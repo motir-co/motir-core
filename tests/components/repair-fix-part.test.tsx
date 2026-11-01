@@ -41,6 +41,7 @@ const CORE = {
   ci: 'failing' as const,
   queueExit: null,
   conflict: null,
+  outOfDate: null,
 };
 const GATEWAY = {
   repo: GATEWAY_PR.repo,
@@ -48,6 +49,7 @@ const GATEWAY = {
   ci: 'failing' as const,
   queueExit: null,
   conflict: null,
+  outOfDate: null,
 };
 
 function renderPart(repair: WorkItemRepairViewDto | null) {
@@ -230,6 +232,7 @@ describe('a member the merge queue threw out (MOTIR-5721)', () => {
       failingCheckName: 'CI complete',
     },
     conflict: null,
+    outOfDate: null,
   };
   const TAGS = ['<b>', '</b>', '<code>', '</code>'] as const;
   const plain = (text: string) => TAGS.reduce((out, tag) => out.split(tag).join(''), text);
@@ -337,6 +340,7 @@ describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
     ci: 'passing' as const,
     queueExit: null,
     conflict: { baseRef: 'main' },
+    outOfDate: null,
   };
 
   it('names it on the conflict line with its base, and says how an agent resolves it', () => {
@@ -382,6 +386,53 @@ describe('a member failing only because it CONFLICTS (MOTIR-5916)', () => {
     const part = screen.getByTestId('repair-fix-part');
     expect(part.textContent).toContain('Checks are failing on');
     expect(screen.getByTestId('repair-conflict-line')).toBeTruthy();
+  });
+});
+
+// A member OUT OF DATE with a base that requires it (Bug MOTIR-10054): green checks, no
+// exit, no conflict. It is named on its own line — never *Checks are failing*, and never
+// the conflict line, which would be false too.
+describe('a member failing only because it is OUT OF DATE (MOTIR-10054)', () => {
+  const BEHIND = {
+    repo: GATEWAY_PR.repo,
+    number: GATEWAY_PR.number,
+    ci: 'passing' as const,
+    queueExit: null,
+    conflict: null,
+    outOfDate: { baseRef: 'main' },
+  };
+  const offer = (failing: (typeof BEHIND)[]) =>
+    renderPart({
+      state: 'offer',
+      repairClass: 'ci',
+      acceptanceRefusal: null,
+      failing,
+      lastGaveUp: null,
+    });
+
+  it('names it on the out-of-date line with its base', () => {
+    offer([BEHIND]);
+    const part = screen.getByTestId('repair-fix-part');
+    expect(part.textContent).not.toContain('Checks are failing on');
+    expect(screen.queryByTestId('repair-conflict-line')).toBeNull();
+    expect(screen.getByTestId('repair-out-of-date-line').textContent).toBe(
+      fix.outOfDateOn
+        .replace('<prs></prs>', `${GATEWAY_PR.repo} · #${GATEWAY_PR.number}`)
+        .replace('{base}', 'main'),
+    );
+  });
+
+  it('a row with no recorded base reads *its base branch*', () => {
+    offer([{ ...BEHIND, outOfDate: { baseRef: null } as unknown as { baseRef: string } }]);
+    expect(screen.getByTestId('repair-out-of-date-line').textContent).toBe(
+      fix.outOfDateOnNoBase.replace('<prs></prs>', `${GATEWAY_PR.repo} · #${GATEWAY_PR.number}`),
+    );
+  });
+
+  it('a member red on its OWN checks as well is named on the checks line alone', () => {
+    offer([{ ...BEHIND, ci: 'failing' as unknown as 'passing' }]);
+    expect(screen.getByTestId('repair-fix-part').textContent).toContain('Checks are failing on');
+    expect(screen.queryByTestId('repair-out-of-date-line')).toBeNull();
   });
 });
 

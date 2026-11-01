@@ -41,6 +41,12 @@ import { unified } from 'unified';
 interface MarkdownNode {
   type: string;
   children?: MarkdownNode[];
+  /** A literal's text (`text`, `inlineCode`, `code`, `html`). */
+  value?: string;
+  /** A `link` / `image` destination. */
+  url?: string;
+  /** An `image`'s alternative text. */
+  alt?: string;
   position?: { start: { offset?: number }; end: { offset?: number } };
 }
 
@@ -105,4 +111,42 @@ export function replaceInProse(text: string, replace: (prose: string) => string)
   visit(tree, false);
 
   return out + text.slice(cursor);
+}
+
+/** One inline link as Markdown parses it: its destination and the text it shows. */
+export interface MarkdownLink {
+  url: string;
+  /** The label as a reader sees it — the link's text content, markup stripped. */
+  label: string;
+}
+
+/** A node's text content, the way mdast-util-to-string reads it. */
+function textContent(node: MarkdownNode): string {
+  if (typeof node.value === 'string') return node.value;
+  if (typeof node.alt === 'string') return node.alt;
+  return (node.children ?? []).map(textContent).join('');
+}
+
+/**
+ * Every inline `link` node in `text`, in source order (bug MOTIR-9825). The read
+ * side of the rule {@link replaceInProse} applies to writes: a scan that judges
+ * links must judge exactly what renders as one, and a regex over the raw body
+ * also matches link syntax quoted inside an inline code span or a code block,
+ * which renders as literal text. Parsing with the render layer's own plugin set
+ * makes `inlineCode` and `code` contain no links by construction.
+ *
+ * Only `link` nodes — the node the renderer turns into a work-item chip
+ * (lib/markdown/render.tsx). Pure — no IO.
+ */
+export function markdownLinks(text: string): MarkdownLink[] {
+  const tree = parser.parse(text) as unknown as MarkdownNode;
+  const links: MarkdownLink[] = [];
+  const visit = (node: MarkdownNode): void => {
+    if (node.type === 'link' && typeof node.url === 'string') {
+      links.push({ url: node.url, label: textContent(node) });
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(tree);
+  return links;
 }

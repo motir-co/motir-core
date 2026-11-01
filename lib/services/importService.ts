@@ -386,13 +386,11 @@ export const importService = {
     //    OAuth flow at all — the wizard "reuses your existing GitHub connection"
     //    (`_data.ts` → `githubIdentityService.getIdentityForUser`), i.e. the 7.10
     //    per-user identity grant (MOTIR-1498).
-    //  • Nothing to refresh FROM. `model GithubIdentity` persists exactly one
-    //    credential column, `access_token_encrypted` — no `expires_at`, no
-    //    refresh token. A GitHub App user-to-server token is non-expiring unless
-    //    the App turns on "Expire user authorization tokens" (a dashboard
-    //    setting, not code); if that were ever flipped on, the fix is NOT a call
-    //    site here — `githubIdentityService` would first have to persist an
-    //    expiry + refresh token, which is a substrate change.
+    //  • The refresh lives in the substrate, not here. Motir Integration DOES
+    //    expire user tokens (MOTIR-6522), and `githubIdentityService.getLiveToken`
+    //    renews them from the refresh token the identity stores (Bug
+    //    MOTIR-10021) — so this call site reads a usable token with no
+    //    refresh path of its own.
     //
     // ⚠️ So it reads `GithubIdentity` — the SAME row the wizard badges — and not
     // `ImportSourceIdentity`, which is what MOTIR-2456 fixed. That failure was

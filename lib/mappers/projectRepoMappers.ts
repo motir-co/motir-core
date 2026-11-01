@@ -3,6 +3,7 @@ import type {
   ProjectRepoDto,
   ProjectRepoOwnershipDto,
   ProjectRepoProposalSignalDto,
+  ProjectRepoSeedMatchDto,
   ProjectRepoRoleDto,
   ProjectRepoSetDto,
   ProjectRepoStateDto,
@@ -65,6 +66,8 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     // signal the UI can map to copy — or null, which is the honest answer for a
     // user-added row and for every row written before MOTIR-1892.
     proposalSignal: row.proposalSignal as ProjectRepoProposalSignalDto | null,
+    // Written only through the set service, which checks `SEED_MATCH_RESULTS`.
+    seedMatch: row.seedMatch as ProjectRepoSeedMatchDto | null,
     realizedRepo: row.githubRepo ? toRealizedDto(row.githubRepo) : null,
     // BOTH halves, deliberately: a settled state whose mirror row has since been
     // deleted is NOT established (the repository no longer exists), even though
@@ -89,6 +92,11 @@ export function toProjectRepoDto(row: ProjectRepoWithRealized): ProjectRepoDto {
     // level to them), which is what keeps this field answering the same question
     // it always has now that a row can hold a whole team's records (MOTIR-1910).
     access: toAccessDto(findOwnerAccessRecord(row.collaborators)),
+    // The Prisma enums carry exactly `lib/hosting/vocabulary.ts`'s values (a test
+    // pins the two lists together), so these are identities, not narrowings.
+    hostingTarget: row.hostingTarget,
+    hostingUseCase: row.hostingUseCase,
+    hostingSize: row.hostingSize,
     position: row.position,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

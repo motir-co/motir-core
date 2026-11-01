@@ -639,9 +639,9 @@ function neonConsoleUrl(): string | null {
  * product this company no longer uses.
  *
  * ⚠️ AND THE REPLACEMENT IS NOT A DIFFERENT URL. The per-run detail an operator
- * actually wants is one workspace deep in `/settings/workspace/jobs`, and that is
- * a per-WORKSPACE surface this console must not fork — the asset says so and so
- * does the card. A link-out this console cannot honestly construct is `null`,
+ * actually wants lives on the staff ledger at `/admin/jobs` (the tenant
+ * per-WORKSPACE page this note once named was retired by Story MOTIR-9982), not
+ * a vendor URL this console could construct. A link-out this console cannot honestly construct is `null`,
  * which the DTO already models (`hostingSignal` returns one on a deployment that
  * is not managed) and which the card renders as text without an affordance.
  */

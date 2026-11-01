@@ -6,22 +6,23 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AWS_CREATE_ACCOUNT_TIMEOUT_MS,
   AWS_EC2_VCPU_QUOTA_CODE,
+  AWS_INDEX_IAM_ROLE,
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_POLICY,
   AWS_RUNNER_IAM_ROLE,
-  AWS_RUNNER_IAM_USER,
+  AWS_TENANT_DEPLOY_ROLE,
   AwsAccountCreationRefusedError,
   AwsManagementApiError,
   OrchestratorNotConfiguredError,
-  awsCredentialsFromEnv,
   awsManagementCredentials,
+  awsManagementRequiredEnv,
   awsAgentHosterPolicyDocument,
   awsRunnerPolicyDocument,
   awsRunnerTrustPolicy,
-  awsRuntimeKeyEnvNames,
   createAwsManagementApi,
   createAwsManagementSdkClient,
   type AwsManagementClientFactory,
+  type AwsManagementCredentials,
   type AwsManagementService,
   type AwsSessionCredentials,
 } from '../src/index';
@@ -39,8 +40,10 @@ const MANAGEMENT = {
 interface SentCall {
   service: AwsManagementService;
   region: string;
-  accessKeyId: string;
+  accessKeyId: string | undefined;
   sessionToken: string | undefined;
+  /** Whether the client was built with a `credentials` property at all. */
+  hasCredentials: boolean;
   command: string;
   input: Record<string, unknown>;
 }
@@ -65,7 +68,11 @@ function session(id: string): Record<string, unknown> {
   };
 }
 
-function harness(handlers: Record<string, Handler>, clock = { t: 0 }) {
+function harness(
+  handlers: Record<string, Handler>,
+  clock = { t: 0 },
+  management: AwsManagementCredentials = MANAGEMENT,
+) {
   const calls: SentCall[] = [];
   const sleeps: number[] = [];
   const factory: AwsManagementClientFactory = (service, config) => ({
@@ -75,8 +82,9 @@ function harness(handlers: Record<string, Handler>, clock = { t: 0 }) {
       const call: SentCall = {
         service,
         region: config.region,
-        accessKeyId: config.credentials.accessKeyId,
-        sessionToken: config.credentials.sessionToken,
+        accessKeyId: config.credentials?.accessKeyId,
+        sessionToken: config.credentials?.sessionToken,
+        hasCredentials: 'credentials' in config,
         command: name,
         input,
       };
@@ -86,7 +94,7 @@ function harness(handlers: Record<string, Handler>, clock = { t: 0 }) {
       return handler(input, call);
     },
   });
-  const api = createAwsManagementApi(MANAGEMENT, {
+  const api = createAwsManagementApi(management, {
     clientFactory: factory,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -125,20 +133,114 @@ describe('awsManagementCredentials', () => {
       ),
     );
   });
+  // MOTIR-9839: no key at all is the default credential chain, not a gap.
+  it('reads the role ARN alone when neither key variable is set', () => {
+    expect(awsManagementCredentials({ AWS_ORG_ADMIN_ROLE_ARN: ' arn ' })).toEqual({
+      roleArn: 'arn',
+    });
+    expect(
+      awsManagementCredentials({
+        AWS_ORG_ADMIN_ACCESS_KEY_ID: ' ',
+        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: '',
+        AWS_ORG_ADMIN_ROLE_ARN: 'arn',
+      }),
+    ).toEqual({ roleArn: 'arn' });
+  });
+
+  it.each([
+    [AWS_MANAGEMENT_ENV.accessKeyId, { AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' }],
+    [AWS_MANAGEMENT_ENV.secretAccessKey, { AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA' }],
+  ])('names %s when only the other half of the key is set', (missing, half) => {
+    expect(() => awsManagementCredentials({ ...half, AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toThrow(
+      new OrchestratorNotConfiguredError(`set ${missing}`),
+    );
+  });
+
+  it('names the role ARN when it is unset, with the key and without it', () => {
+    const roleMissing = new OrchestratorNotConfiguredError(`set ${AWS_MANAGEMENT_ENV.roleArn}`);
+    expect(() => awsManagementCredentials({})).toThrow(roleMissing);
+    expect(() =>
+      awsManagementCredentials({
+        AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA',
+        AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's',
+      }),
+    ).toThrow(roleMissing);
+  });
 });
 
-describe('awsCredentialsFromEnv', () => {
-  it('reads the prefix’s two variables, or null when either is unset', () => {
-    expect(awsRuntimeKeyEnvNames('FLEET_SHARD_A')).toEqual({
-      accessKeyId: 'FLEET_SHARD_A_ACCESS_KEY_ID',
-      secretAccessKey: 'FLEET_SHARD_A_SECRET_ACCESS_KEY',
+describe('awsManagementRequiredEnv', () => {
+  it('is the role ARN alone with no key, and all three once either half is set', () => {
+    const all = Object.values(AWS_MANAGEMENT_ENV);
+    expect(awsManagementRequiredEnv({})).toEqual([AWS_MANAGEMENT_ENV.roleArn]);
+    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_ROLE_ARN: 'arn' })).toEqual([
+      AWS_MANAGEMENT_ENV.roleArn,
+    ]);
+    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_ACCESS_KEY_ID: 'AKIA' }).sort()).toEqual(
+      [...all].sort(),
+    );
+    expect(awsManagementRequiredEnv({ AWS_ORG_ADMIN_SECRET_ACCESS_KEY: 's' }).sort()).toEqual(
+      [...all].sort(),
+    );
+  });
+});
+
+describe('the management role, with the key and on the default chain (MOTIR-9839)', () => {
+  const handlers = {
+    AssumeRoleCommand: assume,
+    ListAccountsCommand: () => ({ Accounts: [] }),
+    ListCreateAccountStatusCommand: () => ({ CreateAccountStatuses: [] }),
+  };
+
+  it('builds the first STS client from the key, when the key is set', async () => {
+    const { api, calls } = harness(handlers);
+    await api.findOrganizationAccount('x');
+    expect(calls[0]).toMatchObject({
+      service: 'sts',
+      command: 'AssumeRoleCommand',
+      hasCredentials: true,
+      accessKeyId: MANAGEMENT.accessKeyId,
+      sessionToken: undefined,
     });
-    expect(awsCredentialsFromEnv('P', { P_ACCESS_KEY_ID: 'k', P_SECRET_ACCESS_KEY: 's' })).toEqual({
-      accessKeyId: 'k',
-      secretAccessKey: 's',
+  });
+
+  it('builds it with no credentials, for the same AssumeRole, when there is no key', async () => {
+    const keyed = harness(handlers);
+    const chained = harness(
+      handlers,
+      {
+        t: 0,
+      },
+      { roleArn: MANAGEMENT.roleArn },
+    );
+    await keyed.api.findOrganizationAccount('x');
+    await chained.api.findOrganizationAccount('x');
+
+    expect(chained.calls[0]).toMatchObject({
+      service: 'sts',
+      command: 'AssumeRoleCommand',
+      hasCredentials: false,
+      accessKeyId: undefined,
     });
-    expect(awsCredentialsFromEnv('P', { P_ACCESS_KEY_ID: 'k' })).toBeNull();
-    expect(awsCredentialsFromEnv('P', {})).toBeNull();
+    expect(chained.calls[0]?.region).toBe(keyed.calls[0]?.region);
+    // Same role, session name and duration as the key path.
+    expect(chained.calls[0]?.input).toEqual(keyed.calls[0]?.input);
+    // Every later call runs on the assumed session, exactly as with the key.
+    expect(chained.calls.slice(1)).toEqual(keyed.calls.slice(1));
+  });
+
+  it('assumes member roles from the management session on the default chain too', async () => {
+    const { api, calls } = harness(
+      { AssumeRoleCommand: assume },
+      { t: 0 },
+      {
+        roleArn: MANAGEMENT.roleArn,
+      },
+    );
+    await api.assumeMemberRole('222222222222');
+    expect(calls.map((c) => [c.hasCredentials, c.accessKeyId, c.sessionToken])).toEqual([
+      [false, undefined, undefined],
+      [true, 'ASIAMGMT', 'token-MGMT'],
+    ]);
   });
 });
 
@@ -590,84 +692,11 @@ describe('the runner role (MOTIR-9460)', () => {
   });
 });
 
-describe('ensureRunnerIamUser', () => {
-  const policy = awsRunnerPolicyDocument({ shardTag: 'ci-runner-use1-2', regionId: 'us-east-1' });
-
-  it('creates the user and its policy when absent, and never mints a key', async () => {
-    const { api, calls } = harness({
-      GetUserCommand: () => {
-        throw sdkError('NoSuchEntityException', 404);
-      },
-      CreateUserCommand: () => ({}),
-      GetUserPolicyCommand: () => {
-        throw Object.assign(new Error('x'), { Code: 'NoSuchEntity' });
-      },
-      PutUserPolicyCommand: () => ({}),
-    });
-
-    expect(await api.ensureRunnerIamUser(MEMBER, policy)).toEqual({
-      created: [`iam-user:${AWS_RUNNER_IAM_USER}`, `iam-policy:${AWS_RUNNER_IAM_POLICY}`],
-    });
-    expect(calls.map((c) => c.command)).toEqual([
-      'GetUserCommand',
-      'CreateUserCommand',
-      'GetUserPolicyCommand',
-      'PutUserPolicyCommand',
-    ]);
-    expect(calls.every((c) => c.service === 'iam' && c.accessKeyId === 'ASIAMEMBER')).toBe(true);
-    expect(JSON.parse(String(calls[3]!.input['PolicyDocument']))).toEqual(policy);
-    expect(calls.some((c) => c.command === 'CreateAccessKeyCommand')).toBe(false);
-  });
-
-  it('creates nothing when the user and the same policy exist', async () => {
-    const { api, calls } = harness({
-      GetUserCommand: () => ({ User: { UserName: AWS_RUNNER_IAM_USER } }),
-      GetUserPolicyCommand: () => ({
-        PolicyDocument: encodeURIComponent(JSON.stringify(policy)),
-      }),
-    });
-    expect(await api.ensureRunnerIamUser(MEMBER, policy)).toEqual({ created: [] });
-    expect(calls.map((c) => c.command)).toEqual(['GetUserCommand', 'GetUserPolicyCommand']);
-  });
-
-  it('rewrites a policy that differs, or one that is not JSON', async () => {
-    for (const document of [
-      encodeURIComponent(JSON.stringify({ Version: '2012-10-17', Statement: [] })),
-      'not-json',
-      '',
-    ]) {
-      const { api, calls } = harness({
-        GetUserCommand: () => ({}),
-        GetUserPolicyCommand: () => ({ PolicyDocument: document }),
-        PutUserPolicyCommand: () => ({}),
-      });
-      expect(await api.ensureRunnerIamUser(MEMBER, policy)).toEqual({
-        created: [`iam-policy:${AWS_RUNNER_IAM_POLICY}`],
-      });
-      expect(calls.at(-1)!.command).toBe('PutUserPolicyCommand');
-    }
-  });
-
-  it('a refusal other than not-found stops it', async () => {
-    const user = harness({
-      GetUserCommand: () => {
-        throw sdkError('AccessDenied', 403);
-      },
-    });
-    await expect(user.api.ensureRunnerIamUser(MEMBER, policy)).rejects.toMatchObject({
-      awsCode: 'AccessDenied',
-    });
-    const doc = harness({
-      GetUserCommand: () => ({}),
-      GetUserPolicyCommand: () => {
-        throw sdkError('ServiceFailure', 500);
-      },
-    });
-    await expect(doc.api.ensureRunnerIamUser(MEMBER, policy)).rejects.toMatchObject({
-      awsCode: 'ServiceFailure',
-    });
-  });
-});
+/** Every IAM action a policy document allows: the index role's pass, and no other. */
+const iamActionsOf = (doc: { Statement: Array<Record<string, unknown>> }) =>
+  doc.Statement.flatMap((s) => [s['Action']].flat() as string[]).filter((a) =>
+    a.startsWith('iam:'),
+  );
 
 describe('awsRunnerPolicyDocument', () => {
   it('allows the adapter’s EC2 calls only, tag-scoped where EC2 supports it', () => {
@@ -682,9 +711,22 @@ describe('awsRunnerPolicyDocument', () => {
         'ec2:CreateTags',
         'ec2:TerminateInstances',
         'ec2:GetConsoleOutput',
+        'iam:PassRole',
       ]),
     );
-    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+    // Its one IAM action passes the index role, to EC2 only (MOTIR-10123).
+    expect(doc.Statement.filter((s) => JSON.stringify(s).includes('iam:'))).toEqual([
+      {
+        Sid: 'PassIndexRole',
+        Effect: 'Allow',
+        Action: 'iam:PassRole',
+        Resource: `arn:aws:iam::*:role/${AWS_INDEX_IAM_ROLE}`,
+        Condition: { StringEquals: { 'iam:PassedToService': 'ec2.amazonaws.com' } },
+      },
+    ]);
+    expect(AWS_INDEX_IAM_ROLE).toBe('motir-fleet-index');
+    expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
+    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
     const terminate = doc.Statement.find((s) => s['Sid'] === 'TerminateOwn')!;
     expect(terminate['Condition']).toEqual({
       StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
@@ -719,7 +761,8 @@ describe('awsRunnerPolicyDocument', () => {
     });
     expect(any).not.toHaveProperty('Condition');
     // Nothing else widens: the same actions as a runner account.
-    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+    expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
+    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
   });
 });
 
@@ -749,7 +792,269 @@ describe('awsAgentHosterPolicyDocument', () => {
     expect(added.find((s) => s['Sid'] === 'DeleteOwnDisk')!['Resource']).toBe(
       'arn:aws:ec2:us-east-1:*:volume/*',
     );
-    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+    expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
+    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
+  });
+});
+
+describe('the Tenants organizational unit (MOTIR-9940)', () => {
+  const ROOT = { Roots: [{ Id: 'r-root' }] };
+
+  it('finds an existing OU by name under the root, paging, and creates nothing', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: (input) =>
+        input['NextToken']
+          ? { OrganizationalUnits: [{ Id: 'ou-tenants', Name: 'Tenants' }] }
+          : { OrganizationalUnits: [{ Id: 'ou-other', Name: 'Other' }], NextToken: 'p2' },
+    });
+
+    expect(await api.ensureOrganizationalUnit('Tenants')).toEqual({
+      ouId: 'ou-tenants',
+      created: false,
+    });
+    expect(
+      calls.find((c) => c.command === 'ListOrganizationalUnitsForParentCommand')!.input,
+    ).toEqual({ ParentId: 'r-root' });
+    expect(calls.map((c) => c.command)).not.toContain('CreateOrganizationalUnitCommand');
+    expect(
+      calls
+        .filter((c) => c.service === 'organizations')
+        .every((c) => c.sessionToken === 'token-MGMT'),
+    ).toBe(true);
+  });
+
+  it('creates the OU under the root only when absent', async () => {
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: () => ({ OrganizationalUnits: [] }),
+      CreateOrganizationalUnitCommand: () => ({
+        OrganizationalUnit: { Id: 'ou-new', Name: 'Tenants' },
+      }),
+    });
+
+    expect(await api.ensureOrganizationalUnit('Tenants')).toEqual({
+      ouId: 'ou-new',
+      created: true,
+    });
+    const creates = calls.filter((c) => c.command === 'CreateOrganizationalUnitCommand');
+    expect(creates.map((c) => c.input)).toEqual([{ ParentId: 'r-root', Name: 'Tenants' }]);
+  });
+
+  it('answers the racing OU when AWS says DuplicateOrganizationalUnitException', async () => {
+    let lists = 0;
+    const { api, calls } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: () =>
+        (lists += 1) === 1
+          ? { OrganizationalUnits: [] }
+          : { OrganizationalUnits: [{ Id: 'ou-raced', Name: 'Tenants' }] },
+      CreateOrganizationalUnitCommand: () => {
+        throw sdkError('DuplicateOrganizationalUnitException');
+      },
+    });
+
+    expect(await api.ensureOrganizationalUnit('Tenants')).toEqual({
+      ouId: 'ou-raced',
+      created: false,
+    });
+    expect(calls.filter((c) => c.command === 'CreateOrganizationalUnitCommand')).toHaveLength(1);
+  });
+
+  it('surfaces any other create failure as a coded error', async () => {
+    const { api } = harness({
+      AssumeRoleCommand: assume,
+      ListRootsCommand: () => ROOT,
+      ListOrganizationalUnitsForParentCommand: () => ({ OrganizationalUnits: [] }),
+      CreateOrganizationalUnitCommand: () => {
+        throw sdkError('AccessDeniedException', 403);
+      },
+    });
+
+    await expect(api.ensureOrganizationalUnit('Tenants')).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'AccessDeniedException',
+    });
+  });
+});
+
+describe('the tenant account bootstrap calls (MOTIR-9941)', () => {
+  const POLICY = {
+    Version: '2012-10-17' as const,
+    Statement: [{ Effect: 'Allow', Action: 'ecs:*' }],
+  };
+  const FARGATE = { serviceCode: 'fargate', quotaCode: 'L-3032A538', desiredValue: 64 };
+
+  it('creates the deploy role trusting only the management role, with its policy', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      CreateRoleCommand: () => ({}),
+      GetRolePolicyCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      PutRolePolicyCommand: () => ({}),
+    });
+
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
+      created: true,
+      policyChanged: true,
+    });
+    const create = calls.find((c) => c.command === 'CreateRoleCommand')!;
+    expect(create).toMatchObject({ service: 'iam', accessKeyId: MEMBER.accessKeyId });
+    expect(create.input['RoleName']).toBe(AWS_TENANT_DEPLOY_ROLE);
+    const trust = JSON.parse(String(create.input['AssumeRolePolicyDocument'])) as {
+      Statement: Array<{ Principal: unknown }>;
+    };
+    expect(trust.Statement.map((s) => s.Principal)).toEqual([{ AWS: MANAGEMENT.roleArn }]);
+    expect(calls.find((c) => c.command === 'PutRolePolicyCommand')!.input).toEqual({
+      RoleName: AWS_TENANT_DEPLOY_ROLE,
+      PolicyName: AWS_TENANT_DEPLOY_ROLE,
+      PolicyDocument: JSON.stringify(POLICY),
+    });
+  });
+
+  it('finds the role and its policy in place and writes nothing', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => ({ Role: { RoleName: AWS_TENANT_DEPLOY_ROLE } }),
+      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent(JSON.stringify(POLICY)) }),
+    });
+
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
+      created: false,
+      policyChanged: false,
+    });
+    expect(calls.map((c) => c.command)).toEqual(['GetRoleCommand', 'GetRolePolicyCommand']);
+  });
+
+  it('treats EntityAlreadyExists on create as found, and still converges the policy', async () => {
+    const { api, calls } = harness({
+      GetRoleCommand: () => {
+        throw sdkError('NoSuchEntity', 404);
+      },
+      CreateRoleCommand: () => {
+        throw sdkError('EntityAlreadyExists', 409);
+      },
+      GetRolePolicyCommand: () => ({ PolicyDocument: encodeURIComponent('{"old":true}') }),
+      PutRolePolicyCommand: () => ({}),
+    });
+
+    expect(await api.ensureTenantDeployRole(MEMBER, POLICY)).toEqual({
+      created: false,
+      policyChanged: true,
+    });
+    expect(calls.map((c) => c.command)).toContain('PutRolePolicyCommand');
+  });
+
+  it('tags the account only when the value differs', async () => {
+    const tagged = harness({
+      AssumeRoleCommand: assume,
+      ListTagsForResourceCommand: () => ({ Tags: [{ Key: 'motir:organization', Value: 'old' }] }),
+      TagResourceCommand: () => ({}),
+    });
+    expect(await tagged.api.ensureAccountTag('123', 'motir:organization', 'org_1')).toEqual({
+      tagged: true,
+    });
+    expect(tagged.calls.find((c) => c.command === 'TagResourceCommand')).toMatchObject({
+      service: 'organizations',
+      sessionToken: 'token-MGMT',
+      input: { ResourceId: '123', Tags: [{ Key: 'motir:organization', Value: 'org_1' }] },
+    });
+
+    const already = harness({
+      AssumeRoleCommand: assume,
+      ListTagsForResourceCommand: (input) =>
+        input['NextToken']
+          ? { Tags: [{ Key: 'motir:organization', Value: 'org_1' }] }
+          : { Tags: [], NextToken: 'p2' },
+    });
+    expect(await already.api.ensureAccountTag('123', 'motir:organization', 'org_1')).toEqual({
+      tagged: false,
+    });
+    expect(already.calls.map((c) => c.command)).not.toContain('TagResourceCommand');
+  });
+
+  it('files a quota raise below target with none open', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => ({
+        RequestedQuota: { Id: 'q-1', Status: 'PENDING', DesiredValue: 64 },
+      }),
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: true,
+      pending: true,
+    });
+    const request = calls.find((c) => c.command === 'RequestServiceQuotaIncreaseCommand')!;
+    expect(request).toMatchObject({ region: 'us-east-1', accessKeyId: MEMBER.accessKeyId });
+    expect(request.input).toEqual({
+      ServiceCode: 'fargate',
+      QuotaCode: 'L-3032A538',
+      DesiredValue: 64,
+    });
+  });
+
+  it('files nothing for a quota at target, read from the default when never changed', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => {
+        throw sdkError('NoSuchResourceException');
+      },
+      GetAWSDefaultServiceQuotaCommand: () => ({ Quota: { Value: 64 } }),
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: false,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
+  });
+
+  it('files nothing and reports pending when a raise is already open', async () => {
+    const { api, calls } = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: (input) =>
+        input['Status'] === 'CASE_OPENED'
+          ? { RequestedQuotas: [{ Id: 'q-0', Status: 'CASE_OPENED', DesiredValue: 64 }] }
+          : { RequestedQuotas: [] },
+    });
+
+    expect(await api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: true,
+    });
+    expect(calls.map((c) => c.command)).not.toContain('RequestServiceQuotaIncreaseCommand');
+  });
+
+  it('answers a raise filed concurrently as pending, and surfaces other errors by code', async () => {
+    const raced = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => {
+        throw sdkError('ResourceAlreadyExistsException');
+      },
+    });
+    expect(await raced.api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).toEqual({
+      filed: false,
+      pending: true,
+    });
+
+    const denied = harness({
+      GetServiceQuotaCommand: () => ({ Quota: { Value: 6 } }),
+      ListRequestedServiceQuotaChangeHistoryByQuotaCommand: () => ({ RequestedQuotas: [] }),
+      RequestServiceQuotaIncreaseCommand: () => {
+        throw sdkError('AccessDeniedException', 403);
+      },
+    });
+    await expect(denied.api.ensureQuotaRaise(MEMBER, 'us-east-1', FARGATE)).rejects.toMatchObject({
+      name: 'AwsManagementApiError',
+      awsCode: 'AccessDeniedException',
+    });
   });
 });
 

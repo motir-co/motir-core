@@ -7,6 +7,7 @@ import { Bot, ChevronDown, ChevronRight, Loader2, TriangleAlert, User } from 'lu
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
 import type { AgentReviewRunRefDto } from '@/lib/dto/agentReview';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { formatRunInstant } from '@/lib/runs/runClock';
 import { runsHref } from '@/lib/runs/runsAddress';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
@@ -216,10 +217,17 @@ export function CouldNotRunBand({
 }
 
 /** The findings in full, through the one Markdown stack (fenced blocks keep their Copy). */
-function Findings({ findingsMd }: { findingsMd: string }) {
+function Findings({
+  findingsMd,
+  workItemRefs,
+}: {
+  findingsMd: string;
+  workItemRefs: WorkItemRefMap;
+}) {
   return (
     <MarkdownView
       value={findingsMd}
+      workItemRefs={workItemRefs}
       copyableCode
       className="motir-how-to-test min-w-0"
       data-testid="agent-review-findings"
@@ -230,11 +238,14 @@ function Findings({ findingsMd }: { findingsMd: string }) {
 /** Panel 3 — SENT BACK: the findings in full, never collapsed (they are the repair's brief). */
 export function SentBackBand({
   findingsMd,
+  findingsRefs,
   run,
   decidedAt,
   count,
 }: {
   findingsMd: string | null;
+  /** The findings' card links, resolved for the reader (MOTIR-10023). */
+  findingsRefs: WorkItemRefMap;
   run: AgentReviewRunRefDto | null;
   decidedAt: string | null;
   count: number;
@@ -255,7 +266,7 @@ export function SentBackBand({
         </h4>
         <DecidedMeta run={run} decidedAt={decidedAt} count={count} />
       </div>
-      {findingsMd?.trim() ? <Findings findingsMd={findingsMd} /> : null}
+      {findingsMd?.trim() ? <Findings findingsMd={findingsMd} workItemRefs={findingsRefs} /> : null}
     </div>
   );
 }
@@ -263,11 +274,14 @@ export function SentBackBand({
 /** Panels 2a/2b — PASSED: the summary, then the findings behind the shipped disclosure. */
 export function PassedBand({
   findingsMd,
+  findingsRefs,
   run,
   decidedAt,
   count,
 }: {
   findingsMd: string | null;
+  /** The findings' card links, resolved for the reader (MOTIR-10023). */
+  findingsRefs: WorkItemRefMap;
   run: AgentReviewRunRefDto | null;
   decidedAt: string | null;
   count: number;
@@ -316,7 +330,7 @@ export function PassedBand({
           </button>
           {open ? (
             <div className="mt-1 border-t border-(--el-border-soft) pt-2.5">
-              <Findings findingsMd={findingsMd!} />
+              <Findings findingsMd={findingsMd!} workItemRefs={findingsRefs} />
             </div>
           ) : null}
         </div>

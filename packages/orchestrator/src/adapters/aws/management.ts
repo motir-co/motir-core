@@ -1,22 +1,37 @@
 import {
+  CloudFormationClient,
+  CreateStackInstancesCommand,
+  DescribeStackInstanceCommand,
+  DescribeStackSetOperationCommand,
+  DescribeStacksCommand,
+  UpdateStackInstancesCommand,
+  type StackInstance,
+} from '@aws-sdk/client-cloudformation';
+import {
   CreateRoleCommand,
   GetRoleCommand,
   GetRolePolicyCommand,
-  GetUserCommand,
-  CreateUserCommand,
-  GetUserPolicyCommand,
   IAMClient,
   PutRolePolicyCommand,
-  PutUserPolicyCommand,
 } from '@aws-sdk/client-iam';
 import {
   CreateAccountCommand,
+  CreateOrganizationalUnitCommand,
   DescribeCreateAccountStatusCommand,
   ListAccountsCommand,
   ListCreateAccountStatusCommand,
+  ListOrganizationalUnitsForParentCommand,
+  ListParentsCommand,
+  ListRootsCommand,
+  ListTagsForResourceCommand,
+  MoveAccountCommand,
   OrganizationsClient,
+  TagResourceCommand,
   type Account,
   type CreateAccountStatus,
+  type OrganizationalUnit,
+  type Root,
+  type Tag,
 } from '@aws-sdk/client-organizations';
 import {
   GetAWSDefaultServiceQuotaCommand,
@@ -29,6 +44,18 @@ import {
 import { AssumeRoleCommand, STSClient } from '@aws-sdk/client-sts';
 import type { AwsManagementCredentials } from './credentials';
 import { AWS_SHARD_TAG_KEY } from './network';
+import {
+  AWS_STACK_SET_OPERATION_RUNNING,
+  AwsStackInstanceFailedError,
+  AwsStackOutputsMissingError,
+  awsStackSetOperationId,
+  parameterOverridesFor,
+  parameterOverridesOf,
+  sameParameterOverrides,
+  stackInstanceOutcome,
+  type AwsStackInstanceState,
+  type AwsStackInstanceTarget,
+} from './stackSet';
 
 // THE AWS MANAGEMENT HALF (Story MOTIR-9270 · MOTIR-9278) — what `fleet-admin
 // add-shard --provider aws` calls to make an account a fleet account: find or
@@ -55,8 +82,18 @@ import { AWS_SHARD_TAG_KEY } from './network';
 //     API_GetAWSDefaultServiceQuota.html, API_RequestServiceQuotaIncrease.html,
 //     API_GetRequestedServiceQuotaChange.html, API_ListRequestedServiceQuotaChangeHistoryByQuota.html
 //     (MOTIR-9459: the fleet's own quota raises)
-//   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetUser.html, API_CreateUser.html,
-//     API_GetUserPolicy.html, API_PutUserPolicy.html
+//   IAM — https://docs.aws.amazon.com/IAM/latest/APIReference/API_GetRole.html, API_CreateRole.html,
+//     API_GetRolePolicy.html, API_PutRolePolicy.html
+//   Organizations, the unit (MOTIR-9844) — API_ListParents.html, API_MoveAccount.html
+//   CloudFormation StackSets (MOTIR-9844) — see `./stackSet.ts`
+//
+// THE STACKSET HALF (MOTIR-9844): a pool account is built by the pool-account
+// StackSet (motir-infra), not by code. The account is moved into its fleet
+// kind's unit, its stack instance created with this account's parameters, and
+// the instance's stack outputs read back. A StackSet run by a delegated
+// administrator can only be driven from that account (the services account), so
+// those calls run on `stackSetAdmin.roleArn`, assumed from the management
+// session, or on the default chain when it is unset.
 
 /** The role Organizations creates in every account it creates (CreateAccount's
  *  `RoleName` default). */
@@ -66,13 +103,21 @@ export const AWS_MEMBER_ROLE_NAME = 'OrganizationAccountAccessRole';
  *  measured in vCPUs — https://docs.aws.amazon.com/ec2/latest/instancetypes/ec2-instance-quotas.html */
 export const AWS_EC2_VCPU_QUOTA_CODE = 'L-1216C47A';
 
-/** The IAM user every account's runners boot with, and its inline policy. */
-export const AWS_RUNNER_IAM_USER = 'motir-fleet-runner';
-/** The runner's IAM ROLE in a member account an unattended add-shard created
- *  (MOTIR-9460): the management role assumes it, so no person mints a key.
- *  Roles and users are separate IAM namespaces; the name matches the user's. */
+/** The runner's IAM ROLE in every pool account, and its inline policy: the
+ *  definition's stack builds it, the management role assumes it (MOTIR-9460),
+ *  and it is the only credential runners boot with (MOTIR-9847). */
 export const AWS_RUNNER_IAM_ROLE = 'motir-fleet-runner';
 export const AWS_RUNNER_IAM_POLICY = 'motir-fleet-runner-ec2';
+
+/** The role, and the instance profile of the same name, every index VM boots
+ *  with (MOTIR-10123): it may pull the indexer image from Motir's ECR, and
+ *  nothing else. The pool-account definition (motir-infra) builds both; the
+ *  runner role may pass it to EC2 (`PassIndexRole`). */
+export const AWS_INDEX_IAM_ROLE = 'motir-fleet-index';
+
+/** The role an enterprise tenant's deploys run as, in its own account, trusted
+ *  only by the management role (MOTIR-9941); its inline policy shares the name. */
+export const AWS_TENANT_DEPLOY_ROLE = 'motir-tenant-deploy';
 
 /** Organizations, STS and IAM are global; their endpoints answer in us-east-1. */
 const GLOBAL_REGION = 'us-east-1';
@@ -84,12 +129,27 @@ const SESSION_NAME = 'motir-add-shard';
  *  through the credential provider before it lapses. */
 const RUNNER_SESSION_SECONDS = 3600;
 const RUNNER_SESSION_NAME = 'motir-fleet-runner';
+/** A deploy session in a tenant account: an hour, long enough for one deploy. */
+const TENANT_DEPLOY_SESSION_SECONDS = 3600;
+const TENANT_DEPLOY_SESSION_NAME = 'motir-tenant-deploy';
 /** CreateAccount is asynchronous; AWS documents it as taking minutes. */
 export const AWS_CREATE_ACCOUNT_TIMEOUT_MS = 10 * 60_000;
 const CREATE_ACCOUNT_POLL_MS = 5_000;
 /** A new account's admin role takes a moment to be assumable. */
 const MEMBER_ROLE_ATTEMPTS = 6;
 const MEMBER_ROLE_RETRY_MS = 5_000;
+
+/** How long `ensureStackInstance` waits for CURRENT before asking for a re-run. */
+export const AWS_STACK_INSTANCE_TIMEOUT_MS = 30 * 60_000;
+const STACK_INSTANCE_POLL_MS = 10_000;
+/** The refusals of a create or update that mean another call got there first:
+ *  the instance exists, or an operation (auto-deployment's, or ours) runs. */
+const STACK_SET_RACE_CODES = [
+  'OperationInProgressException',
+  'OperationIdAlreadyExistsException',
+  'NameAlreadyExistsException',
+  'StaleRequestException',
+];
 
 /** Short-lived credentials from `AssumeRole`. */
 export interface AwsSessionCredentials {
@@ -144,14 +204,21 @@ export interface AwsSdkClient {
   send(command: unknown): Promise<unknown>;
 }
 
-export type AwsManagementService = 'sts' | 'organizations' | 'service-quotas' | 'iam';
+export type AwsManagementService =
+  | 'sts'
+  | 'organizations'
+  | 'service-quotas'
+  | 'iam'
+  | 'cloudformation';
 
 /** How the module builds each SDK client. The default is the real client. */
 export type AwsManagementClientFactory = (
   service: AwsManagementService,
   config: {
     region: string;
-    credentials: { accessKeyId: string; secretAccessKey: string; sessionToken?: string };
+    /** Absent: the SDK's default credential chain (the management role's first
+     *  AssumeRole when no management key is set — MOTIR-9839). */
+    credentials?: { accessKeyId: string; secretAccessKey: string; sessionToken?: string };
   },
 ) => AwsSdkClient;
 
@@ -166,11 +233,17 @@ export const createAwsManagementSdkClient: AwsManagementClientFactory = (service
       return new ServiceQuotasClient(config);
     case 'iam':
       return new IAMClient(config);
+    case 'cloudformation':
+      return new CloudFormationClient(config);
   }
 };
 
 export interface AwsManagementOptions {
   clientFactory?: AwsManagementClientFactory;
+  /** Where the StackSet calls run (MOTIR-9844): `roleArn`, the services
+   *  account's StackSet-operator role, assumed from the management session.
+   *  Absent: the default credential chain (core's task role on Fargate). */
+  stackSetAdmin?: { roleArn: string };
   /** The test seams for CreateAccount's poll and the member role's retry. */
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -225,11 +298,57 @@ export interface AwsManagementApi {
   ): Promise<{ created: string[] }>;
   /** A runner session in the member account, from the management role. */
   assumeRunnerRole(accountId: string): Promise<AwsSessionCredentials>;
-  /** The runner's IAM user and inline policy; answers what it created. */
-  ensureRunnerIamUser(
+  /** A deploy session in a tenant account (MOTIR-10004): `motir-tenant-deploy`,
+   *  assumed from the management session, the only principal it trusts. */
+  assumeTenantDeployRole(accountId: string): Promise<AwsSessionCredentials>;
+  /** Put the account under `organizationalUnitId`; a no-op when it is there. */
+  moveAccountToOrganizationalUnit(
+    accountId: string,
+    organizationalUnitId: string,
+  ): Promise<{ moved: boolean }>;
+  /** Make the account's stack instance exist with exactly these overrides, and
+   *  wait for it to be CURRENT. Answers what it sent, `none` on a resumed run. */
+  ensureStackInstance(
+    input: AwsStackInstanceTarget & {
+      organizationalUnitId: string;
+      parameterOverrides: Readonly<Record<string, string>>;
+    },
+  ): Promise<{ action: 'created' | 'updated' | 'none' }>;
+  /** The instance's stack outputs, read in the member account. */
+  readStackInstanceOutputs(target: AwsStackInstanceTarget): Promise<Record<string, string>>;
+  /** The organizational unit `name` directly under the Organization root,
+   *  created only when absent (MOTIR-9940). */
+  ensureOrganizationalUnit(name: string): Promise<AwsOrganizationalUnitResult>;
+  /** The tenant deploy role and its inline policy, trusting only the management
+   *  role (MOTIR-9941); `created` when the role was made by this call,
+   *  `policyChanged` when the inline policy was written because it differed
+   *  (MOTIR-10005). */
+  ensureTenantDeployRole(
     credentials: AwsSessionCredentials,
     policyDocument: AwsPolicyDocument,
-  ): Promise<{ created: string[] }>;
+  ): Promise<{ created: boolean; policyChanged: boolean }>;
+  /** `key=value` on the account in Organizations, written only when it differs. */
+  ensureAccountTag(accountId: string, key: string, value: string): Promise<{ tagged: boolean }>;
+  /** A quota at `target.desiredValue` or above: nothing filed when it already is,
+   *  or when a raise of it is open (`pending`); else a raise is filed. */
+  ensureQuotaRaise(
+    credentials: AwsSessionCredentials,
+    regionId: string,
+    target: AwsQuotaTarget,
+  ): Promise<{ filed: boolean; pending: boolean }>;
+}
+
+/** One Service Quotas quota and the value wanted for it. */
+export interface AwsQuotaTarget {
+  serviceCode: string;
+  quotaCode: string;
+  desiredValue: number;
+}
+
+/** What `ensureOrganizationalUnit` found or made. */
+export interface AwsOrganizationalUnitResult {
+  ouId: string;
+  created: boolean;
 }
 
 interface SdkErrorShape {
@@ -339,9 +458,16 @@ export function createAwsManagementApi(
   async function managementRole(): Promise<AwsSessionCredentials> {
     const expiresAt = managementSession?.expiration?.getTime() ?? Infinity;
     if (managementSession && expiresAt - now() > 60_000) return managementSession;
+    const { accessKeyId, secretAccessKey } = management;
+    // No management key: an STS client with no `credentials`, so the SDK's
+    // default chain supplies them.
+    const sts =
+      accessKeyId && secretAccessKey
+        ? client('sts', { accessKeyId, secretAccessKey })
+        : factory('sts', { region: GLOBAL_REGION });
     const response = await call<Parameters<typeof sessionOf>[0]>(
       'sts',
-      client('sts', management),
+      sts,
       new AssumeRoleCommand({
         RoleArn: management.roleArn,
         RoleSessionName: SESSION_NAME,
@@ -363,7 +489,12 @@ export function createAwsManagementApi(
     const command = new AssumeRoleCommand({
       RoleArn: `arn:aws:iam::${accountId}:role/${roleName}`,
       RoleSessionName: sessionName,
-      DurationSeconds: roleName === AWS_RUNNER_IAM_ROLE ? RUNNER_SESSION_SECONDS : SESSION_SECONDS,
+      DurationSeconds:
+        roleName === AWS_RUNNER_IAM_ROLE
+          ? RUNNER_SESSION_SECONDS
+          : roleName === AWS_TENANT_DEPLOY_ROLE
+            ? TENANT_DEPLOY_SESSION_SECONDS
+            : SESSION_SECONDS,
     });
     for (let attempt = 1; ; attempt += 1) {
       try {
@@ -411,6 +542,238 @@ export function createAwsManagementApi(
       }
       await sleep(CREATE_ACCOUNT_POLL_MS);
     }
+  }
+
+  // The StackSet-operator session, assumed from the management session when
+  // `stackSetAdmin` names a role, renewed like the management session.
+  let stackSetSession: AwsSessionCredentials | null = null;
+  async function stackSets(region: string): Promise<AwsSdkClient> {
+    const roleArn = options.stackSetAdmin?.roleArn;
+    if (!roleArn) return factory('cloudformation', { region });
+    const expiresAt = stackSetSession?.expiration?.getTime() ?? Infinity;
+    if (!stackSetSession || expiresAt - now() <= 60_000) {
+      stackSetSession = sessionOf(
+        await call<Parameters<typeof sessionOf>[0]>(
+          'sts',
+          client('sts', await managementRole()),
+          new AssumeRoleCommand({
+            RoleArn: roleArn,
+            RoleSessionName: SESSION_NAME,
+            DurationSeconds: SESSION_SECONDS,
+          }),
+        ),
+      );
+    }
+    return client('cloudformation', stackSetSession, region);
+  }
+
+  /** The account's stack instance, or null when the StackSet holds none. */
+  async function describeStackInstance(
+    cfn: AwsSdkClient,
+    target: AwsStackInstanceTarget,
+  ): Promise<AwsStackInstanceState | null> {
+    try {
+      const { StackInstance: instance } = await call<{ StackInstance?: StackInstance }>(
+        'cloudformation',
+        cfn,
+        new DescribeStackInstanceCommand({
+          StackSetName: target.stackSetName,
+          StackInstanceAccount: target.accountId,
+          StackInstanceRegion: target.region,
+          CallAs: 'DELEGATED_ADMIN',
+        }),
+      );
+      if (!instance) return null;
+      return {
+        status: instance.Status ?? '',
+        detailedStatus: instance.StackInstanceStatus?.DetailedStatus ?? null,
+        statusReason: instance.StatusReason ?? null,
+        stackId: instance.StackId ?? null,
+        parameterOverrides: parameterOverridesOf(instance.ParameterOverrides),
+      };
+    } catch (err) {
+      if (
+        err instanceof AwsManagementApiError &&
+        err.awsCode === 'StackInstanceNotFoundException'
+      ) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  /** File a create or update, or null when a racing call got there first. */
+  async function fileStackSetOperation(
+    cfn: AwsSdkClient,
+    command: CreateStackInstancesCommand | UpdateStackInstancesCommand,
+  ): Promise<string | null> {
+    try {
+      const { OperationId } = await call<{ OperationId?: string }>('cloudformation', cfn, command);
+      return required(OperationId, 'OperationId');
+    } catch (err) {
+      if (!(err instanceof AwsManagementApiError) || !STACK_SET_RACE_CODES.includes(err.awsCode)) {
+        throw err;
+      }
+      // Our own operation id, filed by an earlier run: attach to it.
+      return err.awsCode === 'OperationIdAlreadyExistsException'
+        ? String(command.input.OperationId)
+        : null;
+    }
+  }
+
+  function stackInstanceDeadline(target: AwsStackInstanceTarget, state: string): Error {
+    return new Error(
+      `The ${target.stackSetName} stack instance in ${target.accountId} (${target.region}) was ` +
+        `still ${state} after ${AWS_STACK_INSTANCE_TIMEOUT_MS / 60_000} minutes; ` +
+        'run the command again to keep waiting',
+    );
+  }
+
+  async function organizationRootId(orgs: AwsSdkClient): Promise<string> {
+    const { Roots: roots } = await call<{ Roots?: Root[] }>(
+      'organizations',
+      orgs,
+      new ListRootsCommand({}),
+    );
+    return required(roots?.[0]?.Id, 'Roots[0].Id');
+  }
+
+  async function findOrganizationalUnit(
+    orgs: AwsSdkClient,
+    parentId: string,
+    name: string,
+  ): Promise<string | null> {
+    let nextToken: string | undefined;
+    do {
+      const page = await call<{ OrganizationalUnits?: OrganizationalUnit[]; NextToken?: string }>(
+        'organizations',
+        orgs,
+        new ListOrganizationalUnitsForParentCommand({
+          ParentId: parentId,
+          ...(nextToken ? { NextToken: nextToken } : {}),
+        }),
+      );
+      const match = (page.OrganizationalUnits ?? []).find((ou) => ou.Name === name);
+      if (match) return required(match.Id, 'OrganizationalUnit.Id');
+      nextToken = page.NextToken ?? undefined;
+    } while (nextToken);
+    return null;
+  }
+
+  /** An IAM role trusting the management role, with one inline policy that
+   *  converges on `policyDocument`. Each half reads before it writes. */
+  async function ensureRoleWithPolicy(
+    credentials: AwsSessionCredentials,
+    role: {
+      roleName: string;
+      policyName: string;
+      policyDocument: AwsPolicyDocument;
+      maxSessionSeconds: number;
+      tag: string;
+    },
+  ): Promise<{ roleCreated: boolean; policyPut: boolean }> {
+    const iam = client('iam', credentials);
+    let roleCreated = false;
+    try {
+      await call('iam', iam, new GetRoleCommand({ RoleName: role.roleName }));
+    } catch (err) {
+      if (!iamAbsent(err)) throw err;
+      try {
+        await call(
+          'iam',
+          iam,
+          new CreateRoleCommand({
+            RoleName: role.roleName,
+            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
+            MaxSessionDuration: role.maxSessionSeconds,
+            Tags: [{ Key: 'motir-role', Value: role.tag }],
+          }),
+        );
+        roleCreated = true;
+      } catch (createErr) {
+        // A concurrent pass made it between the read and the create.
+        if (
+          !(createErr instanceof AwsManagementApiError) ||
+          createErr.awsCode !== 'EntityAlreadyExists'
+        ) {
+          throw createErr;
+        }
+      }
+    }
+    const wanted = JSON.stringify(role.policyDocument);
+    let current: string | null = null;
+    try {
+      const answer = await call<{ PolicyDocument?: string }>(
+        'iam',
+        iam,
+        new GetRolePolicyCommand({ RoleName: role.roleName, PolicyName: role.policyName }),
+      );
+      current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
+    } catch (err) {
+      if (!iamAbsent(err)) throw err;
+    }
+    if (current !== null && samePolicy(current, wanted)) return { roleCreated, policyPut: false };
+    await call(
+      'iam',
+      iam,
+      new PutRolePolicyCommand({
+        RoleName: role.roleName,
+        PolicyName: role.policyName,
+        PolicyDocument: wanted,
+      }),
+    );
+    return { roleCreated, policyPut: true };
+  }
+
+  /** A quota's applied value; an account whose quota was never changed may have
+   *  no applied value yet, and the default is then what applies. */
+  async function appliedQuota(
+    quotas: AwsSdkClient,
+    serviceCode: string,
+    quotaCode: string,
+  ): Promise<number> {
+    const input = { ServiceCode: serviceCode, QuotaCode: quotaCode };
+    let value: number | undefined;
+    try {
+      const answer = await call<{ Quota?: { Value?: number } }>(
+        'service-quotas',
+        quotas,
+        new GetServiceQuotaCommand(input),
+      );
+      value = answer.Quota?.Value;
+    } catch (err) {
+      if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
+        throw err;
+      }
+      const answer = await call<{ Quota?: { Value?: number } }>(
+        'service-quotas',
+        quotas,
+        new GetAWSDefaultServiceQuotaCommand(input),
+      );
+      value = answer.Quota?.Value;
+    }
+    return Math.floor(required(value, 'Quota.Value'));
+  }
+
+  async function openQuotaRequest(
+    quotas: AwsSdkClient,
+    serviceCode: string,
+    quotaCode: string,
+  ): Promise<AwsQuotaIncreaseRequest | null> {
+    for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
+      const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
+        'service-quotas',
+        quotas,
+        new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
+          ServiceCode: serviceCode,
+          QuotaCode: quotaCode,
+          Status: status,
+        }),
+      );
+      const open = answer.RequestedQuotas?.[0];
+      if (open) return quotaRequestOf(open);
+    }
+    return null;
   }
 
   return {
@@ -474,80 +837,32 @@ export function createAwsManagementApi(
       return assumeInMember(accountId, AWS_RUNNER_IAM_ROLE, RUNNER_SESSION_NAME);
     },
 
+    async assumeTenantDeployRole(accountId) {
+      return assumeInMember(accountId, AWS_TENANT_DEPLOY_ROLE, TENANT_DEPLOY_SESSION_NAME);
+    },
+
     async ensureRunnerRole(credentials, policyDocument) {
-      const iam = client('iam', credentials);
-      const created: string[] = [];
-      try {
-        await call('iam', iam, new GetRoleCommand({ RoleName: AWS_RUNNER_IAM_ROLE }));
-      } catch (err) {
-        if (!iamAbsent(err)) throw err;
-        await call(
-          'iam',
-          iam,
-          new CreateRoleCommand({
-            RoleName: AWS_RUNNER_IAM_ROLE,
-            AssumeRolePolicyDocument: JSON.stringify(awsRunnerTrustPolicy(management.roleArn)),
-            MaxSessionDuration: RUNNER_SESSION_SECONDS,
-            Tags: [{ Key: 'motir-role', Value: 'fleet-runner' }],
-          }),
-        );
-        created.push(`iam-role:${AWS_RUNNER_IAM_ROLE}`);
-      }
-      const wanted = JSON.stringify(policyDocument);
-      let current: string | null = null;
-      try {
-        const answer = await call<{ PolicyDocument?: string }>(
-          'iam',
-          iam,
-          new GetRolePolicyCommand({
-            RoleName: AWS_RUNNER_IAM_ROLE,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-          }),
-        );
-        current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
-      } catch (err) {
-        if (!iamAbsent(err)) throw err;
-      }
-      if (current === null || !samePolicy(current, wanted)) {
-        await call(
-          'iam',
-          iam,
-          new PutRolePolicyCommand({
-            RoleName: AWS_RUNNER_IAM_ROLE,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-            PolicyDocument: wanted,
-          }),
-        );
-        created.push(`iam-role-policy:${AWS_RUNNER_IAM_POLICY}`);
-      }
-      return { created };
+      const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
+        roleName: AWS_RUNNER_IAM_ROLE,
+        policyName: AWS_RUNNER_IAM_POLICY,
+        policyDocument,
+        maxSessionSeconds: RUNNER_SESSION_SECONDS,
+        tag: 'fleet-runner',
+      });
+      return {
+        created: [
+          ...(roleCreated ? [`iam-role:${AWS_RUNNER_IAM_ROLE}`] : []),
+          ...(policyPut ? [`iam-role-policy:${AWS_RUNNER_IAM_POLICY}`] : []),
+        ],
+      };
     },
 
     async readVcpuQuota(credentials, regionId) {
-      const quotas = client('service-quotas', credentials, regionId);
-      const input = { ServiceCode: 'ec2', QuotaCode: AWS_EC2_VCPU_QUOTA_CODE };
-      let value: number | undefined;
-      try {
-        const answer = await call<{ Quota?: { Value?: number } }>(
-          'service-quotas',
-          quotas,
-          new GetServiceQuotaCommand(input),
-        );
-        value = answer.Quota?.Value;
-      } catch (err) {
-        // An account whose quota was never changed may have no applied value
-        // yet; the default is then what applies.
-        if (!(err instanceof AwsManagementApiError) || err.awsCode !== 'NoSuchResourceException') {
-          throw err;
-        }
-        const answer = await call<{ Quota?: { Value?: number } }>(
-          'service-quotas',
-          quotas,
-          new GetAWSDefaultServiceQuotaCommand(input),
-        );
-        value = answer.Quota?.Value;
-      }
-      return Math.floor(required(value, 'Quota.Value'));
+      return appliedQuota(
+        client('service-quotas', credentials, regionId),
+        'ec2',
+        AWS_EC2_VCPU_QUOTA_CODE,
+      );
     },
 
     async requestVcpuQuotaIncrease(credentials, regionId, desired, quotaCode) {
@@ -575,72 +890,244 @@ export function createAwsManagementApi(
     },
 
     async findOpenQuotaRequest(credentials, regionId, quotaCode) {
-      const quotas = client('service-quotas', credentials, regionId);
-      for (const status of OPEN_QUOTA_REQUEST_STATUSES) {
-        const answer = await call<{ RequestedQuotas?: RequestedQuotaShape[] }>(
-          'service-quotas',
-          quotas,
-          new ListRequestedServiceQuotaChangeHistoryByQuotaCommand({
-            ServiceCode: 'ec2',
-            QuotaCode: quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
-            Status: status,
-          }),
-        );
-        const open = answer.RequestedQuotas?.[0];
-        if (open) return quotaRequestOf(open);
-      }
-      return null;
+      return openQuotaRequest(
+        client('service-quotas', credentials, regionId),
+        'ec2',
+        quotaCode ?? AWS_EC2_VCPU_QUOTA_CODE,
+      );
     },
 
-    async ensureRunnerIamUser(credentials, policyDocument) {
-      const iam = client('iam', credentials);
-      const created: string[] = [];
-      const absent = iamAbsent;
-
+    async ensureOrganizationalUnit(name) {
+      const orgs = await organizations();
+      const rootId = await organizationRootId(orgs);
+      const found = await findOrganizationalUnit(orgs, rootId, name);
+      if (found) return { ouId: found, created: false };
       try {
-        await call('iam', iam, new GetUserCommand({ UserName: AWS_RUNNER_IAM_USER }));
+        const { OrganizationalUnit: ou } = await call<{ OrganizationalUnit?: OrganizationalUnit }>(
+          'organizations',
+          orgs,
+          new CreateOrganizationalUnitCommand({ ParentId: rootId, Name: name }),
+        );
+        return { ouId: required(ou?.Id, 'OrganizationalUnit.Id'), created: true };
       } catch (err) {
-        if (!absent(err)) throw err;
-        await call(
-          'iam',
-          iam,
-          new CreateUserCommand({
-            UserName: AWS_RUNNER_IAM_USER,
-            Tags: [{ Key: 'motir-role', Value: 'fleet-runner' }],
+        // A concurrent pass created it between the list and the create: answer
+        // that one, never a second OU.
+        if (
+          !(err instanceof AwsManagementApiError) ||
+          err.awsCode !== 'DuplicateOrganizationalUnitException'
+        ) {
+          throw err;
+        }
+        const raced = await findOrganizationalUnit(orgs, rootId, name);
+        if (!raced) throw err;
+        return { ouId: raced, created: false };
+      }
+    },
+
+    async ensureTenantDeployRole(credentials, policyDocument) {
+      const { roleCreated, policyPut } = await ensureRoleWithPolicy(credentials, {
+        roleName: AWS_TENANT_DEPLOY_ROLE,
+        policyName: AWS_TENANT_DEPLOY_ROLE,
+        policyDocument,
+        maxSessionSeconds: TENANT_DEPLOY_SESSION_SECONDS,
+        tag: 'tenant-deploy',
+      });
+      return { created: roleCreated, policyChanged: policyPut };
+    },
+
+    async ensureAccountTag(accountId, key, value) {
+      const orgs = await organizations();
+      let nextToken: string | undefined;
+      do {
+        const page = await call<{ Tags?: Tag[]; NextToken?: string }>(
+          'organizations',
+          orgs,
+          new ListTagsForResourceCommand({
+            ResourceId: accountId,
+            ...(nextToken ? { NextToken: nextToken } : {}),
           }),
         );
-        created.push(`iam-user:${AWS_RUNNER_IAM_USER}`);
+        if ((page.Tags ?? []).some((t) => t.Key === key && t.Value === value)) {
+          return { tagged: false };
+        }
+        nextToken = page.NextToken ?? undefined;
+      } while (nextToken);
+      await call(
+        'organizations',
+        orgs,
+        new TagResourceCommand({ ResourceId: accountId, Tags: [{ Key: key, Value: value }] }),
+      );
+      return { tagged: true };
+    },
+
+    async ensureQuotaRaise(credentials, regionId, target) {
+      const quotas = client('service-quotas', credentials, regionId);
+      const { serviceCode, quotaCode, desiredValue } = target;
+      if ((await appliedQuota(quotas, serviceCode, quotaCode)) >= desiredValue) {
+        return { filed: false, pending: false };
+      }
+      if (await openQuotaRequest(quotas, serviceCode, quotaCode)) {
+        return { filed: false, pending: true };
+      }
+      try {
+        await call(
+          'service-quotas',
+          quotas,
+          new RequestServiceQuotaIncreaseCommand({
+            ServiceCode: serviceCode,
+            QuotaCode: quotaCode,
+            DesiredValue: desiredValue,
+          }),
+        );
+      } catch (err) {
+        // A raise filed between the read and the request: it is the open one.
+        if (
+          !(err instanceof AwsManagementApiError) ||
+          err.awsCode !== 'ResourceAlreadyExistsException'
+        ) {
+          throw err;
+        }
+        return { filed: false, pending: true };
+      }
+      return { filed: true, pending: true };
+    },
+
+    async moveAccountToOrganizationalUnit(accountId, organizationalUnitId) {
+      const orgs = await organizations();
+      const { Parents } = await call<{ Parents?: { Id?: string }[] }>(
+        'organizations',
+        orgs,
+        new ListParentsCommand({ ChildId: accountId }),
+      );
+      const parentId = required(Parents?.[0]?.Id, 'Parents.Id');
+      if (parentId === organizationalUnitId) return { moved: false };
+      await call(
+        'organizations',
+        orgs,
+        new MoveAccountCommand({
+          AccountId: accountId,
+          SourceParentId: parentId,
+          DestinationParentId: organizationalUnitId,
+        }),
+      );
+      return { moved: true };
+    },
+
+    async ensureStackInstance({ organizationalUnitId, parameterOverrides, ...target }) {
+      const deadline = now() + AWS_STACK_INSTANCE_TIMEOUT_MS;
+      const cfn = await stackSets(target.region);
+      const common = {
+        StackSetName: target.stackSetName,
+        Regions: [target.region],
+        ParameterOverrides: parameterOverridesFor(parameterOverrides),
+        CallAs: 'DELEGATED_ADMIN' as const,
+      };
+
+      // Reach an instance with the wanted overrides, or an operation making one.
+      // Every state is read from AWS, so a re-run picks up where a run stopped.
+      let action: 'created' | 'updated' | 'none' = 'none';
+      let operationId: string | null = null;
+      for (;;) {
+        const instance = await describeStackInstance(cfn, target);
+        if (instance && sameParameterOverrides(instance.parameterOverrides, parameterOverrides)) {
+          break;
+        }
+        const create = instance === null;
+        const id = awsStackSetOperationId(create ? 'create' : 'update', target, parameterOverrides);
+        operationId = await fileStackSetOperation(
+          cfn,
+          create
+            ? new CreateStackInstancesCommand({
+                ...common,
+                DeploymentTargets: {
+                  OrganizationalUnitIds: [organizationalUnitId],
+                  Accounts: [target.accountId],
+                  AccountFilterType: 'INTERSECTION',
+                },
+                OperationId: id,
+              })
+            : new UpdateStackInstancesCommand({
+                ...common,
+                DeploymentTargets: {
+                  OrganizationalUnitIds: [organizationalUnitId],
+                  Accounts: [target.accountId],
+                  AccountFilterType: 'INTERSECTION',
+                },
+                OperationId: id,
+              }),
+        );
+        if (operationId) {
+          action = create ? 'created' : 'updated';
+          break;
+        }
+        // Another operation got there first: wait it out, then read again.
+        if (now() >= deadline) throw stackInstanceDeadline(target, instance?.status ?? 'absent');
+        await sleep(STACK_INSTANCE_POLL_MS);
       }
 
-      const wanted = JSON.stringify(policyDocument);
-      let current: string | null = null;
+      // Our operation, to its end: until it finishes the instance may still read
+      // CURRENT with the old overrides.
+      while (operationId) {
+        const { StackSetOperation: operation } = await call<{
+          StackSetOperation?: { Status?: string; StatusReason?: string };
+        }>(
+          'cloudformation',
+          cfn,
+          new DescribeStackSetOperationCommand({
+            StackSetName: target.stackSetName,
+            OperationId: operationId,
+            CallAs: 'DELEGATED_ADMIN',
+          }),
+        );
+        const status = operation?.Status ?? '';
+        if (status === 'SUCCEEDED') break;
+        if (!(AWS_STACK_SET_OPERATION_RUNNING as readonly string[]).includes(status)) {
+          throw new AwsStackInstanceFailedError(
+            target,
+            `operation ${status || 'unknown'}`,
+            operation?.StatusReason ?? null,
+          );
+        }
+        if (now() >= deadline) throw stackInstanceDeadline(target, `operation ${status}`);
+        await sleep(STACK_INSTANCE_POLL_MS);
+      }
+
+      for (;;) {
+        const instance = await describeStackInstance(cfn, target);
+        if (instance && stackInstanceOutcome(target, instance) === 'current') return { action };
+        if (now() >= deadline) throw stackInstanceDeadline(target, instance?.status ?? 'absent');
+        await sleep(STACK_INSTANCE_POLL_MS);
+      }
+    },
+
+    async readStackInstanceOutputs(target) {
+      const instance = await describeStackInstance(await stackSets(target.region), target);
+      if (!instance) throw new AwsStackOutputsMissingError(target, 'stack instance');
+      if (!instance.stackId) throw new AwsStackOutputsMissingError(target, 'stack id');
+      const member = await assumeInMember(target.accountId, AWS_MEMBER_ROLE_NAME, SESSION_NAME);
+      let stacks: { Outputs?: { OutputKey?: string; OutputValue?: string }[] }[] | undefined;
       try {
-        const answer = await call<{ PolicyDocument?: string }>(
-          'iam',
-          iam,
-          new GetUserPolicyCommand({
-            UserName: AWS_RUNNER_IAM_USER,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-          }),
-        );
-        // IAM answers the document URL-encoded (RFC 3986).
-        current = answer.PolicyDocument ? decodeURIComponent(answer.PolicyDocument) : null;
+        ({ Stacks: stacks } = await call<{ Stacks?: typeof stacks }>(
+          'cloudformation',
+          client('cloudformation', member, target.region),
+          new DescribeStacksCommand({ StackName: instance.stackId }),
+        ));
       } catch (err) {
-        if (!absent(err)) throw err;
+        // A stack the instance names but the account no longer holds.
+        if (err instanceof AwsManagementApiError && err.awsCode === 'ValidationError') {
+          throw new AwsStackOutputsMissingError(target, 'stack');
+        }
+        throw err;
       }
-      if (current === null || !samePolicy(current, wanted)) {
-        await call(
-          'iam',
-          iam,
-          new PutUserPolicyCommand({
-            UserName: AWS_RUNNER_IAM_USER,
-            PolicyName: AWS_RUNNER_IAM_POLICY,
-            PolicyDocument: wanted,
-          }),
-        );
-        created.push(`iam-policy:${AWS_RUNNER_IAM_POLICY}`);
+      const stack = stacks?.[0];
+      if (!stack) throw new AwsStackOutputsMissingError(target, 'stack');
+      const outputs: Record<string, string> = {};
+      for (const { OutputKey: key, OutputValue: value } of stack.Outputs ?? []) {
+        if (key && value !== undefined) outputs[key] = value;
       }
-      return { created };
+      if (Object.keys(outputs).length === 0)
+        throw new AwsStackOutputsMissingError(target, 'outputs');
+      return outputs;
     },
   };
 }
@@ -757,6 +1244,15 @@ export function awsRunnerPolicyDocument(input: {
         Condition: {
           StringEquals: { [`aws:ResourceTag/${AWS_SHARD_TAG_KEY}`]: input.shardTag },
         },
+      },
+      {
+        // An index VM boots with the index role's profile, so it can pull its
+        // image from ECR (MOTIR-10123). Only to EC2, and only that role.
+        Sid: 'PassIndexRole',
+        Effect: 'Allow',
+        Action: 'iam:PassRole',
+        Resource: `arn:aws:iam::*:role/${AWS_INDEX_IAM_ROLE}`,
+        Condition: { StringEquals: { 'iam:PassedToService': 'ec2.amazonaws.com' } },
       },
       ...(input.reapUntagged
         ? [

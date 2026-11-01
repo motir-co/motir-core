@@ -9,14 +9,19 @@ import type { ProjectAccessMode } from '@/generated/prisma/client';
 //
 // The producer end of the integration `motir-marketing`'s router consumes. Two
 // properties are worth more than the rest and are asserted first in their
-// sections: that each of the three shapes RESOLVES, and that everything else
-// refuses IDENTICALLY. A resolver that refused everything would pass every
+// sections: that each of the two shapes RESOLVES, and that everything else —
+// a retired name included (Story MOTIR-4528 · MOTIR-9511) — refuses
+// IDENTICALLY. A resolver that refused everything would pass every
 // denial test ever written.
 
 const { db } = await import('@/lib/db');
 const { publicAddressesService, PublicHostNotFoundError, normaliseHost } =
   await import('@/lib/services/publicAddressesService');
 const { PublicAddressesUnavailableError } = await import('@/lib/publicAddresses/errors');
+const { publicSubdomainService } = await import('@/lib/services/publicSubdomainService');
+const { GET: resolveRoute } = await import('@/app/api/public/hosts/[host]/route');
+const { HOST_CONTRACT_CACHE_CONTROL, HOST_CONTRACT_MAX_AGE_SECONDS, NOT_FOUND_CACHE_CONTROL } =
+  await import('@/lib/publicAddresses/hostContractCache');
 const { createTestWorkspace } = await import('../fixtures');
 
 const BASE = 'motir.example';
@@ -73,28 +78,13 @@ describe('normaliseHost — refuses rather than repairs', () => {
   });
 });
 
-describe('the three shapes that RESOLVE', () => {
-  it('a workspace subdomain lists that workspace’s public projects', async () => {
+describe('the two shapes that RESOLVE', () => {
+  it('a live workspace subdomain answers no_application, and lists no projects', async () => {
+    // The address decision (MOTIR-9790): the bare workspace host belongs to the
+    // default application, and there is no application record yet.
     await seedSubdomain(host, `acme.${BASE}`);
     const r = await publicAddressesService.resolveHost(`acme.${BASE}`);
-    expect(r.kind).toBe('workspace');
-    if (r.kind !== 'workspace') throw new Error('narrowing');
-    expect(r.workspace.name).toBe('Acme');
-    expect(r.projects.map((p) => p.identifier)).toEqual(['ACME']);
-  });
-
-  it('a retired subdomain reports where to redirect', async () => {
-    // The ADR §8 promise made observable to a visitor rather than merely true
-    // in the database.
-    const live = await seedSubdomain(host, `old.${BASE}`);
-    await adminDb.publicAddress.update({
-      where: { id: live.id },
-      data: { kind: 'workspace_subdomain_alias', status: 'alias' },
-    });
-    await seedSubdomain(host, `acme.${BASE}`);
-
-    const r = await publicAddressesService.resolveHost(`old.${BASE}`);
-    expect(r).toEqual({ kind: 'alias', redirectTo: `acme.${BASE}` });
+    expect(r).toEqual({ kind: 'no_application', workspace: { name: 'Acme' } });
   });
 
   it('an ISSUED customer domain names one project, and reports whether it is primary', async () => {
@@ -117,7 +107,7 @@ describe('the three shapes that RESOLVE', () => {
   it('a port on the Host header does not change the answer', async () => {
     await seedSubdomain(host, `acme.${BASE}`);
     await expect(publicAddressesService.resolveHost(`acme.${BASE}:443`)).resolves.toMatchObject({
-      kind: 'workspace',
+      kind: 'no_application',
     });
   });
 });
@@ -131,6 +121,48 @@ describe('everything else refuses IDENTICALLY', () => {
     await expect(publicAddressesService.resolveHost(`nobody.${BASE}`)).rejects.toBeInstanceOf(
       PublicHostNotFoundError,
     );
+  });
+
+  it('a leftover legacy ALIAS row — it never redirects, and never reaches the custom-domain branch', async () => {
+    // Dormant data from the retired never-released design. The service writes
+    // none any more, so the test inserts one.
+    const live = await seedSubdomain(host, `old.${BASE}`);
+    await adminDb.publicAddress.update({
+      where: { id: live.id },
+      data: { kind: 'workspace_subdomain_alias', status: 'alias' },
+    });
+    await seedSubdomain(host, `acme.${BASE}`);
+    await expect(publicAddressesService.resolveHost(`old.${BASE}`)).rejects.toBeInstanceOf(
+      PublicHostNotFoundError,
+    );
+  });
+
+  it('a renamed-away-from name and a released name stop answering at once', async () => {
+    // ADR §8 Amendment 3 rule 2 — and no row is left behind to answer for them.
+    const DAY = 24 * 60 * 60 * 1000;
+    await publicSubdomainService.claim(host.workspaceId, 'first', host.ownerId);
+    await publicSubdomainService.rename(host.workspaceId, 'second', host.ownerId);
+    await expect(publicAddressesService.resolveHost(`first.${BASE}`)).rejects.toBeInstanceOf(
+      PublicHostNotFoundError,
+    );
+    await expect(publicAddressesService.resolveHost(`second.${BASE}`)).resolves.toMatchObject({
+      kind: 'no_application',
+    });
+
+    // Past the 30-day limit, so the release is allowed.
+    await publicSubdomainService.release(
+      host.workspaceId,
+      host.ownerId,
+      new Date(Date.now() + 31 * DAY),
+    );
+    await expect(publicAddressesService.resolveHost(`second.${BASE}`)).rejects.toBeInstanceOf(
+      PublicHostNotFoundError,
+    );
+    expect(
+      await adminDb.publicAddress.count({
+        where: { hostname: { in: [`first.${BASE}`, `second.${BASE}`] } },
+      }),
+    ).toBe(0);
   });
 
   it('the BASE domain itself', async () => {
@@ -192,6 +224,41 @@ describe('everything else refuses IDENTICALLY', () => {
   });
 });
 
+describe('the route’s cache bound — a retired name answers for 30 seconds at most', () => {
+  // Story MOTIR-4528 · MOTIR-9511. The database side of rule 2 is exact; a
+  // cached 200 is what could keep a retired name answering, so the header IS
+  // the promise.
+  const call = (h: string) =>
+    resolveRoute(new Request(`https://app.motir.co/api/public/hosts/${h}`), {
+      params: Promise.resolve({ host: h }),
+    });
+
+  it('a 200 carries exactly `public, max-age=30`, with no revalidate window', async () => {
+    await seedSubdomain(host, `acme.${BASE}`);
+    const res = await call(`acme.${BASE}`);
+    expect(res.status).toBe(200);
+    expect(HOST_CONTRACT_MAX_AGE_SECONDS).toBe(30);
+    expect(res.headers.get('Cache-Control')).toBe(HOST_CONTRACT_CACHE_CONTROL);
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=30');
+    expect(res.headers.get('Cache-Control')).not.toContain('stale-while-revalidate');
+  });
+
+  it('a 404 is `no-store`, and a legacy alias gets the same 404 body as an unknown host', async () => {
+    const live = await seedSubdomain(host, `old.${BASE}`);
+    await adminDb.publicAddress.update({
+      where: { id: live.id },
+      data: { kind: 'workspace_subdomain_alias', status: 'alias' },
+    });
+    const alias = await call(`old.${BASE}`);
+    const unknown = await call(`nobody.${BASE}`);
+    for (const res of [alias, unknown]) {
+      expect(res.status).toBe(404);
+      expect(res.headers.get('Cache-Control')).toBe(NOT_FOUND_CACHE_CONTROL);
+    }
+    expect(await alias.json()).toEqual(await unknown.json());
+  });
+});
+
 describe('addressesForProject — the ADR §7 default rule', () => {
   it('no address at all → the motir.co URL is primary, and it is never empty', async () => {
     const a = await publicAddressesService.addressesForProject(
@@ -203,23 +270,19 @@ describe('addressesForProject — the ADR §7 default rule', () => {
     expect(a.alternates).toEqual([]);
   });
 
-  it('a subdomain claimed → the subdomain PATH is primary, motir.co becomes an alternate', async () => {
-    // ⚠️ `/ACME`, NOT `/p/ACME`. The ADR's Q2 and §3 spell the address
-    // `acme.<base>/<identifier>` and the renderer's router serves it there
-    // (MOTIR-4220); `/p/` is `motir.co`'s shape, because that host also carries
-    // a landing, an /explore and a /docs a bare key would collide with. This
-    // assertion carried the wrong shape until the router was built against it —
-    // the URL still RESOLVED, which is why nothing else caught it, so what was
-    // shipped was a canonical naming the duplicate instead of the address.
+  it('a subdomain claimed → motir.co stays primary, and the subdomain is not listed at all', async () => {
+    // The address decision (MOTIR-9790): the bare workspace host belongs to the
+    // workspace's default application and serves no project path, so
+    // `acme.<base>/ACME` is a 404. Naming it as a canonical or an alternate would
+    // send readers and crawlers to a page that does not exist.
     await seedSubdomain(host, `acme.${BASE}`);
     const a = await publicAddressesService.addressesForProject(
       host.projectId,
       host.workspaceId,
       'ACME',
     );
-    expect(a.primary).toBe(`https://acme.${BASE}/ACME`);
-    expect(a.alternates.some((u) => u.includes('/p/ACME'))).toBe(true);
-    expect(a.alternates).not.toContain(a.primary);
+    expect(a.primary).toContain('/p/ACME');
+    expect(a.alternates).toEqual([]);
   });
 
   it('a custom domain PROMOTED → it wins over the subdomain', async () => {
@@ -235,8 +298,9 @@ describe('addressesForProject — the ADR §7 default rule', () => {
       'ACME',
     );
     expect(a.primary).toBe('https://roadmap.acme.test');
-    // Both the subdomain path and the motir.co URL are alternates that redirect.
-    expect(a.alternates).toContain(`https://acme.${BASE}/ACME`);
+    // The motir.co URL is the one alternate; the workspace host is never listed.
+    expect(a.alternates).toHaveLength(1);
+    expect(a.alternates[0]).toContain('/p/ACME');
   });
 
   it('an ADDED-but-not-issued custom domain is neither primary nor an alternate', async () => {
@@ -298,6 +362,11 @@ describe('primaryHostsForProjects — the batched crawl read', () => {
     // Two paths computing one rule is how they come apart. Asserted against
     // each other rather than against a restated expectation.
     await seedSubdomain(host, `acme.${BASE}`);
+    const addr = await seedCustomDomain(host, 'roadmap.acme.test', 'issued');
+    await adminDb.project.update({
+      where: { id: host.projectId },
+      data: { primaryAddressId: addr.id },
+    });
     const map = await publicAddressesService.primaryHostsForProjects([
       { id: host.projectId, workspaceId: host.workspaceId, identifier: 'ACME' },
     ]);
@@ -309,7 +378,8 @@ describe('primaryHostsForProjects — the batched crawl read', () => {
     expect(map.get(host.projectId)).toBe(new URL(single.primary).host);
   });
 
-  it('is empty for a project with no claimed address, so the caller falls back', async () => {
+  it('is empty for a project with no promoted domain, a claimed workspace subdomain included', async () => {
+    await seedSubdomain(host, `acme.${BASE}`);
     const map = await publicAddressesService.primaryHostsForProjects([
       { id: host.projectId, workspaceId: host.workspaceId, identifier: 'ACME' },
     ]);

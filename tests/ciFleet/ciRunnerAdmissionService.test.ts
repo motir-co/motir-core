@@ -177,7 +177,7 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
   vi.stubEnv('MOTIR_AI_URL', 'https://ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
-  // The kill switch disengaged; the CI figure is the plan's (Max ×2, 25) unless
+  // The kill switch disengaged; the CI figure is the plan's (Max ×2, 15) unless
   // a case sets an override.
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
   stubMotirAi();
@@ -204,7 +204,7 @@ describe("guard 1 — the ORGANISATION'S CI burst cap (MOTIR-9375)", () => {
 
     const verdict = await ciRunnerAdmissionService.admit(intent);
 
-    expect(verdict).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 25 });
+    expect(verdict).toMatchObject({ outcome: 'admitted', ciInFlight: 0, ciBurstCap: 15 });
     // The claim is part of the decision, not a later step — the slot is taken
     // the moment the gate says yes, which is what makes the count exact.
     expect(await statusOf(intent.id)).toBe('provisioning');

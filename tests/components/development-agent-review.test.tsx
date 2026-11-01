@@ -77,6 +77,7 @@ function view(gate: ApprovalGateDTO, over: Partial<AgentReviewViewDto> = {}): Ag
     reviewUnavailableReason: null,
     run: RUN,
     settingsDoorHref: null,
+    findingsRefs: {},
     ...over,
   };
 }
@@ -86,8 +87,22 @@ const REVIEW_REPAIR: WorkItemRepairViewDto = {
   repairClass: 'review',
   acceptanceRefusal: null,
   failing: [
-    { repo: 'moooon/motir-core', number: 131, ci: 'passing', queueExit: null, conflict: null },
-    { repo: 'moooon/motir-gateway', number: 57, ci: 'passing', queueExit: null, conflict: null },
+    {
+      repo: 'moooon/motir-core',
+      number: 131,
+      ci: 'passing',
+      queueExit: null,
+      conflict: null,
+      outOfDate: null,
+    },
+    {
+      repo: 'moooon/motir-gateway',
+      number: 57,
+      ci: 'passing',
+      queueExit: null,
+      conflict: null,
+      outOfDate: null,
+    },
   ],
   lastGaveUp: null,
 };

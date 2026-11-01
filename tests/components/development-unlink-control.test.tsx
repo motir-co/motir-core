@@ -55,6 +55,7 @@ const PR: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
+  preview: null,
   baseRef: 'main',
   conflicted: false,
 };

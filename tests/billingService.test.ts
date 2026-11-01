@@ -336,6 +336,28 @@ describe('billingService.getBillingStatus', () => {
 // → pool, the meter → consumption, the charge row → credits), never a
 // placeholder and never a hardcoded null. The motir-ai boundary is the suite's
 // existing mock; everything else runs against real Postgres.
+describe('billingService.assertCanViewBilling (the Fleet use gate, MOTIR-9661)', () => {
+  it('refuses exactly whom Billing & plans refuses, and admits an owner or admin', async () => {
+    const { organizationId, owner, admin, member, outsider } = await makeOrgWithRoles();
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: owner.id }),
+    ).resolves.toBeUndefined();
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: admin.id }),
+    ).resolves.toBeUndefined();
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: member.id }),
+    ).rejects.toBeInstanceOf(BillingForbiddenError);
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: outsider.id }),
+    ).rejects.toBeInstanceOf(OrganizationNotFoundError);
+    delete process.env['MOTIR_CLOUD'];
+    await expect(
+      billingService.assertCanViewBilling({ organizationId, actorUserId: owner.id }),
+    ).rejects.toBeInstanceOf(BillingNotAvailableError);
+  });
+});
+
 describe('billingService.getBillingStatus — the CI entitlement (③ Motir CI)', () => {
   beforeEach(() => {
     process.env['GITHUB_FALLBACK_ORG'] = 'motir-projects';
@@ -673,18 +695,18 @@ describe('billingService.startCheckout', () => {
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
 
-  it('refuses a larger pool at or below the ladder top with its own code (MOTIR-8990)', async () => {
+  it('refuses a larger pool at or below Host’s pool with its own code (MOTIR-8990 · MOTIR-9366)', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
     const refusal = billingService.startCheckout({
       organizationId,
       actorUserId: owner.id,
-      priceLookupKey: 'pool_60k_pool_monthly',
+      priceLookupKey: 'pool_250k_pool_monthly',
     });
     await expect(refusal).rejects.toBeInstanceOf(LargerPoolAtOrBelowCeilingError);
     await expect(refusal).rejects.toMatchObject({
       code: 'BILLING_POOL_AT_OR_BELOW_CEILING',
-      requestedCredits: 60000,
-      ceilingCredits: 60000,
+      requestedCredits: 250000,
+      ceilingCredits: 300000,
     });
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();
   });
@@ -694,20 +716,20 @@ describe('billingService.startCheckout', () => {
     await billingService.startCheckout({
       organizationId,
       actorUserId: owner.id,
-      priceLookupKey: 'pool_120k_pool_annual',
+      priceLookupKey: 'pool_1200k_pool_annual',
     });
     expect(createCheckoutSessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ priceId: 'pool_120k_pool_annual', quantity: 1 }),
+      expect.objectContaining({ priceId: 'pool_1200k_pool_annual', quantity: 1 }),
     );
   });
 
-  it('keeps a rung-shaped key above the ceiling that no rung carries as UNKNOWN_PRICE', async () => {
+  it('keeps a rung-shaped key above the Host floor that no rung carries as UNKNOWN_PRICE', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
     await expect(
       billingService.startCheckout({
         organizationId,
         actorUserId: owner.id,
-        priceLookupKey: 'pool_90k_pool_monthly',
+        priceLookupKey: 'pool_700k_pool_monthly',
       }),
     ).rejects.toBeInstanceOf(UnknownBillingPriceError);
     expect(createCheckoutSessionMock).not.toHaveBeenCalled();

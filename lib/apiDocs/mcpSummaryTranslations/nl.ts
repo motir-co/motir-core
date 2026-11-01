@@ -106,6 +106,12 @@ export const nl: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'Regels die een tekst of patroon raken in de geïndexeerde bestandsinhoud — tekenreeksliteralen, commentaar en bestanden die geen code zijn, die het zoeken op symbolen niet ziet — het eigen antwoord van de gehoste planner, gepagineerd.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'Sluit een sessie-branch af nadat de PR is gemerged: elk item dat erop is vastgelegd gaat naar Klaar.',
@@ -249,9 +255,9 @@ export const nl: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Eén item in zijn geheel — beschrijving, status, bovenliggend item of Map, onderliggende items, afhankelijkheidsrelaties, een gereedheidsoordeel, de gekoppelde fouten en de laatste weigering die erop is teruggestuurd.',
+      'Eén item in zijn geheel — beschrijving, status, bovenliggend item of Map, onderliggende items, afhankelijkheidsrelaties, een gereedheidsoordeel, de gekoppelde fouten, de laatste weigering die erop is teruggestuurd en waar zijn nog niet gemergede code staat.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -368,9 +374,15 @@ export const nl: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      'De tekst van één bestand uit een repository in de set van het Project, bij een ref — begrensd en per regelbereik zoals de leesactie van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
+      'De tekst van één bestand, of de directe items van een map, uit een repository in de set van het Project, bij een ref — begrensd en per regelbereik zoals de leesactie van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      'De paden die een branch heeft gewijzigd in een repository in de set van het Project, ten opzichte van zijn standaardbranch of een benoemde basis — begrensd zoals de lijst van de gehoste planner, elke afwezigheid een benoemde uitkomst.',
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:
@@ -398,9 +410,9 @@ export const nl: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Een runner die een werkitem bouwde via een plan dat alleen in het HOE klopte niet, legt vast wat hij anders bouwde — een opmerking op het werkitem en een runregistratie, bevestigd.',
+      'Een runner legt vast wat hij anders bouwde dan een plan dat alleen in het HOE niet klopte, en welke beslissingen hij nam waar het plan niets zei — een opmerking op het werkitem en een runregistratie, bevestigd.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

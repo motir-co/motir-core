@@ -158,6 +158,13 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
     source: 'scan',
     why: 'organization_active',
   },
+  'lib/services/ciPreviewUsageMeterService.ts#chargeOrganization': {
+    tables: ['organization'],
+    source: 'scan',
+    why:
+      'the org row read for `isMeta` before a preview-usage charge (Story MOTIR-5766 · ' +
+      'MOTIR-5777) — the same read as ciMinutesMeterService#isMeta, organization_active',
+  },
   'lib/services/ciMinutesMeterService.ts#meterWorkflowRun': {
     tables: ['project_repository', 'workspace'],
     source: 'scan',
@@ -246,6 +253,15 @@ const ORG_SWEEP: Record<string, { tables: string[]; source: 'scan' | 'hand'; why
       'read binds the tenant in its own transaction: project_repository_org_read, the ' +
       'github_repo owner filter by github_repo_org_read, and the workspace JOIN by ' +
       'workspace_org_service_read.',
+  },
+  'lib/services/fleetUseCountsService.ts#memberIdsOf': {
+    tables: ['organization_membership'],
+    source: 'scan',
+    why:
+      'the per-person count of the Fleet use section (MOTIR-9660): the org`s member ids, ' +
+      'read in a transaction of their own under org_membership_visible_active_or_own. The ' +
+      'members` live `agent_instance` rows are counted afterwards in the census transaction ' +
+      'under the system read arm, never under this bind.',
   },
   'lib/services/entitlementsService.ts#tierForOrg': {
     tables: ['organization'],

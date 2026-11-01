@@ -32,6 +32,8 @@ import { adminDb } from '../helpers/adminDb';
 import {
   ADD_SHARD_ENTERPRISE_SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
 } from '../helpers/addShardFakes';
@@ -120,7 +122,6 @@ const MARKERS = {
   managementKey: 'MOTIR9281MGMTKEYSECRET',
   sessionToken: 'MOTIR9281SESSIONTOKEN',
   sessionSecret: 'MOTIR9281SESSIONSECRET',
-  runtimeKey: 'MOTIR9281RUNTIMEKEYSECRET',
   jit: 'MOTIR9281JITMARKER',
 } as const;
 const ENCODED_JIT = Buffer.from(`{"marker":"${MARKERS.jit}"}`).toString('base64');
@@ -165,11 +166,6 @@ async function addShard(): Promise<number> {
   );
 }
 
-function setRuntimeKey(): void {
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, 'AKIA_E2E_RUNTIME');
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, MARKERS.runtimeKey);
-}
-
 /** The `<step> <outcome>` line add-shard printed for `step` on its last run. */
 function stepLine(output: string[], step: string): string {
   return [...output].reverse().find((line) => line.startsWith(`${step} `)) ?? '';
@@ -179,11 +175,10 @@ async function shardRows() {
   return adminDb.fleetShard.findMany({ where: { name: NAME } });
 }
 
-/** Add-shard through to an active row: a first run, then the person's two steps. */
+/** Add-shard through to an active row: a first run, then the person's quota step. */
 async function activeShard() {
   expect(await addShard()).toBe(EXIT_PENDING);
   organization.quota = SHARD_VCPU_QUOTA_TARGET;
-  setRuntimeKey();
   expect(await addShard()).toBe(EXIT_OK);
   const [row] = await shardRows();
   return row!;
@@ -307,20 +302,20 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', 'AKIA_E2E_MANAGEMENT');
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', MARKERS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   // The deployment's own selection — Fly, configured — so the process-wide fleet
   // is the Fly fake and the account resolves through its real `aws` case.
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
   vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly-token');
   vi.stubEnv('FLY_FLEET_APP', 'motir-ci');
   vi.stubEnv('MOTIR_RUNNER_IMAGE', 'motir/ci-runner@sha256:test');
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, '');
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, '');
   vi.stubEnv(AWS_RUNNER_AMI_ENV_VAR, '');
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   installAddShardGithub(newGithubWorld(), 'ghs_installation');
   world.ec2 = new AwsEc2Fake();
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2());
   // The real provider; only its management API is the in-memory organization.
   unregister = registerShardProvisioningProvider(
     createAwsShardProvisioningProvider({
@@ -405,13 +400,14 @@ describe('add-shard for aws, from nothing', () => {
 
     const output = printed.join('\n');
     expect(output).toContain('Pending manual steps:');
-    expect(output).toContain(
-      `then run: flyctl secrets set -a motir-core ${PREFIX}_ACCESS_KEY_ID=… ${PREFIX}_SECRET_ACCESS_KEY=…`,
-    );
+    // The runner role is confirmed by assuming it; no key is asked for (MOTIR-9847).
+    expect(stepLine(printed, 'runtime_credential')).toMatch(/ already — /);
+    expect(output).not.toContain('flyctl secrets set');
   });
 
   it('interrupted at the network, a re-run completes with one account, one of each resource and one row', async () => {
-    ec2().failNext('createSubnet');
+    // The run dies after the stack instance is filed, waiting for CURRENT (MOTIR-9845).
+    organization.stackInstanceFailure = new Error('the run died waiting for CURRENT');
     expect(await addShard()).toBe(EXIT_ERROR);
     expect(await shardRows()).toEqual([]);
     expect(organization.accounts.size).toBe(1);
@@ -422,6 +418,7 @@ describe('add-shard for aws, from nothing', () => {
 
     expect(organization.calls.filter((c) => c === 'createOrganizationAccount')).toHaveLength(1);
     expect(organization.accounts.size).toBe(1);
+    expect(organization.stackInstances.size).toBe(1);
     expect(ec2().vpcs.size).toBe(1);
     expect(ec2().internetGateways.size).toBe(1);
     expect(ec2().routeTables.size).toBe(1);
@@ -433,13 +430,12 @@ describe('add-shard for aws, from nothing', () => {
     }
   });
 
-  it('with the runtime key set and the quota at target, a re-run exits 0, activates the row and creates nothing', async () => {
+  it('with the quota at target, a re-run exits 0, activates the row and creates nothing', async () => {
     expect(await addShard()).toBe(EXIT_PENDING);
     const mutations = ec2().mutations().length;
     const created = organization.calls.filter((c) => c.startsWith('create')).length;
 
     organization.quota = SHARD_VCPU_QUOTA_TARGET;
-    setRuntimeKey();
     expect(await addShard()).toBe(EXIT_OK);
 
     const rows = await shardRows();

@@ -123,6 +123,10 @@ export interface RepairPullRequestDto {
    *  stored reading) — a member failing for that alone has green checks and no exit. NOT on
    *  the wire: the v1 presenter copies fields by name, and this one is the page's. */
   conflicted: boolean;
+  /** The host reports this pull request OUT OF DATE with a base branch that requires it to
+   *  be up to date (`mergeable_state: behind`, Bug MOTIR-10054) — its checks are green and
+   *  only a merge of the base answers it. NOT on the wire, for `conflicted`'s reason. */
+  outOfDate: boolean;
 }
 
 /** Why the merge queue threw a pull request out, as the fixing agent is told it
@@ -193,6 +197,10 @@ export interface RepairPullRequestRefDto {
    *  § 30's fix part) — the line then says it conflicts with `baseRef` and cannot be merged,
    *  never *Checks are failing*, which would be false. */
   conflict: { baseRef: string | null } | null;
+  /** Set when the host reports the pull request out of date with a base that requires it to
+   *  be up to date (Bug MOTIR-10054) — the line then says it is behind `baseRef`, never
+   *  *Checks are failing*, which would be false. */
+  outOfDate: { baseRef: string | null } | null;
 }
 
 /**

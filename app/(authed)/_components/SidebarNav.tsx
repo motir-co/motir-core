@@ -180,6 +180,12 @@ export interface SidebarNavProps {
    */
   hostedRunsAvailable?: boolean;
   /**
+   * Whether the active project holds a repository Motir hosts (MOTIR-9966) — the
+   * registry's project axis, which drops the **Environment** room from a project
+   * holding only customer repositories. Defaults FALSE, like the flags above.
+   */
+  motirRepositoriesPresent?: boolean;
+  /**
    * The Help control for the rail's FOOTER (MOTIR-4239) — a ready-made
    * `<HelpMenu placement="footer" />`, built by the layout so this component
    * stays agnostic of `docsIndexUrl` / `legalIndexUrl` (the Docs and Legal
@@ -219,6 +225,7 @@ export function SidebarNav({
   workspaceTierRevealed = false,
   publicProjectsAvailable = false,
   hostedRunsAvailable = false,
+  motirRepositoriesPresent = false,
   helpMenu,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
@@ -257,7 +264,7 @@ export function SidebarNav({
   // The registry's SECOND axis (MOTIR-4243) — what this BUILD has, beside what
   // this actor holds. Built here with `held`, for the same reason: the rail and
   // the area door must filter on one answer, not two.
-  const availability = { publicProjectsAvailable, hostedRunsAvailable };
+  const availability = { publicProjectsAvailable, hostedRunsAvailable, motirRepositoriesPresent };
 
   // WORKSPACE-settings AREA (Story MOTIR-4843 · MOTIR-4846): the FOURTH and last
   // settings tier to become an area. Like the account and organisation branches
@@ -272,7 +279,7 @@ export function SidebarNav({
   // nothing marks the gap: no empty heading, no disabled row.
   if (isWorkspaceSettingsPath(pathname)) {
     const workspaceSections: SidebarSection[] = groupWorkspaceSettingsNav(
-      visibleWorkspaceSettingsNav(workspaceTierRevealed),
+      visibleWorkspaceSettingsNav(workspaceTierRevealed, undefined, availability),
     ).map(({ group, entries }) => ({
       id: `workspace-settings-${group}`,
       label: ts(`workspace.nav.group.${group}`),
@@ -671,9 +678,11 @@ export function SidebarNav({
   // `organization-tier.md` §6 requires of a hiding rule: above the reveal they
   // are rows in the workspace area's own rail (`lib/settings/workspaceSettingsNav.ts`),
   // and below it they are folded into `/settings/organization` — Security by
-  // `WorkspaceFoldInSection` (MOTIR-3502) and Job runs by `JobRunsFoldInSection`
+  // `WorkspaceFoldInSection` (MOTIR-3502) and Job runs by its own fold-in
   // (MOTIR-4861, the fold-in this card waited on). The door into both is the
-  // workspace SWITCHER's new `Workspace settings` row.
+  // workspace SWITCHER's new `Workspace settings` row. (Job runs was later
+  // RETIRED for tenants by decision — Story MOTIR-9982: the ledger is
+  // staff-only at `/admin/jobs`, so neither its rail row nor its fold-in exists.)
   //
   // ⚠️ AND `Git` HAS NOW LEFT IT TOO (Story MOTIR-1754 · MOTIR-1768). MOTIR-4640
   // took it out of the design asset above; MOTIR-4643 folded Code health + Git
@@ -710,8 +719,8 @@ export function SidebarNav({
             // is the active route, so only one row ever reads current.
             //
             // ⚠️ TWO CLAUSES WENT WITH THEIR ROWS (MOTIR-4847). This predicate
-            // used to negate `/settings/workspace/security` and
-            // `/settings/workspace/jobs` as well. Both are now unreachable from
+            // used to negate `/settings/workspace/security` and the workspace
+            // Job runs route (since retired, Story MOTIR-9982) as well. Both are now unreachable from
             // here in TWO independent ways — the rows they yielded to are gone,
             // and `isWorkspaceSettingsPath` returns the workspace area's own
             // Sidebar before this block is ever built — so a clause that can

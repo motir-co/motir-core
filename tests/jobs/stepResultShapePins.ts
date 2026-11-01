@@ -189,6 +189,25 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape: '{ refusedForSize: null } | { refusedForSize: { capBytes: number; sizeBytes: number } }',
   },
+  // A merge starts a production release (MOTIR-10031): one try per wait while
+  // another release of the application is in flight.
+  '`merge-release-${attempt}`': {
+    file: 'lib/jobs/definitions/productionMergeRelease.ts',
+    shape:
+      '{ outcome: "build_failed_recorded"; releaseId: string } | { outcome: "deferred_in_progress" } | { outcome: "gave_up_in_progress"; releaseId: string } | { outcome: "ignored" } | { outcome: "released"; releaseId: string; state: string }',
+  },
+  // A production config change redeploys the live release (MOTIR-10032).
+  '`config-redeploy-${attempt}`': {
+    file: 'lib/jobs/definitions/productionConfigRedeploy.ts',
+    shape:
+      '{ outcome: "deferred_in_progress" } | { outcome: "failed_release"; releaseId: string } | { outcome: "gave_up_in_progress" } | { outcome: "redeployed"; releaseId: string } | { outcome: "skipped_customer_repository" } | { outcome: "skipped_no_live_release" }',
+  },
+  // Every production release posts its GitHub deployment status (MOTIR-10033).
+  'post-release-status': {
+    file: 'lib/jobs/definitions/releaseDeploymentStatus.ts',
+    shape:
+      '{ outcome: "posted"; statuses: Array<"failure" | "in_progress" | "inactive" | "pending" | "success"> } | { outcome: "release_not_found" } | { outcome: "up_to_date" }',
+  },
   '`settle-${pass}`': {
     file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',
     shape:
@@ -472,6 +491,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ failures: number; organizations: Array<{ host: boolean; organizationId: string; slots: { agent_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; ci_runner?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined; merged?: "already" | "backing_off" | "created" | "failed" | "no_primary" | "raise_failed" | "refused" | undefined } }>; ran: boolean }',
   },
+  // Story MOTIR-9792 · MOTIR-9942 — the tenant account reconcile.
+  'hosting-tenant-account-reconcile': {
+    file: 'lib/jobs/definitions/hostingTenantAccountReconcile.ts',
+    shape:
+      '{ failures: number; organizations: Array<{ organizationId: string; outcome: "already_ready" | "backing_off" | "failed" | "not_requested" | "ready" | "refused" }>; ran: boolean }',
+  },
   // Story MOTIR-9365 · MOTIR-9585 — the Host account state pass.
   'host-account-state': {
     file: 'lib/jobs/definitions/hostAccountState.ts',
@@ -493,6 +518,37 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/fleetAttribution.ts',
     shape:
       '{ accounts: number; apps: number; failures: number; killed: Array<{ action: "destroyed" | "stopped"; app: string; machineId: string; reason: "foreign_org" | "no_record" | "org_stopped" | "record_ended"; workload: "agent_instance" | "ci_runner" | "code_graph_index" | "hosted_agent" | null }>; listed: number; matched: number; orphanedVolumesDestroyed: number; outcome: "reconciled"; spared: number; unavailableApps: Array<string>; undated: number } | { detail: string; outcome: "inventory_unavailable" } | { outcome: "disabled" }',
+  },
+  'preview-enablement-sweep': {
+    file: 'lib/jobs/definitions/previewEnablementSweep.ts',
+    shape:
+      '{ rows: Array<{ errorCode?: string | undefined; outcome: "already_enabled" | "enabled" | "failed" | "ineligible" | "not_found" | "renewed"; repositoryId: string }> }',
+  },
+  '`preview-${data.effect}`': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '{ status: string }',
+  },
+  '`preview-health-${poll}`': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '"healthy" | "pending" | "unhealthy"',
+  },
+  'preview-reaper': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape:
+      '{ announced: number; closed: number; failed: number; startsAbandoned: number; teardownsFinished: number }',
+  },
+  'preview-usage-accrual': {
+    file: 'lib/jobs/definitions/previewUsageAccrual.ts',
+    shape: '{ failed: number; previews: number; slices: number }',
+  },
+  'preview-settle': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape: '{ status: "failed" | "ready" | "skipped" }',
+  },
+  'preview-start': {
+    file: 'lib/jobs/definitions/previewLifecycle.ts',
+    shape:
+      '{ handle: { appRef: string; environment: { kind: "preview"; pullRequest: number } | { kind: "production" }; providerRef: string; releaseId: string; target: "aws" | "fly" | "serverless" }; status: "deployed" } | { reason: string; status: "failed" } | { status: "skipped" }',
   },
   'recompute-code-graph-drift': {
     file: 'lib/jobs/definitions/codeGraphDriftSweep.ts',
@@ -577,6 +633,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // sweep gives a plan whose revision lease lapsed back to `planned`.
     shape: '{ planIds: Array<string>; restored: number }',
   },
+  // MOTIR-10091 — the requirement page of a confirmed plan offer, written after the start.
+  'requirement-page-write': {
+    file: 'lib/jobs/definitions/planOfferRequirementPage.ts',
+    shape: 'null | { pageId: string; title: string }',
+  },
+  'requirement-page-record': {
+    file: 'lib/jobs/definitions/planOfferRequirementPage.ts',
+    shape: 'void',
+  },
   'release-expired-planning-locks': {
     file: 'lib/jobs/definitions/planTargetLockSweep.ts',
     // `plan_awaiting_review` added by MOTIR-5647: a lock held by a plan that has
@@ -607,8 +672,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   },
   'resolve-target-v2': {
     file: 'lib/jobs/indexFleetSteps.ts',
+    // `no_commit_beyond_template` added by MOTIR-4589: a repository Motir created
+    // that still holds only its seed is not indexed yet. Id KEPT — the change only
+    // ADDS a member, so every memo written under the old shape is a valid value of
+    // the new one.
     shape:
-      '{ anchorProjectId: string; indexed: true; organizationId: string; providerId: "github" | "gitlab"; repoRef: string } | { indexed: false; reason: "installation_missing" | "no_projects" | "provider_cannot_index" | "workspace_missing" }',
+      '{ anchorProjectId: string; indexed: true; organizationId: string; providerId: "github" | "gitlab"; repoRef: string } | { indexed: false; reason: "installation_missing" | "no_commit_beyond_template" | "no_projects" | "provider_cannot_index" | "workspace_missing" }',
   },
   'restore-for-revived-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
@@ -748,6 +817,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   'sweep-expired-exports': {
     file: 'lib/jobs/definitions/dataExportExpirySweep.ts',
     shape: '{ expired: number; failed: number; scanned: number }',
+  },
+  'sweep-expired-name-holds': {
+    file: 'lib/jobs/definitions/publicHostnameReservationSweep.ts',
+    shape: '{ deleted: number }',
   },
   'sweep-oauth-leftovers': {
     file: 'lib/jobs/definitions/oauthSweep.ts',

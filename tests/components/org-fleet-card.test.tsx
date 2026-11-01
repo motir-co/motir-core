@@ -46,13 +46,14 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
     isMeta: false,
     internalBilling: false,
     byWorkload: { ci_runner: 3, hosted_agent: 1, agent_instance: 2, code_graph_index: 1 },
+    agentsLive: 2,
     plan: {
       kind: 'capped',
       planKey: 'standard',
       planName: 'Standard',
       agentRunsInParallel: 1,
       agentsPerUser: 1,
-      agentsRunningPerOrg: 5,
+      agentsPerOrg: 5,
       ciBurstCap: 5,
       ciBurstSource: 'plan',
     },
@@ -101,11 +102,12 @@ describe('OrgFleetCard', () => {
     expect(within(screen.getByTestId('org-fleet-tile-index')).getByText('1')).toBeTruthy();
     // MOTIR-9377: the plan and its four figures, each tile against its own.
     expect(screen.getByTestId('org-fleet-plan').textContent).toBe(
-      'Plan Standard · hosted runs at once: 1 · agents per person: 1 · agents running: 5 · CI jobs at once: 5',
+      'Plan Standard · hosted runs at once: 1 · agents per person: 1 · agents: 5 · CI jobs at once: 5',
     );
     expect(screen.getByTestId('org-fleet-tile-ciRunner').textContent).toContain('3 of 5');
     expect(screen.getByTestId('org-fleet-tile-hostedAgent').textContent).toContain('1 of 1');
-    expect(screen.getByTestId('org-fleet-tile-agentInstance').textContent).toContain('2 of 5');
+    // Running machines, against no figure: the org figure counts live agents (MOTIR-9954).
+    expect(screen.getByTestId('org-fleet-tile-agentInstance').textContent).not.toContain(' of ');
     expect(screen.getByTestId('org-fleet-tile-index').textContent).not.toContain(' of ');
     expect(screen.getByTestId('org-fleet-card').textContent).not.toMatch(/pool|500/i);
     expect(screen.getByText('1,240 credits')).toBeTruthy();

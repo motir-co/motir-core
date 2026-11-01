@@ -6,11 +6,13 @@ import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // THE AI BOUNDARY CARRIES A DECISION'S CONFIRMATION (Story MOTIR-5871 · Subtask
-// MOTIR-5958). Through the REAL internal routes, against a real Postgres: a `human`
-// decision's latest confirm question rides `get-item`, `get-subtree` and `plan-tree`
-// as a `decision` block — `confirmed` / `overturned` / `awaiting` / `none`, dated when
-// decided, with an overturn's owed keys — read in ONE query per response however
-// many decisions the set holds, and `null` on every other item.
+// MOTIR-5958; widened by Bug MOTIR-10146). Through the REAL internal routes, against
+// a real Postgres: a decision's latest deciding gate — `decision_confirmation` for a
+// `human` decision, `decision_approval` for the planner's own `coding_agent` record —
+// rides `get-item`, `get-subtree` and `plan-tree` as a `decision` block —
+// `confirmed` / `overturned` / `awaiting` / `none`, dated when decided, with an
+// overturn's owed keys and the person's note — read in ONE query per response
+// however many decisions the set holds, and `null` on every other item.
 
 vi.mock('@/lib/jobs/sendEvent', () => ({ sendEvent: async () => {} }));
 
@@ -101,6 +103,35 @@ async function decide(fx: Fx, itemId: string, verb: 'approve' | 'overturn') {
   return result.gate.decidedAt!;
 }
 
+/**
+ * The planner's own decision's `decision_approval` gate, in a given state. Written
+ * straight to the table: what is under test is the boundary's READ of the gate, and
+ * the publish path that raises one is `decisionPageService`'s own suite.
+ */
+async function approvalGate(
+  fx: Fx,
+  workItemId: string,
+  state: 'approved' | 'changes_requested' | 'awaiting',
+  createdAt: Date,
+) {
+  const decided = state !== 'awaiting';
+  const gate = await adminDb.approvalGate.create({
+    data: {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      workItemId,
+      kind: 'decision_approval',
+      subjectId: `page-version-${createdAt.getTime()}`,
+      state,
+      createdAt,
+      ...(decided
+        ? { decidedAt: new Date(createdAt.getTime() + 60_000), noteMd: 'Reviewed.' }
+        : {}),
+    },
+  });
+  return gate.decidedAt?.toISOString() ?? null;
+}
+
 async function scene() {
   const fx = await makeFixture();
   const epic = await workItemsService.createWorkItem(
@@ -114,6 +145,12 @@ async function scene() {
   const awaiting = await decision(fx, epic.id);
   const defective = await decision(fx, epic.id, '## Decision\nOnly this.');
   const agent = await decision(fx, epic.id, BODY, 'coding_agent');
+  // An older version sent back, then the republished one approved: the latest wins.
+  await approvalGate(fx, agent.id, 'changes_requested', new Date('2026-10-01T09:00:00Z'));
+  const agentAt = await approvalGate(fx, agent.id, 'approved', new Date('2026-10-02T09:00:00Z'));
+  const sentBack = await decision(fx, epic.id, BODY, 'coding_agent');
+  await approvalGate(fx, sentBack.id, 'changes_requested', new Date('2026-10-03T09:00:00Z'));
+  const unpublished = await decision(fx, epic.id, BODY, 'coding_agent');
   const story = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'story', title: 'Plain', parentId: epic.id },
     fx.ctx,
@@ -128,6 +165,9 @@ async function scene() {
     awaiting,
     defective,
     agent,
+    agentAt,
+    sentBack,
+    unpublished,
     story,
   };
 }
@@ -140,27 +180,57 @@ describe('GET get-item — the decision block', () => {
       expect(res.status).toBe(200);
       return (await res.json()).item.decision;
     };
+    const human = { kind: 'decision_confirmation' };
+    const agent = { kind: 'decision_approval' };
     expect(await blockOf(s.confirmed.identifier)).toEqual({
+      ...human,
       state: 'confirmed',
       decidedAt: s.confirmedAt,
       replanOwed: null,
+      noteMd: null,
     });
     expect(await blockOf(s.overturned.identifier)).toEqual({
+      ...human,
       state: 'overturned',
       decidedAt: s.overturnedAt,
       replanOwed: ['MOTIR-6', 'MOTIR-7'],
+      noteMd: 'Not what we agreed.',
     });
     expect(await blockOf(s.awaiting.identifier)).toEqual({
+      ...human,
       state: 'awaiting',
       decidedAt: null,
       replanOwed: null,
+      noteMd: null,
     });
     expect(await blockOf(s.defective.identifier)).toEqual({
+      ...human,
       state: 'none',
       decidedAt: null,
       replanOwed: null,
+      noteMd: null,
     });
-    expect(await blockOf(s.agent.identifier)).toBeNull();
+    expect(await blockOf(s.agent.identifier)).toEqual({
+      ...agent,
+      state: 'confirmed',
+      decidedAt: s.agentAt,
+      replanOwed: null,
+      noteMd: null,
+    });
+    expect(await blockOf(s.sentBack.identifier)).toEqual({
+      ...agent,
+      state: 'awaiting',
+      decidedAt: null,
+      replanOwed: null,
+      noteMd: null,
+    });
+    expect(await blockOf(s.unpublished.identifier)).toEqual({
+      ...agent,
+      state: 'none',
+      decidedAt: null,
+      replanOwed: null,
+      noteMd: null,
+    });
     expect(await blockOf(s.story.identifier)).toBeNull();
     expect(await blockOf(s.epic.identifier)).toBeNull();
   });
@@ -180,10 +250,18 @@ describe('skeleton rows — get-subtree and plan-tree carry the same block', () 
     expect(byKey.get(s.overturned.identifier)).toMatchObject({
       state: 'overturned',
       replanOwed: ['MOTIR-6', 'MOTIR-7'],
+      noteMd: 'Not what we agreed.',
     });
     expect(byKey.get(s.awaiting.identifier)).toMatchObject({ state: 'awaiting' });
     expect(byKey.get(s.defective.identifier)).toMatchObject({ state: 'none' });
-    expect(byKey.get(s.agent.identifier)).toBeNull();
+    expect(byKey.get(s.agent.identifier)).toEqual({
+      kind: 'decision_approval',
+      state: 'confirmed',
+      decidedAt: s.agentAt,
+      replanOwed: null,
+      noteMd: null,
+    });
+    expect(byKey.get(s.sentBack.identifier)).toMatchObject({ state: 'awaiting' });
     expect(byKey.get(s.story.identifier)).toBeNull();
     expect(byKey.get(s.epic.identifier)).toBeNull();
   });
@@ -194,9 +272,18 @@ describe('skeleton rows — get-subtree and plan-tree carry the same block', () 
     expect(res.status).toBe(200);
     const items = (await res.json()).items as Array<{ key: string; decision: unknown }>;
     expect(items.find((i) => i.key === s.confirmed.identifier)?.decision).toEqual({
+      kind: 'decision_confirmation',
       state: 'confirmed',
       decidedAt: s.confirmedAt,
       replanOwed: null,
+      noteMd: null,
+    });
+    expect(items.find((i) => i.key === s.agent.identifier)?.decision).toEqual({
+      kind: 'decision_approval',
+      state: 'confirmed',
+      decidedAt: s.agentAt,
+      replanOwed: null,
+      noteMd: null,
     });
     expect(items.find((i) => i.key === s.story.identifier)?.decision).toBeNull();
   });

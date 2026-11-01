@@ -31,6 +31,17 @@ import baseConfig from './vitest.config';
 // code stands: the plural "Filed bugs:" (one filing per turn), a skipped
 // outcome without a reason, a guide session without a target key, and a
 // write_todos with no rows (the parser refuses one).
+// ⚠️ AND NO BRANCH MAY BE CARRIED BY A RACE ALONE (MOTIR-10154). The landing's
+// lost-claim return (`if (!claimed) return … 'silent'`) was reached only by
+// `guideLandingService.test.ts`'s "two CONCURRENT settles": its loser either
+// loses that claim or, scheduled later, reads the winner's reply and takes the
+// replay path instead. On CI it sometimes took the replay path, so the file
+// measured 207/231 = 89.61 against a local 208/231 = 90.04 on the same commit
+// (one branch and one statement, the same line). Every loser path now has a
+// deterministic case beside the race, and the file was given headroom with
+// cases for its other reachable branches. Reading 2026-10-31, same command:
+//   - guideLandingService.ts    97.61 / 92.2 / 100 / 97.48
+// Do not let a branch's only hit come from a concurrent case again — pin it.
 //
 // ⚠️ `lib/services/aiWorkItemsService.ts` IS DELIBERATELY NOT HERE. This story
 // changed only a doc comment there (MOTIR-7799's PLANLESS JOBS paragraph); the

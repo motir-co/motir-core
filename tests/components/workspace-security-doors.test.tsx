@@ -16,11 +16,12 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // another covers the same room at the same reveal arm.
 //
 // ⚠️ AND THE CARVE-OUT BESIDE IT IS RETIRED. This comment used to say
-// `/settings/workspace/jobs`, `/github` and `/gitlab` "must keep rendering at
+// the workspace Job runs route, `/github` and `/gitlab` "must keep rendering at
 // every count — they are workspace-SCOPED but not workspace-NAMED". That was
 // MOTIR-3502's AC 6, and it was the tell rather than the exception: a surface
 // exempted from a hiding rule BECAUSE IT STILL ANSWERS is one that was never
-// given a relocation. Job runs has one now (MOTIR-4861's `JobRunsFoldInSection`)
+// given a relocation. Job runs got one (MOTIR-4861's fold-in, since retired with
+// the tenant surface by Story MOTIR-9982)
 // and Git changed tier (MOTIR-4680), so all of them are gone from this section.
 //
 // What is unchanged is the REASON: this pane is workspace-named and
@@ -99,11 +100,11 @@ describe('the settings rail', () => {
     }
   });
 
-  it('renders no Job runs row either — both workspace rows left together', () => {
+  it('renders no Job runs row either — the row is retired (Story MOTIR-9982)', () => {
     for (const revealed of [true, false]) {
       cleanup();
-      const { container } = renderRail(revealed);
-      expect(container.innerHTML, `revealed=${revealed}`).not.toContain('/settings/workspace/jobs');
+      renderRail(revealed);
+      expect(screen.queryByRole('link', { name: 'Job runs' }), `revealed=${revealed}`).toBeNull();
     }
   });
 
@@ -121,9 +122,6 @@ describe('the settings rail', () => {
     for (const revealed of [true, false]) {
       cleanup();
       const { container } = renderRail(revealed);
-      expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
-        'href="/settings/workspace/jobs"',
-      );
       expect(container.innerHTML, `revealed=${revealed}`).not.toContain(
         'href="/settings/organization/git"',
       );

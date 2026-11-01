@@ -5,7 +5,11 @@ import { resolveOrganizationId } from '@/lib/github/resolveOrganizationId';
 import { getGitProvider } from '@/lib/git';
 import { RepoNotInProjectError } from '@/lib/git/errors';
 import type { ChangedFilesResult, GitProviderId } from '@/lib/git/types';
-import { splitRepoRef } from './repoFileReadService';
+import { matchRepoInSet, splitRepoRef } from './repoFileReadService';
+import { projectsService } from '@/lib/services/projectsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { resolveCodeContextState } from '@/lib/services/codeContextService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // The CHANGED-FILES listing (Story MOTIR-6617 · MOTIR-6619) — the core-owned read
 // motir-ai calls back into during a planning job to learn WHICH paths a branch
@@ -26,8 +30,47 @@ import { splitRepoRef } from './repoFileReadService';
 // another project of the organisation and a name nobody has are the same 404.
 //
 // ⚠️ ON DEMAND ONLY. This is `compareCommits`' host endpoint, and the rule that
-// keeps provider latency off render paths binds it: its one caller is the
-// internal route.
+// keeps provider latency off render paths binds it: its two callers are the
+// internal route and the MCP `list_changed_files` tool (MOTIR-10069), both a
+// model asking on purpose.
+
+// ── THE COMMIT-PAIR CACHE (MOTIR-10094) ─────────────────────────────────────
+// A compare between two COMMIT SHAS never changes: commits are immutable, so the
+// paths one changed against the other are the same answer for ever. The graph
+// DRIFT every MCP code read now carries (`codeGraphDriftService`) asks exactly
+// that question — the graph's indexed commit against the default branch's head —
+// once per read, and a planning session reads dozens of times between pushes. So
+// an answer for a pair of full shas is kept, keyed on the CONNECTED repository's
+// id (never the caller's spelling) and the two shas.
+//
+// ⚠️ ONLY THE ANSWERS A COMMIT PAIR FIXES ARE KEPT: `ok` and `too_large`. A branch
+// NAME moves, so a pair naming one is never cached; and `no_such_ref`, `revoked`,
+// `not_connected` and `host_error` are facts about the CONNECTION or the moment,
+// which the next call may answer differently.
+
+/** A full git object id — SHA-1 (40) or SHA-256 (64) hex. A branch name never is. */
+const FULL_SHA = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i;
+
+/** How many commit-pair answers one process keeps; the oldest is dropped first. */
+export const CHANGED_FILES_CACHE_MAX = 256;
+
+const pairCache = new Map<string, ChangedFilesResult>();
+
+function rememberPair(key: string, result: ChangedFilesResult): ChangedFilesResult {
+  if (result.outcome !== 'ok' && result.outcome !== 'too_large') return result;
+  pairCache.delete(key);
+  pairCache.set(key, result);
+  while (pairCache.size > CHANGED_FILES_CACHE_MAX) {
+    const oldest = pairCache.keys().next().value as string;
+    pairCache.delete(oldest);
+  }
+  return result;
+}
+
+/** Test-only: forget every cached commit-pair answer. */
+export function _resetChangedFilesCache(): void {
+  pairCache.clear();
+}
 
 export interface RepoChangesContext {
   userId: string;
@@ -35,6 +78,18 @@ export interface RepoChangesContext {
   /** The job token's project — the set the repository must belong to. */
   projectId: string;
 }
+
+/**
+ * The PROJECT-KEYED answer the MCP `list_changed_files` tool renders
+ * (MOTIR-10069): every {@link ChangedFilesResult} with the resolved `repoRef`,
+ * plus the two misses `read_file`'s project-keyed read names the same way — a
+ * `repo` outside the project's set (with the set), and one in the set whose
+ * repository is not connected.
+ */
+export type ProjectChangedFilesResult =
+  | (ChangedFilesResult & { repoRef: string })
+  | { outcome: 'repo_not_in_project'; repo: string; repoSet: string[] }
+  | { outcome: 'repo_not_connected'; repoRef: string; base: string | null; head: string };
 
 export const repoChangesService = {
   /**
@@ -82,6 +137,14 @@ export const repoChangesService = {
     const resolvedHead = head.trim();
     const refs = { base: resolvedBase, head: resolvedHead };
 
+    // A pair of full shas is answered from the cache when it has been asked before.
+    const pairKey =
+      FULL_SHA.test(resolvedBase) && FULL_SHA.test(resolvedHead)
+        ? `${connected.id}:${resolvedBase.toLowerCase()}:${resolvedHead.toLowerCase()}`
+        : null;
+    const cached = pairKey ? pairCache.get(pairKey) : undefined;
+    if (cached) return cached;
+
     let provider;
     try {
       provider = getGitProvider(connected.installation.provider as GitProviderId);
@@ -93,19 +156,67 @@ export const repoChangesService = {
 
     // The STORED canonical coordinates, never the caller's spelling.
     try {
-      return await provider.listChangedFiles(
+      const result = await provider.listChangedFiles(
         connected.installation.installationId,
         connected.owner,
         connected.name,
         resolvedBase,
         resolvedHead,
       );
+      return pairKey ? rememberPair(pairKey, result) : result;
     } catch (err) {
       // The provider returns every answer it names; a throw is "we could not ask".
       return {
         outcome: 'host_error',
         ...refs,
         detail: err instanceof Error ? err.message : 'unknown',
+      };
+    }
+  },
+
+  /**
+   * List the paths `head` changed in one of a PROJECT's repositories — the MCP
+   * `list_changed_files` tool's service (MOTIR-10069), the project-keyed twin of
+   * {@link listChangedFiles} the way `repoFileReadService.readProjectFile` is
+   * `readFile`'s.
+   *
+   * Gated like `readProjectFile`: the key resolves inside the actor's workspace
+   * (another tenant's key is the plain not-found), and `ai:plan` — the key the
+   * MCP door checks — is asserted here too. The `repo` is matched against the
+   * project's REALIZED set (bare name or `owner/name`, any case) and a miss is
+   * answered, with the set, before any provider is resolved.
+   */
+  async listProjectChangedFiles(
+    projectKey: string,
+    repo: string,
+    head: string,
+    base: string | undefined,
+    ctx: ServiceContext,
+  ): Promise<ProjectChangedFilesResult> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertPermission(project.id, ctx, 'ai:plan');
+
+    const repoSet = (await resolveCodeContextState(project.id, ctx)).repos.map((r) => r.repoRef);
+    const repoRef = matchRepoInSet(repo, repoSet);
+    if (!repoRef) return { outcome: 'repo_not_in_project', repo, repoSet };
+
+    try {
+      const result = await this.listChangedFiles(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: project.id },
+        repoRef,
+        head,
+        base,
+      );
+      return { ...result, repoRef };
+    } catch (err) {
+      // In the realized set, yet no CONNECTED repository row realizes it — the
+      // fact `read_file` names `repo_not_connected`. Anything else is not ours.
+      if (!(err instanceof RepoNotInProjectError)) throw err;
+      return {
+        outcome: 'repo_not_connected',
+        repoRef,
+        base: base?.trim() || null,
+        head: head.trim(),
       };
     }
   },

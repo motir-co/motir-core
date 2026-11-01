@@ -329,6 +329,8 @@ describe('the build-through and STOP writes (MOTIR-8722)', () => {
     await reporter.open(OPEN);
 
     await reporter.reportDiscrepancy!('PROD-1', POINTS);
+    // MOTIR-10000: the decisions ride the same call, and only when there are any.
+    await reporter.reportDiscrepancy!('PROD-2', [], [{ planSaid: 'n', chose: 'c', why: 'w' }]);
     await reporter.reportStop!('PROD-1', {
       comment: 'no such table',
       toPlanning: true,
@@ -337,6 +339,12 @@ describe('the build-through and STOP writes (MOTIR-8722)', () => {
 
     expect(calls).toEqual([
       { runId: 'run_1', key: 'PROD-1', points: POINTS },
+      {
+        runId: 'run_1',
+        key: 'PROD-2',
+        points: [],
+        decisions: [{ planSaid: 'n', chose: 'c', why: 'w' }],
+      },
       {
         runId: 'run_1',
         key: 'PROD-1',

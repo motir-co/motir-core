@@ -169,6 +169,19 @@ describe('assertTwoFactorCompliance', () => {
     );
   });
 
+  it('returns to the path a caller names, over the header (MOTIR-5779)', async () => {
+    // `/preview-access` is outside the proxy's matcher, so it names its own
+    // return — and the same open-redirect guard still applies to it.
+    const back = '/preview-access?host=pr-7--acme-web.preview.motir.site&return=%2F';
+    const run = await gate();
+    await expect(run('u1', back)).rejects.toThrow(
+      `NEXT_REDIRECT:/two-factor-required?next=${encodeURIComponent(back)}`,
+    );
+    await expect(run('u1', '//evil.example')).rejects.toThrow(
+      `NEXT_REDIRECT:/two-factor-required?next=${encodeURIComponent(AUTHED_LANDING_PATH)}`,
+    );
+  });
+
   it('⚠️ a FORGED header cannot become the redirect target', async () => {
     currentPath.value = 'https://evil.example/phish';
     const run = await gate();

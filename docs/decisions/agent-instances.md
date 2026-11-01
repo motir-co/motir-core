@@ -504,7 +504,7 @@ organisation, so one busy organisation could make every other one read _"Motir i
   organisation (`reserveSlot` in `agentInstanceLifecycleService`), so two creates racing for an
   organisation's last slot cannot both take it, and another organisation's create in the same instant
   is not counted against it.
-- Reaching it refuses `org_running_cap`, worded as the My agents delta draws it (MOTIR-6916): _"Your
+- Reaching it refuses `org_running_cap` (since AMENDMENT 7, `org_cap`, judged on LIVE agents at create only), worded as the My agents delta draws it (MOTIR-6916): _"Your
   organization is running {limit} of its {limit} agents. Hibernate one to start another."_ The number
   travels on the refusal (`limit`), never typed into copy.
 - **There is no fleet-wide agent cap any more.** `fleet_busy` (_"Motir is busy"_) answers only the
@@ -806,3 +806,31 @@ MOTIR-7395's design and MOTIR-7400's build.
 - **The table's name, columns, indexes and RLS**, which are MOTIR-7397's, within sections 1, 2 and 4.
 - **The panel's layout, copy and states**, which are MOTIR-7395's design.
 - **The run launcher's own wait bound**, `AGENT_RUN_BOOT_WAIT_MS`, which is unchanged.
+
+## AMENDMENT 7 — the organisation's agent figure counts every live agent, and is judged at create only (MOTIR-9954, 2026-10-28)
+
+AMENDMENT 3 §1 made the organisation's cap a count of RUNNING agents, and MOTIR-9374 moved its number
+onto the org's plan as `agentsRunningPerOrg`, judged at create and at wake. An organisation could
+therefore hold any number of hibernating agents, each charged for its storage every day, while the
+plan's "per organisation" figure only limited how many were awake at once.
+
+**Owner decision (2026-10-28):** the figure is **agents per organisation: every live (not deleted)
+agent, running and hibernating together.**
+
+- The plan field is **`agentsPerOrg`** (`lib/billing/planCaps.ts`). Its numbers are unchanged — they
+  stay MOTIR-9668's (Standard 2, Pro 10, Max 20, Max ×2 20, Host floor 20, larger pools 50), and
+  Host's own-account lift raises it the same way.
+- It is judged **at create only**, beside `agentsPerUser`: under the same fleet admission lock that
+  takes the agent slot, the org's live instances plus the creates already holding a slot whose row is
+  not inserted yet are counted in one statement (`agentInstanceRepository.countLiveOrAdmitting`), so
+  two creates one below the figure cannot both pass.
+- Reaching it refuses **`org_cap`** (it replaces `org_running_cap`), naming the plan and the figure,
+  and saying to delete one to create another — as `user_cap` does.
+- **A wake is never refused by it.** A hibernating agent already counts, so waking it changes nothing
+  the figure measures. A wake still takes its slot under the lock (the kill switch still stops it), and
+  `agentRunsInParallel` and the shared pool still bound machines, unchanged.
+- The org admin's Fleet use row shows the org's live agents against the figure. The platform
+  monitor's agent-instance count stays a count of RUNNING machines and is no longer drawn against the
+  figure, which no longer bounds it.
+
+Motir's own organisations still have no agent limits (AMENDMENT 3 §2).

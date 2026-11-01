@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Motir REGISTRY — one per repository (stack motir-registry-<rid>). The two ECR
+  repositories mh/<rid>/preview and mh/<rid>/production, and the two push roles
+  CI assumes through the account's GitHub OIDC provider: each may push only to
+  its own repository, and each trusts the GitHub repository by its immutable
+  owner and repository ids, never by name.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: The Motir organisation (tag motir:organization).
+    AllowedPattern: '^[a-z0-9]+$'
+  RepositoryId:
+    Type: String
+    Description: The Motir repository id, a lowercase cuid (tag motir:repository).
+    AllowedPattern: '^[a-z0-9]+$'
+  GithubRepositoryId:
+    Type: String
+    Description: The GitHub repository's numeric id (the OIDC token's repository_id).
+    AllowedPattern: '^[0-9]+$'
+  GithubOwnerId:
+    Type: String
+    Description: The GitHub owner's numeric id (the OIDC token's repository_owner_id).
+    AllowedPattern: '^[0-9]+$'
+
+Resources:
+  PreviewRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub mh/${RepositoryId}/preview
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  ProductionRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub mh/${RepositoryId}/production
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Pull-request workflows push previews. The subject carries the ids and the
+  # `pull_request` context (README: the OIDC subject the push roles expect).
+  PreviewPushRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub mh-${RepositoryId}-preview-push
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repository_owner_id:${GithubOwnerId}:repository_id:${GithubRepositoryId}:pull_request
+      Policies:
+        - PolicyName: push-preview
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt PreviewRepository.Arn
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Only the `production` environment's jobs push production images.
+  ProductionPushRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub mh-${RepositoryId}-production-push
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub repository_owner_id:${GithubOwnerId}:repository_id:${GithubRepositoryId}:environment:production
+      Policies:
+        - PolicyName: push-production
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:BatchGetImage
+                  - ecr:CompleteLayerUpload
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:InitiateLayerUpload
+                  - ecr:PutImage
+                  - ecr:UploadLayerPart
+                Resource: !GetAtt ProductionRepository.Arn
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+Outputs:
+  PreviewRepositoryUri:
+    Value: !GetAtt PreviewRepository.RepositoryUri
+  ProductionRepositoryUri:
+    Value: !GetAtt ProductionRepository.RepositoryUri
+  PreviewPushRoleArn:
+    Value: !GetAtt PreviewPushRole.Arn
+  ProductionPushRoleArn:
+    Value: !GetAtt ProductionPushRole.Arn

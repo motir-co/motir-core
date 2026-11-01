@@ -8,6 +8,8 @@ import type {
   ProposalSectionsInput,
   ProposedFieldsInput,
   PlanWithItemsDto,
+  ProposalLinkWarningDto,
+  ProposalRescopeWarningDto,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -17,8 +19,13 @@ import type {
   ProposedTodoInput,
   CorrectPlanBriefKey,
 } from '@/lib/dto/plans';
-import { MODIFY_KIND_TARGETS, PLAN_ITEM_REASON_MAX } from '@/lib/dto/plans';
+import {
+  MODIFY_KIND_TARGETS,
+  PLAN_ITEM_REASON_MAX,
+  PLANNER_RECORD_MAX_BYTES,
+} from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
+import { PLAN_CODE_READ_BATCH_MAX } from '@/lib/plans/planCodeRead';
 import {
   TODO_COMMAND_MAX_LENGTH,
   TODO_NOTES_MAX_LENGTH,
@@ -40,6 +47,7 @@ import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import { WORK_ITEM_OBSOLESCENCES } from '@/lib/issues/obsolescence';
 import type { WorkItemDifficultyDto } from '@/lib/dto/workItems';
 import { isWorkItemKey, resolveCorrectionKeyRefs, resolveKeyRefs } from '@/lib/plans/keyRefs';
+import { EDGE_REASON_MAX } from '@/lib/plans/edgeReasons';
 import {
   REASON_CLASSIFIED_KIND,
   REVISION_REASON_BRANCHES,
@@ -444,8 +452,8 @@ const proposedFieldsSchema = z
       .optional()
       .describe(
         'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch ' +
-          'routes to, and the item does not complete until every one of them has a merged pull ' +
-          'request. Bare names or the `owner/name` form, validated against the PROJECT’s repository ' +
+          'routes to. The list does not decide completion: the item completes when every pull ' +
+          'request LINKED to it has merged. Bare names or the `owner/name` form, validated against the PROJECT’s repository ' +
           'domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with ' +
           '`targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is ' +
           'rejected here rather than silently resolved. `[]` is the empty set.',
@@ -516,6 +524,35 @@ const proposedFieldsSchema = z
  * approved card had no executor. The refusal lives in the SERVICE rather than as
  * a `.strict()` here so every door that appends a patch gets it, not only this one.
  */
+/**
+ * ONE entry of a `blocked_by` list (MOTIR-9827): a bare ref, or `{ ref, reason }`
+ * — the ref in any form the list takes, and the reason ONE short line saying what
+ * the waiting card consumes from that blocker. The cap and the one-line rule are
+ * enforced by the service (`lib/plans/edgeReasons.ts`), which names the edge.
+ */
+const edgeEntry = (ref: z.ZodTypeAny) =>
+  z.union([
+    ref,
+    z
+      .object({
+        ref,
+        reason: z
+          .string()
+          .describe(
+            `ONE short line (at most ${EDGE_REASON_MAX} characters) saying what the waiting card ` +
+              'CONSUMES from this blocker — and when it consumes an INTERFACE, the interface ' +
+              'itself: the secret names, the permissions, the endpoint, the file or the symbol ' +
+              'the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+          ),
+      })
+      .strict(),
+  ]);
+
+const EDGE_REASON_NOTE =
+  ' Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line ' +
+  'saying what the waiting card consumes from that blocker. It is shown on the plan and ' +
+  'written onto the link at approve, so the card says why it waits.';
+
 const patchSchema = z
   .object({
     title: z.string().optional().describe('Re-title the target.'),
@@ -636,13 +673,14 @@ const patchSchema = z
           'or another project’s is refused at the append.',
       ),
     blockedByAdd: z
-      .array(z.string())
+      .array(edgeEntry(z.string()))
       .optional()
       .describe(
         'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or ' +
           '`planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same ' +
           'depth below their nearest common ancestor — under any parent; a cross-level edge is ' +
-          'refused `cross_level`. An epic is blocked only by another epic.',
+          'refused `cross_level`. An epic is blocked only by another epic.' +
+          EDGE_REASON_NOTE,
       ),
     blockedByRemove: z
       .array(z.string())
@@ -702,7 +740,7 @@ const proposalSchema = z.object({
         'project’s is refused HERE.',
     ),
   blockedByRefs: z
-    .array(z.string())
+    .array(edgeEntry(z.string()))
     .optional()
     .describe(
       'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), ' +
@@ -712,7 +750,8 @@ const proposalSchema = z.object({
         'none — and ' +
         'may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / ' +
         '`cross_level`. An epic is blocked only by another epic — an edge with an epic at ' +
-        'either end is cross-level unless both ends are epics.',
+        'either end is cross-level unless both ends are epics.' +
+        EDGE_REASON_NOTE,
     ),
   supersedesRefs: z.array(z.string()).optional().describe(SUPERSEDES_REFS_DESCRIPTION),
   baseRevision: z
@@ -978,11 +1017,13 @@ const updatePlanProposalInputSchema = {
         'refused here rather than at approve — and a ref to the proposal ITSELF is refused too.',
     ),
   blockedByRefs: z
-    .array(correctionRefField)
+    .array(edgeEntry(correctionRefField))
     .optional()
     .describe(
       'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you ' +
-        'want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
+        'want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`. The ' +
+        'edges’ reasons are replaced with them.' +
+        EDGE_REASON_NOTE,
     ),
   supersedesRefs: z
     .array(correctionRefField)
@@ -1113,12 +1154,24 @@ const updatePlanInputSchema = {
       'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they ' +
         'read before any card. `null` clears it. Omit it to leave it exactly as it is.',
     ),
+  plannerRecord: z
+    .record(z.string(), z.unknown())
+    .nullable()
+    .optional()
+    .describe(
+      'YOUR OWN record on the plan, as data — machine state you keep between runs (e.g. the ' +
+        'targets you settled and how each walk left them), which a reviewer never sees. A JSON ' +
+        `object of at most ${PLANNER_RECORD_MAX_BYTES} bytes, REPLACED WHOLE; \`null\` clears it. ` +
+        '`get_plan` returns it as `plannerRecord`. Keep it out of `summary`: the summary is ' +
+        'prose a person reads and may correct. Omit it to leave it exactly as it is.',
+    ),
 };
 
 interface UpdatePlanArgs {
   planId: string;
   title?: string | null;
   summary?: string | null;
+  plannerRecord?: Record<string, unknown> | null;
 }
 
 // ── AND `record_plan_revision_reason` (Story MOTIR-5543 · MOTIR-6086) ────────
@@ -1237,7 +1290,7 @@ const reportPlanStepInputSchema = {
         '`author` (writing `target`, or an item not on the plan yet with no target), or `end` ' +
         '(the session finished — clears its step; never a target). A step report also records ' +
         'the words a person reads at the head of that session’s narration. Send exactly one ' +
-        'of `step` or `narration`.',
+        'of `step`, `narration` or `codeReads`.',
     ),
   narration: z
     .array(z.string())
@@ -1250,6 +1303,59 @@ const reportPlanStepInputSchema = {
         'Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is ' +
         'empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing ' +
         'is recorded on a refusal.',
+    ),
+  codeReads: z
+    .array(
+      z.object({
+        tool: z
+          .string()
+          .describe(
+            'The tool: `read_file` · `code_explore` · `code_search` · `code_grep`, or a local ' +
+              'one (`Read` · `Grep` · `Glob` · `git show` · `git grep` · `git log`).',
+          ),
+        repo: z.string().optional().describe('`owner/name`, or the local checkout’s name.'),
+        path: z.string().optional().describe('A read’s path, or a search’s path prefix / glob.'),
+        startLine: z.number().int().min(1).optional(),
+        endLine: z.number().int().min(1).optional(),
+        askedRef: z
+          .string()
+          .optional()
+          .describe('The ref the call ASKED for (`main`) — a label, not what it was read at.'),
+        query: z.string().optional().describe('A search’s query or pattern.'),
+        commits: z
+          .array(
+            z.object({
+              repo: z.string().optional(),
+              sha: z.string().describe('The RESOLVED commit id, 7–64 hex — never a branch name.'),
+              dirty: z.boolean().optional().describe('A local checkout with uncommitted changes.'),
+            }),
+          )
+          .optional()
+          .describe(
+            'Every commit the read was made at: the resolved ref of a file read, the graph’s ' +
+              'commit for a code-graph read, the checkout HEAD for a local read. Empty only ' +
+              'when nothing resolved.',
+          ),
+        outcome: z
+          .string()
+          .describe('The result’s outcome code: `found`, `ok`, `not_found`, `too_large`, …'),
+        lines: z.number().int().min(0).optional().describe('Lines a read returned.'),
+        hits: z.number().int().min(0).optional().describe('Matches a search returned.'),
+        detail: z
+          .string()
+          .optional()
+          .describe('A short refusal or failure detail — never content.'),
+      }),
+    )
+    .optional()
+    .describe(
+      'Instead of `step`: the session’s CODE READS, in the order it made them, appended to the ' +
+        `plan’s kept read log under \`sessionKey\` (at most ${PLAN_CODE_READ_BATCH_MAX} per ` +
+        'call). Records what was asked, the commit it was read at and how much came back — never ' +
+        'the code. Needs no step: a session may post its reads before or after it holds one. ' +
+        'Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a read is ' +
+        'malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. ' +
+        'Read them back with `get_plan_code_reads`.',
     ),
   target: z
     .string()
@@ -1270,6 +1376,7 @@ interface ReportPlanStepArgs {
   step?: PlanStepValue;
   target?: string;
   narration?: string[];
+  codeReads?: unknown[];
 }
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
@@ -1409,6 +1516,42 @@ function summarizeClose(plan: PlanWithItemsDto): string {
  * revision reaches the same status having just disproved that sentence, so the
  * arms split on WHICH act closed the gap rather than on the status alone.
  */
+/**
+ * The item links a write KEPT that would ship dead (MOTIR-10104), as the lines a
+ * caller reads under the summary — one per link, with the corrected link when the
+ * server computed one. Empty when the write left none, so a clean write reads as
+ * it always did.
+ */
+function linkWarningsText(warnings: readonly ProposalLinkWarningDto[] | undefined): string {
+  if (!warnings || warnings.length === 0) return '';
+  const lines = warnings.map(
+    (w) =>
+      `- ${w.proposal}, \`${w.field}\`: \`${w.link}\` — ${w.reason}. ` +
+      (w.correctedLink
+        ? `Write \`${w.correctedLink}\` instead.`
+        : `Write ${(w.canonicalForms ?? []).map((f) => `\`${f}\``).join(' or ')}.`),
+  );
+  return (
+    `\n\nWritten, with ${warnings.length} link(s) to fix — approve refuses the plan while a ` +
+    `malformed one remains:\n${lines.join('\n')}`
+  );
+}
+
+/**
+ * The `modify`s a write KEPT that approve will send back from built work
+ * (MOTIR-10106), as the lines a caller reads under the summary — one per card.
+ * Empty when the write left none, so a clean write reads as it always did.
+ */
+export function rescopeWarningsText(
+  warnings: readonly ProposalRescopeWarningDto[] | undefined,
+): string {
+  if (!warnings || warnings.length === 0) return '';
+  return (
+    `\n\nWritten, with ${warnings.length} card(s) approve will re-open:\n` +
+    warnings.map((w) => `- ${w.proposal}: ${w.message}`).join('\n')
+  );
+}
+
 function summarizeAppend(plan: PlanWithItemsDto, planItemIds: string[], revision: boolean): string {
   const closing = (): string => {
     if (revision)
@@ -1663,20 +1806,25 @@ export async function runAddPlanItems(
   // cross-tenant id 404s rather than 403s).
   const existing = await plansService.getPlan(args.planId, ctx);
 
-  const proposals: ProposalInput[] = args.proposals.map((p) => ({
-    op: p.op,
-    workItemId: p.workItemId ?? null,
-    proposedFields:
-      p.op === 'add' && p.proposedFields
-        ? stampProvenance(p.proposedFields as ProposedFieldsInput, existing)
-        : null,
-    patch: (p.patch ?? null) as ProposalInput['patch'],
-    parentRef: p.parentRef ?? null,
-    blockedByRefs: p.blockedByRefs ?? [],
-    ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs } : {}),
-    baseRevision: p.baseRevision ?? null,
-    ...(p.reason !== undefined ? { reason: p.reason } : {}),
-  }));
+  // An edge entry may carry its REASON (MOTIR-9827); `resolveKeyRefs` below
+  // splits each `{ ref, reason }` into the bare ref and an `edgeReasons` entry.
+  const proposals: ProposalInput[] = args.proposals.map(
+    (p) =>
+      ({
+        op: p.op,
+        workItemId: p.workItemId ?? null,
+        proposedFields:
+          p.op === 'add' && p.proposedFields
+            ? stampProvenance(p.proposedFields as ProposedFieldsInput, existing)
+            : null,
+        patch: (p.patch ?? null) as ProposalInput['patch'],
+        parentRef: p.parentRef ?? null,
+        blockedByRefs: p.blockedByRefs ?? [],
+        ...(p.supersedesRefs !== undefined ? { supersedesRefs: p.supersedesRefs } : {}),
+        baseRevision: p.baseRevision ?? null,
+        ...(p.reason !== undefined ? { reason: p.reason } : {}),
+      }) as ProposalInput,
+  );
 
   // KEY → ID, before the service sees them (MOTIR-3576). The plan substrate's
   // contract is unchanged: what reaches `addProposals`, and what lands in the
@@ -1712,8 +1860,16 @@ export async function runAddPlanItems(
   return toolOk(
     args.proposals.length === 0
       ? summarizeClose(plan)
-      : summarizeAppend(plan, planItemIds, args.revision === true),
-    derived(planAppendPayload, presentMcpPlanAppend(plan, planItemIds)),
+      : summarizeAppend(plan, planItemIds, args.revision === true) +
+          linkWarningsText(appended.warnings) +
+          rescopeWarningsText(appended.rescopeWarnings),
+    derived(
+      planAppendPayload,
+      presentMcpPlanAppend(
+        { ...plan, warnings: appended.warnings, rescopeWarnings: appended.rescopeWarnings },
+        planItemIds,
+      ),
+    ),
   );
 }
 
@@ -1782,7 +1938,9 @@ export async function runUpdatePlanItem(
     : await plansService.deepenProposal(args.planId, args.planItemId, input, ctx);
 
   return toolOk(
-    summarizeDeepen(plan, args.planItemId, changed, args.revision === true),
+    summarizeDeepen(plan, args.planItemId, changed, args.revision === true) +
+      linkWarningsText(plan.warnings) +
+      rescopeWarningsText(plan.rescopeWarnings),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
@@ -1843,7 +2001,9 @@ export async function runUpdatePlanProposal(
   const plan = await plansService.correctProposal(args.planId, args.planItemId, resolved, ctx);
 
   return toolOk(
-    summarizeCorrection(plan, args.planItemId, changed),
+    summarizeCorrection(plan, args.planItemId, changed) +
+      linkWarningsText(plan.warnings) +
+      rescopeWarningsText(plan.rescopeWarnings),
     derived(planPayload, presentMcpPlan(plan)),
   );
 }
@@ -1881,15 +2041,20 @@ export async function runWithdrawPlanProposal(
  * reviewer is reading right now.
  */
 function summarizeBriefCorrection(plan: PlanWithItemsDto, changed: readonly string[]): string {
+  // The planner's record is no part of the heading, and its write is on no timeline (MOTIR-9978).
+  const onTimeline = changed.some((key) => key !== 'plannerRecord');
   return [
     `Corrected plan ${plan.id}'s own ${changed.join(' and ')} — ${plan.status}, ` +
       `${plan.itemCount} proposal(s), every one of them untouched.`,
-    plan.status === 'planned'
-      ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
-        'timeline with the harness and model that made it, so they can see the heading changed ' +
-        'after they started reading.'
-      : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
-        'batch to put the plan in front of a reviewer.',
+    !onTimeline
+      ? 'Only your planner record changed: no reviewer sees it, and nothing was added to the ' +
+        'plan’s timeline.'
+      : plan.status === 'planned'
+        ? 'This plan is `planned` — it is in front of a reviewer, and this edit is on its ' +
+          'timeline with the harness and model that made it, so they can see the heading changed ' +
+          'after they started reading.'
+        : `Still \`generating\` — send \`final: true\` on a last \`${ADD_PLAN_ITEMS_TOOL_NAME}\` ` +
+          'batch to put the plan in front of a reviewer.',
     '',
     PROPOSAL_GATE,
   ].join('\n');
@@ -1908,7 +2073,11 @@ export async function runUpdatePlan(
   args: UpdatePlanArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
-  const patchable = ['title', 'summary'] as const satisfies readonly CorrectPlanBriefKey[];
+  const patchable = [
+    'title',
+    'summary',
+    'plannerRecord',
+  ] as const satisfies readonly CorrectPlanBriefKey[];
 
   const input: CorrectPlanBriefInput = {};
   const changed: string[] = [];
@@ -1919,10 +2088,11 @@ export async function runUpdatePlan(
   }
 
   const plan = await plansService.correctPlanBrief(args.planId, input, ctx);
+  const plannerRecord = await plansService.getPlannerRecord(args.planId, ctx);
 
   return toolOk(
     summarizeBriefCorrection(plan, changed),
-    derived(planPayload, presentMcpPlan(plan)),
+    derived(planPayload, { ...presentMcpPlan(plan), plannerRecord }),
   );
 }
 
@@ -2012,9 +2182,23 @@ export async function runReportPlanStep(
       targetRef,
       ...(args.step !== undefined ? { step: args.step } : {}),
       ...(args.narration !== undefined ? { narration: args.narration } : {}),
+      ...(args.codeReads !== undefined ? { codeReads: args.codeReads } : {}),
     },
     ctx,
   );
+  if (result.kind === 'codeReads') {
+    const n = result.codeReads.length;
+    const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
+      planId: args.planId,
+      sessionKey: args.sessionKey,
+      codeReads: result.codeReads.map((row) => ({ seq: row.seq, tool: row.tool })),
+    });
+    return toolOk(
+      `Recorded ${n} code read${n === 1 ? '' : 's'} for session \`${args.sessionKey}\` on plan ` +
+        `${args.planId}.`,
+      payload,
+    );
+  }
   if (result.kind === 'narration') {
     const n = result.narration.length;
     const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
@@ -2383,7 +2567,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'that was falsified, a decision that moved, a disposition you now have to restate — ' +
         'instead of withdrawing every proposal to rebuild the plan under a new id. The patch is ' +
         'SPARSE: a field you omit is left exactly as it was and an explicit `null` clears it, ' +
-        'so send only what you are changing; a call sending neither is refused. Legal while the ' +
+        'so send only what you are changing; a call sending none of them is refused. It also ' +
+        'holds `plannerRecord`, YOUR machine state on the plan, which no reviewer sees and which ' +
+        'puts nothing on the timeline. Legal while the ' +
         'plan is `generating` AND after you have closed it with `final: true`, while it is ' +
         '`planned` and waiting for a reviewer. It is REFUSED once the plan is `approved` (its ' +
         'proposals have become work items and the plan is the record of what was approved) or ' +
@@ -2462,6 +2648,9 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'refused with PLAN_NOT_GENERATING and nothing changes. Between steps, send ' +
         '`narration` (instead of `step`) with a few plain sentences on what the session is ' +
         'doing and why: a person reads them in the plan’s chat panel, and they are kept. ' +
+        'Send `codeReads` (instead of `step`) with the session’s code reads — what it asked, the ' +
+        'commit it read at, what came back, never the code — so a check of the plan can see what ' +
+        'each card was written from; they are kept and read back with `get_plan_code_reads`. ' +
         'IT IS ADVISORY: every refusal ' +
         'comes back as a code and a sentence, and a refused report should NOT stop you ' +
         'planning — carry on with the plan. It changes nothing about the plan’s proposals. ' +

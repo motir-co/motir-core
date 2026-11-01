@@ -94,6 +94,13 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   'tests/integration/translation/autoTranslateStory.test.ts':
     'MOTIR-8835: the case asserts the change trail is invisible to an unbound read.',
 
+  // ── MOTIR-9967: the environment story's unbound-read case ─────────────────
+  // "the repositories' reads outside a transaction see nothing row-level security
+  // hides" asserts that the entry and change repositories, read with no bound tx,
+  // return nothing under motir_app. Binding the reads would delete the claim.
+  'tests/environmentConfig/storyIntegration.test.ts':
+    'MOTIR-9967: the case asserts environment entries and changes are invisible to an unbound read.',
+
   // ── MOTIR-2751: the repository-CONTRACT + migration-CONSTRAINT suites ──────
   // Four files, one header, one argument: their subject is the repository contract
   // and the migration-built constraints, with RLS deliberately inert. Bound, a

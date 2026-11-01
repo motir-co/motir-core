@@ -34,6 +34,12 @@ import { accountInitial, accountTypeKey, type GithubAccountRef } from './githubA
 // ⚠️ EVERY RESPONSE CODE MAPS TO ONE MESSAGE, AND AN UNKNOWN ONE TO A GENERIC
 // MESSAGE — NEVER A BLANK. The table is `SUBMIT_ERRORS` below.
 //
+// ⚠️ A DEAD SIGN-IN IS A RECONNECT, NEVER A RETRY (Bug MOTIR-8984). GitHub
+// refusing the admin's own token reaches this flow three ways — the accounts
+// read's `identity_required` with `reason: 'refused'`, and the repository read's
+// and the link's `github_identity_refused` — and all three land on the one
+// identity prompt, which links to where the account is reconnected.
+//
 // ⚠️ IT ONLY ADDS. Removing a repository already has a home that names the
 // projects it affects (the inventory row's Disconnect), so the picker says where
 // that is instead of growing a second removal.
@@ -41,7 +47,9 @@ import { accountInitial, accountTypeKey, type GithubAccountRef } from './githubA
 type AccountsState =
   | { kind: 'loading' }
   | { kind: 'error' }
-  | { kind: 'identity_required' }
+  // `refused`: a linked identity GitHub no longer accepts (Bug MOTIR-8984) —
+  // the same prompt, worded as "reconnect" rather than "connect".
+  | { kind: 'identity_required'; refused: boolean }
   | { kind: 'ok'; accounts: GithubAccountForOrganizationDTO[] };
 
 type ReposState =
@@ -118,7 +126,9 @@ export function ConnectGithubFlow({
       const res = await fetch(`${base}/accounts`);
       if (!res.ok) return { kind: 'error' };
       const body = (await readJson(res)) as unknown as GithubAccountsForOrganizationDTO;
-      if (body.state === 'identity_required') return { kind: 'identity_required' };
+      if (body.state === 'identity_required') {
+        return { kind: 'identity_required', refused: body.reason === 'refused' };
+      }
       if (body.state !== 'ok' || !Array.isArray(body.accounts)) return { kind: 'error' };
       const sorted = [...body.accounts].sort((x, y) =>
         x.accountLogin.localeCompare(y.accountLogin),
@@ -140,6 +150,17 @@ export function ConnectGithubFlow({
     }
   };
 
+  // The repository read or the link found the admin's sign-in dead: back to the
+  // accounts step, at the reconnect prompt. Any read still in flight is stale.
+  const showIdentityRefused = useCallback(() => {
+    reposSeq.current++;
+    accountsSeq.current++;
+    pendingInstallation.current = null;
+    setStep({ kind: 'accounts' });
+    setFormError(null);
+    setAccounts({ kind: 'identity_required', refused: true });
+  }, []);
+
   const loadAccounts = () => {
     const seq = ++accountsSeq.current;
     setAccounts({ kind: 'loading' });
@@ -158,6 +179,10 @@ export function ConnectGithubFlow({
         if (!res.ok) {
           const body = await readJson(res);
           if (seq !== reposSeq.current) return;
+          if (body.code === 'github_identity_refused') {
+            showIdentityRefused();
+            return;
+          }
           if (body.code === 'installation_not_accessible')
             setFormError('installation_not_accessible');
           setRepos({ kind: 'error' });
@@ -174,7 +199,7 @@ export function ConnectGithubFlow({
         if (seq === reposSeq.current) setRepos({ kind: 'error' });
       }
     },
-    [base],
+    [base, showIdentityRefused],
   );
 
   function chooseAccount(account: GithubAccountRef) {
@@ -317,6 +342,10 @@ export function ConnectGithubFlow({
         return;
       }
       const code = typeof body.code === 'string' ? body.code : '';
+      if (code === 'github_identity_refused') {
+        showIdentityRefused();
+        return;
+      }
       if (code === 'BAD_REQUEST') setFormError('repo_selection_required');
       else if ((SUBMIT_ERRORS as readonly string[]).includes(code))
         setFormError(code as SubmitError);
@@ -513,8 +542,8 @@ export function ConnectGithubFlow({
       <Modal.Body className="gap-3">
         {accounts.kind === 'identity_required' ? (
           <EmptyState
-            title={t('identity.title')}
-            description={t('identity.body')}
+            title={accounts.refused ? t('identity.refusedTitle') : t('identity.title')}
+            description={accounts.refused ? t('identity.refusedBody') : t('identity.body')}
             action={
               <a
                 href="/settings/account/git"

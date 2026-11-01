@@ -23,6 +23,11 @@ export const E2E_GITHUB_CLIENT_SECRET = 'e2e-github-client-secret';
 export const E2E_GITHUB_TOKEN_ENCRYPTION_KEY =
   'e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0e2e0';
 
+// 64 hex chars → the environment-configuration secrets' own key (Story MOTIR-9795;
+// `lib/environmentConfig/crypto.ts`). Deliberately NOT the GitHub key above.
+export const E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY =
+  'e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9e9';
+
 // App slug so the settings page renders the install link-out (Panel 1's
 // "Install the Motir GitHub App" affordance).
 export const E2E_GITHUB_APP_SLUG = 'motir-e2e-app';

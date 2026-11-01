@@ -40,6 +40,7 @@
     // project must list every file it reads (TS6307). Named narrowly so no other
     // JSON under `tests/` is pulled into the program.
     "tests/fixtures/importSample/**/*.json",
+    "tests/fixtures/calculatorPinnedVector.json",
     // The hoster host agent (MOTIR-9480) is a standalone, dependency-free service
     // with no project of its own; its source is type-checked here, beside its
     // tests in `tests/hosterHostAgent/`.

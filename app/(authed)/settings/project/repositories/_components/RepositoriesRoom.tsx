@@ -10,6 +10,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 import { buttonVariants } from '@/components/ui/Button';
 import { splitRoomSections } from '@/lib/projectRepos/roomSections';
 import { TakeoverRow } from './TakeoverRow';
+import type { SeedRefusalState } from './RowSeed';
 import { TakeoverModal } from './TakeoverModal';
 import { OrganizationRepositories } from './OrganizationRepositories';
 import { AddRepositoryButton, AddRepositoryPicker } from './AddRepositoryPicker';
@@ -18,7 +19,9 @@ import type {
   HostedRunRepoAccessMapDto,
   ProjectRepoDto,
   ProjectRepoRoomViewDto,
+  ProjectRepoSeedRefusalDto,
 } from '@/lib/dto/projectRepos';
+import type { SeedRegistryEntryDto } from '@/lib/dto/seedRegistry';
 
 // The TAKE-IT-OVER room's ROWS — the client island of
 // `/settings/project/repositories` (Story MOTIR-1775 · MOTIR-1939).
@@ -150,6 +153,9 @@ export function RepositoriesRoom({
   const rowsRef = useRef(view.rows);
   const [failed, setFailed] = useState(false);
   const [modalRow, setModalRow] = useState<ProjectRepoDto | null>(null);
+  // A refused re-point per row (MOTIR-712, design MOTIR-705 §1.4) — shown under
+  // that row's picker until its next pick, and never on a sibling.
+  const [seedRefusals, setSeedRefusals] = useState<Record<string, SeedRefusalState>>({});
   // The PICKER's own state. Its list is fetched when the modal opens rather than
   // on every room render: it is an ORG-scoped read across workspaces, and a room
   // that never opens the picker should not pay for it.
@@ -322,6 +328,58 @@ export function RepositoriesRoom({
   );
 
   const onCheckAgain = useCallback((row: ProjectRepoDto) => void call(row, {}), [call]);
+
+  /**
+   * RE-POINT a not-yet-created row's starter (MOTIR-712; design MOTIR-705 §1.3),
+   * sent at once as the row's other edits are. The row the PATCH returns is
+   * applied locally (surface 1), and `router.refresh()` re-reads the seeds — a
+   * PROP of this island, so the refresh reaches it — for the new "why" and the
+   * picker's list. A REFUSAL keeps the saved starter, shows the rule under the
+   * picker and refreshes too: it means the library or the row changed after the
+   * list loaded, so the list is stale (§1.4).
+   */
+  const onRepoint = useCallback(
+    async (row: ProjectRepoDto, entry: SeedRegistryEntryDto) => {
+      setBusyRowId(row.id);
+      busyRef.current = true;
+      setFailed(false);
+      setSeedRefusals(({ [row.id]: _cleared, ...rest }) => rest);
+      try {
+        const res = await fetch(
+          `/api/projects/${encodeURIComponent(projectKey)}/repositories/${encodeURIComponent(row.id)}`,
+          {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ seedSource: entry.key }),
+          },
+        );
+        if (res.ok) {
+          applyRow((await res.json()) as ProjectRepoDto);
+        } else {
+          const body = (await res.json().catch(() => null)) as {
+            code?: string;
+            refusal?: ProjectRepoSeedRefusalDto;
+            error?: string;
+          } | null;
+          if (body?.code !== 'PROJECT_REPO_SEED_REFUSED') {
+            setFailed(true);
+            return;
+          }
+          setSeedRefusals((prev) => ({
+            ...prev,
+            [row.id]: { refusal: body.refusal ?? null, picked: entry, message: body.error ?? '' },
+          }));
+        }
+        router.refresh();
+      } catch {
+        setFailed(true);
+      } finally {
+        busyRef.current = false;
+        setBusyRowId(null);
+      }
+    },
+    [applyRow, projectKey, router],
+  );
 
   // The poll. Keyed on WHETHER anything is in flight rather than on the rows
   // themselves, so a re-render that only changed copy does not restart the
@@ -500,6 +558,9 @@ export function RepositoriesRoom({
                 onMove={setModalRow}
                 onCheckAgain={onCheckAgain}
                 onRetry={setModalRow}
+                seed={view.seeds[row.id]}
+                seedRefusal={seedRefusals[row.id] ?? null}
+                onRepoint={onRepoint}
               />
             ))}
           </div>

@@ -3,6 +3,7 @@ import {
   localizeClaim,
   localizeIdea,
   localizeLabel,
+  publicIdeaLocaleCode,
   resolvePublicIdeaLocale,
   type LocalizableIdea,
 } from '@/lib/ideas/publicLocale';
@@ -25,8 +26,20 @@ describe('resolvePublicIdeaLocale', () => {
     ['xx', 'en'],
     ['JA', 'en'],
     ['zh-CN', 'en'],
+    ['zh-tw', 'zh_tw'],
+    // The enum's own spelling is not a public code.
+    ['zh_tw', 'en'],
+    ['zh-TW', 'en'],
   ] as const)('%s → %s', (raw, served) => {
     expect(resolvePublicIdeaLocale(raw)).toBe(served);
+  });
+});
+
+describe('publicIdeaLocaleCode', () => {
+  it('spells Traditional Chinese as motir.co does, every other locale as itself', () => {
+    expect(publicIdeaLocaleCode('zh_tw')).toBe('zh-tw');
+    expect(publicIdeaLocaleCode('zh')).toBe('zh');
+    expect(publicIdeaLocaleCode('en')).toBe('en');
   });
 });
 

@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../helpers/importGraph';
 
@@ -18,7 +19,7 @@ const ADAPTER_DIR = join('packages', 'orchestrator', 'src', 'adapters', 'aws');
 const SCANNED_ROOTS = [join('packages', 'orchestrator', 'src'), 'lib', 'app'];
 
 /**
- * The ONE registered exception, scoped to one directory AND to the modules it
+ * The registered exceptions, each scoped to one directory AND to the modules it
  * was argued for. `lib/blob/` is the attachment store's S3 port (object storage,
  * not the fleet): it boots nothing and imports nothing from `@motir/orchestrator`.
  * Any other `@aws-sdk/*` module there still fails.
@@ -27,6 +28,28 @@ const BLOB_STORE = {
   dir: join('lib', 'blob'),
   modules: new Set(['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner']),
 };
+
+/**
+ * The SERVERLESS hosting adapter (Story MOTIR-9793 · MOTIR-9972): Lambda with
+ * function URLs in Motir's own `motir-hosting-serverless` account — the hosting
+ * deploy port, not the fleet. Only its client module imports the SDK, and only
+ * the services it deploys to and the STS client it assumes its one role with.
+ * It reads its role and region from the environment like the Fly hosting
+ * adapter, so the no-environment case below still covers only `adapters/aws/`.
+ */
+const SERVERLESS_HOSTING = {
+  dir: join('packages', 'orchestrator', 'src', 'adapters', 'serverless'),
+  modules: new Set([
+    '@aws-sdk/client-lambda',
+    '@aws-sdk/client-ecr',
+    '@aws-sdk/client-secrets-manager',
+    '@aws-sdk/client-cloudwatch',
+    '@aws-sdk/client-cloudwatch-logs',
+    '@aws-sdk/client-sts',
+  ]),
+};
+
+const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING];
 
 const SDK_IMPORT =
   /(?:from\s+|import\s*\(\s*|require\s*\(\s*|^\s*import\s+)['"](@aws-sdk\/[^'"]+)['"]/gm;
@@ -66,10 +89,22 @@ describe('the AWS SDK boundary (MOTIR-9280)', () => {
     );
   });
 
+  it('covers the tenant adapter and the hosting composition root', () => {
+    expect(FILES).toEqual(
+      expect.arrayContaining([
+        join(ADAPTER_DIR, 'tenant', 'hostingAdapter.ts'),
+        join(ADAPTER_DIR, 'tenant', 'sdk.ts'),
+        join('lib', 'orchestrator', 'hosting.ts'),
+      ]),
+    );
+  });
+
   it('every @aws-sdk/* import is under packages/orchestrator/src/adapters/aws/', () => {
     const leaks = FILES.filter((file) => !within(file, ADAPTER_DIR)).flatMap((file) =>
       sdkImportsOf(file)
-        .filter((module) => !(within(file, BLOB_STORE.dir) && BLOB_STORE.modules.has(module)))
+        .filter(
+          (module) => !EXCEPTIONS.some((ex) => within(file, ex.dir) && ex.modules.has(module)),
+        )
         .map((module) => `${relative(ROOT, join(ROOT, file))}: ${module}`),
     );
     expect(leaks).toEqual([]);
@@ -84,4 +119,32 @@ describe('the AWS SDK boundary (MOTIR-9280)', () => {
     );
     expect(readers).toEqual([]);
   });
+
+  it('the @motir/orchestrator barrel exports no AWS SDK name, type or value', () => {
+    const entry = join(ROOT, 'packages', 'orchestrator', 'src', 'index.ts');
+    const config = ts.getParsedCommandLineOfConfigFile(
+      join(ROOT, 'packages', 'orchestrator', 'tsconfig.json'),
+      {},
+      { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => undefined },
+    );
+    const program = ts.createProgram([entry], { ...config?.options, noEmit: true });
+    const checker = program.getTypeChecker();
+    const fromSdk = (file: string) => /node_modules[\\/](?:@aws-sdk|@smithy)[\\/]/.test(file);
+    // The SDK's declarations are in the program, so a leak would be seen.
+    expect(program.getSourceFiles().some((file) => fromSdk(file.fileName))).toBe(true);
+
+    const barrel = checker.getSymbolAtLocation(program.getSourceFile(entry)!)!;
+    const exported = checker.getExportsOfModule(barrel);
+    expect(exported.map((symbol) => symbol.name)).toEqual(
+      expect.arrayContaining(['createAwsHostingDeployPort', 'createSigV4Fetch', 'TenantClients']),
+    );
+    const leaks = exported
+      .filter((symbol) => {
+        const target =
+          symbol.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol;
+        return (target.declarations ?? []).some((d) => fromSdk(d.getSourceFile().fileName));
+      })
+      .map((symbol) => symbol.name);
+    expect(leaks).toEqual([]);
+  }, 120_000);
 });

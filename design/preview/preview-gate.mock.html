@@ -1,0 +1,1669 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The preview gate pages (MOTIR-5766 · MOTIR-5774)</title>
+    <!--
+      DESIGN ASSET (HTML mock) for THE PREVIEW GATE — Story MOTIR-5766, card
+      MOTIR-5774.
+
+      The pages a person meets between clicking a pull request's preview link
+      and seeing the preview, and every page they meet instead when they do not
+      get there. The flow is MOTIR-5769's (the hosting decision page): §9 "The
+      member gate" for the handshake, §9 "States" for the closed state enum
+      `building | starting | ready | failed | closed`, §5 for the 413 / 411 /
+      501 refusals. The permission is `project:browse`
+      (lib/permissions/builtinRoles.ts:242, :289). Nothing here invents a step.
+
+      TWO HOSTS, TWO FRAMES.
+        · app.motir.co pages (sign in, refused) wear the SHIPPED `(auth)` frame —
+          the --el-auth-wash page, one card, the brand lockup inside it — exactly
+          as ../auth/two-factor-required.mock.html reproduces it.
+        · Preview-host pages (building, starting, failed, closed, not found) sit
+          on a TENANT's address. They wear a minimal Motir frame: the brand bar,
+          one card, one action, and a footer that names the address and says
+          Motir never asks for a password there. No app navigation: the host
+          carries no Motir session (the gate strips it), so a nav would be
+          links that bounce, and a Motir shell on a foreign host is the shape a
+          phishing page takes.
+
+      THE ENTRY IS COMPOSED, NOT REDRAWN. The door is the "In the preview" fact
+      of the Development block's How to test (../github/design-notes.md §20,
+      Panel 12e). Its pill already distinguishes Ready / Deploying / Deploy
+      failed / Inactive, and the lifecycle posts exactly those GitHub states, so
+      there is no development-block delta. Panel E draws only the path.
+
+      Panels:
+        E   The entry — the path from the Development block to the preview
+        1   Sign in to view — the shipped sign-in card with the preview banner
+        2   A member — no page; drawn as the path, not as a screen
+        3   Refused — signed in, without project:browse (and the unknown host)
+        4   Building — the image is being built; refreshes itself
+        5   Starting — shares Building's page, the second step lit
+        6   Failed — the record's reason, verbatim, and the way to the checks
+        6b  Not available in previews — the gate's 501 / 413 / 411 answers
+        7   Closed — the preview is gone, and why
+        8   Not found — shares Closed's page, says nothing it cannot know
+        9   Narrow — Building and Refused at 360px
+        10  Dark — Failed and Closed on data-theme="dark"
+
+      See design-notes.md for the per-element primitive, copy and token roles.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-fill: #5645d4;
+        --color-primary-pressed: #4534b3;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-card-padding-12: 12px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-md: 16px;
+        --spacing-sm: 12px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --focus-ring-color: var(--color-primary);
+      }
+
+      [data-theme='dark'] {
+        --color-primary: #7b6ce5;
+        --color-primary-fill: #6c5cdd;
+        --color-primary-pressed: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --color-link-pressed: #79b8ff;
+
+        /* The --el-* layer is RE-DECLARED here on purpose. A custom property is
+           substituted at the element it is DECLARED on, so an --el-* declared only
+           on :root computes against :root's --color-* and a descendant that flips
+           --color-* inherits the ALREADY-RESOLVED light value. Re-declaring it is
+           what makes a nested dark panel actually dark. */
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-card: var(--color-background);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-info: var(--color-info);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --focus-ring-color: var(--color-primary);
+      }
+
+      /* ── Mock chrome (NOT part of the design — the review page only) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1080px;
+        margin: 0 auto 8px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 92ch;
+        line-height: 1.55;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 44px auto 10px;
+        max-width: 1080px;
+        line-height: 1.5;
+      }
+      .panel-note {
+        max-width: 1080px;
+        margin: 0 auto 10px;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .panel {
+        max-width: 1080px;
+        margin: 0 auto;
+      }
+      .pair {
+        display: flex;
+        gap: 20px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .narrow {
+        width: 360px;
+      }
+      .dark-wrap {
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+      }
+
+      /* ── The (auth) frame on app.motir.co — from two-factor-required.mock.html ── */
+      .authwash {
+        background: var(--el-auth-wash);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 36px 24px;
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        flex-wrap: wrap;
+      }
+      .authcard {
+        width: 100%;
+        max-width: 28rem;
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 36px 40px;
+      }
+      .ac-brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 26px;
+        color: var(--el-text);
+      }
+      .glyph {
+        width: 22px;
+        height: 22px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-serif);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .wm {
+        font-family: var(--font-serif);
+        font-size: 17px;
+        font-weight: 600;
+      }
+      .ac-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 22px;
+      }
+      .ac-head h1 {
+        font-family: var(--font-serif);
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.2;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .ac-head p {
+        margin: 0;
+        font-size: 15px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .ac-body {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .ac-foot {
+        margin-top: 22px;
+        padding-top: 18px;
+        border-top: 1px solid var(--el-border);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+      }
+      .why {
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .who {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .who strong {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* The banner the preview hand-off adds to the shipped sign-in card. */
+      .banner {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding-12);
+        font-size: 13px;
+        line-height: 1.5;
+        margin-bottom: 18px;
+      }
+      .banner svg {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+      }
+      .mounted {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-card);
+        padding: 18px var(--spacing-card-padding);
+        background: var(--el-surface-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .mounted-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .mounted-body {
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── The preview-host frame — Motir's, on a tenant's address ──────────── */
+      .pvwash {
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 0 0 28px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 22px;
+        overflow: hidden;
+      }
+      .pvbar {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 20px;
+        background: var(--el-page-bg);
+        border-bottom: 1px solid var(--el-border);
+        color: var(--el-text);
+      }
+      .pvbar .tag {
+        margin-left: 4px;
+      }
+      .pvcard {
+        width: calc(100% - 40px);
+        max-width: 30rem;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        padding: 28px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      .pvcard h1 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.25;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .pvcard p {
+        margin: 0;
+        font-size: 14.5px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .pvhead {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .pvfoot {
+        width: calc(100% - 40px);
+        max-width: 30rem;
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        text-align: center;
+      }
+      .host {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-code-text);
+        background: var(--el-code-bg);
+        border-radius: var(--radius-control);
+        padding: 1px 6px;
+        word-break: break-all;
+      }
+
+      /* What the preview is OF — the pull request and the work item. */
+      .facts {
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        gap: 6px 14px;
+        margin: 0;
+        font-size: 13px;
+      }
+      .facts dt {
+        color: var(--el-text-secondary);
+      }
+      .facts dd {
+        margin: 0;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .key {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-right: 6px;
+      }
+
+      /* ── Pill (components/ui/Pill) — hue in the TINT, ink --el-text-strong ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.25;
+        white-space: nowrap;
+        align-self: flex-start;
+        color: var(--el-text-strong);
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-who {
+        background: var(--el-tint-sky);
+      }
+      .pill-building {
+        background: var(--el-tint-peach);
+      }
+      .pill-failed {
+        background: var(--el-tint-rose);
+      }
+      .pill-closed {
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+      }
+      .tag {
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 11px;
+        font-weight: 600;
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+
+      /* ── The three steps — Building → Starting → Ready ───────────────────── */
+      .steps {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .stp {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+      }
+      .dot {
+        flex: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid var(--el-border-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .dot svg {
+        width: 10px;
+        height: 10px;
+      }
+      .stp-done .dot {
+        background: var(--el-success);
+        border-color: var(--el-success);
+        color: var(--el-text-inverted);
+      }
+      .stp-done {
+        color: var(--el-text);
+      }
+      .stp-now .dot {
+        border-color: var(--el-warning);
+        border-top-color: transparent;
+      }
+      .stp-now {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .refresh {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .refresh svg {
+        flex: none;
+        width: 13px;
+        height: 13px;
+      }
+
+      /* ── The failure reason — hue in the border + glyph, label on --el-text ── */
+      .callout {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        border: 1px solid var(--el-danger);
+        border-left-width: 4px;
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        padding: var(--spacing-card-padding-12);
+      }
+      .callout svg {
+        flex: none;
+        width: 16px;
+        height: 16px;
+        margin-top: 2px;
+        color: var(--el-danger);
+      }
+      .callout-body {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+      .callout-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .reason {
+        font-size: 13.5px;
+        line-height: 1.5;
+        color: var(--el-text);
+      }
+      .callout-neutral {
+        border-color: var(--el-border-strong);
+      }
+      .callout-neutral svg {
+        color: var(--el-text-secondary);
+      }
+
+      /* ── Button (components/ui/Button) ───────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        text-decoration: none;
+      }
+      .btn svg {
+        width: 16px;
+        height: 16px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-ghost {
+        border-color: transparent;
+        background: transparent;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-btn-x-sm);
+        height: var(--height-btn-sm);
+        font-size: 13px;
+      }
+      .btn-block {
+        width: 100%;
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      /* ── The path, drawn as a flow (from two-factor-required.mock.html) ──── */
+      .flow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        padding: 18px var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+      }
+      .step {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        padding: 10px 14px;
+        min-width: 150px;
+        background: var(--el-surface-soft);
+      }
+      .s-t {
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .s-d {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+      }
+      .step.here {
+        background: var(--el-tint-sky);
+        border-color: transparent;
+      }
+      .step.here .s-t,
+      .step.here .s-d {
+        color: var(--el-text-strong);
+      }
+      .step.none {
+        border-style: dashed;
+        background: var(--el-page-bg);
+      }
+      .arrow {
+        color: var(--el-text-secondary);
+        font-size: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>The preview gate — what a person meets between a preview link and the preview</h1>
+      <p>
+        Story MOTIR-5766 · card MOTIR-5774. Two pages on app.motir.co (sign in, refused) wear the
+        shipped <code>(auth)</code> frame. Five on the preview host (building, starting, failed,
+        closed, not found) wear a minimal Motir frame that cannot be mistaken for the tenant's
+        application. Every value of the state enum
+        <code>building · starting · ready · failed · closed</code> resolves to a panel below;
+        <code>ready</code> has no page, because it is the application.
+      </p>
+    </div>
+
+    <div class="panel-label">E · The entry — from the Development block to the preview</div>
+    <div class="panel-note">
+      The door is the <strong>In the preview</strong> fact of the Development block
+      (../github/design-notes.md §20, Panel 12e), composed and not redrawn: its pill already reads
+      Ready, Deploying, Deploy failed or Inactive from the GitHub deployment state the lifecycle
+      posts. Without a gate cookie the preview host always sends the viewer to
+      app.motir.co/preview-access, whatever the host holds — so the host never says whether a
+      preview exists before the gate has decided who is asking.
+    </div>
+    <div class="panel">
+      <div class="flow">
+        <span class="step here">
+          <span class="s-t">In the preview · Ready</span>
+          <span class="s-d">pr-14--portal.preview…</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step">
+          <span class="s-t">Preview host, no cookie</span>
+          <span class="s-d">302 → preview-access</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step">
+          <span class="s-t">app.motir.co/preview-access</span>
+          <span class="s-d">?host=…&amp;return=/</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step none">
+          <span class="s-t">Signed out?</span>
+          <span class="s-d">the shipped sign-in, Panel 1</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step">
+          <span class="s-t">Member: token, 60 s</span>
+          <span class="s-d">/__motir/preview-auth</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step here">
+          <span class="s-t">The preview</span>
+          <span class="s-d">__Host-motir-gate, 8 h</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="panel-label">1 · Sign in to view — signed out, on app.motir.co</div>
+    <div class="panel-note">
+      The shipped sign-in card, unchanged, with ONE banner above it. The banner names only the
+      address, which is already in the viewer's address bar; it names no project, repository or
+      organisation, because a signed-out viewer may have no right to know them. After sign-in the
+      viewer returns to preview-access with the same <code>host</code> and <code>return</code>.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <div class="ac-brand">
+            <span class="glyph" aria-hidden="true">M</span>
+            <span class="wm">Motir</span>
+          </div>
+          <div class="banner" role="note">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
+            </svg>
+            <span
+              >Sign in to open the preview at
+              <span class="host">pr-14--portal.preview.motir.site</span>. Previews open only for
+              members of the project.</span
+            >
+          </div>
+          <div class="mounted">
+            <span class="mounted-label">The shipped sign-in card · ../auth/</span>
+            <span class="mounted-body"
+              >Email, Continue with Google, Sign in with a passkey, the password step and the 2FA
+              challenge — exactly as app/(auth)/ renders them today. Not redrawn here.</span
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">2 · A member — no page at all</div>
+    <div class="panel-note">
+      A viewer who holds <code>project:browse</code> on the repository's project sees nothing on
+      app.motir.co: preview-access mints the single-use token and redirects in the same response.
+      Drawn as the path, because there is no screen to draw. The preview host consumes the token,
+      sets the host-only gate cookie, and redirects to the remembered path — then serves the
+      application if the row is ready, or Panels 4 to 8 if it is not.
+    </div>
+    <div class="panel">
+      <div class="flow">
+        <span class="step">
+          <span class="s-t">preview-access</span>
+          <span class="s-d">project:browse ✓</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step">
+          <span class="s-t">Token minted</span>
+          <span class="s-d">single use, 60 s</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step here">
+          <span class="s-t">Preview host</span>
+          <span class="s-d">sets __Host-motir-gate</span>
+        </span>
+        <span class="arrow" aria-hidden="true">→</span>
+        <span class="step">
+          <span class="s-t">The return path</span>
+          <span class="s-d">/ or the path asked for</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="panel-label">3 · Refused — signed in, without project:browse</div>
+    <div class="panel-note">
+      Says plainly that this account cannot open it, and offers the two ways out that exist: go to
+      Motir, or sign in as someone else. It names NO project: the same page answers a host that
+      matches no preview, so a viewer without access learns nothing about what exists. The account
+      shown is the viewer's own email. There is no access-request flow in Motir today, so the copy
+      points at the person who shared the link rather than at a button that does not exist.
+    </div>
+    <div class="panel">
+      <div class="authwash">
+        <div class="authcard">
+          <div class="ac-brand">
+            <span class="glyph" aria-hidden="true">M</span>
+            <span class="wm">Motir</span>
+          </div>
+          <div class="ac-head">
+            <span class="pill pill-who"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Preview</span
+            >
+            <h1>You don't have access to this preview</h1>
+            <p>
+              Previews open only for members of the project they belong to. If someone shared this
+              link with you, ask them to add you to the project, then open the link again.
+            </p>
+          </div>
+          <div class="ac-body">
+            <span class="who">Signed in as <strong>sam@example.com</strong></span>
+            <a class="btn btn-primary btn-block" href="https://app.motir.co">Go to Motir</a>
+          </div>
+          <div class="ac-foot">
+            <button class="btn btn-ghost" type="button">Sign in with a different account</button>
+            <span class="why">You'll come back to this preview after you sign in.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">4 · Building — state building</div>
+    <div class="panel-note">
+      The member is let in and the row is <code>building</code>: the repository's CI is building the
+      image. Three steps, the first lit. The page re-checks every 10 seconds and swaps itself for
+      the application when the row turns ready. The one action is the work item the pull request is
+      linked to; with no linked work item it is <em>Open pull request #14 on GitHub</em> instead.
+    </div>
+    <div class="panel">
+      <div class="pvwash">
+        <div class="pvbar">
+          <span class="glyph" aria-hidden="true">M</span>
+          <span class="wm">Motir</span>
+          <span class="tag">Preview</span>
+        </div>
+        <div class="pvcard">
+          <div class="pvhead">
+            <span class="pill pill-building"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M17 12h.01M12 12h.01M7 12h.01" />
+              </svg>
+              Building</span
+            >
+            <h1>This preview is being built</h1>
+            <p>
+              The repository's CI is building the preview image for this pull request's latest
+              commit. It usually takes a few minutes.
+            </p>
+          </div>
+          <ol class="steps">
+            <li class="stp stp-now" aria-current="step">
+              <span class="dot" aria-hidden="true"></span>Building the image
+            </li>
+            <li class="stp"><span class="dot" aria-hidden="true"></span>Starting the preview</li>
+            <li class="stp"><span class="dot" aria-hidden="true"></span>Ready</li>
+          </ol>
+          <div class="refresh">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+            This page checks again every 10 seconds and opens the preview when it is ready.
+          </div>
+          <dl class="facts">
+            <dt>Work item</dt>
+            <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+            <dt>Pull request</dt>
+            <dd>acme/portal · #14</dd>
+          </dl>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+              >Open ACME-212 in Motir
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                /></svg
+            ></a>
+          </div>
+        </div>
+        <div class="pvfoot">
+          You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+          runs for a pull request. Motir never asks for your password on this address. Signing in
+          happens only on app.motir.co.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">5 · Starting — state starting, which SHARES Building's page</div>
+    <div class="panel-note">
+      <code>starting</code> is the same page with the second step lit and its own heading. A viewer
+      cannot act differently on either state — both say wait, and both end in ready or failed — so a
+      second page would only be a second thing to keep in step. The pill reads Starting.
+    </div>
+    <div class="panel">
+      <div class="pvwash">
+        <div class="pvbar">
+          <span class="glyph" aria-hidden="true">M</span>
+          <span class="wm">Motir</span>
+          <span class="tag">Preview</span>
+        </div>
+        <div class="pvcard">
+          <div class="pvhead">
+            <span class="pill pill-building"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M17 12h.01M12 12h.01M7 12h.01" />
+              </svg>
+              Starting</span
+            >
+            <h1>This preview is starting</h1>
+            <p>
+              The image is built. Motir is starting it and waiting for its health check to pass.
+            </p>
+          </div>
+          <ol class="steps">
+            <li class="stp stp-done">
+              <span class="dot" aria-hidden="true"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="3"
+                  aria-hidden="true"
+                >
+                  <path d="M20 6 9 17l-5-5" /></svg></span
+              >Building the image
+            </li>
+            <li class="stp stp-now" aria-current="step">
+              <span class="dot" aria-hidden="true"></span>Starting the preview
+            </li>
+            <li class="stp"><span class="dot" aria-hidden="true"></span>Ready</li>
+          </ol>
+          <div class="refresh">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+              <path d="M21 3v5h-5" />
+            </svg>
+            This page checks again every 10 seconds and opens the preview when it is ready.
+          </div>
+          <dl class="facts">
+            <dt>Work item</dt>
+            <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+            <dt>Pull request</dt>
+            <dd>acme/portal · #14</dd>
+          </dl>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+              >Open ACME-212 in Motir
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                /></svg
+            ></a>
+          </div>
+        </div>
+        <div class="pvfoot">
+          You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+          runs for a pull request. Motir never asks for your password on this address. Signing in
+          happens only on app.motir.co.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">6 · Failed — state failed</div>
+    <div class="panel-note">
+      The record's <code>failure_reason</code>, verbatim, in a callout whose hue sits in the border
+      and the glyph; the reason itself is on --el-text. The reason is plain language the lifecycle
+      writes (the health-check timeout shown, or the image build naming GitHub's conclusion). The
+      action is the work item, where the checks and their logs are.
+    </div>
+    <div class="panel">
+      <div class="pvwash">
+        <div class="pvbar">
+          <span class="glyph" aria-hidden="true">M</span>
+          <span class="wm">Motir</span>
+          <span class="tag">Preview</span>
+        </div>
+        <div class="pvcard">
+          <div class="pvhead">
+            <span class="pill pill-failed"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="m15 9-6 6M9 9l6 6" />
+              </svg>
+              Failed</span
+            >
+            <h1>This preview didn't start</h1>
+            <p>
+              Nothing is running for this pull request's latest commit. A new push builds it again.
+            </p>
+          </div>
+          <div class="callout" role="note">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="m15 9-6 6M9 9l6 6" />
+            </svg>
+            <div class="callout-body">
+              <span class="callout-title">What went wrong</span>
+              <span class="reason"
+                >The preview did not pass its health check within 10 minutes.</span
+              >
+            </div>
+          </div>
+          <dl class="facts">
+            <dt>Work item</dt>
+            <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+            <dt>Pull request</dt>
+            <dd>acme/portal · #14</dd>
+          </dl>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+              >Open ACME-212 in Motir
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                /></svg
+            ></a>
+          </div>
+          <p>The work item shows this pull request's checks and their logs.</p>
+        </div>
+        <div class="pvfoot">
+          You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+          runs for a pull request. Motir never asks for your password on this address. Signing in
+          happens only on app.motir.co.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">6b · Not available in previews — the gate's 501, 413 and 411</div>
+    <div class="panel-note">
+      MOTIR-5769 §5: the gate refuses rather than truncates. A websocket upgrade gets 501, a body
+      over the target's gated limit 413, a write with no Content-Length 411. A browser that
+      navigates into one sees this card in the Failed frame, neutral rather than red because the
+      preview is fine; a script gets the status and the same sentence as plain text.
+    </div>
+    <div class="panel">
+      <div class="pvwash">
+        <div class="pvbar">
+          <span class="glyph" aria-hidden="true">M</span>
+          <span class="wm">Motir</span>
+          <span class="tag">Preview</span>
+        </div>
+        <div class="pvcard">
+          <div class="pvhead">
+            <span class="pill pill-closed"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 16v-4M12 8h.01" />
+              </svg>
+              Not available in previews</span
+            >
+            <h1>Previews can't do this</h1>
+            <p>
+              Live connections (websockets) don't pass through the preview gate. The rest of the
+              preview works as usual.
+            </p>
+          </div>
+          <div class="callout callout-neutral" role="note">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
+            </svg>
+            <div class="callout-body">
+              <span class="callout-title">The other two answers</span>
+              <span class="reason"
+                >413: Requests larger than 10 MB can't be sent to a preview. 411: This request
+                didn't say how large it is, so the preview gate can't accept it.</span
+              >
+            </div>
+          </div>
+          <dl class="facts">
+            <dt>Work item</dt>
+            <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+            <dt>Pull request</dt>
+            <dd>acme/portal · #14</dd>
+          </dl>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+              >Open ACME-212 in Motir
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                /></svg
+            ></a>
+          </div>
+        </div>
+        <div class="pvfoot">
+          You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+          runs for a pull request. Motir never asks for your password on this address. Signing in
+          happens only on app.motir.co.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">7 · Closed — state closed</div>
+    <div class="panel-note">
+      Says the preview is gone and why, in one sentence chosen by the reason: the pull request was
+      merged; it was closed without merging; or the repository left Motir. The action is the work
+      item. Nothing offers to restart it: a reopened pull request builds a new preview by itself.
+    </div>
+    <div class="panel">
+      <div class="pvwash">
+        <div class="pvbar">
+          <span class="glyph" aria-hidden="true">M</span>
+          <span class="wm">Motir</span>
+          <span class="tag">Preview</span>
+        </div>
+        <div class="pvcard">
+          <div class="pvhead">
+            <span class="pill pill-closed"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M4.9 4.9l14.2 14.2" />
+              </svg>
+              Closed</span
+            >
+            <h1>This preview has been shut down</h1>
+            <p>
+              Pull request #14 was merged, so Motir shut its preview down and deleted its database.
+            </p>
+          </div>
+          <dl class="facts">
+            <dt>Work item</dt>
+            <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+            <dt>Pull request</dt>
+            <dd>acme/portal · #14</dd>
+          </dl>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+              >Open ACME-212 in Motir
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path
+                  d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                /></svg
+            ></a>
+          </div>
+        </div>
+        <div class="pvfoot">
+          You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+          runs for a pull request. Motir never asks for your password on this address. Signing in
+          happens only on app.motir.co.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      8 · Not found — no row matches the host, which SHARES Closed's page
+    </div>
+    <div class="panel-note">
+      Reached only by a viewer who already holds a valid gate cookie for a host whose row is gone.
+      It is Closed's layout with nothing it cannot know: no work item, no pull request, no reason. A
+      viewer without access never gets here: they get Panel 3 on app.motir.co, for a missing host
+      and for a closed one alike, so the two cannot be told apart.
+    </div>
+    <div class="panel">
+      <div class="pvwash">
+        <div class="pvbar">
+          <span class="glyph" aria-hidden="true">M</span>
+          <span class="wm">Motir</span>
+          <span class="tag">Preview</span>
+        </div>
+        <div class="pvcard">
+          <div class="pvhead">
+            <span class="pill pill-closed"
+              ><svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <circle cx="12" cy="12" r="10" />
+                <path d="M4.9 4.9l14.2 14.2" />
+              </svg>
+              Not available</span
+            >
+            <h1>There is no preview here</h1>
+            <p>
+              This address doesn't belong to a running preview. It may have been shut down, or the
+              link may be mistyped.
+            </p>
+          </div>
+          <div class="actions">
+            <a class="btn btn-primary" href="https://app.motir.co">Go to Motir</a>
+          </div>
+        </div>
+        <div class="pvfoot">
+          You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+          runs for a pull request. Motir never asks for your password on this address. Signing in
+          happens only on app.motir.co.
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">9 · Narrow — Building and Refused at 360px</div>
+    <div class="panel-note">
+      The card fills the width less a 20px gutter. The facts list keeps its two columns; the
+      work-item title wraps.
+    </div>
+    <div class="panel">
+      <div class="pair">
+        <div class="pvwash narrow">
+          <div class="pvbar">
+            <span class="glyph" aria-hidden="true">M</span>
+            <span class="wm">Motir</span>
+            <span class="tag">Preview</span>
+          </div>
+          <div class="pvcard">
+            <div class="pvhead">
+              <span class="pill pill-building"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M17 12h.01M12 12h.01M7 12h.01" />
+                </svg>
+                Building</span
+              >
+              <h1>This preview is being built</h1>
+              <p>
+                The repository's CI is building the preview image for this pull request's latest
+                commit. It usually takes a few minutes.
+              </p>
+            </div>
+            <ol class="steps">
+              <li class="stp stp-now" aria-current="step">
+                <span class="dot" aria-hidden="true"></span>Building the image
+              </li>
+              <li class="stp"><span class="dot" aria-hidden="true"></span>Starting the preview</li>
+              <li class="stp"><span class="dot" aria-hidden="true"></span>Ready</li>
+            </ol>
+            <div class="refresh">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                aria-hidden="true"
+              >
+                <path d="M21 12a9 9 0 1 1-3-6.7L21 8" />
+                <path d="M21 3v5h-5" />
+              </svg>
+              This page checks again every 10 seconds and opens the preview when it is ready.
+            </div>
+            <dl class="facts">
+              <dt>Work item</dt>
+              <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+              <dt>Pull request</dt>
+              <dd>acme/portal · #14</dd>
+            </dl>
+            <div class="actions">
+              <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+                >Open ACME-212 in Motir
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                  /></svg
+              ></a>
+            </div>
+          </div>
+          <div class="pvfoot">
+            You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+            runs for a pull request. Motir never asks for your password on this address. Signing in
+            happens only on app.motir.co.
+          </div>
+        </div>
+        <div class="authwash narrow">
+          <div class="authcard">
+            <div class="ac-brand">
+              <span class="glyph" aria-hidden="true">M</span>
+              <span class="wm">Motir</span>
+            </div>
+            <div class="ac-head">
+              <span class="pill pill-who"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Preview</span
+              >
+              <h1>You don't have access to this preview</h1>
+              <p>
+                Previews open only for members of the project they belong to. If someone shared this
+                link with you, ask them to add you to the project, then open the link again.
+              </p>
+            </div>
+            <div class="ac-body">
+              <span class="who">Signed in as <strong>sam@example.com</strong></span>
+              <a class="btn btn-primary btn-block" href="https://app.motir.co">Go to Motir</a>
+            </div>
+            <div class="ac-foot">
+              <button class="btn btn-ghost" type="button">Sign in with a different account</button>
+              <span class="why">You'll come back to this preview after you sign in.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">10 · Dark — Failed and Closed on data-theme="dark"</div>
+    <div class="panel-note">
+      The frame, the callout and the pills under the dark palette. The tokens are re-declared under
+      [data-theme="dark"], so this panel renders dark rather than inheriting the light values.
+    </div>
+    <div class="panel">
+      <div class="dark-wrap" data-theme="dark">
+        <div class="pair">
+          <div class="pvwash">
+            <div class="pvbar">
+              <span class="glyph" aria-hidden="true">M</span>
+              <span class="wm">Motir</span>
+              <span class="tag">Preview</span>
+            </div>
+            <div class="pvcard">
+              <div class="pvhead">
+                <span class="pill pill-failed"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="m15 9-6 6M9 9l6 6" />
+                  </svg>
+                  Failed</span
+                >
+                <h1>This preview didn't start</h1>
+                <p>
+                  Nothing is running for this pull request's latest commit. A new push builds it
+                  again.
+                </p>
+              </div>
+              <div class="callout" role="note">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="m15 9-6 6M9 9l6 6" />
+                </svg>
+                <div class="callout-body">
+                  <span class="callout-title">What went wrong</span>
+                  <span class="reason"
+                    >The preview did not pass its health check within 10 minutes.</span
+                  >
+                </div>
+              </div>
+              <dl class="facts">
+                <dt>Work item</dt>
+                <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+                <dt>Pull request</dt>
+                <dd>acme/portal · #14</dd>
+              </dl>
+              <div class="actions">
+                <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+                  >Open ACME-212 in Motir
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                    /></svg
+                ></a>
+              </div>
+              <p>The work item shows this pull request's checks and their logs.</p>
+            </div>
+            <div class="pvfoot">
+              You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+              runs for a pull request. Motir never asks for your password on this address. Signing
+              in happens only on app.motir.co.
+            </div>
+          </div>
+          <div class="pvwash">
+            <div class="pvbar">
+              <span class="glyph" aria-hidden="true">M</span>
+              <span class="wm">Motir</span>
+              <span class="tag">Preview</span>
+            </div>
+            <div class="pvcard">
+              <div class="pvhead">
+                <span class="pill pill-closed"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M4.9 4.9l14.2 14.2" />
+                  </svg>
+                  Closed</span
+                >
+                <h1>This preview has been shut down</h1>
+                <p>
+                  Pull request #14 was merged, so Motir shut its preview down and deleted its
+                  database.
+                </p>
+              </div>
+              <dl class="facts">
+                <dt>Work item</dt>
+                <dd><span class="key">ACME-212</span>Let customers export invoices as CSV</dd>
+                <dt>Pull request</dt>
+                <dd>acme/portal · #14</dd>
+              </dl>
+              <div class="actions">
+                <a class="btn btn-primary" href="https://app.motir.co/items/ACME-212"
+                  >Open ACME-212 in Motir
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                    /></svg
+                ></a>
+              </div>
+            </div>
+            <div class="pvfoot">
+              You are on <span class="host">pr-14--portal.preview.motir.site</span>, a preview Motir
+              runs for a pull request. Motir never asks for your password on this address. Signing
+              in happens only on app.motir.co.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -34,4 +34,7 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   treeshake: true,
+  // `AWS_TENANT_STACKS_DIR` (MOTIR-10003) finds its directory from
+  // `import.meta.url`, which the CommonJS build would otherwise leave empty.
+  shims: true,
 });

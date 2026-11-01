@@ -266,56 +266,27 @@ describe('Confirm', () => {
     expect(stream).not.toHaveBeenCalled();
   });
 
-  it('a requirement that could not be saved is not a refusal: no refusal recorded, thread refetched (MOTIR-9438)', async () => {
+  // MOTIR-10091: Confirm no longer saves the requirement page, so no failure of the
+  // door is special-cased any more: whatever it answers is the press's refusal.
+  it('a failure the door answers is recorded as the refusal, with no thread refetch', async () => {
     answerOffer.mockRejectedValue(
       new PlanEditsClientError(503, 'PLAN_OFFER_REQUIREMENT_NOT_SAVED', {
         code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
       }),
     );
-    readSession.mockResolvedValue(session('s1', offer({ requirementSaveFailed: true })));
     const { result } = await mounted();
+    readSession.mockClear();
 
     await act(async () => {
       await result.current.confirmPlanOffer('t1');
     });
-    expect(result.current.state.offerRefusal).toBeNull();
+    expect(result.current.state.offerRefusal).toEqual({
+      turnId: 't1',
+      code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
+    });
     expect(result.current.state.offerAnsweringTurnId).toBeNull();
-    expect(readSession).toHaveBeenCalledWith('s1');
-    expect(result.current.state.session?.turns[1]?.offer?.requirementSaveFailed).toBe(true);
+    expect(readSession).not.toHaveBeenCalled();
     expect(stream).not.toHaveBeenCalled();
-  });
-
-  it('a requirement that could not be saved, with the refetch failing too, still records no refusal', async () => {
-    answerOffer.mockRejectedValue(
-      new PlanEditsClientError(503, 'PLAN_OFFER_REQUIREMENT_NOT_SAVED', {
-        code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
-      }),
-    );
-    readSession.mockRejectedValue(new Error('offline'));
-    const { result } = await mounted();
-
-    await act(async () => {
-      await result.current.confirmPlanOffer('t1');
-    });
-    expect(result.current.state.offerRefusal).toBeNull();
-    expect(result.current.state.offerAnsweringTurnId).toBeNull();
-    expect(result.current.state.session?.turns[1]?.offer?.requirementSaveFailed).toBeFalsy();
-  });
-
-  it('a requirement that could not be saved leaves the thread alone when the read is another conversation', async () => {
-    answerOffer.mockRejectedValue(
-      new PlanEditsClientError(503, 'PLAN_OFFER_REQUIREMENT_NOT_SAVED', {
-        code: 'PLAN_OFFER_REQUIREMENT_NOT_SAVED',
-      }),
-    );
-    readSession.mockResolvedValue(session('other', offer({ requirementSaveFailed: true })));
-    const { result } = await mounted();
-
-    await act(async () => {
-      await result.current.confirmPlanOffer('t1');
-    });
-    expect(result.current.state.session?.id).toBe('s1');
-    expect(result.current.state.offerRefusal).toBeNull();
   });
 
   it('a turn sent while the door is out is not aborted (MOTIR-9409)', async () => {

@@ -44,10 +44,23 @@ function git(...args: string[]): string | null {
  * Words that are the SAME word in a language, so an identical value is a
  * translation, not a leftover placeholder. Reviewed by hand; each carries its why.
  */
+// The platform job ledger (MOTIR-9987) adds a "Status" label the Germanic and
+// Polish catalogues spell as English does, and Portuguese keeps "Jobs" (the
+// tenant ledger's own word) — the same words, not untranslated ones.
+const JOBS_STATUS = ['platformAdmin.jobs.status.label', 'platformAdmin.jobs.columns.status'];
+
 const SAME_WORD: Record<string, string[]> = {
-  fr: ['reports.workload.tableTotal'], // « Total »
+  fr: ['reports.workload.tableTotal', 'platformAdmin.jobs.pageLabel'], // « Total », « Page {page} »
   es: ['reports.workload.tableTotal', 'reports.cvr.seriesLabel'], // « Total », « Series »
-  pt: ['reports.workload.tableTotal'], // « Total »
+  pt: [
+    'reports.workload.tableTotal', // « Total »
+    'platformAdmin.shell.navJobs',
+    'platformAdmin.jobs.title',
+    ...JOBS_STATUS,
+  ],
+  de: JOBS_STATUS,
+  nl: JOBS_STATUS,
+  pl: JOBS_STATUS,
 };
 
 /** A value with no words of its own: only placeholders and punctuation. */

@@ -19,7 +19,13 @@ import { roleMayManageAddress } from '@/lib/services/publicSubdomainService';
 
 const ROOT = process.cwd();
 const PAGE = 'app/(authed)/settings/project/public-address/page.tsx';
-const CARD = 'app/(authed)/settings/project/public-address/_components/PublicSubdomainCard.tsx';
+const ECHO = 'app/(authed)/settings/project/public-address/_components/PublicAddressEcho.tsx';
+// The subdomain's CONTROL moved to workspace settings (Story MOTIR-4528 ·
+// MOTIR-9514/9515); this room keeps a read-only echo of it.
+const WS_BODY = 'app/(authed)/settings/workspace/public-address/_components/PublicAddressBody.tsx';
+const WS_REFUSAL = 'app/(authed)/settings/workspace/public-address/_components/refusal.ts';
+const WS_CONTROL =
+  'app/(authed)/settings/workspace/public-address/_components/PublicAddressControl.tsx';
 const SLOT = 'app/(authed)/settings/project/public-address/_components/CustomDomainsSection.tsx';
 
 /** Source with comments stripped — a claim in prose is not a claim in code. */
@@ -131,63 +137,62 @@ describe('the two axes this room is gated on', () => {
     expect(roleMayManageAddress(null)).toBe(false);
   });
 
-  it('the page asks the SERVICE for that predicate rather than restating the roles', () => {
+  it('the workspace control asks the SERVICE for that predicate rather than restating the roles', () => {
     // A second `['owner','admin']` in a page component is a copy of a
     // security-shaped rule, and its drift shows up as controls that appear and
     // then refuse.
-    const src = code(PAGE);
+    const src = code(WS_BODY);
     expect(src).toContain('roleMayManageAddress');
     expect(src).not.toMatch(/\[\s*'owner'\s*,\s*'admin'\s*\]/);
   });
+
+  it('this room echoes the subdomain read-only — no role read, no write path (MOTIR-9515)', () => {
+    const page = code(PAGE);
+    expect(page).toContain('<PublicAddressEcho');
+    expect(page).not.toContain('roleMayManageAddress');
+    expect(page).not.toContain('getMemberRole');
+    const echo = code(ECHO);
+    expect(echo).toContain("'/settings/workspace/public-address'");
+    expect(echo).not.toMatch(/method:\s*'(PUT|DELETE)'|fetch\(/);
+  });
 });
 
-describe('the card renders the design, and the refusals come from CODES', () => {
-  const src = code(CARD);
+describe('the workspace control renders the design, and the refusals come from CODES', () => {
+  const refusal = code(WS_REFUSAL);
+  const control = code(WS_CONTROL);
 
   it('maps every refusal the service can raise', () => {
     // MOTIR-4215 put the `refusal` discriminator on the wire precisely because
     // `reserved` and `bad_grammar` send a customer to different next actions.
-    for (const refusal of [
+    for (const discriminator of [
       'reserved',
       'structurally_reserved',
       'too_short',
       'too_long',
       'bad_grammar',
     ]) {
-      expect(src, `no copy for the ${refusal} refusal`).toContain(refusal);
+      expect(refusal, `no copy for the ${discriminator} refusal`).toContain(discriminator);
     }
     for (const codeName of [
       'HOSTNAME_TAKEN',
-      'SUBDOMAIN_RENAME_CAP_REACHED',
+      'NAME_QUARANTINED',
+      'SUBDOMAIN_CHANGE_LIMIT',
       'SUBDOMAIN_FORBIDDEN',
     ]) {
-      expect(src, `no arm for ${codeName}`).toContain(codeName);
+      expect(refusal, `no arm for ${codeName}`).toContain(codeName);
     }
   });
 
   it('never renders the server’s English message', () => {
-    // The wire carries an `error` string for a developer. Rendering it would
-    // throw the zh catalogue away and couple the pane to the service's prose.
-    expect(src).not.toMatch(/body\.error|\.error\s*\)/);
+    expect(refusal + control).not.toMatch(/body\.error|\.error\s*\)/);
   });
 
-  it('speaks through the catalogue, so zh is not a second implementation', () => {
-    expect(src).toContain("useTranslations('settings.publicAddress')");
-  });
-
-  it('the rename confirm carries the never-released promise and the count', () => {
-    // ADR §8 in the customer's words. The count is drawn because a cap the
-    // customer cannot see is a cap they meet as a refusal.
-    expect(src).toContain('rename.warningTitle');
-    expect(src).toContain('rename.warningBody');
-    expect(src).toContain('rename.remaining');
+  it('speaks through the catalogue, so the other locales are not a second implementation', () => {
+    expect(control).toContain("useTranslations('settings.workspaceAddress')");
   });
 
   it('re-reads after a write instead of patching local state', () => {
-    // `renamesLeft` and the alias list are DERIVED server-side (the alias rows
-    // are the count), so optimism here would mean re-deriving the cap in the
-    // browser.
-    expect(src).toContain('router.refresh()');
+    expect(control).toContain('router.refresh()');
   });
 });
 

@@ -50,8 +50,10 @@ difference. The first draft of the surfaces showed it plainly, and the review re
      are theirs, shown with the Motir Integration badge. GitHub limits a user token to what both the
      person and the App's installation can reach, so the run also verifies that the installation
      covers the repository and holds the permissions below.
-2. **Motir Integration gains `contents: write` + `pull_requests: write`. Never `workflows`, never
-   `administration`.** An agent must not hold a token that can rewrite the CI that runs with the
+2. **Motir Integration gains `contents: write` + `pull_requests: write`. ~~Never `workflows`~~, never
+   `administration`.** _AMENDED 2026-10-29: Motir Integration also requests `workflows: write`;
+   see [`hosted-run-runs-the-cli-as-the-app.md`](hosted-run-runs-the-cli-as-the-app.md) AMENDMENT
+   2026-10-29. The reason below is kept as the record of what was decided then._ An agent must not hold a token that can rewrite the CI that runs with the
    repository's secrets; a change touching `.github/workflows/` fails at push, as §4 already said.
 3. **Motir Integration's user tokens become expiring** (8 hours, with a refresh token). A stored
    token that can write code must not live for ever. An identity linked before the switch keeps its

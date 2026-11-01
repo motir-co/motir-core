@@ -13,6 +13,7 @@ import {
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE RECONCILER READS EVERY AGENT-HOSTER ACCOUNT (Story MOTIR-9361 · MOTIR-9476)
 // against real Postgres. Each hoster account is an `AwsEc2Fake`, reached through
@@ -50,8 +51,9 @@ vi.mock('@motir/orchestrator', async () => {
   )) as typeof import('@motir/orchestrator');
   return {
     ...source,
-    createEc2Api: (credentials: { accessKeyId: string }) =>
-      world.accounts.get(credentials.accessKeyId),
+    createAwsManagementApi: () => runnerRole.management(),
+    createEc2Api: (config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(config, (keyId) => world.accounts.get(keyId) as object | undefined),
   };
 });
 
@@ -74,8 +76,8 @@ async function seedAccount(name: string, state = 'active'): Promise<Account> {
   seq += 1;
   const credentialRef = `FLEET_SHARD_HOSTER_${seq}`;
   const keyId = `AKIA-${name}`;
-  vi.stubEnv(`${credentialRef}_ACCESS_KEY_ID`, keyId);
-  vi.stubEnv(`${credentialRef}_SECRET_ACCESS_KEY`, MARKER);
+  const awsAccountId = `5555${String(seq).padStart(8, '0')}`;
+  runnerRole.grant(awsAccountId, keyId, MARKER);
   const ec2 = new AwsEc2Fake();
   world.accounts.set(keyId, ec2);
   const row = await adminDb.fleetShard.create({
@@ -86,7 +88,7 @@ async function seedAccount(name: string, state = 'active'): Promise<Account> {
       state: state as 'active',
       githubOrg: 'motir-co',
       githubInstallationId: '556677',
-      awsAccountId: `5555${String(seq).padStart(8, '0')}`,
+      awsAccountId,
       awsRegion: 'us-east-1',
       credentialRef,
     },
@@ -170,6 +172,8 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
   vi.stubEnv('FLY_FLEET_API_TOKEN', '');
   world.accounts.clear();
+  runnerRole.reset();
+  stubAwsManagementCredential();
   captureException.mockReset();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -359,15 +363,17 @@ describe('which accounts a pass reads', () => {
     }
   });
 
-  it('reads a hoster account in any state; one with missing credentials is skipped with an alert', async () => {
+  it('reads a hoster account in any state; one whose runner role cannot be assumed is skipped with an alert', async () => {
     const provisioning = await seedAccount('agent-hoster-new', 'provisioning');
     const disabled = await seedAccount('agent-hoster-old', 'disabled');
     const straysOf = [provisioning, disabled].map((acct) =>
       acct.ec2.plantInstance({ tags: [], launchTime: OLD }),
     );
+    // A row whose account never granted the runner role: the assume is refused
+    // when its listing first signs (MOTIR-9847 — there is no key to be missing).
     await adminDb.fleetShard.create({
       data: {
-        name: 'agent-hoster-unkeyed',
+        name: 'agent-hoster-unassumable',
         fleetKind: 'agent_instance',
         provider: 'aws',
         state: 'active',
@@ -375,20 +381,16 @@ describe('which accounts a pass reads', () => {
         githubInstallationId: '556677',
         awsAccountId: '555599999999',
         awsRegion: 'us-east-1',
-        credentialRef: 'FLEET_SHARD_HOSTER_UNKEYED',
+        credentialRef: 'FLEET_SHARD_HOSTER_UNASSUMABLE',
       },
     });
 
     const result = await reconcile();
 
-    expect(result).toMatchObject({ accounts: 2 });
+    expect(result).toMatchObject({ accounts: 3 });
     if (result.outcome !== 'reconciled') return;
     expect(result.killed.map((k) => k.machineId).sort()).toEqual([...straysOf].sort());
-    expect(
-      alerts().some(
-        (m) => m.includes('agent-hoster-unkeyed') && m.includes('FLEET_SHARD_HOSTER_UNKEYED'),
-      ),
-    ).toBe(true);
+    expect(alerts().some((m) => m.includes('agent-hoster-unassumable'))).toBe(true);
   });
 
   it('no alert or kill row carries a credential value', async () => {

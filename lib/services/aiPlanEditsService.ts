@@ -13,6 +13,7 @@ import type {
   CarriedAnswers,
   JobContextBag,
   JobStreamEvent,
+  RequirementConfirmation,
   SubmittedRequirement,
 } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
@@ -144,10 +145,10 @@ export interface PlanEditSubmitOptions {
    */
   carriedAnswers?: CarriedAnswers;
   /**
-   * The page a confirmed no-target offer's requirement was saved to (MOTIR-9436):
-   * `context.requirementPage`, beside `requirement`, only when present.
+   * The plan offer whose requirement the person confirmed (MOTIR-10091):
+   * `context.requirementConfirmed`, beside `requirement`, only when present.
    */
-  requirementPage?: { pageId: string; title: string };
+  requirementConfirmed?: RequirementConfirmation;
 }
 
 /**
@@ -473,12 +474,12 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { carriedAnswers, requirementPage, ...rest } = opts;
+    const { carriedAnswers, requirementConfirmed, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         ...(requirement ? { requirement } : {}),
-        ...(requirementPage ? { requirementPage } : {}),
+        ...(requirementConfirmed ? { requirementConfirmed } : {}),
         ...(carriedAnswers ? { carriedAnswers } : {}),
       },
       ctx,
@@ -523,13 +524,13 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { carriedAnswers, requirementPage, ...rest } = opts;
+    const { carriedAnswers, requirementConfirmed, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         targetKeys: [...targetKeys],
         ...(requirement ? { requirement } : {}),
-        ...(requirementPage ? { requirementPage } : {}),
+        ...(requirementConfirmed ? { requirementConfirmed } : {}),
         ...(carriedAnswers ? { carriedAnswers } : {}),
       },
       ctx,

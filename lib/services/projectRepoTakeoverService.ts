@@ -13,6 +13,8 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { actionsPermissionsClient } from '@/lib/github/actionsPermissions';
 import { repoTransferClient, RepoTransferError } from '@/lib/github/repoTransfer';
 import { toProjectRepoDto, type ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
@@ -85,7 +87,13 @@ import {
 //     ceiling binds), the unset belongs in this saga, in the same diff.**
 //     `lib/github/actionsVariables.ts` deliberately ships no repo-scoped writer so
 //     that cannot happen by accident, and `projectRepoTakeoverService.test.ts`
-//     asserts this path makes no Actions-variable call at all.
+//     asserts this path makes no ORG-variable call at all.
+//
+//     The one repository-scoped Actions configuration Motir does write is the
+//     preview push credential and its variables (MOTIR-5775,
+//     `lib/github/repositoryActionsConfig.ts`), and its unset is exactly where
+//     the paragraph above says it belongs: `previewEnablementService.disable`,
+//     a step of this saga ordered before the transfer.
 
 /** How far a takeover got. Returned for the surface + the tests; never thrown. */
 export interface TakeoverOutcome {
@@ -149,18 +157,23 @@ export const projectRepoTakeoverService = {
       // reaches it, so this is the last moment they are usable.
       return {
         projectId: row.projectId,
-        installationId: row.githubRepo!.installationId,
+        installationRowId: row.githubRepo!.installationId,
         owner: row.githubRepo!.owner,
         repo: row.githubRepo!.name,
+        // Read before enablement's `disable` clears it: the preview teardown
+        // below destroys the namespace's app by this name (MOTIR-5776).
+        previewPushNamespace: row.previewPushNamespace,
       };
     });
 
     // ── 2 · The host calls, IN ORDER, outside any transaction ────────────────
+    let installationId: string;
     try {
+      installationId = await hostInstallationIdOf(claimed.installationRowId);
       // §G — re-enable FIRST, unconditionally. Idempotent by construction (a PUT
       // of a desired state), so a retry after a lost response is free.
       await actionsPermissionsClient.setActionsEnabled({
-        installationId: claimed.installationId,
+        installationId,
         owner: claimed.owner,
         repo: claimed.repo,
         enabled: true,
@@ -172,10 +185,44 @@ export const projectRepoTakeoverService = {
       );
     }
 
+    // MOTIR-5775 — previews OFF, also BEFORE the transfer and for the same reason
+    // as §G: a repository SECRET and VARIABLES travel with the repository, and
+    // once it has moved Motir's App can no longer delete them. The push token
+    // would leave with it, able to push into Motir's registry. So the token is
+    // revoked and the secret and variables deleted here, and a failure fails the
+    // saga before anything moves. The preview RESOURCES (apps, Neon project) are
+    // the preview lifecycle's, not this step's.
+    try {
+      await previewEnablementService.disable(rowId);
+    } catch (err) {
+      await this.markFailed(rowId, detailOf(err), ctx);
+      throw new RepoTransferRefusedError(
+        `could not withdraw the preview push credential before the transfer: ${detailOf(err)}`,
+      );
+    }
+
+    // MOTIR-5776 — the preview RESOURCES, after the credential is gone and still
+    // before the transfer, while Motir can post `inactive` on the repository's
+    // deployments: every open preview closed and torn down, then the repository's
+    // preview image app and Neon preview project destroyed (decision MOTIR-5769
+    // §9: "previews destroyed, never handed over"). NOT a reason to stop the
+    // handover: no credential is left to leak, every row is committed `closed`
+    // before its teardown, and the reaper finishes a teardown that did not.
+    try {
+      await previewLifecycleService.teardownRepository(rowId, {
+        pushNamespace: claimed.previewPushNamespace,
+      });
+    } catch (err) {
+      console.warn('[projectRepoTakeover] preview teardown did not finish; the reaper will', {
+        rowId,
+        error: detailOf(err),
+      });
+    }
+
     let accepted = false;
     try {
       const result = await repoTransferClient.transferRepo({
-        installationId: claimed.installationId,
+        installationId,
         owner: claimed.owner,
         repo: claimed.repo,
         newOwner: target,
@@ -448,6 +495,27 @@ function assertTransferable(rowId: string, row: ProjectRepoWithRealized): void {
   if (row.state !== 'created' || !row.githubRepo) {
     throw new ProjectRepoNotTransferableError(rowId, 'not_realized');
   }
+}
+
+/**
+ * GitHub's NUMERIC installation id for a mirror row's `installationId` (MOTIR-10062).
+ *
+ * The mirror's column is the foreign key to `GithubInstallation.id` — Motir's own
+ * cuid, which GitHub has never issued, so a token minted for it is a 404 and the
+ * takeover would fail at its very first host call. Read under `withSystemContext`
+ * because the provisioning installation every Motir-created repository lives in
+ * is shared and has no `workspace_id`: the tenant context the claim runs in cannot
+ * see it. The mapping is immutable, so reading it after the claim's lock is safe.
+ */
+async function hostInstallationIdOf(installationRowId: string): Promise<string> {
+  const ids = await withSystemContext((tx) =>
+    githubInstallationRepository.findHostInstallationIdsByIds([installationRowId], tx),
+  );
+  const installationId = ids.get(installationRowId);
+  if (!installationId) {
+    throw new Error('the GitHub installation this repository lives in is no longer on record');
+  }
+  return installationId;
 }
 
 /** Find the row, check the caller may edit its project, lock it, and re-read it

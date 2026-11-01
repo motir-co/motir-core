@@ -4,6 +4,8 @@ import {
   isConflictedAtCurrentHead,
   isMergeabilityOwedAt,
   isMergeabilityOwedAtCurrentHead,
+  isOutOfDateAt,
+  isOutOfDateAtCurrentHead,
 } from '@/lib/github/mergeability';
 
 // THE PULL REQUEST'S HEAD, READ ONE WAY (MOTIR-7005). The check rows are not the head:
@@ -129,6 +131,36 @@ describe('isMergeabilityOwedAtCurrentHead', () => {
       isMergeabilityOwedAt({ mergeableState: 'unknown', mergeableStateHeadSha: A }, null),
     ).toBe(true);
     expect(isMergeabilityOwedAt({ mergeableState: 'clean', mergeableStateHeadSha: A }, null)).toBe(
+      false,
+    );
+  });
+});
+
+// BEHIND A STRICT BASE (Bug MOTIR-10054): the same head rule as a conflict, and never
+// a conflict itself.
+describe('isOutOfDateAtCurrentHead', () => {
+  const at = (mergeableState: string | null, mergeableStateHeadSha: string | null) => ({
+    headSha: B,
+    checkRuns: [run(B, 'success')],
+    mergeableState,
+    mergeableStateHeadSha,
+  });
+
+  it('a `behind` reading at the head is out of date, and is not a conflict', () => {
+    expect(isOutOfDateAtCurrentHead(at('behind', B))).toBe(true);
+    expect(isConflictedAtCurrentHead(at('behind', B))).toBe(false);
+  });
+
+  it('a reading taken at another head, another state, or none at all is not', () => {
+    expect(isOutOfDateAtCurrentHead(at('behind', A))).toBe(false);
+    expect(isOutOfDateAtCurrentHead(at('dirty', B))).toBe(false);
+    expect(isOutOfDateAtCurrentHead(at('clean', B))).toBe(false);
+    expect(isOutOfDateAtCurrentHead(at(null, null))).toBe(false);
+  });
+
+  it('with no known head, any `behind` reading with a head of its own counts', () => {
+    expect(isOutOfDateAt({ mergeableState: 'behind', mergeableStateHeadSha: A }, null)).toBe(true);
+    expect(isOutOfDateAt({ mergeableState: 'behind', mergeableStateHeadSha: null }, null)).toBe(
       false,
     );
   });

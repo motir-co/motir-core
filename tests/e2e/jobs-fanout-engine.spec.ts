@@ -166,17 +166,6 @@ async function transitionInTheUi(page: Page, identifier: string, to: string): Pr
   await expect(page.getByText(to, { exact: true }).first()).toBeVisible({ timeout: 30_000 });
 }
 
-// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
-// sign-up gets ONE auto-created workspace — the COLLAPSED state — and
-// `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
-// workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
-// settings home instead (`JobRunsFoldInSection`): same component, same reads,
-// same tabs and filters, with its links built from THIS address.
-async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/organization');
-  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-}
-
 /** Poll the ledger for one consumer's terminal state. The authoritative signal. */
 async function awaitRunState(
   workspaceId: string | null,
@@ -214,7 +203,6 @@ test('@smoke one UI transition fans out to all FOUR fast-lane consumers on the e
   await adminDb.watcher.create({ data: { workItemId: child.id, userId: t.watcherId } });
 
   // ── the EMPTY STATE first, so nothing below can pass on a pre-existing row ──
-  await gotoJobs(page);
   expect(await adminDb.jobRun.count({ where: { functionId: { in: FAST_LANE } } })).toBe(0);
   expect(await adminDb.jobQueueRun.count({ where: { jobId: { in: FAST_LANE } } })).toBe(0);
 
@@ -231,13 +219,6 @@ test('@smoke one UI transition fans out to all FOUR fast-lane consumers on the e
     where: { functionId: { in: FAST_LANE }, status: 'succeeded' },
   });
   expect(new Set(succeeded.map((r) => r.functionId))).toEqual(new Set(FAST_LANE));
-
-  // …and they are visible on the operator surface, which is itself a real user
-  // surface rather than a table read.
-  await gotoJobs(page);
-  for (const consumer of FAST_LANE) {
-    await expect(page.getByText(consumer).first()).toBeVisible({ timeout: 30_000 });
-  }
 
   // ── THREE visible effects prove the fan-out DID something ─────────────────
 

@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { twoFactorPolicyService } from '@/lib/services/twoFactorPolicyService';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { NameCard } from '../../workspace/_components/NameCard';
@@ -11,6 +12,10 @@ import { DangerZoneCard } from '../../workspace/_components/DangerZoneCard';
 import { setWorkspaceRequireTwoFactorAction } from '../../workspace/security/actions';
 import { RequireTwoFactorCard } from './RequireTwoFactorCard';
 import { RolesDoorCard } from './RolesDoorCard';
+import { PublicAddressDoorCard } from './PublicAddressDoorCard';
+import { isCloud } from '@/lib/billing/availability';
+import { isTenantDomainConfigured } from '@/lib/publicAddresses/tenantDomain';
+import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
 
 // §6d's SETTINGS COLLAPSE (MOTIR-3502 · design/org-admin panel 2). Below the
 // workspace-tier reveal threshold there is no `/settings/workspace` area — it
@@ -49,23 +54,38 @@ export async function WorkspaceFoldInSection({
   // transaction, so a rejection on one must not leave the others running
   // unobserved (MOTIR-3066). The two arms MOTIR-3647 added are what make this a
   // four-arm wave; the pair before it predates the rule and moves with it.
-  const [workspace, members, policy, role, roleContext, migration] = await allSettledOrThrow([
-    workspacesService.getWorkspaceSummary(workspaceId, actorUserId),
-    workspacesService.listMembers(workspaceId, actorUserId),
-    // Story MOTIR-1215 · MOTIR-3647 — the workspace require-2FA control's SECOND
-    // home. Below the reveal threshold `/settings/workspace/security` 404s, so
-    // this is the only place a single-workspace org can reach it, which is the
-    // common case rather than the edge one.
-    twoFactorPolicyService.getWorkspacePolicy(workspaceId, actorUserId),
-    workspacesService.getMemberRole(actorUserId, workspaceId),
-    // The Members role column and the migration report fold in with Members
-    // (Story MOTIR-6168 · MOTIR-6465, design panel 4b).
-    workspacesService.getMemberRoleContext(workspaceId, actorUserId),
-    roleMigrationReportService.firstPageForViewer(workspaceId, actorUserId),
-  ]);
+  // Story MOTIR-4528 · MOTIR-9514 — the Public address door. Cloud only, and
+  // only where a base domain is configured: off-cloud the room 404s, and with no
+  // base domain the door would name nothing.
+  const offersAddress = isCloud() && isTenantDomainConfigured();
+  const [workspace, members, policy, role, roleContext, migration, subdomain, invites] =
+    await allSettledOrThrow([
+      workspacesService.getWorkspaceSummary(workspaceId, actorUserId),
+      workspacesService.listMembers(workspaceId, actorUserId),
+      // Story MOTIR-1215 · MOTIR-3647 — the workspace require-2FA control's SECOND
+      // home. Below the reveal threshold `/settings/workspace/security` 404s, so
+      // this is the only place a single-workspace org can reach it, which is the
+      // common case rather than the edge one.
+      twoFactorPolicyService.getWorkspacePolicy(workspaceId, actorUserId),
+      workspacesService.getMemberRole(actorUserId, workspaceId),
+      // The Members role column and the migration report fold in with Members
+      // (Story MOTIR-6168 · MOTIR-6465, design panel 4b).
+      workspacesService.getMemberRoleContext(workspaceId, actorUserId),
+      roleMigrationReportService.firstPageForViewer(workspaceId, actorUserId),
+      offersAddress
+        ? publicSubdomainService.getForWorkspace(workspaceId, actorUserId)
+        : Promise.resolve(null),
+      // The Members card's pending invitations fold in with it (MOTIR-9997), read
+      // as `/settings/workspace` reads them: the read refuses a viewer who may not
+      // invite, and a failed read draws the card without the block.
+      workspaceInvitesService
+        .listPendingInvites({ userId: actorUserId, workspaceId })
+        .catch(() => []),
+    ]);
   // The caller resolved this workspace from the actor's OWN membership list, so
   // a null here means it went away between the two reads. Nothing to host.
   if (!workspace) return null;
+  const pendingInvites = roleContext.canInvite ? invites : [];
 
   return (
     <>
@@ -88,9 +108,12 @@ export async function WorkspaceFoldInSection({
         members={members}
         currentUserId={actorUserId}
         roleContext={roleContext}
+        pendingInvites={pendingInvites}
       />
 
       <RolesDoorCard customRoleCount={roleContext.customRoles.length} />
+
+      {offersAddress ? <PublicAddressDoorCard hostname={subdomain?.hostname ?? null} /> : null}
 
       {/* ⚠️ RELOCATING A SURFACE PRESERVES ITS GATE, AND THIS SECTION DOES NOT
           CARRY THIS ONE. This host renders for ANY member of the workspace —

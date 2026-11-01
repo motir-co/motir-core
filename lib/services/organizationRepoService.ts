@@ -7,6 +7,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectsService } from '@/lib/services/projectsService';
 import { assertOrgAdmin, assertOrgMember } from '@/lib/services/organizationAccessService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
@@ -677,6 +678,92 @@ export const organizationRepoService = {
         return toProjectRepoDto({ ...row, githubRepo: repo, collaborators: [] });
       }),
     );
+  },
+
+  /**
+   * THE PROJECT ROOM'S INSTALL RETURN (Bug MOTIR-9828) — the setup handler's one
+   * call when a verified install state names a PROJECT. Two halves, in order:
+   *
+   *   1. Link the installation to the ORGANISATION through
+   *      `githubInstallationService.linkExistingInstallation` — the same org
+   *      branch "Install on another account" takes. It re-reads the
+   *      installation's repositories from GitHub and upserts them, so every
+   *      repository the person just selected EXISTS as a row when this returns,
+   *      whether the `installation_repositories` webhook arrived first or not.
+   *      Its refusals propagate: they are the org branch's outcomes.
+   *   2. Link into the PROJECT every repository of that installation that was
+   *      connected to the organisation AT OR AFTER `since` (the moment the
+   *      room minted the link) and that the project does not already hold.
+   *
+   * ⚠️ "CONNECTED SINCE THE LINK WAS MINTED" IS HOW THE ROUND TRIP'S OWN
+   * REPOSITORIES ARE TOLD APART, and it is read off `github_repo.created_at`
+   * rather than off the refresh's `claimed` list, because the webhook usually
+   * wins the race: by the time the browser returns, the row is already there
+   * and the refresh claims nothing. A repository the organisation held BEFORE
+   * the link was minted is never linked here — that is the picker's other
+   * segment, and adding it would be an act nobody asked for.
+   *
+   * The links are made one by one through `linkExistingRepo`, so each carries
+   * that path's gates (`repository:manage`, org admin, the organisation check)
+   * and its `other` role — the role the picker gives. A link that cannot be
+   * made (a name already taken in the project, a concurrent claim) is skipped
+   * and the rest still land; the room shows what did.
+   */
+  async linkInstallReturnIntoProject(input: {
+    projectKey: string;
+    organizationId: string;
+    installationId: string;
+    since: Date;
+    ctx: ServiceContext;
+  }): Promise<{ linked: ProjectRepoDto[] }> {
+    const { ctx } = input;
+    const { installation } = await githubInstallationService.linkExistingInstallation({
+      organizationId: input.organizationId,
+      actorUserId: ctx.userId,
+      installationId: input.installationId,
+      via: 'install_return',
+      workspaceIdHint: ctx.workspaceId,
+      requireHintInOrganization: true,
+    });
+
+    const project = await projectsService.getByKey(input.projectKey, ctx);
+    const candidates = await inProjectOrg(project.id, ctx, 'edit', async (tx, organizationId) => {
+      await assertOrgAdmin(ctx.userId, organizationId, tx);
+      const [orgRepos, held] = await Promise.all([
+        githubRepoRepository.listByOrganization(organizationId, tx),
+        projectRepoRepository.listByProject(project.id, ctx.workspaceId, tx),
+      ]);
+      const taken = new Set(held.map((row) => row.githubRepoId).filter((id): id is string => !!id));
+      return orgRepos.filter(
+        (repo) =>
+          repo.installationId === installation.id &&
+          repo.createdAt.getTime() >= input.since.getTime() &&
+          !taken.has(repo.id),
+      );
+    });
+
+    const linked: ProjectRepoDto[] = [];
+    for (const repo of candidates) {
+      try {
+        linked.push(
+          await organizationRepoService.linkExistingRepo(
+            project.id,
+            { githubRepoId: repo.id, role: 'other' },
+            ctx,
+          ),
+        );
+      } catch (err) {
+        if (
+          err instanceof ProjectRepoNameTakenError ||
+          err instanceof RealizedRepoAlreadyClaimedError ||
+          err instanceof ProjectRepoLinkConflictError
+        ) {
+          continue;
+        }
+        throw err;
+      }
+    }
+    return { linked };
   },
 
   /**

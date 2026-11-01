@@ -188,6 +188,13 @@ user-visible behaviour above is fixed either way.
 
 ### §2 — Seeding is per row, per role, and admits where a repo starts near-empty
 
+> **Amended 2026-10-28 by the seed-registry decision ([MOTIR-706](motir:cmqfb4mto00l52d0i62jdkinq),
+> page `cmvsezd8800eihnoikhllqqev`, version 2).** Its seed registry replaces this section's seeding
+> table and the _"When MOTIR-709 lands"_ sentence below: a row's `seedSource` is a registry entry
+> key, the registry is the default map (`web` → `nextjs-prisma-serverless-starter`, the platform
+> starter renamed from `nextjs-prisma-vercel-starter`), and the code is `seed_registry_entry`
+> (MOTIR-708). The _"One correction to record"_ paragraph (`designStarter`) is unchanged.
+
 There is **one** default platform starter and it is a full-stack Next.js web app. It
 cannot seed an API-only or a shared-package repo, and the multi-stack scaffold registry is
 Epic 9's (MOTIR-709 / 9.3.5), out of scope here. So:

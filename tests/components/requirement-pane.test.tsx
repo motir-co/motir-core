@@ -448,8 +448,13 @@ describe('the layer over the pane', () => {
     expect(region()).toBeNull();
   });
 
+  it('appears for a targeted offer that carries a requirement (MOTIR-9878)', () => {
+    renderHost(thread(offer({ targetKey: 'ACME-40', requirement: REQUIREMENT })));
+    expect(region()!.textContent).toContain('People export the board as CSV.');
+  });
+
   it.each([
-    ['a targeted offer', offer({ targetKey: 'ACME-40', requirement: REQUIREMENT })],
+    ['a targeted offer with no requirement', offer({ targetKey: 'ACME-40' })],
     ['a log_bug offer', offer({ kind: 'log_bug', requirement: REQUIREMENT })],
     ['no offer', null],
   ])('does not appear for %s', (_label, o) => {

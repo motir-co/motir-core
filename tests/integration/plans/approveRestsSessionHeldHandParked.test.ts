@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { buildScope } from '@/lib/planChange/scope';
 import { plansService } from '@/lib/services/plansService';
+import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
@@ -162,5 +163,64 @@ describe('approve — a conversation session holding a hand-parked target', () =
 
     expect(await statusOf(card.id)).toBe('planning');
     expect(await lockRows(card.id)).toEqual([]);
+  });
+
+  // MOTIR-9527 / MOTIR-9531 (2026-10-30): the approve committed, its post-commit
+  // session release never gave the cards back, and the lock sweep later released
+  // the expired lease WITHOUT knowing the plan was approved — `left_as_is`, lock
+  // row deleted, both cards at Planning for good. The resting status is an answer
+  // only the approve knows, so it has to be written inside the approve's
+  // transaction, as `restPlanTargets` writes a plan-held target's.
+  it('rests the card inside the approve, so a failed post-commit release cannot strand it', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await seedCard(fx);
+    await workItemsService.updateStatus(card.id, 'planning', fx.ctx);
+    vi.spyOn(planTargetLockService, 'releaseForSession').mockRejectedValue(
+      new Error('post-commit release lost'),
+    );
+
+    await approveThroughSession(fx, card);
+    // The sweep reaching the lease after it expired is what stranded the cards.
+    await planTargetLockService.releaseExpired(new Date(Date.now() + 2 * 60 * 60 * 1000));
+
+    expect(await statusOf(card.id)).toBe('todo');
+    expect(await lockRows(card.id)).toEqual([]);
+  });
+
+  it('rests a hand-parked target blocked by another hand-parked target of the same session at Blocked', async () => {
+    const fx = await makeWorkItemFixture();
+    const first = await seedCard(fx, 'The first card');
+    const second = await seedCard(fx, 'The second card');
+    await workItemsService.linkWorkItems(
+      { fromId: second.id, toId: first.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(first.id, 'planning', fx.ctx);
+    await workItemsService.updateStatus(second.id, 'planning', fx.ctx);
+    vi.spyOn(planTargetLockService, 'releaseForSession').mockRejectedValue(
+      new Error('post-commit release lost'),
+    );
+
+    const session = await openTestSession(pctxOf(fx), buildScope([first.key, second.key]));
+    const plan = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Re-plan', session: { sessionId: session.id } },
+      fx.ctx,
+    );
+    await plansService.addProposals(
+      plan.id,
+      [
+        { op: 'modify', workItemId: first.id, patch: { descriptionMd: 'A different body.' } },
+        { op: 'modify', workItemId: second.id, patch: { descriptionMd: 'Another body.' } },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    expect(await statusOf(first.id)).toBe('todo');
+    expect(await statusOf(second.id)).toBe('blocked');
+    expect(await lockRows(first.id)).toEqual([]);
+    expect(await lockRows(second.id)).toEqual([]);
   });
 });

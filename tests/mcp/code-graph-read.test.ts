@@ -10,8 +10,16 @@ import { TOOL_ANNOTATIONS } from '@/lib/mcp/toolAnnotations';
 import { EXEMPT_TOOLS } from '@/lib/mcp/payloads/exemptions';
 import { isBillableTool } from '@/lib/mcp/rateLimitGate';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
-import { CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME } from '@/lib/mcp/tools/codeGraphRead';
+import {
+  CODE_EXPLORE_TOOL_NAME,
+  CODE_GREP_TOOL_NAME,
+  CODE_SEARCH_TOOL_NAME,
+} from '@/lib/mcp/tools/codeGraphRead';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { _resetChangedFilesCache } from '@/lib/services/repoChangesService';
+import { codeGraphReadDriftService } from '@/lib/services/codeGraphReadDriftService';
+import { getGitProvider } from '@/lib/git';
+import type { ChangedFilesResult } from '@/lib/git/types';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -132,11 +140,13 @@ beforeEach(async () => {
   });
   fx = await makeWorkItemFixture();
   await seedRepoSet(fx);
+  _resetChangedFilesCache();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
 });
 
 afterAll(async () => {
@@ -144,12 +154,12 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-describe('code_explore / code_search — registered and permissioned', () => {
-  it('tools/list names both, read-only and closed-world; every declaration home carries them', async () => {
+describe('code_explore / code_search / code_grep — registered and permissioned', () => {
+  it('tools/list names all three, read-only and closed-world; every declaration home carries them', async () => {
     const client = await connectClient(fx.ctx);
     const { tools } = await client.listTools();
     await client.close();
-    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME]) {
+    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME, CODE_GREP_TOOL_NAME]) {
       const tool = tools.find((t) => t.name === name);
       expect(tool, `${name} is not registered`).toBeTruthy();
       expect(tool!.annotations?.readOnlyHint).toBe(true);
@@ -166,14 +176,30 @@ describe('code_explore / code_search — registered and permissioned', () => {
     expect(Object.keys(search.inputSchema.properties ?? {}).sort()).toEqual(
       ['cursor', 'limit', 'projectKey', 'query', 'repo'].sort(),
     );
+    const grep = tools.find((t) => t.name === CODE_GREP_TOOL_NAME)!;
+    expect(Object.keys(grep.inputSchema.properties ?? {}).sort()).toEqual(
+      [
+        'caseInsensitive',
+        'cursor',
+        'limit',
+        'path',
+        'pattern',
+        'projectKey',
+        'regex',
+        'repo',
+      ].sort(),
+    );
+    expect(grep.inputSchema.required).toEqual(['projectKey', 'pattern']);
   });
 
-  it('a token whose grant lacks ai:plan is refused at the door for both, before any ai call', async () => {
-    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME]) {
+  it('a token whose grant lacks ai:plan is refused at the door for all three, before any ai call', async () => {
+    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME, CODE_GREP_TOOL_NAME]) {
       const denied = await callTool(
         name,
         fx.ctx,
-        { projectKey: fx.projectIdentifier, query: 'readFile' },
+        name === CODE_GREP_TOOL_NAME
+          ? { projectKey: fx.projectIdentifier, pattern: 'readFile' }
+          : { projectKey: fx.projectIdentifier, query: 'readFile' },
         GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan'),
       );
       expect(denied.isError).toBe(true);
@@ -206,7 +232,7 @@ describe('code_explore / code_search — the read', () => {
       projectKey: fx.projectIdentifier,
       query: 'readFile',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: PAGED });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: PAGED, commits: [] });
     expect(summaryOf(res)).toBe(PAGED);
 
     expect(aiCalls).toHaveLength(1);
@@ -230,7 +256,7 @@ describe('code_explore / code_search — the read', () => {
       limit: 5,
       cursor: 'moooon-B-V/motir-core::c1',
     });
-    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'page 2 of 2' });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'page 2 of 2', commits: [] });
     expect(aiCalls[0]!.body).toMatchObject({
       tool: 'code_search',
       args: { query: 'readFile', limit: 5, cursor: 'moooon-B-V/motir-core::c1' },
@@ -388,5 +414,452 @@ describe('code_explore / code_search — the read', () => {
     });
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.content)).toContain('MOTIR_AI_BAD_REQUEST');
+  });
+});
+
+describe('code_grep — the file-contents search (MOTIR-10066)', () => {
+  // The executor's own text, as motir-ai renders it: the commit searched and the
+  // files under the path filter that were NOT searched travel inside `ok.text`.
+  const GREP =
+    '2 matching lines in 2 files · searched 41 files at commit 3f2a9c1:\n' +
+    'lib/billing/plans.ts:12: const COPY = "Standard, Pro, Max or Enterprise";\n' +
+    'lib/billing/plans.json:4:   "tiers": "Standard, Pro, Max or Enterprise"\n' +
+    'Not searched — 2 files under lib/billing/: lib/billing/logo.png (binary), ' +
+    'lib/billing/seed.sql (over the 1 MiB cap). Read them with read_file before calling a list complete.';
+
+  it('forwards pattern, regex, caseInsensitive, path, repo and limit, and passes the text through byte-equal', async () => {
+    aiReply = () => okText({ state: 'ok', text: GREP });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Standard, Pro, Max or Enterprise',
+      regex: false,
+      caseInsensitive: true,
+      path: 'lib/billing/',
+      repo: 'motir-core',
+      limit: 20,
+    });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: GREP, commits: [] });
+    expect(summaryOf(res)).toBe(GREP);
+    // AC4: the answer names the indexed commit and the skipped files under its path.
+    expect(summaryOf(res)).toContain('at commit 3f2a9c1');
+    expect(summaryOf(res)).toContain('lib/billing/logo.png (binary)');
+    expect(summaryOf(res)).toContain('lib/billing/seed.sql (over the 1 MiB cap)');
+
+    expect(aiCalls).toHaveLength(1);
+    expect(aiCalls[0]!.body).toEqual({
+      coreWorkspaceId: fx.workspaceId,
+      coreProjectId: fx.projectId,
+      tool: 'code_grep',
+      repoRefs: SET,
+      args: {
+        pattern: 'Standard, Pro, Max or Enterprise',
+        regex: false,
+        caseInsensitive: true,
+        path: 'lib/billing/',
+        repos: [`${OWNER}/motir-core`],
+        limit: 20,
+      },
+    });
+    expect(aiCalls[0]!.body.args).not.toHaveProperty('query');
+  });
+
+  it('a pattern is sent untrimmed, and a regex with only the required arguments', async () => {
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: ' Max ',
+    });
+    await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: '(a+)+$',
+      regex: true,
+    });
+    expect(aiCalls.map((c) => c.body.args)).toEqual([
+      { pattern: ' Max ' },
+      { pattern: '(a+)+$', regex: true },
+    ]);
+  });
+
+  it('content_not_indexed is NOT an empty match: enriched with commits behind, and says so', async () => {
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: fx.workspaceId, name: 'motir-ai' },
+      data: {
+        indexedHeadSha: 'aaa111',
+        defaultBranchHeadSha: 'bbb222',
+        commitsBehind: 3,
+        commitsBehindBaseSha: 'aaa111',
+        commitsBehindHeadSha: 'bbb222',
+      },
+    });
+    aiReply = () => okText({ state: 'content_not_indexed', repoRef: `${OWNER}/motir-ai` });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Enterprise',
+      repo: 'motir-ai',
+    });
+    const dto = dtoOf(res);
+    expect(dto).toMatchObject({
+      state: 'content_not_indexed',
+      repoRef: `${OWNER}/motir-ai`,
+      commitsBehind: 3,
+    });
+    expect(typeof dto['indexState']).toBe('string');
+    const summary = summaryOf(res);
+    expect(summary).toContain(`${OWNER}/motir-ai's file contents are not indexed yet`);
+    expect(summary).toContain('3 commits behind');
+    expect(summary).toContain('NOT an empty match');
+    expect(summary).toContain('read_file');
+  });
+
+  it('content_not_indexed for a repo core has no row for carries null facts', async () => {
+    aiReply = () => okText({ state: 'content_not_indexed', repoRef: 'x/unknown' });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Enterprise',
+    });
+    expect(dtoOf(res)).toEqual({
+      state: 'content_not_indexed',
+      repoRef: 'x/unknown',
+      indexState: null,
+      commitsBehind: null,
+    });
+    expect(summaryOf(res)).toBe(
+      "x/unknown's file contents are not indexed yet: its graph was built before contents were stored, so this is NOT an empty match. Its next index run stores them; until then read its files with `read_file`.",
+    );
+  });
+
+  it('an empty pattern is refused by the schema, before any ai call', async () => {
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: '',
+    });
+    expect(res.isError).toBe(true);
+    expect(aiCalls).toEqual([]);
+  });
+});
+
+describe('the DRIFT a read carries when the graph trails the default branch (MOTIR-10094)', () => {
+  // The fixture repository: its graph was built at INDEXED, and ONE commit later the
+  // default branch is at HEAD — the commit that ADDED `chooseInTx` in
+  // `lib/services/fleetShardAdmissionService.ts`. The graph therefore cannot find it.
+  const INDEXED = '8b23b07a1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f';
+  const HEAD = '300f5bfa1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f';
+  const ADDED = 'lib/services/fleetShardAdmissionService.ts';
+  const CORE = `${OWNER}/motir-core`;
+
+  async function behindByOne(name = 'motir-core'): Promise<void> {
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: fx.workspaceId, name },
+      data: {
+        indexedHeadSha: INDEXED,
+        defaultBranchHeadSha: HEAD,
+        commitsBehind: 1,
+        commitsBehindBaseSha: INDEXED,
+        commitsBehindHeadSha: HEAD,
+      },
+    });
+  }
+
+  /** The REAL registered provider's compare, replaced — the object the service is handed. */
+  function stubCompare(answer: (base: string, head: string) => ChangedFilesResult) {
+    const github = getGitProvider('github');
+    return vi
+      .spyOn(github, 'listChangedFiles')
+      .mockImplementation(async (_inst, _owner, _name, base, head) => answer(base, head));
+  }
+  const listed = (paths: string[], truncated = false): ChangedFilesResult => ({
+    outcome: 'ok',
+    base: INDEXED,
+    head: HEAD,
+    files: paths.map((path) => ({ path, status: 'modified' as const })),
+    truncated,
+    baseSha: INDEXED,
+    headSha: HEAD,
+  });
+
+  it('AC1 — code_search for a symbol the one missing commit added: no match, commitsBehind 1, and the file in changedPaths', async () => {
+    await behindByOne();
+    const compare = stubCompare(() => listed([ADDED, 'lib/fleet/containerSize.ts']));
+    aiReply = () => okText({ state: 'ok', text: 'No symbols found.' });
+
+    const res = await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'chooseInTx',
+      repo: 'motir-core',
+    });
+    const dto = dtoOf(res);
+    expect(dto['state']).toBe('ok');
+    expect(dto['text']).toBe('No symbols found.');
+    expect(dto['drift']).toEqual([
+      {
+        repoRef: CORE,
+        indexedSha: INDEXED,
+        defaultHead: HEAD,
+        commitsBehind: 1,
+        changedPaths: [ADDED, 'lib/fleet/containerSize.ts'],
+        changedPathsTruncated: false,
+        changedPathsUnavailable: null,
+        // `chooseInTx` → `choose`, which no changed path names: a lead, not a bound.
+        changedPathsInQueryArea: [],
+      },
+    ]);
+    // The compare is the graph's commit against the head, on the stored coordinates.
+    expect(compare).toHaveBeenCalledTimes(1);
+    expect(compare.mock.calls[0]!.slice(1)).toEqual([OWNER, 'motir-core', INDEXED, HEAD]);
+
+    // The text an agent reads: the executor's bytes FIRST and untouched, then the note.
+    const summary = summaryOf(res);
+    expect(summary.startsWith('No symbols found.\n\n')).toBe(true);
+    expect(summary).toContain('THE GRAPH IS BEHIND THE DEFAULT BRANCH');
+    expect(summary).toContain(
+      `${CORE}: the graph is at 8b23b07, 1 commit behind the default branch at 300f5bf.`,
+    );
+    expect(summary).toContain(`These 2 paths changed since: ${ADDED}, lib/fleet/containerSize.ts.`);
+    expect(summary).toContain('a symbol need not be named in its file’s path');
+    expect(summary).toContain('holds only for code OUTSIDE the changed paths');
+  });
+
+  it('AC1 — a graph at the head carries NO drift fields, and no compare is made', async () => {
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: fx.workspaceId },
+      data: { indexedHeadSha: HEAD, defaultBranchHeadSha: HEAD },
+    });
+    const compare = stubCompare(() => listed([ADDED]));
+    aiReply = () => okText({ state: 'ok', text: 'No symbols found.' });
+    const res = await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'chooseInTx',
+    });
+    // The commit each repository's graph was read at (MOTIR-10122), full sha, in set order.
+    expect(dtoOf(res)).toEqual({
+      state: 'ok',
+      text: 'No symbols found.',
+      commits: [
+        { repoRef: `${OWNER}/motir-ai`, indexedSha: HEAD },
+        { repoRef: `${OWNER}/motir-core`, indexedSha: HEAD },
+      ],
+    });
+    expect(summaryOf(res)).toBe(
+      `No symbols found.\n\nGraph commits read: ${OWNER}/motir-ai@${HEAD}, ${OWNER}/motir-core@${HEAD}.`,
+    );
+    expect(compare).not.toHaveBeenCalled();
+  });
+
+  it('a graph with an unknown sha on either side is not called behind — null is "not known yet"', async () => {
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: fx.workspaceId },
+      data: { indexedHeadSha: INDEXED, defaultBranchHeadSha: null },
+    });
+    const compare = stubCompare(() => listed([ADDED]));
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    const res = await callTool(CODE_EXPLORE_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+    });
+    expect(dtoOf(res)).toEqual({
+      state: 'ok',
+      text: 'x',
+      commits: [
+        { repoRef: `${OWNER}/motir-ai`, indexedSha: INDEXED },
+        { repoRef: `${OWNER}/motir-core`, indexedSha: INDEXED },
+      ],
+    });
+    expect(compare).not.toHaveBeenCalled();
+  });
+
+  it('AC2 — a compare too large to list is a BOUNDED list marked as cut, never an empty one', async () => {
+    await behindByOne();
+    // The host's own cap (300) reached, so it says `truncated` — and this answer
+    // bounds the list again, at 50.
+    const many = Array.from({ length: 300 }, (_, i) => `lib/gen/file${i}.ts`);
+    many[120] = 'lib/fleet/admission.ts';
+    stubCompare(() => listed(many, true));
+    aiReply = () => okText({ state: 'ok', text: '3 symbols:' });
+    const res = await callTool(CODE_EXPLORE_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'fleet admission',
+      repo: 'motir-core',
+    });
+    const [drift] = dtoOf(res)['drift'] as Record<string, unknown>[];
+    expect(drift!['changedPaths']).toHaveLength(50);
+    expect(drift!['changedPaths']).toEqual(many.slice(0, 50));
+    expect(drift!['changedPathsTruncated']).toBe(true);
+    // The area is matched over every path the host listed, past the 50 shown.
+    expect(drift!['changedPathsInQueryArea']).toEqual(['lib/fleet/admission.ts']);
+    const summary = summaryOf(res);
+    expect(summary).toContain('At least these 50 paths changed since:');
+    expect(summary).toContain('and 30 more in `drift`');
+    expect(summary).toContain('(the list was cut)');
+    expect(summary).toContain('The searched area touches 1 of them: lib/fleet/admission.ts');
+
+    // Fewer than the host's cap but more than this answer's bound is cut too.
+    _resetChangedFilesCache();
+    stubCompare(() => listed(many.slice(0, 60)));
+    const again = await callTool(CODE_EXPLORE_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+      repo: 'motir-core',
+    });
+    const [cut] = dtoOf(again)['drift'] as Record<string, unknown>[];
+    expect(cut!['changedPaths']).toHaveLength(50);
+    expect(cut!['changedPathsTruncated']).toBe(true);
+  });
+
+  it.each([
+    ['too_large', { outcome: 'too_large', base: INDEXED, head: HEAD }],
+    ['no_such_ref', { outcome: 'no_such_ref', base: INDEXED, head: HEAD }],
+    ['revoked', { outcome: 'revoked', base: INDEXED, head: HEAD }],
+    ['host_error', { outcome: 'host_error', base: INDEXED, head: HEAD, detail: 'boom' }],
+  ] as const)(
+    'a host that declines (%s) is named — changedPaths null, never []',
+    async (reason, answer) => {
+      await behindByOne();
+      stubCompare(() => answer as ChangedFilesResult);
+      aiReply = () => okText({ state: 'ok', text: 'No symbols found.' });
+      const res = await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+        projectKey: fx.projectIdentifier,
+        query: 'chooseInTx',
+        repo: 'motir-core',
+      });
+      const [drift] = dtoOf(res)['drift'] as Record<string, unknown>[];
+      expect(drift).toMatchObject({
+        changedPaths: null,
+        changedPathsTruncated: false,
+        changedPathsUnavailable: reason,
+        changedPathsInQueryArea: null,
+      });
+      expect(summaryOf(res)).toContain(
+        `What changed could not be listed (${reason}), so every absence in this answer is unproven`,
+      );
+    },
+  );
+
+  it('a compare that THROWS is reported as host_error, and the read still answers', async () => {
+    await behindByOne();
+    const github = getGitProvider('github');
+    vi.spyOn(github, 'listChangedFiles').mockRejectedValue(new Error('socket hang up'));
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    const res = await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+      repo: 'motir-core',
+    });
+    expect((dtoOf(res)['drift'] as Record<string, unknown>[])[0]).toMatchObject({
+      changedPaths: null,
+      changedPathsUnavailable: 'host_error',
+    });
+  });
+
+  it('a drift read that fails outright never fails the graph answer', async () => {
+    await behindByOne();
+    vi.spyOn(codeGraphReadDriftService, 'forRead').mockRejectedValue(new Error('unexpected'));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    const res = await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+    });
+    expect(dtoOf(res)).toEqual({ state: 'ok', text: 'x', commits: expect.any(Array) });
+  });
+
+  it('the paths come from ONE compare per commit pair — a second read is answered from the cache', async () => {
+    await behindByOne();
+    const compare = stubCompare(() => listed([ADDED]));
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    for (const query of ['chooseInTx', 'fleetKindOnPool']) {
+      await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+        projectKey: fx.projectIdentifier,
+        query,
+        repo: 'motir-core',
+      });
+    }
+    expect(compare).toHaveBeenCalledTimes(1);
+  });
+
+  it('only the repositories READ carry drift, in the set’s order; a non-ok answer carries none', async () => {
+    await behindByOne('motir-core');
+    await behindByOne('motir-ai');
+    stubCompare(() => listed([ADDED]));
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    const all = await callTool(CODE_EXPLORE_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+    });
+    expect((dtoOf(all)['drift'] as { repoRef: string }[]).map((d) => d.repoRef)).toEqual(SET);
+    const one = await callTool(CODE_EXPLORE_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+      repo: 'motir-ai',
+    });
+    expect((dtoOf(one)['drift'] as { repoRef: string }[]).map((d) => d.repoRef)).toEqual([
+      `${OWNER}/motir-ai`,
+    ]);
+
+    aiReply = () => okText({ state: 'stale_cursor' });
+    const stale = await callTool(CODE_EXPLORE_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+    });
+    expect(dtoOf(stale)).toEqual({ state: 'stale_cursor' });
+  });
+
+  it('code_grep: the searched area is its path prefix, matched exactly; an uncounted drift says so', async () => {
+    await behindByOne();
+    await adminDb.githubRepo.updateMany({
+      where: { workspaceId: fx.workspaceId, name: 'motir-core' },
+      data: { commitsBehind: null },
+    });
+    stubCompare(() => listed(['lib/billing/plans.ts', 'app/pricing/page.tsx']));
+    aiReply = () => okText({ state: 'ok', text: '0 matching lines' });
+    const res = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'Enterprise',
+      path: './lib/billing/',
+      repo: 'motir-core',
+    });
+    const [drift] = dtoOf(res)['drift'] as Record<string, unknown>[];
+    expect(drift).toMatchObject({
+      commitsBehind: null,
+      changedPathsInQueryArea: ['lib/billing/plans.ts'],
+    });
+    expect(summaryOf(res)).toContain('an uncounted number of commits behind');
+    expect(summaryOf(res)).toContain(
+      'The searched area touches 1 of them: lib/billing/plans.ts — read those with `read_file`',
+    );
+
+    // Without a path, the pattern's words are the area.
+    const byWords = await callTool(CODE_GREP_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      pattern: 'pricing',
+      repo: 'motir-core',
+    });
+    expect((dtoOf(byWords)['drift'] as Record<string, unknown>[])[0]).toMatchObject({
+      changedPathsInQueryArea: ['app/pricing/page.tsx'],
+    });
+  });
+
+  it('two commits that changed no file say the graph’s code is the default branch’s', async () => {
+    await behindByOne();
+    stubCompare(() => listed([]));
+    aiReply = () => okText({ state: 'ok', text: 'x' });
+    const res = await callTool(CODE_SEARCH_TOOL_NAME, fx.ctx, {
+      projectKey: fx.projectIdentifier,
+      query: 'q',
+      repo: 'motir-core',
+    });
+    expect((dtoOf(res)['drift'] as Record<string, unknown>[])[0]).toMatchObject({
+      changedPaths: [],
+      changedPathsTruncated: false,
+    });
+    expect(summaryOf(res)).toContain('No file changed between the two commits');
+  });
+
+  it('the description of every graph tool names the drift', async () => {
+    const client = await connectClient(fx.ctx);
+    const { tools } = await client.listTools();
+    await client.close();
+    for (const name of [CODE_EXPLORE_TOOL_NAME, CODE_SEARCH_TOOL_NAME, CODE_GREP_TOOL_NAME]) {
+      expect(tools.find((t) => t.name === name)!.description).toContain('`changedPaths`');
+    }
   });
 });

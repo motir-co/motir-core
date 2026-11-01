@@ -304,6 +304,11 @@ export interface DispatchPromptOptions {
    * Passed through undefaulted, for the same reason as `findingsPolicy`.
    */
   runnerPostsAgentReport?: boolean;
+  /**
+   * Whether the runner also posts the agent's `decisions` (MOTIR-10000) — see
+   * {@link import('@/lib/dispatch/promptTemplate').DispatchPromptSource.runnerPostsDecisions}.
+   */
+  runnerPostsDecisions?: boolean;
 }
 
 /**
@@ -576,6 +581,9 @@ export const dispatchPromptService = {
       ...(opts.runnerPostsAgentReport === undefined
         ? {}
         : { runnerPostsAgentReport: opts.runnerPostsAgentReport }),
+      ...(opts.runnerPostsDecisions === undefined
+        ? {}
+        : { runnerPostsDecisions: opts.runnerPostsDecisions }),
     });
 
     return {

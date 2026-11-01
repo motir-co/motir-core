@@ -500,7 +500,14 @@ const RERUN_OFFER: WorkItemRepairViewDto = {
   repairClass: 'acceptance_rerun',
   acceptanceRefusal: { reasonMd: REASON, decidedByLabel: 'Yue', decidedAt: '2026-09-26T10:14:00Z' },
   failing: [
-    { repo: CORE_PR.repo, number: CORE_PR.number, ci: 'passing', queueExit: null, conflict: null },
+    {
+      repo: CORE_PR.repo,
+      number: CORE_PR.number,
+      ci: 'passing',
+      queueExit: null,
+      conflict: null,
+      outOfDate: null,
+    },
   ],
   lastGaveUp: null,
 };

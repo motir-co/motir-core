@@ -113,9 +113,11 @@ import {
   registerGetCodingConvention,
 } from './tools/getCodingConvention';
 import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
+import { LIST_CHANGED_FILES_TOOL_NAME, registerListChangedFiles } from './tools/listChangedFiles';
 import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
+  CODE_GREP_TOOL_NAME,
   registerCodeGraphRead,
 } from './tools/codeGraphRead';
 import { SKELETON_TOOL_NAME, registerSkeleton } from './tools/skeleton';
@@ -144,6 +146,11 @@ import { LIST_SPRINTS_TOOL_NAME, registerListSprints } from './tools/listSprints
 import { VALIDATE_SPRINT_TOOL_NAME, registerValidateSprint } from './tools/validateSprint';
 import { VALIDATE_WORK_ITEM_TOOL_NAME, registerValidateWorkItem } from './tools/validateWorkItem';
 import { VALIDATE_PLAN_TOOL_NAME, registerValidatePlan } from './tools/validatePlan';
+import {
+  GET_PLAN_AUTHORING_STATE_TOOL_NAME,
+  registerGetPlanAuthoringState,
+} from './tools/getPlanAuthoringState';
+import { GET_PLAN_CODE_READS_TOOL_NAME, registerGetPlanCodeReads } from './tools/getPlanCodeReads';
 import { CREATE_SPRINT_TOOL_NAME, registerCreateSprint } from './tools/createSprint';
 import { UPDATE_SPRINT_TOOL_NAME, registerUpdateSprint } from './tools/updateSprint';
 import { DELETE_SPRINT_TOOL_NAME, registerDeleteSprint } from './tools/deleteSprint';
@@ -265,8 +272,10 @@ export const MCP_TOOL_NAMES = [
   GET_CODE_HEALTH_TOOL_NAME,
   GET_CODING_CONVENTION_TOOL_NAME,
   READ_FILE_TOOL_NAME,
+  LIST_CHANGED_FILES_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
+  CODE_GREP_TOOL_NAME,
   SKELETON_TOOL_NAME,
   LIST_FOLDERS_TOOL_NAME,
   GET_SECTION_SETS_TOOL_NAME,
@@ -286,6 +295,8 @@ export const MCP_TOOL_NAMES = [
   VALIDATE_SPRINT_TOOL_NAME,
   VALIDATE_WORK_ITEM_TOOL_NAME,
   VALIDATE_PLAN_TOOL_NAME,
+  GET_PLAN_AUTHORING_STATE_TOOL_NAME,
+  GET_PLAN_CODE_READS_TOOL_NAME,
   CREATE_SPRINT_TOOL_NAME,
   UPDATE_SPRINT_TOOL_NAME,
   DELETE_SPRINT_TOOL_NAME,
@@ -521,8 +532,14 @@ export function registerMcpTools(
   // ref: the read the hosted planner's `read_file` makes, for an agent planning
   // over the MCP. Gated on `ai:plan`; the repo resolves against the PROJECT's set.
   registerReadFile(target, resolveContext);
+  // MOTIR-10069 — the PATHS a branch changed in one of the project's
+  // repositories: the listing the hosted planner's `list_changed_files` makes,
+  // read off `get_work_item`'s `inFlightCode`. Gated on `ai:plan`; the repo
+  // resolves against the PROJECT's set.
+  registerListChangedFiles(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
-  // planner executor's own text for `code_explore` / `code_search`. `ai:plan`.
+  // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
+  // `code_grep` over the indexed file contents. `ai:plan`.
   registerCodeGraphRead(target, resolveContext);
   // The ORIENTING read (MOTIR-3100) — the whole project's tree shape in one
   // call, over the same `aiBoundaryService.readPlanTree` the internal
@@ -568,6 +585,12 @@ export function registerMcpTools(
   // because it takes NO target: an edge between two sibling roots is valid in
   // the forest and a false positive per-root, so it is not a loop.
   registerValidatePlan(target, resolveContext);
+  // Which proposals are authored, being authored, or not started (MOTIR-9821) —
+  // the live read an author session makes before it wires an edge onto a sibling.
+  registerGetPlanAuthoringState(target, resolveContext);
+  // What each planner session read, at which commit (MOTIR-10122) — the evidence
+  // a check of a plan attributes a defect from.
+  registerGetPlanCodeReads(target, resolveContext);
   registerCreateSprint(target, resolveContext);
   registerUpdateSprint(target, resolveContext);
   registerDeleteSprint(target, resolveContext);

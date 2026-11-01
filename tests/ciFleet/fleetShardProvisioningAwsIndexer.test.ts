@@ -23,6 +23,8 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -54,8 +56,6 @@ const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
   managementKey: 'AKIA_MANAGEMENT_never_printed',
   managementSecret: 'MANAGEMENT_SECRET_never_printed',
-  runtimeKeyId: 'AKIA_RUNTIME_never_printed',
-  runtimeSecret: 'RUNTIME_SECRET_never_printed',
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -126,20 +126,6 @@ async function activateAll(): Promise<void> {
   await adminDb.fleetShard.updateMany({ data: { state: 'active' } });
 }
 
-/** The person's step, exactly as add-shard words it. */
-function credentialStep(accountId: string): string {
-  return (
-    `create an access key for the IAM user motir-fleet-runner in AWS account ${accountId} ` +
-    '(IAM console → Users → motir-fleet-runner → Security credentials → Create access key), ' +
-    `then run: flyctl secrets set -a motir-core ${PREFIX}_ACCESS_KEY_ID=… ${PREFIX}_SECRET_ACCESS_KEY=…`
-  );
-}
-
-function setRuntimeKey(): void {
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, SECRETS.runtimeKeyId);
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, SECRETS.runtimeSecret);
-}
-
 beforeAll(async () => {
   ({ AwsEc2Fake } = (await import(/* @vite-ignore */ ec2FakePath)) as {
     AwsEc2Fake: new () => Ec2Fake;
@@ -160,12 +146,12 @@ beforeEach(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
-  vi.stubEnv(`${PREFIX}_ACCESS_KEY_ID`, '');
-  vi.stubEnv(`${PREFIX}_SECRET_ACCESS_KEY`, '');
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
   installAddShardGithub(github, SECRETS.installation);
@@ -210,18 +196,19 @@ describe('add-shard --provider aws --fleet-kind code_graph_index', () => {
       credentialRef: PREFIX,
       vcpuQuota: SHARD_VCPU_QUOTA_TARGET - 1_000,
     });
-    // Pending on both: the quota is short and the runtime key is unset.
+    // Pending on the quota only: the runner role the stack built is confirmed
+    // by assuming it, so no key is asked for (MOTIR-9847).
     expect(result.out).toContain('Pending manual steps:');
     expect(result.out).toContain(
       `raise the account's vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 1_000} to at least`,
     );
-    expect(result.out).toContain(credentialStep(account.accountId));
+    expect(organization.calls).toContain(`assumeRunnerRole:${account.accountId}`);
+    expect(result.out).not.toContain('access key');
   });
 
-  it('becomes active, and exits 0, once the quota is met and the runtime key works', async () => {
+  it('becomes active, and exits 0, once the quota is met', async () => {
     await run(args());
     organization.quota = SHARD_VCPU_QUOTA_TARGET;
-    setRuntimeKey();
 
     const result = await run(args());
 
@@ -243,7 +230,7 @@ describe('add-shard --provider aws --fleet-kind code_graph_index', () => {
 
     expect((await poolOf('code_graph_index')).sort()).toEqual([NAME, second]);
     expect((await poolOf('ci_runner')).sort()).toEqual(['ci-runner-use1-8', 'ci-runner-use1-9']);
-    // Each account has its own runtime key, derived from its own name.
+    // Each account has its own credential ref, derived from its own name.
     const refs = (await adminDb.fleetShard.findMany()).map((s) => s.credentialRef);
     expect(new Set(refs).size).toBe(4);
     expect((await shardRow(second))!.credentialRef).toBe('FLEET_SHARD_CODE_GRAPH_INDEX_USE1_2');
@@ -299,14 +286,15 @@ describe('add-shard --provider aws --fleet-kind code_graph_index', () => {
   it('applies the shared runtime policy, which covers the index VM’s calls', async () => {
     await run(args());
 
-    // The document the account's IAM user was given is the shared one, scoped to
-    // this account's tag — plus, for an indexer account, the terminate the
-    // attribution pass needs to reap an untagged VM (MOTIR-9450).
+    // The document the account's runner role was given (by the definition's
+    // stack instance) is the shared one, scoped to this account's tag — plus, for
+    // an indexer account, the terminate the attribution pass needs to reap an
+    // untagged VM (MOTIR-9450).
     const expected = JSON.stringify(
       awsRunnerPolicyDocument({ shardTag: NAME, regionId: 'us-east-1', reapUntagged: true }),
     );
     expect(expected).toContain('TerminateAnyInAccount');
-    expect([...organization.iamUsers]).toEqual([expected]);
+    expect([...organization.runnerRoles.values()]).toEqual([expected]);
     const policy = expected;
     for (const action of [
       'ec2:RunInstances',

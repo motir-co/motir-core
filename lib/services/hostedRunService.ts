@@ -629,7 +629,7 @@ async function admitHostedRun(
       outcome.outcome === 'admission_deferred' &&
       HOSTED_RUN_WAITING_REASONS.has(outcome.reason)
     ) {
-      await recordWaitingLine(run, outcome.detail);
+      await recordWaitingLine(run, outcome.detail, outcome.reason);
       return { kind: 'waiting', detail: outcome.detail };
     }
     const detail = bootFailureDetail(outcome);
@@ -677,24 +677,32 @@ async function admitHostedRun(
 /**
  * The WAITING LINE (MOTIR-9381) — a `log` event on the open run carrying the
  * deferral's own words ("a Standard organization runs 1 agent run at once, and 1
- * is already running"), through the channel the run's closing line uses. Written
- * only when the words changed, so a run that waits an hour is not an hour of
- * identical lines.
+ * is already running") and its REASON (MOTIR-9666 — `plan_cap`, `shard_capacity`
+ * …, so a count can tell a plan-limit wait from a full-pool one), through the
+ * channel the run's closing line uses. Written only when the words or the reason
+ * changed, so a run that waits an hour is not an hour of identical lines.
  */
 async function recordWaitingLine(
   run: { id: string; workspaceId: string; createdById: string | null },
   detail: string,
+  reason: string,
 ): Promise<void> {
   if (!run.createdById) return;
   const latest = await withWorkspaceServiceContext(run.workspaceId, (tx) =>
     dispatchRunEventRepository.findLatestOfKind(run.id, 'log', tx),
   );
-  const previous = (latest?.data as { waiting?: unknown } | null | undefined)?.waiting;
-  if (previous === detail) return;
+  const previous = latest?.data as { waiting?: unknown; reason?: unknown } | null | undefined;
+  if (previous?.waiting === detail && previous?.reason === reason) return;
   try {
     await dispatchRunService.appendEvents(
       run.id,
-      [{ kind: 'log', data: { waiting: detail }, body: `[motir] waiting for room: ${detail}\n` }],
+      [
+        {
+          kind: 'log',
+          data: { waiting: detail, reason },
+          body: `[motir] waiting for room: ${detail}\n`,
+        },
+      ],
       { userId: run.createdById, workspaceId: run.workspaceId },
     );
   } catch (err) {

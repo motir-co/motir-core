@@ -25,6 +25,7 @@ import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // AN AWS CAPACITY REFUSAL MOVES THE JOB OR DEFERS IT — NEVER TO FLY (Story
 // MOTIR-9270 · MOTIR-9279), against real Postgres.
@@ -73,7 +74,7 @@ interface Ec2Fake extends Ec2Api {
 type FakeFleet = ContainerOrchestrator & FakeOrchestratorControls;
 
 const fakes = vi.hoisted(() => ({
-  /** Each account's EC2, by the access key id its credential names. */
+  /** Each account's EC2, by the access key id of its runner-role session. */
   ec2ByKeyId: new Map<string, unknown>(),
   fly: null as unknown,
 }));
@@ -85,11 +86,9 @@ vi.mock('@motir/orchestrator', async () => {
   fakes.fly = source.createFakeOrchestrator({ idPrefix: 'fly-machine' });
   return {
     ...source,
-    createEc2Api: (config: { accessKeyId: string }) => {
-      const ec2 = fakes.ec2ByKeyId.get(config.accessKeyId);
-      if (!ec2) throw new Error(`no EC2 fake for ${config.accessKeyId}`);
-      return ec2;
-    },
+    createAwsManagementApi: () => runnerRole.management(),
+    createEc2Api: (config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(config, (keyId) => fakes.ec2ByKeyId.get(keyId) as object | undefined),
     flyOrchestrator: fakes.fly,
   };
 });
@@ -195,12 +194,12 @@ interface AwsAccount {
 }
 
 /** One `aws` account of the CI pool: its row, its credential and its own EC2,
- *  with the tagged network `ensureAwsShardNetwork` would have left. */
+ *  with the tagged network the pool-account definition builds. */
 async function awsAccount(label: string, machineLimit: number): Promise<AwsAccount> {
   const credentialRef = `AWS_POOL_${label}_${randomToken(4).toUpperCase()}`;
   const accessKeyId = `AKIA${label}${randomToken(8).toUpperCase()}`;
-  vi.stubEnv(`${credentialRef}_ACCESS_KEY_ID`, accessKeyId);
-  vi.stubEnv(`${credentialRef}_SECRET_ACCESS_KEY`, `secret-${label}`);
+  const awsAccountId = label === 'A' ? '111111111111' : '222222222222';
+  runnerRole.grant(awsAccountId, accessKeyId);
   const shard = await fleetShardService.createShard({
     name: `ci-runner-use1-${label.toLowerCase()}-${randomToken(4).toLowerCase()}`,
     fleetKind: 'ci_runner',
@@ -208,7 +207,7 @@ async function awsAccount(label: string, machineLimit: number): Promise<AwsAccou
     state: 'active',
     githubOrg: MOTIR_ORG,
     githubInstallationId: '556677',
-    awsAccountId: label === 'A' ? '111111111111' : '222222222222',
+    awsAccountId,
     awsRegion: REGION,
     credentialRef,
     limits: { machineLimit },
@@ -273,6 +272,8 @@ beforeEach(async () => {
   await truncateAuthTables();
   fly().reset();
   fakes.ec2ByKeyId.clear();
+  runnerRole.reset();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   githubCalls = [];
   logged = [];

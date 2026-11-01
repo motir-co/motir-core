@@ -6,7 +6,9 @@ import type {
 } from '@/lib/dto/fleetShard';
 import type { FleetWorkloadKind } from '@motir/orchestrator';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
+import { GROWTH_CLAIM_STALE_MS } from '@/lib/ciFleet/poolGrowthPolicy';
 import { hostAccountPlan, type HostAccountSlot } from '@/lib/ciFleet/hostAccounts';
+import { ownAccountPoolCredits } from '@/lib/billing/ownAccountPlans';
 import {
   GITHUB_INSTALLATION_API_PER_HOUR,
   poolAccountRaiseTargetVcpu,
@@ -16,7 +18,6 @@ import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import {
   AWS_DEFAULT_REGION,
   AWS_REAP_UNTAGGED_OPTION,
-  AWS_RUNTIME_CREDENTIAL_OPTION,
 } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
   AWS_MEMBER_EMAIL_TEMPLATE_ENV,
@@ -42,6 +43,9 @@ import { provisioningInstallationIdFor } from '@/lib/github/repoProvisioning';
 import { GITHUB_RUNNER_REGISTRATIONS_PER_5_MIN } from '@/lib/github/runnerJitConfig';
 import { platformPrincipalForStaffEmail, type PlatformPrincipal } from '@/lib/platform/auth';
 import { NotPlatformStaffError } from '@/lib/platform/errors';
+import { fleetGrowthEventRepository } from '@/lib/repositories/fleetGrowthEventRepository';
+import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { platformAuditService } from '@/lib/services/platformAuditService';
 import {
   fleetQuotaRaiseService,
@@ -49,6 +53,7 @@ import {
 } from '@/lib/services/fleetQuotaRaiseService';
 import { fleetQuotaRequestService } from '@/lib/services/fleetQuotaRequestService';
 import { fleetShardService } from '@/lib/services/fleetShardService';
+import { withSystemContext } from '@/lib/workspaces/context';
 
 // ADD A FLEET ACCOUNT (Story MOTIR-8953 · MOTIR-8967) — what `fleet-admin
 // add-shard` and `refresh-limits` run, inside a motir-core machine so they use
@@ -103,9 +108,18 @@ export interface ShardProvisioningResult {
   pendingManualSteps: string[];
 }
 
-/** What the unattended add-shard is handed (MOTIR-9460): the kind, nothing else. */
+/** What the unattended add-shard is handed (MOTIR-9460): the kind — and, when a
+ *  person runs it (`fleet-admin add-spare`, MOTIR-10065), that person's email,
+ *  who is then the walk's actor in place of Motir's system account. */
 export interface AddSpareShardInput {
   fleetKind: string;
+  operatorEmail?: string;
+}
+
+/** What `fleet-admin add-spare` is handed (MOTIR-10065). */
+export interface AddSpareShardByOperatorInput {
+  fleetKind: string;
+  operatorEmail: string;
 }
 
 export interface AddSpareShardDeps {
@@ -114,10 +128,19 @@ export interface AddSpareShardDeps {
   env?: Readonly<Record<string, string | undefined>>;
 }
 
-/** What a Host organisation's account creation is handed (MOTIR-9582). */
+/** `addSpareShardByOperator`'s seams: the spare path's, and the clock its
+ *  unfinished-growth read is taken at. */
+export interface AddSpareShardByOperatorDeps extends AddSpareShardDeps {
+  now?: () => Date;
+}
+
+/** What an own-accounts organisation's account creation is handed (MOTIR-9582;
+ *  the plan, MOTIR-9651 — it sizes the slot's raise target). */
 export interface AddOrgOwnedShardInput {
   organizationId: string;
   slot: HostAccountSlot;
+  /** The org's plan key; it must carry own accounts (`planCarriesOwnAccounts`). */
+  planKey: string;
 }
 
 /** How one walk differs between the person-run command and the unattended ones. */
@@ -129,6 +152,9 @@ interface WalkMode {
    *  whose quota step words the raise as a person's step instead). */
   raiseTargetVcpu: number | null;
   raiseDeps?: FleetQuotaRaiseDeps;
+  /** Who started a spare's walk: the growth job, or a person through
+   *  `fleet-admin add-spare` (MOTIR-10065). It words the audit reason. */
+  origin?: 'growth' | 'operator';
 }
 
 export interface AddShardInput {
@@ -277,7 +303,8 @@ export const fleetShardProvisioningService = {
    *  - the GitHub org is the kind's existing primary account's;
    *  - the runtime credential is the account's `motir-fleet-runner` role, assumed
    *    from the management credential — no key is minted or asked of a person;
-   *  - the audit actor is Motir's system account;
+   *  - the audit actor is Motir's system account — or, when `operatorEmail` is
+   *    given (`fleet-admin add-spare`, MOTIR-10065), that platform superadmin;
    *  - the row stays `provisioning` until its quota is granted (the growth pass
    *    settles it), and the kind's raise is filed after the row, last, so a
    *    failure there leaves a usable account and a `failed` step to resume.
@@ -297,17 +324,15 @@ export const fleetShardProvisioningService = {
       ]);
     }
     const kind = input.fleetKind as FleetWorkloadKind;
-    const operator = await fleetAutomationPrincipal();
+    const { operatorEmail } = input;
+    const byOperator = operatorEmail !== undefined;
+    const operator = byOperator
+      ? await resolveOperator(operatorEmail)
+      : await fleetAutomationPrincipal();
     const template = env[AWS_MEMBER_EMAIL_TEMPLATE_ENV];
     problems.push(...memberEmailTemplateProblems(template));
 
-    const primary = await primaryOf(kind);
-    if (!primary) {
-      throw new FleetShardProvisioningRefusedError([
-        `${kind} has no primary account to take its GitHub org from`,
-      ]);
-    }
-
+    const primary = await requirePrimaryOf(kind);
     const target = poolAccountRaiseTargetVcpu(kind);
     const name = (await resumableSpareName(kind, target)) ?? (await nextPoolName(kind));
     const addInput: AddShardInput = {
@@ -320,14 +345,48 @@ export const fleetShardProvisioningService = {
       operatorEmail: operator.email,
       providerOptions: {
         'account-email': template ? memberAccountEmail(template, name) : '',
-        [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
       },
     };
     return walk(await preflight(addInput, operator, problems), addInput, {
       role: 'spare',
       raiseTargetVcpu: target,
       raiseDeps: deps.raise,
+      origin: byOperator ? 'operator' : 'growth',
     });
+  },
+
+  /**
+   * `fleet-admin add-spare` (MOTIR-10065): a platform superadmin gives a fleet
+   * kind its Motir spare — on AWS, whether or not the kind is switched to AWS
+   * yet — through the SAME `addSpareShard` path the growth job runs, so a spare
+   * is named, addressed, located and quota-raised one way whoever made it.
+   *
+   * It refuses, before any external call, while the kind already HAS a spare: a
+   * ready one, one in flight (its raise open or closed — anything the resume
+   * cannot pick up), or an unfinished pool growth of the kind. The spare a
+   * previous run left with no raise ever filed is RESUMED, not refused.
+   *
+   * @throws FleetShardProvisioningRefusedError before any external call;
+   *   FleetShardAccountRefusedError when AWS refuses `CreateAccount`.
+   */
+  async addSpareShardByOperator(
+    input: AddSpareShardByOperatorInput,
+    deps: AddSpareShardByOperatorDeps = {},
+  ): Promise<ShardProvisioningResult> {
+    if (!(FLEET_WORKLOAD_KINDS as string[]).includes(input.fleetKind)) {
+      throw new FleetShardProvisioningRefusedError([
+        `--fleet-kind ${input.fleetKind || '(none)'} is not one of ${FLEET_WORKLOAD_KINDS.join(', ')}`,
+      ]);
+    }
+    const kind = input.fleetKind as FleetWorkloadKind;
+    await resolveOperator(input.operatorEmail);
+    const now = (deps.now ?? (() => new Date()))();
+    const problems = await existingSpareProblems(kind, poolAccountRaiseTargetVcpu(kind), now);
+    if (problems.length > 0) throw new FleetShardProvisioningRefusedError(problems);
+    return fleetShardProvisioningService.addSpareShard(
+      { fleetKind: kind, operatorEmail: input.operatorEmail },
+      deps,
+    );
   },
 
   /**
@@ -342,28 +401,29 @@ export const fleetShardProvisioningService = {
    * `agent_instance` row is then written from that row's AWS location and
    * credential reference — never a second `CreateAccount`, never a second raise.
    *
-   * @throws FleetShardProvisioningRefusedError before any external call (a kind
-   *   with no primary account to take the GitHub org from, a missing template);
+   * @throws FleetShardProvisioningRefusedError before any external call (a plan
+   *   that carries no own accounts, a kind with no primary account to take the
+   *   GitHub org from, a missing template);
    *   FleetShardAccountRefusedError when AWS refuses `CreateAccount`.
    */
   async addOrgOwnedShard(
     input: AddOrgOwnedShardInput,
     deps: AddSpareShardDeps = {},
   ): Promise<ShardProvisioningResult> {
+    const poolCredits = ownAccountPoolCredits(input.planKey);
+    if (poolCredits === null) {
+      throw new FleetShardProvisioningRefusedError([
+        `plan ${input.planKey} carries no AWS accounts of its own`,
+      ]);
+    }
     const env = deps.env ?? process.env;
-    const plan = hostAccountPlan(input.organizationId, input.slot);
+    const plan = hostAccountPlan(input.organizationId, input.slot, poolCredits);
     const kind = plan.account.fleetKind;
     const operator = await fleetAutomationPrincipal();
     const template = env[AWS_MEMBER_EMAIL_TEMPLATE_ENV];
     const problems = memberEmailTemplateProblems(template);
 
-    const primary = await primaryOf(kind);
-    if (!primary) {
-      throw new FleetShardProvisioningRefusedError([
-        `${kind} has no primary account to take its GitHub org from`,
-      ]);
-    }
-
+    const primary = await requirePrimaryOf(kind);
     const name = plan.account.name;
     const addInput: AddShardInput = {
       provider: 'aws',
@@ -375,7 +435,6 @@ export const fleetShardProvisioningService = {
       operatorEmail: operator.email,
       providerOptions: {
         'account-email': template ? memberAccountEmail(template, name) : '',
-        [AWS_RUNTIME_CREDENTIAL_OPTION]: 'role',
         // The attribution pass reaps every machine on an own account (MOTIR-9584).
         [AWS_REAP_UNTAGGED_OPTION]: 'true',
       },
@@ -404,12 +463,79 @@ export const fleetShardProvisioningService = {
   },
 };
 
-/** The kind's primary account to take the GitHub org and region from — an active
- *  one first, never a disabled one. */
+/** The kind's AWS primary account to take the GitHub org and region from — an
+ *  active one first, never a disabled one. Only an `aws` row (MOTIR-10065): the
+ *  account being made is always an AWS member account, so a Fly row's GitHub org
+ *  or region is never the one to take. */
 async function primaryOf(kind: FleetWorkloadKind): Promise<FleetShardDTO | undefined> {
   return (await fleetShardService.listShards({ fleetKind: kind, role: 'primary' }))
-    .filter((shard) => shard.state !== 'disabled')
+    .filter((shard) => shard.provider === 'aws' && shard.state !== 'disabled')
     .sort((a, b) => Number(b.state === 'active') - Number(a.state === 'active'))[0];
+}
+
+/** `primaryOf`, refused by name when the kind has none. */
+async function requirePrimaryOf(kind: FleetWorkloadKind): Promise<FleetShardDTO> {
+  const primary = await primaryOf(kind);
+  if (!primary) {
+    throw new FleetShardProvisioningRefusedError([
+      `${kind} has no primary account on aws to take its GitHub org and region from; ` +
+        `run fleet-admin add-shard --provider aws --fleet-kind ${kind} first`,
+    ]);
+  }
+  return primary;
+}
+
+/** What retiring a spare takes, named in every refusal of `existingSpareProblems`. */
+const retireFirst = (name: string) =>
+  `retire it first with fleet-admin disable --name ${name} --reason <text> --operator <email>`;
+
+/**
+ * Why `fleet-admin add-spare` may not make a spare of `kind` now — empty when it
+ * may (MOTIR-10065). It reads the facts the growth job's claim reads: the kind's
+ * spares, each with its newest quota raise, and the unfinished growth of the
+ * kind. A `provisioning` spare below `target` with no raise ever filed is the one
+ * `resumableSpareName` resumes, so it is no reason to refuse.
+ *
+ * No growth lock is taken across the walk: the claim holds it only for a short
+ * transaction, and a race with a growth pass is bounded by the unfinished-event
+ * read here and by the one-ready-spare index.
+ */
+async function existingSpareProblems(
+  kind: FleetWorkloadKind,
+  target: number,
+  now: Date,
+): Promise<string[]> {
+  return withSystemContext(async (tx) => {
+    const problems: string[] = [];
+    for (const spare of await fleetShardRepository.listSparesForKind(kind, tx)) {
+      const [request] = await fleetQuotaRequestRepository.listByShard(spare.id, tx);
+      const raise = request
+        ? `its raise to ${request.desiredValue} vCPU is ${request.status}` +
+          (request.closedAt === null ? ' and still open' : ' and closed')
+        : 'no raise was filed';
+      if (spare.state === 'active') {
+        problems.push(
+          `${kind} already has a ready spare: ${spare.name} (active; ${raise}); ${retireFirst(spare.name)}`,
+        );
+      } else if (request || (spare.vcpuQuota ?? 0) >= target) {
+        problems.push(
+          `${kind}'s spare ${spare.name} is in flight (${spare.state}; ${raise}); ${retireFirst(spare.name)}`,
+        );
+      }
+    }
+    const growth = await fleetGrowthEventRepository.findLatestUnfinishedByKind(
+      kind,
+      tx,
+      new Date(now.getTime() - GROWTH_CLAIM_STALE_MS),
+    );
+    if (growth) {
+      problems.push(
+        `a pool growth of ${kind} is unfinished (event ${growth.id}, ${growth.outcome}); ` +
+          'add a spare once it settles',
+      );
+    }
+    return problems;
+  });
 }
 
 /** The merged Host account's second row: the same AWS account as `account`
@@ -481,7 +607,11 @@ function failureReason(err: unknown): string {
 
 function auditReason(mode: WalkMode, shard: FleetShardDTO, providerName: string): string {
   const what = `${shard.name} (${shard.fleetKind} on ${providerName})`;
-  if (mode.role === 'spare') return `pool growth: add spare ${what}`;
+  if (mode.role === 'spare') {
+    return mode.origin === 'operator'
+      ? `fleet-admin add-spare ${what}`
+      : `pool growth: add spare ${what}`;
+  }
   if (mode.role === 'org_owned')
     return `host accounts: add ${what} for ${mode.ownerOrganizationId}`;
   return `fleet-admin add-shard ${what}`;
@@ -541,7 +671,12 @@ async function walk(
   report(
     'network',
     network.created.length > 0 ? 'done' : 'already',
-    network.created.length > 0 ? `created ${network.created.join(', ')}` : 'already in place',
+    [
+      network.created.length > 0 ? `created ${network.created.join(', ')}` : 'already in place',
+      network.detail,
+    ]
+      .filter(Boolean)
+      .join('; '),
   );
 
   const quota = await provider.readQuota(ctx);
@@ -566,20 +701,10 @@ async function walk(
 
   const credential = await provider.runtimeCredential(ctx);
   if (credential.confirmed) {
-    report(
-      'runtime_credential',
-      credential.created.length > 0 ? 'done' : 'already',
-      `the key under ${ctx.credentialRef} resolves and works`,
-    );
+    report('runtime_credential', 'already', 'the runtime credential is confirmed');
   } else {
     const owed = provider.manualCredentialStep(ctx);
-    report(
-      'runtime_credential',
-      'pending',
-      credential.created.length > 0
-        ? `created ${credential.created.join(', ')}; the key is a person's step`
-        : "the key is a person's step",
-    );
+    report('runtime_credential', 'pending', 'the runtime credential is not confirmed yet');
     pending.push(owed);
   }
 

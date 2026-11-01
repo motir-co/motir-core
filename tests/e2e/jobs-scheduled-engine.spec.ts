@@ -1,5 +1,5 @@
-// E2E: a SCHEDULED job fires on the Postgres engine, appears on the jobs
-// dashboard, and honours its declared catch-up policy across a worker restart
+// E2E: a SCHEDULED job fires on the Postgres engine, lands in the job ledger,
+// and honours its declared catch-up policy across a worker restart
 // (Story MOTIR-3416 · Subtask MOTIR-3473 — the story's `verification_recipe`,
 // automated).
 //
@@ -34,35 +34,21 @@
 // injected clock), is at the removal site below.
 //
 // What survives here is the half this lane is uniquely good for: a REAL job, on
-// its REAL schedule, fired by the REAL worker process, landing on the REAL
-// dashboard.
+// its REAL schedule, fired by the REAL worker process, landing in the REAL
+// ledger.
+//
+// ⚠️ NO BROWSER (Story MOTIR-9982 · MOTIR-10042). The spec used to sign up a
+// platform-staff user and read the run off the tenant dashboard's System tab.
+// That tab is retired — the ledger is staff-only at `/admin/jobs`, covered by
+// its own specs — so nothing here opens a page: the scheduler and the worker are
+// processes, and their rows are the claim.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { adminDb, resetDatabase, truncateJobTables } from './_helpers/db-reset';
-import { startSignedOut } from './_helpers/shell-session';
-import { isLandedWorkbenchUrl } from './_helpers/workbench-landing';
 
 // Every direct-DB call is `adminDb`, the owner client — post-condition
 // assertions and a TRUNCATE, and `tests/rls/test-singleton-statement-guard.test.ts`
 // ratchets singleton statements under `tests/e2e/**` downward.
-const PASSWORD = 'scheduled-engine-spec-pass-123';
-
-/**
- * ⚠️ THE OPERATOR HERE IS THE PLATFORM ADMIN, AND THAT IS A PRODUCT FACT RATHER
- * THAN A TEST CONVENIENCE. Every `system.*` job writes `workspace_id = NULL`, and
- * the jobs dashboard's ordinary tab reads `listByWorkspace`, which filters on it
- * — so a workspace operator has never been able to see a cron run, on either
- * engine. The SYSTEM tab (`listAll`, under `withSystemContext`) is where they
- * have always been visible, and it is gated on platform-staff standing
- * (`User.platformRole`, `support` or above — MOTIR-8196), so the spec grants this
- * one user `operator` through the owner client right after sign-up. That is a
- * test fixture, not a product path: platform roles are granted out-of-band
- * (`docs/decisions/platform-staff-auth.md` §6), and no other spec holds one.
- *
- * This story does NOT change the dashboard, its DTOs or its service, so this is
- * the recipe's step automated against the surface that actually renders it.
- */
-const OPERATOR_EMAIL = 'sched-platform-admin@example.com';
 
 /**
  * The `latest` pilot: a REAL job, on its REAL daily schedule, whose handler is a
@@ -86,61 +72,10 @@ test.afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-async function signUp(page: Page, email: string): Promise<void> {
-  await startSignedOut(page);
-  await page.goto('/sign-up');
-  await page.getByPlaceholder('Email address').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByPlaceholder('Create a password').fill(PASSWORD);
-  await page.getByRole('button', { name: /^(Create account|Creating account…)$/ }).click();
-  // ⚠️ A registration lands on the onboarding ENTRANCE (MOTIR-4871); this
-  // helper keeps its contract by settling there and navigating on.
-  await page.waitForURL('**/onboarding', { timeout: 30_000 });
-  await page.goto('/workbench');
-  await page.waitForURL(isLandedWorkbenchUrl, { timeout: 30_000 });
-}
-
-// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861). A fresh
-// sign-up gets ONE auto-created workspace — the COLLAPSED state — and
-// `/settings/workspace/jobs` `notFound()`s there now, joining the three sibling
-// workspace routes MOTIR-3502 folded in. The dashboard is a section on the one
-// settings home instead (`JobRunsFoldInSection`): same component, same reads,
-// same tabs and filters, with its links built from THIS address.
-async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/organization');
-  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-}
-
-/**
- * ⚠️ EVERY CELL LOCATOR BELOW IS `exact: true`, AND IT IS LOAD-BEARING.
- * Playwright's accessible-name matching is SUBSTRING by default, and a scheduled
- * run puts the job id in two cells of the same row — the function column
- * (`system.attachment-gc`) and the event column (`scheduled.system.attachment-gc`).
- * A non-exact `getByRole('cell', { name })` therefore resolves to two elements for
- * ONE run, which reads as a duplicate row and is not one. Found by running the
- * spec; the row count is what these assertions mean.
- */
-
-/** Open the SYSTEM tab — the only one an untenanted `system.*` run appears on. */
-async function gotoSystemTab(page: Page): Promise<void> {
-  await gotoJobs(page);
-  await page.getByRole('link', { name: 'System', exact: true }).click();
-  await page.waitForURL(/tab=system/);
-}
-
 // ── scenarios ──────────────────────────────────────────────────────────────
 
-test('@smoke a SCHEDULED job fires on the engine and the operator can see the run', async ({
-  page,
-}) => {
+test('@smoke a SCHEDULED job fires on the engine and its run lands in the ledger', async () => {
   test.setTimeout(120_000);
-  await signUp(page, OPERATOR_EMAIL);
-  // The standing is read fresh per request, so granting it after sign-up and
-  // before the dashboard opens is enough for the System tab to render.
-  await adminDb.user.update({
-    where: { email: OPERATOR_EMAIL },
-    data: { platformRole: 'operator' },
-  });
 
   // The daily sweep runs on the engine because the engine is the only lane there
   // is — MOTIR-3418 retired Inngest, and `lib/jobs/engine/ledger.ts` writes
@@ -233,33 +168,11 @@ test('@smoke a SCHEDULED job fires on the engine and the operator can see the ru
   expect(ledger.eventName).toBe(`scheduled.${CATCH_UP_JOB}`);
   expect(ledger.status).toBe('succeeded');
 
-  // ── and the RECIPE's own step: open the page and see it ──────────────────
-  // Asserted against the RENDERED row, not the database — the recipe says *open
-  // /settings/workspace/jobs*, and a run an operator cannot see is not a migrated
-  // job as far as this story is concerned.
-  await gotoSystemTab(page);
-  // ⚠️ THE OPERATOR SEEING THE RUN IS THE CLAIM — the row COUNT is not, and
-  // asserting it is what took this spec down on `main` at `b8a433e00`
-  // (`Expected: 1  Received: 2`, run 33258667040, failed on the retry too).
-  // The ledger read above already anticipates a second row for this function
-  // and pins THIS run by `eventId` rather than assuming the table holds one;
-  // this assertion did not get the same treatment, so a scheduler that ticked
-  // twice — or one row that carries a retry attempt — reads as a regression.
-  // And the retry cannot clear it: the extra row is COMMITTED, so attempt two
-  // re-reads the same two rows (MOTIR-3929).
-  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true }).first()).toBeVisible();
-
-  // Filtered, which is the other half of the recipe's sentence.
-  await page.getByRole('link', { name: 'Succeeded' }).click();
-  await page.waitForURL(/status=succeeded/);
-  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true }).first()).toBeVisible();
-
-  // ⚠️ AND THE WORKSPACE TAB DOES NOT SHOW IT — recorded rather than left to
-  // surprise the next reader. This is not a regression this story introduces: a
-  // `system.*` run is untenanted on BOTH engines, and the workspace tab filters
-  // on `workspace_id`. Named on the card as a finding, not changed here.
-  await gotoJobs(page);
-  await expect(page.getByRole('cell', { name: CATCH_UP_JOB, exact: true })).toHaveCount(0);
+  // ⚠️ THE RECIPE'S "OPEN THE PAGE AND SEE IT" STEP STOOD HERE (MOTIR-3473),
+  // and its page is retired (Story MOTIR-9982 · MOTIR-10042): it read this run
+  // off the tenant dashboard's System tab, which is staff-only at `/admin/jobs`
+  // now and covered by that surface's own specs. The ledger row asserted above
+  // is the run an operator sees there.
 });
 
 // ⚠️ THE `skip` SCENARIO WAS REMOVED HERE (MOTIR-3314), AND ITS COVERAGE MOVED

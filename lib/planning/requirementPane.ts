@@ -1,7 +1,8 @@
 // THE LEFT PANE'S REQUIREMENT, the pure half (Story MOTIR-9430 · MOTIR-9437). While the
-// conversation's live offer is a plan offer with NO target, the planning overlay's left
-// pane shows the requirement Motir AI composed for it, so the person reads what will be
-// planned before saying yes. Whether that layer is up is DERIVED from the thread through
+// conversation's live offer is a plan offer with NO target — or a targeted one that
+// carries a composed requirement (MOTIR-9878) — the planning overlay's left pane shows
+// the requirement Motir AI composed for it, so the person reads what will be planned
+// before saying yes. Whether that layer is up is DERIVED from the thread through
 // the one rule the rail already reads (`pendingPlanOfferOf`), so the pane and the rail
 // cannot disagree about which offer is live, and a reload or reopen needs no stored flag.
 import { pendingPlanOfferOf, type PlanOfferTurn } from '@/lib/planChange/planOffer';
@@ -16,12 +17,16 @@ export interface RequirementPane {
   requirement: SubmittedRequirement | null;
 }
 
-/** The pane for a thread, or null when no no-target plan offer is pending. */
+/** The pane for a thread, or null when no plan offer that shows one is pending: a
+ *  no-target offer (with its requirement, or the notice that it carries none), or a
+ *  targeted offer that carries a requirement (MOTIR-9878). A targeted offer with none
+ *  leaves the canvas up, as before: its target already states what to build. */
 export function requirementPaneOf(turns: readonly PlanOfferTurn[]): RequirementPane | null {
   const pending = pendingPlanOfferOf(turns);
   if (!pending) return null;
   const { offer } = pending;
-  if (offer.kind !== 'plan' || offer.targetKey !== null) return null;
+  if (offer.kind !== 'plan') return null;
+  if (offer.targetKey !== null && !offer.requirement) return null;
   return {
     turnId: pending.turnId,
     requestMd: offer.requestMd,

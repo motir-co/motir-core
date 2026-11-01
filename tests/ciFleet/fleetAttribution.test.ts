@@ -247,7 +247,9 @@ describe('a machine nothing attributes', () => {
       createdAt: created,
     });
 
-    const result = await fleetAttributionService.reconcile({ now: pastGrace });
+    // Pinned to `created`, not the wall clock, so `ageSeconds` is exactly 660 on a slow runner.
+    const at = new Date(created.getTime() + FLEET_ATTRIBUTION_GRACE_MS + MINUTE);
+    const result = await fleetAttributionService.reconcile({ now: () => at });
 
     expect(result).toMatchObject({
       outcome: 'reconciled',

@@ -273,6 +273,11 @@ describe('H · refused — every member of the union renders in place, with a ne
       refusal: { tag: 'MERGE_CONFLICT', atPress: false, conflicts: [] },
       expect: /conflicts with its base branch\..*Resolve the conflict on the branch/,
     },
+    // Behind a base that requires it (MOTIR-10054) — never "checks are not green".
+    {
+      refusal: { tag: 'MERGE_OUT_OF_DATE' },
+      expect: /out of date with its base branch\..*Nothing was merged.*motir fix/,
+    },
     {
       refusal: { tag: 'MERGE_BRANCH_PROTECTED', reason: 'At least 1 approving review is required' },
       expect: /protection rules do not allow this merge yet\..*Satisfy the rule on GitHub/,

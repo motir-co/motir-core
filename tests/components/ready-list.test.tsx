@@ -67,7 +67,7 @@ afterEach(cleanup);
 function renderRows(items: ReadyItemDto[]) {
   return renderWithIntl(
     <ToastProvider>
-      <ReadyList initialItems={items} initialCursor={null} />
+      <ReadyList initialWorkItemRefs={{}} initialItems={items} initialCursor={null} />
     </ToastProvider>,
   );
 }
@@ -166,6 +166,39 @@ describe('ReadyList manual *Show instruction* variant (8.8.10)', () => {
     expect(within(dialog).getByText('Human task · unassigned')).toBeTruthy();
   });
 
+  it("draws the instruction's card links from the lane's map (MOTIR-10023)", async () => {
+    renderWithIntl(
+      <ToastProvider>
+        <ReadyList
+          initialWorkItemRefs={{
+            wi_live: {
+              accessible: true,
+              id: 'wi_live',
+              identifier: 'PROD-2',
+              title: 'Create the bucket',
+              kind: 'task',
+              archived: false,
+              status: { key: 'done', label: 'Done', category: 'done' },
+              type: null,
+              assignee: null,
+            },
+          }}
+          initialItems={[
+            manual({ descriptionMd: 'After [PROD-2](motir:wi_live) and [PROD-3](motir:wi_gone).' }),
+          ]}
+          initialCursor={null}
+        />
+      </ToastProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show instruction for PROD-9' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeTruthy());
+    const chips = Array.from(screen.getByRole('dialog').querySelectorAll('.wi-chip'));
+    expect(chips).toHaveLength(2);
+    expect(chips[0]!.classList.contains('is-deleted')).toBe(false);
+    expect(chips[0]!.textContent).toContain('Create the bucket');
+    expect(chips[1]!.classList.contains('is-deleted')).toBe(true);
+  });
+
   it('shows the empty state when a manual row has no instruction body', async () => {
     renderRows([manual({ descriptionMd: null })]);
 
@@ -234,7 +267,7 @@ describe('ReadyList — a lane grouped by runnable container', () => {
   it('says so, in one line, when a lane is empty', () => {
     renderWithIntl(
       <ToastProvider>
-        <ReadyList initialItems={[]} initialCursor={null} lane="bug" />
+        <ReadyList initialWorkItemRefs={{}} initialItems={[]} initialCursor={null} lane="bug" />
       </ToastProvider>,
     );
     expect(screen.getByText('No ready bugs.')).toBeTruthy();
@@ -256,10 +289,16 @@ describe('ReadyList — a lane grouped by runnable container', () => {
     loadMoreLeaves.mockResolvedValueOnce({
       items: [item({ key: 'PROD-13', kind: 'subtask', container: S }), leaves[3]!],
       nextCursor: null,
+      workItemRefs: {},
     });
     renderWithIntl(
       <ToastProvider>
-        <ReadyList initialItems={leaves.slice(0, 2)} initialCursor="c1" lane="leaf" />
+        <ReadyList
+          initialWorkItemRefs={{}}
+          initialItems={leaves.slice(0, 2)}
+          initialCursor="c1"
+          lane="leaf"
+        />
       </ToastProvider>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'Expand PROD-10' }));
@@ -286,8 +325,16 @@ describe('ReadyList — a lane grouped by runnable container', () => {
 
 describe('ReadyLanes — the switch over one pane', () => {
   const lanes = {
-    leaves: { items: [item({ key: 'PROD-30', kind: 'task', container: null })], nextCursor: null },
-    bugs: { items: [item({ key: 'PROD-40', kind: 'bug', container: null })], nextCursor: null },
+    leaves: {
+      items: [item({ key: 'PROD-30', kind: 'task', container: null })],
+      nextCursor: null,
+      workItemRefs: {},
+    },
+    bugs: {
+      items: [item({ key: 'PROD-40', kind: 'bug', container: null })],
+      nextCursor: null,
+      workItemRefs: {},
+    },
     counts: { leaves: 1, bugs: 1 },
   };
   afterEach(() => window.history.replaceState(null, '', '/ready'));

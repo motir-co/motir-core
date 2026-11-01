@@ -1,0 +1,258 @@
+{
+  "$comment": "One entry per template: its stack name (README), every parameter it declares (required = it has no default) and every output it returns.",
+  "templates": {
+    "network.yaml": {
+      "stackName": "motir-network",
+      "parameters": [
+        {
+          "name": "OrganizationId",
+          "required": true
+        },
+        {
+          "name": "VpcCidr",
+          "required": false
+        }
+      ],
+      "outputs": [
+        "VpcId",
+        "PrivateSubnetIds",
+        "PublicSubnetIds",
+        "DatabaseSecurityGroupId",
+        "AppSecurityGroupId",
+        "AlbArn",
+        "AlbListenerArn",
+        "AlbDnsName"
+      ]
+    },
+    "registry.yaml": {
+      "stackName": "motir-registry-<rid>",
+      "parameters": [
+        {
+          "name": "OrganizationId",
+          "required": true
+        },
+        {
+          "name": "RepositoryId",
+          "required": true
+        },
+        {
+          "name": "GithubRepositoryId",
+          "required": true
+        },
+        {
+          "name": "GithubOwnerId",
+          "required": true
+        }
+      ],
+      "outputs": [
+        "PreviewRepositoryUri",
+        "ProductionRepositoryUri",
+        "PreviewPushRoleArn",
+        "ProductionPushRoleArn"
+      ]
+    },
+    "database.yaml": {
+      "stackName": "motir-database-<rid>",
+      "parameters": [
+        {
+          "name": "OrganizationId",
+          "required": true
+        },
+        {
+          "name": "RepositoryId",
+          "required": true
+        },
+        {
+          "name": "PrivateSubnetIds",
+          "required": true
+        },
+        {
+          "name": "DatabaseSecurityGroupId",
+          "required": true
+        },
+        {
+          "name": "MaxCapacity",
+          "required": false
+        }
+      ],
+      "outputs": [
+        "ClusterArn",
+        "ClusterEndpoint",
+        "MasterSecretArn",
+        "ProductionConnectionSecretArn",
+        "DatabaseName"
+      ]
+    },
+    "preview-database.yaml": {
+      "stackName": "motir-database-<rid>-pr<n>",
+      "parameters": [
+        {
+          "name": "OrganizationId",
+          "required": true
+        },
+        {
+          "name": "RepositoryId",
+          "required": true
+        },
+        {
+          "name": "PullRequestNumber",
+          "required": true
+        }
+      ],
+      "outputs": ["PreviewSecretArn"]
+    },
+    "function-release.yaml": {
+      "stackName": "motir-release-<appRef>",
+      "parameters": [
+        {
+          "name": "OrganizationId",
+          "required": true
+        },
+        {
+          "name": "RepositoryId",
+          "required": true
+        },
+        {
+          "name": "AppRef",
+          "required": true
+        },
+        {
+          "name": "Environment",
+          "required": true
+        },
+        {
+          "name": "ImageUri",
+          "required": true
+        },
+        {
+          "name": "IdlePolicy",
+          "required": true
+        },
+        {
+          "name": "Port",
+          "required": false
+        },
+        {
+          "name": "HealthCheckPath",
+          "required": false
+        },
+        {
+          "name": "PrivateSubnetIds",
+          "required": true
+        },
+        {
+          "name": "AppSecurityGroupId",
+          "required": true
+        },
+        {
+          "name": "DatabaseSecretArn",
+          "required": false
+        },
+        {
+          "name": "ConfigHash",
+          "required": false
+        },
+        {
+          "name": "InvokePrincipalArn",
+          "required": true
+        }
+      ],
+      "outputs": [
+        "FunctionName",
+        "FunctionArn",
+        "EnvironmentSecretArn",
+        "FunctionUrl",
+        "LiveVersion"
+      ]
+    },
+    "container-release.yaml": {
+      "stackName": "motir-release-<appRef>",
+      "parameters": [
+        {
+          "name": "OrganizationId",
+          "required": true
+        },
+        {
+          "name": "RepositoryId",
+          "required": true
+        },
+        {
+          "name": "AppRef",
+          "required": true
+        },
+        {
+          "name": "Environment",
+          "required": true
+        },
+        {
+          "name": "ImageUri",
+          "required": true
+        },
+        {
+          "name": "IdlePolicy",
+          "required": false
+        },
+        {
+          "name": "TaskCpu",
+          "required": true
+        },
+        {
+          "name": "TaskMemory",
+          "required": true
+        },
+        {
+          "name": "Port",
+          "required": false
+        },
+        {
+          "name": "HealthCheckPath",
+          "required": false
+        },
+        {
+          "name": "VpcId",
+          "required": true
+        },
+        {
+          "name": "PrivateSubnetIds",
+          "required": true
+        },
+        {
+          "name": "AppSecurityGroupId",
+          "required": true
+        },
+        {
+          "name": "AlbListenerArn",
+          "required": true
+        },
+        {
+          "name": "ListenerRulePriority",
+          "required": true
+        },
+        {
+          "name": "AppHost",
+          "required": true
+        },
+        {
+          "name": "OriginSecret",
+          "required": true
+        },
+        {
+          "name": "DatabaseSecretArn",
+          "required": false
+        },
+        {
+          "name": "ConfigHash",
+          "required": false
+        }
+      ],
+      "outputs": [
+        "ClusterArn",
+        "ServiceArn",
+        "ServiceName",
+        "TaskDefinitionArn",
+        "TargetGroupArn",
+        "EnvironmentSecretArn"
+      ]
+    }
+  }
+}

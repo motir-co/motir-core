@@ -58,6 +58,15 @@ export interface CodeContextRepoDTO {
    */
   commitsBehind: number | null;
   /**
+   * THE PAIR THE DRIFT IS ABOUT (MOTIR-10094): the commit the graph was built
+   * from, and the default branch's head as last mirrored — `null` while either is
+   * not known yet. Facts, never a verdict: whether the two differ is
+   * `graphTrailsHead`'s (`lib/codeGraph/indexState.ts`), and what changed between
+   * them is a host compare made on demand by the code-graph read.
+   */
+  indexedSha: string | null;
+  defaultHead: string | null;
+  /**
    * ⚠️ IS THE REFRESH DEAD? (Story MOTIR-1754 · MOTIR-2105.)
    *
    * `true` when the run that last claimed this repository reached a TERMINAL

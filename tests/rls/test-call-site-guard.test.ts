@@ -351,6 +351,7 @@ describe('the ratchets over the real test suite', () => {
       'tests/app-role-bound-context-reads.test.ts',
       'tests/comments/repositories.test.ts',
       'tests/custom-fields/repositories.test.ts',
+      'tests/environmentConfig/storyIntegration.test.ts',
       'tests/integration/sprints/repository.test.ts',
       'tests/integration/translation/autoTranslateStory.test.ts',
       'tests/labels-components-watch/repositories.test.ts',

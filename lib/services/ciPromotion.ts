@@ -20,6 +20,7 @@ import {
 import {
   isConflictedAtCurrentHead,
   isMergeabilityOwedAtCurrentHead,
+  isOutOfDateAtCurrentHead,
 } from '@/lib/github/mergeability';
 import { deliverySetIsGreen, deliveryStateForPromotion } from '@/lib/workItems/deliverySet';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
@@ -261,7 +262,7 @@ async function isPromotable(
 /**
  * THE CONFLICT HOLD (MOTIR-5913, for bug MOTIR-5907; design/github § 30 rule 2) —
  * true while any OPEN delivering pull request is stored `dirty` at its current head,
- * OR its reading is still OWED there (MOTIR-7063).
+ * OR `behind` there (MOTIR-10054), OR its reading is still OWED there (MOTIR-7063).
  *
  * A conflict is the CAN'T-LAND class however it is found (§ 28's class table): a card
  * whose set cannot combine with its base stays at Implemented, because In Review
@@ -282,6 +283,10 @@ function heldByConflict(byId: Map<string, DeliveredPullRequest>): boolean {
   for (const pr of byId.values()) {
     if (pr.state !== 'open' || pr.merged) continue;
     if (isConflictedAtCurrentHead(pr) || isMergeabilityOwedAtCurrentHead(pr)) return true;
+    // ⚠️ AND SO IS A MEMBER OUT OF DATE WITH A BASE THAT REQUIRES IT (Bug MOTIR-10054):
+    // the host refuses its merge however green it is, so it is brought up to date — by a
+    // push, which re-reads it — before anybody is asked. To fix lists it meanwhile.
+    if (isOutOfDateAtCurrentHead(pr)) return true;
   }
   return false;
 }

@@ -1,4 +1,4 @@
-import type { PlanItemPatch } from '@/lib/dto/plans';
+import type { PlanItemPatch, RescopeField } from '@/lib/dto/plans';
 
 /**
  * THE RE-SCOPE RESET (bug MOTIR-5359) — the one definition of *"this `modify`
@@ -24,18 +24,39 @@ import type { PlanItemPatch } from '@/lib/dto/plans';
  */
 export function patchRescopes(
   patch: PlanItemPatch | null | undefined,
-  target: {
-    title: string;
-    descriptionMd: string | null;
-    targetRepo: string | null;
-    targetRepos: readonly string[];
-  },
+  target: RescopeTarget,
 ): boolean {
-  if (!patch) return false;
-  if (patch.title !== undefined && patch.title !== target.title) return true;
+  return rescopingFields(patch, target).length > 0;
+}
+
+/** The live fields {@link patchRescopes} compares a patch against. */
+export interface RescopeTarget {
+  title: string;
+  descriptionMd: string | null;
+  targetRepo: string | null;
+  targetRepos: readonly string[];
+}
+
+/**
+ * WHICH fields of `patch` re-scope its target, in a fixed order — the same
+ * comparisons {@link patchRescopes} answers with, so the write door's warning
+ * (MOTIR-10106) can name what tripped it without a second definition.
+ */
+export function rescopingFields(
+  patch: PlanItemPatch | null | undefined,
+  target: RescopeTarget,
+): RescopeField[] {
+  if (!patch) return [];
+  const fields: RescopeField[] = [];
+  if (patch.title !== undefined && patch.title !== target.title) fields.push('title');
   if (patch.descriptionMd !== undefined && patch.descriptionMd !== (target.descriptionMd ?? null)) {
-    return true;
+    fields.push('descriptionMd');
   }
+  if (repositoryRepinned(patch, target)) fields.push('repository');
+  return fields;
+}
+
+function repositoryRepinned(patch: PlanItemPatch, target: RescopeTarget): boolean {
   if (
     patch.targetRepo !== undefined &&
     blankToNull(patch.targetRepo) !== blankToNull(target.targetRepo)

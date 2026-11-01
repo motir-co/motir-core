@@ -1036,7 +1036,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                   // No id on a proposed row — it has none until approve mints
                   // one — so the index IS the identity here, and it is a stable
                   // one: this list is read-only and never reorders.
-                  <TodoRowReadOnly key={index} row={row} />
+                  <TodoRowReadOnly key={index} row={row} workItemRefs={data.workItemRefs} />
                 ))}
               </ul>
             </section>
@@ -1328,6 +1328,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 <ObsolescenceField
                   value={view.obsolescence}
                   noteMd={view.obsolescenceNoteMd}
+                  workItemRefs={data.workItemRefs}
                   editing
                   locked={!canCarryObsolescence(view.statusCategory)}
                   pending={edit.pending === 'obsolescence'}
@@ -1344,6 +1345,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               <ObsolescenceField
                 value={view.obsolescence}
                 noteMd={view.obsolescenceNoteMd}
+                workItemRefs={data.workItemRefs}
                 editing={false}
                 locked={false}
                 onMark={() => undefined}

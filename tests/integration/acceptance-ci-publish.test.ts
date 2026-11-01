@@ -474,6 +474,7 @@ describe('the acceptance identity stays where it belongs (MOTIR-7256)', () => {
       .sort();
     expect(granting).toEqual([
       '.github/workflows/acceptance-tests.yml', // the receipt publish (MOTIR-7253)
+      '.github/workflows/aws-deploy.yml', // the ECR push and deploy roles (MOTIR-9928)
       '.github/workflows/release-brand.yml', // npm Trusted Publishing
       '.github/workflows/release-ci-runner-ami.yml', // the AMI build's AWS role (MOTIR-9272)
       '.github/workflows/release-cli.yml', // npm Trusted Publishing

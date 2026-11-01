@@ -1,0 +1,118 @@
+# The HOSTING GUARD image — build, prove, publish (MOTIR-9947).
+#
+# `packages/hosting-guard/` is the container the Fly adapter of the hosting
+# deploy port runs in front of every hosted release (decision MOTIR-5769 §4): it
+# refuses any request without the app's `X-Motir-Origin-Secret`. This workflow is
+# its whole lane, on the pattern of `hosted-agent-image.yml`:
+#
+#   - on a PULL REQUEST touching it: build the image and prove it — it refuses to
+#     start without its configuration, and once started answers 403 to a request
+#     without the secret. No push.
+#   - on a PUSH TO `main` touching it: the same build and proofs, then a push to
+#     Fly's registry as `registry.fly.io/motir-hosting-guard:<sha>`, printing the
+#     DIGEST, because motir-core deploys the guard by digest
+#     (`MOTIR_HOSTING_GUARD_IMAGE=registry.fly.io/motir-hosting-guard@sha256:…`).
+#
+# ── Where the image lives ───────────────────────────────────────────────────
+# The Fly app `motir-hosting-guard` in org `motir-hosting` (no Machines; Fly's
+# registry is readable org-wide, so every hosted app's Machine can pull it). The
+# push authenticates with that app's deploy token, the Actions secret
+# `MOTIR_HOSTING_GUARD_PUSH_TOKEN`. Until a person has set it the publish steps are
+# SKIPPED with a notice, never failed: the build and the proofs still gate.
+
+name: Hosting guard image
+
+on:
+  pull_request:
+    paths:
+      - 'packages/hosting-guard/**'
+      - '.github/workflows/hosting-guard-image.yml'
+      - '.github/actions/buildx/**'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/hosting-guard/**'
+      - '.github/workflows/hosting-guard-image.yml'
+      - '.github/actions/buildx/**'
+
+# A pull request's newer push supersedes its older run; a publish is never
+# cancelled mid-push.
+concurrency:
+  group: hosting-guard-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: registry.fly.io/motir-hosting-guard
+  LOCAL_TAG: motir-hosting-guard:ci
+
+jobs:
+  hosting-guard-image:
+    name: Build, prove, publish
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # No run on record yet — this lane is new (MOTIR-9947). The image is one
+    # alpine Node layer plus two source files, expected to build and smoke in
+    # about 1-2 min, far under the hosted-agent lane's 25 min; 10 min is the
+    # short-job floor. Re-measure once it has run and replace this comment.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      HAS_PUSH_TOKEN: ${{ secrets.MOTIR_HOSTING_GUARD_PUSH_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/buildx
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/hosting-guard
+          platforms: linux/amd64
+          tags: ${{ env.LOCAL_TAG }}
+          load: true
+          cache-from: type=gha,scope=hosting-guard
+          cache-to: type=gha,scope=hosting-guard,mode=max
+
+      # The proofs live in the package's own script, so they run the same way
+      # on a laptop: it refuses to start unconfigured, and answers 403 without
+      # the secret.
+      - name: Smoke the image
+        run: packages/hosting-guard/smoke.sh "$LOCAL_TAG"
+
+      # ── Publish: a push to `main` only, and only now the image is proven. ──
+      - name: No push token yet
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN != 'true' }}
+        run: echo "::notice::MOTIR_HOSTING_GUARD_PUSH_TOKEN is not set; the image was built and proven but not published."
+      - name: Log in to Fly's registry
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: registry.fly.io
+          username: x
+          password: ${{ secrets.MOTIR_HOSTING_GUARD_PUSH_TOKEN }}
+      - name: Publish
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN == 'true' }}
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/hosting-guard
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=hosting-guard
+      - name: Print the published digest
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN == 'true' }}
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DIGEST" ]; then
+            echo "::error::the push reported no digest"
+            exit 1
+          fi
+          echo "Published ${IMAGE}@${DIGEST}"
+          {
+            echo '### Hosting guard image published'
+            echo
+            echo "\`${IMAGE}@${DIGEST}\`"
+            echo
+            echo 'Set `MOTIR_HOSTING_GUARD_IMAGE` on motir-core to this reference — a digest, never a tag.'
+          } >> "$GITHUB_STEP_SUMMARY"

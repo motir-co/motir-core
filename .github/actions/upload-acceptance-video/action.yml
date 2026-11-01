@@ -15,7 +15,7 @@ description: >
 # fails template validation and NEVER LOADS: the calling step errors with
 # `Unrecognized named-value: 'github'` and a `TemplateValidationException`
 # before one line of its own logic runs, at the end of a job whose test run was
-# green. Measured on the VENDORED copy in `nextjs-prisma-vercel-starter`, where
+# green. Measured on the VENDORED copy in `nextjs-prisma-serverless-starter`, where
 # this manifest is the one that gets loaded (PR #17, job 95486108427); the
 # counterfactual with the two expressions stripped and nothing else changed ran
 # the publish step to completion (PR #19, job 95494641230). motir-core did not

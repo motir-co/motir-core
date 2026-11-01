@@ -137,6 +137,7 @@ describe('GuideTodoCanvas', () => {
   it('draws a skeleton until the card rows are read', () => {
     renderWithIntl(
       <GuideTodoCanvas
+        workItemRefs={{}}
         view={deriveGuideView([], null, { idle: true })}
         canTick
         onSetDone={() => {}}
@@ -149,6 +150,7 @@ describe('GuideTodoCanvas', () => {
   it('draws a proposed list under its band, with nothing to tick', () => {
     renderWithIntl(
       <GuideTodoCanvas
+        workItemRefs={{}}
         view={deriveGuideView([turn('assistant', PROPOSAL)], [], { idle: true })}
         canTick
         onSetDone={() => {}}
@@ -170,7 +172,15 @@ describe('GuideTodoCanvas', () => {
       [],
       { idle: true },
     );
-    renderWithIntl(<GuideTodoCanvas view={view} canTick onSetDone={() => {}} onSave={onSave} />);
+    renderWithIntl(
+      <GuideTodoCanvas
+        workItemRefs={{}}
+        view={view}
+        canTick
+        onSetDone={() => {}}
+        onSave={onSave}
+      />,
+    );
     const band = screen.getByTestId('guide-temporary-band');
     expect(band.textContent).toContain('Not saved to the work item.');
     expect(screen.queryByRole('checkbox')).toBeNull();
@@ -181,7 +191,9 @@ describe('GuideTodoCanvas', () => {
   });
 
   it('marks the current step and shows the progress', () => {
-    renderWithIntl(<GuideTodoCanvas view={saved()} canTick onSetDone={() => {}} />);
+    renderWithIntl(
+      <GuideTodoCanvas workItemRefs={{}} view={saved()} canTick onSetDone={() => {}} />,
+    );
     const rows = screen.getAllByTestId('guide-row');
     expect(rows[0]!.getAttribute('data-current')).toBe('true');
     expect(rows[1]!.getAttribute('data-current')).toBeNull();
@@ -191,7 +203,9 @@ describe('GuideTodoCanvas', () => {
 
   it('ticks a saved row through onSetDone', () => {
     const onSetDone = vi.fn();
-    renderWithIntl(<GuideTodoCanvas view={saved()} canTick onSetDone={onSetDone} />);
+    renderWithIntl(
+      <GuideTodoCanvas workItemRefs={{}} view={saved()} canTick onSetDone={onSetDone} />,
+    );
     fireEvent.click(screen.getAllByRole('checkbox')[1]!);
     expect(onSetDone).toHaveBeenCalledWith('r2', true);
   });
@@ -199,10 +213,12 @@ describe('GuideTodoCanvas', () => {
   it('plays the tick on the paint that shows it, then clears it', () => {
     vi.useFakeTimers();
     const { rerender } = renderWithIntl(
-      <GuideTodoCanvas view={saved()} canTick onSetDone={() => {}} />,
+      <GuideTodoCanvas workItemRefs={{}} view={saved()} canTick onSetDone={() => {}} />,
     );
     const ticked = [todo('r1', 'Open settings', true), ROWS[1]!, ROWS[2]!];
-    rerender(<GuideTodoCanvas view={saved(ticked)} canTick onSetDone={() => {}} />);
+    rerender(
+      <GuideTodoCanvas workItemRefs={{}} view={saved(ticked)} canTick onSetDone={() => {}} />,
+    );
     const row = screen.getAllByTestId('guide-row')[0]!;
     expect(row.className).toContain('guide-row--ticked');
     expect(screen.getAllByTestId('guide-row')[1]!.getAttribute('data-current')).toBe('true');
@@ -216,10 +232,12 @@ describe('GuideTodoCanvas', () => {
   it('draws the END state in one paint under reduced motion', () => {
     setReducedMotion(true);
     const { rerender } = renderWithIntl(
-      <GuideTodoCanvas view={saved()} canTick onSetDone={() => {}} />,
+      <GuideTodoCanvas workItemRefs={{}} view={saved()} canTick onSetDone={() => {}} />,
     );
     const ticked = [todo('r1', 'Open settings', true), ROWS[1]!, ROWS[2]!];
-    rerender(<GuideTodoCanvas view={saved(ticked)} canTick onSetDone={() => {}} />);
+    rerender(
+      <GuideTodoCanvas workItemRefs={{}} view={saved(ticked)} canTick onSetDone={() => {}} />,
+    );
     const row = screen.getAllByTestId('guide-row')[0]!;
     expect(row.getAttribute('data-todo-done')).toBe('true');
     expect(row.getAttribute('data-motion')).toBeNull();
@@ -230,6 +248,7 @@ describe('GuideTodoCanvas', () => {
     const all = ROWS.map((r) => ({ ...r, done: true }));
     renderWithIntl(
       <GuideTodoCanvas
+        workItemRefs={{}}
         view={saved(all)}
         canTick
         onSetDone={() => {}}

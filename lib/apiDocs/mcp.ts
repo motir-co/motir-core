@@ -526,7 +526,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the reason the last attempt was sent back (with its verdict) — the refusal the
     // next run is told to address, so the line names it.
     summary:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
     // Re-pinned for MOTIR-6580, summary UNCHANGED: the text block gains the
     // Supersedes / Superseded by link groups — two more edge groups, which the
     // summary's "dependency edges" already covers without enumerating groups.
@@ -541,7 +541,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the read returns does not describe.
     // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` adds a
     // parsed view of the body the read already returns — the body, not a new read.
-    descriptionFingerprint: '18bf3c3889bd',
+    // Re-pinned for MOTIR-10069, summary WIDENED: the payload declares `inFlightCode`
+    // and `mergedRepos`, where the item's unmerged code is (its own pull request or a
+    // parent's) — a new question the tool answers, so the line names it.
+    descriptionFingerprint: '5e2545bb6213',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.
@@ -620,18 +623,38 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   read_file: {
     summary:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8cca00253741',
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+    // Re-pinned for MOTIR-10143: the description now says a file over 1 MB is read only by
+    // range. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: 'a3b5e1fed782',
+  },
+  list_changed_files: {
+    // MOTIR-10069 — the hosted planner's `list_changed_files`, on the MCP.
+    summary:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'd2536eb87f90',
   },
   code_explore: {
     summary:
       "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
-    descriptionFingerprint: 'b2e5bdc1492a',
+    // Re-pinned for MOTIR-10094: the description now names the `drift` entry a read off a graph
+    // behind its default branch carries. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: '829f9a5594b5',
   },
   code_search: {
     summary:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
-    descriptionFingerprint: '0b634bf94bd4',
+    // Re-pinned for MOTIR-10094: the description now names the `drift` entry a read off a graph
+    // behind its default branch carries. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: '0976e4761ef1',
+  },
+  code_grep: {
+    summary:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+    // Re-pinned for MOTIR-10094: the description now names the `drift` entry a read off a graph
+    // behind its default branch carries. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: 'bb73c179712f',
   },
   skeleton: {
     // Re-pinned for MOTIR-5410: the description now names the folder placement
@@ -834,7 +857,27 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // is another severity on the channel, not part of the verdict this line names.
     // Re-pinned for MOTIR-9007, summary UNCHANGED: the new `likely-mislabelled-link`
     // advisory is another severity on the channel, outside the verdict.
-    descriptionFingerprint: '94d73c229405',
+    // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
+    // section finding — advisory channel only, outside the verdict.
+    // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
+    // now scans the explanation too — still advisory, outside the verdict.
+    // Re-pinned for MOTIR-10112, summary UNCHANGED: `likely-self-blocking-design`
+    // now exempts `type: test` beside `type: design` — advisory channel only.
+    descriptionFingerprint: '2601f9f3a510',
+  },
+  get_plan_code_reads: {
+    // MOTIR-10122: what each planner session read, at which commit — the evidence a check of a
+    // plan attributes a defect from.
+    summary:
+      'Read the code reads each planner session of a plan made — file and range or query, the commit it was read at, and what came back — in call order.',
+    descriptionFingerprint: 'b9865a0cd819',
+  },
+  get_plan_authoring_state: {
+    // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
+    // SUMMARY REWRITTEN for MOTIR-10001: it now answers committed cards too, `not_in_walk` among them.
+    summary:
+      'Which proposals and committed cards are being written, which are written, which no author session has started, and which this plan never re-writes — read before wiring an edge onto another card.',
+    descriptionFingerprint: '00d2b8e7cb5a',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -861,7 +904,15 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-9032's advisory `sectionFindings`, summary UNCHANGED.
     // Re-pinned for MOTIR-9007, summary UNCHANGED: `advisories` (mislabelled links in
     // proposed bodies) rides beside the verdict and never touches it.
-    descriptionFingerprint: 'f10d745aade7',
+    // Re-pinned for MOTIR-9835, summary UNCHANGED: an extra heading alone is not a
+    // section finding — advisory channel only, outside the verdict.
+    // Re-pinned for MOTIR-9938, summary UNCHANGED: the mislabelled-link advisory
+    // now scans proposed explanations too — beside the verdict, never in it.
+    // Re-pinned for MOTIR-10087, summary UNCHANGED: `advisories` widens to every
+    // shape family on the plan's proposals — still beside the verdict, never in it.
+    // Re-pinned for MOTIR-10106, summary UNCHANGED: `rescopeWarnings` (a `modify`
+    // approve will send back from built work) rides beside the verdict, never in it.
+    descriptionFingerprint: 'ad45344ec714',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -927,8 +978,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   record_run_discrepancy: {
     summary:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
-    descriptionFingerprint: '711c8278f527',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
+    descriptionFingerprint: 'd5fd54f98dd3',
   },
   create_plan: {
     summary:
@@ -1002,9 +1053,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // are all about a PROPOSAL and this one is not — that is the whole reason a
     // reader picks between them.
     summary:
-      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal.",
+      "Correct a plan's OWN title and summary — the heading above the tree — without touching a single proposal, and keep your planner record on it.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '3c8e94ce5a31',
+    descriptionFingerprint: 'd8f72cc61e0f',
   },
   record_plan_revision_reason: {
     // The line has to say the thing that makes this tool unlike its six
@@ -1023,7 +1074,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Report the step a planner session is on (settle, lay, author), narrate it, or end it — an advisory progress signal on a generating plan.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     // Re-pinned for MOTIR-8062: the `narration` arm joins the description.
-    descriptionFingerprint: '8a4719704960',
+    // Re-pinned for MOTIR-10122, summary UNCHANGED: the `codeReads` arm joins the input schema
+    // and the step's exclusive-forms sentence.
+    descriptionFingerprint: '4d3e24448453',
   },
   hold_plan_revision: {
     // What a reader picks this one on: it is the only plan door that re-opens a
@@ -1231,9 +1284,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // planner starts knowing the problem. That is read AFTER a caller has chosen
     // this tool: it changes how you call it, never whether this is the call. The
     // line still says what the tool is for, and it is the only thing it owes.
+    // Re-pinned for MOTIR-9878, summary UNCHANGED: the description now says the
+    // `requirement` and `targetKeys` are input the planner settles from; the call
+    // is still the one that hands the conversation's intent to the planner.
     summary: "Send the conversation's accumulated intent to the planner as one change set.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: 'da07e05ffb16',
+    descriptionFingerprint: '2fe93c5a3739',
   },
   link_work_items: {
     summary:

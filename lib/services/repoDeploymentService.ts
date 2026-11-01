@@ -11,9 +11,12 @@ import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepos
 // the safe-URL rule, the out-of-order guard, the "unconnected repository is not
 // an error" rule — is here, once, so the two providers cannot drift apart.
 //
-// ⚠️ MOTIR CREATES NOTHING. This path makes NO outbound call: no host API
+// ⚠️ MOTIR CREATES NOTHING HERE. This path makes NO outbound call: no host API
 // request, no deployment creation, no status post. It stores what a host
 // announced. Keep it that way — a self-hosted customer owns their deploys.
+// The ONE deployment Motir itself creates is a PRODUCTION release of a Motir
+// repository (MOTIR-10033, `releaseDeploymentStatusService`), and its statuses
+// still reach the store only through the webhook this service records.
 
 export type RecordDeploymentOutcome = 'recorded' | 'stale' | 'unknown_repo';
 

@@ -392,6 +392,26 @@ export const planItemRepository = {
     return client.planItem.findUnique({ where: { id } });
   },
 
+  /**
+   * The `add` rows among `ids` that have MATERIALIZED, in this workspace, each with
+   * the card it became (`workItemId`) — the read that tells a body link written in
+   * the proposal scheme which card it meant (MOTIR-10104). An `add` not yet
+   * approved has no `workItemId` and is not returned.
+   */
+  async findMaterializedAddsByIds(
+    ids: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ id: string; workItemId: string }[]> {
+    if (ids.length === 0) return [];
+    const client = tx ?? dbRead;
+    const rows = await client.planItem.findMany({
+      where: { id: { in: ids }, workspaceId, op: 'add', workItemId: { not: null } },
+      select: { id: true, workItemId: true },
+    });
+    return rows.map((r) => ({ id: r.id, workItemId: r.workItemId! }));
+  },
+
   /** Edit a PlanItem's mutable JSON/columns in place — the proposal-edit path
    *  (7.21.6 · MOTIR-1370) patches an `add`'s `proposedFields` while the plan is
    *  `planned`. A write, so `tx` is required. */

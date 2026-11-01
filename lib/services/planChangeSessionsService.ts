@@ -51,7 +51,7 @@ import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
-import type { CarriedAnswers, SubmittedRequirement } from '@/lib/ai/types';
+import type { CarriedAnswers, RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
@@ -230,6 +230,25 @@ async function failedWaitingShape(
  *  renders them through the shipped `WorkItemRefChip` path exactly as the detail
  *  page and the comment thread do. A thread with no references pays nothing:
  *  `resolveWorkItemRefSummaries` returns `{}` for an empty ref set. */
+/** The Markdown a stored answer offer draws — its request, and the parts of the
+ *  requirement a no-target plan offer composed (MOTIR-9432) — whose card links ride
+ *  the thread's ONE resolve, so the requirement document draws them live (bug
+ *  MOTIR-10023). Read defensively: the column is JSON. */
+function offerBodiesOf(stored: unknown): string[] {
+  if (!stored || typeof stored !== 'object') return [];
+  const offer = stored as { requestMd?: unknown; requirement?: unknown };
+  const requirement =
+    offer.requirement && typeof offer.requirement === 'object'
+      ? (offer.requirement as Record<string, unknown>)
+      : {};
+  return [
+    offer.requestMd,
+    ...(['outcome', 'behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const).map(
+      (part) => requirement[part],
+    ),
+  ].filter((body): body is string => typeof body === 'string');
+}
+
 async function toDto(
   row: PlanChangeSession,
   pctx: ProjectContext,
@@ -246,7 +265,8 @@ async function toDto(
       );
   const ids = turns
     .filter((t) => t.role === 'assistant')
-    .flatMap((t) => parseWorkItemTokenIds(t.body));
+    .flatMap((t) => [t.body, ...offerBodiesOf(t.answerOffer)])
+    .flatMap((body) => parseWorkItemTokenIds(body));
   // An ANSWER's citations are stored as IDENTIFIERS, not as `motir:` id tokens
   // in the body, so they ride the `keys` half of the same ONE resolve
   // (MOTIR-1818). Two reasons they are not left to the client: the rail must
@@ -3141,8 +3161,9 @@ export const planChangeSessionsService = {
     requirement?: SubmittedRequirement,
     opts: {
       planAgainOf?: string | null;
-      /** The saved requirement page (MOTIR-9436): rides the job beside `requirement`. */
-      requirementPage?: { pageId: string; title: string };
+      /** Which offer's requirement the person confirmed (MOTIR-10091): rides the job
+       *  beside `requirement`, so motir-ai keeps it as the planner's own. */
+      requirementConfirmed?: RequirementConfirmation;
       /** Send NO carried answers (MOTIR-9436): a confirmed offer's composed requirement
        *  already holds what Grill me settled, and a second copy would be folded in twice. */
       omitCarriedAnswers?: boolean;
@@ -3266,7 +3287,7 @@ export const planChangeSessionsService = {
       sessionId: session.id,
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(carriedAnswers ? { carriedAnswers } : {}),
-      ...(opts.requirementPage ? { requirementPage: opts.requirementPage } : {}),
+      ...(opts.requirementConfirmed ? { requirementConfirmed: opts.requirementConfirmed } : {}),
     };
     let submitted: { jobId: string; planId: string };
     try {

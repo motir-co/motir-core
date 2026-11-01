@@ -18,6 +18,8 @@ import type { RunDiedReason } from '@/lib/dto/workItemContinue';
  * - `queue_failed` — the merge queue threw a member out for a reason a code change
  *   could answer, and that exit still stands at its head.
  * - `conflicted` — the host reports a member conflicted with its base at its head.
+ * - `out_of_date` — the host reports a member behind a base branch that requires pull
+ *   requests to be up to date (`mergeable_state: behind`, Bug MOTIR-10054).
  * - `ci_failed` — a member's own checks are red at its latest commit.
  * - `changes_requested` — a reviewer sent the card back and nothing has changed since:
  *   a `changes_requested` approve-to-merge decision at the members' CURRENT heads, or a
@@ -27,6 +29,7 @@ export type WorkItemFixReasonDto =
   | 'run_died'
   | 'queue_failed'
   | 'conflicted'
+  | 'out_of_date'
   | 'ci_failed'
   | 'changes_requested';
 

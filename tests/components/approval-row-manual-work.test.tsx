@@ -205,6 +205,96 @@ describe('MARK DONE decides from the row and the row SETTLES in place', () => {
   });
 });
 
+// THE PRESS RACES THE LIST (Bug MOTIR-9696). A later list read — the action's own
+// `revalidatePath` re-seed, or a live window read — can drop the gate BEFORE the press's
+// answer arrives, and the list then hands the row back as HELD. A held row with no
+// announced state draws *Decided elsewhere*, which is false for a press made on this row:
+// the page-wide pending mark is what tells the two apart.
+describe('a HELD section that lands BEFORE the press answers (MOTIR-9696)', () => {
+  function pressThenHold() {
+    const row = awaiting();
+    let resolve!: (value: unknown) => void;
+    let reject!: (error: unknown) => void;
+    decideApprovalGateAction.mockReturnValue(
+      new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+      }),
+    );
+    const view = render({ record: { section: 'awaiting', row }, routedToReader: true });
+    fireEvent.click(screen.getByRole('button', { name: t.markDone }));
+    // The list read lands first: the row comes back HELD.
+    view.rerender(<ApprovalRow record={{ section: 'held', row }} routedToReader />);
+    return { row, resolve, reject };
+  }
+
+  it('keeps drawing Marking…, never *Decided elsewhere*, then settles as marked done', async () => {
+    const { row, resolve } = pressThenHold();
+
+    expect(screen.queryByText(t.live.decidedElsewhere)).toBeNull();
+    const pending = screen.getByRole('button', { name: t.marking });
+    expect(pending.getAttribute('aria-busy')).toBe('true');
+    expect((pending as HTMLButtonElement).disabled).toBe(true);
+    // The sentence is still the pending question's, not the held form.
+    expect(doorName()).toBe(`Review ACME-31 — ${sentence('en', 'manual_work')}`);
+
+    const gate = { id: row.gateId, kind: 'manual_work', state: 'approved' } as ApprovalGateDTO;
+    await act(async () => {
+      resolve({ ok: true, gate, filesKept: null, statusWritten: 'done' });
+    });
+
+    expect(screen.queryByText(t.live.decidedElsewhere)).toBeNull();
+    expect(doorName()).toBe(`Review ACME-31 — ${sentence('en', 'manual_work_done')}`);
+    expect(screen.getByText(en.approvalGate.manualWork.state.markedDone)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: t.marking })).toBeNull();
+  });
+
+  it('a REFUSED press clears the mark: the held row now says *Decided elsewhere*, and the overlay opens', async () => {
+    const { resolve } = pressThenHold();
+    expect(screen.queryByText(t.live.decidedElsewhere)).toBeNull();
+
+    await act(async () => {
+      resolve({
+        ok: false,
+        refusal: { tag: 'APPROVAL_GATE_ALREADY_DECIDED', decidedByLabel: 'Sam' },
+      });
+    });
+
+    // Somebody else's answer won — the held pill is now TRUE, so it is drawn.
+    expect(screen.getByText(t.live.decidedElsewhere)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: t.marking })).toBeNull();
+    expect(shallowPush).toHaveBeenCalledWith(
+      '/workbench?tab=approvals&approval=ACME-31&approvalKind=manual_work',
+    );
+  });
+
+  it('a press that THROWS clears the mark the same way', async () => {
+    const { reject } = pressThenHold();
+
+    await act(async () => {
+      reject(new Error('network'));
+    });
+
+    expect(screen.getByText(t.live.decidedElsewhere)).toBeTruthy();
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('a refused press on a row the list still holds returns it to Mark done', async () => {
+    const row = awaiting();
+    let resolve!: (value: unknown) => void;
+    decideApprovalGateAction.mockReturnValue(new Promise((r) => (resolve = r)));
+    render({ record: { section: 'awaiting', row }, routedToReader: true });
+    fireEvent.click(screen.getByRole('button', { name: t.markDone }));
+
+    await act(async () => {
+      resolve({ ok: false, refusal: { tag: 'APPROVAL_GATE_STALE_SUBJECT' } });
+    });
+
+    expect(screen.getByRole('button', { name: t.markDone })).toBeTruthy();
+    expect(screen.queryByText(t.live.decidedElsewhere)).toBeNull();
+  });
+});
+
 describe('the other forms', () => {
   it('a HELD row (left the set while looking) reads the neutral form and *Decided elsewhere*', () => {
     render({ record: { section: 'held', row: awaiting() }, routedToReader: true });

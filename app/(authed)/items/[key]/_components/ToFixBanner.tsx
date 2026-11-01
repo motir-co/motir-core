@@ -163,6 +163,10 @@ export function ToFixBanner({
         return fixDetail.base
           ? t.rich('conflicted', { base: fixDetail.base, code })
           : t('conflictedNoBase');
+      case 'out_of_date':
+        return fixDetail.base
+          ? t.rich('outOfDate', { base: fixDetail.base, code })
+          : t('outOfDateNoBase');
       case 'ci_failed':
         return fixDetail.check
           ? t.rich('ciFailed', { check: fixDetail.check, code })

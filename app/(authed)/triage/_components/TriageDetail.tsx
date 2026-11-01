@@ -12,6 +12,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { AttachmentGlyph } from '@/app/(authed)/items/[key]/_components/AttachmentGlyph';
 import type { TriageItemDetailDto } from '@/lib/dto/triage';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { CommentDTO } from '@/lib/dto/comments';
 import { TriageAvatar } from './TriageAvatar';
 import { PromotePopover, type PromoteTarget } from './PromotePopover';
@@ -42,7 +43,13 @@ export interface TriageDetailProps {
   handlers: TriageActionHandlers;
 }
 
-function CommentRowReadOnly({ comment }: { comment: CommentDTO }) {
+function CommentRowReadOnly({
+  comment,
+  workItemRefs,
+}: {
+  comment: CommentDTO;
+  workItemRefs: WorkItemRefMap;
+}) {
   const format = useFormatter();
   return (
     <div className="flex gap-2">
@@ -54,7 +61,11 @@ function CommentRowReadOnly({ comment }: { comment: CommentDTO }) {
             {format.relativeTime(new Date(comment.createdAt))}
           </span>
         </div>
-        <MarkdownView value={comment.bodyMd} className="text-sm text-(--el-text-secondary)" />
+        <MarkdownView
+          value={comment.bodyMd}
+          workItemRefs={workItemRefs}
+          className="text-sm text-(--el-text-secondary)"
+        />
       </div>
     </div>
   );
@@ -103,6 +114,7 @@ export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
         {detail.descriptionMd ? (
           <MarkdownView
             value={detail.descriptionMd}
+            workItemRefs={detail.workItemRefs}
             className="text-sm text-(--el-text-secondary)"
           />
         ) : null}
@@ -135,7 +147,9 @@ export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
           {detail.comments.length === 0 ? (
             <p className="text-sm text-(--el-text-muted)">{t('noComments')}</p>
           ) : (
-            detail.comments.map((c) => <CommentRowReadOnly key={c.id} comment={c} />)
+            detail.comments.map((c) => (
+              <CommentRowReadOnly key={c.id} comment={c} workItemRefs={detail.workItemRefs} />
+            ))
           )}
         </div>
       </div>

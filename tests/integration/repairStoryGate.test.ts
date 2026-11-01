@@ -169,7 +169,14 @@ describe('seam 1 — claim → run → page', () => {
       repairClass: 'ci',
       acceptanceRefusal: null,
       failing: [
-        { repo: 'moooon/acme', number: 101, ci: 'failing', queueExit: null, conflict: null },
+        {
+          repo: 'moooon/acme',
+          number: 101,
+          ci: 'failing',
+          queueExit: null,
+          conflict: null,
+          outOfDate: null,
+        },
       ],
       holder: { id: s.user.id, name: 'Owner' },
       byViewer: true,
@@ -243,7 +250,14 @@ describe('seam 3 — give-up → callout again', () => {
       repairClass: 'ci',
       acceptanceRefusal: null,
       failing: [
-        { repo: 'moooon/acme', number: 103, ci: 'failing', queueExit: null, conflict: null },
+        {
+          repo: 'moooon/acme',
+          number: 103,
+          ci: 'failing',
+          queueExit: null,
+          conflict: null,
+          outOfDate: null,
+        },
       ],
       lastGaveUp: { attempts: 5, endedAt: closed.endedAt },
     });

@@ -304,6 +304,11 @@ export default async function ItemView({
   // group below renders them, and the translation offer is built from both.
   const localeRead = getLocale() as Promise<Locale>;
   const todoListRead = workItemTodosService.listTodos(item.id, svc);
+  // The steps' NOTES draw through `MarkdownView` too (bug MOTIR-10023): their card
+  // links, resolved off the same list read — no query when no note links anything.
+  const todoRefsRead = todoListRead.then((list) =>
+    workItemTodosService.resolveNotesRefs(list.items, ctx.read),
+  );
   // THE TRANSLATION OFFER (Story MOTIR-7735 · MOTIR-8121 / MOTIR-8122): for a
   // signed-in reader, which fields differ from their interface language and which
   // already have a kept translation — computed from the item's CURRENT text, no
@@ -332,6 +337,7 @@ export default async function ItemView({
     planHold,
     repairRun,
     readerTranslation,
+    todoRefs,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -367,7 +373,11 @@ export default async function ItemView({
     // after its paragraph is a reflow inside text the reader is already reading.
     workItemsService.resolveReferenceSummaries(
       parseWorkItemRefs(
-        [item.title, item.descriptionMd, item.explanationMd].filter(Boolean).join('\n'),
+        // The obsolescence note rides the same resolve (bug MOTIR-10023): it usually
+        // names the cards that superseded this one, and the field draws its chips.
+        [item.title, item.descriptionMd, item.explanationMd, item.obsolescenceNoteMd]
+          .filter(Boolean)
+          .join('\n'),
         ctx.project.identifier,
       ),
       ctx.projectId,
@@ -449,6 +459,7 @@ export default async function ItemView({
           .then((runs) => runs.get(item.id) ?? null)
       : null,
     translationRead,
+    todoRefsRead,
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -778,6 +789,7 @@ export default async function ItemView({
                       workItemId={item.id}
                       initialTodos={todoList.items}
                       initialProgress={todoList.progress}
+                      initialWorkItemRefs={todoRefs}
                       canEdit={canEdit}
                     />
                     {/* 2.4.5: the relationships section + ready/blocked banner — a left-
@@ -909,6 +921,7 @@ export default async function ItemView({
                       item={item}
                       heldTransitions={heldTransitions}
                       planHold={planHold}
+                      workItemRefs={workItemRefs}
                       members={members}
                       workflow={detail.workflow}
                       parent={detail.parent}

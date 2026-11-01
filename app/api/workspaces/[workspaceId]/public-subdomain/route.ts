@@ -6,32 +6,37 @@ import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
 import { getWorkspaceContext } from '@/lib/workspaces';
 
 // GET / PUT / DELETE /api/workspaces/[workspaceId]/public-subdomain
-// Story MOTIR-3878 · Subtask MOTIR-4215; DELETE is Story MOTIR-4451 ·
-// Subtask MOTIR-4454 (ADR §8 Amendment 2).
+// Story MOTIR-3878 · Subtask MOTIR-4215; DELETE is Story MOTIR-4451 · Subtask
+// MOTIR-4454; the contract below is Story MOTIR-4528 · Subtask MOTIR-9510
+// (`docs/decisions/public-tenant-addresses.md` §8 Amendment 3).
 //
-// GET    — the workspace's subdomain DTO, or `null` when it has none.
-// PUT    — `{ label }`. CLAIMS when the workspace has no subdomain and RENAMES
-//          when it has one. One verb, because from the customer's side there is
-//          one control — a field with the address in it — and which of the two
-//          acts it performs is a fact about the server's state rather than a
-//          choice the caller makes. The service still keeps them distinct
-//          internally, so a rename spends a rename from the cap and a claim does
-//          not.
-// DELETE — RELEASE the subdomain: the live label and every retained alias stop
-//          being addresses, and every one of those names is reserved for ever.
-//          `204`, because there is no resource left to describe; `404` when the
-//          workspace has none, which is a DIFFERENT typed error from the
-//          rename's 409 rather than the same one mapped twice
-//          (`SubdomainNotFoundError`).
+// GET    — the workspace's subdomain DTO, or `null` when it has none. It carries
+//          `nextChangeAllowedAt`: the date the 30-day limit next allows a rename
+//          or release, or `null` when one is allowed now.
+// PUT    — `{ label }`. CLAIMS (201) when the workspace has no subdomain and
+//          RENAMES (200) when it has one. One verb, because from the customer's
+//          side there is one control — a field with the address in it — and
+//          which act it performs is a fact about the server's state rather than a
+//          choice the caller makes. The service keeps them distinct: a rename is
+//          a change under the 30-day limit, a first claim is not. A rename stops
+//          serving the old name at once; nothing redirects to the new one.
+// DELETE — RELEASE the subdomain. It stops being served at once, and `200
+//          { returnsAt }` says when its name returns to the pool: an ISO date
+//          when it is held (claimed 24 hours or more before), `null` when it
+//          returned at once. The pane states that date, and cannot read it back
+//          from GET once the row is gone. `404` when the workspace has none.
+//
+// The dated PREVIEW of a rename or release is `./preview` — advice for the
+// confirm dialog, never a reservation: these writes recompute under the
+// workspace lock.
 //
 // ⚠️ DELETE takes no body and therefore has no "which act is this?" branch —
 // unlike PUT, whose one verb serves two acts. It is a separate verb rather than
-// a `PUT { label: null }` because release is not a kind of naming: it is the one
-// operation §8 had no way to express.
+// a `PUT { label: null }` because release is not a kind of naming.
 //
 // Thin HTTP transport per `CLAUDE.md`: parse, gate, ONE service call, map typed
 // errors. Every rule — the cloud gate, the membership gate, the label grammar,
-// the rename cap, the row lock — lives in the service.
+// the hold, the 30-day limit, the row lock — lives in the service.
 
 interface RouteParams {
   params: Promise<{ workspaceId: string }>;
@@ -107,12 +112,10 @@ export async function DELETE(_req: Request, { params }: RouteParams): Promise<Re
   const { workspaceId } = await params;
 
   try {
-    await publicSubdomainService.release(workspaceId, ctx.userId);
-    // 204 — the resource is gone, and there is nothing to say about it. The
-    // pane REFRESHES rather than patching local state, so it re-reads the DTO
-    // from GET anyway; returning a body here would give it a second, staler
-    // source for the same fact.
-    return new NextResponse(null, { status: 204 });
+    // 200 WITH A BODY, not 204: the one fact the pane needs afterwards — when
+    // the released name returns — has no other source once the row is gone.
+    const released = await publicSubdomainService.release(workspaceId, ctx.userId);
+    return NextResponse.json(released, { status: 200 });
   } catch (err) {
     const mapped = mapPublicAddressError(err);
     if (mapped) return mapped;

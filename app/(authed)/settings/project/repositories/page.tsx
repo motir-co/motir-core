@@ -163,7 +163,7 @@ async function RepositoriesPaneBody({
   // its own transaction, and `Promise.all` abandons the others' connections on the
   // first rejection rather than letting them settle.
   const [view, canAddRepositories, organization] = await allSettledOrThrow([
-    projectRepoRoomService.getRoomView(projectId, { userId, workspaceId }),
+    projectRepoRoomService.getRoomView(projectId, { userId, workspaceId }, { projectKey }),
     isOrgAdminForWorkspace(userId, workspaceId),
     organizationsService.resolveWorkspaceOrganization(userId, workspaceId),
   ]);

@@ -125,6 +125,7 @@ function renderFrame(
     <DecisionConfirmGateFrame
       gate={AWAITING}
       view={p}
+      workItemRefs={{}}
       record={p.record}
       recordCount={p.recordCount}
       presentRecordIds={p.presentRecordIds}
@@ -310,6 +311,7 @@ describe('the item page — the Decision section', () => {
     if (parse.ok) throw new Error('expected a defect');
     renderWithIntl(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={{
           ok: false,
           defect: parse.defect,
@@ -337,6 +339,7 @@ describe('the item page — the Decision section', () => {
     if (parse.ok) throw new Error('expected a defect');
     renderWithIntl(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={{
           ok: false,
           defect: parse.defect,
@@ -359,6 +362,7 @@ describe('the item page — the Decision section', () => {
   it('an awaiting decision for its decider shows the sections and ONE door — Review & confirm', () => {
     renderWithIntl(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={body()}
         gate={AWAITING}
         canDecide
@@ -375,6 +379,7 @@ describe('the item page — the Decision section', () => {
   it('no gate yet renders the sections read-only with the record line', () => {
     renderWithIntl(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={body({ kind: 'none' })}
         gate={null}
         canDecide
@@ -392,6 +397,7 @@ describe('the item page — the Decision section', () => {
     if (parse.ok) throw new Error('expected a defect');
     renderWithIntl(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={{
           ok: false,
           defect: parse.defect,
@@ -415,6 +421,7 @@ describe('the item page — the Decision section', () => {
   it('an awaiting decision routed to someone else is the frame with who it waits on', () => {
     renderWithIntl(
       <DecisionConfirmSection
+        workItemRefs={{}}
         body={body()}
         gate={AWAITING}
         canDecide={false}

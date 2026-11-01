@@ -1,5 +1,6 @@
-import { hostCapsFromGranted } from '@/lib/billing/hostOwnAccountCaps';
-import { capsForPlanKey, HOST_PLAN_KEY, type PlanCaps } from '@/lib/billing/planCaps';
+import { ownAccountCapsFromGranted } from '@/lib/billing/hostOwnAccountCaps';
+import { planCarriesOwnAccounts } from '@/lib/billing/ownAccountPlans';
+import { capsForPlanKey, type PlanCaps } from '@/lib/billing/planCaps';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaRequestRepository';
@@ -29,22 +30,27 @@ import { withSystemContext } from '@/lib/workspaces/context';
 //                      CARRIED, never replaced by a plausible default.
 
 //
-// A `host` org's two fleet figures follow its OWN accounts (MOTIR-9587): once the
+// An org on a plan with its own accounts — `host` or a larger pool on sale
+// (`planCarriesOwnAccounts`, MOTIR-9653) — has two fleet figures that follow its
+// OWN accounts (MOTIR-9587): once the
 // agent-runner or CI account is live — and that kind's switch reads AWS, as
 // admission's does — the figure is the account's granted vCPU ÷ 2, read from its
 // quota requests on every call (a later raise shows on the next read, nothing is
-// copied). Any failure of that read answers the `host` row, the shared floor —
+// copied). Once the merged account's agent hoster row is live on the same terms,
+// the two agent figures lift to the own-accounts 10 / 50 (MOTIR-9668). Any failure of that read answers the plan's row, the shared floor —
 // never a larger figure.
 
 const AGENT_RUNNER: FleetWorkloadKind = 'hosted_agent';
 const CI_RUNNER: FleetWorkloadKind = 'ci_runner';
+/** The merged account's agent hoster row — what lifts the agent figures. */
+const AGENT_HOSTER: FleetWorkloadKind = 'agent_instance';
 
 /** A live own account's granted vCPU per kind — only for a kind on its pool. */
 async function ownGranted(
   organizationId: string,
 ): Promise<Partial<Record<FleetWorkloadKind, number>>> {
   const kinds = new Set<FleetWorkloadKind>();
-  for (const kind of [AGENT_RUNNER, CI_RUNNER]) {
+  for (const kind of [AGENT_RUNNER, CI_RUNNER, AGENT_HOSTER]) {
     if (await fleetKindOnPool(kind)) kinds.add(kind);
   }
   if (kinds.size === 0) return {};
@@ -63,20 +69,24 @@ async function ownGranted(
   });
 }
 
-/** The `host` row, with each live own account's figure in place of the floor's. */
-async function hostCaps(organizationId: string, floor: PlanCaps): Promise<PlanCaps> {
+/** The plan's floor row, with each live own account's figure in place of the floor's. */
+async function ownAccountCaps(organizationId: string, floor: PlanCaps): Promise<PlanCaps> {
   try {
     const granted = await ownGranted(organizationId);
-    return hostCapsFromGranted({
+    return ownAccountCapsFromGranted({
       floor,
       agentRunnerGrantedVcpu: granted[AGENT_RUNNER] ?? null,
       ciGrantedVcpu: granted[CI_RUNNER] ?? null,
+      mergedGrantedVcpu: granted[AGENT_HOSTER] ?? null,
     });
   } catch (err) {
-    console.error("[planCapsService] could not read a Host org's own accounts — the floor", {
-      organizationId,
-      error: err instanceof Error ? err.name : 'UnknownError',
-    });
+    console.error(
+      '[planCapsService] could not read the own accounts of an org on a plan with its own accounts — the floor',
+      {
+        organizationId,
+        error: err instanceof Error ? err.name : 'UnknownError',
+      },
+    );
     return floor;
   }
 }
@@ -103,12 +113,12 @@ export const planCapsService = {
       });
       return { kind: 'plan_unknown', planKey: tier.key };
     }
-    if (tier.key === HOST_PLAN_KEY) {
+    if (planCarriesOwnAccounts(tier.key)) {
       return {
         kind: 'capped',
         planKey: tier.key,
         planName: tier.name,
-        caps: await hostCaps(organizationId, caps),
+        caps: await ownAccountCaps(organizationId, caps),
       };
     }
     return { kind: 'capped', planKey: tier.key, planName: tier.name, caps };

@@ -64,6 +64,13 @@ const ALIAS_ASSERTS: Partial<Record<PermissionKey, string>> = {
 const SERVICE_OF: Record<string, string> = {
   details: 'lib/services/projectAccessService.ts',
   repositories: 'lib/services/projectRepoSetService.ts',
+  // MOTIR-9966 — the Environment room's writes (`set`, `delete`) assert
+  // `repository:manage`, spelled literally in `environmentConfigService`.
+  environment: 'lib/services/environmentConfigService.ts',
+  // MOTIR-10037 — the Production room's one write, Roll back, asserts
+  // `project:administer`, spelled literally in `productionRollbackService`; its
+  // READ asserts the entry's VIEW key, `project:browse`, which VIEW_KEY_EVIDENCE pins.
+  production: 'lib/services/productionRollbackService.ts',
   monitoring: 'lib/services/monitorConnectionService.ts',
   members: 'lib/services/projectMembersService.ts',
   'public-page': 'lib/services/projectsService.ts',

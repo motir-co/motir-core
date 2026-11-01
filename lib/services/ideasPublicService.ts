@@ -14,7 +14,11 @@ import {
   IdeasUnavailableError,
   InvalidIdeaFilterError,
 } from '@/lib/ideas/errors';
-import { localizeLabel, type PublicIdeaLocale } from '@/lib/ideas/publicLocale';
+import {
+  localizeLabel,
+  publicIdeaLocaleCode,
+  type PublicIdeaLocale,
+} from '@/lib/ideas/publicLocale';
 import type { PublicIdeaFilters } from '@/lib/ideas/types';
 import { toPublicIdeaDto } from '@/lib/mappers/ideaMappers';
 import { isConnectionError, retryReadOnceOnConnectionError } from '@/lib/prisma/connectionError';
@@ -127,7 +131,7 @@ export const ideasPublicService = {
         count: byCategory.get(c)!,
       })),
       total: rows.length,
-      locale,
+      locale: publicIdeaLocaleCode(locale),
     };
   },
 

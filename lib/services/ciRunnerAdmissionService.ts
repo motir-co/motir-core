@@ -170,7 +170,18 @@ export const ciRunnerAdmissionService = {
     // against it, and a gate that re-read the clock per workload could count a
     // slot as live for one workload and expired for the next.
     const now = new Date();
+    const verdict = await this.decide(intent, now);
+    // WHY IT WAITS (MOTIR-9666) — recorded AFTER the decision, outside the
+    // fleet-wide lock, so the lock is held exactly as long as before and a write
+    // that fails can never roll a correct verdict into `gate_unavailable`.
+    if (verdict.outcome === 'deferred') {
+      await this.recordWaitingReason(intent.id, verdict.reason, now);
+    }
+    return verdict;
+  },
 
+  /** {@link admit}'s decision itself: every guard, and the claim. */
+  async decide(intent: CiRunnerProvisioningIntent, now: Date): Promise<AdmissionVerdict> {
     // ── 1 · THE KILL SWITCH ───────────────────────────────────────────────────
     if (fleetKillSwitchEngaged()) {
       return { outcome: 'deferred', reason: 'fleet_ceiling', detail: FLEET_KILL_SWITCH_DETAIL };
@@ -355,6 +366,25 @@ export const ciRunnerAdmissionService = {
     }
   },
 
+  /** Record the reason a deferred intent waits now (MOTIR-9666). Best-effort:
+   *  the reason is a reading for the tenant's Fleet use section, and the wait
+   *  itself does not depend on it — a throw is logged and the verdict stands. */
+  async recordWaitingReason(
+    intentId: string,
+    reason: AdmissionDeferralReason,
+    at: Date,
+  ): Promise<void> {
+    try {
+      await withSystemContext((tx) => intents.recordWaitingReasonInTx(intentId, reason, at, tx));
+    } catch (err) {
+      console.error('[ciRunnerAdmissionService] could not record why an intent waits', {
+        intentId,
+        reason,
+        detail: detailOf(err),
+      });
+    }
+  },
+
   /** Put a claimed intent back in the pending pool. Best-effort: the worst case
    *  is an intent that sits in `provisioning` until the stale-claim sweep writes
    *  it off, which is visible and bounded — a throw here would be neither. */
@@ -370,13 +400,16 @@ export const ciRunnerAdmissionService = {
   },
 
   /** {@link releaseClaim} for a boot whose every account refused (MOTIR-8968):
-   *  the claim goes back, and the intent's first `shard_capacity` deferral is
-   *  stamped. Best-effort for the same reason. */
+   *  the claim goes back, the intent's first `shard_capacity` deferral is
+   *  stamped, and its waiting reason reads `shard_capacity` (MOTIR-9666). Best-effort for the same reason. */
   async releaseClaimForShardCapacity(intentId: string, at: Date): Promise<void> {
     try {
       await withSystemContext(async (tx) => {
         await intents.releaseClaim(intentId, tx);
         await intents.markShardCapacityDeferredInTx(intentId, at, tx);
+        // The claim cleared the waiting reason; the job waits again, for a full
+        // pool, from now — without waiting for the next sweep pass (MOTIR-9666).
+        await intents.recordWaitingReasonInTx(intentId, 'shard_capacity', at, tx);
       });
     } catch (err) {
       console.error('[ciRunnerAdmissionService] could not release a claim for shard capacity', {

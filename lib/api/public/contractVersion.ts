@@ -105,8 +105,22 @@
  *   `Retry-After` where it used to escape as an undeclared 500. Additive under
  *   §D — one new declared error status per operation; no success shape, path
  *   or parameter moved, and no condition that answered 2xx, 400 or 404 moved.
+ * - `2.0.0` — MOTIR-9511 (Story MOTIR-4528) reshapes `resolvePublicHost`, and it
+ *   is BREAKING under §D on two counts: the `alias` outcome is removed, so a
+ *   renamed-away-from subdomain moves from a 200 to the shared 404 (the status
+ *   an existing condition returns changes); and the `workspace` outcome, with
+ *   its project list, is replaced by `no_application`. Hence a MAJOR.
+ *   ⚠️ It lands IN PLACE rather than alongside, the one departure from §D, and
+ *   the reason is a decided rule rather than convenience: ADR §8 Amendment 3
+ *   rule 2 says a renamed or released name stops answering AT ONCE, so a 1.x
+ *   kept serving the alias beside a 2 would break the rule §D would be keeping
+ *   the contract for. The workspace outcome follows the address decision
+ *   (MOTIR-9790), which takes the project list off the workspace host. The
+ *   operation's only consumer is `motir-marketing`'s host router, moved to the
+ *   new outcomes in the same story (MOTIR-9512). Every other operation, path,
+ *   field and status is served exactly as at 1.8.0.
  */
-export const PUBLIC_CONTRACT_VERSION = '1.8.0';
+export const PUBLIC_CONTRACT_VERSION = '2.0.0';
 
 /** The MAJOR, for the document's own identity. */
-export const PUBLIC_API_MAJOR = 1;
+export const PUBLIC_API_MAJOR = 2;

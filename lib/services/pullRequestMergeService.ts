@@ -30,6 +30,7 @@ import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubP
 import { githubPullRequestMergeRefusalRepository } from '@/lib/repositories/githubPullRequestMergeRefusalRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
+import { OUT_OF_DATE_MERGEABLE_STATE } from '@/lib/github/mergeability';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -115,6 +116,7 @@ export const APPROVAL_MERGE_PERMISSION = 'work_item:edit' as const;
 const REFUSAL_TAG: Record<Exclude<MergeRefusalCode, 'subject_changed'>, MergeRefusalTag> = {
   checks_not_green: 'MERGE_CHECKS_NOT_GREEN',
   conflict: 'MERGE_CONFLICT',
+  out_of_date: 'MERGE_OUT_OF_DATE',
   branch_protected: 'MERGE_BRANCH_PROTECTED',
   already_merged: 'MERGE_ALREADY_MERGED',
   app_permission_missing: 'MERGE_APP_PERMISSION_MISSING',
@@ -1283,6 +1285,18 @@ async function recordMergeRefusal(
         },
         tx,
       );
+      // ⚠️ AN OUT-OF-DATE REFUSAL IS ALSO A MERGEABILITY READING (Bug MOTIR-10054). The
+      // host classified it from `mergeable_state: behind` at the approved head, so that
+      // reading is stored here as any host read stores one: the promotion holds the card
+      // on it and the repair predicate hands the member to `motir fix`, which is what lists
+      // it under To fix. A push replaces it, as it replaces every reading.
+      if (refusal.code === 'out_of_date') {
+        await githubPullRequestRepository.setMergeability(
+          target.pullRequestId,
+          { mergeableState: OUT_OF_DATE_MERGEABLE_STATE, headSha: target.expectedHeadSha },
+          tx,
+        );
+      }
       const landingClass = classOfMergeRefusal(refusal.code);
       if (landingClass !== null) {
         const item = await workItemRepository.findById(target.workItemId, tx);

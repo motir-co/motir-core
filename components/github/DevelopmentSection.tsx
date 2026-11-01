@@ -30,6 +30,7 @@ import {
   type DevelopmentGateRead,
 } from './DevelopmentGateFrame';
 import { MergeOutcomeSlot, PersistedMergeOutcomes } from './MergeOutcomeSlot';
+import { PreviewLine } from './PreviewLine';
 import { DecisionDocumentSlot } from './DecisionDocumentSlot';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
@@ -208,6 +209,9 @@ function PullRequestRow({
               provenance back needs a fact this row does not have — WHO declared
               the link — and that is a new field, not this one. */}
         </div>
+        {/* The PREVIEW (MOTIR-10099; design/github § 31): the text column's THIRD
+            child — nothing when this pull request has no preview. */}
+        <PreviewLine preview={pr.preview} />
       </div>
       {/* NARROW (MOTIR-5351, Panel 12n): below a 30rem column the pill group drops to
           its own line under the title, so the title keeps the first line instead

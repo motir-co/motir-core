@@ -41,11 +41,11 @@ import { PoolsSection, poolEventsParam, poolRequestsParam } from './_components/
  * *integrate-not-rebuild* stance, and it is why this page renders nothing
  * interactive.
  *
- * ⚠️ AND NO FORK OF `/settings/workspace/jobs`. A per-WORKSPACE view of this
- * same job data already ships there (`JobsDashboard.tsx`, tabs `runs | dlq |
- * system`). This page reads the platform-wide equivalent through its own
- * staff-gated service; it does not copy that component and does not widen it in
- * place. The asset and the card both say so.
+ * ⚠️ AND NO FORK OF THE JOB LEDGER. The ledger is its own staff page,
+ * `/admin/jobs` (the tenant per-workspace Job runs page it once sat beside was
+ * retired by Story MOTIR-9982). This page reads the platform-wide health
+ * through its own staff-gated service; it does not copy the ledger and does not
+ * widen it in place. The asset and the card both say so.
  *
  * A Server Component with no client island: every value is read once, on load,
  * which is what the subtitle promises. Adding a poll would put a cross-tenant

@@ -4482,3 +4482,20 @@ Amends § ⭐ Approvals and `approvals.mock.html` (not edited). The decision is
 
 The full spec — every copy string, token and suggested key, and the two item-page deltas the same story draws — is
 `design/work-items/design-notes.md` § ⭐ Design review without a babysitter.
+
+## Public address — the subdomain card becomes a read-only workspace echo (Story MOTIR-4528 · Subtask MOTIR-9513)
+
+**Amends** the `# Public address` section above and its mock
+[`public-address.mock.html`](public-address.mock.html), panels 1, 2, 8 and 10–13
+(the workspace-subdomain card). The custom-domain panels are unchanged. The delta
+is [`public-address--workspace-echo.mock.html`](public-address--workspace-echo.mock.html),
+panels A–C.
+
+The control for the workspace's name moved to workspace settings
+(`design/workspace-address/`, whose `design-notes.md` carries the elements, the
+strings and the list of what the old card showed that is gone). The project page
+keeps an **echo card** titled `Workspace address`: the workspace host with Copy
+and open, the project's own public page (`motir.co/p/<KEY>`), and
+`Change in workspace settings →`; or, with no name claimed, the project's
+`motir.co/p/<KEY>` and `Claim a name for the workspace →`. No field, Rename or
+Release, for any role. Strings: `settings.workspaceAddress.echo.*`.

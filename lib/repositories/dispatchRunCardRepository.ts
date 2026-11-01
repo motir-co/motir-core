@@ -158,6 +158,29 @@ export const dispatchRunCardRepository = {
   },
 
   /**
+   * Whether a run is WORKING this work item right now — an open leg, as
+   * {@link findOpenLegForWorkItem} defines it, on any run but a `review` (bug
+   * MOTIR-10102). An approve that re-scopes a built card asks it to choose
+   * `in_progress` over `todo`. A hosted review reads the card and builds nothing,
+   * so it holds no claim on the work; a `fix` or `continue` run does, because its
+   * open run IS the repair or takeover lock.
+   */
+  async hasWorkingLegForWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const leg = await tx.dispatchRunCard.findFirst({
+      where: {
+        workItemId,
+        endedAt: null,
+        dispatchRun: { status: 'running', command: { not: 'review' } },
+      },
+      select: { id: true },
+    });
+    return leg !== null;
+  },
+
+  /**
    * The leg that was OPEN for this work item AT A GIVEN INSTANT — the one a
    * finding whose act happened then belongs to, even when it is recorded later
    * (MOTIR-6279).

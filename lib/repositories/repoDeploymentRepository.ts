@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { Prisma } from '@/generated/prisma/client';
 
 // Single-op data access for `repo_deployment` — the preview deployments a
-// repository's own host reports (Story MOTIR-4906 · Subtask MOTIR-5329).
+// repository's own host reports (Story MOTIR-4906 · Subtask MOTIR-5329), and
+// the production releases Motir posts for a Motir repository, which arrive by
+// the same webhook (MOTIR-10033).
 //
 // Writes run under withSystemContext from the webhook services (a delivery has
 // no tenant session), taking `tx`, which is what binds the GUC the table's

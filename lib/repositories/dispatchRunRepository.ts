@@ -4,6 +4,7 @@ import type {
   DispatchRunStatus,
   Prisma,
 } from '@/generated/prisma/client';
+import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 
 // Single Prisma operations on `dispatch_run` — the HEADER of one CLI invocation
 // (Story MOTIR-1789 · MOTIR-1791, ADR `docs/decisions/dispatch-run-record.md`).
@@ -923,6 +924,46 @@ export const dispatchRunRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     await tx.dispatchRun.update({ where: { id }, data: { fleetShardId } });
+  },
+
+  /**
+   * The org's open HOSTED runs still WAITING for room (MOTIR-9660), grouped by the
+   * `reason` of each run's latest waiting line (`{ waiting, reason }`, MOTIR-9666).
+   * Waiting = `running`, holding no live `hosted_agent` slot (the slot the boot
+   * takes under `hostedRunDispatchId`), and carrying a waiting line; a run with
+   * no line yet is not counted. `dispatch_run` carries only its workspace, so the
+   * org is reached through `workspace`. Run under the system context.
+   */
+  async countWaitingHostedForOrganizationByReason(
+    organizationId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ reason: string | null; count: number }>> {
+    const slotRefPrefix = hostedRunDispatchId('');
+    return tx.$queryRaw<Array<{ reason: string | null; count: number }>>`
+      SELECT "latest"."reason" AS "reason", COUNT(*)::int AS "count"
+      FROM "dispatch_run" r
+      JOIN "workspace" w ON w."id" = r."workspace_id"
+      JOIN LATERAL (
+        SELECT e."data" ->> 'reason' AS "reason"
+        FROM "dispatch_run_event" e
+        WHERE e."dispatch_run_id" = r."id"
+          AND e."kind" = 'log'
+          AND (e."data" -> 'waiting') IS NOT NULL
+        ORDER BY e."seq" DESC
+        LIMIT 1
+      ) "latest" ON TRUE
+      WHERE w."organizationId" = ${organizationId}
+        AND r."status" = 'running'
+        AND r."origin" = 'hosted'
+        AND NOT EXISTS (
+          SELECT 1 FROM "fleet_in_flight_slot" s
+          WHERE s."workload" = 'hosted_agent'
+            AND s."ref" = ${slotRefPrefix} || r."id"
+            AND s."expires_at" > ${now}
+        )
+      GROUP BY "latest"."reason"
+    `;
   },
 
   /**

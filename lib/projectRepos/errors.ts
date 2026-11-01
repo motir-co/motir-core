@@ -5,6 +5,8 @@
 // layer translates the stable `code` to an HTTP status — the suggested mapping is
 // on each class.
 
+import type { ProjectRepoSeedRefusalDto } from '@/lib/dto/projectRepos';
+
 /** A set ROW does not resolve in this workspace (wrong id, or another tenant's
  *  row — RLS + the workspace-scoped read make those indistinguishable, which is
  *  the point). → 404, never 403: no cross-tenant existence leak. */
@@ -142,6 +144,29 @@ export class ProjectRepoInvalidFieldError extends Error {
   ) {
     super(`Project repository "${field}" is invalid: ${reason}`);
     this.name = 'ProjectRepoInvalidFieldError';
+  }
+}
+
+/** Why a person's re-point of a row's seed was refused (MOTIR-709) — the wire
+ *  type, so the room can tell the rules apart (MOTIR-712). */
+export type ProjectRepoSeedRefusal = ProjectRepoSeedRefusalDto;
+
+/**
+ * A person tried to re-point a row's `seedSource` to an entry it may not seed
+ * from (MOTIR-709; decision MOTIR-706 v2 §3.5 — role and target are HARD, so a
+ * starter that cannot deploy where the row runs is refused, not merely
+ * discouraged). `refusal` says which rule; nothing is stored. → 409 for
+ * `not_editable` (the row's state moved on), 422 for every other value.
+ */
+export class ProjectRepoSeedRefusedError extends Error {
+  readonly code = 'PROJECT_REPO_SEED_REFUSED' as const;
+  constructor(
+    readonly refusal: ProjectRepoSeedRefusal,
+    readonly seedSource: string,
+    detail: string,
+  ) {
+    super(`This repository cannot start from "${seedSource}": ${detail}`);
+    this.name = 'ProjectRepoSeedRefusedError';
   }
 }
 
@@ -313,5 +338,42 @@ export class AiPlanUnknownError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'AiPlanUnknownError';
+  }
+}
+
+// ── HOSTING (Story MOTIR-9791 · MOTIR-9808) ─────────────────────────────────
+
+/**
+ * The row is a CUSTOMER repository (`seedSource` is `organization`), and Motir
+ * never hosts one (requirement D1: the cloud follows the repo's owner — a
+ * customer's repo deploys through its own CI to its own infrastructure). So it
+ * never carries a Motir hosting target. → 409
+ */
+export class ProjectRepoNotMotirHostedError extends Error {
+  readonly code = 'PROJECT_REPO_NOT_MOTIR_HOSTED' as const;
+  constructor(readonly rowId: string) {
+    super(
+      `Project repository ${rowId} belongs to the organisation, so Motir does not host it and it takes no hosting target.`,
+    );
+    this.name = 'ProjectRepoNotMotirHostedError';
+  }
+}
+
+/**
+ * The row already runs on a DIFFERENT hosting target. Moving an app between
+ * targets is a migration (requirement D3), planned as its own epic — never an
+ * overwrite of this column. Setting the SAME target again is not this error. → 409
+ */
+export class ProjectRepoHostingTargetFixedError extends Error {
+  readonly code = 'PROJECT_REPO_HOSTING_TARGET_FIXED' as const;
+  constructor(
+    readonly rowId: string,
+    readonly current: string,
+    readonly requested: string,
+  ) {
+    super(
+      `Project repository ${rowId} already runs on ${current}; moving it to ${requested} is a migration, not a setting.`,
+    );
+    this.name = 'ProjectRepoHostingTargetFixedError';
   }
 }

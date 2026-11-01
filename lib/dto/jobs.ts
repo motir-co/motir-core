@@ -92,16 +92,41 @@ export interface JobRunDlqDTO {
   replayedAt: string | null;
 }
 
+/** One page of the platform ledger's runs (MOTIR-9984). */
+export interface PlatformRunsPageDTO {
+  rows: JobRunDTO[];
+  /** Another page follows this one. */
+  hasMore: boolean;
+}
+
+/** One job function with dead letters still waiting, and how many. */
+export interface PlatformDlqFunctionDTO {
+  functionId: string;
+  unreplayed: number;
+}
+
 /**
- * The System tab's dead letters with NO workspace, and the two numbers its
- * summary line states (MOTIR-8083). `rows` is unreplayed first, then those
- * replayed in the last seven days, each newest failure first; the counts are the
- * true counts even when the list is capped.
+ * The platform ledger's dead letters (MOTIR-9984): every workspace's and none,
+ * unreplayed first then those replayed in the last seven days, each half capped
+ * per selection. The counts are TRUE counts, so they stay honest past the cap.
  */
-export interface SystemDlqListDTO {
+export interface PlatformDlqListDTO {
   rows: JobRunDlqDTO[];
-  /** Workspace-less dead letters still waiting to be replayed. */
-  waiting: number;
-  /** Workspace-less dead letters replayed in the last seven days. */
+  /** Every function with at least one unreplayed dead letter, most first. */
+  functions: PlatformDlqFunctionDTO[];
+  /** Unreplayed dead letters across every function. */
+  unreplayedTotal: number;
+  /** Dead letters replayed in the last seven days, within the selection. */
   replayedRecently: number;
+}
+
+/** What a Replay all of one function did (MOTIR-9986). */
+export interface ReplayAllResultDTO {
+  functionId: string;
+  /** Rows this run replayed — each has its own audit row. */
+  replayed: number;
+  /** Rows someone else replayed first; nothing was sent for them. */
+  alreadyReplayed: number;
+  /** Ids whose replay threw. They stay unreplayed unless the audit write was what failed. */
+  failed: string[];
 }

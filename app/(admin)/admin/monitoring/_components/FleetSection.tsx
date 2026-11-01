@@ -300,10 +300,8 @@ async function OrgRow({ row, now }: { row: FleetOrgRowDTO; now: Date }) {
         n={row.byWorkload.hosted_agent}
         figure={capped(row.plan)?.agentRunsInParallel ?? null}
       />
-      <UsedOf
-        n={row.byWorkload.agent_instance}
-        figure={capped(row.plan)?.agentsRunningPerOrg ?? null}
-      />
+      {/* The org's LIVE agents, running or asleep — what its figure counts (MOTIR-9954). */}
+      <UsedOf n={row.agentsLive} figure={capped(row.plan)?.agentsPerOrg ?? null} />
       {/* Indexing is held to no plan figure: a bare count, always. */}
       <Count n={row.byWorkload.code_graph_index} own />
       <Td numeric>

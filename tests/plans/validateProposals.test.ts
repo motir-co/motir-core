@@ -1620,6 +1620,80 @@ describe('validatePlanProposals — a blocked_by joins two items on the SAME LEV
     ).not.toThrow();
   });
 
+  describe('a committed item UNDER a re-parented card is placed where the plan moves it (MOTIR-9756)', () => {
+    //   R ─ Z  (a root story and its subtask)  →  the plan moves R under E2
+    const R = 'wi_r';
+    const Z = 'wi_z';
+    const moved = liveMap(
+      ...levels.values(),
+      live({ id: R, kind: 'story' }),
+      live({ id: Z, kind: 'subtask' }),
+    );
+    const movedChains = new Map<string, readonly string[]>([...chains, [R, []], [Z, [R]]]);
+    const moveR = {
+      ...add('m'),
+      op: 'modify' as const,
+      workItemId: R,
+      proposedFields: null,
+      patch: { parentRef: E2 },
+    };
+    const runMoved = (items: ProposalNode[]) =>
+      validate(items, { liveById: moved, edgeAncestorsById: movedChains });
+
+    it('accepts a new child of the moved card blocked_by its existing child — siblings before and after the move', () => {
+      expect(() =>
+        runMoved([
+          moveR,
+          add('n', { proposedFields: { kind: 'subtask' }, parentRef: R, blockedByRefs: [Z] }),
+        ]),
+      ).not.toThrow();
+    });
+
+    it('accepts a subtask elsewhere at the moved depth, blocked_by the existing child', () => {
+      expect(() =>
+        runMoved([
+          moveR,
+          add('n', { proposedFields: { kind: 'subtask' }, parentRef: S2, blockedByRefs: [Z] }),
+        ]),
+      ).not.toThrow();
+    });
+
+    it('refuses an edge that only the PRE-move depth would have made same-level', () => {
+      // A task directly under E2 sits 1 below the root; Z, moved, sits 2.
+      const err = crossLevel(() =>
+        runMoved([
+          moveR,
+          add('t', { proposedFields: { kind: 'task' }, parentRef: E2, blockedByRefs: [Z] }),
+        ]),
+      );
+      expect(err.message).toContain('sits 1 level(s) below the project root');
+      expect(err.message).toContain('sits 2');
+    });
+
+    it('places a GRANDCHILD of the moved card through the moved ancestor, and the APPEND agrees', () => {
+      //   R ─ K ─ G  →  R under E2: G sits 3 below the root, beside a new subtask under S2's new task
+      const K = 'wi_k';
+      const G = 'wi_g';
+      const items = [
+        moveR,
+        add('k2', { proposedFields: { kind: 'task' }, parentRef: S2 }),
+        add('n', {
+          proposedFields: { kind: 'subtask' },
+          parentRef: `${TEMP_REF_PREFIX}k2`,
+          blockedByRefs: [G],
+        }),
+      ];
+      const live3 = liveMap(
+        ...moved.values(),
+        live({ id: K, kind: 'task' }),
+        live({ id: G, kind: 'subtask' }),
+      );
+      const chains3 = new Map<string, readonly string[]>([...movedChains, [K, [R]], [G, [K, R]]]);
+      expect(() => validate(items, { liveById: live3, edgeAncestorsById: chains3 })).not.toThrow();
+      expect(() => assertBlockedByLevels(items, live3, chains3, new Set(['n']))).not.toThrow();
+    });
+  });
+
   it('never refuses patch.blockedByRemove — a plan can always take a cross-level edge away', () => {
     expect(() =>
       run([

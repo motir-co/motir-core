@@ -149,6 +149,7 @@ function reads(): LateReads {
       stamp: null,
       movedSince: [],
       body: null,
+      workItemRefs: {},
     },
     // Not a `human` decision — no confirm gate, no body (MOTIR-5954).
     confirmGate: {
@@ -160,6 +161,7 @@ function reads(): LateReads {
       stamp: null,
       movedSince: [],
       body: null,
+      workItemRefs: {},
     },
     // No agent review on the card (MOTIR-6825).
     agentReview: null,
@@ -237,6 +239,7 @@ describe('the late stack — an awaiting agent review reads Reviewing in the Dev
             startedAt: '2026-09-29T09:41:00.000Z',
           },
           settingsDoorHref: null,
+          findingsRefs: {},
         },
       }),
       itemId: 'wi-acme-12',
@@ -293,6 +296,7 @@ describe('the late stack — the fix part sits inside the Development card', () 
           ci: 'failing',
           queueExit: null,
           conflict: null,
+          outOfDate: null,
         },
       ],
       lastGaveUp: null,

@@ -419,6 +419,9 @@ its GitHub org (MOTIR-8966, MOTIR-8974).
   - The agent runner's switch is `MOTIR_FLEET_AGENT_RUNNER_PROVIDER` (`aws` ⇒ its pool; anything
     else ⇒ Fly), and its in-flight count per account is the live `hosted_agent` fleet slots carrying
     that account (`fleet_in_flight_slot.fleet_shard_id`) (MOTIR-9421, 2026-10-24).
+  - The CI runner's switch is `MOTIR_FLEET_CI_RUNNER_PROVIDER` (`aws` ⇒ its pool; unset, empty or
+    `fly` ⇒ Fly; any other value ⇒ Fly with a warning), read on every admission. The acceptance
+    lane's fixture answers before it (MOTIR-10064, 2026-10-29).
 - **Fly is never a backup.** There is no `backup` role and no overflow to Fly: a job of a kind switched
   to AWS never boots on Fly. Existing Fly-hosted agents are not migrated; only Motir's own orgs have
   them, and that they may stop working after the hoster flips is accepted (MOTIR-9356).
@@ -466,7 +469,7 @@ per GitHub org beside the per-5-minute count, and defers rather than mint past
   agent runner account, and **one merged account for the indexer and the agent hoster**. In the merged
   account the indexer has priority: **10 machine spots (20 vCPU)** are always kept for index
   containers, used or not, and agent instances use only the rest. Hosted-agent caps on these plans are
-  **10 per user and 50 running per org**. Built by the Host-accounts story **MOTIR-9365** (and
+  **10 per user and 50 per org** (live agents, running or asleep — `agent-instances.md` AMENDMENT 7). Built by the Host-accounts story **MOTIR-9365** (and
   MOTIR-9366 for the larger pool plans).
 
 ### A1.7 · The measured results

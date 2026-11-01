@@ -228,6 +228,12 @@ describe('To fix — one fix line per reason (§ 30 Panel 2)', () => {
     expect(within(fixLine('M-8')).getByText('motir fix M-8')).toBeTruthy();
   });
 
+  it('an out-of-date member names its base and offers motir fix (MOTIR-10054)', () => {
+    render(list([stuck('M-9', 'out_of_date', detail({ base: 'main' }))]));
+    expect(fixLine('M-9').querySelector('p')?.textContent).toBe('Out of date with main');
+    expect(within(fixLine('M-9')).getByText('motir fix M-9')).toBeTruthy();
+  });
+
   it.each([
     [
       'a queue failure with no check, a KNOWN reason',
@@ -242,6 +248,12 @@ describe('To fix — one fix line per reason (§ 30 Panel 2)', () => {
       'Failed in the merge queue',
     ],
     ['a conflict with no recorded base', 'conflicted', {}, 'Conflicts with its base branch'],
+    [
+      'an out-of-date member with no recorded base',
+      'out_of_date',
+      {},
+      'Out of date with its base branch',
+    ],
     ['red CI with no check name', 'ci_failed', {}, 'CI failed'],
     [
       'a refusal with no note',

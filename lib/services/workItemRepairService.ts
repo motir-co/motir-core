@@ -136,6 +136,7 @@ const refOf = (pr: RepairPullRequestDto) => ({
           failingCheckName: pr.queueExit.failingCheckName,
         },
   conflict: pr.conflicted ? { baseRef: pr.baseRef } : null,
+  outOfDate: pr.outOfDate ? { baseRef: pr.baseRef } : null,
 });
 
 /**

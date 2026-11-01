@@ -1,4 +1,4 @@
-import { Boxes, ListChecks, Shield, ShieldCheck } from 'lucide-react';
+import { Boxes, Link2, Shield, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The WORKSPACE-settings navigation REGISTRY (Story MOTIR-4843 · MOTIR-4846).
@@ -18,13 +18,12 @@ import type { LucideIcon } from 'lucide-react';
 // (`tests/settings/workspaceSettingsNav.test.ts`).
 //
 // ── ⚠️ ONE FILTER AXIS, AND IT IS THE REVEAL — NOT A ROLE ───────────────────
-// `visibleWorkspaceSettingsNav(revealed)` returns all three rows or none. There
+// `visibleWorkspaceSettingsNav(revealed)` returns every row or none. There
 // is deliberately **no role axis**, and that is a DISPOSITION rather than an
 // omission: all three routes check a session and a workspace context and **no
 // role at all** (`workspacesService.renameWorkspace` asserts membership only —
 // the Delete row's action is org-Admin-gated since MOTIR-6309, and that row
-// moves to the org tier with MOTIR-6312; the jobs page gates only its System tab and its DLQ replay
-// control, per-request, inside the page). `docs/decisions/organization-tier.md`
+// moves to the org tier with MOTIR-6312). `docs/decisions/organization-tier.md`
 // §6d forbids a relocation that NARROWS a gate, so an `adminOnly` flag here
 // would take a shipped capability away silently.
 //
@@ -32,19 +31,12 @@ import type { LucideIcon } from 'lucide-react';
 // own axes: a surface that forgets to thread it drops the row rather than
 // offering a door onto a route that `notFound()`s.
 //
-// ── ⚠️ THE AXIS IS UNIFORM ACROSS ALL THREE ROWS, AND IT USED NOT TO BE ─────
-// `/settings/workspace/jobs` answered **200 at every workspace count** while its
-// two siblings `notFound()`ed below the reveal — it is workspace-SCOPED but not
-// workspace-NAMED, so §6's reveal left it alone (MOTIR-3502 AC 6). An earlier
-// shape of this registry carved that out as a permanent exception.
-//
-// **It was an UNFINISHED COLLAPSE, not a decision.** It was the only
-// workspace-tier surface with no fold-in — `WorkspaceFoldInSection` hosts Name,
-// Members, require-2FA and the danger zone below the reveal, and nothing hosted
-// the jobs dashboard — so hiding it would have stranded its capability, and it
-// kept answering for want of anywhere to go. MOTIR-4861 gives it one on
-// `/settings/organization`; the route becomes reveal-gated like its siblings and
-// this axis stops carrying a carve-out. MOTIR-4859 is the planning bug.
+// ── ⚠️ THE `Job runs` ROW IS GONE, AND SO IS ITS GROUP ─────────────────────
+// The registry carried a `jobs` row in a third group, `operations`, for the
+// tenant Job runs dashboard at `/settings/workspace/jobs`. Story MOTIR-9982
+// retired that surface by decision (MOTIR-4896): the ledger is staff-only at
+// `/admin/jobs`, and the route has no page, so it answers the ordinary 404. Row,
+// page and group left in one change, because the totality test pairs them.
 //
 // ⚠️ TAKE THE BOOLEAN, NOT A WORKSPACE LIST. The predicate is computed ONCE in
 // `lib/workspaces/tierDisclosure.ts`; this must not become a fifth reader of it.
@@ -53,21 +45,15 @@ import type { LucideIcon } from 'lucide-react';
 // both the server (the totality test) and the client (SidebarNav). `icon` is the
 // lucide COMPONENT; the consumer renders `<entry.icon />`.
 
-export type WorkspaceSettingsNavGroup = 'general' | 'access' | 'operations';
+export type WorkspaceSettingsNavGroup = 'general' | 'access';
 
 /**
- * Rail order of the groups (General → Access → Operations).
- *
- * `general` and `access` mirror the organisation's. **`operations` is this
- * tier's own**, and the design records why: `Job runs` configures nothing and
- * gates nobody — it is where you look when something did not happen — so it is
- * neither of the other two. A group whose rows all filter away is not rendered,
- * which is what makes a third group cost nothing.
+ * Rail order of the groups (General → Access), mirroring the organisation's.
+ * A group whose rows all filter away is not rendered.
  */
 export const WORKSPACE_SETTINGS_NAV_GROUP_ORDER: WorkspaceSettingsNavGroup[] = [
   'general',
   'access',
-  'operations',
 ];
 
 export interface WorkspaceSettingsNavEntry {
@@ -84,6 +70,18 @@ export interface WorkspaceSettingsNavEntry {
   exact?: true;
   /** Drill-down routes reached FROM this row, which keep it active (the Roles room). */
   nestedRoutes?: string[];
+  /**
+   * The room exists only on a CLOUD build (Story MOTIR-4528 · MOTIR-9514), so
+   * off-cloud the row is ABSENT and the page 404s — the same deployment axis
+   * `projectSettingsNav.ts` names `cloudOnly`. It composes with the reveal: a
+   * cloud-only row still needs the tier revealed.
+   */
+  cloudOnly?: true;
+}
+
+/** What this BUILD has — the deployment axis beside the reveal. */
+export interface WorkspaceSettingsNavAvailability {
+  publicProjectsAvailable: boolean;
 }
 
 /** The workspace-settings area root — a real page, not a redirect. */
@@ -92,9 +90,9 @@ export const WORKSPACE_SETTINGS_ROOT = '/settings/workspace';
 /**
  * The registry. Order within a group is the rail order.
  *
- * The glyphs are NOT free choices. `ShieldCheck` and `ListChecks` are **carried
- * unchanged** from `SidebarNav.tsx`'s bottom section, where those two rows
- * render them today — two doors onto one room that disagree about its icon are
+ * The glyphs are NOT free choices. `ShieldCheck` is **carried unchanged** from
+ * `SidebarNav.tsx`'s bottom section, where that row rendered it — two doors
+ * onto one room that disagree about its icon are
  * two rooms. `Boxes` is the design's own choice for the index row and is
  * deliberately NOT `Building2`, which `organizationSettingsNav.ts` has taken for
  * the organisation: a workspace is the CONTAINER its projects and teammates live
@@ -109,7 +107,7 @@ export const WORKSPACE_SETTINGS_NAV: WorkspaceSettingsNavEntry[] = [
     icon: Boxes,
     labelKey: 'workspace',
     // EXACT, because every other entry's href is a prefix-sibling under this
-    // one: without it the area root would read as active on all three routes at
+    // one: without it the area root would read as active on every route at
     // once. The same reason `organizationSettingsNav.ts` gives.
     exact: true,
   },
@@ -141,11 +139,20 @@ export const WORKSPACE_SETTINGS_NAV: WorkspaceSettingsNavEntry[] = [
     ],
   },
   {
-    id: 'jobs',
-    group: 'operations',
-    href: '/settings/workspace/jobs',
-    icon: ListChecks,
-    labelKey: 'jobs',
+    // Story MOTIR-4528 · MOTIR-9514 — the workspace's one public name, moved up
+    // from project settings because a subdomain is a property of the WORKSPACE
+    // (ADR §3). `Link2` is the glyph the project rail gave the same room, so the
+    // two doors agree. Placed after Roles, as `design/workspace-address` panel 0
+    // draws it.
+    //
+    // ⚠️ ITS PAGE ANSWERS AT EVERY WORKSPACE COUNT, like Roles: below the reveal
+    // the org page carries a door card to it instead of this row.
+    id: 'public-address',
+    group: 'access',
+    href: '/settings/workspace/public-address',
+    icon: Link2,
+    labelKey: 'publicAddress',
+    cloudOnly: true,
   },
 ];
 
@@ -181,8 +188,12 @@ export function isWorkspaceSettingsEntryActive(
 export function visibleWorkspaceSettingsNav(
   revealed: boolean = false,
   entries: WorkspaceSettingsNavEntry[] = WORKSPACE_SETTINGS_NAV,
+  available: WorkspaceSettingsNavAvailability = { publicProjectsAvailable: false },
 ): WorkspaceSettingsNavEntry[] {
-  return revealed ? [...entries] : [];
+  if (!revealed) return [];
+  // The deployment axis also DEFAULTS CLOSED: a caller that forgets it drops the
+  // cloud-only row rather than pointing at a room that 404s off-cloud.
+  return entries.filter((entry) => !entry.cloudOnly || available.publicProjectsAvailable);
 }
 
 /**

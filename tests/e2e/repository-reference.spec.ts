@@ -396,15 +396,13 @@ test('a repository is a link you can follow, and a rename does not break the car
     // makes the second spec's `opened` delivery resolve to the first spec's
     // change request, so its card never reaches Implemented. Take a new block
     // rather than reusing one.
-    // ⚠️ EACH pull request is linked WHEN IT OPENS, not both up front. Since
-    // MOTIR-3674 the title naming `twoRepo.identifier` associates nothing, so a
-    // link is what makes the hold below a statement about the repository SET —
-    // this receipt's subject — at all.
-    //
-    // Linking both in advance gives the card two delivery links, and the
-    // DELIVERY-set gate (MOTIR-3659) then holds it first, answering a different
-    // question than this receipt asks. One link per pull request, as it opens,
-    // is both what a run does and what keeps the repo-set hold the assertion.
+    // ⚠️ BOTH pull requests are linked AND OPENED before the first merges. Since
+    // MOTIR-3674 the title naming `twoRepo.identifier` associates nothing, so the
+    // links are what tie the deliveries to the card. Since MOTIR-10135 the
+    // item completes when every LINKED pull request has merged onto its trunk
+    // — the repository set no longer holds it — so the hold below is the
+    // DELIVERY-set gate (MOTIR-3659) waiting on the second link, and it only
+    // holds if that second pull request is linked before the first merges.
     //
     // ⚠️ AND IT NAMES THE REPOSITORY BY ITS CURRENT NAME, which in THIS spec is
     // the renamed one. The two doors do not resolve a repository the same way,
@@ -429,24 +427,6 @@ test('a repository is a link you can follow, and a rename does not break the car
       repo: E2E_REPO,
       expectOutcome: 'transitioned',
     });
-    await deliver(page, {
-      action: 'closed',
-      identifier: twoRepo.identifier,
-      number: 8101,
-      repo: E2E_REPO,
-      merged: true,
-      // The hold — not `transitioned`.
-      expectOutcome: 'deferred_incomplete_repo_set',
-    });
-    await page.goto(`/items/${twoRepo.identifier}`);
-    // Held, not completed — the hold is this chapter's claim. The status it
-    // holds AT is `Implemented` since MOTIR-2999: the pull request is open and
-    // no build has reported, so the card is delivered and not yet reviewable.
-    // (This story's receipt has not frozen — it is still in review — so the
-    // spec records today's product rather than owing a disposition.)
-    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
-    await beat();
-
     await linkPr(page, {
       workItemId: twoRepo.id,
       repo: E2E_REPO_SECOND,
@@ -460,6 +440,24 @@ test('a repository is a link you can follow, and a rename does not break the car
       repo: E2E_REPO_SECOND,
       expectOutcome: 'noop',
     });
+    await deliver(page, {
+      action: 'closed',
+      identifier: twoRepo.identifier,
+      number: 8101,
+      repo: E2E_REPO,
+      merged: true,
+      // The hold — not `transitioned`: the linked 8102 has not merged yet.
+      expectOutcome: 'deferred_incomplete_delivery_set',
+    });
+    await page.goto(`/items/${twoRepo.identifier}`);
+    // Held, not completed — the hold is this chapter's claim. The status it
+    // holds AT is `Implemented` since MOTIR-2999: the pull request is open and
+    // no build has reported, so the card is delivered and not yet reviewable.
+    // (This story's receipt has not frozen — it is still in review — so the
+    // spec records today's product rather than owing a disposition.)
+    await expect(statusCard(page).getByText('Implemented', { exact: true })).toBeVisible();
+    await beat();
+
     await deliver(page, {
       action: 'closed',
       identifier: twoRepo.identifier,

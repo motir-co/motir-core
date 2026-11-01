@@ -255,6 +255,8 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── ✅ RETIRED 2026-10-28 (MOTIR-9514) — the workspace address room's
+  //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────
   //  Three FORWARD-LOOKING rows stood here for `/settings/project/approvals` —
   //  MOTIR-4942's design named the room's address in `design/projects/`,
@@ -271,6 +273,8 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  `/approvals` before MOTIR-5302 built the page, and that card removed the row.
   //  And a third time for the Planning lessons console: MOTIR-1409 drew
   //  `/admin/planning-lessons` before MOTIR-1411 built it, and that card removed the rows.
+  //  And a fourth time for the starter library: MOTIR-705 drew `/admin/starters`
+  //  and its promote form before MOTIR-712 built them, and that card removed the rows.
   // ── An address named as HISTORY, by the asset that retires it ─────────────
   // `design/code-context/design-notes.md` (MOTIR-1764) documents a collapse:
   // Code health, the code index and Git were three things in two rail sections
@@ -309,6 +313,55 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/platform-admin/design-notes.md',
     address: '/admin/enterprise-requests/[id]',
     why: 'The detail page of the same removed console, named in the same notes section. Deleted by MOTIR-9386; no live address replaces it.',
+  },
+  // ── The tenant JOB RUNS room, deleted (Story MOTIR-9982) ────────────────
+  //  MOTIR-10043 deleted `/settings/workspace/jobs` and its rail row; the
+  //  platform ledger at `/admin/jobs` serves staff, not tenants, so there is no
+  //  live address to point these assets at. They stay as records.
+  {
+    file: 'design/jobs/design-notes.md',
+    address: '/settings/workspace/jobs',
+    why: 'The notes that specified the tenant Job runs room, deleted with its route by Story MOTIR-9982 (MOTIR-10043). Kept as the record of the surface; its replacement is the platform ledger at `/admin/jobs`, a different audience, so no live address stands in for it.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/settings/design-notes.md',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/shell/3d-immersive-shell.mock.html',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/shell/design-notes.md',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/shell/help-menu.mock.html',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/shell/navigation-pending.mock.html',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/shell/top-bar.mock.html',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
+  },
+  {
+    file: 'design/workbench/workbench.mock.html',
+    address: '/settings/workspace/jobs',
+    why: 'Drawn while the tenant Job runs room existed; Story MOTIR-9982 (MOTIR-10043) deleted `/settings/workspace/jobs` and its rail row. The asset is a record of the moment it was drawn, and an older mock is never updated, so the address stays as history.',
   },
   // ── The RETIRED landing, which the app still answers on ──────────────────
   //  MOTIR-4782 moved the signed-in landing from `/home` to `/workbench` and
@@ -1697,6 +1750,85 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/projects/approvals.mock.html',
     path: 'app/(authed)/settings/organization/_components/AcceptanceVideoCard.tsx',
     why: "A point-in-time record in the mock's header comment: the org-tier control MOTIR-4942 rendered from its own source before drawing the room that replaces it. MOTIR-5172 deleted that card when the switch left the organisation tier; the sentence is about what was rendered, and it is still true.",
+  },
+  // ── The tenant JOB RUNS dashboard, deleted (Story MOTIR-9982) ───────────
+  //  MOTIR-10043 deleted the tenant dashboard and the org fold-in. Assets that
+  //  copied its TableShell grammar keep the citation as history; the grammar
+  //  itself still ships in the `/admin/jobs` ledger tables.
+  {
+    file: 'design/jobs/delivery-state.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'The tenant Job runs mock names the dashboard file it was drawn against. Story MOTIR-9982 (MOTIR-10043) deleted that file with its route; the mock is the record of the retired surface.',
+  },
+  {
+    file: 'design/jobs/design-notes.md',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'The tenant Job runs notes name the dashboard file they specified. Story MOTIR-9982 (MOTIR-10043) deleted that file with its route; the notes are the record of the retired surface.',
+  },
+  {
+    file: 'design/my-agents/my-agents--boot.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/my-agents/my-agents--chat.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/my-agents/my-agents--panel.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/my-agents/my-agents--run.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/my-agents/my-agents--update.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/my-agents/my-agents--waiting-for-room.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Names the tenant dashboard the platform console was drawn beside. Story MOTIR-9982 (MOTIR-10043) deleted it; the sentence records what shipped when the console was designed, and is still true as history.',
+  },
+  {
+    file: 'design/runs/design-notes.md',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/runs/run-modal--discrepancy-finding.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/runs/run-modal.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/runs/run-scope.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/runs/runs-index.mock.html',
+    path: 'app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx',
+    why: 'Cites the TableShell grammar as it shipped in the tenant Job runs dashboard when this asset was drawn. Story MOTIR-9982 (MOTIR-10043) deleted that file; the same grammar still ships in `app/(admin)/admin/jobs/_components/RunsTable.tsx`, and an older mock is a record, never updated.',
+  },
+  {
+    file: 'design/jobs/design-notes.md',
+    path: 'app/(authed)/settings/organization/_components/JobRunsFoldInSection.tsx',
+    why: 'The tenant Job runs notes name the organisation fold-in they specified. Story MOTIR-9982 (MOTIR-10043) deleted it with the room; the notes are the record of the retired surface.',
   },
   // ── The `(planning)` ROUTE GROUP, deleted (MOTIR-4732, under MOTIR-4725) ──
   // The same shape as the `app/(public)/legal` rows above — a deletion, not a

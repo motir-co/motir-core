@@ -361,6 +361,95 @@ describe('plansService.approvePlan — materialize per op', () => {
     ).not.toBeNull();
   });
 
+  it('materializes the link token a planner HANDS for a proposal into a link to the created card (MOTIR-10096)', async () => {
+    const fx = await makeWorkItemFixture();
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Tree' }, fx.ctx);
+    const title = 'Gate [beta] pairs (service layer): `assertLegal`';
+    const afterB = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title, kind: 'task' } }],
+      fx.ctx,
+    );
+    const bPlanItemId = afterB.items[0]!.id;
+    // Exactly what motir-ai's `proposalLinkToken` and plan.py's `_proposal_link`
+    // hand beside this sibling: its title, brackets turned into parentheses, as
+    // the label of a `motir-ref:planItem:` link — copied verbatim into both bodies.
+    const handed = `[Gate (beta) pairs (service layer): \`assertLegal\`](motir-ref:planItem:${bPlanItemId})`;
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Card A',
+            kind: 'task',
+            descriptionMd: `## Scope BOUNDARY\n\n- Hands the matrix to ${handed}.`,
+            explanationMd: `It unblocks ${handed}.`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const a = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await adminDb.workItem.findFirstOrThrow({ where: { title } });
+    const chip = `[Gate (beta) pairs (service layer): \`assertLegal\`](motir:${b.id})`;
+    expect(a.descriptionMd).toBe(`## Scope BOUNDARY\n\n- Hands the matrix to ${chip}.`);
+    expect(a.explanationMd).toBe(`It unblocks ${chip}.`);
+    expect(
+      await adminDb.workItemLink.findFirst({
+        where: { fromId: a.id, toId: b.id, kind: 'relates_to' },
+      }),
+    ).not.toBeNull();
+  });
+
+  it('rewrites a sibling linked as `motir:<planItemId>` in BOTH bodies to the created card (MOTIR-9993)', async () => {
+    const fx = await makeWorkItemFixture();
+    const existingId = await seedItem(fx, 'Existing card');
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Tree' }, fx.ctx);
+    const afterB = await plansService.addProposals(
+      plan.id,
+      [{ op: 'add', proposedFields: { title: 'Sibling B', kind: 'task' } }],
+      fx.ctx,
+    );
+    const bPlanItemId = afterB.items[0]!.id;
+    // Card A names B with the ORDINARY item-link scheme and B's planItem id — the
+    // slip planning-time validation accepts — beside a link to a real work item
+    // and one to an id that is neither.
+    await plansService.addProposals(
+      plan.id,
+      [
+        {
+          op: 'add',
+          proposedFields: {
+            title: 'Card A',
+            kind: 'task',
+            descriptionMd: `Depends on [Sibling B](motir:${bPlanItemId}) and [Existing](motir:${existingId}); [gone](motir:not_an_item_id).`,
+            explanationMd: `Unblocks [Sibling B](motir:${bPlanItemId}).`,
+          },
+        },
+      ],
+      fx.ctx,
+    );
+    await plansService.markPlanned(plan.id, fx.ctx);
+    await plansService.approvePlan(plan.id, fx.ctx);
+
+    const a = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
+    expect(a.descriptionMd).toBe(
+      `Depends on [Sibling B](motir:${b.id}) and [Existing](motir:${existingId}); [gone](motir:not_an_item_id).`,
+    );
+    expect(a.explanationMd).toBe(`Unblocks [Sibling B](motir:${b.id}).`);
+    // The rewritten link relates A → B like the canonical token does.
+    expect(
+      await adminDb.workItemLink.findFirst({
+        where: { fromId: a.id, toId: b.id, kind: 'relates_to' },
+      }),
+    ).not.toBeNull();
+  });
+
   it('leaves a DANGLING intra-plan ref inert when materialized (no crash, no edge)', async () => {
     const fx = await makeWorkItemFixture();
     // The append now refuses a dangling body link (bug MOTIR-9175), so the row is

@@ -133,10 +133,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'public',
     'public_address_public_read (20260903010000) · publicAddressRepository.test "the public read arm" (5 cases, both directions under SET LOCAL ROLE motir_app) + publicHostResolution.test',
   ],
-  'publicAddressRepository.ts#findLiveSubdomainForWorkspacePublic': [
-    'public',
-    'public_address_public_read (20260903010000) · publicHostResolution.test "a retired subdomain reports where to redirect" — the alias hop',
-  ],
   'publicAddressRepository.ts#listForWorkspace': [
     'public',
     'public_address_public_read (20260903010000) · publicHostResolution.test "addressesForProject — the ADR §7 default rule" (6 cases)',
@@ -144,10 +140,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'publicAddressRepository.ts#listForWorkspaces': [
     'public',
     'public_address_public_read (20260903010000) · publicHostResolution.test "primaryHostsForProjects — the batched crawl read" (3 cases)',
-  ],
-  'projectRepository.ts#listPublicByWorkspace': [
-    'public',
-    'project_public_read (20260811230000) · publicHostResolution.test "a workspace subdomain lists that workspace\u2019s public projects" + "a subdomain whose workspace holds NO public project"',
   ],
   'projectRepository.ts#findPublicByIdInternal': [
     'public',
@@ -315,6 +307,35 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'platformFleetKindSwitchRepository.ts#find': [
     'public',
     'platform_fleet_kind_switch_read (20261025090000) · platformFleetKindSwitchRead.test "the fleet kind switch read" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  // ── the SEED REGISTRY (Story MOTIR-704 · MOTIR-708) ──────────────────────
+  // Motir's catalogue of what a new repository starts from, read by every
+  // workspace's establish, the planner's request path and the console — no
+  // tenant owns a row. The SELECT arm is `USING (true)`; writes stay behind
+  // `app.platform_staff` and take the caller's `tx`.
+  'seedRegistryEntryRepository.ts#findByKeyOrLegacyKey': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#list': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#listActive': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#findByPromotion': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#listCompatible': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound)',
+  ],
+  'seedRegistryEntryRepository.ts#listAll': [
+    'public',
+    'seed_registry_entry_read (20261028200000_seed_registry) · seedRegistryService.test "ADMITS a read with nothing bound" (under SET LOCAL ROLE motir_app, nothing bound) — the Repositories room\'s one registry read (MOTIR-712)',
   ],
   'platformRunModelRepository.ts#findListedModelsForOffer': [
     'public',

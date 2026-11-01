@@ -293,7 +293,10 @@ export type DeploymentState = (typeof DEPLOYMENT_STATES)[number];
 
 /** A deployment-status webhook, normalized across providers — the PREVIEW a
  *  repository's own CI reported for a commit (Story MOTIR-4906 · MOTIR-5329).
- *  Motir only LISTENS: it creates no deployment and posts no status.
+ *  For a repository's own deploys Motir only LISTENS: it creates no deployment
+ *  and posts no status. The one exception is a PRODUCTION release of a Motir
+ *  repository (MOTIR-10033), whose deployment and statuses Motir posts — and
+ *  whose statuses come back through this same webhook.
  *
  *  `environmentUrl` is the APP the deployment serves (GitHub's
  *  `environment_url`), never the log link (`target_url`), and is not yet
@@ -392,6 +395,36 @@ export interface NormalizedWorkflowRunEvent {
   /** When the run completed — the period key (§4.5) AND the effective-date the
    *  runner rates resolve at (§3.3). */
   completedAt: Date;
+}
+
+/** A COMPLETED run of a repository's `production-image` workflow, normalized —
+ *  the signal a merge has been built (Story MOTIR-9797 · MOTIR-10031). DISTINCT
+ *  from {@link NormalizedWorkflowRunEvent}, the CI-minutes meter's, which keeps
+ *  its own tolerance: this one carries the facts a release decides on (the
+ *  triggering event, the branch, the commit built and how the run concluded),
+ *  and is trusted for the commit and the outcome only. */
+export interface NormalizedProductionImageRun {
+  providerRepoId: string;
+  repoOwner: string;
+  repoName: string;
+  /** The workflow's name (`production-image` for the run that releases). */
+  workflowName: string;
+  /** The event that triggered the run — `push`, `pull_request`, … */
+  event: string;
+  headBranch: string;
+  /** The commit the run built — the full sha. */
+  headSha: string;
+  /** `success`, `failure`, `timed_out`, `cancelled`, `skipped`, … */
+  conclusion: string;
+  /** The host's own workflow-run id (as a string — never do math on it). */
+  runId: string;
+  /** The run attempt; a re-run of the workflow increments it. */
+  runAttempt: number;
+  /** The head commit's subject as the panel shows it, null when the delivery
+   *  carried no message (MOTIR-10103). */
+  headCommitSubject: string | null;
+  /** The pull request the head commit merged, when its message names one. */
+  pullRequestNumber: number | null;
 }
 
 /** A QUEUED CI job, normalized across providers — consumed by the runner-fleet
@@ -494,6 +527,12 @@ export type RepoFileReadOutcome =
  *  (`lib/git/errors.ts`), thrown only for a status no arm below names. */
 export type RepoFileReadTransportFailure = 'timeout' | 'unreachable';
 
+/** One child of a directory `readFileAtRef` was pointed at (MOTIR-9868). */
+export interface RepoDirectoryEntry {
+  name: string;
+  type: 'file' | 'dir' | 'symlink' | 'submodule';
+}
+
 /**
  * The result of {@link GitProvider.readFileAtRef}.
  *
@@ -508,10 +547,23 @@ export type RepoFileReadTransportFailure = 'timeout' | 'unreachable';
  */
 export type RepoFileReadResult =
   | { outcome: 'found'; path: string; ref: string; text: string; bytes: number }
+  /** The path names a DIRECTORY (MOTIR-9868): its immediate children, sorted by
+   *  name, and `truncated` when the host's listing stopped at
+   *  `REPO_DIRECTORY_MAX_ENTRIES`. Never text — a directory is listed, not read. */
+  | {
+      outcome: 'directory';
+      path: string;
+      ref: string;
+      entries: RepoDirectoryEntry[];
+      truncated: boolean;
+    }
   | { outcome: 'binary'; path: string; ref: string; bytes: number }
   | { outcome: 'not_found'; path: string; ref: string }
   | { outcome: 'ref_not_found'; path: string; ref: string }
-  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number }
+  /** Over `limitBytes`. `totalLines` is set when the file WAS fetched and the
+   *  limit refused only a whole-file read (MOTIR-10143): the caller can read it
+   *  by line range. Absent when the blob was over what a provider fetches. */
+  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number; totalLines?: number }
   | { outcome: 'unauthorized'; path: string; ref: string }
   | { outcome: 'invalid_path'; path: string; reason: string }
   | {
@@ -521,6 +573,21 @@ export type RepoFileReadResult =
       failure: RepoFileReadTransportFailure;
       detail: string;
     };
+
+/**
+ * WHICH COMMIT a ref names right now (MOTIR-10122) — what a recorded code read
+ * cites, so a check opens the exact code a planning session saw rather than
+ * whatever the branch holds by then.
+ *
+ * ⚠️ A RESULT UNION, for {@link RepoFileReadResult}'s reason: "that ref names no
+ * commit" is an answer about the ref, and "the host did not answer" is a failure
+ * to ask. `sha` is the full, lower-cased object id the host resolved.
+ */
+export type RefResolution =
+  | { outcome: 'resolved'; ref: string; sha: string }
+  | { outcome: 'ref_not_found'; ref: string }
+  | { outcome: 'unauthorized'; ref: string }
+  | { outcome: 'unreachable'; ref: string; failure: RepoFileReadTransportFailure; detail: string };
 
 /**
  * The answer to "how far is HEAD ahead of the indexed commit?" (MOTIR-4644).
@@ -682,6 +749,7 @@ export interface ChangeRequestMergeability {
 export type MergeRefusalCode =
   | 'checks_not_green'
   | 'conflict'
+  | 'out_of_date'
   | 'branch_protected'
   | 'already_merged'
   | 'app_permission_missing'

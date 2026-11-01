@@ -9,8 +9,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import { foldersService } from '@/lib/services/foldersService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
-import { deriveInFlightCode } from '@/lib/services/inFlightCode';
+import { inFlightCodeService } from '@/lib/services/inFlightCodeService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { aiDecisionBlockOf } from '@/lib/approvalGates/decisionRecord';
 import {
@@ -22,7 +21,6 @@ import {
   toOrgContextResponse,
   toPendingPlanRows,
   toSimilarWorkItemRows,
-  toInFlightDeliveryFact,
 } from '@/lib/mappers/aiBoundaryMappers';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
@@ -44,7 +42,6 @@ import {
   type SemanticSearchResponse,
   type SimilarWorkItemsResponse,
   type AiDecisionBlock,
-  type AiInFlightCodeFields,
 } from '@/lib/dto/ai';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
@@ -62,51 +59,12 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // and a real work-item tree appears only on APPROVE/materialize. There is no
 // buffered atomic-persist path.
 
-// The IN-FLIGHT CODE of one card (MOTIR-6618): its own open deliveries, else the
-// nearest ancestor's, per repository — see `lib/services/inFlightCode.ts` for the
-// rule. TWO queries however deep the tree: ONE recursive CTE for the ancestor
-// chain and ONE batched delivery read for the card plus every ancestor — never a
-// delivery query per level.
-//
-// ⚠️ BOTH READS RUN INSIDE `withWorkspaceServiceContext(ctx.workspaceId)`.
-// `work_item_delivery` is policy-gated on `app.workspace_id`, and an unbound read
-// returns an EMPTY LIST for a card that has deliveries — `inFlightCode: []`, the
-// failure that looks like an answer. The ancestor walk is workspace-filtered at
-// every step (the CTE's own tenant gate) and then CUT at the first ancestor outside
-// the token's project, so an inherited entry can only ever name a card the token
-// could read.
-async function readInFlightCode(
-  itemId: string,
-  projectId: string,
-  ctx: ServiceContext,
-): Promise<AiInFlightCodeFields> {
-  return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
-    // ROOT→parent order; walked from the parent up.
-    const chain = await workItemRepository.findAncestors(itemId, ctx.workspaceId, tx);
-    const ancestors: Array<{ id: string; key: string }> = [];
-    for (let i = chain.length - 1; i >= 0; i -= 1) {
-      const a = chain[i]!;
-      if (a.projectId !== projectId) break;
-      ancestors.push({ id: a.id, key: a.identifier });
-    }
-    const rows = await workItemDeliveryRepository.listByWorkItemsWithChecks(
-      [itemId, ...ancestors.map((a) => a.id)],
-      tx,
-    );
-    return deriveInFlightCode({
-      itemId,
-      ancestors,
-      deliveries: rows.map(toInFlightDeliveryFact),
-    });
-  });
-}
-
 // The two per-row anchors every skeleton projection carries, read in ONE
 // workspace context and each as ONE batched query: the latest revision id
 // (MOTIR-1531 — the `baseRevision` a modify/remove anchors on) and the folder a
 // filed item sits in (MOTIR-5410). Shared by every read in the skeleton family, so
 // a row can never carry one anchor on one read and miss it on another.
-// The third anchor is a `human` DECISION's confirmation (MOTIR-5958): ONE batched
+// The third anchor is a DECISION's deciding gate (MOTIR-5958, MOTIR-10146): ONE batched
 // read for the whole set, so the planner can date and order an epic's decisions
 // without a `get-item` per child.
 async function readRowAnchors(
@@ -124,12 +82,12 @@ async function readRowAnchors(
   }));
 }
 
-/** Every `human` decision's confirmation in a set, keyed by work-item id — one query. */
+/** Every decision's latest deciding gate in a set, keyed by work-item id — one query. */
 async function readDecisionBlocks(
   workItemIds: string[],
-  tx: Parameters<typeof approvalGateRepository.findDecisionConfirmationsByWorkItemIds>[1],
+  tx: Parameters<typeof approvalGateRepository.findDecisionGatesByWorkItemIds>[1],
 ): Promise<Map<string, AiDecisionBlock>> {
-  const rows = await approvalGateRepository.findDecisionConfirmationsByWorkItemIds(workItemIds, tx);
+  const rows = await approvalGateRepository.findDecisionGatesByWorkItemIds(workItemIds, tx);
   return new Map(rows.map((row) => [row.workItemId, aiDecisionBlockOf(row)]));
 }
 
@@ -321,15 +279,16 @@ export const aiBoundaryService = {
     const links = await workItemsService.getRelationshipLinks(item.id, ctx, {
       restrictToProjectId: projectId,
     });
-    // A `human` decision's confirmation (MOTIR-5958), through the SAME one-query read
+    // A decision's deciding gate (MOTIR-5958, MOTIR-10146), through the SAME one-query read
     // the skeleton rows use — so the item and its row can never disagree.
     const decisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       readDecisionBlocks([item.id], tx),
     );
     // Where the card's UNMERGED code lives, per repository (MOTIR-6618) — own open
     // delivery first, else the nearest ancestor's. Off the delivery rows only; no
-    // provider call on this path.
-    const inFlight = await readInFlightCode(item.id, projectId, ctx);
+    // provider call on this path. The MCP's `get_work_item` makes the same read
+    // (`inFlightCodeService`, MOTIR-10069), so the two planners cannot disagree.
+    const inFlight = await inFlightCodeService.readForItem(item.id, projectId, ctx);
     const response: GetItemResponse = {
       item: { ...item, ...links, decision: decisions.get(item.id) ?? null, ...inFlight },
     };

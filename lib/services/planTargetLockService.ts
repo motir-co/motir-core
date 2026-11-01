@@ -793,6 +793,10 @@ export const planTargetLockService = {
    *  (`plansService.restPlanTargets`) asks it the same way a release does. */
   hasOpenBlockerWithin,
 
+  /** The hand-parked session lock shape, exposed so approve's resting pass rests
+   *  those targets inside its own transaction (MOTIR-9527 / MOTIR-9531). */
+  isHandParkedSessionLock,
+
   /**
    * THE UP-FRONT READ (MOTIR-6265; AMENDMENT 21 §2): whether an undecided plan
    * holds this card, and where its plan is — so the status control can lock

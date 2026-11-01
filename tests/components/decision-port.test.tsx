@@ -65,6 +65,7 @@ const RESOLVED: DecisionDocumentViewDTO = {
   blobSha: BLOB,
   headSha: HEAD,
   markdown: '# ADR: How a page stores its body\n\n## Decision\n\nStore the body as a Yjs document.',
+  workItemRefs: {},
   hostUrl: `https://github.com/moooon/motir-core/blob/${HEAD}/${PATH}`,
 };
 

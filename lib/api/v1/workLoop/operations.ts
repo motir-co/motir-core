@@ -134,6 +134,19 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
         schema: z.string(),
       },
       {
+        name: 'agentReportDecisions',
+        in: 'query',
+        required: false,
+        description:
+          '`1` when the CLIENT that will launch the agent also posts the `decisions` the agent ' +
+          'writes into `$MOTIR_AGENT_REPORT` (MOTIR-10000). With it, and with `agentReport`, the ' +
+          'prompt tells an agent with no Motir tools to record its decisions in that file. ' +
+          'Absent means no: the decisions are recorded through `record_run_discrepancy` and ' +
+          'listed in the pull request, and the file route is not named, because a client that ' +
+          'does not post them would drop them. ⚠️ It changes the TEXT only.',
+        schema: z.string(),
+      },
+      {
         name: 'continueFrom',
         in: 'query',
         required: false,
@@ -1097,8 +1110,10 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'wrong only about the route — the same record as the `record_run_discrepancy` MCP tool, ' +
       'sent by the CLI with the run\u2019s own credential after the agent exits, from the points ' +
       'the agent wrote into its self-report. It writes ONE comment on the card listing every ' +
-      'point (what the plan asked · what was built · why) and ONE finding on the card\u2019s leg of ' +
-      'THIS run. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and ' +
+      'point (what the plan asked · what was built · why) — and every DECISION the agent made ' +
+      'where the plan was silent (what it said · what was chosen · why), in their own section ' +
+      '(MOTIR-10000) — and ONE finding on the card\u2019s leg of THIS run. At least one point or ' +
+      'one decision. ONE record per leg: a second is refused `DISCREPANCY_ALREADY_RECORDED` and ' +
       'writes nothing. A card that is not an open leg of the run is refused ' +
       '`UNKNOWN_DISPATCH_RUN_CARD`. Only the operator who opened the run may record for it.',
     permission: 'work_item:edit',
@@ -1113,7 +1128,9 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     ],
     requestBody: {
       schema: runDiscrepancyBodySchema,
-      description: 'The card that was built through, and every discrepancy in one list.',
+      description:
+        'The card that was built through, every discrepancy in one list, and every decision in ' +
+        'another.',
     },
     response: {
       status: 200,

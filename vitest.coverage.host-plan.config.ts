@@ -43,13 +43,16 @@ export default defineConfig({
       // catalog.ts 100 / 93.54 / 100 / 100 (the arm left is `largerPoolPlans()`'s sort
       // fallback for an entry with no allotment, which the filter above it excludes), BillingClient.tsx 72.97 / 64.61 / 68 / 75.45 (the
       // whole billing panel, of which this lane drives the plan row and its dialogs).
+      // RE-MEASURED 2026-10-27 when the ladder line was removed: BillingClient.tsx
+      // 72.18 / 63.38 / 68.49 / 74.62. The line was covered code, so taking it out
+      // lowered the ratio; no test was dropped for anything still on the page.
       thresholds: {
         'lib/billing/catalog.ts': { statements: 100, branches: 93, functions: 100, lines: 100 },
         'app/*/settings/organization/billing/_components/BillingClient.tsx': {
           statements: 72,
-          branches: 64,
+          branches: 63,
           functions: 68,
-          lines: 75,
+          lines: 74,
         },
       },
     },

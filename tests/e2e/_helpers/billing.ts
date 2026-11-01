@@ -132,8 +132,8 @@ const STANDARD_TIER: BillingFixtureTier = {
   monthlyCreditAllotment: 2000,
 };
 const PRO_TIER: BillingFixtureTier = { key: 'pro', name: 'Pro', monthlyCreditAllotment: 8000 };
-/** The top of the ladder (MOTIR-9363): the figures the flat limits used to be —
- *  5 hosted runs at once, 10 agents per person, 50 running. */
+/** The top of the ladder (MOTIR-9363), at its corrected figures —
+ *  5 hosted runs at once, 3 agents per person, 20 running (MOTIR-9668). */
 const MAX_X2_TIER: BillingFixtureTier = {
   key: 'max_x2',
   name: 'Max ×2',

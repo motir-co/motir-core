@@ -154,9 +154,13 @@ describe('with MOTIR_FAKE_AWS_STATE_PATH unset, nothing routes differently', () 
     expect(inventoryForShard(fly)).toBeNull();
 
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    // The real aws case still demands the account's key and the AMI.
-    expect(() => orchestratorForShard(aws)).toThrow(/AWS_SEAM_ACCOUNT_ACCESS_KEY_ID/);
-    expect(() => inventoryForShard(aws)).toThrow(/AWS_SEAM_ACCOUNT_ACCESS_KEY_ID/);
+    // The real aws case still demands the management credential (which assumes
+    // the account's runner role) and the AMI.
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
+    expect(() => orchestratorForShard(aws)).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
+    expect(() => inventoryForShard(aws)).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
     expect(inventoryForShard(fly)).toBeNull();
   });
 
@@ -170,6 +174,7 @@ describe('with MOTIR_FAKE_AWS_STATE_PATH unset, nothing routes differently', () 
 describe('with the seam on, an aws account runs the real adapter over the state file', () => {
   it('boots a hosted run into that account with real user-data and tags; fly stays fake', async () => {
     await seamOn();
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     const aws = await account(AWS_ACCOUNT);
     const fly = await account(FLY_ACCOUNT);
 
@@ -177,8 +182,9 @@ describe('with the seam on, an aws account runs the real adapter over the state 
     expect(orchestrator.provider).toBe('aws');
     expect(orchestratorForShard(fly).provider).toBe('fake');
 
-    // No key and no AMI in the env: the seam satisfies both.
-    expect(process.env['AWS_SEAM_ACCOUNT_ACCESS_KEY_ID']).toBeUndefined();
+    // No credential and no AMI in the env: the seam satisfies both, ahead of
+    // any credential read.
+    expect(process.env['AWS_ORG_ADMIN_ROLE_ARN']).toBe('');
     expect(process.env[AWS_RUNNER_AMI_ENV_VAR]).toBeUndefined();
 
     const handle = await orchestrator.provision(hostedSpec('run-1'));
@@ -348,12 +354,13 @@ describe('the agent-runner switch reads the fixture with the seam on', () => {
   });
 });
 
-describe('the CI runner switch (MOTIR-9565) is the lane fixture’s, and Fly without it', () => {
+describe('the CI runner switch (MOTIR-9565 · MOTIR-10064): the lane fixture answers first, then the env var', () => {
   it('reads Fly with the seam off, and with the fixture absent, empty or on fly', async () => {
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', '');
     const { fleetKindOnPool } = await import('@/lib/ciFleet/shardTargets');
-    const { ciRunnerOnPoolInLane } = await import('@/lib/ciFleet/fleetKindSwitches');
-    // No seam installed: nothing can say yes.
-    expect(ciRunnerOnPoolInLane()).toBe(false);
+    const { ciRunnerOnPool } = await import('@/lib/ciFleet/fleetKindSwitches');
+    // No seam installed and no env var: nothing says yes.
+    expect(ciRunnerOnPool()).toBe(false);
     expect(await fleetKindOnPool('ci_runner')).toBe(false);
 
     await seamOn();
@@ -377,6 +384,21 @@ describe('the CI runner switch (MOTIR-9565) is the lane fixture’s, and Fly wit
     expect(await fleetKindOnPool('ci_runner')).toBe(true);
     expect(await fleetKindOnPool('hosted_agent')).toBe(false);
     writeFileSync(switchPath, JSON.stringify({ ciRunner: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+  });
+
+  it('lets the fixture win over the env var, and falls through to it when the fixture says nothing', async () => {
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'aws');
+    await seamOn();
+    const { fleetKindOnPool } = await import('@/lib/ciFleet/shardTargets');
+    // The fixture file does not exist: it says nothing, so the env var decides.
+    expect(await fleetKindOnPool('ci_runner')).toBe(true);
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'fly' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(false);
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'fly');
+    writeFileSync(switchPath, JSON.stringify({ ciRunner: 'aws' }));
+    expect(await fleetKindOnPool('ci_runner')).toBe(true);
+    writeFileSync(switchPath, '{}');
     expect(await fleetKindOnPool('ci_runner')).toBe(false);
   });
 });

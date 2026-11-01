@@ -46,9 +46,8 @@ vi.mock('@/lib/services/publicAddressesService', () => ({
   // refusal — measuring the fixture instead of the property.
   publicAddressesService: {
     resolveHost: vi.fn(async () => ({
-      kind: 'workspace' as const,
+      kind: 'no_application' as const,
       workspace: { name: 'Acme' },
-      projects: [{ identifier: 'ACME', name: 'Acme' }],
     })),
   },
   PublicHostNotFoundError: class PublicHostNotFoundError extends Error {

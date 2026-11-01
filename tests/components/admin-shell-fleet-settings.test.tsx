@@ -26,11 +26,13 @@ const LABELS = {
   navTenants: 'Tenants',
   navUsers: 'Users',
   navMonitoring: 'Monitoring',
+  navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
   navCapacity: en.platformAdmin.shell.navCapacity,
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
   navIdeas: en.platformAdmin.shell.navIdeas,
+  navStarters: en.platformAdmin.shell.navStarters,
   navRunModels: 'Hosted-run models',
   navAuditLog: 'Audit log',
   staffMarkTitle: 'Platform staff',
@@ -57,7 +59,7 @@ describe('the Fleet settings row', () => {
     expect(LABELS.navFleetSettings).toBe('Fleet settings');
   });
 
-  it('is on the rail for a superadmin, directly after Monitoring', () => {
+  it('is on the rail for a superadmin, directly after Monitoring and Jobs', () => {
     const rail = renderShell('superadmin', '/admin');
     const row = within(rail).getByRole('link', { name: LABELS.navFleetSettings });
     expect(row.getAttribute('href')).toBe('/admin/fleet-settings');
@@ -65,7 +67,8 @@ describe('the Fleet settings row', () => {
     const names = within(rail)
       .getAllByRole('link')
       .map((link) => link.textContent?.trim());
-    expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navFleetSettings);
+    expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navJobs);
+    expect(names[names.indexOf(LABELS.navJobs) + 1]).toBe(LABELS.navFleetSettings);
     expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navCapacity);
   });
 

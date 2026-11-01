@@ -86,6 +86,10 @@ export const SUB_HOURLY_CADENCE_EXCEPTIONS: Readonly<Record<string, string>> = {
   'system.host-account-reconcile': 'a Host purchase starts its quota wait at account creation',
   // MOTIR-9585 · the state pass follows the every-minute quota reads it derives from.
   'system.host-account-state': 'an own account follows the every-minute quota reads',
+  // MOTIR-9942 · an enterprise tenant's AWS deploys wait on its account being
+  // ready, so the reconcile runs at the Host reconcile's cadence.
+  'system.hosting-tenant-account-reconcile':
+    "an enterprise tenant's deploys wait on its account being ready",
   // MOTIR-9612 · the gateway capacity contract §3 *Lanes*.
   'system.capacity-alert-evaluation':
     'the gateway counts rpm/tpm per fixed clock minute, so one late read per minute is one reading per window',

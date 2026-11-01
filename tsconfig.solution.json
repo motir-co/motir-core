@@ -20,6 +20,7 @@
     { "path": "./tsconfig.e2e.json" },
     { "path": "./tsconfig.scripts.json" },
     { "path": "./packages/orchestrator" },
+    { "path": "./packages/hosting-guard" },
     { "path": "./packages/pages" }
   ]
 }

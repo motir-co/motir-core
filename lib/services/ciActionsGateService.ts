@@ -2,6 +2,7 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
+import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
@@ -270,7 +271,8 @@ async function assertPending(
         return [
           {
             id: row.id,
-            installationId: row.githubRepo.installationId,
+            // Motir's cuid for the installation — resolved to GitHub's id below.
+            installationRowId: row.githubRepo.installationId,
             owner: row.githubRepo.owner,
             repo: row.githubRepo.name,
             disabled: row.ciActionsDisabled,
@@ -279,10 +281,31 @@ async function assertPending(
       });
     });
 
+    // GitHub's NUMERIC installation ids (MOTIR-10062). The mirror's
+    // `installationId` is the foreign key to `GithubInstallation.id`, a cuid GitHub
+    // never issued — a token minted for it is a 404, so no pause or resume would
+    // ever land. Read under `withSystemContext`: the provisioning installation
+    // Motir-created repositories live in is shared and has no `workspace_id`.
+    const hostInstallationIds =
+      pending.length === 0
+        ? new Map<string, string>()
+        : await withSystemContext((tx) =>
+            githubInstallationRepository.findHostInstallationIdsByIds(
+              pending.map((row) => row.installationRowId),
+              tx,
+            ),
+          );
+
     for (const row of pending) {
       try {
+        const installationId = hostInstallationIds.get(row.installationRowId);
+        if (!installationId) {
+          throw new Error(
+            'the GitHub installation this repository lives in is no longer on record',
+          );
+        }
         await actionsPermissionsClient.setActionsEnabled({
-          installationId: row.installationId,
+          installationId,
           owner: row.owner,
           repo: row.repo,
           enabled: !row.disabled,

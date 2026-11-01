@@ -223,6 +223,20 @@ RUN pnpm build:relay
 # (`scripts/build-fleet-admin.mjs`), with the worker's external set.
 RUN pnpm build:fleet-admin
 
+# ── the operator deploy-check bundle (MOTIR-9965) ───────────────────────────
+# `node hosting/deploy-check.mjs <step> --workspace … --repository … --environment …`
+# resolves a repository's stored environment, which needs the database and
+# ENVIRONMENT_CONFIG_ENCRYPTION_KEY — so it runs on this machine, bundled the
+# fleet-admin way (`scripts/build-deploy-check.mjs`).
+RUN pnpm build:deploy-check
+
+# ── the rehearsal breach bundle (MOTIR-9884) ────────────────────────────────
+# `node breach/breach.mjs <memory|cpu|loop>` proves each CloudWatch alarm by a
+# real breach. It runs ONLY as an ECS one-off task on a rehearsal service, and
+# does nothing without MOTIR_BREACH_ENABLED=true; bundled the fleet-admin way
+# (`scripts/build-breach.mjs`).
+RUN pnpm build:breach
+
 
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
@@ -336,6 +350,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
+# Amazon's RDS CA bundle, for the AWS services' database connection. node-postgres
+# treats `sslmode=require` as verify-full and Node does not ship the RDS roots,
+# so without this every query on Fargate fails `self-signed certificate in
+# certificate chain` (MOTIR-10056). motir-infra points NODE_EXTRA_CA_CERTS here.
+# Vendored rather than fetched at build so the image never depends on a network
+# call; refresh it from https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem
+# when AWS adds a CA.
+COPY --chown=nextjs:nodejs certs/rds-global-bundle.pem ./certs/rds-global-bundle.pem
+
 # ── /app/migrate — the release lane, in ONE self-contained directory ────────
 # It gets its own directory rather than merging into the standalone server's
 # node_modules for two independent reasons:
@@ -386,6 +409,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/.relay/relay.mjs.map ./relay/rela
 # copied so an error names a source line.
 COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs ./fleet/fleet-admin.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.fleet-admin/fleet-admin.mjs.map ./fleet/fleet-admin.mjs.map
+
+# ── /app/hosting — the operator deploy check (MOTIR-9965) ───────────────────
+# Run by hand over `fly ssh console`, like fleet-admin; its unresolved imports
+# resolve upward into `/app/node_modules`.
+COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs ./hosting/deploy-check.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs.map ./hosting/deploy-check.mjs.map
+
+# ── /app/breach — the rehearsal breach (MOTIR-9884) ─────────────────────────
+# Run only as an ECS one-off task of this image on a rehearsal service, never by
+# a process group; inert without MOTIR_BREACH_ENABLED=true. The map is copied so
+# an error names a source line.
+COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs ./breach/breach.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs.map ./breach/breach.mjs.map
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS

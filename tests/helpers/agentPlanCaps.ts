@@ -12,7 +12,7 @@ import { planCapsService } from '@/lib/services/planCapsService';
 // organisations (`isMeta` / `internalBilling`) still read `exempt`.
 export const TEST_AGENT_PLAN_NAME = 'Test';
 
-export function capAgentsAt(figures: { running?: number; perUser?: number }): void {
+export function capAgentsAt(figures: { perOrg?: number; perUser?: number }): void {
   const base = capsForPlanKey('max_x2')!;
   const real = planCapsService.capsFor.bind(planCapsService);
   vi.spyOn(planCapsService, 'capsFor').mockImplementation(async (organizationId) => {
@@ -24,7 +24,7 @@ export function capAgentsAt(figures: { running?: number; perUser?: number }): vo
       planName: TEST_AGENT_PLAN_NAME,
       caps: {
         ...base,
-        agentsRunningPerOrg: figures.running ?? base.agentsRunningPerOrg,
+        agentsPerOrg: figures.perOrg ?? base.agentsPerOrg,
         agentsPerUser: figures.perUser ?? base.agentsPerUser,
       },
     };

@@ -112,6 +112,8 @@ export function contentFromRead(
     // A decision document is Markdown; a binary blob at its path is not one,
     // and there is nothing to show (MOTIR-7873).
     case 'binary':
+    // A directory at the path is not a document either (MOTIR-9868).
+    case 'directory':
       return { outcome: 'unresolvable', reason: 'unreadable' };
     default: {
       const unmapped: never = result;

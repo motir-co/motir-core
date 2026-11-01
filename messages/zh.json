@@ -737,9 +737,6 @@
       "pickProjectFirst": "请先选择一个项目。",
       "unknownRelationship": "未知的关系类型。",
       "pickIssueToLink": "请选择要关联的工作项。",
-      "missingDlqId": "缺少死信队列ID。",
-      "ownerOnlyReplay": "只有工作区管理者才能重放任务。",
-      "dlqGone": "该死信队列条目已不存在。",
       "workspaceNameEmpty": "工作区名称不能为空。",
       "useLeaveToRemoveSelf": "请使用“离开”来移除你自己。",
       "cannotRemoveLastMember": "无法移除最后一名成员。",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "只有工作区的所有者或管理员才能更改其安全设置。",
       "refused": "操作未完成：{reason}",
       "organizationClosing": "该组织已计划删除，目前为只读状态。只有组织所有者可以取消删除。",
-      "memberProjectsFailed": "无法加载其项目。",
-      "systemReplayWorkspaceRow": "该死信属于某个工作区——请在该工作区的“死信”标签页中重放。",
-      "systemReplayOperatorOnly": "只有平台运营者才能重放系统死信。"
+      "memberProjectsFailed": "无法加载其项目。"
     },
     "links": {
       "notFound": "该工作项已不存在。",
@@ -1958,6 +1953,8 @@
       "translation": "翻译设置",
       "rules": "规则",
       "repositories": "代码仓库",
+      "environment": "环境",
+      "production": "生产",
       "monitoring": "监控",
       "approvals": "审批",
       "bugs": "缺陷"
@@ -2065,13 +2062,12 @@
       "nav": {
         "group": {
           "general": "通用",
-          "access": "访问与权限",
-          "operations": "运维"
+          "access": "访问与权限"
         },
         "workspace": "工作区",
         "security": "安全",
         "roles": "角色与权限",
-        "jobs": "任务运行"
+        "publicAddress": "公开地址"
       }
     },
     "name": {
@@ -2200,7 +2196,58 @@
       "inviteNoProjectsWarning": "在管理者将其添加到某个项目之前，他们将无法打开任何内容。",
       "inviteJoinsAsMember": "他们将以成员身份加入。接受后你可以更改其角色。",
       "errorInviteProjects": "其中某个项目无法加入。请重新选择。",
-      "errorInviteNotAllowed": "你无法发送此邀请。只有工作区管理者可以发送受限访问的邀请。"
+      "errorInviteNotAllowed": "你无法发送此邀请。只有工作区管理者可以发送受限访问的邀请。",
+      "pending": {
+        "heading": "待处理的邀请",
+        "invitationColumn": "邀请",
+        "deliveryColumn": "投递",
+        "invitedBy": "由 {name} 邀请，{sent}",
+        "invitedByFormer": "由前成员邀请，{sent}",
+        "expiresIn": "{count, plural, other {# 天后过期}}",
+        "expiresToday": "今天过期",
+        "expiresOn": "{date} 过期",
+        "resend": "重新发送",
+        "resendLabel": "向 {email} 重新发送邀请",
+        "resendScopeTooltip": "只有管理者可以重新发送受限邀请",
+        "resentToast": "已向 {email} 发送新邀请",
+        "refusalRateLimited": "已达上限：每个邮箱每小时最多 3 次邀请。",
+        "refusalRateLimitedBody": "请稍后再试。",
+        "refusalAlreadyMember": "此人已加入该工作区。",
+        "refusalNotAllowed": "你无法重新发送此邀请。",
+        "refusalNoLongerPending": "此邀请已不再处于待处理状态。",
+        "showAll": "显示全部 {count} 个待处理的邀请",
+        "showFewer": "收起",
+        "delivery": {
+          "queued": {
+            "label": "排队中",
+            "helper": "等待发送"
+          },
+          "accepted": {
+            "label": "已接收",
+            "helper": "邮件服务商已接收"
+          },
+          "delivered": {
+            "label": "已送达",
+            "helper": "已到达收件人的邮件服务器"
+          },
+          "bounced": {
+            "label": "被退回",
+            "helper": "该地址拒收"
+          },
+          "complained": {
+            "label": "被投诉",
+            "helper": "被标记为垃圾邮件"
+          },
+          "delayed": {
+            "label": "延迟",
+            "helper": "服务商仍在重试"
+          },
+          "failed": {
+            "label": "失败",
+            "helper": "无法发送"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "无法离开",
@@ -2706,43 +2753,6 @@
         "title": "尚未配置公开命名空间",
         "description": "此部署未设置租户基础域名，因此暂时无法认领子域名。请由运维人员设置 MOTIR_PUBLIC_TENANT_DOMAIN。"
       },
-      "subdomain": {
-        "title": "工作区子域名",
-        "subtitle": "整个工作区共用一个地址，其中每个公开项目都在它下面提供访问。",
-        "label": "子域名",
-        "helper": "你的项目将位于 {preview}。仅限小写字母、数字和连字符；3–63 个字符。",
-        "claim": "认领子域名",
-        "claimable": "之后可以重命名，但次数有限。",
-        "active": "使用中",
-        "alias": "重定向至此",
-        "aliasShort": "重定向",
-        "copy": "复制地址",
-        "copied": "地址已复制",
-        "open": "在新标签页中打开",
-        "rename": "重命名",
-        "renamesLeft": "{count, plural, =0 {没有剩余的重命名次数。} other {还可重命名 # 次。}}",
-        "readOnly": "由工作区所有者或管理员管理。",
-        "none": "尚未认领子域名。"
-      },
-      "rename": {
-        "title": "要重命名此子域名吗？",
-        "warningTitle": "旧地址将继续有效，并且永不释放。",
-        "warningBody": "{old} 将永久重定向到此处，任何人都无法再认领它——包括你自己。",
-        "remaining": "此次之后你还可重命名 {count, plural, other {#}} 次。",
-        "cancel": "取消",
-        "confirm": "重命名"
-      },
-      "release": {
-        "remove": "移除",
-        "title": "要移除 {hostname} 吗？",
-        "lead": "{count, plural, other {以下 # 个地址将停止提供访问：}}",
-        "warningTitle": "{count, plural, other {这些名称将被永久保留，任何人都无法再认领它们——包括你自己。}}",
-        "warningBody": "Motir 会把每个已释放的名称永久排除在命名空间之外，因此其他工作区无法继承指向你的链接。",
-        "renamesAfter": "若你再次认领子域名，将只剩 {count, plural, =0 {0} other {#}} 次重命名机会——释放不会把它们还给你。",
-        "fallback": "你的公开项目将回到 {url}，并重新出现在 {site} 上。",
-        "cancel": "取消",
-        "confirm": "移除子域名"
-      },
       "domains": {
         "title": "你自己的域名",
         "subtitle": "使用你拥有的域名来提供此项目。",
@@ -2831,17 +2841,6 @@
         },
         "lastChecked": "上次检查：{when}",
         "error": "操作未成功，请稍后重试。"
-      },
-      "error": {
-        "reserved": "{label} 是保留名称。Motir 保留了一小组名称，用于自己的主机以及读者可能误认的名称。",
-        "structurallyReserved": "{label} 是保留名称。以下划线、xn-- 或 motir- 开头的名称属于 Motir 或 DNS 本身。",
-        "tooShort": "太短——子域名至少需要 3 个字符。",
-        "tooLong": "太长——子域名最多 63 个字符。",
-        "badGrammar": "仅限小写字母、数字和连字符，且需以字母或数字开头和结尾。",
-        "taken": "{label} 已被使用。被重命名后的子域名同样会保留其名称，因此它可能属于一个已不再使用它的工作区。",
-        "capReached": "此工作区的重命名次数已用完，地址无法再更改。",
-        "forbidden": "只有工作区所有者或管理员才能更改此地址。",
-        "generic": "操作未成功，请稍后重试。"
       }
     },
     "codeAccess": {
@@ -2966,86 +2965,6 @@
       "heroOverviewSubheading": "访客在你的公开页面上看到的标语、标签和 README。",
       "editOnPublicPage": "编辑公开页面",
       "heroOverviewNote": "打开“设置 › 公开页面”。项目公开前也可以先写好。"
-    },
-    "jobs": {
-      "title": "任务运行",
-      "subtitle": "该工作区的后台任务——邀请和密码重置邮件的投递，以及各类计划任务。失败的任务会进入死信队列，所有者可在那里重放它们。",
-      "tab": {
-        "runs": "最近运行",
-        "dlq": "死信",
-        "system": "系统"
-      },
-      "tabNavLabel": "任务运行视图",
-      "dlqBadgeLabel": "死信队列中有 {count} 个",
-      "filterGroupLabel": "按状态筛选",
-      "filter": {
-        "all": "全部",
-        "succeeded": "成功",
-        "failed": "失败",
-        "running": "运行中",
-        "abandoned": "已放弃"
-      },
-      "runsTableCaption": "后台任务运行",
-      "col": {
-        "status": "状态",
-        "delivery": "送达",
-        "function": "函数",
-        "event": "事件",
-        "attempts": "尝试次数",
-        "started": "开始时间",
-        "duration": "耗时",
-        "failure": "失败原因",
-        "details": "详情",
-        "firstFailed": "首次失败",
-        "lastFailed": "最近失败",
-        "replayed": "已重放",
-        "actions": "操作"
-      },
-      "view": "查看",
-      "runDetailTitle": "运行详情",
-      "dlqTableCaption": "死信队列",
-      "replay": "重放",
-      "replayTooltip": "只有工作区管理者才能重放任务",
-      "alreadyReplayedToastTitle": "已重放过",
-      "alreadyReplayedToastDesc": "该条目此前已重放，未新建任务。",
-      "replayedToastTitle": "任务已重放",
-      "replayedToastDesc": "原始事件已重新发出。",
-      "replayErrorTitle": "无法重放",
-      "dlqDetailTitle": "死信详情",
-      "dlqDetailDesc": "失败原因和原始事件载荷（可原样重放）。",
-      "failureHeading": "失败原因",
-      "eventPayloadHeading": "事件载荷",
-      "pageLabel": "第 {page} 页",
-      "previous": "上一页",
-      "next": "下一页",
-      "refresh": "刷新",
-      "dlqEmptyTitle": "死信队列为空",
-      "dlqEmptyDesc": "每个任务都已成功或仍在重试。",
-      "runsEmptyTitle": "还没有任务运行",
-      "runsEmptyDesc": "当后台任务运行时，会显示在这里。",
-      "delivery": {
-        "accepted": "已受理",
-        "delivered": "已送达",
-        "bounced": "已退信",
-        "complained": "被举报为垃圾邮件",
-        "delayed": "投递延迟"
-      },
-      "deliveryNone": "无送达记录",
-      "deliveryDetail": {
-        "heading": "送达情况",
-        "state": "状态",
-        "messageId": "消息 ID",
-        "recipient": "收件人",
-        "template": "模板",
-        "lastEvent": "最近事件",
-        "never": "尚未收到服务商事件"
-      },
-      "systemDlqTitle": "无工作区的死信",
-      "systemDlqSummary": "{waiting} 条等待重放 · 最近 7 天内已重放 {replayed} 条",
-      "systemDlqTableCaption": "系统死信",
-      "systemDlqEmptyTitle": "没有系统死信",
-      "systemDlqEmptyDesc": "所有无工作区的作业均已成功，或仍在重试中。",
-      "systemRunsTitle": "系统运行"
     },
     "account": {
       "eyebrow": "账户设置",
@@ -4203,7 +4122,9 @@
         "hosted-agent": "托管运行使用哪个模型，只向能在此项目上发起托管运行的人显示。如需查看，请联系项目管理员。",
         "translation": "此项目工作内容是否为每位读者翻译，仅向可以查看项目工作项的人显示。如需查看，请联系项目管理员。",
         "automation": "项目自动化由项目管理员管理。如需修改规则，请联系管理员。",
-        "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。"
+        "monitoring": "本项目的错误监控连接由可管理集成的成员负责。如需连接或重新连接 Sentry，请联系项目管理员。",
+        "environment": "代码仓库的环境值仅向可以浏览此项目的人显示。如需查看，请联系项目管理员。",
+        "production": "代码仓库的发布仅向可以浏览此项目的人显示。如需查看，请联系项目管理员。"
       }
     },
     "organization": {
@@ -4221,10 +4142,6 @@
         "security": "安全",
         "usage": "用量与费用",
         "billing": "账单与套餐"
-      },
-      "jobRunsFoldIn": {
-        "title": "任务运行",
-        "subtitle": "该工作区的后台任务——运行了什么、失败了什么，以及死信队列中还有什么在等待。"
       }
     },
     "gitAccounts": {
@@ -4234,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "已连接"
+        "connected": "已连接",
+        "needsReauth": "需要重新授权"
       },
       "connectedOn": "连接于 {date}",
       "connect": "连接 GitHub",
       "disconnect": "断开连接",
+      "reconnect": "重新连接",
       "empty": {
         "title": "尚未连接 Git 账户",
         "description": "连接后，Motir 可以把你邀请到项目所使用的仓库，并为你的工作署名。它只读取你的公开资料——不会获得任何代码的访问权限。"
+      },
+      "reauth": {
+        "title": "请重新连接你的 GitHub 账户。",
+        "body": "GitHub 已不再接受此次登录，因此 Motir 无法再确认你在 GitHub 上的身份。你账户的其他内容均未改变。"
       },
       "noInstallation": {
         "title": "你的账户已连接，你的组织尚未连接。",
@@ -4274,6 +4197,282 @@
       "saveError": "出错了，请重试。",
       "saveForbidden": "你已无法更改此项目缺陷的归档位置。",
       "folderGone": "该文件夹已不存在，请选择其他文件夹。"
+    },
+    "environment": {
+      "title": "环境",
+      "lede": "应用运行时读取的值。每个环境设置一次；Motir 会在下次部署时将它们传给应用。",
+      "repositoryLabel": "代码仓库",
+      "role": {
+        "web": "Web 应用",
+        "api": "API",
+        "mobile": "移动应用",
+        "shared": "共享代码",
+        "infra": "基础设施",
+        "other": "其他"
+      },
+      "tablistLabel": "环境",
+      "tab": {
+        "production": "生产",
+        "preview": "预览",
+        "release": "发布"
+      },
+      "column": {
+        "name": "名称",
+        "value": "值"
+      },
+      "set": "已设置",
+      "secretHidden": "密钥 · 值已隐藏",
+      "edit": "编辑",
+      "replace": "替换",
+      "delete": "删除",
+      "editAria": "编辑 {name}",
+      "replaceAria": "替换 {name}",
+      "deleteAria": "删除 {name}",
+      "saving": "正在保存",
+      "add": {
+        "heading": "添加值",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "值",
+        "secret": "密钥",
+        "save": "保存",
+        "helper": "密钥可以替换或删除，但永远不会再次显示——对你、对任何人都不会。"
+      },
+      "error": {
+        "nameRequired": "请输入名称。",
+        "duplicate": "{name} 已在{environment}中设置。请在列表中编辑。",
+        "invalidName": "请使用字母、数字和下划线，且不能以数字开头。",
+        "reserved": "{name} 是保留名称：PORT、DATABASE_URL 和 MOTIR_* 名称由 Motir 设置。请换一个名称。"
+      },
+      "saved": {
+        "secret": "{name} 已保存为密钥。从现在起其值将被隐藏。",
+        "plain": "{name} 已保存。"
+      },
+      "replaceFlow": {
+        "placeholder": "新值",
+        "aria": "{name} 的新值",
+        "helper": "当前值保持隐藏。保存后将在下次部署时替换。",
+        "cancel": "取消"
+      },
+      "deleteDialog": {
+        "title": "从{environment}中删除 {name}？",
+        "body": "从下次部署起，应用将不再在{environment}中收到 {name}。{count, plural, other {{others}保留各自的值。}}此操作无法撤销。",
+        "confirm": "删除",
+        "cancel": "取消"
+      },
+      "empty": {
+        "title": "{environment}中还没有值",
+        "production": "线上应用会收到这些值。请在下方添加第一个。",
+        "preview": "每个拉取请求的预览都会收到这些值。请在下方添加第一个。",
+        "release": "发布列车构建的版本会收到这些值。请在下方添加第一个。"
+      },
+      "loading": "正在加载值…",
+      "loadError": {
+        "title": "无法加载这些值",
+        "body": "未做任何更改。请稍后重试。"
+      },
+      "retry": "重试",
+      "saveError": "无法保存 {name}。未做任何更改。",
+      "deleteError": "无法删除 {name}。它仍处于设置状态。",
+      "readOnly": {
+        "note": "你可以查看这些值。只有项目管理员可以更改。",
+        "tooltip": "只有项目管理员可以更改环境值。"
+      },
+      "changes": {
+        "heading": "最近更改 · {environment}",
+        "added": "添加了",
+        "replaced": "替换了",
+        "deleted": "删除了",
+        "secret": "密钥",
+        "unknownActor": "前成员",
+        "loadError": "无法加载最近的更改。",
+        "empty": "还没有更改。对此环境的每次更改都会列在这里——谁在何时更改，但从不显示值。"
+      },
+      "notFound": {
+        "title": "未找到代码仓库",
+        "body": "Motir 不为此代码仓库保存任何环境。请选择该项目中由 Motir 托管的代码仓库之一。",
+        "back": "返回环境"
+      }
+    },
+    "production": {
+      "title": "生产",
+      "lede": "查看此项目每个应用当前上线的内容、最近几次合并做了什么，以及如何撤销出错的发布。",
+      "repositoryLabel": "代码仓库",
+      "role": {
+        "web": "Web 应用",
+        "api": "API",
+        "mobile": "移动应用",
+        "shared": "共享代码",
+        "infra": "基础设施",
+        "other": "其他"
+      },
+      "current": {
+        "eyebrow": "正在服务生产"
+      },
+      "state": {
+        "building": "构建中",
+        "live": "已上线",
+        "failed": "失败",
+        "replaced": "已替换",
+        "rolledBack": "已回滚"
+      },
+      "trigger": {
+        "merge": "合并 #{number}",
+        "mergeDefault": "合并到默认分支",
+        "redeploy": "重新部署 · 生产设置已更改",
+        "rollback": "由回滚恢复 · {name}",
+        "rollbackUnnamed": "由回滚恢复",
+        "ref": "部署 {ref} · {name}",
+        "refUnnamed": "部署 {ref}"
+      },
+      "address": {
+        "newTab": "（在新标签页中打开）",
+        "copy": "复制",
+        "copied": "已复制",
+        "copyAria": "复制 {address}",
+        "none": "暂无地址——请在<link>公开地址</link>中为工作区申领一个 motir.site 地址。"
+      },
+      "rollback": {
+        "action": "回滚",
+        "helper": "将生产恢复到此发布之前的发布。",
+        "unavailable": "目前还没有可以回退到的更早发布。"
+      },
+      "history": {
+        "heading": "发布历史",
+        "more": "显示更多发布",
+        "moreError": "无法加载更多发布。请重试。"
+      },
+      "failedNewer": "最新的发布失败了，因此正在服务的内容没有变化。{commit} 仍在线上。",
+      "reason": {
+        "build": "构建在部署前失败。",
+        "migration": "迁移失败。",
+        "migrationExit": "迁移失败，退出码为 {code}。",
+        "migrationTimedOut": "迁移超时。",
+        "superseded": "当时有另一个发布正在进行，因此此发布从未开始。",
+        "deploy": "部署在接收流量之前失败。"
+      },
+      "dialog": {
+        "title": "回滚 {repository}？",
+        "leaving": "离开",
+        "returning": "回到",
+        "body": "生产将在 {address} 回到该发布的代码和环境值。数据库结构不会还原：较新发布执行的迁移仍然保留。",
+        "bodyNoAddress": "生产将回到该发布的代码和环境值。数据库结构不会还原：较新发布执行的迁移仍然保留。",
+        "confirm": "回滚",
+        "submitting": "正在回滚…",
+        "cancel": "取消",
+        "error": "回滚未完成。{commit} 仍在服务生产。请重试。",
+        "retry": "重试"
+      },
+      "refusal": {
+        "noPreviousRelease": "没有可以回退到的更早发布。",
+        "releaseInProgress": "有发布正在进行。请在其完成后再回滚。",
+        "conflict": "回滚期间生产发生了变化。请关闭此窗口并查看当前上线的内容。",
+        "forbidden": "只有项目管理员可以回滚。",
+        "notFound": "此代码仓库已不再可用。"
+      },
+      "readOnly": {
+        "note": "你可以查看所有发布。只有项目管理员可以回滚。"
+      },
+      "empty": {
+        "title": "生产中尚无内容",
+        "body": "将拉取请求合并到 main 后，Motir 会构建它并在此上线，并附上其地址。"
+      },
+      "loading": "正在加载发布…",
+      "loadError": {
+        "title": "无法加载发布",
+        "body": "生产不受影响。请稍后重试。"
+      },
+      "retry": "重试",
+      "notFound": {
+        "title": "未找到代码仓库",
+        "body": "Motir 只为其托管的代码仓库运行生产。请选择此项目的代码仓库之一。",
+        "back": "返回生产"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "公开地址",
+        "claimed": "{host} — 工作区唯一的名称。",
+        "none": "尚未认领名称。",
+        "manage": "管理 →",
+        "claim": "认领名称 →"
+      },
+      "title": "公开地址",
+      "subtitle": "工作区对外使用的唯一名称。",
+      "readOnly": "只有工作区所有者和管理员可以更改此项。",
+      "none": "尚未认领名称。",
+      "unavailable": {
+        "title": "此服务器未配置公开地址",
+        "description": "运维人员需要先设置 MOTIR_PUBLIC_TENANT_DOMAIN，工作区才能认领名称。"
+      },
+      "field": {
+        "label": "名称",
+        "renameLabel": "新名称",
+        "hint": "小写字母、数字和单个连字符；{min}–{max} 个字符。一个工作区只有一个名称。",
+        "preview": "访问者将通过 {host} 找到你"
+      },
+      "claim": "认领名称",
+      "refusal": {
+        "tooShort": "至少使用 {min} 个字符。",
+        "badGrammar": "只能使用小写字母、数字和连字符。",
+        "doubleHyphen": "名称不能包含连续两个连字符——这留给应用地址使用。",
+        "tooLong": "最多使用 {max} 个字符。",
+        "taken": "{host} 已被占用。请换一个名称。",
+        "reserved": "“{label}” 是保留名称。请选择其他名称。",
+        "quarantined": "{host} 最近被释放，保留至 {date}。届时任何人都可以认领。",
+        "generic": "无法保存名称。请重试。"
+      },
+      "row": {
+        "live": "已上线",
+        "copy": "复制地址",
+        "copied": "地址已复制",
+        "open": "在新标签页中打开"
+      },
+      "rename": "重命名",
+      "release": "释放",
+      "lock": "你可以在 {date} 再次更改名称。重命名和释放各算一次更改，每 30 天一次。",
+      "lockShort": "你可以在 {date} 再次更改名称。",
+      "review": "检查",
+      "cancel": "取消",
+      "confirm": {
+        "renameTitle": "重命名为 {host}？",
+        "releaseTitle": "释放 {host}？",
+        "stops": "{host} 将立即停止响应。",
+        "returnsOn": "任何人都可以从 {date} 起认领它。",
+        "returnsNow": "任何人都可以立即认领它——你持有它不到 24 小时。",
+        "noRedirectRename": "旧地址不会重定向到新地址，请更新你分享过的链接。",
+        "noRedirectRelease": "不会有任何重定向。你的公开项目仍保留在其 motir.co 地址。",
+        "lockAfterRename": "在 {date} 之前你无法再次更改名称。",
+        "lockAfterRelease": "你可以立即认领新名称。之后的下一次更改要到 {date} 才允许。",
+        "rename": "重命名",
+        "renaming": "正在重命名…",
+        "release": "释放名称",
+        "releasing": "正在释放…"
+      },
+      "toast": {
+        "claimed": "{host} 归你了",
+        "renamed": "已重命名为 {host}",
+        "renamedBody": "{old} 已不再响应。",
+        "released": "已释放 {host}",
+        "refusedTitle": "名称未更改",
+        "refusedLimit": "你可以在 {date} 再次更改。",
+        "refusedTaken": "{host} 刚刚被占用。请换一个名称。",
+        "refusedQuarantined": "{host} 保留至 {date}。"
+      },
+      "released": {
+        "held": "{host} 已被释放。它将保留至 {date}，之后任何人都可以认领。",
+        "free": "{host} 已被释放。现在任何人都可以认领。",
+        "lock": "你现在可以认领名称。之后的下一次更改要到 {date} 才允许。"
+      },
+      "loadError": "无法加载地址。",
+      "retry": "重试",
+      "echo": {
+        "title": "工作区地址",
+        "claimedSub": "工作区对外使用的名称。",
+        "noneSub": "你的工作区还没有名称。",
+        "projectPage": "此项目的公开页面位于 {url}。",
+        "change": "在工作区设置中更改 →",
+        "claim": "为工作区认领名称 →"
+      }
     }
   },
   "boards": {
@@ -6501,7 +6700,7 @@
       "yourPlanTitle": "你的套餐",
       "needMore": {
         "title": "需要更多积分？",
-        "body": "如果你的组织每月用量超过 {plan} 的 {credits} 积分，请估算用量，计算器会给出按估算定制的更大积分池。",
+        "body": "如果你的组织每月用量超过 {plan} 的 {credits} 积分，请估算用量，计算器会给出按估算定制、配有你自有 AWS 账户的更大积分池。",
         "bodyHeld": "如果你的组织每月用量超出现有的 {credits} 积分，请估算用量，计算器会给出按估算定制的更大积分池。",
         "action": "打开计算器"
       },
@@ -6509,10 +6708,6 @@
       "recommended": "推荐",
       "creditsAllotment": "{n} 额度 / 月",
       "creditsAllotmentOneTime": "{n} 额度 · 一次性",
-      "ladder": {
-        "first": "每个套餐的额度单价相同",
-        "multiple": "{plan} 的 {multiple} 倍额度 · 额度单价相同"
-      },
       "perMoEquiv": "${n} / 月",
       "annualSub": "按年计费 · ${yr} / 年",
       "annualSave": "每年省 ${n}",
@@ -6627,6 +6822,8 @@
         "caption": "你的预估为每月 {low} 到 {high} 积分。这个额度按该范围的上限确定，因此不会不够用。它是一个预估，会随你的预估一起变化。",
         "captionCurrent": "这是你购买的额度，按每月 {low} 到 {high} 积分的预估确定。之后预估降低，也不会改变你已持有计划的价格。",
         "priceEstimate": "根据你的预估计算",
+        "ownAccounts": "你的组织自有的三个 AWS 账户：一个用于 CI 运行器，一个用于智能体运行，一个由索引器和托管智能体共用，每个都按此积分池配置",
+        "sharedUntilGranted": "在每个账户的配额获批之前，该套餐在 Motir 的共享池上按 Max 的限制运行",
         "basis": {
           "monthly": "以 {plan} 的月付价格为基础，超出其额度的每个积分按充值价的折扣价计算。",
           "annual": "按 {plan} 年付的同一单积分价格计算。每年扣费一次，额度仍按月发放。"
@@ -6670,9 +6867,12 @@
         "lowLabel": "下限",
         "highLabel": "上限",
         "runCategoriesLabel": "运行器使用的模型",
-        "runCategoriesHelp": "选择一到三类。运行部分在你选中的类别之间平均分摊：选一类占 100%，两类各占 50%，三类各占 33%。无需选择模型 —— 每个类别下列出的是它所服务的示例模型。",
+        "runCategoriesHelp": "选一到三类。选两类或三类时，在下方拖动每一类在运行中的占比——初始为平均分配。你从不选择具体模型——每个类别都会列出它支持的模型作为示例。",
         "categoryShare": "运行部分的 {share}",
         "categoryExamples": "例如：{models}",
+        "sharesLabel": "每个类别在运行中的占比",
+        "sharesHelp": "拖动一个占比，其余类别会平均让出或接收差额，因此总和始终为 100%。添加或移除类别后会重新平均分配。",
+        "shareValue": "{category}：运行的 {share}%",
         "submit": "估算积分"
       },
       "categories": {
@@ -6681,7 +6881,7 @@
       },
       "split": {
         "one": "只选了一类，全部运行都落在 {category} 上。",
-        "even": "运行部分在 {categories} 之间平均分摊 —— 各占 {shares}。"
+        "shares": "运行的分配为 {shares}。"
       },
       "result": {
         "idle": "在你发起估算之前不会计算任何内容：填写区间、选择一到三个类别，然后选择「估算积分」。",
@@ -6699,6 +6899,7 @@
         "largestPoolLabel": "最大的积分池",
         "largestPool": "你的估算超过了我们最大的积分池，因此给出的方案是这个积分池 ——{plan}—— 其余部分用加购额度补足。",
         "largestPoolTopUp": "每月其余约 {excess} 积分由加购额度补足：{units} × {unitCredits} 积分，每月约 ${price}。",
+        "regularWithTopUps": "你的估算超过了 {plan} 每月 {credits} 积分，因此给出的方案是 {plan}，其余部分用加购额度补足。",
         "aboveTopRung": "这超过了最大常规套餐每月 {ceiling} 积分，而目前没有更大的积分池，超出部分通过加购额度补足。",
         "upgradeNote": "期中升级按本周期剩余天数计价。扣费之前会显示具体金额。",
         "goToPlan": "前往该套餐"
@@ -6784,6 +6985,156 @@
     "internalBilling": {
       "badge": "内部计费",
       "note": "该组织与客户完全一样计费，随后被补偿——下方每个数字都是真实的，余额净额为零。"
+    },
+    "fleetUse": {
+      "title": "集群用量",
+      "lead": "你的计划允许同时运行多少、当前在运行什么、哪些在等待",
+      "yourPlan": "你的计划：",
+      "planNotRead": "未能读取计划",
+      "noPlanLimits": "无计划上限",
+      "loading": "加载中…",
+      "label": {
+        "agentRunsInParallel": "并行智能体运行",
+        "agentsInOrg": "每个组织托管智能体",
+        "agentsPerPerson": "每人托管智能体",
+        "ciJobsInFlight": "进行中的 CI 任务"
+      },
+      "explain": {
+        "agentRunsInParallel": "同时运行的托管智能体任务，超出部分排队等待。",
+        "agentsInOrg": "整个组织中的活动托管智能体，无论运行中还是休眠中，超出时新建会被拒绝，不排队。",
+        "agentsPerPerson": "每人可持有的活动托管智能体，超出时新建会被拒绝，不排队。",
+        "ciJobsInFlight": "Motir 运行器上同时进行的 CI 任务，超出部分排队等待。"
+      },
+      "inUseOf": "{inUse} / {figure}",
+      "membersAt": "{count, plural, other {# 名成员}}达到 {figure} / {figure}",
+      "running": "{count} 个运行中",
+      "noLimit": "无上限",
+      "notRead": "未能读取",
+      "source": {
+        "staffOverride": "由 Motir 为你的组织设定：同时 {figure} 个 CI 任务",
+        "notRead": "未能读取你的 CI 上限，CI 任务会等到可以读取为止。其他数字是最新的。",
+        "granted": {
+          "agentRunsInParallel": "{figure} — 已批准 {vcpu} vCPU ÷ 2，使用你自己的智能体运行器账户",
+          "ciJobsInFlight": "{figure} — 已批准 {vcpu} vCPU ÷ 2，使用你自己的 CI 运行器账户"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "你的智能体运行器账户仍在共享底线上，按 Max 上限",
+          "ciJobsInFlight": "你的 CI 运行器账户尚未上线时的共享底线上限：{figure} 个运行器"
+        }
+      },
+      "waiting": {
+        "none": "没有等待",
+        "count": "{count} 个排队",
+        "planLimit": "受计划上限限制 · 更换计划可以解除",
+        "poolFull": {
+          "agentRunsInParallel": "所有智能体运行器账户都已满 · 这是 Motir 的容量，不是你的计划",
+          "ciJobsInFlight": "所有 CI 运行器账户都已满 · 这是 Motir 的容量，不是你的计划"
+        },
+        "other": "其他原因"
+      },
+      "indexing": "代码图索引：{count} 个运行中 · 不计入任何计划上限",
+      "indexingNotRead": "代码图索引：未能读取 · 不计入任何计划上限",
+      "whereItRuns": "运行位置",
+      "kind": {
+        "ci_runner": "CI 运行器",
+        "code_graph_index": "索引器",
+        "hosted_agent": "智能体运行器",
+        "agent_instance": "智能体托管"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Motir 的共享 AWS 池",
+        "own_aws_account": "你组织自己的 AWS 账户"
+      },
+      "notReadNotice": "未能读取你的计划上限或当前运行情况。这里不是零，而是未知。",
+      "tryAgain": "重试",
+      "noPlanLimitsNote": "该组织由 Motir 运营，没有计划上限。当前运行情况不显示上限。",
+      "noFleet": "你的计划不包含托管智能体运行、CI 运行器或智能体。请在上方的 Motir AI 中选择计划来运行它们。",
+      "accounts": {
+        "title": "你自己的 AWS 账户",
+        "notRead": "暂时未能读取你的账户状态。",
+        "kind": {
+          "ci_runner": "CI 运行器",
+          "hosted_agent": "智能体运行器",
+          "indexer_and_hoster": "索引器 + 智能体托管"
+        },
+        "role": {
+          "ci_runner": "运行你的 CI 任务",
+          "hosted_agent": "运行你的托管智能体任务",
+          "indexer_and_hoster": "为你的代码建索引并托管你的智能体"
+        },
+        "state": {
+          "created": "已创建",
+          "quota_requested": "已申请配额",
+          "granted": "已批准",
+          "live": "已上线"
+        },
+        "quotaDenied": "配额被拒",
+        "since": "自 {when}",
+        "vcpuAsked": "申请的 vCPU",
+        "vcpuGranted": "批准的 vCPU",
+        "noneYet": "暂无",
+        "sharedFloor": {
+          "ci_runner": "仍在共享底线上：CI {figure} 个运行器。",
+          "hosted_agent": "仍在共享底线上，按 Max 上限：同时 {figure} 个智能体运行。",
+          "indexer_and_hoster": "索引和智能体托管仍在共享底线上：托管智能体每人 {perPerson} 个、每个组织 {perOrg} 个。"
+        },
+        "liveOnceNetwork": "账户网络建好后即上线。",
+        "deniedNote": "在 AWS 批准提额之前，账户保持在“{state}”。",
+        "keptSpots": "始终为索引保留 {count} 个机器位；智能体实例使用其余部分。"
+      },
+      "quotaOutcome": {
+        "pending": "AWS 处理中",
+        "case_opened": "AWS 已建立工单",
+        "approved": "AWS 已批准",
+        "denied": "AWS 已拒绝",
+        "not_approved": "AWS 未批准",
+        "case_closed": "AWS 已关闭工单",
+        "invalid_request": "AWS 无法读取该申请"
+      },
+      "request": {
+        "button": "申请更多容量",
+        "status": {
+          "open": "已提交",
+          "filed": "已提交给 AWS",
+          "closed": "已关闭"
+        },
+        "granted": "已批准 {vcpu} vCPU",
+        "asked": "{date} 申请了 {vcpu} vCPU",
+        "line": {
+          "open": "已发给 Motir，由 Motir 向 AWS 提交",
+          "filed": "Motir 已向 AWS 提交，AWS 尚未答复",
+          "granted": "AWS 已批准；下次读取时数字会更新",
+          "denied": "AWS 拒绝了提额；可以再次申请",
+          "closedNote": "Motir 已关闭：“{note}”",
+          "closed": "Motir 已关闭；AWS 的答复：{outcome}"
+        }
+      },
+      "dialog": {
+        "title": "申请更多容量",
+        "account": "{account}账户 · 已批准 {vcpu} vCPU。Motir 会向 AWS 提交提额，并告诉你 AWS 的答复。",
+        "accountNoneGranted": "{account}账户 · 尚未批准任何 vCPU。Motir 会向 AWS 提交提额，并告诉你 AWS 的答复。",
+        "figureLabel": "需要的 vCPU",
+        "figurePlaceholder": "例如 300",
+        "figureHelp": "一个大于当前已批准数量的整数。",
+        "figureInvalid": "请填写大于 {granted}（当前已批准的 vCPU）的整数。",
+        "reasonLabel": "为什么需要",
+        "reasonPlaceholder": "什么会不够用，什么时候",
+        "reasonHelp": "最多 2,000 个字符。Motir 会在向 AWS 提交前阅读。",
+        "reasonInvalid": "请说明原因，最多 2,000 个字符。",
+        "cancel": "取消",
+        "send": "发送申请",
+        "sending": "发送中…",
+        "sent": "申请已发送。Motir 会告诉你 AWS 的答复。",
+        "refused": {
+          "open": "该账户已有一个未完成的申请。它的状态显示在账户行上；关闭后再申请。",
+          "notFound": "你的组织还没有这一类的自有账户，因此没有可提额的对象。购买 Host 后会创建。",
+          "forbidden": "只有组织的所有者或管理员可以申请更多容量。",
+          "network": "申请未能发送。请检查网络后重试——什么也没有发送。",
+          "invalid": "无法读取该申请。请检查两个字段后重新发送。",
+          "failed": "申请没有发送。请稍后重试。"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -7240,7 +7591,8 @@
       "install_error": "未能完成 Motir GitHub App 的设置，请重新尝试安装。",
       "select_repos": "已安装 Motir GitHub App。请选择此组织要连接该账号下的哪些仓库。",
       "repo_unavailable": "该仓库已连接到另一个组织，因此未在此添加。其他内容均未更改。",
-      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。"
+      "installation_not_accessible": "你在 GitHub 上看不到该 GitHub 账号，因此它未关联到此组织。未做任何更改。",
+      "identity_refused": "GitHub 不再接受你的 GitHub 登录，因此 Motir 无法完成 App 的连接。请在“设置 → 账户 → Git 账户”中断开你的账户并重新连接，然后再试一次。"
     },
     "connect": {
       "title": "连接 GitHub",
@@ -7363,6 +7715,8 @@
         },
         "conflictOn": "<prs></prs> 与 {base} 冲突，无法合并。",
         "conflictOnNoBase": "<prs></prs> 与其目标分支冲突，无法合并。",
+        "outOfDateOn": "<prs></prs> 落后于要求保持同步的 {base}，无法合并。",
+        "outOfDateOnNoBase": "<prs></prs> 落后于要求保持同步的目标分支，无法合并。",
         "howConflict": "智能体会在拉取请求自己的分支上变基或解决冲突、推送，检查随即重新运行。",
         "rearm": "这里没有可批准的东西。推送会移动 HEAD 并重新武装这个问题；下一次检查全绿时，会就新的提交提出一次合并审批。",
         "sentBackByAgent": "审查智能体退回了这些提交。智能体会在{count, plural, =1 {同一个拉取请求} other {同一组拉取请求}}上修复它们，并把审查发现写进提示词。",
@@ -7518,6 +7872,14 @@
         "failing": "检查失败",
         "running": "检查运行中"
       },
+      "preview": {
+        "building": "预览构建中",
+        "ready": "预览已就绪",
+        "failed": "预览失败",
+        "failedReason": "预览失败 · <tone>{reason}</tone>",
+        "closed": "预览已关闭",
+        "unknown": "预览 {state}"
+      },
       "linkPr": "关联拉取请求",
       "linkPrField": "要关联的拉取请求",
       "searchPlaceholder": "搜索拉取请求…",
@@ -7638,7 +8000,9 @@
       "identity": {
         "title": "请先连接你的 GitHub 账户",
         "body": "Motir 通过你自己的 GitHub 身份列出你可见的 GitHub 账户。请在“设置 → 账户 → Git 账户”中连接，然后返回此处。",
-        "action": "前往 Git 账户"
+        "action": "前往 Git 账户",
+        "refusedTitle": "重新连接你的 GitHub 账户",
+        "refusedBody": "GitHub 不再接受 Motir 为你保存的登录：它已被撤销或已过期。请在“设置 → 账户 → Git 账户”中断开连接并重新连接，然后返回此处。未做任何更改。"
       },
       "cancel": "取消",
       "back": "所有账户",
@@ -8424,7 +8788,7 @@
       "clearEnough": "已足够清楚，可以按原样规划。",
       "nothingSettled": "没有确定任何内容，所以会按请求原样规划。",
       "requirementSaved": "已保存为需求文档中的<link>{title}</link>。",
-      "requirementNotSaved": "<lead>无法保存需求。</lead>尚未开始规划。确认按钮仍可使用，请重试。"
+      "requirementPageNotSaved": "<lead>无法将需求保存为页面。</lead>规划仍会使用该需求。"
     },
     "logBugOffer": {
       "label": "提议记录缺陷",
@@ -9205,10 +9569,73 @@
     "outcomeNeedsAccess": "完成访问设置",
     "connectGithub": "连接GitHub",
     "stateCreated": "已创建",
-    "createdDetail": "由Motir托管 · 基于Motir的Next.js启动模板初始化。",
+    "createdDetail": "由Motir托管 · 基于{seed}创建。",
     "stateFailed": "创建失败",
     "actionError": "操作未成功，没有任何内容被更改——请重试。",
-    "promiseDoor": "迁移是怎么回事"
+    "promiseDoor": "迁移是怎么回事",
+    "stateProposed": "尚未创建",
+    "createdDetailInitialised": "由Motir托管 · 以初始化代码仓库创建。",
+    "createdDetailNoSeed": "由Motir托管。",
+    "seed": {
+      "starterPillLabel": "基于{label}",
+      "targetPillLabel": "托管在{target}",
+      "default": "默认",
+      "noTarget": "无托管目标",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "内部工具",
+        "mvp": "MVP",
+        "planned_product": "规划中的产品"
+      },
+      "size": {
+        "small": "小型",
+        "medium": "中型",
+        "large": "大型"
+      },
+      "why": {
+        "matched": "<b>选择此启动模板的原因：</b>它部署到{target}，并且是为此规模的{use, select, internal_tool {内部工具} mvp {MVP} planned_product {规划中的产品} other {此用途}}打造的。",
+        "matchedTarget": "<b>选择此启动模板的原因：</b>它部署到{target}。",
+        "softUse": "<b>选择此启动模板的原因：</b>它是部署到{target}的最接近的启动模板。没有为{use, select, internal_tool {内部工具} mvp {MVP} planned_product {规划中的产品} other {此用途}}打造的{target}启动模板。",
+        "softSize": "<b>选择此启动模板的原因：</b>它是部署到{target}的最接近的启动模板。没有为此规模代码仓库打造的{target}启动模板。",
+        "notDeployed": "<b>选择此启动模板的原因：</b>它是Motir为{role}应用提供的启动模板。Motir托管不部署此代码仓库，因此不显示托管信息。",
+        "noStackSignal": "<b>选择此启动模板的原因：</b>计划没有说明此代码仓库使用哪种技术栈，因此它基于{target}上Web代码仓库的常用启动模板。如果知道技术栈，请另选一个。",
+        "noTarget": "<b>选择此启动模板的原因：</b>此代码仓库还没有托管目标，因此它基于Web代码仓库的常用启动模板。",
+        "noMatch": "<b>选择此启动模板的原因：</b>没有为{where, select, target {{target}上的} other {此技术栈的}}{role}代码仓库打造的启动模板，因此它以初始化代码仓库开始：一个只有README的空代码仓库。",
+        "byHand": "<b>选择此启动模板的原因：</b>有人为此代码仓库手动选择了它。"
+      },
+      "fact": {
+        "hosting": "托管",
+        "use": "用途",
+        "size": "规模",
+        "stack": "技术栈",
+        "not_set": "未设置",
+        "not_named": "未指定",
+        "none": "无",
+        "notServed": "· 不适用",
+        "noRoleStarter": "· 没有部署到此处的{role}启动模板"
+      },
+      "picker": {
+        "label": "启动模板",
+        "groupTarget": "{target}上的{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {其他}}启动模板",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {其他}}启动模板",
+        "groupAny": "任意代码仓库",
+        "initialisedSub": "一个只有README的空代码仓库",
+        "footerTarget": "仅显示部署到{target}的{role}代码仓库启动模板。",
+        "footerNoTarget": "仅显示{role}代码仓库的启动模板。此代码仓库还没有托管目标。"
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label}不能在此使用。</b>它部署到{targets}，而此代码仓库运行在{target}上。启动模板未更改。",
+        "targetMismatchNoTarget": "<b>{label}不能在此使用。</b>它部署到{targets}，而此代码仓库没有托管目标。启动模板未更改。",
+        "retired": "<b>{label}已停用。</b>Motir不再提供它，请另选一个启动模板。启动模板未更改。",
+        "roleMismatch": "<b>{label}不能在此使用。</b>它是{entryRole}代码仓库的启动模板，而此代码仓库是{role}。启动模板未更改。",
+        "notEditable": "<b>此代码仓库已经创建，</b>因此不能再改用其他启动模板。请重新加载查看。",
+        "unknown": "<b>该启动模板已不存在。</b>请另选一个启动模板。启动模板未更改。"
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "代码仓库",
@@ -9602,6 +10029,8 @@
         "queueFailedBare": "在合并队列中失败",
         "conflicted": "与 <d>{base}</d> 冲突",
         "conflictedNoBase": "与其目标分支冲突",
+        "outOfDate": "落后于 <d>{base}</d>",
+        "outOfDateNoBase": "落后于其目标分支",
         "ciFailed": "CI 未通过 · <d>{check}</d>",
         "ciFailedBare": "CI 未通过",
         "changesRequested": "<b>{name}</b> 要求修改 ——“{note}”",
@@ -9885,7 +10314,9 @@
       "navIdeas": "创意",
       "navRunModels": "托管运行模型",
       "navFleetSettings": "集群设置",
-      "navCapacity": "服务商容量"
+      "navCapacity": "服务商容量",
+      "navJobs": "任务",
+      "navStarters": "启动模板"
     },
     "nav": {
       "overview": "总览",
@@ -10107,6 +10538,13 @@
             "limits": {
               "edit": "编辑了服务商模型的容量限额"
             }
+          },
+          "jobs": {
+            "dlq_replay": "重放了一条死信"
+          },
+          "seed_registry": {
+            "promote": "将一个仓库提升为起始模板",
+            "retire": "下架了一个起始模板"
           }
         }
       }
@@ -11652,8 +12090,8 @@
           "override": "覆盖值"
         },
         "facts": {
-          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · 同时 {ci} 个 CI 作业",
-          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {running} 个智能体运行中 · CI 上限无法读取",
+          "plan": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · 同时 {ci} 个 CI 作业",
+          "planCiUnreadable": "套餐 <strong>{plan}</strong> · 同时 {runs} 个托管运行 · 每人 {perUser} 个智能体 · {agents} 个智能体 · CI 上限无法读取",
           "planExempt": "套餐 <strong>无套餐限制</strong>",
           "planExemptOverride": "套餐 <strong>无套餐限制</strong> · 同时 {ci} 个 CI 作业（覆盖值）",
           "planUnknown": "套餐 <strong>未知 · {key}</strong> · 新容器被拒绝",
@@ -12413,6 +12851,250 @@
         "notConfigured": "这些数字尚未接入数据来源，因此该行不可用，也不会据此触发或解除告警。",
         "readFailed": "这些数字读取失败。在读取成功之前，不会触发或解除告警。"
       }
+    },
+    "jobs": {
+      "breadcrumb": "平台 · 任务",
+      "title": "任务",
+      "subtitle": "平台运行过的每个后台任务（无论是否属于工作区），以及每条等待重放的死信。",
+      "tabsLabel": "任务台账视图",
+      "tabs": {
+        "runs": "运行",
+        "dlq": "死信",
+        "waiting": "{count} 条等待中"
+      },
+      "status": {
+        "label": "状态",
+        "all": "全部",
+        "running": "运行中",
+        "succeeded": "成功",
+        "failed": "失败",
+        "abandoned": "已放弃"
+      },
+      "columns": {
+        "function": "函数",
+        "event": "事件",
+        "functionEvent": "函数 · 事件",
+        "workspace": "工作区",
+        "status": "状态",
+        "attempt": "尝试",
+        "attempts": "尝试次数",
+        "started": "开始",
+        "duration": "耗时",
+        "failure": "失败原因",
+        "lastFailed": "最后失败",
+        "replay": "重放"
+      },
+      "runsCaption": "后台任务运行",
+      "dlqCaption": "死信",
+      "noWorkspace": "无工作区",
+      "pageLabel": "第 {page} 页",
+      "pagerLabel": "运行分页",
+      "previous": "上一页",
+      "next": "下一页",
+      "runsEmpty": {
+        "titleAll": "暂无运行",
+        "bodyAll": "后台任务运行后会显示在这里。",
+        "titleStatus": "没有此状态的运行",
+        "bodyStatus": "台账中没有此状态的记录。选择“全部”以查看所有运行。"
+      },
+      "runsError": {
+        "title": "无法读取任务台账"
+      },
+      "dlqError": {
+        "title": "无法读取死信"
+      },
+      "error": {
+        "body": "数据库没有响应。未做任何更改。"
+      },
+      "retry": "重试",
+      "loadingRuns": "正在加载运行",
+      "readOnly": "只读。重放死信需要运维人员角色。",
+      "fn": {
+        "label": "函数",
+        "all": "所有函数"
+      },
+      "waitingLine": "{waiting} 条等待中 · 最近 7 天内已重放 {replayed} 条",
+      "capped": "显示 {count} 条中的 {shown} 条。列表显示最新的 200 条。",
+      "replay": "重放",
+      "replayAria": "重放 {function} 的死信",
+      "replayedAt": "{time}已重放",
+      "toast": {
+        "replayedTitle": "死信已重放",
+        "replayedBody": "已重新发送 {function}。",
+        "alreadyTitle": "已重放过",
+        "alreadyBody": "已有人先重放了这条死信。未重新发送任何内容。",
+        "failedTitle": "重放失败",
+        "failedBody": "未发送任何内容。请重试。",
+        "notPermittedBody": "重放死信需要运维人员角色。",
+        "notFoundBody": "这条死信已不存在。"
+      },
+      "replayAll": {
+        "button": "全部重放（{count}）",
+        "title": "要重放 {function} 的 {count} 条死信吗？",
+        "body": "每条都会作为新的运行重新发送，并写入平台审计日志。已被他人先重放的死信将被跳过。",
+        "confirm": "重放 {count} 条",
+        "cancel": "取消",
+        "running": "正在重放…",
+        "runningLine": "正在重放 {count} 条死信，每次 50 条。完成前请保持此窗口打开。",
+        "doneTitle": "重放完成",
+        "doneWithFailuresTitle": "重放完成，但有失败",
+        "replayed": "已重放 {count} 条",
+        "already": "{count} 条已由他人重放",
+        "nothingLeft": "已重放 0 条，全部 {count} 条此前均已重放",
+        "failed": "{count} 条无法重放，仍保留在列表中，请逐条重放。",
+        "error": "无法开始重放。未做任何更改。",
+        "close": "完成"
+      },
+      "dlqEmpty": {
+        "title": "没有等待中的死信",
+        "body": "没有任务用尽重试次数。出现时，死信会显示在这里。"
+      }
+    },
+    "starters": {
+      "breadcrumb": "运营 · 启动模板",
+      "title": "启动模板",
+      "subtitle": "Motir创建的代码仓库从这里开始。匹配会按角色、托管目标、用途和规模在启用的启动模板中选择。可以把Motir创建的代码仓库提升为启动模板，或停用某个启动模板。",
+      "promote": "提升代码仓库",
+      "card": {
+        "title": "启动模板库",
+        "count": "最新优先 · {count, plural, other {#个启动模板}}"
+      },
+      "filter": {
+        "label": "筛选启动模板",
+        "role": "角色",
+        "status": "状态",
+        "target": "托管目标",
+        "anyRole": "任意角色",
+        "anyTarget": "任意目标",
+        "all": "全部"
+      },
+      "status": {
+        "active": "启用",
+        "retired": "已停用"
+      },
+      "notDeployed": "不由Motir托管部署",
+      "col": {
+        "starter": "启动模板",
+        "roleStack": "角色 · 技术栈",
+        "serves": "适用",
+        "hosting": "托管",
+        "status": "状态",
+        "provenance": "来源",
+        "actions": "操作"
+      },
+      "alsoAnswersTo": "也可通过{keys}引用",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "任意角色 · 任意技术栈",
+      "everyUse": "所有用途",
+      "everySize": "所有规模",
+      "provenance": {
+        "shipped": "随Motir提供",
+        "promoted": "由<b>{email}</b>于{date}从{repo}的<mono>{ref}</mono>提升",
+        "promotedNoRepo": "由<b>{email}</b>于{date}从<mono>{ref}</mono>提升",
+        "retired": "由<b>{email}</b>于{date}停用：“{reason}”",
+        "removedAccount": "已删除的账号"
+      },
+      "defaultForRole": "{role}的默认模板",
+      "defaultForEveryRole": "所有角色的默认模板",
+      "empty": {
+        "title": "没有符合这些筛选条件的启动模板",
+        "bodyRoleTarget": "没有部署到{target}的启用中的{role}代码仓库启动模板。清除筛选条件可查看整个启动模板库。",
+        "body": "没有符合这些筛选条件的启动模板。",
+        "clear": "清除筛选条件"
+      },
+      "pager": {
+        "label": "分页",
+        "showing": "第{from}–{to}个，共{total}个",
+        "previous": "上一页",
+        "next": "下一页"
+      },
+      "retire": {
+        "action": "停用",
+        "title": "停用{label}？",
+        "body": "匹配将不再选择它，启动模板选择器也不再提供它。已基于它创建的代码仓库保留各自的代码。尚未创建且指定了它的代码仓库，在有人另选启动模板之前无法基于它创建。",
+        "reasonLabel": "原因",
+        "reasonHelp": "会连同操作人的名字写入审计日志。",
+        "cancel": "取消",
+        "confirm": "停用启动模板",
+        "done": "已停用。{label}不再提供给新的代码仓库。",
+        "failedTitle": "此启动模板未停用。",
+        "failed": "Motir未能停用它。请重试。",
+        "defaultTitle": "此启动模板不能停用。",
+        "defaultBody": "“{key}”是{role}代码仓库的默认启动模板。更改默认模板是一项决策，不是运营人员的操作。",
+        "defaultBodyEveryRole": "“{key}”是所有角色的默认启动模板。更改默认模板是一项决策，不是运营人员的操作。",
+        "close": "关闭"
+      },
+      "promoteForm": {
+        "breadcrumb": "运营 · 启动模板 · 提升",
+        "title": "提升代码仓库",
+        "subtitle": "Motir会把该代码仓库在指定ref处的内容复制到自己的组织中，并把这份副本作为启动模板提供给符合条件的新代码仓库。已有的代码仓库不受影响。",
+        "field": {
+          "source": "Motir创建的代码仓库",
+          "ref": "Ref",
+          "role": "角色",
+          "stack": "技术栈",
+          "label": "标签",
+          "key": "键",
+          "uses": "适用用途",
+          "sizes": "适用规模",
+          "targets": "部署到的托管目标",
+          "reason": "原因"
+        },
+        "help": {
+          "ref": "分支、标签或提交。启动模板从这里复制。",
+          "stack": "规划器对此技术栈的称呼，使用小写。",
+          "label": "用户在其代码仓库上看到的名称。",
+          "key": "小写字母、数字和连字符。也是motir-co中副本的名称。之后无法更改。",
+          "targets": "每个目标都必须列在该代码仓库在ref处的motir.hosting.json中。如果Motir托管不部署此启动模板，请一个都不要勾选。",
+          "reason": "会连同操作人的名字写入审计日志。"
+        },
+        "source": {
+          "placeholder": "选择代码仓库",
+          "empty": "没有匹配的代码仓库。",
+          "footer": "仅显示Motir创建的代码仓库。",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "正在移交给所有者",
+          "notCreated": "尚未创建"
+        },
+        "rolePlaceholder": "选择角色",
+        "cancel": "取消",
+        "review": "检查提升内容",
+        "confirm": {
+          "title": "将{name}提升为启动模板？",
+          "body": "Motir会把<b>{repo}</b>在<b>{ref}</b>处的内容复制到<b>motir-co/{key}</b>，并把<b>{label}</b>加入启动模板库。此后，匹配可以为符合条件的新{role}代码仓库选择它。已有的代码仓库不受影响。",
+          "roleStack": "角色 · 技术栈",
+          "uses": "用途",
+          "sizes": "规模",
+          "hosting": "托管",
+          "reason": "原因",
+          "notDeployed": "不由Motir托管部署",
+          "back": "返回",
+          "promote": "提升"
+        },
+        "done": "已提升。{target}上的新{role}代码仓库现在可以基于{label}创建。",
+        "doneNoTarget": "已提升。新的{role}代码仓库现在可以基于{label}创建。",
+        "refusal": {
+          "sourceTitle": "此代码仓库不能提升。",
+          "takenOver": "它正在移交给所有者或已经移交，Motir不能再复制它。",
+          "notCreated": "只有Motir创建的代码仓库才能提升，而此代码仓库仍处于{state}状态。",
+          "organizationRow": "这是组织自己的代码仓库，Motir从不复制客户的代码。",
+          "notMotirHeld": "{repo}已不在Motir持有的GitHub组织中。",
+          "notFound": "它已不存在。请另选一个。",
+          "refNotFound": "“{ref}”不是{repo}的分支、标签或提交。",
+          "manifestTitle": "motir.hosting.json拒绝了此次提升。",
+          "manifestMissing": "此代码仓库在<b>{ref}</b>处没有motir.hosting.json，因此不能声明托管目标。请在该ref处添加此文件，或取消勾选所有托管目标。",
+          "manifestInvalid": "<b>{ref}</b>处的文件无效：<b>{field}</b> {reason}",
+          "theDocument": "文档",
+          "targetNotDeclared": "它的targets中没有<b>{target}</b>（列出的是{declared}）。请取消勾选{target}，或把它加入文件。",
+          "declaredNone": "无",
+          "targetNotDeclaredField": "{ref}处的motir.hosting.json中没有{target}。",
+          "notInList": "“{value}”不是有效的{kind, select, role {角色} useCases {用途} sizes {规模} other {托管目标}}。请从{list}中选择。",
+          "keyTaken": "键{key}已被占用。",
+          "templateNameTaken": "motir-co/{key}已存在，且不是此启动模板的副本。请另选一个键，或先删除该代码仓库。",
+          "genericTitle": "Motir未能提升此代码仓库。",
+          "genericBody": "没有复制任何内容。请重试。"
+        }
+      }
     }
   },
   "legal": {
@@ -12565,8 +13247,8 @@
       "creditsUnknown": "Motir 暂时无法查询你的组织额度。请稍后重试。",
       "userCap": "你的组织的 {plan} 套餐每人最多可有 {limit, plural, other {#}} 个智能体。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
       "userCapNoFigure": "你拥有的智能体已达到组织套餐允许的每人上限。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
-      "orgRunningLimit": "你的组织的 {plan} 套餐最多可同时运行 {limit, plural, other {#}} 个智能体，现已全部在运行。休眠一个后才能启动另一个。",
-      "orgRunningLimitNoFigure": "你的组织同时运行的智能体已达到套餐允许的上限。休眠一个后才能启动另一个。",
+      "orgCap": "你的组织的 {plan} 套餐在整个组织中最多可有 {limit, plural, other {#}} 个智能体，无论运行中还是休眠中。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
+      "orgCapNoFigure": "你的组织拥有的智能体已达到套餐允许的上限，无论运行中还是休眠中。每个智能体即使休眠，每天也会收取存储费用。删除一个后才能再创建。",
       "busy": "Motir 当前运行的机器已达上限。请几分钟后重试。",
       "notOffered": "暂不提供该编码智能体：其条款尚不允许平台托管它。请选择其他编码智能体。",
       "nameTaken": "你在这个项目上已经有一个名为 {name} 的智能体。",
@@ -12580,7 +13262,7 @@
       "aiPlanUnknown": "无法查询你的 AI 套餐",
       "credits": "额度已用完",
       "userCap": "你的上限",
-      "orgRunningLimit": "你的组织的上限"
+      "orgCap": "你的组织的上限"
     },
     "lapse": {
       "bannerLead": "你的组织的 AI 套餐已结束。",
@@ -13622,6 +14304,10 @@
         "next": "没有批准，也没有合并任何内容。请在分支上解决冲突（motir fix 可交给智能体处理），检查通过后，Motir 会再次请求审批。",
         "atPress": "{host} 报告 {pr} 与 {base} 冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。",
         "atPressNoBase": "{host} 报告 {pr} 与其目标分支冲突。该操作在写入任何内容之前即被拒绝，因此 {key} 没有变化。"
+      },
+      "mergeOutOfDate": {
+        "title": "该拉取请求落后于其目标分支。",
+        "next": "没有合并任何内容。目标分支要求拉取请求在合并前与其保持同步，而该拉取请求已落后。请将目标分支合入它（更新分支，或让 motir fix 交给智能体处理），检查通过后，Motir 会再次请求审批。"
       },
       "mergeBranchProtected": {
         "title": "分支保护规则暂不允许此次合并。",
@@ -14794,6 +15480,7 @@
       "run_died": "待修复 · 运行已中断",
       "queue_failed": "待修复 · 在合并队列中失败",
       "conflicted": "待修复 · 与其目标分支冲突",
+      "out_of_date": "待修复 · 落后于其目标分支",
       "ci_failed": "待修复 · CI 未通过",
       "changes_requested": "待修复 · 已要求修改",
       "sent_back_by_agent": "待修复 · 已被审查智能体退回",
@@ -14805,6 +15492,8 @@
       "queueFailedBare": "需要修复：它在合并队列中失败。",
       "conflicted": "需要修复：它与 <code>{base}</code> 冲突。",
       "conflictedNoBase": "需要修复：它与其目标分支冲突。",
+      "outOfDate": "需要修复：它落后于 <code>{base}</code>。",
+      "outOfDateNoBase": "需要修复：它落后于其目标分支。",
       "ciFailed": "需要修复：CI 未通过（检查 <code>{check}</code>）。",
       "ciFailedBare": "需要修复：CI 未通过。",
       "changesRequested": "需要修复：<b>{name}</b> 要求修改——“{note}”",
@@ -15398,5 +16087,85 @@
     "pendingMark": "正在翻译",
     "showOriginal": "显示原文",
     "showTranslation": "显示译文"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "预览",
+      "brand": "Motir",
+      "footer": "你正在访问 <chip>{host}</chip>，这是 Motir 为一个拉取请求运行的预览。Motir 绝不会在此地址要求你输入密码。登录只在 app.motir.co 进行。"
+    },
+    "signIn": {
+      "banner": "登录以打开 <chip>{host}</chip> 上的预览。预览仅对项目成员开放。"
+    },
+    "refused": {
+      "metaTitle": "无权访问此预览",
+      "pill": "预览",
+      "title": "你无权访问此预览",
+      "body": "预览仅对其所属项目的成员开放。如果是别人分享给你的链接，请让对方把你加入该项目，然后重新打开链接。",
+      "signedInAs": "当前登录：<strong>{email}</strong>",
+      "home": "前往 Motir",
+      "switch": "使用其他账号登录",
+      "switchHint": "登录后你会回到此预览。"
+    },
+    "building": {
+      "pill": "构建中",
+      "title": "正在构建此预览",
+      "body": "仓库的 CI 正在为此拉取请求的最新提交构建预览镜像，通常需要几分钟。",
+      "refresh": "此页面每 10 秒检查一次，预览就绪后会自动打开。"
+    },
+    "starting": {
+      "pill": "启动中",
+      "title": "正在启动此预览",
+      "body": "镜像已构建完成。Motir 正在启动它，并等待健康检查通过。"
+    },
+    "steps": {
+      "label": "进度",
+      "build": "构建镜像",
+      "start": "启动预览",
+      "ready": "就绪"
+    },
+    "facts": {
+      "workItem": "工作项",
+      "pullRequest": "拉取请求",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "在 Motir 中打开 {key}",
+      "openPullRequest": "在 GitHub 上打开拉取请求 #{n}"
+    },
+    "failed": {
+      "pill": "失败",
+      "title": "此预览未能启动",
+      "body": "此拉取请求的最新提交没有在运行的预览。新的推送会重新构建它。",
+      "reasonTitle": "失败原因",
+      "checks": "工作项中可以查看此拉取请求的检查及其日志。",
+      "reason": {
+        "imageBuild": "预览镜像未能构建：「Preview image」工作流以「{conclusion}」结束。原因见其在 GitHub 上的运行日志。",
+        "healthTimeout": "预览未能在 {minutes} 分钟内通过健康检查。",
+        "healthFailed": "预览已启动，但未通过健康检查。",
+        "fallback": "预览无法启动。"
+      }
+    },
+    "unsupported": {
+      "pill": "预览中不可用",
+      "title": "预览无法执行此操作",
+      "websocket": "实时连接（WebSocket）无法通过预览网关。预览的其他功能照常可用。",
+      "tooLarge": "无法向预览发送大于 10 MB 的请求。",
+      "noLength": "此请求没有说明其大小，因此预览网关无法接受。"
+    },
+    "closed": {
+      "pill": "已关闭",
+      "title": "此预览已关闭",
+      "merged": "拉取请求 #{n} 已合并，因此 Motir 关闭了它的预览并删除了其数据库。",
+      "closed": "拉取请求 #{n} 未合并即被关闭，因此 Motir 关闭了它的预览并删除了其数据库。",
+      "takenOver": "此仓库已离开 Motir，因此 Motir 关闭了它的预览并删除了其数据库。",
+      "unknown": "Motir 已关闭此预览并删除了其数据库。"
+    },
+    "notFound": {
+      "pill": "不可用",
+      "title": "这里没有预览",
+      "body": "此地址不属于任何正在运行的预览。它可能已被关闭，或者链接输入有误。",
+      "home": "前往 Motir"
+    }
   }
 }

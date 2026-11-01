@@ -11,6 +11,7 @@ import {
   localizeClaim,
   localizeIdea,
   localizeLabel,
+  publicIdeaLocaleCode,
   type PublicIdeaLocale,
 } from '@/lib/ideas/publicLocale';
 import { tagLabelTranslations, toStaffTranslationView } from '@/lib/ideas/staffTranslations';
@@ -81,7 +82,7 @@ export function toPublicIdeaDto(
       const claim = localizeClaim(row.evidence[i]!, locale);
       return { ...e, claim: claim.text, claimFallback: claim.fallback };
     }),
-    locale,
+    locale: publicIdeaLocaleCode(locale),
     fallbackFields,
   };
 }

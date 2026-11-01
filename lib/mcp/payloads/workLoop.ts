@@ -22,7 +22,7 @@ import { PLAN_DECISION_REASONS } from '@/lib/dto/plans';
 import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
-import type { PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
+import type { PlanOutcomeDto, PlanWithItemsAndWarningsDto } from '@/lib/dto/plans';
 import { redactNativeActor } from '@/lib/plans/redactNativeModel';
 import { definePayload } from './define';
 import { parsedSectionsSchema } from './parsedSectionsSchema';
@@ -182,6 +182,22 @@ export const planOutcomePayload = definePayload({
  * proposal rows stay MCP's own and the divergence is DECLARED here rather than
  * discovered later.
  */
+/**
+ * One `modify` approve will send back from built work (MOTIR-10106) — the shape
+ * `ProposalRescopeWarningDto` carries, on the write doors and `validate_plan`.
+ */
+export const rescopeWarningSchema = z.object({
+  planItemId: z.string(),
+  proposal: z.string(),
+  workItemId: z.string(),
+  identifier: z.string(),
+  status: z.string(),
+  statusLabel: z.string(),
+  outcomes: z.string(),
+  fields: z.array(z.enum(['title', 'descriptionMd', 'repository'])),
+  message: z.string(),
+});
+
 export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: true }).extend({
   projectId: z.string(),
   itemCount: z.number().int(),
@@ -257,18 +273,52 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
       settledAt: z.string(),
     })
     .nullable(),
+  /**
+   * The PLANNER's own record (MOTIR-9978) — machine state the authoring agent
+   * keeps on the plan through `update_plan`, as data rather than in the summary.
+   * MCP-only, and not on `PlanWithItemsDto` at all, so neither v1 nor the review
+   * surface receives it. Present (null when none) on `get_plan` and
+   * `update_plan`; absent on the other plan payloads.
+   */
+  plannerRecord: z.record(z.string(), z.unknown()).nullable().optional(),
   items: z.array(z.unknown()),
   /**
    * The OPTIONAL sections view (MOTIR-9033): each `add` proposal's body parsed at
    * read time, keyed by plan item id. Present only when `includeSections` was asked.
    */
   parsedSections: z.record(z.string(), parsedSectionsSchema).optional(),
+  /**
+   * The item links a proposal WRITE kept that would ship dead (MOTIR-10104) — on
+   * `add_plan_items`, `update_plan_item` and `update_plan_proposal`, present only
+   * when the write left at least one. Each names the corrected link when the
+   * server can compute it; approve refuses the plan while a malformed one remains.
+   */
+  warnings: z
+    .array(
+      z.object({
+        planItemId: z.string(),
+        proposal: z.string(),
+        field: z.enum(['descriptionMd', 'explanationMd']),
+        link: z.string(),
+        reason: z.string(),
+        correctedLink: z.string().nullable(),
+        canonicalForms: z.array(z.string()).optional(),
+      }),
+    )
+    .optional(),
+  /**
+   * The `modify`s a proposal WRITE kept that approve will send back from built work
+   * (MOTIR-10106) — present only when the write left at least one. The write is kept;
+   * the entry names the card, the status it leaves, what it may land on and the
+   * fields that trip it.
+   */
+  rescopeWarnings: z.array(rescopeWarningSchema).optional(),
 });
 export type McpPlan = z.infer<typeof mcpPlanSchema>;
 
 /** Map a plan — the shared envelope fields through v1's shape. */
 export function presentMcpPlan(
-  plan: PlanWithItemsDto,
+  plan: PlanWithItemsAndWarningsDto,
   folders?: ReadonlyMap<string, { folderId: string; folderPath: string[] | null }>,
 ): McpPlan {
   return {
@@ -304,6 +354,10 @@ export function presentMcpPlan(
           folderPath: folders.get(item.id)?.folderPath ?? null,
         }))
       : plan.items,
+    ...(plan.warnings && plan.warnings.length > 0 ? { warnings: plan.warnings } : {}),
+    ...(plan.rescopeWarnings && plan.rescopeWarnings.length > 0
+      ? { rescopeWarnings: plan.rescopeWarnings }
+      : {}),
   };
 }
 
@@ -334,7 +388,10 @@ export const mcpPlanAppendSchema = mcpPlanSchema.extend({
 export type McpPlanAppend = z.infer<typeof mcpPlanAppendSchema>;
 
 /** Map an append result — the plan through the shared shape, plus the new ids. */
-export function presentMcpPlanAppend(plan: PlanWithItemsDto, planItemIds: string[]): McpPlanAppend {
+export function presentMcpPlanAppend(
+  plan: PlanWithItemsAndWarningsDto,
+  planItemIds: string[],
+): McpPlanAppend {
   return { ...presentMcpPlan(plan), planItemIds };
 }
 

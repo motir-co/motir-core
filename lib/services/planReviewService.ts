@@ -42,8 +42,8 @@ import {
 import { workflowsService } from '@/lib/services/workflowsService';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
-import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
-import { RESTING_BLOCKED_KEY, RESTING_TODO_KEY } from '@/lib/plans/restingStatus';
+import { planStatusChangeOf } from '@/lib/plans/planStatusRow';
+import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 
 import type {
@@ -55,7 +55,7 @@ import type {
   PlanWithItemsDto,
   StaleReason,
 } from '@/lib/dto/plans';
-import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemRefMap, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { resolveExecutor } from '@/lib/issues/executorDefaults';
 import { isContainerKind } from '@/lib/plans/validateProposedKind';
 import type { PlanRevision, Prisma } from '@/generated/prisma/client';
@@ -300,6 +300,12 @@ function buildChanges(
   placementSides: PlacementSides,
   refChipOf: (ref: string) => PlanRefChipDto,
   targetTodos?: { total: number; done: number },
+  statusContext: {
+    /** The target's park — whose holder moved it to `planning`, and from where. */
+    park?: { priorStatus: string; statusHeld: boolean; planId: string | null } | undefined;
+    /** Whether this plan lays children under the target too. */
+    gainsChildren: boolean;
+  } = { gainsChildren: false },
 ): PlanItemChangeDto[] {
   if (!patch) return [];
   // Typed to the CLOSED wire vocabulary, so a new `field:` literal here is a
@@ -585,37 +591,8 @@ function buildChanges(
   };
   edgeRow('supersedes', patch.supersedesAdd, patch.supersedesRemove);
   edgeRow('supersededBy', patch.supersededByAdd, patch.supersededByRemove);
-  // THE RESTING STATUS (bug MOTIR-5640 · MOTIR-5646, superseding MOTIR-5359's
-  // re-scope reset) — the one row no patch key produces, because the approve
-  // DERIVES it. A target its plan has PARKED comes back when the plan is
-  // approved, and the reviewer sees that here BEFORE pressing approve.
-  //
-  // ⚠️ IT NAMES BOTH OUTCOMES RATHER THAN PREDICTING ONE, and that is deliberate.
-  // The resting status is decided AT APPROVE from the card's live `blocked_by`
-  // edges — including the edges the plan itself wires — so a row promising `To Do`
-  // could be falsified by an edge landing between this read and the press, which
-  // is exactly the review-shows-what-approve-does drift `rescopeReset.ts`'s header
-  // was written about (MOTIR-3868, MOTIR-3070). Naming both cannot drift.
-  //
-  // The TRIGGER is the card being parked, not the patch's contents: the previous
-  // row keyed on `patchRescopes` (*did the body change?*), which is a narrower
-  // question than the one the park poses and missed every plan that only splits,
-  // re-sizes or re-wires its target.
-  if (target && target.status === PLANNING_STATUS_KEY) {
-    const from = statusByKey.get(target.status);
-    if (from) {
-      const blocked = statusByKey.get(RESTING_BLOCKED_KEY);
-      const todo = [...statusByKey.values()].find((s) => s.key === RESTING_TODO_KEY);
-      const both = [todo?.label, blocked?.label].filter((l): l is string => Boolean(l));
-      if (both.length > 0) {
-        changes.push({
-          field: 'status',
-          from: from.label,
-          to: `${both.join(' or ')} (returned when this plan is approved)`,
-        });
-      }
-    }
-  }
+  const statusRow = target ? planStatusChangeOf(patch, target, statusByKey, statusContext) : null;
+  if (statusRow) changes.push(statusRow);
   return leadingPlacement ? [leadingPlacement, ...changes] : changes;
 }
 
@@ -1112,7 +1089,7 @@ export const planReviewService = {
     // target read's parents seed the walk — with only pure id arithmetic between them, and they
     // used to open a transaction EACH (the walk one per tree level). Every one is a BEGIN, a
     // `set_config` and a COMMIT paid on every tick of the poll.
-    const { committedBlockersByItemId, targetById, ancestorById, todoCountById } =
+    const { committedBlockersByItemId, targetById, ancestorById, todoCountById, parkPriorById } =
       await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
         const committedEdgeRows = await workItemLinkRepository.findBlockerEdgesForItems(
           targetIds,
@@ -1241,7 +1218,22 @@ export const planReviewService = {
             .map((i) => i.workItemId!),
           tx,
         );
-        return { committedBlockersByItemId, targetById, ancestorById, todoCountById };
+        // …AND the status every PARKED `modify` target was parked FROM (bug
+        // MOTIR-10102): the card reads `planning` while a plan or a session holds
+        // it, so the re-scope row's question — did this card claim built work? —
+        // is answered by its lock. One batched read over the modify targets.
+        const parkPriors = await planTargetLockRepository.listParkPriorsByWorkItemIds(
+          plan.items.filter((i) => i.op === 'modify' && i.workItemId).map((i) => i.workItemId!),
+          tx,
+        );
+        const parkPriorById = new Map(parkPriors.map((p) => [p.workItemId, p]));
+        return {
+          committedBlockersByItemId,
+          targetById,
+          ancestorById,
+          todoCountById,
+          parkPriorById,
+        };
       });
 
     /**
@@ -1551,6 +1543,14 @@ export const planReviewService = {
     const childParentIds = new Set(
       withNodeIds.map(({ item }) => parentNodeIdOf(item)).filter((p): p is string => p !== null),
     );
+    // The committed cards this plan lays NEW children under — the approve's
+    // `gainsChildren` (MOTIR-10102), read off the `add`s alone, as materialize reads it.
+    const addParentIds = new Set(
+      plan.items
+        .filter((i) => i.op === 'add')
+        .map((i) => i.parentRef)
+        .filter((ref): ref is string => !!ref && !isTempRef(ref) && !isFolderRef(ref)),
+    );
 
     // ── THE FOLDER TRAIL (Bug MOTIR-5782 · MOTIR-5798; design Part XVIII §18.7) ──
     // The folder chain a proposal sits under, with ids, so a canvas can draw a
@@ -1636,6 +1636,10 @@ export const planReviewService = {
               placementSides,
               refChipOf,
               item.workItemId ? todoCountById.get(item.workItemId) : undefined,
+              {
+                park: item.workItemId ? parkPriorById.get(item.workItemId) : undefined,
+                gainsChildren: item.workItemId ? addParentIds.has(item.workItemId) : false,
+              },
             )
           : [];
       // An `add`'s SUPERSEDES chips (MOTIR-6632, Part XXIV §24.8) — ONE local, two
@@ -1979,12 +1983,19 @@ export const planReviewService = {
       items.map((i) => [
         i.planItemId,
         parseWorkItemTokenIds(
-          [i.title, i.descriptionMd, i.explanationMd].filter(Boolean).join('\n'),
+          // A proposed step's NOTES draw in the peek too (bug MOTIR-10023).
+          [i.title, i.descriptionMd, i.explanationMd, ...(i.todos ?? []).map((t) => t.notesMd)]
+            .filter(Boolean)
+            .join('\n'),
         ),
       ]),
     );
+    // The plan's own SUMMARY (the briefing) rides the SAME read (bug MOTIR-9697):
+    // both surfaces that draw it — the review rail and the overlay's briefing
+    // bubble — had no map built from it, so every chip in it was drawn deleted.
+    const summaryRefIds = plan.summary ? parseWorkItemTokenIds(plan.summary) : [];
     const bodyRefs = await resolveWorkItemRefSummaries(
-      { ids: [...new Set([...refIdsByItem.values()].flat())], keys: [] },
+      { ids: [...new Set([...refIdsByItem.values()].flat().concat(summaryRefIds))], keys: [] },
       plan.projectId,
       reader,
     );
@@ -1996,6 +2007,12 @@ export const planReviewService = {
         }),
       );
     }
+    const summaryRefs: WorkItemRefMap = Object.fromEntries(
+      summaryRefIds.flatMap((id) => {
+        const summary = bodyRefs[id];
+        return summary ? [[id, summary]] : [];
+      }),
+    );
 
     // ── WHAT EACH OFF-LEVEL EDGE DRAWS AFTER APPROVE (MOTIR-6362) ──────────────
     //
@@ -2205,6 +2222,7 @@ export const planReviewService = {
       status: plan.status,
       title: plan.title,
       summary: plan.summary,
+      summaryRefs,
       itemCount: plan.itemCount,
       createdAt: plan.createdAt,
       plannedAt: plan.plannedAt,

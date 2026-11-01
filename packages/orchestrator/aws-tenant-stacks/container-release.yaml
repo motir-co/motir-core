@@ -1,0 +1,302 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Motir CONTAINER RELEASE — one per (repository, environment) (stack
+  motir-release-<appRef>). An ECS cluster and a Fargate service named the
+  release's appRef, its task definition (replaced revisions RETAINED, the
+  rollback target), a target group with the manifest's health check, and ONE
+  listener rule on the network's shared listener that forwards only a request
+  carrying the app's host AND its X-Motir-Origin-Secret header. It creates no
+  load balancer and no listener: there is one per account, the network's.
+  The release's plain variables are task `environment` entries and its secret
+  ones task `secrets` entries, one per variable, reading the stack's own
+  environment secret at the version ConfigHash names; the caller writes both
+  lists into this template at the markers, and the secret's value. A first apply
+  with an empty ConfigHash creates no task definition and no service, so the
+  caller can write that value before a task starts.
+
+Parameters:
+  OrganizationId:
+    Type: String
+    Description: The Motir organisation (tag motir:organization).
+    AllowedPattern: '^[a-z0-9]+$'
+  RepositoryId:
+    Type: String
+    Description: The Motir repository id (tag motir:repository).
+    AllowedPattern: '^[a-z0-9]+$'
+  AppRef:
+    Type: String
+    Description: The release's app name, mh-<rid> or mh-<rid>-pr<n> - the service's name.
+    AllowedPattern: '^mh-[a-z0-9]+(-pr[0-9]+)?$'
+    MaxLength: 63
+  Environment:
+    Type: String
+    AllowedValues: [production, preview]
+  ImageUri:
+    Type: String
+    Description: The release's image in the registry stack's repository, by digest.
+  IdlePolicy:
+    Type: String
+    Default: always_on
+    Description: A container is always on; `suspend` is refused before the stack is applied.
+    AllowedValues: [always_on]
+  TaskCpu:
+    Type: String
+    Description: Fargate CPU units, from the size table (256 is 0.25 vCPU).
+    AllowedValues: ['256', '512', '1024']
+  TaskMemory:
+    Type: String
+    Description: Fargate memory in MiB, from the size table.
+    AllowedValues: ['512', '1024', '2048']
+  Port:
+    Type: Number
+    Default: 8080
+    Description: The port the app listens on.
+  HealthCheckPath:
+    Type: String
+    Default: /
+    Description: The target group's health check path.
+  VpcId:
+    Type: String
+    Description: The network stack's VpcId output.
+  PrivateSubnetIds:
+    Type: CommaDelimitedList
+    Description: The network stack's PrivateSubnetIds output.
+  AppSecurityGroupId:
+    Type: String
+    Description: The network stack's AppSecurityGroupId output.
+  AlbListenerArn:
+    Type: String
+    Description: The network stack's AlbListenerArn output - the listener the rule joins.
+  ListenerRulePriority:
+    Type: Number
+    Description: The rule's priority on the shared listener, unique per app.
+    MinValue: 1
+    MaxValue: 50000
+  AppHost:
+    Type: String
+    Description: The host the rule matches.
+  OriginSecret:
+    Type: String
+    NoEcho: true
+    Description: The app's origin secret, derived by the caller (deriveOriginSecret); never computed here.
+  DatabaseSecretArn:
+    Type: String
+    Default: ''
+    Description: The environment's database connection secret (key `url`), or empty.
+  ConfigHash:
+    Type: String
+    Default: ''
+    Description: >-
+      A hash of the release's variables, and the id of the environment secret's
+      version holding them; a change registers a new task definition revision.
+      Empty: no task definition or service yet.
+
+Conditions:
+  HasDatabase: !Not [!Equals [!Ref DatabaseSecretArn, '']]
+  Published: !Not [!Equals [!Ref ConfigHash, '']]
+
+Resources:
+  # The release's secret variables as one JSON object; the caller writes the value.
+  EnvironmentSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub
+        - motir/${AppRef}/environment-${Suffix}
+        - Suffix: !Select [4, !Split ['-', !Select [2, !Split ['/', !Ref AWS::StackId]]]]
+      Description: The release's secret environment variables.
+      SecretString: '{}'
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /motir/hosting/${AppRef}
+      RetentionInDays: 30
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Ref AppRef
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Pulls the image, writes the log group, reads the release's own secrets.
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub motir-${AppRef}-exec
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: release
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  [ecr:BatchCheckLayerAvailability, ecr:BatchGetImage, ecr:GetDownloadUrlForLayer]
+                Resource: !Sub arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/mh/${RepositoryId}/*
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub ${LogGroup.Arn}
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !If
+                  - HasDatabase
+                  - [!Ref EnvironmentSecret, !Ref DatabaseSecretArn]
+                  - [!Ref EnvironmentSecret]
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # The app's own identity: no permissions until an app needs one.
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub motir-${AppRef}-task
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # A replaced revision is RETAINED: the rollback target.
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Condition: Published
+    UpdateReplacePolicy: Retain
+    Properties:
+      Family: !Ref AppRef
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities: [FARGATE]
+      RuntimePlatform:
+        CpuArchitecture: X86_64
+        OperatingSystemFamily: LINUX
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: app
+          Image: !Ref ImageUri
+          Essential: true
+          PortMappings:
+            - ContainerPort: !Ref Port
+              Protocol: tcp
+          Environment:
+            - { Name: PORT, Value: !Ref Port }
+            - { Name: MOTIR_ENVIRONMENT, Value: !Ref Environment }
+            # <release variables>
+          # Secrets reach the task only as `secrets` entries, by ARN.
+          Secrets:
+            - !If
+              - HasDatabase
+              - { Name: DATABASE_URL, ValueFrom: !Sub '${DatabaseSecretArn}:url::' }
+              - !Ref AWS::NoValue
+            # <release secrets>
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: app
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      TargetType: ip
+      Protocol: HTTP
+      Port: !Ref Port
+      VpcId: !Ref VpcId
+      HealthCheckPath: !Ref HealthCheckPath
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # Forward only the app's host AND its origin secret; everything else falls to
+  # the listener's fixed 403.
+  ListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref AlbListenerArn
+      Priority: !Ref ListenerRulePriority
+      Conditions:
+        - Field: host-header
+          HostHeaderConfig:
+            Values: [!Ref AppHost]
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: X-Motir-Origin-Secret
+            Values: [!Ref OriginSecret]
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  Service:
+    Type: AWS::ECS::Service
+    Condition: Published
+    DependsOn: ListenerRule
+    Properties:
+      ServiceName: !Ref AppRef
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref TaskDefinition
+      LaunchType: FARGATE
+      # Always on: the container shape has no scale to zero.
+      DesiredCount: 1
+      HealthCheckGracePeriodSeconds: 60
+      DeploymentConfiguration:
+        MinimumHealthyPercent: 100
+        MaximumPercent: 200
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets: !Ref PrivateSubnetIds
+          SecurityGroups:
+            - !Ref AppSecurityGroupId
+      LoadBalancers:
+        - ContainerName: app
+          ContainerPort: !Ref Port
+          TargetGroupArn: !Ref TargetGroup
+      PropagateTags: SERVICE
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+Outputs:
+  ClusterArn:
+    Value: !GetAtt Cluster.Arn
+  ServiceArn:
+    Condition: Published
+    Value: !Ref Service
+  ServiceName:
+    Condition: Published
+    Value: !GetAtt Service.Name
+  TaskDefinitionArn:
+    Condition: Published
+    Value: !Ref TaskDefinition
+  TargetGroupArn:
+    Value: !Ref TargetGroup
+  EnvironmentSecretArn:
+    Value: !Ref EnvironmentSecret

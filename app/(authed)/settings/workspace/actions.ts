@@ -8,6 +8,7 @@ import { getSession } from '@/lib/auth';
 import { getWorkspaceContext, WORKSPACE_COOKIE_NAME } from '@/lib/workspaces';
 import { shouldUseSecureCookies } from '@/lib/e2eProdHarness';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService';
 import { roleMigrationReportService } from '@/lib/services/roleMigrationReportService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -16,6 +17,11 @@ import {
   AccessScopeForbiddenError,
   InvalidAccessScopeError,
   InvalidWorkspaceRoleError,
+  InviteExpiredOrMissingError,
+  InviteNotAllowedForScopeError,
+  InviteRateLimitedError,
+  InviteScopeForbiddenError,
+  InviteTargetAlreadyMemberError,
   LastManagerError,
   LastMemberError,
   NotAMemberError,
@@ -131,6 +137,38 @@ export async function removeMemberAction(targetUserId: string): Promise<ActionRe
     }
     if (err instanceof LastManagerError) {
       return { ok: false, error: t('actions.lastManager') };
+    }
+    throw err;
+  }
+  revalidateWorkspaceSettingsSurfaces();
+  return { ok: true };
+}
+
+/**
+ * Resend a pending invitation (MOTIR-9996): a fresh link and email, the old link
+ * retired. The service owns every refusal; this action hands back its `code` and
+ * no text — the Members card draws each message itself, as it does for an invite.
+ */
+export async function resendInviteAction(inviteId: string): Promise<ActionResult> {
+  const { userId, workspaceId } = await requireContext();
+  const session = await getSession();
+  try {
+    await workspaceInvitesService.resendInvite({
+      actorUserId: userId,
+      actorName: session?.user.name ?? '',
+      workspaceId,
+      inviteId,
+    });
+  } catch (err) {
+    if (
+      err instanceof InviteRateLimitedError ||
+      err instanceof InviteTargetAlreadyMemberError ||
+      err instanceof InviteNotAllowedForScopeError ||
+      err instanceof InviteScopeForbiddenError ||
+      err instanceof InviteExpiredOrMissingError ||
+      err instanceof NotAMemberError
+    ) {
+      return { ok: false, code: err.code };
     }
     throw err;
   }

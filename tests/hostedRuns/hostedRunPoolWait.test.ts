@@ -24,10 +24,11 @@ import { planCapsService } from '@/lib/services/planCapsService';
 import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
+import { hostedAgentContainerService } from '@/lib/services/hostedAgentContainerService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { adminDb } from '../helpers/adminDb';
-import { grantPaidAiPlan } from '../helpers/paidAiPlan';
+import { grantPaidAiPlan, stubPaidAiPlan } from '../helpers/paidAiPlan';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // A FULL AGENT-RUNNER POOL WAITS (Story MOTIR-9359 · MOTIR-9425) — with the
@@ -430,6 +431,69 @@ describe('a full agent-runner pool waits — it is not ended', () => {
     expect(lines).toHaveLength(2);
     expect(lines[1]).toBe(WAITING_LINE);
     expect(lines[0]).not.toBe(WAITING_LINE);
+  });
+});
+
+/** The REASON each waiting line carries (MOTIR-9666), oldest first. */
+const waitingReasons = async (dispatchRunId: string) =>
+  (await adminDb.dispatchRunEvent.findMany({ where: { dispatchRunId, kind: 'log' } }))
+    .filter((e) => (e.body ?? '').startsWith('[motir] waiting for room'))
+    .map((e) => (e.data as { reason?: unknown } | null)?.reason);
+
+describe('the waiting line carries why the run waits (MOTIR-9666)', () => {
+  it('a full pool: reason shard_capacity', async () => {
+    await fullPool();
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const started = await start((await newCard('reason: full pool')).identifier);
+
+    expect(await waitingReasons(started.dispatchRunId)).toEqual(['shard_capacity']);
+  });
+
+  it('the org at its plan figure: reason plan_cap', async () => {
+    await agentAccount(5);
+    stubPaidAiPlan('standard');
+    // The org's one Standard agent run is already running.
+    await withSystemContext((tx) =>
+      fleetInFlightSlotRepository.take(
+        {
+          workload: 'hosted_agent',
+          ref: 'own-running-run',
+          ownerRef: 'own-running-run',
+          organizationId: fx.workspace.organizationId,
+          expiresAt: new Date(Date.now() + 3_600_000),
+        },
+        tx,
+      ),
+    );
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const started = await start((await newCard('reason: plan limit')).identifier);
+
+    expect(await waitingReasons(started.dispatchRunId)).toEqual(['plan_cap']);
+  });
+
+  it('a change of reason under unchanged words writes a new line; the same pair does not', async () => {
+    await fullPool();
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+    const started = await start((await newCard('reason changes, words do not')).identifier);
+    expect(await waitingReasons(started.dispatchRunId)).toEqual(['shard_capacity']);
+
+    const deferredAs = (reason: string) =>
+      vi.spyOn(hostedAgentContainerService, 'boot').mockResolvedValueOnce({
+        phase: 'terminal',
+        outcome: {
+          outcome: 'admission_deferred',
+          reason,
+          detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+        },
+      } as Awaited<ReturnType<typeof hostedAgentContainerService.boot>>);
+
+    deferredAs('plan_unknown');
+    await hostedRunService.admit(await admitPayload(started.dispatchRunId));
+    deferredAs('plan_unknown');
+    await hostedRunService.admit(await admitPayload(started.dispatchRunId));
+
+    expect(await waitingReasons(started.dispatchRunId)).toEqual(['shard_capacity', 'plan_unknown']);
+    expect(await waitingLines(started.dispatchRunId)).toEqual([WAITING_LINE, WAITING_LINE]);
   });
 });
 

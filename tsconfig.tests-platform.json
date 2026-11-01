@@ -100,6 +100,9 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.scripts.json" },
-    { "path": "./tsconfig.tests.json" }
+    { "path": "./tsconfig.tests.json" },
+    // `tests/hosting/hostingGuard.test.ts` runs the guard image's own source
+    // (MOTIR-9947), which lives in its package's project.
+    { "path": "./packages/hosting-guard" }
   ]
 }

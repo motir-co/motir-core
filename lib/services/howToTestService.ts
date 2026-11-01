@@ -10,6 +10,7 @@ import type { HowToTestDto } from '@/lib/dto/howToTest';
 import { authorOf, dispatchRunLabel } from '@/lib/howToTest/author';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { resolveRunTarget } from './runTarget';
+import { resolveMarkdownWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 
 // `dispatchRunLabel` moved to `@/lib/howToTest/author` when the v1 read needed it
 // too (MOTIR-5454). Re-exported here so its existing importers are unchanged.
@@ -49,7 +50,7 @@ export const howToTestService = {
     // reader who cannot browse the project gets the 404-shaped not-found.
     await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
 
-    return withWorkspaceContext(binding, async (tx) => {
+    const read = await withWorkspaceContext(binding, async (tx): Promise<HowToTestDto> => {
       const [history, ancestors, legRuns, scopeRuns] = await Promise.all([
         testInstructionsRepository.listHistoryForWorkItem(item.id, tx),
         workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
@@ -125,6 +126,8 @@ export const howToTestService = {
         author: authorOf(current, nameById),
         createdAt: record.createdAt,
         bodyMd: record.bodyMd,
+        // Resolved below, outside this transaction.
+        workItemRefs: {},
         previewPath: record.previewPath,
       };
       return {
@@ -135,5 +138,15 @@ export const howToTestService = {
         history: historyDto,
       };
     });
+    // The record's card links, for the reader (bug MOTIR-10023) — no query when the
+    // body links nothing.
+    if (!read.record) return read;
+    return {
+      ...read,
+      record: {
+        ...read.record,
+        workItemRefs: await resolveMarkdownWorkItemRefs(read.record.bodyMd, ctx),
+      },
+    };
   },
 };

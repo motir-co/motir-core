@@ -1,3 +1,4 @@
+import type { Prisma } from '@/generated/prisma/client';
 import type { IndexPauseReason } from '@/lib/ciFleet/indexAllowance';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { getGitProvider, providerSupportsRepoTarballUrl } from '@/lib/git';
@@ -7,6 +8,8 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
+import { isOnlyItsSeed, NO_COMMIT_BEYOND_TEMPLATE } from '@/lib/projectRepos/seedHead';
 import {
   enqueueCodeGraphIndex,
   enqueueReposMissingFirstIndex,
@@ -117,7 +120,10 @@ export type IndexSkipReason =
   | 'installation_missing'
   | 'workspace_missing'
   | 'no_projects'
-  | 'provider_cannot_index';
+  | 'provider_cannot_index'
+  // A repository Motir created that still holds only its seed (MOTIR-4589):
+  // "not indexed YET", which a later push past the seed changes — never a failure.
+  | typeof NO_COMMIT_BEYOND_TEMPLATE;
 
 // ⚠️ `no_projects` SURVIVED MOTIR-4652, AND ITS MEANING NARROWED. THE CARD ASKED
 // FOR IT TO BE RETIRED; IT CANNOT BE, AND THE REASON IS IN THE OTHER REPOSITORY.
@@ -499,6 +505,27 @@ export interface FirstIndexSweepReport {
   enqueued: number;
 }
 
+/**
+ * Does this repository still hold only the seed Motir created it with
+ * (MOTIR-4589)? Reads its mirror row and every `project_repository` row that
+ * realizes it, in the resolve step's transaction (the workspace is bound). A
+ * repository with no mirror row answers false: what is unknown is never held.
+ */
+async function repoHoldsOnlyItsSeed(
+  input: IndexRepoInput,
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  const repo = await githubRepoRepository.findConnectedByWorkspaceAndName(
+    input.workspaceId,
+    input.repoOwner,
+    input.repoName,
+    tx,
+  );
+  if (!repo) return false;
+  const rows = await projectRepoRepository.listByGithubRepoId(repo.id, tx);
+  return isOnlyItsSeed(rows, repo.defaultBranchHeadSha);
+}
+
 export const codeGraphIndexService = {
   /**
    * PHASE 1 (one checkpointed step) — resolve the tenant tuple and the project
@@ -544,6 +571,7 @@ export const codeGraphIndexService = {
       const projects = await projectRepository.findByWorkspace(input.workspaceId, tx);
       return {
         kind: 'resolved' as const,
+        onlyItsSeed: await repoHoldsOnlyItsSeed(input, tx),
         providerId: installation.provider as GitProviderId,
         workspaceId: input.workspaceId,
         organizationId: workspace.organizationId,
@@ -624,6 +652,21 @@ export const codeGraphIndexService = {
         repoRefOf({ owner: input.repoOwner, name: input.repoName }),
       );
       return { indexed: false, reason: 'provider_cannot_index' };
+    }
+
+    // ⚠️ A CREATED REPOSITORY WAITS FOR A COMMIT OF ITS OWN (MOTIR-4589), and the
+    // check is HERE, at run time, for the same reason the capability gate is: every
+    // trigger passes through it. Establish no longer enqueues a created repository,
+    // but the push of Motir's own CI stub, a reconcile and the operator sweep still
+    // can, and the debounced refresh resolves after the row has its seed head.
+    // AFTER the tenant and capability verdicts: those are truer descriptions of a
+    // run that could never index. The verdict reaches the ledger like theirs.
+    if (resolved.onlyItsSeed) {
+      console.warn(
+        '[codeGraphIndexService] not indexed yet: no commit beyond the template. repo:',
+        repoRefOf({ owner: input.repoOwner, name: input.repoName }),
+      );
+      return { indexed: false, reason: NO_COMMIT_BEYOND_TEMPLATE };
     }
 
     return {

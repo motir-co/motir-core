@@ -51,7 +51,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 // `?filter=v1:` param string, decode + deep-validate, and store the envelope.
 
 /** The audit-log page size (Subtask 6.6.6) — bounded reads only (finding #57),
- * the jobs-dashboard precedent (`JOBS_PAGE_SIZE`). */
+ * after the retired jobs dashboard's fixed page size. */
 export const AUTOMATION_EXECUTIONS_PAGE_SIZE = 20;
 
 /** The validated, write-ready core of a rule (shared by create + update). */

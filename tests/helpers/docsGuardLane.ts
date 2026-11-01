@@ -102,8 +102,8 @@ export const DOCS_GUARD_SPECS = [
   'tests/mcp/mcp-doc-guards.test.ts',
   // ── tests/mcp/ — the code-read tools' text homes (MOTIR-7865) ─────────────
   // Reads `docs/mcp.md` and `docs/decisions/member-facing-permissions.md` and
-  // fails when either stops naming `read_file`, `code_explore` or
-  // `code_search`. Imports nothing from `lib/`.
+  // fails when either stops naming `read_file`, `code_explore`, `code_search`
+  // or `code_grep`. Imports nothing from `lib/`.
   'tests/mcp/code-read-tool-docs.test.ts',
   // ── tests/permissions/ — the inventory, from THREE sides ──────────────────
   // All three open `docs/decisions/permission-inventory.md`, which maps every
@@ -121,6 +121,12 @@ export const DOCS_GUARD_SPECS = [
   'tests/permissions/catalog.test.ts',
   'tests/permissions/inventoryCoverage.test.ts',
   'tests/permissions/noUngovernedOperation.test.ts',
+  // ── tests/publicAddresses/ — the reserved set against ADR §8 (MOTIR-10025) ─
+  // Reads `docs/decisions/public-tenant-addresses.md` §8 rules 1–2 and its
+  // AMENDMENT 4 rules table, and fails when the ADR and
+  // `lib/publicAddresses/reservedNames.ts` disagree. Imports only that pure
+  // module, so it opens no database.
+  'tests/publicAddresses/reservedNames.test.ts',
   // ── tests/theme/ — the §4b surface ladder (MOTIR-4406) ────────────────────
   // The card this defect was found in. It reads `docs/styles/3d-immersive.md`
   // §4b as its CLASSIFICATION source and fails on any surface class the ladder

@@ -19,6 +19,8 @@
 // "a path outside the named repository cannot be reached" a fact about this
 // code rather than a bet on two third parties.
 
+import type { RepoDirectoryEntry } from './types';
+
 /** Why a path was refused. Rendered to the caller verbatim, so it says what to
  *  fix rather than that something was wrong. */
 export type RepoPathRefusal = string;
@@ -135,4 +137,68 @@ export async function describeBody(res: Response): Promise<string> {
   } catch {
     return res.statusText || `HTTP ${res.status}`;
   }
+}
+
+/**
+ * The most children one directory read lists (MOTIR-9868) — GitHub's own cap on
+ * its contents endpoint, applied on GitLab too so the SAME directory is cut at
+ * the same place on either host.
+ */
+export const REPO_DIRECTORY_MAX_ENTRIES = 1000;
+
+const GITHUB_ENTRY_TYPES = new Set(['file', 'dir', 'symlink', 'submodule']);
+
+/**
+ * GitHub's answer for a DIRECTORY, or `null` for anything else (MOTIR-9868).
+ *
+ * Asked for a directory, the contents endpoint ignores the raw media type and
+ * answers its own JSON listing — which used to reach the caller as `found` text,
+ * an undocumented shape owned by the host. A file's raw bytes can be a JSON
+ * array too, so the listing is recognised by its SHAPE rather than by a header:
+ * every element names a child whose `path` is `<dir>/<name>`, with a type the
+ * endpoint uses and a blob `sha`. No committed file is that by accident.
+ */
+export function parseGithubDirectoryListing(
+  bytes: Uint8Array,
+  dirPath: string,
+): RepoDirectoryEntry[] | null {
+  const first = bytes.find((b) => b !== 0x20 && b !== 0x0a && b !== 0x0d && b !== 0x09);
+  if (first !== 0x5b /* [ */) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0) return null;
+  const entries: RepoDirectoryEntry[] = [];
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object') return null;
+    const { name, path, type, sha } = item as Record<string, unknown>;
+    if (typeof name !== 'string' || typeof sha !== 'string' || typeof type !== 'string') {
+      return null;
+    }
+    if (path !== `${dirPath}/${name}` || !GITHUB_ENTRY_TYPES.has(type)) return null;
+    entries.push({ name, type: type as RepoDirectoryEntry['type'] });
+  }
+  return sortEntries(entries);
+}
+
+/**
+ * One GitLab `repository/tree` item as a directory entry (MOTIR-9868): `tree` is
+ * a directory, `commit` a submodule, and a `blob` with mode `120000` a symlink —
+ * the same four types GitHub names.
+ */
+export function gitlabTreeEntry(item: unknown): RepoDirectoryEntry | null {
+  if (!item || typeof item !== 'object') return null;
+  const { name, type, mode } = item as Record<string, unknown>;
+  if (typeof name !== 'string') return null;
+  if (type === 'tree') return { name, type: 'dir' };
+  if (type === 'commit') return { name, type: 'submodule' };
+  if (type === 'blob') return { name, type: mode === '120000' ? 'symlink' : 'file' };
+  return null;
+}
+
+export function sortEntries(entries: RepoDirectoryEntry[]): RepoDirectoryEntry[] {
+  return entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 }

@@ -83,6 +83,8 @@ describe('the sentence — one per reason, with the fallbacks the detail allows'
     ],
     ['conflicted', { base: 'main' }, 'This needs a fix: it conflicts with main.'],
     ['conflicted', {}, 'This needs a fix: it conflicts with its base branch.'],
+    ['out_of_date', { base: 'main' }, 'This needs a fix: it is out of date with main.'],
+    ['out_of_date', {}, 'This needs a fix: it is out of date with its base branch.'],
     ['ci_failed', { check: 'typecheck' }, 'This needs a fix: CI failed (check typecheck).'],
     ['ci_failed', {}, 'This needs a fix: CI failed.'],
     [

@@ -16,7 +16,9 @@ import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepos
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { githubInstallationService } from './githubInstallationService';
-import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { enqueueCodeGraphIndex, enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
+import { isOnlyItsSeed } from '@/lib/projectRepos/seedHead';
+import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { listPullRequestFiles, type PullRequestFiles } from '@/lib/github/pullRequestFiles';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
@@ -41,7 +43,9 @@ import { ciAllowanceService } from './ciAllowanceService';
 import { ciActionsGateService } from './ciActionsGateService';
 import { projectRepoTakeoverService } from './projectRepoTakeoverService';
 import { readReportedCheckSet } from './checkSetReconcile';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
 import { repoDeploymentService } from './repoDeploymentService';
+import { productionMergeReleaseService } from './productionMergeReleaseService';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemFixReason } from './fixReasonService';
@@ -175,6 +179,8 @@ export type GithubWebhookResult =
       event: 'push';
       outcome:
         | 'refresh_enqueued' // a default-branch push → the incremental refresh job is queued
+        | 'first_index_enqueued' // a created repo's first push past its seed → its first index (MOTIR-4589)
+        | 'seed_only' // a push that leaves a created repo on its seed head → nothing indexed (MOTIR-4589)
         | 'ignored_ref' // a non-branch push (tag / delete) or a non-default branch — no refresh
         | 'unknown_installation'
         | 'unknown_repo';
@@ -238,6 +244,24 @@ export type GithubWebhookResult =
   // A merge queue started testing a group (MOTIR-5633).
   | MergeGroupResult;
 
+/**
+ * The PREVIEW LIFECYCLE's share of a delivery (Story MOTIR-5766 · MOTIR-5776):
+ * a pull request's head or close, a preview-image run's completion. It runs
+ * BESIDE the event's own handler, never instead of it, and best-effort: a
+ * failure here must not fail the status sync or the CI meter on the same
+ * delivery, and the reaper finishes whatever a lost transition left.
+ */
+async function runPreviewLifecycle(eventType: string, run: () => Promise<unknown>): Promise<void> {
+  try {
+    await run();
+  } catch (err) {
+    console.error('[githubWebhookService] preview lifecycle failed; delivery acked', {
+      eventType,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+}
+
 export const githubWebhookService = {
   /**
    * Handle one verified delivery. `eventType` is the `X-GitHub-Event` header;
@@ -265,6 +289,9 @@ export const githubWebhookService = {
       case 'installation_repositories':
         return this.handleInstallationRepositories(body);
       case 'pull_request':
+        await runPreviewLifecycle('pull_request', () =>
+          previewLifecycleService.onPullRequest(body),
+        );
         return this.handlePullRequest(body, deliveryId);
       case 'pull_request_review':
         return this.handlePullRequestReview(body);
@@ -275,8 +302,16 @@ export const githubWebhookService = {
         return this.handleCiStatus(body);
       case 'merge_group':
         return this.handleMergeGroup(body);
-      case 'workflow_run':
-        return this.handleWorkflowRun(body);
+      case 'workflow_run': {
+        // One delivery, three listeners: the CI-minutes meter's answer is the
+        // delivery's result, a completed `production-image` run of a Motir
+        // repository also starts its release (MOTIR-10031), and a
+        // `preview-image` run moves its pull request's preview (MOTIR-5776).
+        await runPreviewLifecycle('workflow_run', () => previewLifecycleService.onImageRun(body));
+        const metered = await this.handleWorkflowRun(body);
+        await this.handleProductionImageRun(body);
+        return metered;
+      }
       case 'workflow_job':
         return this.handleWorkflowJob(body);
       case 'repository':
@@ -573,6 +608,11 @@ export const githubWebhookService = {
         repoOwner: repo.owner,
         repoName: repo.name,
         defaultBranch: repo.defaultBranch,
+        // Whether the repository has a code graph at all, and the seed facts of the
+        // rows that realize it (MOTIR-4589) — read through `project_repository`'s
+        // system read arm.
+        hasGraph: repo.indexedAt !== null,
+        seedRows: await projectRepoRepository.listByGithubRepoId(repo.id, tx),
       };
     });
 
@@ -607,16 +647,42 @@ export const githubWebhookService = {
     // repo's shipped mainline, per tenant, per repo (the N-repo cardinality).
     if (push.branch !== resolved.defaultBranch) return { event: 'push', outcome: 'ignored_ref' };
 
-    // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
-    // the default branch's CURRENT head at run time, so debounced/coalesced
-    // pushes index the newest state once.
-    await enqueueCodeGraphRefresh({
+    const indexData = {
       installationId,
       workspaceId: resolved.workspaceId,
       repoOwner: resolved.repoOwner,
       repoName: resolved.repoName,
       defaultBranch: resolved.defaultBranch,
-    });
+    };
+    // ⚠️ A REPOSITORY MOTIR CREATED IS INDEXED BY ITS FIRST PUSH PAST THE SEED
+    // (MOTIR-4589). A push that leaves it on its seed head — Motir's own CI stub on
+    // an initialised repository — indexes nothing: the graph would be the
+    // template's. The first push past the seed is the repository's FIRST index, so
+    // it is enqueued as one (prompt, no debounce), not as a refresh of a graph that
+    // does not exist. Every other repository refreshes exactly as before.
+    //
+    // A push with no head sha cannot be compared with the seed, so it refreshes;
+    // the index's own run-time gate (`codeGraphIndexService.resolveIndexTarget`)
+    // still holds a repository that turns out to be only its seed.
+    const firstIndexPending =
+      !resolved.hasGraph &&
+      resolved.seedRows.some((row) => row.state === 'created' && row.seedHeadSha !== null);
+    let outcome: 'refresh_enqueued' | 'first_index_enqueued' | 'seed_only' = 'refresh_enqueued';
+    if (push.headSha && firstIndexPending && isOnlyItsSeed(resolved.seedRows, push.headSha)) {
+      outcome = 'seed_only';
+      console.warn(
+        '[github-webhook] code graph not indexed yet: no commit beyond the template. repo:',
+        `${resolved.repoOwner}/${resolved.repoName}`,
+      );
+    } else if (push.headSha && firstIndexPending) {
+      outcome = 'first_index_enqueued';
+      await enqueueCodeGraphIndex(indexData);
+    } else {
+      // POST-tx, best-effort: the ack never hinges on the queue. The job fetches
+      // the default branch's CURRENT head at run time, so debounced/coalesced
+      // pushes index the newest state once.
+      await enqueueCodeGraphRefresh(indexData);
+    }
     // ⚠️ THE BASE MOVED, SO ASK WHETHER ITS PULL REQUESTS STILL MERGE (MOTIR-5914, for bug
     // MOTIR-5907; design/github § 30 rule 1). A conflict usually arrives exactly like this —
     // another merge moves the base and GitHub sends the conflicted pull request nothing —
@@ -630,7 +696,7 @@ export const githubWebhookService = {
       baseHeadSha: push.headSha ?? null,
       idempotencyKey: `${resolved.repoRowId}:${push.headSha ?? 'unknown'}`,
     });
-    return { event: 'push', outcome: 'refresh_enqueued' };
+    return { event: 'push', outcome };
   },
 
   async handlePullRequest(
@@ -952,6 +1018,30 @@ export const githubWebhookService = {
         error: err instanceof Error ? err.message : 'unknown',
       });
       return { event: 'workflow_run', outcome: 'failed' };
+    }
+  },
+
+  /**
+   * The production half of a `workflow_run` delivery (Story MOTIR-9797 ·
+   * MOTIR-10031): a completed `production-image` run for a push to a Motir
+   * repository's default branch enqueues its release. Every decision is
+   * `productionMergeReleaseService`'s; this only normalizes and dispatches.
+   * Never throws: a failure is logged with ids only and the delivery is acked,
+   * exactly as the meter's is.
+   */
+  async handleProductionImageRun(body: Record<string, unknown>): Promise<void> {
+    const run = getGitProvider(PROVIDER).parseProductionImageRunEvent?.(body);
+    const installationId = readInstallationId(body);
+    if (!run || !installationId) return;
+    try {
+      await productionMergeReleaseService.handleProductionImageRun(run, installationId);
+    } catch (err) {
+      console.error('[githubWebhookService] production merge release failed; delivery acked', {
+        runId: run.runId,
+        runAttempt: run.runAttempt,
+        providerRepoId: run.providerRepoId,
+        error: err instanceof Error ? err.name : 'unknown',
+      });
     }
   },
 

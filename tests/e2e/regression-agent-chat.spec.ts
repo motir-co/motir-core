@@ -296,7 +296,6 @@ test.describe('Chat with your agent', () => {
     await signIn(page, seed.email, seed.password);
     const claudeId = await createAgent(page, seed, 'yue-claude', 'claude');
     const codexId = await createAgent(page, seed, 'yue-codex', 'codex');
-    const aiderId = await createAgent(page, seed, 'yue-aider', 'aider');
     const subId = await createAgent(page, seed, 'yue-claude-sub', 'claude');
     // yue-claude: an Anthropic API key in its own environment, and an older
     // session in its Claude Code store from the day before.
@@ -329,7 +328,6 @@ test.describe('Chat with your agent', () => {
         },
       ],
     });
-    setUpAgent(aiderId, {});
     await letIdleWindowPass(page, [claudeId]);
 
     await page.getByRole('link', { name: 'My agents' }).click();
@@ -478,27 +476,6 @@ test.describe('Chat with your agent', () => {
       ]);
     });
 
-    await chapter('Aider cannot chat — its terminal still can', async () => {
-      await cardOf(page, 'yue-aider').click();
-      await expect(panelTitle(page)).toContainText('yue-aider');
-      const disabled = panel(page).getByTestId('agent-chat-tab-disabled');
-      await expect(disabled).toHaveAttribute('aria-disabled', 'true');
-      // The terminal attaches first, so the panel has stopped re-rendering before
-      // the pointer moves. The tip is CSS `group-hover`, and a re-render under a
-      // resting pointer does not always re-apply :hover in headless Chromium,
-      // so the hover is re-issued until the tip shows (it was red once in CI,
-      // on 1b9a610, with the tip never drawn).
-      await expect(connWord(page)).toHaveText(copy.panel.conn.live, { timeout: 30_000 });
-      await expect(screen(page)).toContainText(PROMPT);
-      const tip = page.getByRole('tooltip', { name: chatCopy.unsupported });
-      await expect(async () => {
-        await page.mouse.move(0, 0);
-        await disabled.hover();
-        await expect(tip).toBeVisible({ timeout: 2_000 });
-      }).toPass({ timeout: 20_000 });
-      await expect(chatTab(page)).toHaveCount(0);
-    });
-
     await chapter(
       'Claude Code on a subscription — the chat says why, the terminal works',
       async () => {
@@ -528,6 +505,10 @@ test.describe('Chat with your agent', () => {
     await signIn(page, seed.email, seed.password);
     const signedOutId = await createAgent(page, seed, 'yue-codex-new', 'codex');
     const oldImageId = await createAgent(page, seed, 'yue-old-image', 'claude');
+    // Aider has no chat. It lives in this test, not the first: a person keeps at most
+    // three agents on Max ×2 (MOTIR-9668), and the first test needs three of its own.
+    const aiderId = await createAgent(page, seed, 'yue-aider', 'aider');
+    setUpAgent(aiderId, {});
     // A Codex agent nobody has signed in yet: no credential file on its home.
     setUpAgent(signedOutId, {});
     // An image from before the chat: its server answers `/v1/chat` with 404.
@@ -566,5 +547,25 @@ test.describe('Chat with your agent', () => {
     await tabButton(page, 'Terminal').click();
     await expect(connWord(page)).toHaveText(copy.panel.conn.live, { timeout: 30_000 });
     await expect(screen(page)).toContainText(PROMPT);
+
+    // Aider cannot chat — its terminal still can.
+    await page.goto(`/my-agents?agent=${aiderId}`);
+    await expect(panelTitle(page)).toContainText('yue-aider');
+    const disabled = panel(page).getByTestId('agent-chat-tab-disabled');
+    await expect(disabled).toHaveAttribute('aria-disabled', 'true');
+    // The terminal attaches first, so the panel has stopped re-rendering before
+    // the pointer moves. The tip is CSS `group-hover`, and a re-render under a
+    // resting pointer does not always re-apply :hover in headless Chromium,
+    // so the hover is re-issued until the tip shows (it was red once in CI,
+    // on 1b9a610, with the tip never drawn).
+    await expect(connWord(page)).toHaveText(copy.panel.conn.live, { timeout: 30_000 });
+    await expect(screen(page)).toContainText(PROMPT);
+    const tip = page.getByRole('tooltip', { name: chatCopy.unsupported });
+    await expect(async () => {
+      await page.mouse.move(0, 0);
+      await disabled.hover();
+      await expect(tip).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
+    await expect(chatTab(page)).toHaveCount(0);
   });
 });

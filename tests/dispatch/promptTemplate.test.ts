@@ -274,6 +274,51 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     expect(prompt).toContain(marker);
   });
 
+  // ── MOTIR-9953: a code run owns the suites that pin what it changes, and the
+  // coverage of what it adds. Only the `code` steps carry it; a design or test
+  // card's steps are untouched.
+  describe('WHAT_TO_DO.code owns the pinned suites and the coverage of the change (MOTIR-9953)', () => {
+    const PINNED_SUITES = [
+      'The suites that ALREADY assert the behaviour you change are part of the',
+      'grep the tests for every function, route, message and state you',
+      'update each suite that asserts the old behaviour in this same',
+      'existing suite is modified, does not stop this: make the update, and record',
+      'the mismatch with the record_run_discrepancy tool (BUILD THROUGH below).',
+      'files you added or changed — the existing suites you updated under 3 are',
+    ];
+    const COVERAGE = [
+      'COVER the code you add to at least 90% — statements, branches, functions and',
+      'lines: per file for every file you add, and every function and branch you add',
+      'Measure the change, never the',
+      'Where the repository has its own coverage gates,',
+      'Run coverage over the files you changed and put each changed',
+      'file’s numbers in the pull request body.',
+    ];
+    const promptFor = (type: WorkItemTypeDto) =>
+      assembleDispatchPrompt(source({ type, executor: 'coding_agent' })).prompt;
+
+    it.each([...PINNED_SUITES, ...COVERAGE])('a code dispatch is told: %s', (rule) => {
+      expect(promptFor('code')).toContain(rule);
+    });
+
+    it('keeps the pinned-suite step inside step 3, before step 4', () => {
+      const prompt = promptFor('code');
+      const step3 = prompt.indexOf('3. Ship the TESTS that cover the change');
+      const pinned = prompt.indexOf('The suites that ALREADY assert the behaviour you change');
+      const step4 = prompt.indexOf('4. Run the repository checks');
+      expect(step3).toBeGreaterThan(-1);
+      expect(pinned).toBeGreaterThan(step3);
+      expect(step4).toBeGreaterThan(pinned);
+    });
+
+    it.each(['design', 'test'] as const)('a %s dispatch carries neither rule', (type) => {
+      const prompt = promptFor(type);
+      for (const rule of [...PINNED_SUITES, ...COVERAGE]) {
+        expect(prompt).not.toContain(rule);
+      }
+    });
+  });
+
   // ── MOTIR-7437: the DECISION lane writes a PAGE and publishes it
   //
   // The gate asks a person about the published page VERSION (`approval-gates.md`
@@ -607,6 +652,9 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
         'never the',
         '@motir/design-system/mock, build the mock with renderMock',
         'actual markup with that version’s theme.css inlined',
+        'width of the screen it is opened on, whatever its page’s own column:',
+        "on a full-width board — renderMock’s boardWidth 'full'",
+        'never post-process the rendered HTML',
         'package’s parts first, then the project’s own local components, then new',
         '"proposed addition to @motir/design-system" or "product-local component"',
       ]) {
@@ -1381,9 +1429,9 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
         'If one repository turns out to need no change at all, open no pull request there.',
         'Take it off the card instead: call the update_work_item tool with key PROD-7',
         'and targetRepos set to the repositories you DID change, in their current order.',
-        'The item completes only when every repository on its list has merged, so a',
-        'repository left there holds it open for ever. Then record why as a point of your',
-        'ONE record_run_discrepancy call — planAsked: that repository; built: no change;',
+        'The list records where the work shipped, so a repository left on it misreports',
+        'the card. Then record why as a point of your ONE record_run_discrepancy call —',
+        'planAsked: that repository; built: no change;',
         'why: what made the change unnecessary — and name it in your outcome report.',
       ].join('\n'),
     );
@@ -3380,6 +3428,146 @@ describe('the run prompt states the product’s approval and receipt rules (MOTI
     for (const p of [designPrompt, acceptancePrompt, codePrompt]) {
       expect(p).not.toContain('tests/e2e/acceptance');
       expect(p).not.toContain('docs/approval-gates');
+    }
+  });
+});
+
+// ── DECIDE WHAT THE CARD LEAVES OPEN — the never-ask rule and the decision record (MOTIR-10000) ──
+
+describe('DECIDE WHAT THE CARD LEAVES OPEN — a run never asks, decides by best practice, records it (MOTIR-10000)', () => {
+  const HEADING = 'DECIDE WHAT THE CARD LEAVES OPEN — never ask';
+  /** The block's own text: its heading up to the next rule-barred heading. */
+  const blockOf = (prompt: string): string => {
+    const at = prompt.indexOf(HEADING);
+    expect(at, 'a DECIDE WHAT THE CARD LEAVES OPEN section').toBeGreaterThan(-1);
+    // Past the heading's own closing rule, up to the next section's opening rule.
+    const rest = prompt.slice(at + HEADING.length).replace(/^\n═+\n/, '');
+    const next = rest.search(/\n═+\n[A-Z]/);
+    return next === -1 ? rest : rest.slice(0, next);
+  };
+  const DECISION_CARD = {
+    type: 'decision' as const,
+    title: 'Pick the queue',
+    kind: 'task' as const,
+  };
+
+  it('says never ask, how to decide, and that ease is never a reason — on the code lane', () => {
+    const block = blockOf(assembleDispatchPrompt(source()).prompt);
+    expect(block).toContain(
+      'A detail the card and its plan leave open is YOURS to decide. Never ask anyone',
+    );
+    expect(block).toContain(
+      'about the implementation: nobody is there to answer mid-run. Do not use',
+    );
+    expect(block).toContain(
+      'AskUserQuestion, do not ask to confirm the scope, and do not offer options and',
+    );
+    expect(block).toContain(
+      "  1. The repository's own conventions — its coding convention, its instruction",
+    );
+    expect(block).toContain(
+      '  2. Where they are silent, the established industry best practice for the',
+    );
+    expect(block).toContain(
+      'Take the best-practice option even when it is more work. Never choose an option',
+    );
+    expect(block).toContain('because it is the easiest, the smallest or the quickest to ship.');
+    // No "simplest option" escape hatch anywhere in the block.
+    expect(block).not.toMatch(/simplest|if in doubt, (pick|choose) the/i);
+  });
+
+  it('keeps the WHAT out of it: a question that changes the WHAT is THE CARD IS WRONG, not a question', () => {
+    const block = blockOf(assembleDispatchPrompt(source()).prompt);
+    expect(block).toContain(
+      "card's outcome or an acceptance criterion — is not yours to decide: that is",
+    );
+    expect(block).toContain(
+      'THE CARD IS WRONG below, and its STOP is an action you take, not a question.',
+    );
+  });
+
+  it('records the decisions ONCE through record_run_discrepancy, before committing, in the SAME call as a build-through', () => {
+    const block = blockOf(assembleDispatchPrompt(source({ key: 'PROD-42' })).prompt);
+    expect(RECORD_DISCREPANCY_TOOL_NAME).toBe(RECORD_RUN_DISCREPANCY_TOOL_NAME);
+    expect(block).toContain(
+      'RECORD every decision you made, ONCE, after you have built and before you commit,',
+    );
+    expect(block).toContain(`with the ${RECORD_RUN_DISCREPANCY_TOOL_NAME} tool:`);
+    expect(block).toContain('         key:       PROD-42');
+    expect(block).toContain(
+      '                    { planSaid, chose, why, alternatives } — what the card said',
+    );
+    expect(block).toContain(
+      '  that SAME call beside its points: the record is one call per run, and a',
+    );
+    expect(block).toContain(
+      '  second call is refused DISCREPANCY_ALREADY_RECORDED. A run that decided',
+    );
+    expect(block).toContain('  "## Decisions the run made" section.');
+    expect(block).toContain('         Decision record missing: <the error code or message>');
+  });
+
+  it('sits after the card’s own WHAT and before the closing sections', () => {
+    const prompt = assembleDispatchPrompt(source()).prompt;
+    const at = prompt.indexOf(HEADING);
+    expect(at).toBeGreaterThan(prompt.indexOf('\nACCEPTANCE CRITERIA'));
+    expect(at).toBeLessThan(prompt.indexOf('\nREPORTING YOUR STEPS'));
+    expect(at).toBeLessThan(prompt.indexOf('\nGIT WORKFLOW'));
+  });
+
+  it('a session-lineage card lists the decisions in the session pull request body', () => {
+    const block = blockOf(
+      assembleDispatchPrompt(source({ sessionBranch: 'session/PROD-1-x' })).prompt,
+    );
+    expect(block).toContain(
+      '  List the same decisions for PROD-7 in a "## Decisions the run made"',
+    );
+    expect(block).toContain('  section of the BODY of the session pull request.');
+  });
+
+  it('a decision card records before publish_decision_page and lists them in its report', () => {
+    const block = blockOf(assembleDispatchPrompt(source(DECISION_CARD)).prompt);
+    expect(block).toContain('before publish_decision_page,');
+    expect(block).toContain('  List the same decisions in your FINISHED report.');
+    expect(block).not.toContain('pull request');
+  });
+
+  it('a MANUAL item has no such section — a person does it, and there is no run to record on', () => {
+    const prompt = assembleDispatchPrompt(source({ type: 'manual', executor: 'human' })).prompt;
+    expect(prompt).not.toContain(HEADING);
+  });
+
+  it('names the "decisions" file route ONLY to a runner that declares it posts them', () => {
+    const route = '"decisions" beside "model"';
+    const withBoth = blockOf(
+      assembleDispatchPrompt(source({ runnerPostsAgentReport: true, runnerPostsDecisions: true }))
+        .prompt,
+    );
+    expect(withBoth).toContain(route);
+    expect(withBoth).toContain(
+      '         {"model": "<as above>", "decisions": [{"planSaid": "…", "chose": "…", "why": "…", "alternatives": "…"}]}',
+    );
+    // A CLI that posts the other findings but predates decisions would drop them.
+    for (const over of [
+      { runnerPostsAgentReport: true },
+      { runnerPostsDecisions: true },
+      {},
+    ] as Partial<DispatchPromptSource>[]) {
+      expect(blockOf(assembleDispatchPrompt(source(over)).prompt)).not.toContain(route);
+    }
+  });
+
+  it('leaves BUILD THROUGH, STOP and FOUND A DEFECT byte-identical', () => {
+    // The block is self-contained: removing it gives back exactly the prompt without it.
+    for (const over of [
+      {},
+      DECISION_CARD,
+      { runnerPostsAgentReport: true },
+    ] as Partial<DispatchPromptSource>[]) {
+      const prompt = assembleDispatchPrompt(source(over)).prompt;
+      const outcome = prompt.slice(prompt.indexOf('THE CARD IS WRONG — its premise is false'));
+      expect(outcome).not.toContain(HEADING);
+      expect(outcome).not.toContain('decisions');
     }
   });
 });

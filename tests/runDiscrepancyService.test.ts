@@ -359,3 +359,131 @@ describe('who may record', () => {
     );
   });
 });
+
+// THE DECISIONS ARM (MOTIR-10000): a run never asks about the implementation — it decides what
+// the plan left open and records each decision in this same ONE record, beside the points or
+// alone. Points-only calls are covered above and write exactly what they did before.
+describe('decisions — the same record, its own section', () => {
+  const DECISION = {
+    planSaid: 'SENTINEL-SAID: nothing — the card names no retry policy',
+    chose: 'SENTINEL-CHOSE: exponential backoff with jitter, three attempts',
+    why: 'SENTINEL-WHY: the repository retries every other outbound call this way',
+    alternatives: 'SENTINEL-ALT: a fixed delay; no retry at all',
+  };
+  const recordAll = (key: string, points: unknown[], decisions: unknown[], ctx: ServiceContext) =>
+    runDiscrepancyService.recordDiscrepancy(
+      {
+        key,
+        points: points as (typeof POINT)[],
+        decisions: decisions as (typeof DECISION)[],
+      },
+      ctx,
+    );
+
+  it('decisions alone make ONE comment and ONE finding counting them', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    await openLegs(fx, [c.key], fx.ctx, 'agent');
+
+    const { planSaid, chose, why } = DECISION;
+    const result = await recordAll(c.key, [], [DECISION, { planSaid, chose, why }], fx.ctx);
+    expect(result.recorded).toBe(true);
+
+    const comments = await adminDb.comment.findMany({ where: { workItemId: c.id } });
+    expect(comments).toHaveLength(1);
+    const body = comments[0]!.bodyMd;
+    expect(body).toContain('Decided by the run where the plan was silent');
+    expect(body).toContain('2 decisions');
+    expect(body).not.toContain('Built through a plan');
+    for (const text of Object.values(DECISION)) expect(body).toContain(text);
+    // `alternatives` is optional: the second decision carries no such line.
+    expect(body.match(/Alternatives considered/g)).toHaveLength(1);
+
+    const leg = await adminDb.dispatchRunCard.findFirstOrThrow({ where: { workItemId: c.id } });
+    const events = await findings(c.id);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.data).toEqual({
+      commentId: result.commentId,
+      pointCount: 2,
+      decisionCount: 2,
+      dispatchRunCardId: leg.id,
+    });
+    expect(JSON.stringify(events[0]!.data)).not.toContain('SENTINEL');
+  });
+
+  it('points and decisions in one call: both sections, the count over every entry', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+    await openLegs(fx, [c.key], fx.ctx);
+
+    await recordAll(c.key, [POINT], [DECISION], fx.ctx);
+
+    const [comment] = await adminDb.comment.findMany({ where: { workItemId: c.id } });
+    expect(comment!.bodyMd).toContain('Built through a plan that was wrong about the HOW');
+    expect(comment!.bodyMd).toContain(
+      '**Decided by the run where the plan was silent** — 1 decision,',
+    );
+    expect(comment!.bodyMd.indexOf(POINT.planAsked)).toBeLessThan(
+      comment!.bodyMd.indexOf(DECISION.planSaid),
+    );
+    expect((await findings(c.id))[0]!.data).toMatchObject({ pointCount: 2, decisionCount: 1 });
+
+    // …and the leg's ONE record is spent: a decisions-only second call is refused too.
+    await expect(recordAll(c.key, [], [DECISION], fx.ctx)).rejects.toBeInstanceOf(
+      DiscrepancyAlreadyRecordedError,
+    );
+  });
+
+  it('no open leg: the decisions comment is still written, recorded: false', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+
+    expect(await recordAll(c.key, [], [DECISION], fx.ctx)).toMatchObject({ recorded: false });
+    expect(await adminDb.comment.count({ where: { workItemId: c.id } })).toBe(1);
+  });
+
+  it('refuses no entries at all, too many decisions, an empty or an over-long field', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const c = await card(fx);
+
+    await expect(recordAll(c.key, [], [], fx.ctx)).rejects.toMatchObject({
+      reason: 'points_empty',
+    });
+    await expect(
+      recordAll(
+        c.key,
+        [],
+        Array.from({ length: RUN_DISCREPANCY_POINTS_MAX + 1 }, () => DECISION),
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({ reason: 'decisions_too_many' });
+    await expect(
+      recordAll(c.key, [], [DECISION, { ...DECISION, chose: ' ' }], fx.ctx),
+    ).rejects.toMatchObject({ reason: 'field_empty', where: { decision: 2, field: 'chose' } });
+    await expect(
+      recordAll(
+        c.key,
+        [],
+        [{ ...DECISION, alternatives: 'z'.repeat(RUN_DISCREPANCY_FIELD_MAX + 1) }],
+        fx.ctx,
+      ),
+    ).rejects.toMatchObject({
+      reason: 'field_too_long',
+      where: { decision: 1, field: 'alternatives' },
+    });
+    // A blank `alternatives` is the same as none, not an empty field.
+    expect(await recordAll(c.key, [], [{ ...DECISION, alternatives: '  ' }], fx.ctx)).toMatchObject(
+      { recorded: false },
+    );
+    expect(await adminDb.comment.count()).toBe(1);
+  });
+
+  it('the refusal message names the decision and the field', () => {
+    const err = new RunDiscrepancyInvalidError('field_empty', { decision: 3, field: 'why' });
+    expect(err.message).toContain('(decision 3, `why`)');
+    expect(new RunDiscrepancyInvalidError('decisions_too_many').message).toContain(
+      `${RUN_DISCREPANCY_POINTS_MAX} decisions`,
+    );
+    expect(new RunDiscrepancyInvalidError('points_empty').message).toContain('one decision');
+  });
+});

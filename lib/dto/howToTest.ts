@@ -1,3 +1,5 @@
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+
 // Wire DTOs for the HOW TO TEST read (Story MOTIR-4906 · Subtask MOTIR-5333).
 //
 // HOW TO TEST is per RUN, on the RUN TARGET (`docs/decisions/approval-gates.md`
@@ -53,6 +55,9 @@ export interface HowToTestRecordDto {
   createdAt: string;
   /** The rich-text How to test, as its author wrote it. */
   bodyMd: string;
+  /** The chips of every `[KEY](motir:<id>)` in `bodyMd`, resolved for the reader
+   *  (bug MOTIR-10023) — `{}` when it links nothing. */
+  workItemRefs: WorkItemRefMap;
   previewPath: string | null;
 }
 

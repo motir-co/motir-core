@@ -59,7 +59,24 @@ export interface RenderMockOptions {
    * `@font-face` is emitted.
    */
   fontCss?: string;
+  /**
+   * How wide the board is drawn (MOTIR-9758). Defaults to `'full'`: a design
+   * result is reviewed at the width of the screen it is opened on, and a page's
+   * own column sits inside the board as the page ships it.
+   * - `'full'` — the viewport's width.
+   * - `'narrow'` — the 64rem column every mock had before 0.19.
+   * - any other string — ONE max-width utility, e.g. `'max-w-[1400px]'`, for a
+   *   page that ships at that width. It lands on the board as a class, so
+   *   Tailwind compiles it like any other candidate.
+   *
+   * An empty string, or one holding whitespace, falls back to `'full'` and
+   * the fallback is named in a comment at the top, as an unknown axis is.
+   */
+  boardWidth?: BoardWidth;
 }
+
+/** `'narrow'`, `'full'`, or one max-width utility class. */
+export type BoardWidth = 'narrow' | 'full' | (string & {});
 
 // `theme.css` sits at the package root, two levels above both the source file
 // (src/mock/) and the emitted chunk (dist/mock/).
@@ -171,9 +188,30 @@ function safeStyleText(css: string): string {
 
 const BODY_CLASS = 'bg-(--el-page-bg) text-(--el-text) font-sans antialiased';
 
-function Board({ title, panels }: { title: string; panels: MockPanel[] }) {
+const FULL_WIDTH_CLASS = 'w-full';
+
+/** The board's width class for `boardWidth`, plus a note when it fell back. */
+function resolveBoardWidth(boardWidth: unknown): { widthClass: string; fallback?: string } {
+  if (boardWidth === undefined || boardWidth === 'full') return { widthClass: FULL_WIDTH_CLASS };
+  if (boardWidth === 'narrow') return { widthClass: 'max-w-[64rem]' };
+  if (typeof boardWidth === 'string' && /^\S+$/.test(boardWidth)) return { widthClass: boardWidth };
+  return {
+    widthClass: FULL_WIDTH_CLASS,
+    fallback: `boardWidth ${JSON.stringify(boardWidth)} is not one class — fell back to "full"`,
+  };
+}
+
+function Board({
+  title,
+  panels,
+  widthClass,
+}: {
+  title: string;
+  panels: MockPanel[];
+  widthClass: string;
+}) {
   return (
-    <main className="mx-auto flex max-w-[64rem] flex-col gap-8 p-8">
+    <main className={`mx-auto flex ${widthClass} flex-col gap-8 p-8`}>
       <h1 className="font-sans text-2xl font-semibold text-(--el-text)">{title}</h1>
       {panels.map((panel, i) => (
         <section key={i} className="flex flex-col gap-3" aria-label={panel.label}>
@@ -196,13 +234,18 @@ function Board({ title, panels }: { title: string; panels: MockPanel[] }) {
  * stylesheet link, no script and no remote import — it opens offline.
  *
  * An unknown or missing axis id never throws: it falls back to that axis's
- * registry default and the fallback is named in a comment at the top.
+ * registry default and the fallback is named in a comment at the top. So does
+ * a `boardWidth` that is not one class.
  */
 export async function renderMock(options: RenderMockOptions): Promise<string> {
   const { title, panels, theme = 'light', fontCss } = options;
   const { styleId, paletteId, typeId, fallbacks } = resolveAxes(options.axes ?? {});
+  const { widthClass, fallback: widthFallback } = resolveBoardWidth(options.boardWidth);
+  if (widthFallback) fallbacks.push(widthFallback);
 
-  const body = renderToStaticMarkup(<Board title={title} panels={panels} />);
+  const body = renderToStaticMarkup(
+    <Board title={title} panels={panels} widthClass={widthClass} />,
+  );
   const bodyTag = `<body class="${BODY_CLASS}">`;
   const compiled = await compileCss(bodyTag + body);
   const css = fontCss === undefined ? compiled : `${fontCss}\n${compiled}`;

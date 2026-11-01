@@ -14,8 +14,9 @@ import {
 } from '@/lib/repositories/ciWorkflowRunUsageRepository';
 import {
   ciPeriodUsageRepository,
-  type OrgPeriodConsumption,
+  type OrgPeriodConsumption as CiPeriodRollup,
 } from '@/lib/repositories/ciPeriodUsageRepository';
+import { previewUsageRepository } from '@/lib/repositories/previewUsageRepository';
 import { ciLiveAccrualRepository } from '@/lib/repositories/ciLiveAccrualRepository';
 import {
   isCiMeteringEnabled,
@@ -99,6 +100,12 @@ interface Attribution {
   githubRepoId: string;
   isMeta: boolean;
 }
+
+/** An org's period consumption: the CI rollup's figures, with preview minutes
+ *  added to `linearEquivalentMinutes` and broken out in `bySource`. */
+export type OrgPeriodConsumption = CiPeriodRollup & {
+  bySource: { ci: number; preview: number };
+};
 
 export const ciMinutesMeterService = {
   /**
@@ -466,14 +473,32 @@ export const ciMinutesMeterService = {
    * `at`? MOTIR-1901 measures its `max(members × 300, 1000)` pool against
    * exactly this and nothing else.
    *
+   * It counts PREVIEW usage too (MOTIR-5777, `ci-minutes-allowance.md`
+   * amendment 2026-10-29): a Motir-hosted repository's pull-request previews,
+   * converted to Linux-equivalent minutes at MOTIR-5769 §9's factors, are in the
+   * same pool, so the existing thresholds and `ci_overage` debit apply to them
+   * with no second path. `bySource` says where the minutes went;
+   * `billableMinutes` and `runCount` stay the Actions figures.
+   *
    * Deliberately returns consumption ONLY — no pool, no balance, no verdict.
    * Those are the entitlement's, and keeping them out of the meter is what lets
    * this half stay a pure measurement with no billing coupling.
    */
   async getOrgPeriodConsumption(organizationId: string, at: Date): Promise<OrgPeriodConsumption> {
-    return withSystemContext((tx) =>
-      ciPeriodUsageRepository.sumForOrgPeriod(organizationId, periodStartFor(at), tx),
-    );
+    const periodStart = periodStartFor(at);
+    return withSystemContext(async (tx) => {
+      const ci = await ciPeriodUsageRepository.sumForOrgPeriod(organizationId, periodStart, tx);
+      const preview = await previewUsageRepository.sumLinuxMinutesForOrgPeriod(
+        organizationId,
+        periodStart,
+        tx,
+      );
+      return {
+        ...ci,
+        linearEquivalentMinutes: ci.linearEquivalentMinutes + preview,
+        bySource: { ci: ci.linearEquivalentMinutes, preview },
+      };
+    });
   },
 
   /**

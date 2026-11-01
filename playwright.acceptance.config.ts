@@ -12,6 +12,7 @@ import {
   E2E_GITHUB_CLIENT_ID,
   E2E_GITHUB_CLIENT_SECRET,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_PROVISIONING_ORG,
   E2E_STUDIO_APP_ID,
 } from './tests/e2e/_helpers/github-const';
@@ -275,6 +276,26 @@ process.env['MOTIR_FAKE_AWS_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_FLEET_SWITCH_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-fleet-switch.json',
 );
+// Story MOTIR-9797 · MOTIR-10040 — a PRODUCTION RELEASE. A merge's release is
+// a JOB, so the worker reads the hosting manifest, deploys and posts the GitHub
+// deployment; the rollback after it runs in the webServer; the spec holds a
+// deploy open to see it building. So the hosting fake's cross-process store is
+// one file all three share (the runner writes its hold sidecar), and the GitHub
+// seam is the worker's (`productionReleaseSeamEnv`), steered through a control
+// file the spec writes and read back through a journal. A PREVIEW (Story
+// MOTIR-5766 · MOTIR-10098) shares the same store: the worker deploys it, the
+// webServer's gate reads its release, and the spec arranges both through
+// `tests/e2e/_helpers/preview-hosting.ts`.
+process.env['MOTIR_FAKE_HOSTING_STATE_PATH'] ??= path.resolve(
+  'out/playwright-output-acceptance/.fake-hosting.json',
+);
+process.env['MOTIR_PRODUCTION_RELEASE_CONTROL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-production-release-control.json',
+);
+process.env['MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-production-release-journal.jsonl',
+);
+process.env['E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM'] ??= '1';
 // Story MOTIR-9539 · MOTIR-9617 — the CAPACITY FAKE: the gateway capacity API's
 // limits, lane usage and mode (live, counter store down, unreachable) in one file
 // (`lib/gateway/capacityFakeState.ts`). THREE processes read it on every call:
@@ -308,6 +329,28 @@ process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH'] ??= path.resolve(
 process.env['MOTIR_FAKE_IMAGE_CATALOG_PATH'] ??= path.resolve(
   'out/playwright-output-acceptance/.fake-image-catalog.json',
 );
+// Story MOTIR-5766 · MOTIR-5781 — the PREVIEW HOST, served in this lane the way
+// production serves it. `preview.localhost` because a browser resolves it to
+// loopback; the spec maps it onto its HTTPS front (`preview-tls-front.ts`) so the
+// gate's `https://<host>` redirects and its `__Host-` cookie work unchanged — no
+// `MOTIR_PREVIEW_SCHEME`. The two keys are test values: the gate's admission
+// signing key, and the key a release's origin secret derives from, which the job
+// worker (deploy) and the app server (forward) must share. Set on the RUNNER, so
+// the worker inherits them, and handed to the webServer below.
+process.env['MOTIR_PREVIEW_DOMAIN'] ??= 'preview.localhost';
+process.env['MOTIR_HOSTING_GATE_SIGNING_KEY'] ??= 'e2e-preview-gate-signing-key';
+process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY'] ??= 'e2e-preview-origin-secret-key';
+process.env['E2E_PREVIEW_TLS_PORT'] ??= '3293';
+// …and a preview's GitHub calls (its deployment, statuses and hosting manifest),
+// which the lifecycle makes from the JOB WORKER: `lib/test-github-preview-mock.ts`,
+// mirrored there by `githubPreviewSeamEnv` beside the merge seam that mints its token.
+process.env['MOTIR_GITHUB_PREVIEW_CONTROL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-github-preview-control.json',
+);
+process.env['MOTIR_GITHUB_PREVIEW_JOURNAL_PATH'] ??= path.resolve(
+  '/tmp/motir-acceptance-github-preview-journal.jsonl',
+);
+process.env['E2E_JOB_WORKER_GITHUB_PREVIEW_SEAM'] ??= '1';
 // The stall watchdog's test-only config seam (`hostedRunStallWindowMs`,
 // `lib/hostedRuns/limits.ts`) — shortened from the real 15 minutes so the
 // "stalled" case can run in this lane at all. Read directly by whichever
@@ -644,6 +687,9 @@ export default defineConfig({
         // The identity/installation the seed binds are read back on this surface;
         // the App slug is what the settings pane the step hands off to renders.
         GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+        // A repository's environment secrets (Story MOTIR-9795 · MOTIR-9968) are
+        // sealed under their OWN key, which never falls back to the GitHub one.
+        ENVIRONMENT_CONFIG_ENCRYPTION_KEY: E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
         // The hosted-run gateway/motir-ai/GitHub seams (Story MOTIR-683 ·
         // MOTIR-6452) — see the "HOSTED RUN seams" block above this config for
         // why each of these exists.
@@ -656,9 +702,16 @@ export default defineConfig({
         MOTIR_HOSTED_RUN_JOURNAL_PATH,
         MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
         MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
+        // The preview host (MOTIR-5781) — see its block above this config.
+        MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
+        MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
+        MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
         // The fake AWS (MOTIR-9429) — see its block above this config.
         MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
         MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
+        // The hosting fake's store — a production release's (MOTIR-10040) and a
+        // preview's (MOTIR-10098); see its block above.
+        MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
         // The capacity fake (MOTIR-9617) — see its block above this config.
         MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
         MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:

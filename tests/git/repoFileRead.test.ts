@@ -4,6 +4,7 @@ import {
   getGitProvider,
   normalizeRepoFilePath,
   MAX_REPO_PATH_LENGTH,
+  REPO_FILE_FETCH_MAX_BYTES,
   REPO_FILE_MAX_BYTES,
   REPO_FILE_READ_TIMEOUT_MS,
   RepoFileReadError,
@@ -58,6 +59,14 @@ function stubFetch(reply: (url: string) => Response | Promise<Response>) {
  *  about the file. This is what the path guard's assertion counts. */
 function hostCalls(mock: ReturnType<typeof stubFetch>): string[] {
   return mock.mock.calls.map(([u]) => String(u)).filter((u) => !u.includes('/access_tokens'));
+}
+
+/** A 200 with NO declared length whose body is one byte over the fetch limit.
+ *  The buffer is zero-filled and never copied, so the test allocates lazily. */
+function undeclaredOverFetchLimit(): Response {
+  return Object.assign(new Response(null, { status: 200 }), {
+    arrayBuffer: async () => new ArrayBuffer(REPO_FILE_FETCH_MAX_BYTES + 1),
+  });
 }
 
 describe('normalizeRepoFilePath — the guard that runs before any host call', () => {
@@ -229,7 +238,7 @@ describe('github.readFileAtRef', () => {
     expect(missingRef.outcome).not.toBe(missingPath.outcome);
   });
 
-  it('names a blob over the inline limit, and does NOT report it as a credential failure', async () => {
+  it('names a blob over what the raw read serves, and does NOT report it as a credential failure', async () => {
     stubFetch(
       () =>
         new Response(
@@ -241,7 +250,7 @@ describe('github.readFileAtRef', () => {
       outcome: 'too_large',
       path: 'big.bin',
       ref: 'main',
-      limitBytes: REPO_FILE_MAX_BYTES,
+      limitBytes: REPO_FILE_FETCH_MAX_BYTES,
     });
   });
 
@@ -254,11 +263,40 @@ describe('github.readFileAtRef', () => {
     });
   });
 
-  it('caps a body the host served over the limit anyway', async () => {
-    stubFetch(() => new Response('a'.repeat(REPO_FILE_MAX_BYTES + 1), { status: 200 }));
-    expect(await github.readFileAtRef('inst-1', 'moooon', 'acme', 'big.txt', 'main')).toMatchObject(
-      { outcome: 'too_large', limitBytes: REPO_FILE_MAX_BYTES },
+  it('refuses a body DECLARED over the fetch limit before buffering it', async () => {
+    stubFetch(
+      () =>
+        new Response('a'.repeat(64), {
+          status: 200,
+          headers: { 'content-length': String(REPO_FILE_FETCH_MAX_BYTES + 1) },
+        }),
     );
+    expect(await github.readFileAtRef('inst-1', 'moooon', 'acme', 'big.txt', 'main')).toEqual({
+      outcome: 'too_large',
+      path: 'big.txt',
+      ref: 'main',
+      limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+    });
+  });
+
+  it('caps a body over the fetch limit that declared no length', async () => {
+    stubFetch(undeclaredOverFetchLimit);
+    expect(await github.readFileAtRef('inst-1', 'moooon', 'acme', 'big.txt', 'main')).toEqual({
+      outcome: 'too_large',
+      path: 'big.txt',
+      ref: 'main',
+      limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+    });
+  });
+
+  // MOTIR-10143: the 1 MB whole-file limit is the SERVICE's. The provider hands
+  // back a text blob over it, so a ranged read of a large file can be served.
+  it('returns a text file over the 1 MB whole-file limit as `found`', async () => {
+    const text = 'line\n'.repeat(Math.ceil((REPO_FILE_MAX_BYTES + 1) / 5));
+    stubFetch(() => new Response(text, { status: 200 }));
+    const result = await github.readFileAtRef('inst-1', 'moooon', 'acme', 'big.ts', 'main');
+    expect(result).toMatchObject({ outcome: 'found', bytes: text.length });
+    expect(result.outcome === 'found' && result.text).toBe(text);
   });
 
   it('returns an EMPTY file as `found`, never as absent', async () => {
@@ -399,24 +437,36 @@ describe('gitlab.readFileAtRef', () => {
   // so without our own cap the same file would be a named `too_large` on one
   // host and a multi-megabyte string on the other — a session learning a
   // different fact about a repository because of where it is hosted.
-  it('applies the SHARED cap that GitLab itself does not enforce', async () => {
+  it('applies the SHARED fetch cap that GitLab itself does not enforce', async () => {
     stubFetch(
       () =>
         new Response('a'.repeat(64), {
           status: 200,
-          headers: { 'content-length': String(REPO_FILE_MAX_BYTES + 1) },
+          headers: { 'content-length': String(REPO_FILE_FETCH_MAX_BYTES + 1) },
         }),
     );
     expect(await gitlab.readFileAtRef('conn-1', 'acme', 'web', 'big.bin', 'main')).toEqual({
       outcome: 'too_large',
       path: 'big.bin',
       ref: 'main',
-      limitBytes: REPO_FILE_MAX_BYTES,
+      limitBytes: REPO_FILE_FETCH_MAX_BYTES,
     });
 
-    stubFetch(() => new Response('a'.repeat(REPO_FILE_MAX_BYTES + 1), { status: 200 }));
+    stubFetch(undeclaredOverFetchLimit);
     expect(await gitlab.readFileAtRef('conn-1', 'acme', 'web', 'big.bin', 'main')).toMatchObject({
       outcome: 'too_large',
+      limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+    });
+  });
+
+  // MOTIR-10143: as on GitHub, a text file over the 1 MB whole-file limit is
+  // handed back — the limit is the service's, applied only to an unranged read.
+  it('returns a text file over the 1 MB whole-file limit as `found`', async () => {
+    const text = 'a'.repeat(REPO_FILE_MAX_BYTES + 1);
+    stubFetch(() => new Response(text, { status: 200 }));
+    expect(await gitlab.readFileAtRef('conn-1', 'acme', 'web', 'big.ts', 'main')).toMatchObject({
+      outcome: 'found',
+      bytes: REPO_FILE_MAX_BYTES + 1,
     });
   });
 

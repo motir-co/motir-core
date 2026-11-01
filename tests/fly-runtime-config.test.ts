@@ -391,6 +391,28 @@ describe('fly.toml — the deployment configuration', () => {
     expect(flyToml).toMatch(/size\s*=\s*"performance-1x"/);
   });
 
+  it('runs EVERY process group on a dedicated CPU, never a quota-throttled shared one (MOTIR-10119)', () => {
+    // A shared CPU is throttled once its burst balance drains, and Fly reports the
+    // throttle as `steal`. It froze the app on 2026-10-15 and the worker in every CI
+    // burst of 2026-10-29/30 (P2028 on `system.ci-runner-boot`). Read per group,
+    // because the old test only asked whether `performance-1x` appeared ANYWHERE,
+    // and it passed while the worker stayed shared.
+    const vms = [...flyToml.matchAll(/^\s*\[\[vm\]\]\s*$([\s\S]*?)(?=^\s*\[|(?![\s\S]))/gm)].map(
+      (m) => m[1] ?? '',
+    );
+    const sizeOf = (group: string) =>
+      vms
+        .filter((body) =>
+          new RegExp(`^\\s*processes\\s*=\\s*\\[\\s*"${group}"\\s*\\]`, 'm').test(body),
+        )
+        .map((body) => /^\s*size\s*=\s*"([^"]*)"/m.exec(body)?.[1]);
+    expect(sizeOf('app')).toEqual(['performance-1x']);
+    expect(sizeOf('worker')).toEqual(['performance-1x']);
+    for (const body of vms) {
+      expect(/^\s*size\s*=\s*"shared-cpu-/m.test(body), body).toBe(false);
+    }
+  });
+
   it('deploys bluegreen, so one running machine is not an outage on every deploy', () => {
     // The default `rolling` strategy replaces a machine in place; with a single
     // running `app` machine that is a gap. Unverified against the worker group and

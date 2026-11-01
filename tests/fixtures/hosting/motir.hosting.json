@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "targets": ["fly"],
+  "port": 8080,
+  "healthCheck": { "path": "/health" },
+  "startCommand": "/whoami",
+  "buildCommand": "echo prebuilt",
+  "requires": { "websockets": false, "backgroundWork": false },
+  "database": { "kind": "none" }
+}

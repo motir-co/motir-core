@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { GuidePlanningAccessDto, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { TodoProgressDto, WorkItemTodoDto } from '@/lib/dto/workItemTodos';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { PlanEditsClientError, streamAskJob } from '@/lib/planning/planEditsClient';
 import {
   openGuideConversation,
@@ -52,6 +53,8 @@ export interface GuideConversationState {
   session: PlanChangeSessionDto | null;
   /** The card's rows as last read, or null before the first read lands. */
   rows: WorkItemTodoDto[] | null;
+  /** The rows' notes' work-item links, as the last read resolved them (MOTIR-10023). */
+  rowRefs: WorkItemRefMap;
   progress: TodoProgressDto | null;
   /** A turn that did not finish, or a door that refused (a typed code). */
   errorCode: string | null;
@@ -70,10 +73,14 @@ export interface GuideConversationState {
 /** The to-do reads and writes, injected so the hook stays free of the page's
  *  Server Action module (the host passes `todoActions`). */
 export interface GuideTodoAccess {
-  list: (input: {
-    workItemId: string;
-  }) => Promise<
-    { ok: true; items: WorkItemTodoDto[]; progress: TodoProgressDto } | { ok: false; error: string }
+  list: (input: { workItemId: string }) => Promise<
+    | {
+        ok: true;
+        items: WorkItemTodoDto[];
+        progress: TodoProgressDto;
+        workItemRefs: WorkItemRefMap;
+      }
+    | { ok: false; error: string }
   >;
   setDone: (input: {
     todoId: string;
@@ -132,6 +139,7 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     phase: 'opening',
     session: null,
     rows: null,
+    rowRefs: {},
     progress: null,
     errorCode: null,
     startingUp: false,
@@ -170,7 +178,12 @@ export function useGuideConversation({ itemKey, workItemId, todos }: UseGuideCon
     try {
       const result = await todosRef.current.list({ workItemId });
       if (!mountedRef.current || seq !== readSeq.current || !result.ok) return;
-      setState((s) => ({ ...s, rows: result.items, progress: result.progress }));
+      setState((s) => ({
+        ...s,
+        rows: result.items,
+        rowRefs: result.workItemRefs,
+        progress: result.progress,
+      }));
     } catch {
       /* the last read stands */
     }

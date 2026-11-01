@@ -14,6 +14,7 @@ import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { HostAccountRefusedError } from '@/lib/ciFleet/headroomErrors';
+import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { hostAccountPlan } from '@/lib/ciFleet/hostAccounts';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
@@ -33,10 +34,13 @@ import { randomToken } from '../helpers/random';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
 } from '../helpers/addShardFakes';
+import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE STORY GATE FOR A HOST ORGANISATION'S OWN ACCOUNTS (Story MOTIR-9365 ·
 // MOTIR-9591) — the SEAMS between its nine feature cards, driven through their
@@ -127,8 +131,8 @@ const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_9591_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_9591_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_9591_never_printed',
+  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
+  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_9591_never_printed',
   sessionSecret: 'SESSION_SECRET_9591_never_printed',
   sessionToken: 'SESSION_TOKEN_9591_never_printed',
@@ -413,9 +417,8 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4445390');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
-  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubAwsManagementCredential();
+  stubPoolDefinitionEnv();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   _resetInstallationTokenCache();
@@ -427,6 +430,7 @@ beforeEach(async () => {
   github = newGithubWorld();
   github.orgs.add(GITHUB_ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   const ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);
@@ -538,7 +542,8 @@ describe('purchase, and a replayed pass', () => {
       expect(await placed(kind, host)).toEqual({ shardId: shared[kind]!.id });
     }
     const floor = await caps(host.organizationId);
-    expect([floor.agentRunsInParallel, floor.ciBurstCap]).toEqual([5, 50]);
+    expect([floor.agentRunsInParallel, floor.ciBurstCap]).toEqual([5, 20]);
+    expect([floor.agentsPerUser, floor.agentsPerOrg]).toEqual([5, 20]);
   });
 
   it('a replayed reconcile and state pass create nothing and move no time already set', async () => {
@@ -577,14 +582,14 @@ describe('an account granted', () => {
     expect(results.slice(16)).toEqual(Array(4).fill(ownFull('hosted_agent')));
   });
 
-  it('CI pending, then granted at 200: shared at 50, then own at 100, the agent runner unaffected', async () => {
+  it('CI pending, then granted at 200: shared at 20, then own at 100, the agent runner unaffected', async () => {
     const host = await purchase();
     await answer(host.organizationId, 'hosted_agent', 'APPROVED', 32);
     await statePass();
     const runner = await row(host.organizationId, 'hosted_agent');
 
     expect(await placed('ci_runner', host)).toEqual({ shardId: shared.ci_runner!.id });
-    expect((await caps(host.organizationId)).ciBurstCap).toBe(50);
+    expect((await caps(host.organizationId)).ciBurstCap).toBe(20);
     expect(await placed('hosted_agent', host)).toEqual({ shardId: runner.id });
 
     await answer(host.organizationId, 'ci_runner', 'APPROVED', 200);
@@ -626,6 +631,10 @@ describe('an account granted', () => {
       b!.liveAt,
     ]);
     expect(a!.liveAt).not.toBeNull();
+    // Live, the merged account lifts the plan's agents from the floor's 5 / 20 to
+    // 10 / 50 (MOTIR-9668); what the grant holds stays the account's own bound.
+    const lifted = await caps(host.organizationId);
+    expect([lifted.agentsPerUser, lifted.agentsPerOrg]).toEqual([10, 50]);
     const hoster = await row(host.organizationId, 'agent_instance');
 
     // No index running: 10 agents and no 11th — the index spots are not lent.
@@ -763,7 +772,10 @@ describe('a refused CreateAccount for a second Host org', () => {
     const second = await seedTenant();
     await setPlan(second.organizationId, HOST_PLAN_KEY);
     organization.usedEmails.add(
-      TEMPLATE.replace('{name}', hostAccountPlan(second.organizationId, 'ci_runner').account.name),
+      TEMPLATE.replace(
+        '{name}',
+        hostAccountPlan(second.organizationId, 'ci_runner', hostMonthlyPlanCredits()).account.name,
+      ),
     );
 
     await reconcile();

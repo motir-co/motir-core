@@ -3363,3 +3363,216 @@ it; this design adds no run-name string. The fix part's closing line is `fix.how
 | MOTIR-6817 | this card                                                                                                                                                                                                                                 |
 
 Fixture items use `ACME-n` keys, so they link to nothing.
+
+## 31 · The PREVIEW on a pull request's row — _building_, _ready_ with its live link, _failed_ with its reason, _closed_, and nothing at all when there is no preview (MOTIR-10097, 2026-10-30)
+
+**AMENDS § 19** (the Development row, `PullRequestRow`, Panels 3 / 12a in `github.mock.html`) **and
+§ 25** (the How-to-test repository sub-block is retired; a pull request's facts live on its ROW). The
+delta is **[`github--pr-row-preview.mock.html`](./github--pr-row-preview.mock.html)**, Panels **P1–P8**.
+**No existing mock is edited**, and no image export ships (`docs/decisions/design-result.md`
+AMENDMENT 4). Card MOTIR-10097, Story MOTIR-5766; the card that builds it is **MOTIR-10099**. The
+states are the closed enum of the ADR (MOTIR-5769, `preview_deployment.state`). Rendered against
+motir-core `origin/main` @ `92db2603a`.
+
+### Design system — the verdict
+
+**On Motir Design.** `package.json` depends on `@motir/design-system` (`workspace:*`, 0.19.0) and
+`app/globals.css` imports `@motir/design-system/theme.css`. The axes are per workspace
+(`app/layout.tsx` sets `data-style` / `data-palette` from the applied theme), so the sheet draws the
+defaults the area's sheets carry — `warm-editorial`, base palette — and the AA table below is measured
+across every palette. The installed version exports `@motir/design-system/mock`, but this card's
+asset is a delta sheet of an area whose sheets carry ONE stylesheet byte for byte; composing it with
+`renderMock` would give this sheet a second stylesheet that drifts from the sheets it amends. So the
+sheet carries `approve-and-merge.mock.html`'s stylesheet and sprite sheet verbatim and adds one block.
+Every part drawn is shipped (`PullRequestRow`, `Pill`, the Development card, the peek); nothing is
+proposed to the package and no product-local component is added.
+
+### Access path
+
+None is new. The **item page → Development card**, and the **quick-view peek's Development section**,
+reached from any board card, list row or Workbench row that opens an item. Every panel draws the
+item header above the card (P8 draws the peek's own header), so the door is on the board.
+
+### Where the sheet's own rules are
+
+The carried stylesheet runs from the comment `/* ═══ CARRIED BLOCK — BEGIN: approve-and-merge.mock.html's
+stylesheet, verbatim ═══ */` to `/* ═══ CARRIED BLOCK — END ═══ */`. Every raw hue and every
+`rounded-` the sheet contains is inside that block (its tokens, and the class strings its derived rules
+quote): `grep -nE 'rounded-|#[0-9a-fA-F]{3,6}' design/github/github--pr-row-preview.mock.html` hits
+nothing outside it. The sheet's own rules follow it as the **`pv-` block**. The card named it `pr-`;
+the carried sheet already owns `.pr-row` / `.pr-text` / `.pr-meta` / `.pr-states`, so a second
+`pr-` family would collide with the row it extends. `node scripts/audit-mock-sprites.mjs
+design/github/github--pr-row-preview.mock.html --strict`: 44 symbols, 0 undeclared, 0 drifted. No
+sprite is added.
+
+### The per-value table — total over the enum
+
+| `state` (raw, in `data-preview-state`) | drawn state                    | copy key (`github.development.preview.`) | glyph (lucide, sprite id)                                                | a link?            | panel      |
+| -------------------------------------- | ------------------------------ | ---------------------------------------- | ------------------------------------------------------------------------ | ------------------ | ---------- |
+| `building`                             | building                       | `building`                               | `circle-ellipsis` (`#i-dots`) — the in-flight glyph, as _Checks running_ | no                 | P2         |
+| `starting`                             | **building** — the same pixels | `building`                               | `circle-ellipsis` (`#i-dots`)                                            | no                 | P3 → P2    |
+| `ready`                                | ready                          | `ready`                                  | `circle-check` (`#i-check`)                                              | **yes — the host** | P1, P6, P8 |
+| `failed`, reason recorded              | failed                         | `failedReason`                           | `circle-x` (`#i-x`)                                                      | no                 | P4 row 1   |
+| `failed`, reason `null`                | failed                         | `failed`                                 | `circle-x` (`#i-x`)                                                      | no                 | P4 row 2   |
+| `closed`                               | closed                         | `closed`                                 | `circle-minus` (`#i-circle-minus`)                                       | no                 | P5         |
+| any other value                        | unknown — the raw value        | `unknown` (`{state}` = the raw value)    | `circle-dashed` (`#i-circle-dashed`)                                     | no                 | P7         |
+| no record for the row                  | **nothing rendered**           | —                                        | —                                                                        | —                  | P6 row 2   |
+
+`starting` shares `building`'s drawing because a viewer cannot act differently on the two, and the
+preview host's own page for both is the building page. The DOM keeps the raw value, so a test drives
+and asserts them apart.
+
+### The absence rule
+
+A connected repository, a repository whose previews are switched off, a pull request that never built,
+and an item with no linked pull request all draw **no element at all**. The no-preview row is
+**byte-identical to the shipped row**: no label, no placeholder, no dashed outline, no muted _No
+preview_, no empty chip. This is the shipped rule for `ci: null` (no CI pill) and `githubReview: null`
+on the same DTO. **P6 draws it as a pair**, a row with a ready preview beside a row with none, in one
+list, because an absence reads only beside a presence. Each row states its own preview; nothing is
+aggregated across rows, and a row carries at most one (the record is keyed to the repository and pull
+request the row already is).
+
+### Anatomy of the line, in the row's own terms
+
+- **Place.** The **third child** of the row's text column (`<div className="min-w-0 flex-1 py-1">`),
+  under the title and the `owner/name · #n` meta line. It is the column's only child that is not
+  `truncate`. The pill group, the link-out and the trailing control stay siblings in the `<li>`, in
+  their places, with their classes; a row with a preview is taller than one without, and nothing else
+  moves.
+- **Parts, in order:** the **glyph** · the **label** · **one tail** · nothing else. The tail is the
+  reason (failed, when recorded), the host as a link (ready), or nothing (building, starting, closed,
+  unknown).
+- **Structure.** `<div data-testid="pr-row-preview" data-preview-state={state} className="mt-0.5 flex
+min-w-0 items-start gap-1.5 font-sans text-xs">` holding the glyph (`mt-[3px] h-3 w-3 shrink-0
+text-(--el-icon-muted)`, `aria-hidden`) and ONE text span (`min-w-0`) with the label and the tail
+  inline. Two children, so the glyph never wraps away from its words, and a long reason flows like a
+  sentence (P4).
+- **Inks.** Label `--el-text-identifier`, the meta line's own ink on this fill. Reason
+  `--el-text-secondary`. Link `--el-link`, `underline`, in the area's inline identifier treatment
+  (`HowToTestBlock`'s `ChildPointer`: `font-mono text-[12.5px] text-(--el-link) underline`).
+  `--el-text-muted` is used nowhere in the line (below).
+- **Narrow.** The line wraps normally. The ready link carries `[overflow-wrap:anywhere]`: the host
+  moves to its own line first and breaks only where it is longer than the line; it never truncates,
+  because a truncated address cannot be read and it is the one thing on the line a person acts on.
+  The card said `break-all`; that breaks the host mid-word even when it would fit whole on the next
+  line (the first render of P1 at 590px did exactly that), so `anywhere` is the better-behaved form of
+  the same promise. Below a 30rem column the row's shipped narrow rule still drops the pill group
+  under the text column (P1, P2, P4–P6, P8 at ~400px).
+- **Why it is not a pill.** The pill group's second slot is already an arbitration with three
+  claimants: the conflict pill, then the GitHub review chip, then the CI pill (`MergeOutcomeSlot`,
+  § 23, § 30). A fourth would be hidden by the conflict pill on exactly the red rows where a reviewer
+  most wants to know whether the preview opens. And a preview is a fact about a deployment, not a
+  state of the pull request, which is what § 19's pills are for. It also needs a line's room: a failed
+  reason and an address do not fit a chip.
+- **The label always leads with the word _Preview_**, so _building_ cannot be read as the pull
+  request's own state.
+
+### Accessibility
+
+- **Every state carries a word AND a glyph**, so no state rides colour alone; the glyph is
+  `aria-hidden` and the word carries the meaning.
+- **The ready link's accessible name is its visible text, the preview host.** No `aria-label`
+  overrides the address.
+- **No second external-link glyph.** The row's GitHub link-out owns that mark; two identical marks for
+  two destinations is a row that has to be read twice.
+- The link is `target="_blank" rel="noopener noreferrer"`, the row's own link-out treatment, and takes
+  the shipped focus ring (`focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)`) on the
+  `--radius-control` corners.
+- The failed reason is drawn in full: no clamp, no ellipsis, no `title`-only carrier. A tooltip is not
+  a carrier for a screen reader.
+
+### Contrast — measured on the row's `--el-surface` fill
+
+Computed with the WCAG 2.x relative-luminance formula over `packages/design-system/theme.css`, every
+palette, both themes. The row's fill is `--el-surface` (`.pr-row`, `bg-(--el-surface)`).
+
+| ink                            | resolves to                | base light | base dark | lowest across all palettes × themes | AA (4.5:1)                                                                           |
+| ------------------------------ | -------------------------- | ---------- | --------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `--el-text-identifier` (label) | `--color-slate`            | 6.24:1     | 6.67:1    | 5.11:1 (candy, light)               | passes                                                                               |
+| `--el-text-secondary` (reason) | `--color-slate`            | 6.24:1     | 6.67:1    | 5.11:1 (candy, light)               | passes                                                                               |
+| `--el-link` (the host)         | `--color-link`             | 4.54:1     | 6.89:1    | 4.54:1 (base / amethyst, light)     | passes                                                                               |
+| `--el-icon-muted` (glyph)      | `--color-muted-foreground` | 4.17:1     | 6.67:1    | 4.17:1                              | a decorative glyph (`aria-hidden`); graphics owe 3:1, and the word carries the state |
+
+**`--el-text-muted` is excluded on this fill.** On `--el-surface` it measures **4.17:1** and fails AA,
+which `components/howToTest/HowToTestBlock.tsx`'s own header records. The sheet's board chrome (the
+DOM notes under the panels) uses `--el-text-secondary` for the same reason.
+
+### Both hosts, and no other row
+
+The line is drawn identically on the **quick-view peek** and the **detail page's Development card**
+(P8, and P1–P7 on the detail card). It is a fact and a link-out, and the peek's read-only contract
+forbids verbs, not links; the row already carries the GitHub link-out on both. The line adds **no
+verb** on either host. **`AwaitingRepoRow`** (a repository the item carries with no pull request)
+**draws no preview line in any state**: there is no pull request, so nothing is being built.
+
+### No loading, error or refresh state of its own
+
+The rows are server-rendered with the item, so the line's data arrives with the page: no spinner,
+skeleton or shimmer. The fact is Motir's own record, not a host read, so a failure to read it is the
+page's failure; the row draws no _could not load the preview_ line (no other row fact draws one). A
+state that changes while the page is open arrives through the block's existing `router.refresh()`
+path (`CoordinatedRefreshProvider`, `lib/navigation/coordinatedRefresh.tsx`); the line adds no channel
+of its own.
+
+### Copy — `en` + `zh`
+
+Under **`github.development.preview`**, in the `github` namespace the row already translates through
+(`t('development.prState.…')` beside it). No neighbouring key is reused or re-worded, and
+`github.development.prState.*` / `ciState.*` are untouched.
+
+| key            | en                        | zh                  |
+| -------------- | ------------------------- | ------------------- |
+| `building`     | Preview building          | 预览构建中          |
+| `ready`        | Preview ready             | 预览已就绪          |
+| `failed`       | Preview failed            | 预览失败            |
+| `failedReason` | Preview failed · {reason} | 预览失败 · {reason} |
+| `closed`       | Preview closed            | 预览已关闭          |
+| `unknown`      | Preview {state}           | 预览 {state}        |
+
+`failedReason` is one sentence so a language can put the reason where it belongs; `{reason}` is
+rendered as the `--el-text-secondary` span (`t.rich` with a node value). **The reason is the same
+sentence the preview host's failed page shows** (`app/(preview-host)/preview-gate/page.tsx`): a stored
+reason that `knownFailureReason` (`lib/preview/failureReason.ts`) recognises is drawn from the
+existing `previewGate.failed.reason.<key>` strings in the viewer's language, and any other stored
+text is drawn verbatim. The row reuses those keys rather than adding a second translation of the same
+sentences. No string names the address in prose: the host is data, the link's own text.
+
+### Decisions
+
+| decision                            | chosen                                                                         | why                                                                                                                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| where the element sits              | the text column's third line, under `owner/name · #n`                          | the row's own facts live in that column; a reason and an address need a line, not a chip                                                                             |
+| chip or text                        | text, word + glyph                                                             | a fourth claimant in the second pill slot would be hidden by the conflict pill on the rows that matter most                                                          |
+| `starting`                          | drawn as `building`; raw value in the DOM                                      | nothing differs for the viewer, and the host page for both is the building page                                                                                      |
+| only `ready` is a link              | yes                                                                            | nothing runs behind the other states; a failed or closed address would open a page repeating the row                                                                 |
+| a preview scaled to zero while idle | still `ready`, still linked                                                    | the ADR's enum has no idle value; the row must not invent one                                                                                                        |
+| the failed reason                   | in full, no clamp; the failed page's own translated sentence                   | it is the only place the reader learns why; one translation per sentence                                                                                             |
+| the line's layout                   | glyph + ONE inline text span, not a wrapping flex of three items               | with three flex items, a long reason wrapped away from its glyph (first render of P4)                                                                                |
+| the address at narrow widths        | `[overflow-wrap:anywhere]`, not `break-all`                                    | `break-all` split the host mid-word even when it fitted on the next line                                                                                             |
+| glyphs                              | `circle-ellipsis`, `circle-check`, `circle-x`, `circle-minus`, `circle-dashed` | all five are already declared in the carried sprite sheet, so the closed and unknown states get distinct marks with no new sprite; failed and closed never share one |
+| the block's prefix                  | `pv-`                                                                          | `pr-` is the carried row's own family                                                                                                                                |
+| both hosts                          | peek and detail page                                                           | a link-out is not a write                                                                                                                                            |
+| no spinner, no polling              | render what the page was given                                                 | one refresh path per block, so two rows never disagree                                                                                                               |
+
+### Scope
+
+**Drawn:** the line in every value of the enum, the null reason, the unknown value, absence beside
+presence, both hosts, light, dark and ~400px. **Not drawn, and whose it is:** the DTO field and the
+service read, and where the fact is read from in `preview_deployment` — MOTIR-10099; the lifecycle
+and its values — MOTIR-5776; the preview host's own pages — MOTIR-5774, built by MOTIR-5779; the gate,
+the handshake and the forward — MOTIR-5779; the recorded walk — MOTIR-5781. The How-to-test
+per-repository sub-block stays retired (§ 25). Note for a reader arriving from MOTIR-5779's boundary,
+which said a delta's row would be built there: this section supersedes that clause, and the row is
+MOTIR-10099's.
+
+### GIVES / TAKES
+
+| key         | GIVES / TAKES                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| MOTIR-10099 | **GIVES** the anatomy and the line's place; the state table above, total over the enum, with `starting` drawn as `building` and the unknown fallback; the absence rule; the six copy keys in `en` and `zh` (and the reuse of `previewGate.failed.reason.*` for a known reason); the element contract `data-testid="pr-row-preview"` + `data-preview-state` = the raw enum value; the AA table and the exclusion of `--el-text-muted`. **TAKES nothing**: the line needs a state, an address and a failure reason, and this asset names those FACTS, never a field |
+| MOTIR-5781  | **GIVES** the element contract the E2E finds the line by, and `building` / `starting` told apart by `data-preview-state`. **TAKES** nothing                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| MOTIR-5769  | the ADR; the enum this table is total over                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| MOTIR-10097 | this card                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+
+Fixture items use `ACME-n` keys, as the rest of this area does, so they link to nothing.

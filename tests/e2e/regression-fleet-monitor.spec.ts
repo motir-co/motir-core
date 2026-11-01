@@ -122,9 +122,9 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
       await expect(northwindRow.getByText(fm.verdict.running_not_debited)).toBeVisible();
       await expect(northwindRow.getByText(fm.orgs.accrued.none)).toBeVisible();
       await expect(halcyonRow.getByText(fm.verdict.ok)).toBeVisible();
-      // Halcyon is on Standard (MOTIR-9377): its plan named, its CI against 5.
+      // Halcyon is on Standard (MOTIR-9377): its plan named, its CI against 2 (MOTIR-9668).
       await expect(halcyonRow.getByRole('cell').nth(1)).toContainText('Standard');
-      await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 5');
+      await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 2');
       // Every column is ON SCREEN, not merely in the DOM: the No plan figure group
       // and the last column are inside the table's scroll box, not past its edge.
       const ownPool = fleetOrgs.getByRole('columnheader', { name: fm.orgs.group.uncapped });
@@ -218,7 +218,7 @@ test('a platform admin reads the fleet, stops one org’s containers, and the ot
     await expect(main.getByRole('heading', { name: fm.orgs.title })).toBeVisible();
     await fleetOrgs.scrollIntoViewIfNeeded();
     await expect(halcyonRow.getByText(fm.verdict.ok)).toBeVisible();
-    await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 5');
+    await expect(halcyonRow.getByRole('cell').nth(2)).toHaveText('2 of 2');
     await expect(northwindRow).toHaveCount(0);
     await expect(fleetOrgs.getByText(fm.orgs.noMismatch)).toBeVisible();
     expect(await inFlightCi(halcyon.organizationId)).toBe(2);

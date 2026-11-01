@@ -28,6 +28,7 @@ const webhookPr: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-core/pull/11',
   githubReview: null,
+  preview: null,
   baseRef: 'main',
   conflicted: false,
 };
@@ -41,6 +42,7 @@ const pickerPr: LinkedPullRequestDto = {
   headSha: null,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
+  preview: null,
   baseRef: 'main',
   conflicted: false,
 };

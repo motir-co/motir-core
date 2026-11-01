@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
-import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Info, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import type { OAuthSignInClientDto } from '@/lib/dto/oauthConnections';
 import { Button, buttonVariants } from '@/components/ui/Button';
@@ -68,17 +68,52 @@ export type SignInOAuthApp = OAuthSignInClientDto;
 export function SignInCard({
   sessionActive = false,
   oauthApp = null,
+  previewHost = null,
 }: {
   sessionActive?: boolean;
   oauthApp?: SignInOAuthApp | null;
+  /** The preview this sign-in opens, when it came from preview-access
+   *  (MOTIR-5779) — shown in a banner above the card. */
+  previewHost?: string | null;
 }) {
   // useSearchParams must be wrapped in Suspense for Next 16's static
   // pre-rendering — the suspense boundary lets the static shell stream
   // while the search params resolve client-side.
   return (
-    <Suspense fallback={<SignInShell />}>
-      <SignInForm sessionActive={sessionActive} oauthApp={oauthApp} />
-    </Suspense>
+    <>
+      {previewHost ? <PreviewBanner host={previewHost} /> : null}
+      <Suspense fallback={<SignInShell />}>
+        <SignInForm sessionActive={sessionActive} oauthApp={oauthApp} />
+      </Suspense>
+    </>
+  );
+}
+
+/**
+ * The preview banner (design `design/preview/preview-gate.mock.html` Panel 1):
+ * the shipped sign-in, unchanged, with one note above it naming only the
+ * address — already in the viewer's address bar — and never the project, which
+ * a signed-out viewer may have no right to know.
+ */
+function PreviewBanner({ host }: { host: string }) {
+  const t = useTranslations('previewGate');
+  return (
+    <div
+      role="note"
+      className="flex items-start gap-2.5 rounded-(--radius-card) bg-(--el-tint-sky) p-(--spacing-card-padding-12) font-sans text-[13px] leading-normal text-(--el-text-strong)"
+    >
+      <Info className="mt-0.5 h-4 w-4 flex-none" aria-hidden />
+      <span className="min-w-0">
+        {t.rich('signIn.banner', {
+          host,
+          chip: (chunks) => (
+            <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-[11.5px] break-all text-(--el-code-text)">
+              {chunks}
+            </code>
+          ),
+        })}
+      </span>
+    </div>
   );
 }
 

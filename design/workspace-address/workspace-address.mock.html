@@ -1,0 +1,1675 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Workspace settings › Public address (Story MOTIR-4528 · MOTIR-9513)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — WORKSPACE SETTINGS › PUBLIC ADDRESS.
+      Story MOTIR-4528 (the workspace subdomain, rebuilt) · Subtask MOTIR-9513.
+
+      A NEW surface. The control for a workspace's one name under the tenant
+      base domain moves from PROJECT settings to WORKSPACE settings, and the
+      rules it states changed (`docs/decisions/public-tenant-addresses.md` §8
+      Amendment 3). The shipped pane, drawn in
+      `design/projects/public-address.mock.html` panels 1, 2, 8 and 10-13, is
+      the record of what is replaced; it is cited, never edited. The
+      project-settings echo is drawn as a DELTA mock beside that file:
+      `design/projects/public-address--workspace-echo.mock.html`.
+
+      ── WHAT IT IS BUILT FROM ────────────────────────────────────────────────
+      * The token block below is copied unchanged from
+        `design/projects/public-address.mock.html` (the shipped Tier-0
+        `--color-*` + Tier-3 `--el-*` + shape tokens, with
+        `--el-danger-on-surface` derived as theme.css derives it). No hue is
+        invented.
+      * The markup composes ONLY shipped primitives — Card, Input (+ suffix and
+        helperText), Button, Pill, CopyButton, Modal, Toast, Skeleton and the
+        settings rail — in that file's grammar. The address row is the shipped
+        `AddressRow`, reused by name.
+
+      ── THE BASE DOMAIN IS CONFIGURATION ─────────────────────────────────────
+      Every address renders `motir.site`; read it as `<base>`
+      (`MOTIR_PUBLIC_TENANT_DOMAIN`).
+
+      ── THE DATES ARE ONE SCENARIO ───────────────────────────────────────────
+      Today is 28 October 2026. A quarantined name returns 90 days after the
+      release (26 January 2027); a change made today locks the next one for 30
+      days (27 November 2026). Every date the UI shows comes from the server's
+      preview or write, in the viewer's locale, long form.
+
+      ── PANELS (a multi-panel board — inspect EVERY panel) ───────────────────
+        0   the ACCESS PATH — the workspace rail row, and the organisation-page
+            door card when the workspace is the only one
+        1   unclaimed, can manage — the field, the live preview, Claim
+        2   the field's refusals — too short, bad characters, a double hyphen,
+            too long, taken, reserved, and a QUARANTINED name with its date
+        3   claimed, can manage — the one address row, Rename, Release
+        4   claimed, the 30-DAY LOCK — actions disabled, the end date as text
+        5   rename — the inline editor and its Review step
+        6   the DATED CONFIRM for a rename — held 24 h or more · held under 24 h
+            (side by side), plus the conditional application-host line and the
+            submitting state
+        7   the DATED CONFIRM for a release — the same two variants
+        8   toasts — claim, rename, release; the refusals of a change
+        9   RELEASED — the state the user is left looking at
+        10  read-only — cannot manage: every control ABSENT, not disabled
+        11  the pane loading, and failing to load
+        12  narrow (390 wide) — the row's actions and the dialog
+
+      ── INK ─────────────────────────────────────────────────────────────────
+      Secondary copy is `--el-text-secondary` throughout. `--el-text-muted` and
+      `--el-text-faint` carry no text. Danger text takes
+      `--el-danger-on-surface`; `--el-danger-text` appears only on the danger
+      Button's fill.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        /* Shape tokens — the [data-display-style] swap layer (default values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 16px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 40px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* The ink for danger TEXT on a page (theme.css's own derivation).
+           --el-danger-text is the ink for a danger FILL and is legal only on
+           an element carrying bg-(--el-danger); this mock uses it nowhere. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      /* ── The Tier-3 block, RE-EMITTED for any nested [data-theme] scope ──
+         Panel 9b puts data-theme="dark" on a DIV, not on <html>. Tier-0
+         --color-* flips there, but the Tier-3 --el-* above are declared on
+         :root and keep resolving against the OUTER palette — so the dark panel
+         paints the LIGHT page background while every hue around it goes dark.
+         MEASURED by tests/design-dark-parity.test.ts, which caught exactly that
+         on this asset. Re-declaring them on [data-theme] makes each nested
+         scope recompute them against its OWN Tier-0 values.
+         ⚠️ PLACED BEFORE the [data-theme='dark'] block, never after: both are
+         one attribute selector, so equal specificity and the later one wins
+         (MOTIR-3712, design/settings/two-factor.mock.html). ── */
+      [data-theme] {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+           --el-danger-text is the ink for a danger FILL and is legal only on
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+      /* ── Board chrome ──────────────────────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      .board {
+        padding: 32px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      .boardTitle {
+        font-size: 22px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .boardSub {
+        color: var(--el-text-secondary);
+        margin: 0 0 28px;
+        max-width: 78ch;
+      }
+      .panel {
+        margin: 0 0 34px;
+      }
+      .panelLabel {
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 8px;
+      }
+      .panelNote {
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+        max-width: 88ch;
+      }
+      .stage {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 20px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .stage.tight {
+        padding: 0;
+        overflow: hidden;
+      }
+      .row2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .row2n {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 20px;
+        align-items: start;
+      }
+
+      /* ── Card (components/ui/Card) ─────────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+      }
+      .cardHead {
+        padding: 16px var(--spacing-card-padding) 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .cardTitle {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .cardSub {
+        color: var(--el-text-secondary);
+        margin: 4px 0 0;
+        font-size: 13px;
+      }
+      .cardBody {
+        padding: var(--spacing-card-padding);
+      }
+      .cardBody.tightY {
+        padding-top: 16px;
+        padding-bottom: 16px;
+      }
+
+      /* ── Button (components/ui/Button) ─────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: var(--height-btn-sm);
+        padding: 0 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        border-color: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .btn-ghost {
+        background: transparent;
+        border-color: transparent;
+        color: var(--el-text-secondary);
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .btn-icon {
+        width: var(--height-btn-sm);
+        padding: 0;
+      }
+
+      /* ── Input (components/ui/Input) ───────────────────────────────── */
+      .field {
+        display: block;
+      }
+      .label {
+        display: block;
+        font-size: 13px;
+        font-weight: 500;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .input {
+        display: flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font: inherit;
+      }
+      .input.mono {
+        font-family: var(--font-mono);
+        font-size: 13px;
+      }
+      .input.is-error {
+        border-color: var(--el-danger);
+      }
+      .input .ph {
+        color: var(--el-text-secondary);
+      }
+      .inputGroup {
+        display: flex;
+        align-items: stretch;
+      }
+      .inputGroup .input {
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+        flex: 1;
+        min-width: 0;
+      }
+      .suffix {
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-input-x);
+        border: 1px solid var(--el-border);
+        border-left: 0;
+        border-radius: 0 var(--radius-input) var(--radius-input) 0;
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        font-family: var(--font-mono);
+        font-size: 13px;
+        white-space: nowrap;
+      }
+      .helper {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 6px 0 0;
+      }
+      .helper .prev {
+        font-family: var(--font-mono);
+        color: var(--el-text);
+      }
+      .helperError {
+        font-size: 12px;
+        color: var(--el-danger-on-surface);
+        margin: 6px 0 0;
+        font-weight: 500;
+      }
+
+      /* ── Pill (components/ui/Pill) — tint bg + --el-text-strong ────── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-strong);
+        background: var(--el-muted);
+        white-space: nowrap;
+      }
+      .pill-ok {
+        background: var(--el-tint-mint);
+      }
+      .pill-info {
+        background: var(--el-tint-sky);
+      }
+      .pill-wait {
+        background: var(--el-tint-yellow);
+      }
+      .pill-bad {
+        background: var(--el-tint-rose);
+      }
+      .pill-alias {
+        background: var(--el-tint-lavender);
+      }
+      .pill-neutral {
+        background: var(--el-muted);
+      }
+      .dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: currentColor;
+        flex: none;
+      }
+
+      /* ── Address row ───────────────────────────────────────────────── */
+      .addr {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-surface-soft);
+        min-height: var(--height-control);
+      }
+      .addr .host {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+      .addr .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .mono {
+        font-family: var(--font-mono);
+      }
+
+      /* ── DNS instruction table ─────────────────────────────────────── */
+      .dns {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .dns th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        padding: 0 10px 6px 0;
+      }
+      .dns td {
+        padding: 8px 10px 8px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .dns td.v {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .dns td.act {
+        width: 1%;
+        white-space: nowrap;
+      }
+
+      /* ── State table (panel 5) ─────────────────────────────────────── */
+      .states {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .states th {
+        text-align: left;
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        font-weight: 600;
+        padding: 0 12px 8px 0;
+      }
+      .states td {
+        padding: 10px 12px 10px 0;
+        border-top: 1px solid var(--el-border);
+        vertical-align: top;
+        color: var(--el-text);
+      }
+      .states td.mean {
+        color: var(--el-text-secondary);
+      }
+      .states td.act {
+        white-space: nowrap;
+      }
+
+      /* ── Radio card (primary picker) ───────────────────────────────── */
+      .radio {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        padding: 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-control);
+        background: var(--el-page-bg);
+      }
+      .radio + .radio {
+        margin-top: 8px;
+      }
+      .radio.is-on {
+        border-color: var(--el-accent);
+        background: var(--el-tint-lavender);
+      }
+      .radio.is-off {
+        opacity: 0.55;
+      }
+      .ring {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        margin-top: 2px;
+        border-radius: 9999px;
+        border: 1.5px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+      }
+      .radio.is-on .ring {
+        border-color: var(--el-accent);
+        box-shadow: inset 0 0 0 4px var(--el-accent);
+      }
+      .radio .rtitle {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+        overflow-wrap: anywhere;
+      }
+      .radio .rsub {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 2px;
+      }
+
+      /* ── Rail (settings-area.mock.html grammar — COMPOSED, not redrawn) ── */
+      .rail {
+        width: 232px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        padding: 12px 8px;
+        background: var(--el-page-bg);
+      }
+      .railGroup + .railGroup {
+        margin-top: 14px;
+      }
+      .railGroupLabel {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        padding: 0 10px 6px;
+      }
+      .railRow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        color: var(--el-text);
+        font-size: 13px;
+      }
+      .railRow.is-active {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-weight: 500;
+      }
+      .railRow.is-new {
+        outline: 2px solid var(--el-highlight);
+        outline-offset: 1px;
+      }
+      .glyph {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .railRow.is-active .glyph {
+        color: var(--el-text-strong);
+      }
+
+      /* ── Shell (composed by citation) ──────────────────────────────── */
+      .shell {
+        display: flex;
+        min-height: 320px;
+        background: var(--el-page-bg);
+      }
+      .shellMain {
+        flex: 1;
+        min-width: 0;
+        padding: 20px 24px;
+        background: var(--el-surface-soft);
+      }
+      .crumb {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 12px;
+      }
+      .h1 {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 4px;
+        color: var(--el-text);
+      }
+      .col {
+        max-width: 672px;
+      }
+
+      /* ── Modal (components/ui/Modal) ───────────────────────────────── */
+      .scrim {
+        background: var(--el-surface);
+        border-radius: var(--radius-card);
+        padding: 24px;
+        display: flex;
+        justify-content: center;
+      }
+      .modal {
+        width: 440px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: 20px;
+      }
+      .modalTitle {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .modalBody {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        margin: 0 0 16px;
+      }
+      .modalFoot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      /* ── Callout / EmptyState ──────────────────────────────────────── */
+      .empty {
+        border: 1px dashed var(--el-border-strong);
+        border-radius: var(--radius-control);
+        padding: 22px;
+        text-align: center;
+        background: var(--el-surface-soft);
+      }
+      .empty .etitle {
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0 0 4px;
+      }
+      .empty .esub {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        margin: 0 0 14px;
+      }
+      .callout {
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-accent);
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--el-text-strong);
+      }
+      .callout.warn {
+        border-left-color: var(--el-warning);
+        background: var(--el-tint-yellow);
+      }
+      .callout.danger {
+        border-left-color: var(--el-danger);
+        background: var(--el-tint-rose);
+      }
+      .callout .ctitle {
+        font-weight: 600;
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      /* ── Tooltip ───────────────────────────────────────────────────── */
+      .tip {
+        display: inline-block;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 12px;
+        padding: 5px 9px;
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── Misc ──────────────────────────────────────────────────────── */
+      .stack > * + * {
+        margin-top: 12px;
+      }
+      .stack-sm > * + * {
+        margin-top: 8px;
+      }
+      .flex {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .grow {
+        flex: 1;
+        min-width: 0;
+      }
+      .sec {
+        color: var(--el-text-secondary);
+      }
+      .sec13 {
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .sec12 {
+        color: var(--el-text-secondary);
+        font-size: 12px;
+      }
+      .strong {
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .danger {
+        color: var(--el-danger-on-surface);
+      }
+      .cite {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        border-top: 1px dashed var(--el-border);
+        margin-top: 10px;
+        padding-top: 8px;
+      }
+      .cite code {
+        font-family: var(--font-mono);
+      }
+      .halo {
+        outline: 2px solid var(--el-highlight);
+        outline-offset: 2px;
+        border-radius: var(--radius-control);
+      }
+      .num {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 9999px;
+        background: var(--el-highlight);
+        color: var(--el-text-inverted);
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+      }
+      .phone {
+        width: 390px;
+        height: 844px;
+        overflow: hidden;
+        border: 1px solid var(--el-border-strong);
+        border-radius: 22px;
+        background: var(--el-page-bg);
+        padding: 14px;
+      }
+      .darkStage {
+        background: var(--el-page-bg);
+        border-radius: var(--radius-card);
+        padding: 20px;
+      }
+      /* ── Added by this asset ───────────────────────────────────────── */
+      /* The lock line: the date the 30-day limit ends, as TEXT beside the
+         disabled actions (never only a tooltip). */
+      .lockLine {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 8px 0 0;
+      }
+      .lockLine strong {
+        color: var(--el-text-strong);
+      }
+      /* Toast (components/ui/Toast) — the shipped success / danger grammar:
+         the hue in the border and the glyph, the words on --el-text. */
+      .toast {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        width: 360px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-left: 3px solid var(--el-success);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 12px 14px;
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .toast.is-danger {
+        border-left-color: var(--el-danger);
+      }
+      .toast .tglyph {
+        color: var(--el-success);
+        font-weight: 700;
+      }
+      .toast.is-danger .tglyph {
+        color: var(--el-danger-on-surface);
+      }
+      .toast .ttitle {
+        font-weight: 600;
+        display: block;
+      }
+      .toast .tbody {
+        color: var(--el-text-secondary);
+        display: block;
+        margin-top: 2px;
+      }
+      /* The skeleton grammar of components/ui/PageSkeleton.tsx */
+      .skel {
+        height: 14px;
+        border-radius: var(--radius-control);
+        background: var(--el-muted);
+      }
+      .skel.tall {
+        height: var(--height-control);
+      }
+      /* The single-workspace door card on the organisation page. */
+      .door {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .linkText {
+        color: var(--el-link);
+        font-size: 13px;
+        text-decoration: none;
+      }
+      .spin {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 9999px;
+        border: 2px solid currentColor;
+        border-right-color: transparent;
+        flex: none;
+      }
+      .row3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <h1 class="boardTitle">Workspace settings › Public address</h1>
+      <p class="boardSub">
+        Where a workspace owner or admin claims, renames or releases the workspace's one name under
+        <code class="mono">motir.site</code> — Story MOTIR-4528, subtask MOTIR-9513. The rules every
+        string states are §8 Amendment 3 of the public-tenant-addresses ADR: one name, no aliases; a
+        retired name stops answering at once; a name held under 24 hours returns at once, one held
+        longer is held for 90 days; one change per 30 days. Today is 28 October 2026 in every panel.
+      </p>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel 0 — the access path · the rail row and the single-workspace door
+        </p>
+        <p class="panelNote">
+          <strong>① A new row in the workspace rail</strong>, in the Access group after Roles,
+          labelled <em>Public address</em>.
+          <strong>② When the workspace is the organisation's only one</strong> the workspace rail
+          does not show (its rows fold into the organisation page), so the organisation page carries
+          a door card that names the current address and links to the same room. The rail and the
+          shell are the shipped ones, composed by citation.
+        </p>
+        <div class="row2n">
+          <div class="stage tight">
+            <div class="shell">
+              <nav class="rail" aria-label="Workspace settings">
+                <div class="railGroup">
+                  <div class="railGroupLabel">General</div>
+                  <div class="railRow">
+                    <span class="glyph" aria-hidden="true">▤</span> Workspace
+                  </div>
+                </div>
+                <div class="railGroup">
+                  <div class="railGroupLabel">Access</div>
+                  <div class="railRow">
+                    <span class="glyph" aria-hidden="true">▤</span> Security
+                  </div>
+                  <div class="railRow"><span class="glyph" aria-hidden="true">▤</span> Roles</div>
+                  <div class="railRow is-active is-new">
+                    <span class="num">1</span>
+                    <span class="glyph" aria-hidden="true">▤</span> Public address
+                  </div>
+                </div>
+                <div class="railGroup">
+                  <div class="railGroupLabel">Operations</div>
+                  <div class="railRow"><span class="glyph" aria-hidden="true">▤</span> Jobs</div>
+                </div>
+              </nav>
+              <div class="shellMain">
+                <p class="crumb">Settings › Workspace › Public address</p>
+                <h2 class="h1">Public address</h2>
+                <p class="sec13" style="margin: 0 0 14px">
+                  The one name the Acme workspace answers at.
+                </p>
+                <div class="card col">
+                  <div class="cardBody tightY">
+                    <div class="addr">
+                      <span class="host grow">acme.motir.site</span>
+                      <span class="pill pill-ok"
+                        ><span class="dot" aria-hidden="true"></span> Live</span
+                      >
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <p class="panelLabel" style="margin-top: 0">
+              ② organisation settings, a single-workspace organisation
+            </p>
+            <div class="card">
+              <div class="cardBody">
+                <div class="door halo">
+                  <span class="num">2</span>
+                  <div class="grow">
+                    <p class="cardTitle">Public address</p>
+                    <p class="cardSub">
+                      <span class="mono">acme.motir.site</span> — one name for the workspace.
+                    </p>
+                  </div>
+                  <a class="linkText">Manage →</a>
+                </div>
+              </div>
+            </div>
+            <div class="card" style="margin-top: 12px">
+              <div class="cardBody">
+                <div class="door">
+                  <div class="grow">
+                    <p class="cardTitle">Public address</p>
+                    <p class="cardSub">No name claimed yet.</p>
+                  </div>
+                  <a class="linkText">Claim a name →</a>
+                </div>
+              </div>
+            </div>
+            <p class="cite">
+              Both links go to <code>/settings/workspace/public-address</code>. The fold-in grammar
+              is the Roles door card's (<code>lib/settings/workspaceSettingsNav.ts</code>, the
+              reveal carve-out).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 1 — unclaimed, can manage · the field and its live preview</p>
+        <p class="panelNote">
+          The preview sits in the Input's <code class="mono">helperText</code> slot and follows the
+          typing. The helper states the one-name rule; there is no rename counter and no promise of
+          permanence.
+        </p>
+        <div class="row2">
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+              <p class="cardSub">The one name your workspace answers at.</p>
+            </div>
+            <div class="cardBody">
+              <div class="field">
+                <span class="label">Name</span>
+                <div class="inputGroup">
+                  <div class="input mono"><span class="ph">acme</span></div>
+                  <div class="suffix">.motir.site</div>
+                </div>
+                <p class="helper">
+                  Lowercase letters, digits and single hyphens; 3–30 characters. A workspace has one
+                  name.
+                </p>
+              </div>
+              <div class="flex" style="margin-top: 16px">
+                <button class="btn btn-primary" disabled>Claim name</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+              <p class="cardSub">The one name your workspace answers at.</p>
+            </div>
+            <div class="cardBody">
+              <div class="field">
+                <span class="label">Name</span>
+                <div class="inputGroup">
+                  <div class="input mono">acme</div>
+                  <div class="suffix">.motir.site</div>
+                </div>
+                <p class="helper">
+                  Readers will find you at <span class="prev">acme.motir.site</span>
+                </p>
+              </div>
+              <div class="flex" style="margin-top: 16px">
+                <button class="btn btn-primary">Claim name</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 2 — the field's refusals · each with its own words</p>
+        <p class="panelNote">
+          The grammar refusals show as the user types; taken, reserved and quarantined come back
+          from the server on Claim. Claim is disabled while the label is refused. The quarantined
+          refusal states the DATE the name returns, never a rename story. A name held under 24 hours
+          never reaches this state: it returns to the pool at once.
+        </p>
+        <div class="row3">
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">ac</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">Use at least 3 characters.</p>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">acme_inc</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">Use only lowercase letters, digits and hyphens.</p>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">acme--inc</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">
+                A name can’t contain two hyphens in a row — that’s kept for application addresses.
+              </p>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">acme-incorporated-worldwide-hq</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">Use 30 characters or fewer.</p>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">globex</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">globex.motir.site is taken. Try another name.</p>
+            </div>
+          </div>
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">www</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">“www” is reserved. Choose another name.</p>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top: 16px">
+          <div class="stage">
+            <div class="field">
+              <span class="label">Name</span>
+              <div class="inputGroup">
+                <div class="input mono is-error">initech</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helperError">
+                initech.motir.site was released recently and is held until 26 January 2027. Anyone
+                can claim it from then.
+              </p>
+            </div>
+            <div class="flex" style="margin-top: 16px">
+              <button class="btn btn-primary" disabled>Claim name</button>
+            </div>
+          </div>
+          <div class="stage">
+            <p class="sec13" style="margin: 0">
+              The quarantined refusal is the same for every claimer, the workspace that released the
+              name included. Its date is the stored hold's end, read by the claim itself.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 3 — claimed, can manage · one address, no aliases</p>
+        <p class="panelNote">
+          The shipped <code class="mono">AddressRow</code>: host, Live pill, CopyButton, open link.
+          Rename and Release sit under it. No alias rows, no rename counter. No next-change line
+          while no lock is active.
+        </p>
+        <div class="card" style="max-width: 640px">
+          <div class="cardHead">
+            <p class="cardTitle">Public address</p>
+            <p class="cardSub">The one name your workspace answers at.</p>
+          </div>
+          <div class="cardBody">
+            <div class="addr">
+              <span class="host grow">acme.motir.site</span>
+              <span class="pill pill-ok"><span class="dot" aria-hidden="true"></span> Live</span>
+              <button class="btn btn-icon" aria-label="Copy address">⧉</button>
+              <button class="btn btn-icon" aria-label="Open in a new tab">↗</button>
+            </div>
+            <div class="flex" style="margin-top: 14px">
+              <button class="btn">Rename</button>
+              <button class="btn btn-ghost">Release</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 4 — claimed, the 30-day lock is active</p>
+        <p class="panelNote">
+          Rename and Release stay visible but disabled, and the date the lock ends is TEXT beside
+          them, not a tooltip. The line says a rename and a release count alike.
+        </p>
+        <div class="card" style="max-width: 640px">
+          <div class="cardHead">
+            <p class="cardTitle">Public address</p>
+            <p class="cardSub">The one name your workspace answers at.</p>
+          </div>
+          <div class="cardBody">
+            <div class="addr">
+              <span class="host grow">acme-inc.motir.site</span>
+              <span class="pill pill-ok"><span class="dot" aria-hidden="true"></span> Live</span>
+              <button class="btn btn-icon" aria-label="Copy address">⧉</button>
+              <button class="btn btn-icon" aria-label="Open in a new tab">↗</button>
+            </div>
+            <div class="flex" style="margin-top: 14px">
+              <button class="btn" disabled>Rename</button>
+              <button class="btn btn-ghost" disabled>Release</button>
+            </div>
+            <p class="lockLine">
+              You can change the name again on <strong>27 November 2026</strong>. A rename and a
+              release each count as one change, once every 30 days.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 5 — rename · the inline editor and its Review step</p>
+        <p class="panelNote">
+          The row turns into the same field as Panel 1, pre-filled with the current name, with the
+          same refusals. <em>Review</em> opens the dated confirm (Panel 6); nothing changes until it
+          is confirmed.
+        </p>
+        <div class="card" style="max-width: 640px">
+          <div class="cardHead">
+            <p class="cardTitle">Public address</p>
+            <p class="cardSub">The one name your workspace answers at.</p>
+          </div>
+          <div class="cardBody">
+            <div class="field">
+              <span class="label">New name</span>
+              <div class="inputGroup">
+                <div class="input mono">acme-inc</div>
+                <div class="suffix">.motir.site</div>
+              </div>
+              <p class="helper">
+                Readers will find you at <span class="prev">acme-inc.motir.site</span>
+              </p>
+            </div>
+            <div class="flex" style="margin-top: 16px">
+              <button class="btn btn-primary">Review</button>
+              <button class="btn btn-ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">
+          Panel 6 — the dated confirm for a RENAME · two variants, side by side
+        </p>
+        <p class="panelNote">
+          The first line is the settled wording: <em>&lt;host&gt; stops answering now.</em> Then
+          when anyone can claim it — a date when it was held 24 hours or more, <em>right away</em>
+          when it was held less. The no-redirect line is in both. The application-host line shows
+          only when the count is above zero. The primary action is danger-toned; the third dialog is
+          its submitting state.
+        </p>
+        <div class="row2">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-label="Rename to acme-inc.motir.site?">
+              <p class="modalTitle">Rename to acme-inc.motir.site?</p>
+              <div class="modalBody">
+                <div class="callout warn">
+                  <span class="ctitle">acme.motir.site stops answering now.</span>
+                  Anyone can claim it from 26 January 2027.
+                </div>
+                <p style="margin: 12px 0 0">
+                  Nothing redirects from the old address to the new one, so update any links you
+                  have shared.
+                </p>
+                <p style="margin: 8px 0 0">
+                  2 application addresses (<span class="mono">*--acme.motir.site</span>) stop
+                  answering with it.
+                </p>
+                <p style="margin: 8px 0 0">
+                  You can’t change the name again until 27 November 2026.
+                </p>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Rename</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-label="Rename to acme-inc.motir.site?">
+              <p class="modalTitle">Rename to acme-inc.motir.site?</p>
+              <div class="modalBody">
+                <div class="callout warn">
+                  <span class="ctitle">acme.motir.site stops answering now.</span>
+                  Anyone can claim it right away — you held it for less than 24 hours.
+                </div>
+                <p style="margin: 12px 0 0">
+                  Nothing redirects from the old address to the new one, so update any links you
+                  have shared.
+                </p>
+                <p style="margin: 8px 0 0">
+                  You can’t change the name again until 27 November 2026.
+                </p>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Rename</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="row2" style="margin-top: 16px">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-label="Rename to acme-inc.motir.site?">
+              <p class="modalTitle">Rename to acme-inc.motir.site?</p>
+              <div class="modalBody">
+                <div class="callout warn">
+                  <span class="ctitle">acme.motir.site stops answering now.</span>
+                  Anyone can claim it from 26 January 2027.
+                </div>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost" disabled>Cancel</button>
+                <button class="btn btn-danger" disabled>
+                  <span class="spin" aria-hidden="true"></span> Renaming…
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="stage">
+            <p class="sec13" style="margin: 0">
+              Submitting: both actions disabled, the primary shows a spinner and
+              <em>Renaming…</em>. The dialog's dates come from the preview route; the write
+              recomputes them under the lock, so a refusal here (Panel 8) is possible and closes the
+              dialog with the control as it was.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 7 — the dated confirm for a RELEASE · the same two variants</p>
+        <p class="panelNote">
+          A release states the same rule as a rename and says the public projects are unaffected:
+          they live at <span class="mono">motir.co/p/&lt;KEY&gt;</span> either way (the address
+          decision).
+        </p>
+        <div class="row2">
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-label="Release acme.motir.site?">
+              <p class="modalTitle">Release acme.motir.site?</p>
+              <div class="modalBody">
+                <div class="callout danger">
+                  <span class="ctitle">acme.motir.site stops answering now.</span>
+                  Anyone can claim it from 26 January 2027.
+                </div>
+                <p style="margin: 12px 0 0">
+                  Nothing redirects. Your public projects stay at their motir.co addresses.
+                </p>
+                <p style="margin: 8px 0 0">
+                  You can’t claim or change a name until 27 November 2026.
+                </p>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Release name</button>
+              </div>
+            </div>
+          </div>
+          <div class="scrim">
+            <div class="modal" role="dialog" aria-label="Release acme.motir.site?">
+              <p class="modalTitle">Release acme.motir.site?</p>
+              <div class="modalBody">
+                <div class="callout danger">
+                  <span class="ctitle">acme.motir.site stops answering now.</span>
+                  Anyone can claim it right away — you held it for less than 24 hours.
+                </div>
+                <p style="margin: 12px 0 0">
+                  Nothing redirects. Your public projects stay at their motir.co addresses.
+                </p>
+                <p style="margin: 8px 0 0">
+                  You can’t claim or change a name until 27 November 2026.
+                </p>
+              </div>
+              <div class="modalFoot">
+                <button class="btn btn-ghost">Cancel</button>
+                <button class="btn btn-danger">Release name</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 8 — toasts · success, and a refused change</p>
+        <p class="panelNote">
+          After a refusal the dialog closes and the control returns to the state it was in. The
+          refusals carry the server's date.
+        </p>
+        <div class="row3">
+          <div class="toast" role="status">
+            <span class="tglyph" aria-hidden="true">✓</span>
+            <span><span class="ttitle">acme.motir.site is yours</span></span>
+          </div>
+          <div class="toast" role="status">
+            <span class="tglyph" aria-hidden="true">✓</span>
+            <span
+              ><span class="ttitle">Renamed to acme-inc.motir.site</span
+              ><span class="tbody">acme.motir.site no longer answers.</span></span
+            >
+          </div>
+          <div class="toast" role="status">
+            <span class="tglyph" aria-hidden="true">✓</span>
+            <span><span class="ttitle">acme.motir.site released</span></span>
+          </div>
+          <div class="toast is-danger" role="alert">
+            <span class="tglyph" aria-hidden="true">!</span>
+            <span
+              ><span class="ttitle">Name not changed</span
+              ><span class="tbody">You can change it again on 27 November 2026.</span></span
+            >
+          </div>
+          <div class="toast is-danger" role="alert">
+            <span class="tglyph" aria-hidden="true">!</span>
+            <span
+              ><span class="ttitle">Name not changed</span
+              ><span class="tbody"
+                >acme-inc.motir.site was just taken. Try another name.</span
+              ></span
+            >
+          </div>
+          <div class="toast is-danger" role="alert">
+            <span class="tglyph" aria-hidden="true">!</span>
+            <span
+              ><span class="ttitle">Name not changed</span
+              ><span class="tbody">acme-inc.motir.site is held until 26 January 2027.</span></span
+            >
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 9 — RELEASED · what the user is left looking at</p>
+        <p class="panelNote">
+          The control is back to unclaimed, with one line about the released name — held until its
+          date, or free at once — and the lock, which applies to a new claim's next change as well.
+          The field is empty (it never keeps the released label).
+        </p>
+        <div class="row2">
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+              <p class="cardSub">The one name your workspace answers at.</p>
+            </div>
+            <div class="cardBody">
+              <div class="callout">
+                acme.motir.site was released. It is held until 26 January 2027, then anyone can
+                claim it.
+              </div>
+              <div class="field" style="margin-top: 14px">
+                <span class="label">Name</span>
+                <div class="inputGroup">
+                  <div class="input mono"><span class="ph">acme</span></div>
+                  <div class="suffix">.motir.site</div>
+                </div>
+                <p class="helper">
+                  Lowercase letters, digits and single hyphens; 3–30 characters. A workspace has one
+                  name.
+                </p>
+              </div>
+              <div class="flex" style="margin-top: 16px">
+                <button class="btn btn-primary" disabled>Claim name</button>
+              </div>
+              <p class="lockLine">
+                You can claim a name now. After that, the next change is allowed on
+                <strong>27 November 2026</strong>.
+              </p>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+              <p class="cardSub">The one name your workspace answers at.</p>
+            </div>
+            <div class="cardBody">
+              <div class="callout">acme.motir.site was released. Anyone can claim it now.</div>
+              <div class="field" style="margin-top: 14px">
+                <span class="label">Name</span>
+                <div class="inputGroup">
+                  <div class="input mono"><span class="ph">acme</span></div>
+                  <div class="suffix">.motir.site</div>
+                </div>
+                <p class="helper">
+                  Lowercase letters, digits and single hyphens; 3–30 characters. A workspace has one
+                  name.
+                </p>
+              </div>
+              <div class="flex" style="margin-top: 16px">
+                <button class="btn btn-primary" disabled>Claim name</button>
+              </div>
+              <p class="lockLine">
+                You can claim a name now. After that, the next change is allowed on
+                <strong>27 November 2026</strong>.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 10 — read-only · a member who cannot manage</p>
+        <p class="panelNote">
+          Every address is visible; every control is ABSENT, not disabled. One line names who can
+          change it.
+        </p>
+        <div class="row2">
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+              <p class="cardSub">Only workspace owners and admins can change this.</p>
+            </div>
+            <div class="cardBody">
+              <div class="addr">
+                <span class="host grow">acme.motir.site</span>
+                <span class="pill pill-ok"><span class="dot" aria-hidden="true"></span> Live</span>
+                <button class="btn btn-icon" aria-label="Copy address">⧉</button>
+                <button class="btn btn-icon" aria-label="Open in a new tab">↗</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+              <p class="cardSub">Only workspace owners and admins can change this.</p>
+            </div>
+            <div class="cardBody">
+              <p class="sec13" style="margin: 0">No name claimed yet.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 11 — the pane loading, and failing to load</p>
+        <div class="row2">
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+            </div>
+            <div class="cardBody" aria-busy="true">
+              <div class="skel tall"></div>
+              <div class="skel" style="width: 40%; margin-top: 14px"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="cardHead">
+              <p class="cardTitle">Public address</p>
+            </div>
+            <div class="cardBody">
+              <p class="sec13" style="margin: 0 0 12px">The address couldn’t be loaded.</p>
+              <button class="btn">Try again</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════════════════════════════════════════════════════════ -->
+      <section class="panel">
+        <p class="panelLabel">Panel 12 — narrow (390 wide) · the row's actions and the dialog</p>
+        <p class="panelNote">
+          The host wraps; Copy and Open stay on the row; Rename and Release go full width under it.
+          The dialog's actions stack, the danger action first.
+        </p>
+        <div class="row2">
+          <div class="phone">
+            <div class="card">
+              <div class="cardHead">
+                <p class="cardTitle">Public address</p>
+              </div>
+              <div class="cardBody">
+                <div class="addr">
+                  <span class="host grow">acme-incorporated.motir.site</span>
+                  <button class="btn btn-icon" aria-label="Copy address">⧉</button>
+                  <button class="btn btn-icon" aria-label="Open in a new tab">↗</button>
+                </div>
+                <div style="margin-top: 8px">
+                  <span class="pill pill-ok"
+                    ><span class="dot" aria-hidden="true"></span> Live</span
+                  >
+                </div>
+                <div class="stack-sm" style="margin-top: 14px">
+                  <button class="btn" disabled style="width: 100%">Rename</button>
+                  <button class="btn btn-ghost" disabled style="width: 100%">Release</button>
+                </div>
+                <p class="lockLine">
+                  You can change the name again on <strong>27 November 2026</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+          <div class="phone">
+            <div class="modal" role="dialog" aria-label="Release acme.motir.site?">
+              <p class="modalTitle">Release acme.motir.site?</p>
+              <div class="modalBody">
+                <div class="callout danger">
+                  <span class="ctitle">acme.motir.site stops answering now.</span>
+                  Anyone can claim it from 26 January 2027.
+                </div>
+                <p style="margin: 12px 0 0">
+                  Nothing redirects. Your public projects stay at their motir.co addresses.
+                </p>
+              </div>
+              <div class="stack-sm">
+                <button class="btn btn-danger" style="width: 100%">Release name</button>
+                <button class="btn btn-ghost" style="width: 100%">Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

@@ -23,7 +23,13 @@ import { planSentenceOf } from '@/lib/planning/planSentence';
 import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
 import { BrandMark } from '@/components/brand/BrandMark';
 import { usePeekRowClick } from '@/app/(authed)/items/_components/IssueQuickView';
-import { announceGateDecided, useDecidedGateState } from '@/lib/approvals/decidedGates';
+import {
+  announceGateDecided,
+  clearGatePressPending,
+  markGatePressPending,
+  useDecidedGateState,
+  useGatePressPending,
+} from '@/lib/approvals/decidedGates';
 import { decideApprovalGateAction } from '@/app/(authed)/items/[key]/approvalGateActions';
 import { ManualWorkGlyph, useGuideDoor } from '@/components/approvals/ManualWorkGate';
 import { RefusalReasonCell, showsRefusalReason } from './RefusalReason';
@@ -677,6 +683,7 @@ export function ApprovalRow({
   const openApproval = useOpenApproval();
   const { row } = record;
   const announcedState = useDecidedGateState(row.gateId);
+  const pressPending = useGatePressPending(row.gateId);
   // A card-less row has no title to translate: an empty id registers nothing.
   const shownCardTitle = useSurfaceTitleText(row.workItem?.id ?? '', row.workItem?.title ?? '');
 
@@ -720,15 +727,20 @@ export function ApprovalRow({
   const renderable = row.subject !== null && RENDERABLE_KINDS.has(row.subject.kind);
   const settledState: ApprovalGateStateDTO | null =
     record.section === 'decided' ? record.row.state : announcedState;
+  // ⚠️ A HELD ROW THIS PAGE IS PRESSING IS NOT HELD (Bug MOTIR-9696). A list read can
+  // drop the gate before the press's own answer arrives; until that answer settles it,
+  // the row keeps drawing the press in flight rather than *Decided elsewhere*.
+  const ownPressInFlight = record.section === 'held' && settledState === null && pressPending;
+  const held = record.section === 'held' && !ownPressInFlight;
   // A HELD row is settled with no state to show: it has left the awaiting set,
   // so nothing is left to press, and the surface does not know what it became.
-  const settled = settledState !== null || record.section === 'held';
+  const settled = settledState !== null || held;
   const sentenceKey =
     row.kind === 'manual_work'
       ? manualWorkSentenceKey({
           gone,
           settledState,
-          held: record.section === 'held',
+          held,
           routedToReader: routedToReader ?? (record.section === 'awaiting' && record.row.canDecide),
         })
       : gone
@@ -744,7 +756,10 @@ export function ApprovalRow({
   const manualSubject: ManualWorkSubjectSummaryDTO | null =
     row.subject?.kind === 'manual_work' ? row.subject : null;
   const manualPressable =
-    manualSubject !== null && record.section === 'awaiting' && !settled && record.row.canDecide;
+    manualSubject !== null &&
+    (record.section === 'awaiting' || ownPressInFlight) &&
+    !settled &&
+    record.row.canDecide;
   const timeIso = record.section === 'decided' ? record.row.decidedAt : record.row.waitingSince;
 
   function onRowClick(e: MouseEvent<HTMLAnchorElement>) {
@@ -1023,10 +1038,16 @@ function MarkDoneButton({
   // A press already in flight is not pressed twice (the button is also disabled).
   const inFlight = useRef(false);
 
+  // The row may REMOUNT this button mid-press (a held section arriving first), so the
+  // in-flight state is also read from the page-wide mark, not only from local state.
+  const pending = useGatePressPending(gateId);
+  const showDeciding = deciding || pending;
+
   async function press() {
     if (inFlight.current) return;
     inFlight.current = true;
     setDeciding(true);
+    markGatePressPending(gateId);
     try {
       const result = await decideApprovalGateAction({
         gateId,
@@ -1037,6 +1058,7 @@ function MarkDoneButton({
       if (!result.ok) {
         inFlight.current = false;
         setDeciding(false);
+        clearGatePressPending(gateId);
         onRefused();
         return;
       }
@@ -1045,10 +1067,12 @@ function MarkDoneButton({
         filesKept: result.filesKept,
         statusWritten: result.statusWritten,
       });
+      clearGatePressPending(gateId);
       router.refresh();
     } catch {
       inFlight.current = false;
       setDeciding(false);
+      clearGatePressPending(gateId);
       onRefused();
     }
   }
@@ -1059,10 +1083,10 @@ function MarkDoneButton({
       variant="secondary"
       size="sm"
       className="relative z-10"
-      loading={deciding}
+      loading={showDeciding}
       onClick={() => void press()}
     >
-      {deciding ? t('marking') : t('markDone')}
+      {showDeciding ? t('marking') : t('markDone')}
     </Button>
   );
 }

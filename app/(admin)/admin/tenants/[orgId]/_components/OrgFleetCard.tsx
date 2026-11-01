@@ -58,15 +58,18 @@ const TILES: {
 
 /**
  * The figure the plan holds a tile's workload to (MOTIR-9377): CI to the burst
- * cap (the plan's, or a staff override), hosted runs to the parallel-run figure,
- * agent instances to the running figure. Indexing, an exempt org and an unknown
- * plan have none, so the tile shows a bare count — never a default.
+ * cap (the plan's, or a staff override), hosted runs to the parallel-run figure.
+ * Agent instances have none here: the tile counts RUNNING machines, and the plan's
+ * org figure counts LIVE agents, running or asleep (MOTIR-9954), so pairing the two
+ * would misread — the plan line names that figure instead. Indexing, an exempt org
+ * and an unknown plan have none either, so the tile shows a bare count — never a
+ * default.
  */
 export function tileFigure(
   plan: FleetOrgPlanDTO,
   key: (typeof TILES)[number]['key'],
 ): { figure: number; override: boolean } | null {
-  if (key === 'index' || plan.kind === 'plan_unknown') return null;
+  if (key === 'index' || key === 'agentInstance' || plan.kind === 'plan_unknown') return null;
   if (plan.kind === 'exempt') {
     return key === 'ciRunner' && plan.ciBurstOverride !== null
       ? { figure: plan.ciBurstOverride, override: true }
@@ -79,8 +82,6 @@ export function tileFigure(
         : { figure: plan.ciBurstCap, override: plan.ciBurstSource === 'override' };
     case 'hostedAgent':
       return { figure: plan.agentRunsInParallel, override: false };
-    case 'agentInstance':
-      return { figure: plan.agentsRunningPerOrg, override: false };
   }
 }
 
@@ -225,7 +226,7 @@ function PlanFacts({ plan }: { plan: FleetOrgPlanDTO }) {
         plan: plan.planName,
         runs: format.number(plan.agentRunsInParallel),
         perUser: format.number(plan.agentsPerUser),
-        running: format.number(plan.agentsRunningPerOrg),
+        agents: format.number(plan.agentsPerOrg),
         strong,
       };
       return plan.ciBurstCap === null

@@ -1,10 +1,9 @@
 import {
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_ROLE,
-  awsCredentialsFromEnv,
   awsTerminalEndpoint,
   awsManagementCredentials,
-  awsRuntimeKeyEnvNames,
+  awsManagementRequiredEnv,
   createAwsFleetInventory,
   createAwsManagementApi,
   createAwsOrchestrator,
@@ -51,7 +50,11 @@ import {
   shardFakeJournalShared,
   shardHeldShared,
 } from '@/lib/orchestrator/shardFakeJournal';
+import { selectedOrchestratorProvider } from './provider';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
+import { observeHostingDestroyApp } from './hosting';
+import { observeDatabaseBranchDelete } from './database';
 import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnqueue';
 
 // ⚠️ THIS FILE IS THE PACKAGE'S COMPOSITION ROOT (MOTIR-4299), and it is the ONE
@@ -84,15 +87,9 @@ import { withPlatformMeterReport } from '@/lib/services/platformMeterReportEnque
 // token — it must simply be unable to reach this path. Same contract
 // `appAuth.ts` and `ciMetering/config.ts` hold.
 
-/** The selector's env var. Unset means `fly`, which is §1's decision; `fake` is
- *  what the test suites and MOTIR-1927's gate select. */
-const SELECTOR_ENV = 'MOTIR_FLEET_ORCHESTRATOR';
-
-/** Which adapter this deployment has selected, whether or not it is configured. */
-export function selectedOrchestratorProvider(): OrchestratorProvider {
-  const raw = process.env[SELECTOR_ENV]?.trim().toLowerCase();
-  return raw === 'fake' ? 'fake' : 'fly';
-}
+// The selector itself lives in `./provider`, which loads no database, so a
+// DB-free caller (the hosting accessor, `./hosting`) can read it too.
+export { selectedOrchestratorProvider } from './provider';
 
 /**
  * The orchestrator, or the typed not-configured error.
@@ -404,12 +401,11 @@ function onFakeAws(shard: FleetShardDTO): boolean {
 /**
  * An AWS account's EC2 client and region — the ONE place the orchestrator and
  * the inventory of an account build it, so a kill and its settle land in the
- * account the VM was listed in. Its credential is its own IAM key, read from
- * `<credentialRef>_ACCESS_KEY_ID` / `_SECRET_ACCESS_KEY` (the suffixes add-shard
- * documents, MOTIR-9278), or, when no key is set, a session of the account's
- * `motir-fleet-runner` ROLE assumed from the management credential (MOTIR-9460:
- * an account the unattended add-shard created has no key at all); the SDK asks
- * the provider again before the session lapses. `extra` names variables only
+ * account the VM was listed in. Its credential is ALWAYS a session of the
+ * account's `motir-fleet-runner` ROLE, assumed from the management credential
+ * (MOTIR-9460, MOTIR-9847): no pool account holds a runner key, and no
+ * `<credentialRef>_*` variable is read; the SDK asks the provider again before
+ * the session lapses. `extra` names variables only
  * the caller needs (the AMI, for a launch); every missing one is named at once,
  * as `indexFleetConfig` does.
  */
@@ -427,11 +423,11 @@ function awsShardClient(
     for (const name of extra) values[name] = process.env[name]?.trim() || FAKE_AWS_AMI_ID;
     return { ec2: override(shard, { Ec2ApiError }), region: shard.aws.region, values };
   }
-  const keyNames = awsRuntimeKeyEnvNames(shard.credentialRef);
-  const key = awsCredentialsFromEnv(shard.credentialRef, process.env);
-  const management = key ? null : runnerRoleManagement();
+  const management = runnerRoleManagement();
   const values: Record<string, string> = {};
-  const missing = key || management ? [] : [keyNames.accessKeyId, keyNames.secretAccessKey];
+  const missing = management
+    ? []
+    : awsManagementRequiredEnv(process.env).filter((name) => !process.env[name]?.trim());
   for (const name of extra) {
     const value = process.env[name]?.trim();
     if (value) values[name] = value;
@@ -440,21 +436,19 @@ function awsShardClient(
   if (missing.length > 0) {
     throw new OrchestratorNotConfiguredError(
       `set ${missing.join(', ')}` +
-        (key || management
+        (management
           ? ''
-          : ` (or ${Object.values(AWS_MANAGEMENT_ENV).join(', ')} to assume ${AWS_RUNNER_IAM_ROLE})`),
+          : ` (the management credential, ${Object.values(AWS_MANAGEMENT_ENV).join(', ')}, assumes ${AWS_RUNNER_IAM_ROLE})`),
     );
   }
   if (!shard.aws) {
     throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} names no AWS location`);
   }
   const { accountId, region } = shard.aws;
-  const ec2 = key
-    ? createEc2Api({ ...key, region })
-    : createEc2Api({
-        region,
-        credentialProvider: runnerRoleCredentialProvider(management!, accountId),
-      });
+  const ec2 = createEc2Api({
+    region,
+    credentialProvider: runnerRoleCredentialProvider(management!, accountId),
+  });
   return { ec2, region, values };
 }
 
@@ -1143,8 +1137,20 @@ export const recordContainerUsage = usageSink.recordContainerUsage;
 /** Emit a CHECKPOINT on a container still running. NEVER THROWS. */
 export const recordContainerAccrual = usageSink.recordContainerAccrual;
 
+// ── The preview meter, bound to the ports' destroys (MOTIR-5777) ────────────
+//
+// The lifecycle destroys a preview's app and branch through the ports and never
+// calls billing code; binding the meter HERE is how a destroy's usage reaches
+// the CI pool. `./hosting` and `./database` load no database, so they only hold
+// the observer; this module, which does, binds it. The preview lifecycle imports
+// its ports from `@/lib/orchestrator` for exactly that reason.
+observeHostingDestroyApp((input) => ciPreviewUsageMeterService.recordDestroyedApp(input));
+observeDatabaseBranchDelete((input) => ciPreviewUsageMeterService.recordDeletedBranch(input));
+
 // ── The PURE half: re-exported verbatim from the package ─────────────────────
 //
 // So that `@/lib/orchestrator` remains one import for a consumer, and so that
 // moving a symbol across the boundary later is not a change at every call site.
 export * from '@motir/orchestrator';
+export * from './hosting';
+export * from './database';

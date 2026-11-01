@@ -838,7 +838,6 @@ export default defineConfig({
         //
         //   workspaceSettingsNav.ts     93.33 / 91.66 / 100 / 100
         //   WorkspaceSidebarHeader.tsx  100   / 100   / 100 / 100
-        //   JobRunsFoldInSection.tsx    100   / 100   / 100 / 100
         //   WorkspaceSwitcher.tsx        40   /  61.11/  26.66 / 40.42
         //
         // The registry's one uncovered line is its `if (!entry.href)` guard, an
@@ -847,7 +846,7 @@ export default defineConfig({
         // initial fallback were undriven — and MOTIR-4848 wrote the four missing
         // cases rather than pinning three axes and leaving the fourth off, which
         // is the remedy this list's own rule prescribes (MOTIR-4368's precedent
-        // on `SidebarNav`). All three are GATED in `thresholds` below.
+        // on `SidebarNav`). Both are GATED in `thresholds` below.
         //
         // ⚠️ `WorkspaceSwitcher.tsx` IS REPORT-ONLY, deliberately — it is in this
         // list and NOT in `thresholds`. This story added one row to it and the
@@ -859,7 +858,6 @@ export default defineConfig({
         // undertake. It publishes a number until a card owns the gap.
         'lib/settings/workspaceSettingsNav.ts',
         'app/**/_components/WorkspaceSidebarHeader.tsx',
-        'app/**/_components/JobRunsFoldInSection.tsx',
         'app/**/_components/WorkspaceSwitcher.tsx',
         // ⚠️ `app/**/settings/workspace/layout.tsx` is NOT here. It is an async
         // Server Component whose whole body is a session check and a redirect,
@@ -1738,6 +1736,15 @@ export default defineConfig({
         'lib/fleetShards/awsMemberAccountPlan.ts',
         'lib/fleetShards/fleetAutomationPrincipal.ts',
         'lib/fleetShards/scrubSecrets.ts',
+        // Story MOTIR-9708 · MOTIR-9850 — the pool-account definition as add-shard
+        // reads it, and the `aws` provider that applies it. MEASURED on this branch
+        // against `tests/ciFleet/awsPoolStackSeam.test.ts`, `awsPoolDefinition`,
+        // `fleetShardProvisioningAws` and `fleetShardProvisioningAwsIndexer` alone:
+        // awsPoolDefinition 100 / 95 / 100 / 100, awsProvisioningProvider
+        // 96.94 / 90 / 100 / 98.34 (statements / branches / functions / lines).
+        // Pinned at the fleet's 90 floor below.
+        'lib/fleetShards/awsPoolDefinition.ts',
+        'lib/fleetShards/awsProvisioningProvider.ts',
         'lib/jobs/definitions/fleetPoolGrowth.ts',
         'lib/mappers/fleetPoolMappers.ts',
         'lib/repositories/fleetGrowthEventRepository.ts',
@@ -1752,6 +1759,21 @@ export default defineConfig({
         'lib/services/fleetQuotaRequestService.ts',
         'lib/services/fleetShardQuotaService.ts',
         'scripts/fleet/fleetAdminPoolCommands.ts',
+        // Story MOTIR-9709 · MOTIR-9933 — the AWS deploy script and the read-only
+        // `fleet-admin check-quota`. MEASURED on the story branch against
+        // `tests/awsDeploy/**`, `tests/hosting/credentialModes.test.ts` and
+        // `tests/ciFleet/fleetAdminCheckQuota.test.ts`: awsDeploy 98.87 / 98.07 /
+        // 100 / 100, rollingDeploy 100 / 96.42 / 100 / 100, migrateRun, ports and
+        // taskDefinitions 100 on all four, fleetAdminCheckQuota 100 / 100 / 100 /
+        // 100 (statements / branches / functions / lines). The branches left are the
+        // entry guard and a container missing from its own clone. Pinned at the
+        // fleet's 90 floor below. (`lib/blob/s3.ts` is gated further down.)
+        'scripts/aws-deploy/awsDeploy.ts',
+        'scripts/aws-deploy/migrateRun.ts',
+        'scripts/aws-deploy/ports.ts',
+        'scripts/aws-deploy/rollingDeploy.ts',
+        'scripts/aws-deploy/taskDefinitions.ts',
+        'scripts/fleet/fleetAdminCheckQuota.ts',
         // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
         // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
         // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
@@ -3004,6 +3026,42 @@ export default defineConfig({
         'lib/repositories/testInstructionsRepository.ts',
         'lib/repositories/testInstructionsRepoRepository.ts',
         'lib/repositories/repoDeploymentRepository.ts',
+        // Motir's own pull-request previews (Story MOTIR-5766 · MOTIR-5772).
+        'lib/preview/errors.ts',
+        'lib/preview/config.ts',
+        'lib/preview/hostName.ts',
+        'lib/preview/states.ts',
+        'lib/preview/previewDatabase.ts',
+        'lib/repositories/previewDeploymentRepository.ts',
+        // Switching previews on and off (MOTIR-5775).
+        'lib/preview/enablement.ts',
+        'lib/github/repositoryActionsConfig.ts',
+        'lib/services/previewEnablementService.ts',
+        // The preview lifecycle (MOTIR-5776).
+        'lib/preview/lifecycleEvents.ts',
+        'lib/github/previewDeployments.ts',
+        'lib/services/previewLifecycleService.ts',
+        'lib/jobs/definitions/previewLifecycle.ts',
+        // Preview usage metered into the CI pool (MOTIR-5777).
+        'lib/ciMetering/previewRates.ts',
+        'lib/repositories/previewUsageRepository.ts',
+        'lib/services/ciPreviewUsageMeterService.ts',
+        'lib/jobs/definitions/previewUsageAccrual.ts',
+        // The hourly enablement sweep (MOTIR-5775), run as a job by the story
+        // gate (MOTIR-5780), and the preview gate itself (MOTIR-5779). The two
+        // preview pages sit under route groups whose `(` is glob syntax to the
+        // coverage matcher (see above), so they are measured through the frame
+        // they render and opened by `tests/components/preview-gate-pages.test.tsx`.
+        'lib/jobs/definitions/previewEnablementSweep.ts',
+        'lib/preview/gate.ts',
+        'lib/preview/gateProxy.ts',
+        'lib/preview/failureReason.ts',
+        'lib/services/previewGateService.ts',
+        'lib/repositories/previewGateAdmissionRepository.ts',
+        'components/preview/PreviewGateFrame.tsx',
+        // The preview on a pull request's row (MOTIR-10099).
+        'lib/preview/url.ts',
+        'components/github/PreviewLine.tsx',
         'lib/mappers/testInstructionsMappers.ts',
         'lib/services/testInstructionsService.ts',
         'lib/services/repoDeploymentService.ts',
@@ -3359,6 +3417,26 @@ export default defineConfig({
         'lib/monitoring/requestLabel.ts',
         'lib/monitoring/requestDbTiming.ts',
         'lib/monitoring/metricsServer.ts',
+        // ── Story MOTIR-9710 · the CloudWatch publishers (MOTIR-9889) ──
+        // The three modules the story added and the two it edited. MEASURED on this
+        // branch over `tests/monitoring/{cloudwatchMetrics,watchdogMetrics,breachTask,
+        // processPressure,loopBlockWatchdog,monitoringUnsetGuarantee,transactionStall*}`
+        // (stmts / branch / fn / lines): cloudwatchMetrics 98.0 / 94.7 / 100 / 100,
+        // breachTask 100 / 100 / 100 / 100, processPressure 94.1 / 88.1 / 100 / 100,
+        // watchdogMetrics 98.2 / 86.2 / 100 / 97.9, loopBlockWatchdog 89.4 / 62.7 /
+        // 97.1 / 98.7. Pinned in `thresholds` below. The three under the floor are
+        // pinned at what they measure, and the gap is v8's, not the tests': every
+        // guard of the form `if (x) return …;` reports its fall-through as an unhit
+        // branch even where the statements after it ran (watchdogMetrics' four
+        // start/stop guards; most of loopBlockWatchdog's 23 classifier guards, each
+        // exercised both ways by `loopBlockWatchdog.test.ts`'s pure cases). The one
+        // real miss in watchdogMetrics is `readFileSync('/proc/stat')` throwing,
+        // which only happens off Linux.
+        'lib/monitoring/cloudwatchMetrics.ts',
+        'lib/monitoring/watchdogMetrics.ts',
+        'lib/monitoring/breachTask.ts',
+        'lib/monitoring/processPressure.ts',
+        'lib/monitoring/loopBlockWatchdog.ts',
         'lib/mcp/toolTracing.ts',
         'scripts/pgTopStatements.ts',
         // Story MOTIR-8651 · BUILD THROUGH (Subtask MOTIR-8662) — the two NEW modules the
@@ -3489,6 +3567,13 @@ export default defineConfig({
         'lib/services/requirementPageService.ts',
         'lib/ai/requirementMarkdown.ts',
         'lib/planning/requirementPane.ts',
+        // Bug MOTIR-10091 — the requirement page saved by a background job after the start.
+        // MEASURED against `tests/integration/planning/planOfferRequirementPage` and
+        // `composedRequirementSeam`, statements / branches / functions / lines:
+        // requirementPageSaveService.ts 95.74 / 90 / 100 / 100; planOfferRequirementPage.ts
+        // 100 / 100 / 100 / 100. Pinned at the floor below.
+        'lib/services/requirementPageSaveService.ts',
+        'lib/jobs/definitions/planOfferRequirementPage.ts',
         // Story MOTIR-9539 · MOTIR-9615 — the provider-capacity story's new modules (the
         // gateway capacity client, its fake and provider, the threshold function, the
         // raised-alert store, the alert evaluation and its minutely job, the staff
@@ -3734,6 +3819,20 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-9708 · MOTIR-9850 — the pool-account definition and the `aws`
+        // provider, measured above.
+        'lib/fleetShards/awsPoolDefinition.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/fleetShards/awsProvisioningProvider.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'lib/jobs/definitions/fleetPoolGrowth.ts': {
           lines: 90,
           functions: 90,
@@ -3831,6 +3930,43 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        // Story MOTIR-9709 · MOTIR-9933 — measured above, pinned at the floor.
+        'scripts/aws-deploy/awsDeploy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/migrateRun.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/ports.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/rollingDeploy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/aws-deploy/taskDefinitions.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/fleet/fleetAdminCheckQuota.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         // Story MOTIR-9219 · MOTIR-9295 — measured above, pinned at the floor (the start
         // service's branches at 88, for the reason the `include` block gives).
         'lib/planChange/planOffer.ts': {
@@ -3876,6 +4012,19 @@ export default defineConfig({
           statements: 90,
         },
         'app/api/ai/plan-change/session/offer/decline/route.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // Bug MOTIR-10091 — measured above, pinned at the floor.
+        'lib/services/requirementPageSaveService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/planOfferRequirementPage.ts': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -5480,12 +5629,6 @@ export default defineConfig({
           statements: 90,
         },
         'app/**/_components/WorkspaceSidebarHeader.tsx': {
-          lines: 90,
-          functions: 90,
-          branches: 90,
-          statements: 90,
-        },
-        'app/**/_components/JobRunsFoldInSection.tsx': {
           lines: 90,
           functions: 90,
           branches: 90,
@@ -7888,6 +8031,162 @@ export default defineConfig({
           branches: 90,
           statements: 90,
         },
+        'lib/preview/errors.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/config.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/hostName.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/states.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/previewDatabase.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/previewDeploymentRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/enablement.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/github/repositoryActionsConfig.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/previewEnablementService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/lifecycleEvents.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/github/previewDeployments.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/previewLifecycleService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/previewLifecycle.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/ciMetering/previewRates.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/previewUsageRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/ciPreviewUsageMeterService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/previewUsageAccrual.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/jobs/definitions/previewEnablementSweep.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/gate.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/gateProxy.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/failureReason.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/services/previewGateService.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/repositories/previewGateAdmissionRepository.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/preview/PreviewGateFrame.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/preview/url.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'components/github/PreviewLine.tsx': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
         'lib/mappers/testInstructionsMappers.ts': {
           lines: 90,
           functions: 90,
@@ -8327,6 +8626,33 @@ export default defineConfig({
         'lib/monitoring/requestLabel.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/monitoring/requestDbTiming.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/monitoring/metricsServer.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-9710 · MOTIR-9889 — measured above (`include`); the three under
+        // the floor are pinned at their measurement, for the reason given there.
+        'lib/monitoring/cloudwatchMetrics.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'lib/monitoring/breachTask.ts': { lines: 90, functions: 90, branches: 90, statements: 90 },
+        'lib/monitoring/processPressure.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 85,
+          statements: 90,
+        },
+        'lib/monitoring/watchdogMetrics.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 85,
+          statements: 90,
+        },
+        'lib/monitoring/loopBlockWatchdog.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 60,
+          statements: 85,
+        },
         'lib/mcp/toolTracing.ts': { branches: 90, functions: 90, lines: 90 },
         'scripts/pgTopStatements.ts': { branches: 90, functions: 90, lines: 90 },
         'scripts/pgTopStatementsQuery.ts': { branches: 90, functions: 90, lines: 90 },

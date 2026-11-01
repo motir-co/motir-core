@@ -16,6 +16,7 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 const setMemberAccessScopeAction = vi.fn();
 const listMemberAddedProjectsAction = vi.fn();
 vi.mock('@/app/(authed)/settings/workspace/actions', () => ({
+  resendInviteAction: vi.fn(async () => ({ ok: true })),
   setMemberRoleAction: vi.fn(async () => ({ ok: true })),
   removeMemberAction: vi.fn(async () => ({ ok: true })),
   setMemberAccessScopeAction: (...a: unknown[]) => setMemberAccessScopeAction(...a),
@@ -253,6 +254,35 @@ describe('the invite (W7 / W8 / W9)', () => {
   it('a Limited member gets no Invite button at all', () => {
     renderCard(context({ canManageRoles: false, canInvite: false, inviteProjects: [] }));
     expect(screen.queryByRole('button', { name: /Invite/ })).toBeNull();
+  });
+
+  it('a Limited member gets no Pending invitations block and no Resend, even if invites were passed', () => {
+    render(
+      <ToastProvider>
+        <MembersCard
+          workspaceId="ws1"
+          workspaceName="Sales"
+          members={members}
+          currentUserId={ME}
+          roleContext={context({ canManageRoles: false, canInvite: false, inviteProjects: [] })}
+          pendingInvites={[
+            {
+              id: 'inv-1',
+              email: 'pending@example.com',
+              accessScope: 'full',
+              projectCount: 0,
+              invitedBy: { userId: ME, name: 'Zhu Yue' },
+              sentAt: new Date().toISOString(),
+              expiresAt: new Date(Date.now() + 86_400_000 * 3).toISOString(),
+              deliveryState: 'queued',
+              canResend: false,
+            },
+          ]}
+        />
+      </ToastProvider>,
+    );
+    expect(screen.queryByText('Pending invitations')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Resend/ })).toBeNull();
   });
 });
 

@@ -120,6 +120,7 @@ function renderFrame(
     <ChoiceGateFrame
       gate={AWAITING}
       port={TWO}
+      workItemRefs={{}}
       canDecide
       routedToLabel="Yue"
       identifier="ACME-42"
@@ -253,6 +254,7 @@ describe('the item page — the Choice section', () => {
     if (parse.ok) throw new Error('expected a defect');
     renderWithIntl(
       <ChoiceSection
+        workItemRefs={{}}
         body={{ ok: false, defects: parse.defects, draft: parse.draft }}
         gate={null}
         canDecide={false}
@@ -275,6 +277,7 @@ describe('the item page — the Choice section', () => {
   it('an awaiting choice for its decider shows the options and ONE door — Review & choose', () => {
     renderWithIntl(
       <ChoiceSection
+        workItemRefs={{}}
         body={{ ok: true, port: TWO }}
         gate={AWAITING}
         canDecide
@@ -303,6 +306,7 @@ describe('the remaining shapes (MOTIR-5898 coverage)', () => {
   it('a bare draft — no question, no why, no follow-up — renders its options and each defect sentence', () => {
     renderWithIntl(
       <ChoiceSection
+        workItemRefs={{}}
         body={{
           ok: false,
           defects: [
@@ -337,6 +341,7 @@ describe('the remaining shapes (MOTIR-5898 coverage)', () => {
   it('a situation-3 why quotes nothing, and a gate with no body yet renders the options read-only', () => {
     renderWithIntl(
       <ChoiceSection
+        workItemRefs={{}}
         body={{
           ok: true,
           port: { ...TWO, why: { situation: 'two_workflows', youSaid: null, evidenceMd: '' } },
@@ -356,6 +361,7 @@ describe('the remaining shapes (MOTIR-5898 coverage)', () => {
   it('a decided choice whose body stopped parsing still shows its record', () => {
     renderWithIntl(
       <ChoiceSection
+        workItemRefs={{}}
         body={{
           ok: false,
           defects: [{ reason: 'no_follow_up_section' }],

@@ -737,9 +737,6 @@
       "pickProjectFirst": "Najpierw wybierz projekt.",
       "unknownRelationship": "Nieznana relacja.",
       "pickIssueToLink": "Wybierz element roboczy do powiązania.",
-      "missingDlqId": "Brak identyfikatora wpisu w kolejce niedostarczonych.",
-      "ownerOnlyReplay": "Tylko menedżer obszaru roboczego może ponownie uruchamiać zadania.",
-      "dlqGone": "Ten wpis w kolejce niedostarczonych już nie istnieje.",
       "workspaceNameEmpty": "Nazwa obszaru roboczego nie może być pusta.",
       "useLeaveToRemoveSelf": "Aby usunąć siebie, użyj opcji Opuść.",
       "cannotRemoveLastMember": "Nie można usunąć ostatniego członka.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Tylko właściciele i administratorzy obszaru roboczego mogą zmieniać jego ustawienia zabezpieczeń.",
       "refused": "Nie udało się: {reason}",
       "organizationClosing": "Ta organizacja jest zaplanowana do usunięcia i jest tylko do odczytu. Tylko jej właściciel może anulować usunięcie.",
-      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby.",
-      "systemReplayWorkspaceRow": "Ten wpis w kolejce niedostarczonych należy do przestrzeni roboczej — uruchom go ponownie na karcie Niedostarczone tej przestrzeni.",
-      "systemReplayOperatorOnly": "Tylko operator platformy może ponownie uruchamiać systemowe niedostarczone wpisy."
+      "memberProjectsFailed": "Nie udało się załadować projektów tej osoby."
     },
     "links": {
       "notFound": "Ten element roboczy już nie istnieje.",
@@ -1958,6 +1953,8 @@
       "translation": "Tłumaczenie",
       "rules": "Reguły",
       "repositories": "Repozytoria",
+      "environment": "Środowisko",
+      "production": "Produkcja",
       "monitoring": "Monitorowanie",
       "approvals": "Zatwierdzenia",
       "bugs": "Błędy"
@@ -2065,13 +2062,12 @@
       "nav": {
         "group": {
           "general": "Ogólne",
-          "access": "Dostęp",
-          "operations": "Operacje"
+          "access": "Dostęp"
         },
         "workspace": "Obszar roboczy",
         "security": "Zabezpieczenia",
         "roles": "Role i uprawnienia",
-        "jobs": "Uruchomienia zadań"
+        "publicAddress": "Adres publiczny"
       }
     },
     "name": {
@@ -2200,7 +2196,58 @@
       "inviteNoProjectsWarning": "Osoba nie będzie mogła niczego otworzyć, dopóki menedżer nie doda jej do projektu.",
       "inviteJoinsAsMember": "Osoba dołączy jako członek. Możesz zmienić jej rolę po przyjęciu zaproszenia.",
       "errorInviteProjects": "Do jednego z tych projektów nie można dołączyć. Wybierz je ponownie.",
-      "errorInviteNotAllowed": "Nie możesz wysłać tego zaproszenia. Tylko menedżer obszaru roboczego może zapraszać z ograniczonym dostępem."
+      "errorInviteNotAllowed": "Nie możesz wysłać tego zaproszenia. Tylko menedżer obszaru roboczego może zapraszać z ograniczonym dostępem.",
+      "pending": {
+        "heading": "Oczekujące zaproszenia",
+        "invitationColumn": "Zaproszenie",
+        "deliveryColumn": "Dostarczenie",
+        "invitedBy": "Zaprasza: {name}, {sent}",
+        "invitedByFormer": "Zaprasza: były członek, {sent}",
+        "expiresIn": "Wygasa za {count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+        "expiresToday": "Wygasa dzisiaj",
+        "expiresOn": "Wygasa {date}",
+        "resend": "Wyślij ponownie",
+        "resendLabel": "Wyślij ponownie zaproszenie na adres {email}",
+        "resendScopeTooltip": "Tylko menedżer może ponownie wysłać ograniczone zaproszenie",
+        "resentToast": "Wysłano nowe zaproszenie na adres {email}",
+        "refusalRateLimited": "Osiągnięto limit: 3 zaproszenia na adres na godzinę.",
+        "refusalRateLimitedBody": "Spróbuj ponownie później.",
+        "refusalAlreadyMember": "Ta osoba już dołączyła do obszaru roboczego.",
+        "refusalNotAllowed": "Nie możesz ponownie wysłać tego zaproszenia.",
+        "refusalNoLongerPending": "To zaproszenie już nie oczekuje.",
+        "showAll": "Pokaż wszystkie oczekujące zaproszenia ({count})",
+        "showFewer": "Pokaż mniej",
+        "delivery": {
+          "queued": {
+            "label": "W kolejce",
+            "helper": "Czeka na wysłanie"
+          },
+          "accepted": {
+            "label": "Przyjęte",
+            "helper": "Dostawca poczty je otrzymał"
+          },
+          "delivered": {
+            "label": "Dostarczone",
+            "helper": "Dotarło do serwera poczty odbiorcy"
+          },
+          "bounced": {
+            "label": "Odrzucone",
+            "helper": "Adres je odrzucił"
+          },
+          "complained": {
+            "label": "Skarga",
+            "helper": "Oznaczone jako spam"
+          },
+          "delayed": {
+            "label": "Opóźnione",
+            "helper": "Dostawca wciąż ponawia próby"
+          },
+          "failed": {
+            "label": "Niepowodzenie",
+            "helper": "Nie udało się wysłać"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Nie można odejść",
@@ -2706,43 +2753,6 @@
         "title": "Nie skonfigurowano publicznej przestrzeni nazw",
         "description": "To wdrożenie nie ma ustawionej domeny bazowej dzierżawców, więc nie można jeszcze zarezerwować subdomeny. Operator ustawia MOTIR_PUBLIC_TENANT_DOMAIN."
       },
-      "subdomain": {
-        "title": "Subdomena obszaru roboczego",
-        "subtitle": "Jeden adres dla całego obszaru roboczego. Każdy publiczny projekt w nim jest dostępny pod tym adresem.",
-        "label": "Subdomena",
-        "helper": "Twoje projekty będą dostępne pod adresem {preview}. Małe litery, cyfry i myślniki; 3–63 znaki.",
-        "claim": "Zarezerwuj subdomenę",
-        "claimable": "Nazwę można później zmienić ograniczoną liczbę razy.",
-        "active": "Aktywna",
-        "alias": "Przekierowuje tutaj",
-        "aliasShort": "Przekierowuje",
-        "copy": "Kopiuj adres",
-        "copied": "Skopiowano adres",
-        "open": "Otwórz w nowej karcie",
-        "rename": "Zmień nazwę",
-        "renamesLeft": "{count, plural, =0 {Nie pozostały żadne zmiany nazwy.} one {Pozostała # zmiana nazwy.} few {Pozostały # zmiany nazwy.} many {Pozostało # zmian nazwy.} other {Pozostało # zmiany nazwy.}}",
-        "readOnly": "Zarządzane przez właściciela lub administratora obszaru roboczego.",
-        "none": "Nie zarezerwowano jeszcze subdomeny."
-      },
-      "rename": {
-        "title": "Zmienić nazwę tej subdomeny?",
-        "warningTitle": "Stary adres nadal działa i nigdy nie zostanie zwolniony.",
-        "warningBody": "{old} będzie trwale przekierowywać tutaj i nikt inny nie będzie mógł go zarezerwować — nawet Twój obszar roboczy w przyszłości.",
-        "remaining": "Po tej zmianie {count, plural, one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}}.",
-        "cancel": "Anuluj",
-        "confirm": "Zmień nazwę"
-      },
-      "release": {
-        "remove": "Usuń",
-        "title": "Usunąć {hostname}?",
-        "lead": "{count, plural, one {Ten adres przestanie działać:} few {Te # adresy przestaną działać:} many {Tych # adresów przestanie działać:} other {Te # adresu przestaną działać:}}",
-        "warningTitle": "{count, plural, one {Ta nazwa jest zablokowana na zawsze. Nikt nie może jej ponownie zarezerwować — nawet Twój obszar roboczy.} few {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} many {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.} other {Te nazwy są zablokowane na zawsze. Nikt nie może ich ponownie zarezerwować — nawet Twój obszar roboczy.}}",
-        "warningBody": "Motir trwale wyklucza każdą zwolnioną nazwę ze swojej przestrzeni nazw, aby żaden inny obszar roboczy nie przejął linków, które wskazywały na Twój.",
-        "renamesAfter": "Jeśli ponownie zarezerwujesz subdomenę, {count, plural, =0 {nie pozostaną żadne zmiany nazwy} one {pozostanie # zmiana nazwy} few {pozostaną # zmiany nazwy} many {pozostanie # zmian nazwy} other {pozostanie # zmiany nazwy}} — zwolnienie ich nie przywraca.",
-        "fallback": "Twoje publiczne projekty wrócą pod adres {url} i ponownie pojawią się w {site}.",
-        "cancel": "Anuluj",
-        "confirm": "Usuń subdomenę"
-      },
       "domains": {
         "title": "Własna domena",
         "subtitle": "Udostępniaj ten projekt z domeny, która należy do Ciebie.",
@@ -2831,17 +2841,6 @@
         },
         "lastChecked": "Ostatnio sprawdzono {when}",
         "error": "To się nie udało. Spróbuj ponownie za chwilę."
-      },
-      "error": {
-        "reserved": "{label} jest zarezerwowana. Motir zachowuje niewielki zestaw nazw dla własnych hostów oraz nazw, które czytelnik mógłby z nimi pomylić.",
-        "structurallyReserved": "{label} jest zarezerwowana. Nazwy zaczynające się od podkreślenia, xn-- lub motir- należą do Motir lub samego DNS.",
-        "tooShort": "Za krótka — subdomena ma co najmniej 3 znaki.",
-        "tooLong": "Za długa — subdomena ma maksymalnie 63 znaki.",
-        "badGrammar": "Tylko małe litery, cyfry i myślniki; musi zaczynać się i kończyć literą lub cyfrą.",
-        "taken": "{label} jest już używana. Subdomena, której nazwę zmieniono, również zachowuje swoją nazwę, więc ta może należeć do obszaru roboczego, który już pod nią nie odpowiada.",
-        "capReached": "Wykorzystano wszystkie zmiany nazwy dla tego obszaru roboczego. Adresu nie można już zmienić.",
-        "forbidden": "Tylko właściciel lub administrator obszaru roboczego może zmienić ten adres.",
-        "generic": "To się nie udało. Spróbuj ponownie za chwilę."
       }
     },
     "codeAccess": {
@@ -2966,86 +2965,6 @@
       "heroOverviewSubheading": "Hasło, tagi i README, które odwiedzający widzą na Twojej stronie publicznej.",
       "editOnPublicPage": "Edytuj stronę publiczną",
       "heroOverviewNote": "Otwiera Ustawienia › Strona publiczna. Możesz ją przygotować, zanim projekt stanie się publiczny."
-    },
-    "jobs": {
-      "title": "Uruchomienia zadań",
-      "subtitle": "Zadania w tle dla tego obszaru roboczego — dostarczanie zaproszeń i resetów hasła oraz wszelka zaplanowana praca. Nieudane zadania trafiają do kolejki niedostarczonych, gdzie właściciel może je ponownie uruchomić.",
-      "tab": {
-        "runs": "Ostatnie uruchomienia",
-        "dlq": "Niedostarczone",
-        "system": "System"
-      },
-      "tabNavLabel": "Widoki uruchomień zadań",
-      "dlqBadgeLabel": "W kolejce niedostarczonych: {count}",
-      "filterGroupLabel": "Filtruj według statusu",
-      "filter": {
-        "all": "Wszystkie",
-        "succeeded": "Udane",
-        "failed": "Nieudane",
-        "running": "W trakcie",
-        "abandoned": "Porzucone"
-      },
-      "runsTableCaption": "Uruchomienia zadań w tle",
-      "col": {
-        "status": "Status",
-        "delivery": "Dostarczenie",
-        "function": "Funkcja",
-        "event": "Zdarzenie",
-        "attempts": "Próby",
-        "started": "Rozpoczęto",
-        "duration": "Czas trwania",
-        "failure": "Niepowodzenie",
-        "details": "Szczegóły",
-        "firstFailed": "Pierwsze niepowodzenie",
-        "lastFailed": "Ostatnie niepowodzenie",
-        "replayed": "Uruchomiono ponownie",
-        "actions": "Akcje"
-      },
-      "view": "Wyświetl",
-      "runDetailTitle": "Szczegóły uruchomienia",
-      "dlqTableCaption": "Kolejka niedostarczonych",
-      "replay": "Uruchom ponownie",
-      "replayTooltip": "Tylko menedżer obszaru roboczego może ponownie uruchamiać zadania",
-      "alreadyReplayedToastTitle": "Już uruchomiono ponownie",
-      "alreadyReplayedToastDesc": "Ten wpis został już wcześniej uruchomiony ponownie — nic nowego nie zostało dodane do kolejki.",
-      "replayedToastTitle": "Zadanie uruchomiono ponownie",
-      "replayedToastDesc": "Pierwotne zdarzenie zostało wyemitowane ponownie.",
-      "replayErrorTitle": "Nie udało się uruchomić ponownie",
-      "dlqDetailTitle": "Szczegóły wpisu niedostarczonego",
-      "dlqDetailDesc": "Niepowodzenie i pierwotny ładunek zdarzenia (można go ponownie uruchomić bez zmian).",
-      "failureHeading": "Niepowodzenie",
-      "eventPayloadHeading": "Ładunek zdarzenia",
-      "pageLabel": "Strona {page}",
-      "previous": "Poprzednia",
-      "next": "Następna",
-      "refresh": "Odśwież",
-      "dlqEmptyTitle": "Kolejka niedostarczonych jest pusta",
-      "dlqEmptyDesc": "Każde zadanie zakończyło się powodzeniem lub jest wciąż ponawiane.",
-      "runsEmptyTitle": "Brak uruchomień zadań",
-      "runsEmptyDesc": "Gdy zadanie w tle zostanie uruchomione, pojawi się tutaj.",
-      "delivery": {
-        "accepted": "przyjęto",
-        "delivered": "dostarczono",
-        "bounced": "odrzucono",
-        "complained": "oznaczono jako spam",
-        "delayed": "opóźniono"
-      },
-      "deliveryNone": "Brak rekordu dostarczenia",
-      "deliveryDetail": {
-        "heading": "Dostarczenie",
-        "state": "Stan",
-        "messageId": "Identyfikator wiadomości",
-        "recipient": "Odbiorca",
-        "template": "Szablon",
-        "lastEvent": "Ostatnie zdarzenie",
-        "never": "Brak zdarzeń od dostawcy"
-      },
-      "systemDlqTitle": "Niedostarczone bez przestrzeni roboczej",
-      "systemDlqSummary": "{waiting} czeka na ponowne uruchomienie · {replayed} uruchomionych ponownie w ostatnich 7 dniach",
-      "systemDlqTableCaption": "Systemowe niedostarczone",
-      "systemDlqEmptyTitle": "Brak systemowych niedostarczonych",
-      "systemDlqEmptyDesc": "Każde zadanie bez przestrzeni roboczej zakończyło się powodzeniem albo jest nadal ponawiane.",
-      "systemRunsTitle": "Uruchomienia systemowe"
     },
     "account": {
       "eyebrow": "Ustawienia konta",
@@ -4203,7 +4122,9 @@
         "hosted-agent": "Informacja o tym, którego modelu używa hostowane uruchomienie, jest widoczna dla osób, które mogą uruchamiać hostowane uruchomienia w tym projekcie. Poproś administratora projektu, jeśli musisz ją zobaczyć.",
         "translation": "To, czy treść pracy w tym projekcie jest tłumaczona dla każdego czytelnika, widzą osoby, które mogą czytać elementy pracy projektu. Zapytaj administratora projektu, jeśli potrzebujesz to zobaczyć.",
         "automation": "Automatyzacją projektu zarządzają administratorzy projektu. Poproś administratora, jeśli reguła wymaga zmiany.",
-        "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie."
+        "monitoring": "Połączeniem z monitorem błędów tego projektu zarządzają osoby, które mogą zarządzać integracjami. Poproś administratora projektu, jeśli Sentry trzeba połączyć lub połączyć ponownie.",
+        "environment": "Wartości środowiska repozytorium widzą osoby, które mogą przeglądać ten projekt. Zapytaj administratora projektu, jeśli potrzebujesz je zobaczyć.",
+        "production": "Wydania repozytorium widzą osoby, które mogą przeglądać ten projekt. Zapytaj administratora projektu, jeśli potrzebujesz je zobaczyć."
       }
     },
     "organization": {
@@ -4221,10 +4142,6 @@
         "security": "Zabezpieczenia",
         "usage": "Użycie i koszty",
         "billing": "Rozliczenia i plany"
-      },
-      "jobRunsFoldIn": {
-        "title": "Uruchomienia zadań",
-        "subtitle": "Praca w tle dla tego obszaru roboczego — co zostało uruchomione, co się nie powiodło i co czeka w kolejce niedostarczonych."
       }
     },
     "gitAccounts": {
@@ -4234,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Połączono"
+        "connected": "Połączono",
+        "needsReauth": "Wymaga ponownego uwierzytelnienia"
       },
       "connectedOn": "Połączono {date}",
       "connect": "Połącz z GitHub",
       "disconnect": "Rozłącz",
+      "reconnect": "Połącz ponownie",
       "empty": {
         "title": "Brak połączonego konta Git",
         "description": "Połączenie konta pozwala Motir zapraszać Cię do repozytoriów, nad którymi pracują Twoje projekty, i podpisywać wykonaną pracę. Odczytuje tylko Twój publiczny profil — nie daje dostępu do żadnego kodu."
+      },
+      "reauth": {
+        "title": "Połącz ponownie swoje konto GitHub.",
+        "body": "GitHub nie akceptuje już tego logowania, więc Motir nie może już potwierdzić, kim jesteś na GitHubie. Nic innego na Twoim koncie się nie zmieniło."
       },
       "noInstallation": {
         "title": "Twoje konto jest połączone. Konto organizacji — nie.",
@@ -4274,6 +4197,282 @@
       "saveError": "Coś poszło nie tak. Spróbuj ponownie.",
       "saveForbidden": "Nie możesz już zmieniać miejsca docelowego błędów tego projektu.",
       "folderGone": "Ten folder już nie istnieje. Wybierz inny."
+    },
+    "environment": {
+      "title": "Środowisko",
+      "lede": "Wartości, które aplikacja odczytuje podczas działania. Ustaw je raz dla każdego środowiska; Motir przekaże je aplikacji przy następnym wdrożeniu.",
+      "repositoryLabel": "Repozytorium",
+      "role": {
+        "web": "Aplikacja webowa",
+        "api": "API",
+        "mobile": "Aplikacja mobilna",
+        "shared": "Kod współdzielony",
+        "infra": "Infrastruktura",
+        "other": "Inne"
+      },
+      "tablistLabel": "Środowisko",
+      "tab": {
+        "production": "Produkcja",
+        "preview": "Podgląd",
+        "release": "Wydanie"
+      },
+      "column": {
+        "name": "Nazwa",
+        "value": "Wartość"
+      },
+      "set": "Ustawiono",
+      "secretHidden": "Sekret · wartość ukryta",
+      "edit": "Edytuj",
+      "replace": "Zastąp",
+      "delete": "Usuń",
+      "editAria": "Edytuj {name}",
+      "replaceAria": "Zastąp {name}",
+      "deleteAria": "Usuń {name}",
+      "saving": "Zapisywanie",
+      "add": {
+        "heading": "Dodaj wartość",
+        "namePlaceholder": "NAZWA",
+        "valuePlaceholder": "Wartość",
+        "secret": "Sekret",
+        "save": "Zapisz",
+        "helper": "Sekret można zastąpić lub usunąć, ale nigdy nie zostanie ponownie pokazany — ani tobie, ani nikomu innemu."
+      },
+      "error": {
+        "nameRequired": "Wpisz nazwę.",
+        "duplicate": "{name} jest już ustawione w środowisku {environment}. Edytuj je na liście.",
+        "invalidName": "Użyj liter, cyfr i podkreśleń; nazwa nie może zaczynać się od cyfry.",
+        "reserved": "{name} jest zarezerwowane: PORT, DATABASE_URL i nazwy MOTIR_* ustawia Motir. Wybierz inną nazwę."
+      },
+      "saved": {
+        "secret": "Zapisano {name} jako sekret. Od teraz jego wartość jest ukryta.",
+        "plain": "Zapisano {name}."
+      },
+      "replaceFlow": {
+        "placeholder": "Nowa wartość",
+        "aria": "Nowa wartość dla {name}",
+        "helper": "Obecna wartość pozostaje ukryta. Zapisanie zastąpi ją przy następnym wdrożeniu.",
+        "cancel": "Anuluj"
+      },
+      "deleteDialog": {
+        "title": "Usunąć {name} ze środowiska {environment}?",
+        "body": "Od następnego wdrożenia aplikacja przestanie otrzymywać {name} w środowisku {environment}. {count, plural, one {Środowisko {others} zachowuje własną wartość.} few {Środowiska {others} zachowują własne wartości.} many {Środowiska {others} zachowują własne wartości.} other {Środowiska {others} zachowują własne wartości.}} Tej operacji nie można cofnąć.",
+        "confirm": "Usuń",
+        "cancel": "Anuluj"
+      },
+      "empty": {
+        "title": "Brak wartości w środowisku {environment}",
+        "production": "Otrzymuje je działająca aplikacja. Dodaj pierwszą poniżej.",
+        "preview": "Otrzymuje je podgląd każdego pull requesta. Dodaj pierwszą poniżej.",
+        "release": "Otrzymuje je wydanie budowane przez twój pociąg. Dodaj pierwszą poniżej."
+      },
+      "loading": "Wczytywanie wartości…",
+      "loadError": {
+        "title": "Nie udało się wczytać wartości",
+        "body": "Nic nie zostało zmienione. Spróbuj ponownie za chwilę."
+      },
+      "retry": "Spróbuj ponownie",
+      "saveError": "Nie udało się zapisać {name}. Nic nie zostało zmienione.",
+      "deleteError": "Nie udało się usunąć {name}. Wartość nadal jest ustawiona.",
+      "readOnly": {
+        "note": "Możesz czytać te wartości. Tylko administratorzy projektu mogą je zmieniać.",
+        "tooltip": "Tylko administratorzy projektu mogą zmieniać wartości środowiska."
+      },
+      "changes": {
+        "heading": "Ostatnie zmiany · {environment}",
+        "added": "dodał(a)",
+        "replaced": "zastąpił(a)",
+        "deleted": "usunął(ęła)",
+        "secret": "Sekret",
+        "unknownActor": "Były członek",
+        "loadError": "Nie udało się wczytać ostatnich zmian.",
+        "empty": "Brak zmian. Każda zmiana w tym środowisku jest tu wymieniona — kto ją wprowadził i kiedy, nigdy wartość."
+      },
+      "notFound": {
+        "title": "Nie znaleziono repozytorium",
+        "body": "Motir nie przechowuje środowiska dla tego repozytorium. Wybierz jedno z repozytoriów projektu hostowanych przez Motir.",
+        "back": "Wróć do Środowiska"
+      }
+    },
+    "production": {
+      "title": "Produkcja",
+      "lede": "Co działa na produkcji dla każdej aplikacji tego projektu, co zrobiły ostatnie merge’e i jak cofnąć wadliwe wydanie.",
+      "repositoryLabel": "Repozytorium",
+      "role": {
+        "web": "Aplikacja webowa",
+        "api": "API",
+        "mobile": "Aplikacja mobilna",
+        "shared": "Kod współdzielony",
+        "infra": "Infrastruktura",
+        "other": "Inne"
+      },
+      "current": {
+        "eyebrow": "Działa na produkcji"
+      },
+      "state": {
+        "building": "Budowanie",
+        "live": "Na produkcji",
+        "failed": "Niepowodzenie",
+        "replaced": "Zastąpione",
+        "rolledBack": "Wycofane"
+      },
+      "trigger": {
+        "merge": "Merge #{number}",
+        "mergeDefault": "Merge do domyślnej gałęzi",
+        "redeploy": "Ponowne wdrożenie · zmieniono ustawienia produkcji",
+        "rollback": "Przywrócone przez wycofanie · {name}",
+        "rollbackUnnamed": "Przywrócone przez wycofanie",
+        "ref": "Wdrożenie {ref} · {name}",
+        "refUnnamed": "Wdrożenie {ref}"
+      },
+      "address": {
+        "newTab": "(otwiera się w nowej karcie)",
+        "copy": "Kopiuj",
+        "copied": "Skopiowano",
+        "copyAria": "Kopiuj {address}",
+        "none": "Brak adresu — zarezerwuj adres motir.site dla obszaru roboczego w sekcji <link>Adres publiczny</link>."
+      },
+      "rollback": {
+        "action": "Wycofaj",
+        "helper": "Przywraca produkcję do wydania sprzed tego.",
+        "unavailable": "Nie ma jeszcze wcześniejszego wydania, do którego można wrócić."
+      },
+      "history": {
+        "heading": "Historia wydań",
+        "more": "Pokaż więcej wydań",
+        "moreError": "Nie udało się wczytać kolejnych wydań. Spróbuj ponownie."
+      },
+      "failedNewer": "Najnowsze wydanie się nie powiodło, więc nic, co działa, się nie zmieniło. {commit} nadal działa na produkcji.",
+      "reason": {
+        "build": "Budowanie nie powiodło się przed wdrożeniem.",
+        "migration": "Migracja nie powiodła się.",
+        "migrationExit": "Migracja nie powiodła się z kodem wyjścia {code}.",
+        "migrationTimedOut": "Przekroczono limit czasu migracji.",
+        "superseded": "Trwało inne wydanie, więc to nigdy się nie rozpoczęło.",
+        "deploy": "Wdrożenie nie powiodło się, zanim przejęło ruch."
+      },
+      "dialog": {
+        "title": "Wycofać {repository}?",
+        "leaving": "Opuszczane",
+        "returning": "Powrót do",
+        "body": "Produkcja wraca do kodu i wartości środowiska tamtego wydania pod adresem {address}. Schemat bazy danych nie jest cofany: migracje wykonane przez nowsze wydanie pozostają zastosowane.",
+        "bodyNoAddress": "Produkcja wraca do kodu i wartości środowiska tamtego wydania. Schemat bazy danych nie jest cofany: migracje wykonane przez nowsze wydanie pozostają zastosowane.",
+        "confirm": "Wycofaj",
+        "submitting": "Wycofywanie…",
+        "cancel": "Anuluj",
+        "error": "Wycofanie nie zostało ukończone. {commit} nadal obsługuje produkcję. Spróbuj ponownie.",
+        "retry": "Spróbuj ponownie"
+      },
+      "refusal": {
+        "noPreviousRelease": "Nie ma wcześniejszego wydania, do którego można wrócić.",
+        "releaseInProgress": "Trwa wydanie. Wycofaj, gdy się zakończy.",
+        "conflict": "Produkcja zmieniła się w trakcie wycofywania. Zamknij to okno i sprawdź, co teraz działa.",
+        "forbidden": "Tylko administratorzy projektu mogą wycofywać.",
+        "notFound": "To repozytorium nie jest już dla ciebie dostępne."
+      },
+      "readOnly": {
+        "note": "Widzisz każde wydanie. Tylko administratorzy projektu mogą wycofywać."
+      },
+      "empty": {
+        "title": "Na produkcji jeszcze nic nie ma",
+        "body": "Zmerguj pull request do main, a Motir go zbuduje i uruchomi tutaj, z jego adresem."
+      },
+      "loading": "Wczytywanie wydań…",
+      "loadError": {
+        "title": "Nie udało się wczytać wydań",
+        "body": "Nie ma to wpływu na produkcję. Spróbuj ponownie za chwilę."
+      },
+      "retry": "Spróbuj ponownie",
+      "notFound": {
+        "title": "Nie znaleziono repozytorium",
+        "body": "Motir prowadzi produkcję tylko dla repozytoriów, które hostuje. Wybierz jedno z repozytoriów tego projektu.",
+        "back": "Wróć do Produkcji"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Adres publiczny",
+        "claimed": "{host} — jedna nazwa obszaru roboczego.",
+        "none": "Nie zajęto jeszcze żadnej nazwy.",
+        "manage": "Zarządzaj →",
+        "claim": "Zajmij nazwę →"
+      },
+      "title": "Adres publiczny",
+      "subtitle": "Jedyna nazwa, pod którą odpowiada obszar roboczy.",
+      "readOnly": "Tylko właściciele i administratorzy obszaru roboczego mogą to zmienić.",
+      "none": "Nie zajęto jeszcze żadnej nazwy.",
+      "unavailable": {
+        "title": "Adresy publiczne nie są skonfigurowane na tym serwerze",
+        "description": "Operator musi ustawić MOTIR_PUBLIC_TENANT_DOMAIN, zanim obszar roboczy będzie mógł zająć nazwę."
+      },
+      "field": {
+        "label": "Nazwa",
+        "renameLabel": "Nowa nazwa",
+        "hint": "Małe litery, cyfry i pojedyncze łączniki; od {min} do {max} znaków. Obszar roboczy ma jedną nazwę.",
+        "preview": "Czytelnicy znajdą cię pod adresem {host}"
+      },
+      "claim": "Zajmij nazwę",
+      "refusal": {
+        "tooShort": "Użyj co najmniej {min} znaków.",
+        "badGrammar": "Używaj tylko małych liter, cyfr i łączników.",
+        "doubleHyphen": "Nazwa nie może zawierać dwóch łączników z rzędu — są zarezerwowane dla adresów aplikacji.",
+        "tooLong": "Użyj najwyżej {max} znaków.",
+        "taken": "{host} jest zajęty. Spróbuj innej nazwy.",
+        "reserved": "„{label}” jest zarezerwowana. Wybierz inną nazwę.",
+        "quarantined": "{host} został niedawno zwolniony i jest wstrzymany do {date}. Od tego dnia każdy może go zająć.",
+        "generic": "Nie udało się zapisać nazwy. Spróbuj ponownie."
+      },
+      "row": {
+        "live": "Aktywny",
+        "copy": "Kopiuj adres",
+        "copied": "Skopiowano adres",
+        "open": "Otwórz w nowej karcie"
+      },
+      "rename": "Zmień nazwę",
+      "release": "Zwolnij",
+      "lock": "Nazwę można zmienić ponownie {date}. Zmiana nazwy i zwolnienie liczą się jako jedna zmiana, raz na 30 dni.",
+      "lockShort": "Nazwę można zmienić ponownie {date}.",
+      "review": "Sprawdź",
+      "cancel": "Anuluj",
+      "confirm": {
+        "renameTitle": "Zmienić nazwę na {host}?",
+        "releaseTitle": "Zwolnić {host}?",
+        "stops": "{host} przestaje odpowiadać od teraz.",
+        "returnsOn": "Każdy może go zająć od {date}.",
+        "returnsNow": "Każdy może go zająć od razu — był używany krócej niż 24 godziny.",
+        "noRedirectRename": "Stary adres nie przekierowuje na nowy, więc zaktualizuj udostępnione linki.",
+        "noRedirectRelease": "Nie ma przekierowania. Projekty publiczne pozostają pod adresami motir.co.",
+        "lockAfterRename": "Nazwy nie można zmienić ponownie przed {date}.",
+        "lockAfterRelease": "Nową nazwę możesz zająć od razu. Kolejna zmiana po tym będzie możliwa od {date}.",
+        "rename": "Zmień nazwę",
+        "renaming": "Zmienianie nazwy…",
+        "release": "Zwolnij nazwę",
+        "releasing": "Zwalnianie…"
+      },
+      "toast": {
+        "claimed": "{host} jest twój",
+        "renamed": "Zmieniono nazwę na {host}",
+        "renamedBody": "{old} już nie odpowiada.",
+        "released": "Zwolniono {host}",
+        "refusedTitle": "Nazwa nie została zmieniona",
+        "refusedLimit": "Możesz ją zmienić ponownie {date}.",
+        "refusedTaken": "{host} został właśnie zajęty. Spróbuj innej nazwy.",
+        "refusedQuarantined": "{host} jest wstrzymany do {date}."
+      },
+      "released": {
+        "held": "Zwolniono {host}. Jest wstrzymany do {date}, potem każdy może go zająć.",
+        "free": "Zwolniono {host}. Każdy może go teraz zająć.",
+        "lock": "Możesz teraz zająć nazwę. Kolejna zmiana po tym będzie możliwa od {date}."
+      },
+      "loadError": "Nie udało się wczytać adresu.",
+      "retry": "Spróbuj ponownie",
+      "echo": {
+        "title": "Adres obszaru roboczego",
+        "claimedSub": "Nazwa, pod którą odpowiada obszar roboczy.",
+        "noneSub": "Obszar roboczy nie ma jeszcze nazwy.",
+        "projectPage": "Publiczna strona tego projektu jest pod adresem {url}.",
+        "change": "Zmień w ustawieniach obszaru roboczego →",
+        "claim": "Zajmij nazwę dla obszaru roboczego →"
+      }
     }
   },
   "boards": {
@@ -6501,7 +6700,7 @@
       "yourPlanTitle": "Twój plan",
       "needMore": {
         "title": "Potrzebujesz więcej kredytów?",
-        "body": "Jeśli Twoja organizacja zużywa więcej niż {credits} kredytów miesięcznie z planu {plan}, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę kredytów dopasowaną do niego.",
+        "body": "Jeśli Twoja organizacja zużywa więcej niż {credits} kredytów miesięcznie z planu {plan}, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę kredytów dopasowaną do niego, z własnymi kontami AWS.",
         "bodyHeld": "Jeśli Twoja organizacja wyrasta ze swoich {credits} kredytów miesięcznie, oszacuj swoje zużycie, a kalkulator zaproponuje większą pulę dopasowaną do niego.",
         "action": "Otwórz kalkulator"
       },
@@ -6509,10 +6708,6 @@
       "recommended": "Zalecany",
       "creditsAllotment": "{n} kredytów / mies.",
       "creditsAllotmentOneTime": "{n} kredytów · jednorazowo",
-      "ladder": {
-        "first": "Ta sama cena za kredyt w każdym planie",
-        "multiple": "{multiple}× kredytów planu {plan} · ta sama cena za kredyt"
-      },
       "perMoEquiv": "${n} / mies.",
       "annualSub": "rozliczane rocznie · ${yr} / rok",
       "annualSave": "Oszczędź ${n}/rok",
@@ -6636,6 +6831,8 @@
         "caption": "Twoja szacunkowa wartość to od {low} do {high} kredytów miesięcznie. Ta pula jest dopasowana do górnej granicy zakresu, więc nie zabraknie jej. To szacunek, który zmienia się razem z Twoim.",
         "captionCurrent": "To pula, którą kupiono, wyliczona z szacunku od {low} do {high} kredytów miesięcznie. Późniejszy, niższy szacunek nie zmienia ceny planu, który już masz.",
         "priceEstimate": "Wyliczone z Twojego szacunku",
+        "ownAccounts": "Trzy własne konta AWS Twojej organizacji: jedno dla runnerów CI, jedno dla uruchomień agentów i jedno wspólne dla indeksera i hostowanych agentów, każde dopasowane do tej puli",
+        "sharedUntilGranted": "Dopóki przydziały zasobów każdego konta nie zostaną zatwierdzone, plan działa z limitami planu Max na wspólnych pulach Motir",
         "basis": {
           "monthly": "Wyceniane od miesięcznej ceny planu {plan}; każdy kredyt ponad jego pulę jest tańszy niż przy doładowaniu.",
           "annual": "Wyceniane po tej samej cenie za kredyt co {plan} w rozliczeniu rocznym. Płatność jest raz w roku, a pula nadal przychodzi co miesiąc."
@@ -6679,9 +6876,12 @@
         "lowLabel": "Dolna",
         "highLabel": "Górna",
         "runCategoriesLabel": "Modele, których używa runner",
-        "runCategoriesHelp": "Wybierz od jednej do trzech. Uruchomienia są dzielone po równo między wybrane kategorie: jedna dostaje 100%, dwie po 50%, wszystkie trzy po 33%. Modelu nigdy nie wybierasz — każda kategoria pokazuje obsługiwane modele jako przykłady.",
+        "runCategoriesHelp": "Wybierz od jednej do trzech. Przy dwóch lub trzech przeciągnij poniżej udział każdej w wykonaniu — na początku są równe. Nigdy nie wybierasz modelu — każda kategoria podaje jako przykłady modele, które obsługuje.",
         "categoryShare": "{share} uruchomień",
         "categoryExamples": "Na przykład: {models}",
+        "sharesLabel": "Udział każdej kategorii w wykonaniu",
+        "sharesHelp": "Przeciągnij udział, a pozostałe oddadzą lub przejmą różnicę po równo, więc zawsze sumują się do 100%. Dodanie lub usunięcie kategorii znów wyrównuje udziały.",
+        "shareValue": "{category}: {share}% wykonania",
         "submit": "Oszacuj kredyty"
       },
       "categories": {
@@ -6690,7 +6890,7 @@
       },
       "split": {
         "one": "Jedna kategoria, więc wszystkie uruchomienia przypadają na {category}.",
-        "even": "Uruchomienia są podzielone po równo między {categories} — po {shares}."
+        "shares": "Wykonanie jest podzielone tak: {shares}."
       },
       "result": {
         "idle": "Nic nie jest szacowane, dopóki o to nie poprosisz: wpisz przedział, wybierz od jednej do trzech kategorii, a potem wybierz „Oszacuj kredyty”.",
@@ -6708,6 +6908,7 @@
         "largestPoolLabel": "Największa pula kredytów",
         "largestPool": "Twój szacunek przekracza naszą największą pulę, więc odpowiedzią jest ta pula — {plan} — z doładowaniami na resztę.",
         "largestPoolTopUp": "Pozostałe około {excess} kredytów miesięcznie pokrywają doładowania: {units} × {unitCredits} kredytów, około {price} $ miesięcznie.",
+        "regularWithTopUps": "Twój szacunek przekracza {credits} kredytów miesięcznie z planu {plan}, więc odpowiedzią jest {plan} z doładowaniami na resztę.",
         "aboveTopRung": "To więcej niż {ceiling} kredytów miesięcznie w największym zwykłym planie, a większa pula nie jest teraz dostępna, więc nadwyżkę pokrywają doładowania kredytów.",
         "upgradeNote": "Zmiana na wyższy plan w trakcie okresu jest wyceniana za pozostałe dni. Kwota jest pokazywana, zanim cokolwiek zostanie pobrane.",
         "goToPlan": "Przejdź do tego planu"
@@ -6793,6 +6994,156 @@
     "internalBilling": {
       "badge": "Rozliczenie wewnętrzne",
       "note": "Ta organizacja jest obciążana dokładnie tak jak klient, a następnie otrzymuje zwrot — każda poniższa wartość jest prawdziwa, a saldo bilansuje się do zera."
+    },
+    "fleetUse": {
+      "title": "Wykorzystanie floty",
+      "lead": "Ile plan pozwala uruchomić naraz, co teraz działa i co czeka",
+      "yourPlan": "Plan:",
+      "planNotRead": "Nie odczytano planu",
+      "noPlanLimits": "Brak limitów planu",
+      "loading": "Wczytywanie…",
+      "label": {
+        "agentRunsInParallel": "Równoległe uruchomienia agentów",
+        "agentsInOrg": "Hostowane agenty na organizację",
+        "agentsPerPerson": "Hostowane agenty na osobę",
+        "ciJobsInFlight": "Trwające zadania CI"
+      },
+      "explain": {
+        "agentRunsInParallel": "Zadania hostowanych agentów działające naraz. Kolejne czekają w kolejce.",
+        "agentsInOrg": "Aktywne hostowane agenty w całej organizacji, działające lub uśpione. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
+        "agentsPerPerson": "Aktywne hostowane agenty, które może mieć jedna osoba. Powyżej limitu nowy jest odrzucany, a nie kolejkowany.",
+        "ciJobsInFlight": "Zadania CI działające naraz na runnerach Motir. Kolejne czekają w kolejce."
+      },
+      "inUseOf": "{inUse} z {figure}",
+      "membersAt": "{count, plural, one {# członek} few {# członków} many {# członków} other {# członka}} na poziomie {figure} z {figure}",
+      "running": "Działa: {count}",
+      "noLimit": "Bez limitu",
+      "notRead": "Nie odczytano",
+      "source": {
+        "staffOverride": "Ustawione przez Motir dla organizacji: {figure} zadań CI naraz",
+        "notRead": "Nie odczytano limitu CI, więc zadania CI czekają, aż będzie można go odczytać. Pozostałe liczby są aktualne.",
+        "granted": {
+          "agentRunsInParallel": "{figure} — {vcpu} przyznanych vCPU ÷ 2 na własnym koncie runnera agentów",
+          "ciJobsInFlight": "{figure} — {vcpu} przyznanych vCPU ÷ 2 na własnym koncie runnera CI"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "Konto runnera agentów jest wciąż na wspólnym minimum, z limitami planu Max",
+          "ciJobsInFlight": "Wspólne minimum, dopóki konto runnera CI nie zacznie działać: runnery: {figure}"
+        }
+      },
+      "waiting": {
+        "none": "Nic nie czeka",
+        "count": "W kolejce: {count}",
+        "planLimit": "Przez limit planu · zmiana planu go znosi",
+        "poolFull": {
+          "agentRunsInParallel": "Wszystkie konta runnerów agentów są pełne · to pojemność Motir, nie plan",
+          "ciJobsInFlight": "Wszystkie konta runnerów CI są pełne · to pojemność Motir, nie plan"
+        },
+        "other": "Z innego powodu"
+      },
+      "indexing": "Indeksowanie grafu kodu: działa {count} · nie wlicza się do żadnego limitu planu",
+      "indexingNotRead": "Indeksowanie grafu kodu: nie odczytano · nie wlicza się do żadnego limitu planu",
+      "whereItRuns": "Gdzie to działa",
+      "kind": {
+        "ci_runner": "Runner CI",
+        "code_graph_index": "Indekser",
+        "hosted_agent": "Runner agentów",
+        "agent_instance": "Hosting agentów"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Wspólna pula AWS Motir",
+        "own_aws_account": "Własne konto AWS organizacji"
+      },
+      "notReadNotice": "Nie udało się odczytać limitów planu ani tego, co działa. To nie jest zero, tylko wartość nieznana.",
+      "tryAgain": "Spróbuj ponownie",
+      "noPlanLimitsNote": "Tę organizację prowadzi Motir i nie ma ona limitów planu. To, co działa, jest pokazane bez limitu.",
+      "noFleet": "Plan nie obejmuje uruchomień hostowanych agentów, runnerów CI ani agentów. Wybierz plan w Motir AI powyżej, aby je uruchamiać.",
+      "accounts": {
+        "title": "Własne konta AWS",
+        "notRead": "Nie udało się teraz odczytać stanu kont.",
+        "kind": {
+          "ci_runner": "Runner CI",
+          "hosted_agent": "Runner agentów",
+          "indexer_and_hoster": "Indekser + hosting agentów"
+        },
+        "role": {
+          "ci_runner": "Uruchamia zadania CI",
+          "hosted_agent": "Uruchamia zadania hostowanych agentów",
+          "indexer_and_hoster": "Indeksuje kod i hostuje agenty"
+        },
+        "state": {
+          "created": "Utworzone",
+          "quota_requested": "Złożono wniosek o limit",
+          "granted": "Przyznane",
+          "live": "Działa"
+        },
+        "quotaDenied": "Limit odrzucony",
+        "since": "od {when}",
+        "vcpuAsked": "Wnioskowane vCPU",
+        "vcpuGranted": "Przyznane vCPU",
+        "noneYet": "Jeszcze brak",
+        "sharedFloor": {
+          "ci_runner": "Wciąż na wspólnym minimum: runnery CI: {figure}.",
+          "hosted_agent": "Wciąż na wspólnym minimum, z limitami planu Max: uruchomienia agentów naraz: {figure}.",
+          "indexer_and_hoster": "Indeksowanie i hosting agentów są wciąż na wspólnym minimum: hostowane agenty {perPerson} na osobę, {perOrg} na organizację."
+        },
+        "liveOnceNetwork": "Zacznie działać, gdy sieć konta zostanie zbudowana.",
+        "deniedNote": "Konto pozostaje w stanie „{state}”, dopóki AWS nie przyzna zwiększenia.",
+        "keptSpots": "Miejsca na maszyny zawsze zarezerwowane na indeksowanie: {count}; instancje agentów korzystają z reszty."
+      },
+      "quotaOutcome": {
+        "pending": "W toku po stronie AWS",
+        "case_opened": "AWS otworzył sprawę",
+        "approved": "Zatwierdzone przez AWS",
+        "denied": "Odrzucone przez AWS",
+        "not_approved": "Niezatwierdzone przez AWS",
+        "case_closed": "AWS zamknął sprawę",
+        "invalid_request": "AWS nie mógł odczytać wniosku"
+      },
+      "request": {
+        "button": "Poproś o więcej mocy",
+        "status": {
+          "open": "Wysłana",
+          "filed": "Złożona w AWS",
+          "closed": "Zamknięta"
+        },
+        "granted": "Przyznano vCPU: {vcpu}",
+        "asked": "Poproszono o vCPU: {vcpu} ({date})",
+        "line": {
+          "open": "Wysłana do Motir, które składa ją w AWS",
+          "filed": "Motir złożyło ją w AWS; AWS jeszcze nie odpowiedział",
+          "granted": "AWS przyznał; liczby zaktualizują się przy następnym odczycie",
+          "denied": "AWS odrzucił zwiększenie; możesz poprosić ponownie",
+          "closedNote": "Zamknięta przez Motir: „{note}”",
+          "closed": "Zamknięta przez Motir; odpowiedź AWS: {outcome}"
+        }
+      },
+      "dialog": {
+        "title": "Poproś o więcej mocy",
+        "account": "Konto: {account} · przyznane vCPU: {vcpu}. Motir składa wniosek o zwiększenie w AWS i przekaże odpowiedź AWS.",
+        "accountNoneGranted": "Konto: {account} · jeszcze nie przyznano vCPU. Motir składa wniosek o zwiększenie w AWS i przekaże odpowiedź AWS.",
+        "figureLabel": "Potrzebne vCPU",
+        "figurePlaceholder": "np. 300",
+        "figureHelp": "Liczba całkowita większa niż obecnie przyznana.",
+        "figureInvalid": "Wpisz liczbę całkowitą większą niż {granted} (obecnie przyznane vCPU).",
+        "reasonLabel": "Dlaczego są potrzebne",
+        "reasonPlaceholder": "Czego zabraknie i kiedy",
+        "reasonHelp": "Do 2000 znaków. Motir przeczyta to przed złożeniem w AWS.",
+        "reasonInvalid": "Podaj powód, maksymalnie 2000 znaków.",
+        "cancel": "Anuluj",
+        "send": "Wyślij prośbę",
+        "sending": "Wysyłanie…",
+        "sent": "Prośba wysłana. Motir przekaże odpowiedź AWS.",
+        "refused": {
+          "open": "Dla tego konta jest już otwarta prośba. Jej stan widać w wierszu konta; poproś ponownie, gdy zostanie zamknięta.",
+          "notFound": "Organizacja nie ma jeszcze własnego konta tego rodzaju, więc nie ma czego zwiększać. Zostanie utworzone po zakupie Host.",
+          "forbidden": "O więcej mocy mogą prosić tylko właściciele lub administratorzy organizacji.",
+          "network": "Nie udało się wysłać prośby. Sprawdź połączenie i spróbuj ponownie — nic nie zostało wysłane.",
+          "invalid": "Nie udało się odczytać prośby. Sprawdź oba pola i wyślij ją ponownie.",
+          "failed": "Prośba nie została wysłana. Spróbuj ponownie za chwilę."
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -7249,7 +7600,8 @@
       "install_error": "Nie udało się dokończyć konfiguracji aplikacji GitHub App. Spróbuj zainstalować ponownie.",
       "select_repos": "Motir GitHub App jest zainstalowana. Wybierz, które repozytoria tego konta łączy ta organizacja.",
       "repo_unavailable": "To repozytorium jest już połączone z inną organizacją, więc nie zostało tu dodane. Nic innego się nie zmieniło.",
-      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione."
+      "installation_not_accessible": "Nie widzisz tego konta GitHub w serwisie GitHub, więc nie zostało ono połączone z tą organizacją. Nic nie zostało zmienione.",
+      "identity_refused": "GitHub nie akceptuje już Twojego logowania do GitHuba, więc Motir nie mógł dokończyć łączenia aplikacji. W Ustawienia → Konto → Konta Git odłącz swoje konto i połącz je ponownie, a potem spróbuj jeszcze raz."
     },
     "connect": {
       "title": "Połącz GitHuba",
@@ -7372,6 +7724,8 @@
         },
         "conflictOn": "<prs></prs> jest w konflikcie z {base} i nie może zostać scalony.",
         "conflictOnNoBase": "<prs></prs> jest w konflikcie ze swoją gałęzią bazową i nie może zostać scalony.",
+        "outOfDateOn": "<prs></prs> pozostaje w tyle za {base}, która wymaga aktualności, i nie może zostać scalony.",
+        "outOfDateOnNoBase": "<prs></prs> pozostaje w tyle za gałęzią bazową, która wymaga aktualności, i nie może zostać scalony.",
         "howConflict": "Agent wykonuje rebase lub rozwiązuje konflikt na własnej gałęzi pull requesta, wypycha zmiany, a testy uruchamiają się ponownie.",
         "rearm": "Nie ma tu nic do zatwierdzenia. Wypchnięcie przesuwa HEAD, co ponownie uzbraja pytanie, a następny zielony wynik raz podniesie bramkę scalania — dla nowych commitów.",
         "sentBackByAgent": "Agent przeglądu odesłał te commity. Agent naprawia je w ramach {count, plural, one {tego samego pull requesta} few {tych samych pull requestów} many {tych samych pull requestów} other {tych samych pull requestów}}, z jego ustaleniami w prompcie.",
@@ -7527,6 +7881,14 @@
         "failing": "Testy nie przechodzą",
         "running": "Testy w toku"
       },
+      "preview": {
+        "building": "Podgląd w budowie",
+        "ready": "Podgląd gotowy",
+        "failed": "Podgląd nie powiódł się",
+        "failedReason": "Podgląd nie powiódł się · <tone>{reason}</tone>",
+        "closed": "Podgląd zamknięty",
+        "unknown": "Podgląd {state}"
+      },
       "linkPr": "Powiąż pull request",
       "linkPrField": "Pull request do powiązania",
       "searchPlaceholder": "Szukaj pull requestów…",
@@ -7647,7 +8009,9 @@
       "identity": {
         "title": "Najpierw połącz swoje konto GitHub",
         "body": "Motir wyświetla konta GitHub, które widzisz dzięki własnej tożsamości GitHub. Połącz ją w Ustawienia → Konto → Konta Git, a potem wróć tutaj.",
-        "action": "Przejdź do kont Git"
+        "action": "Przejdź do kont Git",
+        "refusedTitle": "Połącz ponownie swoje konto GitHub",
+        "refusedBody": "GitHub nie akceptuje już logowania, które Motir ma dla Ciebie: zostało odwołane lub wygasło. W Ustawienia → Konto → Konta Git odłącz je i połącz ponownie, a potem wróć tutaj. Nic nie zostało zmienione."
       },
       "cancel": "Anuluj",
       "back": "Wszystkie konta",
@@ -8433,7 +8797,7 @@
       "clearEnough": "Wystarczająco jasne, by zaplanować bez zmian.",
       "nothingSettled": "Nic nie ustalono, więc prośba zostanie zaplanowana bez zmian.",
       "requirementSaved": "Zapisano jako <link>{title}</link> w Dokumentach wymagań.",
-      "requirementNotSaved": "<lead>Nie udało się zapisać wymagania.</lead> Nic nie zostało uruchomione. Potwierdź nadal jest dostępne – spróbuj ponownie."
+      "requirementPageNotSaved": "<lead>Nie udało się zapisać wymagania jako strony.</lead> Planowanie nadal z niego korzysta."
     },
     "logBugOffer": {
       "label": "Propozycja zgłoszenia błędu",
@@ -9214,10 +9578,73 @@
     "outcomeNeedsAccess": "Dokończ konfigurację dostępu",
     "connectGithub": "Połącz GitHuba",
     "stateCreated": "Utworzono",
-    "createdDetail": "Hostowane przez Motir · utworzone z szablonu Motir Next.js.",
+    "createdDetail": "Hostowane przez Motir · utworzone z szablonu {seed}.",
     "stateFailed": "Nie udało się utworzyć",
     "actionError": "To się nie udało. Nic nie zostało zmienione — spróbuj ponownie.",
-    "promiseDoor": "Jak działa przenoszenie"
+    "promiseDoor": "Jak działa przenoszenie",
+    "stateProposed": "Jeszcze nie utworzono",
+    "createdDetailInitialised": "Hostowane przez Motir · utworzone jako zainicjowane repozytorium.",
+    "createdDetailNoSeed": "Hostowane przez Motir.",
+    "seed": {
+      "starterPillLabel": "Startuje z {label}",
+      "targetPillLabel": "Hostowane na {target}",
+      "default": "Domyślny",
+      "noTarget": "Brak celu hostingu",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Narzędzie wewnętrzne",
+        "mvp": "MVP",
+        "planned_product": "Planowany produkt"
+      },
+      "size": {
+        "small": "Mały",
+        "medium": "Średni",
+        "large": "Duży"
+      },
+      "why": {
+        "matched": "<b>Dlaczego ten szablon:</b> wdraża się na {target} i jest przeznaczony dla {use, select, internal_tool {narzędzia wewnętrznego} mvp {MVP} planned_product {planowanego produktu} other {tego zastosowania}} tej wielkości.",
+        "matchedTarget": "<b>Dlaczego ten szablon:</b> wdraża się na {target}.",
+        "softUse": "<b>Dlaczego ten szablon:</b> to najbliższy szablon wdrażany na {target}. Żaden szablon {target} nie jest przeznaczony dla {use, select, internal_tool {narzędzia wewnętrznego} mvp {MVP} planned_product {planowanego produktu} other {tego zastosowania}}.",
+        "softSize": "<b>Dlaczego ten szablon:</b> to najbliższy szablon wdrażany na {target}. Żaden szablon {target} nie jest przeznaczony dla repozytorium tej wielkości.",
+        "notDeployed": "<b>Dlaczego ten szablon:</b> to szablon Motir dla aplikacji {role}. Hosting Motir nie wdraża tego repozytorium, więc hosting nie jest pokazywany.",
+        "noStackSignal": "<b>Dlaczego ten szablon:</b> plan nie mówi, jakiego stosu używa to repozytorium, więc startuje ono z typowego szablonu dla repozytorium web na {target}. Wybierz inny, jeśli znasz stos.",
+        "noTarget": "<b>Dlaczego ten szablon:</b> to repozytorium nie ma jeszcze celu hostingu, więc startuje z typowego szablonu dla repozytorium web.",
+        "noMatch": "<b>Dlaczego ten szablon:</b> nie ma szablonu dla repozytorium {role} {where, select, target {na {target}} other {z tym stosem}}, więc startuje ono jako zainicjowane repozytorium: puste repozytorium z plikiem README.",
+        "byHand": "<b>Dlaczego ten szablon:</b> ktoś wybrał go ręcznie dla tego repozytorium."
+      },
+      "fact": {
+        "hosting": "Hosting",
+        "use": "Zastosowanie",
+        "size": "Wielkość",
+        "stack": "Stos",
+        "not_set": "Nie ustawiono",
+        "not_named": "Nie podano",
+        "none": "Brak",
+        "notServed": "· nieobsługiwane",
+        "noRoleStarter": "· żaden szablon {role} nie wdraża się tutaj"
+      },
+      "picker": {
+        "label": "Szablon",
+        "groupTarget": "Szablony {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Inne}} na {target}",
+        "groupRole": "Szablony {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Inne}}",
+        "groupAny": "Dowolne repozytorium",
+        "initialisedSub": "Puste repozytorium z plikiem README",
+        "footerTarget": "Tylko szablony dla repozytorium {role}, które wdrażają się na {target}.",
+        "footerNoTarget": "Tylko szablony dla repozytorium {role}. To repozytorium nie ma jeszcze celu hostingu."
+      },
+      "refusal": {
+        "targetMismatch": "<b>Nie można tu użyć {label}.</b> Wdraża się na {targets}, a to repozytorium działa na {target}. Szablon się nie zmienił.",
+        "targetMismatchNoTarget": "<b>Nie można tu użyć {label}.</b> Wdraża się na {targets}, a to repozytorium nie ma celu hostingu. Szablon się nie zmienił.",
+        "retired": "<b>Szablon {label} został wycofany.</b> Motir już go nie oferuje, więc wybierz inny szablon. Szablon się nie zmienił.",
+        "roleMismatch": "<b>Nie można tu użyć {label}.</b> To szablon dla repozytorium {entryRole}, a to repozytorium ma rolę {role}. Szablon się nie zmienił.",
+        "notEditable": "<b>To repozytorium zostało już utworzone,</b> więc nie może już startować z innego szablonu. Odśwież, aby je zobaczyć.",
+        "unknown": "<b>Ten szablon już nie istnieje.</b> Wybierz inny szablon. Szablon się nie zmienił."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repozytoria",
@@ -9611,6 +10038,8 @@
         "queueFailedBare": "Niepowodzenie w kolejce scalania",
         "conflicted": "Konflikt z <d>{base}</d>",
         "conflictedNoBase": "Konflikt z gałęzią bazową",
+        "outOfDate": "Nieaktualny względem <d>{base}</d>",
+        "outOfDateNoBase": "Nieaktualny względem gałęzi bazowej",
         "ciFailed": "CI nie przeszło · <d>{check}</d>",
         "ciFailedBare": "CI nie przeszło",
         "changesRequested": "Zmiany zażądane przez <b>{name}</b> — „{note}”",
@@ -9894,7 +10323,9 @@
       "navIdeas": "Pomysły",
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty",
-      "navCapacity": "Pojemność dostawców"
+      "navCapacity": "Pojemność dostawców",
+      "navJobs": "Zadania",
+      "navStarters": "Szablony"
     },
     "nav": {
       "overview": "Przegląd",
@@ -10116,6 +10547,13 @@
             "limits": {
               "edit": "Edytowano limity pojemności modelu dostawcy"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Ponownie uruchomiono niedostarczony wpis"
+          },
+          "seed_registry": {
+            "promote": "Awansowano repozytorium na szablon startowy",
+            "retire": "Wycofano szablon startowy"
           }
         }
       }
@@ -11661,8 +12099,8 @@
           "override": "nadpisanie"
         },
         "facts": {
-          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · działający agenci: {running} · zadania CI naraz: {ci}",
-          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · działający agenci: {running} · limit CI nieczytelny",
+          "plan": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · zadania CI naraz: {ci}",
+          "planCiUnreadable": "Plan <strong>{plan}</strong> · hostowane uruchomienia naraz: {runs} · agenci na osobę: {perUser} · agenci: {agents} · limit CI nieczytelny",
           "planExempt": "Plan <strong>Brak limitu planu</strong>",
           "planExemptOverride": "Plan <strong>Brak limitu planu</strong> · zadania CI naraz: {ci} (nadpisanie)",
           "planUnknown": "Plan <strong>nieznany · {key}</strong> · nowe kontenery odrzucane",
@@ -12411,6 +12849,250 @@
         "notPermitted": "Twoja rola nie może edytować limitów, więc nic nie zostało zapisane.",
         "failed": "Nie udało się zapisać limitów. Nic nie zostało zmienione; spróbuj ponownie."
       }
+    },
+    "jobs": {
+      "breadcrumb": "Platforma · Zadania",
+      "title": "Zadania",
+      "subtitle": "Każde zadanie w tle uruchomione przez platformę, w każdym obszarze roboczym i poza nimi, oraz każdy wpis niedostarczony czekający na ponowne uruchomienie.",
+      "tabsLabel": "Widoki rejestru zadań",
+      "tabs": {
+        "runs": "Uruchomienia",
+        "dlq": "Niedostarczone",
+        "waiting": "Oczekujące: {count}"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Wszystkie",
+        "running": "W toku",
+        "succeeded": "Powodzenie",
+        "failed": "Niepowodzenie",
+        "abandoned": "Porzucone"
+      },
+      "columns": {
+        "function": "Funkcja",
+        "event": "Zdarzenie",
+        "functionEvent": "Funkcja · zdarzenie",
+        "workspace": "Obszar roboczy",
+        "status": "Status",
+        "attempt": "Próba",
+        "attempts": "Próby",
+        "started": "Rozpoczęto",
+        "duration": "Czas trwania",
+        "failure": "Błąd",
+        "lastFailed": "Ostatni błąd",
+        "replay": "Uruchom ponownie"
+      },
+      "runsCaption": "Uruchomienia zadań w tle",
+      "dlqCaption": "Niedostarczone",
+      "noWorkspace": "Brak obszaru roboczego",
+      "pageLabel": "Strona {page}",
+      "pagerLabel": "Strony uruchomień",
+      "previous": "Poprzednia",
+      "next": "Następna",
+      "runsEmpty": {
+        "titleAll": "Brak uruchomień",
+        "bodyAll": "Zadania w tle pojawiają się tutaj po uruchomieniu.",
+        "titleStatus": "Brak uruchomień o tym statusie",
+        "bodyStatus": "Nic w rejestrze nie ma tego statusu. Wybierz Wszystkie, aby zobaczyć każde uruchomienie."
+      },
+      "runsError": {
+        "title": "Nie udało się odczytać rejestru zadań"
+      },
+      "dlqError": {
+        "title": "Nie udało się odczytać niedostarczonych"
+      },
+      "error": {
+        "body": "Baza danych nie odpowiedziała. Nic nie zostało zmienione."
+      },
+      "retry": "Spróbuj ponownie",
+      "loadingRuns": "Wczytywanie uruchomień",
+      "readOnly": "Tylko do odczytu. Ponowne uruchomienie wpisu niedostarczonego wymaga roli operatora.",
+      "fn": {
+        "label": "Funkcja",
+        "all": "Wszystkie funkcje"
+      },
+      "waitingLine": "Oczekujące: {waiting} · uruchomione ponownie w ostatnich 7 dniach: {replayed}",
+      "capped": "Wyświetlono {shown} z {count}. Lista pokazuje 200 najnowszych.",
+      "replay": "Uruchom ponownie",
+      "replayAria": "Uruchom ponownie niedostarczony wpis {function}",
+      "replayedAt": "Uruchomiono ponownie {time}",
+      "toast": {
+        "replayedTitle": "Wpis niedostarczony uruchomiono ponownie",
+        "replayedBody": "{function} wysłano ponownie.",
+        "alreadyTitle": "Już uruchomiono ponownie",
+        "alreadyBody": "Ktoś inny uruchomił już ponownie ten wpis. Nic nie zostało wysłane ponownie.",
+        "failedTitle": "Ponowne uruchomienie nie powiodło się",
+        "failedBody": "Nic nie zostało wysłane. Spróbuj ponownie.",
+        "notPermittedBody": "Ponowne uruchomienie wpisu niedostarczonego wymaga roli operatora.",
+        "notFoundBody": "Ten wpis niedostarczony już nie istnieje."
+      },
+      "replayAll": {
+        "button": "Uruchom ponownie wszystkie ({count})",
+        "title": "Uruchomić ponownie {count} niedostarczonych wpisów {function}?",
+        "body": "Każdy zostanie wysłany ponownie jako nowe uruchomienie i zapisany w dzienniku audytu platformy. Wpis, który ktoś inny uruchomi wcześniej, zostanie pominięty.",
+        "confirm": "Uruchom ponownie ({count})",
+        "cancel": "Anuluj",
+        "running": "Trwa ponowne uruchamianie…",
+        "runningLine": "Trwa ponowne uruchamianie wpisów ({count}), po 50 naraz. Nie zamykaj tego okna do końca.",
+        "doneTitle": "Ponowne uruchamianie zakończone",
+        "doneWithFailuresTitle": "Ponowne uruchamianie zakończone z błędami",
+        "replayed": "Uruchomiono ponownie: {count}",
+        "already": "Już uruchomione ponownie przez kogoś innego: {count}",
+        "nothingLeft": "Uruchomiono ponownie: 0 — wszystkie ({count}) były już uruchomione",
+        "failed": "Nie udało się uruchomić ponownie: {count}. Pozostają na liście; uruchom je ponownie pojedynczo.",
+        "error": "Nie udało się rozpocząć ponownego uruchamiania. Nic nie zostało zmienione.",
+        "close": "Gotowe"
+      },
+      "dlqEmpty": {
+        "title": "Nic nie czeka",
+        "body": "Żadne zadanie nie wyczerpało prób. Wpisy niedostarczone pojawią się tutaj, gdy to nastąpi."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Operacje · Szablony",
+      "title": "Szablony",
+      "subtitle": "Od czego startuje repozytorium tworzone przez Motir. Dopasowanie wybiera spośród aktywnych szablonów według roli, celu hostingu, zastosowania i wielkości. Awansuj na szablon repozytorium utworzone przez Motir albo wycofaj szablon.",
+      "promote": "Awansuj repozytorium",
+      "card": {
+        "title": "Biblioteka szablonów",
+        "count": "Najnowsze najpierw · {count, plural, one {# szablon} few {# szablony} many {# szablonów} other {# szablonu}}"
+      },
+      "filter": {
+        "label": "Filtruj szablony",
+        "role": "Rola",
+        "status": "Status",
+        "target": "Cel hostingu",
+        "anyRole": "Dowolna rola",
+        "anyTarget": "Dowolny cel",
+        "all": "Wszystkie"
+      },
+      "status": {
+        "active": "Aktywny",
+        "retired": "Wycofany"
+      },
+      "notDeployed": "Niewdrażany przez hosting Motir",
+      "col": {
+        "starter": "Szablon",
+        "roleStack": "Rola · stos",
+        "serves": "Obsługuje",
+        "hosting": "Hosting",
+        "status": "Status",
+        "provenance": "Pochodzenie",
+        "actions": "Akcje"
+      },
+      "alsoAnswersTo": "Odpowiada też na {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "dowolna rola · dowolny stos",
+      "everyUse": "Każde zastosowanie",
+      "everySize": "Każda wielkość",
+      "provenance": {
+        "shipped": "Dostarczony z Motir",
+        "promoted": "Awansowany przez <b>{email}</b> dnia {date} z {repo} w <mono>{ref}</mono>",
+        "promotedNoRepo": "Awansowany przez <b>{email}</b> dnia {date} w <mono>{ref}</mono>",
+        "retired": "Wycofany przez <b>{email}</b> dnia {date}: „{reason}”",
+        "removedAccount": "usunięte konto"
+      },
+      "defaultForRole": "Domyślny dla {role}",
+      "defaultForEveryRole": "Domyślny dla każdej roli",
+      "empty": {
+        "title": "Żaden szablon nie pasuje do tych filtrów",
+        "bodyRoleTarget": "Żaden aktywny szablon dla repozytorium {role} nie wdraża się na {target}. Wyczyść filtry, aby zobaczyć całą bibliotekę.",
+        "body": "Żaden szablon nie pasuje do tych filtrów.",
+        "clear": "Wyczyść filtry"
+      },
+      "pager": {
+        "label": "Strony",
+        "showing": "{from}–{to} z {total}",
+        "previous": "Poprzednia strona",
+        "next": "Następna strona"
+      },
+      "retire": {
+        "action": "Wycofaj",
+        "title": "Wycofać {label}?",
+        "body": "Dopasowanie przestaje go wybierać, a wybór szablonu przestaje go oferować. Repozytoria już z niego utworzone zachowują swój kod. Jeszcze nieutworzonego repozytorium, które go wskazuje, nie da się z niego utworzyć, dopóki ktoś nie wybierze innego szablonu.",
+        "reasonLabel": "Powód",
+        "reasonHelp": "Zapisywany w dzienniku audytu wraz z nazwiskiem.",
+        "cancel": "Anuluj",
+        "confirm": "Wycofaj szablon",
+        "done": "Wycofano. {label} nie jest już oferowany nowym repozytoriom.",
+        "failedTitle": "Ten szablon nie został wycofany.",
+        "failed": "Motir nie mógł go wycofać. Spróbuj ponownie.",
+        "defaultTitle": "Tego szablonu nie można wycofać.",
+        "defaultBody": "„{key}” to domyślny szablon dla repozytorium {role}. Zmiana domyślnego to decyzja, a nie akcja operatora.",
+        "defaultBodyEveryRole": "„{key}” to domyślny szablon dla każdej roli. Zmiana domyślnego to decyzja, a nie akcja operatora.",
+        "close": "Zamknij"
+      },
+      "promoteForm": {
+        "breadcrumb": "Operacje · Szablony · Awans",
+        "title": "Awansuj repozytorium",
+        "subtitle": "Motir kopiuje repozytorium w danym ref do własnej organizacji i oferuje kopię jako szablon nowym repozytoriom, które do niego pasują. Istniejące repozytoria się nie zmieniają.",
+        "field": {
+          "source": "Repozytorium utworzone przez Motir",
+          "ref": "Ref",
+          "role": "Rola",
+          "stack": "Stos",
+          "label": "Etykieta",
+          "key": "Klucz",
+          "uses": "Obsługiwane zastosowania",
+          "sizes": "Obsługiwane wielkości",
+          "targets": "Cele hostingu do wdrożenia",
+          "reason": "Powód"
+        },
+        "help": {
+          "ref": "Gałąź, tag lub commit. Szablon jest z niego kopiowany.",
+          "stack": "Jak planista nazywa ten stos, małymi literami.",
+          "label": "To, co ludzie widzą przy swoim repozytorium.",
+          "key": "Małe litery, cyfry i myślniki. To także nazwa kopii w motir-co. Nie można jej później zmienić.",
+          "targets": "Każdy musi być wymieniony w motir.hosting.json repozytorium w danym ref. Nie zaznaczaj żadnego dla szablonu, którego hosting Motir nie wdraża.",
+          "reason": "Zapisywany w dzienniku audytu wraz z nazwiskiem."
+        },
+        "source": {
+          "placeholder": "Wybierz repozytorium",
+          "empty": "Brak pasujących repozytoriów.",
+          "footer": "Tylko repozytoria utworzone przez Motir.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "przekazywane właścicielowi",
+          "notCreated": "jeszcze nie utworzono"
+        },
+        "rolePlaceholder": "Wybierz rolę",
+        "cancel": "Anuluj",
+        "review": "Sprawdź awans",
+        "confirm": {
+          "title": "Awansować {name} na szablon?",
+          "body": "Motir kopiuje <b>{repo}</b> w <b>{ref}</b> do <b>motir-co/{key}</b> i dodaje <b>{label}</b> do biblioteki. Od tej chwili dopasowanie może go wybrać dla nowego repozytorium {role}, do którego pasuje. Istniejące repozytoria się nie zmieniają.",
+          "roleStack": "Rola · stos",
+          "uses": "Zastosowania",
+          "sizes": "Wielkości",
+          "hosting": "Hosting",
+          "reason": "Powód",
+          "notDeployed": "Niewdrażany przez hosting Motir",
+          "back": "Wstecz",
+          "promote": "Awansuj"
+        },
+        "done": "Awansowano. Nowe repozytoria {role} na {target} mogą teraz startować z {label}.",
+        "doneNoTarget": "Awansowano. Nowe repozytoria {role} mogą teraz startować z {label}.",
+        "refusal": {
+          "sourceTitle": "Tego repozytorium nie można awansować.",
+          "takenOver": "Jest przekazywane właścicielowi lub już zostało przekazane, więc Motir nie może go już kopiować.",
+          "notCreated": "Awansować można tylko repozytorium utworzone przez Motir, a to jest wciąż w stanie {state}.",
+          "organizationRow": "To własne repozytorium organizacji, a Motir nigdy nie kopiuje kodu klienta.",
+          "notMotirHeld": "{repo} nie jest już w organizacji GitHub zarządzanej przez Motir.",
+          "notFound": "Już nie istnieje. Wybierz inne.",
+          "refNotFound": "„{ref}” nie jest gałęzią, tagiem ani commitem {repo}.",
+          "manifestTitle": "motir.hosting.json odrzuca ten awans.",
+          "manifestMissing": "Repozytorium nie ma pliku motir.hosting.json w <b>{ref}</b>, więc nie może deklarować celu hostingu. Dodaj plik w tym ref albo odznacz wszystkie cele hostingu.",
+          "manifestInvalid": "Plik w <b>{ref}</b> jest nieprawidłowy: <b>{field}</b> {reason}",
+          "theDocument": "dokument",
+          "targetNotDeclared": "Nie wymienia <b>{target}</b> w targets (wymienia {declared}). Odznacz {target} albo dodaj go do pliku.",
+          "declaredNone": "nic",
+          "targetNotDeclaredField": "{target} nie ma w motir.hosting.json w {ref}.",
+          "notInList": "„{value}” nie jest {kind, select, role {rolą} useCases {zastosowaniem} sizes {wielkością} other {celem hostingu}}. Wybierz spośród: {list}.",
+          "keyTaken": "Klucz {key} jest już zajęty.",
+          "templateNameTaken": "motir-co/{key} już istnieje i nie jest kopią tego szablonu. Wybierz inny klucz albo najpierw usuń to repozytorium.",
+          "genericTitle": "Motir nie mógł awansować tego repozytorium.",
+          "genericBody": "Nic nie zostało skopiowane. Spróbuj ponownie."
+        }
+      }
     }
   },
   "legal": {
@@ -12563,8 +13245,8 @@
       "creditsUnknown": "Motir nie mógł teraz sprawdzić kredytów Twojej organizacji. Spróbuj ponownie za chwilę.",
       "userCap": "Limit agentów na osobę w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}}. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
       "userCapNoFigure": "Masz już tylu agentów, ilu plan Twojej organizacji pozwala mieć jednej osobie. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
-      "orgRunningLimit": "Limit jednocześnie działających agentów w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}} i wszystkie już działają. Uśpij jednego, aby uruchomić kolejnego.",
-      "orgRunningLimitNoFigure": "W Twojej organizacji działa już tylu agentów naraz, ilu pozwala jej plan. Uśpij jednego, aby uruchomić kolejnego.",
+      "orgCap": "Limit agentów w organizacji, działających lub uśpionych, w planie {plan} Twojej organizacji wynosi {limit, plural, other {#}}. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
+      "orgCapNoFigure": "Twoja organizacja ma już tylu agentów, działających lub uśpionych, ilu pozwala jej plan. Za przestrzeń dyskową każdego z nich naliczana jest codzienna opłata, nawet w uśpieniu. Usuń jednego, aby utworzyć kolejnego.",
       "busy": "Motir uruchamia teraz tyle maszyn, ile może. Spróbuj ponownie za kilka minut.",
       "notOffered": "Ten agent kodujący nie jest oferowany: jego warunki nie pozwalają jeszcze platformie go hostować. Wybierz innego agenta kodującego.",
       "nameTaken": "Masz już w tym projekcie agenta o nazwie {name}.",
@@ -12578,7 +13260,7 @@
       "aiPlanUnknown": "Nie udało się sprawdzić planu AI",
       "credits": "Brak kredytów",
       "userCap": "Twój limit",
-      "orgRunningLimit": "Limit Twojej organizacji"
+      "orgCap": "Limit Twojej organizacji"
     },
     "lapse": {
       "bannerLead": "Plan AI Twojej organizacji wygasł.",
@@ -13620,6 +14302,10 @@
         "next": "Nic nie zostało zatwierdzone ani scalone. Rozwiąż konflikt na gałęzi — motir fix przekaże go agentowi — a Motir zapyta ponownie, gdy testy będą zielone.",
         "atPress": "{host} zgłasza, że {pr} jest w konflikcie z {base}. Kliknięcie zostało odrzucone, zanim cokolwiek zapisano, więc {key} się nie przesunął.",
         "atPressNoBase": "{host} zgłasza, że {pr} jest w konflikcie ze swoją gałęzią bazową. Kliknięcie zostało odrzucone, zanim cokolwiek zapisano, więc {key} się nie przesunął."
+      },
+      "mergeOutOfDate": {
+        "title": "Ten pull request jest nieaktualny względem swojej gałęzi bazowej.",
+        "next": "Nic nie zostało scalone. Gałąź bazowa wymaga, aby pull requesty były aktualne przed scaleniem, a ten pozostaje w tyle. Wprowadź do niego gałąź bazową — zaktualizuj gałąź albo pozwól, by motir fix przekazał go agentowi — a Motir zapyta ponownie, gdy testy będą zielone."
       },
       "mergeBranchProtected": {
         "title": "Reguły ochrony gałęzi nie pozwalają jeszcze na to scalenie.",
@@ -14792,6 +15478,7 @@
       "run_died": "Do naprawy · uruchomienie przerwane",
       "queue_failed": "Do naprawy · niepowodzenie w kolejce scalania",
       "conflicted": "Do naprawy · konflikt z gałęzią bazową",
+      "out_of_date": "Do naprawy · nieaktualny względem gałęzi bazowej",
       "ci_failed": "Do naprawy · CI nie powiodło się",
       "changes_requested": "Do naprawy · poproszono o zmiany",
       "sent_back_by_agent": "Do naprawy · odesłane przez agenta przeglądającego",
@@ -14803,6 +15490,8 @@
       "queueFailedBare": "To wymaga naprawy: niepowodzenie w kolejce scalania.",
       "conflicted": "To wymaga naprawy: konflikt z <code>{base}</code>.",
       "conflictedNoBase": "To wymaga naprawy: konflikt z gałęzią bazową.",
+      "outOfDate": "To wymaga naprawy: nieaktualny względem <code>{base}</code>.",
+      "outOfDateNoBase": "To wymaga naprawy: nieaktualny względem gałęzi bazowej.",
       "ciFailed": "To wymaga naprawy: CI nie powiodło się (test <code>{check}</code>).",
       "ciFailedBare": "To wymaga naprawy: CI nie powiodło się.",
       "changesRequested": "To wymaga naprawy: <b>{name}</b> prosi o zmiany — „{note}”",
@@ -15396,5 +16085,85 @@
     "pendingMark": "Tłumaczenie",
     "showOriginal": "Pokaż oryginał",
     "showTranslation": "Pokaż tłumaczenie"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Podgląd",
+      "brand": "Motir",
+      "footer": "Jesteś na <chip>{host}</chip> – to podgląd, który Motir uruchamia dla pull requesta. Motir nigdy nie prosi o hasło pod tym adresem. Logowanie odbywa się wyłącznie na app.motir.co."
+    },
+    "signIn": {
+      "banner": "Zaloguj się, aby otworzyć podgląd pod adresem <chip>{host}</chip>. Podglądy są dostępne tylko dla członków projektu."
+    },
+    "refused": {
+      "metaTitle": "Brak dostępu do tego podglądu",
+      "pill": "Podgląd",
+      "title": "Nie masz dostępu do tego podglądu",
+      "body": "Podglądy są dostępne tylko dla członków projektu, do którego należą. Jeśli ktoś udostępnił Ci ten link, poproś tę osobę o dodanie Cię do projektu, a potem otwórz link ponownie.",
+      "signedInAs": "Zalogowano jako <strong>{email}</strong>",
+      "home": "Przejdź do Motir",
+      "switch": "Zaloguj się na inne konto",
+      "switchHint": "Po zalogowaniu wrócisz do tego podglądu."
+    },
+    "building": {
+      "pill": "Budowanie",
+      "title": "Ten podgląd jest budowany",
+      "body": "CI repozytorium buduje obraz podglądu dla najnowszego commita tego pull requesta. Zwykle trwa to kilka minut.",
+      "refresh": "Ta strona sprawdza ponownie co 10 sekund i otwiera podgląd, gdy będzie gotowy."
+    },
+    "starting": {
+      "pill": "Uruchamianie",
+      "title": "Ten podgląd jest uruchamiany",
+      "body": "Obraz jest zbudowany. Motir go uruchamia i czeka, aż przejdzie kontrolę kondycji."
+    },
+    "steps": {
+      "label": "Postęp",
+      "build": "Budowanie obrazu",
+      "start": "Uruchamianie podglądu",
+      "ready": "Gotowe"
+    },
+    "facts": {
+      "workItem": "Element roboczy",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Otwórz {key} w Motir",
+      "openPullRequest": "Otwórz pull request #{n} w GitHub"
+    },
+    "failed": {
+      "pill": "Niepowodzenie",
+      "title": "Ten podgląd się nie uruchomił",
+      "body": "Dla najnowszego commita tego pull requesta nic nie działa. Nowy push zbuduje go ponownie.",
+      "reasonTitle": "Co poszło nie tak",
+      "checks": "Element roboczy pokazuje kontrole tego pull requesta i ich logi.",
+      "reason": {
+        "imageBuild": "Obraz podglądu nie został zbudowany: workflow „Preview image” zakończył się wynikiem „{conclusion}”. Jego log uruchomienia w GitHub wyjaśnia dlaczego.",
+        "healthTimeout": "Podgląd nie przeszedł kontroli kondycji w ciągu {minutes} min.",
+        "healthFailed": "Podgląd się uruchomił, ale nie przeszedł kontroli kondycji.",
+        "fallback": "Nie udało się uruchomić podglądu."
+      }
+    },
+    "unsupported": {
+      "pill": "Niedostępne w podglądach",
+      "title": "Podglądy tego nie obsługują",
+      "websocket": "Połączenia na żywo (websockety) nie przechodzą przez bramę podglądów. Reszta podglądu działa normalnie.",
+      "tooLarge": "Do podglądu nie można wysyłać żądań większych niż 10 MB.",
+      "noLength": "To żądanie nie podało swojego rozmiaru, więc brama podglądów nie może go przyjąć."
+    },
+    "closed": {
+      "pill": "Zamknięty",
+      "title": "Ten podgląd został wyłączony",
+      "merged": "Pull request #{n} został scalony, więc Motir wyłączył jego podgląd i usunął jego bazę danych.",
+      "closed": "Pull request #{n} został zamknięty bez scalania, więc Motir wyłączył jego podgląd i usunął jego bazę danych.",
+      "takenOver": "To repozytorium opuściło Motir, więc Motir wyłączył jego podglądy i usunął ich bazy danych.",
+      "unknown": "Motir wyłączył ten podgląd i usunął jego bazę danych."
+    },
+    "notFound": {
+      "pill": "Niedostępny",
+      "title": "Tu nie ma żadnego podglądu",
+      "body": "Ten adres nie należy do żadnego działającego podglądu. Mógł zostać wyłączony albo link zawiera literówkę.",
+      "home": "Przejdź do Motir"
+    }
   }
 }

@@ -42,6 +42,7 @@ export type AutoMergeOutcome =
 const REFUSAL_COPY: Record<Exclude<MergeRefusalCode, 'subject_changed'>, string> = {
   checks_not_green: 'mergeChecksNotGreen',
   conflict: 'mergeConflict',
+  out_of_date: 'mergeOutOfDate',
   branch_protected: 'mergeBranchProtected',
   already_merged: 'mergeAlreadyMerged',
   app_permission_missing: 'mergeAppPermissionMissing',

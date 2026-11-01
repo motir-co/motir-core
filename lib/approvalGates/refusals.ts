@@ -109,6 +109,8 @@ export type GateRefusal =
       /** The conflicted members and the base each targets, for `{pr}` / `{base}`. */
       conflicts: { pullRequest: string; baseRef: string | null }[];
     }
+  // Behind a base branch that requires pull requests to be up to date (MOTIR-10054).
+  | { tag: 'MERGE_OUT_OF_DATE' }
   | {
       tag: 'MERGE_BRANCH_PROTECTED';
       /**
@@ -235,6 +237,7 @@ export function toGateRefusal(
         conflicts: extra?.conflicts ? [...extra.conflicts] : [],
       };
     case 'MERGE_CHECKS_NOT_GREEN':
+    case 'MERGE_OUT_OF_DATE':
     case 'MERGE_ALREADY_MERGED':
     case 'MERGE_ALREADY_REQUEUED':
     case 'MERGE_REQUEUE_NEEDS_APPROVAL':

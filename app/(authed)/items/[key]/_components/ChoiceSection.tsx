@@ -9,6 +9,7 @@ import {
   ChoicePortBody,
 } from '@/components/approvals/ChoiceGate';
 import type { ApprovalGateDTO, ChoiceBodyDTO } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // THE ITEM PAGE'S **CHOICE** SECTION (Story MOTIR-4914 · Subtask MOTIR-5896; design
 // `approval-control--choice.mock.html` Panels 3, 5 and 6a). It sits in the late stack
@@ -34,6 +35,7 @@ async function decideNothing(): Promise<null> {
 
 export function ChoiceSection({
   body,
+  workItemRefs,
   gate,
   canDecide,
   routedToLabel,
@@ -42,6 +44,8 @@ export function ChoiceSection({
   canReplan = false,
 }: {
   body: ChoiceBodyDTO;
+  /** The body's work-item links, resolved by the page's late read (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   gate: ApprovalGateDTO | null;
   canDecide: boolean;
   routedToLabel: string | null;
@@ -63,7 +67,7 @@ export function ChoiceSection({
         <div>
           <Pill severity="warning">{t('defect.title')}</Pill>
         </div>
-        <ChoiceDefectBody defects={body.defects} draft={body.draft} />
+        <ChoiceDefectBody defects={body.defects} draft={body.draft} workItemRefs={workItemRefs} />
       </div>
     );
   }
@@ -73,13 +77,25 @@ export function ChoiceSection({
   const view = body.ok ? body.port : body.draft;
 
   if (gate === null) {
-    return <ChoicePortBody body={view} mode="read" groupName={`choice-${itemIdentifier}`} />;
+    return (
+      <ChoicePortBody
+        body={view}
+        workItemRefs={workItemRefs}
+        mode="read"
+        groupName={`choice-${itemIdentifier}`}
+      />
+    );
   }
 
   if (gate.state === 'awaiting' && canDecide) {
     return (
       <div className="flex flex-col gap-3">
-        <ChoicePortBody body={view} mode="read" groupName={`choice-${itemIdentifier}`} />
+        <ChoicePortBody
+          body={view}
+          workItemRefs={workItemRefs}
+          mode="read"
+          groupName={`choice-${itemIdentifier}`}
+        />
         <GateCallToActionBand
           kind="decision_choice"
           subjectLabel={t('meta', { count: view.options.length })}
@@ -99,6 +115,7 @@ export function ChoiceSection({
       layout="section"
       gate={gate}
       port={view}
+      workItemRefs={workItemRefs}
       // Nothing is pressed on the page: a decided or withdrawn gate is pressable by
       // nobody, and a reader who may not decide sees who it waits on (state B).
       canDecide={false}

@@ -41,7 +41,12 @@
 // citations, the next answers honestly with none, the third redirects to a plan
 // change — without a second harness and without a timing assumption.
 
-import type { AskConversationTurn, CarriedAnswers, SubmittedRequirement } from '@/lib/ai/types';
+import type {
+  AskConversationTurn,
+  CarriedAnswers,
+  RequirementConfirmation,
+  SubmittedRequirement,
+} from '@/lib/ai/types';
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
@@ -320,11 +325,12 @@ export interface SubmittedJob {
   /** A `plan` submit's `context.carriedAnswers` (Story MOTIR-9221 · MOTIR-9319) — what
    *  the conversation's grilling settled before the run, as motir-core sent it. */
   carriedAnswers?: CarriedAnswers;
-  /** A `plan` submit's `context.requirement` and `context.requirementPage` (Story
-   *  MOTIR-9430 · MOTIR-9441) — the composed requirement core supplied to the run, and
-   *  the page it was saved to, each recorded as sent and only when present. */
+  /** A `plan` submit's `context.requirement` and `context.requirementConfirmed` (Story
+   *  MOTIR-9430 · MOTIR-9441; MOTIR-10091) — the composed requirement core supplied to
+   *  the run, and the offer that confirmed it, each recorded as sent and only when
+   *  present. */
   requirement?: SubmittedRequirement;
-  requirementPage?: { pageId: string; title: string };
+  requirementConfirmed?: RequirementConfirmation;
   /** Whether a `plan` submit carried carried answers at all, recorded on EVERY plan
    *  submit so a spec asserts their absence rather than inferring it. */
   hasCarriedAnswers?: boolean;
@@ -442,8 +448,8 @@ function recordSubmit(kind: string, rawBody: string, refused = false): number {
       ...(kind === 'plan' && requirementOf(rawBody)
         ? { requirement: requirementOf(rawBody)! }
         : {}),
-      ...(kind === 'plan' && requirementPageOf(rawBody)
-        ? { requirementPage: requirementPageOf(rawBody)! }
+      ...(kind === 'plan' && requirementConfirmedOf(rawBody)
+        ? { requirementConfirmed: requirementConfirmedOf(rawBody)! }
         : {}),
       ...(kind === 'ask_project' && conversationTurnsOf(rawBody)
         ? { conversationTurns: conversationTurnsOf(rawBody)! }
@@ -563,9 +569,9 @@ function requirementOf(rawBody: string): SubmittedRequirement | null {
   return contextObjectOf(rawBody, 'requirement') as SubmittedRequirement | null;
 }
 
-/** The `context.requirementPage` a `plan` submit carried (MOTIR-9436), or null. */
-function requirementPageOf(rawBody: string): { pageId: string; title: string } | null {
-  return contextObjectOf(rawBody, 'requirementPage') as { pageId: string; title: string } | null;
+/** The `context.requirementConfirmed` a `plan` submit carried (MOTIR-10091), or null. */
+function requirementConfirmedOf(rawBody: string): RequirementConfirmation | null {
+  return contextObjectOf(rawBody, 'requirementConfirmed') as RequirementConfirmation | null;
 }
 
 /** The `context.conversationTurns` an `ask_project` submit carried (MOTIR-9442), or null. */

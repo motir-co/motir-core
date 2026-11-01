@@ -38,6 +38,10 @@ export default defineConfig({
       'tests/git/listChangedFiles.test.ts',
       'tests/integration/ai/repoChangesRoute.test.ts',
       'tests/integration/ai/inFlightCodeStoryGate.test.ts',
+      // MOTIR-10069 — the same answer on the MCP: `get_work_item`'s `inFlightCode`
+      // and the project-keyed `list_changed_files` over `repoChangesService`.
+      'tests/mcp/get-work-item-in-flight.test.ts',
+      'tests/mcp/list-changed-files.test.ts',
     ],
     coverage: {
       provider: 'v8',
@@ -45,6 +49,8 @@ export default defineConfig({
       all: false,
       include: [
         'lib/services/inFlightCode.ts',
+        'lib/services/inFlightCodeService.ts',
+        'lib/mcp/inFlightCode.ts',
         'lib/services/repoChangesService.ts',
         'app/api/internal/ai/repo-changes/route.ts',
         'lib/services/aiBoundaryService.ts',
@@ -71,6 +77,15 @@ export default defineConfig({
           branches: 90,
           lines: 90,
         },
+        // MOTIR-10069 — the read shared by `get_item` and the MCP's `get_work_item`,
+        // and the MCP's in-flight lines.
+        'lib/services/inFlightCodeService.ts': {
+          statements: 90,
+          functions: 90,
+          branches: 90,
+          lines: 90,
+        },
+        'lib/mcp/inFlightCode.ts': { statements: 90, functions: 90, branches: 90, lines: 90 },
         'lib/services/repoChangesService.ts': {
           statements: 90,
           functions: 90,

@@ -225,7 +225,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   type: 'array',
                   items: { type: 'string' },
                   description:
-                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to, and the item does not complete until every one of them has a merged pull request. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
+                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to. The list does not decide completion: the item completes when every pull request LINKED to it has merged. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
                 },
                 targetRepositories: {
                   type: 'array',
@@ -427,9 +427,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 },
                 blockedByAdd: {
                   type: 'array',
-                  items: { type: 'string' },
+                  items: {
+                    anyOf: [
+                      { type: 'string' },
+                      {
+                        type: 'object',
+                        properties: {
+                          ref: { type: 'string' },
+                          reason: {
+                            type: 'string',
+                            description:
+                              'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                          },
+                        },
+                        required: ['ref', 'reason'],
+                        additionalProperties: false,
+                      },
+                    ],
+                  },
                   description:
-                    'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic.',
+                    'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
                 },
                 blockedByRemove: {
                   type: 'array',
@@ -483,9 +500,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
             },
             blockedByRefs: {
               type: 'array',
-              items: { type: 'string' },
+              items: {
+                anyOf: [
+                  { type: 'string' },
+                  {
+                    type: 'object',
+                    properties: {
+                      ref: { type: 'string' },
+                      reason: {
+                        type: 'string',
+                        description:
+                          'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                      },
+                    },
+                    required: ['ref', 'reason'],
+                    additionalProperties: false,
+                  },
+                ],
+              },
               description:
-                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing. An edge joins two items on the SAME LEVEL — the same depth below their nearest common ancestor, a folder adding none — and may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / `cross_level`. An epic is blocked only by another epic — an edge with an epic at either end is cross-level unless both ends are epics.',
+                'Dependency edges, in the same three forms as `parentRef`: work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs into this plan. A `folder:<id>` ref is refused here — a folder is a placement, it blocks nothing. An edge joins two items on the SAME LEVEL — the same depth below their nearest common ancestor, a folder adding none — and may cross parents; one between two levels is refused `INVALID_PLAN_REF_GRAPH` / `cross_level`. An epic is blocked only by another epic — an edge with an epic at either end is cross-level unless both ends are epics. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
             },
             supersedesRefs: {
               type: 'array',
@@ -874,6 +908,59 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'query'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  code_grep: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      pattern: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 1000,
+        description:
+          'The text to find in the files, matched literally and case-sensitively unless `regex` or `caseInsensitive` says otherwise. It is NOT trimmed.',
+      },
+      regex: {
+        type: 'boolean',
+        description:
+          'OPTIONAL. Treat `pattern` as a regular expression (RE2 syntax: no backreferences or lookaround). Matched one line at a time.',
+      },
+      caseInsensitive: {
+        type: 'boolean',
+        description: 'OPTIONAL. Match regardless of letter case.',
+      },
+      path: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Limit the search to files under this path prefix, e.g. "lib/billing/" or "app/pricing/page.tsx".',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Limit the read to ONE repository in the project’s set — its bare name ("motir-core") or `owner/name`, case-insensitively. Omit to read every indexed repository in the set.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Fetch the NEXT PAGE of an earlier result: pass the `cursor` printed on that result’s page line, exactly as printed, with the same other arguments. Omit for page 1.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL. The page size — how many matching lines to return per page.',
+      },
+    },
+    required: ['projectKey', 'pattern'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -1291,7 +1378,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: { type: 'string' },
         description:
-          'Optional: EVERY repository this item ships in, ORDERED — bare repo names (e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST element is the PRIMARY: the one dispatch routes the CLI to. The rest record where the item\'s other work lands, and the item does not complete until EVERY repository on the list has a pull request merged onto that repository\'s own default branch. Each element is validated against the project\'s repository domain; duplicates collapse, blank elements are dropped, and one unknown element rejects the whole write. Use it for a card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, so this is for a story or a task, not a subtask. `[]` is the empty set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list\'s first element: supplying both is rejected rather than silently resolved.',
+          'Optional: EVERY repository this item ships in, ORDERED — bare repo names (e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST element is the PRIMARY: the one dispatch routes the CLI to. The rest record where the item\'s other work may land. The list does not decide completion: the item completes when every pull request LINKED to it has merged onto its repository\'s default branch, so a listed repository that needed no change never holds it open. Each element is validated against the project\'s repository domain; duplicates collapse, blank elements are dropped, and one unknown element rejects the whole write. Use it for a card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, so this is for a story or a task, not a subtask. `[]` is the empty set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list\'s first element: supplying both is rejected rather than silently resolved.',
       },
       targetRepositories: {
         type: 'array',
@@ -1606,6 +1693,56 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_plan_authoring_state: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+      workItems: {
+        type: 'array',
+        items: { type: 'string', minLength: 1 },
+        maxItems: 50,
+        description:
+          'OPTIONAL — committed work items to answer for, by key (`ACME-7`) or id, beside the ones the walk re-authors. A named card the walk does not re-author reads `not_in_walk`.',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  get_plan_code_reads: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+      sessionKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL — only this session’s reads (the key `report_plan_step` carried).',
+      },
+      afterSeq: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'OPTIONAL — the next page: pass the previous page’s `nextAfterSeq`. Omit for the first.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 500,
+        description: 'OPTIONAL — reads per page, at most 500 (the default).',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_plan_status: {
     type: 'object',
     properties: {
@@ -1844,6 +1981,38 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  list_changed_files: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively: the `repo` of an `inFlightCode` entry on `get_work_item` passes straight through.',
+      },
+      head: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The branch (or commit) whose changes to list — the `branch` of an `inFlightCode` entry on `get_work_item`.',
+      },
+      base: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The ref to compare against. Omit for the repository’s default branch, which is what you want for a pull request that targets it; pass the entry’s `baseRef` when it names a different one.',
+      },
+    },
+    required: ['projectKey', 'repo', 'head'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2431,7 +2600,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts". Not a URL, not an absolute path, and never containing "..".',
+          'The file path RELATIVE TO THE REPOSITORY ROOT, e.g. "lib/git/provider.ts" — or a directory path, e.g. ".github/workflows", to list it. Not a URL, not an absolute path, and never containing "..".',
       },
       ref: {
         type: 'string',
@@ -2515,10 +2684,37 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
           additionalProperties: false,
         },
         description:
-          'Every discrepancy you found, in ONE call — 1–20 points, each field 1–2000 characters once trimmed.',
+          'Every discrepancy you found, in ONE call — 1–20 points, each field 1–2000 characters once trimmed. Omit it when the record carries only decisions.',
+      },
+      decisions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            planSaid: {
+              type: 'string',
+              description:
+                'What the card or its plan said about this detail — "nothing" when it was silent.',
+            },
+            chose: { type: 'string', description: 'What you decided and built.' },
+            why: {
+              type: 'string',
+              description:
+                'Why — the repository\'s convention you followed or, where it is silent, the established industry best practice for the stack. Never "it was the simplest".',
+            },
+            alternatives: {
+              type: 'string',
+              description: 'The options you considered and did not take, and why not.',
+            },
+          },
+          required: ['planSaid', 'chose', 'why'],
+          additionalProperties: false,
+        },
+        description:
+          'Every decision you made where the card left the HOW open, in the SAME one call — up to 20, each field 1–2000 characters once trimmed.',
       },
     },
-    required: ['key', 'points'],
+    required: ['key'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2659,13 +2855,74 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['settle', 'lay', 'author', 'end'],
         description:
-          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step` or `narration`.',
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration` or `codeReads`.',
       },
       narration: {
         type: 'array',
         items: { type: 'string' },
         description:
           'Instead of `step`: one or more plain-language sentences saying what the session is doing and why, appended in order to the plan’s kept narration under `sessionKey` (at most 20 per call; whitespace is collapsed and a sentence longer than 240 characters is cut with an ellipsis). Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing is recorded on a refusal.',
+      },
+      codeReads: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description:
+                'The tool: `read_file` · `code_explore` · `code_search` · `code_grep`, or a local one (`Read` · `Grep` · `Glob` · `git show` · `git grep` · `git log`).',
+            },
+            repo: { type: 'string', description: '`owner/name`, or the local checkout’s name.' },
+            path: {
+              type: 'string',
+              description: 'A read’s path, or a search’s path prefix / glob.',
+            },
+            startLine: { type: 'integer', minimum: 1 },
+            endLine: { type: 'integer', minimum: 1 },
+            askedRef: {
+              type: 'string',
+              description:
+                'The ref the call ASKED for (`main`) — a label, not what it was read at.',
+            },
+            query: { type: 'string', description: 'A search’s query or pattern.' },
+            commits: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  repo: { type: 'string' },
+                  sha: {
+                    type: 'string',
+                    description: 'The RESOLVED commit id, 7–64 hex — never a branch name.',
+                  },
+                  dirty: {
+                    type: 'boolean',
+                    description: 'A local checkout with uncommitted changes.',
+                  },
+                },
+                required: ['sha'],
+                additionalProperties: false,
+              },
+              description:
+                'Every commit the read was made at: the resolved ref of a file read, the graph’s commit for a code-graph read, the checkout HEAD for a local read. Empty only when nothing resolved.',
+            },
+            outcome: {
+              type: 'string',
+              description: 'The result’s outcome code: `found`, `ok`, `not_found`, `too_large`, …',
+            },
+            lines: { type: 'integer', minimum: 0, description: 'Lines a read returned.' },
+            hits: { type: 'integer', minimum: 0, description: 'Matches a search returned.' },
+            detail: {
+              type: 'string',
+              description: 'A short refusal or failure detail — never content.',
+            },
+          },
+          required: ['tool', 'outcome'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the session’s CODE READS, in the order it made them, appended to the plan’s kept read log under `sessionKey` (at most 50 per call). Records what was asked, the commit it was read at and how much came back — never the code. Needs no step: a session may post its reads before or after it holds one. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a read is malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. Read them back with `get_plan_code_reads`.',
       },
       target: {
         type: 'string',
@@ -3104,7 +3361,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         additionalProperties: false,
         description:
-          'OPTIONAL. WHAT you want built, as six named fields instead of prose — the planner reads this INSTEAD of asking you what is wrong. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to treat the requirement as settled; short of that it simply opens the conversation, which is the same thing it does when you omit this argument entirely.',
+          'OPTIONAL. WHAT you want built, as six named fields instead of prose. It is INPUT: the planner reads it beside the thread, then settles the targets and writes the requirement it plans against itself. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to read it; short of that it is ignored, which is the same as omitting this argument.',
       },
     },
     required: ['projectKey'],
@@ -3325,6 +3582,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         anyOf: [{ type: 'string', minLength: 1 }, { type: 'null' }],
         description:
           'The longer summary (Markdown) shown to the reviewer above the tree — the sentence they read before any card. `null` clears it. Omit it to leave it exactly as it is.',
+      },
+      plannerRecord: {
+        anyOf: [{ type: 'object', additionalProperties: {} }, { type: 'null' }],
+        description:
+          'YOUR OWN record on the plan, as data — machine state you keep between runs (e.g. the targets you settled and how each walk left them), which a reviewer never sees. A JSON object of at most 65536 bytes, REPLACED WHOLE; `null` clears it. `get_plan` returns it as `plannerRecord`. Keep it out of `summary`: the summary is prose a person reads and may correct. Omit it to leave it exactly as it is.',
       },
     },
     required: ['planId'],
@@ -3601,12 +3863,33 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       blockedByRefs: {
         type: 'array',
         items: {
-          type: 'string',
-          description:
-            'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+          anyOf: [
+            {
+              type: 'string',
+              description:
+                'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+            },
+            {
+              type: 'object',
+              properties: {
+                ref: {
+                  type: 'string',
+                  description:
+                    'A work-item KEY ("ACME-7", the identifier every other tool takes, case-insensitive); a real work-item id; or a `planItem:<id>` ref naming another `add` on THIS plan. A key is resolved to its id by this call, exactly as `add_plan_items` resolves one, so the three are interchangeable (MOTIR-3934).',
+                },
+                reason: {
+                  type: 'string',
+                  description:
+                    'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                },
+              },
+              required: ['ref', 'reason'],
+              additionalProperties: false,
+            },
+          ],
         },
         description:
-          'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`.',
+          'REPLACES the dependency edges wholesale — a list has no sparse edit, so send the set you want and `[]` to clear it. Same ref rules and same re-validation as `parentRef`. The edges’ reasons are replaced with them. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
       },
       supersedesRefs: {
         type: 'array',
@@ -3792,9 +4075,26 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
               },
               blockedByAdd: {
                 type: 'array',
-                items: { type: 'string' },
+                items: {
+                  anyOf: [
+                    { type: 'string' },
+                    {
+                      type: 'object',
+                      properties: {
+                        ref: { type: 'string' },
+                        reason: {
+                          type: 'string',
+                          description:
+                            'ONE short line (at most 120 characters) saying what the waiting card CONSUMES from this blocker — and when it consumes an INTERFACE, the interface itself: the secret names, the permissions, the endpoint, the file or the symbol the two cards must agree on (e.g. "consumes: the `AWS_ORG_ADMIN_*` secrets").',
+                        },
+                      },
+                      required: ['ref', 'reason'],
+                      additionalProperties: false,
+                    },
+                  ],
+                },
                 description:
-                  'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic.',
+                  'Dependency edges to ADD — work-item keys ("ACME-7"), real work-item ids, or `planItem:<id>` refs. Each joins the target to an item on the SAME LEVEL — the same depth below their nearest common ancestor — under any parent; a cross-level edge is refused `cross_level`. An epic is blocked only by another epic. Each entry may be `{ ref, reason }` instead of a bare ref: the reason is one short line saying what the waiting card consumes from that blocker. It is shown on the plan and written onto the link at approve, so the card says why it waits.',
               },
               blockedByRemove: {
                 type: 'array',
@@ -3998,7 +4298,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: { type: 'string' },
         description:
-          "Replace the repository SET wholesale — EVERY repository this item ships in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched into. The item does not complete until every repository on the list has a pull request merged onto that repository's own default branch, so use it for a card that legitimately spans repositories (a story or a task — ONE SUBTASK is still ONE REPO). Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: supplying both is rejected rather than silently resolved.",
+          "Replace the repository SET wholesale — EVERY repository this item ships in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched into. The list does not decide completion: the item completes when every pull request LINKED to it has merged onto its repository's default branch. Use it for a card that legitimately spans repositories (a story or a task — ONE SUBTASK is still ONE REPO). Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: supplying both is rejected rather than silently resolved.",
       },
       targetRepositories: {
         type: 'array',
@@ -4203,6 +4503,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   close_work_item_repair: 'Close a repair',
   close_work_item_run: 'Close your run of a work item',
   code_explore: 'Explore the code graph',
+  code_grep: 'Search the file contents',
   code_search: 'Search the code graph',
   complete_session: 'Complete session',
   complete_sprint: 'Complete sprint',
@@ -4228,6 +4529,8 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_design: 'Get design',
   get_page: 'Get page',
   get_plan: 'Read plan proposals',
+  get_plan_authoring_state: 'Read which proposals are authored',
+  get_plan_code_reads: 'Read what each planning session read',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
   get_section_sets: 'Get section sets',
@@ -4237,6 +4540,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   link_page: 'Link page',
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
+  list_changed_files: 'List changed files',
   list_designs: 'List designs',
   list_folders: 'List folders',
   list_projects: 'List projects',
@@ -4408,6 +4712,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   code_explore: { title: 'Explore the code graph', readOnlyHint: true, openWorldHint: false },
+  code_grep: { title: 'Search the file contents', readOnlyHint: true, openWorldHint: false },
   code_search: { title: 'Search the code graph', readOnlyHint: true, openWorldHint: false },
   complete_session: {
     title: 'Complete session',
@@ -4529,6 +4834,16 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_design: { title: 'Get design', readOnlyHint: true, openWorldHint: false },
   get_page: { title: 'Get page', readOnlyHint: true, openWorldHint: false },
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
+  get_plan_authoring_state: {
+    title: 'Read which proposals are authored',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  get_plan_code_reads: {
+    title: 'Read what each planning session read',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
   get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
@@ -4566,6 +4881,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  list_changed_files: { title: 'List changed files', readOnlyHint: true, openWorldHint: true },
   list_designs: { title: 'List designs', readOnlyHint: true, openWorldHint: false },
   list_folders: { title: 'List folders', readOnlyHint: true, openWorldHint: false },
   list_projects: { title: 'List projects', readOnlyHint: true, openWorldHint: false },

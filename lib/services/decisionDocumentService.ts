@@ -12,6 +12,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { resolveMarkdownWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import { repoFileReadService } from './repoFileReadService';
 
 // READ A DECISION DOCUMENT — the one door a surface uses to SHOW what a decision gate
@@ -103,11 +104,23 @@ export const decisionDocumentService = {
   /**
    * The same read, as the decision PORT draws it (MOTIR-5678) — display-ready, with the
    * file's public host link. `null` when there is nothing to ask about yet.
+   *
+   * ⚠️ AND WITH THE DOCUMENT'S WORK-ITEM CHIPS RESOLVED (bug MOTIR-10020). The port hands
+   * the Markdown to `MarkdownView`, which draws every `[KEY](motir:<id>)` it has no
+   * summary for as deleted — so the summaries are read here, for this reader, in one
+   * batched read after the content read (never inside its transaction: the file
+   * resolver calls the Git host). A document that links nothing pays no ref read.
    */
   async readViewForWorkItem(
     workItemId: string,
     ctx: ServiceContext,
   ): Promise<DecisionDocumentViewDTO | null> {
-    return toDecisionDocumentViewDTO(await this.readForWorkItem(workItemId, ctx));
+    const read = await this.readForWorkItem(workItemId, ctx);
+    const markdown =
+      read.content?.outcome === 'page' || read.content?.outcome === 'resolved'
+        ? read.content.markdown
+        : '';
+    const workItemRefs = markdown ? await resolveMarkdownWorkItemRefs(markdown, ctx) : {};
+    return toDecisionDocumentViewDTO(read, workItemRefs);
   },
 };

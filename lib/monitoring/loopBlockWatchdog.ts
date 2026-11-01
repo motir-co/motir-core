@@ -147,6 +147,15 @@ interface RawBlockEnd {
   readonly endedAt: number;
 }
 
+/** An ended block's length (MOTIR-9882): posted for every block, captured or not. */
+interface RawBlockLength {
+  readonly t: 'length';
+  readonly ms: number;
+}
+
+/** At most this many ended-block lengths wait for `takeCompletedBlockLengths()`. */
+export const MAX_COMPLETED_BLOCK_LENGTHS = 200;
+
 interface Capture extends RawCapture {
   readonly epoch: number;
   endedAt: number | null;
@@ -309,6 +318,8 @@ setInterval(() => {
   } else if (block) {
     bumpMax(last - block.hbStart, block.hbStart);
     if (block.captured) port.postMessage({ t: 'end', hbStart: block.hbStart, endedAt: last });
+    // Every ended block's length, captured or not, for the CloudWatch series.
+    port.postMessage({ t: 'length', ms: last - block.hbStart });
     block = null;
   }
 }, pollMs);
@@ -327,12 +338,17 @@ interface Watchdog {
   captures: Capture[];
   captureCount: number;
   lastHold: number;
+  completedLengths: number[];
 }
 
 let watchdog: Watchdog | null = null;
 let thresholdOverrideMs: number | null = null;
 
-/** Start the watchdog thread. Idempotent. Called ONLY from `startTransactionStallMonitor()`. */
+/**
+ * Start the watchdog thread. Idempotent. Called from `startTransactionStallMonitor()`
+ * (under Sentry) and from the CloudWatch block-length publisher (`watchdogMetrics.ts`,
+ * MOTIR-9882) — whichever runs first starts it, the other is a no-op.
+ */
 export function startLoopBlockWatchdog(): void {
   if (watchdog) return;
   const thresholdMs = thresholdOverrideMs ?? BLOCK_THRESHOLD_MS;
@@ -385,6 +401,7 @@ export function startLoopBlockWatchdog(): void {
     captures: [],
     captureCount: 0,
     lastHold: 0,
+    completedLengths: [],
   };
 }
 
@@ -415,7 +432,11 @@ function drain(w: Watchdog): void {
   for (;;) {
     const received = receiveMessageOnPort(w.port);
     if (!received) return;
-    const message = received.message as RawCapture | RawConfirmMessage | RawBlockEnd;
+    const message = received.message as
+      | RawCapture
+      | RawConfirmMessage
+      | RawBlockEnd
+      | RawBlockLength;
     if (message.t === 'capture') {
       w.captures.push({ ...message, epoch: epochOf(w), endedAt: null, confirm: null });
       w.lastHold = message.holdMs;
@@ -434,8 +455,32 @@ function drain(w: Watchdog): void {
     } else if (message.t === 'end') {
       const match = w.captures.find((c) => c.hbStart === message.hbStart);
       if (match) match.endedAt = message.endedAt;
+    } else if (message.t === 'length') {
+      recordBlockLength(w, message.ms);
     }
   }
+}
+
+/** Keep an ended block's length, dropping the oldest past the cap. */
+function recordBlockLength(w: Watchdog, ms: number): void {
+  w.completedLengths.push(ms);
+  if (w.completedLengths.length > MAX_COMPLETED_BLOCK_LENGTHS) w.completedLengths.shift();
+}
+
+/**
+ * The length, in ms, of every block that has ENDED since the last call — each
+ * returned once, oldest first, at most {@link MAX_COMPLETED_BLOCK_LENGTHS}.
+ * Independent of the Sentry-rolled windows `readLoopBlock()` reads, so the
+ * CloudWatch publisher (`watchdogMetrics.ts`) sees every block on its own clock.
+ * `[]` when the watchdog is not running.
+ */
+export function takeCompletedBlockLengths(): number[] {
+  const w = watchdog;
+  if (!w) return [];
+  drain(w);
+  const lengths = w.completedLengths;
+  w.completedLengths = [];
+  return lengths;
 }
 
 /**
@@ -660,6 +705,10 @@ export const __forTests = {
   /** The worker's thread id, or null when none runs. */
   threadId(): number | null {
     return watchdog ? watchdog.worker.threadId : null;
+  },
+  /** Record an ended block's length as the worker's `length` message would. */
+  recordBlockLength(ms: number): void {
+    if (watchdog) recordBlockLength(watchdog, ms);
   },
   /** Resolves when the worker thread has exited. */
   exited(): Promise<void> {

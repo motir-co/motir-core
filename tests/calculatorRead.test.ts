@@ -347,6 +347,16 @@ describe('POST …/calculator/estimate — the answers', () => {
     expect(sent['categories']).toStrictEqual(cats);
   });
 
+  it('forwards the shares unchanged when the body carries them (MOTIR-9832)', async () => {
+    const { organizationId, owner } = await makeOrg();
+    signInAs(owner);
+    fetchMock.mockResolvedValueOnce(json(200, ESTIMATE));
+    const withShares = { ...REQUEST, shares: { 'band-a': 70, 'band-b': 30 } };
+
+    expect((await postEstimate(organizationId, withShares)).status).toBe(200);
+    expect(JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))).toStrictEqual(withShares);
+  });
+
   it('accepts a category key no fixture names — the set is open', async () => {
     const { organizationId, owner } = await makeOrg();
     signInAs(owner);
@@ -454,6 +464,25 @@ describe('POST …/calculator/estimate — a refused body never reaches the engi
       'running',
     ],
     ['the replaced shape: modelIds', { ...REQUEST, modelIds: ['model-a1'] }, 'modelIds'],
+    // The shares hold the engine's own rules (MOTIR-9832), so a bad one is refused here.
+    ['shares that are not an object', { ...REQUEST, shares: [70, 30] }, 'shares'],
+    ['a share of 0', { ...REQUEST, shares: { 'band-a': 100, 'band-b': 0 } }, 'shares.band-b'],
+    [
+      'a fractional share',
+      { ...REQUEST, shares: { 'band-a': 70.5, 'band-b': 29.5 } },
+      'shares.band-a',
+    ],
+    [
+      'a share keyed by a category not picked',
+      { ...REQUEST, shares: { 'band-a': 50, 'band-b': 30, 'band-z': 20 } },
+      'shares.band-z',
+    ],
+    ['a picked category with no share', { ...REQUEST, shares: { 'band-a': 100 } }, 'shares.band-b'],
+    [
+      'shares that do not total 100',
+      { ...REQUEST, shares: { 'band-a': 70, 'band-b': 20 } },
+      'shares',
+    ],
   ];
 
   it.each(cases)('%s → 400 naming the field', async (_name, body, field) => {

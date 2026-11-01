@@ -71,6 +71,12 @@
 //     registered BEFORE the repos seam and answers only the repositories its
 //     control names — see that module's header (MOTIR-5572).
 //
+//   - E2E_TEST_GITHUB_PREVIEW=1 → lib/test-github-preview-mock answers a preview's
+//     GitHub calls — its deployment, the deployment's statuses and the hosting
+//     manifest at the pull request's head — for the repositories its control names.
+//     They are made by the lifecycle's effects, so the lane sets this flag on the
+//     WORKER (MOTIR-5781). Registered before the merge seam — see that module's header.
+//
 //   - E2E_TEST_GITHUB_FLEET_ORG_CI=1 → lib/test-github-fleet-org-ci-mock answers the
 //     GitHub calls behind /admin/fleet-settings (the org's App installation, its
 //     repositories, their visibility, the workflow commit, the org's MOTIR_RUNNER
@@ -174,6 +180,18 @@ export async function register() {
   registerRequestDbTimingListener();
   const { startMetricsServer } = await import('@/lib/monitoring/metricsServer');
   startMetricsServer();
+
+  // This process's event-loop delay as CloudWatch embedded-metric lines on
+  // stdout when `MONITORING_CLOUDWATCH_NAMESPACE` is set (MOTIR-9881); unset
+  // starts nothing and writes nothing. The worker and relay start their own from
+  // `main()`.
+  const { startEventLoopDelayPublisher } = await import('@/lib/monitoring/cloudwatchMetrics');
+  startEventLoopDelayPublisher();
+  // Each ended loop block's length, and CPU steal when MONITORING_CLOUDWATCH_STEAL
+  // is on (MOTIR-9882). Starts the loop-block watchdog itself when no Sentry DSN
+  // started it.
+  const { startWatchdogMetricsPublisher } = await import('@/lib/monitoring/watchdogMetrics');
+  startWatchdogMetricsPublisher();
 
   // Every E2E seam, from the ONE table the job worker installs from too
   // (`lib/test-mock-seams.ts`, MOTIR-5837). Dynamic, like every import below the

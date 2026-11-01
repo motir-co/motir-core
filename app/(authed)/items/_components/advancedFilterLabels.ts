@@ -126,6 +126,7 @@ export const FIX_REASON_VALUE_KEYS: Record<WorkItemFixReasonDto, string> = {
   run_died: 'runDiedBare',
   queue_failed: 'queueFailedBare',
   conflicted: 'conflictedNoBase',
+  out_of_date: 'outOfDateNoBase',
   ci_failed: 'ciFailedBare',
   changes_requested: 'changesRequestedAnon',
 };

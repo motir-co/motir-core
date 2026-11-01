@@ -139,6 +139,7 @@ describe('backfillFixReason', () => {
       run_died: 1,
       queue_failed: 1,
       conflicted: 1,
+      out_of_date: 0,
       ci_failed: 1,
       changes_requested: 1,
       none: 1,

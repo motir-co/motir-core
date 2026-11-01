@@ -1,4 +1,5 @@
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
+import type { OrgPlanFiguresDTO } from '@/lib/dto/orgPlanFigures';
 
 // THE FLEET MONITOR (MOTIR-7316 · Story MOTIR-6905) — what platform staff read on
 // /admin/monitoring and the tenant page: per organisation, what it is running and
@@ -36,33 +37,9 @@ export function isFleetMismatch(verdict: FleetVerdict): verdict is FleetMismatch
   return (FLEET_MISMATCH_VERDICTS as readonly FleetVerdict[]).includes(verdict);
 }
 
-/**
- * The org's plan as the fleet's admissions read it (MOTIR-9377): each workload is
- * held to its OWN plan figure (`lib/billing/planCaps.ts`, the fleet-capacity
- * decision MOTIR-9357, amending `fleet-per-org-pool.md` §2), and the monitor
- * shows the same figures the gates apply. A CLOSED union: the page renders each
- * kind by name, so an exempt or unknown plan reads as words, never a default
- * figure.
- */
-export type FleetOrgPlanDTO =
-  | {
-      kind: 'capped';
-      planKey: string;
-      /** As motir-ai names it; shown untranslated. */
-      planName: string;
-      agentRunsInParallel: number;
-      agentsPerUser: number;
-      agentsRunningPerOrg: number;
-      /** What CI admission holds the org to — the plan's `ciBurstCap` or the staff
-       *  override; null when the override could not be read (CI is refused). */
-      ciBurstCap: number | null;
-      ciBurstSource: 'plan' | 'override' | 'unreadable';
-    }
-  /** Motir's own orgs (`isMeta` / `internalBilling`) or a build with no billing:
-   *  no plan figure, except a staff CI override when one is set. */
-  | { kind: 'exempt'; ciBurstOverride: number | null }
-  /** The plan could not be read, or its key has no caps row — admission refuses. */
-  | { kind: 'plan_unknown'; planKey: string | null };
+/** The org's plan figures — the one shape the monitor and the tenant's Fleet use
+ *  read share (`lib/dto/orgPlanFigures.ts`, MOTIR-9659). */
+export type FleetOrgPlanDTO = OrgPlanFiguresDTO;
 
 /** One organisation's fleet row — the monitor's line and the tenant page's card. */
 export interface FleetOrgRowDTO {
@@ -75,6 +52,9 @@ export interface FleetOrgRowDTO {
   internalBilling: boolean;
   /** Running containers per workload — the census the admission reads. */
   byWorkload: Record<FleetWorkloadKind, number>;
+  /** The org's live agent instances, running or hibernating — what the plan's
+   *  `agentsPerOrg` counts, so the agent-instance cell reads against it (MOTIR-9954). */
+  agentsLive: number;
   /** The plan's figures each workload is read against (MOTIR-9377). */
   plan: FleetOrgPlanDTO;
   /** Whole minutes the live charge accrued for the org in the window. */

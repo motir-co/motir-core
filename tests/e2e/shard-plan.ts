@@ -495,6 +495,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // shape (`admin-fleet-selfhost.spec.ts`, above), rounded UP for the same
   // reason. RE-MEASURE from the first green bulk artifact that includes it.
   'admin-ideas-smoke.spec.ts': 4.0,
+  // MOTIR-10055 — the /admin/jobs tables fit a 1280px frame: one sign-up, two
+  // page loads and their bounding boxes. ESTIMATED from its nearest neighbour by
+  // shape (`admin-ideas-smoke.spec.ts`, above), rounded UP for the same reason.
+  // RE-MEASURE from the first green bulk artifact that includes it.
+  'admin-jobs-columns.spec.ts': 4.0,
   'app-role-surfaces.spec.ts': 1.3,
   'ai-callout-gate.spec.ts': 1.9,
   'ai-plan-generation.spec.ts': 10.0,
@@ -682,7 +687,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // the same basis — so 30.0, again rounded up.
   'item-plan-history.spec.ts': 30.0,
   'issue-list-flow.spec.ts': 51.7,
-  'jobs-dashboard.spec.ts': 8.6,
   'jobs-fanout-engine.spec.ts': 11.7,
   'jobs-flow.spec.ts': 25.7,
   'jobs-postgres-engine.spec.ts': 24.8,
@@ -957,6 +961,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // it.
   'style-material-isolation.spec.ts': 5.0,
   'supervision-pool-under-load.spec.ts': 4.7,
+  // MOTIR-10045 — ESTIMATED from `project-access-contractor.spec.ts` (the same
+  // tenant seed, reset per test) scaled to eight tests, one of which waits on the
+  // job worker's delivery row; rounded UP. Replace with its measured CI time.
+  'tenant-job-runs-retired.spec.ts': 30.0,
   'token-permissions.spec.ts': 4.4,
   'triage-flow.spec.ts': 13.1,
   'passkeys.spec.ts': 7.7,

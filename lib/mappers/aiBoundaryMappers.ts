@@ -53,7 +53,7 @@ export function toSkeletonRows(
   rows: SkeletonSourceRow[],
   revisionByItemId: Map<string, string>,
   folderIdByItemId: Map<string, string>,
-  // A `human` decision's confirmation (MOTIR-5958) — only such an item has an entry,
+  // A decision's deciding gate (MOTIR-5958, MOTIR-10146) — only such an item has an entry,
   // so every other row projects `decision: null`. Required for the same reason
   // `folderIdByItemId` is: a read that forgot it would report every decision undated.
   decisionByItemId: Map<string, AiDecisionBlock>,

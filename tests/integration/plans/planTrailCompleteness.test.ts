@@ -242,9 +242,22 @@ describe('no plan mutation escapes the trail', () => {
       ).toBe(true);
     }
 
+    // ⚠️ NOR IS WHAT A PLANNER SESSION READ (MOTIR-10122). `recordPlanCodeReads` takes the
+    // same lock and appends to `plan_code_read` which files and queries a session read, at
+    // which commit — evidence about how the plan was written, not a change to what it
+    // proposes; a trail row per read would bury the history the same way narration would.
+    const NOT_A_PLAN_CHANGE_CODE_READS = new Set(['recordPlanCodeReads']);
+    for (const name of NOT_A_PLAN_CHANGE_CODE_READS) {
+      expect(mutations, `${name} is no longer a derived mutation`).toContain(name);
+      expect(reaches(name, bodies).has('maxSeq'), `${name} no longer appends code reads`).toBe(
+        true,
+      );
+    }
+
     const untracked = mutations.filter(
       (name) =>
         !NOT_A_PLAN_CHANGE.has(name) &&
+        !NOT_A_PLAN_CHANGE_CODE_READS.has(name) &&
         !NOT_A_PLAN_CHANGE_NARRATION.has(name) &&
         !NOT_A_PLAN_CHANGE_WAIT.has(name) &&
         !reaches(name, bodies).has('recordRevision') &&

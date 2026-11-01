@@ -89,6 +89,20 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-9797 · MOTIR-10040 — a production release's GitHub calls, made
+    // by the job WORKER: the manifest read at the merged commit, the deployment
+    // and its statuses, and the org installation read before the token mint.
+    // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE` and `E2E_TEST_GITHUB_REPOS`: it claims only
+    // the repositories and orgs its control file names, and every other path of
+    // the host falls through to them.
+    flag: 'E2E_TEST_PRODUCTION_RELEASE',
+    message: 'GitHub production-release calls (manifest, deployments) mocked.',
+    install: async (agent) => {
+      const { installProductionReleaseMock } = await import('@/lib/test-production-release-mock');
+      installProductionReleaseMock(agent);
+    },
+  },
+  {
     // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE` and `E2E_TEST_GITHUB_REPOS`, and the order
     // is load-bearing: the REPOS seam answers every `POST /app/installations/*`
     // with one shared token, and this one claims only its own installation, so
@@ -115,6 +129,19 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     install: async (agent) => {
       const { installGithubFleetOrgCiMock } = await import('@/lib/test-github-fleet-org-ci-mock');
       installGithubFleetOrgCiMock(agent);
+    },
+  },
+  {
+    // Story MOTIR-5766 · MOTIR-5781 — a preview's GitHub deployment, its statuses
+    // and its hosting manifest, all reached from the JOB WORKER's lifecycle effects.
+    // ⚠️ BEFORE `E2E_TEST_GITHUB_MERGE`, and the order is load-bearing: that seam
+    // answers `contents/{path}` RAW for its own repositories, and this one claims the
+    // manifest read (GitHub's JSON object) only for the repositories its control names.
+    flag: 'E2E_TEST_GITHUB_PREVIEW',
+    message: 'GitHub preview deployments + hosting manifest mocked.',
+    install: async (agent) => {
+      const { installGithubPreviewMock } = await import('@/lib/test-github-preview-mock');
+      installGithubPreviewMock(agent);
     },
   },
   {
@@ -155,7 +182,8 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
   },
   {
     // Story MOTIR-7858 · MOTIR-7866 — motir-ai's POST /v1/code-graph/read, which
-    // the MCP `code_explore` / `code_search` tools call from inside the server.
+    // the MCP `code_explore` / `code_search` / `code_grep` tools call from inside
+    // the server.
     flag: 'E2E_TEST_CODE_GRAPH_READ',
     message: 'motir-ai code-graph read seam mocked.',
     install: async (agent) => {

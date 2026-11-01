@@ -1468,10 +1468,161 @@ describe('a server card is not its own design blocker — MOTIR-9263', () => {
   });
 });
 
+describe('a test double named by its FILE is not a design asset — MOTIR-10088', () => {
+  /**
+   * The E2E card of plan `cmvm7k7f5000ehmnmxs8zx7vx` (the requirement-pane
+   * story's acceptance receipt), its acceptance criteria as the plan authored
+   * them before `check-plan --fix` reworded criterion 1 to "The motir-ai jobs
+   * test mock (`lib/test-ai-jobs-mock.ts`) …". Criterion 1 names the jobs mock
+   * by its file and criterion 7 is an ordinary render criterion ("shows no
+   * requirement document"), so the detector reported the card as its own
+   * design blocker (`designCriterionIndex: 1`, `surfaceCriterionIndex: 7`).
+   * The card draws nothing.
+   */
+  const E2E_CARD_PRE_FIX = [
+    '## Acceptance criteria',
+    '',
+    '- `lib/test-ai-jobs-mock.ts` passes a declared `offer.requirement` onto `result.ask.offer` and leaves every undeclared reply byte-identical, and journals `requirement`, `requirementPage` and `hasCarriedAnswers` on each `plan` submit and the conversation turns on each `ask_project` submit; `tests/ai/askJobsMock.test.ts` covers each.',
+    "- `tests/e2e/acceptance-requirement-pane.spec.ts` exists, runs under `playwright.acceptance.config.ts`, declares `acceptanceStory()` with the parent story's key, and its recorded test has one chapter per recorded case in the Cases section, in that order.",
+    '- Every case in the Cases section is asserted as written and passes on the acceptance lane.',
+    '- Every "no page", "one page" and "one run" assertion is a count read through `adminDb` or the jobs journal at that moment, never only an absence on screen.',
+    "- The confirmed run's journaled `plan` context carries `requirement` deep-equal to the stored offer's requirement, the recorded `requirementPage`, and no carried answers.",
+    "- The page reached from the rail's link is in a root-level folder named Requirements Docs, created by the Motir system account, and the folder holds exactly one page after the recorded walk.",
+    '- The targeted "plan this" chapter shows no requirement document, no page link and no new page, and its `plan` journal entry carries no `requirement` or `requirementPage`.',
+    "- The spec uses no `page.route` stub and no `waitForTimeout`; each action's response is awaited from a `waitForResponse` armed before it.",
+    '- The spec passes three consecutive runs on the acceptance lane locally, and the shipped `acceptance-plan-offer.spec.ts` still passes unchanged.',
+  ].join('\n');
+
+  it('the E2E card (pre-fix) is not reported as its own design blocker', () => {
+    expect(selfBlockingDesignCriteria(E2E_CARD_PRE_FIX)).toBeNull();
+  });
+
+  it('still pairs the render criterion with a criterion that names a drawing', () => {
+    const drawn = E2E_CARD_PRE_FIX.replace(
+      '- `lib/test-ai-jobs-mock.ts` passes',
+      '- `design/ai-planning/requirement-pane.mock.html` draws the pane, and the jobs mock passes',
+    );
+    expect(selfBlockingDesignCriteria(drawn)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 7,
+    });
+  });
+
+  it.each([
+    '`lib/test-ai-jobs-mock.ts` passes a declared `offer.requirement` onto the ask result',
+    'lib/test-ai-jobs-mock.ts journals every plan submit',
+    '`tests/foo.mock.ts` answers every call',
+    '`__mocks__/bar.ts` stands in for the client',
+    'the fixture lives in tests/e2e/_helpers/mock/seam.json',
+    'the double (helpers/mock-gateway.mjs) replies 200',
+    'scripts/plan-mock.py prints the envelope.',
+    'tests/mocks/README.md lists the doubles',
+  ])('a mock named by a code file or a test path is not a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it.each([
+    '`design/x/y.mock.html` is added',
+    'the mock draws the panel',
+    'the mock draws the panel that `lib/test-ai-jobs-mock.ts` feeds',
+    'tests/x.test.ts asserts what the mock shows',
+    'the board-mock.png export of the mock is committed',
+  ])('a drawing is still a design asset beside a code path: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+});
+
+describe('a bare "mock" is a test double unless it is plainly a drawing — MOTIR-10112', () => {
+  /**
+   * The REST pages story's integration gate in plan `cmvixgpa503mchmrkh0tbr6j7`
+   * (2026-10-24), a server-only `type: test` card. Criterion 9 was read as the
+   * DESIGN criterion and criterion 5 as the SURFACE one, so the card was its own
+   * design blocker. Criteria 5 and 9 are the card's own words; the rest are
+   * trimmed to the shape of an integration gate. It draws nothing.
+   */
+  const GATE_CARD = [
+    '## Acceptance criteria',
+    '',
+    '1. `POST /api/v1/pages` creates a page and answers 201 with its id.',
+    '2. `GET /api/v1/pages/{id}` answers the page body as markdown.',
+    '3. `PATCH /api/v1/pages/{id}` replaces the body and records one revision.',
+    '4. `DELETE /api/v1/pages/{id}` archives the page and answers 204.',
+    '5. The emitted OpenAPI document lists all four page operations.',
+    '6. A token without the page scope is refused with 403 on every operation.',
+    '7. A page in another workspace answers 404, never 403.',
+    '8. Every error body is `problem+json`.',
+    '9. The tests run against real Postgres and mock only the session or auth seam the other v1 tests mock.',
+  ].join('\n');
+
+  it('the integration-gate card is not reported as its own design blocker', () => {
+    expect(selfBlockingDesignCriteria(GATE_CARD)).toBeNull();
+  });
+
+  it.each(['Run as the other v1 tests mock.', 'The tests mock only the auth seam.'])(
+    'a double in ordinary English is not a design asset: %s',
+    (line) => {
+      expect(namesDesignAsset(line)).toBe(false);
+      const card = [
+        '## Acceptance criteria',
+        '',
+        `1. ${line}`,
+        '2. The emitted OpenAPI document lists all four page operations.',
+      ].join('\n');
+      expect(selfBlockingDesignCriteria(card)).toBeNull();
+    },
+  );
+
+  it.each([
+    'the stub replaces the fetch, and every other caller keeps its mock',
+    'the double is a mock, not a spy',
+    'each test resets its mocks between cases',
+    'only the clock is mocked',
+  ])('a mock with no drawing word is a test double: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(false);
+  });
+
+  it.each([
+    'The mock shows the panel’s empty state',
+    'the mock clearly draws the Target column',
+    "the mock's empty state",
+    'every state is drawn in the delta mock',
+    'the mocks of each panel are committed',
+    'a delta mock beside the shipped one',
+  ])('a mock in a drawing sense is still a design asset: %s', (line) => {
+    expect(namesDesignAsset(line)).toBe(true);
+  });
+
+  it('still fires on a code card that draws AND renders the same state', () => {
+    const drawn = [
+      '## Acceptance criteria',
+      '',
+      '1. Draw the empty state in `design/x/y.mock.html`.',
+      '2. Render the empty state.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(drawn)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+
+    const shown = [
+      '## Acceptance criteria',
+      '',
+      "1. The mock shows the panel's empty state.",
+      '2. The settings page renders the empty state.',
+    ].join('\n');
+    expect(selfBlockingDesignCriteria(shown)).toEqual({
+      designCriterionIndex: 1,
+      surfaceCriterionIndex: 2,
+    });
+  });
+});
+
 describe('isSelfBlockingDesignCheckExempt — the TYPE scope test (MOTIR-6245)', () => {
-  it('exempts a `type: design` card, and nothing else', () => {
+  it('exempts a `type: design` card and a `type: test` card, and nothing else', () => {
     expect(isSelfBlockingDesignCheckExempt('design')).toBe(true);
-    for (const type of ['code', 'test', 'content', 'chore', 'decision', 'deploy']) {
+    // A test card draws nothing there is to lift (MOTIR-10112).
+    expect(isSelfBlockingDesignCheckExempt('test')).toBe(true);
+    for (const type of ['code', 'content', 'chore', 'decision', 'deploy']) {
       expect(isSelfBlockingDesignCheckExempt(type)).toBe(false);
     }
     // Untyped is a real answer and is NOT exempt — the check still asks the prose.

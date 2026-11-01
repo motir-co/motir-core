@@ -44,8 +44,10 @@ export class ActionsRunsError extends Error {
 }
 
 export interface ActionsRepoRef {
-  /** The installation the repository lives in — for a Motir-created repo, the
-   *  PROVISIONING installation (the mirror row's `installationId`). */
+  /** GitHub's NUMERIC id of the installation the repository lives in — for a
+   *  Motir-created repo, the PROVISIONING installation. It is
+   *  `GithubInstallation.installationId`, NOT the mirror row's `installationId`,
+   *  which is the foreign key to Motir's own cuid (MOTIR-10071). */
   installationId: string;
   owner: string;
   repo: string;

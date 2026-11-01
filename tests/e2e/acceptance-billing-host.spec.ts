@@ -46,9 +46,9 @@ import zh from '@/messages/zh.json';
 // engine. The owner's balance is the FIXTURE replaying a paid invoice, so every
 // balance assertion is what the PAGE shows once the boundary reports the grant.
 // So this proves the requests motir-core sends (the lookup key, quantity 1,
-// `toPlanKey`, the preview's `prorationDate`), motir-core's own refusals (a
-// `pool_250k` checkout is not refused at the ceiling, as it would be had the
-// ceiling moved to Host), and what the page shows. It does NOT prove that Stripe
+// `toPlanKey`, the preview's `prorationDate`), motir-core's own refusals, and
+// what the page shows — the Need more credits? callout naming Host, the floor of
+// the larger offer since MOTIR-9654. It does NOT prove that Stripe
 // holds the Host prices, that motir-ai granted 300,000 or reconciled the price,
 // or that the real engine never recommends Host: those are the test-mode Stripe
 // card's (MOTIR-9399, its recorded test-mode Checkout and proration preview) and
@@ -367,7 +367,7 @@ test.describe('Host, a regular plan of 300,000 credits', () => {
         await expect(host()).not.toContainText(copy.plans.recommended);
         await expect(host()).not.toHaveAttribute('data-marked', /.*/);
         await expect(live(page).getByTestId('plans-need-more')).toContainText(
-          format(copy.plans.needMore.body, { plan: MAX_X2.name, credits: n(poolOf(MAX_X2)) }),
+          format(copy.plans.needMore.body, { plan: HOST.name, credits: n(poolOf(HOST)) }),
         );
       },
     );

@@ -17,6 +17,19 @@ export interface UpsertGithubIdentityInput {
   githubLogin: string;
   avatarUrl: string | null;
   accessTokenEncrypted: string;
+  /** Absent / null when GitHub issued a non-expiring token (no refresh token):
+   *  the upsert then stores null, so a reconnect never keeps a stale one. */
+  refreshTokenEncrypted?: string | null;
+  tokenExpiresAt?: Date | null;
+  refreshTokenExpiresAt?: Date | null;
+}
+
+/** A renewed token pair, as `storeRefreshedTokens` writes it. */
+export interface RefreshedGithubTokens {
+  accessTokenEncrypted: string;
+  refreshTokenEncrypted: string;
+  tokenExpiresAt: Date;
+  refreshTokenExpiresAt: Date | null;
 }
 
 export const githubIdentityRepository = {
@@ -63,16 +76,64 @@ export const githubIdentityRepository = {
   },
 
   /** Create-or-refresh the acting user's identity binding (re-auth updates the
-   *  login / avatar / token in place, keyed on the unique `user_id`). */
+   *  login / avatar / tokens in place, keyed on the unique `user_id`). A re-auth
+   *  is a fresh credential, so it also clears a refused-refresh mark and any
+   *  renewal lease (Bug MOTIR-10021). */
   async upsertForUser(
     input: UpsertGithubIdentityInput,
     tx: Prisma.TransactionClient,
   ): Promise<GithubIdentity> {
-    const { userId, ...rest } = input;
+    const { userId, ...given } = input;
+    const rest = {
+      ...given,
+      refreshTokenEncrypted: given.refreshTokenEncrypted ?? null,
+      tokenExpiresAt: given.tokenExpiresAt ?? null,
+      refreshTokenExpiresAt: given.refreshTokenExpiresAt ?? null,
+    };
     return tx.githubIdentity.upsert({
       where: { userId },
       create: { userId, ...rest },
-      update: rest,
+      update: { ...rest, refreshLeaseUntil: null, refreshRefusedAt: null },
+    });
+  },
+
+  /** Row-lock the user's identity for the renewal decision (Bug MOTIR-10021).
+   *  `$queryRaw` because Prisma has no `FOR UPDATE`. Held only for the short
+   *  decide transaction, never across the call to GitHub. */
+  async lockByUserId(userId: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$queryRaw`SELECT "id" FROM "github_identity" WHERE "user_id" = ${userId} FOR UPDATE`;
+  },
+
+  /** Take the single-flight renewal lease until `until`. Written under the lock
+   *  above, and committed BEFORE the refresh grant is spent. */
+  async setRefreshLease(id: string, until: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.githubIdentity.update({ where: { id }, data: { refreshLeaseUntil: until } });
+  },
+
+  /** Give the lease back without changing the stored pair (a renewal that got
+   *  no answer, or a 5xx). */
+  async releaseRefreshLease(id: string, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.githubIdentity.update({ where: { id }, data: { refreshLeaseUntil: null } });
+  },
+
+  /** Store the rotated pair and release the lease, in one statement. */
+  async storeRefreshedTokens(
+    id: string,
+    tokens: RefreshedGithubTokens,
+    tx: Prisma.TransactionClient,
+  ): Promise<void> {
+    await tx.githubIdentity.update({
+      where: { id },
+      data: { ...tokens, refreshLeaseUntil: null },
+    });
+  },
+
+  /** Mark the refresh token REFUSED by GitHub and release the lease. The
+   *  identity is dead until the member reconnects (`upsertForUser` clears it). */
+  async markRefreshRefused(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
+    await tx.githubIdentity.update({
+      where: { id },
+      data: { refreshRefusedAt: at, refreshLeaseUntil: null },
     });
   },
 

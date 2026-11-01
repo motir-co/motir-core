@@ -9,7 +9,7 @@ import type {
   WorkItemRepairClass,
   WorkItemRepairRefusal,
 } from '@/lib/dto/workItemRepair';
-import { isConflictedAtCurrentHead } from '@/lib/github/mergeability';
+import { isConflictedAtCurrentHead, isOutOfDateAtCurrentHead } from '@/lib/github/mergeability';
 import { derivePrCiState } from '@/lib/github/prCiState';
 import { pullRequestHead, prCiStateAtHead, checkRowsAtHead } from '@/lib/github/pullRequestHead';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
@@ -125,10 +125,12 @@ function toRepairPullRequest(m: {
   ci: ReturnType<typeof derivePrCiState>;
   exit: GithubPullRequestQueueExit | null;
   conflicted: boolean;
+  outOfDate: boolean;
 }): RepairPullRequestDto {
-  const { row, ci, exit, conflicted } = m;
+  const { row, ci, exit, conflicted, outOfDate } = m;
   return {
     conflicted,
+    outOfDate,
     repo: `${row.repo.owner}/${row.repo.name}`,
     number: row.pullRequest.number,
     url: `https://github.com/${row.repo.owner}/${row.repo.name}/pull/${row.pullRequest.number}`,
@@ -249,6 +251,7 @@ export async function evaluateRepair(
             ci: prCiStateAtHead(row.pullRequest),
             exit: queueHeld.get(row.pullRequest.id) ?? null,
             conflicted: isConflictedAtCurrentHead(row.pullRequest),
+            outOfDate: isOutOfDateAtCurrentHead(row.pullRequest),
           }),
         ),
       };
@@ -294,6 +297,7 @@ export async function evaluateRepair(
             ci: prCiStateAtHead(row.pullRequest),
             exit: queueHeld.get(row.pullRequest.id) ?? null,
             conflicted: isConflictedAtCurrentHead(row.pullRequest),
+            outOfDate: isOutOfDateAtCurrentHead(row.pullRequest),
           }),
         ),
       };
@@ -328,14 +332,21 @@ export async function evaluateRepair(
   // the card at Implemented with green checks, and `motir fix` is the answer the band
   // offers — so it must not be refused `not_failing`. The fixing prompt merges the base
   // first (`renderFixPrompt`), which is exactly what resolving a conflict takes.
+  //
+  // ⚠️ AND SO IS A MEMBER OUT OF DATE WITH A BASE THAT REQUIRES IT (Bug MOTIR-10054). The
+  // host refuses its merge with every check green, the promotion holds it at Implemented,
+  // and the merge of the base the fixing prompt opens with is the whole repair. It is NOT
+  // an In Review admission (`redAtHead` above): a card in review whose base moved is
+  // refused at the press, which settles it at Implemented, where this arm finds it.
   const open = openRows.map((d) => ({
     row: d,
     ci: prCiStateAtHead(d.pullRequest),
     exit: queueHeld.get(d.pullRequest.id) ?? null,
     conflicted: isConflictedAtCurrentHead(d.pullRequest),
+    outOfDate: isOutOfDateAtCurrentHead(d.pullRequest),
   }));
   const failing: RepairPullRequestDto[] = open
-    .filter((m) => m.ci === 'failing' || m.exit !== null || m.conflicted)
+    .filter((m) => m.ci === 'failing' || m.exit !== null || m.conflicted || m.outOfDate)
     .map(toRepairPullRequest);
 
   // The repair runs where the run that delivered the pull requests was launched.

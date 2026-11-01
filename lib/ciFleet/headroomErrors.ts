@@ -107,6 +107,25 @@ export class HostAccountRefusedError extends Error {
   }
 }
 
+/** AWS refused `CreateAccount` for an enterprise tenant's hosting account
+ *  (MOTIR-9942). One issue per organisation. */
+export class TenantAccountRefusedError extends Error {
+  constructor(
+    readonly organizationId: string,
+    readonly accountName: string,
+    /** AWS's reason, as its code. */
+    readonly reason: string,
+    readonly consecutiveRefusals: number,
+  ) {
+    super(
+      `Creating the tenant account ${accountName} (organisation ${organizationId}) was ` +
+        `refused: ${reason}. Refusal ${consecutiveRefusals} in a row; the reconcile backs off ` +
+        "before the next attempt, and the organisation's AWS deploys wait until it is ready.",
+    );
+    this.name = 'TenantAccountRefusedError';
+  }
+}
+
 /** A quota raise still open after a day — AWS is slow, or wants a case answered. */
 export class QuotaRequestSlowError extends Error {
   constructor(

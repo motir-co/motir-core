@@ -27,6 +27,13 @@ deliberate ×1.00**, a **runner-selection seam** that keeps a handed-over repo p
 [the amendment](#amendment-2026-07-31-yue--motir-1915--project-ci-runs-on-motirs-own-runner-fleet).
 Everything it records is BUILT by MOTIR-1916; the planning defect is logged as MOTIR-1917.
 
+**Amended:** 2026-10-29 (MOTIR-5777) — **PREVIEW USAGE is counted in the pool.** A
+Motir-hosted repository's pull-request previews are converted to Linux-equivalent minutes at
+the factors the hosting decision page sets, counted in the same per-seat pool, and charged as
+the existing `ci_overage` past it. **§1–§8 are unchanged**: no new ledger kind, no new rate,
+no second path. See
+[the amendment](#amendment-2026-10-29-motir-5777--preview-usage-is-counted-in-the-pool).
+
 Motir hosts some of its users' repositories, so Motir pays some of their CI bill. This
 record prices that: the **included allowance** every seat carries, the **rate** the
 overage draws from the credit ledger, how the pool is **pooled and reset**, how minutes
@@ -1562,6 +1569,57 @@ warns past a tolerance — correct code, now pointed at a population that no lon
   31-job figure; also the `docs/`-prefix branch gate this amendment's own PR rides.
 - `nextjs-prisma-vercel-starter` (5 job sites) and
   `nextjs-prisma-vercel-starter-with-design` (6), counted for §N.
+
+### Amendment 2026-10-29 (MOTIR-5777) — preview usage is counted in the pool
+
+**Status:** accepted · **Date:** 2026-10-29 · **Card:** MOTIR-5777 (Story MOTIR-5766) ·
+**Decided by:**
+[Decision — hosting Motir repositories](https://app.motir.co/pages/cmvrcywwc00jkhpr1zvvnike8)
+(MOTIR-5769, §9 "Preview cost through the CI allowance"). That page is a published Motir page,
+not a file in this repository; this amendment is its in-repo pointer, and the page is the
+authority for every figure below.
+
+**What changes.** Every pull request on a Motir-hosted web repository gets a live preview on
+Motir's own Fly or serverless account and a Neon branch (Story MOTIR-5766). That usage is
+charged through this allowance rather than a second bill:
+
+- It is converted to **Linux-equivalent minutes** at the factors below and counted in the
+  **same per-seat pool** (§1). `ciMinutesMeterService.getOrgPeriodConsumption`, the one read
+  the entitlement measures against, returns CI minutes plus preview minutes, with a `bySource`
+  breakdown. `CiEntitlementStateDTO.consumedBySource` carries that breakdown to a usage
+  surface.
+- Past the pool, overage is charged by the **shipped charge**
+  (`ciAllowanceService.chargeForMeteredRun`) as the existing **`ci_overage`** ledger kind at
+  §2's 1 credit per minute. **No ledger kind is added**, and motir-ai's `src/creditKinds.ts`
+  is not widened.
+- **Motir's own cost** is recorded on every slice beside the minutes (`preview_usage.motir_cost_usd`),
+  at the same list prices, as §P keeps the customer's minute and Motir's cost as two
+  quantities.
+
+**The factors**, as the decision page states them, against GitHub's Linux 2-core rate of
+**$0.006 a minute** (unchanged; [GitHub](https://docs.github.com/en/billing/reference/actions-runner-pricing)):
+
+| Usage                    | Source price                                            | Read                                   | Linux-equivalent minutes      |
+| ------------------------ | ------------------------------------------------------- | -------------------------------------- | ----------------------------- |
+| Fly Machine running time | `shared-cpu-1x` 512 MB **$3.69/month** (≈ $0.0000014/s) | 2026-10-28 (2026-09-19: $0.00000128/s) | **0.0140 per running minute** |
+| Neon compute             | Launch **$0.106 per CU-hour**                           | 2026-10-28 (unchanged)                 | **17.7 per CU-hour**          |
+| Lambda compute           | x86 **$0.0000166667 per GB-second**                     | 2026-10-28                             | **0.167 per GB-minute**       |
+| Lambda requests          | **$0.20 per million requests**                          | 2026-10-28                             | **33.3 per million requests** |
+| AWS previews             | the tenant's own account cost                           | —                                      | **not converted**             |
+
+**How it is metered.** `preview_usage` holds one row per accrual slice, keyed
+`(preview, kind, slice end)`. An hourly job (`system.preview-usage-accrual`) records each live
+preview's usage since its last slice, so a preview that lives for weeks is charged in the
+month it ran. The final slice is written when the preview's app or branch is destroyed: the
+composition root (`lib/orchestrator/index.ts`) observes the deploy and database ports'
+destroys, so the preview lifecycle itself calls no billing code. The figures live in
+`lib/ciMetering/previewRates.ts`; a price change on the decision page is a change there and a
+new dated line here.
+
+**What this does not decide.** Whether an exhausted organisation's previews stop is the
+decision page's call, and it has not made it; nothing here refuses a preview. Production
+metering of a hosted app is
+the "running a live app" story's (MOTIR-9799).
 
 ## Consequences
 

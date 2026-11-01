@@ -201,8 +201,10 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_code_health: 'read',
   get_coding_convention: 'read',
   read_file: 'read',
+  list_changed_files: 'read',
   code_explore: 'read',
   code_search: 'read',
+  code_grep: 'read',
   skeleton: 'read',
   list_folders: 'read',
   get_section_sets: 'read',
@@ -240,6 +242,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // gate (`TOOL_PERMISSIONS` → `project:browse`) is the same class. This row
   // governs nothing but the deprecated docs rendering.
   validate_plan: 'read',
+  get_plan_authoring_state: 'read',
+  get_plan_code_reads: 'read',
   get_plan_status: 'read',
   get_plan: 'read',
   // The approved-shape verdict (MOTIR-6227). A pure READ, and still filed under

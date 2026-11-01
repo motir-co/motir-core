@@ -156,8 +156,8 @@ describe('system.daily-health-check scheduled job', () => {
 // §6.1 of `docs/decisions/fleet-image-pull.md` asks for a preflight that "fails
 // loudly, once, naming the image reference and the registry's own error". LOUDLY
 // means somewhere a person looks: this job's `retryPolicy: 'none'` sends a
-// failure straight to the DLQ, whose tab in `/settings/workspace/jobs` carries a
-// badge count and renders `job_run.failure` in its detail panel. So the tests
+// failure straight to the DLQ, whose tab on the staff ledger (`/admin/jobs`)
+// counts it and renders `job_run.failure`. So the tests
 // below assert the two things that make that surface worth having — that the row
 // EXISTS, and that its message is a diagnosis rather than "the fleet is
 // unhealthy".

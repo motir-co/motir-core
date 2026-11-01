@@ -1,51 +1,92 @@
-import type { Prisma, WorkspaceRole } from '@/generated/prisma/client';
+import type { Prisma, PublicAddress, WorkspaceRole } from '@/generated/prisma/client';
 
 import { isCloud } from '@/lib/billing/availability';
-import type { PublicSubdomainDto, RetiredSubdomainDto } from '@/lib/dto/publicAddresses';
+import type {
+  PublicSubdomainDto,
+  SubdomainChangePreviewDto,
+  SubdomainReleaseDto,
+} from '@/lib/dto/publicAddresses';
 import {
   HostnameTakenError,
+  NameQuarantinedError,
   NoSubdomainClaimedError,
   PublicAddressesUnavailableError,
   ReservedLabelError,
+  SubdomainChangeLimitError,
   SubdomainForbiddenError,
   SubdomainNotFoundError,
-  SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import {
   hostnameReservationHash,
   reservesItsHostname,
 } from '@/lib/publicAddresses/hostnameReservation';
-import { MAX_SUBDOMAIN_RENAMES, refuseLabel } from '@/lib/publicAddresses/reservedNames';
+import {
+  canChangeNow,
+  holdOutcome,
+  nextChangeAllowedAt,
+  type HoldOutcome,
+} from '@/lib/publicAddresses/nameHold';
+import { refuseLabel } from '@/lib/publicAddresses/reservedNames';
 import { tenantBaseDomain, tenantHostname } from '@/lib/publicAddresses/tenantDomain';
 import { publicAddressRepository } from '@/lib/repositories/publicAddressRepository';
 import { publicHostnameReservationRepository } from '@/lib/repositories/publicHostnameReservationRepository';
+import { publicSubdomainChangeRepository } from '@/lib/repositories/publicSubdomainChangeRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { readReachRole } from '@/lib/workspaces/membershipGate';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
-// A WORKSPACE'S TENANT SUBDOMAIN — claim it, rename it, read it back.
-// Story MOTIR-3878 · Subtask MOTIR-4215. `docs/decisions/public-tenant-addresses.md`
-// §3 (a subdomain names a WORKSPACE), §8 (never released, capped), §11 (cloud).
+// A WORKSPACE'S TENANT SUBDOMAIN — claim it, rename it, release it, read it.
+// Story MOTIR-3878 · Subtask MOTIR-4215; rebuilt by Story MOTIR-4528 · Subtask
+// MOTIR-9507 to `docs/decisions/public-tenant-addresses.md` §8 Amendment 3.
 //
 // This is the FREE tier's address and it works on every tier. Custom domains are
 // MOTIR-4216's; nothing here touches a certificate, because the wildcard
 // `*.<base>` already covers every label (ADR §6) — claiming one writes a row,
-// and RELEASING one deletes a row. `customDomainService.remove` DOES call the
-// provider, and it is the nearest neighbour to this file's `release`; copying it
-// would ask Fly to withdraw a certificate for a hostname it never issued one for.
+// and renaming or releasing one deletes a row. `customDomainService.remove` DOES
+// call the provider, and it is the nearest neighbour to this file's `release`;
+// copying it would ask Fly to withdraw a certificate for a hostname it never
+// issued one for.
 //
-// ── RELEASE (ADR §8 AMENDMENT 2 · Story MOTIR-4451 · Subtask MOTIR-4454) ────
+// ── THE RULES (§8 Amendment 3, the story's rules 1 to 4) ────────────────────
 //
-// §8's never-released rule is about who may take a name NEXT, not about who must
-// keep SERVING it — `reservesItsHostname`'s own comment says so — so a workspace
-// may give its subdomain back while the NAME stays out of the namespace for ever.
-// The workspace delete (`deleteWorkspaceCascade`) already had this shape scoped to a whole
-// workspace (list → filter `reservesItsHostname` → `reserveMany` → delete, one
-// transaction); `release` is that path narrowed from *the workspace is going* to
-// *the subdomain is going*, and it follows it deliberately rather than by
-// coincidence.
+//   1. ONE NAME per workspace. No alias, no redirect: a rename deletes the live
+//      row and creates the new one, and the alias kind is never written again.
+//      Legacy alias rows still in the database are the one-off cleanup's
+//      (MOTIR-9520); this file neither reads nor writes them.
+//   2. A rename or release STOPS SERVING AT ONCE. The old row is deleted in the
+//      same transaction, so the next read of the host contract finds nothing.
+//   3. THE HOLD. A label held strictly under 24 hours returns to the pool at
+//      once; one held longer is reserved for 90 days. `nameHold.ts` is the one
+//      definition, and this file never restates a duration.
+//   4. ONE CHANGE PER 30 DAYS, renames and releases alike, with no cap on the
+//      number. A first claim is not a change: it neither reads nor writes the
+//      ledger, so claim-after-release stays possible while the rename or
+//      release after it still obeys the limit.
+//
+// ── THE WRITE ORDER, and why each step is where it is ──────────────────────
+//
+//   lock the workspace row → read the live row → read the ledger and refuse on
+//   the limit → decide the hold → RESERVE (quarantine only) → DELETE the old row
+//   → (rename) CREATE the new row, then check the reservation table → record the
+//   change in the ledger.
+//
+//   * The LOCK comes first because the ledger read and the hold decision are
+//     decisions about a state; taken before the lock they decide about a state
+//     that may already be gone. Two admins renaming at once serialize on it, and
+//     the second one meets the first one's ledger row and is refused.
+//   * RESERVE BEFORE DELETE. The reservation is what keeps a released name out of
+//     the pool while it is held. A transaction that committed the delete and lost
+//     the reserve would hand the name straight back — and unrepairably, because
+//     the row that knew the hostname is the row that was deleted and the table
+//     stores a digest we cannot read back. Reserving first means a failing
+//     reserve rolls the delete back with it and the workspace keeps its address.
+//   * DELETE BEFORE CREATE, so the workspace never holds two live subdomains (a
+//     state `findLiveSubdomainForWorkspace` resolves arbitrarily) — and, because
+//     it is one transaction, never holds none either.
+//   * The LEDGER WRITE is last, so a refused claim of the new label rolls the
+//     whole change back and spends no change from the limit.
 //
 // ── AUTHORISATION: a WORKSPACE resource, not a project one ─────────────────
 //
@@ -62,12 +103,17 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // ── CONCURRENCY: lock the WORKSPACE row, then read ─────────────────────────
 //
-// Two admins claiming at once is the warm-pool TOCTOU `entitlementsService`'s
-// header describes. The workspace row is the single row all of one workspace's
-// claims contend on, so it is the anchor — and the `hostname` unique index is
-// the SECOND line of defence for the cross-workspace race the row lock cannot
-// see (two different workspaces claiming one label lock two different rows).
-// Both are needed and neither is redundant.
+// The workspace row is the single row all of one workspace's changes contend on,
+// so it is the anchor — and the `hostname` unique index is the SECOND line of
+// defence for the cross-workspace race the row lock cannot see (two different
+// workspaces claiming one label lock two different rows). Both are needed and
+// neither is redundant.
+//
+// ── THE CLOCK ──────────────────────────────────────────────────────────────
+//
+// Every method takes an optional trailing `now`, so the 24-hour and 30-day
+// boundaries are testable to the millisecond. It is the only clock the rules
+// read: `nameHold.ts` takes every instant as an argument.
 
 /**
  * Whether a workspace ROLE may change the address — the predicate the settings
@@ -85,7 +131,7 @@ export function roleMayManageAddress(role: WorkspaceRole | null | undefined): bo
 
 export const publicSubdomainService = {
   /**
-   * The workspace's subdomain, or `null` when it has never claimed one.
+   * The workspace's subdomain, or `null` when it holds none.
    *
    * Readable by any workspace member — an address is not a secret from the team
    * that answers at it, and the pane needs it to render the read-only arm.
@@ -93,26 +139,59 @@ export const publicSubdomainService = {
   async getForWorkspace(
     workspaceId: string,
     actorUserId: string,
+    now: Date = new Date(),
   ): Promise<PublicSubdomainDto | null> {
     assertAvailable();
     await assertMember(workspaceId, actorUserId);
     return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
-      const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
-      return toDto(addresses, await reservedCount(workspaceId, tx));
+      const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
+      if (!live) return null;
+      return toDto(live, await readLastChange(workspaceId, tx), now);
+    });
+  },
+
+  /**
+   * What a rename or release would do right now, without doing it — the confirm
+   * dialog's dated preview (story rule 5).
+   *
+   * Computed with the same pure functions the writes apply, so for the same
+   * `now` the dialog and the stored expiry cannot disagree. It takes no lock:
+   * it is advice, never authority, and the write recomputes under the lock.
+   */
+  async previewChange(
+    workspaceId: string,
+    actorUserId: string,
+    now: Date = new Date(),
+  ): Promise<SubdomainChangePreviewDto> {
+    assertAvailable();
+    await assertAddressAdmin(workspaceId, actorUserId);
+    return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+      const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
+      // A GET of a resource that is not there: 404, the release path's answer.
+      if (!live) throw new SubdomainNotFoundError();
+      const lastChangedAt = await readLastChange(workspaceId, tx);
+      const hold = holdOf(live, now);
+      return {
+        host: live.hostname,
+        outcome: hold.kind,
+        returnsAt: hold.kind === 'quarantine' ? hold.returnsAt.toISOString() : null,
+        changeAllowed: canChangeNow(lastChangedAt, now),
+        nextChangeAllowedAt: blockedUntil(lastChangedAt, now)?.toISOString() ?? null,
+      };
     });
   },
 
   /**
    * Claim a label for a workspace that has none.
    *
-   * ONE transaction: lock, re-read under the lock, validate, write. The re-read
-   * is the point of the lock — a claim decided from a read taken before it is a
-   * decision about a state that may already be gone.
+   * ONE transaction: lock, re-read under the lock, validate, write. A claim is
+   * not a change (rule 4), so the ledger is neither read nor written.
    */
   async claim(
     workspaceId: string,
     label: string,
     actorUserId: string,
+    now: Date = new Date(),
   ): Promise<PublicSubdomainDto> {
     assertAvailable();
     await assertAddressAdmin(workspaceId, actorUserId);
@@ -123,27 +202,27 @@ export const publicSubdomainService = {
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       if (live) {
         // Already claimed — a claim is not a rename, and quietly turning one
-        // into the other would spend a rename from the cap without saying so.
+        // into the other would spend a change from the limit without saying so.
         throw new HostnameTakenError(live.hostname);
       }
       const hostname = tenantHostname(label);
-      await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
-      await assertNotReserved(hostname, tx);
-      const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
-      return toDto(addresses, await reservedCount(workspaceId, tx))!;
+      const created = await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
+      await assertNotReserved(hostname, now, tx);
+      return toDto(created, await readLastChange(workspaceId, tx), now);
     });
   },
 
   /**
-   * Rename the workspace's subdomain, retaining the old label FOR EVER.
+   * Rename the workspace's subdomain. The old name stops being served in this
+   * transaction and is held or freed by rule 3; nothing redirects to the new one.
    *
-   * The retirement and the new claim are ONE transaction, so there is no instant
-   * at which the workspace has two live subdomains or none.
+   * The order inside the transaction is the file header's WRITE ORDER.
    */
   async rename(
     workspaceId: string,
     newLabel: string,
     actorUserId: string,
+    now: Date = new Date(),
   ): Promise<PublicSubdomainDto> {
     assertAvailable();
     await assertAddressAdmin(workspaceId, actorUserId);
@@ -154,125 +233,133 @@ export const publicSubdomainService = {
       const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       if (!live) throw new NoSubdomainClaimedError();
 
-      const reserved = await reservedCount(workspaceId, tx);
-      const used =
-        (await publicAddressRepository.countAliasesForWorkspace(workspaceId, tx)) + reserved;
-      if (used >= MAX_SUBDOMAIN_RENAMES) {
-        throw new SubdomainRenameCapReachedError(used, MAX_SUBDOMAIN_RENAMES);
-      }
-
       const hostname = tenantHostname(newLabel);
       if (hostname === live.hostname) {
-        // Renaming to the name you already hold would burn a rename from the cap
-        // and write an alias row pointing at itself. Refused as taken, which is
-        // what it is.
+        // Renaming to the name you already hold would spend a change and hold
+        // the name against yourself. Refused as taken, which is what it is.
         throw new HostnameTakenError(hostname);
       }
 
-      // ORDER MATTERS: retire first, then claim. The reverse would hold two
-      // `workspace_subdomain` rows for an instant — a state
-      // `findLiveSubdomainForWorkspace` resolves arbitrarily.
-      await publicAddressRepository.retireSubdomainToAlias(live.id, tx);
-      await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
-      await assertNotReserved(hostname, tx);
+      await assertChangeAllowed(workspaceId, now, tx);
+      await retireLiveSubdomain(workspaceId, live, now, tx);
+      const created = await publicAddressRepository.createSubdomain({ workspaceId, hostname }, tx);
+      await assertNotReserved(hostname, now, tx);
+      await publicSubdomainChangeRepository.recordChangeInTx(workspaceId, now, tx);
 
-      const addresses = await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx);
-      return toDto(addresses, reserved)!;
+      return toDto(created, now, now);
     });
   },
 
   /**
-   * RELEASE the workspace's subdomain — the live label AND every retained alias
-   * (ADR §8 Amendment 2, MOTIR-4454).
+   * RELEASE the workspace's subdomain (§8 Amendments 2 and 3). It stops being
+   * served in this transaction, its name is held or freed by rule 3, and the
+   * release counts against the 30-day limit exactly as a rename does.
    *
-   * ONE transaction, and the ORDER inside it is the whole safety argument:
-   * **reserve, then delete.** The reservation is the only reason a release is
-   * permitted at all — it is what keeps §8's protection while the address goes —
-   * so a release that committed the delete and lost the reserve would hand the
-   * label back to the global namespace, which is the exact outcome §8 exists to
-   * prevent. And it would be unrepairable: the row that knew the hostname is the
-   * row that was deleted, and the table deliberately stores a digest we cannot
-   * read back. Reserving first means a failing reserve rolls the delete back with
-   * it and the workspace keeps its address.
-   *
-   * The rows are chosen by `reservesItsHostname`, never by a hand-written kind
-   * list. That predicate is where the custom-domain exclusion lives, and it
-   * carries its own reason: a customer's domain is theirs whatever happens to
-   * their Motir account, so reserving it would be a hostage rather than a
-   * protection. A workspace with custom domains keeps every one of them, and a
-   * promoted one stays the project's canonical.
+   * Returns when the name returns to the pool — `null` when it already has — so
+   * the caller can state the date.
    *
    * ⚠️ NO CERTIFICATE CALL, and the temptation is structural rather than
    * hypothetical: the nearest neighbour to this method is
    * `customDomainService.remove`, which withdraws a certificate post-commit. A
    * workspace subdomain is covered by the wildcard `*.<base>` (ADR §6) — claiming
-   * one issues nothing, so releasing one withdraws nothing, and asking Fly about
-   * a hostname it never certificated is a call that can only fail.
+   * one issues nothing, so releasing one withdraws nothing.
    *
    * ⚠️ NO `setPrimary(null)` SWEEP either. `project.primary_address_id` is
-   * `ON DELETE SET NULL` (`schema.prisma`'s own comment on the relation), so a
-   * project whose primary this was falls back to §7's default — `motir.co/p/<id>`
-   * — on its own. A hand-run sweep here would be a second copy of a constraint
-   * the database already holds, and the test asserts the fallback instead.
+   * `ON DELETE SET NULL`, so a project whose primary this was falls back to §7's
+   * default on its own. A hand-run sweep here would be a second copy of a
+   * constraint the database already holds.
    */
-  async release(workspaceId: string, actorUserId: string): Promise<void> {
+  async release(
+    workspaceId: string,
+    actorUserId: string,
+    now: Date = new Date(),
+  ): Promise<SubdomainReleaseDto> {
     assertAvailable();
     await assertAddressAdmin(workspaceId, actorUserId);
 
-    await withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
+    return withWorkspaceContext({ userId: actorUserId, workspaceId }, async (tx) => {
       await lockWorkspaceOrRefuse(workspaceId, tx);
-      const rows = (await publicAddressRepository.listForWorkspaceInTx(workspaceId, tx)).filter(
-        (address) => reservesItsHostname(address.kind),
-      );
+      const live = await publicAddressRepository.findLiveSubdomainForWorkspace(workspaceId, tx);
       // Nothing claimed. A DELETE names a resource, so this is a 404 and NOT the
       // rename path's 409 — `SubdomainNotFoundError` carries that reasoning.
-      if (rows.length === 0) throw new SubdomainNotFoundError();
+      if (!live) throw new SubdomainNotFoundError();
 
-      await publicHostnameReservationRepository.reserveMany(
-        rows.map((address) => ({
-          hostnameHash: hostnameReservationHash(address.hostname),
-          retiredFromWorkspaceId: workspaceId,
-        })),
-        tx,
-      );
-      await publicAddressRepository.removeMany(
-        rows.map((address) => address.id),
-        tx,
-      );
+      await assertChangeAllowed(workspaceId, now, tx);
+      const hold = await retireLiveSubdomain(workspaceId, live, now, tx);
+      await publicSubdomainChangeRepository.recordChangeInTx(workspaceId, now, tx);
+
+      return { returnsAt: hold.kind === 'quarantine' ? hold.returnsAt.toISOString() : null };
     });
   },
 };
 
 // ── Internals ──────────────────────────────────────────────────────────────
 
+/** The hold `live` takes if it stops being the workspace's name at `now` (rule 3). */
+function holdOf(live: PublicAddress, now: Date): HoldOutcome {
+  // The live row's `createdAt` is when the workspace took THIS label: a rename
+  // creates a new row, so the clock restarts with every name.
+  return holdOutcome({ claimedAt: live.createdAt, releasedAt: now });
+}
+
+/** The workspace's last rename or release, or `null` if it has never changed its name. */
+async function readLastChange(
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<Date | null> {
+  return (
+    (await publicSubdomainChangeRepository.findByWorkspaceInTx(workspaceId, tx))?.lastChangedAt ??
+    null
+  );
+}
+
+/** When the 30-day limit next allows a change, or `null` when it allows one at `now`. */
+function blockedUntil(lastChangedAt: Date | null, now: Date): Date | null {
+  if (!lastChangedAt || canChangeNow(lastChangedAt, now)) return null;
+  return nextChangeAllowedAt(lastChangedAt);
+}
+
 /**
- * How many hostnames this workspace has RETIRED into the reservation table — the
- * SECOND term of the ADR §8 rename cap, as Amendment 2 restates it.
- *
- * The ADR line this implements, quoted (`docs/decisions/public-tenant-addresses.md`
- * §8 Amendment 2, *The rename cap: releasing does NOT reset it*):
- *
- * > `renamesLeft = MAX_SUBDOMAIN_RENAMES − (aliases held + hostnames this
- * > workspace has reserved)`
- *
- * So the cap counts names BURNT out of a shared namespace, not alias ROWS. Those were the
- * same number for as long as the only way to stop holding an alias was to delete
- * the whole workspace. A release deletes the rows while the workspace survives,
- * so a cap reading only them is handed back in full on every release, and
- * `claim → rename ×5 → release`, repeated, burns names without bound — giving
- * back at the exit exactly what the cap holds at the door.
- *
- * ⚠️ IT CHARGES THE RELEASED LIVE LABEL TOO, and that is Amendment 2's stated
- * choice rather than an off-by-one: the live label is permanently burnt as surely
- * as an alias is, so a workspace that claims once and releases once has spent one
- * of its five. Not charging it would need a column on the reservation table
- * marking which kind a row came from, existing only to make the cap kinder.
- *
- * For a workspace that has never released this is `0`, so every derived number
- * is byte-for-byte what it was before Amendment 2.
+ * Refuse a rename or release inside the 30-day limit (rule 4). Called UNDER the
+ * workspace lock, so the ledger it reads is the one the change will write.
  */
-async function reservedCount(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
-  return publicHostnameReservationRepository.countForWorkspaceInTx(workspaceId, tx);
+async function assertChangeAllowed(
+  workspaceId: string,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const until = blockedUntil(await readLastChange(workspaceId, tx), now);
+  if (until) throw new SubdomainChangeLimitError(until);
+}
+
+/**
+ * Stop serving the live subdomain: hold its name if rule 3 says so, then delete
+ * its row. RESERVE BEFORE DELETE — the file header's write order says why.
+ */
+async function retireLiveSubdomain(
+  workspaceId: string,
+  live: PublicAddress,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<HoldOutcome> {
+  const hold = holdOf(live, now);
+  // `reservesItsHostname` stays the one place that decides which kinds are ever
+  // held; it is true for a workspace subdomain, and asking keeps it that way.
+  if (hold.kind === 'quarantine' && reservesItsHostname(live.kind)) {
+    await publicHostnameReservationRepository.reserveMany(
+      [
+        {
+          hostnameHash: hostnameReservationHash(live.hostname),
+          retiredFromWorkspaceId: workspaceId,
+          expiresAt: hold.returnsAt,
+        },
+      ],
+      now,
+      tx,
+    );
+  }
+  await publicAddressRepository.remove(live.id, tx);
+  return hold;
 }
 
 /** Public addresses are a cloud capability — ABSENT off-cloud, not hidden. */
@@ -292,44 +379,50 @@ async function assertAddressAdmin(workspaceId: string, actorUserId: string): Pro
   if (!roleMayManageAddress(role)) throw new SubdomainForbiddenError();
 }
 
-/** Refuse a label the ADR §8 grammar or reserved set rejects. */
+/**
+ * Refuse a label the ADR §8 grammar or reserved set rejects. `refuseLabel` is
+ * the ONLY label check, so a grammar rule added there (MOTIR-9797's `--` and
+ * length rules) applies here the day it lands.
+ */
 function assertLabelClaimable(label: string): void {
   const refusal = refuseLabel(label);
   if (refusal) throw new ReservedLabelError(label, refusal);
 }
 
 /**
- * Refuse a hostname a DELETED workspace retired — the second half of ADR §8's
- * never-released rule (Bug MOTIR-4366).
+ * Refuse a hostname that is held by an unexpired reservation — a name another
+ * workspace (or this one) renamed or released within the hold, or a deleted
+ * workspace retired (Bug MOTIR-4366, §8 Amendment 3).
  *
- * The first half is the `public_address.hostname` unique index, which holds a
- * name for as long as its row exists. This is the half that holds it once the
- * row is gone: the workspace delete (`deleteWorkspaceCascade`) writes a digest into
- * `public_hostname_reservation` before the cascade takes the addresses, and this
- * is what reads it back.
+ * The `public_address.hostname` unique index holds a name for as long as its row
+ * exists; this is what holds it once the row is gone. A lapsed reservation holds
+ * nothing, whether or not the sweep has deleted it yet.
  *
  * ⚠️ CALLED AFTER THE INSERT, NOT BEFORE IT, AND THE ORDER IS THE RACE
- * ARGUMENT. Checked BEFORE, this would be a count-then-write — the exact shape
- * the model's own comment says the global unique exists to avoid — with a real
- * window: a workspace delete committing between the check and the insert frees
- * a name we have already decided is free. Checked AFTER, the window closes by
- * construction. Our insert holds the `hostname` slot, so no other row carried
- * that hostname at insert time; any deletion that could reserve it must
+ * ARGUMENT. Checked BEFORE, this would be a count-then-write with a real window:
+ * a rename, release or workspace delete committing between the check and the
+ * insert frees a name we have already decided is free. Checked AFTER, the window
+ * closes by construction. Our insert holds the `hostname` slot, so no other row
+ * carried that hostname at insert time; any change that could reserve it must
  * therefore have removed its own row BEFORE our insert, hence committed before
  * it, hence is visible to this read under READ COMMITTED. Throwing rolls the
  * whole transaction back, so the refusal costs the caller nothing.
  *
- * `HostnameTakenError`, not a fourth error: `errors.ts` is explicit that the
- * situations behind a taken hostname are deliberately NOT distinguished, and
- * "held by a workspace that no longer exists" is the one a claimer has least
- * business being told about.
+ * `NameQuarantinedError`, not `HostnameTakenError`: a reservation ends on a
+ * known date, and story rule 5 owes the claimer that date. The reserving
+ * workspace stays unnamed — only the date is read.
  */
-async function assertNotReserved(hostname: string, tx: Prisma.TransactionClient): Promise<void> {
-  const reserved = await publicHostnameReservationRepository.isReservedInTx(
+async function assertNotReserved(
+  hostname: string,
+  now: Date,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const returnsAt = await publicHostnameReservationRepository.findActiveExpiryInTx(
     hostnameReservationHash(hostname),
+    now,
     tx,
   );
-  if (reserved) throw new HostnameTakenError(hostname);
+  if (returnsAt) throw new NameQuarantinedError(hostname, returnsAt);
 }
 
 /**
@@ -355,38 +448,13 @@ function labelOf(hostname: string): string {
   return hostname.endsWith(`.${base}`) ? hostname.slice(0, -(base.length + 1)) : hostname;
 }
 
-/**
- * Map the workspace's address rows to the DTO.
- *
- * `null` when there is no LIVE subdomain — which includes the case of a
- * workspace holding only aliases. That cannot happen through this service (a
- * rename always claims), and the mapping still handles it rather than asserting
- * it away, because an unreachable branch that returns `null` is cheaper than one
- * that throws in production if the assumption ever stops holding.
- */
-function toDto(
-  addresses: Array<{ hostname: string; kind: string; createdAt: Date; updatedAt: Date }>,
-  reservedHostnames: number,
-): PublicSubdomainDto | null {
-  const live = addresses.find((a) => a.kind === 'workspace_subdomain');
-  if (!live) return null;
-  const aliases: RetiredSubdomainDto[] = addresses
-    .filter((a) => a.kind === 'workspace_subdomain_alias')
-    // `updatedAt`, not `createdAt`: an alias was CREATED when the workspace
-    // first claimed that label and RETIRED when the rename moved off it, and
-    // those are different dates — often months apart. `retireSubdomainToAlias`
-    // is the write that stamps `updatedAt`, so it is the retirement's clock.
-    .map((a) => ({ hostname: a.hostname, retiredAt: a.updatedAt.toISOString() }));
+/** Map the live subdomain row and the ledger's last change to the DTO. */
+function toDto(live: PublicAddress, lastChangedAt: Date | null, now: Date): PublicSubdomainDto {
   return {
     label: labelOf(live.hostname),
     hostname: live.hostname,
     url: `https://${live.hostname}`,
     claimedAt: live.createdAt.toISOString(),
-    aliases,
-    // ⚠️ ALIASES *PLUS* RESERVATIONS — the ADR §8 cap counts names BURNT, not
-    // alias ROWS (Amendment 2). `reservedHostnames` is `0` for every workspace
-    // that has never released, so this is the old number wherever the old number
-    // was defined. See {@link reservedCount} for why the difference matters.
-    renamesLeft: Math.max(0, MAX_SUBDOMAIN_RENAMES - aliases.length - reservedHostnames),
+    nextChangeAllowedAt: blockedUntil(lastChangedAt, now)?.toISOString() ?? null,
   };
 }

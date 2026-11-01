@@ -441,10 +441,6 @@ model User {
   contentLanguageChanges           OrganizationContentLanguageChange[] @relation("OrganizationContentLanguageChangedBy")
   autoTranslateChanges             ProjectAutoTranslateChange[]        @relation("ProjectAutoTranslateChangedBy")
   cancelledOrganizationDeletions   OrganizationDeletionRequest[]       @relation("OrganizationDeletionCancelledBy")
-  // SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
-  // its model so the generated client stops naming the table; the CONTRACT
-  // migration drops the table and deletes this line in a later release.
-  enterpriseRequests               EnterpriseRequest[]                 @ignore
   // Personal-data export requests this person has raised (Story 8.4 ·
   // MOTIR-3698). A LIST for the same reason: each request builds its own
   // archive, and the previous ones remain as history until they expire.
@@ -472,6 +468,12 @@ model User {
   // The capacity alert share this person last set (Story MOTIR-9539 ·
   // MOTIR-9609). SetNull: removing the person keeps the setting.
   capacityAlertSettingsUpdated     CapacityAlertSetting[]              @relation("CapacityAlertSettingUpdater")
+  /// Environment-configuration changes this user made (MOTIR-9960). SetNull on delete.
+  environmentConfigChanges         EnvironmentConfigChange[]           @relation("EnvironmentConfigChangeActor")
+  /// Production releases this user restored by a rollback (MOTIR-10035). SetNull on delete.
+  hostedReleasesRestored           HostedRelease[]                     @relation("HostedReleaseRestoredBy")
+  /// Production releases of a ref this user asked for (MOTIR-10103). SetNull on delete.
+  hostedReleasesRequested          HostedRelease[]                     @relation("HostedReleaseRequestedBy")
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1478,6 +1480,8 @@ model Organization {
   // a join through every workspace. Cascade: an org's consumption history is
   // meaningless without the org.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  // Preview usage slices charged to the CI pool (MOTIR-5777). Cascade.
+  previewUsages               PreviewUsage[]
   ciPeriodUsages              CiPeriodUsage[]
   ciLiveAccruals              CiLiveAccrual[]
   // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
@@ -1521,9 +1525,6 @@ model Organization {
   // one may follow it. `Restrict` on the request's side: an org row may not
   // vanish under its own deletion record (the purge deletes the requests first).
   deletionRequests      OrganizationDeletionRequest[]
-  /// SCHEMA-ONLY phase of the Contact-sales removal (MOTIR-9386): `@ignore`d with
-  /// its model; the CONTRACT migration drops the table and this line later.
-  enterpriseRequests    EnterpriseRequest[]           @ignore
   /// Per-org kill-switch OVERRIDES (MOTIR-750); absence = the registry default.
   featureFlags          OrgFeatureFlag[]
   /// Staff "View as" sessions opened inside this organization (MOTIR-749).
@@ -1561,6 +1562,8 @@ model Organization {
   /// three (MOTIR-9581). Restrict on the account's side.
   ownedFleetShards            FleetShard[]                 @relation("FleetShardOwner")
   hostAccountAttempts         HostAccountAttempt[]
+  /// Its one AWS hosting account, when a project of it targets AWS (MOTIR-9939).
+  hostingTenantAccount        HostingTenantAccount?
   /// Its asks for more capacity on its own accounts (MOTIR-9583).
   fleetCapacityRequests       FleetCapacityRequest[]
 
@@ -1638,6 +1641,12 @@ model Workspace {
   /// dead weight.
   requiresTwoFactor Boolean @default(false) @map("requires_two_factor")
 
+  /// The application the bare workspace host serves (Decision MOTIR-9790 §2,
+  /// ADR public-tenant-addresses §8 AMENDMENT 4). Set by
+  /// `hostedApplicationService.ensureApplication` when the workspace has none;
+  /// null until the workspace's first hosted application exists.
+  defaultApplicationId String? @unique @map("default_application_id")
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1668,6 +1677,12 @@ model Workspace {
   testInstructionsRepos       TestInstructionsRepo[]
   // Preview deployments reported by connected repositories (MOTIR-5329). Cascade.
   repoDeployments             RepoDeployment[]
+  // Motir's own previews of pull requests (MOTIR-5772). Cascade.
+  previewDeployments          PreviewDeployment[]
+  // Production hosting (Story MOTIR-9797 · MOTIR-10026).
+  hostedApplications          HostedApplication[]          @relation("HostedApplicationWorkspace")
+  hostedReleases              HostedRelease[]
+  defaultApplication          HostedApplication?           @relation("WorkspaceDefaultApplication", fields: [defaultApplicationId], references: [id], onDelete: SetNull)
   /// Approval gates scoped to this workspace (the routing read's tenancy half).
   approvalGates               ApprovalGate[]
   /// Automatic hosted re-runs after a design Revise (MOTIR-700).
@@ -1689,6 +1704,9 @@ model Workspace {
   /// `workspaceId` is denormalized onto every row so the RLS tenancy gate is a
   /// direct comparison with no join, the same pattern `project_key_alias` uses.
   publicAddresses             PublicAddress[]
+  /// The workspace's subdomain change ledger — one row, the last rename or
+  /// release (§8 Amendment 3 rule 4, MOTIR-9506).
+  publicSubdomainChange       PublicSubdomainChange?
   comments                    Comment[]
   // Work-item to-do rows (Story MOTIR-3808 · MOTIR-3813). Tenanted on the ROW,
   // the `comments` shape — a direct child of `work_item` carries its own
@@ -1781,6 +1799,10 @@ model Workspace {
   // The repository SETS of this workspace's projects (Story MOTIR-1775 ·
   // MOTIR-1780). Workspace-scoped tenant data — cascade with the workspace.
   projectRepos                ProjectRepo[]
+  // A Motir repository's environment configuration and its change record (Story
+  // MOTIR-9795 · MOTIR-9960). Workspace-scoped tenant data — cascade with the workspace.
+  environmentConfigEntries    EnvironmentConfigEntry[]
+  environmentConfigChanges    EnvironmentConfigChange[]
   workItemRepos               WorkItemRepo[]
   workItemDeliveries          WorkItemDelivery[]
   /// The per-member collaborator records on this workspace's repositories
@@ -1791,6 +1813,8 @@ model Workspace {
   // workspace_id + RLS contract) even though the POOL is resolved per org, so a
   // tenant can never read another's consumption. Cascade with the workspace.
   ciWorkflowRunUsages         CiWorkflowRunUsage[]
+  // Preview usage slices charged to the CI pool (MOTIR-5777). Cascade.
+  previewUsages               PreviewUsage[]
   ciPeriodUsages              CiPeriodUsage[]
   ciLiveAccruals              CiLiveAccrual[]
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the same
@@ -2264,6 +2288,7 @@ model Project {
   // INTENDED repository, ordered, primary first. Cascade: deleting a project
   // removes its set (the plan for repos that only existed for that project).
   repos                       ProjectRepo[]
+  hostedApplications          HostedApplication[]
   // The project's runner groups in CONNECTED orgs (Story MOTIR-8699 · MOTIR-8712)
   // — one per org other than the provisioning org that owns some of the project's
   // private repositories and has the provisioning App installed. The provisioning
@@ -3716,6 +3741,11 @@ model WorkItemLink {
   // distinguishes an auto-related edge from a hand-made one. Additive with a
   // `manual` default so every pre-5.8.3 row reads as a manual link.
   source      WorkItemLinkSource @default(manual)
+  /// WHY the edge exists (MOTIR-9827): one short line saying what the waiting
+  /// card consumes from its blocker. Written only on an `is_blocked_by` row an
+  /// approved plan created from an edge that carried a reason; null on every
+  /// other row and on every edge drawn before reasons existed.
+  reason      String?
   createdById String
   createdAt   DateTime           @default(now())
 
@@ -3952,10 +3982,14 @@ enum WorkItemObsolescence {
 /// be repaired until somebody owns its branch again. It was added with a hand-written
 /// `ADD VALUE … BEFORE 'queue_failed'` — a generated `ADD VALUE` appends at the END,
 /// which would have made it the LOWEST priority.
+///
+/// `out_of_date` (Bug MOTIR-10054) — a member behind a base branch that requires it to
+/// be up to date — is placed the same way, `ADD VALUE … AFTER 'conflicted'`.
 enum WorkItemFixReason {
   run_died
   queue_failed
   conflicted
+  out_of_date
   ci_failed
   changes_requested
 
@@ -7545,6 +7579,14 @@ model Plan {
   /// `SubmittedRequirement` parts, `plannerAssumptions` and `settledAt`. NULL
   /// means nobody sharpened this plan — every plan written before the column.
   sharpenedRequirement Json?                   @map("sharpened_requirement")
+  /// The PLANNER's own record (MOTIR-9978) — machine state an authoring agent
+  /// keeps ON the plan between its runs, as data rather than briefing prose.
+  /// plan.py keeps the targets its PART 1 settled here (`{ targets: [...] }`),
+  /// the record motir-ai keeps as `context.conversation` on its job. Written and
+  /// read only through the MCP's `update_plan` / `get_plan`; deliberately NOT on
+  /// `PlanDto`, so the review surface never receives it. NULL means the planner
+  /// keeps none — every plan written before the column, and every hosted plan.
+  plannerRecord        Json?                   @map("planner_record")
 
   workspace         Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project           Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -7564,6 +7606,10 @@ model Plan {
   /// Each planner session's STEP WORDS (MOTIR-8062) — kind + target title as
   /// last reported, kept after the session's `end` deletes its `PlanStep`.
   narrationSessions PlanNarrationSession[]
+  /// Every CODE READ a planner session made (MOTIR-10122) — what it asked, at
+  /// which commit, and how much came back; never the contents. Append-only and
+  /// kept as long as the narration.
+  codeReads         PlanCodeRead[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -7635,6 +7681,12 @@ model PlanItem {
   /// `add` / edge changes: blocked-by refs, each a real workItemId or an
   /// intra-plan temp-ref, resolved at materialize.
   blockedByRefs  String[]   @map("blocked_by_refs")
+  /// WHY each edge this proposal draws exists (MOTIR-9827): a map from a ref to
+  /// one short line saying what the waiting card consumes from that blocker.
+  /// Keyed by the refs of `blockedByRefs` on an `add` and of `patch.blockedByAdd`
+  /// on a `modify`; a ref with no entry was drawn without a reason. Written onto
+  /// the `work_item_link.reason` of the edge approve creates.
+  edgeReasons    Json       @default("{}") @map("edge_reasons")
   /// `add` only: the OLDER work items the created card SUPERSEDES (Story
   /// MOTIR-6577 · MOTIR-6630), each a real workItemId or an intra-plan temp-ref,
   /// resolved at materialize and written as one `supersedes` link each (from =
@@ -7859,6 +7911,60 @@ model PlanNarration {
   @@map("plan_narration")
 }
 
+/// One CODE READ a planner session made (MOTIR-10122): the tool, what it asked
+/// (a file and range, or a query and its scope), the COMMIT the code was read at
+/// and how much came back — never the code itself. Lets a check of a plan tell a
+/// session that read the file holding a fact and wrote against it from one that
+/// read another file, or nothing. APPEND-ONLY KEPT HISTORY, exactly as
+/// `PlanNarration`: never updated, deleted only by the plan's cascade, and keyed
+/// by the same opaque `sessionKey`. No FK to `plan_step`: a read outlives its
+/// session's step, and `plan.py`'s PART 1 session reads before it holds one.
+model PlanCodeRead {
+  id         String   @id @default(cuid())
+  planId     String   @map("plan_id")
+  /// The reading session's opaque key, the value `plan_step` and narration carry.
+  sessionKey String   @map("session_key")
+  /// Per-plan order, gapless from 1, taken under the plan row lock — call order
+  /// within a session, because one session's reads arrive in order.
+  seq        Int
+  /// The tool, as the planner named it: `read_file` · `code_explore` ·
+  /// `code_search` · `code_grep`, and `plan.py`'s local `Read` · `Grep` · `Glob`
+  /// · `git show` · `git grep` · `git log`.
+  tool       String
+  /// `owner/name`, or the local checkout's name; NULL when the read named none.
+  repo       String?
+  /// A read's path, or a search's path prefix / glob.
+  path       String?
+  startLine  Int?     @map("start_line")
+  endLine    Int?     @map("end_line")
+  /// The ref the call ASKED for (`main`, `origin/main`), when it named one. A
+  /// LABEL only: what the read was made AT is `commits`.
+  askedRef   String?  @map("asked_ref")
+  /// A search's query or pattern.
+  query      String?
+  /// Every commit the read was made at, as `[{ repo?, sha, dirty? }]`: one for a
+  /// file read, one per repository for a graph read across a set. `sha` is a
+  /// resolved hex id, never a branch name; `dirty` marks a local checkout whose
+  /// working tree had changes. EMPTY only when nothing resolved (a refused
+  /// path, a ref that names nothing, a failure to ask).
+  commits    Json
+  /// The result's own outcome code: `found`, `ok`, `not_found`, `too_large`, …
+  outcome    String
+  /// Lines returned by a read, when it returned any.
+  lines      Int?
+  /// Matches a search returned, when it is a search.
+  hits       Int?
+  /// A short refusal or failure detail, capped; never content.
+  detail     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, seq])
+  @@index([planId, sessionKey])
+  @@map("plan_code_read")
+}
+
 /// One planner session's STEP WORDS on a plan (MOTIR-8062): the step kind, its
 /// target ref and the target's TITLE as it read when the step was reported — the
 /// head of that session's group in the chat panel. Upserted on every accepted
@@ -7899,16 +8005,35 @@ model PlanNarrationSession {
 /// precedent): the OAuth callback persists under `withUserContext`, so a member
 /// only ever reads/writes their own identity.
 model GithubIdentity {
-  id                   String   @id @default(cuid())
-  userId               String   @unique @map("user_id")
-  githubUserId         String   @unique @map("github_user_id")
-  githubLogin          String   @map("github_login")
-  avatarUrl            String?  @map("avatar_url")
+  id                    String    @id @default(cuid())
+  userId                String    @unique @map("user_id")
+  githubUserId          String    @unique @map("github_user_id")
+  githubLogin           String    @map("github_login")
+  avatarUrl             String?   @map("avatar_url")
   /// The GitHub user access token, encrypted at rest (never plaintext). Only
   /// lib/github/tokenCrypto.ts + githubIdentityService ever read/write it.
-  accessTokenEncrypted String   @map("access_token_encrypted")
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  accessTokenEncrypted  String    @map("access_token_encrypted")
+  /// The rotating refresh token GitHub issues beside an EXPIRING user token
+  /// (Motir Integration has "Expire user authorization tokens" on — MOTIR-6522),
+  /// encrypted with the same tokenCrypto (Bug MOTIR-10021). Null on a row linked
+  /// before MOTIR-10021, or from an App that does not expire user tokens: such a
+  /// token is returned as stored and never renewed.
+  refreshTokenEncrypted String?   @map("refresh_token_encrypted")
+  /// When the access token stops working (`expires_in` from GitHub, ~8 hours).
+  tokenExpiresAt        DateTime? @map("token_expires_at")
+  /// When the refresh token itself stops working (`refresh_token_expires_in`,
+  /// ~6 months). Past it, only a reconnect helps.
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at")
+  /// The single-flight renewal LEASE: set under a row lock before the refresh
+  /// grant is spent, cleared when the rotated pair is stored. A live lease makes
+  /// every other caller wait rather than spend the same refresh token.
+  refreshLeaseUntil     DateTime? @map("refresh_lease_until")
+  /// When GitHub REFUSED the refresh token (`bad_refresh_token` — expired or
+  /// revoked). The identity is dead until the member reconnects, and no further
+  /// renewal is attempted. Cleared by a reconnect.
+  refreshRefusedAt      DateTime? @map("refresh_refused_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -8330,6 +8455,8 @@ model GithubRepo {
   testInstructionsRepos       TestInstructionsRepo[]
   /// Preview deployments this repository's host reported (MOTIR-5329). Cascade.
   repoDeployments             RepoDeployment[]
+  /// Motir's own previews of this repository's pull requests (MOTIR-5772). Cascade.
+  previewDeployments          PreviewDeployment[]
 
   @@unique([installationId, repoId])
   @@index([installationId])
@@ -8909,6 +9036,126 @@ model RepoDeployment {
   @@index([repoId, ref])
   @@index([workspaceId])
   @@map("repo_deployment")
+}
+
+/// The lifecycle of a Motir-hosted preview — MOTIR-5769's closed enum, verbatim
+/// (§9 "States"). Moves only through `previewDeploymentRepository.transition`.
+enum PreviewDeploymentState {
+  building
+  starting
+  ready
+  failed
+  closed
+}
+
+/// ONE preview of one pull request on a Motir-hosted repository (Story MOTIR-5766
+/// · MOTIR-5772): Motir's own OPERATING record — what it started, where it lives
+/// and what state it is in. Distinct from `RepoDeployment`, which is what a host
+/// REPORTS through `deployment_status` and stays the display store; the lifecycle
+/// posts GitHub statuses that land there, and nothing here writes to it.
+///
+/// One row per `(repo, pull request)` for the pull request's whole life: a new
+/// head moves the same row back to `building`, and a closed one keeps its row so
+/// the host it held is never handed to another repository's preview.
+model PreviewDeployment {
+  id                 String                 @id @default(cuid())
+  /// The repository's tenancy, copied onto the row so the policy is a pure gate
+  /// (the `repo_deployment` precedent).
+  workspaceId        String                 @map("workspace_id")
+  repoId             String                 @map("repo_id")
+  pullRequestNumber  Int                    @map("pull_request_number")
+  headSha            String                 @map("head_sha")
+  /// The full `pr-<n>--<slug>.<preview domain>` (`lib/preview/hostName.ts`).
+  /// Looked up host → row, never parsed back into a repository.
+  host               String                 @unique
+  state              PreviewDeploymentState @default(building)
+  /// Why it is `failed`, written for a person; null otherwise.
+  failureReason      String?                @map("failure_reason")
+  /// The provider's names for the release and its database, as the deploy and
+  /// database ports return them. The column names are the card's; on a
+  /// non-Fly target `fly_app_name` holds the port's app reference.
+  flyAppName         String?                @map("fly_app_name")
+  flyMachineId       String?                @map("fly_machine_id")
+  neonProjectId      String?                @map("neon_project_id")
+  neonBranchId       String?                @map("neon_branch_id")
+  githubDeploymentId String?                @map("github_deployment_id")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  closedAt           DateTime?              @map("closed_at")
+
+  workspace Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  repo      GithubRepo     @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  usages    PreviewUsage[]
+
+  @@unique([repoId, pullRequestNumber])
+  /// The reaper's scan: rows not yet closed, oldest first.
+  @@index([state, updatedAt])
+  @@index([workspaceId])
+  @@map("preview_deployment")
+}
+
+/// A consumed preview-gate ADMISSION (Story MOTIR-5766 · Subtask MOTIR-5779,
+/// MOTIR-5769 §9). The admission preview-access mints is signed, host-bound and
+/// valid for 60 seconds; its id is inserted here when the preview host sets the
+/// gate cookie, so a second use of the same admission is refused. Expired rows
+/// carry no meaning and are deleted by the consume path. System-only RLS.
+model PreviewGateAdmission {
+  jti        String   @id
+  host       String
+  expiresAt  DateTime @map("expires_at")
+  consumedAt DateTime @default(now()) @map("consumed_at")
+
+  @@index([expiresAt])
+  @@map("preview_gate_admission")
+}
+
+/// What a preview's usage is measured in (MOTIR-5777, MOTIR-5769 §9): a Fly
+/// Machine's running seconds, a Lambda's GB-seconds and requests, and a Neon
+/// branch's compute-unit hours. AWS previews run in the tenant's own account and
+/// are not converted, so they have no kind.
+enum PreviewUsageKind {
+  machine_seconds
+  lambda_gb_seconds
+  lambda_requests
+  neon_compute_hours
+}
+
+/// ONE accrual slice of a preview's usage (Story MOTIR-5766 · MOTIR-5777),
+/// counted in the organisation's CI-minutes pool at MOTIR-5769 §9's factors and
+/// charged as `ci_overage` past it (`docs/decisions/ci-minutes-allowance.md`
+/// Amendment 2026-10-29). Written by the hourly accrual job and by the
+/// composition-root wrap of the ports' destroy calls, never by the lifecycle.
+model PreviewUsage {
+  id                     String           @id @default(cuid())
+  previewDeploymentId    String           @map("preview_deployment_id")
+  organizationId         String           @map("organization_id")
+  workspaceId            String           @map("workspace_id")
+  kind                   PreviewUsageKind
+  /// The provider unit the slice was read from: the app for a release, the
+  /// branch for a database. A branch reports life-to-date figures, so its
+  /// slices are differences against what was already recorded FOR THAT branch.
+  sourceRef              String           @map("source_ref")
+  /// In the kind's own unit.
+  quantity               Decimal          @db.Decimal(20, 6)
+  linuxEquivalentMinutes Decimal          @map("linux_equivalent_minutes") @db.Decimal(14, 4)
+  /// What the slice cost Motir at the decision page's list price.
+  motirCostUsd           Decimal          @map("motir_cost_usd") @db.Decimal(20, 12)
+  /// Midnight UTC on the 1st of the month the slice ends in (§4.5).
+  periodStart            DateTime         @map("period_start")
+  sliceStart             DateTime         @map("slice_start")
+  sliceEnd               DateTime         @map("slice_end")
+  createdAt              DateTime         @default(now()) @map("created_at")
+
+  previewDeployment PreviewDeployment @relation(fields: [previewDeploymentId], references: [id], onDelete: Cascade)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  /// The idempotency key: two accrual runs over the same interval write one.
+  @@unique([previewDeploymentId, kind, sliceEnd])
+  /// The pool read (`getOrgPeriodConsumption`).
+  @@index([organizationId, periodStart])
+  @@index([workspaceId])
+  @@map("preview_usage")
 }
 
 /// THE CI feedback comment for one `(change request, head commit, work item)`
@@ -10145,41 +10392,41 @@ model PlanTargetLock {
 /// `@relation`s on BOTH sides with the same actions the SQL uses (the
 /// FK-`@relation` rule), so `migrate dev` reports no drift.
 model ProjectRepo {
-  id                    String                    @id @default(cuid())
-  workspaceId           String                    @map("workspace_id")
-  projectId             String                    @map("project_id")
+  id                         String                    @id @default(cuid())
+  workspaceId                String                    @map("workspace_id")
+  projectId                  String                    @map("project_id")
   /// WHAT this repository is (ADR §1.1) — a fixed six-value enum, because the role
   /// drives real behaviour: it selects what the repo is seeded from (§2) and it is
   /// the key a work item's repo pin resolves through (§5). An open string could do
   /// neither without a lookup table that would be this enum, less safely.
   /// A role MAY repeat (§1.2) — two services are two `api` rows.
-  role                  ProjectRepoRole
+  role                       ProjectRepoRole
   /// The free-form label the enum deliberately does not carry (ADR §1.1) — `api` +
   /// "billing" versus `api` + "search". Distinguishes repeated roles for a human;
   /// never a resolution key (an ambiguous role resolves to null, §5.3, rather than
   /// being disambiguated by a label nobody validated).
-  label                 String?
+  label                      String?
   /// The INTENDED repo name, editable per row until the row is established (ADR
   /// §1.4/§1.5). Unique per project (see `@@unique`). Once realized this is still
   /// the authored intent — the authoritative checkout name is the realized repo's
   /// own `name`, which is what the read layer prefers (a rename on the host must
   /// not silently re-point a dispatch).
-  name                  String
+  name                       String
   /// WHAT the repo is seeded from (ADR §2), recorded as a STRING, not a boolean or
   /// a two-value enum: when the multi-stack starter registry lands (MOTIR-709 /
   /// 9.3.5) a row's seed source becomes a registry key and §2's table becomes its
   /// default map — no migration, no second code path. Values today come from
   /// `lib/projectRepos/vocabulary.ts`.
-  seedSource            String                    @map("seed_source")
+  seedSource                 String                    @map("seed_source")
   /// The per-row ESTABLISH state (ADR §4.1). Rows are INDEPENDENT: one may fail or
   /// be skipped while the others succeed, and nothing is rolled back (a created
   /// repository is a real artifact in the user's own account — §4.2). `failed` is
   /// RESUMABLE, not terminal.
-  state                 ProjectRepoState          @default(proposed)
+  state                      ProjectRepoState          @default(proposed)
   /// Why a `failed` row failed, so partial establishment is RECORDED rather than
   /// inferred (revoked token, not an org admin, name collision, template policy,
   /// rate limit). Null in every other state; cleared on a retry.
-  failureReason         String?                   @map("failure_reason")
+  failureReason              String?                   @map("failure_reason")
   /// WHY Motir proposed this row — the ADR §0.1 rung the derivation climbed to
   /// (MOTIR-1892), so the establish step can show what was inferred on a LATER
   /// page load and a wrong proposal is arguable rather than mysterious. Without
@@ -10204,7 +10451,7 @@ model ProjectRepo {
   /// Only the machine-readable SIGNAL is stored, never the derivation's English
   /// `reason`: that gloss is a log/PR fallback and is not a localized string, so
   /// persisting it would put untranslated prose on a rendered surface.
-  proposalSignal        String?                   @map("proposal_signal")
+  proposalSignal             String?                   @map("proposal_signal")
   /// ── The CI-Actions INTENT (MOTIR-1907) ──────────────────────────────────
   ///
   /// The DESIRED Actions state for this row: `true` means "Motir wants GitHub
@@ -10213,7 +10460,7 @@ model ProjectRepo {
   /// the fan-out is N GitHub calls with NO transaction over them: half can fail,
   /// and a durable intent is what lets the next sweep finish the job instead of
   /// losing it (§6.5).
-  ciActionsDisabled     Boolean                   @default(false) @map("ci_actions_disabled")
+  ciActionsDisabled          Boolean                   @default(false) @map("ci_actions_disabled")
   /// When the intent above last CHANGED. Paired with `ciActionsAppliedAt` this
   /// is the whole convergence predicate — a row needs (re-)asserting exactly
   /// when `ciActionsAppliedAt IS NULL OR ciActionsAppliedAt < ciActionsIntentAt`.
@@ -10222,10 +10469,10 @@ model ProjectRepo {
   /// be cleared by the same code that sets it, so a crash between the GitHub call
   /// and the clear leaves it lying. Comparing two stamps is derivable state — it
   /// cannot desynchronise, and a re-run recomputes the same answer.
-  ciActionsIntentAt     DateTime?                 @map("ci_actions_intent_at")
+  ciActionsIntentAt          DateTime?                 @map("ci_actions_intent_at")
   /// When the intent was last SUCCESSFULLY asserted on the host. NULL means it
   /// never has been (a fresh row, or every attempt so far failed).
-  ciActionsAppliedAt    DateTime?                 @map("ci_actions_applied_at")
+  ciActionsAppliedAt         DateTime?                 @map("ci_actions_applied_at")
   /// ── The TAKE-IT-OVER saga (MOTIR-711) ───────────────────────────────────
   ///
   /// Where this row sits in the handoff that moves a Motir-owned repository to
@@ -10238,26 +10485,55 @@ model ProjectRepo {
   /// two of them are waits on a HUMAN doing something on GitHub — accepting a
   /// transfer, installing the App — and a wait nobody recorded is a wedged repo
   /// (ADR `ci-minutes-allowance.md` §5.4/§G). Every state is re-promptable.
-  takeoverState         ProjectRepoTakeoverState? @map("takeover_state")
+  takeoverState              ProjectRepoTakeoverState? @map("takeover_state")
   /// The GitHub login the repository is being handed to — a personal account or
   /// one of the user's orgs. Recorded at REQUEST time so the saga can be resumed
   /// (and the transfer re-issued) without asking again, and so the webhook can
   /// verify the transfer that landed is the one Motir asked for.
-  takeoverTargetOwner   String?                   @map("takeover_target_owner")
+  takeoverTargetOwner        String?                   @map("takeover_target_owner")
   /// When the takeover was requested. The saga's start, and what an operator
   /// reads to spot a transfer nobody has accepted for a fortnight.
-  takeoverRequestedAt   DateTime?                 @map("takeover_requested_at")
+  takeoverRequestedAt        DateTime?                 @map("takeover_requested_at")
   /// When the `repository` `transferred` webhook confirmed the repo actually
   /// moved. NULL while the transfer is still pending the new owner's accept.
-  takeoverTransferredAt DateTime?                 @map("takeover_transferred_at")
+  takeoverTransferredAt      DateTime?                 @map("takeover_transferred_at")
   /// When the handoff COMPLETED — i.e. a `GithubInstallation` under the new
   /// owner was observed, so dispatch and the code-graph feed still work. The
   /// transfer alone never sets this: a repo the App can no longer reach is a
   /// broken loop, not a finished handoff.
-  takeoverCompletedAt   DateTime?                 @map("takeover_completed_at")
+  takeoverCompletedAt        DateTime?                 @map("takeover_completed_at")
   /// Why a `failed` takeover failed, so a stalled handoff is RECORDED rather
   /// than inferred. Cleared on every retry, exactly like `failureReason`.
-  takeoverFailureReason String?                   @map("takeover_failure_reason")
+  takeoverFailureReason      String?                   @map("takeover_failure_reason")
+  /// ── HOSTING (Story MOTIR-9791 · MOTIR-9808) ─────────────────────────────
+  ///
+  /// Where this Motir repo's app runs, what it is for and how big it is — the
+  /// one home every hosting consumer reads: the deploy port picks its adapter by
+  /// target, seed matching (MOTIR-709) picks a starter by all three. Written once
+  /// by the plan's hosting decision or by build directly, through
+  /// `projectRepoSetService.setHosting`, which refuses a customer repo (D1: a
+  /// repository whose `seedSource` is `organization` is never hosted by Motir)
+  /// and refuses a different target on a row that has one (D3: moving targets is
+  /// a migration, not an overwrite). NULL until then, and on every row that
+  /// predates this card. Vocabulary: `lib/hosting/vocabulary.ts`.
+  hostingTarget              HostingTarget?            @map("hosting_target")
+  hostingUseCase             HostingUseCase?           @map("hosting_use_case")
+  hostingSize                HostingSize?              @map("hosting_size")
+  /// ── PREVIEWS (Story MOTIR-5766 · MOTIR-5775) ────────────────────────────
+  ///
+  /// The record that this repository's pull requests can PUSH a preview image:
+  /// its preview push namespace exists, a push credential for it sits in the
+  /// repository's Actions configuration, and the variables the starter's
+  /// `preview-image` workflow reads are written (decision MOTIR-5769 §11). Set by
+  /// `previewEnablementService.enable`, cleared by its `disable` at takeover.
+  /// NULL on every row that was never enabled — a connected repository, a
+  /// non-web seed, a row with no hosting target yet.
+  previewPushNamespace       String?                   @map("preview_push_namespace")
+  previewEnabledAt           DateTime?                 @map("preview_enabled_at")
+  /// When the static push credential stops working (Fly's 90-day deploy token),
+  /// so enablement re-mints it with 14 days to spare. NULL for a federated
+  /// credential, which does not expire.
+  previewCredentialExpiresAt DateTime?                 @map("preview_credential_expires_at")
   /// ── COLLABORATOR ACCESS — the TEAM's way IN to their own code ──────────────
   ///
   /// Every repository Motir creates lives in Motir's own org and is PRIVATE (ADR
@@ -10270,7 +10546,7 @@ model ProjectRepo {
   /// join table, because a project's code is reachable by a TEAM and "how many
   /// can there be?" is answered by the membership, not by one. The four columns
   /// were migrated into it, not dropped — see the migration's backfill.
-  collaborators         ProjectRepoCollaborator[]
+  collaborators              ProjectRepoCollaborator[]
   /// The realized `GithubRepo` mirror row — NULL until the repo exists, set when
   /// creation or connect-existing completes (`attachRealizedRepo`). This is the
   /// seam that makes one table serve as both plan and record.
@@ -10295,20 +10571,38 @@ model ProjectRepo {
   /// realized repo and its state still reading honestly. A disconnected repo is
   /// not a lost plan — the role + name + seed source survive so the row can be
   /// re-established.
-  githubRepoId          String?                   @map("github_repo_id")
+  githubRepoId               String?                   @map("github_repo_id")
+  /// The default-branch HEAD the repository had when Motir finished seeding it
+  /// (MOTIR-4589) — the template's commit, plus any commit Motir wrote while
+  /// seeding (the CI stub on an initialised repo). Until the default branch moves
+  /// past it, the repository holds only what its seed already says, so its code
+  /// graph would be the template's graph: the index waits for a commit of the
+  /// project's own (`lib/projectRepos/seedHead.ts`).
+  ///
+  /// NULL on a `connected` row (the user's repository has history of its own),
+  /// on every row created before this column existed, and on a created row whose
+  /// head could not be read at creation — each of which indexes as it always did.
+  seedHeadSha                String?                   @map("seed_head_sha")
+  /// HOW the seed matching chose this row's `seedSource` (MOTIR-709, decision
+  /// MOTIR-706 v2 §3.5): `matched`, `no_stack_signal`, `no_target` or `no_match`.
+  /// NULL when the matching did not choose it — a hand-added row, a person's
+  /// re-point, an `organization` row, every row from before this column — so a
+  /// fallback is never shown as a match. A plain string, like `proposalSignal`:
+  /// the vocabulary (`SEED_MATCH_RESULTS`) is checked at the one writer.
+  seedMatch                  String?                   @map("seed_match")
   /// ORDER within the set, and it is MEANINGFUL: the first row is the project's
   /// PRIMARY repo (ADR §1.3) — what a single-repo project's one row is, and the
   /// deterministic tie-break anywhere the set needs one. Order carries NO dispatch
   /// meaning; an item is never routed by position. A fractional index (the same
   /// `String @db.Text` + `lib/workItems/positioning` scheme as `work_item` /
   /// `board_column`), so a row is reordered with one write.
-  position              String                    @db.Text
-  createdAt             DateTime                  @default(now()) @map("created_at")
-  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  position                   String                    @db.Text
+  createdAt                  DateTime                  @default(now()) @map("created_at")
+  updatedAt                  DateTime                  @updatedAt @map("updated_at")
 
-  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  githubRepo GithubRepo?    @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
+  workspace                Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project                  Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubRepo               GithubRepo?               @relation(fields: [githubRepoId], references: [id], onDelete: SetNull)
   /// The WORK ITEMS pinned to this repository row (Story MOTIR-2732 · MOTIR-3039).
   /// Cascade on delete: removing a row from the project's set removes the cards'
   /// references to it, because the project no longer has that repository. `Restrict`
@@ -10316,7 +10610,12 @@ model ProjectRepo {
   /// `project-repository-set.md` §4.4 forbids. A pin's survival across a repository
   /// being DISCONNECTED is a different edge and is preserved by `githubRepoId`'s
   /// `SetNull` above. Modelled both sides per the FK-`@relation` rule.
-  workItems  WorkItemRepo[]
+  workItems                WorkItemRepo[]
+  /// The repository's environment configuration and its change record (Story
+  /// MOTIR-9795 · MOTIR-9960). Cascade: deleting the repository deletes both.
+  environmentConfigEntries EnvironmentConfigEntry[]
+  environmentConfigChanges EnvironmentConfigChange[]
+  hostedApplication        HostedApplication?
 
   /// The first uniqueness guarantee: at most one row per `(project, name)`, so two
   /// rows can never race for one repo name. Enforced in the DATABASE — the service
@@ -10867,6 +11166,14 @@ model CiRunnerProvisioningIntent {
   /// The intent's FIRST `shard_capacity` deferral (MOTIR-8968), at admission or
   /// at boot; never cleared. The headroom reading counts sustained deferral from it.
   shardCapacityDeferredAt DateTime?             @map("shard_capacity_deferred_at")
+  /// Why the intent is waiting NOW (MOTIR-9666): the `AdmissionDeferralReason`
+  /// the gate gave it on its latest pass, written only when it changes, and
+  /// cleared by the claim. NULL = not judged yet, or not waiting. The tenant's
+  /// Fleet use reading splits plan-limit waits from full-pool waits from it.
+  waitingReason           String?               @map("waiting_reason")
+  /// When `waitingReason` was first given (MOTIR-9666) — moves only when the
+  /// reason changes.
+  waitingSince            DateTime?             @map("waiting_since")
 
   /// GitHub's numeric runner id, from the JIT-config mint. Stored because
   /// `generate-jitconfig` REGISTERS the runner before any container exists
@@ -11872,6 +12179,34 @@ model HostAccountAttempt {
   @@map("host_account_attempt")
 }
 
+/// An organisation's ONE AWS hosting account — the enterprise tenant's account in
+/// Motir's AWS Organization, under the `Tenants` OU (Story MOTIR-9792 · MOTIR-9939).
+/// Never a `fleet_shard` row and no relation to one, so admission, headroom, pool
+/// growth and plan caps cannot see it. Counts, times, ids and a state only: no
+/// column holds a credential or the member email (`hostingTenantAccountPlan`
+/// derives the email on demand). Platform-only, as `fleet_shard`.
+model HostingTenantAccount {
+  id             String       @id @default(cuid())
+  organizationId String       @unique @map("organization_id")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Null until the create-or-find step finds or creates the account.
+  awsAccountId   String?      @map("aws_account_id")
+  /// `requested` | `creating` | `bootstrapping` | `ready` | `refused`
+  /// (`HostingTenantAccountState`, `lib/ciFleet/hostingTenantAccounts.ts`).
+  state          String       @default("requested")
+  /// Consecutive `CreateAccount` refusals — the reconcile's backoff reads it, so
+  /// a restart never resets the wait.
+  refusedCount   Int          @default(0) @map("refused_count")
+  lastRefusedAt  DateTime?    @map("last_refused_at")
+  /// The `Tenants` organisational unit the account sits under, once known.
+  ouId           String?      @map("ou_id")
+  region         String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@map("hosting_tenant_account")
+}
+
 /// Where a Host organisation's ask for more capacity stands (MOTIR-9583). Whether
 /// AWS granted is NOT stored here: it is the linked quota request's.
 enum FleetCapacityRequestStatus {
@@ -11921,6 +12256,227 @@ model FleetCapacityRequest {
   @@index([organizationId, createdAt])
   @@index([status, createdAt])
   @@map("fleet_capacity_request")
+}
+
+/// Where a Motir repo's app runs (MOTIR-5769, requirement D3). Mirrors
+/// `HOSTING_TARGETS` in `lib/hosting/vocabulary.ts`.
+enum HostingTarget {
+  serverless
+  fly
+  aws
+
+  @@map("hosting_target")
+}
+
+/// The life of one production release (Story MOTIR-9797 · MOTIR-10026). Mirrors
+/// `HOSTED_RELEASE_STATES` in `lib/hosting/vocabulary.ts`, whose edge table says
+/// which moves are legal.
+enum HostedReleaseState {
+  building
+  releasing
+  live
+  failed
+  replaced
+  rolled_back
+
+  @@map("hosted_release_state")
+}
+
+/// Why a release was made. Mirrors `HOSTED_RELEASE_CAUSES`.
+enum HostedReleaseCause {
+  merge
+  config_change
+  ref
+  rollback
+
+  @@map("hosted_release_cause")
+}
+
+/// The production home of ONE Motir repository (Story MOTIR-9797 · MOTIR-10026).
+/// Keyed on the `project_repository` row, never the project: a project can hold
+/// several repositories, each deployed on its own. A customer repository (seed
+/// source `organization`) never gets one (`lib/hosting/deployEligibility.ts`).
+///
+/// RLS: `hosted_application_workspace_or_system` (FOR ALL) — the release paths
+/// write from webhooks and jobs under `withSystemContext`, a member's session
+/// reads its own workspace's rows.
+model HostedApplication {
+  id                      String        @id @default(cuid())
+  workspaceId             String        @map("workspace_id")
+  projectId               String        @map("project_id")
+  projectRepositoryId     String        @unique @map("project_repository_id")
+  target                  HostingTarget
+  /// The application's label in its host, `<slug>--<workspace label>`; unique in
+  /// the workspace (ADR public-tenant-addresses §8 AMENDMENT 4).
+  slug                    String
+  /// The production host without scheme, e.g. `shop--acme.motir.site`. Stored
+  /// and looked up, never parsed; null while the workspace has no claimed label.
+  productionAddress       String?       @unique @map("production_address")
+  currentReleaseId        String?       @unique @map("current_release_id")
+  previousReleaseId       String?       @unique @map("previous_release_id")
+  /// The production database (written by the database card, MOTIR-10028). The
+  /// URL is stored only encrypted, and no DTO carries it.
+  databaseProjectId       String?       @map("database_project_id")
+  databaseUrlCiphertext   String?       @map("database_url_ciphertext")
+  /// Production switched on (MOTIR-10027): the Fly app (`mh-<rid>`), when it was
+  /// first enabled, and when its deploy token was last minted (re-minted when
+  /// fewer than 14 of its 90 days remain, ADR MOTIR-5769 §4). The token itself is
+  /// never stored.
+  productionAppName       String?       @map("production_app_name")
+  productionEnabledAt     DateTime?     @map("production_enabled_at")
+  productionTokenMintedAt DateTime?     @map("production_token_minted_at")
+  createdAt               DateTime      @default(now()) @map("created_at")
+  updatedAt               DateTime      @updatedAt @map("updated_at")
+
+  workspace         Workspace       @relation("HostedApplicationWorkspace", fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo     @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  currentRelease    HostedRelease?  @relation("HostedApplicationCurrentRelease", fields: [currentReleaseId], references: [id], onDelete: SetNull)
+  previousRelease   HostedRelease?  @relation("HostedApplicationPreviousRelease", fields: [previousReleaseId], references: [id], onDelete: SetNull)
+  releases          HostedRelease[] @relation("HostedApplicationReleases")
+  defaultOf         Workspace?      @relation("WorkspaceDefaultApplication")
+
+  @@unique([workspaceId, slug])
+  @@index([projectId])
+  @@map("hosted_application")
+}
+
+/// One release of a commit on a hosted application. A config redeploy of the
+/// same commit is a NEW row, so `(application_id, commit_sha)` is not unique.
+model HostedRelease {
+  id                 String             @id @default(cuid())
+  workspaceId        String             @map("workspace_id")
+  applicationId      String             @map("application_id")
+  commitSha          String             @map("commit_sha")
+  /// The tag or branch the release was asked for, when it was asked by ref.
+  ref                String?
+  /// The first line of the released commit's message, as the build's run
+  /// reported it; null when it did not (MOTIR-10103).
+  commitSubject      String?            @map("commit_subject")
+  /// The pull request a merge release came from, when its merge commit names
+  /// one (MOTIR-10103).
+  pullRequestNumber  Int?               @map("pull_request_number")
+  /// Who asked for a release of a ref (MOTIR-10103); null for a merge.
+  requestedById      String?            @map("requested_by_id")
+  cause              HostedReleaseCause
+  state              HostedReleaseState @default(building)
+  artifactRef        String?            @map("artifact_ref")
+  /// The deploy port's handle for this release.
+  providerReleaseId  String?            @map("provider_release_id")
+  /// The deploy port's `providerRef` for the release (a Fly Machine id) —
+  /// with the provider release id, what rebuilds its `ReleaseHandle` (MOTIR-10034).
+  providerRef        String?            @map("provider_ref")
+  failureReason      String?            @map("failure_reason")
+  /// Seconds the release ran live (written by the usage card, MOTIR-10034).
+  usageSeconds       Int?               @map("usage_seconds")
+  /// The end of the last window added to `usageSeconds`; the next settle reads
+  /// from here (from `liveAt` the first time) (MOTIR-10034).
+  usageSettledUntil  DateTime?          @map("usage_settled_until") @db.Timestamptz(3)
+  /// Who restored this release by a rollback, and when (MOTIR-10035); null for
+  /// a release never restored.
+  restoredById       String?            @map("restored_by_id")
+  restoredAt         DateTime?          @map("restored_at") @db.Timestamptz(3)
+  /// The GitHub deployment Motir created for this release on its repository
+  /// (MOTIR-10033), set once.
+  githubDeploymentId String?            @map("github_deployment_id")
+  /// The last deployment status posted for it (a `ReleaseDeploymentState`).
+  statusPostedState  String?            @map("status_posted_state")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  liveAt             DateTime?          @map("live_at")
+  endedAt            DateTime?          @map("ended_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  workspace   Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  application HostedApplication  @relation("HostedApplicationReleases", fields: [applicationId], references: [id], onDelete: Cascade)
+  currentOf   HostedApplication? @relation("HostedApplicationCurrentRelease")
+  previousOf  HostedApplication? @relation("HostedApplicationPreviousRelease")
+  restoredBy  User?              @relation("HostedReleaseRestoredBy", fields: [restoredById], references: [id], onDelete: SetNull)
+  requestedBy User?              @relation("HostedReleaseRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+  @@index([workspaceId])
+  @@index([restoredById])
+  @@index([requestedById])
+  @@map("hosted_release")
+}
+
+/// What a Motir repo's app is for (requirement R3/D4). Mirrors
+/// `HOSTING_USE_CASES` in `lib/hosting/vocabulary.ts`.
+enum HostingUseCase {
+  internal_tool
+  mvp
+  planned_product
+
+  @@map("hosting_use_case")
+}
+
+/// How big a Motir repo's app is; each adapter maps it to machine sizes
+/// (MOTIR-9808). Mirrors `HOSTING_SIZES` in `lib/hosting/vocabulary.ts`.
+enum HostingSize {
+  small
+  medium
+  large
+
+  @@map("hosting_size")
+}
+
+/// A SEED REGISTRY entry (Story MOTIR-704 · MOTIR-708; decision MOTIR-706, page
+/// cmvsezd8800eihnoikhllqqev v2): what a Motir-created repository starts from.
+/// A Motir row's `seedSource` is an entry's `key` (or one of its `legacyKeys`).
+///
+/// PLATFORM-WIDE: Motir's catalogue, read by every workspace's establish, so it
+/// carries no `workspace_id`. Its RLS reads unconditionally and writes only under
+/// `app.platform_staff` (the migration says why).
+model SeedRegistryEntry {
+  id             String                  @id @default(cuid())
+  /// The key a row's `seedSource` stores. Opaque: never shown as the explanation.
+  key            String                  @unique
+  /// Earlier keys of the same entry; a row storing one resolves here (3.7).
+  legacyKeys     String[]                @default([]) @map("legacy_keys")
+  /// The role it seeds; NULL means any role (the `initialised` entry only).
+  role           ProjectRepoRole?
+  /// A lowercase stack name (`nextjs`, `expo`, `spring`); NULL means any stack.
+  stack          String?
+  /// What a person reads ("Next.js · serverless").
+  label          String
+  /// The GitHub TEMPLATE repository `/generate` copies. Both NULL means the
+  /// `initialised` seed (`auto_init`); a CHECK keeps the pair together.
+  templateOwner  String?                 @map("template_owner")
+  templateRepo   String?                 @map("template_repo")
+  useCases       HostingUseCase[]        @map("use_cases")
+  sizes          HostingSize[]
+  /// The hosting targets it deploys to; EMPTY means the hosting port does not
+  /// deploy it (mobile, api, `initialised`).
+  hostingTargets HostingTarget[]         @map("hosting_targets")
+  status         SeedRegistryEntryStatus @default(active)
+  /// The Motir-created `project_repository` row an operator promoted it from
+  /// (MOTIR-710), kept as text: the row may be removed, the provenance stays.
+  promotedFrom   String?                 @map("promoted_from")
+  /// The commit SHA it was promoted at. With `promotedFrom`, unique: promoting
+  /// the same source at the same ref again updates this entry.
+  promotedRef    String?                 @map("promoted_ref")
+  /// The operator's user id, kept as PROVENANCE text rather than a foreign key:
+  /// an FK to `user` would put this platform table in every `TRUNCATE "user"
+  /// CASCADE` and on every account erasure's cascade, and provenance must
+  /// outlive the account that wrote it (the platform audit log's posture).
+  promotedBy     String?                 @map("promoted_by")
+  promotedAt     DateTime?               @map("promoted_at")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+
+  @@unique([promotedFrom, promotedRef])
+  @@index([role, status])
+  @@index([legacyKeys], type: Gin)
+  @@map("seed_registry_entry")
+}
+
+/// Whether a seed registry entry is offered: a `retired` entry is kept, with its
+/// lists and provenance, and is never matched or established from (MOTIR-706 3.6).
+enum SeedRegistryEntryStatus {
+  active
+  retired
+
+  @@map("seed_registry_entry_status")
 }
 
 /// The repo-role vocabulary (`docs/decisions/project-repository-set.md` §1.1).
@@ -12266,126 +12822,6 @@ model AccountDeletionRequest {
   /// columns are in its `WHERE`, so the second earns its place.
   @@index([status, erasureDueAt])
   @@map("account_deletion_request")
-}
-
-/// ⚠️ RETIRED — SCHEMA-ONLY PHASE (Story MOTIR-9385 · MOTIR-9386). Motir has no
-/// Enterprise plan, and the feature that wrote and read this table is deleted.
-/// The model is `@@ignore`d so the generated client no longer names the table,
-/// while the table and its five enum types stay in place: `fly.toml`'s
-/// `release_command` migrates BEFORE the new image takes traffic, so dropping
-/// them in the same release would pull the table from under the still-serving
-/// image (`docs/decisions/delivery-reader-migration.md` §6a,
-/// `tests/contract-phase-guard.test.ts`). A CONTRACT migration in a LATER
-/// release drops the table and the enums and deletes these declarations.
-///
-/// A request for the ENTERPRISE plan, sent from the Enterprise card's Contact
-/// sales control on Billing & plans (Story MOTIR-7602 · Subtask MOTIR-7605).
-/// Platform staff work it in the operator console's Enterprise requests page
-/// through `new → contacted → offer_sent → won | lost`.
-///
-/// AT MOST ONE OPEN REQUEST PER ORG — the PARTIAL UNIQUE INDEX
-/// `enterprise_request_open_per_org_key` (`(organization_id) WHERE status IN
-/// ('new','contacted','offer_sent')`), not a check-then-insert: two tabs racing
-/// both read "nothing open", so only the index can refuse the second insert. It
-/// is the table's only index on `(organization_id)` alone — the history read is
-/// `(organizationId, createdAt)` (`CLAUDE.md`, the partial-index rule).
-///
-/// It never stores a PRICE: the offer is private and lives outside the product.
-/// Every answer the org gives is optional except the note.
-///
-/// TENANCY — org-scoped (`app.organization_id`), with an `app.platform_staff`
-/// arm for the console and an `app.system_admin` arm for the email job. See the
-/// migration.
-model EnterpriseRequest {
-  id             String  @id @default(cuid())
-  organizationId String  @map("organization_id")
-  /// Who pressed Send. SetNull: the org's record outlives the sender's account.
-  requestedById  String? @map("requested_by_id")
-
-  status EnterpriseRequestStatus @default(new)
-
-  /// Roughly how many cards a day the org wants to run.
-  cardsPerDay      Int?                 @map("cards_per_day")
-  /// How many agents in parallel.
-  parallelAgents   Int?                 @map("parallel_agents")
-  agentPath        EnterpriseAgentPath? @map("agent_path")
-  autonomy         EnterpriseAutonomy?
-  startWhen        EnterpriseStartWhen? @map("start_when")
-  teamSize         EnterpriseTeamSize?  @map("team_size")
-  /// How to reach them. The service defaults it to the sender's email.
-  contact          String
-  /// The free-text note — the one required answer.
-  note             String
-  /// The PM-core tier the org was on when it asked (`pmTierForOrg`), snapshotted.
-  tierKeyAtRequest String?              @map("tier_key_at_request")
-
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
-  /// When staff moved it to `won` or `lost`. Null while it is open.
-  closedAt  DateTime? @map("closed_at")
-
-  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  requestedBy  User?        @relation(fields: [requestedById], references: [id], onDelete: SetNull)
-
-  /// The console list — newest first within a state filter.
-  @@index([status, createdAt])
-  /// The org's history read. NOT `([organizationId])` — see the doc comment.
-  @@index([organizationId, createdAt])
-  @@index([requestedById])
-  @@map("enterprise_request")
-  @@ignore
-}
-
-/// Where an {@link EnterpriseRequest} stands. `new`, `contacted` and
-/// `offer_sent` are OPEN (the partial index); `won` and `lost` are terminal.
-enum EnterpriseRequestStatus {
-  new
-  contacted
-  offer_sent
-  won
-  lost
-
-  @@map("enterprise_request_status")
-}
-
-/// Which agents the org would run.
-enum EnterpriseAgentPath {
-  /// Motir's hosted agents, on Motir's models.
-  hosted
-  /// Their own agents (Claude Code, Codex, …) on their own credential.
-  own
-  both
-
-  @@map("enterprise_agent_path")
-}
-
-/// Whether the org wants the project run on its own, or only a volume of runs.
-enum EnterpriseAutonomy {
-  autonomous_lead
-  volume_only
-  unsure
-
-  @@map("enterprise_autonomy")
-}
-
-/// When the org would start.
-enum EnterpriseStartWhen {
-  now
-  within_month
-  within_quarter
-  exploring
-
-  @@map("enterprise_start_when")
-}
-
-/// The org's team size, as a range.
-enum EnterpriseTeamSize {
-  size_1_10
-  size_11_50
-  size_51_200
-  size_201_plus
-
-  @@map("enterprise_team_size")
 }
 
 /// A request to DELETE AN ORGANIZATION (Story MOTIR-6306 · Subtask MOTIR-6391) —
@@ -13513,14 +13949,43 @@ model PublicHostnameReservation {
   /// DELETION retired it", which was true when `workspacesService.deleteWorkspace`
   /// was the only writer. A workspace may now RELEASE its own subdomain, which
   /// writes this column while the workspace is very much alive — so the id here
-  /// is an orphan only on the delete path, and the count of a LIVING workspace's
-  /// rows is what §8's rename cap reads
-  /// (`publicHostnameReservationRepository.countForWorkspaceInTx`).
+  /// is an orphan only on the delete path. (Amendment 2's rename cap counted a
+  /// living workspace's rows; Amendment 3 removed the cap, and nothing counts
+  /// them now.)
   retiredFromWorkspaceId String @map("retired_from_workspace_id")
 
   retiredAt DateTime @default(now()) @map("retired_at")
 
+  /// When the name returns to the pool (§8 Amendment 3 rule 3, MOTIR-9506). A
+  /// row whose expiry has passed reserves nothing: `isReservedInTx` ignores it
+  /// and the daily sweep deletes it. The table keeps an expiry, never a name,
+  /// so Amendment 1's erasure reasoning holds unchanged. The rule that computes
+  /// it is `lib/publicAddresses/nameHold.ts`.
+  expiresAt DateTime @map("expires_at")
+
   @@map("public_hostname_reservation")
+}
+
+/// A workspace's subdomain CHANGE LEDGER — §8 Amendment 3 rule 4 (Story
+/// MOTIR-4528 · MOTIR-9506).
+///
+/// One row per workspace holding the instant of its last rename or release, so
+/// `nameHold.canChangeNow` can refuse a second change inside 30 days. Renames and
+/// releases both write it, which is what stops delete-then-reclaim from being a
+/// free rename. A first claim is not a change and writes nothing.
+///
+/// A table rather than a column on `workspace` so its RLS is its own, and the
+/// workspace delete takes it with the cascade: the limit is per workspace, and a
+/// workspace that is gone has nothing left to limit.
+model PublicSubdomainChange {
+  id            String    @id @default(cuid())
+  workspaceId   String    @unique @map("workspace_id")
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  lastChangedAt DateTime  @map("last_changed_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("public_subdomain_change")
 }
 
 /// A FOLDER — a named, nestable place in a project's tree that carries no
@@ -13674,9 +14139,9 @@ model Page {
 /// hold them.
 model PageEmbedding {
   /// PK *and* FK — one embedding per page, by construction.
-  pageId      String @id @map("page_id")
-  workspaceId String @map("workspace_id")
-  projectId   String @map("project_id")
+  pageId      String   @id @map("page_id")
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
   /// The model that produced this vector, as REPORTED by `POST /v1/embeddings`.
   /// A hard ranking filter: rows of another model are not comparable.
   model       String
@@ -13684,7 +14149,7 @@ model PageEmbedding {
   dimensions  Int
   /// SHA-256 of the page document (title + "\n\n" + body text). THE RE-EMBED
   /// TRIGGER: an unchanged save skips the provider call.
-  contentHash String @map("content_hash")
+  contentHash String   @map("content_hash")
   embeddedAt  DateTime @map("embedded_at") @db.Timestamptz(3)
 
   embedding Unsupported("vector(1536)")?
@@ -13702,7 +14167,6 @@ model PageEmbedding {
   @@index([embedding], map: "page_embedding_embedding_idx")
   @@map("page_embedding")
 }
-
 
 // PAGE VERSIONS — a page's history (Story MOTIR-5754 · MOTIR-7382).
 //
@@ -15000,6 +15464,10 @@ model IdeaTagAssignment {
 /// name is the UI's type, and this one means "the non-English ones".
 enum IdeaTranslationLocale {
   zh
+  // Traditional Chinese (Taiwan). An enum value cannot hold a hyphen, so it is
+  // stored as `zh_tw`; the public reads take and answer `zh-tw`, motir.co's code
+  // (lib/ideas/publicLocale.ts).
+  zh_tw
   ja
   ko
   de
@@ -15178,4 +15646,85 @@ model CapacityRaisedAlert {
 
   @@unique([provider, model, limitUnit])
   @@map("capacity_raised_alert")
+}
+
+/// Which of a Motir repository's environments an environment-configuration entry
+/// belongs to (Story MOTIR-9795 · MOTIR-9960). Mirrors `ENVIRONMENTS` in
+/// `lib/environmentConfig/vocabulary.ts`.
+enum AppEnvironment {
+  production
+  preview
+  release
+
+  @@map("app_environment")
+}
+
+/// What one environment-configuration change did (MOTIR-9960). Mirrors
+/// `ENVIRONMENT_CONFIG_ACTIONS` in `lib/environmentConfig/vocabulary.ts`.
+enum EnvironmentConfigAction {
+  added
+  replaced
+  deleted
+
+  @@map("environment_config_action")
+}
+
+/// ONE environment variable a Motir repository's app is given in one of its
+/// environments (Story MOTIR-9795 · MOTIR-9960): one row per (repository,
+/// environment, name).
+///
+/// A plain entry stores its value as written. A SECRET stores ONLY the `v1.`
+/// ciphertext `environmentConfigCrypto` produces (`lib/environmentConfig/crypto.ts`,
+/// a key of its own with no fallback), so a read of the stored row never holds the
+/// plain value; a CHECK refuses a secret whose value is not that form. A second
+/// CHECK refuses the names the platform owns — `PORT`, `DATABASE_URL` and any
+/// `MOTIR_*` (`isReservedEnvironmentName`) — so a path that bypasses the service
+/// still cannot store one. Workspace-scoped under row-level security
+/// (`environment_config_entry_active_workspace`).
+model EnvironmentConfigEntry {
+  id                  String         @id @default(cuid())
+  workspaceId         String         @map("workspace_id")
+  projectRepositoryId String         @map("project_repository_id")
+  environment         AppEnvironment
+  name                String
+  isSecret            Boolean        @default(false) @map("is_secret")
+  /// The plain value, or the `v1.<iv>.<tag>.<ct>` ciphertext when `isSecret`.
+  value               String
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+
+  workspace         Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([projectRepositoryId, environment, name])
+  @@index([workspaceId])
+  @@map("environment_config_entry")
+}
+
+/// The append-only record of every environment-configuration change
+/// (MOTIR-9960): who added, replaced or deleted which name in which environment,
+/// and when. It has NO value column, so a change record cannot hold a value —
+/// secret or not. Its repository writes and lists; nothing updates or deletes a
+/// row except the cascade from its repository or workspace. Workspace-scoped
+/// under row-level security (`environment_config_change_active_workspace`).
+model EnvironmentConfigChange {
+  id                  String                  @id @default(cuid())
+  workspaceId         String                  @map("workspace_id")
+  projectRepositoryId String                  @map("project_repository_id")
+  environment         AppEnvironment
+  name                String
+  action              EnvironmentConfigAction
+  isSecret            Boolean                 @map("is_secret")
+  /// Who made the change. SetNull: a removed account leaves the history standing.
+  actorId             String?                 @map("actor_id")
+  createdAt           DateTime                @default(now()) @map("created_at")
+
+  workspace         Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectRepository ProjectRepo @relation(fields: [projectRepositoryId], references: [id], onDelete: Cascade)
+  actor             User?       @relation("EnvironmentConfigChangeActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([projectRepositoryId, environment, createdAt])
+  @@index([workspaceId])
+  @@index([actorId])
+  @@map("environment_config_change")
 }

@@ -384,10 +384,21 @@ file's text at a ref (`repoFileReadService.readProjectFile`; `TOOL_PERMISSIONS.r
 gated on `ai:plan` at the door and in the service on the same argument: the hosted planner's own
 `read_file` already shows that text to every `ai:plan` holder, so nobody's reach widens.
 
+**A fourth (MOTIR-10069, 2026-10-29):** the `list_changed_files` MCP tool — the paths a branch
+changed in a project repository (`repoChangesService.listProjectChangedFiles`;
+`TOOL_PERMISSIONS.list_changed_files`) — is gated on `ai:plan` at the door and in the service on
+the same argument: the hosted planner's own `list_changed_files` already shows that listing to
+every `ai:plan` holder.
+
 **A third (MOTIR-7862, 2026-10-08):** the `code_explore` / `code_search` MCP tools — the hosted code
 graph, read through motir-ai's `POST /v1/code-graph/read` (`codeGraphReadService.read`) — are gated
 on `ai:plan` for the same reason: the hosted planner's own graph tools already show those answers
 to every `ai:plan` holder.
+
+**A fourth (MOTIR-10066, 2026-10-29):** the `code_grep` MCP tool — a search of the indexed file
+contents, through the same `POST /v1/code-graph/read` — is gated on `ai:plan` for the same reason:
+the hosted planner's own `code_grep` already shows those lines to every `ai:plan` holder, and
+`read_file` already shows them the whole file.
 
 ## AMENDMENT 4 (2026-10-21) — §4: the `/code` READS are `ai:plan`; the writes stay `ai:configure` (MOTIR-9173)
 

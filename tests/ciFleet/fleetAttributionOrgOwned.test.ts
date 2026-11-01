@@ -17,6 +17,7 @@ import type { UnattributedMachineDestroyedError } from '@/lib/ciFleet/attributio
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt, randomToken } from '../helpers/random';
+import { runnerRole, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // A HOST ORGANISATION'S OWN ACCOUNTS ARE REAPED AND ATTRIBUTED TO THEIR OWNER
 // (Story MOTIR-9365 · MOTIR-9584), against real Postgres.
@@ -54,11 +55,9 @@ vi.mock('@motir/orchestrator', async () => {
   )) as typeof import('@motir/orchestrator');
   return {
     ...source,
-    createEc2Api: (config: { accessKeyId: string }) => {
-      const ec2 = fakes.ec2ByKeyId.get(config.accessKeyId);
-      if (!ec2) throw new Error(`no EC2 fake for ${config.accessKeyId}`);
-      return ec2;
-    },
+    createAwsManagementApi: () => runnerRole.management(),
+    createEc2Api: (config: Parameters<typeof runnerRole.ec2For>[0]) =>
+      runnerRole.ec2For(config, (keyId) => fakes.ec2ByKeyId.get(keyId) as object | undefined),
   };
 });
 
@@ -116,11 +115,10 @@ async function ownAccount(owner: Fixture, kinds: readonly Kind[]): Promise<OwnAc
   const label = randomToken(6).toUpperCase();
   const credentialRef = `HOST_OWN_${label}`;
   const accessKeyId = `AKIA${label}`;
-  vi.stubEnv(`${credentialRef}_ACCESS_KEY_ID`, accessKeyId);
-  vi.stubEnv(`${credentialRef}_SECRET_ACCESS_KEY`, SECRET);
   const ec2 = new AwsEc2Fake();
   fakes.ec2ByKeyId.set(accessKeyId, ec2);
   const awsAccountId = String(randomInt(100_000_000_000, 999_999_999_999));
+  runnerRole.grant(awsAccountId, accessKeyId, SECRET);
   const account: OwnAccount = { rows: {}, names: {}, awsAccountId, ec2 };
   for (const fleetKind of kinds) {
     const name = `host-${label.toLowerCase()}-${fleetKind.replace(/_/g, '-')}`;
@@ -291,6 +289,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await truncateAuthTables();
   fakes.ec2ByKeyId.clear();
+  runnerRole.reset();
+  stubAwsManagementCredential();
   fleetShardOrchestratorService.resetCache();
   captureException.mockReset();
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');

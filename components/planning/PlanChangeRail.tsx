@@ -1481,7 +1481,12 @@ export function PlanChangeRail({
               <Bubble role="assistant" testId="plan-change-briefing">
                 <PlanBriefing
                   summary={state.review.summary}
-                  workItemRefs={state.session?.workItemRefs ?? {}}
+                  // The summary's own refs (MOTIR-9697) over the session's turn
+                  // map: a link no chat turn mentions still resolves live.
+                  workItemRefs={{
+                    ...state.session?.workItemRefs,
+                    ...state.review.summaryRefs,
+                  }}
                 />
               </Bubble>
             ) : (

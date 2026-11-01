@@ -165,6 +165,82 @@ describe('the account picker', () => {
   });
 });
 
+// Bug MOTIR-8984 — GitHub refused the admin's own stored sign-in. A retry can
+// never work, so all three doors land on the reconnect prompt; only a real
+// transport failure or a 5xx is still "Couldn't reach GitHub".
+describe('a refused GitHub sign-in (Bug MOTIR-8984)', () => {
+  const RECONNECT = 'Reconnect your GitHub account';
+
+  function expectReconnectPrompt() {
+    expect(screen.getByRole('link', { name: /Go to Git accounts/ }).getAttribute('href')).toBe(
+      '/settings/account/git',
+    );
+    expect(screen.queryByText("Couldn't reach GitHub")).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.queryByText('Connect your GitHub account first')).toBeNull();
+  }
+
+  it('the accounts read`s identity_required (refused) draws the reconnect prompt', async () => {
+    routes[`GET /api/organizations/${ORG_ID}/github/accounts`] = () => ({
+      status: 200,
+      body: { state: 'identity_required', reason: 'refused' },
+    });
+    renderFlow({ initialAccount: null });
+    await screen.findByText(RECONNECT);
+    expect(screen.getByText(/GitHub no longer accepts the sign-in Motir has for you/)).toBeTruthy();
+    expectReconnectPrompt();
+  });
+
+  it('the repository read`s 409 github_identity_refused goes back to the reconnect prompt', async () => {
+    routes[`GET /api/organizations/${ORG_ID}/github/accounts/7001/repositories`] = () => ({
+      status: 409,
+      body: { code: 'github_identity_refused' },
+    });
+    renderFlow();
+    await screen.findByText(RECONNECT);
+    expect(screen.queryByText('Choose repositories from moooon-labs')).toBeNull();
+    expectReconnectPrompt();
+  });
+
+  it('the link`s 409 github_identity_refused goes back to the reconnect prompt', async () => {
+    routes[`POST /api/organizations/${ORG_ID}/github/installations`] = () => ({
+      status: 409,
+      body: { code: 'github_identity_refused' },
+    });
+    const { onLinked } = renderFlow();
+    await screen.findByText(/Select all available/);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Select all available/ }));
+    await act(async () => {
+      fireEvent.click(submitButton());
+    });
+    await screen.findByText(RECONNECT);
+    expect(onLinked).not.toHaveBeenCalled();
+    expectReconnectPrompt();
+  });
+
+  it('a 5xx on the accounts read is still "Couldn`t reach GitHub" with Try again', async () => {
+    routes[`GET /api/organizations/${ORG_ID}/github/accounts`] = () => ({
+      status: 500,
+      body: {},
+    });
+    renderFlow({ initialAccount: null });
+    await screen.findByText("Couldn't reach GitHub");
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(screen.queryByText(RECONNECT)).toBeNull();
+  });
+
+  it('a network failure on the accounts read is still "Couldn`t reach GitHub" with Try again', async () => {
+    const routed = vi.mocked(fetch);
+    routed.mockImplementationOnce(async () => {
+      throw new TypeError('fetch failed');
+    });
+    renderFlow({ initialAccount: null });
+    await screen.findByText("Couldn't reach GitHub");
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+    expect(screen.queryByText(RECONNECT)).toBeNull();
+  });
+});
+
 describe('the repo picker — the story`s scenario (X has A, B; Y connects)', () => {
   it('lists C, D, E available and A, B locked, naming NO other organisation or project', async () => {
     renderFlow();

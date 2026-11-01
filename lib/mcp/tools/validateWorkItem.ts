@@ -17,6 +17,7 @@ import {
   isSizingAdvisory,
   isUnderAuthoredAdvisory,
   isMislabelledLinkAdvisory,
+  isPostMergeChildAdvisory,
   isSubsumptionAdvisory,
 } from '@/lib/dto/workItems';
 import {
@@ -25,6 +26,7 @@ import {
 } from '@/lib/workItems/bodyAboveFieldMove';
 import type {
   WorkItemProseMislabelledLinkAdvisoryDto,
+  WorkItemValidityAdvisoryDto,
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import type { ValidityCondition } from '@/lib/dto/sprints';
@@ -87,24 +89,39 @@ interface ValidateWorkItemArgs {
  * not change `valid`, so a VALID item with advisories is still VALID.
  */
 function advisoryLines(result: WorkItemValidityDto): string[] {
-  if (result.advisories.length === 0) return [];
-  const unaffected = `NOT a blocker — ${result.key} is ${
-    result.valid ? 'still VALID' : 'unaffected'
-  } either way`;
+  return advisoryBlockLines(
+    result.advisories,
+    `NOT a blocker — ${result.key} is ${result.valid ? 'still VALID' : 'unaffected'} either way`,
+  );
+}
 
-  const references = result.advisories.filter(isReferenceAdvisory);
-  const shapes = result.advisories.filter(isOrderingAdvisory);
-  const straddles = result.advisories.filter(isRepoStraddleAdvisory);
-  const subsumed = result.advisories.filter(isSubsumptionAdvisory);
-  const oversized = result.advisories.filter(isSizingAdvisory);
-  const selfBlocking = result.advisories.filter(isSelfBlockingDesignAdvisory);
-  const bodyAbove = result.advisories.filter(isBodyAboveFieldMoveAdvisory);
-  const blockerCounts = result.advisories.filter(isBlockerCountAdvisory);
-  const underAuthored = result.advisories.filter(isUnderAuthoredAdvisory);
-  const mislabelled = result.advisories.filter(isMislabelledLinkAdvisory);
-  const uncovered = result.advisories.filter(isCoverageAdvisory);
-  const unnamedTitles = result.advisories.filter(isTitleCoverageAdvisory);
-  const pathReferences = result.advisories.filter(isPathReferenceAdvisory);
+/**
+ * The advisory blocks for any advisory list, one block per family with its
+ * remedy. Exported for `validate_plan`, which reports the SHAPE families over a
+ * plan's proposals (MOTIR-10087) in the same words this verdict uses for one
+ * card. `unaffected` is the caller's "not a blocker" clause — the two verdicts
+ * phrase it differently.
+ */
+export function advisoryBlockLines(
+  advisories: readonly WorkItemValidityAdvisoryDto[],
+  unaffected: string,
+): string[] {
+  if (advisories.length === 0) return [];
+
+  const references = advisories.filter(isReferenceAdvisory);
+  const shapes = advisories.filter(isOrderingAdvisory);
+  const straddles = advisories.filter(isRepoStraddleAdvisory);
+  const subsumed = advisories.filter(isSubsumptionAdvisory);
+  const oversized = advisories.filter(isSizingAdvisory);
+  const selfBlocking = advisories.filter(isSelfBlockingDesignAdvisory);
+  const bodyAbove = advisories.filter(isBodyAboveFieldMoveAdvisory);
+  const blockerCounts = advisories.filter(isBlockerCountAdvisory);
+  const underAuthored = advisories.filter(isUnderAuthoredAdvisory);
+  const mislabelled = advisories.filter(isMislabelledLinkAdvisory);
+  const postMerge = advisories.filter(isPostMergeChildAdvisory);
+  const uncovered = advisories.filter(isCoverageAdvisory);
+  const unnamedTitles = advisories.filter(isTitleCoverageAdvisory);
+  const pathReferences = advisories.filter(isPathReferenceAdvisory);
 
   const lines: string[] = [];
   for (const a of underAuthored) {
@@ -124,6 +141,14 @@ function advisoryLines(result: WorkItemValidityDto): string[] {
     );
   }
   lines.push(...mislabelledLinkLines(mislabelled, unaffected));
+  // The POST-MERGE-CHILD member of the shape family (MOTIR-8863), rendered here
+  // since `validate_plan` reports it over a plan's proposals (MOTIR-10087).
+  for (const a of postMerge) {
+    lines.push(
+      '',
+      `Advisory (${unaffected}): ${a.item} reads the deployment ("${a.phrase}") while it sits INSIDE ${a.container}, whose merge it waits on. Move it out to be a sibling of ${a.container} that ${a.container} blocks.`,
+    );
+  }
   if (references.length > 0) {
     lines.push(
       '',
@@ -363,8 +388,8 @@ export function mislabelledLinkLines(
   return advisories.flatMap((a) => [
     '',
     a.targetKey === null
-      ? `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which opens NO work item. Fix the id — resolve the key you meant with get_work_item.`
-      : `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId}, which is ${a.targetKey}. The label and the card disagree — fix the id or the label.`,
+      ? `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId} in its ${a.field}, which opens NO work item. Fix the id — resolve the key you meant with get_work_item.`
+      : `Advisory (${unaffected}): ${a.item} links "${a.label}" to motir:${a.targetId} in its ${a.field}, which is ${a.targetKey}. The label and the card disagree — fix the id or the label.`,
   ]);
 }
 
@@ -617,7 +642,7 @@ export function registerValidateWorkItem(
         'alone (with `threshold`, the observed `storyPoints` and `estimateMinutes`, and no ' +
         'criterion index, because the remedy is to SPLIT the card rather than cut it at a line), ' +
         'or `likely-self-blocking-design` when ' +
-        'a CHILDLESS card that is not itself `type: design` is its OWN design blocker — one ' +
+        'a CHILDLESS card that is not itself `type: design` or `type: test` is its OWN design blocker — one ' +
         'criterion produces a design asset and ' +
         'another builds the rendered surface that drawing decides (with BOTH 1-based indices, ' +
         '`designCriterionIndex` and `surfaceCriterionIndex`, because the remedy LIFTS the design ' +
@@ -634,9 +659,10 @@ export function registerValidateWorkItem(
         'has no enumerated acceptance criterion AND null `storyPoints`, `estimateMinutes`, `type` ' +
         'and `executor` (with `criteria`: `no-heading` or `no-criterion` — a pure null check, ' +
         'never a gate, because a card is routinely saved mid-authoring), or ' +
-        '`likely-mislabelled-link` when a `[label](motir:<id>)` link in the body opens a ' +
-        'different card than the key its label names, or opens no card at all (with the ' +
-        '`label`, the `targetId`, and the `targetKey` it really opens, `null` for none). A `coverage` ' +
+        '`likely-mislabelled-link` when a `[label](motir:<id>)` link in the description OR the ' +
+        'explanation opens a different card than the key its label names, or opens no card at ' +
+        'all (with the `label`, the `targetId`, the `targetKey` it really opens, `null` for none, ' +
+        'and the `field` it sits in: `descriptionMd` or `explanationMd`). A `coverage` ' +
         'advisory (`kind: "coverage"`, `likely-unowned-criterion`) names a CONTAINER one of whose ' +
         "acceptance criteria no direct child's TITLE carries, reported only when a child was " +
         'created BEFORE the container (adopted) — with the `criterionIndex` and the ' +
@@ -653,6 +679,8 @@ export function registerValidateWorkItem(
         'card whose BODY, parsed against the section registry for its kind and type, misses a ' +
         'required section or carries one it cannot read, as `{ item, state: "unstructured" | ' +
         '"incomplete", missing, invalid, otherHeadings, signals }` — it never changes `valid`. ' +
+        'A heading the registry does not define is an allowed `otherSections` entry, listed in ' +
+        '`otherHeadings` beside a real finding and never a finding on its own. ' +
         'Pass `planId` to ask the SAME question over a plan you are authoring: the verdict is ' +
         'then computed over the project’s live tree ⊕ that plan’s proposals, so you can check a ' +
         'subtree you have PROPOSED before anybody reviews it. With a `planId`, `invalidEdges` ' +

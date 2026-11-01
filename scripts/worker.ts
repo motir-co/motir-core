@@ -43,6 +43,8 @@ import * as Sentry from '@sentry/nextjs';
 import { db } from '@/lib/db';
 import { serverSentryInitOptions } from '@/lib/monitoring/serverInit';
 import { startTransactionStallMonitor } from '@/lib/monitoring/transactionStall';
+import { startEventLoopDelayPublisher } from '@/lib/monitoring/cloudwatchMetrics';
+import { startWatchdogMetricsPublisher } from '@/lib/monitoring/watchdogMetrics';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { JobWorker } from '@/lib/jobs/engine/worker';
@@ -151,6 +153,13 @@ function initMonitoring(): void {
 
 async function main(): Promise<void> {
   initMonitoring();
+  // Event-loop delay as CloudWatch metrics when MONITORING_CLOUDWATCH_NAMESPACE
+  // is set (MOTIR-9881). Outside initMonitoring's DSN return on purpose: a
+  // Fargate task may run with no DSN and still owes the alarm its metric.
+  startEventLoopDelayPublisher();
+  // Each ended loop block's length, and CPU steal when MONITORING_CLOUDWATCH_STEAL
+  // is on (MOTIR-9882).
+  startWatchdogMetricsPublisher();
 
   // Before anything claims a run: a supervised job's first act is an external
   // call, so the seam has to be in place before the loop starts.

@@ -5,7 +5,7 @@
 > `scripts/upload-acceptance-video.mjs` and `.github/actions/upload-acceptance-video/`
 > were retired on 2026-09-01 (MOTIR-4096), when the agent took over publishing over
 > MCP, and RESTORED on 2026-10-01: for the repositories Motir writes itself —
-> motir-core and every project generated from `nextjs-prisma-vercel-starter` — CI
+> motir-core and every project generated from `nextjs-prisma-serverless-starter` — CI
 > publishes the receipt again, from a green `pull_request` run, over keyless GitHub
 > OIDC only (`docs/decisions/acceptance-video.md`, the 2026-10-01 amendment). Two
 > things differ from the copy this page first described: `producedByKey` is no longer

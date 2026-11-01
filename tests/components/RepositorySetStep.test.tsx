@@ -30,6 +30,7 @@ const ROW_DEFAULTS = {
   seedSource: 'nextjs-prisma-vercel-starter',
   failureReason: null,
   proposalSignal: null,
+  seedMatch: null,
   realizedRepo: null,
   established: false,
   // The TAKE-IT-OVER saga (MOTIR-711) — null is the common case: no handoff has
@@ -48,6 +49,9 @@ function row(
   return {
     ...ROW_DEFAULTS,
     state: 'proposed' as ProjectRepoStateDto,
+    hostingTarget: null,
+    hostingUseCase: null,
+    hostingSize: null,
     position: 'a0',
     ...over,
   };

@@ -1,5 +1,17 @@
 # @motir/design-system
 
+## 0.19.0
+
+### Minor Changes
+
+- 98cb0b6: `renderMock`'s board is full width by default. 0.18 added `boardWidth` but kept `'narrow'` (a 64rem column) as the default, so a mock whose page has a narrower own column (a 46rem settings page) or a fixed one (an 80rem console) was still drawn centred in the middle of the screen. The default is now `'full'`: the page's own column sits inside a viewport-wide board as the page ships it. `'narrow'` keeps the old 64rem column for a mock that asks for it, and a value that is not one class now falls back to `'full'`.
+
+## 0.18.0
+
+### Minor Changes
+
+- bc5db95: `renderMock` takes a `boardWidth` (MOTIR-9758). The board was a hard-coded 64rem column, so a mock of a page that ships wider (motir-core's Billing & plans, every motir.co page at `max-w-[1400px]`) was drawn squeezed into the middle, and authors widened it by string-replacing the class in the rendered HTML. `'narrow'`, the default, keeps the 64rem column byte for byte; `'full'` draws the board at the viewport's width; any other string is one max-width class such as `'max-w-[1400px]'`, compiled like the rest of the markup. A value that is not one class falls back to `'narrow'` and is named in a comment at the top of the document, as an unknown axis is. The `BoardWidth` type is exported from `@motir/design-system/mock`.
+
 ## 0.17.1
 
 ### Patch Changes

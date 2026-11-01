@@ -92,7 +92,9 @@ export interface ProposedRepoRow {
   role: ProjectRepoRoleDto;
   /** §1.4: `<project-slug>` at one row, `<project-slug>-<role>` at two or more. */
   name: string;
-  /** §2's seeding table for the role. */
+  /** The role's FIXED default (706 v2 §3.8). The proposer stores the seed
+   *  MATCHING's choice instead (MOTIR-709, `seedRegistryService.matchSeedEntry`),
+   *  which agrees with this on a registry holding only the shipped seeds. */
   seedSource: string;
   /** The §0.1 signal that justified this row (see {@link RepoProposalSignal}). */
   signal: RepoProposalSignal;

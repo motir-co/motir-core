@@ -530,8 +530,9 @@ as six named fields — what the corrected card should make possible, what it
 expected versus what it found, what it is not asking for, what already binds the
 shape, how the planner will know the corrected card is right, and what it
 concluded that nobody confirmed — and submits them with the same finding it
-commented on the card. The planner reads those instead of opening a conversation
-to ask. One thing to expect: the finding also lands as a turn on the card's
+commented on the card. The planner reads those as input to its first phase,
+which still settles the targets and writes the requirement it plans against, so
+it starts knowing the problem rather than asking about it. One thing to expect: the finding also lands as a turn on the card's
 planning thread, which is the conversation the planning panel shows for that
 card — so a refused card's thread has the agent's turn on it before you open it.
 

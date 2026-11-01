@@ -197,6 +197,7 @@ describe('the work item page', () => {
       <ProjectAccessProvider permissions={s.actors[who].permissions}>
         <CoreFieldsPanel item={detail.item} members={[]} workflow={workflow} parent={null} />
         <TodoListSection
+          initialWorkItemRefs={{}}
           workItemId={detail.item.id}
           initialTodos={[]}
           initialProgress={{ done: 0, total: 0 }}

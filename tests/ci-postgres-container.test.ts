@@ -151,9 +151,21 @@ describe('CI Postgres container (MOTIR-1742)', () => {
       // MOTIR-9591's Host own-accounts coverage lane (Story MOTIR-9365): the story gate
       // drives reconcile, state, admission, caps and attribution against a real database.
       'ci.yml:story-9365-coverage',
+      // MOTIR-9656's larger-pool coverage lane (Story MOTIR-9366): the story gate drives
+      // checkout and the reconcile, state, admission and caps for rung orgs on a real database.
+      'ci.yml:story-9366-coverage',
+      // MOTIR-9664's Fleet use coverage lane (Story MOTIR-9368): the story gate drives real
+      // admission into its deferrals and reads the real routes against a real database.
+      'ci.yml:story-9368-coverage',
       // MOTIR-9624's provider-limit coverage lane (Story MOTIR-9540): the story gate stores
       // and clears a provider wait through the hosted door and resumes a rate_limited session.
       'ci.yml:story-9540-coverage',
+      // MOTIR-9806's deploy-interface coverage lane (Story MOTIR-9791): the repo row's
+      // hosting columns are written and read against a real database.
+      'ci.yml:story-9791-coverage',
+      // MOTIR-9967's repository-environment coverage lane (Story MOTIR-9795): the story
+      // gate writes through the real doors and resolves under row-level security.
+      'ci.yml:story-9795-coverage',
       'ci.yml:test',
     ]);
   });

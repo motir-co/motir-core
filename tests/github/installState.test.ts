@@ -68,6 +68,7 @@ describe('decodeInstallStateResult names WHY it rejected', () => {
     const token = encodeInstallState({ workspaceId: 'ws_1', userId: 'usr_1' }, NOW);
     expect(decodeInstallStateResult(token, NOW + 10)).toEqual({
       ok: true,
+      issuedAt: NOW,
       state: { workspaceId: 'ws_1', userId: 'usr_1' },
     });
   });
@@ -146,6 +147,7 @@ describe('the return context', () => {
     );
     expect(decodeInstallStateResult(token, NOW + 10)).toEqual({
       ok: true,
+      issuedAt: NOW,
       state: {
         workspaceId: 'ws_1',
         userId: 'usr_1',
@@ -228,6 +230,58 @@ describe('the return context', () => {
     expect(decodeInstallStateResult(token, NOW + 601)).toStrictEqual({
       ok: false,
       reason: 'expired',
+    });
+  });
+});
+
+// MOTIR-9828 — the Repositories room's `Connect a new one` names its PROJECT, so
+// the setup handler can link what the round trip connected into it.
+describe('the install state carries the project key', () => {
+  it('round-trips `projectKey` with the room origin, and reports when it was minted', () => {
+    const token = encodeInstallState(
+      {
+        workspaceId: 'ws_1',
+        userId: 'usr_1',
+        organizationId: 'org_1',
+        origin: 'projectRepositories',
+        projectKey: 'MOTIR',
+      },
+      NOW,
+    );
+    expect(decodeInstallStateResult(token, NOW + 10)).toEqual({
+      ok: true,
+      issuedAt: NOW,
+      state: {
+        workspaceId: 'ws_1',
+        userId: 'usr_1',
+        organizationId: 'org_1',
+        origin: 'projectRepositories',
+        projectKey: 'MOTIR',
+      },
+    });
+  });
+
+  it('OMITS an absent or over-long key, so the token is byte-identical to one minted without it', () => {
+    const without = encodeInstallState({ workspaceId: 'ws_1', userId: 'usr_1' }, NOW);
+    for (const projectKey of ['', 'X'.repeat(65)]) {
+      expect(encodeInstallState({ workspaceId: 'ws_1', userId: 'usr_1', projectKey }, NOW)).toBe(
+        without,
+      );
+    }
+  });
+
+  it('a forged project key fails the signature', () => {
+    const token = encodeInstallState(
+      { workspaceId: 'ws_1', userId: 'usr_1', projectKey: 'MOTIR' },
+      NOW,
+    );
+    const [payloadB64, sig] = token.split('.');
+    const payload = JSON.parse(Buffer.from(payloadB64!, 'base64url').toString('utf8'));
+    payload.p = 'OTHER';
+    const forged = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    expect(decodeInstallStateResult(`${forged}.${sig}`, NOW + 10)).toEqual({
+      ok: false,
+      reason: 'malformed',
     });
   });
 });

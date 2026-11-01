@@ -293,6 +293,7 @@ async function readSubject(
         manualWork: {
           todos: todoList.items,
           progress: todoList.progress,
+          workItemRefs: await workItemTodosService.resolveNotesRefs(todoList.items, ctx),
           mergeWritesDone: deliveries.some((delivery) => delivery.pullRequest.state === 'open'),
         },
       };

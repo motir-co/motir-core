@@ -44,6 +44,10 @@ vi.mock('@/lib/approvals/decidedGates', () => ({
   announceGateDecided,
   useDecidedGate: () => null,
   useDecidedGateState: () => null,
+  // The press-in-flight mark (MOTIR-9696) has nothing to tell a list here.
+  markGatePressPending: () => {},
+  clearGatePressPending: () => {},
+  useGatePressPending: () => false,
 }));
 
 const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay');
@@ -93,6 +97,7 @@ const WITH_LIST: ManualWorkPortDTO = {
   ],
   progress: { done: 2, total: 3 },
   mergeWritesDone: false,
+  workItemRefs: {},
 };
 
 function readOf(
@@ -191,7 +196,12 @@ describe('the manual-work port, PENDING', () => {
 
   it('with no to-do list: says so, never *0 of 0*, and keeps both controls', async () => {
     fetchApprovalGateOverlay.mockResolvedValue(
-      readOf({ todos: [], progress: { done: 0, total: 0 }, mergeWritesDone: false }),
+      readOf({
+        todos: [],
+        progress: { done: 0, total: 0 },
+        mergeWritesDone: false,
+        workItemRefs: {},
+      }),
     );
     await renderOverlay();
 

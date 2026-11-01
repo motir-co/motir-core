@@ -67,7 +67,7 @@ function Harness({
       </section>
       <section aria-label="Explanation">
         <FieldTranslationMark fieldRef="explanation" field="explanation" />
-        <TranslatableMarkdown fieldRef="explanation" value="Already English." />
+        <TranslatableMarkdown fieldRef="explanation" value="Already English." workItemRefs={{}} />
       </section>
     </TranslationProvider>
   );
@@ -303,7 +303,7 @@ describe('what is offered', () => {
       <>
         <TranslateControl />
         <FieldTranslationMark fieldRef="title" field="title" />
-        <TranslatableMarkdown fieldRef="description" value="Stored text" />
+        <TranslatableMarkdown fieldRef="description" value="Stored text" workItemRefs={{}} />
       </>,
     );
     expect(screen.queryByRole('button')).toBeNull();

@@ -494,11 +494,58 @@ export async function flyRequest(
   path: string,
   init: { method: string; token: string; body?: string; timeoutMs?: number },
 ): Promise<Response> {
+  return boundedFlyFetch(`${FLY_MACHINES_API}${path}`, init);
+}
+
+/** Fly's GraphQL API — the only home of some calls the Machines API lacks (a
+ *  token's listing and revocation, MOTIR-5775). */
+export const FLY_GRAPHQL_API = 'https://api.fly.io/graphql';
+
+/** What one GraphQL call answered: its `data`, and its errors' messages. */
+export interface FlyGraphqlAnswer {
+  readonly data: Record<string, unknown> | null;
+  readonly errors: readonly string[];
+}
+
+/**
+ * One call to Fly's GraphQL API, through the same bounded `fetch` as
+ * {@link flyRequest}. A non-2xx answer throws `OrchestratorApiError` with its
+ * status; a 200 that carries `errors` is RETURNED, because GraphQL reports a
+ * missing object that way and only the caller knows whether that is a failure.
+ */
+export async function flyGraphqlRequest(
+  query: string,
+  variables: Record<string, unknown>,
+  token: string,
+): Promise<FlyGraphqlAnswer> {
+  const res = await boundedFlyFetch(FLY_GRAPHQL_API, {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ query, variables }),
+  });
+  const body = await readFlyJson(res);
+  if (!res.ok) throw new OrchestratorApiError('fly', res.status, flyErrorDetail(body));
+  const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : {};
+  const data = record['data'];
+  const errors = Array.isArray(record['errors']) ? record['errors'] : [];
+  return {
+    data: typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : null,
+    errors: errors.map((e) => {
+      const message = (e as Record<string, unknown> | null)?.['message'];
+      return typeof message === 'string' ? message.slice(0, 200) : 'unknown error';
+    }),
+  };
+}
+
+async function boundedFlyFetch(
+  url: string,
+  init: { method: string; token: string; body?: string; timeoutMs?: number },
+): Promise<Response> {
   const timeoutMs = init.timeoutMs ?? ORCHESTRATOR_REQUEST_TIMEOUT_MS;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    return await fetch(`${FLY_MACHINES_API}${path}`, {
+    return await fetch(url, {
       method: init.method,
       headers: {
         accept: 'application/json',

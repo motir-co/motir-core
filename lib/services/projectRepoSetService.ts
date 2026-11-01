@@ -24,9 +24,11 @@ import type {
   PatchProjectRepoInput,
   ProjectRepoDto,
   ProjectRepoProposalSignalDto,
+  ProjectRepoSeedMatchDto,
   ProjectRepoSetDto,
   SetProjectRepoOwnershipInput,
 } from '@/lib/dto/projectRepos';
+import type { SeedRegistryEntryListDto, SeedRegistryPage } from '@/lib/dto/seedRegistry';
 import {
   toProjectRepoNames,
   toProjectRepoPinNames,
@@ -34,16 +36,33 @@ import {
 } from '@/lib/projectRepos/names';
 import { allowedTransitions, canTransition } from '@/lib/projectRepos/transitions';
 import { classifyProjectRepoUniqueViolation } from '@/lib/projectRepos/uniqueViolation';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 import {
+  PROJECT_REPO_PLAN_EDITABLE_STATES,
   PROJECT_REPO_PROPOSAL_SIGNALS,
-  defaultSeedSourceForRole,
+  SEED_MATCH_RESULTS,
+  isOrganizationSeedSource,
   isProjectRepoProposalSignal,
+  isSeedMatchResult,
 } from '@/lib/projectRepos/vocabulary';
+import { seedEntryFitsRow } from '@/lib/projectRepos/seedMatching';
 import {
+  HOSTING_SIZES,
+  HOSTING_TARGETS,
+  HOSTING_USE_CASES,
+  isHostingSize,
+  isHostingTarget,
+  type HostingTarget,
+  isHostingUseCase,
+} from '@/lib/hosting/vocabulary';
+import {
+  ProjectRepoHostingTargetFixedError,
   ProjectRepoInvalidFieldError,
   ProjectRepoLinkConflictError,
   ProjectRepoNameTakenError,
   ProjectRepoNotFoundError,
+  ProjectRepoNotMotirHostedError,
+  ProjectRepoSeedRefusedError,
   ProjectRepoStateTransitionError,
   RealizedRepoAlreadyClaimedError,
 } from '@/lib/projectRepos/errors';
@@ -102,7 +121,7 @@ const TARGET_ACCOUNT_MAX = 100;
  * settled, and re-planning it is a remove-and-re-add). The free-form `label` is
  * editable in EVERY state: it is a human annotation that drives nothing.
  */
-const PLAN_EDITABLE_STATES: readonly ProjectRepoState[] = ['proposed', 'failed'];
+const PLAN_EDITABLE_STATES: readonly ProjectRepoState[] = PROJECT_REPO_PLAN_EDITABLE_STATES;
 
 /**
  * The SETTLED states a row may be RE-PLANNED out of (`replanRow`) — the two that
@@ -179,6 +198,55 @@ function validateSeedSource(raw: string): string {
  * ADR fixes: the column is what the establish step maps to copy, so a value it
  * cannot map is a bug to reject at the write, not one to discover at render.
  */
+/** Validate the matching's recorded result (MOTIR-709) against its closed list. */
+function validateSeedMatch(raw: unknown): ProjectRepoSeedMatchDto | null {
+  if (raw === undefined || raw === null) return null;
+  if (!isSeedMatchResult(raw)) {
+    throw new ProjectRepoInvalidFieldError(
+      'seedMatch',
+      `it must be one of ${SEED_MATCH_RESULTS.join(', ')}.`,
+    );
+  }
+  return raw;
+}
+
+/**
+ * Check a person's re-point (MOTIR-709; decision MOTIR-706 v2 §3.5) and answer
+ * the key to store — the entry's CURRENT key, so a legacy key is never written
+ * anew. Role and target are HARD: an entry of another role, or one that cannot
+ * deploy where the row runs, is refused rather than stored. Each refusal names
+ * its rule, and nothing is written.
+ */
+async function checkRepoint(
+  seedSource: string,
+  row: { role: ProjectRepoRole; hostingTarget: HostingTarget | null },
+): Promise<string> {
+  const entry = await seedRegistryService.findEntry(seedSource);
+  if (!entry) {
+    throw new ProjectRepoSeedRefusedError('unknown', seedSource, 'no starter has that key.');
+  }
+  if (entry.status !== 'active') {
+    throw new ProjectRepoSeedRefusedError('retired', seedSource, 'that starter has been retired.');
+  }
+  if (entry.role !== row.role && entry.role !== 'any') {
+    throw new ProjectRepoSeedRefusedError(
+      'role_mismatch',
+      seedSource,
+      `that starter is for a ${entry.role} repository, and this one is ${row.role}.`,
+    );
+  }
+  if (!seedEntryFitsRow(entry, row)) {
+    throw new ProjectRepoSeedRefusedError(
+      'target_mismatch',
+      seedSource,
+      row.hostingTarget === null
+        ? 'that starter deploys to a hosting target, and this repository runs on none.'
+        : `that starter does not deploy to ${row.hostingTarget}, where this repository runs.`,
+    );
+  }
+  return entry.key;
+}
+
 function validateProposalSignal(raw: unknown): ProjectRepoProposalSignalDto | null {
   if (raw === undefined || raw === null) return null;
   if (!isProjectRepoProposalSignal(raw)) {
@@ -326,6 +394,29 @@ export const projectRepoSetService = {
   },
 
   /**
+   * The seeds a person may re-point this row to (MOTIR-709), one page at a time:
+   * the ACTIVE registry entries of the row's role — and the any-role
+   * `initialised` — that pass the row's hosting target, exactly the entries
+   * `patchRow` would accept. For MOTIR-712's picker; a browse read, since seeing
+   * the choices is not changing them.
+   */
+  async listCompatibleSeeds(
+    rowId: string,
+    page: SeedRegistryPage,
+    ctx: ServiceContext,
+  ): Promise<SeedRegistryEntryListDto> {
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepoRepository.findById(rowId, ctx.workspaceId, tx),
+    );
+    if (!row) throw new ProjectRepoNotFoundError(rowId);
+    await projectAccessService.assertCanBrowse(row.projectId, ctx);
+    return seedRegistryService.listCompatible(
+      { role: row.role, hostingTarget: row.hostingTarget },
+      page,
+    );
+  },
+
+  /**
    * The rows carrying a given ROLE, in set order — a LIST, because a role may
    * repeat (ADR §1.2). A caller resolving an item's repo pin by role must treat
    * `length !== 1` as unresolvable (§5.3: no match → null; more than one → null,
@@ -433,10 +524,14 @@ export const projectRepoSetService = {
   ): Promise<ProjectRepoDto> {
     const name = validateName(input.name);
     const label = validateLabel(input.label);
+    // The default is the seed REGISTRY's (MOTIR-706 3.8), read live, so a role
+    // whose foundation is registered later gets it with no code change here.
     const seedSource = validateSeedSource(
-      input.seedSource ?? defaultSeedSourceForRole(input.role as ProjectRepoRole),
+      input.seedSource ??
+        (await seedRegistryService.defaultSeedSourceForRole(input.role as ProjectRepoRole)),
     );
     const proposalSignal = validateProposalSignal(input.proposalSignal);
+    const seedMatch = validateSeedMatch(input.seedMatch);
 
     const row = await inProject(projectId, ctx, 'edit', async (tx) => {
       const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
@@ -457,6 +552,7 @@ export const projectRepoSetService = {
             name,
             seedSource,
             proposalSignal,
+            seedMatch,
             state: 'proposed',
             position: keyForAppend(last),
           },
@@ -499,12 +595,36 @@ export const projectRepoSetService = {
     const label = 'label' in input ? validateLabel(input.label) : undefined;
 
     return inLockedRow(rowId, ctx, async (row, tx) => {
+      // A re-point's own refusals come first, each naming its rule (MOTIR-709):
+      // the organisation's repository is never seeded (D1), and a row past
+      // `proposed` / `failed` already has its repository, or one on the way.
+      if (seedSource !== undefined && isOrganizationSeedSource(row.seedSource)) {
+        throw new ProjectRepoSeedRefusedError(
+          'organization_row',
+          seedSource,
+          "it is the organisation's own repository, which Motir never seeds.",
+        );
+      }
+      if (seedSource !== undefined && !PLAN_EDITABLE_STATES.includes(row.state)) {
+        throw new ProjectRepoSeedRefusedError(
+          'not_editable',
+          seedSource,
+          `a ${row.state} repository already exists or is being created.`,
+        );
+      }
       if (wantsPlanEdit && !PLAN_EDITABLE_STATES.includes(row.state)) {
         throw new ProjectRepoInvalidFieldError(
           'state',
           `a ${row.state} row's role / name / seed source can no longer be edited (only ${PLAN_EDITABLE_STATES.join(' or ')} rows can); its label still can.`,
         );
       }
+      const repointed =
+        seedSource !== undefined
+          ? await checkRepoint(seedSource, {
+              role: (input.role ?? row.role) as ProjectRepoRole,
+              hostingTarget: row.hostingTarget,
+            })
+          : undefined;
       if (name !== undefined) {
         const clash = await projectRepoRepository.findByProjectAndNameInsensitive(
           row.projectId,
@@ -522,7 +642,9 @@ export const projectRepoSetService = {
             ...(input.role !== undefined ? { role: input.role as ProjectRepoRole } : {}),
             ...(name !== undefined ? { name } : {}),
             ...(label !== undefined ? { label } : {}),
-            ...(seedSource !== undefined ? { seedSource } : {}),
+            // A person's choice is authoritative and is not the matching's, so
+            // the recorded match result is cleared with it.
+            ...(repointed !== undefined ? { seedSource: repointed, seedMatch: null } : {}),
           },
           tx,
         );
@@ -628,6 +750,7 @@ export const projectRepoSetService = {
           name: row.name,
           seedSource: row.seedSource,
           proposalSignal: row.proposalSignal,
+          seedMatch: row.seedMatch,
           state: 'proposed',
           position: row.position,
         },
@@ -827,8 +950,9 @@ export const projectRepoSetService = {
     rowId: string,
     githubRepoId: string,
     ctx: ServiceContext,
+    seed: { seedHeadSha?: string | null } = {},
   ): Promise<ProjectRepoDto> {
-    const attached = await this.attachRealizedRepoRow(rowId, githubRepoId, ctx);
+    const attached = await this.attachRealizedRepoRow(rowId, githubRepoId, ctx, seed);
     // ⚠️ MOTIR-1913's PIN RESOLUTION PASS USED TO RUN HERE, AND IT IS GONE
     // (Story MOTIR-2732 · MOTIR-3040, ADR `work-item-repository-set.md`
     // "Amendment 2026-08-18" §A3's RETIRE branch).
@@ -984,6 +1108,7 @@ export const projectRepoSetService = {
     rowId: string,
     githubRepoId: string,
     ctx: ServiceContext,
+    seed: { seedHeadSha?: string | null } = {},
   ): Promise<ProjectRepoDto> {
     return inLockedRow(rowId, ctx, async (row, tx) => {
       const target: ProjectRepoState = row.state === 'creating' ? 'created' : 'connected';
@@ -1014,9 +1139,12 @@ export const projectRepoSetService = {
         throw new RealizedRepoAlreadyClaimedError(githubRepoId);
       }
       try {
+        // Only a repository Motir CREATED has a seed head (MOTIR-4589); a
+        // connected one is the user's, with history of its own.
+        const seedHeadSha = target === 'created' ? (seed.seedHeadSha ?? null) : null;
         const updated = await projectRepoRepository.update(
           rowId,
-          { githubRepoId, state: target, failureReason: null },
+          { githubRepoId, state: target, failureReason: null, seedHeadSha },
           tx,
         );
         // The `created` / `connected` hop may be what ESTABLISHES the set (MOTIR-5178).
@@ -1026,6 +1154,64 @@ export const projectRepoSetService = {
       } catch (err) {
         translateUniqueViolation(err, { projectId: row.projectId, name: row.name, githubRepoId });
       }
+    });
+  },
+
+  /**
+   * Record where a Motir repo's app runs, what it is for and how big it is
+   * (MOTIR-9808) — the plan's hosting decision and build directly are the two
+   * callers. One locked transaction; returns the row's DTO.
+   *
+   * Refuses, changing nothing: a value outside the vocabulary
+   * (`ProjectRepoInvalidFieldError` naming `target` / `useCase` / `size`), a
+   * customer row (`ProjectRepoNotMotirHostedError`, D1) and a row already on a
+   * DIFFERENT target (`ProjectRepoHostingTargetFixedError` — moving is a
+   * migration, D3). The same three values again are a no-op with no write; on
+   * the same target the use case and size may be revised.
+   */
+  async setHosting(
+    rowId: string,
+    input: { target: string; useCase: string; size: string },
+    ctx: ServiceContext,
+  ): Promise<ProjectRepoDto> {
+    const { target, useCase, size } = input;
+    if (!isHostingTarget(target)) {
+      throw new ProjectRepoInvalidFieldError(
+        'target',
+        `must be one of ${HOSTING_TARGETS.join(', ')}.`,
+      );
+    }
+    if (!isHostingUseCase(useCase)) {
+      throw new ProjectRepoInvalidFieldError(
+        'useCase',
+        `must be one of ${HOSTING_USE_CASES.join(', ')}.`,
+      );
+    }
+    if (!isHostingSize(size)) {
+      throw new ProjectRepoInvalidFieldError('size', `must be one of ${HOSTING_SIZES.join(', ')}.`);
+    }
+    return inLockedRow(rowId, ctx, async (row, tx) => {
+      if (isOrganizationSeedSource(row.seedSource)) throw new ProjectRepoNotMotirHostedError(rowId);
+      if (row.hostingTarget !== null && row.hostingTarget !== target) {
+        throw new ProjectRepoHostingTargetFixedError(rowId, row.hostingTarget, target);
+      }
+      if (
+        row.hostingTarget === target &&
+        row.hostingUseCase === useCase &&
+        row.hostingSize === size
+      ) {
+        return toProjectRepoDto(row);
+      }
+      const updated = await projectRepoRepository.setHosting(
+        rowId,
+        { hostingTarget: target, hostingUseCase: useCase, hostingSize: size },
+        tx,
+      );
+      return toProjectRepoDto({
+        ...updated,
+        githubRepo: row.githubRepo,
+        collaborators: row.collaborators,
+      });
     });
   },
 };

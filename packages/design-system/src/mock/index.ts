@@ -4,4 +4,4 @@
 // and reads files, and the main entry must stay safe for a Next client import
 // (`test/barrel-rsc-safe.test.ts`).
 export { renderMock, extractClassCandidates } from './renderMock';
-export type { RenderMockOptions, MockPanel, MockAxes } from './renderMock';
+export type { RenderMockOptions, MockPanel, MockAxes, BoardWidth } from './renderMock';

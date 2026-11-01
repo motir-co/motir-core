@@ -2,6 +2,7 @@ import {
   Prisma,
   type Plan,
   type PlanItem,
+  type PlanTargetLock,
   type WorkItem,
   type WorkItemKind,
 } from '@/generated/prisma/client';
@@ -41,6 +42,12 @@ import {
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
+import { planCodeReadRepository } from '@/lib/repositories/planCodeReadRepository';
+import {
+  PLAN_CODE_READ_PAGE_MAX,
+  PlanCodeReadRefusal,
+  parsePlanCodeReads,
+} from '@/lib/plans/planCodeRead';
 import { PLAN_NARRATION_BATCH_MAX, cleanNarrationSentence } from '@/lib/plans/planNarration';
 import { PLAN_STALLED_AFTER_MS } from '@/lib/plans/planProgress';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -71,6 +78,15 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { NoInitialStatusError } from '@/lib/workItems/errors';
 import { foldAppend } from '@/lib/plans/mergeModifyPatch';
+import {
+  assertEdgeReasonsKeyed,
+  foldEdgeReasons,
+  normalizeCorrectionEdges,
+  normalizeProposalEdges,
+  pickEdgeReasons,
+  proposalEdgeRefs,
+  readEdgeReasons,
+} from '@/lib/plans/edgeReasons';
 import { assertKnownPatchKeys } from '@/lib/plans/validatePatchKeys';
 import {
   FOLDER_REF_PREFIX,
@@ -128,11 +144,16 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { isMarkOnlyPatch } from '@/lib/plans/markOnlyPatch';
 import {
   assertBodyRefsResolve,
-  validateProposedBodyRefs,
+  findUnresolvedIntraPlanRefIds,
 } from '@/lib/plans/validateProposedBodyRefs';
+import { proposalLinkWarningsService } from '@/lib/services/proposalLinkWarningsService';
+import { proposalRescopeWarningsService } from '@/lib/services/proposalRescopeWarningsService';
 import { patchRescopes } from '@/lib/plans/rescopeReset';
 import { committedPlanTargets } from '@/lib/plans/planTargets';
 import { restingStatusFor } from '@/lib/plans/restingStatus';
+import { modifyTargetStatusFor, priorStatusOf } from '@/lib/plans/rescopeStatus';
+import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
+import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemTodoRepository } from '@/lib/repositories/workItemTodoRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -212,6 +233,9 @@ import type {
   PlanApprovabilityRejectionDto,
   PlanStatusCountsDto,
   PlanWithItemsDto,
+  PlanWithItemsAndWarningsDto,
+  ProposalLinkWarningDto,
+  ProposalRescopeWarningDto,
   ProposalInput,
   UpdateProposalInput,
   CorrectProposalInput,
@@ -228,6 +252,8 @@ import type {
   WorkItemApprovedShapeVerdictDto,
   WorkItemApprovedShapeVerdictPageDto,
   PlanNarrationDto,
+  PlanCodeReadDto,
+  PlanCodeReadPageDto,
   PlanStepDto,
   PlanStepKindDto,
   PlanStepProviderWaitDto,
@@ -235,12 +261,15 @@ import type {
 import {
   PLAN_ITEM_REASON_MAX,
   PLAN_STATUS_DTO_VALUES,
+  PLANNER_RECORD_MAX_BYTES,
   WORK_ITEM_PENDING_PLAN_STATUSES,
 } from '@/lib/dto/plans';
 import {
   toPlanDto,
   toPlanItemDto,
   toPlanNarrationDto,
+  toPlanCodeReadDto,
+  toPlanNarrationSessionDto,
   toPlanStepDto,
   toPlanWithItemsDto,
   toWorkItemPlanHistoryEntryDto,
@@ -656,6 +685,33 @@ function validateProposedSizing(pf: PlanItemProposedFields): void {
   validateEstimateMinutes(pf.estimateMinutes ?? null);
 }
 
+/** A stored JSON value that is an object — the only shape a planner record takes (MOTIR-9978). */
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * The column value for a planner record (MOTIR-9978): `null` clears it, an object
+ * is stored whole. Refused, naming the field, when it is not an object or its JSON
+ * is over {@link PLANNER_RECORD_MAX_BYTES} — the record is a planner's bookkeeping,
+ * not a store for anything a plan's size should be paying for.
+ */
+function plannerRecordValue(
+  record: Record<string, unknown> | null,
+): Prisma.InputJsonValue | typeof Prisma.DbNull {
+  if (record === null) return Prisma.DbNull;
+  if (!isJsonObject(record)) {
+    throw new InvalidProposalError('`plannerRecord` must be a JSON object, or null to clear it.');
+  }
+  const bytes = Buffer.byteLength(JSON.stringify(record), 'utf8');
+  if (bytes > PLANNER_RECORD_MAX_BYTES) {
+    throw new InvalidProposalError(
+      `\`plannerRecord\` is ${bytes} bytes of JSON; the most a plan stores is ${PLANNER_RECORD_MAX_BYTES}.`,
+    );
+  }
+  return record as Prisma.InputJsonValue;
+}
+
 /**
  * A SELF-REPORTED free-text provenance value (MOTIR-2986) — the authoring
  * agent's harness or model. Stored as-supplied per
@@ -807,12 +863,9 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
-    // The bodies' INTRA-PLAN item links (bug MOTIR-6494) — a link approve cannot
-    // rewrite is refused here, by the ONE validator every proposal door shares.
-    validateProposedBodyRefs(
-      p.proposedFields,
-      proposalLabel({ op: p.op, title: p.proposedFields.title }),
-    );
+    // The bodies' INTRA-PLAN item links are NOT refused here (MOTIR-10104): a
+    // broken one is kept and WARNED on the response (`addProposals`), and approve
+    // refuses the plan while it remains.
     // The repo ROLE (MOTIR-1912) — checked HERE, at the append, because the check
     // is pure (a closed vocabulary, no repository need exist) and the producer is
     // a machine: telling motir-ai its role is unknown while it is still writing
@@ -881,8 +934,7 @@ function validateProposal(p: ProposalInput): void {
     // string-or-null note, and nothing else: the mark is kind- and status-agnostic.
     validateProposedObsolescence(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
     // A `modify`'s rewritten bodies are rewritten at approve too (MOTIR-3804), so
-    // they are held to the same link check as an `add`'s (bug MOTIR-6494).
-    validateProposedBodyRefs(p.patch, proposalLabel({ op: p.op, workItemId: p.workItemId }));
+    // their links are WARNED like an `add`'s (bugs MOTIR-6494 · MOTIR-10104).
     // A `modify` may RE-PIN the role (MOTIR-1912) — same vocabulary check as the
     // `add` path, so the two cannot disagree about what a role is.
     assertKnownRepoRole(
@@ -1033,6 +1085,39 @@ function mergeProposedFields(
     });
   }
   return next;
+}
+
+/**
+ * Refuse an `add` edit whose bodies link a `planItem:` id the plan does not hold
+ * (bug MOTIR-9175), judged on the bodies the edit WRITES (bug MOTIR-9836). A
+ * write carrying `sections` sends no `descriptionMd` of its own — the body it
+ * stores is the one `mergeProposedFields` rendered into `next` — so judging
+ * `input.descriptionMd` skipped the check on the path both planners author
+ * through. Sections are sparse over the stored body, so a link the stored body
+ * already carried is inherited, not written: it stays repairable by a write that
+ * does not touch it, as an unrelated edit already is on the plain path.
+ */
+function assertEditBodyRefsResolve(
+  current: PlanItemProposedFields,
+  input: UpdateProposalInput,
+  next: PlanItemProposedFields,
+  addIds: ReadonlySet<string>,
+  label: string,
+): void {
+  if (!hasSectionsInput(input)) {
+    assertBodyRefsResolve(
+      { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
+      addIds,
+      label,
+    );
+    return;
+  }
+  const inherited = findUnresolvedIntraPlanRefIds(current.descriptionMd ?? '', addIds);
+  assertBodyRefsResolve(
+    { descriptionMd: next.descriptionMd, explanationMd: input.explanationMd },
+    new Set([...addIds, ...inherited]),
+    label,
+  );
 }
 
 /**
@@ -2435,6 +2520,50 @@ function proposalLabel(p: { op: string; workItemId?: string | null; title?: stri
   return `the \`${p.op}\` of work item ${p.workItemId ?? '(unknown)'}`;
 }
 
+/** A persisted proposal, named as {@link proposalLabel} names one at a door. */
+function planItemLabel(item: PlanItem): string {
+  const title = (item.proposedFields as { title?: unknown } | null)?.title;
+  return proposalLabel({
+    op: item.op,
+    workItemId: item.workItemId,
+    title: typeof title === 'string' ? title : undefined,
+  });
+}
+
+/**
+ * Attach the WARNINGS of the proposals a write touched — present only when there
+ * is one, so a clean write answers exactly as before: the item links it kept that
+ * would ship dead (MOTIR-10104), and the `modify`s approve will send back from
+ * built work (MOTIR-10106).
+ */
+async function withLinkWarnings<T extends { projectId: string }>(
+  answer: T,
+  items: readonly PlanItem[],
+  writtenIds: readonly string[],
+  ctx: ServiceContext,
+): Promise<
+  T & { warnings?: ProposalLinkWarningDto[]; rescopeWarnings?: ProposalRescopeWarningDto[] }
+> {
+  const warnings = await proposalLinkWarningsService.forWrittenProposals(
+    items,
+    writtenIds,
+    planItemLabel,
+    ctx,
+  );
+  const rescopeWarnings = await proposalRescopeWarningsService.forProposals(
+    items,
+    writtenIds,
+    planItemLabel,
+    answer.projectId,
+    ctx,
+  );
+  return {
+    ...answer,
+    ...(warnings.length > 0 ? { warnings } : {}),
+    ...(rescopeWarnings.length > 0 ? { rescopeWarnings } : {}),
+  };
+}
+
 /**
  * REJECT a repo role outside ADR §1.1's vocabulary, naming the offending
  * proposal. `undefined` (the proposal carries no role) and `null` (an explicit
@@ -3037,13 +3166,18 @@ async function materialize(
   // per-row structural triggers are unaffected by batching (see
   // `createManyIfAbsent`), and `skipDuplicates` makes a plan that proposes the
   // same edge twice idempotent instead of aborting the approve.
+  //
+  // Each edge carries the REASON its proposal gave it (MOTIR-9827) onto the link,
+  // so the card shows why it waits once the plan is gone.
   const blockedByRows = adds.flatMap((item) => {
     const fromId = planItemToWorkItem.get(item.id)!;
+    const reasons = readEdgeReasons(item.edgeReasons);
     return item.blockedByRefs.map((ref) => ({
       workspaceId: ctx.workspaceId,
       fromId,
       toId: resolveRef(ref),
       kind: 'is_blocked_by' as const,
+      reason: reasons[ref] ?? null,
       createdById: ctx.userId,
     }));
   });
@@ -3217,7 +3351,7 @@ async function materialize(
           projectId: plan.projectId,
           projectIdentifier: prefix,
         },
-        text: `${finalRow.descriptionMd ?? ''}\n${finalRow.explanationMd ?? ''}`,
+        bodies: [finalRow.descriptionMd, finalRow.explanationMd],
         ctx,
       },
       tx,
@@ -3239,6 +3373,10 @@ async function materialize(
   const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
   /** The re-parents this pass performed (MOTIR-3859) — see {@link ReparentMove}. */
   const reparented: ReparentMove[] = [];
+  /** Every `modify` target and what its patch did — the re-scope move's input
+   *  (MOTIR-10102), recorded BEFORE the patch lands, since `patchRescopes`
+   *  compares the patch with the row it replaces. */
+  const modifyTargets = new Map<string, ModifyTargetFacts>();
 
   // modify + remove against existing targets (locked + re-read inside the tx).
   //
@@ -3256,7 +3394,7 @@ async function materialize(
   // `normalizeBodyRefs` are for; only the edge write is withheld.
   for (const item of items) {
     if (item.op === 'modify') {
-      const { reparent: moved } = await applyModify(
+      const { reparent: moved, rescoped } = await applyModify(
         item,
         ctx,
         resolveRef,
@@ -3268,6 +3406,10 @@ async function materialize(
         plan.id,
       );
       if (moved) reparented.push(moved);
+      modifyTargets.set(resolveRef(item.workItemId!), {
+        rescopes: rescoped,
+        markOnly: isMarkOnlyPatch((item.patch ?? {}) as object),
+      });
       // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
       // target, so this is non-null by the time we get here — asserted rather
       // than re-guarded, which would add a branch nothing can take.
@@ -3334,7 +3476,18 @@ async function materialize(
   // resting status is an answer ONLY the approve knows — a post-commit failure
   // would leave the sweep to restore `in_progress` on a card whose body just
   // changed, which is the state MOTIR-5359 was filed about.
-  const restingMoves = await restPlanTargets(plan, ctx, tx);
+  //
+  // ⚠️ AND A `modify` TARGET THAT CLAIMS BUILT WORK IS DECIDED BY THE RE-SCOPE
+  // MOVE, parked or not (bug MOTIR-10102): the plan-held ones here, and every
+  // other one — a conversation plan parks nothing, and its session holds only its
+  // anchors — in `settleUnparkedModifyTargets` straight after.
+  for (const parentRef of adds.map((a) => a.parentRef)) {
+    if (!parentRef || isTempRef(parentRef) || isFolderRef(parentRef)) continue;
+    const facts = modifyTargets.get(parentRef);
+    if (facts) facts.gainsChildren = true;
+  }
+  const restingMoves = await restPlanTargets(plan, ctx, tx, modifyTargets);
+  restingMoves.push(...(await settleUnparkedModifyTargets(plan, ctx, tx, modifyTargets)));
 
   return { touchedWorkItemIds, reparented, restingMoves };
 }
@@ -3358,8 +3511,21 @@ async function restPlanTargets(
   plan: Plan,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
+  modifyTargets: ReadonlyMap<string, ModifyTargetFacts>,
 ): Promise<RestingMove[]> {
-  const locks = await planTargetLockRepository.listByPlanId(plan.id, tx);
+  // ⚠️ AND THE CONVERSATION'S HAND-PARKED TARGETS (MOTIR-9527 / MOTIR-9531). A plan a
+  // conversation produces parks nothing, so a target that was ALREADY at `planning`
+  // when the session took it has only the SESSION's lock (`priorStatus: 'planning'`,
+  // nothing held). Its resting status used to be written by the post-commit session
+  // release (bug MOTIR-8356) — best-effort, so when that release did not run the
+  // lease expired and the sweep, which cannot know the plan was approved, deleted the
+  // lock and left the card at Planning for good. It is an answer only the approve
+  // knows, so it is written here, in the approve's transaction, like the plan's own.
+  // Merged into the one work-item-id order every target path takes.
+  const locks = [
+    ...(await planTargetLockRepository.listByPlanId(plan.id, tx)),
+    ...(await sessionHandParkedLocks(plan, tx)),
+  ].sort((a, b) => (a.workItemId < b.workItemId ? -1 : a.workItemId > b.workItemId ? 1 : 0));
   if (locks.length === 0) return [];
 
   const moves: RestingMove[] = [];
@@ -3390,6 +3556,24 @@ async function restPlanTargets(
       ctx.workspaceId,
       tx,
     );
+
+    // A `modify` target that claims BUILT work is decided by the re-scope move
+    // instead (bug MOTIR-10102): it leaves for `blocked` / `in_progress` / `todo`
+    // when its body changed, and gets back the status it was parked from when it
+    // did not. Written AUTHORITATIVELY, like `releaseOne`'s restore: the approved
+    // plan is the decision, and `planning → implemented` is not an edge the
+    // default graph declares.
+    const facts = modifyTargets.get(item.id);
+    if (facts) {
+      facts.settled = true;
+      const toKey = await decideModifyTargetStatus(item, lock, facts, hasOpenBlocker, statuses, tx);
+      if (toKey !== null) {
+        await planTargetLockRepository.deleteById(lock.id, tx);
+        const move = await writePlanDecidedStatus(item, toKey, statuses, ctx, tx);
+        if (move) moves.push(move);
+        continue;
+      }
+    }
 
     const decision = restingStatusFor({
       archived: item.archivedAt !== null,
@@ -3443,6 +3627,159 @@ async function restPlanTargets(
       toStatusKey: to.key,
       revisionId,
     });
+  }
+  return moves;
+}
+
+/**
+ * The locks this plan's CONVERSATION holds on cards that were hand-parked at
+ * `planning` before it took them — only when this plan is the session's latest,
+ * the rule the post-commit release applies, so approving an earlier plan of a
+ * conversation that has moved on gives back nothing it still holds.
+ */
+async function sessionHandParkedLocks(
+  plan: Plan,
+  tx: Prisma.TransactionClient,
+): Promise<PlanTargetLock[]> {
+  if (!plan.sessionId) return [];
+  if ((await planRepository.findLatestIdBySession(plan.sessionId, tx)) !== plan.id) return [];
+  const locks = await planTargetLockRepository.listBySessionId(plan.sessionId, tx);
+  return locks.filter(planTargetLockService.isHandParkedSessionLock);
+}
+
+/** What an approved `modify` did to its target, as the re-scope move reads it
+ *  (bug MOTIR-10102). `settled` is set once a pass has decided the target, so the
+ *  pass after it does not decide it twice. */
+interface ModifyTargetFacts {
+  rescopes: boolean;
+  markOnly: boolean;
+  gainsChildren?: boolean;
+  settled?: boolean;
+}
+
+/**
+ * The status the re-scope move gives one `modify` target, or `null` when the
+ * move is not its business (`modifyTargetStatusFor` answers `not_ours`). Reads
+ * the target's prior status through its lock, its category from the project's
+ * workflow, and a live run only when the answer can depend on one.
+ */
+async function decideModifyTargetStatus(
+  item: { id: string; status: string; archivedAt: Date | null; obsolescence: string | null },
+  lock: { priorStatus: string; statusHeld: boolean } | null,
+  facts: ModifyTargetFacts,
+  hasOpenBlocker: boolean,
+  statuses: ReadonlyArray<{ key: string; category: StatusCategoryDto }>,
+  tx: Prisma.TransactionClient,
+): Promise<string | null> {
+  // An archived row is claimed by nothing, and a marked card stays finished —
+  // the two cases `restAdoptedTarget` leaves where they are, for the same reasons.
+  if (item.archivedAt !== null || item.obsolescence != null) return null;
+  const priorStatus = priorStatusOf(item.status, lock);
+  const priorCategory = statuses.find((s) => s.key === priorStatus)?.category ?? null;
+  const decision = modifyTargetStatusFor({
+    priorStatus,
+    priorCategory,
+    rescopes: facts.rescopes,
+    markOnly: facts.markOnly,
+    gainsChildren: facts.gainsChildren === true,
+    hasOpenBlocker,
+    hasLiveRun:
+      facts.rescopes && !hasOpenBlocker
+        ? await dispatchRunCardRepository.hasWorkingLegForWorkItem(item.id, tx)
+        : false,
+  });
+  return decision.kind === 'not_ours' ? null : decision.toKey;
+}
+
+/**
+ * Write a status an approved plan decided, past the project's transition graph,
+ * with the revision that carries it — the write `restPlanTargets` makes, minus
+ * its legality read. Answers the move for the post-commit `transitioned` event,
+ * or `null` when there is nothing to write: the status is the card's already, the
+ * workflow has no such status, or it is a done-category one (never written here).
+ */
+async function writePlanDecidedStatus(
+  item: { id: string; status: string },
+  toKey: string,
+  statuses: ReadonlyArray<{ key: string; category: StatusCategoryDto }>,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<RestingMove | null> {
+  // Never into the done category: the decision only names a card's own built
+  // status or `todo` / `blocked` / `in_progress`, and asserting it here is what
+  // lets this write skip `applyStatusTransition`'s `completedAt` stamp.
+  const to = statuses.find((s) => s.key === toKey);
+  if (item.status === toKey || !to || to.category === 'done') return null;
+  await workItemRepository.update(item.id, { status: toKey }, tx);
+  const revisionId = await workItemRevisionsService.recordRevision(
+    {
+      workItemId: item.id,
+      changedById: ctx.userId,
+      changeKind: 'updated',
+      diff: { status: { from: item.status, to: toKey } },
+    },
+    tx,
+  );
+  return { workItemId: item.id, fromStatusKey: item.status, toStatusKey: toKey, revisionId };
+}
+
+/**
+ * THE RE-SCOPE MOVE FOR EVERY `modify` TARGET THIS PLAN DID NOT PARK (bug
+ * MOTIR-10102) — materialize's pass after `restPlanTargets`.
+ *
+ * ⚠️ THIS IS THE REPORTED BUG. A plan a planning CONVERSATION produces parks
+ * nothing (`addProposals`, `sessionHoldingThisPlan`), and its session holds only
+ * its anchors, so a `modify` of any other card was never parked, never rested and
+ * never moved: an `implemented` card whose body the plan rewrote went on claiming
+ * the old body was built. The same holds for a card no plan could park (a
+ * workflow with no edge into `planning`).
+ *
+ * TWO SHAPES, by whether something HOLDS the card at `planning` right now:
+ *
+ * - held (a session's lock, or another plan's, that moved it there) — the status
+ *   belongs to that hold, so the decision is written onto the lock as the status
+ *   to give back. The session's release after this approve, or the hold's own
+ *   decision later, restores it there — and the review read it from the lock too;
+ * - not held — the decision is written onto the card, authoritatively, as
+ *   `restPlanTargets` writes its own.
+ *
+ * Locks each card in work-item-id order, the one lock order every target path takes.
+ */
+async function settleUnparkedModifyTargets(
+  plan: Plan,
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+  modifyTargets: ReadonlyMap<string, ModifyTargetFacts>,
+): Promise<RestingMove[]> {
+  const pending = [...modifyTargets.entries()]
+    .filter(([, facts]) => !facts.settled)
+    .map(([id]) => id)
+    .sort();
+  if (pending.length === 0) return [];
+  const statuses = await workflowsRepository.findStatuses(plan.projectId, ctx.workspaceId, tx);
+  const moves: RestingMove[] = [];
+  for (const workItemId of pending) {
+    const facts = modifyTargets.get(workItemId)!;
+    facts.settled = true;
+    await workItemRepository.lockById(workItemId, tx);
+    const item = await workItemRepository.findById(workItemId, tx);
+    if (!item) continue;
+    const lock = await planTargetLockRepository.findByWorkItemId(workItemId, tx);
+    const hasOpenBlocker = await planTargetLockService.hasOpenBlockerWithin(
+      item.id,
+      ctx.workspaceId,
+      tx,
+    );
+    const toKey = await decideModifyTargetStatus(item, lock, facts, hasOpenBlocker, statuses, tx);
+    if (toKey === null) continue;
+    if (lock && item.status === PLANNING_STATUS_KEY && lock.statusHeld) {
+      if (lock.priorStatus !== toKey) {
+        await planTargetLockRepository.update(lock.id, { priorStatus: toKey }, tx);
+      }
+      continue;
+    }
+    const move = await writePlanDecidedStatus(item, toKey, statuses, ctx, tx);
+    if (move) moves.push(move);
   }
   return moves;
 }
@@ -3564,7 +3901,7 @@ async function applyModify(
   // already has its row and the map is complete by the time we are called.
   planItemToWorkItem: ReadonlyMap<string, string>,
   planId: string,
-): Promise<{ reparent: ReparentMove | null }> {
+): Promise<{ reparent: ReparentMove | null; rescoped: boolean }> {
   if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
   const locked = await workItemRepository.lockById(item.workItemId, tx);
   if (!locked) throw new PlanItemTargetMissingError(item.workItemId);
@@ -3927,20 +4264,14 @@ async function applyModify(
     }
   }
 
-  // ⚠️ THE RE-SCOPE RESET IS GONE FROM HERE (MOTIR-5646 supersedes MOTIR-5359).
-  // `resolveRescopeReset` used to run at this point and move a re-scoped
-  // in-progress-category card to the project's INITIAL status.
+  // ⚠️ THE STATUS IS NOT WRITTEN HERE. A re-scope's status move runs after
+  // every op has landed, as materialize's last pass: `restPlanTargets` for a
+  // target this plan parked and `settleUnparkedModifyTargets` for every other
+  // one (bug MOTIR-10102), both through `modifyTargetStatusFor`. It cannot run
+  // here, because it reads the card's open blockers, and the edges this very
+  // `modify` wires are written further down.
   //
-  // It is replaced rather than kept beside its successor, because the two would
-  // fight over the same column with different answers. Its question was *did
-  // this patch change the card's title, body or repository?* — narrower than the
-  // one the park poses (*was this card parked?*), and blind to the card's
-  // blockers, so it sent a card with an open prerequisite to `todo`. Every
-  // `modify` target is now parked by its own append, and `restPlanTargets`
-  // rests ALL of them from their live edges as materialize's last pass
-  // (AMENDMENT 16 D6, and D11's disposition for MOTIR-5359).
-  //
-  // ⚠️ ONE THING THAT RESET DID IS KEPT, and it is not about the status: a card
+  // ⚠️ THE BRANCH IS CLEARED HERE, with the patch, and that is not about the status: a card
   // whose body just changed must not go on unblocking its dependents on the OLD
   // body's branch. Readiness treats a blocker carrying a `sessionBranch` as
   // satisfied (`isOpenBlocker`), so the branch is cleared with the re-scope
@@ -3954,7 +4285,8 @@ async function applyModify(
   // the branch, like the status (never parked, so `restPlanTargets` never rests
   // it), is left exactly as it was. Asked through the SAME predicate the gate
   // admitted it by, so the two cannot disagree.
-  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
+  const rescoped = !isMarkOnlyPatch(patch) && patchRescopes(patch, current);
+  if (rescoped) {
     update.sessionBranch = null;
   }
 
@@ -3969,7 +4301,7 @@ async function applyModify(
   // mark done work nobody has described to them. Usually the append's park already
   // withdrew it; this catches a target the append could not park (no edge into
   // Planning, or one already sitting there). The next run to reach the card re-asks.
-  if (!isMarkOnlyPatch(patch) && patchRescopes(patch, current)) {
+  if (rescoped) {
     await manualWorkGateService.withdrawOnReplan(item.workItemId, tx);
   }
 
@@ -3994,17 +4326,20 @@ async function applyModify(
   // already carries and readiness already computes. The mover stays explicit:
   // whoever finds the missing prerequisite calls `transition_status` themselves.
   //
-  // (2) THE RE-SCOPE RESET IS THAT EXPLICIT MOVER (bug MOTIR-5359). A patch that
-  // changes WHAT the card asks for — its title, its description, the repository it
-  // ships in (`patchRescopes`) — on a card in the `in_progress` CATEGORY moves it
-  // back to the project's initial status, above. Rule (1)'s objection does not
-  // reach it: the fact being walked back is *"work matching this body is under way
-  // or built"*, and approving a new body is what made that fact false. A person
-  // approved the re-scope, and the review diff showed them the reset before they
-  // pressed the button (`planReviewService.buildChanges`). Left alone, an
-  // `implemented` card goes on claiming the OLD body is on the remote, and
-  // readiness, the board, the parent rollup and dispatch all read that claim.
+  // (2) THE RE-SCOPE MOVE IS THAT EXPLICIT MOVER (bug MOTIR-10102, restoring
+  // what MOTIR-5359 meant). A patch that changes WHAT the card asks for — its
+  // title, its description, the repository it ships in (`patchRescopes`) — on a
+  // card that claims its work is built (`implemented`, `in_review`, `approved`)
+  // moves it to `blocked`, `in_progress` or `todo` once materialize has wired
+  // every edge (`lib/plans/rescopeStatus.ts`). Rule (1)'s objection does not
+  // reach it: the fact being walked back is *"work matching this body is built"*,
+  // and approving a new body is what made that fact false. A person approved the
+  // re-scope, and the review diff showed them the move before they pressed the
+  // button (`planReviewService.buildChanges`, through the same predicate). Left
+  // alone, an `implemented` card goes on claiming the OLD body is on the remote,
+  // and readiness, the board, the parent rollup and dispatch all read that claim.
   const linkAdded: Array<{ toId: string; kind: string }> = [];
+  const edgeReasons = readEdgeReasons(item.edgeReasons);
   for (const ref of patch.blockedByAdd ?? []) {
     const toId = resolveRef(ref);
     // `createIfAbsent`, not `create` (MOTIR-8147): naming an edge the card already
@@ -4019,6 +4354,7 @@ async function applyModify(
         fromId: item.workItemId,
         toId,
         kind: 'is_blocked_by',
+        reason: edgeReasons[ref] ?? null,
         createdById: ctx.userId,
       },
       tx,
@@ -4177,8 +4513,9 @@ async function applyModify(
   // The STATUS is no longer one of them: `restPlanTargets` writes the resting
   // status for every parked target as materialize's last pass and returns its
   // own moves, so this function has no status change left to report
-  // (MOTIR-5646).
-  return { reparent };
+  // (MOTIR-5646). It reports whether the patch RE-SCOPED the card, which the
+  // re-scope move decides from (MOTIR-10102).
+  return { reparent, rescoped };
 }
 
 /**
@@ -4527,7 +4864,7 @@ async function editAddProposal(
   input: UpdateProposalInput,
   ctx: ServiceContext,
   mode: AddProposalEditMode,
-): Promise<PlanWithItemsDto> {
+): Promise<PlanWithItemsAndWarningsDto> {
   const expectedStatus = mode === 'deepen' ? 'generating' : 'planned';
   const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
     planRepository.findById(planId, ctx.workspaceId, tx),
@@ -4579,7 +4916,7 @@ async function editAddProposal(
       return { row: fresh, items: allItems };
     },
   );
-  return toPlanWithItemsDto(row, items);
+  return withLinkWarnings(toPlanWithItemsDto(row, items), items, [planItemId], ctx);
 }
 
 /**
@@ -4639,16 +4976,16 @@ async function applyAddProposalEdit(
     next.kind ?? DEFAULT_PROPOSED_KIND,
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
   );
-  // And the bodies' item links on the MERGED result (bug MOTIR-6494).
-  validateProposedBodyRefs(
+  // The bodies' malformed item links are WARNED on the edit's response, not
+  // refused (bugs MOTIR-6494 · MOTIR-10104) — `editAddProposal`.
+  // The links THIS edit writes must name a proposal on the plan (bug
+  // MOTIR-9175), the rendered body when it carries `sections` (bug MOTIR-9836).
+  // Only the bodies the edit writes are judged, so a proposal that inherited a
+  // dangling link can still be repaired by an unrelated edit.
+  assertEditBodyRefsResolve(
+    current,
+    input,
     next,
-    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-  );
-  // ...and the links THIS edit writes must name a proposal on the plan (bug
-  // MOTIR-9175). Only the bodies the edit sets are judged, so a proposal that
-  // inherited a dangling link can still be repaired by an unrelated edit.
-  assertBodyRefsResolve(
-    { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
     new Set(
       (await planItemRepository.findByPlan(fresh.id, tx))
         .filter((i) => i.op === 'add')
@@ -4775,11 +5112,10 @@ async function releasePlanTargetLocks(
   }
 
   // The SESSION half: a plan produced by a planning conversation also hands that
-  // conversation's own leases back when it is decided. On an APPROVE
-  // (`opts.approved`) a target the session held while it was hand-parked at
-  // `planning` is RESTED at `todo` / `blocked`, because the conversation's plan
-  // parked nothing itself, so `restPlanTargets` found no plan-held lock to rest
-  // and this lock is the card's only record (bug MOTIR-8356).
+  // conversation's own leases back when it is decided. On an APPROVE a target the
+  // session held while it was hand-parked at `planning` has already been RESTED
+  // inside the approve's transaction (`restPlanTargets`, MOTIR-9527); `opts.approved`
+  // still rests one here for a lock that pass did not see (bug MOTIR-8356).
   if (!plan.sessionId) return;
   const sessionId = plan.sessionId;
   try {
@@ -5224,6 +5560,7 @@ export type ReportPlanStepResult =
   | { kind: 'step'; step: PlanStepDto }
   | { kind: 'end' }
   | { kind: 'narration'; narration: PlanNarrationDto[] }
+  | { kind: 'codeReads'; codeReads: PlanCodeReadDto[] }
   | { kind: 'providerRetry'; providerWait: PlanStepProviderWaitDto | null };
 
 /** The most retries one provider wait may name (MOTIR-9619) — `attempt` and
@@ -5425,7 +5762,7 @@ export const plansService = {
     incoming: ProposalInput[],
     ctx: ServiceContext,
     opts: { revision?: boolean } = {},
-  ): Promise<PlanWithItemsDto & { appendedItemIds: string[] }> {
+  ): Promise<PlanWithItemsAndWarningsDto & { appendedItemIds: string[] }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -5436,8 +5773,16 @@ export const plansService = {
     // The sections INPUT is rendered into each `add`'s `descriptionMd` and stripped
     // BEFORE any gate below reads a proposal (MOTIR-9030), so every gate judges the
     // proposal as it will be stored and `proposals` never carries a `sections` key.
-    const proposals = incoming.map(resolveProposalSections);
+    //
+    // The edge lists are split first (MOTIR-9827): a `{ ref, reason }` entry in an
+    // `add`'s `blockedByRefs` or a `modify`'s `patch.blockedByAdd` becomes a bare
+    // ref plus an `edgeReasons` entry, so every gate below reads the `string[]` it
+    // always has.
+    const proposals = incoming.map(normalizeProposalEdges).map(resolveProposalSections);
     proposals.forEach(validateProposal);
+    proposals.forEach((p) =>
+      assertEdgeReasonsKeyed(p, proposalLabel({ op: p.op, workItemId: p.workItemId })),
+    );
 
     // ⚠️ THE CLOSE'S OWN GATE, FOR THE ONE APPEND THAT HAS NO CLOSE LEFT
     // (MOTIR-4153). Read the append's own gate comment below: it deliberately
@@ -5761,6 +6106,7 @@ export const plansService = {
           // still gets a real id (AMENDMENT 18 §2).
           const appendedItemIds: string[] = [];
           const inserted: ProposalInput[] = [];
+          const reasons = foldEdgeReasons(existing, proposals, fold);
           for (const [index, p] of proposals.entries()) {
             const disposition = fold.dispositions[index]!;
             if (disposition.kind === 'mergeExisting') {
@@ -5779,6 +6125,10 @@ export const plansService = {
               workItemId: p.op === 'add' ? null : (p.workItemId ?? null),
               parentRef: p.parentRef ?? null,
               blockedByRefs: p.blockedByRefs ?? [],
+              edgeReasons: pickEdgeReasons(
+                reasons.forInsert.get(index),
+                proposalEdgeRefs({ op: p.op, blockedByRefs: p.blockedByRefs, patch }),
+              ),
               supersedesRefs: p.op === 'add' ? (p.supersedesRefs ?? []) : [],
               baseRevision: baseRevisions.get(index) ?? p.baseRevision ?? null,
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
@@ -5805,7 +6155,13 @@ export const plansService = {
           for (const [rowId, merged] of fold.mergedExisting) {
             await planItemRepository.update(
               rowId,
-              { patch: merged as unknown as Prisma.InputJsonValue },
+              {
+                patch: merged as unknown as Prisma.InputJsonValue,
+                edgeReasons: pickEdgeReasons(
+                  reasons.forExisting.get(rowId),
+                  merged.blockedByAdd ?? [],
+                ),
+              },
               tx,
             );
           }
@@ -5886,10 +6242,15 @@ export const plansService = {
       // including the typed refusals thrown a few lines up.
       throw containPrismaFailure(err, 'plan proposal append');
     }
-    return {
-      ...toPlanWithItemsDto(result.row, result.items),
-      appendedItemIds: result.appendedItemIds,
-    };
+    return withLinkWarnings(
+      {
+        ...toPlanWithItemsDto(result.row, result.items),
+        appendedItemIds: result.appendedItemIds,
+      },
+      result.items,
+      result.appendedItemIds,
+      ctx,
+    );
   },
 
   /**
@@ -5933,6 +6294,14 @@ export const plansService = {
 
     try {
       await runPersistGate(items, ctx, terminalStatusKeys, plan.projectId);
+      // The bodies' item links (MOTIR-10104) — approve's own second question, asked
+      // the same way here so the validator and the button cannot disagree.
+      const linkBlocker = await proposalLinkWarningsService.firstShippingBlocker(
+        items,
+        planItemLabel,
+        ctx,
+      );
+      if (linkBlocker) throw linkBlocker;
       return [];
     } catch (err) {
       if (
@@ -6474,7 +6843,7 @@ export const plansService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'review');
   },
 
@@ -6504,7 +6873,7 @@ export const plansService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'deepen');
   },
 
@@ -6526,7 +6895,7 @@ export const plansService = {
     planItemId: string,
     input: UpdateProposalInput,
     ctx: ServiceContext,
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
     return editAddProposal(planId, planItemId, input, ctx, 'revise');
   },
 
@@ -6613,9 +6982,16 @@ export const plansService = {
       data.summary = normalizeSelfReported(input.summary);
       touched.push('summary');
     }
+    if (input.plannerRecord !== undefined) {
+      data.plannerRecord = plannerRecordValue(input.plannerRecord);
+      touched.push('plannerRecord');
+    }
     if (touched.length === 0) {
       throw new InvalidProposalError('A correction must change something.');
     }
+    // The planner's record is not part of the heading a reviewer reads, so a
+    // write of it alone is not a `brief_edited` on the timeline (MOTIR-9978).
+    const briefFields = touched.filter((key) => key !== 'plannerRecord');
 
     const { row, items } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -6639,21 +7015,37 @@ export const plansService = {
         // verbatim: this method exists precisely so an AGENT can reach a
         // `planned` plan, and a reviewer must be able to see WHICH harness and
         // model rewrote the sentence they were reading.
-        await planRevisionsService.recordRevision(
-          {
-            planId,
-            changeKind: 'brief_edited',
-            ...generationActor(fresh, ctx),
-            diff: { fields: touched, correction: true },
-          },
-          tx,
-        );
+        if (briefFields.length > 0) {
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              changeKind: 'brief_edited',
+              ...generationActor(fresh, ctx),
+              diff: { fields: briefFields, correction: true },
+            },
+            tx,
+          );
+        }
         // The plan's activity stamp (MOTIR-7822).
         await stampPlanActivity(fresh, new Date(), tx);
         return { row: updated, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
     return toPlanWithItemsDto(row, items);
+  },
+
+  /**
+   * The PLANNER's own record on a plan (MOTIR-9978) — what `get_plan` hands the
+   * authoring agent beside the plan, and the only read of it: no `PlanDto`
+   * carries it, so the review surface never receives it. Admits the reader
+   * exactly as {@link getPlanForReader} does; `null` when the plan carries none.
+   */
+  async getPlannerRecord(
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<Record<string, unknown> | null> {
+    const plan = await plansService.admitPlanReader(planId, ctx);
+    return isJsonObject(plan.plannerRecord) ? plan.plannerRecord : null;
   },
 
   /**
@@ -6696,7 +7088,8 @@ export const plansService = {
     input: CorrectProposalInput,
     ctx: ServiceContext,
     opts: { byReviewer?: boolean } = {},
-  ): Promise<PlanWithItemsDto> {
+  ): Promise<PlanWithItemsAndWarningsDto> {
+    input = normalizeCorrectionEdges(input);
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findById(planId, ctx.workspaceId, tx),
     );
@@ -6901,15 +7294,13 @@ export const plansService = {
             next.kind ?? DEFAULT_PROPOSED_KIND,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
-          // The bodies' item links, on the MERGED result (bug MOTIR-6494).
-          validateProposedBodyRefs(
+          // A malformed item link is WARNED on the response (MOTIR-10104), and
+          // the links the correction writes must name a proposal on the plan
+          // (bug MOTIR-9175), judged on the bodies it writes (bug MOTIR-9836).
+          assertEditBodyRefsResolve(
+            current,
+            input,
             next,
-            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
-          );
-          // ...and the links the correction writes must name a proposal on the plan
-          // (bug MOTIR-9175), judged on the bodies it sets.
-          assertBodyRefsResolve(
-            { descriptionMd: input.descriptionMd, explanationMd: input.explanationMd },
             new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
@@ -6938,7 +7329,11 @@ export const plansService = {
           data.proposedFields = next as unknown as Prisma.InputJsonValue;
           touched.push(
             ...Object.keys(input).filter(
-              (k) => k !== 'parentRef' && k !== 'blockedByRefs' && k !== 'supersedesRefs',
+              (k) =>
+                k !== 'parentRef' &&
+                k !== 'blockedByRefs' &&
+                k !== 'edgeReasons' &&
+                k !== 'supersedesRefs',
             ),
           );
         } else {
@@ -6947,7 +7342,11 @@ export const plansService = {
           // `targetRepo` are meaningless on it rather than merely unsupported.
           const contentKeys = Object.keys(input).filter(
             (k) =>
-              k !== 'patch' && k !== 'blockedByRefs' && k !== 'parentRef' && k !== 'supersedesRefs',
+              k !== 'patch' &&
+              k !== 'blockedByRefs' &&
+              k !== 'edgeReasons' &&
+              k !== 'parentRef' &&
+              k !== 'supersedesRefs',
           );
           if (contentKeys.length > 0) {
             throw new InvalidProposalError(
@@ -7009,11 +7408,8 @@ export const plansService = {
                 );
               });
             }
-            // The replacement patch's bodies, held to the append's link check (bug MOTIR-6494).
-            validateProposedBodyRefs(
-              input.patch ?? {},
-              proposalLabel({ op: item.op, workItemId: item.workItemId }),
-            );
+            // The replacement patch's malformed links are WARNED on the response
+            // (MOTIR-10104); a canonical link to no proposal is refused (MOTIR-9175).
             assertBodyRefsResolve(
               input.patch ?? {},
               new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
@@ -7082,6 +7478,24 @@ export const plansService = {
         if (input.blockedByRefs !== undefined) {
           data.blockedByRefs = input.blockedByRefs;
           touched.push('blockedByRefs');
+        }
+        // The reasons REPLACE with the edges they explain (MOTIR-9827), held to the
+        // refs the corrected proposal draws.
+        if (input.edgeReasons !== undefined) {
+          const correctedEdges = {
+            op: item.op,
+            blockedByRefs: (data.blockedByRefs as string[] | undefined) ?? item.blockedByRefs,
+            patch: (input.patch !== undefined ? input.patch : item.patch) as {
+              blockedByAdd?: string[];
+            } | null,
+            edgeReasons: input.edgeReasons,
+          };
+          assertEdgeReasonsKeyed(
+            correctedEdges,
+            proposalLabel({ op: item.op, workItemId: item.workItemId }),
+          );
+          data.edgeReasons = input.edgeReasons;
+          touched.push('edgeReasons');
         }
         // REPLACES the `add`'s supersedes set (MOTIR-6630), as `blockedByRefs`
         // does; a `modify` corrects its edges through its `patch`.
@@ -7221,7 +7635,7 @@ export const plansService = {
         return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };
       },
     );
-    return toPlanWithItemsDto(row, items);
+    return withLinkWarnings(toPlanWithItemsDto(row, items), items, [planItemId], ctx);
   },
 
   /**
@@ -7523,6 +7937,88 @@ export const plansService = {
   },
 
   /**
+   * Append a session's CODE READS (MOTIR-10122): each read it made — the tool,
+   * what it asked, the commits it was read at and how much came back, never the
+   * code — in call order, to the plan's kept log. The whole call is refused,
+   * nothing written, when the batch is empty or over the cap, any read is
+   * malformed (`parsePlanCodeReads` names the field), or the plan is not
+   * `generating`. Accepted reads take the next consecutive per-plan `seq` values
+   * under the plan row lock and stamp the plan's activity.
+   *
+   * ⚠️ NO STEP IS REQUIRED, unlike narration. `plan.py`'s PART 1 conversation
+   * reads code before the plan exists and never reports a step; its reads are
+   * posted under its own session key once the plan does. A read is evidence of
+   * what a session saw, not a signal on the overlay, so it needs no step to hang on.
+   */
+  async recordPlanCodeReads(
+    planId: string,
+    input: { sessionKey: string; codeReads: unknown },
+    ctx: ServiceContext,
+  ): Promise<PlanCodeReadDto[]> {
+    const sessionKey = assertSessionKey(input.sessionKey);
+    let reads;
+    try {
+      reads = parsePlanCodeReads(input.codeReads);
+    } catch (err) {
+      if (err instanceof PlanCodeReadRefusal) throw new InvalidPlanStepError(err.message);
+      throw err;
+    }
+    return withGeneratingPlanStep(planId, ctx, async (_plan, tx, now) => {
+      const base = await planCodeReadRepository.maxSeq(planId, tx);
+      const rows = await planCodeReadRepository.createMany(
+        reads.map((read, i) => ({
+          ...read,
+          commits: read.commits as unknown as Prisma.InputJsonValue,
+          planId,
+          sessionKey,
+          seq: base + i + 1,
+          createdAt: now,
+        })),
+        tx,
+      );
+      return rows.map(toPlanCodeReadDto);
+    });
+  },
+
+  /**
+   * One page of a plan's CODE READS (MOTIR-10122), ascending `seq`, after
+   * `afterSeq` — optionally one session's — with the step words of every session
+   * on the page. Reader-gated exactly as `get_plan` (`admitPlanReader`: an unknown
+   * or unreadable plan is not-found), and readable on a plan in ANY status — the
+   * log is evidence about how a decided plan was written.
+   */
+  async listPlanCodeReads(
+    planId: string,
+    opts: { sessionKey?: string | null; afterSeq?: number; limit?: number },
+    ctx: ServiceContext,
+  ): Promise<PlanCodeReadPageDto> {
+    await plansService.admitPlanReader(planId, ctx);
+    const limit = Math.min(
+      Math.max(1, opts.limit ?? PLAN_CODE_READ_PAGE_MAX),
+      PLAN_CODE_READ_PAGE_MAX,
+    );
+    const filter = {
+      afterSeq: Math.max(0, opts.afterSeq ?? 0),
+      sessionKey: opts.sessionKey ?? null,
+      limit,
+    };
+    // A READ: the service binding, not the write transaction (planTrailCompleteness).
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await planCodeReadRepository.listAfterSeq(planId, filter, tx);
+      const keys = new Set(rows.map((r) => r.sessionKey));
+      const sessions = (await planNarrationRepository.listSessionsByPlan(planId, tx)).filter((s) =>
+        keys.has(s.sessionKey),
+      );
+      return {
+        planId,
+        reads: rows.map(toPlanCodeReadDto),
+        sessions: sessions.map(toPlanNarrationSessionDto),
+        nextAfterSeq: rows.length === limit ? rows[rows.length - 1]!.seq : null,
+      };
+    });
+  },
+
+  /**
    * Record — or clear — a session's provider-retry WAIT (Story MOTIR-9540 ·
    * MOTIR-9619). A `waiting` report is checked (integers in
    * `1..PLAN_PROVIDER_RETRY_ATTEMPTS_MAX`, `attempt ≤ maxAttempts`, a `retryAt`
@@ -7624,19 +8120,35 @@ export const plansService = {
       narration?: string[];
       /** The session's provider-retry wait (MOTIR-9619) — the third exclusive form. */
       providerRetry?: PlanProviderRetryInput;
+      /** The session's code reads (MOTIR-10122) — the fourth exclusive form. */
+      codeReads?: unknown[];
     },
     ctx: ServiceContext,
   ): Promise<ReportPlanStepResult> {
-    // EXACTLY ONE of `step` / `narration` / `providerRetry` (MOTIR-8062 ·
-    // MOTIR-9619): a step report re-stamps `startedAt`, so keeping them apart is
-    // what lets a narration or a wait never touch the step.
-    const forms = [input.step, input.narration, input.providerRetry].filter(
+    // EXACTLY ONE of `step` / `narration` / `providerRetry` / `codeReads`
+    // (MOTIR-8062 · MOTIR-9619 · MOTIR-10122): a step report re-stamps
+    // `startedAt`, so keeping them apart is what lets the others never touch the step.
+    const forms = [input.step, input.narration, input.providerRetry, input.codeReads].filter(
       (form) => form !== undefined,
     ).length;
     if (forms !== 1) {
       throw new InvalidPlanStepError(
-        'Send exactly one of `step`, `narration` or `providerRetry` — nothing was recorded.',
+        'Send exactly one of `step`, `narration`, `providerRetry` or `codeReads` — nothing was ' +
+          'recorded.',
       );
+    }
+    if (input.codeReads !== undefined) {
+      if (input.targetRef !== null) {
+        throw new InvalidPlanStepError(
+          'A `codeReads` call names no target — send it with none; nothing was recorded.',
+        );
+      }
+      const codeReads = await plansService.recordPlanCodeReads(
+        planId,
+        { sessionKey: input.sessionKey, codeReads: input.codeReads },
+        ctx,
+      );
+      return { kind: 'codeReads', codeReads };
     }
     if (input.providerRetry !== undefined) {
       if (input.targetRef !== null) {
@@ -8901,6 +9413,19 @@ async function prepareApprove(planId: string, ctx: ServiceContext) {
     // again in the right order anyway.
     if (plan.status === 'planned') assertPlanHasProposals(planId, preItems);
     await runPersistGate(preItems, ctx, terminalStatusKeys, plan.projectId);
+    // ⚠️ A MALFORMED BODY LINK STOPS APPROVE (MOTIR-10104). The write doors KEEP a
+    // body carrying one and answer with a warning naming the corrected link, so
+    // this is the one place it can still be refused before it ships as dead text.
+    // It is deliberately NOT part of `runPersistGate`: the correction doors run that
+    // gate before/after, and a correction that writes a link it was warned about
+    // must be kept, not rolled back. Bodies do not drift under the row locks, so
+    // the pre-transaction pass is the whole check.
+    const linkBlocker = await proposalLinkWarningsService.firstShippingBlocker(
+      preItems,
+      planItemLabel,
+      ctx,
+    );
+    if (linkBlocker) throw linkBlocker;
 
     // The proposed repo PINS (MOTIR-1884), normalized + validated against this
     // PROJECT's repository set. Out here because the domain read opens its own

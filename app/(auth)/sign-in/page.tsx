@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { resolvePostAuthDestination } from '@/lib/navigation/landing';
 import { authorizeNextClientId, oauthAuthorizeNext } from '@/lib/oauth/authorizeReturn';
 import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
+import { PREVIEW_ACCESS_PATH, previewHostOf } from '@/lib/preview/gate';
 import { SignInCard } from './_components/SignInCard';
 
 /**
@@ -87,7 +88,25 @@ export default async function SignInPage({
       })
     : null;
 
-  return <SignInCard sessionActive={Boolean(session)} oauthApp={oauthApp} />;
+  return (
+    <SignInCard
+      sessionActive={Boolean(session)}
+      oauthApp={oauthApp}
+      previewHost={previewHostOfNext(next)}
+    />
+  );
+}
+
+/**
+ * The preview a sign-in was sent from (MOTIR-5779, design
+ * `design/preview/preview-gate.mock.html` Panel 1): `next` is preview-access for
+ * a preview host. Only a host that IS a preview host is named — the banner never
+ * echoes arbitrary text from the address bar.
+ */
+function previewHostOfNext(next: string | undefined): string | null {
+  if (!next?.startsWith(`${PREVIEW_ACCESS_PATH}?`)) return null;
+  const query = new URLSearchParams(next.slice(PREVIEW_ACCESS_PATH.length + 1));
+  return previewHostOf(query.get('host'));
 }
 
 function toSearchParams(params: Record<string, string | string[] | undefined>): URLSearchParams {

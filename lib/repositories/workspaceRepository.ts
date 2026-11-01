@@ -29,6 +29,24 @@ export const workspaceRepository = {
   },
 
   /**
+   * Make `applicationId` the workspace's DEFAULT application — only when it has
+   * none (Decision MOTIR-9790 §2; Story MOTIR-9797 · MOTIR-10026). The condition
+   * is in the statement, so a default a person already chose is never
+   * overwritten. Returns whether the row changed.
+   */
+  async setDefaultApplicationIfUnset(
+    id: string,
+    applicationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const { count } = await tx.workspace.updateMany({
+      where: { id, defaultApplicationId: null },
+      data: { defaultApplicationId: applicationId },
+    });
+    return count > 0;
+  },
+
+  /**
    * BINDABLE (MOTIR-2789). `workspace` is a tenant-root table with no public arm, so a
    * caller that knows the workspace must be able to bind it — the public project
    * overview reads the project's own workspace and got null otherwise.

@@ -4,22 +4,18 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { isCloud } from '@/lib/billing/availability';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { isTenantDomainConfigured, tenantBaseDomain } from '@/lib/publicAddresses/tenantDomain';
-import {
-  publicSubdomainService,
-  roleMayManageAddress,
-} from '@/lib/services/publicSubdomainService';
+import { isTenantDomainConfigured } from '@/lib/publicAddresses/tenantDomain';
+import { publicSubdomainService } from '@/lib/services/publicSubdomainService';
 import { customDomainService } from '@/lib/services/customDomainService';
-import { workspacesService } from '@/lib/services/workspacesService';
 import { guardSettingsPage } from '../_guard';
 import { publicProjectPath, publicSiteOrigin } from '@/lib/publicProjects/urls';
 
-import { PublicSubdomainCard } from './_components/PublicSubdomainCard';
+import { PublicAddressEcho } from './_components/PublicAddressEcho';
 import { CustomDomainsSection } from './_components/CustomDomainsSection';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
-// THE PUBLIC ADDRESS ROOM (Story MOTIR-3878 · MOTIR-4221) — where a workspace
-// claims its subdomain and, once MOTIR-4229 lands, a project connects a domain
+// THE PUBLIC ADDRESS ROOM (Story MOTIR-3878 · MOTIR-4221) — where a project
+// echoes its workspace's address (MOTIR-9515) and, once MOTIR-4229 lands, a project connects a domain
 // the customer owns. Drawn by MOTIR-4211:
 // `design/projects/public-address.mock.html` panels 0, 1, 2, 8, 9 +
 // `design/projects/design-notes.md` § *Public address*.
@@ -47,18 +43,12 @@ import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 //    would tell an admin the room does not exist when it does, and they would
 //    go looking for the feature instead of for the variable.
 //
-// ── WHY `canManage` IS A WORKSPACE ROLE AND NOT THE RAIL'S KEY ────────────
+// ── THE SUBDOMAIN IS ECHOED, NOT EDITED (Story MOTIR-4528 · MOTIR-9515) ────
 //
-// The rail row is gated on `project:manage_access` (the key this room's writes
-// assert through `customDomainService`). The SUBDOMAIN's writes are gated on a
-// different axis — the WORKSPACE role, owner or admin, which is what
-// `publicSubdomainService` asserts, because ADR §3 makes a subdomain a property
-// of the workspace rather than of one project. A project admin who is a
-// workspace member therefore holds the door key and not the write key, and the
-// pane renders every address with its controls ABSENT (design panel 8).
-// `roleMayManageAddress` is the service's own predicate, asked rather than
-// restated — a second `['owner','admin']` here would be a copy of a
-// security-shaped rule whose drift shows up as controls that appear and refuse.
+// ADR §3 makes a subdomain a property of the WORKSPACE, and its control moved to
+// `/settings/workspace/public-address` (MOTIR-9514). This room keeps a read-only
+// echo, the same for every role, so it reads no workspace role at all; the
+// custom-domain half below is still this project's own.
 export default async function ProjectPublicAddressPage() {
   // Off-cloud (self-hosted GPL build): public addresses do not exist.
   if (!isCloud()) notFound();
@@ -104,43 +94,30 @@ export default async function ProjectPublicAddressPage() {
     );
   }
 
-  const [subdomain, role, addresses] = await Promise.all([
+  const [subdomain, addresses] = await Promise.all([
     publicSubdomainService.getForWorkspace(ctx.workspaceId, ctx.userId),
-    // The COMPOSED workspace role, so the org Owner / an org Admin — a Manager in
-    // every workspace of the org with or without a membership — sees the controls
-    // the write path already lets them use (MOTIR-6462).
-    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
     customDomainService.list({ key: ctx.project.identifier, actorUserId: ctx.userId, ctx }),
   ]);
+
+  // `MOTIR_PUBLIC_SITE_URL` is server configuration, so the project's own
+  // address is resolved here and shown as text (scheme stripped: read, not
+  // followed).
+  const projectUrl = `${publicSiteOrigin()}${publicProjectPath(ctx.project.identifier)}`;
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">
       {header}
-      <PublicSubdomainCard
-        workspaceId={ctx.workspaceId}
-        baseDomain={tenantBaseDomain()}
-        projectIdentifier={ctx.project.identifier}
-        // ⚠️ RESOLVED HERE, NOT IN THE CARD. `MOTIR_PUBLIC_SITE_URL` is server
-        // configuration, and the release confirm's last sentence tells a
-        // customer where their projects go once nothing is claimed (ADR §7's
-        // default-primary table, first row). A client component guessing the
-        // origin would print a different address than the one the product
-        // actually emits, on the one sentence whose whole job is that address.
-        // The scheme is stripped because this is read, not followed.
-        publicSiteHost={publicSiteOrigin().replace(/^https?:\/\//, '')}
-        fallbackAddress={`${publicSiteOrigin().replace(/^https?:\/\//, '')}${publicProjectPath(
-          ctx.project.identifier,
-        )}`}
+      <PublicAddressEcho
         subdomain={subdomain}
-        canManage={roleMayManageAddress(role)}
+        projectAddress={projectUrl.replace(/^https?:\/\//, '')}
+        projectUrl={projectUrl}
       />
       {/* MOTIR-4229's half. ⚠️ `canManage` IS `true` BY CONSTRUCTION HERE and is
           passed anyway: the destination guard above already refused anyone
           without `project:manage_access`, which is the key every one of the
           section's writes asserts — so on THIS page the two cannot disagree. The
           prop exists so the section does not inherit its host's gate by
-          assumption. This is a DIFFERENT axis from the subdomain card's, whose
-          writes are gated on the workspace role. */}
+          assumption. */}
       <CustomDomainsSection projectKey={ctx.project.identifier} canManage addresses={addresses} />
     </div>
   );

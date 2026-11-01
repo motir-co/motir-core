@@ -27,11 +27,13 @@ const LABELS = {
   navTenants: en.platformAdmin.nav.tenants,
   navUsers: en.platformAdmin.nav.users,
   navMonitoring: en.platformAdmin.nav.monitoring,
+  navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: shell.navFleetSettings,
   navCapacity: shell.navCapacity,
   navAiPlanning: shell.navAiPlanning,
   navPlanningLessons: shell.navPlanningLessons,
   navIdeas: shell.navIdeas,
+  navStarters: shell.navStarters,
   navRunModels: shell.navRunModels,
   navAuditLog: en.platformAdmin.nav.auditLog,
   staffMarkTitle: 'Platform staff',
@@ -60,8 +62,8 @@ describe('the Provider capacity row', () => {
   });
 
   it.each([
-    ['support', LABELS.navMonitoring],
-    ['operator', LABELS.navMonitoring],
+    ['support', LABELS.navJobs],
+    ['operator', LABELS.navJobs],
     ['superadmin', LABELS.navFleetSettings],
   ] as const)('is on the rail for %s, directly after %s', (role, before) => {
     const nav = rail(role, '/admin');

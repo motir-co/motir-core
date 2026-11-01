@@ -1,22 +1,22 @@
 // E2E: the Story-1.6 jobs flow, end to end through the REAL runtime (Subtask
 // 1.6.6 — closes the Story).
 //
-// @smoke — proves the background-jobs stack (the defineJob runtime, the retry +
-// dead-letter + replay patterns, and the 1.6.5 operator dashboard) holds
-// together against a forced failure, driven through the running Next server +
-// the engine's worker (a child of the Playwright runner, started by
-// `globalSetup`) + Postgres.
+// @smoke — proves the background-jobs stack (the defineJob runtime and the retry
+// + dead-letter patterns) holds together against a forced failure, driven
+// through the running Next server + the engine's worker (a child of the
+// Playwright runner, started by `globalSetup`) + Postgres.
 //
-// Unlike jobs-dashboard.spec.ts (which seeds ledger rows directly to test the
-// READ surface fast), the happy-path and forced-failure scenarios here drive a
-// REAL job: an invite enqueues `email.send`, the worker claims and runs it, and
-// we assert what actually landed in the ledger. That real path is the whole point
-// — it's what caught PRODECT_FINDINGS #39 (the 1.6.4 dead-letter write never ran
-// on the real executor; only the in-process unit harness made it look like it
-// did) and #40 (replay re-emitting the unchanged idempotency key was
-// dedup-dropped). The replay + role-gating scenarios seed a DLQ row directly
-// (the honest fixture for an action surface — same call as jobs-dashboard.spec)
-// and then exercise the real re-emit → job → outbox path.
+// Both scenarios drive a REAL job: an invite enqueues `email.send`, the worker
+// claims and runs it, and we assert what actually landed in the ledger. That
+// real path is the whole point — it's what caught PRODECT_FINDINGS #39 (the
+// 1.6.4 dead-letter write never ran on the real executor; only the in-process
+// unit harness made it look like it did).
+//
+// ⚠️ NO DASHBOARD STEP (Story MOTIR-9982 · MOTIR-10042). The tenant Job runs
+// surface these scenarios used to finish on is retired; the ledger is staff-only
+// at `/admin/jobs` now, whose own specs cover its reads and its operator replay
+// door (`tests/e2e/acceptance-admin-jobs.spec.ts`). The ledger rows are what this spec
+// proves about the engine, and they are asserted through the database.
 //
 // TIMING. The forced-failure path runs the full transient retry budget (3
 // attempts) before the terminal-failure hook dead-letters. The engine's backoff
@@ -26,7 +26,7 @@
 // budget that is larger than it needs to be costs nothing and a tight one turns a
 // loaded runner into a flake.
 
-import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db, truncateJobTables } from './_helpers/db-reset';
 import { waitForEmail } from './_helpers/email-capture';
 import { armEmailFault, clearEmailFault } from './_helpers/email-fault';
@@ -95,51 +95,9 @@ async function sendInvite(page: Page, inviteeEmail: string): Promise<void> {
   ).toBeVisible();
 }
 
-// ⚠️ THE DOOR MOVED FOR THIS FIXTURE (Story MOTIR-4843 · MOTIR-4861), and it is
-// the SAME address `sendInvite` above already uses, for the same reason: these
-// fixtures use an auto-created single workspace — the COLLAPSED state, where the
-// workspace area 404s and its sections are hosted by the one settings home.
-// `/settings/workspace/jobs` joined its three siblings in doing so, and its
-// dashboard is now a section here (`JobRunsFoldInSection`), links and all.
-async function gotoJobs(page: Page): Promise<void> {
-  await page.goto('/settings/organization');
-  await expect(page.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-}
-
-// Seed a dead-letter row directly (the honest fixture for the replay/role-gating
-// action surfaces). The eventData is a valid workspace-invite `email.send`
-// payload, so a replay re-emits a deliverable event.
-async function seedInviteDlqRow(args: {
-  workspaceId: string;
-  to: string;
-  idempotencyKey: string;
-}): Promise<string> {
-  const row = await db.jobRunDlq.create({
-    data: {
-      workspaceId: args.workspaceId,
-      functionId: 'email.send',
-      eventName: 'email.send',
-      eventData: {
-        workspaceId: args.workspaceId,
-        idempotencyKey: args.idempotencyKey,
-        to: args.to,
-        template: 'workspace-invite',
-        data: {
-          inviterName: 'E2E Owner',
-          workspaceName: 'E2E Workspace',
-          acceptUrl: 'http://localhost:3000/invite/accept?token=' + args.idempotencyKey,
-        },
-      },
-      failure: { message: 'seeded e2e failure' },
-      attempts: 3,
-    },
-  });
-  return row.id;
-}
-
 // ── scenarios ──────────────────────────────────────────────────────────────
 
-test('@smoke happy path: an invite enqueues email.send, which succeeds and shows in Recent runs', async ({
+test('@smoke happy path: an invite enqueues email.send, which succeeds in the ledger', async ({
   page,
 }) => {
   const owner = 'jf-happy-owner@example.com';
@@ -160,12 +118,6 @@ test('@smoke happy path: an invite enqueues email.send, which succeeds and shows
     )
     .toBe(1);
   expect(await db.jobRun.count({ where: { workspaceId, status: 'failed' } })).toBe(0);
-
-  // …and the dashboard renders it (server component → reload to re-fetch).
-  await gotoJobs(page);
-  await expect(page.getByText('email.send').first()).toBeVisible();
-  await page.getByRole('link', { name: 'Succeeded' }).click();
-  await expect(page.getByText('email.send').first()).toBeVisible();
 });
 
 test('@smoke forced failure: a failing send retries to exhaustion, then dead-letters', async ({
@@ -198,173 +150,4 @@ test('@smoke forced failure: a failing send retries to exhaustion, then dead-let
   const dlqRow = await db.jobRunDlq.findFirst({ where: { workspaceId } });
   expect(dlqRow!.attempts).toBe(3);
   expect(dlqRow!.replayedAt).toBeNull();
-
-  // The dashboard shows the failed run under the Failed filter…
-  await gotoJobs(page);
-  await page.getByRole('link', { name: 'Failed' }).click();
-  await expect(page.getByText('email.send').first()).toBeVisible();
-
-  // …and the Dead-letter tab badge counts the one un-replayed entry, attempts = 3.
-  await expect(page.getByRole('main').getByLabel('1 in dead-letter queue')).toBeVisible();
-  await page.getByRole('link', { name: /Dead letter/ }).click();
-  await expect(page.getByRole('cell', { name: '3', exact: true })).toBeVisible();
-});
-
-test('@smoke replay: an owner replays a dead-lettered send, which re-runs and succeeds', async ({
-  page,
-}) => {
-  test.setTimeout(60_000);
-  const owner = 'jf-replay-owner@example.com';
-  const replayTo = 'jf-replay-delivered@example.com';
-  await signUp(page, owner);
-  const workspaceId = await workspaceIdFor(owner);
-  // Seed a dead-lettered invite send (no fault armed → its replay will deliver).
-  await seedInviteDlqRow({ workspaceId, to: replayTo, idempotencyKey: 'replay-token-1' });
-
-  await gotoJobs(page);
-  await page.getByRole('link', { name: /Dead letter/ }).click();
-  const replay = page.getByRole('button', { name: 'Replay', exact: true });
-  await expect(replay).toBeEnabled();
-  await replay.click();
-  await expect(page.getByText('Job replayed', { exact: true })).toBeVisible();
-
-  // The re-emitted event (with a re-shaped idempotency key, finding #40) actually
-  // runs: a fresh succeeded run appears AND the email is delivered.
-  await expect
-    .poll(
-      async () =>
-        db.jobRun.count({ where: { workspaceId, functionId: 'email.send', status: 'succeeded' } }),
-      { timeout: 30_000, intervals: [1_500] },
-    )
-    .toBe(1);
-  const delivered = await waitForEmail(replayTo);
-  expect(delivered.subject).toContain('invited to join');
-
-  // The DLQ row is stamped as replayed (auditable).
-  const row = await db.jobRunDlq.findFirst({ where: { workspaceId } });
-  expect(row!.replayedAt).not.toBeNull();
-});
-
-test('@smoke cross-workspace isolation: jobs from another workspace are not visible', async ({
-  page,
-  baseURL,
-}) => {
-  const owner = 'jf-iso-owner@example.com';
-  await signUp(page, owner);
-  const workspaceA = await workspaceIdFor(owner);
-
-  // Workspace A has many runs; a second workspace B (also the user's) has none.
-  for (let i = 0; i < 3; i++) {
-    await db.jobRun.create({
-      data: {
-        workspaceId: workspaceA,
-        functionId: 'email.send',
-        eventName: 'email.send',
-        eventId: `iso-evt-${i}`,
-        lane: 'engine',
-        attempt: 0,
-        status: 'succeeded',
-        finishedAt: new Date(),
-        durationMs: 5,
-      },
-    });
-  }
-  // Story 6.10: a workspace is nested under an Organization (organizationId is
-  // non-nullable), so mint a parent org for this isolation fixture first.
-  const orgB = await db.organization.create({
-    data: { name: 'Isolation B', slug: 'jf-iso-b-org' },
-  });
-  const workspaceB = await db.workspace.create({
-    data: { name: 'Isolation B', slug: 'jf-iso-b', organizationId: orgB.id },
-  });
-  const isoUserId = (await db.user.findFirstOrThrow()).id;
-  await db.workspaceMembership.create({
-    data: {
-      workspaceId: workspaceB.id,
-      userId: isoUserId,
-      workspaceRole: 'manager',
-    },
-  });
-  // Story 6.10.4: org membership gates workspace access — a workspace member who
-  // isn't a member of its org is DENIED, so resolveActiveWorkspace would skip B
-  // and fall back to A. Enrol the user in orgB so activating B resolves to B.
-  await db.organizationMembership.create({
-    data: { organizationId: orgB.id, userId: isoUserId, role: 'owner' },
-  });
-
-  // Activate workspace B (the RLS + explicit workspace filter must hide A's runs).
-  // ⚠️ THE ORIGIN COMES FROM THE LANE, not a literal (MOTIR-4137). `addCookies`
-  // needs an absolute URL, and a hard-coded one is only ever right for whichever
-  // port that lane happens to serve on — the defect that took `main` off deploy
-  // when a spec carrying `:3200` was promoted into the lane that serves `:3100`.
-  await page.context().addCookies([{ name: 'workspace_id', value: workspaceB.id, url: baseURL! }]);
-  await gotoJobs(page);
-  await expect(page.getByText('No job runs yet')).toBeVisible();
-  await expect(page.getByText('email.send')).toHaveCount(0);
-});
-
-test('@smoke role gating: a non-owner member sees a disabled Replay with a tooltip', async ({
-  browser,
-  page,
-}) => {
-  test.setTimeout(90_000);
-  const owner = 'jf-role-owner@example.com';
-  const member = 'jf-role-member@example.com';
-
-  // Owner signs up and invites the member.
-  await signUp(page, owner);
-  const workspaceId = await workspaceIdFor(owner);
-  await sendInvite(page, member);
-  const invite = await waitForEmail(member);
-  const acceptUrl = invite.text.match(/https?:\/\/[^\s)]+/)![0];
-
-  // Member signs up in a fresh context and accepts → joins as a `member`.
-  const memberCtx: BrowserContext = await browser.newContext();
-  const memberPage = await memberCtx.newPage();
-  await signUp(memberPage, member);
-  await memberPage.goto(acceptUrl);
-  await memberPage.getByRole('button', { name: 'Accept invite' }).click();
-  // ⚠️ Accepting an invite lands on the signed-in landing, not `/dashboard`
-  // (MOTIR-5132): it calls the same server action the workspace switcher does,
-  // so it is a context switch and resolves its destination through the same
-  // owner instead of naming a route of its own.
-  await memberPage.waitForURL(isLandedWorkbenchUrl);
-
-  // Seed a DLQ row in the shared workspace so the Replay control renders.
-  await seedInviteDlqRow({ workspaceId, to: 'role-gate@example.com', idempotencyKey: 'role-1' });
-
-  // The member (now active in the shared workspace) opens the DLQ tab.
-  //
-  // ⚠️ THE ACTOR §6d IS WRITTEN TO PROTECT, at the address that rule gives them.
-  // A workspace invitee is a plain org `member`, and one workspace is the only
-  // count they have — so this page refuses them its ORG-scoped cards and hosts
-  // the workspace sections underneath, this dashboard among them. That the
-  // Replay control below still renders, and still gates, is the whole claim: the
-  // relocation preserved the surface AND its gate.
-  await memberPage.goto('/settings/organization');
-  await expect(memberPage.getByRole('heading', { name: 'Job runs', exact: true })).toBeVisible();
-  await memberPage.getByRole('link', { name: /Dead letter/ }).click();
-
-  // Replay is disabled (the load-bearing gate)…
-  const replay = memberPage.getByRole('button', { name: 'Replay', exact: true });
-  await expect(replay).toBeVisible();
-  await expect(replay).toBeDisabled();
-  // …with the gating tooltip. Radix mounts tooltip content in a portal only on
-  // hover/focus (after a 700ms delay); the disabled button can't receive pointer
-  // events, so the component wraps it in a <span> trigger — hover that.
-  await replay.locator('xpath=..').hover();
-  await expect(memberPage.getByText('Only a workspace Manager can replay jobs')).toBeVisible();
-
-  await memberCtx.close();
-});
-
-test('@smoke empty states: a fresh workspace shows the documented empty states', async ({
-  page,
-}) => {
-  await signUp(page, 'jf-empty@example.com');
-
-  await gotoJobs(page);
-  await expect(page.getByText('No job runs yet')).toBeVisible();
-  await page.getByRole('link', { name: /Dead letter/ }).click();
-  await expect(page.getByText('Nothing in the dead-letter queue')).toBeVisible();
 });

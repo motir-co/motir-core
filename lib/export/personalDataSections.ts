@@ -97,6 +97,7 @@ export type PersonalDataDelegate =
   | 'dataExportRequest'
   | 'projectMembership'
   | 'projectAutoTranslateChange'
+  | 'environmentConfigChange'
   | 'notification'
   | 'savedFilter'
   | 'savedFilterStar'
@@ -135,7 +136,8 @@ export type PersonalDataDelegate =
   | 'pageWorkItemLink'
   | 'monitorConnection'
   | 'approvalGate'
-  | 'planRevision';
+  | 'planRevision'
+  | 'hostedRelease';
 
 const byUserId = (userId: string) => ({ userId });
 
@@ -302,7 +304,7 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     model: 'githubIdentity',
     tier: 'identity',
     basis: 'The linked GitHub identity (login and account id).',
-    redact: ['accessTokenEncrypted'],
+    redact: ['accessTokenEncrypted', 'refreshTokenEncrypted'],
     where: byUserId,
   },
   {
@@ -376,6 +378,17 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // redacted.
     basis: "Flips of a project's auto-translate switch the reader made.",
     where: (userId) => ({ changedByUserId: userId }),
+  },
+  {
+    table: 'environment_config_change',
+    model: 'environmentConfigChange',
+    tier: 'tenant',
+    // `actor_id` attributes a change to a repository's stored environment to the
+    // person who made it (Story MOTIR-9795). The table's policy keys on
+    // `app.workspace_id`, so it is read per workspace. The row records a NAME and
+    // an action, never a value, so nothing is redacted.
+    basis: "Changes to a repository's environment entries the reader made.",
+    where: (userId) => ({ actorId: userId }),
   },
   {
     table: 'role_migration_report',
@@ -738,6 +751,18 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     basis: 'Plan content changes the reader made.',
     where: (userId) => ({ changedById: userId }),
   },
+  {
+    table: 'hosted_release',
+    model: 'hostedRelease',
+    tier: 'tenant',
+    // `restored_by_id` records WHO rolled production back to this release
+    // (Story MOTIR-9797 · MOTIR-10035) and `requested_by_id` who asked for a
+    // release of a ref (MOTIR-10103). SetNull-preserved attributions of an act
+    // to a person, the same shape as `approval_gate.decidedById`, so they are
+    // exported rather than excluded. A release a merge made carries no actor.
+    basis: 'Production releases the reader rolled back to or asked for.',
+    where: (userId) => ({ OR: [{ restoredById: userId }, { requestedById: userId }] }),
+  },
 ];
 
 /**
@@ -803,12 +828,6 @@ export const EXCLUDED_FROM_EXPORT: Readonly<Record<string, string>> = {
     'only from the platform tier, not a record about the operator as a data subject — ' +
     '`OrgFeatureFlag`’s argument; every add and remove is recorded in the audit log ' +
     '(`ai.run_model_list.add` / `ai.run_model_list.remove`) with the same actor.',
-  EnterpriseRequest:
-    'An organization’s request to talk about the Enterprise plan (Story MOTIR-7602): a ' +
-    'commercial record about the ORG, sent by one of its owners or admins, which the org ' +
-    'keeps after the sender leaves (`requestedById` is SetNull). Its RLS admits only the ' +
-    'org context (`app.organization_id`) and platform staff, so neither export tier can ' +
-    'read it. Exporting it would need an org tier this enumeration does not have.',
   IdeaResearchRun:
     'A row of the idea store’s research-run log (MOTIR-7662) whose only User FK is ' +
     'the moooon B.V. operator who recorded the run. Motir’s own content, written only ' +

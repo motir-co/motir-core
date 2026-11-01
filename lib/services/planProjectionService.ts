@@ -121,6 +121,10 @@ export interface Projection {
   nodes: Map<string, ProjectedNode>;
   /** from-id → set of blocker (to) ids — the projected `is_blocked_by` edges. */
   blockedBy: Map<string, Set<string>>;
+  /** from-id → (blocker id → reason): the reason each edge THIS PLAN draws carries
+   *  (MOTIR-9827). A proposed edge with no reason, and every committed edge, is
+   *  absent. */
+  edgeReasons: Map<string, Map<string, string>>;
   /** parent-id → child ids — derived from `nodes`' projected `parentId`. */
   childrenByParent: Map<string, string[]>;
   /** Per-project terminal (`category = 'done'`) status keys, for done-ness. */
@@ -134,6 +138,13 @@ export interface Projection {
    * WHOLE project and descriptions are long.
    */
   projectedDescription: Map<string, string | null>;
+  /**
+   * The PROPOSED explanation of each node the plan sets one on — an `add`'s
+   * proposed text, or a `modify`'s patched text — with the same sparse `has()`
+   * semantics as {@link projectedDescription}. Read ONLY by the mislabelled-link
+   * advisory (MOTIR-9938), which scans both bodies.
+   */
+  projectedExplanation: Map<string, string | null>;
   /**
    * The PROJECTED `type` / `executor` of each node the plan sets one on — an
    * `add`'s proposed values, or a `modify`'s patched `type`. Read ONLY by the
@@ -407,6 +418,7 @@ export async function buildProjection(
   // Pass 1 — virtual `add` nodes (keyed by their temp-ref, so an intra-plan
   // parent/blocker ref resolves with no topo ordering needed).
   const projectedDescription = new Map<string, string | null>();
+  const projectedExplanation = new Map<string, string | null>();
   const projectedType = new Map<string, string | null>();
   const projectedExecutor = new Map<string, string | null>();
   const proposalByRef = new Map<string, PlanItemDto>();
@@ -414,6 +426,7 @@ export async function buildProjection(
     const id = `${TEMP_REF_PREFIX}${item.id}`;
     proposalByRef.set(id, item);
     projectedDescription.set(id, item.proposedFields?.descriptionMd ?? null);
+    projectedExplanation.set(id, item.proposedFields?.explanationMd ?? null);
     // An `add` has no stored row, so its proposed shape is the ONLY shape there
     // is — set both keys unconditionally, absent proposal included (`null`).
     projectedType.set(id, item.proposedFields?.type ?? null);
@@ -459,11 +472,19 @@ export async function buildProjection(
   }
 
   // Pass 2 — `add` blocked_by edges (all add targets now exist).
+  const edgeReasons = new Map<string, Map<string, string>>();
+  const noteReason = (fromId: string, toId: string, reason: string | undefined) => {
+    if (!reason) return;
+    const byBlocker = edgeReasons.get(fromId) ?? new Map<string, string>();
+    byBlocker.set(toId, reason);
+    edgeReasons.set(fromId, byBlocker);
+  };
   for (const item of adds) {
     const fromId = `${TEMP_REF_PREFIX}${item.id}`;
     for (const ref of item.blockedByRefs) {
       const toId = resolveRef(ref);
       if (nodes.has(toId)) addEdge(blockedBy, fromId, toId);
+      noteReason(fromId, toId, item.edgeReasons?.[ref]);
     }
   }
 
@@ -478,6 +499,9 @@ export async function buildProjection(
     // means the plan clears it.
     if (item.patch && 'descriptionMd' in item.patch) {
       projectedDescription.set(item.workItemId, item.patch.descriptionMd ?? null);
+    }
+    if (item.patch && 'explanationMd' in item.patch) {
+      projectedExplanation.set(item.workItemId, item.patch.explanationMd ?? null);
     }
     // Same sparse-patch semantics for the ORDERING exemption's `type`
     // (MOTIR-2175). `PlanItemPatch` has no `executor` key, so a modified node's
@@ -517,6 +541,7 @@ export async function buildProjection(
     for (const ref of item.patch?.blockedByAdd ?? []) {
       const toId = resolveRef(ref);
       if (nodes.has(toId)) addEdge(blockedBy, item.workItemId, toId);
+      noteReason(item.workItemId, toId, item.edgeReasons?.[ref]);
     }
     for (const ref of item.patch?.blockedByRemove ?? []) {
       removeEdge(blockedBy, item.workItemId, resolveRef(ref));
@@ -553,9 +578,11 @@ export async function buildProjection(
     projectId,
     nodes,
     blockedBy,
+    edgeReasons,
     childrenByParent,
     terminalByProject,
     projectedDescription,
+    projectedExplanation,
     projectedType,
     projectedExecutor,
     proposalByRef,
@@ -662,6 +689,9 @@ export interface ProjectedRowDto {
   /** ⚠️ Present ONLY on a committed row the plan `modify`s — the patch, verbatim.
    *  The row's own fields are what it is TODAY; this is what would change. */
   pendingPatch: PlanItemPatch | null;
+  /** Present ONLY on a `blockedBy` row whose edge THIS PLAN draws with a reason
+   *  (MOTIR-9827): what the target consumes from this blocker. */
+  edgeReason?: string;
 }
 
 /** The projected DETAIL of one target — the `get_work_item` projected answer. */
@@ -907,7 +937,11 @@ export async function projectedWorkItem(
     committedChildren: childRows.filter((r) => !r.proposal),
     proposedChildren: childRows.filter((r) => r.proposal),
     blockedBy: blockerIds
-      .map((id) => rowOf(proj, id, storedRows))
+      .map((id) => {
+        const row = rowOf(proj, id, storedRows);
+        const reason = proj.edgeReasons.get(root.id)?.get(id);
+        return row && reason ? { ...row, edgeReason: reason } : row;
+      })
       .filter((r): r is ProjectedRowDto => r !== null),
   };
 }

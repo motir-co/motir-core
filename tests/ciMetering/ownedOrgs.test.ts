@@ -51,8 +51,19 @@ function account(overrides: Partial<CreateFleetShardInput> = {}): CreateFleetSha
   };
 }
 
-beforeEach(async () => {
+// Another file in the same shard can leave rows that point at an account with
+// `onDelete: Restrict` (agent instances, in-flight slots, provisioning intents),
+// which would refuse the account delete below. Unbind them first.
+async function clearAccounts(): Promise<void> {
+  const unbind = { where: { fleetShardId: { not: null } }, data: { fleetShardId: null } };
+  await adminDb.agentInstance.updateMany(unbind);
+  await adminDb.fleetInFlightSlot.updateMany(unbind);
+  await adminDb.ciRunnerProvisioningIntent.updateMany(unbind);
   await adminDb.fleetShard.deleteMany({});
+}
+
+beforeEach(async () => {
+  await clearAccounts();
   resetOwnedOrgCache();
   mintInstallationToken.mockReset();
   vi.stubEnv('GITHUB_FALLBACK_ORG', FALLBACK);
@@ -61,7 +72,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  await adminDb.fleetShard.deleteMany({});
+  await clearAccounts();
   resetOwnedOrgCache();
 });
 

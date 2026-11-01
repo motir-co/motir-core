@@ -23,8 +23,8 @@ import zh from '@/messages/zh.json';
 //
 //   - the free-trial strip above the row, with what is left of the grant, and its
 //     spent form — Free is not a plan, so there is no Free card;
-//   - Standard / Pro / Max / Max ×2 with their pools, the ladder line under each
-//     pool, and the included-seat line on every card, at both cadences;
+//   - Standard / Pro / Max / Max ×2 with their pools and the included-seat line on
+//     every card, at both cadences;
 //   - no Enterprise card and no Contact sales anywhere on the screen;
 //   - the same row in 中文;
 //   - an org on a paid plan sees no trial strip, and its own card as current;
@@ -37,7 +37,7 @@ import zh from '@/messages/zh.json';
 //
 // ── FIGURES ARE READ, NEVER RETYPED ───────────────────────────────────────────
 // Plan names, pools and prices come from the catalog entry, every label from
-// `messages/*.json`, and every ladder multiple from the two pools it relates.
+// `messages/*.json`.
 //
 // ── WAITS ─────────────────────────────────────────────────────────────────────
 // Every step waits on the billing panel's own read before asserting — never on a
@@ -80,13 +80,6 @@ function format(message: string, values: Record<string, string | number>, locale
 }
 
 const n = (value: number) => value.toLocaleString('en-US');
-
-/** The ladder line each paid card should carry, computed from the catalog pools. */
-function ladderFor(messages: typeof en, i: number): string {
-  if (i === 0) return messages.billing.plans.ladder.first;
-  const multiple = PAID[i]!.allotment!.credits / PAID[i - 1]!.allotment!.credits;
-  return format(messages.billing.plans.ladder.multiple, { multiple, plan: PAID[i - 1]!.name });
-}
 
 /** The panel's own read — the authoritative state the page renders. */
 const billingRead = (page: Page, seed: BillingSeed): Promise<Response> =>
@@ -131,15 +124,14 @@ async function setCadence(page: Page, label: string): Promise<void> {
   );
 }
 
-/** Every paid card: its pool, its ladder line and its included seat. */
+/** Every paid card: its pool and its included seat. */
 async function expectRow(page: Page, messages: typeof en, locale = 'en'): Promise<void> {
   await expect(cardNames(page)).toHaveText(PAID.map((p) => p.name));
-  for (const [i, plan] of PAID.entries()) {
+  for (const plan of PAID) {
     const c = card(page, plan.name);
     await expect(c).toContainText(
       format(messages.billing.plans.creditsAllotment, { n: n(plan.allotment!.credits) }),
     );
-    await expect(c.getByTestId('plan-ladder')).toHaveText(ladderFor(messages, i));
     await expect(c.getByTestId('plan-included-seat')).toHaveText(
       format(messages.billing.plans.seatIncluded, { count: plan.includedTrackerSeats }, locale),
     );
@@ -147,7 +139,7 @@ async function expectRow(page: Page, messages: typeof en, locale = 'en'): Promis
 }
 
 test.describe('The AI plan cards, planning-led', () => {
-  test('an owner on the free trial reads the five plan cards, a ladder, the included seat and no Enterprise', async ({
+  test('an owner on the free trial reads the five plan cards, the included seat and no Enterprise', async ({
     page,
     chapter,
     beat,
@@ -170,7 +162,7 @@ test.describe('The AI plan cards, planning-led', () => {
     });
     await beat();
 
-    await chapter('Annual: each pool, its ladder line and one Motir seat included', async () => {
+    await chapter('Annual: each pool and one Motir seat included', async () => {
       await setCadence(page, copy.plans.annual);
       await expectRow(page, en);
       await expect(card(page, MAX_X2.name)).toContainText(
@@ -181,7 +173,7 @@ test.describe('The AI plan cards, planning-led', () => {
     });
     await beat();
 
-    await chapter('Monthly: the same ladder, Max ×2 at its monthly price', async () => {
+    await chapter('Monthly: the same row, Max ×2 at its monthly price', async () => {
       await setCadence(page, copy.plans.monthly);
       await expectRow(page, en);
       await expect(card(page, MAX_X2.name)).toContainText(
@@ -209,7 +201,7 @@ test.describe('The AI plan cards, planning-led', () => {
     });
     await beat();
 
-    await chapter('中文: the same five cards, ladder and included seat', async () => {
+    await chapter('中文: the same five cards and included seat', async () => {
       // The signed-in account's saved language outranks the browser's cookie
       // (`lib/i18n/resolveLocale.ts`), so the owner's account says 中文 too.
       await db.user.update({ where: { id: seed.ownerId }, data: { locale: 'zh' } });
@@ -269,7 +261,6 @@ test.describe('The AI plan cards, planning-led', () => {
     await page.goto(billingPath);
     expect((await read).status()).toBe(403);
     await expect(page.getByRole('heading', { name: copy.member.gateTitle })).toBeVisible();
-    await expect(page.getByTestId('plan-ladder')).toHaveCount(0);
     await expect(strip(page)).toHaveCount(0);
   });
 });

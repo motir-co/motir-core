@@ -11,9 +11,8 @@ import { changeRequestNoun } from '@/lib/git/labels';
 // literal (MOTIR-5002).
 import { getGitProvider } from '@/lib/git';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
-import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
 import {
-  deliveryMemberState,
+  deliveryMembersOf,
   deliverySetShortfall,
   hasDeliverySetShortfall,
   EMPTY_DELIVERY_SHORTFALL,
@@ -25,13 +24,6 @@ import {
   withdrawPullRequestApprovalGatesOnDraft,
 } from './pullRequestApprovalGates';
 import { promoteDeliveredCardsOnGreen } from './ciPromotion';
-import {
-  classifyRepoDelivery,
-  hasRepoSetShortfall,
-  repoSetShortfall,
-  EMPTY_SHORTFALL,
-  type RepoSetShortfall,
-} from '@/lib/workItems/repoDelivery';
 import {
   resolveChangeRequestWorkItemSet,
   resolveDeliveredWorkItems,
@@ -78,24 +70,36 @@ import {
 // automation-engine precedent). The transition itself runs AFTER the resolve tx,
 // in its own transaction, exactly as the GitHub path always did.
 //
-// ⚠️ COMPLETION IS GATED TWICE, and both gates say "a merge event is not proof the
-// deliverable shipped" (they are the same lesson at two different scopes):
+// ⚠️ COMPLETION IS GATED THREE TIMES, and every gate says "a merge event is not proof the
+// deliverable shipped" (they are the same lesson at three different scopes):
 //   * MOTIR-1604 — the merge must be the item's LAST open linked change request,
 //     else a cross-repo two-PR card completes on half its work.
 //   * MOTIR-1873 — the merge must have landed on the repository's DEFAULT branch,
 //     else a change request STACKED on a sibling's branch completes while its code
 //     sits on a dead branch with no path to the trunk. GitHub reports MERGED for
 //     that merge, truthfully; the trunk is the only witness that matters.
-//   * MOTIR-2729 — every repository the item CARRIES (`work_item.targetRepos`, the
-//     repository SET) must have a merged linked change request on that repository's
-//     own default branch. This is the gate the other two structurally cannot be:
-//     both of them reason about change requests that EXIST, and a repository whose
-//     pull request was never opened writes no row at all, so a two-repo card
-//     completed on half its work (MOTIR-2664). The SET is the expected side; without
-//     it "has everything merged?" is a question with no data behind it.
+//   * MOTIR-3659 — every change request DELIVERING the item (its linked set) must
+//     have merged onto its own repository's default branch.
 // All three HOLD the item at In Review rather than transitioning, and all three
 // report a distinct outcome — never a silent no-op, because invisibility was the
 // whole cost of MOTIR-1873's incident.
+//
+// ⚠️ THE REPOSITORY-SET GATE (MOTIR-2729) IS NOT ASKED HERE ANY MORE (MOTIR-10135).
+// It held the item until every repository on `work_item.targetRepos` had a merged
+// linked change request, which read a planning guess — where the work MIGHT land —
+// as a promise that each repository gets a pull request. Runs routinely find one
+// listed repository needs nothing, and the item was then held at In Review after
+// all of its real work had merged (MOTIR-7180, MOTIR-8811, MOTIR-9235 and
+// MOTIR-10135 each met a different route into that hold). Completion now counts
+// the item's LINKED change requests: once one has landed on its trunk, the
+// delivery set decides alone (`hasLandedDelivery`). A merge this sync decides
+// completion for is always such a delivery — the item is linked to it, and a
+// merge that missed the trunk was already held above — so the repository set
+// would always abstain here and is not read. The trade-off is accepted: a
+// two-repository card whose run never opened its second pull request completes on
+// the first merge (MOTIR-2664's shape). Opening every pull request the work needs
+// is the run's job; the list is not a promise. `repoSetCompletionService` still
+// asks the set for an item with NO landed delivery.
 //
 // ⚠️ A FOURTH HOLD IS DECIDED ELSEWHERE, and forgetting that cost a production
 // incident (MOTIR-3364). MOTIR-2709's artifact-evidence gate lives inside
@@ -145,7 +149,6 @@ export type ChangeRequestSyncResult = {
     | 'deferred_incomplete_delivery_set' // a pull request DELIVERING this item has not landed — item stays In Review (MOTIR-3659)
     | 'deferred_open_pr' // a merge that is NOT the item's last open linked change request — item stays In Review (MOTIR-1604)
     | 'deferred_non_default_base' // a merge into a NON-default base — the work never reached the trunk, item stays In Review (MOTIR-1873)
-    | 'deferred_incomplete_repo_set' // a repository the item CARRIES has no merge on its default branch — item stays In Review (MOTIR-2729)
     | 'missing_artifact_evidence' // a `deploy` item whose comments record no published artifact — item stays where it is (MOTIR-2709 / MOTIR-3364)
     | 'no_work_item'
     | 'no_matching_status'
@@ -190,7 +193,7 @@ export interface DeliveredItemResult {
 }
 
 /** One delivered card carried from the resolve transaction to the tail: its
- *  identity, its current status, and the three ITEM-SCOPED gate verdicts computed
+ *  identity, its current status, and the two ITEM-SCOPED gate verdicts computed
  *  under the row lock. Everything pull-request-scoped (the base ref, the actor,
  *  whether the merge was already recorded) is shared and lives beside it. */
 interface ItemDecision {
@@ -199,7 +202,6 @@ interface ItemDecision {
   currentStatus: string;
   deliveryShortfall: DeliverySetShortfall;
   hasOtherOpenLinkedPr: boolean;
-  shortfall: RepoSetShortfall;
 }
 
 /** The connection + repo + resolved author a provider hands the shared sync, once
@@ -463,11 +465,11 @@ async function syncOnce(
     // about this merge, so it holds every card the merge delivers alike.
     const mergedIntoNonDefaultBase = lifecycle === 'done' && cr.baseRef !== repo.defaultBranch;
 
-    // ── THE THREE ITEM-SCOPED GATES, now evaluated PER DELIVERED CARD ────────
+    // ── THE TWO ITEM-SCOPED GATES, now evaluated PER DELIVERED CARD ──────────
     //
-    // ⚠️ ALL THREE ARE SKIPPED ON A SESSION CLOSE-OUT, and that is a boundary
+    // ⚠️ BOTH ARE SKIPPED ON A SESSION CLOSE-OUT, and that is a boundary
     // rather than an omission (MOTIR-3007): they answer "is THIS item finished",
-    // and a session delivery closes N items whose repository sets and sibling
+    // and a session delivery closes N items whose delivery sets and sibling
     // change requests differ; `completeSession` walks the branch itself, so there
     // is no per-item exclusion to hand it. `delivered` is empty there, so the
     // loop below simply does not run. The branch-scoped gate above DOES still
@@ -476,7 +478,7 @@ async function syncOnce(
     // Evaluating them per card is what MOTIR-3721 changes. They were always
     // per-card questions; there was only ever one card to ask them about, because
     // the resolve above was capped at one. The answers genuinely differ between
-    // two cards on one pull request — different repository sets, different
+    // two cards on one pull request — different delivery sets, different
     // sibling pull requests — so each is decided on its own facts.
     const decisions: ItemDecision[] = [];
     for (const item of delivered) {
@@ -490,18 +492,7 @@ async function syncOnce(
       const deliveryShortfall =
         lifecycle === 'done' && !mergedIntoNonDefaultBase
           ? deliverySetShortfall(
-              (await workItemDeliveryRepository.listByWorkItem(item.id, tx)).map((d) => ({
-                repoLabel: `${d.repo.owner}/${d.repo.name}`,
-                number: d.pullRequest.number,
-                // ⚠️ THE COLLAPSE, not the raw `merged` flag (MOTIR-5004). The
-                // stored row keeps `state` and `merged` apart; passing only the
-                // boolean threw away the difference between a pull request that
-                // has not merged YET and one that was CLOSED and never will, and
-                // the gate then held the card for the latter for ever.
-                state: deliveryMemberState(d.pullRequest),
-                baseRef: d.pullRequest.baseRef,
-                defaultBranch: d.repo.defaultBranch,
-              })),
+              deliveryMembersOf(await workItemDeliveryRepository.listByWorkItem(item.id, tx)),
             )
           : EMPTY_DELIVERY_SHORTFALL;
 
@@ -515,36 +506,12 @@ async function syncOnce(
           ? (await workItemDeliveryRepository.countOtherOpenByWorkItem(item.id, prId, tx)) > 0
           : false;
 
-      // MOTIR-2729 — the item completes only when EVERY repository it CARRIES has
-      // a merged change request on that repository's own default branch. The two
-      // gates above reason about change requests that EXIST; a repository whose
-      // pull request was never opened writes no row, so neither can see it. The
-      // expected side is the item's own repository SET (MOTIR-2727).
-      //
-      // Skipped for any delivery the gates above already hold or that cannot
-      // complete at all — the read costs nothing to skip and the outcome would be
-      // discarded.
-      const shortfall =
-        lifecycle === 'done' && !mergedIntoNonDefaultBase && !hasOtherOpenLinkedPr
-          ? repoSetShortfall(
-              classifyRepoDelivery(
-                // RESOLVED through the references, not the stored name projection
-                // (Story MOTIR-2732 · MOTIR-3043). The projection goes stale the
-                // moment a repository is renamed, and a gate reading it compares
-                // a name no pull request will ever report again.
-                await resolveExpectedRepos(item.id, item.targetRepos, tx),
-                await workItemDeliveryRepository.listCompletionFactsByWorkItem(item.id, tx),
-              ),
-            )
-          : EMPTY_SHORTFALL;
-
       decisions.push({
         workItemId: item.id,
         projectId: item.projectId,
         currentStatus: item.status,
         deliveryShortfall,
         hasOtherOpenLinkedPr,
-        shortfall,
       });
     }
 
@@ -872,42 +839,6 @@ async function applyToDeliveredItem(
     return { workItemId, outcome: 'deferred_open_pr' };
   }
 
-  // A merge that leaves any repository the item CARRIES without a merge of its own
-  // holds the item In Review (MOTIR-2729). THIRD, not a replacement for the gate
-  // above: that one works with no expected set at all and is therefore the only
-  // protection every unpinned card in the product has. Where both hold, the one
-  // above wins on purpose — "a sibling change request is still open" names an
-  // artifact the reader can go and look at.
-  if (lifecycle === 'done' && hasRepoSetShortfall(decision.shortfall)) {
-    // Never a silent hold, for the reason MOTIR-1873 already paid for. Posted once
-    // per merge (guarded by the same `mergeAlreadyRecorded` read taken under the
-    // row lock) and best-effort — a failed note must not turn a correct hold into
-    // a 500 the host retries forever.
-    if (!shared.mergeAlreadyRecorded) {
-      try {
-        await commentsService.addComment(
-          workItemId,
-          {
-            bodyMd: incompleteRepoSetCommentBody({
-              noun: changeRequestNoun(shared.provider),
-              number: cr.number,
-              shortfall: decision.shortfall,
-            }),
-          },
-          actorCtx,
-        );
-      } catch (err) {
-        console.error('[changeRequestStatusSync] repo-set note failed; item still held', {
-          workItemId,
-          number: cr.number,
-          outstanding: decision.shortfall.outstanding,
-          error: err instanceof Error ? err.message : 'unknown',
-        });
-      }
-    }
-    return { workItemId, outcome: 'deferred_incomplete_repo_set' };
-  }
-
   // Phase 2 — the status transition through the SHIPPED authority. Resolve the
   // concrete target status key by category against the project's live workflow.
   const targetKey = await workflowsService.resolveStatusKey(
@@ -1048,8 +979,8 @@ function toDeliveredItemResult(
  *
  * ⚠️ WHY THIS SITS BETWEEN THE CATCH AND `classifyTransitionError`. The two holds
  * decided BEFORE the transition (`deferred_non_default_base`,
- * `deferred_incomplete_repo_set`) each post their own note inline, because the
- * facts they report — a base ref, a repository list — are in hand there. The
+ * `deferred_incomplete_delivery_set`) each post their own note inline, because the
+ * facts they report — a base ref, a delivery list — are in hand there. The
  * artifact-evidence gate is decided INSIDE `applyStatusTransition`, so its refusal
  * only ever surfaces here, as an exception. Before this function it surfaced as a
  * rethrow: a 500 on a successful merge delivery, and a card silently parked at In
@@ -1214,31 +1145,14 @@ function approvalPendingCommentBody(args: {
   );
 }
 
-/** The incomplete-repository-set note (MOTIR-2729) — posted on the linked item
- *  when a merge leaves some repository the item carries without one of its own.
- *
- *  It names the repositories, because that single fact is what turns "why isn't
- *  this Done?" into a one-minute answer, and it states the condition that WILL
- *  complete the item so the hold never reads as a stuck integration — the same
- *  two obligations the stranded-merge note below carries.
- *
- *  Like that one, it describes what did NOT happen rather than asserting a
- *  status: the sync leaves the item exactly where it was.
- *
- *  ⚠️ THE HEADING SAYS NOTHING ABOUT HOW MANY REPOSITORIES (MOTIR-3034). It read
- *  "this item ships in more than one repository" until a ONE-element set was held
- *  by the unknown-base arm and the note told its reader something plainly false
- *  about their own card. The gate is about EVERY repository, never about more than
- *  one — the set of size one is not an edge case here, it is the common case. */
 /** The incomplete-DELIVERY-SET note (MOTIR-3659) — posted on the item when a merge
  *  lands while another pull request DELIVERING that item has not.
  *
- *  Sibling of the repository-set note below, and deliberately distinguishable from
- *  it: that one names REPOSITORIES the card promised, this one names PULL REQUESTS
- *  that exist. A reader who cannot tell which gate held their card cannot tell
- *  whether to go and merge something or to fix the card's repository set.
+ *  It names PULL REQUESTS that exist, never repositories the card lists: since
+ *  MOTIR-10135 the repository list holds no merge, so the only thing a merged card
+ *  can be waiting for is a delivery a reader can go and look at.
  *
- *  Like both of its siblings it describes what did NOT happen rather than asserting
+ *  Like the stranded-merge note below it describes what did NOT happen rather than asserting
  *  a status: the sync leaves the item exactly where it was.
  *
  *  ⚠️ IT IS SILENT ABOUT AN ABANDONED DELIVERY, AND THAT IS A DECISION (MOTIR-5004).
@@ -1295,55 +1209,6 @@ function incompleteDeliverySetCommentBody(args: {
   return lines.join('\n\n');
 }
 
-function incompleteRepoSetCommentBody(args: {
-  noun: string;
-  number: number;
-  shortfall: RepoSetShortfall;
-}): string {
-  const list = (names: string[]) => names.map((n) => `\`${n}\``).join(', ');
-  const lines: string[] = [
-    `⚠️ **Merged, but this item is not complete** — ${args.noun} ` +
-      `#${args.number} merged, and the item is not complete yet, so its status is left unchanged.`,
-  ];
-  if (args.shortfall.outstanding.length > 0) {
-    lines.push(
-      `Still outstanding: ${list(args.shortfall.outstanding)} — no ${args.noun} merged onto ` +
-        `${args.shortfall.outstanding.length === 1 ? 'its' : 'their'} default ` +
-        `branch${args.shortfall.outstanding.length === 1 ? '' : 'es'} yet.`,
-    );
-  }
-  if (args.shortfall.unknownBase.length > 0) {
-    lines.push(
-      `No record of which branch the merge landed on for ${list(args.shortfall.unknownBase)} — ` +
-        `${args.shortfall.unknownBase.length === 1 ? 'that repository has' : 'those repositories have'} ` +
-        `a merged ${args.noun} that Motir mirrored before it began recording base branches, so it ` +
-        `cannot tell whether the work reached the trunk. An operator can repair this without a new ` +
-        `merge — \`pnpm db:backfill:pr-base-ref\` reads the base back from the provider and re-runs ` +
-        `this decision (MOTIR-3034).`,
-    );
-  }
-  if (args.shortfall.unestablished.length > 0) {
-    // The third kind of shortfall (Story MOTIR-2732 · ADR §A5) — and the one
-    // whose answer is NOT "open a pull request". The card points at a
-    // `project_repository` row that names no repository yet, so telling the
-    // reader to merge something would send them somewhere that does not exist.
-    lines.push(
-      `Not created yet: ${list(args.shortfall.unestablished)} — ` +
-        `${args.shortfall.unestablished.length === 1 ? 'that repository is' : 'those repositories are'} ` +
-        `still proposed on the project, so there is nothing to open a ${args.noun} against. ` +
-        `Establish the ${args.shortfall.unestablished.length === 1 ? 'row' : 'rows'} in the ` +
-        `project's repository settings, or skip ${args.shortfall.unestablished.length === 1 ? 'it' : 'them'} ` +
-        `if the work does not ship there.`,
-    );
-  }
-  lines.push(
-    `The item completes when every repository it carries has a ${args.noun} merged onto that ` +
-      `repository's own default branch. If one of them is not where this work ships, remove it ` +
-      `from the item's repositories.`,
-  );
-  return lines.join('\n\n');
-}
-
 /** The stranded-merge note (MOTIR-1873) — posted on the linked item when a merge
  *  landed on a base other than the repository's default branch. It names the base
  *  that swallowed the merge, because that single fact is what turns "why isn't this
@@ -1378,9 +1243,8 @@ export interface ResolvedChangeRequestWorkItem {
   identifier: string;
   projectId: string;
   status: string;
-  /** The repositories this item ships in — the EXPECTED side of MOTIR-2729's
-   *  completion gate. Empty for every card that names none, which is the common
-   *  case and the one the gate abstains on. */
+  /** The repositories this item lists — where its work may land. Since MOTIR-10135
+   *  no merge reads it: completion counts the item's linked change requests. */
   targetRepos: string[];
 }
 

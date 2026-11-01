@@ -1228,7 +1228,7 @@ describe('the To fix condition row (MOTIR-6609)', () => {
     return row;
   }
 
-  it('offers the five reasons in priority order — a dead run first — and emits the AST', () => {
+  it('offers the six reasons in priority order — a dead run first — and emits the AST', () => {
     const row = pickToFix();
     fireEvent.focus(within(row).getByRole('combobox', { name: 'To fix values' }));
     const options = screen.getAllByRole('option').map((o) => o.textContent?.trim());
@@ -1236,6 +1236,7 @@ describe('the To fix condition row (MOTIR-6609)', () => {
       'Run died',
       'Failed in the merge queue',
       'Conflicts with its base branch',
+      'Out of date with its base branch',
       'CI failed',
       'Changes requested',
     ]);

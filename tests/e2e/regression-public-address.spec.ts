@@ -30,7 +30,7 @@ import { projectAccessData } from '@/tests/helpers/projectAccess';
 // `tests/publicAddresses/dnsResolverPort.test.ts`.
 //
 // The mounting is SELF-DETECTING here rather than merely argued: chapter 1's
-// first assertion is that the claim field is present, which the pane renders
+// first assertion is that the workspace-address echo is present, which the pane renders
 // only when a base domain is configured — so a lane that set neither variable
 // fails loudly instead of filming an operator error message.
 //
@@ -55,14 +55,13 @@ import { projectAccessData } from '@/tests/helpers/projectAccess';
 
 const EMAIL = 'address-acceptance@motir.test';
 const PASSWORD = 'Sup3rSecret!Pass';
-const BASE = 'motir.e2e';
 /** The pane under test — also the pathname its `router.refresh()` re-reads. */
 const PANE = '/settings/project/public-address';
 
 /**
  * ⚠️ READ BACK FROM THE CREATED PROJECT, NEVER THE STRING WE PASSED.
  * `projectsService.createProject` normalises an identifier — `ROADMAP` is stored
- * as `ROADM` — and the pane's live preview shows the STORED one. A fixture that
+ * as `ROADM` — and the echo shows the STORED one. A fixture that
  * asserted the string it handed in failed on the preview and looked for all the
  * world like a rendering bug; it was the seed being wrong about itself.
  */
@@ -129,30 +128,23 @@ test('a project admin gives their public project an address of its own', async (
     await page.goto(PANE);
 
     await expect(page.getByRole('heading', { name: 'Public address' })).toBeVisible();
-    // ⚠️ THE MOUNTING CHECK. The claim field renders only when a base domain is
-    // configured; without `MOTIR_PUBLIC_TENANT_DOMAIN` the pane shows an
-    // operator explanation and this walk would film that instead of the room.
-    await expect(page.getByRole('textbox', { name: 'Subdomain' })).toBeVisible();
+    // ⚠️ THE MOUNTING CHECK. The workspace-address echo renders only when a base
+    // domain is configured; without `MOTIR_PUBLIC_TENANT_DOMAIN` the pane shows
+    // an operator explanation and this walk would film that instead of the room.
+    await expect(page.getByRole('heading', { name: 'Workspace address' })).toBeVisible();
     await beat();
   });
 
-  await chapter('A reserved name is refused, and says why', async () => {
-    await page.getByRole('textbox', { name: 'Subdomain' }).fill('admin');
-    await page.getByRole('button', { name: 'Claim subdomain' }).click();
-    await expect(page.getByText(/is reserved/)).toBeVisible();
-    await beat();
-  });
-
-  await chapter('Claiming the workspace address', async () => {
-    await page.getByRole('textbox', { name: 'Subdomain' }).fill('acme');
-    // The live preview is the point of the field: it shows the address the
-    // customer is about to own, path included.
-    await expect(page.getByText(`acme.${BASE}/${identifier}`)).toBeVisible();
-    await beat();
-
-    await page.getByRole('button', { name: 'Claim subdomain' }).click();
-    await expect(page.getByText(`acme.${BASE}/${identifier}`)).toBeVisible();
-    await expect(page.getByText('Active')).toBeVisible();
+  await chapter('The workspace name is claimed in workspace settings', async () => {
+    // Story MOTIR-4528 moved the subdomain's control to workspace settings
+    // (ADR §3: a subdomain is a property of the WORKSPACE). This room echoes it
+    // read-only and links there; the claim, rename and release walk is
+    // `cloud-workspace-address.spec.ts`'s.
+    const claimLink = page.getByRole('link', { name: 'Claim a name for the workspace →' });
+    await expect(claimLink).toHaveAttribute('href', '/settings/workspace/public-address');
+    await expect(page.getByRole('textbox', { name: 'Name' })).toHaveCount(0);
+    // Unclaimed, the echo names the project's own public address instead.
+    await expect(page.getByRole('main').getByText(new RegExp(`/p/${identifier}$`))).toBeVisible();
     await beat();
   });
 
@@ -195,31 +187,6 @@ test('a project admin gives their public project an address of its own', async (
     await page.getByRole('button', { name: 'Make primary' }).click();
     await expect(page.getByText('Every other address redirects here.')).toBeVisible();
     await expect(page.getByText('Primary')).toBeVisible();
-    await beat();
-  });
-
-  await chapter('Renaming the subdomain — and the old one never goes away', async () => {
-    await page.getByRole('button', { name: 'Rename' }).click();
-    await expect(page.getByText(/never released/)).toBeVisible();
-    await expect(page.getByText(/renames left after this one/)).toBeVisible();
-    await beat();
-
-    await page.getByRole('textbox', { name: 'Subdomain' }).last().fill('acme-inc');
-    // Same shape as the domain add above: `PublicSubdomainCard` refreshes rather
-    // than patching, and says why in as many words — `renamesLeft` and the alias
-    // rows are derived server-side, so optimism would mean re-deriving the cap in
-    // the browser. The spec waits on the refresh (MOTIR-4399, disposition (c)).
-    const renamed = pageRefresh(page, PANE);
-    await page.getByRole('button', { name: 'Rename', exact: true }).last().click();
-    await renamed;
-
-    await expect(page.getByText(`acme-inc.${BASE}/${identifier}`)).toBeVisible();
-    // ⚠️ THE PROMISE THE WHOLE §8 DECISION TURNS ON, on screen: the old address
-    // is still listed, and it says what it now does.
-    await expect(page.getByText(`acme.${BASE}`)).toBeVisible();
-    // `exact`, because the primary row's consequence line ends in the same
-    // three words — *Every other address redirects here.*
-    await expect(page.getByText('Redirects here', { exact: true })).toBeVisible();
     await beat();
   });
 });

@@ -1,0 +1,143 @@
+name: AWS deploy
+
+# The AWS deploy of motir-core (Story MOTIR-9709, card MOTIR-9928;
+# docs/aws-deploy.md). Every push to `main` builds the image, pushes it to ECR,
+# and hands its DIGEST to `pnpm deploy:aws`, which migrates, rolls web, worker
+# and relay, and records the digest only when every service completed.
+#
+# ⚠️ INDEPENDENT OF THE FLY DEPLOY BY CONSTRUCTION. The Fly deploy is the
+# `deploy` job of the CI workflow. This file shares no job with it, waits on
+# nothing in it and is not triggered by it, so an AWS failure turns only this
+# run red and a Fly failure never stops this one. Both deploy the same commit.
+#
+# No second migration gate: every push to `main` arrives through the merge
+# queue, whose required checks already include the CI workflow's `build` job and
+# its schema-drift guard.
+#
+# The image is a SECOND build of the commit (Fly builds its own with
+# `flyctl deploy --local-only`). It gets no Sentry auth token, so only the Fly
+# build uploads source maps for the release.
+#
+# No AWS key anywhere: both sessions are GitHub OIDC role assumptions, and the
+# role ARNs, region and name prefix are repository VARIABLES (none is a
+# credential). The job has no `environment:`, because one would change the OIDC
+# subject both roles trust (`ref:refs/heads/main`).
+
+on:
+  push:
+    branches: [main]
+  # A manual re-run of the same commit, and the first `--no-roll` run.
+  workflow_dispatch:
+
+jobs:
+  aws-deploy:
+    name: Deploy to AWS
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Until the seed card sets the variables, a merge skips this job rather than
+    # failing it.
+    if: vars.AWS_DEPLOY_ROLE_ARN != ''
+    # Two merges queue; deploys of two commits never overlap, and a release is
+    # never cancelled mid-flight.
+    concurrency:
+      group: aws-deploy
+      cancel-in-progress: false
+    permissions:
+      id-token: write
+      contents: read
+    # The image build takes single-digit minutes; the deploy script waits up to
+    # its default 20 minutes for the migrate task and again for the roll. 60
+    # bounds a hang without cutting off a slow-but-healthy deploy.
+    timeout-minutes: 60
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_NAME_PREFIX: ${{ vars.AWS_DEPLOY_NAME_PREFIX }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/buildx
+
+      # The push role can push images and nothing else; the deploy role below
+      # can run ECS and SSM calls and cannot push. Two steps, two sessions.
+      - name: Assume the ECR push role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ECR_PUSH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # The repository's tags are immutable, so a re-run of a commit whose tag
+      # is already pushed reads that image's digest instead of failing.
+      - name: Look for this commit's image
+        id: existing
+        env:
+          REPOSITORY: ${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core
+        run: |
+          set -euo pipefail
+          digest="$(aws ecr describe-images --repository-name "$REPOSITORY" \
+            --image-ids "imageTag=$GITHUB_SHA" \
+            --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)"
+          [ "$digest" = "None" ] && digest=""
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # Same Dockerfile and the same browser-facing build arguments as the Fly
+      # build. The Server Action salt goes in as a build SECRET, as there, so
+      # both builds give every action the same id.
+      - name: Build and push the image
+        id: build
+        if: steps.existing.outputs.digest == ''
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/${{ vars.AWS_DEPLOY_NAME_PREFIX }}/motir-core:${{ github.sha }}
+          build-args: |
+            NEXT_PUBLIC_SENTRY_DSN=${{ secrets.NEXT_PUBLIC_SENTRY_DSN }}
+            MOTIR_RELEASE=${{ github.sha }}
+          secrets: |
+            NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=${{ secrets.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY }}
+
+      # The deploy is handed the digest from the push result (or the existing
+      # image), never a tag, and nothing deploys unless it is well formed.
+      - name: Take the pushed digest
+        id: digest
+        env:
+          PUSHED: ${{ steps.build.outputs.digest }}
+          EXISTING: ${{ steps.existing.outputs.digest }}
+        run: |
+          set -euo pipefail
+          digest="${PUSHED:-$EXISTING}"
+          if ! [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::not an image digest: '$digest'"
+            exit 1
+          fi
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "### AWS deploy" >> "$GITHUB_STEP_SUMMARY"
+          echo "Digest: \`$digest\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Assume the deploy role
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: ./.github/actions/pnpm
+      - run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: '0'
+
+      # `--no-roll` only while `AWS_DEPLOY_NO_ROLL` is `true`: the first run,
+      # before the services exist (docs/aws-deploy.md, The first run).
+      - name: Deploy
+        env:
+          DIGEST: ${{ steps.digest.outputs.digest }}
+          NO_ROLL: ${{ vars.AWS_DEPLOY_NO_ROLL == 'true' && '--no-roll' || '' }}
+        run: |
+          set -euo pipefail
+          pnpm --silent deploy:aws --digest "$DIGEST" $NO_ROLL | tee /tmp/aws-deploy.json
+          {
+            echo "Result:"
+            echo '```json'
+            tail -n 1 /tmp/aws-deploy.json
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,7 +1,9 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { parseChoiceOptions } from '@/lib/approvalGates/choiceOptions';
 import { routingTargetId } from '@/lib/approvalGates/routing';
-import type { ChoiceBodyDTO, DecisionChoicePortDTO } from '@/lib/dto/approvalGate';
+import type { ChoiceBodyDTO, DecisionChoicePortViewDTO } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { resolveMarkdownWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
@@ -218,16 +220,35 @@ export const choiceGateService = {
    * work item that is not a choice.
    */
   async readBody(workItemId: string, ctx: ServiceContext): Promise<ChoiceBodyDTO | null> {
+    return (await this.readBodyWithRefs(workItemId, ctx)).body;
+  },
+
+  /**
+   * {@link readBody} with the body's work-item links resolved for the reader (bug
+   * MOTIR-10023) — what the surfaces that DRAW the port read. The sections are
+   * parsed from the work item's description, so its `[KEY](motir:<id>)` tokens are
+   * the port's; `{}` and no ref query when there is no body or it links nothing.
+   */
+  async readBodyWithRefs(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<{ body: ChoiceBodyDTO | null; workItemRefs: WorkItemRefMap }> {
     const item = await withWorkspaceContext(ctx, (tx) =>
       workItemRepository.findById(workItemId, tx),
     );
-    if (!item || item.workspaceId !== ctx.workspaceId) return null;
-    return choiceBodyOf(item);
+    if (!item || item.workspaceId !== ctx.workspaceId) return { body: null, workItemRefs: {} };
+    const body = choiceBodyOf(item);
+    const workItemRefs =
+      body && item.descriptionMd ? await resolveMarkdownWorkItemRefs(item.descriptionMd, ctx) : {};
+    return { body, workItemRefs };
   },
 
   /** The overlay's port for a `decision_choice` gate — null when the body no longer parses. */
-  async readPort(workItemId: string, ctx: ServiceContext): Promise<DecisionChoicePortDTO | null> {
-    const body = await this.readBody(workItemId, ctx);
-    return body?.ok ? body.port : null;
+  async readPort(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<DecisionChoicePortViewDTO | null> {
+    const { body, workItemRefs } = await this.readBodyWithRefs(workItemId, ctx);
+    return body?.ok ? { ...body.port, workItemRefs } : null;
   },
 };

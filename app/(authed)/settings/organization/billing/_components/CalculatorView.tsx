@@ -25,9 +25,12 @@ import {
   fetchCalculatorEstimate,
   type CalculatorOutcome,
 } from '@/lib/billing/calculatorClient';
+import { dragShare, evenShares, maxShare, MIN_SHARE } from '@/lib/billing/calculatorShares';
 import { largerPoolRefusalFor, type LargerPoolRefusal } from '@/lib/billing/largerPoolRefusal';
 import { UpgradeDialog, type PlanNames } from './PlanChangeDialog';
+import { RungEntitlements, isOnSaleRung } from './RungEntitlements';
 import { fmt } from './billingFormat';
+import { exampleModels } from '@/lib/billing/modelExamples';
 
 // The Calculator view on Billing & plans (Story MOTIR-8381 · MOTIR-8639 · MOTIR-9224 ·
 // MOTIR-8997) — the fourth view of the page. It computes nothing: the categories, the
@@ -39,9 +42,17 @@ import { fmt } from './billingFormat';
 // Two ranges (MOTIR-9224): items PLANNED in Motir and items RUN on Motir's runner. The
 // picked categories are the RUNNER's models; the planning lane is the engine's own.
 //
+// With two or three picked, each carries a share of the run set on a slider (MOTIR-9832,
+// § "Amendment 2026-10-27 — each category's share of the run"). They start even, reset to
+// even when the set changes, and a drag takes the difference from the others equally
+// (`dragShare`), so they always total 100 and are sent as `shares`.
+//
 // The answer sells the larger pool itself (design/billing § "Amendment 2026-10-21 — the
 // larger credit pool plan", approved 2026-10-22): Choose starts Checkout here, and an
-// org on a smaller live plan gets the shipped change-of-plan dialog instead.
+// org on a smaller live plan gets the shipped change-of-plan dialog instead. The larger
+// offer starts above HOST's pool (§ "Amendment 2026-10-26 — the larger pools above
+// Host"): below it the engine answers the regular plan with top-ups, and only a rung the
+// catalog sells is ever offered.
 //
 // ⚠️ The recommendation ARM is read, never derived. `ceiling.outcome` is the engine's
 // own statement of which situation the high end is in, so nothing below compares a
@@ -134,6 +145,8 @@ export function CalculatorView(props: CalculatorViewProps) {
   // that runs everything on Motir gets the single-range estimate without retyping.
   const runTouched = useRef(false);
   const [picked, setPicked] = useState<string[]>([]);
+  // Each picked category's share, keyed by category; set only with two or more picked.
+  const [shares, setShares] = useState<Record<string, number>>({});
   const [issues, setIssues] = useState<Partial<Record<Lane, FormIssue>>>({});
   const [categoryIssue, setCategoryIssue] = useState<CategoryIssue | null>(null);
   const [result, setResult] = useState<ResultState>({ kind: 'idle' });
@@ -188,11 +201,12 @@ export function CalculatorView(props: CalculatorViewProps) {
       plannedPerMonth: p,
       runPerMonth: r,
       categories: picked,
+      ...(picked.length > 1 ? { shares } : {}),
       cadence,
     });
     if (mine !== seq.current) return;
     applyOutcome(out, { planned: p, run: r }, setResult, setIssues, setCategoryIssue);
-  }, [planned, run, picked, orgId, cadence]);
+  }, [planned, run, picked, shares, orgId, cadence]);
 
   const editPlanned = (field: keyof Range, value: string) => {
     clear();
@@ -205,11 +219,32 @@ export function CalculatorView(props: CalculatorViewProps) {
     setRun((current) => ({ ...current, [field]: value }));
   };
 
+  // Picked categories in the tiles' order — the order the share sliders are listed in,
+  // and the order the even split's remainder follows.
+  const tileOrder =
+    categories.kind === 'ready' ? categories.value.categories.map((c) => c.key) : [];
+  const inTileOrder = (keys: string[]) =>
+    [...keys].sort((a, b) => tileOrder.indexOf(a) - tileOrder.indexOf(b));
+
   const togglePicked = (key: string) => {
     clear();
-    setPicked((current) =>
-      current.includes(key) ? current.filter((k) => k !== key) : [...current, key],
+    const next = inTileOrder(
+      picked.includes(key) ? picked.filter((k) => k !== key) : [...picked, key],
     );
+    setPicked(next);
+    // A changed set starts the shares even again.
+    const even = evenShares(next.length);
+    setShares(next.length > 1 ? Object.fromEntries(next.map((k, i) => [k, even[i]!])) : {});
+  };
+
+  const dragTo = (key: string, to: number) => {
+    clear();
+    const values = dragShare(
+      picked.map((k) => shares[k] ?? MIN_SHARE),
+      picked.indexOf(key),
+      to,
+    );
+    setShares(Object.fromEntries(picked.map((k, i) => [k, values[i]!])));
   };
 
   const asking = result.kind === 'loading';
@@ -295,6 +330,10 @@ export function CalculatorView(props: CalculatorViewProps) {
               issue={categoryIssue}
               locale={locale}
             />
+
+            {picked.length > 1 ? (
+              <SharesField picked={picked} shares={shares} onDrag={dragTo} />
+            ) : null}
 
             <div>
               <Button
@@ -388,9 +427,9 @@ function CategoryGroup({
 }) {
   const t = useTranslations('billing');
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
-  // The share each picked category would carry — the engine's equal split, shown before
-  // anyone asks; the answer then states the split it actually used.
-  const share = picked.length > 0 ? percent.format(1 / picked.length) : null;
+  // With one category picked the tile says it carries the whole run; with two or three
+  // the share sliders below say what each carries.
+  const share = picked.length === 1 ? percent.format(1) : null;
   const ready = categories.kind === 'ready' ? categories.value : null;
   return (
     <div className="flex flex-col gap-2">
@@ -453,10 +492,10 @@ function CategoryGroup({
                   {empty
                     ? t('calculator.categories.empty')
                     : t('calculator.inputs.categoryExamples', {
-                        models: category.models
-                          .slice(0, CATEGORY_MODEL_EXAMPLES)
-                          .map((m) => m.id)
-                          .join(', '),
+                        models: exampleModels(
+                          category.models.map((m) => m.id),
+                          CATEGORY_MODEL_EXAMPLES,
+                        ).join(', '),
                       })}
                 </span>
               </button>
@@ -473,6 +512,83 @@ function CategoryGroup({
         </p>
       ) : null}
     </div>
+  );
+}
+
+// The split bar's segment fills, in the sliders' order: three distinct pastel tints.
+const SHARE_TINTS = ['var(--el-tint-sky)', 'var(--el-tint-mint)', 'var(--el-tint-lavender)'];
+
+function SharesField({
+  picked,
+  shares,
+  onDrag,
+}: {
+  picked: string[];
+  shares: Record<string, number>;
+  onDrag: (key: string, to: number) => void;
+}) {
+  const t = useTranslations('billing');
+  const id = useId();
+  const max = maxShare(picked.length);
+  return (
+    <fieldset
+      className="flex flex-col gap-3"
+      aria-describedby={`${id}-help`}
+      data-testid="calculator-shares"
+    >
+      <legend className="font-sans text-sm font-medium text-(--el-text)">
+        {t('calculator.inputs.sharesLabel')}
+      </legend>
+      <div className="flex flex-col gap-3">
+        {picked.map((key) => {
+          const label = categoryLabel(key);
+          const value = shares[key] ?? MIN_SHARE;
+          return (
+            <div key={key} className="grid grid-cols-[6rem_1fr_3rem] items-center gap-3">
+              <label htmlFor={`${id}-${key}`} className="font-sans text-sm text-(--el-text)">
+                {label}
+              </label>
+              <input
+                id={`${id}-${key}`}
+                type="range"
+                min={MIN_SHARE}
+                max={max}
+                step={1}
+                value={value}
+                aria-valuetext={t('calculator.inputs.shareValue', {
+                  category: label,
+                  share: value,
+                })}
+                onChange={(event) => onDrag(key, Number(event.target.value))}
+                className="h-6 w-full cursor-grab focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--focus-ring-color)"
+                style={{ accentColor: 'var(--el-accent)' }}
+              />
+              <span
+                data-testid="calculator-share-value"
+                className="text-right font-sans text-sm font-medium text-(--el-text-strong) tabular-nums"
+              >
+                {value}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="flex h-2 w-full overflow-hidden rounded-full bg-(--el-muted)" aria-hidden>
+        {picked.map((key, i) => (
+          <span
+            key={key}
+            style={{
+              width: `${shares[key] ?? MIN_SHARE}%`,
+              backgroundColor: SHARE_TINTS[i % SHARE_TINTS.length],
+              borderRight: i < picked.length - 1 ? '2px solid var(--el-surface)' : undefined,
+            }}
+          />
+        ))}
+      </div>
+      <p id={`${id}-help`} className="font-sans text-xs text-(--el-text-secondary)">
+        {t('calculator.inputs.sharesHelp')}
+      </p>
+    </fieldset>
   );
 }
 
@@ -629,7 +745,7 @@ function Estimate({
   const t = useTranslations('billing');
   const { cadence, locale, goToPlan } = view;
   const arm = armOf(answer);
-  const { recommendation, topUp, ceiling, split } = answer;
+  const { recommendation, topUp, split } = answer;
   const { aiPlans, seatPlan } = data.catalog;
 
   // Every plan figure is the CATALOG's: `recommendation.monthlyPriceUsd` is the monthly
@@ -656,11 +772,11 @@ function Estimate({
     entryPool > currentPool;
 
   const percent = new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 0 });
-  const list = new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' });
-  const shares = [...new Set(split.categories.map((c) => percent.format(c.weight)))];
   const names = split.categories.map((c) => categoryLabel(c.key));
   const pool = arm === 'larger' || arm === 'largest';
-  const offer = pool && entry?.prices ? entry : null;
+  // Only a rung on sale is offered: a pool key the catalog does not sell (unlisted, or
+  // no longer on sale) gets no offer card and no buy control.
+  const offer = pool && entry?.prices && isOnSaleRung(entry) ? entry : null;
   // A pool key this catalog cannot sell is shown as the answer names it, with no buy.
   const named = arm === 'regular' || arm === 'above' || (pool && !offer);
   const hasTopUp = topUp.high.credits > 0;
@@ -683,9 +799,10 @@ function Estimate({
         <p className="font-sans text-sm text-(--el-text)">
           {split.count === 1
             ? t('calculator.split.one', { category: names[0] ?? '' })
-            : t('calculator.split.even', {
-                categories: list.format(names),
-                shares: list.format(shares),
+            : t('calculator.split.shares', {
+                shares: split.categories
+                  .map((c) => `${categoryLabel(c.key)} ${percent.format(c.weight)}`)
+                  .join(' · '),
               })}
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -731,27 +848,42 @@ function Estimate({
             {t('calculator.result.planLabel')}
           </span>
           <span className="font-sans text-lg font-semibold text-(--el-text)">{planName}</span>
+          {/* The regular plan with top-ups (design panel 1): the plan and its pool are the
+              catalog entry's, and no Host or rung is named here. */}
+          {arm === 'above' ? (
+            <p
+              className="font-sans text-sm text-(--el-text)"
+              data-testid="calculator-regular-topups"
+            >
+              {t('calculator.result.regularWithTopUps', {
+                plan: planName ?? '',
+                credits: fmt(entryPool ?? 0, locale),
+              })}
+            </p>
+          ) : null}
           <PlanPrice
             cadence={cadence}
             locale={locale}
             amountUsd={entry?.prices?.[cadence].amountUsd ?? recommendation.monthlyPriceUsd}
             fromCatalog={entry?.prices != null}
           />
+          {arm === 'above' && topUp.high.units > 0 ? (
+            <TopUpBox
+              testId="calculator-above-topup"
+              excess={Math.max(0, answer.credits.high - (entryPool ?? 0))}
+              topUp={topUp.high}
+              locale={locale}
+            />
+          ) : null}
           <p className="font-sans text-xs text-(--el-text-secondary)">
             {t('calculator.result.perOrg')}
           </p>
         </div>
       ) : null}
 
-      {arm === 'above' ? (
-        <Note>
-          {t('calculator.result.aboveTopRung', { ceiling: fmt(ceiling.credits ?? 0, locale) })}
-        </Note>
-      ) : null}
-
       {arm === 'topup_only' ? <Note>{t('calculator.result.topupOnly')}</Note> : null}
 
-      {!offer && hasTopUp ? (
+      {!offer && arm !== 'above' && hasTopUp ? (
         <div className="flex flex-col gap-0.5" data-testid="calculator-topup">
           <span className="font-sans text-xs font-medium text-(--el-text-secondary)">
             {t('calculator.result.topupLabel')}
@@ -844,7 +976,6 @@ function PoolOffer({
   // An org whose live plan already holds at least this pool is not sold it again.
   const covered = holdsPlan && !isCurrent && currentPool !== null && currentPool >= pool;
   const planNames: PlanNames = Object.fromEntries(data.catalog.aiPlans.map((p) => [p.key, p.name]));
-  const unitCredits = topUp.units > 0 ? topUp.credits / topUp.units : 0;
 
   const buy = () => {
     setRefusal(null);
@@ -890,20 +1021,12 @@ function PoolOffer({
           {t('plans.creditsAllotment', { n: fmt(poolCredits || pool, locale) })}
         </p>
         {largest && topUp.units > 0 ? (
-          <p
-            data-testid="calculator-largest-topup"
-            className="flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text)"
-          >
-            <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
-            <span>
-              {t('calculator.result.largestPoolTopUp', {
-                excess: fmt(excess, locale),
-                units: fmt(topUp.units, locale),
-                unitCredits: fmt(unitCredits, locale),
-                price: fmt(topUp.priceUsd, locale),
-              })}
-            </span>
-          </p>
+          <TopUpBox
+            testId="calculator-largest-topup"
+            excess={excess}
+            topUp={topUp}
+            locale={locale}
+          />
         ) : null}
         <p className="font-sans text-xs text-(--el-text-secondary)">
           {t('calculator.result.largerPlanEstimate')}
@@ -912,6 +1035,7 @@ function PoolOffer({
           <Users className="h-3.5 w-3.5 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
           {t('calculator.result.perOrg')}
         </p>
+        <RungEntitlements plan={plan} testId="calculator-rung-entitlements" />
         {!canManage ? (
           <p id={reasonId} className="font-sans text-xs text-(--el-text-secondary)">
             {t('plans.upgrade.disabledReason')}
@@ -950,6 +1074,39 @@ function PoolOffer({
         />
       ) : null}
     </div>
+  );
+}
+
+// The top-up box (design panels 1 and 5): the credits a month past the plan's pool, and
+// the top-ups the answer prices for them. Every figure is the answer's or the entry's.
+function TopUpBox({
+  testId,
+  excess,
+  topUp,
+  locale,
+}: {
+  testId: string;
+  excess: number;
+  topUp: CalculatorEstimateDTO['topUp']['high'];
+  locale: string;
+}) {
+  const t = useTranslations('billing');
+  const unitCredits = topUp.units > 0 ? topUp.credits / topUp.units : 0;
+  return (
+    <p
+      data-testid={testId}
+      className="flex items-start gap-1.5 rounded-(--radius-control) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x-12) py-(--spacing-control-y-8) font-sans text-sm text-(--el-text)"
+    >
+      <Coins className="mt-0.5 h-4 w-4 shrink-0 text-(--el-accent-on-surface)" aria-hidden />
+      <span>
+        {t('calculator.result.largestPoolTopUp', {
+          excess: fmt(excess, locale),
+          units: fmt(topUp.units, locale),
+          unitCredits: fmt(unitCredits, locale),
+          price: fmt(topUp.priceUsd, locale),
+        })}
+      </span>
+    </p>
   );
 }
 

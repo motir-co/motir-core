@@ -56,6 +56,10 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
     todos: TODOS,
   });
 
+  const canvasRefs = useMemo(
+    () => ({ ...(state.session?.workItemRefs ?? {}), ...state.rowRefs }),
+    [state.session?.workItemRefs, state.rowRefs],
+  );
   const view = useMemo(
     () => deriveGuideView(state.session?.turns ?? [], state.rows, { idle: state.phase === 'idle' }),
     [state.session, state.rows, state.phase],
@@ -128,6 +132,9 @@ export function GuideWorkspaceHost({ projectName, card, onClose }: GuideWorkspac
           <div className="relative min-h-0 flex-1 overflow-hidden">
             <GuideTodoCanvas
               view={view}
+              // The saved rows' links from their read; a step the conversation proposed
+              // and has not saved draws from the thread's own resolve.
+              workItemRefs={canvasRefs}
               // The door asserted `work_item:edit` before the guide opened, and the
               // to-do action asserts it again on every tick.
               canTick

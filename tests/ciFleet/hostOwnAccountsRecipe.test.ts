@@ -14,6 +14,7 @@ import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import type { HostAccountRefusedError } from '@/lib/ciFleet/headroomErrors';
+import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { hostAccountPlan } from '@/lib/ciFleet/hostAccounts';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
@@ -31,6 +32,8 @@ import { randomToken } from '../helpers/random';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
@@ -460,6 +463,7 @@ beforeAll(async () => {
   vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
   vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
   vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubPoolDefinitionEnv();
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
   _resetInstallationTokenCache();
@@ -469,6 +473,7 @@ beforeAll(async () => {
   github = newGithubWorld();
   github.orgs.add(GITHUB_ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   const ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);
@@ -592,7 +597,7 @@ describe('the Host own-accounts recipe, step by step', () => {
     expect(await ownRequests(first.organizationId)).toHaveLength(3);
   });
 
-  it("recipe 3 — before any grant: five runs on the shared runner, the sixth waits on the plan's figure; CI held to 50 on shared", async () => {
+  it("recipe 3 — before any grant: five runs on the shared runner, the sixth waits on the plan's figure; CI held to 20 on shared", async () => {
     const runs = [];
     for (let i = 0; i < 6; i++) runs.push(await hostedRun(first));
     expect(runs.slice(0, 5).map((r) => r.landed)).toEqual(Array(5).fill(on(shared.hosted_agent!)));
@@ -600,18 +605,18 @@ describe('the Host own-accounts recipe, step by step', () => {
     expect((runs[5]!.landed as { detail: string }).detail).toContain('runs 5');
 
     const jobs = [];
-    for (let i = 0; i < 51; i++) jobs.push(await ciJob(first));
+    for (let i = 0; i < 21; i++) jobs.push(await ciJob(first));
     expect(
       jobs
-        .slice(0, 50)
+        .slice(0, 20)
         .every((j) => 'shardId' in j.landed && j.landed.shardId === shared.ci_runner!.id),
     ).toBe(true);
-    expect(jobs[50]!.landed).toMatchObject({ deferred: 'plan_cap' });
-    expect((jobs[50]!.landed as { detail: string }).detail).toContain('50');
+    expect(jobs[20]!.landed).toMatchObject({ deferred: 'plan_cap' });
+    expect((jobs[20]!.landed as { detail: string }).detail).toContain('20');
     expect([
       (await caps(first.organizationId)).agentRunsInParallel,
       (await caps(first.organizationId)).ciBurstCap,
-    ]).toEqual([5, 50]);
+    ]).toEqual([5, 20]);
 
     // The runs and the push finish.
     await finishHosted(runs.map((r) => r.ref));
@@ -677,7 +682,7 @@ describe('the Host own-accounts recipe, step by step', () => {
     setNow(new Date(now.getTime() + 5 * MINUTE)); // past the refusal's pause
     const pending = await ciJob(first);
     expect(pending.landed).toEqual(on(shared.ci_runner!));
-    expect((await caps(first.organizationId)).ciBurstCap).toBe(50);
+    expect((await caps(first.organizationId)).ciBurstCap).toBe(20);
 
     await answer(first.organizationId, 'ci_runner', 'APPROVED', 200);
     await statePass();
@@ -755,7 +760,7 @@ describe('the Host own-accounts recipe, step by step', () => {
     await setPlan(second.organizationId, HOST_PLAN_KEY);
     const taken = TEMPLATE.replace(
       '{name}',
-      hostAccountPlan(second.organizationId, 'ci_runner').account.name,
+      hostAccountPlan(second.organizationId, 'ci_runner', hostMonthlyPlanCredits()).account.name,
     );
     organization.usedEmails.add(taken);
     const alertsBefore = alerts.length;

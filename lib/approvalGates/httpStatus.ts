@@ -69,6 +69,7 @@ export const APPROVAL_GATE_STATUS: Record<ApprovalGateErrorTag, number> = {
   APPROVAL_GATE_PRIMARY_PENDING: 409,
   MERGE_CHECKS_NOT_GREEN: 409,
   MERGE_CONFLICT: 409,
+  MERGE_OUT_OF_DATE: 409,
   MERGE_BRANCH_PROTECTED: 409,
   MERGE_ALREADY_MERGED: 409,
   // A second Queue again press lost the claim (MOTIR-5634) — a race, like the rest.

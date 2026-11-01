@@ -27,6 +27,7 @@ import { linkProjectRepo } from '../helpers/projectRepoLink';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
+import { seedRegistryService } from '@/lib/services/seedRegistryService';
 
 const PASSWORD = 'hunter2hunter2';
 
@@ -512,7 +513,13 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
           role: 'web',
           label: null,
           state: 'connected',
+          // MOTIR-10014 — the owner input and the (unrecorded) hosting fields.
+          seedSource: expect.any(String),
+          hostingTarget: null,
+          hostingUseCase: null,
+          hostingSize: null,
         })),
+        starterByTarget: await seedRegistryService.starterByHostingTarget(),
       },
       // The consent flag rides every planning submit (MOTIR-4343), generation
       // included — ON here because this fixture never touches the setting.
@@ -565,6 +572,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
           {
             provider: 'github',
@@ -576,6 +586,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
           {
             provider: 'github',
@@ -587,6 +600,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
           {
             provider: 'github',
@@ -598,6 +614,9 @@ describe('aiGenerationService.startGeneration — the context.code envelope seam
             refreshInFlight: false,
             indexedAt: null,
             commitsBehind: null,
+            // MOTIR-10094's pair — null while the repository has never been indexed.
+            indexedSha: null,
+            defaultHead: null,
           },
         ],
       },

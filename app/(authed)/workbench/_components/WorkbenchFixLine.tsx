@@ -137,6 +137,10 @@ const REASON_SENTENCE: Readonly<
     d.base
       ? t.rich('toFix.reason.conflicted', { base: d.base, d: mono })
       : t('toFix.reason.conflictedNoBase'),
+  out_of_date: (t, d) =>
+    d.base
+      ? t.rich('toFix.reason.outOfDate', { base: d.base, d: mono })
+      : t('toFix.reason.outOfDateNoBase'),
   ci_failed: (t, d) =>
     d.check
       ? t.rich('toFix.reason.ciFailed', { check: d.check, d: mono })

@@ -109,6 +109,12 @@ export interface AppCommandPaletteProps {
    */
   hostedRunsAvailable?: boolean;
   /**
+   * Whether the active project holds a repository Motir hosts (MOTIR-9966), so
+   * ⌘K offers **Environment** only where the room has something in it. Defaults
+   * CLOSED, like the props above.
+   */
+  motirRepositoriesPresent?: boolean;
+  /**
    * `orgCan(activeOrg.role, 'manageOrgSettings')` (MOTIR-6175 · MOTIR-6305) — the org-settings deep links
    * are offered through `visibleOrganizationSettingsNav`, the registry the org
    * rail and the org menu read. Defaults CLOSED, like the two props above.
@@ -125,6 +131,7 @@ export function AppCommandPalette({
   aiPlanningConfigured = false,
   publicProjectsAvailable = false,
   hostedRunsAvailable = false,
+  motirRepositoriesPresent = false,
   isOrgAdmin = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
@@ -440,6 +447,7 @@ export function AppCommandPalette({
     const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES, {
       publicProjectsAvailable,
       hostedRunsAvailable,
+      motirRepositoriesPresent,
     });
     if (settingsEntries.length > 0) {
       groups.push({

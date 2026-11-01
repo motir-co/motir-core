@@ -131,6 +131,51 @@ describe('auto-relate on create', () => {
   });
 });
 
+// Bug MOTIR-9825 — a key or token quoted in code is literal text, not a
+// reference, so saving it wires no edge; the same key in prose still does.
+describe('auto-relate ignores code', () => {
+  it('a key or token only in an inline code span or a code block relates nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const other = await makeItem(fx.projectId, fx.ctx, 'Other');
+    const dto = await makeItem(fx.projectId, fx.ctx, 'Source', {
+      descriptionMd: [
+        `Quote \`${target.identifier}\` and \`\`${token(other)}\`\`.`,
+        '',
+        '```',
+        `${target.identifier} ${token(other)}`,
+        '```',
+      ].join('\n'),
+      explanationMd: `    ${target.identifier}`,
+    });
+
+    expect(await relatesOut(dto.id)).toHaveLength(0);
+
+    // An edit and a comment take the same rule.
+    await workItemsService.updateWorkItem(
+      dto.id,
+      { descriptionMd: `Still only quoted: \`${target.identifier}\`.` },
+      fx.ctx,
+    );
+    await commentsService.addComment(dto.id, { bodyMd: `\`${token(other)}\`` }, fx.ctx);
+    expect(await relatesOut(dto.id)).toHaveLength(0);
+  });
+
+  it('the same key in prose relates, and a title key relates even in backticks', async () => {
+    const fx = await makeWorkItemFixture();
+    const target = await makeItem(fx.projectId, fx.ctx, 'Target');
+    const titled = await makeItem(fx.projectId, fx.ctx, 'Titled');
+
+    const dto = await makeItem(fx.projectId, fx.ctx, `Follow-up to \`${titled.identifier}\``, {
+      descriptionMd: `Quoted \`${target.identifier}\`, then meant: ${target.identifier}.`,
+    });
+
+    expect(await linkBetween(dto.id, target.id)).not.toBeNull();
+    // A title is plain text and chips every bare key, so it relates every one.
+    expect(await linkBetween(dto.id, titled.id)).not.toBeNull();
+  });
+});
+
 describe('auto-relate on update + comment', () => {
   it('a bare KEY-N added in an edited description links', async () => {
     const fx = await makeWorkItemFixture();
@@ -430,7 +475,7 @@ describe('auto-relate concurrency', () => {
               projectId: fx.projectId,
               projectIdentifier: fx.projectIdentifier,
             },
-            text: refText,
+            bodies: [refText],
             ctx: fx.ctx,
           },
           tx,

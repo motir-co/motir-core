@@ -34,6 +34,13 @@ export default defineConfig({
       'tests/ciFleet/hostLeaveOwnAccounts.test.ts',
       // The story's integration gate (MOTIR-9591).
       'tests/ciFleet/hostOwnAccountsIntegration.test.ts',
+      // The tenant's door onto the capacity-request record and its DTO
+      // (MOTIR-9662, `requestForOrganization` / `listForOrganization` /
+      // `toOrgFleetCapacityRequestDTO`), which Story MOTIR-9368 added to two
+      // files this lane floors.
+      'tests/api/fleetCapacityRequestRoute.test.ts',
+      'tests/billing/fleetUseService.test.ts',
+      'tests/mappers/fleetCapacityRequestMappers.test.ts',
     ],
     coverage: {
       provider: 'v8',

@@ -363,20 +363,6 @@ export class PlanOfferStartRefusedError extends Error {
 }
 
 /**
- * Confirm of a no-target plan offer could not save the requirement page (MOTIR-9436):
- * the folder, the page or the system account refused. Nothing was started and the
- * offer is pending again, so Confirm can be pressed again. A retryable failure, never a
- * refusal of the offer. → 503 `PLAN_OFFER_REQUIREMENT_NOT_SAVED`.
- */
-export class PlanOfferRequirementNotSavedError extends Error {
-  readonly code = 'PLAN_OFFER_REQUIREMENT_NOT_SAVED' as const;
-  constructor(cause?: unknown) {
-    super('The requirement page could not be saved, so the plan was not started.', { cause });
-    this.name = 'PlanOfferRequirementNotSavedError';
-  }
-}
-
-/**
  * A second Confirm of a guide re-plan offer that already started a planning
  * session (MOTIR-8691). Carries that session's id so the client can open it
  * instead of starting again. → 409 `GUIDE_REPLAN_OFFER_CONFIRMED`.

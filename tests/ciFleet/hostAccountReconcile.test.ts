@@ -3,9 +3,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import type { AwsSessionCredentials, Ec2Api, FleetWorkloadKind } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
+import { hostMonthlyPlanCredits } from '@/lib/billing/catalog';
 import { capsForPlanKey, HOST_PLAN_KEY } from '@/lib/billing/planCaps';
 import type { HostAccountRefusedError } from '@/lib/ciFleet/headroomErrors';
 import { hostAccountPlan, type HostAccountSlot } from '@/lib/ciFleet/hostAccounts';
+import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { REFUSAL_BACKOFF_BASE_MS } from '@/lib/ciFleet/poolGrowthPolicy';
 import { AWS_MEMBER_EMAIL_TEMPLATE_ENV } from '@/lib/fleetShards/awsMemberAccountPlan';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
@@ -29,15 +31,19 @@ import { truncateAuthTables } from '../helpers/db';
 import {
   ADD_SHARD_ENTERPRISE_SLUG as SLUG,
   FakeOrganization,
+  buildStacksInto,
+  stubPoolDefinitionEnv,
   installAddShardGithub,
   newGithubWorld,
   type GithubWorld,
 } from '../helpers/addShardFakes';
+import { TEST_MANAGEMENT_KEY, stubAwsManagementCredential } from '../helpers/awsRunnerRoleFake';
 
 // THE HOST ACCOUNT RECONCILE (Story MOTIR-9365 · MOTIR-9582), against a real
 // database for the rows, attempts and audit entries, GitHub stubbed at `fetch`,
 // the AWS management calls behind the in-memory organization and the network
-// built by the REAL `ensureAwsShardNetwork` over the in-memory EC2 — the
+// built by the pool-account definition's stack instance in the in-memory EC2 and
+// read back by the REAL `readAwsShardNetwork` — the
 // unattended add-shard's own fakes.
 
 const ec2FakePath = '../../packages/orchestrator/test/contract/awsEc2Fake';
@@ -47,8 +53,8 @@ const GITHUB_ORG = 'motir-fleet-use1-1';
 const TEMPLATE = 'aws+{name}@motir.co';
 const SECRETS = {
   installation: 'ghs_INSTALL_SECRET_never_printed',
-  managementKey: 'AKIA_MANAGEMENT_never_printed',
-  managementSecret: 'MANAGEMENT_SECRET_never_printed',
+  managementKey: TEST_MANAGEMENT_KEY.accessKeyId,
+  managementSecret: TEST_MANAGEMENT_KEY.secretAccessKey,
   sessionKeyId: 'ASIA_SESSION_never_printed',
   sessionSecret: 'SESSION_SECRET_never_printed',
   sessionToken: 'SESSION_TOKEN_never_printed',
@@ -74,6 +80,13 @@ const host = (): PlanCapsAnswer => ({
   planKey: HOST_PLAN_KEY,
   planName: 'Host',
   caps: HOST_CAPS,
+});
+/** A plan answer naming `planKey` — what `capsFor` answers for any `pool_<N>k`. */
+const onPlan = (planKey: string): PlanCapsAnswer => ({
+  kind: 'capped',
+  planKey,
+  planName: planKey,
+  caps: capsForPlanKey(planKey)!,
 });
 
 function deps(now: Date = T0): HostReconcileDeps {
@@ -129,7 +142,10 @@ const ownedRequests = (organizationId: string) =>
   });
 const creates = () => organization.calls.filter((c) => c === 'createOrganizationAccount');
 const emailOf = (organizationId: string, slot: HostAccountSlot) =>
-  TEMPLATE.replace('{name}', hostAccountPlan(organizationId, slot).account.name);
+  TEMPLATE.replace(
+    '{name}',
+    hostAccountPlan(organizationId, slot, hostMonthlyPlanCredits()).account.name,
+  );
 
 beforeAll(async () => {
   ({ AwsEc2Fake } = (await import(/* @vite-ignore */ ec2FakePath)) as {
@@ -147,14 +163,14 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4445390');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   vi.stubEnv('GITHUB_ENTERPRISE_SLUG', SLUG);
-  vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', SECRETS.managementKey);
-  vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', SECRETS.managementSecret);
-  vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
+  stubAwsManagementCredential();
+  stubPoolDefinitionEnv();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   github.orgs.add(GITHUB_ORG);
   organization = new FakeOrganization(SESSION);
+  buildStacksInto(organization, () => ec2);
   organization.quota = 5; // a new account's AWS default
   const ec2 = new AwsEc2Fake();
   installAddShardGithub(github, SECRETS.installation);
@@ -525,6 +541,37 @@ describe('a slot whose kind has no primary account', () => {
     const second = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
     expect(second.slots.agent_runner).toBe('created');
   });
+
+  it('counts only an aws primary: a kind with just a Fly primary is skipped (MOTIR-10065)', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, host());
+    await adminDb.fleetShard.update({
+      where: { name: 'hosted-agent-use1-1' },
+      data: { state: 'disabled' },
+    });
+    await adminDb.fleetShard.create({
+      data: {
+        name: 'hosted-agent-fly-1',
+        fleetKind: 'hosted_agent',
+        provider: 'fly',
+        role: 'primary',
+        state: 'active',
+        githubOrg: 'motir-fly-org',
+        githubInstallationId: '9001',
+        flyOrg: 'motir',
+        flyApp: 'motir-hosted-agent-fly-1',
+        flyRegion: 'iad',
+        credentialRef: 'FLEET_SHARD_FLY_TEST',
+        machineLimit: 4,
+      },
+    });
+
+    const result = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+
+    expect(result.slots.agent_runner).toBe('no_primary');
+    expect(alerts).toEqual([]);
+    expect((await ownedRows(org.id)).map((r) => r.fleetKind)).not.toContain('hosted_agent');
+  });
 });
 
 describe('the addOrgOwnedShard door', () => {
@@ -536,12 +583,29 @@ describe('the addOrgOwnedShard door', () => {
     });
     await expect(
       fleetShardProvisioningService.addOrgOwnedShard(
-        { organizationId: org.id, slot: 'ci_runner' },
+        { organizationId: org.id, slot: 'ci_runner', planKey: HOST_PLAN_KEY },
         deps().provisioning,
       ),
     ).rejects.toThrow(/no primary account/);
     expect(organization.calls).toEqual([]);
   });
+
+  it.each(['max', 'pool_250k', 'free', 'enterprise'])(
+    'refuses a plan that carries no own accounts (%s) before any AWS or GitHub call',
+    async (planKey) => {
+      const org = await seedOrg();
+      const fetchSpy = vi.spyOn(globalThis, 'fetch');
+      await expect(
+        fleetShardProvisioningService.addOrgOwnedShard(
+          { organizationId: org.id, slot: 'ci_runner', planKey },
+          deps().provisioning,
+        ),
+      ).rejects.toBeInstanceOf(FleetShardProvisioningRefusedError);
+      expect(organization.calls).toEqual([]);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(await ownedRows(org.id)).toEqual([]);
+    },
+  );
 });
 
 describe('no credential, secret or member email', () => {
@@ -566,5 +630,145 @@ describe('no credential, secret or member email', () => {
     ]);
     for (const secret of Object.values(SECRETS)) expect(printed).not.toContain(secret);
     expect(printed).not.toContain('@motir.co');
+  });
+});
+
+describe('a larger pool on sale carries the same three accounts, sized to its pool (MOTIR-9651)', () => {
+  const raises = async (organizationId: string) =>
+    (await ownedRequests(organizationId))
+      .map((r) => [r.shard.fleetKind, r.desiredValue, r.quotaCode])
+      .sort();
+
+  it.each([
+    ['pool_600k', 400, 64, 120],
+    ['pool_2400k', 1_600, 256, 120],
+  ] as const)(
+    '%s: three accounts, four rows, raises %i / %i / %i',
+    async (planKey, ci, agent, merged) => {
+      const org = await seedOrg();
+      plans.set(org.id, onPlan(planKey));
+
+      const summary = await hostAccountReconcileService.runReconcile(deps());
+
+      expect(summary.organizations).toEqual([
+        {
+          organizationId: org.id,
+          host: true,
+          slots: { ci_runner: 'created', agent_runner: 'created', merged: 'created' },
+        },
+      ]);
+      expect(creates()).toHaveLength(3);
+      const rows = await ownedRows(org.id);
+      expect(rows).toHaveLength(4);
+      for (const r of rows)
+        expect([r.role, r.state, r.ownerOrganizationId]).toEqual([
+          'org_owned',
+          'provisioning',
+          org.id,
+        ]);
+      const index = rows.find((r) => r.fleetKind === 'code_graph_index')!;
+      expect(rows.find((r) => r.fleetKind === 'agent_instance')!.awsAccountId).toBe(
+        index.awsAccountId,
+      );
+      expect(await raises(org.id)).toEqual([
+        ['ci_runner', ci, 'L-1216C47A'],
+        ['code_graph_index', merged, 'L-1216C47A'],
+        ['hosted_agent', agent, 'L-1216C47A'],
+      ]);
+
+      // Again, and after a replayed paid invoice: nothing more.
+      await hostAccountReconcileService.runReconcile(deps());
+      await adminDb.organization.update({ where: { id: org.id }, data: { aiIncludedSeat: true } });
+      await hostAccountReconcileService.runReconcile(deps());
+      expect(creates()).toHaveLength(3);
+      expect(await ownedRows(org.id)).toHaveLength(4);
+      expect(await ownedRequests(org.id)).toHaveLength(3);
+    },
+  );
+
+  it('a removed rung’s key gets no account, row, raise, refusal or alert, and is not in the summary', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, onPlan('pool_250k'));
+
+    const outcome = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+    const summary = await hostAccountReconcileService.runReconcile(deps());
+
+    expect(outcome).toEqual({ organizationId: org.id, host: false, slots: {} });
+    expect(summary.organizations).toEqual([]);
+    expect(creates()).toHaveLength(0);
+    expect(await ownedRows(org.id)).toEqual([]);
+    expect(await ownedRequests(org.id)).toEqual([]);
+    expect(await adminDb.hostAccountAttempt.count()).toBe(0);
+    expect(alerts).toEqual([]);
+  });
+
+  it('an upgrade from Host keeps the accounts, waits on the open 200, then files 400 once', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, host());
+    await hostAccountReconcileService.runReconcile(deps());
+    const before = await ownedRows(org.id);
+    expect(before).toHaveLength(4);
+
+    plans.set(org.id, onPlan('pool_600k'));
+    const waiting = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+
+    expect(waiting.slots.ci_runner).toBe('raise_failed');
+    expect(creates()).toHaveLength(3);
+    expect((await ownedRows(org.id)).map((r) => r.id)).toEqual(before.map((r) => r.id));
+    expect(await adminDb.hostAccountAttempt.count()).toBe(0);
+    expect(alerts).toEqual([]);
+
+    // AWS answers the 200 request; it closes.
+    const ci = before.find((r) => r.fleetKind === 'ci_runner')!;
+    const open = await adminDb.fleetQuotaRequest.findFirstOrThrow({
+      where: { shardId: ci.id, closedAt: null },
+    });
+    expect(open.desiredValue).toBe(200);
+    organization.settleQuotaRequest(open.awsRequestId!, 'APPROVED');
+    await adminDb.fleetQuotaRequest.update({
+      where: { id: open.id },
+      data: { status: 'approved', grantedValue: 200, closedAt: T0 },
+    });
+
+    const filed = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+    await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+
+    expect(filed.slots.ci_runner).toBe('created');
+    const ciRequests = await adminDb.fleetQuotaRequest.findMany({
+      where: { shardId: ci.id },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(ciRequests.map((r) => r.desiredValue)).toEqual([200, 400]);
+    expect(creates()).toHaveLength(3);
+    expect((await ownedRows(org.id)).map((r) => r.id)).toEqual(before.map((r) => r.id));
+  });
+
+  it('a downgrade from a rung to Host, granted at the rung’s targets, creates and files nothing', async () => {
+    const org = await seedOrg();
+    plans.set(org.id, onPlan('pool_600k'));
+    await hostAccountReconcileService.runReconcile(deps());
+    const rows = await ownedRows(org.id);
+    for (const request of await ownedRequests(org.id)) {
+      organization.settleQuotaRequest(request.awsRequestId!, 'APPROVED');
+      await adminDb.fleetQuotaRequest.update({
+        where: { id: request.id },
+        data: { status: 'approved', grantedValue: request.desiredValue, closedAt: T0 },
+      });
+      await adminDb.fleetShard.updateMany({
+        where: { awsAccountId: rows.find((r) => r.id === request.shardId)!.awsAccountId },
+        data: { vcpuQuota: request.desiredValue },
+      });
+    }
+
+    plans.set(org.id, host());
+    const after = await hostAccountReconcileService.reconcileOrganization(org.id, deps());
+
+    expect(after.slots).toEqual({
+      ci_runner: 'already',
+      agent_runner: 'already',
+      merged: 'already',
+    });
+    expect(creates()).toHaveLength(3);
+    expect(await ownedRequests(org.id)).toHaveLength(3);
   });
 });

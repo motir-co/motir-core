@@ -325,8 +325,14 @@ function correctionFrom(
     ...('parentRef' in b
       ? { parentRef: typeof b.parentRef === 'string' ? b.parentRef : null }
       : {}),
+    // An entry is a ref string or `{ ref, reason }` (MOTIR-9827), forwarded AS
+    // SENT: the service splits the reasons off and refuses a malformed entry.
     ...(Array.isArray(b.blockedByRefs)
-      ? { blockedByRefs: b.blockedByRefs.filter((r): r is string => typeof r === 'string') }
+      ? {
+          blockedByRefs: b.blockedByRefs.filter(
+            (r) => typeof r === 'string' || (typeof r === 'object' && r !== null),
+          ) as string[],
+        }
       : {}),
     // An `add`'s SUPERSEDES set (Story MOTIR-6577 · MOTIR-6631) — a list, so it
     // REPLACES the set like `blockedByRefs` beside it and `[]` clears it. The refs

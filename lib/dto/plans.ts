@@ -205,8 +205,9 @@ export interface PlanItemProposedFields {
    * `[label](motir:<workItemId>)` for an existing item, or
    * `[label](motir-ref:planItem:<planItemId>)` for another `add` in this plan,
    * rewritten to `motir:<id>` at materialize. The `planItem:` prefix is part of
-   * the token: `motir-ref:<id>` without it is refused at every proposal door
-   * (`lib/plans/validateProposedBodyRefs.ts`, bug MOTIR-6494).
+   * the token: `motir-ref:<id>` without it is kept but WARNED at every proposal
+   * door, with the corrected link when the server can compute it, and refused at
+   * approve (`lib/plans/validateProposedBodyRefs.ts`, bugs MOTIR-6494 · MOTIR-10104).
    */
   explanationMd?: string | null;
   explanationSource?: string | null;
@@ -268,8 +269,8 @@ export interface PlanItemProposedFields {
    * a card they already approved, with a window in between where dispatch routes
    * on the WRONG pin.
    *
-   * Element 0 is the PRIMARY — the repository dispatch routes to — and the item
-   * does not complete until every element has a merged pull request of its own.
+   * Element 0 is the PRIMARY — the repository dispatch routes to. The list does
+   * not decide completion: the item's linked pull requests do (MOTIR-10135).
    * Bare names or the `owner/name` ref form, validated at approve against the
    * PROJECT's repository domain by the SAME resolver the direct path calls
    * (`resolveAuthoredRepoPinsInProject`), so the two doors cannot disagree about
@@ -785,6 +786,11 @@ export interface PlanItemDto {
   patch: PlanItemPatch | null;
   parentRef: string | null;
   blockedByRefs: string[];
+  /** WHY each drawn edge exists (MOTIR-9827): ref → one short line saying what the
+   *  waiting card consumes from that blocker, keyed by `blockedByRefs` on an `add`
+   *  and by `patch.blockedByAdd` on a `modify`. A ref with no entry carries no
+   *  reason; `{}` on a plan item written before reasons existed. */
+  edgeReasons: Record<string, string>;
   /** `add` only: the older cards the created card supersedes (MOTIR-6630);
    *  `[]` on every other op and on a plan item written before the column. */
   supersedesRefs: string[];
@@ -836,6 +842,43 @@ export interface PlanNarrationDto {
   seq: number;
   body: string;
   createdAt: string;
+}
+
+/**
+ * One CODE READ a planner session made (MOTIR-10122): what it asked, the commits
+ * it was read at and how much came back — never the code. `seq` is the plan-wide
+ * call order; within one `sessionKey` it is that session's call order.
+ */
+export interface PlanCodeReadDto {
+  seq: number;
+  sessionKey: string;
+  tool: string;
+  repo: string | null;
+  path: string | null;
+  startLine: number | null;
+  endLine: number | null;
+  /** The ref the call asked for — a label; what it was read AT is `commits`. */
+  askedRef: string | null;
+  query: string | null;
+  /** Every commit the read was made at: a resolved hex id, never a branch name. */
+  commits: { repo?: string; sha: string; dirty?: boolean }[];
+  outcome: string;
+  lines: number | null;
+  hits: number | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * One page of a plan's code reads (MOTIR-10122), ascending `seq`, with the step
+ * words of every session that appears on it — so a reader can tell which card a
+ * session was writing — and the cursor for the next page (`null` on the last).
+ */
+export interface PlanCodeReadPageDto {
+  planId: string;
+  reads: PlanCodeReadDto[];
+  sessions: PlanNarrationSessionDto[];
+  nextAfterSeq: number | null;
 }
 
 /**
@@ -1011,6 +1054,71 @@ export interface PlanWithItemsDto extends PlanDto {
   items: PlanItemDto[];
 }
 
+/**
+ * ONE ITEM LINK A PROPOSAL WRITE KEPT THAT WOULD SHIP DEAD (MOTIR-10104) — on the
+ * response of every proposal write door (the append, the deepen, the correction)
+ * as `warnings`, present only when there is at least one. The write is NOT
+ * refused: the body is stored as sent, and approve refuses the plan while a
+ * malformed `motir-ref:` link remains, so the warning is the author's chance to
+ * fix it in the same session.
+ */
+export interface ProposalLinkWarningDto {
+  /** The proposal the link sits in. */
+  planItemId: string;
+  /** The proposal as a refusal names it — its title, or the `modify`'s target. */
+  proposal: string;
+  field: 'descriptionMd' | 'explanationMd';
+  /** The link exactly as written. */
+  link: string;
+  /** Why it would ship as dead text. */
+  reason: string;
+  /**
+   * The link to write in its place, when the server can compute it: the card an
+   * earlier plan's proposal became (`[label](motir:<cardId>)`), or this plan's
+   * proposal in the canonical token (`[label](motir-ref:planItem:<id>)`).
+   */
+  correctedLink: string | null;
+  /** The two canonical forms — present only when `correctedLink` is `null`. */
+  canonicalForms?: string[];
+}
+
+/** A field whose change re-scopes a card (`patchRescopes`); the repository axis is one, however it is spelled. */
+export type RescopeField = 'title' | 'descriptionMd' | 'repository';
+
+/**
+ * ONE `modify` APPROVE WILL SEND BACK FROM BUILT WORK (MOTIR-10106) — on the
+ * response of every proposal write door as `rescopeWarnings`, and on
+ * `validate_plan` for every such proposal on the plan, present only when there is
+ * at least one. The write is kept: a re-scope is legitimate when what the card
+ * delivers changes. The warning tells the author what the reviewer's status row
+ * already says — the card leaves the status that claims its work is built — so a
+ * correction of record is not mistaken for one.
+ */
+export interface ProposalRescopeWarningDto {
+  planItemId: string;
+  /** The proposal as a refusal names it. */
+  proposal: string;
+  /** The card the `modify` targets. */
+  workItemId: string;
+  /** Its key, e.g. `MOTIR-5779`. */
+  identifier: string;
+  /** The status it holds before any park (`implemented`), and its label. */
+  status: string;
+  statusLabel: string;
+  /** What approve may move it to, as the review row names them: `To Do, Blocked, or In Progress`. */
+  outcomes: string;
+  /** The patch fields that re-scope it (`patchRescopes`). */
+  fields: RescopeField[];
+  /** The whole warning, as a caller reads it. */
+  message: string;
+}
+
+/** A proposal write door's answer: the plan, and what it kept that the author should look at. */
+export type PlanWithItemsAndWarningsDto = PlanWithItemsDto & {
+  warnings?: ProposalLinkWarningDto[];
+  rescopeWarnings?: ProposalRescopeWarningDto[];
+};
+
 /** A cursor-paginated page of plans, newest first. */
 export interface PlanListPageDto {
   plans: PlanDto[];
@@ -1116,6 +1224,15 @@ export interface ProposalInput {
   parentRef?: string | null;
   /** `add` / edge changes: blocked-by refs (real ids or intra-plan temp-refs). */
   blockedByRefs?: string[];
+  /**
+   * WHY each edge this proposal draws exists (MOTIR-9827) — ref → one short line
+   * saying what the waiting card consumes from it, keyed by `blockedByRefs` on an
+   * `add` and by `patch.blockedByAdd` on a `modify`. A door receiving the wire form
+   * (`{ ref, reason }` entries) splits it into the refs and this map
+   * (`lib/plans/edgeReasons.ts`); a reason keyed by a ref the proposal does not
+   * draw is refused.
+   */
+  edgeReasons?: Record<string, string>;
   /**
    * `add` only: the OLDER work items the created card SUPERSEDES (Story
    * MOTIR-6577 · MOTIR-6630) — real ids or intra-plan temp-refs naming an `add`
@@ -1245,6 +1362,10 @@ export interface CorrectProposalInput extends UpdateProposalInput {
   parentRef?: string | null;
   /** REPLACES the blocked-by set (see the note above); `[]` clears it. */
   blockedByRefs?: string[];
+  /** REPLACES the proposal's edge reasons (MOTIR-9827) — sent by a door whenever
+   *  it replaces `blockedByRefs` or a `modify`'s `patch`, keyed by the refs the
+   *  corrected proposal draws. */
+  edgeReasons?: Record<string, string>;
   /** `add` only — REPLACES the supersedes set (MOTIR-6630), exactly as
    *  {@link blockedByRefs} replaces its own; `[]` clears it. */
   supersedesRefs?: string[];
@@ -1363,6 +1484,7 @@ export const CORRECT_PROPOSAL_KEYS = [
   ...UPDATE_PROPOSAL_KEYS,
   'parentRef',
   'blockedByRefs',
+  'edgeReasons',
   'supersedesRefs',
   'targetRepo',
   'targetRepos',
@@ -1393,14 +1515,24 @@ export type CorrectProposalKey = (typeof CORRECT_PROPOSAL_KEYS)[number];
 export interface CorrectPlanBriefInput {
   title?: string | null;
   summary?: string | null;
+  /**
+   * The PLANNER's own record (MOTIR-9978) — a JSON object the authoring agent
+   * keeps on the plan between runs, replaced whole; `null` clears it. Not part
+   * of the heading a reviewer reads: it is never on {@link PlanDto}, and a write
+   * of it alone puts nothing on the plan's timeline.
+   */
+  plannerRecord?: Record<string, unknown> | null;
 }
+
+/** The largest planner record `update_plan` stores, in bytes of its JSON (MOTIR-9978). */
+export const PLANNER_RECORD_MAX_BYTES = 64 * 1024;
 
 /**
  * The keys {@link CorrectPlanBriefInput} declares — the same DECLARED-SOURCE
  * discipline the two constants above are held to, and for the same reason: a key
  * on the input that no transport reads is invisible from both ends.
  */
-export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary'] as const;
+export const CORRECT_PLAN_BRIEF_KEYS = ['title', 'summary', 'plannerRecord'] as const;
 
 export type CorrectPlanBriefKey = (typeof CORRECT_PLAN_BRIEF_KEYS)[number];
 

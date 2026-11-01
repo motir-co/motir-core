@@ -26,7 +26,7 @@ import type {
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { ReadyContainerDto, ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
-import type { PlanTreeSkeletonItem } from '@/lib/dto/ai';
+import type { InFlightCodeDto, PlanTreeSkeletonItem } from '@/lib/dto/ai';
 import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
@@ -173,6 +173,34 @@ const mcpLatestRefusalSchema = z.object({
   subjectVersion: z.string().nullable(),
 });
 
+/**
+ * One `inFlightCode` entry on `get_work_item` (MOTIR-10069) — the same
+ * `InFlightCodeDto` the hosted planner's item read carries (MOTIR-6618).
+ */
+const mcpInFlightCodeSchema = z.union([
+  z.object({
+    repo: z.string(),
+    branch: z.string(),
+    headSha: z.string().nullable(),
+    prNumber: z.number(),
+    prUrl: z.string(),
+    draft: z.boolean(),
+    baseRef: z.string().nullable(),
+    source: z.literal('own'),
+  }),
+  z.object({
+    repo: z.string(),
+    branch: z.string(),
+    headSha: z.string().nullable(),
+    prNumber: z.number(),
+    prUrl: z.string(),
+    draft: z.boolean(),
+    baseRef: z.string().nullable(),
+    source: z.literal('inherited'),
+    fromKey: z.string(),
+  }),
+]);
+
 export const getWorkItemPayload = definePayload({
   schema: z
     .object({
@@ -201,6 +229,15 @@ export const getWorkItemPayload = definePayload({
        */
       latestRefusal: mcpLatestRefusalSchema.nullable().optional(),
       /**
+       * WHERE the item's UNMERGED code is (MOTIR-10069), per repository: its own
+       * open pull request, else the nearest ancestor's (`inherited`, `fromKey`).
+       * `[]` when none; absent on the projected answer, where a proposal has no
+       * pull request.
+       */
+      inFlightCode: z.array(mcpInFlightCodeSchema).optional(),
+      /** The repositories where the item's own delivery has merged (MOTIR-10069). */
+      mergedRepos: z.array(z.string()).optional(),
+      /**
        * The item itself — its columns ride through unchanged; DECLARED here is
        * `languages` (Story MOTIR-7731 · MOTIR-8098): each text field's recorded
        * language, `null` when none was recorded. Optional only for the
@@ -224,6 +261,8 @@ export const getWorkItemPayload = definePayload({
       folderPath?: string[] | null;
       errors?: MonitorIssueLinkDto[];
       latestRefusal?: LatestRefusalDTO | null;
+      inFlightCode?: InFlightCodeDto[];
+      mergedRepos?: string[];
       parsedSections?: z.infer<typeof parsedSectionsSchema>;
     } & Record<string, unknown>
   >,

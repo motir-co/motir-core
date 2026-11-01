@@ -341,31 +341,27 @@ describe('create', () => {
       await expectNothingStarted();
     });
 
-    it('the running cap is the ORGANISATION’s own: at its plan’s running figure it refuses create and wake, naming the plan and the limit', async () => {
-      capAgentsAt({ running: 2 });
+    it('the org figure is the ORGANISATION’s own: at its plan’s figure in LIVE agents it refuses a create, naming the plan and the limit, and never a wake', async () => {
+      capAgentsAt({ perOrg: 2 });
       await create('one');
       const two = await create('two');
       await expect(create('three')).rejects.toMatchObject({
-        reason: 'org_running_cap',
+        reason: 'org_cap',
         limit: 2,
         planName: 'Test',
         message:
-          'Your organization’s Test plan runs 2 agents at once, and 2 are running. Hibernate one to start another.',
+          'Your organization’s Test plan allows 2 agents in the organization, running or asleep, and it already has that many. Each one is charged for its storage every day, even asleep. Delete one to create another.',
       });
       expect(await instances()).toHaveLength(2);
       expect(await slots()).toHaveLength(2);
-      // Hibernating one frees its place; a third takes it, and the wake is refused.
+      // A hibernated agent still counts: the create stays refused, and its wake is admitted.
       await lifecycle.hibernate(KEY(), two.id, fx.ctx);
-      await create('three');
-      await expect(lifecycle.wake(KEY(), two.id, fx.ctx)).rejects.toMatchObject({
-        reason: 'org_running_cap',
-        limit: 2,
-      });
-      expect((await instances()).find((r) => r.id === two.id)!.state).toBe('hibernated');
+      await expect(create('three')).rejects.toMatchObject({ reason: 'org_cap', limit: 2 });
+      expect((await lifecycle.wake(KEY(), two.id, fx.ctx)).state).toBe('running');
     });
 
     it('one organisation at its limit never refuses another — in the same instant, under the admission lock', async () => {
-      capAgentsAt({ running: 2 });
+      capAgentsAt({ perOrg: 2 });
       const other = await makeWorkItemFixture({ name: 'Other org', identifier: 'OTHR' });
       const createIn = (name: string, profileId = 'claude') =>
         lifecycle.create(other.projectIdentifier, { name, profileId }, other.ctx);
@@ -376,7 +372,7 @@ describe('create', () => {
         createIn('b-one'),
         createIn('b-two', 'codex'),
       ]);
-      expect(a).toMatchObject({ status: 'rejected', reason: { reason: 'org_running_cap' } });
+      expect(a).toMatchObject({ status: 'rejected', reason: { reason: 'org_cap' } });
       expect(b).toMatchObject({ status: 'fulfilled', value: { state: 'running' } });
       expect(c).toMatchObject({ status: 'fulfilled', value: { state: 'running' } });
       // …and the other org's own cap holds against its own racing creates.
@@ -390,7 +386,7 @@ describe('create', () => {
     });
 
     it('no create is refused as Motir being busy because of other organisations — only the kill switch reads that way', async () => {
-      capAgentsAt({ running: 1 });
+      capAgentsAt({ perOrg: 1 });
       const other = await makeWorkItemFixture({ name: 'Other org', identifier: 'OTHR' });
       await lifecycle.create(
         other.projectIdentifier,
@@ -600,7 +596,7 @@ describe('Motir’s own organisations have no agent limits (AMENDMENT 3, MOTIR-6
         where: { id: fx.workspace.organizationId },
         data: { [flag]: true },
       });
-      capAgentsAt({ running: 1 });
+      capAgentsAt({ perOrg: 1 });
       mayRun = false;
       await seedLive(10);
       const first = await create('one');
@@ -621,9 +617,9 @@ describe('Motir’s own organisations have no agent limits (AMENDMENT 3, MOTIR-6
     mayRun = false;
     await expect(create()).rejects.toMatchObject({ reason: 'credits' });
     mayRun = true;
-    capAgentsAt({ running: 1 });
+    capAgentsAt({ perOrg: 1 });
     await create('one');
-    await expect(create('two')).rejects.toMatchObject({ reason: 'org_running_cap', limit: 1 });
+    await expect(create('two')).rejects.toMatchObject({ reason: 'org_cap', limit: 1 });
   });
 });
 

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -38,6 +38,10 @@ let fx: WorkItemFixture;
 beforeEach(async () => {
   await truncateAuthTables();
   fx = await makeWorkItemFixture();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 afterAll(async () => {
@@ -131,6 +135,52 @@ describe('the THREE states the substrate can answer', () => {
   });
 });
 
+describe('NEEDS RE-AUTH — the fourth state, and the way out of it (Bug MOTIR-10047)', () => {
+  // MOTIR-10021 gave the pane its signal: `github_identity.refresh_refused_at`,
+  // written when GitHub refuses to renew the member's sign-in. The pane renders
+  // the design's Needs re-auth state from `needsReauth` on the identity it
+  // already reads, and `Reconnect` runs the ordinary OAuth round trip — whose
+  // upsert clears the mark. This pins both ends against a real database.
+
+  /** GitHub's two OAuth endpoints, answering a successful reconnect. */
+  function stubGithubReconnect(login: string) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const body = url.includes('/login/oauth/access_token')
+          ? { access_token: 'gho_reconnected' }
+          : { id: 4242, login, avatar_url: null };
+        return new Response(JSON.stringify(body), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+  }
+
+  it('a refused renewal reads as needsReauth, and reconnecting returns the pane to Connected', async () => {
+    const row = await bindIdentity(fx.ownerId);
+    expect((await githubIdentityService.getIdentityForUser(fx.ownerId))?.needsReauth).toBe(false);
+
+    await adminDb.githubIdentity.update({
+      where: { id: row.id },
+      data: { refreshRefusedAt: new Date() },
+    });
+    expect((await githubIdentityService.getIdentityForUser(fx.ownerId))?.needsReauth).toBe(true);
+
+    // `Reconnect` is `/api/github/oauth/start?from=accountGit`; its callback lands
+    // here. The same member, the same GitHub account, a fresh sign-in.
+    stubGithubReconnect('yue');
+    await githubIdentityService.completeOAuthCallback({ code: 'c', userId: fx.ownerId });
+
+    const identity = await githubIdentityService.getIdentityForUser(fx.ownerId);
+    expect(identity?.githubLogin).toBe('yue');
+    expect(identity?.needsReauth).toBe(false);
+  });
+});
+
 describe('DISCONNECT leaves the ORGANISATION`s installation untouched', () => {
   it('unbinds the identity and the installation stands', async () => {
     // The half `githubIdentityService`'s own suite does not assert, and the half a
@@ -160,41 +210,5 @@ describe('DISCONNECT leaves the ORGANISATION`s installation untouched', () => {
     await githubInstallationService.removeInstallation(`inst-${fx.workspaceId}`);
 
     expect(await githubIdentityService.getIdentityForUser(fx.ownerId)).not.toBeNull();
-  });
-});
-
-describe('⚠️ REVOKED has no producer, and the schema is the evidence', () => {
-  it('`GithubIdentity` carries no revocation column', async () => {
-    // The pane renders three states, not the design's four. This is the
-    // measurement behind that: there is nothing to read. The service's own
-    // comment says a GitHub App user-to-server token "does not expire unless the
-    // App enables 'Expire user authorization tokens'", and that were it turned
-    // on, "the fix is a substrate change HERE (persist an expiry + refresh
-    // token), not at a call site".
-    //
-    // Rendering `Needs re-auth` today would mean inventing the signal rather than
-    // reporting it. The substrate is proposed, not improvised.
-    //
-    // This case deletes itself in the commit that adds the column.
-    const columns = await adminDb.$queryRawUnsafe<{ column_name: string }[]>(
-      `select column_name from information_schema.columns where table_name = 'github_identity'`,
-    );
-    const names = columns.map((c) => c.column_name);
-    expect(names).not.toContain('revoked_at');
-    expect(names).not.toContain('token_expires_at');
-    // …and the columns that DO exist are the three the pane reads plus its keys,
-    // so this is a statement about the whole table rather than two guesses.
-    expect(names.sort()).toEqual(
-      [
-        'access_token_encrypted',
-        'avatar_url',
-        'created_at',
-        'github_login',
-        'github_user_id',
-        'id',
-        'updated_at',
-        'user_id',
-      ].sort(),
-    );
   });
 });

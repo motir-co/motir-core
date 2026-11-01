@@ -196,6 +196,10 @@ describe('1 — REFERENCE ⟷ RENAME: the story’s central claim', () => {
 // ───────────────────────────────────────────────────────────────────────────
 describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', () => {
   it('a story whose set came from its CHILDREN holds on one merge and completes on the second', async () => {
+    // ⚠️ Since MOTIR-10135 the hold on the first merge is the DELIVERY set's —
+    // the story's second linked pull request is still open — and no longer the
+    // repository set's: completion counts the linked pull requests, so a
+    // repository with none would not hold the story at all.
     const fx = await scenario('reach@example.com');
     // The repositories have to EXIST on the host for a pull request to name
     // them, so the two rows are realized against a real installation mirror.
@@ -297,11 +301,11 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
           user: { id: 4242 },
         },
       });
-    const deliver = async (repo: typeof CORE, number: number) => {
+    const open = async (repo: typeof CORE, number: number) => {
       // LINKED first — since MOTIR-3674 the `Change (KEY)` title above names the
       // story to a reader and to nothing else, so an unlinked delivery would
-      // resolve `no_work_item` and the repository-set gate below would never be
-      // reached. The link is setup; the gate assertions are unchanged.
+      // resolve `no_work_item` and the completion gates below would never be
+      // reached. The link is setup; the gate assertions follow.
       await linkPrByIdentifier({
         identifier: storyRow.identifier,
         owner: 'moooon',
@@ -311,16 +315,18 @@ describe('2 — ROLLUP ⟷ the COMPLETION GATE: is the capability reachable?', (
         baseRef: repo.defaultBranch,
       });
       await event('opened', repo, number, false);
-      return event('closed', repo, number, true);
     };
+    const merge = (repo: typeof CORE, number: number) => event('closed', repo, number, true);
 
-    expect(await deliver(CORE, 1)).toMatchObject({ outcome: 'deferred_incomplete_repo_set' });
+    await open(CORE, 1);
+    await open(AI, 2);
+    expect(await merge(CORE, 1)).toMatchObject({ outcome: 'deferred_incomplete_delivery_set' });
     // Held, not done. `implemented` since MOTIR-2999 — the delivery says the code
     // is pushed, and no build has reported for this card.
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
       'implemented',
     );
-    expect(await deliver(AI, 2)).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
+    expect(await merge(AI, 2)).toMatchObject({ outcome: 'transitioned', toStatus: 'done' });
     expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
       'done',
     );

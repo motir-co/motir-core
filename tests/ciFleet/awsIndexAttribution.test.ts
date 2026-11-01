@@ -394,24 +394,22 @@ describe('inventoryForShard routes an indexer AWS account to its own listing (MO
     };
   }
 
-  it('an indexer account with its key set lists through aws, as every AWS account does', () => {
+  it('an indexer account with the management role set lists through aws, as every AWS account does', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
-    vi.stubEnv('FLEET_SHARD_INDEXER_USE1_1_ACCESS_KEY_ID', 'AKIATEST');
-    vi.stubEnv('FLEET_SHARD_INDEXER_USE1_1_SECRET_ACCESS_KEY', 'secret');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::576360162297:role/motir-add-shard');
     expect(inventoryForShard(shard('code_graph_index'))?.provider).toBe('aws');
     expect(inventoryForShard(shard('ci_runner'))?.provider).toBe('aws');
   });
 
-  it('an indexer account with no key throws naming the variables, so the pass alerts and skips it', () => {
+  it('an indexer account with no management credential throws naming the variables, so the pass alerts and skips it', () => {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
-    vi.stubEnv('FLEET_SHARD_INDEXER_USE1_1_ACCESS_KEY_ID', '');
-    vi.stubEnv('FLEET_SHARD_INDEXER_USE1_1_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ACCESS_KEY_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_SECRET_ACCESS_KEY', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', '');
     expect(() => inventoryForShard(shard('code_graph_index'))).toThrow(
       OrchestratorNotConfiguredError,
     );
-    expect(() => inventoryForShard(shard('code_graph_index'))).toThrow(
-      /FLEET_SHARD_INDEXER_USE1_1_ACCESS_KEY_ID/,
-    );
+    expect(() => inventoryForShard(shard('code_graph_index'))).toThrow(/AWS_ORG_ADMIN_ROLE_ARN/);
   });
 
   it('with the fake orchestrator selected nothing reads EC2', () => {

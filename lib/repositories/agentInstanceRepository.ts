@@ -427,25 +427,23 @@ export const agentInstanceRepository = {
   },
 
   /**
-   * The org's running cap count (MOTIR-9374): its instances in a running state,
-   * UNION the instances it holds a fleet slot for (`admittingIds`) whose row has
-   * not moved yet — a create whose row is not inserted, or a wake still
-   * `hibernated`. ONE statement, so a racer that moves its row between two reads
-   * can be neither missed nor counted twice; two wakes one below the figure
-   * cannot both pass the guard that holds the fleet admission lock.
+   * The org figure's count (MOTIR-9954): its LIVE instances, running or
+   * hibernating (any state, not deleted), UNION the instances it holds a fleet
+   * slot for (`admittingIds`) whose row is not inserted yet — a create in flight.
+   * A held slot whose row exists is the same id, so it counts once. ONE statement,
+   * so two creates one below the figure cannot both pass the guard that holds the
+   * fleet admission lock.
    */
-  async countRunningOrAdmitting(
+  async countLiveOrAdmitting(
     organizationId: string,
     admittingIds: string[],
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const states = [...RUNNING_STATES];
     const rows = await tx.$queryRaw<Array<{ n: number }>>`
       SELECT COUNT(*)::int AS "n" FROM (
         SELECT "id" FROM "agent_instance"
         WHERE "organization_id" = ${organizationId}
           AND "deleted_at" IS NULL
-          AND "state"::text = ANY(${states}::text[])
         UNION
         SELECT unnest(${admittingIds}::text[])
       ) AS "counted"
@@ -459,6 +457,27 @@ export const agentInstanceRepository = {
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     return tx.agentInstance.count({ where: { ownerId, ...LIVE } });
+  },
+
+  /**
+   * How many of `ownerIds` hold at least `figure` live instances in ANY project
+   * (MOTIR-9660) — the per-user cap's count ({@link countLiveForOwnerEverywhere},
+   * the same live predicate), taken for every owner at once. Only the number:
+   * never who. The caller resolves the org's members; this reads
+   * `agent_instance` alone, under its system read arm, so no org GUC is needed.
+   */
+  async countOwnersAtLiveFigure(
+    ownerIds: readonly string[],
+    figure: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (ownerIds.length === 0) return 0;
+    const rows = await tx.agentInstance.groupBy({
+      by: ['ownerId'],
+      where: { ownerId: { in: [...ownerIds] }, ...LIVE },
+      _count: { _all: true },
+    });
+    return rows.filter((row) => row._count._all >= figure).length;
   },
 
   /** Live instances in any of `states`, oldest state change first — the sweep's discovery. */

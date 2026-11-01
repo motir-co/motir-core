@@ -737,9 +737,6 @@
       "pickProjectFirst": "先にプロジェクトを選択してください。",
       "unknownRelationship": "不明な関係です。",
       "pickIssueToLink": "リンクする作業項目を選択してください。",
-      "missingDlqId": "デッドレター ID がありません。",
-      "ownerOnlyReplay": "ジョブを再実行できるのはワークスペースのマネージャーだけです。",
-      "dlqGone": "そのデッドレターエントリは存在しなくなりました。",
       "workspaceNameEmpty": "ワークスペース名を空にすることはできません。",
       "useLeaveToRemoveSelf": "自分を削除するには「退出」を使用してください。",
       "cannotRemoveLastMember": "最後のメンバーは削除できません。",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "ワークスペースのセキュリティ設定を変更できるのは、そのワークスペースのオーナーと管理者だけです。",
       "refused": "処理できませんでした: {reason}",
       "organizationClosing": "この組織は削除が予定されているため、閲覧のみになっています。削除を取り消せるのはオーナーだけです。",
-      "memberProjectsFailed": "このメンバーのプロジェクトを読み込めませんでした。",
-      "systemReplayWorkspaceRow": "そのデッドレターはワークスペースに属しています。そのワークスペースの「デッドレター」タブから再実行してください。",
-      "systemReplayOperatorOnly": "システムのデッドレターを再実行できるのはプラットフォーム運用者のみです。"
+      "memberProjectsFailed": "このメンバーのプロジェクトを読み込めませんでした。"
     },
     "links": {
       "notFound": "その作業項目は存在しなくなりました。",
@@ -1958,6 +1953,8 @@
       "translation": "翻訳",
       "rules": "ルール",
       "repositories": "リポジトリ",
+      "environment": "環境",
+      "production": "本番",
       "monitoring": "監視",
       "approvals": "承認",
       "bugs": "バグ"
@@ -2065,13 +2062,12 @@
       "nav": {
         "group": {
           "general": "一般",
-          "access": "アクセス",
-          "operations": "運用"
+          "access": "アクセス"
         },
         "workspace": "ワークスペース",
         "security": "セキュリティ",
         "roles": "ロールと権限",
-        "jobs": "ジョブの実行"
+        "publicAddress": "公開アドレス"
       }
     },
     "name": {
@@ -2200,7 +2196,58 @@
       "inviteNoProjectsWarning": "マネージャーがプロジェクトに追加するまで、何も開けません。",
       "inviteJoinsAsMember": "メンバーとして参加します。ロールは承諾後に変更できます。",
       "errorInviteProjects": "参加できないプロジェクトが含まれています。もう一度選択してください。",
-      "errorInviteNotAllowed": "この招待は送信できません。限定アクセスで招待できるのはワークスペースのマネージャーだけです。"
+      "errorInviteNotAllowed": "この招待は送信できません。限定アクセスで招待できるのはワークスペースのマネージャーだけです。",
+      "pending": {
+        "heading": "保留中の招待",
+        "invitationColumn": "招待",
+        "deliveryColumn": "配信",
+        "invitedBy": "{name} が招待、{sent}",
+        "invitedByFormer": "以前のメンバーが招待、{sent}",
+        "expiresIn": "{count, plural, other {あと # 日で期限切れ}}",
+        "expiresToday": "今日で期限切れ",
+        "expiresOn": "{date} に期限切れ",
+        "resend": "再送信",
+        "resendLabel": "{email} に招待を再送信",
+        "resendScopeTooltip": "限定の招待を再送信できるのはマネージャーだけです",
+        "resentToast": "{email} に新しい招待を送信しました",
+        "refusalRateLimited": "上限に達しました：1 アドレスにつき 1 時間に 3 件までです。",
+        "refusalRateLimitedBody": "しばらくしてから、もう一度お試しください。",
+        "refusalAlreadyMember": "この人はすでにワークスペースに参加しています。",
+        "refusalNotAllowed": "この招待は再送信できません。",
+        "refusalNoLongerPending": "この招待はもう保留中ではありません。",
+        "showAll": "保留中の招待をすべて表示（{count} 件）",
+        "showFewer": "表示を減らす",
+        "delivery": {
+          "queued": {
+            "label": "送信待ち",
+            "helper": "送信を待っています"
+          },
+          "accepted": {
+            "label": "受付済み",
+            "helper": "メールプロバイダーが受け付けました"
+          },
+          "delivered": {
+            "label": "配信済み",
+            "helper": "受信者のメールサーバーに届きました"
+          },
+          "bounced": {
+            "label": "バウンス",
+            "helper": "アドレスに拒否されました"
+          },
+          "complained": {
+            "label": "苦情",
+            "helper": "迷惑メールとして報告されました"
+          },
+          "delayed": {
+            "label": "遅延",
+            "helper": "プロバイダーが再試行しています"
+          },
+          "failed": {
+            "label": "失敗",
+            "helper": "送信できませんでした"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "退出できません",
@@ -2706,43 +2753,6 @@
         "title": "公開ネームスペースが設定されていません",
         "description": "このデプロイにはテナントのベースドメインが設定されていないため、まだサブドメインを取得できません。運用担当者が MOTIR_PUBLIC_TENANT_DOMAIN を設定する必要があります。"
       },
-      "subdomain": {
-        "title": "ワークスペースのサブドメイン",
-        "subtitle": "ワークスペース全体で 1 つのアドレスです。ワークスペース内のすべての公開プロジェクトがその配下に表示されます。",
-        "label": "サブドメイン",
-        "helper": "プロジェクトは {preview} に表示されます。小文字、数字、ハイフンを使用し、3〜63 文字で入力してください。",
-        "claim": "サブドメインを取得",
-        "claimable": "後から名前を変更できますが、回数には制限があります。",
-        "active": "有効",
-        "alias": "ここにリダイレクト",
-        "aliasShort": "リダイレクト",
-        "copy": "アドレスをコピー",
-        "copied": "アドレスをコピーしました",
-        "open": "新しいタブで開く",
-        "rename": "名前を変更",
-        "renamesLeft": "{count, plural, =0 {名前の変更はもうできません。} other {名前の変更はあと # 回できます。}}",
-        "readOnly": "ワークスペースのオーナーまたは管理者が管理しています。",
-        "none": "まだサブドメインを取得していません。"
-      },
-      "rename": {
-        "title": "このサブドメインの名前を変更しますか？",
-        "warningTitle": "古いアドレスは引き続き機能し、解放されることはありません。",
-        "warningBody": "{old} は恒久的にここへリダイレクトされ、他の誰も（後からあなた自身も）取得できなくなります。",
-        "remaining": "今回の変更後、名前の変更はあと {count, plural, other {# 回}}できます。",
-        "cancel": "キャンセル",
-        "confirm": "名前を変更"
-      },
-      "release": {
-        "remove": "削除",
-        "title": "{hostname} を削除しますか？",
-        "lead": "{count, plural, other {次の # 個のアドレスにアクセスできなくなります:}}",
-        "warningTitle": "{count, plural, other {これらの名前は永久に保持され、あなたを含め誰も再取得できません。}}",
-        "warningBody": "Motir は解放されたすべての名前を恒久的にネームスペースから除外するため、あなたのワークスペースを指していたリンクを他のワークスペースが引き継ぐことはありません。",
-        "renamesAfter": "再びサブドメインを取得した場合、名前の変更は{count, plural, =0 {できません} other {あと # 回できます}}。解放しても回数は戻りません。",
-        "fallback": "公開プロジェクトは {url} に戻り、再び {site} に表示されます。",
-        "cancel": "キャンセル",
-        "confirm": "サブドメインを削除"
-      },
       "domains": {
         "title": "独自ドメイン",
         "subtitle": "所有しているドメインからこのプロジェクトを配信します。",
@@ -2831,17 +2841,6 @@
         },
         "lastChecked": "最終確認: {when}",
         "error": "うまくいきませんでした。しばらくしてからもう一度お試しください。"
-      },
-      "error": {
-        "reserved": "{label} は予約されています。Motir は、自社のホスト用の名前と、それと誤認されうる名前をいくつか確保しています。",
-        "structurallyReserved": "{label} は予約されています。アンダースコア、xn--、motir- で始まる名前は、Motir または DNS 自体のものです。",
-        "tooShort": "短すぎます。サブドメインは 3 文字以上です。",
-        "tooLong": "長すぎます。サブドメインは 63 文字以下です。",
-        "badGrammar": "小文字、数字、ハイフンのみを使用し、先頭と末尾は英字または数字にしてください。",
-        "taken": "{label} はすでに使用されています。名前変更前のサブドメインも名前を保持するため、もう使われていないワークスペースのものである可能性があります。",
-        "capReached": "このワークスペースの名前変更の回数をすべて使い切りました。アドレスはこれ以上変更できません。",
-        "forbidden": "このアドレスを変更できるのはワークスペースのオーナーまたは管理者だけです。",
-        "generic": "うまくいきませんでした。しばらくしてからもう一度お試しください。"
       }
     },
     "codeAccess": {
@@ -2966,86 +2965,6 @@
       "heroOverviewSubheading": "公開ページで訪問者に表示されるキャッチコピー、タグ、README です。",
       "editOnPublicPage": "公開ページを編集",
       "heroOverviewNote": "「設定」›「公開ページ」が開きます。プロジェクトを公開する前に書いておくこともできます。"
-    },
-    "jobs": {
-      "title": "ジョブの実行",
-      "subtitle": "このワークスペースのバックグラウンドジョブです（招待やパスワードリセットの配信、スケジュールされた処理など）。失敗したジョブはデッドレターキューに入り、オーナーが再実行できます。",
-      "tab": {
-        "runs": "最近の実行",
-        "dlq": "デッドレター",
-        "system": "システム"
-      },
-      "tabNavLabel": "ジョブ実行の表示",
-      "dlqBadgeLabel": "デッドレターキューに {count} 件",
-      "filterGroupLabel": "ステータスで絞り込む",
-      "filter": {
-        "all": "すべて",
-        "succeeded": "成功",
-        "failed": "失敗",
-        "running": "実行中",
-        "abandoned": "中止"
-      },
-      "runsTableCaption": "バックグラウンドジョブの実行",
-      "col": {
-        "status": "ステータス",
-        "delivery": "配信",
-        "function": "関数",
-        "event": "イベント",
-        "attempts": "試行回数",
-        "started": "開始",
-        "duration": "所要時間",
-        "failure": "失敗内容",
-        "details": "詳細",
-        "firstFailed": "初回失敗",
-        "lastFailed": "最終失敗",
-        "replayed": "再実行",
-        "actions": "操作"
-      },
-      "view": "表示",
-      "runDetailTitle": "実行の詳細",
-      "dlqTableCaption": "デッドレターキュー",
-      "replay": "再実行",
-      "replayTooltip": "ジョブを再実行できるのはワークスペースのマネージャーだけです",
-      "alreadyReplayedToastTitle": "すでに再実行済みです",
-      "alreadyReplayedToastDesc": "このエントリは以前に再実行されています。新たにキューに追加されたものはありません。",
-      "replayedToastTitle": "ジョブを再実行しました",
-      "replayedToastDesc": "元のイベントを再送信しました。",
-      "replayErrorTitle": "再実行できませんでした",
-      "dlqDetailTitle": "デッドレターの詳細",
-      "dlqDetailDesc": "失敗内容と元のイベントのペイロード（そのまま再実行可能）です。",
-      "failureHeading": "失敗内容",
-      "eventPayloadHeading": "イベントのペイロード",
-      "pageLabel": "{page} ページ",
-      "previous": "前へ",
-      "next": "次へ",
-      "refresh": "更新",
-      "dlqEmptyTitle": "デッドレターキューは空です",
-      "dlqEmptyDesc": "すべてのジョブが成功したか、再試行中です。",
-      "runsEmptyTitle": "ジョブの実行はまだありません",
-      "runsEmptyDesc": "バックグラウンドジョブが実行されると、ここに表示されます。",
-      "delivery": {
-        "accepted": "受付済み",
-        "delivered": "配信済み",
-        "bounced": "バウンス",
-        "complained": "苦情",
-        "delayed": "遅延"
-      },
-      "deliveryNone": "配信記録なし",
-      "deliveryDetail": {
-        "heading": "配信",
-        "state": "状態",
-        "messageId": "メッセージ ID",
-        "recipient": "受信者",
-        "template": "テンプレート",
-        "lastEvent": "最終イベント",
-        "never": "プロバイダーからのイベントはまだありません"
-      },
-      "systemDlqTitle": "ワークスペースのないデッドレター",
-      "systemDlqSummary": "{waiting} 件が再実行待ち · 過去 7 日間に {replayed} 件を再実行",
-      "systemDlqTableCaption": "システムのデッドレター",
-      "systemDlqEmptyTitle": "システムのデッドレターはありません",
-      "systemDlqEmptyDesc": "ワークスペースのないジョブはすべて成功したか、まだ再試行中です。",
-      "systemRunsTitle": "システム実行"
     },
     "account": {
       "eyebrow": "アカウント設定",
@@ -4203,7 +4122,9 @@
         "hosted-agent": "ホスト型の実行で使用するモデルは、このプロジェクトでホスト型の実行を開始できるユーザーに表示されます。確認が必要な場合はプロジェクト管理者に依頼してください。",
         "translation": "このプロジェクトの作業内容が読み手ごとに翻訳されるかどうかは、プロジェクトの作業項目を閲覧できる人に表示されます。確認が必要な場合は、プロジェクト管理者にお問い合わせください。",
         "automation": "プロジェクトの自動化はプロジェクト管理者が管理しています。ルールの変更が必要な場合は管理者に依頼してください。",
-        "monitoring": "このプロジェクトのエラー監視ツールとの接続は、連携を管理できるユーザーが管理しています。Sentry の接続や再接続が必要な場合はプロジェクト管理者に依頼してください。"
+        "monitoring": "このプロジェクトのエラー監視ツールとの接続は、連携を管理できるユーザーが管理しています。Sentry の接続や再接続が必要な場合はプロジェクト管理者に依頼してください。",
+        "environment": "リポジトリの環境値は、このプロジェクトを閲覧できる人に表示されます。確認が必要な場合は、プロジェクト管理者にお問い合わせください。",
+        "production": "リポジトリのリリースは、このプロジェクトを閲覧できる人に表示されます。確認が必要な場合は、プロジェクト管理者にお問い合わせください。"
       }
     },
     "organization": {
@@ -4221,10 +4142,6 @@
         "security": "セキュリティ",
         "usage": "使用量とコスト",
         "billing": "請求とプラン"
-      },
-      "jobRunsFoldIn": {
-        "title": "ジョブの実行",
-        "subtitle": "このワークスペースのバックグラウンド処理です。実行されたもの、失敗したもの、デッドレターキューで待機しているものを確認できます。"
       }
     },
     "gitAccounts": {
@@ -4234,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "接続済み"
+        "connected": "接続済み",
+        "needsReauth": "再認証が必要"
       },
       "connectedOn": "{date} に接続",
       "connect": "GitHub を接続",
       "disconnect": "接続を解除",
+      "reconnect": "再接続",
       "empty": {
         "title": "接続された Git アカウントはありません",
         "description": "接続すると、Motir がプロジェクトのリポジトリにあなたを招待し、あなたの作業に署名できるようになります。読み取るのは公開プロフィールだけで、コードへのアクセス権は付与されません。"
+      },
+      "reauth": {
+        "title": "GitHub アカウントを再接続してください。",
+        "body": "GitHub がこのサインインを受け付けなくなったため、Motir は GitHub 上のあなたを確認できなくなりました。アカウントのその他の設定は変わっていません。"
       },
       "noInstallation": {
         "title": "あなたのアカウントは接続済みですが、組織のアカウントは未接続です。",
@@ -4274,6 +4197,282 @@
       "saveError": "問題が発生しました。もう一度お試しください。",
       "saveForbidden": "このプロジェクトのバグの登録先を変更する権限がなくなりました。",
       "folderGone": "そのフォルダーは存在しなくなりました。別のフォルダーを選択してください。"
+    },
+    "environment": {
+      "title": "環境",
+      "lede": "アプリが実行時に読み込む値です。環境ごとに一度設定すると、Motir が次回のデプロイ時にアプリへ渡します。",
+      "repositoryLabel": "リポジトリ",
+      "role": {
+        "web": "Web アプリ",
+        "api": "API",
+        "mobile": "モバイルアプリ",
+        "shared": "共有コード",
+        "infra": "インフラ",
+        "other": "その他"
+      },
+      "tablistLabel": "環境",
+      "tab": {
+        "production": "本番",
+        "preview": "プレビュー",
+        "release": "リリース"
+      },
+      "column": {
+        "name": "名前",
+        "value": "値"
+      },
+      "set": "設定済み",
+      "secretHidden": "シークレット · 値は非表示",
+      "edit": "編集",
+      "replace": "置き換え",
+      "delete": "削除",
+      "editAria": "{name} を編集",
+      "replaceAria": "{name} を置き換え",
+      "deleteAria": "{name} を削除",
+      "saving": "保存中",
+      "add": {
+        "heading": "値を追加",
+        "namePlaceholder": "NAME",
+        "valuePlaceholder": "値",
+        "secret": "シークレット",
+        "save": "保存",
+        "helper": "シークレットは置き換えや削除はできますが、二度と表示されません。あなたにも、ほかの誰にも。"
+      },
+      "error": {
+        "nameRequired": "名前を入力してください。",
+        "duplicate": "{name} は {environment} ですでに設定されています。一覧から編集してください。",
+        "invalidName": "英字、数字、アンダースコアを使用し、数字で始めないでください。",
+        "reserved": "{name} は予約されています。PORT、DATABASE_URL、MOTIR_* の名前は Motir が設定します。別の名前を選んでください。"
+      },
+      "saved": {
+        "secret": "{name} をシークレットとして保存しました。今後、値は表示されません。",
+        "plain": "{name} を保存しました。"
+      },
+      "replaceFlow": {
+        "placeholder": "新しい値",
+        "aria": "{name} の新しい値",
+        "helper": "現在の値は非表示のままです。保存すると、次回のデプロイで置き換わります。",
+        "cancel": "キャンセル"
+      },
+      "deleteDialog": {
+        "title": "{environment} から {name} を削除しますか？",
+        "body": "次回のデプロイから、アプリは {environment} で {name} を受け取らなくなります。{count, plural, other {{others} は独自の値を保持します。}}この操作は元に戻せません。",
+        "confirm": "削除",
+        "cancel": "キャンセル"
+      },
+      "empty": {
+        "title": "{environment} にはまだ値がありません",
+        "production": "本番のアプリがこれらを受け取ります。下から最初の値を追加してください。",
+        "preview": "各プルリクエストのプレビューがこれらを受け取ります。下から最初の値を追加してください。",
+        "release": "トレインがビルドするリリースがこれらを受け取ります。下から最初の値を追加してください。"
+      },
+      "loading": "値を読み込み中…",
+      "loadError": {
+        "title": "値を読み込めませんでした",
+        "body": "変更は行われていません。しばらくしてから再試行してください。"
+      },
+      "retry": "再試行",
+      "saveError": "{name} を保存できませんでした。変更は行われていません。",
+      "deleteError": "{name} を削除できませんでした。値は設定されたままです。",
+      "readOnly": {
+        "note": "これらの値は閲覧できます。変更できるのはプロジェクト管理者だけです。",
+        "tooltip": "環境値を変更できるのはプロジェクト管理者だけです。"
+      },
+      "changes": {
+        "heading": "最近の変更 · {environment}",
+        "added": "追加",
+        "replaced": "置き換え",
+        "deleted": "削除",
+        "secret": "シークレット",
+        "unknownActor": "以前のメンバー",
+        "loadError": "最近の変更を読み込めませんでした。",
+        "empty": "まだ変更はありません。この環境への変更はすべてここに表示されます。誰がいつ変更したかは表示されますが、値は表示されません。"
+      },
+      "notFound": {
+        "title": "リポジトリが見つかりません",
+        "body": "Motir はこのリポジトリの環境を保持していません。Motir がホストしているプロジェクトのリポジトリを選んでください。",
+        "back": "環境に戻る"
+      }
+    },
+    "production": {
+      "title": "本番",
+      "lede": "このプロジェクトの各アプリで何が公開中か、直近のマージで何が起きたか、問題のあるリリースを元に戻す方法を確認できます。",
+      "repositoryLabel": "リポジトリ",
+      "role": {
+        "web": "Web アプリ",
+        "api": "API",
+        "mobile": "モバイルアプリ",
+        "shared": "共有コード",
+        "infra": "インフラ",
+        "other": "その他"
+      },
+      "current": {
+        "eyebrow": "本番で稼働中"
+      },
+      "state": {
+        "building": "ビルド中",
+        "live": "公開中",
+        "failed": "失敗",
+        "replaced": "置き換え済み",
+        "rolledBack": "ロールバック済み"
+      },
+      "trigger": {
+        "merge": "#{number} のマージ",
+        "mergeDefault": "デフォルトブランチへのマージ",
+        "redeploy": "再デプロイ · 本番設定の変更",
+        "rollback": "ロールバックで復元 · {name}",
+        "rollbackUnnamed": "ロールバックで復元",
+        "ref": "{ref} のデプロイ · {name}",
+        "refUnnamed": "{ref} のデプロイ"
+      },
+      "address": {
+        "newTab": "(新しいタブで開きます)",
+        "copy": "コピー",
+        "copied": "コピーしました",
+        "copyAria": "{address} をコピー",
+        "none": "アドレスはまだありません。<link>公開アドレス</link>でワークスペースの motir.site アドレスを取得してください。"
+      },
+      "rollback": {
+        "action": "ロールバック",
+        "helper": "本番をこのひとつ前のリリースに戻します。",
+        "unavailable": "戻せる以前のリリースはまだありません。"
+      },
+      "history": {
+        "heading": "リリース履歴",
+        "more": "さらにリリースを表示",
+        "moreError": "リリースをさらに読み込めませんでした。もう一度お試しください。"
+      },
+      "failedNewer": "最新のリリースが失敗したため、稼働中の内容は変わっていません。{commit} は引き続き公開中です。",
+      "reason": {
+        "build": "デプロイ前にビルドが失敗しました。",
+        "migration": "マイグレーションが失敗しました。",
+        "migrationExit": "マイグレーションが終了コード {code} で失敗しました。",
+        "migrationTimedOut": "マイグレーションがタイムアウトしました。",
+        "superseded": "別のリリースが進行中だったため、このリリースは開始されませんでした。",
+        "deploy": "トラフィックを受ける前にデプロイが失敗しました。"
+      },
+      "dialog": {
+        "title": "{repository} をロールバックしますか?",
+        "leaving": "戻す前",
+        "returning": "戻し先",
+        "body": "本番は {address} で、そのリリースのコードと環境値に戻ります。データベーススキーマは元に戻りません。新しいリリースが実行したマイグレーションは適用されたままです。",
+        "bodyNoAddress": "本番は、そのリリースのコードと環境値に戻ります。データベーススキーマは元に戻りません。新しいリリースが実行したマイグレーションは適用されたままです。",
+        "confirm": "ロールバック",
+        "submitting": "ロールバック中…",
+        "cancel": "キャンセル",
+        "error": "ロールバックは完了しませんでした。{commit} が引き続き本番で稼働しています。もう一度お試しください。",
+        "retry": "再試行"
+      },
+      "refusal": {
+        "noPreviousRelease": "戻せる以前のリリースはありません。",
+        "releaseInProgress": "リリースが進行中です。完了してからロールバックしてください。",
+        "conflict": "ロールバック中に本番が変更されました。これを閉じて、現在公開中の内容を確認してください。",
+        "forbidden": "ロールバックできるのはプロジェクト管理者だけです。",
+        "notFound": "このリポジトリは利用できなくなりました。"
+      },
+      "readOnly": {
+        "note": "すべてのリリースを閲覧できます。ロールバックできるのはプロジェクト管理者だけです。"
+      },
+      "empty": {
+        "title": "本番にはまだ何もありません",
+        "body": "プルリクエストを main にマージすると、Motir がビルドしてここで公開し、アドレスを表示します。"
+      },
+      "loading": "リリースを読み込み中…",
+      "loadError": {
+        "title": "リリースを読み込めませんでした",
+        "body": "本番には影響ありません。しばらくしてからもう一度お試しください。"
+      },
+      "retry": "再試行",
+      "notFound": {
+        "title": "リポジトリが見つかりません",
+        "body": "Motir が本番を運用するのは、Motir がホストしているリポジトリだけです。このプロジェクトのリポジトリを選んでください。",
+        "back": "本番に戻る"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "公開アドレス",
+        "claimed": "{host} — ワークスペースの唯一の名前です。",
+        "none": "まだ名前が取得されていません。",
+        "manage": "管理 →",
+        "claim": "名前を取得 →"
+      },
+      "title": "公開アドレス",
+      "subtitle": "ワークスペースが応答する唯一の名前です。",
+      "readOnly": "変更できるのはワークスペースのオーナーと管理者だけです。",
+      "none": "まだ名前が取得されていません。",
+      "unavailable": {
+        "title": "このサーバーでは公開アドレスが設定されていません",
+        "description": "ワークスペースが名前を取得するには、運用担当者が MOTIR_PUBLIC_TENANT_DOMAIN を設定する必要があります。"
+      },
+      "field": {
+        "label": "名前",
+        "renameLabel": "新しい名前",
+        "hint": "小文字、数字、単独のハイフン。{min}〜{max} 文字。ワークスペースの名前は 1 つだけです。",
+        "preview": "閲覧者は {host} であなたを見つけます"
+      },
+      "claim": "名前を取得",
+      "refusal": {
+        "tooShort": "{min} 文字以上にしてください。",
+        "badGrammar": "小文字、数字、ハイフンのみ使用できます。",
+        "doubleHyphen": "ハイフンを 2 つ続けることはできません。これはアプリケーションのアドレス用に予約されています。",
+        "tooLong": "{max} 文字以内にしてください。",
+        "taken": "{host} は使用されています。別の名前を試してください。",
+        "reserved": "「{label}」は予約されています。別の名前を選んでください。",
+        "quarantined": "{host} は最近解放され、{date} まで保留されます。その日以降は誰でも取得できます。",
+        "generic": "名前を保存できませんでした。もう一度お試しください。"
+      },
+      "row": {
+        "live": "公開中",
+        "copy": "アドレスをコピー",
+        "copied": "アドレスをコピーしました",
+        "open": "新しいタブで開く"
+      },
+      "rename": "名前を変更",
+      "release": "解放",
+      "lock": "{date} に再び名前を変更できます。名前の変更と解放はそれぞれ 1 回の変更として数えられ、30 日に 1 回までです。",
+      "lockShort": "{date} に再び名前を変更できます。",
+      "review": "確認",
+      "cancel": "キャンセル",
+      "confirm": {
+        "renameTitle": "{host} に名前を変更しますか？",
+        "releaseTitle": "{host} を解放しますか？",
+        "stops": "{host} はただちに応答しなくなります。",
+        "returnsOn": "{date} から誰でも取得できるようになります。",
+        "returnsNow": "すぐに誰でも取得できます。保持期間が 24 時間未満だったためです。",
+        "noRedirectRename": "旧アドレスから新アドレスへのリダイレクトはありません。共有したリンクを更新してください。",
+        "noRedirectRelease": "リダイレクトはありません。公開プロジェクトは motir.co のアドレスのままです。",
+        "lockAfterRename": "{date} まで再び名前を変更することはできません。",
+        "lockAfterRelease": "新しい名前はすぐに取得できます。その後の次の変更は {date} から可能です。",
+        "rename": "名前を変更",
+        "renaming": "名前を変更中…",
+        "release": "名前を解放",
+        "releasing": "解放中…"
+      },
+      "toast": {
+        "claimed": "{host} を取得しました",
+        "renamed": "{host} に名前を変更しました",
+        "renamedBody": "{old} は応答しなくなりました。",
+        "released": "{host} を解放しました",
+        "refusedTitle": "名前は変更されませんでした",
+        "refusedLimit": "{date} に再び変更できます。",
+        "refusedTaken": "{host} はたった今使用されました。別の名前を試してください。",
+        "refusedQuarantined": "{host} は {date} まで保留されています。"
+      },
+      "released": {
+        "held": "{host} を解放しました。{date} まで保留され、その後は誰でも取得できます。",
+        "free": "{host} を解放しました。今すぐ誰でも取得できます。",
+        "lock": "今すぐ名前を取得できます。その後の次の変更は {date} から可能です。"
+      },
+      "loadError": "アドレスを読み込めませんでした。",
+      "retry": "再試行",
+      "echo": {
+        "title": "ワークスペースのアドレス",
+        "claimedSub": "ワークスペースが応答する名前です。",
+        "noneSub": "ワークスペースにはまだ名前がありません。",
+        "projectPage": "このプロジェクトの公開ページは {url} にあります。",
+        "change": "ワークスペース設定で変更 →",
+        "claim": "ワークスペースの名前を取得 →"
+      }
     }
   },
   "boards": {
@@ -6501,7 +6700,7 @@
       "yourPlanTitle": "現在のプラン",
       "needMore": {
         "title": "クレジットが足りませんか？",
-        "body": "組織が {plan} の月 {credits} クレジットを超えて使う場合は、利用量を見積もってください。計算機が見積もりに合わせたより大きなクレジットプールをご案内します。",
+        "body": "組織が {plan} の月 {credits} クレジットを超えて使う場合は、利用量を見積もってください。計算機が見積もりに合わせ、自社の AWS アカウントを備えたより大きなクレジットプールをご案内します。",
         "bodyHeld": "組織が月 {credits} クレジットを超えるようになったら、利用量を見積もってください。計算機が見積もりに合わせたより大きなプールをご案内します。",
         "action": "計算機を開く"
       },
@@ -6509,10 +6708,6 @@
       "recommended": "おすすめ",
       "creditsAllotment": "月 {n} クレジット",
       "creditsAllotmentOneTime": "{n} クレジット · 1 回限り",
-      "ladder": {
-        "first": "どのプランもクレジット単価は同じ",
-        "multiple": "{plan} の {multiple} 倍のクレジット · クレジット単価は同じ"
-      },
       "perMoEquiv": "月額 ${n}",
       "annualSub": "年払い · 年額 ${yr}",
       "annualSave": "年 ${n} お得",
@@ -6633,6 +6828,8 @@
         "caption": "見積もりは月 {low}〜{high} クレジットです。このプールは範囲の上限に合わせているため、不足することはありません。これは見積もりで、見積もりが変われば変わります。",
         "captionCurrent": "これは購入したプールで、月 {low}〜{high} クレジットの見積もりから決まりました。後で見積もりが下がっても、保有中のプランの価格は変わりません。",
         "priceEstimate": "見積もりから算出",
+        "ownAccounts": "組織専用の AWS アカウント 3 つ：CI ランナー用、エージェント実行用、インデクサーとホスト型エージェントの共用で、いずれもこのプールに合わせた規模",
+        "sharedUntilGranted": "各アカウントのクォータが承認されるまでは、Motir の共有プール上で Max の上限で動作します",
         "basis": {
           "monthly": "{plan} の月額料金を基準に、そのプールを超える分のクレジットはトップアップ料金から割り引いて計算します。",
           "annual": "{plan} の年額払いと同じクレジット単価で計算します。請求は年に一度で、プールは引き続き月ごとに付与されます。"
@@ -6676,9 +6873,12 @@
         "lowLabel": "下限",
         "highLabel": "上限",
         "runCategoriesLabel": "ランナーが使うモデル",
-        "runCategoriesHelp": "1〜3 個選んでください。実行分は選んだカテゴリに均等に分けられます。1 つなら 100%、2 つならそれぞれ 50%、3 つならそれぞれ 33% です。モデルを選ぶ必要はありません。各カテゴリには、そのカテゴリで提供されるモデルが例として表示されます。",
+        "runCategoriesHelp": "1～3 個選んでください。2 個または 3 個選んだ場合は、下でそれぞれの実行の割合をドラッグして設定します。初期値は均等です。モデルを選ぶことはありません。各カテゴリには対応するモデルが例として表示されます。",
         "categoryShare": "実行分の {share}",
         "categoryExamples": "例：{models}",
+        "sharesLabel": "各カテゴリの実行の割合",
+        "sharesHelp": "割合をドラッグすると、他のカテゴリが差分を均等に増減するため、合計は常に 100% になります。カテゴリを追加または削除すると、均等な配分に戻ります。",
+        "shareValue": "{category}: 実行の {share}%",
         "submit": "クレジットを見積もる"
       },
       "categories": {
@@ -6687,7 +6887,7 @@
       },
       "split": {
         "one": "カテゴリが 1 つのため、実行分の全体が {category} になります。",
-        "even": "実行分を {categories} に均等に分けています（各 {shares}）。"
+        "shares": "実行の配分は {shares} です。"
       },
       "result": {
         "idle": "見積もりは依頼するまで行われません。範囲を入力し、カテゴリを 1〜3 個選んで、「クレジットを見積もる」を選択してください。",
@@ -6705,6 +6905,7 @@
         "largestPoolLabel": "最大のクレジットプール",
         "largestPool": "見積もりが最大のプールを超えているため、そのプール（{plan}）に、残りをチャージで補う形をご案内します。",
         "largestPoolTopUp": "残りの月あたり約 {excess} クレジットはチャージで補います：{unitCredits} クレジット × {units}、月あたり約 ${price} です。",
+        "regularWithTopUps": "見積もりが {plan} の月 {credits} クレジットを超えているため、{plan} に、残りをチャージで補う形をご案内します。",
         "aboveTopRung": "これは最大の通常プランの月 {ceiling} クレジットを超えており、現在はより大きなプールを利用できないため、超過分はクレジットのチャージで補います。",
         "upgradeNote": "期間の途中でのアップグレードは、期間の残り日数に応じた料金になります。請求の前に金額が表示されます。",
         "goToPlan": "このプランを見る"
@@ -6790,6 +6991,156 @@
     "internalBilling": {
       "badge": "社内請求",
       "note": "この組織は顧客とまったく同じように請求され、その後補填されます。以下の数値はすべて実際のもので、残高は差し引きゼロになります。"
+    },
+    "fleetUse": {
+      "title": "フリートの利用状況",
+      "lead": "プランで同時に実行できる数、いま実行中のもの、待機中のもの",
+      "yourPlan": "プラン：",
+      "planNotRead": "プランを読み取れませんでした",
+      "noPlanLimits": "プランの上限なし",
+      "loading": "読み込み中…",
+      "label": {
+        "agentRunsInParallel": "並列のエージェント実行",
+        "agentsInOrg": "組織あたりのホスト型エージェント",
+        "agentsPerPerson": "1 人あたりのホスト型エージェント",
+        "ciJobsInFlight": "進行中の CI ジョブ"
+      },
+      "explain": {
+        "agentRunsInParallel": "同時に実行されるホスト型エージェントのジョブです。上限を超えた分は待機します。",
+        "agentsInOrg": "組織全体のアクティブなホスト型エージェントです（実行中・スリープ中を含む）。上限を超えると新規作成は拒否され、待機しません。",
+        "agentsPerPerson": "1 人が持てるアクティブなホスト型エージェントです。上限を超えると作成は拒否され、待機しません。",
+        "ciJobsInFlight": "Motir のランナーで同時に進行する CI ジョブです。上限を超えた分は待機します。"
+      },
+      "inUseOf": "{inUse} / {figure}",
+      "membersAt": "{count, plural, other {# 人のメンバー}}が {figure} / {figure} に到達",
+      "running": "{count} 件実行中",
+      "noLimit": "上限なし",
+      "notRead": "読み取れませんでした",
+      "source": {
+        "staffOverride": "Motir が組織向けに設定：同時に {figure} 件の CI ジョブ",
+        "notRead": "CI の上限を読み取れませんでした。読み取れるまで CI ジョブは待機します。その他の数値は最新です。",
+        "granted": {
+          "agentRunsInParallel": "{figure} — 承認済み {vcpu} vCPU ÷ 2、組織のエージェントランナーアカウントで実行",
+          "ciJobsInFlight": "{figure} — 承認済み {vcpu} vCPU ÷ 2、組織の CI ランナーアカウントで実行"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "エージェントランナーアカウントはまだ共有の下限にあり、Max の上限で動いています",
+          "ciJobsInFlight": "CI ランナーアカウントが稼働するまでの共有の下限：{figure} 台のランナー"
+        }
+      },
+      "waiting": {
+        "none": "待機なし",
+        "count": "{count} 件待機中",
+        "planLimit": "プランの上限による待機 · プランを変更すると解消します",
+        "poolFull": {
+          "agentRunsInParallel": "すべてのエージェントランナーアカウントが満杯です · これは Motir の容量で、プランの上限ではありません",
+          "ciJobsInFlight": "すべての CI ランナーアカウントが満杯です · これは Motir の容量で、プランの上限ではありません"
+        },
+        "other": "その他の理由"
+      },
+      "indexing": "コードグラフのインデックス作成：{count} 件実行中 · どのプランの上限にも含まれません",
+      "indexingNotRead": "コードグラフのインデックス作成：読み取れませんでした · どのプランの上限にも含まれません",
+      "whereItRuns": "実行場所",
+      "kind": {
+        "ci_runner": "CI ランナー",
+        "code_graph_index": "インデクサー",
+        "hosted_agent": "エージェントランナー",
+        "agent_instance": "エージェントのホスト"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Motir の共有 AWS プール",
+        "own_aws_account": "組織専用の AWS アカウント"
+      },
+      "notReadNotice": "プランの上限と現在の実行状況を読み取れませんでした。ここはゼロではなく、不明です。",
+      "tryAgain": "再試行",
+      "noPlanLimitsNote": "この組織は Motir が運営しており、プランの上限はありません。現在の実行状況は上限なしで表示されます。",
+      "noFleet": "このプランにはホスト型エージェントの実行、CI ランナー、エージェントが含まれていません。実行するには、上の Motir AI でプランを選んでください。",
+      "accounts": {
+        "title": "組織専用の AWS アカウント",
+        "notRead": "アカウントの状態をいまは読み取れませんでした。",
+        "kind": {
+          "ci_runner": "CI ランナー",
+          "hosted_agent": "エージェントランナー",
+          "indexer_and_hoster": "インデクサー + エージェントのホスト"
+        },
+        "role": {
+          "ci_runner": "CI ジョブを実行します",
+          "hosted_agent": "ホスト型エージェントのジョブを実行します",
+          "indexer_and_hoster": "コードのインデックスを作成し、エージェントをホストします"
+        },
+        "state": {
+          "created": "作成済み",
+          "quota_requested": "クォータ申請済み",
+          "granted": "承認済み",
+          "live": "稼働中"
+        },
+        "quotaDenied": "クォータ拒否",
+        "since": "{when} から",
+        "vcpuAsked": "申請した vCPU",
+        "vcpuGranted": "承認された vCPU",
+        "noneYet": "まだありません",
+        "sharedFloor": {
+          "ci_runner": "まだ共有の下限にあります：CI は {figure} 台のランナー。",
+          "hosted_agent": "まだ共有の下限にあり、Max の上限で動いています：同時に {figure} 件のエージェント実行。",
+          "indexer_and_hoster": "インデックス作成とエージェントのホストはまだ共有の下限にあります：ホスト型エージェントは 1 人あたり {perPerson}、組織あたり {perOrg}。"
+        },
+        "liveOnceNetwork": "アカウントのネットワークが構築されると稼働します。",
+        "deniedNote": "AWS が引き上げを承認するまで、アカウントは「{state}」のままです。",
+        "keptSpots": "インデックス作成のために常に {count} 台分のマシン枠を確保します。エージェントのインスタンスは残りを使います。"
+      },
+      "quotaOutcome": {
+        "pending": "AWS で処理中",
+        "case_opened": "AWS がケースを作成",
+        "approved": "AWS が承認",
+        "denied": "AWS が拒否",
+        "not_approved": "AWS が未承認",
+        "case_closed": "AWS がケースを終了",
+        "invalid_request": "AWS が申請を読み取れませんでした"
+      },
+      "request": {
+        "button": "容量の追加を申請",
+        "status": {
+          "open": "申請済み",
+          "filed": "AWS に提出済み",
+          "closed": "終了"
+        },
+        "granted": "{vcpu} vCPU を承認",
+        "asked": "{date} に {vcpu} vCPU を申請",
+        "line": {
+          "open": "Motir に送信済み。Motir が AWS に提出します",
+          "filed": "Motir が AWS に提出済み。AWS からはまだ回答がありません",
+          "granted": "AWS が承認しました。次回の読み取りで数値が更新されます",
+          "denied": "AWS が引き上げを拒否しました。再度申請できます",
+          "closedNote": "Motir が終了しました：「{note}」",
+          "closed": "Motir が終了しました。AWS の回答：{outcome}"
+        }
+      },
+      "dialog": {
+        "title": "容量の追加を申請",
+        "account": "{account}アカウント · 承認済み {vcpu} vCPU。Motir が AWS に引き上げを申請し、AWS の回答をお知らせします。",
+        "accountNoneGranted": "{account}アカウント · まだ vCPU は承認されていません。Motir が AWS に引き上げを申請し、AWS の回答をお知らせします。",
+        "figureLabel": "必要な vCPU",
+        "figurePlaceholder": "例：300",
+        "figureHelp": "現在の承認数より大きい整数です。",
+        "figureInvalid": "{granted}（現在承認されている vCPU）より大きい整数を入力してください。",
+        "reasonLabel": "必要な理由",
+        "reasonPlaceholder": "何が、いつ足りなくなるか",
+        "reasonHelp": "2,000 文字まで。Motir が AWS に提出する前に確認します。",
+        "reasonInvalid": "理由を 2,000 文字以内で入力してください。",
+        "cancel": "キャンセル",
+        "send": "申請を送信",
+        "sending": "送信中…",
+        "sent": "申請を送信しました。AWS の回答は Motir からお知らせします。",
+        "refused": {
+          "open": "このアカウントにはすでに未完了の申請があります。状態はアカウントの行に表示されます。終了してから再度申請してください。",
+          "notFound": "組織にはこの種類の専用アカウントがまだないため、引き上げる対象がありません。Host を購入すると作成されます。",
+          "forbidden": "容量の追加を申請できるのは、組織のオーナーまたは管理者だけです。",
+          "network": "申請を送信できませんでした。接続を確認して再試行してください。何も送信されていません。",
+          "invalid": "申請を読み取れませんでした。両方の欄を確認して、もう一度送信してください。",
+          "failed": "申請は送信されませんでした。しばらくしてから再試行してください。"
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -7246,7 +7597,8 @@
       "install_error": "GitHub App のセットアップを完了できませんでした。もう一度インストールしてください。",
       "select_repos": "Motir GitHub App はインストール済みです。この組織が接続する、このアカウントのリポジトリを選択してください。",
       "repo_unavailable": "そのリポジトリは既に別の組織に接続されているため、ここには追加されませんでした。ほかには何も変更されていません。",
-      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。"
+      "installation_not_accessible": "GitHub 上でその GitHub アカウントを表示できないため、この組織にリンクされませんでした。何も変更されていません。",
+      "identity_refused": "GitHub があなたの GitHub サインインを受け付けなくなったため、Motir は App の接続を完了できませんでした。「設定 → アカウント → Git アカウント」でアカウントの接続を解除してから再接続し、もう一度お試しください。"
     },
     "connect": {
       "title": "GitHub を接続",
@@ -7369,6 +7721,8 @@
         },
         "conflictOn": "<prs></prs> は {base} とコンフリクトしているため、マージできません。",
         "conflictOnNoBase": "<prs></prs> はベースブランチとコンフリクトしているため、マージできません。",
+        "outOfDateOn": "<prs></prs> は最新であることが求められる {base} より遅れているため、マージできません。",
+        "outOfDateOnNoBase": "<prs></prs> は最新であることが求められるベースブランチより遅れているため、マージできません。",
         "howConflict": "エージェントがプルリクエスト自身のブランチでリベースまたは解決してプッシュし、チェックが再実行されます。",
         "rearm": "ここで承認するものはありません。プッシュによって head が移動すると問いが再び有効になり、次にチェックが通った時点で、新しいコミットに対してマージゲートが一度だけ作成されます。",
         "sentBackByAgent": "レビューエージェントがこれらのコミットを差し戻しました。エージェントがその指摘をプロンプトに含めて、{count, plural, other {同じプルリクエスト}}上で修正します。",
@@ -7524,6 +7878,14 @@
         "failing": "チェック失敗",
         "running": "チェック実行中"
       },
+      "preview": {
+        "building": "プレビューをビルド中",
+        "ready": "プレビュー準備完了",
+        "failed": "プレビューに失敗",
+        "failedReason": "プレビューに失敗 · <tone>{reason}</tone>",
+        "closed": "プレビュー終了",
+        "unknown": "プレビュー {state}"
+      },
       "linkPr": "プルリクエストをリンク",
       "linkPrField": "リンクするプルリクエスト",
       "searchPlaceholder": "プルリクエストを検索…",
@@ -7644,7 +8006,9 @@
       "identity": {
         "title": "まず GitHub アカウントを接続してください",
         "body": "Motir は、あなた自身の GitHub ID を通じて閲覧できる GitHub アカウントを一覧表示します。「設定 → アカウント → Git アカウント」で接続してから、ここに戻ってください。",
-        "action": "Git アカウントへ移動"
+        "action": "Git アカウントへ移動",
+        "refusedTitle": "GitHub アカウントを再接続してください",
+        "refusedBody": "Motir が保持しているあなたのサインインを GitHub が受け付けなくなりました。取り消されたか、有効期限が切れています。「設定 → アカウント → Git アカウント」で接続を解除してから再接続し、ここに戻ってください。何も変更されていません。"
       },
       "cancel": "キャンセル",
       "back": "すべてのアカウント",
@@ -8430,7 +8794,7 @@
       "clearEnough": "このまま計画できるほど明確です。",
       "nothingSettled": "何も決まらなかったので、依頼をそのまま計画します。",
       "requirementSaved": "要件ドキュメントに<link>{title}</link>として保存しました。",
-      "requirementNotSaved": "<lead>要件を保存できませんでした。</lead>何も開始されていません。確認は引き続き押せます。もう一度お試しください。"
+      "requirementPageNotSaved": "<lead>要件をページとして保存できませんでした。</lead>計画では引き続きこの要件を使用します。"
     },
     "logBugOffer": {
       "label": "バグ登録の提案",
@@ -9211,10 +9575,73 @@
     "outcomeNeedsAccess": "アクセスのセットアップを完了する",
     "connectGithub": "GitHub を接続",
     "stateCreated": "作成済み",
-    "createdDetail": "Motir がホスト · Motir Next.js スターターから作成。",
+    "createdDetail": "Motir がホスト · {seed} から作成。",
     "stateFailed": "作成できませんでした",
     "actionError": "うまくいきませんでした。何も変更されていません。もう一度お試しください。",
-    "promiseDoor": "移行の仕組み"
+    "promiseDoor": "移行の仕組み",
+    "stateProposed": "未作成",
+    "createdDetailInitialised": "Motir がホスト · 初期化済みリポジトリとして作成。",
+    "createdDetailNoSeed": "Motir がホスト。",
+    "seed": {
+      "starterPillLabel": "{label} から開始",
+      "targetPillLabel": "{target} でホスト",
+      "default": "デフォルト",
+      "noTarget": "ホスティング先なし",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "社内ツール",
+        "mvp": "MVP",
+        "planned_product": "計画済みのプロダクト"
+      },
+      "size": {
+        "small": "小",
+        "medium": "中",
+        "large": "大"
+      },
+      "why": {
+        "matched": "<b>このスターターの理由:</b> {target} にデプロイされ、このサイズの{use, select, internal_tool {社内ツール} mvp {MVP} planned_product {計画済みのプロダクト} other {この用途}}向けに作られています。",
+        "matchedTarget": "<b>このスターターの理由:</b> {target} にデプロイされます。",
+        "softUse": "<b>このスターターの理由:</b> {target} にデプロイされるスターターのうち最も近いものです。{use, select, internal_tool {社内ツール} mvp {MVP} planned_product {計画済みのプロダクト} other {この用途}}向けの {target} スターターはありません。",
+        "softSize": "<b>このスターターの理由:</b> {target} にデプロイされるスターターのうち最も近いものです。このサイズのリポジトリ向けの {target} スターターはありません。",
+        "notDeployed": "<b>このスターターの理由:</b> {role} アプリ向けの Motir のスターターです。Motir ホスティングはこのリポジトリをデプロイしないため、ホスティングは表示されません。",
+        "noStackSignal": "<b>このスターターの理由:</b> 計画にこのリポジトリのスタックが書かれていないため、{target} 上の Web リポジトリ向けの通常のスターターから始めます。スタックがわかっている場合は別のものを選んでください。",
+        "noTarget": "<b>このスターターの理由:</b> このリポジトリにはまだホスティング先がないため、Web リポジトリ向けの通常のスターターから始めます。",
+        "noMatch": "<b>このスターターの理由:</b> {where, select, target {{target} 上の} other {このスタックの}} {role} リポジトリ向けのスターターがないため、初期化済みリポジトリ(README だけの空のリポジトリ)として始めます。",
+        "byHand": "<b>このスターターの理由:</b> このリポジトリ用に誰かが手動で選びました。"
+      },
+      "fact": {
+        "hosting": "ホスティング",
+        "use": "用途",
+        "size": "サイズ",
+        "stack": "スタック",
+        "not_set": "未設定",
+        "not_named": "未指定",
+        "none": "なし",
+        "notServed": "· 対象外",
+        "noRoleStarter": "· ここにデプロイされる {role} スターターはありません"
+      },
+      "picker": {
+        "label": "スターター",
+        "groupTarget": "{target} 上の {role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {その他の}} スターター",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {その他の}} スターター",
+        "groupAny": "すべてのリポジトリ",
+        "initialisedSub": "README だけの空のリポジトリ",
+        "footerTarget": "{target} にデプロイされる {role} リポジトリ向けのスターターのみです。",
+        "footerNoTarget": "{role} リポジトリ向けのスターターのみです。このリポジトリにはまだホスティング先がありません。"
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} はここでは使えません。</b> {targets} にデプロイされるスターターですが、このリポジトリは {target} で動作します。スターターは変更されていません。",
+        "targetMismatchNoTarget": "<b>{label} はここでは使えません。</b> {targets} にデプロイされるスターターですが、このリポジトリにはホスティング先がありません。スターターは変更されていません。",
+        "retired": "<b>{label} は廃止されました。</b> Motir はもう提供していないため、別のスターターを選んでください。スターターは変更されていません。",
+        "roleMismatch": "<b>{label} はここでは使えません。</b> {entryRole} リポジトリ向けのスターターですが、このリポジトリは {role} です。スターターは変更されていません。",
+        "notEditable": "<b>このリポジトリはすでに作成されているため、</b>別のスターターから始めることはできません。再読み込みして確認してください。",
+        "unknown": "<b>そのスターターはもう存在しません。</b> 別のスターターを選んでください。スターターは変更されていません。"
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "リポジトリ",
@@ -9608,6 +10035,8 @@
         "queueFailedBare": "マージキューで失敗",
         "conflicted": "<d>{base}</d> とコンフリクト",
         "conflictedNoBase": "ベースブランチとコンフリクト",
+        "outOfDate": "<d>{base}</d> に対して最新ではない",
+        "outOfDateNoBase": "ベースブランチに対して最新ではない",
         "ciFailed": "CI 失敗 · <d>{check}</d>",
         "ciFailedBare": "CI 失敗",
         "changesRequested": "<b>{name}</b> が変更を依頼 — 「{note}」",
@@ -9891,7 +10320,9 @@
       "navIdeas": "アイデア",
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
-      "navCapacity": "プロバイダーの容量"
+      "navCapacity": "プロバイダーの容量",
+      "navJobs": "ジョブ",
+      "navStarters": "スターター"
     },
     "nav": {
       "overview": "概要",
@@ -10113,6 +10544,13 @@
             "limits": {
               "edit": "プロバイダーモデルの容量上限を編集しました"
             }
+          },
+          "jobs": {
+            "dlq_replay": "デッドレターを再実行しました"
+          },
+          "seed_registry": {
+            "promote": "リポジトリをスターターに昇格",
+            "retire": "スターターを廃止"
           }
         }
       }
@@ -11658,8 +12096,8 @@
           "override": "上書き"
         },
         "facts": {
-          "plan": "プラン <strong>{plan}</strong> · ホスト型実行を同時に {runs} 件 · 1 人あたりエージェント {perUser} 個 · 実行中のエージェント {running} 個 · CI ジョブを同時に {ci} 件",
-          "planCiUnreadable": "プラン <strong>{plan}</strong> · ホスト型実行を同時に {runs} 件 · 1 人あたりエージェント {perUser} 個 · 実行中のエージェント {running} 個 · CI の上限を読み取れません",
+          "plan": "プラン <strong>{plan}</strong> · ホスト型実行を同時に {runs} 件 · 1 人あたりエージェント {perUser} 個 · エージェント {agents} 個 · CI ジョブを同時に {ci} 件",
+          "planCiUnreadable": "プラン <strong>{plan}</strong> · ホスト型実行を同時に {runs} 件 · 1 人あたりエージェント {perUser} 個 · エージェント {agents} 個 · CI の上限を読み取れません",
           "planExempt": "プラン <strong>プランの上限なし</strong>",
           "planExemptOverride": "プラン <strong>プランの上限なし</strong> · CI ジョブを同時に {ci} 件(上書き)",
           "planUnknown": "プラン <strong>不明 · {key}</strong> · 新しいコンテナーは拒否",
@@ -12408,6 +12846,250 @@
         "notPermitted": "あなたのロールでは上限を編集できないため、何も保存されていません。",
         "failed": "上限を保存できませんでした。何も変更されていません。もう一度お試しください。"
       }
+    },
+    "jobs": {
+      "breadcrumb": "プラットフォーム · ジョブ",
+      "title": "ジョブ",
+      "subtitle": "プラットフォームが実行したすべてのバックグラウンドジョブ（ワークスペースの有無を問わず）と、再実行を待つすべてのデッドレターです。",
+      "tabsLabel": "ジョブ台帳の表示",
+      "tabs": {
+        "runs": "実行",
+        "dlq": "デッドレター",
+        "waiting": "{count} 件待機中"
+      },
+      "status": {
+        "label": "ステータス",
+        "all": "すべて",
+        "running": "実行中",
+        "succeeded": "成功",
+        "failed": "失敗",
+        "abandoned": "中断"
+      },
+      "columns": {
+        "function": "関数",
+        "event": "イベント",
+        "functionEvent": "関数 · イベント",
+        "workspace": "ワークスペース",
+        "status": "ステータス",
+        "attempt": "試行",
+        "attempts": "試行回数",
+        "started": "開始",
+        "duration": "所要時間",
+        "failure": "失敗内容",
+        "lastFailed": "最終失敗",
+        "replay": "再実行"
+      },
+      "runsCaption": "バックグラウンドジョブの実行",
+      "dlqCaption": "デッドレター",
+      "noWorkspace": "ワークスペースなし",
+      "pageLabel": "{page} ページ",
+      "pagerLabel": "実行のページ",
+      "previous": "前へ",
+      "next": "次へ",
+      "runsEmpty": {
+        "titleAll": "まだ実行はありません",
+        "bodyAll": "バックグラウンドジョブは実行されるとここに表示されます。",
+        "titleStatus": "このステータスの実行はありません",
+        "bodyStatus": "台帳にこのステータスのものはありません。すべての実行を見るには「すべて」を選択してください。"
+      },
+      "runsError": {
+        "title": "ジョブ台帳を読み込めませんでした"
+      },
+      "dlqError": {
+        "title": "デッドレターを読み込めませんでした"
+      },
+      "error": {
+        "body": "データベースが応答しませんでした。何も変更されていません。"
+      },
+      "retry": "再試行",
+      "loadingRuns": "実行を読み込んでいます",
+      "readOnly": "読み取り専用です。デッドレターを再実行するにはオペレーターのロールが必要です。",
+      "fn": {
+        "label": "関数",
+        "all": "すべての関数"
+      },
+      "waitingLine": "{waiting} 件待機中 · 過去 7 日間に {replayed} 件を再実行",
+      "capped": "{count} 件中 {shown} 件を表示しています。一覧には最新の 200 件が表示されます。",
+      "replay": "再実行",
+      "replayAria": "{function} のデッドレターを再実行",
+      "replayedAt": "{time}に再実行",
+      "toast": {
+        "replayedTitle": "デッドレターを再実行しました",
+        "replayedBody": "{function} を再送信しました。",
+        "alreadyTitle": "すでに再実行済みです",
+        "alreadyBody": "別のユーザーが先にこのデッドレターを再実行しました。再送信されたものはありません。",
+        "failedTitle": "再実行に失敗しました",
+        "failedBody": "何も送信されていません。もう一度お試しください。",
+        "notPermittedBody": "デッドレターを再実行するにはオペレーターのロールが必要です。",
+        "notFoundBody": "このデッドレターはもう存在しません。"
+      },
+      "replayAll": {
+        "button": "{count} 件をすべて再実行",
+        "title": "{function} の {count} 件のデッドレターを再実行しますか？",
+        "body": "それぞれ新しい実行として再送信され、プラットフォームの監査ログに記録されます。他のユーザーが先に再実行したデッドレターはスキップされます。",
+        "confirm": "{count} 件を再実行",
+        "cancel": "キャンセル",
+        "running": "再実行しています…",
+        "runningLine": "{count} 件のデッドレターを 50 件ずつ再実行しています。完了するまでこの画面を開いたままにしてください。",
+        "doneTitle": "再実行が完了しました",
+        "doneWithFailuresTitle": "一部失敗して再実行が完了しました",
+        "replayed": "{count} 件を再実行",
+        "already": "{count} 件は他のユーザーが再実行済み",
+        "nothingLeft": "0 件を再実行 — {count} 件はすべて再実行済みでした",
+        "failed": "{count} 件は再実行できませんでした。一覧に残っているので、1 件ずつ再実行してください。",
+        "error": "再実行を開始できませんでした。何も変更されていません。",
+        "close": "完了"
+      },
+      "dlqEmpty": {
+        "title": "待機中のものはありません",
+        "body": "試行回数を使い切ったジョブはありません。使い切るとここにデッドレターが表示されます。"
+      }
+    },
+    "starters": {
+      "breadcrumb": "運用 · スターター",
+      "title": "スターター",
+      "subtitle": "Motir が作成するリポジトリの出発点です。マッチングは、ロール、ホスティング先、用途、サイズに応じて有効なスターターから選びます。Motir が作成したリポジトリをスターターに昇格したり、スターターを廃止したりできます。",
+      "promote": "リポジトリを昇格",
+      "card": {
+        "title": "スターターライブラリ",
+        "count": "新しい順 · {count, plural, other {# 件のスターター}}"
+      },
+      "filter": {
+        "label": "スターターを絞り込む",
+        "role": "ロール",
+        "status": "ステータス",
+        "target": "ホスティング先",
+        "anyRole": "すべてのロール",
+        "anyTarget": "すべてのホスティング先",
+        "all": "すべて"
+      },
+      "status": {
+        "active": "有効",
+        "retired": "廃止"
+      },
+      "notDeployed": "Motir ホスティングではデプロイされません",
+      "col": {
+        "starter": "スターター",
+        "roleStack": "ロール · スタック",
+        "serves": "対象",
+        "hosting": "ホスティング",
+        "status": "ステータス",
+        "provenance": "出所",
+        "actions": "操作"
+      },
+      "alsoAnswersTo": "{keys} でも参照できます",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "すべてのロール · すべてのスタック",
+      "everyUse": "すべての用途",
+      "everySize": "すべてのサイズ",
+      "provenance": {
+        "shipped": "Motir に同梱",
+        "promoted": "<b>{email}</b> が {date} に {repo} の <mono>{ref}</mono> から昇格",
+        "promotedNoRepo": "<b>{email}</b> が {date} に <mono>{ref}</mono> から昇格",
+        "retired": "<b>{email}</b> が {date} に廃止:「{reason}」",
+        "removedAccount": "削除されたアカウント"
+      },
+      "defaultForRole": "{role} のデフォルト",
+      "defaultForEveryRole": "すべてのロールのデフォルト",
+      "empty": {
+        "title": "これらのフィルターに一致するスターターはありません",
+        "bodyRoleTarget": "{target} にデプロイされる {role} リポジトリ向けの有効なスターターはありません。フィルターをクリアするとライブラリ全体が表示されます。",
+        "body": "これらのフィルターに一致するスターターはありません。",
+        "clear": "フィルターをクリア"
+      },
+      "pager": {
+        "label": "ページ",
+        "showing": "{total} 件中 {from}–{to} 件を表示",
+        "previous": "前のページ",
+        "next": "次のページ"
+      },
+      "retire": {
+        "action": "廃止",
+        "title": "{label} を廃止しますか?",
+        "body": "マッチングはこのスターターを選ばなくなり、スターターの選択肢にも表示されなくなります。すでに作成されたリポジトリのコードはそのままです。このスターターを指定している未作成のリポジトリは、誰かが別のスターターを選ぶまで作成できません。",
+        "reasonLabel": "理由",
+        "reasonHelp": "あなたの名前とともに監査ログに記録されます。",
+        "cancel": "キャンセル",
+        "confirm": "スターターを廃止",
+        "done": "廃止しました。{label} は新しいリポジトリに提供されなくなりました。",
+        "failedTitle": "このスターターは廃止されませんでした。",
+        "failed": "Motir は廃止できませんでした。もう一度お試しください。",
+        "defaultTitle": "このスターターは廃止できません。",
+        "defaultBody": "「{key}」は {role} リポジトリのデフォルトのスターターです。デフォルトの変更は決定事項であり、オペレーターの操作ではありません。",
+        "defaultBodyEveryRole": "「{key}」はすべてのロールのデフォルトのスターターです。デフォルトの変更は決定事項であり、オペレーターの操作ではありません。",
+        "close": "閉じる"
+      },
+      "promoteForm": {
+        "breadcrumb": "運用 · スターター · 昇格",
+        "title": "リポジトリを昇格",
+        "subtitle": "Motir は指定した ref のリポジトリを自身の組織にコピーし、条件に合う新しいリポジトリにそのコピーをスターターとして提供します。既存のリポジトリは変更されません。",
+        "field": {
+          "source": "Motir が作成したリポジトリ",
+          "ref": "Ref",
+          "role": "ロール",
+          "stack": "スタック",
+          "label": "ラベル",
+          "key": "キー",
+          "uses": "対象の用途",
+          "sizes": "対象のサイズ",
+          "targets": "デプロイ先のホスティング",
+          "reason": "理由"
+        },
+        "help": {
+          "ref": "ブランチ、タグ、またはコミット。スターターはここからコピーされます。",
+          "stack": "プランナーがこのスタックを呼ぶ名前(小文字)。",
+          "label": "リポジトリ上で表示される名前です。",
+          "key": "小文字、数字、ハイフン。motir-co 内のコピーの名前にもなります。後から変更できません。",
+          "targets": "それぞれが ref 時点のリポジトリの motir.hosting.json に記載されている必要があります。Motir ホスティングがデプロイしないスターターの場合は、何も選択しないでください。",
+          "reason": "あなたの名前とともに監査ログに記録されます。"
+        },
+        "source": {
+          "placeholder": "リポジトリを選択",
+          "empty": "一致するリポジトリはありません。",
+          "footer": "Motir が作成したリポジトリのみです。",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "所有者に引き渡し中",
+          "notCreated": "未作成"
+        },
+        "rolePlaceholder": "ロールを選択",
+        "cancel": "キャンセル",
+        "review": "昇格内容を確認",
+        "confirm": {
+          "title": "{name} をスターターに昇格しますか?",
+          "body": "Motir は <b>{repo}</b> の <b>{ref}</b> を <b>motir-co/{key}</b> にコピーし、<b>{label}</b> をライブラリに追加します。以後、マッチングは条件に合う新しい {role} リポジトリにこのスターターを選べるようになります。既存のリポジトリは変更されません。",
+          "roleStack": "ロール · スタック",
+          "uses": "用途",
+          "sizes": "サイズ",
+          "hosting": "ホスティング",
+          "reason": "理由",
+          "notDeployed": "Motir ホスティングではデプロイされません",
+          "back": "戻る",
+          "promote": "昇格"
+        },
+        "done": "昇格しました。{target} 上の新しい {role} リポジトリは {label} から始められるようになりました。",
+        "doneNoTarget": "昇格しました。新しい {role} リポジトリは {label} から始められるようになりました。",
+        "refusal": {
+          "sourceTitle": "このリポジトリは昇格できません。",
+          "takenOver": "所有者への引き渡し中、またはすでに引き渡し済みのため、Motir はもうコピーできません。",
+          "notCreated": "昇格できるのは Motir が作成したリポジトリのみですが、このリポジトリはまだ {state} です。",
+          "organizationRow": "組織自身のリポジトリであり、Motir が顧客のコードをコピーすることはありません。",
+          "notMotirHeld": "{repo} は Motir が管理する GitHub 組織にもうありません。",
+          "notFound": "このリポジトリはもう存在しません。別のものを選んでください。",
+          "refNotFound": "「{ref}」は {repo} のブランチ、タグ、コミットのいずれでもありません。",
+          "manifestTitle": "motir.hosting.json がこの昇格を拒否しています。",
+          "manifestMissing": "このリポジトリには <b>{ref}</b> 時点の motir.hosting.json がないため、ホスティング先を指定できません。その ref にファイルを追加するか、ホスティング先の選択をすべて外してください。",
+          "manifestInvalid": "<b>{ref}</b> 時点のファイルが無効です: <b>{field}</b> {reason}",
+          "theDocument": "ドキュメント",
+          "targetNotDeclared": "targets に <b>{target}</b> が含まれていません({declared} が含まれています)。{target} の選択を外すか、ファイルに追加してください。",
+          "declaredNone": "なし",
+          "targetNotDeclaredField": "{target} は {ref} 時点の motir.hosting.json にありません。",
+          "notInList": "「{value}」は有効な{kind, select, role {ロール} useCases {用途} sizes {サイズ} other {ホスティング先}}ではありません。{list} から選んでください。",
+          "keyTaken": "キー {key} はすでに使われています。",
+          "templateNameTaken": "motir-co/{key} はすでに存在し、このスターターのコピーではありません。別のキーを選ぶか、先にそのリポジトリを削除してください。",
+          "genericTitle": "Motir はこのリポジトリを昇格できませんでした。",
+          "genericBody": "何もコピーされていません。もう一度お試しください。"
+        }
+      }
     }
   },
   "legal": {
@@ -12560,8 +13242,8 @@
       "creditsUnknown": "現在、Motir は組織のクレジットを確認できませんでした。しばらくしてからもう一度お試しください。",
       "userCap": "組織の {plan} プランでは、ユーザーごとに {limit, plural, other {#}} 個までエージェントを作成できます。各エージェントにはスリープ中でも毎日ストレージ料金がかかります。新しく作成するには 1 つ削除してください。",
       "userCapNoFigure": "組織のプランでユーザーごとに許可されている数のエージェントをすでに作成しています。各エージェントにはスリープ中でも毎日ストレージ料金がかかります。新しく作成するには、いずれかを削除してください。",
-      "orgRunningLimit": "組織の {plan} プランでは同時に {limit, plural, other {#}} 個のエージェントを実行でき、すべて実行中です。別のエージェントを起動するには 1 つを休止してください。",
-      "orgRunningLimitNoFigure": "組織では、プランで許可されている数のエージェントがすでに同時に実行中です。別のエージェントを起動するには、いずれかを休止してください。",
+      "orgCap": "組織の {plan} プランでは、組織全体で {limit, plural, other {#}} 個までエージェントを持てます（実行中・スリープ中を含む）。各エージェントにはスリープ中でも毎日ストレージ料金がかかります。新しく作成するには 1 つ削除してください。",
+      "orgCapNoFigure": "組織には、プランで許可されている数のエージェントがすでにあります（実行中・スリープ中を含む）。各エージェントにはスリープ中でも毎日ストレージ料金がかかります。新しく作成するには 1 つ削除してください。",
       "busy": "Motir は現在、可能な限り多くのマシンを実行しています。数分後にもう一度お試しください。",
       "notOffered": "そのコーディングエージェントは提供されていません。その利用規約がプラットフォームでのホスティングをまだ認めていないためです。別のコーディングエージェントを選択してください。",
       "nameTaken": "このプロジェクトにはすでに {name} という名前のエージェントがあります。",
@@ -12575,7 +13257,7 @@
       "aiPlanUnknown": "AI プランを確認できませんでした",
       "credits": "クレジット不足",
       "userCap": "あなたの上限",
-      "orgRunningLimit": "組織の上限"
+      "orgCap": "組織の上限"
     },
     "lapse": {
       "bannerLead": "組織の AI プランが終了しました。",
@@ -13617,6 +14299,10 @@
         "next": "何も承認されず、何もマージされていません。ブランチでコンフリクトを解消してください（motir fix でエージェントに任せられます）。チェックが通ると Motir が再度確認します。",
         "atPress": "{host} によると、{pr} は {base} とコンフリクトしています。何も書き込まれる前に操作が拒否されたため、{key} は動いていません。",
         "atPressNoBase": "{host} によると、{pr} はベースブランチとコンフリクトしています。何も書き込まれる前に操作が拒否されたため、{key} は動いていません。"
+      },
+      "mergeOutOfDate": {
+        "title": "このプルリクエストはベースブランチに対して最新ではありません。",
+        "next": "何もマージされていません。ベースブランチはマージ前にプルリクエストが最新であることを求めていますが、このプルリクエストは遅れています。ベースブランチを取り込んでください（ブランチを更新するか、motir fix でエージェントに任せられます）。チェックが通ると Motir が再度確認します。"
       },
       "mergeBranchProtected": {
         "title": "ブランチの保護ルールにより、まだこのマージはできません。",
@@ -14789,6 +15475,7 @@
       "run_died": "要修正 · 実行が停止",
       "queue_failed": "要修正 · マージキューで失敗",
       "conflicted": "要修正 · ベースブランチとコンフリクト",
+      "out_of_date": "要修正 · ベースブランチに対して最新ではない",
       "ci_failed": "要修正 · CI が失敗",
       "changes_requested": "要修正 · 変更リクエスト",
       "sent_back_by_agent": "要修正 · レビューエージェントが差し戻し",
@@ -14800,6 +15487,8 @@
       "queueFailedBare": "修正が必要です：マージキューで失敗しました。",
       "conflicted": "修正が必要です：<code>{base}</code> とコンフリクトしています。",
       "conflictedNoBase": "修正が必要です：ベースブランチとコンフリクトしています。",
+      "outOfDate": "修正が必要です：<code>{base}</code> に対して最新ではありません。",
+      "outOfDateNoBase": "修正が必要です：ベースブランチに対して最新ではありません。",
       "ciFailed": "修正が必要です：CI が失敗しました（チェック <code>{check}</code>）。",
       "ciFailedBare": "修正が必要です：CI が失敗しました。",
       "changesRequested": "修正が必要です：<b>{name}</b> が変更をリクエストしました —「{note}」",
@@ -15393,5 +16082,85 @@
     "pendingMark": "翻訳中",
     "showOriginal": "原文を表示",
     "showTranslation": "翻訳を表示"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "プレビュー",
+      "brand": "Motir",
+      "footer": "いま <chip>{host}</chip> を表示しています。これは Motir がプルリクエストのために動かしているプレビューです。Motir がこのアドレスでパスワードを求めることはありません。サインインは app.motir.co でのみ行います。"
+    },
+    "signIn": {
+      "banner": "<chip>{host}</chip> のプレビューを開くにはサインインしてください。プレビューはプロジェクトのメンバーにのみ公開されます。"
+    },
+    "refused": {
+      "metaTitle": "このプレビューへのアクセス権がありません",
+      "pill": "プレビュー",
+      "title": "このプレビューへのアクセス権がありません",
+      "body": "プレビューは、それが属するプロジェクトのメンバーにのみ公開されます。このリンクを誰かから共有された場合は、その人にプロジェクトへ追加してもらってから、もう一度リンクを開いてください。",
+      "signedInAs": "<strong>{email}</strong> としてサインイン中",
+      "home": "Motir へ移動",
+      "switch": "別のアカウントでサインイン",
+      "switchHint": "サインイン後、このプレビューに戻ります。"
+    },
+    "building": {
+      "pill": "ビルド中",
+      "title": "このプレビューをビルドしています",
+      "body": "リポジトリの CI が、このプルリクエストの最新コミットのプレビューイメージをビルドしています。通常は数分かかります。",
+      "refresh": "このページは 10 秒ごとに再確認し、準備ができるとプレビューを開きます。"
+    },
+    "starting": {
+      "pill": "起動中",
+      "title": "このプレビューを起動しています",
+      "body": "イメージのビルドが完了しました。Motir がイメージを起動し、ヘルスチェックに合格するのを待っています。"
+    },
+    "steps": {
+      "label": "進行状況",
+      "build": "イメージのビルド",
+      "start": "プレビューの起動",
+      "ready": "準備完了"
+    },
+    "facts": {
+      "workItem": "作業項目",
+      "pullRequest": "プルリクエスト",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "Motir で {key} を開く",
+      "openPullRequest": "GitHub でプルリクエスト #{n} を開く"
+    },
+    "failed": {
+      "pill": "失敗",
+      "title": "このプレビューは起動しませんでした",
+      "body": "このプルリクエストの最新コミットでは何も動いていません。新しくプッシュすると再びビルドされます。",
+      "reasonTitle": "問題の内容",
+      "checks": "作業項目で、このプルリクエストのチェックとそのログを確認できます。",
+      "reason": {
+        "imageBuild": "プレビューイメージのビルドに失敗しました。「Preview image」ワークフローは「{conclusion}」で終了しました。理由は GitHub の実行ログに記載されています。",
+        "healthTimeout": "プレビューは {minutes} 分以内にヘルスチェックに合格しませんでした。",
+        "healthFailed": "プレビューは起動しましたが、ヘルスチェックに失敗しました。",
+        "fallback": "プレビューを起動できませんでした。"
+      }
+    },
+    "unsupported": {
+      "pill": "プレビューでは利用できません",
+      "title": "プレビューではこの操作はできません",
+      "websocket": "ライブ接続（WebSocket）はプレビューゲートを通過できません。プレビューのその他の機能は通常どおり使えます。",
+      "tooLarge": "10 MB を超えるリクエストはプレビューに送信できません。",
+      "noLength": "このリクエストはサイズを示していないため、プレビューゲートで受け付けられません。"
+    },
+    "closed": {
+      "pill": "終了",
+      "title": "このプレビューは停止されました",
+      "merged": "プルリクエスト #{n} がマージされたため、Motir はそのプレビューを停止し、データベースを削除しました。",
+      "closed": "プルリクエスト #{n} がマージされずにクローズされたため、Motir はそのプレビューを停止し、データベースを削除しました。",
+      "takenOver": "このリポジトリが Motir を離れたため、Motir はそのプレビューを停止し、データベースを削除しました。",
+      "unknown": "Motir はこのプレビューを停止し、データベースを削除しました。"
+    },
+    "notFound": {
+      "pill": "利用できません",
+      "title": "ここにプレビューはありません",
+      "body": "このアドレスは実行中のプレビューのものではありません。停止されたか、リンクが間違っている可能性があります。",
+      "home": "Motir へ移動"
+    }
   }
 }

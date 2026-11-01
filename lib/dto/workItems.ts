@@ -442,6 +442,10 @@ export interface RelationshipLinkDto {
   /** The `work_item_link.id` of THIS edge — what `unlinkWorkItems` deletes. */
   linkId: string;
   item: WorkItemSummaryDto;
+  /** WHY the edge exists (MOTIR-9827) — the one line an approved plan's
+   *  `blocked_by` carried, saying what the waiting card consumes. Present only on
+   *  an edge that has one. */
+  reason?: string;
 }
 
 /**
@@ -1898,7 +1902,9 @@ export interface SectionFindingDto {
   missing: string[];
   /** Sections found but unreadable into their shape, with why. */
   invalid: { section: string; message: string }[];
-  /** Headings the body carries that the registry does not define for this cell. */
+  /** Headings the body carries that the registry does not define for this cell —
+   *  allowed `otherSections`, listed as information. They never make a finding on
+   *  their own (MOTIR-9835): a card is reported only for `missing` / `invalid`. */
   otherHeadings: string[];
   /** The parser's diagnostics (`empty`, `no-headings`, `quoted-gutter`, …). */
   signals: string[];
@@ -2354,7 +2360,16 @@ export interface WorkItemProseMislabelledLinkAdvisoryDto extends WorkItemProseSh
   targetId: string;
   /** The key of the card that id opens, or `null` when it opens none. */
   targetKey: string | null;
+  /**
+   * The body the link sits in (MOTIR-9938). The explanation is a second stored
+   * body whose chips open cards exactly as the description's do, so both are
+   * scanned, and the advisory says which one to fix.
+   */
+  field: WorkItemLinkBodyField;
 }
+
+/** The stored bodies the mislabelled-link advisory scans (MOTIR-9938), in scan order. */
+export type WorkItemLinkBodyField = 'descriptionMd' | 'explanationMd';
 
 /**
  * ONE SHAPE advisory — narrowed by {@link WorkItemProseShapeAdvisoryDto.severity}

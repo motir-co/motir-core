@@ -29,7 +29,14 @@
 // defineJob); the payload type therefore makes `workspaceId` optional.
 
 import type { DesignAutoRerunRequestedData } from '@/lib/services/designAutoRerunService';
+import type {
+  PreviewEffectRequestedData,
+  PreviewStartRequestedData,
+} from '@/lib/services/previewLifecycleService';
+import type { MergeReleaseRequestedData } from '@/lib/services/productionMergeReleaseService';
+import type { ReleaseStatusRequestedData } from '@/lib/services/releaseDeploymentStatusService';
 import type { GateResumeRequestedData } from '@/lib/services/gateResumeRequest';
+import type { PlanOfferRequirementPageRequestedData } from '@/lib/services/requirementPageSaveService';
 import type { TransactionalEmail } from '@/lib/services/emailService';
 import type { HostedAgentSession } from '@/lib/services/hostedAgentContainerService';
 
@@ -631,6 +638,18 @@ export interface JobEventDataMap {
   /** The DRIFT RECOMPUTE sweep (MOTIR-4644) — counts commits between the graph's
    *  head and the default branch's, off every render path. */
   'system.code-graph-drift-sweep': SystemScheduledData;
+  'system.preview-enablement-sweep': SystemScheduledData;
+  /** The preview reaper (Story MOTIR-5766 · MOTIR-5776) — finishes interrupted
+   *  teardowns and closes previews whose close was missed. Cross-tenant. */
+  'system.preview-reaper': SystemScheduledData;
+  /** The preview usage accrual (Story MOTIR-5766 · MOTIR-5777) — one slice of
+   *  every live preview's usage into its organisation's CI pool. Cross-tenant. */
+  'system.preview-usage-accrual': SystemScheduledData;
+  /** One effect of a committed preview transition (MOTIR-5776), enqueued by the
+   *  webhook after the transition commits. */
+  'preview/effect.requested': PreviewEffectRequestedData;
+  /** A preview image landed: start the head's release (MOTIR-5776). */
+  'preview/start.requested': PreviewStartRequestedData;
   /** The index CATCH-UP sweep (MOTIR-5290) — re-asks the internal index allowance
    *  for repositories paused by a hard stop, and refreshes only where the head
    *  moved. Cross-tenant by design. */
@@ -676,6 +695,9 @@ export interface JobEventDataMap {
    *  deletes each archive's blob once its seven-day window has run out and
    *  moves the row to `expired`. Cross-tenant by design. */
   'system.data-export-expiry-sweep': SystemScheduledData;
+  /** The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509) — deletes the
+   *  public-hostname reservations whose hold has lapsed. Cross-tenant by design. */
+  'system.public-hostname-reservation-sweep': SystemScheduledData;
   /** The runner FLEET (Story MOTIR-1916 · MOTIR-1921): the interim pending-intent
    *  trigger, the per-intent boot, and the crash-backstop reaper. */
   'system.ci-runner-provision-sweep': SystemScheduledData;
@@ -704,6 +726,10 @@ export interface JobEventDataMap {
    *  account's state and entry times. Cross-tenant by design: it walks every
    *  Host org's accounts. */
   'system.host-account-state': SystemScheduledData;
+  /** The tenant account reconcile (Story MOTIR-9792 · MOTIR-9942) — every
+   *  enterprise tenant AWS account not yet ready is created or found, then
+   *  bootstrapped. Cross-tenant by design: it walks every requested account. */
+  'system.hosting-tenant-account-reconcile': SystemScheduledData;
   'system.billing-seat-sync': BillingSeatSyncData;
   /** A settled fleet container's usage-and-cost report to motir-ai (MOTIR-5286). */
   'system.platform-meter-report': PlatformMeterReportData;
@@ -748,11 +774,30 @@ export interface JobEventDataMap {
    *  hosted agent if it was hosted, and record what happened. Emitted by both decide
    *  doors AFTER the decision commits. */
   'run/gate-resume.requested': GateResumeRequestedData;
+  /** A plan offer carrying a composed requirement was CONFIRMED (MOTIR-10091): save the
+   *  requirement as its page in Requirements Docs and record it on the offer. Emitted by
+   *  the confirm AFTER the transaction that claimed the offer commits; keyed by the offer
+   *  turn, so one offer gets one page. */
+  'plan-offer/requirement-page.requested': PlanOfferRequirementPageRequestedData;
   /** A push moved a repository's DEFAULT branch (MOTIR-5914): re-read the host's
    *  mergeability of every open pull request that targets it, and withdraw the question
    *  over any that now conflict. Emitted by the push webhook after its own write. */
   'pull-request/base-moved': PullRequestBaseMovedData;
   'pull-request/head-moved': PullRequestHeadMovedData;
+  /** A Motir repository's environment configuration changed (Story MOTIR-9795 ·
+   *  MOTIR-9961): one entry added, replaced or deleted. Emitted by
+   *  `environmentConfigService` AFTER the change commits; carries no value. The
+   *  deploying stories subscribe to it to redeploy that environment. */
+  'environment.config.changed': EnvironmentConfigChangedData;
+  /** A Motir repository's `production-image` workflow run completed for a push
+   *  to its default branch, and production is switched on for it (Story
+   *  MOTIR-9797 · MOTIR-10031): release that commit, or record the failed
+   *  build. Emitted by the `workflow_run` webhook; carries no value. */
+  'hosting/merge-release.requested': MergeReleaseRequestedData;
+  /** A production release was created or changed state (Story MOTIR-9797 ·
+   *  MOTIR-10033): post its GitHub deployment status. Emitted by
+   *  `hostedApplicationService` after the change commits; ids only. */
+  'hosted-release.status': ReleaseStatusRequestedData;
   /** The monitor-issue reconciler's TICK (Story MOTIR-4929 · MOTIR-5581) — cron
    *  triggered and cross-tenant: it discovers every binding and fans out. */
   'system.monitor-issue-reconcile': SystemScheduledData;
@@ -832,6 +877,20 @@ export interface PullRequestBaseMovedData {
  * request's OWN branch asks about that one, because a head pushed onto a base that has
  * already moved past it conflicts with no event on the base at all.
  */
+/**
+ * The `environment.config.changed` event payload (Story MOTIR-9795 · MOTIR-9961)
+ * — one per add, replace or delete of an environment entry. It names the entry
+ * and never carries its value, secret or not.
+ */
+export interface EnvironmentConfigChangedData {
+  workspaceId: string;
+  projectRepositoryId: string;
+  environment: 'production' | 'preview' | 'release';
+  name: string;
+  action: 'added' | 'replaced' | 'deleted';
+  actorId: string;
+}
+
 export interface PullRequestHeadMovedData {
   /** The repository's tenant — `github_repo.workspace_id`. */
   workspaceId: string;
@@ -939,7 +998,9 @@ export type JobEventData<N extends JobEventName> = JobEventDataMap[N];
  * `email.send` + the `work-item/*` events.
  */
 export type { DesignAutoRerunRequestedData };
+export type { PreviewEffectRequestedData, PreviewStartRequestedData };
 export type { GateResumeRequestedData };
+export type { PlanOfferRequirementPageRequestedData };
 
 export type WorkspaceScopedEventName = Exclude<JobEventName, `system.${string}`>;
 

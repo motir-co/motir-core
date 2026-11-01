@@ -350,9 +350,10 @@ describe('no flag changes a default', () => {
     const queries = server.v1Calls
       .filter((c) => c.path.endsWith('/dispatch-prompt'))
       .map((c) => [...c.query.keys()]);
-    // `agentReport` is not a flag: every prompt read declares that this CLI posts
-    // the agent's self-report (MOTIR-8810), so it is the one key always present.
-    expect(queries).toEqual([['agentReport']]);
+    // `agentReport` and `agentReportDecisions` are not flags: every prompt read
+    // declares that this CLI posts the agent's self-report (MOTIR-8810) and the
+    // decisions in it (MOTIR-10000), so they are the keys always present.
+    expect(queries).toEqual([['agentReport', 'agentReportDecisions']]);
   });
 
   it('rejects an unknown findings flag rather than ignoring it', () => {

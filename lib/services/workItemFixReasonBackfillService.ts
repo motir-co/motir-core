@@ -118,6 +118,7 @@ function emptyByReason(): FixReasonBackfillReport['byReason'] {
     run_died: 0,
     queue_failed: 0,
     conflicted: 0,
+    out_of_date: 0,
     ci_failed: 0,
     changes_requested: 0,
     none: 0,

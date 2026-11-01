@@ -30,7 +30,6 @@ import {
   GuideReplanOfferNotOpenError,
   PlanOfferNotFoundError,
   PlanOfferNotOpenError,
-  PlanOfferRequirementNotSavedError,
   PlanOfferStartRefusedError,
   PlanChangeRunPauseTurnMismatchError,
   PlanChangeSessionNotFoundError,
@@ -116,9 +115,6 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
   // longer open, and a start refused before anything was written, each with why.
   if (err instanceof PlanOfferNotOpenError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
-  }
-  if (err instanceof PlanOfferRequirementNotSavedError) {
-    return NextResponse.json({ code: err.code, error: err.message }, { status: 503 });
   }
   if (err instanceof PlanOfferStartRefusedError) {
     return NextResponse.json(

@@ -44,6 +44,10 @@ const { announceGateDecided } = vi.hoisted(() => ({ announceGateDecided: vi.fn()
 vi.mock('@/lib/approvals/decidedGates', () => ({
   announceGateDecided,
   useDecidedGate: () => null,
+  // The press-in-flight mark (MOTIR-9696) has nothing to tell a list here.
+  markGatePressPending: () => {},
+  clearGatePressPending: () => {},
+  useGatePressPending: () => false,
 }));
 
 const { ApprovalOverlay } = await import('@/components/approvals/ApprovalOverlay');
@@ -88,6 +92,7 @@ function reviewView(over: Partial<AgentReviewViewDto> = {}): AgentReviewViewDto 
       startedAt: '2026-09-29T09:41:00.000Z',
     },
     settingsDoorHref: null,
+    findingsRefs: {},
     ...over,
   };
 }

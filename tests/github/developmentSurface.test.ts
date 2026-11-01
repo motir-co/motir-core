@@ -197,6 +197,8 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         // as `ci: null` draws no pill. It stays inside `toEqual` for the same reason `id`
         // does: the key must be PRESENT.
         githubReview: null,
+        // MOTIR-10099: no preview record, so the row draws no preview line.
+        preview: null,
         // MOTIR-5916: the branch it targets, and whether the host reports it conflicted AT
         // its head — nothing has read its mergeability, so it is not.
         baseRef: 'main',
@@ -256,6 +258,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
         headSha: null, // …and no check rows → no known head (MOTIR-5691)
         url: 'https://github.com/moooon/acme/pull/7',
         githubReview: null, // MOTIR-5602 — nobody reviewed it
+        preview: null,
         baseRef: 'main', // MOTIR-5916 — see the sibling case above
         conflicted: false,
       },

@@ -1,4 +1,5 @@
 import { registerGitProvider } from '../registry';
+import { FULL_COMMIT_SHA } from '../commitSha';
 import {
   createAppJwt,
   GithubAppNotConfiguredError,
@@ -7,17 +8,24 @@ import {
 } from '@/lib/github/appAuth';
 import { githubAppRoleForRepo } from '@/lib/github/appRoleForRepo';
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
+import { mergeCommitFacts } from '@/lib/hosting/mergeCommit';
 import {
   CHANGED_FILES_MAX,
   CHANGED_FILES_TIMEOUT_MS,
-  REPO_FILE_MAX_BYTES,
+  REPO_FILE_FETCH_MAX_BYTES,
   COMMIT_COMPARE_TIMEOUT_MS,
   MERGE_CHANGE_REQUEST_TIMEOUT_MS,
   REPO_FILE_READ_TIMEOUT_MS,
   REPO_TARBALL_TIMEOUT_MS,
   type GitProvider,
 } from '../provider';
-import { classifyRepoBlob, describeBody, normalizeRepoFilePath } from '../fileRead';
+import {
+  classifyRepoBlob,
+  describeBody,
+  normalizeRepoFilePath,
+  parseGithubDirectoryListing,
+  REPO_DIRECTORY_MAX_ENTRIES,
+} from '../fileRead';
 import {
   MergeChangeRequestError,
   RepoFileReadError,
@@ -39,8 +47,10 @@ import type {
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
+  NormalizedProductionImageRun,
   NormalizedWorkflowRunEvent,
   RepoFileReadResult,
+  RefResolution,
   CommitComparison,
   ChangedFile,
   ChangedFileStatus,
@@ -313,6 +323,12 @@ function allowedMergeMethod(repo: Record<string, unknown> | null): string | unde
 // GitHub's wording for a refusal made by a REQUIRED CHECK. Read from the 405's own
 // message because `mergeable_state` answers `blocked` for a missing review and a
 // failing required check alike.
+//
+// ⚠️ IT IS ASKED ONLY AFTER `behind` (Bug MOTIR-10054). A base branch whose required
+// checks are STRICT refuses a pull request that is behind it, and GitHub's 405 then
+// talks about the required status checks (*"2 of 2 required status checks are
+// expected."*) although every check on the head is green. The state word is the
+// reliable answer there, so it is read first.
 const CHECKS_NOT_GREEN_MESSAGE =
   /status check|checks? (?:is|are) (?:expected|failing|pending|in progress)/i;
 const MERGE_QUEUE_MESSAGE = /merge queue/i;
@@ -350,6 +366,14 @@ function permissionNamedBy(res: Response): Omit<MergeRefusal, 'code'> {
   const first = res.headers.get('x-accepted-github-permissions')?.split(/[;,]/)[0]?.trim();
   return first && first.includes('=') ? { permission: first.replace('=', ': ') } : {};
 }
+
+/**
+ * GitHub's `mergeable_state` for a head that is behind a base branch requiring pull
+ * requests to be up to date (Bug MOTIR-10054). GitHub answers it ONLY when the base
+ * requires it — a base that does not reads `clean` — so the word alone says both that
+ * the branch is behind and that being behind blocks the merge.
+ */
+const OUT_OF_DATE_STATE = 'behind';
 
 /** Does the base branch's active ruleset require a merge queue? */
 function rulesRequireMergeQueue(rules: unknown): boolean {
@@ -429,6 +453,10 @@ async function githubEnqueue(
     });
   }
   if (HEAD_MOVED_MESSAGE.test(message)) return mergeRefused('subject_changed');
+  // Behind a strict base, the queue's message names the checks too (MOTIR-10054).
+  if (pull?.['mergeable_state'] === OUT_OF_DATE_STATE) {
+    return mergeRefused('out_of_date', message ? { reason: message } : {});
+  }
   if (ENQUEUE_CHECKS_MESSAGE.test(message)) {
     return mergeRefused('checks_not_green', { reason: message });
   }
@@ -718,10 +746,15 @@ export const githubProvider: GitProvider = {
       return mergeRefused('subject_changed');
     }
     if (pr?.['mergeable_state'] === 'dirty') return mergeRefused('conflict');
+    // Behind a strict base: GitHub's message names the required checks, but they are
+    // green — the branch has to be brought up to date (MOTIR-10054).
+    if (pr?.['mergeable_state'] === OUT_OF_DATE_STATE) {
+      return mergeRefused('out_of_date', message ? { reason: message } : {});
+    }
     if (CHECKS_NOT_GREEN_MESSAGE.test(message) || pr?.['mergeable_state'] === 'unstable') {
       return mergeRefused('checks_not_green', message ? { reason: message } : {});
     }
-    // `blocked`, `behind`, a draft, or a state GitHub adds later: the host said no
+    // `blocked`, a draft, or a state GitHub adds later: the host said no
     // and named a rule. It is a refusal with the host's own reason — never a throw,
     // because the host DID answer.
     return mergeRefused('branch_protected', message ? { reason: message } : {});
@@ -1046,29 +1079,59 @@ export const githubProvider: GitProvider = {
         ? { outcome: 'ref_not_found', path: guarded.path, ref }
         : { outcome: 'not_found', path: guarded.path, ref };
     }
-    // 403 covers BOTH a refused credential and a blob over the inline limit;
-    // 401 is only the credential. GitHub says which in the body, and the two
-    // have opposite meanings for a caller: one is "ask a smaller question",
-    // the other is "this connection is broken".
+    // 403 covers BOTH a refused credential and a blob over what the raw media
+    // type serves (100 MB); 401 is only the credential. GitHub says which in the
+    // body, and the two have opposite meanings for a caller: one is "this file
+    // cannot be read here", the other is "this connection is broken".
     if (res.status === 403 || res.status === 401) {
       const body = await res.text().catch(() => '');
-      return /too_large|larger than 1 ?MB|over the (file )?size limit/i.test(body)
-        ? { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES }
+      return /too_large|larger than \d+ ?MB|over the (file )?size limit/i.test(body)
+        ? { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_FETCH_MAX_BYTES }
         : { outcome: 'unauthorized', path: guarded.path, ref };
     }
     if (!res.ok) {
       throw new RepoFileReadError('github', res.status, await describeBody(res));
     }
 
+    // A declared size over what is fetched is refused before the body is
+    // buffered — up to 100 MB is now read, so the buffer is no longer small.
+    const declared = Number(res.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > REPO_FILE_FETCH_MAX_BYTES) {
+      return {
+        outcome: 'too_large',
+        path: guarded.path,
+        ref,
+        limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+      };
+    }
     // The BYTES, never `res.text()` — a lenient decode turns a binary blob into
     // `found` and inflates its size (`classifyRepoBlob`, MOTIR-7873).
     const blob = new Uint8Array(await res.arrayBuffer());
-    // The size arm the host did not take. A directory read, a repo whose blob
+    // A DIRECTORY is answered with GitHub's JSON listing whatever media type was
+    // asked for (MOTIR-9868): named and listed, never handed over as text.
+    const listing = parseGithubDirectoryListing(blob, guarded.path);
+    if (listing) {
+      return {
+        outcome: 'directory',
+        path: guarded.path,
+        ref,
+        entries: listing,
+        truncated: listing.length >= REPO_DIRECTORY_MAX_ENTRIES,
+      };
+    }
+    // The size arm the host did not take. A repo whose blob
     // limit differs, a future endpoint change: whatever the reason, a caller
     // must never receive more than the named bound WITHOUT being told, so the
-    // check is ours as well as GitHub's — on the blob's REAL length.
-    if (blob.byteLength > REPO_FILE_MAX_BYTES) {
-      return { outcome: 'too_large', path: guarded.path, ref, limitBytes: REPO_FILE_MAX_BYTES };
+    // check is ours as well as GitHub's — on the blob's REAL length. The 1 MB
+    // WHOLE-file limit is not this one: it is the service's, and a ranged read
+    // is served past it (MOTIR-10143).
+    if (blob.byteLength > REPO_FILE_FETCH_MAX_BYTES) {
+      return {
+        outcome: 'too_large',
+        path: guarded.path,
+        ref,
+        limitBytes: REPO_FILE_FETCH_MAX_BYTES,
+      };
     }
     const classified = classifyRepoBlob(blob);
     if (classified.kind === 'binary') {
@@ -1081,6 +1144,54 @@ export const githubProvider: GitProvider = {
       text: classified.text,
       bytes: blob.byteLength,
     };
+  },
+
+  async resolveRef(
+    installationId: string,
+    owner: string,
+    name: string,
+    ref: string,
+  ): Promise<RefResolution> {
+    const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
+    const { token } = await mintInstallationToken(installationId, role);
+    const url = `${GITHUB_API}/repos/${owner}/${name}/commits/${encodeURIComponent(ref)}`;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REPO_FILE_READ_TIMEOUT_MS);
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          authorization: `Bearer ${token}`,
+          // The SHA media type: the body is the commit id alone, not the commit.
+          accept: 'application/vnd.github.sha',
+          'user-agent': 'motir',
+        },
+        signal: controller.signal,
+      });
+    } catch (err) {
+      return {
+        outcome: 'unreachable',
+        ref,
+        failure: controller.signal.aborted ? 'timeout' : 'unreachable',
+        detail: controller.signal.aborted
+          ? `no response within ${REPO_FILE_READ_TIMEOUT_MS}ms`
+          : err instanceof Error
+            ? err.message
+            : 'unknown',
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+    // 422 is GitHub's answer for a ref that is not a valid commit-ish at all.
+    if (res.status === 404 || res.status === 422) return { outcome: 'ref_not_found', ref };
+    if (res.status === 401 || res.status === 403) return { outcome: 'unauthorized', ref };
+    if (!res.ok) throw new RepoFileReadError('github', res.status, await describeBody(res));
+    const sha = (await res.text()).trim().toLowerCase();
+    if (!FULL_COMMIT_SHA.test(sha)) {
+      throw new RepoFileReadError('github', res.status, 'the commit lookup returned no sha');
+    }
+    return { outcome: 'resolved', ref, sha };
   },
 
   async fetchInstallation(installationId: string): Promise<NormalizedInstallation> {
@@ -1606,6 +1717,65 @@ export const githubProvider: GitProvider = {
       repoName,
       workflowName: typeof run['name'] === 'string' ? run['name'] : null,
       completedAt,
+    };
+  },
+
+  // --- Production releases (Story MOTIR-9797 · MOTIR-10031) -----------------
+
+  parseProductionImageRunEvent(rawPayload: unknown): NormalizedProductionImageRun | null {
+    const payload = asRecord(rawPayload);
+    if (!payload || payload['action'] !== 'completed') return null;
+    const run = asRecord(payload['workflow_run']);
+    const repo = asRecord(payload['repository']);
+    if (!run || !repo) return null;
+
+    const text = (value: unknown): string | null =>
+      typeof value === 'string' && value.length > 0 ? value : null;
+    const providerRepoId = idToString(repo['id']);
+    const runId = idToString(run['id']);
+    // The owner from the delivery's own `repository.owner.login`, as the meter
+    // and the fleet read it — never the stored mirror.
+    const repoOwner = text(asRecord(repo['owner'])?.['login']);
+    const repoName = text(repo['name']);
+    const workflowName = text(run['name']);
+    const event = text(run['event']);
+    const headBranch = text(run['head_branch']);
+    const headSha = text(run['head_sha']);
+    const conclusion = text(run['conclusion']);
+    if (
+      !providerRepoId ||
+      !runId ||
+      !repoOwner ||
+      !repoName ||
+      !workflowName ||
+      !event ||
+      !headBranch ||
+      !headSha ||
+      !conclusion
+    ) {
+      return null;
+    }
+    const rawAttempt = run['run_attempt'];
+    const runAttempt =
+      typeof rawAttempt === 'number' && Number.isInteger(rawAttempt) && rawAttempt > 0
+        ? rawAttempt
+        : 1;
+    // What the merge was, for the Production panel (MOTIR-10103) — the head
+    // commit's message only; a delivery without one still releases.
+    const headCommit = mergeCommitFacts(asRecord(run['head_commit'])?.['message']);
+    return {
+      providerRepoId,
+      repoOwner,
+      repoName,
+      workflowName,
+      event,
+      headBranch,
+      headSha,
+      conclusion,
+      runId,
+      runAttempt,
+      headCommitSubject: headCommit.subject,
+      pullRequestNumber: headCommit.pullRequestNumber,
     };
   },
 

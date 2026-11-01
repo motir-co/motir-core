@@ -975,6 +975,42 @@ describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR
     ).rejects.toBeInstanceOf(EntitlementExceededError);
   });
 
+  it('counts the domains of EVERY workspace in the org, not only the adding one (MOTIR-10116)', async () => {
+    // The adding transaction is bound to workspace A, and `public_address`'s
+    // tenancy policy hides B's rows from any invoker read — so a plain count saw
+    // three, and the sixth domain was admitted. Neither workspace is at the cap
+    // on its own; together they are, which is the fixture where the caller's
+    // view and the true population differ.
+    const fx = await makeWorkItemFixture();
+    const orgId = await orgIdOf(fx.workspaceId);
+    await setTier(orgId, SCALED);
+    const sibling = await makeSiblingWorkspaceProject(orgId, fx.workspaceId);
+    await seedCustomDomains(fx, 3);
+    await seedCustomDomains(sibling, 2, 'sibling');
+
+    await expect(
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertCanAddCustomDomain(orgId, tx)),
+    ).rejects.toMatchObject({ entitlement: 'custom_domains', detail: { limit: 5, usage: 5 } });
+  });
+
+  it('answers 0 for an organisation the bound workspace does not belong to', async () => {
+    // The count reads past RLS, so its one boundary is the bound workspace: a
+    // caller learns the size of its OWN organisation's estate and no other's.
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
+    await seedCustomDomains(other, 4, 'other');
+    const otherOrgId = await orgIdOf(other.workspaceId);
+
+    const seen = await withWorkspaceContext(fx.ctx, (tx) =>
+      publicAddressRepository.countCustomDomainsByOrganization(otherOrgId, tx),
+    );
+    const own = await withWorkspaceContext(other.ctx, (tx) =>
+      publicAddressRepository.countCustomDomainsByOrganization(otherOrgId, tx),
+    );
+    expect(seen).toBe(0);
+    expect(own).toBe(4);
+  });
+
   it('never caps the META org', async () => {
     const fx = await makeWorkItemFixture();
     const orgId = await orgIdOf(fx.workspaceId);
@@ -1059,15 +1095,30 @@ describe('entitlementsService — custom-domain cap (Story MOTIR-3878 · the ADR
 async function seedCustomDomains(
   fx: { workspaceId: string; projectId: string },
   count: number,
+  prefix = 'seed',
 ): Promise<void> {
   await adminDb.publicAddress.createMany({
     data: Array.from({ length: count }, (_, i) => ({
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
-      hostname: `seed-${i}.acme.example`,
+      hostname: `${prefix}-${i}.acme.example`,
       kind: 'custom_domain' as const,
       status: 'issued' as const,
-      verificationToken: `motir-verify-seed-${i}`,
+      verificationToken: `motir-verify-${prefix}-${i}`,
     })),
   });
+}
+
+/** A second workspace in `orgId`, holding one project, seeded past RLS. */
+async function makeSiblingWorkspaceProject(
+  orgId: string,
+  firstWorkspaceId: string,
+): Promise<{ workspaceId: string; projectId: string }> {
+  const workspace = await adminDb.workspace.create({
+    data: { organizationId: orgId, name: 'Second', slug: `second-${firstWorkspaceId}` },
+  });
+  const project = await adminDb.project.create({
+    data: { workspaceId: workspace.id, name: 'Sibling', slug: 'sibling', identifier: 'SIB' },
+  });
+  return { workspaceId: workspace.id, projectId: project.id };
 }

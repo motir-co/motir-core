@@ -19,6 +19,54 @@ of every request were.
 
 The job worker does not run `instrumentation.ts`, so it records nothing here.
 
+## On AWS
+
+On AWS the same series reach CloudWatch, and Fly's scrape of `9091` keeps
+working unchanged wherever `MONITORING_METRICS_PORT` is set.
+
+- **Published by** a collector container (the AWS Distro for OpenTelemetry)
+  beside the web task, which scrapes the web's own `/metrics` over the task's
+  loopback every 15 s and writes the series with its `awsemf` exporter. The
+  production parameters turn it on for the web only (motir-infra,
+  `lib/config/environments/production.ts`, `monitoring.requestTiming`).
+- **Stored in** the CloudWatch namespace `monitoring.metricNamespace`, which is
+  `Motir/Core` in production. The raw EMF lines land in the log group
+  `/motir/core/web/request-timing`, one log stream per task.
+- **Dimensioned by** the collector's `dimensionSets`. Production declares two
+  sets for each labelled series, a per-route set and a per-tool set beside it:
+  `route, context, outcome, attempt` and `route, tool, context, outcome, attempt`
+  for `db_tx_wait_seconds` and `db_tx_hold_seconds`; `route` and `route, tool`
+  for `db_pool_waiting_at_acquire`, `db_pool_idle_at_acquire` and
+  `db_pool_unmeasured_total`. `db_pool_max` and `db_pool_count` have none. A
+  query can group or filter only by a label in the set it reads.
+- **Every request publishes per route; only an MCP tool call publishes per
+  tool.** `tool` is empty outside a tool call, an empty Prometheus label is an
+  absent one, and `awsemf` keeps a set only for a point carrying every label in
+  it. So the per-route set counts every transaction, tool calls included, and
+  the per-tool set counts tool calls only. Read a per-route total from the
+  per-route set: the per-tool set misses every page request (MOTIR-10070). Fly's `instance` label has no equivalent, because the
+  collector adds no task dimension. Per-task memory and CPU come from Container
+  Insights instead (see [the AWS alarms](./aws-alarms.md)).
+- **Only count, sum and average are real.** `awsemf` sends each histogram as one
+  statistic set per period, not as buckets, and a Prometheus histogram carries
+  no minimum or maximum. So of CloudWatch's statistics only `SampleCount`, `Sum`
+  and `Average` (Sum / SampleCount) hold measured values. **`Minimum` and
+  `Maximum` read 0 whatever was observed — never read them as a longest wait or
+  hold.** And `histogram_quantile` has no CloudWatch equivalent: **p50, p95 and
+  p99 are not available on AWS.** The nearest reading beside each quantile query
+  below is the Average.
+- **Cost.** Each distinct combination of a series' dimension values is a
+  separately billed CloudWatch custom metric.
+
+The CloudWatch blocks below are
+[Metrics Insights](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/query_with_cloudwatch-metrics-insights.html)
+queries. Paste one into the console's Metrics → All metrics → Query tab, or pass
+it to `aws cloudwatch get-metric-data` as a `MetricDataQueries` expression. In
+Metrics Insights, `SUM` reads the Sum statistic and `COUNT` reads SampleCount;
+`MAX` and `MIN` read the Maximum and Minimum, which are 0 here. `SCHEMA` matches
+metrics with exactly the dimensions it names, so it picks the set a query reads.
+Set the period to the window you would have put in `[5m]`.
+
 ## The series
 
 | series                       | kind      | labels                                           | what it is                                                                                                            |
@@ -79,12 +127,28 @@ histogram_quantile(0.95, sum by (le, route) (rate(db_tx_wait_seconds_bucket{app=
 histogram_quantile(0.99, sum by (le, route) (rate(db_tx_wait_seconds_bucket{app="motir-core"}[5m])))
 ```
 
+**CloudWatch** has no p50, p95 or p99, and no longest wait. The nearest reading
+is the average wait, the first query divided by the second (a metric-math
+`m1 / m2`):
+
+```sql
+SELECT SUM(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) GROUP BY route
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) GROUP BY route
+```
+
 ### Hold per route — p50, p95, p99
 
 ```promql
 histogram_quantile(0.50, sum by (le, route) (rate(db_tx_hold_seconds_bucket{app="motir-core"}[5m])))
 histogram_quantile(0.95, sum by (le, route) (rate(db_tx_hold_seconds_bucket{app="motir-core"}[5m])))
 histogram_quantile(0.99, sum by (le, route) (rate(db_tx_hold_seconds_bucket{app="motir-core"}[5m])))
+```
+
+**CloudWatch** has no quantiles and no longest hold. Use the average (`m1 / m2`):
+
+```sql
+SELECT SUM(db_tx_hold_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) GROUP BY route
+SELECT COUNT(db_tx_hold_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) GROUP BY route
 ```
 
 ### Wait and hold per MCP tool — p50, p95, p99
@@ -99,12 +163,34 @@ histogram_quantile(0.95, sum by (le, tool) (rate(db_tx_hold_seconds_bucket{app="
 histogram_quantile(0.99, sum by (le, tool) (rate(db_tx_hold_seconds_bucket{app="motir-core", route="mcp"}[5m])))
 ```
 
+**CloudWatch** has no quantiles. The per-tool set holds tool calls only, so the
+average per tool (`m1 / m2`) works. Swap `db_tx_wait_seconds` for
+`db_tx_hold_seconds` to read hold:
+
+```sql
+SELECT SUM(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, tool, context, outcome, attempt) WHERE route = 'mcp' GROUP BY tool
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, tool, context, outcome, attempt) WHERE route = 'mcp' GROUP BY tool
+```
+
 ### The same, per machine
 
 Add `instance` to the `by`. For example, the p95 wait per route and machine:
 
 ```promql
 histogram_quantile(0.95, sum by (le, route, instance) (rate(db_tx_wait_seconds_bucket{app="motir-core"}[5m])))
+```
+
+**CloudWatch** has no equivalent. The series carry no task dimension, because
+Fly's `instance` label is added by Fly's scrape and the collector adds none.
+Two readings come close. A task's memory and CPU are in Container Insights.
+The raw per-task values are in the log group `/motir/core/web/request-timing`,
+whose log streams are named by task id, and can be read with Logs Insights. The
+lines carry the same statistic set, so read the average (their `Max` is 0 too):
+
+```
+fields @logStream, route
+| filter ispresent(db_tx_wait_seconds.Count)
+| stats sum(db_tx_wait_seconds.Sum) / sum(db_tx_wait_seconds.Count) as avg_wait_seconds by @logStream, route
 ```
 
 ### Pool waiting at acquire, per route
@@ -114,6 +200,14 @@ histogram_quantile(0.95, sum by (le, route) (rate(db_pool_waiting_at_acquire_buc
 # the mean queue a transaction joined
 sum by (route) (rate(db_pool_waiting_at_acquire_sum{app="motir-core"}[5m]))
   / sum by (route) (rate(db_pool_waiting_at_acquire_count{app="motir-core"}[5m]))
+```
+
+**CloudWatch** has no p95 and no longest queue. The mean queue (`m1 / m2`, the
+same quantity as the second Fly query):
+
+```sql
+SELECT SUM(db_pool_waiting_at_acquire) FROM SCHEMA("Motir/Core", route) GROUP BY route
+SELECT COUNT(db_pool_waiting_at_acquire) FROM SCHEMA("Motir/Core", route) GROUP BY route
 ```
 
 ### The retry rate
@@ -126,6 +220,14 @@ sum by (route) (rate(db_tx_wait_seconds_count{app="motir-core", attempt="2"}[5m]
   / sum by (route) (rate(db_tx_wait_seconds_count{app="motir-core"}[5m]))
 ```
 
+**CloudWatch**: `attempt` is in the dimension set, so the rate is exact. It is
+the first query divided by the second (`m1 / m2`):
+
+```sql
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) WHERE attempt = '2' GROUP BY route
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) GROUP BY route
+```
+
 ### The unlabelled share
 
 This is how much of the database's transaction load comes from routes outside the
@@ -136,12 +238,26 @@ sum(rate(db_tx_wait_seconds_count{app="motir-core", route="unlabelled"}[5m]))
   / sum(rate(db_tx_wait_seconds_count{app="motir-core"}[5m]))
 ```
 
+**CloudWatch**, exact (`m1 / m2`):
+
+```sql
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) WHERE route = 'unlabelled'
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt)
+```
+
 ### Transactions per second, per route
 
 This shows that every request is recorded, sampled for a trace or not.
 
 ```promql
 sum by (route) (rate(db_tx_wait_seconds_count{app="motir-core"}[5m]))
+```
+
+**CloudWatch**: the transactions per period. Divide by the period in seconds
+(`m1 / PERIOD(m1)`) for a per-second rate:
+
+```sql
+SELECT COUNT(db_tx_wait_seconds) FROM SCHEMA("Motir/Core", route, context, outcome, attempt) GROUP BY route
 ```
 
 ## What these series do not say

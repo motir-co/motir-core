@@ -24,6 +24,7 @@ const NAMES: Record<WorkItemFixReasonDto, string> = {
   run_died: 'To fix · run died',
   queue_failed: 'To fix · failed in the merge queue',
   conflicted: 'To fix · conflicts with its base branch',
+  out_of_date: 'To fix · out of date with its base branch',
   ci_failed: 'To fix · CI failed',
   changes_requested: 'To fix · changes requested',
 };

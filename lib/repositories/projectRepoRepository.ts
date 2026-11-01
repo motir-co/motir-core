@@ -1,5 +1,8 @@
 import {
   Prisma,
+  type HostingSize,
+  type HostingTarget,
+  type HostingUseCase,
   type ProjectRepo,
   type ProjectRepoCollaboratorPermission,
   type ProjectRepoRole,
@@ -7,7 +10,10 @@ import {
 } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
-import { ESTABLISHED_PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';
+import {
+  ESTABLISHED_PROJECT_REPO_STATES,
+  SEED_SOURCE_ORGANIZATION,
+} from '@/lib/projectRepos/vocabulary';
 
 // Single Prisma operations on the `project_repository` table — a project's
 // REPOSITORY SET (Story MOTIR-1775 · MOTIR-1780).
@@ -61,6 +67,8 @@ interface JoinedRow {
   failureReason: string | null;
   proposalSignal: string | null;
   githubRepoId: string | null;
+  seedHeadSha: string | null;
+  seedMatch: string | null;
   position: string;
   createdAt: Date;
   updatedAt: Date;
@@ -73,6 +81,12 @@ interface JoinedRow {
   takeoverTransferredAt: Date | null;
   takeoverCompletedAt: Date | null;
   takeoverFailureReason: string | null;
+  hostingTarget: HostingTarget | null;
+  hostingUseCase: HostingUseCase | null;
+  hostingSize: HostingSize | null;
+  previewPushNamespace: string | null;
+  previewEnabledAt: Date | null;
+  previewCredentialExpiresAt: Date | null;
   // The APPROVING USER's collaborator record (the `admin` one — ADR §3 Q2), or
   // all-NULL when the row has none. Only that record is joined here: this read
   // feeds the establish step, which asks "can *I* reach my code?", and joining a
@@ -142,6 +156,14 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
     takeoverTransferredAt: r.takeoverTransferredAt,
     takeoverCompletedAt: r.takeoverCompletedAt,
     takeoverFailureReason: r.takeoverFailureReason,
+    hostingTarget: r.hostingTarget,
+    hostingUseCase: r.hostingUseCase,
+    hostingSize: r.hostingSize,
+    previewPushNamespace: r.previewPushNamespace,
+    previewEnabledAt: r.previewEnabledAt,
+    previewCredentialExpiresAt: r.previewCredentialExpiresAt,
+    seedHeadSha: r.seedHeadSha,
+    seedMatch: r.seedMatch,
     // Zero or one record — the mapper then picks the `admin` one out of it, which
     // is exactly what the JOIN already selected. Keeping the shape a LIST (rather
     // than a nullable field) means this read and the Prisma-`include` reads below
@@ -197,7 +219,88 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
   };
 }
 
+/** What the preview lifecycle reads of a row (MOTIR-5776). */
+const PREVIEW_LIFECYCLE_SUBJECT_SELECT = {
+  id: true,
+  workspaceId: true,
+  seedSource: true,
+  state: true,
+  hostingTarget: true,
+  takeoverState: true,
+  previewPushNamespace: true,
+  previewEnabledAt: true,
+  githubRepoId: true,
+  githubRepo: {
+    select: {
+      id: true,
+      repoId: true,
+      owner: true,
+      name: true,
+      installation: { select: { installationId: true } },
+    },
+  },
+} satisfies Prisma.ProjectRepoSelect;
+
 export const projectRepoRepository = {
+  /**
+   * The row a STARTER PROMOTION names, in any workspace, with the repository it
+   * realised (Story MOTIR-704 · MOTIR-710). Inside a platform context only: the
+   * operator names a row by id with no tenant to bind, and the read passes on the
+   * `platform_staff` arms of `project_repository` and `github_repo`
+   * (`20261028220000_seed_registry_promotion`). Nothing else calls it.
+   */
+  async findForPromotionInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        state: true,
+        seedSource: true,
+        takeoverState: true,
+        githubRepo: { select: { owner: true, name: true, organizationId: true } },
+      },
+    });
+  },
+
+  /**
+   * The repositories the starter library names as promotion sources, in any
+   * workspace (MOTIR-712): each row's realised `owner/repo`. Inside a platform
+   * context only, on the same `platform_staff` arms as
+   * {@link findForPromotionInTx}.
+   */
+  async findRepoRefsForPromotionInTx(ids: string[], tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, githubRepo: { select: { owner: true, name: true } } },
+    });
+  },
+
+  /**
+   * Every repository Motir CREATED or is about to, in any workspace, newest
+   * first — the promote form's picker (MOTIR-712). An organisation's own
+   * repository (`seedSource = 'organization'`) is never listed: Motir never
+   * copies a customer's code. Inside a platform context only.
+   */
+  async listPromotionSourcesInTx(take: number, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findMany({
+      where: { seedSource: { not: SEED_SOURCE_ORGANIZATION } },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      take,
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        state: true,
+        takeoverState: true,
+        project: { select: { name: true } },
+        githubRepo: { select: { owner: true, name: true } },
+      },
+    });
+  },
+
   /**
    * A project's whole repository set, ORDERED (primary first), with each row's
    * realized `GithubRepo` joined — in ONE query.
@@ -254,6 +357,14 @@ export const projectRepoRepository = {
         pr."takeover_transferred_at" AS "takeoverTransferredAt",
         pr."takeover_completed_at" AS "takeoverCompletedAt",
         pr."takeover_failure_reason" AS "takeoverFailureReason",
+        pr."hosting_target"    AS "hostingTarget",
+        pr."hosting_use_case"  AS "hostingUseCase",
+        pr."hosting_size"      AS "hostingSize",
+        pr."preview_push_namespace" AS "previewPushNamespace",
+        pr."preview_enabled_at" AS "previewEnabledAt",
+        pr."preview_credential_expires_at" AS "previewCredentialExpiresAt",
+        pr."seed_head_sha"     AS "seedHeadSha",
+        pr."seed_match"        AS "seedMatch",
         oc."github_login"      AS "ownerLogin",
         oc."permission"        AS "ownerPermission",
         oc."invited_at"        AS "ownerInvitedAt",
@@ -819,6 +930,24 @@ export const projectRepoRepository = {
   },
 
   /**
+   * Write a row's HOSTING columns — target, use case and size (MOTIR-9808). A
+   * narrow writer, like `setTakeover`, so the three columns move only through
+   * `projectRepoSetService.setHosting`, which owns the set-once rule and keeps
+   * customer rows out.
+   */
+  async setHosting(
+    id: string,
+    data: {
+      hostingTarget: HostingTarget;
+      hostingUseCase: HostingUseCase;
+      hostingSize: HostingSize;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo> {
+    return tx.projectRepo.update({ where: { id }, data });
+  },
+
+  /**
    * The realized repositories of a project's ESTABLISHED rows — the input to the
    * runner group's access list (Story MOTIR-1916 · MOTIR-1972).
    *
@@ -861,6 +990,84 @@ export const projectRepoRepository = {
   },
 
   /**
+   * The facts a PRODUCTION home is decided from (Story MOTIR-9797 · MOTIR-10026):
+   * tenancy, name, seed source, establish state and hosting target. A read by id
+   * alone, like {@link findHostingIdentityInTx} — the caller holds a
+   * `withSystemContext` transaction (`project_repository_system_read`).
+   */
+  async findDeployFactsInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        projectId: true,
+        name: true,
+        seedSource: true,
+        state: true,
+        hostingTarget: true,
+        hostingSize: true,
+        githubRepo: { select: { owner: true, name: true, defaultBranch: true } },
+      },
+    });
+  },
+
+  /**
+   * One page of the repositories production enablement's backfill walks
+   * (MOTIR-10027): established, not a customer repository, Fly-targeted and
+   * realized on GitHub, in id order after `afterId`. A platform read across
+   * workspaces — the caller holds a `withSystemContext` transaction.
+   */
+  async listProductionCandidatesInTx(
+    afterId: string | null,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.projectRepo.findMany({
+      where: {
+        ...(afterId ? { id: { gt: afterId } } : {}),
+        state: { in: [...ESTABLISHED_PROJECT_REPO_STATES] },
+        hostingTarget: 'fly',
+        seedSource: { not: SEED_SOURCE_ORGANIZATION },
+        githubRepoId: { not: null },
+      },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take,
+    });
+  },
+
+  /**
+   * A row's HOSTING IDENTITY for the AWS adapter (MOTIR-10010): its seed source
+   * (a customer repository is never hosted), the organisation its workspace
+   * belongs to, and its realized GitHub repository's id, if any. A platform read
+   * by id alone — the caller holds a `withSystemContext` transaction.
+   */
+  async findHostingIdentityInTx(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{
+    seedSource: string;
+    organizationId: string;
+    githubRepositoryId: string | null;
+  } | null> {
+    const row = await tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        seedSource: true,
+        workspace: { select: { organizationId: true } },
+        githubRepo: { select: { repoId: true } },
+      },
+    });
+    if (!row) return null;
+    return {
+      seedSource: row.seedSource,
+      organizationId: row.workspace.organizationId,
+      githubRepositoryId: row.githubRepo?.repoId ?? null,
+    };
+  },
+
+  /**
    * Whether ANY project in ANY of the organisation's workspaces has an
    * established row whose realized repository `hostOwner` owns (MOTIR-8966) —
    * "is this organisation already hosted in that org?". Case-insensitive on the
@@ -881,5 +1088,121 @@ export const projectRepoRepository = {
       select: { id: true },
     });
     return row !== null;
+  },
+  /**
+   * The facts preview enablement decides on for ONE row (MOTIR-5775): whether it
+   * is Motir-hosted and a web starter, its hosting target, whether a takeover has
+   * begun, its enablement record, and the repository's coordinates with GitHub's
+   * numeric installation id. A read by id alone, inside `withSystemContext` (the
+   * `project_repository_system_read` arm) — the backfill names rows across
+   * workspaces, and establishment hands over a row id.
+   */
+  async findPreviewSubjectInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        workspaceId: true,
+        seedSource: true,
+        state: true,
+        hostingTarget: true,
+        takeoverState: true,
+        previewPushNamespace: true,
+        previewEnabledAt: true,
+        previewCredentialExpiresAt: true,
+        githubRepo: {
+          select: { owner: true, name: true, installation: { select: { installationId: true } } },
+        },
+      },
+    });
+  },
+
+  /**
+   * The rows the preview backfill visits: Motir-created, realized, with a hosting
+   * target, no takeover, seeded from one of `seedSources`, and either never
+   * enabled or holding a credential that expires before `renewBefore`. Oldest
+   * first, at most `limit`. System context, like {@link findPreviewSubjectInTx}.
+   */
+  async listPreviewBackfillCandidatesInTx(
+    input: { seedSources: readonly string[]; renewBefore: Date; limit: number },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string }>> {
+    return tx.projectRepo.findMany({
+      where: {
+        state: 'created',
+        githubRepoId: { not: null },
+        hostingTarget: { not: null },
+        takeoverState: null,
+        seedSource: { in: [...input.seedSources] },
+        OR: [{ previewEnabledAt: null }, { previewCredentialExpiresAt: { lt: input.renewBefore } }],
+      },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+      take: input.limit,
+    });
+  },
+
+  /**
+   * The row a preview lifecycle event is about, found from the GitHub mirror row
+   * the delivery resolved to (Story MOTIR-5766 · MOTIR-5776). Every field the
+   * lifecycle decides "is this repository's preview switched on?" with, and the
+   * coordinates its outbound calls need. System context, like
+   * {@link findPreviewSubjectInTx}: a webhook has no tenant session. The first
+   * row by creation when (unusually) two projects list the same repository.
+   */
+  async findPreviewLifecycleSubjectByGithubRepoInTx(
+    githubRepoId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    return tx.projectRepo.findFirst({
+      where: { githubRepoId },
+      orderBy: { createdAt: 'asc' },
+      select: PREVIEW_LIFECYCLE_SUBJECT_SELECT,
+    });
+  },
+
+  /**
+   * What the preview GATE needs of a preview's repository (MOTIR-5779): the
+   * project whose `project:browse` admits a viewer, the hosting target its
+   * release runs on, whether a takeover moved it, and its GitHub name. The
+   * oldest row for the mirror, as {@link findPreviewLifecycleSubjectByGithubRepoInTx}
+   * picks it, so the gate and the lifecycle agree on which project owns a
+   * preview. Inside withSystemContext.
+   */
+  async findPreviewGateSubjectByGithubRepoInTx(githubRepoId: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findFirst({
+      where: { githubRepoId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        projectId: true,
+        workspaceId: true,
+        hostingTarget: true,
+        takeoverState: true,
+        githubRepo: { select: { owner: true, name: true } },
+      },
+    });
+  },
+
+  /** {@link findPreviewLifecycleSubjectByGithubRepoInTx}, by the row's own id —
+   *  what the takeover saga holds. */
+  async findPreviewLifecycleSubjectInTx(id: string, tx: Prisma.TransactionClient) {
+    return tx.projectRepo.findUnique({ where: { id }, select: PREVIEW_LIFECYCLE_SUBJECT_SELECT });
+  },
+
+  /**
+   * Write a row's preview enablement record — set by enable, cleared (all null)
+   * by disable. A narrow writer, like `setHosting`, so the columns move only
+   * through `previewEnablementService`.
+   */
+  async setPreviewEnablement(
+    id: string,
+    data: {
+      previewPushNamespace: string | null;
+      previewEnabledAt: Date | null;
+      previewCredentialExpiresAt: Date | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectRepo> {
+    return tx.projectRepo.update({ where: { id }, data });
   },
 };

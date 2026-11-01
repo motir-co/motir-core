@@ -49,6 +49,7 @@ import { capacityAlertEvaluation } from './definitions/capacityAlertEvaluation';
 import { fleetPoolGrowth } from './definitions/fleetPoolGrowth';
 import { hostAccountReconcile } from './definitions/hostAccountReconcile';
 import { hostAccountState } from './definitions/hostAccountState';
+import { hostingTenantAccountReconcile } from './definitions/hostingTenantAccountReconcile';
 import { hostedRunAdmit } from './definitions/hostedRunAdmit';
 import { hostedRunSupervise } from './definitions/hostedRunSupervise';
 import {
@@ -66,11 +67,15 @@ import { impersonationExpirySweep } from './definitions/impersonationExpirySweep
 import { supervisionSweep } from './definitions/supervisionSweep';
 import { abandonedPlanSweep } from './definitions/abandonedPlanSweep';
 import { codeGraphDriftSweep } from './definitions/codeGraphDriftSweep';
+import { previewEnablementSweep } from './definitions/previewEnablementSweep';
+import { previewEffect, previewReaper, previewStart } from './definitions/previewLifecycle';
+import { previewUsageAccrual } from './definitions/previewUsageAccrual';
 import { codeGraphIndexCatchUp } from './definitions/codeGraphIndexCatchUp';
 import { jobRunReap } from './definitions/jobRunReap';
 import { jobQueueRetention } from './definitions/jobQueueRetention';
 import { dataExportBuild } from './definitions/dataExportBuild';
 import { dataExportExpirySweep } from './definitions/dataExportExpirySweep';
+import { publicHostnameReservationSweep } from './definitions/publicHostnameReservationSweep';
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { runLivenessSweep } from './definitions/runLivenessSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
@@ -78,7 +83,11 @@ import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import { designAutoRerun } from './definitions/designAutoRerun';
 import { gateResume } from './definitions/gateResume';
+import { planOfferRequirementPage } from './definitions/planOfferRequirementPage';
 import { pullRequestBaseMoved } from './definitions/pullRequestBaseMoved';
+import { productionMergeRelease } from './definitions/productionMergeRelease';
+import { productionConfigRedeploy } from './definitions/productionConfigRedeploy';
+import { releaseDeploymentStatus } from './definitions/releaseDeploymentStatus';
 import { pullRequestHeadMoved } from './definitions/pullRequestHeadMoved';
 import {
   monitorConnectionPoll,
@@ -160,6 +169,7 @@ export const jobDefinitions = [
   fleetPoolGrowth,
   hostAccountReconcile,
   hostAccountState,
+  hostingTenantAccountReconcile,
   hostedRunAdmit,
   hostedRunSupervise,
   planDriftOnTransitioned,
@@ -175,11 +185,20 @@ export const jobDefinitions = [
   supervisionSweep,
   abandonedPlanSweep,
   codeGraphDriftSweep,
+  // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
+  previewEnablementSweep,
+  // The preview lifecycle (Story MOTIR-5766 · MOTIR-5776).
+  previewEffect,
+  previewStart,
+  previewReaper,
+  // Preview usage metered into the CI pool (Story MOTIR-5766 · MOTIR-5777).
+  previewUsageAccrual,
   codeGraphIndexCatchUp,
   jobRunReap,
   jobQueueRetention,
   dataExportBuild,
   dataExportExpirySweep,
+  publicHostnameReservationSweep,
   dispatchRunSweep,
   runLivenessSweep,
   accountErasureSweep,
@@ -193,9 +212,17 @@ export const jobDefinitions = [
   designAutoRerun,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).
   gateResume,
+  // The confirmed plan offer's requirement page, saved after the start (MOTIR-10091).
+  planOfferRequirementPage,
   pullRequestBaseMoved,
   // The head-push re-read beside it (MOTIR-7063): a push onto a base already moved.
   pullRequestHeadMoved,
+  // A merge starts a production release (Story MOTIR-9797 · MOTIR-10031).
+  productionMergeRelease,
+  // A production config change redeploys the live release (MOTIR-10032).
+  productionConfigRedeploy,
+  // Every production release posts its GitHub deployment status (MOTIR-10033).
+  releaseDeploymentStatus,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick and
   // its per-connection fan-out.
   monitorIssueReconcileTick,

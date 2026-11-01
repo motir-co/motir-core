@@ -1,15 +1,12 @@
 // The DTOs the public-address surfaces return — Story MOTIR-3878 · MOTIR-4215.
 // Services return these, never raw Prisma rows (`CLAUDE.md`'s 4-layer rule).
 
-/** One retired subdomain, kept for ever as a redirect (ADR §8). */
-export interface RetiredSubdomainDto {
-  readonly hostname: string;
-  readonly retiredAt: string;
-}
-
 /**
  * A workspace's tenant subdomain, or the shape a workspace that has none reads
  * as (`null` from the service).
+ *
+ * One name and nothing else (§8 Amendment 3 rule 1): a workspace has no aliases,
+ * and there is no rename cap to count down.
  */
 export interface PublicSubdomainDto {
   /** The label alone, e.g. `acme` — what the settings field edits. */
@@ -20,43 +17,55 @@ export interface PublicSubdomainDto {
   readonly url: string;
   readonly claimedAt: string;
   /**
-   * Every previous label, still redirecting. Present even when empty, so the
-   * pane renders the same shape before and after a first rename.
+   * When the workspace may next rename or release its subdomain (rule 4), or
+   * `null` when it may do so now. Sent because a limit the customer cannot see
+   * is a limit they meet as a refusal.
    */
-  readonly aliases: readonly RetiredSubdomainDto[];
-  /**
-   * How many renames remain (ADR §8's cap minus those used).
-   *
-   * Sent because a cap the customer cannot see is a cap they meet as a refusal.
-   * Derived rather than stored: the alias rows ARE the count.
-   */
-  readonly renamesLeft: number;
-}
-
-// ── Host resolution (MOTIR-4217) ───────────────────────────────────────────
-//
-// What `GET /api/public/hosts/{host}` answers. A DISCRIMINATED UNION rather
-// than one shape with nullable halves: the three cases have nothing in common
-// beyond the discriminator, and a router that has to check which fields are
-// present is a router that will one day check the wrong one.
-
-/** A workspace subdomain — the host lists that workspace's public projects. */
-export interface PublicHostWorkspaceDto {
-  readonly kind: 'workspace';
-  readonly workspace: { readonly name: string };
-  /** Every public project under it, freshest first. May be empty. */
-  readonly projects: ReadonlyArray<{ readonly identifier: string; readonly name: string }>;
+  readonly nextChangeAllowedAt: string | null;
 }
 
 /**
- * A RETIRED subdomain. The router 301s to `redirectTo` — this is the shape that
- * makes the ADR §8 never-released promise observable to a visitor rather than
- * merely true in the database.
+ * What renaming or releasing the subdomain would do RIGHT NOW — the confirm
+ * dialog's dated preview (rule 5). Computed by the same pure functions the write
+ * applies, so the date the dialog shows is the date the write stores. Advice,
+ * never authority: the write re-checks under the workspace lock.
  */
-export interface PublicHostAliasDto {
-  readonly kind: 'alias';
-  /** The live hostname to redirect to. */
-  readonly redirectTo: string;
+export interface SubdomainChangePreviewDto {
+  /** The hostname that would stop being served. */
+  readonly host: string;
+  /** `return_now` frees the name at once; `quarantine` holds it until `returnsAt`. */
+  readonly outcome: 'return_now' | 'quarantine';
+  readonly returnsAt: string | null;
+  /** Whether the 30-day limit allows a change now. */
+  readonly changeAllowed: boolean;
+  /** When a change is next allowed, or `null` when one is allowed now. */
+  readonly nextChangeAllowedAt: string | null;
+}
+
+/** What a release returns: when the released name returns to the pool, or `null` if it already has. */
+export interface SubdomainReleaseDto {
+  readonly returnsAt: string | null;
+}
+
+// ── Host resolution (MOTIR-4217; Story MOTIR-4528 · MOTIR-9511) ─────────────
+//
+// What `GET /api/public/hosts/{host}` answers. A DISCRIMINATED UNION rather
+// than one shape with nullable halves: the cases have nothing in common beyond
+// the discriminator, and a router that has to check which fields are present is
+// a router that will one day check the wrong one.
+//
+// There is NO redirect outcome. ADR §8 Amendment 3 rule 2: a renamed or released
+// name stops answering at once, so a retired hostname is the same 404 as one
+// that never existed. A workspace host no longer lists projects either — the
+// address decision (MOTIR-9790) moves them to `motir.co/p/<identifier>` and
+// gives the bare workspace host to the workspace's default application. No
+// application record exists yet, so every live workspace host answers
+// `no_application`; the `application` outcome is owed with that record.
+
+/** A live workspace host with no application to serve yet. */
+export interface PublicHostNoApplicationDto {
+  readonly kind: 'no_application';
+  readonly workspace: { readonly name: string };
 }
 
 /** A customer domain with an issued certificate — it serves ONE project at its root. */
@@ -67,10 +76,7 @@ export interface PublicHostProjectDto {
   readonly primary: boolean;
 }
 
-export type PublicHostResolutionDto =
-  | PublicHostWorkspaceDto
-  | PublicHostAliasDto
-  | PublicHostProjectDto;
+export type PublicHostResolutionDto = PublicHostNoApplicationDto | PublicHostProjectDto;
 
 /**
  * A project's addresses, as the renderer needs them (ADR §7).

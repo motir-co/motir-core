@@ -16,6 +16,7 @@ import { useToast } from '@/components/ui/Toast';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { MarkdownView } from '@/components/ui/MarkdownView';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
@@ -61,6 +62,9 @@ const LOAD_AHEAD_PX = 600;
 export interface ReadyListProps {
   initialItems: ReadyItemDto[];
   initialCursor: string | null;
+  /** The card links in the first page's manual instructions (bug MOTIR-10023); each
+   *  later page's map is merged in as it loads. */
+  initialWorkItemRefs: WorkItemRefMap;
   /** Which ready lane this list pages — picks the load-more action and the copy. */
   lane?: 'leaf' | 'bug';
 }
@@ -107,10 +111,16 @@ export function laneDisplayRows(
   return rows;
 }
 
-export function ReadyList({ initialItems, initialCursor, lane = 'leaf' }: ReadyListProps) {
+export function ReadyList({
+  initialItems,
+  initialCursor,
+  initialWorkItemRefs,
+  lane = 'leaf',
+}: ReadyListProps) {
   const t = useTranslations('ready');
   const [items, setItems] = useState<ReadyItemDto[]>(initialItems);
   const [cursor, setCursor] = useState<string | null>(initialCursor);
+  const [workItemRefs, setWorkItemRefs] = useState<WorkItemRefMap>(initialWorkItemRefs);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const rows = laneDisplayRows(items, expanded);
   const toggle = useCallback((id: string) => {
@@ -141,6 +151,7 @@ export function ReadyList({ initialItems, initialCursor, lane = 'leaf' }: ReadyL
           cursor,
         );
         setItems((prev) => [...prev, ...next.items]);
+        setWorkItemRefs((prev) => ({ ...prev, ...next.workItemRefs }));
         setCursor(next.nextCursor);
       } finally {
         loadingRef.current = false;
@@ -208,7 +219,7 @@ export function ReadyList({ initialItems, initialCursor, lane = 'leaf' }: ReadyL
                   onToggle={toggle}
                 />
               ) : (
-                <ReadyRow item={row.item} child={row.child} />
+                <ReadyRow item={row.item} child={row.child} workItemRefs={workItemRefs} />
               )}
             </div>
           );
@@ -227,7 +238,15 @@ export function ReadyList({ initialItems, initialCursor, lane = 'leaf' }: ReadyL
 }
 
 /** One dispatch card — a flat arrangement of the shipped issue primitives. */
-function ReadyRow({ item, child = false }: { item: ReadyItemDto; child?: boolean }) {
+function ReadyRow({
+  item,
+  child = false,
+  workItemRefs,
+}: {
+  item: ReadyItemDto;
+  child?: boolean;
+  workItemRefs: WorkItemRefMap;
+}) {
   const openPeek = usePeekOpen();
   const shownTitleName = useSurfaceTitleName(item.id, item.title);
   // A MANUAL row (human work) carries no `motir run` command (8.8.5/8.8.10):
@@ -269,7 +288,11 @@ function ReadyRow({ item, child = false }: { item: ReadyItemDto; child?: boolean
         {item.type ? <WorkItemTypeChip type={item.type} /> : null}
         <PriorityValue priority={item.priority} />
         <ReadyAssignee assignee={item.assignee} />
-        {isManual ? <ShowInstructionAction item={item} /> : <CopyCommandAction item={item} />}
+        {isManual ? (
+          <ShowInstructionAction item={item} workItemRefs={workItemRefs} />
+        ) : (
+          <CopyCommandAction item={item} />
+        )}
       </div>
     </div>
   );
@@ -336,7 +359,13 @@ function CopyCommandAction({
 /** The manual-row action (8.8.5/8.8.10) — an ALWAYS-visible *Show instruction*
  *  button (a human task can't be run, so reading the instruction is the only
  *  affordance and must not hide behind hover) that opens the instruction modal. */
-function ShowInstructionAction({ item }: { item: ReadyItemDto }) {
+function ShowInstructionAction({
+  item,
+  workItemRefs,
+}: {
+  item: ReadyItemDto;
+  workItemRefs: WorkItemRefMap;
+}) {
   const t = useTranslations('ready');
   const [open, setOpen] = useState(false);
   return (
@@ -356,7 +385,12 @@ function ShowInstructionAction({ item }: { item: ReadyItemDto }) {
           {t('showInstruction')}
         </Button>
       </Tooltip>
-      <InstructionModal item={item} open={open} onOpenChange={setOpen} />
+      <InstructionModal
+        item={item}
+        workItemRefs={workItemRefs}
+        open={open}
+        onOpenChange={setOpen}
+      />
     </span>
   );
 }
@@ -365,10 +399,12 @@ function ShowInstructionAction({ item }: { item: ReadyItemDto }) {
  *  same Markdown stack as the issue detail page (`Modal` + `MarkdownView`). */
 function InstructionModal({
   item,
+  workItemRefs,
   open,
   onOpenChange,
 }: {
   item: ReadyItemDto;
+  workItemRefs: WorkItemRefMap;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -390,7 +426,11 @@ function InstructionModal({
       </div>
       <Modal.Body>
         {body ? (
-          <MarkdownView value={body} aria-label={t('instruction.bodyAria')} />
+          <MarkdownView
+            value={body}
+            workItemRefs={workItemRefs}
+            aria-label={t('instruction.bodyAria')}
+          />
         ) : (
           // Empty: point the reader at the fix rather than showing a blank pane.
           <div className="flex flex-1 flex-col items-center justify-center gap-2 py-(--spacing-lg) text-center">

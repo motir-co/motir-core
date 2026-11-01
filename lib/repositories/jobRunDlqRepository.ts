@@ -35,77 +35,94 @@ export const jobRunDlqRepository = {
   },
 
   /**
-   * Dashboard DLQ-tab read (1.6.5): a workspace's dead-letter entries,
-   * newest-failure-first, paged. Takes `tx` (runs under withWorkspaceContext;
-   * explicit workspaceId scope is defense-in-depth like jobRunRepository).
-   * Serves the `[workspaceId, lastFailedAt desc]` index from the 1.6.4 schema.
+   * The platform ledger's unreplayed dead letters (MOTIR-9984): workspace rows
+   * and workspace-less rows together, newest failure first, optionally only one
+   * function's. NO workspace predicate — the caller MUST supply a
+   * `withSystemContext` tx, for the reason `countActiveSince` gives. `take` is
+   * the per-selection cap, so a chosen function's rows are reached however old
+   * they are next to every other function's.
    */
-  async listByWorkspace(
-    workspaceId: string,
-    opts: { limit: number; offset: number },
+  async listUnreplayed(
+    opts: { functionId?: string; take: number },
     tx: Prisma.TransactionClient,
   ): Promise<JobRunDlq[]> {
     return tx.jobRunDlq.findMany({
-      where: { workspaceId },
+      where: { replayedAt: null, ...(opts.functionId ? { functionId: opts.functionId } : {}) },
       orderBy: { lastFailedAt: 'desc' },
-      take: opts.limit,
-      skip: opts.offset,
+      take: opts.take,
     });
   },
 
   /**
-   * Count of ACTIVE (not-yet-replayed) dead-letter entries for the DLQ-tab
-   * badge. Excludes replayed rows (`replayedAt IS NOT NULL`) so the badge
-   * reflects entries still needing operator attention, per the 1.6.5 AC.
+   * The platform ledger's dead letters replayed since `since`, newest failure
+   * first, optionally only one function's. Same system-context requirement as
+   * {@link listUnreplayed}.
    */
-  async countActiveByWorkspace(workspaceId: string, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.jobRunDlq.count({ where: { workspaceId, replayedAt: null } });
-  },
-
-  /**
-   * The System tab's dead letters with NO workspace, not yet replayed
-   * (MOTIR-8083), newest failure first. `workspace_id IS NULL` is the
-   * definition of the list — a row that has a workspace belongs to that
-   * workspace's own Dead letter tab and is never returned here.
-   *
-   * The caller MUST supply a `withSystemContext` tx: only that RLS branch
-   * admits an untenanted row, for the reason `countActiveSince` gives.
-   * `take` is a safety cap, not a page — the tab has no pager (design
-   * `design/jobs/design-notes.md` § System dead letters).
-   */
-  async listSystemUnreplayed(take: number, tx: Prisma.TransactionClient): Promise<JobRunDlq[]> {
-    return tx.jobRunDlq.findMany({
-      where: { workspaceId: null, replayedAt: null },
-      orderBy: { lastFailedAt: 'desc' },
-      take,
-    });
-  },
-
-  /**
-   * The System tab's workspace-less dead letters replayed since `since`, newest
-   * failure first — the tail kept long enough to confirm a replay landed.
-   * Same system-context requirement as {@link listSystemUnreplayed}.
-   */
-  async listSystemReplayedSince(
-    since: Date,
-    take: number,
+  async listReplayedSince(
+    opts: { since: Date; functionId?: string; take: number },
     tx: Prisma.TransactionClient,
   ): Promise<JobRunDlq[]> {
     return tx.jobRunDlq.findMany({
-      where: { workspaceId: null, replayedAt: { gte: since } },
+      where: {
+        replayedAt: { gte: opts.since },
+        ...(opts.functionId ? { functionId: opts.functionId } : {}),
+      },
       orderBy: { lastFailedAt: 'desc' },
-      take,
+      take: opts.take,
     });
   },
 
-  /** How many workspace-less dead letters are still waiting to be replayed. */
-  async countSystemUnreplayed(tx: Prisma.TransactionClient): Promise<number> {
-    return tx.jobRunDlq.count({ where: { workspaceId: null, replayedAt: null } });
+  /** How many dead letters, of every workspace and none, were replayed since `since`. */
+  async countReplayedSince(
+    opts: { since: Date; functionId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.jobRunDlq.count({
+      where: {
+        replayedAt: { gte: opts.since },
+        ...(opts.functionId ? { functionId: opts.functionId } : {}),
+      },
+    });
   },
 
-  /** How many workspace-less dead letters were replayed since `since`. */
-  async countSystemReplayedSince(since: Date, tx: Prisma.TransactionClient): Promise<number> {
-    return tx.jobRunDlq.count({ where: { workspaceId: null, replayedAt: { gte: since } } });
+  /**
+   * One batch of a function's unreplayed dead letters for Replay all
+   * (MOTIR-9986), newest failure first, keyset-paged on (`lastFailedAt` desc,
+   * `id` desc): `after` is the last row of the previous batch, so a row whose
+   * replay failed (still unreplayed) is never read again by a later batch.
+   * Workspace rows and workspace-less rows both; the caller MUST supply a
+   * `withSystemContext` tx, for the reason `countActiveSince` gives.
+   */
+  async listUnreplayedIdsForFunction(
+    opts: { functionId: string; take: number; after?: { lastFailedAt: Date; id: string } },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; lastFailedAt: Date }[]> {
+    const after = opts.after;
+    return tx.jobRunDlq.findMany({
+      where: {
+        functionId: opts.functionId,
+        replayedAt: null,
+        ...(after
+          ? {
+              OR: [
+                { lastFailedAt: { lt: after.lastFailedAt } },
+                { lastFailedAt: after.lastFailedAt, id: { lt: after.id } },
+              ],
+            }
+          : {}),
+      },
+      orderBy: [{ lastFailedAt: 'desc' }, { id: 'desc' }],
+      take: opts.take,
+      select: { id: true, lastFailedAt: true },
+    });
+  },
+
+  /** How many of one function's dead letters, of every workspace and none, wait to be replayed. */
+  async countUnreplayedForFunction(
+    opts: { functionId: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.jobRunDlq.count({ where: { functionId: opts.functionId, replayedAt: null } });
   },
 
   /**

@@ -46,6 +46,8 @@ const listeners = new Set<() => void>();
 let decided: ReadonlyMap<string, DecidedGate> = new Map();
 /** The STATE each announced gate reached — written by both announcements below. */
 let decidedStates: ReadonlyMap<string, ApprovalGateStateDTO> = new Map();
+/** The gates THIS page has a decide press in flight on (Bug MOTIR-9696). */
+let pendingPresses: ReadonlySet<string> = new Set();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
@@ -77,6 +79,43 @@ export function announceGateStateDecided(gateId: string, state: ApprovalGateStat
   if (state === 'awaiting' || decidedStates.get(gateId) === state) return;
   decidedStates = new Map(decidedStates).set(gateId, state);
   for (const listener of listeners) listener();
+}
+
+/**
+ * A PRESS IN FLIGHT ON THIS PAGE (Bug MOTIR-9696). A surface that decides a gate marks it
+ * BEFORE it awaits the decide action, and clears the mark on a refusal or a throw (and
+ * after it announces the decision).
+ *
+ * ⚠️ WHY THE ROW NEEDS IT. The press's answer is not the only thing that tells a list the
+ * gate has left the awaiting set: the action's own `revalidatePath`, or a live window read
+ * the decision's event nudged, can land FIRST — and a read only returns `awaiting` gates,
+ * so it drops the row, which the list then draws as HELD (§ 26). A held row with no
+ * announced state draws *Decided elsewhere*, which is false for a press made right here.
+ * This mark is what lets the held branch tell *decided by me, answer on its way* from
+ * *decided by somebody else*.
+ */
+export function markGatePressPending(gateId: string): void {
+  if (pendingPresses.has(gateId)) return;
+  pendingPresses = new Set(pendingPresses).add(gateId);
+  for (const listener of listeners) listener();
+}
+
+/** Clear {@link markGatePressPending}'s mark — the press was refused, threw, or settled. */
+export function clearGatePressPending(gateId: string): void {
+  if (!pendingPresses.has(gateId)) return;
+  const next = new Set(pendingPresses);
+  next.delete(gateId);
+  pendingPresses = next;
+  for (const listener of listeners) listener();
+}
+
+/** Whether this page has a decide press in flight on `gateId`. */
+export function useGatePressPending(gateId: string): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => pendingPresses.has(gateId),
+    () => false,
+  );
 }
 
 /** The state `gateId` was decided to on this page, or `null` while it has not been. */

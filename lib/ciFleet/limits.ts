@@ -27,7 +27,7 @@
 //
 // ⚠️ AGENT INSTANCES ARE NOT IN THE ORG POOL (`docs/decisions/agent-instances.md`
 // AMENDMENT 2). They are an `own`-pool workload: slotted under the same lock,
-// bounded by their plan's `agentsRunningPerOrg` (MOTIR-9374), and never summed
+// bounded at create by their plan's `agentsPerOrg` (MOTIR-9954), and never summed
 // into an org's count — a long-lived per-minute machine must not take CI's
 // capacity. The kill switch still stops them.
 

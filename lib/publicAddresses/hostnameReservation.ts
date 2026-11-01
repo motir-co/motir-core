@@ -2,11 +2,18 @@ import { createHash } from 'node:crypto';
 
 import type { PublicAddressKind } from '@/generated/prisma/client';
 
-// THE §8 RESERVATION — what a hostname leaves behind when its workspace is
-// deleted. Bug MOTIR-4366.
+// THE §8 RESERVATION — what a hostname leaves behind when its workspace renames,
+// releases or deletes it. Bug MOTIR-4366; expiring since §8 Amendment 3
+// (Story MOTIR-4528).
 //
-// `docs/decisions/public-tenant-addresses.md` §8 decides that a subdomain is
-// never released. MOTIR-4209 implemented that with the `public_address.hostname`
+// ⚠️ A RESERVATION EXPIRES. §8 first decided a subdomain was never released,
+// and this file was written to hold names permanently. Amendment 3 replaced that:
+// a label held under 24 hours returns to the pool at once, and one held longer
+// is reserved for 90 days (`lib/publicAddresses/nameHold.ts` is the rule). The
+// history below is kept because the hash's reasoning still rests on it.
+//
+// `docs/decisions/public-tenant-addresses.md` §8 originally decided that a
+// subdomain is never released. MOTIR-4209 implemented that with the `public_address.hostname`
 // unique index alone — "a retired label keeps its row, the row keeps the name" —
 // which holds for the case §8 was thinking about (a RENAME, where the workspace
 // survives) and does not hold for the case it never asked about (the workspace
@@ -22,7 +29,8 @@ import type { PublicAddressKind } from '@/generated/prisma/client';
 // ── WHY A HASH, AND NOT THE HOSTNAME ───────────────────────────────────────
 //
 // The two obligations meet inside one row and pull opposite ways: §8 wants the
-// name held FOR EVER, and Article 17 wants the personal data GONE. A hostname
+// name held (for 90 days now, once for good), and Article 17 wants the personal
+// data GONE. A hostname
 // can itself be the personal datum — `jane-smith.<base>` — so retaining the
 // literal string would be retaining exactly what the erasure was asked to
 // remove.
@@ -35,8 +43,8 @@ import type { PublicAddressKind } from '@/generated/prisma/client';
 // ⚠️ NO PEPPER, AND THAT IS A DECISION RATHER THAN AN OMISSION. A keyed hash
 // would resist an offline dictionary attack better, and it would also mean the
 // entire namespace silently reopens the day the key is lost or rotated — a
-// reservation whose whole promise is *for ever* is the wrong place for a
-// rotatable secret. The residual is named rather than hidden: someone holding a
+// reservation whose promise is to hold a name until a date is the wrong place
+// for a rotatable secret. The residual is named rather than hidden: someone holding a
 // database dump can confirm a hostname they already guessed. That is accepted
 // because these hostnames were SERVED ON THE PUBLIC INTERNET by the person who
 // chose them; the dump tells an attacker nothing the DNS did not.
@@ -93,7 +101,7 @@ export function hostnameReservationHash(hostname: string): string {
  * out `<label>.<base>` from a space we own, so releasing a label lets a stranger
  * inherit somebody's inbound links. A customer domain is the CUSTOMER's
  * property — `docs.acme.com` is theirs whatever happens to their Motir account —
- * and reserving it for ever would lock the rightful owner out of connecting
+ * and reserving it at all would lock the rightful owner out of connecting
  * their own domain again. Holding a name we do not own is not a protection, it
  * is a hostage.
  *
@@ -101,8 +109,8 @@ export function hostnameReservationHash(hostname: string): string {
  * (`docs/decisions/public-tenant-addresses.md` §8, Story MOTIR-4451). The
  * sentence above says never-released is about who may take the name NEXT — not
  * about who must keep SERVING it — so a workspace may RELEASE its own subdomain:
- * this predicate chooses the kinds that go, every one of them is reserved by
- * digest in the same transaction as the delete, and the names stay held for ever.
+ * this predicate chooses the kinds that go, and each is held by digest in the
+ * same transaction as the delete for as long as §8 Amendment 3's hold says.
  * The judgement here is unchanged and is now load-bearing in a second place: a
  * release must select its rows through THIS function and never through a
  * hand-written kind list, or it takes a customer's own domain with it.

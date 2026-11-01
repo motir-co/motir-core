@@ -1,0 +1,13 @@
+{
+  "name": "motir-aws-deploy-check-fixture",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "pg": "8.21.0"
+  }
+}

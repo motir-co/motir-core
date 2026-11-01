@@ -732,6 +732,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
   > = {
     parentRef: 'planItem.parentRef',
     blockedByRefs: 'planItem.blockedByRefs',
+    // The edges' REASONS (MOTIR-9827) — carried as `{ ref, reason }` entries of
+    // `blockedByRefs` and split off by the service onto `planItem.edgeReasons`.
+    edgeReasons: 'planItem.edgeReasons',
     // An `add`'s supersedes set (MOTIR-6630) lands in `planItem.supersedesRefs`;
     // `correctionFrom` carries it (MOTIR-6631), driven through the body below.
     supersedesRefs: 'planItem.supersedesRefs',
@@ -787,7 +790,7 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
       mode: 'correct',
       patch: CONTENT_SAMPLE,
       parentRef: `planItem:${firstId}`,
-      blockedByRefs: [`planItem:${peer}`],
+      blockedByRefs: [{ ref: `planItem:${peer}`, reason: 'consumes: the peer task' }],
       // The corrected card REPLACES the story prerequisite (MOTIR-6631) — any
       // kind may supersede any kind, and a supersedes edge orders nothing.
       supersedesRefs: [`planItem:${firstId}`],
@@ -811,6 +814,7 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     });
     expect(stored.parentRef).toBe(`planItem:${firstId}`);
     expect(stored.blockedByRefs).toEqual([`planItem:${peer}`]);
+    expect(stored.edgeReasons).toEqual({ [`planItem:${peer}`]: 'consumes: the peer task' });
     expect(stored.supersedesRefs).toEqual([`planItem:${firstId}`]);
   });
 

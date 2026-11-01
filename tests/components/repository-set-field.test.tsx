@@ -54,6 +54,7 @@ function delivery(
       headSha: null,
       url: `https://github.com/${repoLabel}/pull/${number}`,
       githubReview: null,
+      preview: null,
       baseRef: 'main',
       conflicted: false,
     },

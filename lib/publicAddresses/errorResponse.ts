@@ -15,12 +15,13 @@ import {
 
 import {
   HostnameTakenError,
+  NameQuarantinedError,
   NoSubdomainClaimedError,
   PublicAddressesUnavailableError,
   ReservedLabelError,
   SubdomainForbiddenError,
+  SubdomainChangeLimitError,
   SubdomainNotFoundError,
-  SubdomainRenameCapReachedError,
   WorkspaceNotVisibleError,
 } from '@/lib/publicAddresses/errors';
 import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDomain';
@@ -43,8 +44,12 @@ import { TenantDomainNotConfiguredError } from '@/lib/publicAddresses/tenantDoma
 //   409 for a TAKEN hostname — a conflict with state, not a bad request. It is
 //       also the answer for "you already have one" on claim, because from the
 //       caller's side both mean the name they asked for is not available.
-//   422 for a REFUSED LABEL and a REACHED CAP — well-formed requests that fail a
-//       domain rule, which is exactly what 422 is for.
+//   409 for a QUARANTINED name and for a change inside the 30-day LIMIT (§8
+//       Amendment 3) — both are conflicts with state that END on a known date,
+//       so each body carries that date as ISO 8601 (`returnsAt`,
+//       `nextAllowedAt`) and the pane can say when rather than just no.
+//   422 for a REFUSED LABEL — a well-formed request that fails a domain rule,
+//       which is exactly what 422 is for.
 //   404 for a RELEASE of a workspace with no subdomain (§8 Amendment 2) — a
 //       DELETE names a resource, and the honest answer for one that is not there
 //       is that it is not there. It is deliberately a DIFFERENT typed error from
@@ -74,10 +79,21 @@ export function mapPublicAddressError(err: unknown): NextResponse | null {
       { status: 422 },
     );
   }
-  if (err instanceof SubdomainRenameCapReachedError) {
+  if (err instanceof NameQuarantinedError) {
     return NextResponse.json(
-      { code: err.code, error: err.message, used: err.used, cap: err.cap },
-      { status: 422 },
+      {
+        code: err.code,
+        error: err.message,
+        hostname: err.hostname,
+        returnsAt: err.returnsAt.toISOString(),
+      },
+      { status: 409 },
+    );
+  }
+  if (err instanceof SubdomainChangeLimitError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, nextAllowedAt: err.nextAllowedAt.toISOString() },
+      { status: 409 },
     );
   }
   if (err instanceof NoSubdomainClaimedError) {

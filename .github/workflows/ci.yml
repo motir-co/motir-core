@@ -1451,6 +1451,33 @@ jobs:
           path: .vitest-reports
           include-hidden-files: true
           retention-days: 1
+      # THE FLEET SUITES IN THE MANAGEMENT CREDENTIAL'S OTHER MODE (MOTIR-9850).
+      # The sharded run above gives them the role ARN alone, which the SDK's
+      # default chain completes (core on Fargate, MOTIR-9839). Core on Fly holds
+      # the key pair and assumes the role through it, so the same files run once
+      # more, unchanged, with `stubAwsManagementCredential` supplying the key
+      # (`tests/helpers/awsRunnerRoleFake.ts`). One leg only: it is one pass, not
+      # a share of the suite, and it adds no coverage blob.
+      - name: Fleet suites with the management key pair
+        if: matrix.leg == '1'
+        env:
+          MOTIR_TEST_AWS_MANAGEMENT_CREDENTIAL: key
+        run: >-
+          pnpm vitest run
+          tests/ciFleet/awsPoolDeferral.test.ts
+          tests/ciFleet/awsIndexPoolSeam.test.ts
+          tests/ciFleet/fleetGrowthIntegration.test.ts
+          tests/ciFleet/fleetGrowthWalk.test.ts
+          tests/ciFleet/fleetPoolGrowthService.test.ts
+          tests/ciFleet/fleetPoolGrowthPassService.test.ts
+          tests/ciFleet/addSpareShard.test.ts
+          tests/ciFleet/hostAccountReconcile.test.ts
+          tests/ciFleet/hostOwnAccountsIntegration.test.ts
+          tests/ciFleet/fleetAttributionAws.test.ts
+          tests/ciFleet/fleetAttributionHoster.test.ts
+          tests/ciFleet/fleetAttributionOrgOwned.test.ts
+          tests/ciFleet/codeGraphIndexAwsE2E.test.ts
+          tests/agentInstances/agentHosterCharging.test.ts
 
   coverage:
     name: Vitest coverage
@@ -3280,6 +3307,98 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:host-own-accounts
 
+  story-9368-coverage:
+    name: Coverage (Fleet use)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Story MOTIR-9368 (an organisation's admin sees its fleet use against its plan caps) —
+    # MOTIR-9664's per-file floor over the files the story's code cards added
+    # (`vitest.coverage.fleet-use.config.ts`), measured by the story gate and the cards'
+    # own suites against Postgres. Locally it ran 10 files (162 tests) in about 1.5 min;
+    # with no CI run measured yet, the ceiling is the 20 min its neighbours take.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9368
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9368
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9368.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9368.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:fleet-use
+
+  story-9366-coverage:
+    name: Coverage (larger pools above Host)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # Story MOTIR-9366 (the larger pools start above Host and carry AWS accounts of their
+    # own) — MOTIR-9656's per-file floor over the files the story changed
+    # (`vitest.coverage.larger-pool.config.ts`), measured by the feature cards' suites and
+    # the story gate's two halves against Postgres. Locally it ran 18 files (424 tests) in
+    # about 2.5 min; with no CI run measured yet, the ceiling is the 20 min its neighbours take.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9366
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9366
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9366.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9366.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:larger-pool
+
   # Story MOTIR-7797 (a confirmed bug is filed the moment it is confirmed) —
   # MOTIR-7806's per-file floor over the story's changed motir-core files
   # (`vitest.coverage.bug-filing.config.ts`): the guide's filing, the `file_bug`
@@ -3593,6 +3712,101 @@ jobs:
       - run: pnpm -r --filter './packages/*' build
       - run: pnpm coverage:pages
 
+  # Story MOTIR-9791 (one deploy interface) — MOTIR-9806's story gate: a per-file
+  # floor over the app files the story added (`vitest.coverage.deploy-port.config.ts`):
+  # the hosting manifest, its vocabulary, the hosting port's composition root and
+  # the operator deploy check, measured by the parse-then-deploy seam plus each
+  # card's suites. The port and its adapters are floored by the `orchestrator` job.
+  # Needs Postgres (the repo row's hosting columns) and the package build, like
+  # `story-5752-coverage`.
+  story-9791-coverage:
+    name: Coverage (deploy interface)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # A new lane with no CI run to quote yet. Locally the 6 spec files ran in
+    # ~0.5 min against Postgres, coverage-instrumented; the ceiling bounds a hang
+    # rather than setting a target — replace it with a measured figure.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9791
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9791
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9791.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9791.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:deploy-port
+
+  story-9795-coverage:
+    name: Coverage (repository environment)
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # A new lane with no CI run to quote yet. Locally the 7 spec files ran in
+    # ~1 min against Postgres, coverage-instrumented; the ceiling bounds a hang
+    # rather than setting a target — replace it with a measured figure.
+    timeout-minutes: 20
+    needs: changes
+    if: ${{ needs.changes.outputs.app == 'true' && github.event_name != 'push' }}
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: postgresql://prodect:prodect@localhost:5432/prodect
+      BETTER_AUTH_SECRET: ci-test-only-not-a-real-secret-do-not-reuse
+      GOOGLE_CLIENT_ID: ci-test-placeholder
+      GOOGLE_CLIENT_SECRET: ci-test-placeholder
+      HUSKY: '0'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Start Postgres
+        uses: ./.github/actions/postgres
+      - uses: ./.github/actions/pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-story-9795
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Cache Prisma client
+        id: cache-prisma-story-9795
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules/.prisma
+            node_modules/@prisma/client
+          key: ${{ runner.os }}-prisma-client-${{ hashFiles('prisma/schema.prisma') }}
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-story-9795.outputs.cache-hit != 'true'
+      - run: pnpm prisma generate
+        if: steps.cache-prisma-story-9795.outputs.cache-hit != 'true'
+      - run: pnpm prisma migrate deploy
+      - run: pnpm -r --filter './packages/*' build
+      - run: pnpm coverage:environment-config
+
   ci-complete:
     name: CI complete
     # WHY `always()` AND an explicit result assertion — neither alone works:
@@ -3642,10 +3856,14 @@ jobs:
         story-8060-coverage,
         story-9364-coverage,
         story-9365-coverage,
+        story-9368-coverage,
+        story-9366-coverage,
         story-7797-coverage,
         story-7990-coverage,
         story-8684-coverage,
         story-7738-coverage,
+        story-9791-coverage,
+        story-9795-coverage,
         e2e,
         e2e-at-scale,
         sandbox,

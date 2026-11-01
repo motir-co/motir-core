@@ -240,22 +240,19 @@ describe('the hostname race', () => {
     ).rejects.toBeInstanceOf(HostnameTakenError);
   });
 
-  it('holds a RETIRED alias against re-claim — the ADR §8 never-released rule', async () => {
-    // The case a customer will not expect, and the one the settings copy exists
-    // to explain. A renamed-away-from label keeps its row, the row keeps the
-    // name, and the index goes on refusing everyone — including the workspace
-    // that used to hold it.
-    const original = await seedSubdomain(host, 'acme.motir.example');
-    await db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${host.workspaceId}, true)`;
-      await publicAddressRepository.retireSubdomainToAlias(original.id, tx);
+  it('holds a LEGACY alias row against re-claim until the cleanup removes it', async () => {
+    // A rename no longer writes an alias (§8 Amendment 3, MOTIR-9507), but rows
+    // written before it stay until the one-off cleanup (MOTIR-9520). Until then
+    // the row keeps the name, and the index goes on refusing everyone —
+    // including the workspace that used to hold it.
+    await adminDb.publicAddress.create({
+      data: {
+        workspaceId: host.workspaceId,
+        hostname: 'acme.motir.example',
+        kind: 'workspace_subdomain_alias',
+        status: 'alias',
+      },
     });
-
-    const alias = await adminDb.publicAddress.findUnique({
-      where: { hostname: 'acme.motir.example' },
-    });
-    expect(alias?.kind).toBe('workspace_subdomain_alias');
-    expect(alias?.status).toBe('alias');
 
     for (const claimant of [host, neighbour]) {
       await expect(

@@ -35,3 +35,8 @@ LICENSE
 # External design-system references (fetched via `npx getdesign add ...`).
 # Keep them verbatim so they can be diffed against fresh fetches.
 docs/inspiration/
+
+# The pinned cross-surface calculator vector (MOTIR-10156). Written byte-for-byte by
+# `scripts/record-calculator-pinned-vector.mjs`, and motir-marketing carries a byte-identical
+# copy under a different printWidth, so a formatter run here would break the identity.
+tests/fixtures/calculatorPinnedVector.json

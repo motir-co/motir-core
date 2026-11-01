@@ -12,6 +12,7 @@ import {
   type DecisionRecordPicker,
 } from '@/components/approvals/DecisionConfirmGate';
 import type { ApprovalGateDTO, DecisionConfirmationBodyDTO } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // THE ITEM PAGE'S **DECISION** SECTION (Story MOTIR-5871 · Subtask MOTIR-5960; design
 // `approval-control--decision-confirm.mock.html` Panels A1, 3–6). It sits in the late
@@ -36,6 +37,7 @@ async function decideNothing(): Promise<null> {
 
 export function DecisionConfirmSection({
   body,
+  workItemRefs,
   gate,
   canDecide,
   routedToLabel,
@@ -45,6 +47,8 @@ export function DecisionConfirmSection({
   canEditRecord = false,
 }: {
   body: DecisionConfirmationBodyDTO;
+  /** The chips of every `[KEY](motir:<id>)` in the body's sections (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   gate: ApprovalGateDTO | null;
   canDecide: boolean;
   routedToLabel: string | null;
@@ -76,6 +80,7 @@ export function DecisionConfirmSection({
         <DecisionConfirmDefectBody
           defect={body.defect}
           view={{ ...body.draft, supersedesItems: body.supersedesItems }}
+          workItemRefs={workItemRefs}
         />
       </div>
     );
@@ -89,7 +94,14 @@ export function DecisionConfirmSection({
     : { ...body.draft, supersedesItems: body.supersedesItems };
 
   if (gate === null) {
-    return <DecisionPortBody view={view} record={shared.record} recordCount={shared.recordCount} />;
+    return (
+      <DecisionPortBody
+        view={view}
+        workItemRefs={workItemRefs}
+        record={shared.record}
+        recordCount={shared.recordCount}
+      />
+    );
   }
 
   if (gate.state === 'awaiting' && canDecide) {
@@ -97,6 +109,7 @@ export function DecisionConfirmSection({
       <div className="flex flex-col gap-3">
         <DecisionPortBody
           view={view}
+          workItemRefs={workItemRefs}
           record={shared.record}
           recordCount={shared.recordCount}
           recordPicker={recordPicker}
@@ -120,6 +133,7 @@ export function DecisionConfirmSection({
       layout="section"
       gate={gate}
       view={view}
+      workItemRefs={workItemRefs}
       record={shared.record}
       recordCount={shared.recordCount}
       presentRecordIds={shared.presentRecordIds}

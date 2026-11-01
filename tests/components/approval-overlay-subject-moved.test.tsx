@@ -318,6 +318,7 @@ describe('the DISCRIMINATION — a tab moving is not this gate moving', () => {
             supersedesMd: 'MOTIR-6',
             resultingDirectionMd: 'Bucket.',
             subjectVersion: 'a'.repeat(64),
+            workItemRefs: {},
             record: { kind: 'none' },
             recordCount: 0,
             presentRecordIds: [],
@@ -357,6 +358,7 @@ describe('the DISCRIMINATION — a tab moving is not this gate moving', () => {
             todos: [],
             progress: { done: 0, total: 0 },
             mergeWritesDone: false,
+            workItemRefs: {},
           },
         },
       } as ApprovalGateOverlayReadDTO;

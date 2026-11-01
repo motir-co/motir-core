@@ -76,6 +76,7 @@ function view(rows: ProjectRepoDto[]): ProjectRepoRoomViewDto {
     otherHostedProjects: [],
     connected: [],
     connectedInDomain: false,
+    seeds: {},
   } as unknown as ProjectRepoRoomViewDto;
 }
 

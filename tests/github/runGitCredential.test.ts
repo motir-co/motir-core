@@ -449,6 +449,31 @@ describe('mintRunGitCredentials — one uncached token per installation (AC1, AC
     }
   });
 
+  it('adds workflows write only for an installation that holds it (AMENDMENT 2026-10-29)', async () => {
+    const calls = stubGithub({
+      installation: {
+        'acme/web': { permissions: { ...ACCEPTED, workflows: 'write' } },
+        'beta/api': { id: 43 },
+      },
+    });
+    const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });
+    const api = await seedRepo({ state: 'connected', owner: 'beta', name: 'api' });
+    const runId = await openRun([[web.id, api.id]]);
+
+    await mintRunGitCredentials(runId);
+
+    const mints = calls.filter((c) => c.url.endsWith('/access_tokens'));
+    expect(mints.find((c) => c.url.includes('/installations/42/'))!.body).toEqual({
+      repository_ids: [web.providerRepoId],
+      permissions: { contents: 'write', pull_requests: 'write', workflows: 'write' },
+    });
+    // Not yet accepted: the run still mints, without asking for what GitHub would refuse.
+    expect(mints.find((c) => c.url.includes('/installations/43/'))!.body).toEqual({
+      repository_ids: [api.providerRepoId],
+      permissions: { contents: 'write', pull_requests: 'write' },
+    });
+  });
+
   it('never serves or fills the appAuth cache, and a second mint records new tokens', async () => {
     const calls = stubGithub();
     const web = await seedRepo({ state: 'connected', owner: 'acme', name: 'web' });

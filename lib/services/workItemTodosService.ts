@@ -20,7 +20,8 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { TodoReorderConflictError, WorkItemTodoNotFoundError } from '@/lib/workItemTodos/errors';
-import type { ExecutorDto } from '@/lib/dto/workItems';
+import type { ExecutorDto, WorkItemRefMap } from '@/lib/dto/workItems';
+import { resolveMarkdownBodiesWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import { normalizeCommand, normalizeNotes, requireText } from '@/lib/workItemTodos/normalize';
 import type {
   TodoProgressDto,
@@ -28,6 +29,7 @@ import type {
   WorkItemTodoListDto,
 } from '@/lib/dto/workItemTodos';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { VisitorReadContext } from '@/lib/visitor/context';
 import type { Locale } from '@/lib/i18n/locales';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import {
@@ -280,6 +282,24 @@ export const workItemTodosService = {
       const rows = await workItemTodoRepository.listByWorkItem(workItemId, tx);
       return toWorkItemTodoListDto(rows);
     });
+  },
+
+  /**
+   * The `[KEY](motir:<id>)` links in to-dos' NOTES, resolved for the reader in ONE
+   * read (bug MOTIR-10023) — what every surface that draws a step's notes hands
+   * `MarkdownView`, so a step that names a card draws it live rather than deleted.
+   * `{}` with no query when no note links anything. Kept off `listTodos` on
+   * purpose: the MCP read, the guide's walk and translation read the list and draw
+   * nothing.
+   */
+  async resolveNotesRefs(
+    todos: readonly Pick<WorkItemTodoDto, 'notesMd'>[],
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<WorkItemRefMap> {
+    return resolveMarkdownBodiesWorkItemRefs(
+      todos.map((todo) => todo.notesMd),
+      ctx,
+    );
   },
 
   /**

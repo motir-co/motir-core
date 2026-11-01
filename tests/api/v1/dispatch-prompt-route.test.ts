@@ -265,6 +265,23 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     expect(text).toContain('no Motir tool needed');
     expect(text).toContain('NO MOTIR TOOLS?');
     expect(text).toContain('"discrepancy": [{"planAsked"');
+    // …but not the decisions route, which a CLI that predates MOTIR-10000 would drop.
+    expect(text).not.toContain('"decisions": [{"planSaid"');
+  });
+
+  it('names the decisions file route only for `?agentReport=1&agentReportDecisions=1` (MOTIR-10000)', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'a cli that posts decisions');
+
+    const both = (await prompt(caller, item.identifier, '?agentReport=1&agentReportDecisions=1'))
+      .prompt;
+    expect(both).toContain('"decisions": [{"planSaid"');
+    expect(both).toContain('DECIDE WHAT THE CARD LEAVES OPEN — never ask');
+
+    const alone = (await prompt(caller, item.identifier, '?agentReportDecisions=1')).prompt;
+    expect(alone).not.toContain('"decisions": [{"planSaid"');
+    // The never-ask block itself is in every agent prompt, whatever the client posts.
+    expect(alone).toContain('DECIDE WHAT THE CARD LEAVES OPEN — never ask');
   });
 
   // ── ?autoApproveReplan (MOTIR-4085) ─────────────────────────────────────

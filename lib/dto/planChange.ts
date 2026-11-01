@@ -579,14 +579,17 @@ export interface PlanAnswerOfferDto {
    *  `log_bug` offer, the key its write targets (null on a new bug). */
   targetKey: string | null;
   /** The six-field requirement the answering session composed (MOTIR-9432). Present
-   *  only on a `plan` offer with no target; absent otherwise, never `null`. */
+   *  only on a `plan` offer — one with no target, or a targeted one whose target's
+   *  description does not state the WHAT (MOTIR-9878); absent otherwise, never `null`. */
   requirement?: SubmittedRequirement;
-  /** The page Confirm saved the requirement to (MOTIR-9436). Present only on a `plan`
-   *  offer with no target, once a confirm has written it; kept for a retry. */
+  /** The page the requirement was saved to (MOTIR-9436). Present only on a `plan` offer
+   *  carrying a requirement, once the background save after its confirm has written it
+   *  (MOTIR-10091). */
   requirementPage?: { pageId: string; title: string };
-  /** `true` when the last Confirm could not save the requirement page and started
-   *  nothing (MOTIR-9436); the offer is pending again. Absent otherwise. */
-  requirementSaveFailed?: true;
+  /** `true` when that background save failed every attempt (MOTIR-10091): the run is
+   *  unaffected, and the rail's confirmed line says the page could not be saved. Absent
+   *  otherwise. */
+  requirementPageFailed?: true;
   /** The bug a `log_bug` offer would write (MOTIR-9322); absent on a `plan` offer.
    *  On a `log_bug` offer, `requestMd` is the new bug's title. */
   bug?: LogBugOfferDto;
@@ -616,7 +619,7 @@ export interface AnswerOfferInput {
   kind: AnswerOfferKindDto;
   requestMd: string;
   targetKey: string | null;
-  /** The composed requirement; present only on a `plan` offer with no target. */
+  /** The composed requirement; present only on a `plan` offer (MOTIR-9878: target or not). */
   requirement?: SubmittedRequirement;
   /** Present exactly on a `log_bug` offer. */
   bug?: LogBugOfferDto;

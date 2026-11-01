@@ -54,6 +54,10 @@ vi.mock('@/lib/approvals/decidedGates', () => ({
   announceGateDecided,
   // Read only by the item page's hand-over (MOTIR-6323); no announcement reaches it here.
   useDecidedGate: () => null,
+  // The press-in-flight mark (MOTIR-9696) has nothing to tell a list here.
+  markGatePressPending: () => {},
+  clearGatePressPending: () => {},
+  useGatePressPending: () => false,
 }));
 
 // The design port has its OWN suite (`design-result-panel.test.ts`); here it

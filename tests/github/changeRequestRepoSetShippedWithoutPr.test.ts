@@ -29,11 +29,15 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 //
 //   1. The card's reproduction: c1 (web) delivered by a merge linked to the
 //      story, c2 (api, human) Done with no pull request → the merge COMPLETES it.
-//   2. It must not become "a Done child excuses a missing merge": c2 not yet
-//      Done → HELD.
-//   3. c2 Done but carrying a linked pull request of its own (closed unmerged)
-//      → HELD.
-//   4. The item panel reads the same answer the gate acted on.
+//   2. ⚠️ SINCE MOTIR-10135 THE MERGE NO LONGER READS THE REPOSITORY SET AT ALL:
+//      completion counts the story's own linked pull requests, so c2 not yet
+//      Done, or Done beside a closed pull request of its own, no longer holds the
+//      story — its merge completes it, and the cascade closes c2. These were
+//      HOLDS; they are pinned as completions so the accepted trade-off is a
+//      decision on record rather than a silent change.
+//   3. The item panel still reads `delivered_without_change_request` — the
+//      classification this card added, which the panel and the event-free
+//      re-check of an item with no landed delivery still use.
 
 const PASSWORD = 'hunter2hunter2';
 const INSTALLATION_ID = 'inst-shipped-without-pr';
@@ -184,17 +188,18 @@ describe('a repository shipped through a Done card with no pull request', () => 
     expect(await statusOf(fx.story.id)).toBe('done');
   });
 
-  it('still HOLDS while that card is not Done — a Done child is the evidence, not a formality', async () => {
+  it('completes even while that card is not Done — the list no longer holds the story (MOTIR-10135)', async () => {
     const fx = await scenario('not-done@example.com');
     await workItemsService.updateStatus(fx.apiHalf.id, 'implemented', fx.ctx);
 
     expect(await deliver(fx.story.identifier, CORE, 1)).toMatchObject({
-      outcome: 'deferred_incomplete_repo_set',
+      outcome: 'transitioned',
+      toStatus: 'done',
     });
-    expect(await statusOf(fx.story.id)).not.toBe('done');
+    expect(await statusOf(fx.story.id)).toBe('done');
   });
 
-  it('still HOLDS when that Done card carries a linked pull request of its own', async () => {
+  it('completes when that Done card carries a closed pull request of its own (MOTIR-10135)', async () => {
     const fx = await scenario('has-pr@example.com');
     // A pull request in motir-ai, linked to the leaf and closed UNMERGED: the
     // work there did not ship without one, whatever the leaf's status says.
@@ -223,10 +228,13 @@ describe('a repository shipped through a Done card with no pull request', () => 
     });
     await workItemsService.updateStatus(fx.apiHalf.id, 'done', fx.ctx);
 
+    // The leaf's pull request is linked to the LEAF, not the story, so the
+    // story's own delivery set is the one merge below.
     expect(await deliver(fx.story.identifier, CORE, 1)).toMatchObject({
-      outcome: 'deferred_incomplete_repo_set',
+      outcome: 'transitioned',
+      toStatus: 'done',
     });
-    expect(await statusOf(fx.story.id)).not.toBe('done');
+    expect(await statusOf(fx.story.id)).toBe('done');
   });
 
   it('the item panel reads the same answer the gate acts on', async () => {

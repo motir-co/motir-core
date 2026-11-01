@@ -8,9 +8,11 @@ import { parseDecisionRecord } from '@/lib/approvalGates/decisionRecord';
 import { routingTargetId } from '@/lib/approvalGates/routing';
 import type {
   DecisionConfirmationBodyDTO,
-  DecisionConfirmationPortDTO,
+  DecisionConfirmationPortViewDTO,
   SupersededItemDTO,
 } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { resolveMarkdownWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -178,7 +180,20 @@ export const decisionConfirmationGateService = {
     workItemId: string,
     ctx: ServiceContext,
   ): Promise<DecisionConfirmationBodyDTO | null> {
-    return withWorkspaceContext(ctx, async (tx) => {
+    return (await this.readBodyWithRefs(workItemId, ctx)).body;
+  },
+
+  /**
+   * {@link readBody} with the body's work-item links resolved for the reader (bug
+   * MOTIR-10023) — what the surfaces that DRAW the port read. The four sections are
+   * parsed from the work item's description, so its `[KEY](motir:<id>)` tokens are
+   * the port's; `{}` and no ref query when there is no body or it links nothing.
+   */
+  async readBodyWithRefs(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<{ body: DecisionConfirmationBodyDTO | null; workItemRefs: WorkItemRefMap }> {
+    const read = await withWorkspaceContext(ctx, async (tx) => {
       const item = await workItemRepository.findById(workItemId, tx);
       if (!item || item.workspaceId !== ctx.workspaceId) return null;
       if (!asksTheConfirmQuestion(item)) return null;
@@ -189,20 +204,26 @@ export const decisionConfirmationGateService = {
       const keys = parse.ok ? parse.supersedes : parse.draft.supersedes;
       const found = await workItemRepository.findByIdentifiers(item.projectId, keys, tx);
       const titles = new Map(found.map((row) => [row.identifier, row.title]));
-      return decisionConfirmationBodyOf(
+      const body = decisionConfirmationBodyOf(
         item,
         await readDecisionRecords(item.id, tx),
         (key) => titles.get(key) ?? null,
       );
+      return body ? { body, descriptionMd: item.descriptionMd } : null;
     });
+    if (!read) return { body: null, workItemRefs: {} };
+    const workItemRefs = read.descriptionMd
+      ? await resolveMarkdownWorkItemRefs(read.descriptionMd, ctx)
+      : {};
+    return { body: read.body, workItemRefs };
   },
 
   /** The overlay's port for a `decision_confirmation` gate — null when the body no longer parses. */
   async readPort(
     workItemId: string,
     ctx: ServiceContext,
-  ): Promise<DecisionConfirmationPortDTO | null> {
-    const body = await this.readBody(workItemId, ctx);
-    return body?.ok ? body.port : null;
+  ): Promise<DecisionConfirmationPortViewDTO | null> {
+    const { body, workItemRefs } = await this.readBodyWithRefs(workItemId, ctx);
+    return body?.ok ? { ...body.port, workItemRefs } : null;
   },
 };

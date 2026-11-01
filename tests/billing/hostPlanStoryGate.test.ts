@@ -29,7 +29,11 @@ import { adminDb } from '../helpers/adminDb';
 //
 // No band figure is typed except Host's own: every pre-Host answer is the same
 // derivation over the catalog with the `host` entry removed, re-implemented here as
-// `largerPoolAgreement.test.ts` builds its ladder and band. The motir-ai client is
+// `largerPoolAgreement.test.ts` builds its ladder and band. Since MOTIR-9366 the band
+// is floored at Host's pool, not the ladder's top, so the pre-Host band is restated
+// as the rungs ABOVE Host and the change of plan reads ladder, Host, then those rungs;
+// the rungs at or below Host are retired (`largerPoolAgreement.test.ts` covers them).
+// The motir-ai client is
 // the one external leaf, so it is mocked (with the seat-sync enqueue); the orgs are
 // seeded through the real services on the real Postgres. The Calculator and the
 // plans view in every locale are `hostPlanStoryGate.ui.test.tsx`.
@@ -72,9 +76,10 @@ const ladderOf = (entries: readonly AiPlanCatalogEntry[]) =>
   entries.filter((p) => p.band === 'ladder');
 const ceilingOf = (entries: readonly AiPlanCatalogEntry[]) =>
   Math.max(...ladderOf(entries).flatMap((p) => (sellable(p) ? [poolOf(p)] : [])));
+/** The rung table: larger pools strictly above Host's pool (MOTIR-9366's floor). */
 const bandOf = (entries: readonly AiPlanCatalogEntry[]) =>
   entries
-    .filter((p) => p.band === 'larger_pool' && sellable(p) && poolOf(p) > ceilingOf(entries))
+    .filter((p) => p.band === 'larger_pool' && sellable(p) && poolOf(p) > poolOf(HOST))
     .sort((a, b) => poolOf(a) - poolOf(b));
 const checkoutKeysOf = (entries: readonly AiPlanCatalogEntry[]) => [
   ...[...ladderOf(entries), ...bandOf(entries)].flatMap((p) => (p.prices ? keysOf(p) : [])),
@@ -155,12 +160,13 @@ describe('Host is what the requirement says, in a band of its own', () => {
   });
 });
 
-describe('the ceiling and the rungs did not move', () => {
-  it('the ceiling is still the ladder’s top, and the rungs are still the larger pools above it', () => {
+describe('the ceiling did not move, and the rungs sit above Host', () => {
+  it('the ceiling is still the ladder’s top, and the rungs are the larger pools above Host', () => {
     expect(maxMonthlyPlanCredits()).toBe(ceilingOf(PRE_HOST));
     expect(maxMonthlyPlanCredits()).toBe(Math.max(...LADDER.map(poolOf)));
     expect(largerPoolPlans().map((p) => p.key)).toEqual(BAND.map((p) => p.key));
     expect(BAND.length).toBeGreaterThan(0);
+    for (const rung of BAND) expect(poolOf(rung), rung.key).toBeGreaterThan(poolOf(HOST));
     expect(maxMonthlyPlanCredits()).not.toBe(poolOf(HOST));
     expect(largerPoolPlans().map((p) => p.key)).not.toContain(HOST.key);
   });
@@ -176,9 +182,9 @@ describe('the allow-lists gained exactly Host', () => {
     }
   });
 
-  it('the change of plan accepts the pre-Host keys plus host, ascending, host last', () => {
-    const before = planChangeKeysOf([...ladderOf(PRE_HOST), ...BAND]);
-    expect([...PLAN_CHANGE_KEYS]).toEqual([...before, HOST.key]);
+  it('the change of plan accepts the pre-Host keys plus host, ascending, the rungs after host', () => {
+    const ladder = planChangeKeysOf(ladderOf(PRE_HOST));
+    expect([...PLAN_CHANGE_KEYS]).toEqual([...ladder, HOST.key, ...planChangeKeysOf(BAND)]);
     const pools = PLAN_CHANGE_KEYS.map((k) =>
       poolOf(BILLING_CATALOG.aiPlans.find((p) => p.key === k)!),
     );

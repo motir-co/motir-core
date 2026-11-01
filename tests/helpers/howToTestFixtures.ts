@@ -20,6 +20,7 @@ export const CORE_PR: LinkedPullRequestDto = {
   headSha: CORE_HEAD,
   url: 'https://github.com/moooon/motir-core/pull/131',
   githubReview: null,
+  preview: null,
   baseRef: 'main',
   conflicted: false,
 };
@@ -34,6 +35,7 @@ export const GATEWAY_PR: LinkedPullRequestDto = {
   headSha: GATEWAY_HEAD,
   url: 'https://github.com/moooon/motir-gateway/pull/57',
   githubReview: null,
+  preview: null,
   baseRef: 'main',
   conflicted: false,
 };
@@ -69,6 +71,7 @@ export function recordDto(over: Partial<HowToTestDto> = {}): HowToTestDto {
       author: { kind: 'run', runId: 'run-318', label: 'Parent run #318' },
       createdAt: '2026-09-13T14:05:00.000Z',
       bodyMd: SECTIONED_BODY,
+      workItemRefs: {},
       previewPath: '/settings/api-keys',
     },
     history: [],

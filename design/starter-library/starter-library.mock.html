@@ -1,0 +1,1592 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Operator console — Starters (MOTIR-705)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — MOTIR-705. A new operator-console page,
+      Operations → Starters: the paginated starter library with its use
+      cases, sizes, hosting targets, status and provenance, filtered by role,
+      status and hosting target. Spec: design/starter-library/design-notes.md §2.
+
+      Built from app/(admin)/_components/AdminShell.tsx (the rail) and the
+      shell of design/platform-admin/console--ideas.mock.html, with the
+      shipped Pill / Button / Combobox / EmptyState primitives. The entries
+      are decision MOTIR-706 v2's initial set (prisma seed + MOTIR-9813).
+    -->
+    <style>
+      /* ═══ TOKENS — generated from @motir/design-system/theme.css ═══ */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-primary-fill: #5645d4;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-canvas: #ecebe7;
+        --color-ink: #1a1a1a;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-orange: #dd5b00;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0070d2;
+        --color-link-pressed: #005bab;
+        --font-sans:
+          var(--font-sans-source, -apple-system), BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: var(--font-serif-source, Georgia), serif;
+        --font-mono: var(--font-mono-source, ui-monospace), 'SF Mono', Menlo, monospace;
+        --font-size-xs: 0.75rem;
+        --font-size-sm: 0.875rem;
+        --font-size-base: 1rem;
+        --font-size-lg: 1.25rem;
+        --font-size-xl: 1.5rem;
+        --font-size-2xl: 2rem;
+        --font-size-3xl: 3rem;
+        --font-size-display: 5rem;
+        --radius-xs: 4px;
+        --radius-sm: 6px;
+        --radius-md: 8px;
+        --radius-lg: 12px;
+        --radius-xl: 16px;
+        --radius-pill: 9999px;
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-flat: none;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --shadow-hero-mockup: 0 24px 48px -8px rgba(15, 15, 15, 0.2);
+        --spacing-xxs: 4px;
+        --spacing-xs: 8px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --spacing-lg: 20px;
+        --spacing-xl: 24px;
+        --spacing-2xl: 32px;
+        --spacing-3xl: 40px;
+        --spacing-section: 64px;
+        --spacing-section-lg: 96px;
+        --spacing-hero: 120px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-btn-y-sm: 8px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-input: 44px;
+        --height-control: 36px;
+        --transition-duration: 150ms;
+        --transition-fast: 100ms;
+        --transition-slow: 250ms;
+        --hover-scale: 1;
+        --active-scale: 0.98;
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+        --focus-ring-color: var(--color-primary);
+        --el-page-bg: var(--color-background);
+        --el-page-text: var(--color-foreground);
+        --el-page-text-muted: var(--color-muted-foreground);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary-fill);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-canvas: var(--color-canvas);
+        --el-surface-text: var(--color-foreground);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-link-pressed: var(--color-link-pressed);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        /* ADDED by MOTIR-4674, verbatim from packages/design-system/theme.css:
+           the ink for danger text ON a page surface. --el-danger-text is legal
+           ONLY on an element carrying bg-(--el-danger), and raw --el-danger is
+           under AA on the dark page in three palettes. */
+        --el-danger-on-surface: color-mix(in srgb, var(--el-danger) 70%, var(--el-text));
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-status-todo: var(--color-stone);
+        --el-status-in-progress: var(--color-info);
+        --el-status-in-review: var(--color-primary);
+        --el-status-done: var(--color-success);
+        --el-status-blocked: var(--color-warning);
+        --el-status-cancelled: var(--color-steel);
+        --el-priority-highest: var(--color-destructive);
+        --el-priority-high: var(--color-warning);
+        --el-priority-medium: var(--color-slate);
+        --el-priority-low: var(--color-info);
+        --el-priority-lowest: var(--color-stone);
+        --el-danger-surface: var(--color-tint-rose);
+        --el-danger-surface-text: var(--color-charcoal);
+        --el-warning-surface: var(--color-tint-peach);
+        --el-warning-text: var(--color-charcoal);
+        --el-success-surface: var(--color-tint-mint);
+        --el-notice-info-bg: var(--color-tint-sky);
+        --el-notice-info-border: var(--color-info);
+        --el-callout-bg: var(--color-tint-lavender);
+        --el-callout-text: var(--color-charcoal);
+        --el-role-admin: var(--color-tint-lavender);
+        --el-role-member: var(--color-tint-sky);
+        --el-role-viewer: var(--color-tint-mint);
+        --el-org-role-owner: var(--color-tint-lavender);
+        --el-org-role-admin: var(--color-tint-sky);
+        --el-org-role-member: var(--color-tint-mint);
+        --el-privacy-private: var(--color-tint-lavender);
+        --el-privacy-public: var(--color-tint-sky);
+        --el-label-1: var(--color-tint-peach);
+        --el-label-2: var(--color-tint-rose);
+        --el-label-3: var(--color-tint-mint);
+        --el-label-4: var(--color-tint-lavender);
+        --el-label-5: var(--color-tint-sky);
+        --el-label-6: var(--color-tint-yellow);
+        --el-avatar-peach: var(--color-tint-peach);
+        --el-avatar-rose: var(--color-tint-rose);
+        --el-avatar-mint: var(--color-tint-mint);
+        --el-avatar-lavender: var(--color-tint-lavender);
+        --el-avatar-sky: var(--color-tint-sky);
+        --el-avatar-yellow: var(--color-tint-yellow);
+        --el-avatar-fallback: var(--color-info);
+        --el-notif-mentioned: var(--color-primary-fill);
+        --el-notif-commented: var(--color-info);
+        --el-notif-assigned: var(--color-accent-green);
+        --el-notif-transitioned: var(--color-accent-teal);
+        --el-model-opus: var(--color-primary-fill);
+        --el-model-sonnet: var(--color-info);
+        --el-model-haiku: var(--color-success);
+        --el-model-deepseek: var(--color-accent-teal);
+        --el-icon-muted: var(--color-muted-foreground);
+        --el-icon-active: var(--color-primary);
+        --el-icon-btn: var(--color-foreground);
+        --el-icon-heading: var(--color-charcoal);
+        --el-icon-field: var(--color-muted-foreground);
+        --el-text-eyebrow: var(--color-muted-foreground);
+        --el-text-subtitle: var(--color-slate);
+        --el-text-helper: var(--color-muted-foreground);
+        --el-text-identifier: var(--color-slate);
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
+        --el-switch-on: var(--color-primary-fill);
+        --el-switch-knob: var(--color-surface);
+        --el-option-active-bg: var(--color-muted);
+        --el-overlay-scrim: #00000066;
+        --el-chip-bg: var(--color-surface);
+        --el-chip-border: var(--color-border);
+        --el-card: var(--color-background);
+        --el-input-border: var(--color-hairline-strong);
+        --el-button-border: var(--color-hairline-strong);
+        --el-count-bg: var(--color-muted);
+        --el-count-text: var(--color-slate);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-type-code: var(--color-info);
+        --el-type-design: var(--color-accent);
+        --el-type-test: var(--color-success);
+        --el-type-content: var(--color-accent-teal);
+        --el-type-research: var(--color-primary);
+        --el-type-review: var(--color-accent-orange);
+        --el-type-deploy: var(--color-destructive);
+        --el-type-decision: var(--color-charcoal);
+        --el-type-manual: var(--color-stone);
+        --el-type-chore: var(--color-slate);
+        --el-chart-guideline: var(--color-stone);
+        --el-chart-actual: var(--color-primary);
+        --el-chart-scope: var(--color-warning);
+        --el-chart-committed: var(--color-info);
+        --el-chart-completed: var(--color-success);
+        --el-chart-average: var(--color-charcoal);
+        --el-chart-plot: var(--color-surface-soft);
+        --el-chart-grid: var(--color-border);
+        --el-chart-axis: var(--color-steel);
+        --el-chart-cat-1: var(--color-primary);
+        --el-chart-cat-2: var(--color-info);
+        --el-chart-cat-3: var(--color-success);
+        --el-chart-cat-4: var(--color-warning);
+        --el-chart-cat-5: var(--color-accent-teal);
+        --el-chart-cat-6: var(--color-accent);
+        --el-chart-cat-7: var(--color-charcoal);
+        --el-chart-cat-none: var(--color-stone);
+        --el-chart-created: var(--color-info);
+        --el-chart-resolved: var(--color-success);
+        --el-chart-deficit: var(--color-destructive);
+        --el-chart-surplus: var(--color-success);
+        --el-chart-age: var(--color-warning);
+        --el-chart-resolution: var(--color-info);
+        --el-chart-cycle-scope: var(--color-stone);
+        --el-chart-cycle-started: var(--color-warning);
+        --el-chart-cycle-completed: var(--color-info);
+        --el-chart-cycle-target: var(--color-info);
+        --el-public-banner-bg: var(--color-tint-sky);
+        --el-public-banner-text: var(--color-charcoal);
+        --el-vote-bg: var(--color-tint-lavender);
+        --el-vote-active-bg: var(--color-primary);
+        --el-vote-active-text: var(--color-primary-foreground);
+        --el-roadmap-submitted: var(--color-tint-peach);
+        --el-roadmap-planned: var(--color-tint-lavender);
+        --el-roadmap-progress: var(--color-tint-sky);
+        --el-roadmap-done: var(--color-tint-mint);
+        --el-diff-added: var(--color-tint-mint);
+        --el-diff-removed: var(--color-tint-rose);
+        --el-diff-moved: var(--color-tint-sky);
+        --el-chat-bubble-user: var(--color-primary-fill);
+        --el-chat-bubble-ai: var(--color-surface-soft);
+        --el-canvas-edge-pending: var(--color-slate);
+        --el-canvas-edge-committed: var(--color-charcoal);
+        --el-station-tier-discovery: var(--color-tint-sky);
+        --el-station-tier-vision: var(--color-tint-lavender);
+        --el-station-tier-feasibility: var(--color-tint-mint);
+        --el-station-tier-validation: var(--color-tint-peach);
+        --el-hero-wash-a: var(--color-tint-lavender);
+        --el-hero-wash-b: var(--color-tint-sky);
+        --el-build-bg: var(--color-tint-lavender);
+        --el-build-text: var(--color-charcoal);
+        --el-build-glyph: var(--color-primary);
+        --el-selection-bg: var(--color-tint-sky);
+        --el-droptarget-bg: var(--color-tint-lavender);
+        --el-board-column-accent: var(--color-primary);
+        --el-overdue: var(--color-destructive);
+        --el-due-soon: var(--color-warning);
+        --el-sprint-accent: var(--color-tint-lavender);
+        --el-epic-accent: var(--color-accent);
+        --el-archived-pill-bg: var(--color-muted);
+        --el-archived-pill-text: var(--color-slate);
+        --el-auth-wash: var(--color-tint-sky);
+        --el-tabnav-track: var(--color-surface);
+        --el-tabnav-active: var(--color-primary);
+        --el-card-icon-bg: var(--color-muted);
+        --el-card-icon-fg: var(--color-primary);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+      }
+      :root {
+        --spacing-card-padding-16: 16px;
+        --spacing-card-padding-12: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: #f2f1ee;
+        color: var(--el-page-text);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          Roboto,
+          'Helvetica Neue',
+          Arial,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .board {
+        max-width: 1240px;
+        margin: 0 auto;
+        padding: 40px 24px 72px;
+      }
+      .board > header {
+        margin-bottom: 32px;
+      }
+      .board h1 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 30px;
+        line-height: 1.2;
+        margin: 0 0 8px;
+        color: var(--el-text);
+      }
+      .board > header p {
+        margin: 0 0 10px;
+        font-size: 14px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .board > header p b {
+        color: var(--el-text);
+      }
+      .panel-label {
+        margin: 44px 0 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        border-top: 1px solid var(--el-border);
+        padding-top: 14px;
+      }
+      .panel-label b {
+        color: var(--el-text);
+        font-weight: 700;
+      }
+      .panel-note {
+        margin: 0 0 14px;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 88ch;
+      }
+      .panel-note b {
+        color: var(--el-text);
+      }
+      .panel {
+        margin-bottom: 8px;
+      }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+      figcaption {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code.k {
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+        border-radius: var(--radius-control);
+        padding: 2px 6px;
+      }
+      svg.i {
+        width: 16px;
+        height: 16px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      svg.i.sm {
+        width: 14px;
+        height: 14px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border: 0;
+        cursor: pointer;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding-inline: var(--spacing-btn-x);
+        background: transparent;
+        color: var(--el-text);
+        white-space: nowrap;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        border: 1px solid var(--el-button-border);
+        background: var(--el-card);
+        color: var(--el-text);
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding-inline: var(--spacing-btn-x-sm);
+        font-size: 13px;
+      }
+      .btn[disabled] {
+        opacity: 0.5;
+        cursor: default;
+      }
+      .icon-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: var(--height-control);
+        height: var(--height-control);
+        border: 0;
+        background: transparent;
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill-neutral {
+        background: var(--el-chip-bg);
+        color: var(--el-text-secondary);
+        border-color: var(--el-chip-border);
+      }
+      .pill-target {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+      .pill-active {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-retired {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-default {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill svg {
+        color: currentColor;
+      }
+      .listbox {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+        display: flex;
+        flex-direction: column;
+      }
+      .listbox .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 14px;
+        color: var(--el-text);
+        min-width: 0;
+      }
+      .listbox .opt.active {
+        background: var(--el-option-active-bg);
+      }
+      .listbox .opt .main {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .listbox .opt .nm {
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .listbox .opt .tick {
+        color: var(--el-accent-on-surface);
+      }
+      .chips {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 4px;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .shell {
+        display: flex;
+        min-height: 540px;
+      }
+      .admin-nav {
+        width: 224px;
+        flex: none;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        display: flex;
+        flex-direction: column;
+        padding: 14px 10px;
+      }
+      .admin-nav .brand {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 4px 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .admin-nav .brand .logo {
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 12px;
+        flex: none;
+      }
+      .admin-nav .brand .bt {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .admin-nav .brand .bs {
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .nav-group {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding: 14px 8px 4px;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 1px;
+      }
+      .nav-item svg {
+        color: var(--el-text-secondary);
+      }
+      .nav-item.active {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-weight: 600;
+      }
+      .nav-item.active svg {
+        color: var(--el-info);
+      }
+      .shell-main {
+        flex: 1;
+        min-width: 0;
+      }
+      .adminbar {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 9px 16px;
+        background: var(--el-tint-sky);
+        border-bottom: 1px solid var(--el-border-soft);
+        box-shadow: inset 3px 0 0 var(--el-info);
+      }
+      .staff-mark {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .staff-mark svg {
+        color: var(--el-info);
+      }
+      .page {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 22px 26px 28px;
+      }
+      .crumb {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .crumb b {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .page-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .page-head h2 {
+        margin: 0 0 6px;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 24px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .page-head p {
+        margin: 0;
+        max-width: 72ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .card {
+        border-radius: var(--radius-card);
+        border: 1px solid var(--el-border);
+        background: var(--el-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: var(--spacing-card-padding-16) var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-head .hsub {
+        margin: 2px 0 0;
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .card-foot {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: var(--spacing-card-padding-12) var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px;
+        padding: var(--spacing-card-padding-16) var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .lookup-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .lf-label {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+      }
+      .ftrig {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        min-width: 160px;
+        height: var(--height-control);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-input-border);
+        background: var(--el-page-bg);
+        padding-inline: var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .ftrig svg {
+        color: var(--el-icon-muted);
+      }
+      .segmented {
+        display: inline-flex;
+        gap: 2px;
+        border-radius: var(--radius-control);
+        background: var(--el-tabnav-track);
+        padding: 2px;
+      }
+      .seg-opt {
+        display: inline-flex;
+        align-items: center;
+        height: calc(var(--height-control) - 4px);
+        border-radius: var(--radius-control);
+        padding-inline: var(--spacing-control-x);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .seg-opt.active {
+        background: var(--el-card);
+        box-shadow: var(--shadow-subtle);
+        color: var(--el-text);
+        font-weight: 600;
+      }
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .tbl th {
+        text-align: left;
+        padding: 10px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        border-bottom: 1px solid var(--el-border);
+        white-space: nowrap;
+      }
+      .tbl td {
+        padding: 12px;
+        vertical-align: top;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text);
+      }
+      .tbl tr.gone td {
+        background: var(--el-surface-soft);
+      }
+      .entry-label {
+        display: block;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .entry-key {
+        display: block;
+        white-space: nowrap;
+        margin-top: 2px;
+        font-family: ui-monospace, Menlo, monospace;
+        font-size: 12px;
+        color: var(--el-text-identifier);
+      }
+      .entry-alias {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .serves {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .no-host {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .prov {
+        display: block;
+        max-width: 26ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .prov b {
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .act-cell {
+        text-align: right;
+        white-space: nowrap;
+      }
+      .default-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .pager {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 40px 24px;
+        text-align: center;
+      }
+      .empty > svg {
+        width: 28px;
+        height: 28px;
+        color: var(--el-icon-muted);
+      }
+      .empty h4 {
+        margin: 0;
+        font-family: ui-serif, Georgia, serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        max-width: 52ch;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      @media (max-width: 980px) {
+        .gallery {
+          grid-template-columns: 1fr;
+        }
+        .admin-nav {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-activity" viewBox="0 0 24 24">
+          <path
+            d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"
+          />
+        </symbol>
+        <symbol id="i-archive" viewBox="0 0 24 24">
+          <rect width="20" height="5" x="2" y="3" rx="1" />
+          <path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" />
+          <path d="M10 12h4" />
+        </symbol>
+        <symbol id="i-book" viewBox="0 0 24 24">
+          <path d="M12 7v14" />
+          <path
+            d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+          />
+        </symbol>
+        <symbol id="i-bot" viewBox="0 0 24 24">
+          <path d="M12 8V4H8" />
+          <path d="M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </symbol>
+        <symbol id="i-building" viewBox="0 0 24 24">
+          <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+          <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+          <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+          <path d="M10 6h4" />
+          <path d="M10 10h4" />
+          <path d="M10 14h4" />
+          <path d="M10 18h4" />
+        </symbol>
+        <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></symbol>
+        <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" /></symbol>
+        <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6" /></symbol>
+        <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6" /></symbol>
+        <symbol id="i-coins" viewBox="0 0 24 24">
+          <path d="M13.744 17.736a6 6 0 1 1-7.48-7.48" />
+          <path d="M15 6h1v4" />
+          <path d="m6.134 14.768.866-.5 2 3.464" />
+          <circle cx="16" cy="8" r="6" />
+        </symbol>
+        <symbol id="i-gauge" viewBox="0 0 24 24">
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24">
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"
+          />
+          <path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65" />
+          <path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65" />
+        </symbol>
+        <symbol id="i-lightbulb" viewBox="0 0 24 24">
+          <path
+            d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"
+          />
+          <path d="M9 18h6" />
+          <path d="M10 22h4" />
+        </symbol>
+        <symbol id="i-lock" viewBox="0 0 24 24">
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </symbol>
+        <symbol id="i-plus" viewBox="0 0 24 24">
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </symbol>
+        <symbol id="i-server" viewBox="0 0 24 24">
+          <rect width="20" height="8" x="2" y="2" rx="2" ry="2" />
+          <rect width="20" height="8" x="2" y="14" rx="2" ry="2" />
+          <line x1="6" x2="6.01" y1="6" y2="6" />
+          <line x1="6" x2="6.01" y1="18" y2="18" />
+        </symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24">
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </symbol>
+        <symbol id="i-sparkles" viewBox="0 0 24 24">
+          <path
+            d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+          />
+          <path d="M20 2v4" />
+          <path d="M22 4h-4" />
+          <circle cx="4" cy="20" r="2" />
+        </symbol>
+        <symbol id="i-usersearch" viewBox="0 0 24 24">
+          <circle cx="10" cy="7" r="4" />
+          <path d="M10.3 15H7a4 4 0 0 0-4 4v2" />
+          <circle cx="17" cy="17" r="3" />
+          <path d="m21 21-1.9-1.9" />
+        </symbol>
+        <symbol id="i-workflow" viewBox="0 0 24 24">
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </symbol>
+        <symbol id="i-x" viewBox="0 0 24 24">
+          <path d="M18 6 6 18" />
+          <path d="m6 6 12 12" />
+        </symbol>
+      </defs>
+    </svg>
+    <main class="board">
+      <header>
+        <h1>Operator console — Starters</h1>
+        <p>
+          MOTIR-705 · story MOTIR-704. A new page in the shipped operator console: the
+          <b>starter library</b> every repository Motir creates starts from. Each entry shows its
+          role and stack, the uses, sizes and hosting targets it serves, whether it is active or
+          retired, and where it came from. Filters for role, status and hosting target live in the
+          URL. Promoting and retiring are drawn in
+          <code class="k">starter-library--promote.mock.html</code>.
+        </p>
+        <p>
+          <b>Operators and superadmins only.</b> The <b>Starters</b> row appears in the rail for
+          them; for <b>support</b> it is absent and <code class="k">/admin/starters</code> answers
+          404, as Fleet settings and Audit log do. Nothing on this page changes a repository that
+          already exists.
+        </p>
+      </header>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 1 · <b>The library, populated</b> — the door is the new <b>Starters</b> row in the
+        rail’s Operations group, after Ideas. Status defaults to <b>Active</b>.
+      </div>
+      <p class="panel-note">
+        Seven active starters: Motir’s own six (decision MOTIR-706 v2) and one an operator promoted.
+        A starter that no Motir hosting target deploys reads
+        <b>Not deployed by Motir hosting</b>. A role’s default carries a <b>Default</b> pill and no
+        Retire action. 25 starters to a page.
+      </p>
+      <div class="panel">
+        <div class="stage">
+          <div class="shell">
+            <aside class="admin-nav">
+              <div class="brand">
+                <span class="logo">M</span>
+                <div>
+                  <div class="bt">Motir</div>
+                  <div class="bs">Platform admin</div>
+                </div>
+              </div>
+              <div class="nav-group">Platform</div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-activity" /></svg>Overview
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-coins" /></svg>Usage &amp; cost
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-building" /></svg>Tenants
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-usersearch" /></svg>Users
+              </div>
+              <div class="nav-group">Operations</div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-server" /></svg>Monitoring
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-workflow" /></svg>Jobs
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-gauge" /></svg>Provider capacity
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-sparkles" /></svg>AI planning
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-bot" /></svg>Hosted-run models
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-book" /></svg>Planning lessons
+              </div>
+              <div class="nav-item">
+                <svg class="i"><use href="#i-lightbulb" /></svg>Ideas
+              </div>
+              <!-- THE DOOR (MOTIR-705): a new row in the Operations group, directly after
+                 Ideas, for operator and superadmin only. For support the row is absent
+                 and /admin/starters 404s, as Fleet settings and Audit log do. -->
+              <div class="nav-item active">
+                <svg class="i"><use href="#i-layers" /></svg>Starters
+              </div>
+            </aside>
+            <div class="shell-main">
+              <div class="adminbar">
+                <span class="staff-mark"
+                  ><svg class="i"><use href="#i-shield" /></svg>Platform staff · all reads
+                  audited</span
+                >
+              </div>
+              <div class="page">
+                <span class="crumb"><b>Operations</b> · Starters</span>
+                <div class="page-head">
+                  <div>
+                    <h2>Starters</h2>
+                    <p>
+                      What a repository Motir creates starts from. Matching picks among the active
+                      starters by role, hosting target, use and size. Promote a repository Motir
+                      created into a starter, or retire one.
+                    </p>
+                  </div>
+                  <button class="btn btn-primary" type="button">
+                    <svg class="i"><use href="#i-plus" /></svg>Promote a repository
+                  </button>
+                </div>
+                <div class="card">
+                  <div class="card-head">
+                    <div>
+                      <h3>Starter library</h3>
+                      <p class="hsub">Newest first · 7 starters</p>
+                    </div>
+                  </div>
+                  <div class="filters" role="search" aria-label="Filter starters">
+                    <div class="lookup-field">
+                      <span class="lf-label">Role</span>
+                      <span class="ftrig"
+                        >Any role<svg class="i sm"><use href="#i-chevron-down" /></svg
+                      ></span>
+                    </div>
+                    <div class="lookup-field">
+                      <span class="lf-label">Status</span>
+                      <div class="segmented" role="radiogroup" aria-label="Status">
+                        <span class="seg-opt active" role="radio" aria-checked="true">Active</span
+                        ><span class="seg-opt" role="radio" aria-checked="false">Retired</span
+                        ><span class="seg-opt" role="radio" aria-checked="false">All</span>
+                      </div>
+                    </div>
+                    <div class="lookup-field">
+                      <span class="lf-label">Hosting target</span>
+                      <span class="ftrig"
+                        >Any target<svg class="i sm"><use href="#i-chevron-down" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                  <table class="tbl">
+                    <thead>
+                      <tr>
+                        <th>Starter</th>
+                        <th>Role · stack</th>
+                        <th>Serves</th>
+                        <th>Hosting</th>
+                        <th>Status</th>
+                        <th>Provenance</th>
+                        <th aria-label="Actions"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Next.js · booking</span
+                          ><span class="entry-key">nextjs-booking-starter</span>
+                        </td>
+                        <td>web · nextjs</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"><span class="pill pill-neutral">MVP</span></span>
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Small</span
+                              ><span class="pill pill-neutral">Medium</span></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="pill pill-target">Serverless</span></td>
+                        <td><span class="pill pill-active">Active</span></td>
+                        <td>
+                          <span class="prov"
+                            >Promoted by <b>sam@moooon.net</b> on 26 Oct 2026 from
+                            motir-projects/acme-booking-web at <span class="mono">main</span></span
+                          >
+                        </td>
+                        <td class="act-cell">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="i sm"><use href="#i-archive" /></svg>Retire
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Next.js · AWS</span
+                          ><span class="entry-key">nextjs-prisma-aws-starter</span>
+                        </td>
+                        <td>web · nextjs</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Planned product</span></span
+                            >
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Small</span
+                              ><span class="pill pill-neutral">Medium</span
+                              ><span class="pill pill-neutral">Large</span></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="pill pill-target">AWS</span></td>
+                        <td><span class="pill pill-active">Active</span></td>
+                        <td><span class="prov">Shipped with Motir</span></td>
+                        <td class="act-cell">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="i sm"><use href="#i-archive" /></svg>Retire
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Next.js · Fly</span
+                          ><span class="entry-key">nextjs-prisma-fly-starter</span>
+                        </td>
+                        <td>web · nextjs</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"
+                              ><span class="pill pill-neutral">MVP</span
+                              ><span class="pill pill-neutral">Planned product</span></span
+                            >
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Small</span
+                              ><span class="pill pill-neutral">Medium</span
+                              ><span class="pill pill-neutral">Large</span></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="pill pill-target">Fly</span></td>
+                        <td><span class="pill pill-active">Active</span></td>
+                        <td><span class="prov">Shipped with Motir</span></td>
+                        <td class="act-cell">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="i sm"><use href="#i-archive" /></svg>Retire
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Expo mobile foundation</span
+                          ><span class="entry-key">expo-mobile-foundation</span>
+                        </td>
+                        <td>mobile · expo</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Every use</span></span
+                            >
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Every size</span></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="no-host">Not deployed by Motir hosting</span></td>
+                        <td><span class="pill pill-active">Active</span></td>
+                        <td><span class="prov">Shipped with Motir</span></td>
+                        <td class="act-cell">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="i sm"><use href="#i-archive" /></svg>Retire
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Spring API foundation</span
+                          ><span class="entry-key">spring-api-foundation</span>
+                        </td>
+                        <td>api · spring</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Every use</span></span
+                            >
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Every size</span></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="no-host">Not deployed by Motir hosting</span></td>
+                        <td><span class="pill pill-active">Active</span></td>
+                        <td><span class="prov">Shipped with Motir</span></td>
+                        <td class="act-cell">
+                          <button class="btn btn-secondary btn-sm" type="button">
+                            <svg class="i sm"><use href="#i-archive" /></svg>Retire
+                          </button>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Next.js · serverless</span
+                          ><span class="entry-key">nextjs-prisma-serverless-starter</span
+                          ><span class="entry-alias"
+                            >Also answers to nextjs-prisma-vercel-starter</span
+                          >
+                        </td>
+                        <td>web · nextjs</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Internal tool</span
+                              ><span class="pill pill-neutral">MVP</span></span
+                            >
+                            <span class="chips"><span class="pill pill-neutral">Small</span></span>
+                          </div>
+                        </td>
+                        <td><span class="pill pill-target">Serverless</span></td>
+                        <td>
+                          <span class="chips"
+                            ><span class="pill pill-active">Active</span
+                            ><span class="pill pill-default">Default</span></span
+                          >
+                        </td>
+                        <td><span class="prov">Shipped with Motir</span></td>
+                        <td class="act-cell">
+                          <span class="default-note"
+                            ><svg class="i sm"><use href="#i-lock" /></svg>Default for web</span
+                          >
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <span class="entry-label">Initialised repository</span
+                          ><span class="entry-key">initialised</span>
+                        </td>
+                        <td>any role · any stack</td>
+                        <td>
+                          <div class="serves">
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Every use</span></span
+                            >
+                            <span class="chips"
+                              ><span class="pill pill-neutral">Every size</span></span
+                            >
+                          </div>
+                        </td>
+                        <td><span class="no-host">Not deployed by Motir hosting</span></td>
+                        <td>
+                          <span class="chips"
+                            ><span class="pill pill-active">Active</span
+                            ><span class="pill pill-default">Default</span></span
+                          >
+                        </td>
+                        <td><span class="prov">Shipped with Motir</span></td>
+                        <td class="act-cell">
+                          <span class="default-note"
+                            ><svg class="i sm"><use href="#i-lock" /></svg>Default for every
+                            role</span
+                          >
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                  <div class="card-foot">
+                    <span>Showing 1–7 of 7</span>
+                    <span class="pager">
+                      <button class="icon-btn" type="button" aria-label="Previous page" disabled>
+                        <svg class="i"><use href="#i-chevron-left" /></svg>
+                      </button>
+                      <button class="icon-btn" type="button" aria-label="Next page" disabled>
+                        <svg class="i"><use href="#i-chevron-right" /></svg>
+                      </button>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 2 · <b>Filtered by hosting target</b> — the target filter open, then
+        <b>Fly</b> applied
+      </div>
+      <p class="panel-note">
+        The target filter offers the closed list of hosting targets plus
+        <b>Not deployed by Motir hosting</b>, which finds the starters with no target. The URL
+        becomes <code class="k">/admin/starters?target=fly</code>. Only the library card is drawn;
+        the shell is Panel 1’s.
+      </p>
+      <div class="panel gallery">
+        <figure>
+          <figcaption>Hosting target · open</figcaption>
+          <div class="lookup-field">
+            <span class="lf-label">Hosting target</span>
+            <span class="ftrig"
+              >Any target<svg class="i sm"><use href="#i-chevron-down" /></svg
+            ></span>
+            <div class="listbox" role="listbox" aria-label="Hosting target">
+              <div class="opt active" role="option" aria-selected="true">
+                <span class="main"><span class="nm">Any target</span></span>
+                <svg class="i tick"><use href="#i-check" /></svg>
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"><span class="nm">Serverless</span></span>
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"><span class="nm">Fly</span></span>
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"><span class="nm">AWS</span></span>
+              </div>
+              <div class="opt" role="option" aria-selected="false">
+                <span class="main"><span class="nm">Not deployed by Motir hosting</span></span>
+              </div>
+            </div>
+          </div>
+        </figure>
+        <figure>
+          <figcaption>Hosting target · Fly</figcaption>
+          <div class="card">
+            <div class="filters" role="search" aria-label="Filter starters">
+              <div class="lookup-field">
+                <span class="lf-label">Status</span>
+                <div class="segmented" role="radiogroup" aria-label="Status">
+                  <span class="seg-opt active" role="radio" aria-checked="true">Active</span
+                  ><span class="seg-opt" role="radio" aria-checked="false">Retired</span
+                  ><span class="seg-opt" role="radio" aria-checked="false">All</span>
+                </div>
+              </div>
+              <div class="lookup-field">
+                <span class="lf-label">Hosting target</span>
+                <span class="ftrig"
+                  >Fly<svg class="i sm"><use href="#i-chevron-down" /></svg
+                ></span>
+              </div>
+            </div>
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th>Starter</th>
+                  <th>Hosting</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    <span class="entry-label">Next.js · Fly</span
+                    ><span class="entry-key">nextjs-prisma-fly-starter</span>
+                  </td>
+                  <td><span class="pill pill-target">Fly</span></td>
+                  <td><span class="pill pill-active">Active</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="card-foot"><span>Showing 1–1 of 1</span></div>
+          </div>
+        </figure>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 3 · <b>Retired</b> — the Retired filter, and an entry shown distinctly
+      </div>
+      <p class="panel-note">
+        A retired starter stays in the library as a record. Its row is quieted (<code class="k"
+          >--el-surface-soft</code
+        >), its status pill is grey, it has no action, and its provenance adds who retired it, when
+        and why. Matching never picks it and the room’s picker never offers it.
+      </p>
+      <div class="panel">
+        <div class="card">
+          <div class="filters" role="search" aria-label="Filter starters">
+            <div class="lookup-field">
+              <span class="lf-label">Role</span>
+              <span class="ftrig"
+                >Any role<svg class="i sm"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+            <div class="lookup-field">
+              <span class="lf-label">Status</span>
+              <div class="segmented" role="radiogroup" aria-label="Status">
+                <span class="seg-opt" role="radio" aria-checked="false">Active</span
+                ><span class="seg-opt active" role="radio" aria-checked="true">Retired</span
+                ><span class="seg-opt" role="radio" aria-checked="false">All</span>
+              </div>
+            </div>
+            <div class="lookup-field">
+              <span class="lf-label">Hosting target</span>
+              <span class="ftrig"
+                >Any target<svg class="i sm"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+          </div>
+          <table class="tbl">
+            <thead>
+              <tr>
+                <th>Starter</th>
+                <th>Role · stack</th>
+                <th>Serves</th>
+                <th>Hosting</th>
+                <th>Status</th>
+                <th>Provenance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="gone">
+                <td>
+                  <span class="entry-label">Next.js · booking (pages)</span
+                  ><span class="entry-key">nextjs-booking-pages-starter</span>
+                </td>
+                <td>web · nextjs</td>
+                <td>
+                  <div class="serves">
+                    <span class="chips"><span class="pill pill-neutral">MVP</span></span>
+                    <span class="chips"><span class="pill pill-neutral">Small</span></span>
+                  </div>
+                </td>
+                <td><span class="pill pill-target">Serverless</span></td>
+                <td><span class="pill pill-retired">Retired</span></td>
+                <td>
+                  <span class="prov"
+                    >Promoted by <b>sam@moooon.net</b> on 3 Oct 2026. Retired by
+                    <b>lee@moooon.net</b> on 26 Oct 2026: “Replaced by Next.js · booking, on the app
+                    router.”</span
+                  >
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="card-foot"><span>Showing 1–1 of 1</span></div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════════════════════════════════════════════════════ -->
+      <div class="panel-label">
+        Panel 4 · <b>No starter matches the filters</b> — the empty state keeps a way back
+      </div>
+      <div class="panel">
+        <div class="card">
+          <div class="filters" role="search" aria-label="Filter starters">
+            <div class="lookup-field">
+              <span class="lf-label">Role</span>
+              <span class="ftrig"
+                >mobile<svg class="i sm"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+            <div class="lookup-field">
+              <span class="lf-label">Status</span>
+              <div class="segmented" role="radiogroup" aria-label="Status">
+                <span class="seg-opt active" role="radio" aria-checked="true">Active</span
+                ><span class="seg-opt" role="radio" aria-checked="false">Retired</span
+                ><span class="seg-opt" role="radio" aria-checked="false">All</span>
+              </div>
+            </div>
+            <div class="lookup-field">
+              <span class="lf-label">Hosting target</span>
+              <span class="ftrig"
+                >AWS<svg class="i sm"><use href="#i-chevron-down" /></svg
+              ></span>
+            </div>
+          </div>
+          <div class="empty">
+            <svg class="i"><use href="#i-layers" /></svg>
+            <h4>No starters match these filters</h4>
+            <p>
+              No active starter for a mobile repository deploys to AWS. Clear the filters to see the
+              whole library.
+            </p>
+            <button class="btn btn-secondary btn-sm" type="button">
+              <svg class="i sm"><use href="#i-x" /></svg>Clear filters
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

@@ -329,7 +329,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **105 tools**.
+`initialize` handshake and registers **109 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -689,9 +689,13 @@ is a LIFT rather than a cut: the design criterion becomes its own `type: design`
 card and what is left is `blocked_by` it, so somebody sees the drawing before the
 files written to match it (Principle #13). It fires only for a **childless** card
 — a container's design child can be reviewed before its code children run, which
-is exactly the shape the finding asks for — that is **not itself `type: design`**:
-a design card IS the card the lift would create, so it is never reported, whatever
-its criteria say (MOTIR-6245). A criterion whose own deliverable is a design asset
+is exactly the shape the finding asks for — that is **not itself `type: design`
+or `type: test`**: a design card IS the card the lift would create, so it is never
+reported, whatever its criteria say (MOTIR-6245), and a test card draws nothing
+there is to lift (MOTIR-10112). A bare _mock_ in a criterion is read as a test
+double unless it is plainly a drawing — _the mock shows / draws …_, _the mock's
+panel_, _drawn in the mock_ — while a design file (`design/…`, `.mock.html`,
+`.pen`) and _mockup_ always count (MOTIR-10112). A criterion whose own deliverable is a design asset
 is also never read as the rendered surface, which keeps a code card's own mock
 criterion out of the surface arm. Read literally the planning-time
 design gate is SATISFIED on such a card, because the `type: design` subtask a UI
@@ -1101,6 +1105,31 @@ GitHub_); `refusalVerdict` is set only on a design refusal pressed in Motir;
   "decidedByLabel": "Ada <ada@example.com>", "decidedAt": "2026-09-26T01:02:03.000Z",
   "decisionSource": "ui", "refusalVerdict": "revise", "subjectVersion": "cm…"
 }
+```
+
+The aggregate carries **`inFlightCode`** and **`mergedRepos`** (MOTIR-10069) —
+WHERE the item's UNMERGED code is, per repository: its own open pull request
+(`source: "own"`), else the NEAREST ANCESTOR's (`source: "inherited"`, `fromKey`
+the ancestor's key). A child built by `motir run <parent>` commits onto its
+parent's pull request and has no delivery of its own, so its `deliveries` is
+`[]` while its code sits on the parent's branch; `inFlightCode` names that
+branch. `mergedRepos` lists the repositories where the item's own delivery has
+already merged and nothing is in flight. Both are `[]` when nothing was delivered
+on the item or a parent. It is the read the hosted planner's `get_item` makes
+(`inFlightCodeService.readForItem`, shared), so the two planners are handed the
+same answer; `deliveries` is unchanged and stays the item's OWN pull requests.
+The text block prints one `In-flight code:` line per entry, then `Merged to
+default branch: …`, or `No in-flight code (…)`. Pass an entry's `repo` and
+`branch` to [`list_changed_files`](#list_changed_files) as `repo` and `head`, then
+to [`read_file`](#read_file) as `repo` and `ref`.
+
+```jsonc
+"inFlightCode": [{
+  "repo": "acme/web", "branch": "parent/ACME-7-story", "headSha": "0328041…",
+  "prNumber": 42, "prUrl": "https://github.com/acme/web/pull/42", "draft": true,
+  "baseRef": "main", "source": "inherited", "fromKey": "ACME-7"
+}],
+"mergedRepos": []
 ```
 
 The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
@@ -2644,7 +2673,7 @@ chapters?, commitSha?, producedByKey? }` → the receipt.
 ⚠️ **WHO publishes depends on the repository, and the agent reads its checkout to
 find out (MOTIR-7254).** In a repository whose acceptance lane carries the
 `upload-acceptance-video` action — motir-core, and every project generated from
-`nextjs-prisma-vercel-starter` since MOTIR-7255 — **CI publishes the receipt**, from
+`nextjs-prisma-serverless-starter` since MOTIR-7255 — **CI publishes the receipt**, from
 a green pull-request run over keyless GitHub OIDC, and the agent makes no call. The
 dispatch prompt spells the check out:
 `grep -rlE 'uses:\s*\./\.github/actions/upload-acceptance-video' .github/workflows/`
@@ -3598,7 +3627,9 @@ cross-workspace key returns a `WORK_ITEM_NOT_FOUND` tool error.
 subtree card whose body, parsed against the section registry for its kind × type,
 misses a required section or carries one it cannot read is reported as
 `{ item, state: "unstructured" | "incomplete", missing, invalid, otherHeadings, signals }`,
-sorted by `item`. It never changes `valid` (a VALID verdict states the count and says
+sorted by `item`. A heading the registry does not define for the cell is an allowed
+`otherSections` entry: it is listed in `otherHeadings` beside a real finding, and never
+makes a finding on its own (MOTIR-9835). It never changes `valid` (a VALID verdict states the count and says
 so), and with a `planId` the body is the projected one. Fix a finding by re-writing the
 card with `sections` (see `get_section_sets`).
 
@@ -3697,13 +3728,16 @@ of the six carry `criterionIndex`, so narrow on `severity` before reading one.
 
 One more `shape` member is reported by `validate_work_item` and `validate_plan`
 only, never on the dispatch wire: **`likely-mislabelled-link`** (MOTIR-9007). A
-body link `[label](motir:<id>)` whose `label` names one or more work-item keys
+link `[label](motir:<id>)` in the card's description OR its explanation (both
+bodies are scanned, MOTIR-9938) whose `label` names one or more work-item keys
 (a token whose prefix is a project identifier in the workspace) none of which
 is the key `<id>` actually opens — or whose `<id>` opens no work item the caller
-can read. It carries the link's `label`, its `targetId`, and `targetKey`: the
+can read. It carries the link's `label`, its `targetId`, `targetKey`: the
 key the id resolves to, or `null` when it resolves to nothing (an unknown id,
 another workspace's id and an unbrowsable id all read the same, so the advisory
-leaks no existence). A label that names no key — `[the export flow](motir:…)` —
+leaks no existence), and `field`: the body the link sits in, `descriptionMd` or
+`explanationMd`, so the right one is fixed. A link quoted inside Markdown code,
+in either body, is not a link and is never judged (MOTIR-9825). A label that names no key — `[the export flow](motir:…)` —
 is never checked. Fix the id (resolve the key you meant with `get_work_item`) or
 the label; a link that opens the wrong card is consumed by every agent that
 reads the body.
@@ -4182,10 +4216,18 @@ acceptance criteria held (`docs/decisions/run-findings-protocol.md`, the
 MOTIR-8654 amendment). It is called **once, after building and before the pull
 request**.
 
-| Input    | Type   | Required | Notes                                                                                                             |
-| -------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `key`    | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                              |
-| `points` | array  | yes      | 1–20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed. |
+The same call also records the **decisions the run made where the card left the
+HOW open** (MOTIR-10000). A run never asks the user about the implementation: it
+decides by the repository's conventions first, then the established industry
+best practice for the stack, and writes each decision down here — beside any
+build-through points, or alone. The comment lists them in a section of their
+own, and the run's finding counts them (`decisionCount`, and in `pointCount`).
+
+| Input       | Type   | Required | Notes                                                                                                                                                    |
+| ----------- | ------ | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`       | string | yes      | The card the run built (`ACME-7`). Case-insensitive.                                                                                                     |
+| `points`    | array  | no       | Up to 20 entries of `planAsked`, `built` and `why`; each field is non-empty text of at most 2000 characters, trimmed.                                    |
+| `decisions` | array  | no       | Up to 20 entries of `planSaid`, `chose` and `why`, and optionally `alternatives`; the same field bounds. At least one point or one decision is required. |
 
 **Output** — the id of the card comment the server wrote, and whether the run
 record was written too:
@@ -4200,8 +4242,8 @@ the comment is still written, and nothing is put on a run.
 **One record per leg**: a second call on the same leg is refused with
 `DISCREPANCY_ALREADY_RECORDED` and writes nothing more. Other refusals:
 
-- an empty `points`, more than 20, or a field that is empty or over 2000
-  characters → `RUN_DISCREPANCY_INVALID`;
+- no points and no decisions, more than 20 of either, or a field that is empty
+  or over 2000 characters → `RUN_DISCREPANCY_INVALID`;
 - an unknown key, or a key in another workspace → `WORK_ITEM_NOT_FOUND`
   (404-not-403);
 - a caller who may read but not edit the card → `PERMISSION_DENIED`.
@@ -4343,6 +4385,18 @@ Each proposal is `{ op, proposedFields?, workItemId?, patch?, parentRef?, blocke
 - **`parentRef`** / **`blockedByRefs`** — a work-item **key** (`ACME-7`, resolved
   to its id at the append — keys are accepted, not refused), a real
   `work_item.id`, **or** an intra-plan temp-ref `planItem:<id>`.
+- **An edge may carry its REASON** (MOTIR-9827). Each entry of `blockedByRefs`
+  and of a `modify`'s `patch.blockedByAdd` is a bare ref **or** `{ ref, reason }`:
+  `reason` is ONE short line (at most 120 characters, no line break) saying what
+  the waiting card **consumes** from that blocker — and, when it consumes an
+  interface, the interface itself (_"consumes: the `AWS*ORG_ADMIN*_`secrets"*).
+The append splits it off onto the plan item's`edgeReasons`(ref → reason,
+re-keyed with the ref when a key resolves to an id),`get_plan`prints it beside
+the edge,`get_work_item`with`planId`shows it on the projected blocker row,
+and approve writes it onto the`work_item_link.reason`it creates, so the card's`blockedBy`row says why it waits. A blank, multi-line or over-long reason is
+refused as`INVALID_PROPOSAL`, naming the edge. `update_plan_proposal`'s
+`blockedByRefs` takes the same entries and replaces the reasons with the edges.
+  A bare ref stays accepted and carries no reason.
 - **`parentRef` may instead be `folder:<folderId>`** — FILE the proposal into a
   folder of the plan's project rather than under a work item (MOTIR-5414). A filed
   card is a root, and a folder admits **any** kind, `subtask` included. The same
@@ -4767,11 +4821,12 @@ had the most expensive remedy in this surface: withdraw every proposal (which EN
 proposal with every `planItem:` ref rebuilt, re-close it. One wrong sentence cost the
 whole plan.
 
-| Input     | Type           | Required | Notes                                                        |
-| --------- | -------------- | -------- | ------------------------------------------------------------ |
-| `planId`  | string         | yes      | The id `create_plan` returned.                               |
-| `title`   | string \| null | no       | The plan's own short label. `null` clears it.                |
-| `summary` | string \| null | no       | The Markdown summary shown above the tree. `null` clears it. |
+| Input           | Type           | Required | Notes                                                                          |
+| --------------- | -------------- | -------- | ------------------------------------------------------------------------------ |
+| `planId`        | string         | yes      | The id `create_plan` returned.                                                 |
+| `title`         | string \| null | no       | The plan's own short label. `null` clears it.                                  |
+| `summary`       | string \| null | no       | The Markdown summary shown above the tree. `null` clears it.                   |
+| `plannerRecord` | object \| null | no       | YOUR machine state on the plan (MOTIR-9978). Replaced whole; `null` clears it. |
 
 **Sparse, and a call that sends neither is refused.** An omitted field is left
 exactly as it was; an explicit `null` clears it. `INVALID_PROPOSAL` for a call that
@@ -4792,6 +4847,15 @@ and model that made it. That is a decision rather than a side effect: a `planned
 is a thing a person is deciding about, and silently rewriting the sentence they are
 reading would trade one honesty problem for another. It is deliberately not the
 `edited` verb, which means _a proposal changed_ and renders as a proposal count.
+
+**`plannerRecord` is the AUTHOR's own record, kept as data (MOTIR-9978).** Machine
+state an agent keeps on a plan between its runs — plan.py's targets and how each walk
+left them — belongs here, never in `summary`: the summary is prose a person reads and
+may correct, and the review rail renders it as Markdown, so a JSON fence there is drawn
+as a code block and a person's edit can break the next resume. A JSON object of at most
+64 KiB, replaced whole. `get_plan` returns it as `plannerRecord` (`null` when the plan
+keeps none); it is on no plan DTO, so neither `/api/v1` nor the review surface receives
+it, and a call that writes only the record puts nothing on the timeline.
 
 ```jsonc
 // The summary said the org was the billing unit for code indexing. It is not.
@@ -4943,6 +5007,28 @@ report_plan_step({ planId, sessionKey: "author-3", narration: ["Splitting the ex
 // → { planId, sessionKey: "author-3", narration: [{ seq: 7, body: "Splitting the export into two stories." }] }
 ```
 
+**Record the session's code reads (MOTIR-10122).** Send `codeReads` (instead of
+`step`, and with no `target`) with the reads the session made, in the order it made
+them — at most 50 per call. Each is `{ tool, repo?, path?, startLine?, endLine?,
+askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+detail? }`: what it asked, the commits it was read at, and how much came back,
+**never the code** (a read carrying `text` or `content` is refused, and every
+string is capped). `sha` is a RESOLVED commit id — 7 to 64 hex characters, never a
+branch name; a read whose ref resolved to nothing carries `commits: []`. A local
+planner records its checkout's `HEAD` and marks `dirty: true` when the working
+tree had changes. Unlike narration, a code read needs NO step: plan.py's
+conversation session reads code before the plan exists, and posts its reads once
+it does. They are kept with the plan; read them back with
+[`get_plan_code_reads`](#get_plan_code_reads--what-each-planning-session-read).
+
+```jsonc
+report_plan_step({ planId, sessionKey: "author-3", codeReads: [
+  { tool: "read_file", repo: "acme/web", path: "lib/export.ts", startLine: 1, endLine: 80,
+    askedRef: "main", commits: [{ sha: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b" }],
+    outcome: "found", lines: 80 } ] })
+// → { planId, sessionKey: "author-3", codeReads: [{ seq: 12, tool: "read_file" }] }
+```
+
 Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
 credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
 executing one work item has no business reporting progress on a plan.
@@ -4951,7 +5037,10 @@ Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_GENERATING` off `generating`, naming the
 status; `PLAN_STEP_INVALID` for a target on `settle` or `end`, a ref naming nothing
 on this plan or in its project, a `folder:` ref, or a key that names no work item;
 and, for `narration`, both or neither of `step` / `narration`, a `target`, an empty
-or over-long batch, a blank sentence, or a session that holds no step.
+or over-long batch, a blank sentence, or a session that holds no step; for
+`codeReads`, another arm or a `target` alongside it, an empty or over-long batch,
+a read with no `tool` or `outcome`, a `sha` that is not hex, or a read carrying
+`text` / `content`.
 
 ##### `hold_plan_revision` — hold a plan still while you revise it
 
@@ -5026,14 +5115,29 @@ PROJECTION: a PROPOSED cross-level edge is a `cross_level` rejection instead, so
 what it reports is a COMMITTED cross-level edge (the link door writes one —
 MOTIR-6509). `valid` is `true` only when all four lists are empty.
 
-**`advisories` rides beside the verdict and never changes it (MOTIR-9007).** It
-lists every `likely-mislabelled-link` shape advisory in a body the plan
-PROPOSES — an `add`'s body, or a `modify` that rewrites one — as
-`{ kind: "shape", item, severity, label, targetId, targetKey }`: a
-`[label](motir:<id>)` link whose label names a work-item key the id does not
+**`advisories` rides beside the verdict and never changes it (MOTIR-9007,
+widened by MOTIR-10087).** It lists every SHAPE advisory (`kind: "shape"`) on a
+card the plan PROPOSES — an `add` (keyed `planItem:<id>`) or a card a `modify`
+patches — the same entries `validate_work_item { planId }` yields for that card:
+`likely-self-blocking-design` (`designCriterionIndex` + `surfaceCriterionIndex`),
+`likely-repo-straddle` and `likely-ordering-violation` (`criterionIndex`),
+`likely-over-gate-sizing`, `likely-post-merge-child-under-container`,
+`under-authored`, `likely-blocker-count-mismatch` and
+`body-edit-above-field-move`. The reference and subsumption families are not
+shape and stay `validate_work_item`'s. A runner reads a two-index entry as LIFT
+and stops, so a planner disposes of each before sealing: re-word the criterion,
+lift the design half into its own card, or record on the card why it is a false
+positive.
+
+`likely-mislabelled-link` keeps its narrower scope: it is listed only for a body
+the plan writes — an `add`'s description or explanation, or a `modify` that
+rewrites either — as `{ kind: "shape", item, severity, label, targetId,
+targetKey, field }` (`field` is `descriptionMd` or `explanationMd`, MOTIR-9938):
+a `[label](motir:<id>)` link whose label names a work-item key the id does not
 open, or whose id opens no card at all (`targetKey: null`). Fix the id before
-sealing. Only the MCP tool carries it; the internal `validate-plan-forest`
-verdict is unchanged.
+sealing. The internal `validate-plan-forest` route answers the same
+`advisories` beside its verdict (MOTIR-9873), so motir-ai's forest close can
+re-open on one; its verdict is otherwise unchanged.
 
 **Both edge lists hold only the findings the PLAN introduces (MOTIR-7727).** The
 projection holds every edge anyone ever drew in the project, so judging all of
@@ -5052,7 +5156,7 @@ this plan's to fix. An old edge the plan touches nothing of is reported by
 `validate_plan` also returns `sectionFindings` (MOTIR-9032), the same advisory
 channel as on `validate_work_item`, over the cards the plan adds or modifies: the
 projected body parsed against the section registry, a missing required section
-named by `item`. It never changes `valid`.
+named by `item`. An extra heading alone is not a finding (MOTIR-9835). It never changes `valid`.
 
 ```jsonc
 validate_plan({ planId })
@@ -5092,6 +5196,76 @@ the plan DECISIONS (approve / decline / append), and this one decides nothing.
 
 Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak).
+
+##### `get_plan_code_reads` — what each planning session read
+
+The code reads a plan's planner sessions recorded through `report_plan_step`'s
+`codeReads`, in call order (a plan-wide `seq`), for BOTH planners: the hosted
+planner's `read_file` / `code_explore` / `code_search` / `code_grep`, and plan.py's
+own MCP reads beside its local `Read`, `Grep`, `Glob`, `git show`, `git grep` and
+`git log`. A check of the plan reads it to tell a session that read the file
+holding a fact from one that read another file, or nothing.
+
+```jsonc
+get_plan_code_reads({ planId, sessionKey?: "author-3", afterSeq?: 0, limit?: 500 })
+// → { planId,
+//     reads: [{ seq: 12, sessionKey: "author-3", tool: "read_file", repo: "acme/web",
+//               path: "lib/export.ts", startLine: 1, endLine: 80, askedRef: "main", query: null,
+//               commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
+//               detail: null, createdAt: "…" }],
+//     sessions: [{ sessionKey: "author-3", stepKind: "author", targetRef: "planItem:…", targetTitle: "…" }],
+//     nextAfterSeq: null }
+```
+
+`sessions` carries the step words of every session on the page (a session that
+never reported a step — plan.py's conversation — has none). Page with
+`afterSeq: nextAfterSeq` until it is `null`. `project:browse`, through the same
+reader gate as `get_plan`, on a plan in any status; read-only. Errors:
+`PLAN_NOT_FOUND` for an unknown or other-tenant plan.
+
+##### `get_plan_authoring_state` — WHICH SIBLINGS have not started (MOTIR-9821)
+
+An author session may hand not-done work in its `## Scope BOUNDARY` only to a card
+`blocked_by` its own, because only that card's author session reads the boundary.
+The one edge a session may wire onto a SIBLING to make such a hand-off legal is
+"that sibling `blocked_by` me" — and only while the sibling's own author session
+has NOT STARTED. The level view a session opened on is a snapshot that cannot tell
+"being written now" from "not started", so the session reads this, live, first.
+
+```jsonc
+get_plan_authoring_state({ planId, workItems: ["ACME-12"] })
+// → { planId: "cm…", status: "generating",
+//     proposals: [
+//      { ref: "planItem:ck_email", op: "add", title: "Send the invoice email", state: "authoring" },
+//      { ref: "planItem:ck_retry", op: "add", title: "Retry a bounced email",  state: "not_started" } ],
+//     committed: [
+//      { ref: "cm_wi_9", key: "ACME-9",  title: "Invoice list", inWalk: true,  state: "not_started" },
+//      { ref: "cm_wi_12", key: "ACME-12", title: "Billing page", inWalk: false, state: "not_in_walk" } ],
+//     unresolved: [] }
+```
+
+`authoring` — an `author` step reported through `report_plan_step` targets the
+card and has not ended. `authored` — an author session that targeted it has
+ended, or it was appended COMPLETE and never needed one.
+`not_started` — no author session, live or ended, and the card is still
+incomplete: a missing body or explanation, a `validate_plan` section finding, or,
+on a childless leaf, a missing type, executor, size or difficulty. "Complete" is
+plan.py's own `author_gaps` test, so a card the surgical add appended complete
+reads `authored` rather than `not_started` for ever. `project:browse`, read
+through the same reader gate as `get_plan`; it writes nothing.
+
+**Committed cards (MOTIR-10001)** are answered in `committed`, by work-item id. A
+committed card the walk RE-AUTHORS races exactly as a proposal does, so it reads
+the same three states: one the lay listed — a `modify` that changes its title, or
+an id the driver recorded in the plan's `plannerRecord.walkListed` before the
+card's session opens — one a `modify` rewrote the body of (`authored`), or one an
+`author` step has targeted. Every card named in the optional **`workItems`** (keys
+or ids, at most 50) is answered too, and a committed card the walk does not
+re-author reads **`not_in_walk`**: no session of this plan will rewrite its body,
+so the planner rule is that an edge drawn onto it must rest on what its body
+already says, with that as the edge's reason. A `workItems` entry naming no work
+item of the plan's project comes back in `unresolved` rather than failing the read.
+A `modify` row no longer appears in `proposals`; its card is a `committed` row.
 
 ##### The PROJECTED mode on the existing validators
 
@@ -5483,6 +5657,12 @@ to CHECK a code fact before writing it into a card.
 | `startLine`  | integer | no       | 1-based, inclusive. With `endLine`, the range is clamped to the file and headed `lines a-b of N`.    |
 | `endLine`    | integer | no       | 1-based, inclusive. Omit with `startLine` set to read to the end of the file.                        |
 
+**The commit it was read at (MOTIR-10122).** The ref is resolved to the commit it
+names first, and the file is read AT that commit, so a moving branch cannot change
+between the two. Every outcome that reached the host with a resolved ref carries
+`commitSha` (the full id), and its summary says `at <ref> (commit <sha>)` — the
+text a session stream carries, which is where plan.py records it from.
+
 **The cap and the range.** The text returned — the range when one is asked for,
 else the whole file — is capped at **24,000 characters**, motir-ai's
 `FILE_CONTENT_CAP`. Over the cap it is cut, and ends with a SENTENCE, never a
@@ -5490,25 +5670,38 @@ bare ellipsis: _the first 24000 of N characters; the file continues; re-read wit
 startLine / endLine_. The cap, the marker and the range semantics are copied from
 the planner's tool, so both planners read the same evidence in the same shape.
 
+**A file over 1 MB is read by range (MOTIR-10143).** A read with `startLine` or
+`endLine` is served for any text file up to the host's raw limit (100 MB), and
+returns the range under the same cap. Read whole, a file over 1 MB answers
+`too_large` with `totalLines`, so the next call can ask for a range.
+
 **Output** — `structuredContent.outcome` names what happened, and every outcome is
 a **non-error** result with its own summary sentence:
 
-| `outcome`              | Meaning                                                                                | Extra fields                                                    |
-| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `found`                | The file's text (ranged, then capped).                                                 | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
-| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository. | `repoRef`, `path`, `ref`                                        |
-| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                   | `repoRef`, `path`, `ref`                                        |
-| `too_large`            | The file exists and is over what the host serves inline.                               | `repoRef`, `path`, `ref`, `limitBytes`                          |
-| `binary`               | The file exists and holds a NUL character, so no text is returned.                     | `repoRef`, `path`, `ref`, `bytes`                               |
-| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.               | `repoRef`, `path`, `ref`                                        |
-| `invalid_path`         | The path was refused before any request.                                               | `repoRef`, `path`, `reason`                                     |
-| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                             | `repoRef`, `path`, `ref`, `failure`                             |
-| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                    | `repoRef`                                                       |
-| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                       | `repoRef`, `detail`                                             |
-| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.  | `repo`, `repoSet`                                               |
+| `outcome`              | Meaning                                                                                                                    | Extra fields                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| `found`                | The file's text (ranged, then capped).                                                                                     | `repoRef`, `path`, `ref`, `bytes`, `lines`, `truncated`, `text` |
+| `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                |
+| `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                        |
+| `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                        |
+| `too_large`            | The file exists and was read whole over 1 MB (`totalLines` set — read it by range), or is over the host's 100 MB.          | `repoRef`, `path`, `ref`, `limitBytes`, `totalLines`            |
+| `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                               |
+| `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                        |
+| `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                     |
+| `unreachable`          | The host did not answer — a failure to ASK, not an answer.                                                                 | `repoRef`, `path`, `ref`, `failure`                             |
+| `repo_not_connected`   | The repository is in the set but not connected to the organisation.                                                        | `repoRef`                                                       |
+| `provider_unavailable` | The repository's git provider cannot be used on this deployment.                                                           | `repoRef`, `detail`                                             |
+| `repo_not_in_project`  | `repo` matches no repository in the project's set. Answered **before** any host call.                                      | `repo`, `repoSet`                                               |
 
 None of them means the project has no code, and none carries a provider
 credential or a download URL.
+
+**Listing a directory (MOTIR-9868).** A `path` naming a directory is LISTED, not
+read: the outcome is `directory`, never the host's own listing JSON as `found`
+text (which is what GitHub's contents endpoint used to hand back). GitLab answers
+the same path the same way, from its repository tree. It is how a file that is not
+code — a CI workflow, a Dockerfile, a config — is found when its exact path is not
+known and `code_search` on its name did not return it.
 
 **Permission: `ai:plan`, at the door and in the service** — the same gate as
 `get_code_health`, on the same argument: the hosted planner already shows this
@@ -5518,6 +5711,55 @@ connections: a repository another project of the same organisation connected
 reads as `repo_not_in_project`.
 
 **Read-only**, but **open-world**: the read calls the third-party git host.
+`projectKey` selects **within** the token's workspace; another tenant's key reads
+as a plain not-found.
+
+#### `list_changed_files`
+
+The **paths a branch changed** in one of the project's repositories, against the
+repository's default branch or a named base — names and a status, no content —
+the listing the hosted planner's own `list_changed_files` makes (motir-ai
+`src/llm/codeReadTools.ts`, served by `app/api/internal/ai/repo-changes`), for an
+agent planning over the MCP (MOTIR-10069). Reach for it on a NEIGHBOUR'S
+IN-FLIGHT CODE: [`get_work_item`](#get_work_item)'s `inFlightCode` names the
+`repo` and `branch` of an unmerged pull request; list what that branch changed
+here, then open the paths that matter with [`read_file`](#read_file) at that
+branch.
+
+**Input**
+
+| Field        | Type   | Required | Notes                                                                                                                                |
+| ------------ | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                                                                          |
+| `repo`       | string | yes      | A repository in the project's set: the bare name (`motir-core`) or `owner/name`, case-insensitively.                                 |
+| `head`       | string | yes      | The branch (or commit) whose changes to list — an `inFlightCode` entry's `branch`.                                                   |
+| `base`       | string | no       | The ref to compare against. Omitted ⇒ the repository's default branch, as stored on its row (the entry's `baseRef` when it differs). |
+
+**The bound.** At most **300 paths** are listed — the host's own cap and motir-ai's
+`CHANGED_FILES_RENDER_CAP`. A cut list says so in `truncated` and ends its text
+with a SENTENCE: the branch changed AT LEAST these files. The cap, the marker and
+the outcome sentences are copied from the planner's tool.
+
+**Output** — `structuredContent.outcome` names what happened, and every outcome is
+a **non-error** result with its own summary sentence:
+
+| `outcome`             | Meaning                                                                                                       | Extra fields                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `ok`                  | The changed paths, each `{ path, status, previousPath? }` (`added` / `modified` / `removed` / `renamed`).     | `repoRef`, `base`, `head`, `baseSha`, `headSha`, `files`, `truncated` |
+| `no_such_ref`         | `head` or `base` does not resolve, or they share no history — perhaps a merged pull request's deleted branch. | `repoRef`, `base`, `head`                                             |
+| `not_connected`       | No usable connection on this deployment.                                                                      | `repoRef`, `base`, `head`                                             |
+| `revoked`             | The host refused the stored credential. What the branch changed is unknown.                                   | `repoRef`, `base`, `head`                                             |
+| `too_large`           | The host declined to compute a comparison that large. The branch exists.                                      | `repoRef`, `base`, `head`                                             |
+| `host_error`          | The host did not answer — a failure to ASK, not an answer.                                                    | `repoRef`, `base`, `head`, `detail`                                   |
+| `repo_not_connected`  | The repository is in the set but not connected to the organisation.                                           | `repoRef`, `base`, `head`                                             |
+| `repo_not_in_project` | `repo` matches no repository in the project's set. Answered **before** any host call.                         | `repo`, `repoSet`                                                     |
+
+None of them means the branch changed nothing, and none carries a provider
+credential, a patch or a host URL.
+
+**Permission: `ai:plan`, at the door and in the service** — as `read_file`, on the
+same argument (`docs/decisions/member-facing-permissions.md` AMENDMENT 3).
+**Read-only**, but **open-world**: the listing calls the third-party git host.
 `projectKey` selects **within** the token's workspace; another tenant's key reads
 as a plain not-found.
 
@@ -5547,23 +5789,98 @@ amendment).
 
 **Output** — `structuredContent.state`, every one a **non-error** result:
 
-| `state`             | Meaning                                                                                                     | Extra fields                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `ok`                | The executor's text, unchanged.                                                                             | `text`                                                                      |
-| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                    | —                                                                           |
-| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                           | `repo`, `available`                                                         |
-| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                      | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
-| `no_graph`          | No repository of the set has a graph.                                                                       | —                                                                           |
-| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                 | —                                                                           |
-| `invalid_cursor`    | A cursor this read did not issue.                                                                           | —                                                                           |
-| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`. | `reason`                                                                    |
+| `state`             | Meaning                                                                                                            | Extra fields                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `ok`                | The executor's text, unchanged — plus the drift note below when a repository read is behind, then the commit line. | `text`, `commits`, `drift` (only when behind)                               |
+| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                           | —                                                                           |
+| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                                  | `repo`, `available`                                                         |
+| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                             | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
+| `no_graph`          | No repository of the set has a graph.                                                                              | —                                                                           |
+| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                        | —                                                                           |
+| `invalid_cursor`    | A cursor this read did not issue.                                                                                  | —                                                                           |
+| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`.        | `reason`                                                                    |
+
+**The commit line (MOTIR-10122).** An `ok` answer carries `commits: [{ repoRef,
+indexedSha }]` — the commit each read repository's graph was built at, full id —
+and its text ends with `Graph commit(s) read: owner/name@<sha>, ….`. A repository
+with no graph is left out; a planning session records these as the commits its
+graph read was made at.
 
 A request motir-ai rejects as malformed stays an error, so it is seen rather
 than read as a soft state.
 
+**The drift (MOTIR-10094).** When a repository the read covered has a graph
+built from a commit other than its default branch's head, the `ok` answer
+carries a `drift` entry for it — and a graph at its head carries none, so a
+current answer is unchanged. One squash-merge is one commit and can be a whole
+story, so the entry hands over **what changed**, not only how much:
+
+| Field                     | Meaning                                                                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `repoRef`                 | `owner/name`.                                                                                                                     |
+| `indexedSha`              | The commit the graph was built from.                                                                                              |
+| `defaultHead`             | The default branch's head, as last mirrored.                                                                                      |
+| `commitsBehind`           | Commits between the two when counted; `null` when not (never coerced to `0`).                                                     |
+| `changedPaths`            | The paths changed between the two, from the git host's compare, at most 50. `null` only when the host could not list them.        |
+| `changedPathsTruncated`   | `true` when the list was cut — by the host's own cap (300 on GitHub) or by this answer's bound. A cut list is never an empty one. |
+| `changedPathsUnavailable` | Why `changedPaths` is `null`: `too_large`, `no_such_ref`, `not_connected`, `revoked` or `host_error`.                             |
+| `changedPathsInQueryArea` | The changed paths naming the searched area — a word of the query in the path, or under `code_grep`'s `path`. A lead, not a bound. |
+
+The text gets a note after the executor's bytes saying the same, ending with the
+rule it exists for: **an absence in the answer holds only for code outside the
+changed paths** — where what was searched touches one, read it with `read_file`
+(the default branch, live) before writing it down. The compare is asked in
+parallel with the read and once per commit pair (a compare between two commits
+never changes, so its answer is cached); a compare that fails never fails the
+read. `code_grep` carries the same `drift`.
+
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). **Read-only**, closed-world: the graph is Motir's own.
+
+#### `code_grep`
+
+**A search of the indexed FILE CONTENTS** (MOTIR-10066): the lines inside string
+literals, comments, function bodies and files that are not code (copy, config,
+JSON, YAML), which `code_search` and `code_explore` cannot see — they match symbol
+names and paths only. It is how an agent finds every place that still says
+something before it plans a removal, a rename or a copy change. Like the two graph
+reads it is the hosted planner's own `code_grep`, run in motir-ai behind
+`POST /v1/code-graph/read`, and an `ok` answer's text is that executor's bytes
+verbatim.
+
+Each index run stores the content of every text file in the snapshot, up to
+1 MiB; a binary file (a NUL byte in its first 8 KB) or a larger one is recorded
+as **not searched** instead. A literal is matched byte-for-byte; a `regex` or
+`caseInsensitive` search runs on RE2, which has no backtracking, so a pathological
+pattern such as `(a+)+$` answers in normal time. Lines are decoded as UTF-8,
+falling back to Latin-1, with a trailing carriage return dropped.
+
+**Input**
+
+| Field             | Type    | Required | Notes                                                                                                  |
+| ----------------- | ------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `projectKey`      | string  | yes      | Project key, e.g. `"ACME"`.                                                                            |
+| `pattern`         | string  | yes      | The text to find, at most 1,000 characters. Not trimmed.                                               |
+| `regex`           | boolean | no       | Treat `pattern` as an RE2 regular expression (no backreferences or lookaround), matched per line.      |
+| `caseInsensitive` | boolean | no       | Match regardless of letter case.                                                                       |
+| `path`            | string  | no       | A path prefix the search is limited to, e.g. `"lib/billing/"`.                                         |
+| `repo`            | string  | no       | ONE repository in the project's set — bare name or `owner/name`, case-insensitively. Omit to read all. |
+| `cursor`          | string  | no       | The `cursor` a page line printed, passed back exactly, with the same other arguments.                  |
+| `limit`           | integer | no       | The page size — matching lines per page.                                                               |
+
+**Output.** The `ok` text lists each match as `path:line: text`, headed by the
+number of matching lines and files and **the commit it searched**, and ends with
+the files under `path` that were **not searched** (binary, or over the cap) —
+read those with `read_file` before calling a list complete. The states are
+`code_explore`'s, plus one:
+
+| `state`               | Meaning                                                                                                                                  | Extra fields                             |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| `content_not_indexed` | The repository is indexed, but its graph was built before file contents were stored. NOT an empty match: its next index run stores them. | `repoRef`, `indexState`, `commitsBehind` |
+
+**Permission: `ai:plan`, at the door and in the service**, as the two graph reads.
+**Read-only**, closed-world.
 
 #### `get_coding_convention`
 

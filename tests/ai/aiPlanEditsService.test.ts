@@ -158,6 +158,8 @@ describe('aiPlanEditsService.submitAugment', () => {
           refreshInFlight: false,
           indexedAt: null,
           commitsBehind: null,
+          indexedSha: null,
+          defaultHead: null,
         },
       ],
     });
@@ -535,6 +537,8 @@ describe('aiPlanEditsService — the generateExplanations opt-in rides every pla
           refreshInFlight: false,
           indexedAt: null,
           commitsBehind: null,
+          indexedSha: null,
+          defaultHead: null,
         },
       ],
     });

@@ -29,7 +29,9 @@ import type {
 // this slot leaves the part out for a decision, and this file draws none.
 //
 // ⚠️ DISPLAY-READY, AND READ ON THE SERVER. The Markdown and the file's link arrive in the
-// DTO (`decisionDocumentService.readViewForWorkItem`); this component calls nothing.
+// DTO (`decisionDocumentService.readViewForWorkItem`); this component calls nothing. So
+// do the summaries of the work items the document links (`workItemRefs`, bug
+// MOTIR-10020): both `MarkdownView`s take them, or every chip draws as deleted.
 
 const mono = (chunks: ReactNode) => <span className="font-mono text-xs">{chunks}</span>;
 const bold = (chunks: ReactNode) => <b className="font-semibold">{chunks}</b>;
@@ -105,7 +107,11 @@ export function DecisionDocumentSlot({
             </span>
             <HostLink href={document.hostUrl} />
           </span>
-          <MarkdownView value={document.markdown} className="motir-how-to-test min-w-0" />
+          <MarkdownView
+            value={document.markdown}
+            workItemRefs={document.workItemRefs}
+            className="motir-how-to-test min-w-0"
+          />
         </>
       ) : (
         <ReasonCallout
@@ -182,7 +188,11 @@ function PageDocument({
           </span>
         </div>
       ) : null}
-      <MarkdownView value={document.markdown} className="motir-how-to-test min-w-0" />
+      <MarkdownView
+        value={document.markdown}
+        workItemRefs={document.workItemRefs}
+        className="motir-how-to-test min-w-0"
+      />
     </>
   );
 }

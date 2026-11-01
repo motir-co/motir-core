@@ -42,12 +42,11 @@ const originLiterals = (s: string): string[] =>
  * entry left behind by a deleted spec fails rather than silently exempting
  * nothing.
  */
-const PAYLOAD_ONLY: Record<string, string> = {
-  // The `resetUrl` inside a mocked password-reset email body.
-  'jobs-dashboard.spec.ts': 'resetUrl',
-  // The `acceptUrl` the invite job's mocked payload carries.
-  'jobs-flow.spec.ts': 'acceptUrl',
-};
+// Empty since MOTIR-10042 deleted the two specs that seeded mocked email
+// payloads (`jobs-dashboard.spec.ts`'s `resetUrl`, `jobs-flow.spec.ts`'s
+// `acceptUrl`). Kept, with its stale-entry check, so the next payload literal
+// has a recorded home rather than a reason to weaken the guard.
+const PAYLOAD_ONLY: Record<string, string> = {};
 
 function specFiles(): string[] {
   return readdirSync(SPEC_DIR)

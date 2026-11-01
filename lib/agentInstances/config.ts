@@ -1,6 +1,6 @@
 // The agent-instance lane's NUMBERS (Story MOTIR-6860 · MOTIR-6872) — each one
 // `docs/decisions/agent-instances.md`'s, named once. The two agent LIMITS are not
-// here: they are the org's plan figures, `agentsPerUser` and `agentsRunningPerOrg`
+// here: they are the org's plan figures, `agentsPerUser` and `agentsPerOrg`
 // (`lib/billing/planCaps.ts`, the fleet-capacity decision record MOTIR-9357,
 // MOTIR-9374), which replaced the flat 10 per person and MOTIR_INSTANCE_MAX_RUNNING.
 

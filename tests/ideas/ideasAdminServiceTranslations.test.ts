@@ -37,7 +37,7 @@ afterAll(async () => {
   await truncateAuthTables();
 });
 
-const EVERY = ['zh', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'] as const;
+const EVERY = ['zh', 'zh_tw', 'ja', 'ko', 'de', 'fr', 'es', 'it', 'nl', 'pl', 'pt'] as const;
 
 /** A full translation of `directionInput`'s fields, tagged with the locale. */
 function fullDirection(locale: string) {
@@ -505,7 +505,7 @@ describe('toStaffTranslationView', () => {
     expect(view.translations).toEqual({});
     expect(view.claimTranslations).toEqual([{}]);
     expect(view.labelTranslations).toEqual([{}]);
-    expect(view.missingLocales).toHaveLength(10);
+    expect(view.missingLocales).toHaveLength(11);
   });
 });
 

@@ -23,6 +23,14 @@
 //   - PUT  /repos/{owner}/{name}/contents/...              → the CI stub commit (best-effort)
 //   - PUT  /repos/{owner}/{name}/collaborators/{login}     → the admin invite (MOTIR-1900)
 //   - GET  /repos/{owner}/{name}/collaborators/{login}     → has the invitee accepted?
+//   - GET  /repos/{owner}/{name}/contents/{path}           → the design manifest read (MOTIR-1529)
+//   - GET  /repos/{owner}/{name}/branches/{branch}         → the seed head (MOTIR-4589)
+//   - the starter PROMOTION's reads and writes (Story MOTIR-704 · MOTIR-6415):
+//       GET  …/commits/{ref}, GET …/git/trees/{sha}, GET …/git/blobs/{sha},
+//       POST …/git/{blobs,trees,commits}, PATCH …/git/refs/heads/{branch},
+//       PATCH /repos/{owner}/{name} (marking the copy a template)
+//   Every repository-scoped read and write above answers ONLY inside Motir's
+//   provisioning org, for the same reason the readiness read does.
 //
 // TWO FILES, deliberately not one:
 //   * the CONTROL file (MOTIR_GITHUB_CONTROL_PATH) — the spec WRITES, the mock
@@ -34,6 +42,7 @@
 //   Sharing one file would make the mock's journal write clobber a control edit
 //   the spec had just made (and vice-versa), which is a race a test must not have.
 
+import { createHash } from 'node:crypto';
 import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
@@ -79,6 +88,13 @@ export interface GithubReposControl {
   alreadyHasAccess?: string[];
   /** `"{repo}:{login}"` pairs the fake reports as accepted collaborators on a GET. */
   accepted?: string[];
+  /**
+   * Repo NAME → file path → the text the fake's tree holds for it (MOTIR-6415).
+   * Served by the contents read, and copied by a promotion's tree read. A path
+   * not listed is GitHub's `404`, which is what the design manifest read must
+   * get for a starter that is not built on the design system.
+   */
+  files?: Record<string, Record<string, string>>;
 }
 
 function readControl(): GithubReposControl {
@@ -162,6 +178,35 @@ function parseRepo(path: string): { owner: string; name: string } | null {
   return { owner: m[1]!, name: m[2]! };
 }
 
+/** The repository-scoped sub-resources this fake serves, after `/repos/{owner}/{name}/`.
+ *  The one capture group is the part each reply reads (a path, a branch, a sha). */
+const CONTENTS = /^contents\/([^?]+)(?:\?.*)?$/;
+const BRANCH = /^branches\/([^/?]+)$/;
+const COMMIT = /^commits\/([^/?]+)$/;
+const TREE = /^git\/trees\/([^/?]+)(?:\?.*)?$/;
+const BLOB = /^git\/blobs\/([^/?]+)$/;
+const GIT_WRITE = /^git\/(blobs|trees|commits)$/;
+const REF = /^git\/refs\/heads\/([^?]+)$/;
+
+/** `/repos/{owner}/{name}/<sub>` → the repository and `sub`'s capture, or null.
+ *  Matches ONLY inside Motir's provisioning org — see {@link provisioningOrg}. */
+function parseRepoSub(
+  path: string,
+  sub: RegExp,
+): { owner: string; name: string; rest: string } | null {
+  const m = /^\/repos\/([^/]+)\/([^/]+)\/(.+)$/.exec(path);
+  if (!m) return null;
+  const org = provisioningOrg();
+  if (org.length === 0 || m[1]!.toLowerCase() !== org.toLowerCase()) return null;
+  const tail = sub.exec(m[3]!);
+  return tail ? { owner: m[1]!, name: m[2]!, rest: tail[1]! } : null;
+}
+
+/** A stable 40-hex git-shaped sha for `seed`, so a run's journal is repeatable. */
+function fakeSha(seed: string, kind: string): string {
+  return createHash('sha1').update(`${kind}:${seed}`).digest('hex');
+}
+
 function parseBody(raw: unknown): Record<string, unknown> | null {
   if (typeof raw !== 'string' || raw.length === 0) return null;
   try {
@@ -183,6 +228,9 @@ function parseBody(raw: unknown): Record<string, unknown> | null {
 const created = new Map<string, number>();
 let nextRepoId = 900_001;
 let seenEpoch: number | undefined;
+/** Blob sha → its text, filled by a tree read so the blob reads that follow it
+ *  can answer. Keyed by content, so it never needs clearing between tests. */
+const blobs = new Map<string, string>();
 
 /** Read the control AND honour its epoch: a new stamp means the spec reset the
  *  fixture, so the fake forgets every repository it ever made. Called at the top
@@ -287,6 +335,119 @@ export function installGithubReposMock(agent: MockAgent): void {
         owner: { login: parsed.owner },
         default_branch: 'main',
       });
+    })
+    .persist();
+
+  // ── The files of a repository the fake made (MOTIR-1529 · MOTIR-6415) ──────
+  // The design manifest read after a template create, and a promotion's
+  // hosting-manifest read. `404` for any path the control does not list.
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, CONTENTS) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      journal({ method: 'GET', path, body: null });
+      const { name, rest } = parseRepoSub(path, CONTENTS)!;
+      const text = control().files?.[name]?.[decodeURIComponent(rest)];
+      if (text === undefined || !created.has(name)) return reply(404, { message: 'Not Found' });
+      return reply(200, {
+        type: 'file',
+        path: rest,
+        encoding: 'base64',
+        content: Buffer.from(text, 'utf8').toString('base64'),
+      });
+    })
+    .persist();
+
+  // ── The seed head: the branch's commit ─────────────────────────────────────
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, BRANCH) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      journal({ method: 'GET', path, body: null });
+      const { name, rest } = parseRepoSub(path, BRANCH)!;
+      if (!created.has(name)) return reply(404, { message: 'Not Found' });
+      return reply(200, { name: rest, commit: { sha: fakeSha(name, 'head') } });
+    })
+    .persist();
+
+  // ── A promotion's reads of its SOURCE (Story MOTIR-704 · MOTIR-710) ────────
+  // The ref resolves to the repository's one commit; its tree is the control's
+  // `files` for that repository, and each blob is read back by its sha.
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, COMMIT) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      journal({ method: 'GET', path, body: null });
+      const { name } = parseRepoSub(path, COMMIT)!;
+      if (!created.has(name)) return reply(404, { message: 'Not Found' });
+      return reply(200, {
+        sha: fakeSha(name, 'head'),
+        commit: { tree: { sha: fakeSha(name, 'tree') } },
+      });
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, TREE) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      journal({ method: 'GET', path, body: null });
+      const { name } = parseRepoSub(path, TREE)!;
+      const files = control().files?.[name] ?? {};
+      const tree = Object.entries(files).map(([filePath, text]) => {
+        const sha = fakeSha(text, 'blob');
+        blobs.set(sha, text);
+        return { path: filePath, mode: '100644', type: 'blob', sha };
+      });
+      return reply(200, { sha: fakeSha(name, 'tree'), tree, truncated: false });
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, BLOB) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      journal({ method: 'GET', path, body: null });
+      const text = blobs.get(parseRepoSub(path, BLOB)!.rest);
+      if (text === undefined) return reply(404, { message: 'Not Found' });
+      return reply(200, { encoding: 'base64', content: Buffer.from(text).toString('base64') });
+    })
+    .persist();
+
+  // ── A promotion's writes to its COPY ───────────────────────────────────────
+  // Each git object answers a sha derived from what it was asked to hold, so
+  // the journal shows the copy's commit naming the tree that was posted.
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, GIT_WRITE) !== null, method: 'POST' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const body = parseBody(req.body);
+      journal({ method: 'POST', path, body });
+      const { name, rest } = parseRepoSub(path, GIT_WRITE)!;
+      return reply(201, { sha: fakeSha(`${name}:${JSON.stringify(body)}`, rest) });
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => parseRepoSub(p, REF) !== null, method: 'PATCH' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const body = parseBody(req.body);
+      journal({ method: 'PATCH', path, body });
+      const { rest } = parseRepoSub(path, REF)!;
+      return reply(200, { ref: `refs/heads/${rest}`, object: { sha: body?.['sha'] ?? null } });
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => parseRepo(p) !== null, method: 'PATCH' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const body = parseBody(req.body);
+      journal({ method: 'PATCH', path, body });
+      const parsed = parseRepo(path)!;
+      if (!created.has(parsed.name)) return reply(404, { message: 'Not Found' });
+      return reply(200, { name: parsed.name, owner: { login: parsed.owner }, ...body });
     })
     .persist();
 

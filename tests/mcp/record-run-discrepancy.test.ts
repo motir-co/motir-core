@@ -65,7 +65,7 @@ async function cliClient(fx: WorkItemFixture): Promise<Client> {
 
 async function record(
   client: Client,
-  args: { key: string; points: Record<string, string>[] },
+  args: { key: string; points?: Record<string, string>[]; decisions?: Record<string, string>[] },
 ): Promise<CallToolResult> {
   return (await client.callTool({
     name: RECORD_RUN_DISCREPANCY_TOOL_NAME,
@@ -126,7 +126,7 @@ describe('registered, permissioned, declared', () => {
     expect(source).not.toMatch(/lib\/repositories\//);
   });
 
-  it('tools/list advertises it with { key, points }, both required', async () => {
+  it('tools/list advertises it with { key, points, decisions }, only key required', async () => {
     const fx = await makeWorkItemFixture();
     const server = buildMcpServer(() => fx.ctx);
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -137,8 +137,10 @@ describe('registered, permissioned, declared', () => {
     const tool = tools.find((t) => t.name === RECORD_RUN_DISCREPANCY_TOOL_NAME)!;
     expect(tool).toBeDefined();
     const schema = tool.inputSchema as { properties: Record<string, unknown>; required?: string[] };
-    expect(Object.keys(schema.properties).sort()).toEqual(['key', 'points']);
-    expect([...(schema.required ?? [])].sort()).toEqual(['key', 'points']);
+    // `decisions` (MOTIR-10000) rides the same record, so `points` is no longer required.
+    expect(Object.keys(schema.properties).sort()).toEqual(['decisions', 'key', 'points']);
+    expect([...(schema.required ?? [])].sort()).toEqual(['key']);
+    expect(tool.description).toContain('never ask the user');
     await client.close();
   });
 });
@@ -167,6 +169,53 @@ describe('over the REAL /api/mcp with a token minted from EXACTLY CLI_TOKEN_GRAN
 
     expect(result.isError, textOf(result)).toBeFalsy();
     expect(result.structuredContent).toMatchObject({ recorded: false });
+    await client.close();
+  });
+});
+
+describe('decisions (MOTIR-10000) — the same door, round-tripped', () => {
+  const DECISION = {
+    planSaid: 'Nothing: the card names no page size.',
+    chose: 'Cursor pagination, 50 per page.',
+    why: 'Every other list endpoint in the repository pages this way.',
+  };
+
+  it('decisions alone record on the open leg and land in the comment', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const key = await card(fx);
+    await openLeg(fx, key);
+    const client = await cliClient(fx);
+
+    const result = await record(client, { key, decisions: [DECISION] });
+
+    expect(result.isError, textOf(result)).toBeFalsy();
+    expect(result.structuredContent).toMatchObject({ recorded: true });
+    expect(textOf(result)).toContain('the decisions you made');
+    const comment = await adminDb.comment.findUniqueOrThrow({
+      where: { id: (result.structuredContent as { commentId: string }).commentId },
+    });
+    expect(comment.bodyMd).toContain(DECISION.chose);
+    const [finding] = await adminDb.dispatchRunEvent.findMany({
+      where: { kind: 'discrepancy_recorded' },
+    });
+    expect(finding!.data).toMatchObject({ pointCount: 1, decisionCount: 1 });
+    await client.close();
+  });
+
+  it('points and decisions in one call, and a decision with an empty field is refused', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const key = await card(fx);
+    const client = await cliClient(fx);
+
+    const both = await record(client, { key, points: [POINT], decisions: [DECISION] });
+    expect(both.isError, textOf(both)).toBeFalsy();
+
+    const empty = await record(client, { key, decisions: [{ ...DECISION, why: ' ' }] });
+    expect(empty.isError).toBe(true);
+    expect(textOf(empty)).toMatch(/^RUN_DISCREPANCY_INVALID: /);
+    const none = await record(client, { key });
+    expect(none.isError).toBe(true);
+    expect(textOf(none)).toMatch(/^RUN_DISCREPANCY_INVALID: /);
     await client.close();
   });
 });

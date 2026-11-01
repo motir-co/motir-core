@@ -3570,3 +3570,212 @@ Reused from `platformAdmin.monitoring.fleet` (shipped, with their zh twins): `pr
 - **The shipped sections** — health cards, Overdue schedules, Index allowance, Fleet — unchanged.
 - **A Host organisation's own accounts**, any tenant-facing view, and any measurement or alert.
 - **A `.png` export** — retired (AMENDMENT 4).
+
+# AMENDMENT 2026-10-28 — Jobs
+
+**Design system (step 1, read before drawing).** `package.json` depends on `@motir/design-system`
+(`workspace:*`, the in-repo package `packages/design-system`), and `app/globals.css` imports
+`@motir/design-system/theme.css`: **on Motir Design, branch (a).** The console renders the default
+axes `warm-editorial` · `motir` · `motir`. The mock is built with `renderMock` from
+`@motir/design-system/mock` at those axes, from the package's `Button`, `Pill`, `EmptyState`,
+`ErrorState` and `SectionLabel`. The Sidebar row, the Combobox trigger and menu, the Modal panel and
+the Toast item are drawn in place with their shipped classes, because their portals do not render
+to static markup. The table anatomy is the workspace jobs dashboard's own (`Th`, `Td`, the table
+shell, the status chips). No part is missing from the package, so nothing is proposed as an
+addition.
+
+**Mock:** `design/platform-admin/console--jobs.mock.html` — a DELTA mock. It ADDS one page,
+`/admin/jobs`, and one row in the console's Operations sidebar. It amends no drawn panel:
+`design/platform-admin/console.mock.html` and the workspace ledger's mocks under `design/jobs/`
+stand as records. This section is the asset's whole specification, and the published design result
+is its authority: the page and its sidebar row are built only after that result is approved,
+because they put a write (replaying another tenant's work) in front of platform staff.
+
+**Verified on the default branch before drawing:**
+
+- `app/(admin)/layout.tsx` and `app/(admin)/_components/AdminShell.tsx` draw the console shell.
+  Operations lists Monitoring, Fleet settings (superadmin), Provider capacity, AI planning,
+  Hosted-run models, Planning lessons, Ideas and Audit log (superadmin). Its labels come from
+  `platformAdmin.shell.*`.
+- `app/(admin)/admin/monitoring/page.tsx` is the header pattern: a secondary breadcrumb
+  _Platform · Monitoring_, a serif `h1`, one secondary sentence. The page is
+  `requirePlatformStaffPage('support')` with `dynamic = 'force-dynamic'`.
+- `lib/services/jobsDashboardService.ts` already reads every run (`listSystemRuns`, paged by 50) and
+  the system dead letters (`listSystemDlq`, capped at 200, replayed rows kept 7 days).
+  `lib/jobs/platformStanding.ts` sets the reading role to **support** and the replay role to
+  **operator**.
+- `lib/dto/jobs.ts`: a run's status is one of `running`, `succeeded`, `failed` or `abandoned`. A
+  dead letter has a function, an event, an optional workspace, a failure, its attempts, its last
+  failure time and `replayedAt`. **There is no column recording who replayed it**; who replayed is
+  in the platform audit log.
+- `app/(authed)/settings/workspace/jobs/_components/JobsDashboard.tsx` is the workspace manager's
+  ledger, whose tab strip, status chips, table and Replay button this page reuses as anatomy (it
+  does not import the component).
+
+## What this section is
+
+One place where platform staff see **every background job the platform ran, in every workspace and
+in none**, and **every dead letter waiting**, and where an operator replays them: one at a time, or
+every waiting dead letter of one function at once. It supersedes, for staff, the system
+dead-letter view drawn in `design/jobs/design-notes.md` § System dead letters. That view is a
+workspace manager's page and only ever showed rows with no workspace.
+
+## The access path (Panel 1)
+
+A new sidebar row, **Jobs** (lucide `Workflow` glyph), under **Operations**, directly after
+**Monitoring**. It links to `/admin/jobs` and is selected on `/admin/jobs` and below. Its states are
+the shipped Sidebar row's: default, hover, keyboard focus and selected. Every platform staff role
+sees the row; the page itself answers 404 to anyone else, as its peers do.
+
+## Elements — each named once
+
+| Name                  | What it is                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Page header**       | Breadcrumb _Platform · Jobs_ (secondary, uppercase), `h1` _Jobs_ (serif), one secondary sentence.                                                                                                                                                                                                                                                                                                          |
+| **Tabs**              | A tab strip with **Runs** and **Dead letters**. Dead letters carries a neutral count Pill of the waiting dead letters (`aria-label` _{n} waiting_). The tab is a link: `?tab=runs` / `?tab=dlq`.                                                                                                                                                                                                           |
+| **Status filter**     | Chips **All · Running · Succeeded · Failed · Abandoned**, the shipped run statuses. A chip is a link (`?status=`), the current one `aria-current="true"`. There is no _dead-lettered_ run status; dead-lettered work lives on the Dead letters tab.                                                                                                                                                        |
+| **Runs table**        | Function (mono) · Event (secondary) · Workspace · Status (`Pill`: Running info, Succeeded success, Failed danger, Abandoned warning) · Attempt · Started (relative, secondary) · Duration (_—_ while running). Newest first.                                                                                                                                                                               |
+| **Workspace cell**    | The workspace's name. A run or dead letter with no workspace shows the neutral Pill **No workspace**. Where the read gives only the workspace id, the id shows in mono instead of the name.                                                                                                                                                                                                                |
+| **Pager**             | _Page {n}_ (secondary) and secondary **Previous** / **Next** buttons, 50 rows a page; an end that has no page is disabled. Links keep the tab and status (`?page=`).                                                                                                                                                                                                                                       |
+| **Read-only notice**  | For support (below operator) on the Dead letters tab: a `role="note"` box on `--el-tint-sky` with an Info glyph and _Read-only. Replaying a dead letter needs the operator role._ No Replay button and no Replay all are drawn for this role.                                                                                                                                                              |
+| **Function filter**   | The Combobox trigger, 20rem, reading **All functions** or the chosen function (mono). Its menu lists **All functions** then one option per function that has a waiting dead letter, each with its waiting count at the right, most waiting first. The menu scrolls past its height. `?fn=` holds it.                                                                                                       |
+| **Waiting line**      | Beside the filter: _{n} waiting · {m} replayed in the last 7 days_ (secondary).                                                                                                                                                                                                                                                                                                                            |
+| **Dead-letter table** | Function · event (the function in mono, the event under it in secondary) · Workspace · Failure (one line, truncated; the full message is the cell's `title`) · Attempts · Last failed · the row's Replay. Newest failure first, at most 200 rows, then _Showing {shown} of {n}. The list shows the newest 200._                                                                                            |
+| **Row Replay**        | Operator only. `Button` secondary, small, `RotateCcw` glyph, **Replay**, `aria-label` _Replay {function} dead letter_. While it runs the button shows its spinner and is busy. A replayed row turns secondary and shows the neutral Pill _Replayed {time}_ in place of the button; support sees the same Pill in that column.                                                                              |
+| **Replay all**        | Operator only, and only when one function is chosen and it has waiting dead letters: `Button` secondary, small, **Replay all {n}**, at the right of the filter row. It opens the Replay-all dialog.                                                                                                                                                                                                        |
+| **Replay-all dialog** | The Modal panel as an `alertdialog`. Confirm: title _Replay {n} dead letters of {function}?_, the sentence below, **Cancel** (ghost, the initial focus) and **Replay {n}** (primary). Running: the same title, no close button, Cancel disabled, the primary busy (_Replaying…_), and a `role="status"` line. Result: _Replay finished_ or _Replay finished with failures_, the counts as lines, **Done**. |
+| **Toasts**            | After a row Replay: success _Dead letter replayed_, info _Already replayed_, error _The replay failed_ (each with its sentence).                                                                                                                                                                                                                                                                           |
+| **Empty and error**   | `EmptyState` and `ErrorState` in place of a table (copy below). Loading is the table header over four `--el-muted` skeleton rows, `aria-busy="true"`.                                                                                                                                                                                                                                                      |
+
+## The panels
+
+| #   | Panel                          | What it shows                                                                                                              |
+| --- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Sidebar                        | The Operations section with the Jobs row default, hovered, keyboard-focused and selected.                                  |
+| 2   | Runs                           | The page in place: header, tabs, status chips on All, six runs across every status, three with no workspace, page 1.       |
+| 3   | Runs, filtered, empty          | Failed chosen, nothing matches.                                                                                            |
+| 4   | Runs, loading and error        | The skeleton table; the error state with Try again.                                                                        |
+| 5   | Runs at scale                  | Page 4 with both pager buttons live, a long function name and a long workspace name.                                       |
+| 6   | Dead letters, support          | The Read-only notice, the filter, and the table with no Replay button; one row already replayed shows its Pill.            |
+| 7   | Function filter open           | Operator, the menu open over the table: All functions (164) and six functions with their counts.                           |
+| 8   | Function filter, long list     | Ten functions; the menu scrolls inside its height.                                                                         |
+| 9   | One function chosen            | `system.platform-meter-report` with **Replay all 109** and the _Showing_ line.                                             |
+| 10  | Row Replay                     | In flight; replayed (the row turns secondary, the button is gone); the three toasts.                                       |
+| 11  | Replay all, confirm            | The alert dialog with Cancel first.                                                                                        |
+| 12  | Replay all, running            | The dialog cannot be closed; one server call, so the line states the batch size rather than a per-row count.               |
+| 13  | Replay all, result             | 108 replayed and 1 already replayed; a repeat that found all 108 already replayed; 104 replayed, 1 already, 4 failed.      |
+| 14  | Dead letters, empty and states | Nothing waiting; nothing waiting for the chosen function (no Replay all); loading; error.                                  |
+| 15  | Dark                           | Panel 9 with a replayed row, and the partial-failure result, under `data-theme="dark"` (a nested `data-appearance-scope`). |
+
+## Rules the drawing holds
+
+- **Reading is support; every replay is operator.** Support sees both tabs and the notice; it never
+  sees a Replay button or Replay all. The server refuses a replay below operator whatever the page
+  draws.
+- **Replay all acts on one function only**, and only its waiting dead letters. It is never offered
+  for All functions.
+- **A replay is never undone and never repeated.** A dead letter someone else replayed first is
+  counted as _already replayed_ and not sent again. Each replay is written to the platform audit
+  log; the page shows _Replayed {time}_ and does not name who.
+- **Replay all is one server call** that works through the dead letters 50 at a time. The dialog
+  stays open and cannot be dismissed while it runs, and shows no per-row progress, because the
+  server reports only when it finishes.
+- **After Replay all, Done reloads the list.** When the chosen function has nothing left waiting it drops out of the Function filter and the filter returns to **All functions**; opening a function with nothing waiting by its link shows the empty state of Panel 14.
+- **A partial failure leaves the failed dead letters in the list** to be replayed one by one.
+- **Workspace rows are replayable here.** This is the one door staff use to replay a workspace's
+  dead letter.
+
+## Copy (en — `platformAdmin.shell.navJobs` and a new `platformAdmin.jobs` namespace; the build adds every locale)
+
+| key                           | en                                                                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `shell.navJobs`               | Jobs                                                                                                                                |
+| `jobs.breadcrumb`             | Platform · Jobs                                                                                                                     |
+| `jobs.title`                  | Jobs                                                                                                                                |
+| `jobs.subtitle`               | Every background job the platform ran, in every workspace and in none, and every dead letter waiting for a replay.                  |
+| `jobs.tabs.runs`              | Runs                                                                                                                                |
+| `jobs.tabs.dlq`               | Dead letters                                                                                                                        |
+| `jobs.tabs.waiting`           | {count} waiting                                                                                                                     |
+| `jobs.status.*`               | All · Running · Succeeded · Failed · Abandoned                                                                                      |
+| `jobs.columns.*`              | Function · Event · Function · event · Workspace · Status · Attempt · Attempts · Started · Duration · Failure · Last failed · Replay |
+| `jobs.noWorkspace`            | No workspace                                                                                                                        |
+| `jobs.pageLabel`              | Page {page}                                                                                                                         |
+| `jobs.previous` · `jobs.next` | Previous · Next                                                                                                                     |
+| `jobs.runsEmpty.title`        | No runs yet / No {status} runs                                                                                                      |
+| `jobs.runsEmpty.body`         | Nothing in the ledger has this status. Choose All to see every run.                                                                 |
+| `jobs.runsError.title`        | The job ledger could not be read                                                                                                    |
+| `jobs.error.body`             | The database did not answer. Nothing was changed.                                                                                   |
+| `jobs.retry`                  | Try again                                                                                                                           |
+| `jobs.readOnly`               | Read-only. Replaying a dead letter needs the operator role.                                                                         |
+| `jobs.fn.all`                 | All functions                                                                                                                       |
+| `jobs.fn.label`               | Function                                                                                                                            |
+| `jobs.waitingLine`            | {waiting} waiting · {replayed} replayed in the last 7 days                                                                          |
+| `jobs.capped`                 | Showing {shown} of {count}. The list shows the newest 200.                                                                          |
+| `jobs.replay`                 | Replay                                                                                                                              |
+| `jobs.replayAria`             | Replay {function} dead letter                                                                                                       |
+| `jobs.replayedAt`             | Replayed {time}                                                                                                                     |
+| `jobs.toast.replayed`         | Dead letter replayed — {function} was sent again.                                                                                   |
+| `jobs.toast.already`          | Already replayed — Someone replayed this dead letter first. Nothing was sent again.                                                 |
+| `jobs.toast.failed`           | The replay failed — Nothing was sent. Try again.                                                                                    |
+| `jobs.replayAll.button`       | Replay all {count}                                                                                                                  |
+| `jobs.replayAll.title`        | Replay {count} dead letters of {function}?                                                                                          |
+| `jobs.replayAll.body`         | Each one is sent again as a new run and written to the platform audit log. A dead letter someone else replays first is skipped.     |
+| `jobs.replayAll.confirm`      | Replay {count}                                                                                                                      |
+| `jobs.replayAll.cancel`       | Cancel                                                                                                                              |
+| `jobs.replayAll.running`      | Replaying… · Replaying {count} dead letters, 50 at a time. Keep this open until it finishes.                                        |
+| `jobs.replayAll.done`         | Replay finished · Replay finished with failures                                                                                     |
+| `jobs.replayAll.replayed`     | {count} replayed                                                                                                                    |
+| `jobs.replayAll.already`      | {count} already replayed by someone else                                                                                            |
+| `jobs.replayAll.nothingLeft`  | 0 replayed — all {count} were already replayed                                                                                      |
+| `jobs.replayAll.failed`       | {count} could not be replayed. They stay in the list; replay them one by one.                                                       |
+| `jobs.replayAll.close`        | Done                                                                                                                                |
+| `jobs.dlqEmpty.title`         | Nothing waiting                                                                                                                     |
+| `jobs.dlqEmpty.body`          | No job has run out of attempts. Dead letters appear here when one does.                                                             |
+| `jobs.dlqEmptyFn.title`       | Nothing waiting for {function}                                                                                                      |
+| `jobs.dlqEmptyFn.body`        | Its dead letters were all replayed. Choose All functions to see the rest.                                                           |
+| `jobs.dlqError.title`         | The dead letters could not be read                                                                                                  |
+
+Counts use ICU plurals in the build. Function names, event names, workspace names and failure
+messages are data and are not translated.
+
+## Colour and shape roles (`--el-*` only)
+
+| element                                                              | role                                                                                                                                                                       |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| title · table cells · function names                                 | `--el-text` (function names mono)                                                                                                                                          |
+| breadcrumb · subtitle · events · times · waiting line · replayed row | `--el-text-secondary` (AA on every surface)                                                                                                                                |
+| Sidebar row                                                          | the shipped Sidebar row: `--el-sidebar-item-bg-active` / `-hover`, `--el-icon-active` / `--el-icon-muted`, `--radius-control`, `--spacing-control-x/y`, `--height-control` |
+| Tabs                                                                 | active `--el-accent` underline + `--el-text`; inactive `--el-text-muted` on the white page only                                                                            |
+| Status chips                                                         | `--radius-badge`, `--spacing-chip-x/y`; current `--el-accent` border, `--el-tint-lavender`, `--el-text-strong`                                                             |
+| Status pills · No workspace · count                                  | `Pill` severities (tints + `--el-text-strong`) · `Pill tone="neutral"`                                                                                                     |
+| Table shell                                                          | `--radius-card`, `--el-border`; header row `--el-surface` with `--el-text-secondary` labels; row hover `--el-surface`                                                      |
+| Read-only notice                                                     | `--el-tint-sky`, `--el-border-soft`, `--el-text-strong`, `--radius-card`, `--spacing-card-padding-12/-8`                                                                   |
+| Function filter                                                      | Combobox trigger and menu: `--radius-input`, `--height-control`, `--radius-card` menu, `--shadow-elevated`, `--el-option-active-bg`; counts `--el-text-secondary`          |
+| Buttons                                                              | `Button` secondary small (Replay, Replay all, pager), primary / ghost in the dialog                                                                                        |
+| Dialog                                                               | the Modal panel: `--radius-modal`, `--shadow-modal`, `--spacing-card-padding`, scrim `--el-overlay-scrim`                                                                  |
+| Result glyphs                                                        | replayed `--el-success`, already `--el-info`, failed `--el-danger-on-surface`; each beside its words                                                                       |
+| Toasts                                                               | the Toast item: border `--el-success` / `--el-info` / `--el-danger`                                                                                                        |
+| Skeleton                                                             | `--el-muted`, `--radius-control`                                                                                                                                           |
+
+## Accessibility contract
+
+- **Tabs** are a `tablist` of links with `aria-selected`; the count on Dead letters has an
+  `aria-label`. Status chips are a labelled `group` with `aria-current` on the current chip.
+- **Tables have headers** (`<th scope="col">`); the replay column's header is visually hidden
+  (_Replay_). Every Replay button names its function in its `aria-label`.
+- **The Function filter is the Combobox**: `role="combobox"` with `aria-label` _Function_, a
+  `listbox` of options with `aria-selected`; counts are text in the option.
+- **Replay all is an `alertdialog`** with Cancel as the initial focus. While it runs it cannot be
+  dismissed (Esc and outside clicks are ignored) and its line is `role="status"`; the result's
+  counts are a `role="status"` list, and focus moves to Done.
+- **Every outcome is in words**: pills, the replayed line, toast titles and result lines. Glyphs are
+  `aria-hidden`.
+- **Loading** is `aria-busy="true"` with an `aria-label`; the error state's Try again reloads.
+
+## What this amendment does NOT draw
+
+- **The workspace manager's ledger** (`/settings/workspace/jobs`) — unchanged.
+- **Who replayed a dead letter**: no column records it; it is in the platform audit log.
+- **A per-row progress count** for Replay all, a cancel once it has started, or a replay of a run
+  that did not dead-letter.
+- **A `.png` export** — retired (AMENDMENT 4).

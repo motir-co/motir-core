@@ -218,6 +218,38 @@ describe('a BUILD-THROUGH, recorded by the run on the leg and the card', () => {
     }
     expect(await comments(card)).toHaveLength(0);
   });
+
+  it('DECISIONS ride the same record (MOTIR-10000): alone, counted, and bounded', async () => {
+    const fx = await makeWorkItemFixture({ name: 'Customer', identifier: 'CUST' });
+    const card = await inProgressCard(fx);
+    const { runId, headers } = await serverRunOver(fx, card, 'hosted');
+    const DECISION = {
+      planSaid: 'SENTINEL-SAID: nothing',
+      chose: 'SENTINEL-CHOSE: a partial unique index',
+      why: 'SENTINEL-WHY: the schema enforces every other invariant in the database',
+      alternatives: 'SENTINEL-ALT: an application-level check',
+    };
+
+    for (const body of [
+      { key: card.key, decisions: [{ ...DECISION, chose: '' }] },
+      { key: card.key, decisions: [{ ...DECISION, extra: 'x' }] },
+      { key: card.key, points: [], decisions: [] },
+      { key: card.key },
+    ]) {
+      const res = await post('discrepancy', runId, headers, body);
+      expect(res.status, JSON.stringify(body)).toBe(422);
+    }
+    expect(await comments(card)).toHaveLength(0);
+
+    const res = await post('discrepancy', runId, headers, { key: card.key, decisions: [DECISION] });
+    expect(res.status).toBe(200);
+    const [written] = await comments(card);
+    for (const sentinel of Object.values(DECISION)) expect(written!.bodyMd).toContain(sentinel);
+    const events = await adminDb.dispatchRunEvent.findMany({
+      where: { dispatchRunId: runId, kind: 'discrepancy_recorded' },
+    });
+    expect(events[0]!.data).toMatchObject({ pointCount: 1, decisionCount: 1 });
+  });
 });
 
 const FINDING = 'SENTINEL-FINDING: the table the card names does not exist (prisma/schema.prisma)';

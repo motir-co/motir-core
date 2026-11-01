@@ -20,6 +20,8 @@ import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
 import { isCloud, isCloudBilling } from '@/lib/billing/availability';
 import { isHostedRunsAvailable } from '@/lib/hostedRuns/availability';
+import { hasMotirRepository } from '@/lib/environmentConfig/motirRepositories';
+import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
 import { docsIndexUrl as resolveDocsIndexUrl } from '@/lib/docs/links';
@@ -344,6 +346,18 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // The settings registry's hosted-runs axis (MOTIR-6995): the Hosted agent room
   // exists only on a build that runs hosted agents. A build fact, not a live read.
   const hostedRunsAvailable = isHostedRunsAvailable();
+  // The settings registry's project axis (MOTIR-9966): the Environment room exists
+  // only for a project holding a repository Motir hosts. One read of the set, and
+  // only for an actor who may browse the project at all.
+  const motirRepositoriesPresent =
+    ctx && activeProject && held.has('project:browse')
+      ? hasMotirRepository(
+          await projectRepoSetService.listByProject(activeProject.id, {
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+          }),
+        )
+      : false;
   const buildInPublicProjectKey =
     publicProjectsAvailable && canManage && activeProject && activeProject.accessMode !== 'public'
       ? activeProject.identifier
@@ -546,6 +560,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           workspaceTierRevealed={workspaceTierRevealed}
                           publicProjectsAvailable={publicProjectsAvailable}
                           hostedRunsAvailable={hostedRunsAvailable}
+                          motirRepositoriesPresent={motirRepositoriesPresent}
                           helpMenu={
                             <HelpMenu docsIndexUrl={docsIndexUrl} legalIndexUrl={legalIndexUrl} />
                           }
@@ -665,6 +680,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         workspaceTierRevealed={workspaceTierRevealed}
                         publicProjectsAvailable={publicProjectsAvailable}
                         hostedRunsAvailable={hostedRunsAvailable}
+                        motirRepositoriesPresent={motirRepositoriesPresent}
                       />
                     </SidebarDrawer>
 
@@ -680,6 +696,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       aiPlanningConfigured={aiPlanningConfigured}
                       publicProjectsAvailable={publicProjectsAvailable}
                       hostedRunsAvailable={hostedRunsAvailable}
+                      motirRepositoriesPresent={motirRepositoriesPresent}
                       isOrgAdmin={activeOrg ? orgCan(activeOrg.role, 'manageOrgSettings') : false}
                     />
 

@@ -26,7 +26,7 @@ import {
 // refuses.
 //
 // ⚠️ THE CARVE-OUT THIS COMMENT USED TO CARRY IS RETIRED (Story MOTIR-4843 ·
-// MOTIR-4847). It read: `/settings/workspace/jobs` and
+// MOTIR-4847). It read: the workspace Job runs route and
 // `/settings/workspace/github` "are NOT covered by that rule and must keep
 // rendering at every count — they are workspace-SCOPED but not workspace-NAMED".
 // That was MOTIR-3502's AC 6, and it was the tell rather than the exception: a
@@ -34,7 +34,8 @@ import {
 // was never given a relocation. All three are now equally absent below the
 // reveal — Git moved a tier (MOTIR-4680), Security folds in via
 // `WorkspaceFoldInSection` (MOTIR-3502), and Job runs gained its own gate and
-// `JobRunsFoldInSection` (MOTIR-4861).
+// the Job runs fold-in (MOTIR-4861; retired with the tenant Job runs surface,
+// Story MOTIR-9982).
 //
 // The href anchor below (`"/settings/workspace"` followed by a quote) is KEPT
 // anyway, because it is the tighter assertion: it asks about the AREA's own
@@ -210,8 +211,13 @@ describe('the shell tier nav', () => {
 const ORG = { id: 'org-1', name: 'Acme', role: 'owner' as const };
 const RAIL_USER = { name: 'Ada', email: 'ada@example.com' };
 
-/** The area rail's three routes, read off the registry rather than retyped. */
-const AREA_ROUTES = WORKSPACE_SETTINGS_NAV.map((e) => e.href);
+/**
+ * The area rail's routes, read off the registry rather than retyped. A
+ * `cloudOnly` entry (Public address, MOTIR-9514) is a DEPLOYMENT axis, not a
+ * tier one: the rail rendered here has no public-projects availability, so it
+ * is left out, exactly as the rail leaves it out.
+ */
+const AREA_ROUTES = WORKSPACE_SETTINGS_NAV.filter((e) => !e.cloudOnly).map((e) => e.href);
 
 function tierNav(count: number) {
   return renderWithIntl(

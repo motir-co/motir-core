@@ -21,6 +21,11 @@ export interface CalculatorEstimateInput {
   runPerMonth: { low: number; high: number };
   /** One to three category keys — no model is ever chosen. */
   categories: string[];
+  /**
+   * Each category's whole-percentage share of the run, keyed by `categories`, totalling
+   * 100 (MOTIR-9832). Sent only with two or more categories; absent, the run splits evenly.
+   */
+  shares?: Record<string, number>;
   cadence?: CalculatorCadence;
 }
 
@@ -81,6 +86,7 @@ export function fetchCalculatorEstimate(
         plannedPerMonth: input.plannedPerMonth,
         runPerMonth: input.runPerMonth,
         categories: input.categories,
+        ...(input.shares ? { shares: input.shares } : {}),
         ...(input.cadence ? { cadence: input.cadence } : {}),
       }),
     },

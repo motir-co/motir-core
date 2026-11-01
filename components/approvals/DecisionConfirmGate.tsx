@@ -21,6 +21,7 @@ import type {
   GateDecision,
   SupersededItemDTO,
 } from '@/lib/dto/approvalGate';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { formatBytes } from '@/lib/utils/bytes';
 import {
   ApprovalGateControl,
@@ -168,8 +169,11 @@ export function DecisionPortBody({
   record,
   recordCount,
   recordPicker,
+  workItemRefs,
 }: {
   view: DecisionPortView;
+  /** The chips of every `[KEY](motir:<id>)` in the sections (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   /** The record the port links — omitted on a decided gate, whose band reads the stamp. */
   record?: ConfirmedRecordDTO;
   recordCount?: number;
@@ -184,6 +188,7 @@ export function DecisionPortBody({
           <Eyebrow>{t('decision')}</Eyebrow>
           <MarkdownView
             value={view.decisionMd}
+            workItemRefs={workItemRefs}
             className="mt-1 text-sm font-medium text-(--el-text)"
           />
         </div>
@@ -199,6 +204,7 @@ export function DecisionPortBody({
           {view.whatChangedMd ? (
             <MarkdownView
               value={view.whatChangedMd}
+              workItemRefs={workItemRefs}
               className="mt-2 text-[13px] leading-snug text-(--el-text-secondary)"
             />
           ) : null}
@@ -219,6 +225,7 @@ export function DecisionPortBody({
           <Eyebrow>{t('resultingDirection')}</Eyebrow>
           <MarkdownView
             value={view.resultingDirectionMd}
+            workItemRefs={workItemRefs}
             className="mt-1 text-[13px] leading-snug text-(--el-text)"
           />
         </div>
@@ -233,6 +240,8 @@ export function DecisionPortBody({
 export interface DecisionConfirmGateFrameProps {
   gate: ApprovalGateDTO;
   view: DecisionPortView;
+  /** The chips of every `[KEY](motir:<id>)` in the sections (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
   /** The record the port would stamp now, and how many there are. */
   record: ConfirmedRecordDTO;
   recordCount: number;
@@ -265,6 +274,7 @@ export interface DecisionConfirmGateFrameProps {
 export function DecisionConfirmGateFrame({
   gate,
   view,
+  workItemRefs,
   record,
   recordCount,
   presentRecordIds,
@@ -363,6 +373,7 @@ export function DecisionConfirmGateFrame({
       port={
         <DecisionPortBody
           view={view}
+          workItemRefs={workItemRefs}
           // The DECIDED bands read the stamp; only an open question links the record now.
           {...(gate.state === 'awaiting' ? { record, recordCount, recordPicker } : {})}
         />
@@ -506,9 +517,11 @@ function OverturnedBand({
 export function DecisionConfirmDefectBody({
   defect,
   view,
+  workItemRefs,
 }: {
   defect: DecisionDefectDTO;
   view: DecisionPortView;
+  workItemRefs: WorkItemRefMap;
 }) {
   const t = useTranslations('approvalGate.decisionConfirm.defect');
   return (
@@ -532,7 +545,7 @@ export function DecisionConfirmDefectBody({
           <p className="text-(--el-text-secondary)">{t('tail')}</p>
         </div>
       </div>
-      <DecisionPortBody view={view} />
+      <DecisionPortBody view={view} workItemRefs={workItemRefs} />
     </div>
   );
 }

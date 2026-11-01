@@ -933,6 +933,7 @@ export async function estimateCalculator(
       plannedPerMonth: { low: request.plannedPerMonth.low, high: request.plannedPerMonth.high },
       runPerMonth: { low: request.runPerMonth.low, high: request.runPerMonth.high },
       categories: [...request.categories],
+      ...(request.shares ? { shares: { ...request.shares } } : {}),
       cadence: request.cadence,
     }),
   });
@@ -1393,10 +1394,20 @@ export async function getCodeAudit(query: CodeAuditQuery): Promise<RawCodeAuditS
 export interface CodeGraphReadRequest {
   coreWorkspaceId: string;
   coreProjectId: string;
-  tool: 'code_explore' | 'code_search';
+  tool: 'code_explore' | 'code_search' | 'code_grep';
   /** The project's whole realized repository set — bound by core, never by the agent. */
   repoRefs: string[];
-  args: { query: string; cursor?: string; repos?: string[]; limit?: number };
+  /** `query` for explore/search; `pattern` (+ `regex` / `caseInsensitive` / `path`) for grep. */
+  args: {
+    query?: string;
+    pattern?: string;
+    regex?: boolean;
+    caseInsensitive?: boolean;
+    path?: string;
+    cursor?: string;
+    repos?: string[];
+    limit?: number;
+  };
 }
 
 /** motir-ai's answer — the route's state union, exactly as it sends it (contract §2.4). */
@@ -1404,6 +1415,8 @@ export type RawCodeGraphRead =
   | { state: 'ok'; text: string }
   | { state: 'no_graph' }
   | { state: 'not_indexed'; repoRef: string }
+  /** `code_grep` only: the repo's graph predates the file-contents table (MOTIR-10066). */
+  | { state: 'content_not_indexed'; repoRef: string }
   | { state: 'repo_not_in_set'; repoRef: string }
   | { state: 'stale_cursor' }
   | { state: 'invalid_cursor' }

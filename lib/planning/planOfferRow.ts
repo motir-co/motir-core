@@ -67,16 +67,6 @@ const ANSWER_REFUSAL_KEY: Record<string, AnswerRefusalKey> = {
   target_not_available: 'targetUnavailable',
 };
 
-/** The code core answers a Confirm with when it could not save the requirement page
- *  (MOTIR-9436). NOT a refusal: nothing was started and the offer stays pending, so
- *  the row keeps Confirm and the served `requirementSaveFailed` draws the line. */
-export const REQUIREMENT_NOT_SAVED_CODE = 'PLAN_OFFER_REQUIREMENT_NOT_SAVED';
-
-/** Whether a failed answer's code is the could-not-save-the-requirement one. */
-export function isRequirementNotSaved(code: string | null | undefined): boolean {
-  return code === REQUIREMENT_NOT_SAVED_CODE;
-}
-
 /** The line a refused Confirm or Decline draws in place of the actions. `code` is
  *  the door's refusal reason (or its error code); generic for anything else. */
 export function answerRefusalKey(code: string): AnswerRefusalKey {

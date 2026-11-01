@@ -4,7 +4,7 @@
 // shape (member vs public) so the inbox UI (6.11.6) renders the submitter avatar
 // and a "Public" chip without re-deriving origin.
 
-import type { WorkItemKindDto, WorkItemPriorityDto } from './workItems';
+import type { WorkItemKindDto, WorkItemPriorityDto, WorkItemRefMap } from './workItems';
 import type { CommentDTO } from './comments';
 import type { AttachmentDTO } from './attachments';
 
@@ -94,6 +94,9 @@ export interface TriageItemDetailDto {
   triagedAt: string;
   comments: CommentDTO[];
   attachments: AttachmentDTO[];
+  /** The chips of every `[KEY](motir:<id>)` in the body and the thread, resolved for the
+   *  reader (bug MOTIR-10023) — `{}` when nothing links a card. */
+  workItemRefs: WorkItemRefMap;
 }
 
 /**

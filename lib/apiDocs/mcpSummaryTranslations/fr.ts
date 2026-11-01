@@ -106,6 +106,12 @@ export const fr: McpSummaryTranslations = {
     source:
       "Symbols matching a name in the hosted code graph — the hosted planner's own answer, paged.",
   },
+  code_grep: {
+    summary:
+      'Les lignes correspondant à un texte ou à un motif dans le contenu indexé des fichiers — littéraux de chaîne, commentaires et fichiers qui ne sont pas du code, que la recherche de symboles ne voit pas — la propre réponse du planificateur hébergé, paginée.',
+    source:
+      "Lines matching a text or pattern in the indexed file contents — string literals, comments and non-code files the symbol search cannot see — the hosted planner's own answer, paged.",
+  },
   complete_session: {
     summary:
       'Clore une branche de session après la fusion de sa pull request : chaque élément enregistré dessus passe à Terminé.',
@@ -250,9 +256,9 @@ export const fr: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Un élément en détail — description, statut, parent ou Dossier, enfants, liens de dépendance, un verdict de disponibilité, les erreurs qui lui sont liées et le dernier refus renvoyé à son sujet.',
+      "Un élément en détail — description, statut, parent ou Dossier, enfants, liens de dépendance, un verdict de disponibilité, les erreurs qui lui sont liées, le dernier refus renvoyé à son sujet et l'emplacement de son code pas encore fusionné.",
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, and the latest refusal sent back on it.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
   },
   get_work_item_activity: {
     summary:
@@ -370,9 +376,15 @@ export const fr: McpSummaryTranslations = {
   },
   read_file: {
     summary:
-      "Le texte d'un fichier d'un dépôt de l'ensemble du Projet, à une ref — plafonné et limité en lignes comme la lecture du planificateur hébergé, chaque absence étant un résultat nommé.",
+      "Le texte d'un fichier, ou les entrées immédiates d'un répertoire, d'un dépôt de l'ensemble du Projet, à une ref — plafonné et limité en lignes comme la lecture du planificateur hébergé, chaque absence étant un résultat nommé.",
     source:
-      "One file's text from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+      "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
+  },
+  list_changed_files: {
+    summary:
+      "Les chemins qu'une branche a modifiés dans un dépôt de l'ensemble du Projet, par rapport à sa branche par défaut ou à une base nommée — plafonné comme la liste du planificateur hébergé, chaque absence étant un résultat nommé.",
+    source:
+      "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
   record_plan_revision_reason: {
     summary:
@@ -400,9 +412,9 @@ export const fr: McpSummaryTranslations = {
   },
   record_run_discrepancy: {
     summary:
-      'Un exécuteur qui a réalisé un élément de travail avec un plan erroné seulement sur le COMMENT consigne ce qu’il a construit autrement — un commentaire sur l’élément et une trace de l’exécution, avec accusé de réception.',
+      'Un exécuteur consigne ce qu’il a construit autrement qu’un plan erroné seulement sur le COMMENT, et les décisions qu’il a prises là où le plan ne disait rien — un commentaire sur l’élément et une trace de l’exécution, avec accusé de réception.',
     source:
-      'A runner that built a card through a plan wrong only about the HOW records what it built differently — a card comment and a run record, acknowledged.',
+      'A runner records what it built differently from a plan wrong only about the HOW, and the decisions it made where the plan was silent — a card comment and a run record, acknowledged.',
   },
   report_unbuildable_target: {
     summary:

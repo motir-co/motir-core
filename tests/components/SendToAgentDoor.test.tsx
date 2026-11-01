@@ -719,19 +719,19 @@ describe('each refusal renders its own words, and the section shows no run', () 
     noRun();
   });
 
-  it('agent_instance_start_refused · org_running_cap — the plan and the figure the refusal carries (MOTIR-9376)', async () => {
+  it('agent_instance_start_refused · org_cap — the plan and the figure the refusal carries (MOTIR-9376)', async () => {
     await refusedWith(
       429,
       {
         code: 'agent_instance_start_refused',
-        reason: 'org_running_cap',
+        reason: 'org_cap',
         limit: 30,
         planName: 'Pro',
       },
       'yue-sleepy',
     );
     expect(screen.getByTestId('agent-refused-wake').textContent).toContain(
-      'Your organization’s Pro plan runs 30 agents at once, and all of them are running.',
+      'Your organization’s Pro plan allows 30 agents in the organization, running or asleep.',
     );
     noRun();
   });

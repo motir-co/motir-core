@@ -7,8 +7,8 @@ import { jobServices } from '../services';
 
 // LEDGER + DLQ PARITY (Story MOTIR-3414 · Subtask MOTIR-3424) — the engine
 // writes the same `job_run` and `job_run_dlq` rows the Inngest wrapper writes,
-// so `/settings/workspace/jobs` keeps working with NO change to the operator
-// surface, the service behind it, or the DTOs between them.
+// so the operator ledger (staff-only at `/admin/jobs` since Story MOTIR-9982)
+// reads engine runs with NO change to the service behind it or its DTOs.
 //
 // Nothing in this file is new bookkeeping. It reuses `jobRunsService` verbatim —
 // `recordStart` / `recordSuccess` / `recordTerminalFailure` — which is the point:

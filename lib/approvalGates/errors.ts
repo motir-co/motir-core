@@ -96,6 +96,9 @@ export type ApprovalGateErrorTag =
   // `APPROVAL_GATE_SUPERSEDED`.
   | 'MERGE_CHECKS_NOT_GREEN'
   | 'MERGE_CONFLICT'
+  // The base branch requires a pull request to be up to date and this one is behind it
+  // (Bug MOTIR-10054): GitHub reads it as `mergeable_state: behind`.
+  | 'MERGE_OUT_OF_DATE'
   | 'MERGE_BRANCH_PROTECTED'
   | 'MERGE_ALREADY_MERGED'
   | 'MERGE_APP_PERMISSION_MISSING'

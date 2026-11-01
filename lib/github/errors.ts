@@ -189,6 +189,32 @@ export class InstallationNotAccessibleError extends Error {
   }
 }
 
+/** GitHub REFUSED the actor's stored user token (HTTP 401 Bad credentials) —
+ *  the sign-in was revoked, replaced or has expired (Bug MOTIR-8984). It is a
+ *  dead credential, not an unreachable GitHub: retrying cannot work, and the
+ *  only remedy is the member reconnecting their account. Every surface answers
+ *  it with a reconnect prompt, never "couldn't reach GitHub". */
+export class GithubIdentityRefusedError extends Error {
+  readonly code = 'GITHUB_IDENTITY_REFUSED' as const;
+  constructor() {
+    super('GitHub no longer accepts your linked GitHub sign-in. Reconnect your GitHub account.');
+    this.name = 'GithubIdentityRefusedError';
+  }
+}
+
+/** Renewing the actor's expiring GitHub user token could not be done just now
+ *  (Bug MOTIR-10021): GitHub's token endpoint did not answer, timed out or
+ *  answered 5xx. Unlike {@link GithubIdentityRefusedError} the sign-in is NOT
+ *  known to be dead, and the next call tries the renewal again — so every
+ *  surface answers it as "couldn't reach GitHub", which is true. */
+export class GithubIdentityRefreshUnavailableError extends Error {
+  readonly code = 'GITHUB_IDENTITY_REFRESH_UNAVAILABLE' as const;
+  constructor(detail: string) {
+    super(`Motir couldn't renew your GitHub sign-in just now: ${detail}`);
+    this.name = 'GithubIdentityRefreshUnavailableError';
+  }
+}
+
 /** The organisation is not linked to this GitHub installation (Story MOTIR-8216
  *  · MOTIR-8222) — it was never connected, it has already disconnected, or it is
  *  Motir's own shared provisioning installation, which no organisation is linked

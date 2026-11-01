@@ -52,6 +52,7 @@ import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldD
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { previewDeploymentRepository } from '@/lib/repositories/previewDeploymentRepository';
 import { countableReviewsAtHead, type CountableReview } from '@/lib/approvalGates/reviewVerdict';
 import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import type { GithubPullRequestWithContext } from '@/lib/repositories/githubPullRequestRepository';
@@ -189,7 +190,11 @@ import {
 import { toWorkItemLinkDto } from '@/lib/mappers/workItemLinkMappers';
 import { toQuickViewData } from '@/lib/mappers/quickViewMappers';
 import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
-import { toLinkedPullRequestDto, toWorkItemDeliveryDto } from '@/lib/mappers/githubMappers';
+import {
+  toLinkedPullRequestDto,
+  toWorkItemDeliveryDto,
+  type PreviewDeploymentFacts,
+} from '@/lib/mappers/githubMappers';
 import { standingMergeRefusals, standingQueueFailures } from './deliveryVerdict';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -320,6 +325,7 @@ import { acceptanceCriteriaTexts } from '@/lib/workItems/proseVsGraph';
 import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
 import {
   distinctAssigneeIds,
+  resolveMarkdownBodiesWorkItemRefs,
   resolveWorkItemRefSummaries,
 } from '@/lib/workItems/resolveWorkItemRefs';
 import { parseWorkItemRefs, type WorkItemRefs } from '@/lib/mentions/workItemRefs';
@@ -699,14 +705,20 @@ function clampBound(n: number | undefined, lo: number, hi: number, fallback: num
  * map is 1:1.
  */
 function toRelationshipLinks(
-  links: ReadonlyArray<{ id: string; fromId: string; toId: string }>,
+  links: ReadonlyArray<{ id: string; fromId: string; toId: string; reason?: string | null }>,
   rows: WorkItem[],
   endpoint: 'fromId' | 'toId',
 ): RelationshipLinkDto[] {
-  const linkIdByItem = new Map(links.map((l) => [l[endpoint], l.id]));
-  return rows
-    .sort(byKeyAsc)
-    .map((r) => ({ linkId: linkIdByItem.get(r.id) ?? '', item: toWorkItemSummaryDto(r) }));
+  const linkByItem = new Map(links.map((l) => [l[endpoint], l]));
+  return rows.sort(byKeyAsc).map((r) => {
+    const link = linkByItem.get(r.id);
+    return {
+      linkId: link?.id ?? '',
+      item: toWorkItemSummaryDto(r),
+      // The edge's reason (MOTIR-9827), only where it has one.
+      ...(link?.reason ? { reason: link.reason } : {}),
+    };
+  });
 }
 
 /** The seven link-row batches of one item, before their far ends are resolved. */
@@ -1628,13 +1640,15 @@ async function latchCiGreen(
  * Re-run the repository-SET completion gate after an edit CHANGED an item's
  * repository set (MOTIR-9235).
  *
- * The merge comment `changeRequestStatusSync` posts on a held card tells the
- * person to remove a repository the work does not ship in — and until this
+ * The merge comment `changeRequestStatusSync` once posted on a held card told
+ * the person to remove a repository the work does not ship in — and until this
  * existed, doing so changed nothing: the gate runs on a DELIVERY, and an edit is
  * not one, so the card waited for an operator to run
  * `pnpm db:reevaluate:repo-set` against production. This asks the same question
  * at the moment the answer changed, through the module that owns it, so no rule
- * is restated here: an empty set, an open linked pull request and an undecided
+ * is restated here. Since MOTIR-10135 the merge no longer holds on the set once
+ * a linked delivery landed, and neither does this; an item with no landed
+ * delivery is still re-checked against its set. An empty set, an open linked pull request and an undecided
  * plan hold all still keep the item where it is.
  *
  * Returns the item as it stands afterwards — re-read only when it moved, so the
@@ -1723,6 +1737,30 @@ async function recordBugFiledFinding(
  * pure function that DECIDES the gate, so a row and the gate can never disagree about what
  * counts — which is exactly the disagreement a reader would report as a bug.
  */
+/** The key a pull request's preview is looked up by: its repository and number —
+ *  the pair `preview_deployment`'s unique constraint is on. */
+function previewKey(repoId: string, pullRequestNumber: number): string {
+  return `${repoId}#${pullRequestNumber}`;
+}
+
+/**
+ * The PREVIEW of every pull request a card draws (Story MOTIR-5766 · MOTIR-10099),
+ * over ONE read for the card, keyed by {@link previewKey} — the shape
+ * {@link readGithubReviewsForRows} has, for the same reason: the rows are a list, and
+ * a read per row would make rendering one card N round trips. A pull request with no
+ * record is simply absent from the map.
+ */
+async function readPreviewsForPullRequests(
+  pullRequests: readonly { repoId: string; number: number }[],
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, PreviewDeploymentFacts>> {
+  const rows = await previewDeploymentRepository.listForPullRequests(
+    pullRequests.map((pr) => ({ repoId: pr.repoId, pullRequestNumber: pr.number })),
+    tx,
+  );
+  return new Map(rows.map((row) => [previewKey(row.repoId, row.pullRequestNumber), row]));
+}
+
 async function readGithubReviewsForRows(
   rows: readonly GithubPullRequestWithContext[],
   workspaceId: string,
@@ -2487,8 +2525,9 @@ export const workItemsService = {
       // link (source = mention) to each viewable, same-workspace target — in
       // THIS transaction (a DB write, correctly in-tx). ADD-only, idempotent,
       // never throws out: an unresolved / cross-workspace / unviewable / self
-      // reference is dropped silently. One combined parse over all three bodies
-      // (the parser dedups). `prefix` is the in-tx project identifier.
+      // reference is dropped silently. The title is read as plain text and each
+      // body as Markdown, so a key quoted in code relates nothing (MOTIR-9825).
+      // `prefix` is the in-tx project identifier.
       await autoRelateWorkItemMentions(
         {
           source: {
@@ -2497,7 +2536,8 @@ export const workItemsService = {
             projectId: input.projectId,
             projectIdentifier: prefix,
           },
-          text: [row.title, row.descriptionMd, row.explanationMd].filter(Boolean).join('\n'),
+          title: row.title,
+          bodies: [row.descriptionMd, row.explanationMd],
           ctx,
         },
         tx,
@@ -3202,7 +3242,8 @@ export const workItemsService = {
                 projectId: current.projectId,
                 projectIdentifier: project.identifier,
               },
-              text: [row.title, row.descriptionMd, row.explanationMd].filter(Boolean).join('\n'),
+              title: row.title,
+              bodies: [row.descriptionMd, row.explanationMd],
               ctx,
             },
             tx,
@@ -3353,7 +3394,7 @@ export const workItemsService = {
     //
     // The completion gate runs on a delivery, so an item held for a repository
     // that never had work to ship stayed held after the person removed that
-    // repository — the very step the merge comment tells them to take. After the
+    // repository — the step the old merge comment told them to take. After the
     // commit, so the gate reads the set this edit wrote.
     if (result.repoSetChanged) return reevaluateRepoSetCompletion(result.dto, ctx);
 
@@ -7164,7 +7205,16 @@ export const workItemsService = {
     );
     const workItemRefs = await resolveWorkItemRefSummaries(
       parseWorkItemRefs(
-        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        // Every body the peek draws through `MarkdownView` (bug MOTIR-10023): the
+        // explanation and the obsolescence note beside the description.
+        [
+          detail.item.title,
+          detail.item.descriptionMd,
+          detail.item.explanationMd,
+          detail.item.obsolescenceNoteMd,
+        ]
+          .filter(Boolean)
+          .join('\n'),
         prefix,
       ),
       projectId,
@@ -7329,7 +7379,16 @@ export const workItemsService = {
     );
     const workItemRefs = await this.resolveReferenceSummaries(
       parseWorkItemRefs(
-        [detail.item.title, detail.item.descriptionMd].filter(Boolean).join('\n'),
+        // Every body the peek draws through `MarkdownView` (bug MOTIR-10023): the
+        // explanation and the obsolescence note beside the description.
+        [
+          detail.item.title,
+          detail.item.descriptionMd,
+          detail.item.explanationMd,
+          detail.item.obsolescenceNoteMd,
+        ]
+          .filter(Boolean)
+          .join('\n'),
         prefix,
       ),
       projectId,
@@ -7393,7 +7452,14 @@ export const workItemsService = {
     return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx);
       const reviews = await readGithubReviewsForRows(rows, ctx.workspaceId, tx);
-      return rows.map((row) => toLinkedPullRequestDto(row, reviews.get(row.id) ?? null));
+      const previews = await readPreviewsForPullRequests(rows, tx);
+      return rows.map((row) =>
+        toLinkedPullRequestDto(
+          row,
+          reviews.get(row.id) ?? null,
+          previews.get(previewKey(row.repoId, row.number)) ?? null,
+        ),
+      );
     });
   },
 
@@ -7439,11 +7505,18 @@ export const workItemsService = {
       const held = await standingQueueFailures(byId, tx);
       // …and its STANDING host merge refusal, with the host's own words (MOTIR-6735).
       const refused = await standingMergeRefusals(byId, tx);
+      // …and its PREVIEW (MOTIR-10099): `mergePullRequestRows` draws a row from this
+      // set too, so a pull request linked only here still shows its preview.
+      const previews = await readPreviewsForPullRequests(
+        rows.map((row) => row.pullRequest),
+        tx,
+      );
       return rows.map((row) =>
         toWorkItemDeliveryDto(
           row,
           held.get(row.githubPullRequestId) ?? null,
           refused.get(row.githubPullRequestId) ?? null,
+          previews.get(previewKey(row.pullRequest.repoId, row.pullRequest.number)) ?? null,
         ),
       );
     });
@@ -8442,6 +8515,26 @@ export const workItemsService = {
     ctx: ServiceContext | VisitorReadContext,
   ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
     return listReadyLaneRows(projectId, 'bug', filter, ctx);
+  },
+
+  /**
+   * One page of a ready lane AS THE /ready PAGE DRAWS IT (bug MOTIR-10023): the lane's
+   * rows, plus the chips of every `[KEY](motir:<id>)` in the instructions its manual
+   * rows open — the only bodies the page renders. ONE ref read for the page, and none
+   * when no instruction links a card. The API and MCP lane reads stay row-only.
+   */
+  async listReadyLanePage(
+    projectId: string,
+    lane: 'leaf' | 'bug',
+    filter: ReadyListFilter,
+    ctx: ServiceContext | VisitorReadContext,
+  ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null; workItemRefs: WorkItemRefMap }> {
+    const page = await listReadyLaneRows(projectId, lane, filter, ctx);
+    const workItemRefs = await resolveMarkdownBodiesWorkItemRefs(
+      page.items.map((item) => item.descriptionMd),
+      ctx,
+    );
+    return { ...page, workItemRefs };
   },
 
   /**
@@ -9898,6 +9991,8 @@ async function computeSubtreeProseAdvisories(
     return {
       item: member.identifier,
       descriptionMd: row?.descriptionMd ?? null,
+      // The MISLABELLED-LINK check scans the explanation too (MOTIR-9938).
+      explanationMd: row?.explanationMd ?? null,
       kind: membersById.get(member.id)?.kind,
       exemptIds,
       // The ORDERING exemption's inputs (MOTIR-2175) and the REPO-STRADDLE

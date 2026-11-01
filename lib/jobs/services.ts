@@ -5,7 +5,11 @@ import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcile
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { gateResumeService } from '@/lib/services/gateResumeService';
+import { requirementPageSaveService } from '@/lib/services/requirementPageSaveService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
+import { productionMergeReleaseService } from '@/lib/services/productionMergeReleaseService';
+import { productionConfigRedeployService } from '@/lib/services/productionConfigRedeployService';
+import { releaseDeploymentStatusService } from '@/lib/services/releaseDeploymentStatusService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
 import { dlqStandingDepthService } from '@/lib/services/dlqStandingDepthService';
 import { monitorSyncService } from '@/lib/services/monitorSyncService';
@@ -43,6 +47,10 @@ import { capacityAlertJobService } from '@/lib/services/capacityAlertJobService'
 import { fleetPoolGrowthPassService } from '@/lib/services/fleetPoolGrowthPassService';
 import { hostAccountReconcileService } from '@/lib/services/hostAccountReconcileService';
 import { hostAccountStateService } from '@/lib/services/hostAccountStateService';
+import { hostingTenantAccountService } from '@/lib/services/hostingTenantAccountService';
+import { previewEnablementService } from '@/lib/services/previewEnablementService';
+import { previewLifecycleService } from '@/lib/services/previewLifecycleService';
+import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
 import { ciLiveChargeService } from '@/lib/services/ciLiveChargeService';
 import { ciActionsGateService } from '@/lib/services/ciActionsGateService';
 import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
@@ -69,6 +77,7 @@ import { abandonedPlanService } from '@/lib/services/abandonedPlanService';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { jobQueueRetentionService } from '@/lib/services/jobQueueRetentionService';
 import { dataExportService } from '@/lib/services/dataExportService';
+import { publicHostnameReservationService } from '@/lib/services/publicHostnameReservationService';
 import { accountErasureSweepService } from '@/lib/services/accountErasureSweepService';
 import { organizationDeletionNotifier } from '@/lib/services/organizationDeletionNotifier';
 import { organizationErasureSweepService } from '@/lib/services/organizationErasureSweepService';
@@ -137,6 +146,13 @@ export const jobServices = {
   // The Host account reconcile (Story MOTIR-9365 · MOTIR-9582).
   hostAccountReconcile: hostAccountReconcileService,
   hostAccountState: hostAccountStateService,
+  // The enterprise tenant account reconcile (Story MOTIR-9792 · MOTIR-9942).
+  hostingTenantAccountReconcile: hostingTenantAccountService,
+  // The preview enablement sweep (Story MOTIR-5766 · MOTIR-5775).
+  previewEnablement: previewEnablementService,
+  previewLifecycle: previewLifecycleService,
+  // Preview usage metered into the CI pool (Story MOTIR-5766 · MOTIR-5777).
+  ciPreviewUsageMeter: ciPreviewUsageMeterService,
   ciActionsGate: ciActionsGateService,
   ciRunnerBoot: ciRunnerBootService,
   // The GitHub-side reconcile of the fleet's queue (MOTIR-8976).
@@ -183,6 +199,9 @@ export const jobServices = {
   // The personal-data export (Story 8.4 · MOTIR-3701) — the build job and
   // the retention sweep are both its callers.
   dataExport: dataExportService,
+  // The expired name-hold sweep (Story MOTIR-4528 · MOTIR-9509): deletes the
+  // public-hostname reservations whose hold has lapsed.
+  publicHostnameReservation: publicHostnameReservationService,
   // The nightly erasure of accounts whose grace period has run out (MOTIR-3702).
   accountErasureSweep: accountErasureSweepService,
   // The 7-day and 1-day reminders before an organization is erased (MOTIR-6395).
@@ -206,9 +225,18 @@ export const jobServices = {
   designAutoRerun: designAutoRerunService,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).
   gateResume: gateResumeService,
+  // The confirmed plan offer's requirement page, saved after the start (MOTIR-10091).
+  requirementPageSave: requirementPageSaveService,
   // The base-branch mergeability re-read (MOTIR-5914): a push to a default branch
   // withdraws the approve-and-merge question over any pull request it put in conflict.
   pullRequestMergeability: pullRequestMergeabilityService,
+  // A merge starts a production release (Story MOTIR-9797 · MOTIR-10031): one
+  // release of the commit the production-image run built, or its failed build.
+  productionMergeRelease: productionMergeReleaseService,
+  // A production config change redeploys the live release (MOTIR-10032).
+  productionConfigRedeploy: productionConfigRedeployService,
+  // Every production release posts its GitHub deployment status (MOTIR-10033).
+  releaseDeploymentStatus: releaseDeploymentStatusService,
   // The monitor-issue reconciler (Story MOTIR-4929 · MOTIR-5581): the tick's
   // discovery, one binding's poll, and the terminal write onto that binding.
   monitorIngestion: monitorIngestionService,

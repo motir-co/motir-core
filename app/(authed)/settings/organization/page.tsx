@@ -23,7 +23,6 @@ import { SettingsPaneFrame } from '@/components/settings/SettingsPaneFrame';
 import { OrgGeneralCard } from './_components/OrgGeneralCard';
 import { BillingCard } from './_components/BillingCard';
 import { WorkspaceFoldInSection } from './_components/WorkspaceFoldInSection';
-import { JobRunsFoldInSection } from './_components/JobRunsFoldInSection';
 import { DangerZoneCard } from './_components/DangerZoneCard';
 import { DELETE_ORGANIZATION_DIALOG } from './_components/deleteOrganizationDialogParam';
 import { OrgWorkspacesCard } from './_components/OrgWorkspacesCard';
@@ -40,14 +39,7 @@ import { ORG_WORKSPACES_PAGE_SIZE } from './_components/workspacesPageSize';
 export default async function OrganizationSettingsPage({
   searchParams,
 }: {
-  /** ⚠️ READ ONLY BY THE `Job runs` FOLD-IN (Story MOTIR-4843 · MOTIR-4849).
-   *  Below the workspace-tier reveal this page hosts that dashboard, and a
-   *  dashboard whose tabs, filters and pages are URL-driven needs a URL on the
-   *  page that renders it. Every other section here ignores these. */
   searchParams: Promise<{
-    tab?: string;
-    status?: string;
-    page?: string;
     /** MOTIR-6314's deep link names the org to open (the one blocking an account
      *  deletion), which need not be the active one. Honoured only for an org the
      *  viewer belongs to — `resolveActiveOrganization` checks membership. */
@@ -79,7 +71,7 @@ export default async function OrganizationSettingsPage({
   //
   // `preferredOrganizationId` is the same helper the (authed) layout composes, so
   // the two cannot drift again.
-  const [ctx, myWorkspaces, cookieStore, jobsParams] = await Promise.all([
+  const [ctx, myWorkspaces, cookieStore, query] = await Promise.all([
     getWorkspaceContext(),
     workspacesService.listUserWorkspaces(session.user.id),
     cookies(),
@@ -89,7 +81,7 @@ export default async function OrganizationSettingsPage({
   const orgCookie = cookieStore.get(ORGANIZATION_COOKIE_NAME)?.value ?? null;
   const current = await organizationsService.resolveActiveOrganization(
     session.user.id,
-    jobsParams.org || preferredOrganizationId(activeWorkspace, orgCookie),
+    query.org || preferredOrganizationId(activeWorkspace, orgCookie),
   );
 
   if (!current) {
@@ -181,15 +173,14 @@ export default async function OrganizationSettingsPage({
           role={current.role}
           isAdmin={isAdmin}
           canTransfer={canTransfer}
-          openTransfer={canTransfer && jobsParams.dialog === 'transfer-ownership'}
-          openDelete={canTransfer && jobsParams.dialog === DELETE_ORGANIZATION_DIALOG}
+          openTransfer={canTransfer && query.dialog === 'transfer-ownership'}
+          openDelete={canTransfer && query.dialog === DELETE_ORGANIZATION_DIALOG}
           sessionSignedInAt={new Date(session.session.createdAt).toISOString()}
           canManageWorkspaces={canManageWorkspaces}
           activeWorkspaceId={ctx?.workspaceId ?? null}
           actorUserId={session.user.id}
           orgWorkspaceCount={orgWorkspaces.length}
           foldInWorkspace={foldInWorkspace}
-          jobsParams={jobsParams}
         />
       </Suspense>
     </div>
@@ -218,7 +209,6 @@ async function OrgPaneBody({
   actorUserId,
   orgWorkspaceCount,
   foldInWorkspace,
-  jobsParams,
 }: {
   orgId: string;
   orgName: string;
@@ -235,7 +225,6 @@ async function OrgPaneBody({
   actorUserId: string;
   orgWorkspaceCount: number;
   foldInWorkspace: { id: string } | null;
-  jobsParams: { tab?: string; status?: string; page?: string };
 }) {
   // The org-scoped reads, for an Owner/Admin only — a Member's view of this
   // page is the fold-in alone, and neither read is theirs to make.
@@ -314,24 +303,6 @@ async function OrgPaneBody({
           actorUserId={actorUserId}
           workspaceCount={orgWorkspaceCount}
           canManageWorkspaces={canManageWorkspaces}
-        />
-      ) : null}
-
-      {/* Story MOTIR-4843 · MOTIR-4861 — the FOURTH workspace-tier capability's
-          fold-in, and the last one to get one. Same condition as the block
-          above, so all four surfaces hide and reappear together; a SEPARATE
-          section rather than a card inside it, because this is an operator
-          surface rather than workspace CONFIG — which is also why the area rail
-          gives it a group of its own.
-
-          ⚠️ Gated on `foldInWorkspace` — a WORKSPACE MEMBERSHIP — and never on
-          `isAdmin`. §6d gates this page per SECTION, and the source surface
-          checks no role at all. */}
-      {foldInWorkspace ? (
-        <JobRunsFoldInSection
-          workspaceId={foldInWorkspace.id}
-          actorUserId={actorUserId}
-          searchParams={jobsParams}
         />
       ) : null}
 

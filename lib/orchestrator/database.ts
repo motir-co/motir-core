@@ -1,0 +1,95 @@
+// The composition root of the DATABASE PORT (MOTIR-9971). A module of its own,
+// beside `./hosting` and for the same reason: it loads no database, so the
+// operator deploy check can run it from a laptop with only the provider tokens
+// set. `./index` re-exports everything here.
+import {
+  createFakeDatabasePort,
+  createNeonDatabasePort,
+  neonDatabaseConfig,
+  OrchestratorNotConfiguredError,
+  type DatabaseBranchHandle,
+  type DatabasePort,
+  type DatabaseProvider,
+  type DatabaseUsage,
+} from '@motir/orchestrator';
+import { selectedOrchestratorProvider } from './provider';
+
+// ── The DATABASE PORT (Story MOTIR-9793 · MOTIR-9971) ───────────────────────
+//
+// One port for an application's own database. The fake while
+// `MOTIR_FLEET_ORCHESTRATOR=fake`, so a suite that selects the fake gets every
+// fake; otherwise the adapter registered for the provider, and failing that the
+// Neon adapter built from its own key and organisation (MOTIR-9973), read at
+// call time — the way `getHostingDeployPort` builds Fly's.
+
+/** Builds a provider's adapter, at call time. */
+export type DatabaseAdapterFactory = () => DatabasePort;
+
+const databaseAdapters = new Map<DatabaseProvider, DatabaseAdapterFactory>();
+const databaseFakes = new Map<DatabaseProvider, DatabasePort>();
+
+/** Register (or replace) the adapter for a provider. */
+export function registerDatabaseAdapter(
+  provider: DatabaseProvider,
+  factory: DatabaseAdapterFactory,
+): void {
+  databaseAdapters.set(provider, factory);
+}
+
+/** Forget a registration — for tests. */
+export function unregisterDatabaseAdapter(provider: DatabaseProvider): void {
+  databaseAdapters.delete(provider);
+}
+
+/** What the composition root does with a deleted branch's usage — the preview
+ *  meter's final slice (MOTIR-5777). It must never throw: the branch is gone. */
+export type DatabaseBranchDeleteObserver = (input: {
+  branch: DatabaseBranchHandle;
+  usage: DatabaseUsage;
+}) => Promise<unknown>;
+
+let branchDeleteObserver: DatabaseBranchDeleteObserver | null = null;
+
+/** Bind (or, with null, unbind) the observer of every port's `deleteBranch`.
+ *  `./index` binds the preview meter; this module loads no database. */
+export function observeDatabaseBranchDelete(observer: DatabaseBranchDeleteObserver | null): void {
+  branchDeleteObserver = observer;
+}
+
+/** Route `port`'s `deleteBranch` result through the observer bound at CALL
+ *  time, in place so a cached fake keeps its identity. */
+function observed(port: DatabasePort): DatabasePort {
+  const deleteBranch = port.deleteBranch.bind(port);
+  port.deleteBranch = async (branch) => {
+    const usage = await deleteBranch(branch);
+    if (branchDeleteObserver) await branchDeleteObserver({ branch, usage });
+    return usage;
+  };
+  return port;
+}
+
+/** The database port for a provider, or the typed not-configured error. The
+ *  fake is one per process, so a suite sees one store. */
+export function getDatabasePort(provider: DatabaseProvider = 'neon'): DatabasePort {
+  if (selectedOrchestratorProvider() === 'fake') {
+    let fake = databaseFakes.get(provider);
+    if (!fake) {
+      fake = observed(createFakeDatabasePort({ provider }));
+      databaseFakes.set(provider, fake);
+    }
+    return fake;
+  }
+  return observed(buildDatabaseAdapter(provider));
+}
+
+function buildDatabaseAdapter(provider: DatabaseProvider): DatabasePort {
+  const registered = databaseAdapters.get(provider);
+  if (registered) return registered();
+  if (provider === 'neon') return createNeonDatabasePort(neonDatabaseConfig());
+  throw new OrchestratorNotConfiguredError(`no ${provider} database adapter is registered`);
+}
+
+/** Drop the fakes — for tests. */
+export function resetDatabaseFakes(): void {
+  databaseFakes.clear();
+}

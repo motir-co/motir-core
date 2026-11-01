@@ -133,9 +133,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // `platform_run_model_list` marker are MOTIR-7525's hosted-run model list —
     // platform configuration, written solely from this tier, and so is
     // `platform_fleet_org_ci`, MOTIR-8714's fleet org CI switch, and so is
-    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch. `enterprise_request`
-    // is MOTIR-7605's Contact-sales request, which staff list and move from the
-    // console (MOTIR-7608); its tenant arm is the org's own.
+    // `platform_fleet_kind_switch`, MOTIR-9503's per-fleet-kind Fly↔AWS switch.
     // The five `idea*`
     // tables are MOTIR-7662's idea store — Motir's own content, readable by
     // anyone and written solely from this tier (`20261007100000_idea_store`);
@@ -145,10 +143,15 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // provider-capacity alert state (`20261025230000_capacity_alert_state`):
     // platform-only, written by the alert job under `app.system_admin`, the
     // share set and both read from this tier.
+    // `seed_registry_entry` is MOTIR-708's seed registry — Motir's catalogue,
+    // readable by anyone and written solely from this tier
+    // (`20261028200000_seed_registry`). `project_repository` and `github_repo`
+    // carry MOTIR-710's SELECT-only arms, for the one cross-tenant read a starter
+    // promotion makes (`20261028220000_seed_registry_promotion`).
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
-      'enterprise_request',
+      'github_repo',
       'idea',
       'idea_evidence',
       'idea_evidence_translation',
@@ -167,6 +170,8 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'platform_run_model',
       'platform_run_model_list',
       'project',
+      'project_repository',
+      'seed_registry_entry',
       'workspace',
       'workspace_membership',
     ]);

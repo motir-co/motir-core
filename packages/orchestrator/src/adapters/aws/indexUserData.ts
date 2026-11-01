@@ -14,9 +14,25 @@ import { parseImageReference } from '../../imagePull';
 // to every index run), and no AMI of our own to bake and keep current. The ECS
 // agent it also carries is stopped first: this VM joins no cluster.
 //
-// THE PULL-FAILURE CHANNEL is the serial console. The VM has no inbound rule and
-// no instance profile, so it cannot call any AWS API. It can write to its own
-// console, and `GetConsoleOutput` reads that console with the adapter's own key.
+// THE REGISTRY LOGIN (MOTIR-10123). The image is private: GHCR's package is, and
+// Fly's mirror serves nothing without a Fly token. On AWS it is pulled from
+// Motir's own ECR, so the VM boots with ONE instance profile,
+// `motir-fleet-index` (`AWS_INDEX_IAM_ROLE`), whose role may get an ECR login
+// and read that one repository and nothing else; the repository's own policy
+// admits it from the indexer pool's accounts only. Before the pull the script
+// asks ECR for a login with that role and hands it to `docker login`. The
+// command it uses is the AWS CLI's `aws ecr get-login-password`, the documented
+// way: the ECS-optimized AMI is built from the MINIMAL Amazon Linux 2023 image,
+// which may not carry the CLI, so when `aws` is missing the script installs
+// `awscli-2` from the region's own Amazon Linux repository first. That is the
+// one package a boot may install, and only on an ECR image. An image in any
+// other registry is pulled as before, with no login. A failed login is a failed
+// pull: it writes the same marker.
+//
+// THE PULL-FAILURE CHANNEL is the serial console. The VM has no inbound rule, and
+// its role can do nothing but read the indexer image, so it reports nothing
+// through an AWS API. It can write to its own console, and `GetConsoleOutput`
+// reads that console with the adapter's own key.
 // When the pull fails, the script writes ONE line, {@link AWS_INDEX_PULL_FAILED_MARKER},
 // to the console and powers off. The adapter's `describe` reads the console of a
 // stopped index VM and reports `imagePullFailed`. Every other line of the script,
@@ -37,7 +53,7 @@ import { parseImageReference } from '../../imagePull';
 // ⚠️ THE PAYLOAD CARRIES THE RUN CREDENTIAL and two pre-signed URLs. Nothing here
 // logs it, and no refusal names a value: it names the KEY only. IMDSv2 with a hop
 // limit of 1 (set on every launch) keeps the container off the metadata service,
-// which serves the user-data.
+// which serves the user-data and the index role's credentials.
 
 /** The console line an index VM writes when it cannot pull its image. */
 export const AWS_INDEX_PULL_FAILED_MARKER = 'MOTIR_INDEX_BOOT: image_pull_failed';
@@ -49,6 +65,23 @@ export const AWS_INDEX_EXIT_MARKER = 'MOTIR_INDEX_BOOT: exit_code=';
 /** The comment line naming the image the script pulls. The fake EC2 reads it to
  *  decide whether the pull succeeds; nothing in AWS does. */
 export const AWS_INDEX_IMAGE_COMMENT = '# motir-index-image: ';
+
+/** A private ECR registry host: `<account>.dkr.ecr.<region>.amazonaws.com`
+ *  (`.com.cn` in the China partition). Captures the region. */
+const ECR_REGISTRY_PATTERN =
+  /^\d{12}\.dkr\.ecr\.([a-z]{2}(?:-[a-z]+)+-\d)\.amazonaws\.com(?:\.cn)?$/;
+
+/**
+ * The ECR registry and region an image reference names, or null for an image in
+ * any other registry. Read from the host before the first `/`.
+ */
+export function ecrRegistryOf(image: string): { registry: string; region: string } | null {
+  const slash = image.indexOf('/');
+  if (slash <= 0) return null;
+  const registry = image.slice(0, slash);
+  const match = ECR_REGISTRY_PATTERN.exec(registry);
+  return match ? { registry, region: match[1]! } : null;
+}
 
 /** What `docker --env-file` takes as a variable name. */
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -100,7 +133,30 @@ function envLines(env: Readonly<Record<string, string>>): string[] {
   });
 }
 
-/** The boot script for one index VM: pull by digest, run, power off. */
+/** The lines that end the boot on a failed pull: the marker, then power off. */
+const PULL_FAILED_LINES = [
+  `  console '${AWS_INDEX_PULL_FAILED_MARKER}'`,
+  '  shutdown -h now',
+  '  exit 0',
+];
+
+/**
+ * The ECR login before the pull, or nothing for an image elsewhere: install the
+ * AWS CLI when the AMI has none, then pipe the role's login into `docker login`.
+ * The password travels on the pipe only, never in an argument or the log.
+ */
+function ecrLoginLines(image: string): string[] {
+  const ecr = ecrRegistryOf(image);
+  if (!ecr) return [];
+  return [
+    'if ! command -v aws >/dev/null 2>&1; then dnf install -y -q awscli-2; fi',
+    `if ! aws ecr get-login-password --region '${ecr.region}' | docker login --username AWS --password-stdin '${ecr.registry}'; then`,
+    ...PULL_FAILED_LINES,
+    'fi',
+  ];
+}
+
+/** The boot script for one index VM: log in, pull by digest, run, power off. */
 export function buildIndexUserData(spec: {
   readonly image: string;
   readonly env: Readonly<Record<string, string>>;
@@ -109,7 +165,8 @@ export function buildIndexUserData(spec: {
   return [
     '#!/bin/bash',
     `${AWS_INDEX_IMAGE_COMMENT}${image}`,
-    'set -u',
+    // pipefail: the ECR login is a pipe, and its failure is the CLI's too.
+    'set -u -o pipefail',
     'console() { echo "$1" >/dev/ttyS0 2>/dev/null || echo "$1" >/dev/console; }',
     // Everything below stays off the console: only the marker may reach it.
     'exec >>/var/log/motir-index-boot.log 2>&1',
@@ -120,10 +177,9 @@ export function buildIndexUserData(spec: {
     ...envLines(spec.env),
     ENV_DELIMITER,
     `IMAGE='${image}'`,
+    ...ecrLoginLines(image),
     'if ! docker pull "$IMAGE"; then',
-    `  console '${AWS_INDEX_PULL_FAILED_MARKER}'`,
-    '  shutdown -h now',
-    '  exit 0',
+    ...PULL_FAILED_LINES,
     'fi',
     'docker run --rm --env-file /run/motir-index.env "$IMAGE"',
     'code=$?',

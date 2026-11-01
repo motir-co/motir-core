@@ -6,6 +6,7 @@ import type {
   Plan,
   PlanItem,
   PlanNarration,
+  PlanCodeRead,
   PlanNarrationSession,
   PlanStep,
 } from '@/generated/prisma/client';
@@ -16,6 +17,7 @@ import type {
   PlanItemPatch,
   PlanItemProposedFields,
   PlanNarrationDto,
+  PlanCodeReadDto,
   PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
@@ -23,6 +25,7 @@ import type {
   WorkItemPlanHistoryEntryDto,
 } from '@/lib/dto/plans';
 import { redactNativeActor, redactNativeProvenance } from '@/lib/plans/redactNativeModel';
+import { readEdgeReasons } from '@/lib/plans/edgeReasons';
 
 /**
  * The stored proposed fields as a tenant may read them: a native `add`'s
@@ -46,6 +49,8 @@ export function toPlanItemDto(row: PlanItem): PlanItemDto {
     patch: (row.patch as PlanItemPatch | null) ?? null,
     parentRef: row.parentRef,
     blockedByRefs: row.blockedByRefs,
+    // A row read through a narrow select may lack the column (MOTIR-9827).
+    edgeReasons: readEdgeReasons(row.edgeReasons),
     // A row read through a narrow select may lack the column (MOTIR-6630).
     supersedesRefs: row.supersedesRefs ?? [],
     baseRevision: row.baseRevision,
@@ -123,6 +128,27 @@ export function toPlanNarrationDto(row: PlanNarration): PlanNarrationDto {
     sessionKey: row.sessionKey,
     seq: row.seq,
     body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One stored code read as it crosses the boundary (MOTIR-10122). */
+export function toPlanCodeReadDto(row: PlanCodeRead): PlanCodeReadDto {
+  return {
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    tool: row.tool,
+    repo: row.repo,
+    path: row.path,
+    startLine: row.startLine,
+    endLine: row.endLine,
+    askedRef: row.askedRef,
+    query: row.query,
+    commits: Array.isArray(row.commits) ? (row.commits as PlanCodeReadDto['commits']) : [],
+    outcome: row.outcome,
+    lines: row.lines,
+    hits: row.hits,
+    detail: row.detail,
     createdAt: row.createdAt.toISOString(),
   };
 }

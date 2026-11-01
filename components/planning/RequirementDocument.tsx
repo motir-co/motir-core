@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { assumptionRowsOf } from '@/lib/planning/requirementPane';
 import type { SubmittedRequirement } from '@/lib/ai/types';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // THE REQUIREMENT DOCUMENT and the NO-REQUIREMENT NOTICE (Story MOTIR-9430 ·
 // MOTIR-9437), as `design/ai-chat/plan-offer--requirement.mock.html` draws them: the
@@ -16,9 +17,12 @@ const PARTS = ['outcome', 'behaviour', 'scopeEdge', 'constraints', 'acceptance']
 export function RequirementDocument({
   requestMd,
   requirement,
+  workItemRefs,
 }: {
   requestMd: string;
   requirement: SubmittedRequirement;
+  /** The thread's resolved card links, which cover the offer's requirement (MOTIR-10023). */
+  workItemRefs: WorkItemRefMap;
 }) {
   const t = useTranslations('planningWorkspace.requirementPane');
   const rows = assumptionRowsOf(requirement.assumptions);
@@ -38,7 +42,7 @@ export function RequirementDocument({
               {t(`headings.${part}`)}
             </h3>
             {text.length > 0 ? (
-              <MarkdownView value={text} />
+              <MarkdownView value={text} workItemRefs={workItemRefs} />
             ) : (
               <p
                 className="text-sm italic text-(--el-text-secondary)"

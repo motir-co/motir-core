@@ -9,6 +9,7 @@ import {
 } from '@/lib/dispatchRuns/errors';
 import {
   composeDiscrepancyComment,
+  type RunDecisionPoint,
   type RunDiscrepancyPoint,
 } from '@/lib/dispatchRuns/discrepancyComment';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -52,6 +53,15 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // `reportedBy` on the event is the RUN's own reporter (`cli` or `agent`), so a reader knows
 // whose account the record is in.
 //
+// ⚠️ DECISIONS RIDE THE SAME RECORD (MOTIR-10000). A run that DECIDED something the plan left
+// open — by the repository's conventions, then industry best practice — sends it as a
+// `decisions` entry (`planSaid · chose · why`, `alternatives` optional) in this same ONE call,
+// beside any build-through points or alone. One comment, one finding, one record per leg, as
+// before: the comment gives the decisions their own section, and the finding's `pointCount`
+// counts every entry (so the run's strip never reads _0 points_ on a decisions-only record)
+// while `decisionCount` says how many of them were decisions. Points-only calls are unchanged
+// byte for byte, so a build-through, and the planning-bug path that reads it, behave as they did.
+//
 // Permission: `work_item:edit` on the card's project — the key `CLI_TOKEN_GRANT` already holds.
 //
 // ⚠️ THE RUN DOOR (MOTIR-8722) names its run: `POST /api/v1/dispatch-runs/{id}/discrepancy`,
@@ -66,7 +76,10 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 export interface RecordDiscrepancyInput {
   /** The card that was built through, `KEY-<n>` (the in-flight child, on a parent run). */
   key: string;
-  points: readonly RunDiscrepancyPoint[];
+  /** The build-through points; empty (or absent) when the record carries only decisions. */
+  points?: readonly RunDiscrepancyPoint[];
+  /** The decisions the run made where the plan was silent (MOTIR-10000). */
+  decisions?: readonly RunDecisionPoint[];
 }
 
 /** The whole answer — acknowledgement only. */
@@ -82,24 +95,56 @@ function projectKeyOf(identifier: string): string {
 }
 
 const FIELDS = ['planAsked', 'built', 'why'] as const;
+const DECISION_FIELDS = ['planSaid', 'chose', 'why'] as const;
+
+/** One field trimmed and bounded, or the refusal naming where it is. */
+function boundedField(
+  raw: string | null | undefined,
+  where: ConstructorParameters<typeof RunDiscrepancyInvalidError>[1],
+): string {
+  const value = (raw ?? '').trim();
+  if (value.length === 0) throw new RunDiscrepancyInvalidError('field_empty', where);
+  if (value.length > RUN_DISCREPANCY_FIELD_MAX) {
+    throw new RunDiscrepancyInvalidError('field_too_long', where);
+  }
+  return value;
+}
+
+/** Trim and bound the decisions. `alternatives` is optional; sent, it is bounded like the rest. */
+function validateDecisions(decisions: readonly RunDecisionPoint[]): RunDecisionPoint[] {
+  if (decisions.length > RUN_DISCREPANCY_POINTS_MAX) {
+    throw new RunDiscrepancyInvalidError('decisions_too_many');
+  }
+  return decisions.map((decision, index) => {
+    const clean: RunDecisionPoint = { planSaid: '', chose: '', why: '' };
+    for (const field of DECISION_FIELDS) {
+      clean[field] = boundedField(decision[field], { decision: index + 1, field });
+    }
+    if (decision.alternatives != null && decision.alternatives.trim() !== '') {
+      clean.alternatives = boundedField(decision.alternatives, {
+        decision: index + 1,
+        field: 'alternatives',
+      });
+    }
+    return clean;
+  });
+}
 
 /** Trim and bound the points. Refused, never truncated; nothing is resolved first. */
-function validatePoints(points: readonly RunDiscrepancyPoint[]): RunDiscrepancyPoint[] {
-  if (points.length === 0) throw new RunDiscrepancyInvalidError('points_empty');
+function validatePoints(
+  points: readonly RunDiscrepancyPoint[],
+  decisionCount: number,
+): RunDiscrepancyPoint[] {
+  if (points.length === 0 && decisionCount === 0) {
+    throw new RunDiscrepancyInvalidError('points_empty');
+  }
   if (points.length > RUN_DISCREPANCY_POINTS_MAX) {
     throw new RunDiscrepancyInvalidError('points_too_many');
   }
   return points.map((point, index) => {
     const clean = { planAsked: '', built: '', why: '' };
     for (const field of FIELDS) {
-      const value = (point[field] ?? '').trim();
-      if (value.length === 0) {
-        throw new RunDiscrepancyInvalidError('field_empty', { point: index + 1, field });
-      }
-      if (value.length > RUN_DISCREPANCY_FIELD_MAX) {
-        throw new RunDiscrepancyInvalidError('field_too_long', { point: index + 1, field });
-      }
-      clean[field] = value;
+      clean[field] = boundedField(point[field], { point: index + 1, field });
     }
     return clean;
   });
@@ -109,7 +154,8 @@ export const runDiscrepancyService = {
   /**
    * Record that the caller's run built `key` through a wrong HOW. See the file header.
    *
-   * @throws RunDiscrepancyInvalidError — the points are empty, too many, or a field is empty or
+   * @throws RunDiscrepancyInvalidError — no points and no decisions, too many of either, or a
+   *   field is empty or
    *   over {@link RUN_DISCREPANCY_FIELD_MAX} characters.
    * @throws WorkItemNotFoundError — the card does not exist for this caller.
    * @throws PermissionDeniedError — the caller may not edit the card.
@@ -124,7 +170,8 @@ export const runDiscrepancyService = {
     } = {},
   ): Promise<RecordDiscrepancyResult> {
     if (opts.runId !== undefined) assertRunTokenScope(opts.runId, ctx);
-    const points = validatePoints(input.points);
+    const decisions = validateDecisions(input.decisions ?? []);
+    const points = validatePoints(input.points ?? [], decisions.length);
     const key = input.key.trim().toUpperCase();
 
     // An unknown project, another workspace's key and an unbrowsable project all answer the SAME
@@ -184,7 +231,7 @@ export const runDiscrepancyService = {
           workItemId: item.id,
           authorId: ctx.userId,
           parentCommentId: null,
-          bodyMd: composeDiscrepancyComment(points),
+          bodyMd: composeDiscrepancyComment(points, decisions),
         },
         tx,
       );
@@ -203,10 +250,12 @@ export const runDiscrepancyService = {
                 seq,
                 kind: 'discrepancy_recorded',
                 reportedBy: run.reportedBy,
-                // A POINTER and a count — never the text, which lives in the comment.
+                // A POINTER and counts — never the text, which lives in the comment.
                 data: {
                   commentId: comment.id,
-                  pointCount: points.length,
+                  pointCount: points.length + decisions.length,
+                  // Only when there are any, so a points-only record writes what it always did.
+                  ...(decisions.length > 0 ? { decisionCount: decisions.length } : {}),
                   dispatchRunCardId: leg.id,
                 },
               },

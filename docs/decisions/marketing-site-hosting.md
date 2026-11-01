@@ -21,6 +21,8 @@
   the first record in this directory about a repository other than `motir-core`.
   **§3 is additionally CORRECTED 2026-09-04 — see AMENDMENT 2**, which fixes what
   it said about the kind of IPv4 the `motir-marketing` app holds.
+  **Q1 and Q3's deploy step are SUPERSEDED 2026-10-27 by AMENDMENT 3: the site
+  runs on Vercel.**
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `application-hosting.md` / `production-service-stack.md`): a decision record is
@@ -520,3 +522,51 @@ address)"_) and §27's pricing row, both sourced to Fly's published pricing. So
 the corpus contained its own refutation and nothing compared the two, while the
 records a reader reaches for **while setting the value customers point an apex
 at** were the wrong ones.
+
+---
+
+## AMENDMENT 3 — `motir.co` moves to Vercel (2026-10-27)
+
+**Q1 is reversed: `motir.co` is served by a Vercel project, `motir-marketing`,
+functions pinned to `iad1`.** Q3 stands in substance — GitHub Actions in
+`motir-marketing` deploys it, behind the same gates — but the deploy step is now
+`vercel build` on the runner and `vercel deploy --prebuilt --prod`, with
+Vercel's Git integration turned off in `vercel.json`, so no build runs anywhere
+the gates do not.
+
+### Why
+
+Q1 chose Fly for **one build model**, not because the site needs a long-running
+process. It does not: every page is a server render or an ISR page reading
+motir-core's public API. On 2026-10-27 that one argument stopped paying for
+itself:
+
+| reading (2026-10-27, Fly Prometheus and `fly logs`)                  | value                               |
+| -------------------------------------------------------------------- | ----------------------------------- |
+| CPU steal on both `shared-cpu-1x` machines, different physical hosts | 57–91, from ~0 earlier the same day |
+| First byte, every page, while it lasted                              | 3–11 s                              |
+| Requests per day, 10-21 → 10-27, mostly crawlers on filter URLs      | 130–175k                            |
+
+Two small shared machines put every visitor behind every crawler render and
+every neighbour's CPU. A serverless host scales a burst out instead of queueing
+it, and leaves no machine to be starved.
+
+### What no longer binds the site to Fly
+
+- **Public project pages** are `motir.co/p/<identifier>` (`public-tenant-addresses.md`
+  AMENDMENT 3) — the site's own host.
+- **`*.motir.site` and customer-owned domains** belong to the hosted-applications
+  epic (MOTIR-4527), not to this site. `public-tenant-addresses.md` Q5's
+  _"on the `motir-marketing` app"_ and the certificate comments in
+  `lib/publicAddresses/` describe a placement that epic will re-decide; the
+  `motir.site` certificates on the old Fly app are dormant.
+
+### What it costs
+
+- **Vercel is back as a vendor** — reversing MOTIR-2396 for this one site. It is
+  **not** a subprocessor row: it hosts the marketing site, which carries no
+  customer data, and the privacy policy covers `app.motir.co`. The rows
+  `subprocessors.md` publishes are for the hosted service, which stays on Fly.
+- **Two build models** — the cost Q1 named. Accepted: the site is not the product.
+- **§3's apex** points at Vercel (`A 216.198.79.1` and `A 64.29.17.1`, `www` → `98ddd21bbcbedce4.vercel-dns-017.com`, as Vercel recommended on 2026-10-27);
+  the `MX`, `TXT`, DKIM and `_dmarc` records §3 protects are untouched.

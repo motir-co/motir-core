@@ -737,9 +737,6 @@
       "pickProjectFirst": "Kies eerst een project.",
       "unknownRelationship": "Onbekende relatie.",
       "pickIssueToLink": "Kies een werkitem om te koppelen.",
-      "missingDlqId": "Dead-letter-id ontbreekt.",
-      "ownerOnlyReplay": "Alleen een Manager van de werkruimte kan taken opnieuw afspelen.",
-      "dlqGone": "Dat dead-letter-item bestaat niet meer.",
       "workspaceNameEmpty": "De naam van de werkruimte mag niet leeg zijn.",
       "useLeaveToRemoveSelf": "Gebruik Verlaten om jezelf te verwijderen.",
       "cannotRemoveLastMember": "Het laatste lid kan niet worden verwijderd.",
@@ -765,9 +762,7 @@
       "workspaceSecurityForbidden": "Alleen eigenaren en beheerders van een werkruimte kunnen de beveiligingsinstellingen ervan wijzigen.",
       "refused": "Dat is niet gelukt: {reason}",
       "organizationClosing": "Deze organisatie staat gepland voor verwijdering en is alleen-lezen. Alleen de Eigenaar kan de verwijdering annuleren.",
-      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden.",
-      "systemReplayWorkspaceRow": "Dat dead-letter-item hoort bij een workspace – speel het opnieuw af vanaf het tabblad Dead letter van die workspace.",
-      "systemReplayOperatorOnly": "Alleen de platformbeheerder kan dead letters van het systeem opnieuw afspelen."
+      "memberProjectsFailed": "Kan de projecten van deze persoon niet laden."
     },
     "links": {
       "notFound": "Dat werkitem bestaat niet meer.",
@@ -1958,6 +1953,8 @@
       "translation": "Vertaling",
       "rules": "Regels",
       "repositories": "Repository's",
+      "environment": "Omgeving",
+      "production": "Productie",
       "monitoring": "Monitoring",
       "approvals": "Goedkeuringen",
       "bugs": "Bugs"
@@ -2065,13 +2062,12 @@
       "nav": {
         "group": {
           "general": "Algemeen",
-          "access": "Toegang",
-          "operations": "Bedrijfsvoering"
+          "access": "Toegang"
         },
         "workspace": "Werkruimte",
         "security": "Beveiliging",
         "roles": "Rollen en rechten",
-        "jobs": "Taakuitvoeringen"
+        "publicAddress": "Openbaar adres"
       }
     },
     "name": {
@@ -2200,7 +2196,58 @@
       "inviteNoProjectsWarning": "Ze kunnen niets openen totdat een Manager hen aan een project toevoegt.",
       "inviteJoinsAsMember": "Ze worden toegevoegd als Lid. Je kunt hun rol wijzigen nadat ze hebben geaccepteerd.",
       "errorInviteProjects": "Aan een van die projecten kan niet worden deelgenomen. Kies ze opnieuw.",
-      "errorInviteNotAllowed": "Je kunt deze uitnodiging niet versturen. Alleen een Manager van de werkruimte kan uitnodigen met Beperkte toegang."
+      "errorInviteNotAllowed": "Je kunt deze uitnodiging niet versturen. Alleen een Manager van de werkruimte kan uitnodigen met Beperkte toegang.",
+      "pending": {
+        "heading": "Openstaande uitnodigingen",
+        "invitationColumn": "Uitnodiging",
+        "deliveryColumn": "Bezorging",
+        "invitedBy": "Uitgenodigd door {name}, {sent}",
+        "invitedByFormer": "Uitgenodigd door een voormalig lid, {sent}",
+        "expiresIn": "Verloopt over {count, plural, one {# dag} other {# dagen}}",
+        "expiresToday": "Verloopt vandaag",
+        "expiresOn": "Verloopt op {date}",
+        "resend": "Opnieuw versturen",
+        "resendLabel": "Uitnodiging opnieuw versturen naar {email}",
+        "resendScopeTooltip": "Alleen een Manager kan een beperkte uitnodiging opnieuw versturen",
+        "resentToast": "Nieuwe uitnodiging verstuurd naar {email}",
+        "refusalRateLimited": "Limiet bereikt: 3 uitnodigingen per adres per uur.",
+        "refusalRateLimitedBody": "Probeer het later opnieuw.",
+        "refusalAlreadyMember": "Deze persoon is al lid van de werkruimte.",
+        "refusalNotAllowed": "Je kunt deze uitnodiging niet opnieuw versturen.",
+        "refusalNoLongerPending": "Deze uitnodiging staat niet meer open.",
+        "showAll": "Alle {count} openstaande uitnodigingen tonen",
+        "showFewer": "Minder tonen",
+        "delivery": {
+          "queued": {
+            "label": "In wachtrij",
+            "helper": "Wacht op verzending"
+          },
+          "accepted": {
+            "label": "Geaccepteerd",
+            "helper": "De mailprovider heeft hem ontvangen"
+          },
+          "delivered": {
+            "label": "Bezorgd",
+            "helper": "Heeft de mailserver van de ontvanger bereikt"
+          },
+          "bounced": {
+            "label": "Gebounced",
+            "helper": "Het adres heeft hem geweigerd"
+          },
+          "complained": {
+            "label": "Klacht",
+            "helper": "Gemarkeerd als spam"
+          },
+          "delayed": {
+            "label": "Vertraagd",
+            "helper": "De provider probeert het nog"
+          },
+          "failed": {
+            "label": "Mislukt",
+            "helper": "Kon niet worden verstuurd"
+          }
+        }
+      }
     },
     "danger": {
       "cantLeaveTitle": "Kan niet vertrekken",
@@ -2706,43 +2753,6 @@
         "title": "Er is geen openbare namespace geconfigureerd",
         "description": "Voor deze installatie is geen basisdomein voor tenants ingesteld, dus er kan nog geen subdomein worden geclaimd. Een beheerder stelt MOTIR_PUBLIC_TENANT_DOMAIN in."
       },
-      "subdomain": {
-        "title": "Subdomein van de werkruimte",
-        "subtitle": "Eén adres voor de hele werkruimte. Elk openbaar project erin is daaronder bereikbaar.",
-        "label": "Subdomein",
-        "helper": "Je projecten komen op {preview}. Kleine letters, cijfers en koppeltekens; 3–63 tekens.",
-        "claim": "Subdomein claimen",
-        "claimable": "Dit kan later nog een beperkt aantal keer worden hernoemd.",
-        "active": "Actief",
-        "alias": "Verwijst hierheen door",
-        "aliasShort": "Verwijst door",
-        "copy": "Adres kopiëren",
-        "copied": "Adres gekopieerd",
-        "open": "Openen in een nieuw tabblad",
-        "rename": "Hernoemen",
-        "renamesLeft": "{count, plural, =0 {Geen hernoemingen meer over.} one {Nog # hernoeming over.} other {Nog # hernoemingen over.}}",
-        "readOnly": "Beheerd door een eigenaar of beheerder van de werkruimte.",
-        "none": "Nog geen subdomein geclaimd."
-      },
-      "rename": {
-        "title": "Dit subdomein hernoemen?",
-        "warningTitle": "Het oude adres blijft werken en wordt nooit vrijgegeven.",
-        "warningBody": "{old} verwijst voorgoed hierheen door en kan door niemand anders worden geclaimd — ook later niet door jou.",
-        "remaining": "Na deze heb je nog {count, plural, one {# hernoeming} other {# hernoemingen}} over.",
-        "cancel": "Annuleren",
-        "confirm": "Hernoemen"
-      },
-      "release": {
-        "remove": "Verwijderen",
-        "title": "{hostname} verwijderen?",
-        "lead": "{count, plural, one {Dit adres is dan niet meer bereikbaar:} other {Deze # adressen zijn dan niet meer bereikbaar:}}",
-        "warningTitle": "{count, plural, one {Deze naam blijft voor altijd vastgehouden. Niemand kan hem opnieuw claimen — ook jij niet.} other {Deze namen blijven voor altijd vastgehouden. Niemand kan ze opnieuw claimen — ook jij niet.}}",
-        "warningBody": "Motir houdt elke vrijgegeven naam permanent buiten de namespace, zodat geen andere werkruimte links kan erven die naar de jouwe verwezen.",
-        "renamesAfter": "Als je opnieuw een subdomein claimt, heb je nog {count, plural, =0 {geen hernoemingen} one {# hernoeming} other {# hernoemingen}} over — vrijgeven geeft ze niet terug.",
-        "fallback": "Je openbare projecten gaan terug naar {url} en verschijnen weer op {site}.",
-        "cancel": "Annuleren",
-        "confirm": "Subdomein verwijderen"
-      },
       "domains": {
         "title": "Je eigen domein",
         "subtitle": "Dit project aanbieden vanaf een domein dat je bezit.",
@@ -2831,17 +2841,6 @@
         },
         "lastChecked": "Laatst gecontroleerd {when}",
         "error": "Dat is niet gelukt. Probeer het zo opnieuw."
-      },
-      "error": {
-        "reserved": "{label} is gereserveerd. Motir houdt een kleine set namen vrij voor zijn eigen hosts en voor namen die een lezer daarmee zou kunnen verwarren.",
-        "structurallyReserved": "{label} is gereserveerd. Namen die beginnen met een underscore, xn-- of motir- horen bij Motir of bij DNS zelf.",
-        "tooShort": "Te kort — een subdomein heeft minstens 3 tekens.",
-        "tooLong": "Te lang — een subdomein heeft maximaal 63 tekens.",
-        "badGrammar": "Alleen kleine letters, cijfers en koppeltekens, beginnend en eindigend met een letter of cijfer.",
-        "taken": "{label} is al in gebruik. Een subdomein dat is hernoemd, houdt ook zijn naam vast, dus deze kan horen bij een werkruimte die er niet meer op bereikbaar is.",
-        "capReached": "Je hebt alle hernoemingen voor deze werkruimte gebruikt. Het adres kan niet meer worden gewijzigd.",
-        "forbidden": "Alleen een eigenaar of beheerder van de werkruimte kan dit adres wijzigen.",
-        "generic": "Dat is niet gelukt. Probeer het zo opnieuw."
       }
     },
     "codeAccess": {
@@ -2966,86 +2965,6 @@
       "heroOverviewSubheading": "De slogan, tags en README die bezoekers op je openbare pagina zien.",
       "editOnPublicPage": "De openbare pagina bewerken",
       "heroOverviewNote": "Opent Instellingen › Openbare pagina. Je kunt hem schrijven voordat het project openbaar is."
-    },
-    "jobs": {
-      "title": "Taakuitvoeringen",
-      "subtitle": "Achtergrondtaken voor deze werkruimte — het bezorgen van uitnodigingen en wachtwoordherstel, en gepland werk. Mislukte taken komen in de dead-letter-wachtrij terecht, waar een eigenaar ze opnieuw kan afspelen.",
-      "tab": {
-        "runs": "Recente uitvoeringen",
-        "dlq": "Dead letter",
-        "system": "Systeem"
-      },
-      "tabNavLabel": "Weergaven van taakuitvoeringen",
-      "dlqBadgeLabel": "{count} in dead-letter-wachtrij",
-      "filterGroupLabel": "Filteren op status",
-      "filter": {
-        "all": "Alle",
-        "succeeded": "Geslaagd",
-        "failed": "Mislukt",
-        "running": "Bezig",
-        "abandoned": "Opgegeven"
-      },
-      "runsTableCaption": "Uitvoeringen van achtergrondtaken",
-      "col": {
-        "status": "Status",
-        "delivery": "Bezorging",
-        "function": "Functie",
-        "event": "Gebeurtenis",
-        "attempts": "Pogingen",
-        "started": "Gestart",
-        "duration": "Duur",
-        "failure": "Fout",
-        "details": "Details",
-        "firstFailed": "Eerst mislukt",
-        "lastFailed": "Laatst mislukt",
-        "replayed": "Opnieuw afgespeeld",
-        "actions": "Acties"
-      },
-      "view": "Bekijken",
-      "runDetailTitle": "Details van de uitvoering",
-      "dlqTableCaption": "Dead-letter-wachtrij",
-      "replay": "Opnieuw afspelen",
-      "replayTooltip": "Alleen een Manager van de werkruimte kan taken opnieuw afspelen",
-      "alreadyReplayedToastTitle": "Al opnieuw afgespeeld",
-      "alreadyReplayedToastDesc": "Dit item is eerder al opnieuw afgespeeld — er is niets nieuws in de wachtrij gezet.",
-      "replayedToastTitle": "Taak opnieuw afgespeeld",
-      "replayedToastDesc": "De oorspronkelijke gebeurtenis is opnieuw verzonden.",
-      "replayErrorTitle": "Kan niet opnieuw afspelen",
-      "dlqDetailTitle": "Dead-letter-details",
-      "dlqDetailDesc": "De fout en de oorspronkelijke payload van de gebeurtenis (ongewijzigd opnieuw af te spelen).",
-      "failureHeading": "Fout",
-      "eventPayloadHeading": "Payload van de gebeurtenis",
-      "pageLabel": "Pagina {page}",
-      "previous": "Vorige",
-      "next": "Volgende",
-      "refresh": "Vernieuwen",
-      "dlqEmptyTitle": "Niets in de dead-letter-wachtrij",
-      "dlqEmptyDesc": "Elke taak is geslaagd of wordt nog opnieuw geprobeerd.",
-      "runsEmptyTitle": "Nog geen taakuitvoeringen",
-      "runsEmptyDesc": "Wanneer een achtergrondtaak wordt uitgevoerd, verschijnt die hier.",
-      "delivery": {
-        "accepted": "geaccepteerd",
-        "delivered": "bezorgd",
-        "bounced": "gebounced",
-        "complained": "klacht",
-        "delayed": "vertraagd"
-      },
-      "deliveryNone": "Geen bezorgregistratie",
-      "deliveryDetail": {
-        "heading": "Bezorging",
-        "state": "Status",
-        "messageId": "Bericht-id",
-        "recipient": "Ontvanger",
-        "template": "Sjabloon",
-        "lastEvent": "Laatste gebeurtenis",
-        "never": "Nog geen gebeurtenis van de provider"
-      },
-      "systemDlqTitle": "Dead letters zonder workspace",
-      "systemDlqSummary": "{waiting} wachten op opnieuw afspelen · {replayed} opnieuw afgespeeld in de afgelopen 7 dagen",
-      "systemDlqTableCaption": "Dead letters van het systeem",
-      "systemDlqEmptyTitle": "Geen dead letters van het systeem",
-      "systemDlqEmptyDesc": "Elke taak zonder workspace is geslaagd of wordt nog opnieuw geprobeerd.",
-      "systemRunsTitle": "Systeemruns"
     },
     "account": {
       "eyebrow": "Accountinstellingen",
@@ -4203,7 +4122,9 @@
         "hosted-agent": "Welk model een gehoste run gebruikt, wordt getoond aan personen die in dit project een gehoste run kunnen starten. Vraag het een projectbeheerder als je het wilt zien.",
         "translation": "Of de werkinhoud van dit project voor elke lezer wordt vertaald, wordt getoond aan mensen die de werkitems van het project kunnen lezen. Vraag het een projectbeheerder als je dit wilt zien.",
         "automation": "Projectautomatisering wordt beheerd door projectbeheerders. Vraag het een beheerder als je een regel wilt laten wijzigen.",
-        "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld."
+        "monitoring": "De koppeling met de foutmonitor van dit project wordt beheerd door personen die integraties kunnen beheren. Vraag het een projectbeheerder als Sentry moet worden gekoppeld of opnieuw gekoppeld.",
+        "environment": "De omgevingswaarden van een repository worden getoond aan mensen die dit project kunnen bekijken. Vraag het een projectbeheerder als je ze wilt zien.",
+        "production": "De releases van een repository worden getoond aan mensen die dit project kunnen bekijken. Vraag het een projectbeheerder als je ze wilt zien."
       }
     },
     "organization": {
@@ -4221,10 +4142,6 @@
         "security": "Beveiliging",
         "usage": "Gebruik en kosten",
         "billing": "Facturering en abonnementen"
-      },
-      "jobRunsFoldIn": {
-        "title": "Taakuitvoeringen",
-        "subtitle": "Achtergrondwerk voor deze werkruimte — wat er is uitgevoerd, wat er is mislukt en wat er in de dead-letter-wachtrij wacht."
       }
     },
     "gitAccounts": {
@@ -4234,14 +4151,20 @@
         "github": "GitHub"
       },
       "state": {
-        "connected": "Gekoppeld"
+        "connected": "Gekoppeld",
+        "needsReauth": "Opnieuw aanmelden nodig"
       },
       "connectedOn": "Gekoppeld op {date}",
       "connect": "GitHub koppelen",
       "disconnect": "Ontkoppelen",
+      "reconnect": "Opnieuw verbinden",
       "empty": {
         "title": "Geen git-account gekoppeld",
         "description": "Als je er een koppelt, kan Motir je uitnodigen voor de repository's waarin je projecten werken en het werk dat je doet ondertekenen. Het leest alleen je openbare profiel — het geeft geen toegang tot code."
+      },
+      "reauth": {
+        "title": "Verbind je GitHub-account opnieuw.",
+        "body": "GitHub accepteert deze aanmelding niet meer, dus Motir kan niet meer bevestigen wie je daar bent. Verder is er niets aan je account veranderd."
       },
       "noInstallation": {
         "title": "Je account is gekoppeld. Dat van je organisatie niet.",
@@ -4274,6 +4197,282 @@
       "saveError": "Er ging iets mis. Probeer het opnieuw.",
       "saveForbidden": "Je kunt niet meer wijzigen waar de bugs van dit project worden opgeslagen.",
       "folderGone": "Die map bestaat niet meer. Kies een andere."
+    },
+    "environment": {
+      "title": "Omgeving",
+      "lede": "Waarden die je app leest wanneer hij draait. Stel ze één keer per omgeving in; Motir geeft ze bij de volgende deploy door aan de app.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Webapp",
+        "api": "API",
+        "mobile": "Mobiele app",
+        "shared": "Gedeelde code",
+        "infra": "Infrastructuur",
+        "other": "Overig"
+      },
+      "tablistLabel": "Omgeving",
+      "tab": {
+        "production": "Productie",
+        "preview": "Preview",
+        "release": "Release"
+      },
+      "column": {
+        "name": "Naam",
+        "value": "Waarde"
+      },
+      "set": "Ingesteld",
+      "secretHidden": "Geheim · waarde verborgen",
+      "edit": "Bewerken",
+      "replace": "Vervangen",
+      "delete": "Verwijderen",
+      "editAria": "{name} bewerken",
+      "replaceAria": "{name} vervangen",
+      "deleteAria": "{name} verwijderen",
+      "saving": "Opslaan",
+      "add": {
+        "heading": "Een waarde toevoegen",
+        "namePlaceholder": "NAAM",
+        "valuePlaceholder": "Waarde",
+        "secret": "Geheim",
+        "save": "Opslaan",
+        "helper": "Een geheim kan worden vervangen of verwijderd, maar wordt nooit meer getoond — niet aan jou, aan niemand."
+      },
+      "error": {
+        "nameRequired": "Vul een naam in.",
+        "duplicate": "{name} is al ingesteld in {environment}. Bewerk het in de lijst.",
+        "invalidName": "Gebruik letters, cijfers en underscores, niet beginnend met een cijfer.",
+        "reserved": "{name} is gereserveerd: PORT, DATABASE_URL en MOTIR_*-namen stelt Motir in. Kies een andere naam."
+      },
+      "saved": {
+        "secret": "{name} is opgeslagen als geheim. De waarde is vanaf nu verborgen.",
+        "plain": "{name} is opgeslagen."
+      },
+      "replaceFlow": {
+        "placeholder": "Nieuwe waarde",
+        "aria": "Nieuwe waarde voor {name}",
+        "helper": "De huidige waarde blijft verborgen. Opslaan vervangt hem bij de volgende deploy.",
+        "cancel": "Annuleren"
+      },
+      "deleteDialog": {
+        "title": "{name} verwijderen uit {environment}?",
+        "body": "De app ontvangt {name} in {environment} niet meer vanaf de volgende deploy. {count, plural, one {{others} houdt een eigen waarde.} other {{others} houden hun eigen waarden.}} Dit kan niet ongedaan worden gemaakt.",
+        "confirm": "Verwijderen",
+        "cancel": "Annuleren"
+      },
+      "empty": {
+        "title": "Nog geen waarden in {environment}",
+        "production": "Je live app krijgt deze. Voeg hieronder de eerste toe.",
+        "preview": "De preview van elke pull request krijgt deze. Voeg hieronder de eerste toe.",
+        "release": "De release die je train bouwt, krijgt deze. Voeg hieronder de eerste toe."
+      },
+      "loading": "Waarden laden…",
+      "loadError": {
+        "title": "De waarden konden niet worden geladen",
+        "body": "Er is niets gewijzigd. Probeer het zo opnieuw."
+      },
+      "retry": "Opnieuw proberen",
+      "saveError": "{name} kon niet worden opgeslagen. Er is niets gewijzigd.",
+      "deleteError": "{name} kon niet worden verwijderd. Het is nog steeds ingesteld.",
+      "readOnly": {
+        "note": "Je kunt deze waarden lezen. Alleen projectbeheerders kunnen ze wijzigen.",
+        "tooltip": "Alleen projectbeheerders kunnen omgevingswaarden wijzigen."
+      },
+      "changes": {
+        "heading": "Recente wijzigingen · {environment}",
+        "added": "heeft toegevoegd",
+        "replaced": "heeft vervangen",
+        "deleted": "heeft verwijderd",
+        "secret": "Geheim",
+        "unknownActor": "Een voormalig lid",
+        "loadError": "De recente wijzigingen konden niet worden geladen.",
+        "empty": "Nog geen wijzigingen. Elke wijziging aan deze omgeving staat hier — wie hem maakte en wanneer, nooit de waarde."
+      },
+      "notFound": {
+        "title": "Repository niet gevonden",
+        "body": "Motir houdt geen omgeving bij voor deze repository. Kies een van de repository’s van het project die Motir host.",
+        "back": "Terug naar Omgeving"
+      }
+    },
+    "production": {
+      "title": "Productie",
+      "lede": "Wat er live staat voor elke app van dit project, wat de laatste merges deden en hoe je een slechte release ongedaan maakt.",
+      "repositoryLabel": "Repository",
+      "role": {
+        "web": "Webapp",
+        "api": "API",
+        "mobile": "Mobiele app",
+        "shared": "Gedeelde code",
+        "infra": "Infrastructuur",
+        "other": "Overig"
+      },
+      "current": {
+        "eyebrow": "Draait in productie"
+      },
+      "state": {
+        "building": "Wordt gebouwd",
+        "live": "Live",
+        "failed": "Mislukt",
+        "replaced": "Vervangen",
+        "rolledBack": "Teruggedraaid"
+      },
+      "trigger": {
+        "merge": "Merge van #{number}",
+        "mergeDefault": "Merge naar de standaardbranch",
+        "redeploy": "Opnieuw gedeployd · productie-instellingen gewijzigd",
+        "rollback": "Hersteld door terugdraaien · {name}",
+        "rollbackUnnamed": "Hersteld door terugdraaien",
+        "ref": "Deploy van {ref} · {name}",
+        "refUnnamed": "Deploy van {ref}"
+      },
+      "address": {
+        "newTab": "(opent in een nieuw tabblad)",
+        "copy": "Kopiëren",
+        "copied": "Gekopieerd",
+        "copyAria": "{address} kopiëren",
+        "none": "Nog geen adres — claim een motir.site-adres voor de werkruimte in <link>Openbaar adres</link>."
+      },
+      "rollback": {
+        "action": "Terugdraaien",
+        "helper": "Zet productie terug naar de release vóór deze.",
+        "unavailable": "Er is nog geen eerdere release om naar terug te gaan."
+      },
+      "history": {
+        "heading": "Releasegeschiedenis",
+        "more": "Meer releases tonen",
+        "moreError": "Kon niet meer releases laden. Probeer het opnieuw."
+      },
+      "failedNewer": "De nieuwste release is mislukt, dus er is niets veranderd aan wat draait. {commit} staat nog steeds live.",
+      "reason": {
+        "build": "De build is mislukt vóór de deploy.",
+        "migration": "De migratie is mislukt.",
+        "migrationExit": "De migratie is mislukt met exitcode {code}.",
+        "migrationTimedOut": "De migratie duurde te lang.",
+        "superseded": "Er liep al een andere release, dus deze is nooit gestart.",
+        "deploy": "De deploy is mislukt voordat er verkeer binnenkwam."
+      },
+      "dialog": {
+        "title": "{repository} terugdraaien?",
+        "leaving": "Verlaten",
+        "returning": "Terug naar",
+        "body": "Productie gaat terug naar de code en omgevingswaarden van die release op {address}. Het databaseschema wordt niet teruggedraaid: migraties die de nieuwere release uitvoerde, blijven toegepast.",
+        "bodyNoAddress": "Productie gaat terug naar de code en omgevingswaarden van die release. Het databaseschema wordt niet teruggedraaid: migraties die de nieuwere release uitvoerde, blijven toegepast.",
+        "confirm": "Terugdraaien",
+        "submitting": "Bezig met terugdraaien…",
+        "cancel": "Annuleren",
+        "error": "Het terugdraaien is niet voltooid. {commit} draait nog steeds in productie. Probeer het opnieuw.",
+        "retry": "Opnieuw proberen"
+      },
+      "refusal": {
+        "noPreviousRelease": "Er is geen eerdere release om naar terug te gaan.",
+        "releaseInProgress": "Er loopt een release. Draai terug zodra die klaar is.",
+        "conflict": "Productie is veranderd tijdens het terugdraaien. Sluit dit en controleer wat er nu live staat.",
+        "forbidden": "Alleen projectbeheerders kunnen terugdraaien.",
+        "notFound": "Deze repository is niet meer voor je beschikbaar."
+      },
+      "readOnly": {
+        "note": "Je kunt elke release zien. Alleen projectbeheerders kunnen terugdraaien."
+      },
+      "empty": {
+        "title": "Nog niets in productie",
+        "body": "Merge een pull request naar main en Motir bouwt hem en zet hem hier live, met zijn adres."
+      },
+      "loading": "Releases laden…",
+      "loadError": {
+        "title": "Kon de releases niet laden",
+        "body": "Productie wordt niet beïnvloed. Probeer het zo meteen opnieuw."
+      },
+      "retry": "Opnieuw proberen",
+      "notFound": {
+        "title": "Repository niet gevonden",
+        "body": "Motir draait productie alleen voor de repository’s die het host. Kies een van de repository’s van dit project.",
+        "back": "Terug naar Productie"
+      }
+    },
+    "workspaceAddress": {
+      "door": {
+        "title": "Openbaar adres",
+        "claimed": "{host} — één naam voor de werkruimte.",
+        "none": "Nog geen naam geclaimd.",
+        "manage": "Beheren →",
+        "claim": "Een naam claimen →"
+      },
+      "title": "Openbaar adres",
+      "subtitle": "De ene naam waarop je werkruimte antwoordt.",
+      "readOnly": "Alleen eigenaren en beheerders van de werkruimte kunnen dit wijzigen.",
+      "none": "Nog geen naam geclaimd.",
+      "unavailable": {
+        "title": "Openbare adressen zijn niet ingesteld op deze server",
+        "description": "Een beheerder moet MOTIR_PUBLIC_TENANT_DOMAIN instellen voordat een werkruimte een naam kan claimen."
+      },
+      "field": {
+        "label": "Naam",
+        "renameLabel": "Nieuwe naam",
+        "hint": "Kleine letters, cijfers en losse koppeltekens; {min}–{max} tekens. Een werkruimte heeft één naam.",
+        "preview": "Lezers vinden je op {host}"
+      },
+      "claim": "Naam claimen",
+      "refusal": {
+        "tooShort": "Gebruik minstens {min} tekens.",
+        "badGrammar": "Gebruik alleen kleine letters, cijfers en koppeltekens.",
+        "doubleHyphen": "Een naam mag geen twee koppeltekens achter elkaar bevatten — die zijn gereserveerd voor applicatieadressen.",
+        "tooLong": "Gebruik maximaal {max} tekens.",
+        "taken": "{host} is al bezet. Probeer een andere naam.",
+        "reserved": "‘{label}’ is gereserveerd. Kies een andere naam.",
+        "quarantined": "{host} is onlangs vrijgegeven en wordt vastgehouden tot {date}. Vanaf dan kan iedereen hem claimen.",
+        "generic": "De naam kon niet worden opgeslagen. Probeer het opnieuw."
+      },
+      "row": {
+        "live": "Live",
+        "copy": "Adres kopiëren",
+        "copied": "Adres gekopieerd",
+        "open": "Openen in nieuw tabblad"
+      },
+      "rename": "Hernoemen",
+      "release": "Vrijgeven",
+      "lock": "Je kunt de naam op {date} weer wijzigen. Een hernoeming en een vrijgave tellen elk als één wijziging, eens per 30 dagen.",
+      "lockShort": "Je kunt de naam op {date} weer wijzigen.",
+      "review": "Controleren",
+      "cancel": "Annuleren",
+      "confirm": {
+        "renameTitle": "Hernoemen naar {host}?",
+        "releaseTitle": "{host} vrijgeven?",
+        "stops": "{host} antwoordt vanaf nu niet meer.",
+        "returnsOn": "Iedereen kan hem claimen vanaf {date}.",
+        "returnsNow": "Iedereen kan hem meteen claimen — je had hem minder dan 24 uur.",
+        "noRedirectRename": "Er is geen doorverwijzing van het oude adres naar het nieuwe, dus werk links die je hebt gedeeld bij.",
+        "noRedirectRelease": "Er is geen doorverwijzing. Je openbare projecten blijven op hun motir.co-adressen.",
+        "lockAfterRename": "Je kunt de naam pas op {date} weer wijzigen.",
+        "lockAfterRelease": "Je kunt meteen een nieuwe naam claimen. De volgende wijziging daarna is toegestaan vanaf {date}.",
+        "rename": "Hernoemen",
+        "renaming": "Hernoemen…",
+        "release": "Naam vrijgeven",
+        "releasing": "Vrijgeven…"
+      },
+      "toast": {
+        "claimed": "{host} is van jou",
+        "renamed": "Hernoemd naar {host}",
+        "renamedBody": "{old} antwoordt niet meer.",
+        "released": "{host} vrijgegeven",
+        "refusedTitle": "Naam niet gewijzigd",
+        "refusedLimit": "Je kunt hem op {date} weer wijzigen.",
+        "refusedTaken": "{host} is net bezet. Probeer een andere naam.",
+        "refusedQuarantined": "{host} wordt vastgehouden tot {date}."
+      },
+      "released": {
+        "held": "{host} is vrijgegeven. Hij wordt vastgehouden tot {date}, daarna kan iedereen hem claimen.",
+        "free": "{host} is vrijgegeven. Iedereen kan hem nu claimen.",
+        "lock": "Je kunt nu een naam claimen. Daarna is de volgende wijziging toegestaan vanaf {date}."
+      },
+      "loadError": "Het adres kon niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "echo": {
+        "title": "Werkruimteadres",
+        "claimedSub": "De naam waarop je werkruimte antwoordt.",
+        "noneSub": "Je werkruimte heeft nog geen naam.",
+        "projectPage": "De openbare pagina van dit project staat op {url}.",
+        "change": "Wijzigen in de werkruimte-instellingen →",
+        "claim": "Een naam claimen voor de werkruimte →"
+      }
     }
   },
   "boards": {
@@ -6501,7 +6700,7 @@
       "yourPlanTitle": "Je abonnement",
       "needMore": {
         "title": "Meer credits nodig?",
-        "body": "Gebruikt je organisatie meer dan de {credits} credits per maand van {plan}? Schat je gebruik en de rekenhulp biedt je een grotere creditpool op maat aan.",
+        "body": "Gebruikt je organisatie meer dan de {credits} credits per maand van {plan}? Schat je gebruik en de rekenhulp biedt je een grotere creditpool op maat aan, met AWS-accounts van jezelf.",
         "bodyHeld": "Groeit je organisatie boven haar {credits} credits per maand uit? Schat je gebruik en de rekenhulp biedt je een grotere pool op maat aan.",
         "action": "Rekenhulp openen"
       },
@@ -6509,10 +6708,6 @@
       "recommended": "Aanbevolen",
       "creditsAllotment": "{n} credits per maand",
       "creditsAllotmentOneTime": "{n} credits · eenmalig",
-      "ladder": {
-        "first": "Dezelfde prijs per credit in elk abonnement",
-        "multiple": "{multiple}× de credits van {plan} · dezelfde prijs per credit"
-      },
       "perMoEquiv": "${n} per maand",
       "annualSub": "jaarlijks gefactureerd · ${yr} per jaar",
       "annualSave": "Bespaar ${n} per jaar",
@@ -6636,6 +6831,8 @@
         "caption": "Je schatting loopt van {low} tot {high} credits per maand. Deze pool is afgestemd op de bovenkant van dat bereik, zodat je niet tekortkomt. Het is een schatting en verandert mee met jouw schatting.",
         "captionCurrent": "Dit is de pool die je hebt gekocht, berekend op basis van een schatting van {low} tot {high} credits per maand. Een latere, lagere schatting verandert de prijs van een plan dat je al hebt niet.",
         "priceEstimate": "Berekend uit je schatting",
+        "ownAccounts": "Drie AWS-accounts van je organisatie zelf: één voor CI-runners, één voor agentruns en één die de indexer en de gehoste agents delen, elk afgestemd op deze pool",
+        "sharedUntilGranted": "Tot de quota van elk account zijn toegekend, draait het plan op de limieten van Max op de gedeelde pools van Motir",
         "basis": {
           "monthly": "Berekend op basis van de maandprijs van {plan}; elke credit boven die pool is goedkoper dan bij opwaarderen.",
           "annual": "Berekend tegen dezelfde prijs per credit als {plan} bij jaarlijkse facturering. Je betaalt één keer per jaar en de pool komt nog steeds per maand binnen."
@@ -6679,9 +6876,12 @@
         "lowLabel": "Laag",
         "highLabel": "Hoog",
         "runCategoriesLabel": "Modellen die de runner gebruikt",
-        "runCategoriesHelp": "Kies er één tot drie. De uitvoering wordt gelijk verdeeld over wat je kiest: één krijgt 100%, twee elk 50%, alle drie elk 33%. Je kiest nooit een model — elke categorie toont de modellen die erbij horen als voorbeeld.",
+        "runCategoriesHelp": "Kies er één tot drie. Bij twee of drie sleep je hieronder het aandeel van elk in de uitvoering; ze beginnen gelijk verdeeld. Je kiest nooit een model — elke categorie noemt de modellen die ze bedient als voorbeeld.",
         "categoryShare": "{share} van de uitvoering",
         "categoryExamples": "Bijvoorbeeld: {models}",
+        "sharesLabel": "Het aandeel van elke categorie in de uitvoering",
+        "sharesHelp": "Sleep een aandeel en de andere geven of nemen het verschil in gelijke delen, zodat ze altijd samen 100% zijn. Een categorie toevoegen of weghalen verdeelt ze weer gelijk.",
+        "shareValue": "{category}: {share}% van de uitvoering",
         "submit": "Credits schatten"
       },
       "categories": {
@@ -6690,7 +6890,7 @@
       },
       "split": {
         "one": "Eén categorie, dus de hele uitvoering valt op {category}.",
-        "even": "De uitvoering is gelijk verdeeld over {categories} — {shares} per categorie."
+        "shares": "De uitvoering is verdeeld als {shares}."
       },
       "result": {
         "idle": "Er wordt niets geschat totdat je erom vraagt: vul het bereik in, kies één tot drie categorieën en kies dan Credits schatten.",
@@ -6708,6 +6908,7 @@
         "largestPoolLabel": "Grootste creditpool",
         "largestPool": "Je schatting ligt boven onze grootste pool, dus het antwoord is die pool — {plan} — met bijkopen voor de rest.",
         "largestPoolTopUp": "De overige ongeveer {excess} credits per maand dek je met bijkopen: {units} × {unitCredits} credits, ongeveer ${price} per maand.",
+        "regularWithTopUps": "Je schatting ligt boven de {credits} credits per maand van {plan}, dus het antwoord is {plan} met bijkopen voor de rest.",
         "aboveTopRung": "Dat is meer dan de {ceiling} credits per maand van het grootste gewone abonnement en er is nu geen grotere pool beschikbaar, dus het teveel wordt gedekt met bijgekochte credits.",
         "upgradeNote": "Halverwege de periode upgraden wordt berekend over de resterende dagen. Het bedrag wordt getoond voordat er iets in rekening wordt gebracht.",
         "goToPlan": "Naar dit abonnement"
@@ -6793,6 +6994,156 @@
     "internalBilling": {
       "badge": "Interne facturering",
       "note": "Deze organisatie wordt precies als een klant gefactureerd en daarna gecompenseerd — elk bedrag hieronder is echt, en het saldo komt netto op nul uit."
+    },
+    "fleetUse": {
+      "title": "Vlootgebruik",
+      "lead": "Hoeveel je plan tegelijk mag uitvoeren, wat er nu draait en wat er wacht",
+      "yourPlan": "Je plan:",
+      "planNotRead": "Plan niet gelezen",
+      "noPlanLimits": "Geen plangrenzen",
+      "loading": "Laden…",
+      "label": {
+        "agentRunsInParallel": "Parallelle agentruns",
+        "agentsInOrg": "Gehoste agents per organisatie",
+        "agentsPerPerson": "Gehoste agents per persoon",
+        "ciJobsInFlight": "Lopende CI-jobs"
+      },
+      "explain": {
+        "agentRunsInParallel": "Jobs van gehoste agents die tegelijk draaien. Meer wacht in de wachtrij.",
+        "agentsInOrg": "Actieve gehoste agents in de hele organisatie, draaiend of slapend. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
+        "agentsPerPerson": "Actieve gehoste agents die één persoon kan hebben. Daarboven wordt een nieuwe geweigerd, niet in de wachtrij gezet.",
+        "ciJobsInFlight": "CI-jobs die tegelijk draaien op de runners van Motir. Meer wacht in de wachtrij."
+      },
+      "inUseOf": "{inUse} van {figure}",
+      "membersAt": "{count, plural, one {# lid} other {# leden}} op {figure} van {figure}",
+      "running": "{count} actief",
+      "noLimit": "Geen grens",
+      "notRead": "Niet gelezen",
+      "source": {
+        "staffOverride": "Door Motir ingesteld voor je organisatie: {figure} CI-jobs tegelijk",
+        "notRead": "Je CI-grens is niet gelezen, dus CI-jobs wachten tot die gelezen kan worden. De andere cijfers zijn actueel.",
+        "granted": {
+          "agentRunsInParallel": "{figure} — {vcpu} toegekende vCPU ÷ 2 op je eigen agentrunner-account",
+          "ciJobsInFlight": "{figure} — {vcpu} toegekende vCPU ÷ 2 op je eigen CI-runner-account"
+        },
+        "sharedFloor": {
+          "agentRunsInParallel": "Je agentrunner-account staat nog op de gedeelde ondergrens, met de grenzen van Max",
+          "ciJobsInFlight": "De gedeelde ondergrens tot je CI-runner-account live is: {figure} runners"
+        }
+      },
+      "waiting": {
+        "none": "Niets wacht",
+        "count": "{count} in de wachtrij",
+        "planLimit": "Door je plangrens · een ander plan heft die op",
+        "poolFull": {
+          "agentRunsInParallel": "Alle agentrunner-accounts zijn vol · dat is de capaciteit van Motir, niet je plan",
+          "ciJobsInFlight": "Alle CI-runner-accounts zijn vol · dat is de capaciteit van Motir, niet je plan"
+        },
+        "other": "Om een andere reden"
+      },
+      "indexing": "Indexering van de codegraaf: {count} actief · telt voor geen enkele plangrens",
+      "indexingNotRead": "Indexering van de codegraaf: niet gelezen · telt voor geen enkele plangrens",
+      "whereItRuns": "Waar het draait",
+      "kind": {
+        "ci_runner": "CI-runner",
+        "code_graph_index": "Indexer",
+        "hosted_agent": "Agentrunner",
+        "agent_instance": "Agenthosting"
+      },
+      "provider": {
+        "fly": "Fly",
+        "shared_aws_pool": "Gedeelde AWS-pool van Motir",
+        "own_aws_account": "Eigen AWS-account van je organisatie"
+      },
+      "notReadNotice": "Je plangrenzen en wat er draait, konden niet gelezen worden. Dit is niet nul, maar onbekend.",
+      "tryAgain": "Opnieuw proberen",
+      "noPlanLimitsNote": "Deze organisatie wordt door Motir beheerd en heeft geen plangrenzen. Wat er draait, wordt zonder grens getoond.",
+      "noFleet": "Je plan bevat geen runs van gehoste agents, CI-runners of agents. Kies hierboven onder Motir AI een plan om ze uit te voeren.",
+      "accounts": {
+        "title": "Je eigen AWS-accounts",
+        "notRead": "De status van je accounts kon nu niet gelezen worden.",
+        "kind": {
+          "ci_runner": "CI-runner",
+          "hosted_agent": "Agentrunner",
+          "indexer_and_hoster": "Indexer + agenthosting"
+        },
+        "role": {
+          "ci_runner": "Voert je CI-jobs uit",
+          "hosted_agent": "Voert de jobs van je gehoste agents uit",
+          "indexer_and_hoster": "Indexeert je code en host je agents"
+        },
+        "state": {
+          "created": "Aangemaakt",
+          "quota_requested": "Quotum aangevraagd",
+          "granted": "Toegekend",
+          "live": "Live"
+        },
+        "quotaDenied": "Quotum geweigerd",
+        "since": "sinds {when}",
+        "vcpuAsked": "Aangevraagde vCPU",
+        "vcpuGranted": "Toegekende vCPU",
+        "noneYet": "Nog geen",
+        "sharedFloor": {
+          "ci_runner": "Nog op de gedeelde ondergrens: CI {figure} runners.",
+          "hosted_agent": "Nog op de gedeelde ondergrens, met de grenzen van Max: {figure} agentruns tegelijk.",
+          "indexer_and_hoster": "Indexering en agenthosting staan nog op de gedeelde ondergrens: gehoste agents {perPerson} per persoon, {perOrg} per organisatie."
+        },
+        "liveOnceNetwork": "Live zodra het netwerk van het account gebouwd is.",
+        "deniedNote": "Het account blijft op ‘{state}’ tot AWS een verhoging toekent.",
+        "keptSpots": "{count} machineplaatsen blijven altijd gereserveerd voor indexering; agentinstanties gebruiken de rest."
+      },
+      "quotaOutcome": {
+        "pending": "In behandeling bij AWS",
+        "case_opened": "AWS heeft een case geopend",
+        "approved": "Goedgekeurd door AWS",
+        "denied": "Geweigerd door AWS",
+        "not_approved": "Niet goedgekeurd door AWS",
+        "case_closed": "AWS heeft de case gesloten",
+        "invalid_request": "AWS kon de aanvraag niet lezen"
+      },
+      "request": {
+        "button": "Meer capaciteit aanvragen",
+        "status": {
+          "open": "Aangevraagd",
+          "filed": "Ingediend bij AWS",
+          "closed": "Gesloten"
+        },
+        "granted": "{vcpu} vCPU toegekend",
+        "asked": "{vcpu} vCPU aangevraagd op {date}",
+        "line": {
+          "open": "Naar Motir gestuurd, die het bij AWS indient",
+          "filed": "Motir heeft het bij AWS ingediend; AWS heeft nog niet geantwoord",
+          "granted": "AWS heeft het toegekend; de cijfers worden bij de volgende lezing bijgewerkt",
+          "denied": "AWS heeft de verhoging geweigerd; je kunt het opnieuw aanvragen",
+          "closedNote": "Gesloten door Motir: ‘{note}’",
+          "closed": "Gesloten door Motir; antwoord van AWS: {outcome}"
+        }
+      },
+      "dialog": {
+        "title": "Meer capaciteit aanvragen",
+        "account": "{account}-account · {vcpu} vCPU toegekend. Motir dient de verhoging in bij AWS en laat je het antwoord van AWS weten.",
+        "accountNoneGranted": "{account}-account · nog geen vCPU toegekend. Motir dient de verhoging in bij AWS en laat je het antwoord van AWS weten.",
+        "figureLabel": "Benodigde vCPU",
+        "figurePlaceholder": "bijv. 300",
+        "figureHelp": "Een geheel getal boven wat nu is toegekend.",
+        "figureInvalid": "Vul een geheel getal boven {granted} in (de vCPU die nu zijn toegekend).",
+        "reasonLabel": "Waarom je ze nodig hebt",
+        "reasonPlaceholder": "Wat niet genoeg zal zijn, en wanneer",
+        "reasonHelp": "Maximaal 2.000 tekens. Motir leest het voordat het bij AWS wordt ingediend.",
+        "reasonInvalid": "Geef een reden van maximaal 2.000 tekens.",
+        "cancel": "Annuleren",
+        "send": "Aanvraag versturen",
+        "sending": "Versturen…",
+        "sent": "Aanvraag verstuurd. Motir laat je het antwoord van AWS weten.",
+        "refused": {
+          "open": "Er staat al een aanvraag open voor dit account. De status staat in de rij van het account; vraag opnieuw aan zodra die gesloten is.",
+          "notFound": "Je organisatie heeft nog geen eigen account van dit type, dus er is niets te verhogen. Het wordt aangemaakt bij de aankoop van Host.",
+          "forbidden": "Alleen eigenaren of beheerders van de organisatie kunnen meer capaciteit aanvragen.",
+          "network": "De aanvraag kon niet verstuurd worden. Controleer je verbinding en probeer het opnieuw — er is niets verstuurd.",
+          "invalid": "De aanvraag kon niet gelezen worden. Controleer beide velden en verstuur hem opnieuw.",
+          "failed": "De aanvraag is niet verstuurd. Probeer het zo opnieuw."
+        }
+      }
     }
   },
   "draftWithAi": {
@@ -7249,7 +7600,8 @@
       "install_error": "We konden het instellen van de GitHub-app niet afronden. Probeer opnieuw te installeren.",
       "select_repos": "De Motir GitHub App is geïnstalleerd. Kies welke repository's van het account deze organisatie koppelt.",
       "repo_unavailable": "Die repository is al gekoppeld aan een andere organisatie en is daarom hier niet toegevoegd. Verder is er niets veranderd.",
-      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd."
+      "installation_not_accessible": "Je kunt dat GitHub-account niet zien op GitHub, dus het is niet aan deze organisatie gekoppeld. Er is niets gewijzigd.",
+      "identity_refused": "GitHub accepteert je GitHub-aanmelding niet meer, dus Motir kon het koppelen van de app niet afronden. Verbreek in Instellingen → Account → Git-accounts de verbinding met je account, verbind het opnieuw en probeer het daarna nog eens."
     },
     "connect": {
       "title": "GitHub koppelen",
@@ -7372,6 +7724,8 @@
         },
         "conflictOn": "<prs></prs> conflicteert met {base} en kan niet worden gemerged.",
         "conflictOnNoBase": "<prs></prs> conflicteert met de basisbranch en kan niet worden gemerged.",
+        "outOfDateOn": "<prs></prs> loopt achter op {base}, dat een bijgewerkte branch eist, en kan niet worden gemerged.",
+        "outOfDateOnNoBase": "<prs></prs> loopt achter op de basisbranch, die een bijgewerkte branch eist, en kan niet worden gemerged.",
         "howConflict": "Een agent rebaset of lost op in de eigen branch van de pull request, pusht, en de checks draaien opnieuw.",
         "rearm": "Er valt hier niets goed te keuren. Een push verplaatst de head, waardoor de vraag opnieuw wordt gesteld, en de volgende groene status opent de merge-poort één keer — over de nieuwe commits.",
         "sentBackByAgent": "De review-agent heeft deze commits teruggestuurd. Een agent repareert ze op {count, plural, one {dezelfde pull request} other {dezelfde pull requests}}, met de bevindingen in de prompt.",
@@ -7527,6 +7881,14 @@
         "failing": "Checks mislukt",
         "running": "Checks bezig"
       },
+      "preview": {
+        "building": "Voorbeeld wordt gebouwd",
+        "ready": "Voorbeeld klaar",
+        "failed": "Voorbeeld mislukt",
+        "failedReason": "Voorbeeld mislukt · <tone>{reason}</tone>",
+        "closed": "Voorbeeld gesloten",
+        "unknown": "Voorbeeld {state}"
+      },
       "linkPr": "Pull request koppelen",
       "linkPrField": "Te koppelen pull request",
       "searchPlaceholder": "Pull requests zoeken…",
@@ -7647,7 +8009,9 @@
       "identity": {
         "title": "Verbind eerst je GitHub-account",
         "body": "Motir toont de GitHub-accounts die je via je eigen GitHub-identiteit kunt zien. Verbind die in Instellingen → Account → Git-accounts en kom daarna hier terug.",
-        "action": "Naar Git-accounts"
+        "action": "Naar Git-accounts",
+        "refusedTitle": "Verbind je GitHub-account opnieuw",
+        "refusedBody": "GitHub accepteert de aanmelding die Motir voor je heeft niet meer: die is ingetrokken of verlopen. Verbreek in Instellingen → Account → Git-accounts de verbinding, verbind opnieuw en kom daarna hier terug. Er is niets gewijzigd."
       },
       "cancel": "Annuleren",
       "back": "Alle accounts",
@@ -8433,7 +8797,7 @@
       "clearEnough": "Duidelijk genoeg om zo te plannen.",
       "nothingSettled": "Er is niets vastgelegd, dus het verzoek wordt gepland zoals het er staat.",
       "requirementSaved": "Opgeslagen als <link>{title}</link> in Vereistendocumenten.",
-      "requirementNotSaved": "<lead>De vereiste kon niet worden opgeslagen.</lead> Er is niets gestart. Bevestigen is nog beschikbaar – probeer het opnieuw."
+      "requirementPageNotSaved": "<lead>De vereiste kon niet als pagina worden opgeslagen.</lead> De planning gebruikt hem toch."
     },
     "logBugOffer": {
       "label": "Aanbod om een bug vast te leggen",
@@ -9214,10 +9578,73 @@
     "outcomeNeedsAccess": "Het instellen van toegang afronden",
     "connectGithub": "GitHub koppelen",
     "stateCreated": "Aangemaakt",
-    "createdDetail": "Gehost door Motir · opgezet vanuit de Motir Next.js-starter.",
+    "createdDetail": "Gehost door Motir · opgezet vanuit {seed}.",
     "stateFailed": "Kon niet worden aangemaakt",
     "actionError": "Dat werkte niet. Er is niets gewijzigd — probeer het opnieuw.",
-    "promiseDoor": "Zo werkt verplaatsen"
+    "promiseDoor": "Zo werkt verplaatsen",
+    "stateProposed": "Nog niet aangemaakt",
+    "createdDetailInitialised": "Gehost door Motir · opgezet als geïnitialiseerde repository.",
+    "createdDetailNoSeed": "Gehost door Motir.",
+    "seed": {
+      "starterPillLabel": "Begint vanuit {label}",
+      "targetPillLabel": "Gehost op {target}",
+      "default": "Standaard",
+      "noTarget": "Geen hostingdoel",
+      "target": {
+        "serverless": "Serverless",
+        "fly": "Fly",
+        "aws": "AWS"
+      },
+      "use": {
+        "internal_tool": "Interne tool",
+        "mvp": "MVP",
+        "planned_product": "Gepland product"
+      },
+      "size": {
+        "small": "Klein",
+        "medium": "Middel",
+        "large": "Groot"
+      },
+      "why": {
+        "matched": "<b>Waarom deze starter:</b> hij wordt uitgerold op {target} en is gemaakt voor {use, select, internal_tool {een interne tool} mvp {een MVP} planned_product {een gepland product} other {dit gebruik}} van deze omvang.",
+        "matchedTarget": "<b>Waarom deze starter:</b> hij wordt uitgerold op {target}.",
+        "softUse": "<b>Waarom deze starter:</b> het is de dichtstbijzijnde starter die op {target} wordt uitgerold. Geen {target}-starter is gemaakt voor {use, select, internal_tool {een interne tool} mvp {een MVP} planned_product {een gepland product} other {dit gebruik}}.",
+        "softSize": "<b>Waarom deze starter:</b> het is de dichtstbijzijnde starter die op {target} wordt uitgerold. Geen {target}-starter is gemaakt voor een repository van deze omvang.",
+        "notDeployed": "<b>Waarom deze starter:</b> het is de starter van Motir voor een {role}-app. Motir-hosting rolt deze repository niet uit, dus er wordt geen hosting getoond.",
+        "noStackSignal": "<b>Waarom deze starter:</b> het plan zegt niet welke stack deze repository gebruikt, dus hij begint vanuit de gebruikelijke starter voor een webrepository op {target}. Kies een andere als je de stack kent.",
+        "noTarget": "<b>Waarom deze starter:</b> deze repository heeft nog geen hostingdoel, dus hij begint vanuit de gebruikelijke starter voor een webrepository.",
+        "noMatch": "<b>Waarom deze starter:</b> er is geen starter voor een {role}-repository {where, select, target {op {target}} other {met deze stack}}, dus hij begint als geïnitialiseerde repository: een lege repository met een README.",
+        "byHand": "<b>Waarom deze starter:</b> iemand heeft hem met de hand gekozen voor deze repository."
+      },
+      "fact": {
+        "hosting": "Hosting",
+        "use": "Gebruik",
+        "size": "Omvang",
+        "stack": "Stack",
+        "not_set": "Niet ingesteld",
+        "not_named": "Niet genoemd",
+        "none": "Geen",
+        "notServed": "· niet gedekt",
+        "noRoleStarter": "· geen {role}-starter wordt hier uitgerold"
+      },
+      "picker": {
+        "label": "Starter",
+        "groupTarget": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Overige}}-starters op {target}",
+        "groupRole": "{role, select, web {Web} api {API} mobile {Mobile} shared {Shared} infra {Infra} other {Overige}}-starters",
+        "groupAny": "Elke repository",
+        "initialisedSub": "Een lege repository met een README",
+        "footerTarget": "Alleen starters voor een {role}-repository die op {target} worden uitgerold.",
+        "footerNoTarget": "Alleen starters voor een {role}-repository. Deze repository heeft nog geen hostingdoel."
+      },
+      "refusal": {
+        "targetMismatch": "<b>{label} kan hier niet worden gebruikt.</b> Hij wordt uitgerold op {targets}, en deze repository draait op {target}. De starter is niet gewijzigd.",
+        "targetMismatchNoTarget": "<b>{label} kan hier niet worden gebruikt.</b> Hij wordt uitgerold op {targets}, en deze repository heeft geen hostingdoel. De starter is niet gewijzigd.",
+        "retired": "<b>{label} is buiten gebruik gesteld.</b> Motir biedt hem niet meer aan, dus kies een andere starter. De starter is niet gewijzigd.",
+        "roleMismatch": "<b>{label} kan hier niet worden gebruikt.</b> Het is een starter voor een {entryRole}-repository, en deze is {role}. De starter is niet gewijzigd.",
+        "notEditable": "<b>Deze repository is al aangemaakt,</b> dus hij kan niet meer vanuit een andere starter beginnen. Laad de pagina opnieuw om hem te zien.",
+        "unknown": "<b>Die starter bestaat niet meer.</b> Kies een andere starter. De starter is niet gewijzigd."
+      }
+    }
   },
   "repositoryTakeover": {
     "title": "Repository's",
@@ -9611,6 +10038,8 @@
         "queueFailedBare": "Mislukt in de merge-wachtrij",
         "conflicted": "Conflicteert met <d>{base}</d>",
         "conflictedNoBase": "Conflicteert met de basisbranch",
+        "outOfDate": "Loopt achter op <d>{base}</d>",
+        "outOfDateNoBase": "Loopt achter op de basisbranch",
         "ciFailed": "CI mislukt · <d>{check}</d>",
         "ciFailedBare": "CI mislukt",
         "changesRequested": "Wijzigingen gevraagd door <b>{name}</b> — ‘{note}’",
@@ -9894,7 +10323,9 @@
       "navIdeas": "Ideeën",
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen",
-      "navCapacity": "Providercapaciteit"
+      "navCapacity": "Providercapaciteit",
+      "navJobs": "Taken",
+      "navStarters": "Starters"
     },
     "nav": {
       "overview": "Overzicht",
@@ -10116,6 +10547,13 @@
             "limits": {
               "edit": "Capaciteitslimieten van een providermodel bewerkt"
             }
+          },
+          "jobs": {
+            "dlq_replay": "Dead letter opnieuw afgespeeld"
+          },
+          "seed_registry": {
+            "promote": "Repository gepromoveerd tot starter",
+            "retire": "Starter uit gebruik genomen"
           }
         }
       }
@@ -11661,8 +12099,8 @@
           "override": "afwijking"
         },
         "facts": {
-          "plan": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {running} actieve agents · {ci} CI-jobs tegelijk",
-          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {running} actieve agents · CI-limiet onleesbaar",
+          "plan": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {agents} agents · {ci} CI-jobs tegelijk",
+          "planCiUnreadable": "Abonnement <strong>{plan}</strong> · {runs} gehoste runs tegelijk · {perUser} agents per persoon · {agents} agents · CI-limiet onleesbaar",
           "planExempt": "Abonnement <strong>Geen abonnementslimiet</strong>",
           "planExemptOverride": "Abonnement <strong>Geen abonnementslimiet</strong> · {ci} CI-jobs tegelijk (afwijking)",
           "planUnknown": "Abonnement <strong>onbekend · {key}</strong> · nieuwe containers geweigerd",
@@ -12411,6 +12849,250 @@
         "notPermitted": "Uw rol mag geen limieten bewerken, dus er is niets opgeslagen.",
         "failed": "De limieten konden niet worden opgeslagen. Er is niets gewijzigd; probeer het opnieuw."
       }
+    },
+    "jobs": {
+      "breadcrumb": "Platform · Taken",
+      "title": "Taken",
+      "subtitle": "Elke achtergrondtaak die het platform heeft uitgevoerd, in elke werkruimte en zonder werkruimte, en elke dead letter die wacht om opnieuw te worden afgespeeld.",
+      "tabsLabel": "Weergaven van het takenlogboek",
+      "tabs": {
+        "runs": "Uitvoeringen",
+        "dlq": "Dead letter",
+        "waiting": "{count} wachtend"
+      },
+      "status": {
+        "label": "Status",
+        "all": "Alle",
+        "running": "Bezig",
+        "succeeded": "Geslaagd",
+        "failed": "Mislukt",
+        "abandoned": "Afgebroken"
+      },
+      "columns": {
+        "function": "Functie",
+        "event": "Gebeurtenis",
+        "functionEvent": "Functie · gebeurtenis",
+        "workspace": "Werkruimte",
+        "status": "Status",
+        "attempt": "Poging",
+        "attempts": "Pogingen",
+        "started": "Gestart",
+        "duration": "Duur",
+        "failure": "Fout",
+        "lastFailed": "Laatst mislukt",
+        "replay": "Opnieuw afspelen"
+      },
+      "runsCaption": "Uitvoeringen van achtergrondtaken",
+      "dlqCaption": "Dead letter",
+      "noWorkspace": "Geen werkruimte",
+      "pageLabel": "Pagina {page}",
+      "pagerLabel": "Pagina’s met uitvoeringen",
+      "previous": "Vorige",
+      "next": "Volgende",
+      "runsEmpty": {
+        "titleAll": "Nog geen uitvoeringen",
+        "bodyAll": "Achtergrondtaken verschijnen hier zodra ze worden uitgevoerd.",
+        "titleStatus": "Geen uitvoeringen met deze status",
+        "bodyStatus": "Niets in het logboek heeft deze status. Kies Alle om elke uitvoering te zien."
+      },
+      "runsError": {
+        "title": "Het takenlogboek kon niet worden gelezen"
+      },
+      "dlqError": {
+        "title": "De dead letters konden niet worden gelezen"
+      },
+      "error": {
+        "body": "De database gaf geen antwoord. Er is niets gewijzigd."
+      },
+      "retry": "Opnieuw proberen",
+      "loadingRuns": "Uitvoeringen laden",
+      "readOnly": "Alleen-lezen. Voor het opnieuw afspelen van een dead letter is de operatorrol nodig.",
+      "fn": {
+        "label": "Functie",
+        "all": "Alle functies"
+      },
+      "waitingLine": "{waiting} wachtend · {replayed} opnieuw afgespeeld in de afgelopen 7 dagen",
+      "capped": "{shown} van {count} getoond. De lijst toont de nieuwste 200.",
+      "replay": "Opnieuw afspelen",
+      "replayAria": "Dead letter van {function} opnieuw afspelen",
+      "replayedAt": "Opnieuw afgespeeld {time}",
+      "toast": {
+        "replayedTitle": "Dead letter opnieuw afgespeeld",
+        "replayedBody": "{function} is opnieuw verzonden.",
+        "alreadyTitle": "Al opnieuw afgespeeld",
+        "alreadyBody": "Iemand anders heeft deze dead letter al opnieuw afgespeeld. Er is niets opnieuw verzonden.",
+        "failedTitle": "Opnieuw afspelen is mislukt",
+        "failedBody": "Er is niets verzonden. Probeer het opnieuw.",
+        "notPermittedBody": "Voor het opnieuw afspelen van een dead letter is de operatorrol nodig.",
+        "notFoundBody": "Deze dead letter bestaat niet meer."
+      },
+      "replayAll": {
+        "button": "Alle {count} opnieuw afspelen",
+        "title": "{count} dead letters van {function} opnieuw afspelen?",
+        "body": "Elk wordt opnieuw verzonden als een nieuwe uitvoering en vastgelegd in het auditlogboek van het platform. Een dead letter die iemand anders eerst opnieuw afspeelt, wordt overgeslagen.",
+        "confirm": "{count} opnieuw afspelen",
+        "cancel": "Annuleren",
+        "running": "Bezig met opnieuw afspelen…",
+        "runningLine": "{count} dead letters worden opnieuw afgespeeld, 50 tegelijk. Houd dit open tot het klaar is.",
+        "doneTitle": "Opnieuw afspelen voltooid",
+        "doneWithFailuresTitle": "Opnieuw afspelen voltooid met fouten",
+        "replayed": "{count} opnieuw afgespeeld",
+        "already": "{count} al opnieuw afgespeeld door iemand anders",
+        "nothingLeft": "0 opnieuw afgespeeld — alle {count} waren al opnieuw afgespeeld",
+        "failed": "{count} konden niet opnieuw worden afgespeeld. Ze blijven in de lijst; speel ze een voor een opnieuw af.",
+        "error": "Opnieuw afspelen kon niet worden uitgevoerd. Er is niets gewijzigd.",
+        "close": "Klaar"
+      },
+      "dlqEmpty": {
+        "title": "Niets wachtend",
+        "body": "Geen enkele taak heeft zijn pogingen opgebruikt. Dead letters verschijnen hier zodra dat gebeurt."
+      }
+    },
+    "starters": {
+      "breadcrumb": "Beheer · Starters",
+      "title": "Starters",
+      "subtitle": "Waar een repository die Motir aanmaakt mee begint. De matching kiest uit de actieve starters op rol, hostingdoel, gebruik en omvang. Maak van een repository die Motir heeft aangemaakt een starter, of stel er een buiten gebruik.",
+      "promote": "Repository promoveren",
+      "card": {
+        "title": "Starterbibliotheek",
+        "count": "Nieuwste eerst · {count, plural, one {# starter} other {# starters}}"
+      },
+      "filter": {
+        "label": "Starters filteren",
+        "role": "Rol",
+        "status": "Status",
+        "target": "Hostingdoel",
+        "anyRole": "Elke rol",
+        "anyTarget": "Elk doel",
+        "all": "Alle"
+      },
+      "status": {
+        "active": "Actief",
+        "retired": "Buiten gebruik"
+      },
+      "notDeployed": "Niet uitgerold door Motir-hosting",
+      "col": {
+        "starter": "Starter",
+        "roleStack": "Rol · stack",
+        "serves": "Dekt",
+        "hosting": "Hosting",
+        "status": "Status",
+        "provenance": "Herkomst",
+        "actions": "Acties"
+      },
+      "alsoAnswersTo": "Reageert ook op {keys}",
+      "roleStack": "{role} · {stack}",
+      "anyRoleAnyStack": "elke rol · elke stack",
+      "everyUse": "Elk gebruik",
+      "everySize": "Elke omvang",
+      "provenance": {
+        "shipped": "Meegeleverd met Motir",
+        "promoted": "Gepromoveerd door <b>{email}</b> op {date} vanuit {repo} bij <mono>{ref}</mono>",
+        "promotedNoRepo": "Gepromoveerd door <b>{email}</b> op {date} bij <mono>{ref}</mono>",
+        "retired": "Buiten gebruik gesteld door <b>{email}</b> op {date}: ‘{reason}’",
+        "removedAccount": "een verwijderd account"
+      },
+      "defaultForRole": "Standaard voor {role}",
+      "defaultForEveryRole": "Standaard voor elke rol",
+      "empty": {
+        "title": "Geen starters komen overeen met deze filters",
+        "bodyRoleTarget": "Geen actieve starter voor een {role}-repository wordt uitgerold op {target}. Wis de filters om de hele bibliotheek te zien.",
+        "body": "Geen starter komt overeen met deze filters.",
+        "clear": "Filters wissen"
+      },
+      "pager": {
+        "label": "Pagina's",
+        "showing": "{from}–{to} van {total}",
+        "previous": "Vorige pagina",
+        "next": "Volgende pagina"
+      },
+      "retire": {
+        "action": "Buiten gebruik stellen",
+        "title": "{label} buiten gebruik stellen?",
+        "body": "De matching kiest hem niet meer en de starterkeuze biedt hem niet meer aan. Repository's die er al mee zijn aangemaakt, houden hun code. Een nog niet aangemaakte repository die hem noemt, kan er pas mee worden aangemaakt als iemand een andere starter kiest.",
+        "reasonLabel": "Reden",
+        "reasonHelp": "Wordt met je naam in het auditlogboek geschreven.",
+        "cancel": "Annuleren",
+        "confirm": "Starter buiten gebruik stellen",
+        "done": "Buiten gebruik gesteld. {label} wordt niet meer aangeboden aan nieuwe repository's.",
+        "failedTitle": "Deze starter is niet buiten gebruik gesteld.",
+        "failed": "Motir kon hem niet buiten gebruik stellen. Probeer het opnieuw.",
+        "defaultTitle": "Deze starter kan niet buiten gebruik worden gesteld.",
+        "defaultBody": "‘{key}’ is de standaardstarter voor een {role}-repository. Een standaard wijzigen is een besluit, geen operatoractie.",
+        "defaultBodyEveryRole": "‘{key}’ is de standaardstarter voor elke rol. Een standaard wijzigen is een besluit, geen operatoractie.",
+        "close": "Sluiten"
+      },
+      "promoteForm": {
+        "breadcrumb": "Beheer · Starters · Promoveren",
+        "title": "Repository promoveren",
+        "subtitle": "Motir kopieert de repository bij de ref naar de eigen organisatie en biedt de kopie als starter aan nieuwe repository's die erbij passen. Bestaande repository's veranderen niet.",
+        "field": {
+          "source": "Repository die Motir heeft aangemaakt",
+          "ref": "Ref",
+          "role": "Rol",
+          "stack": "Stack",
+          "label": "Label",
+          "key": "Sleutel",
+          "uses": "Gedekt gebruik",
+          "sizes": "Gedekte omvang",
+          "targets": "Hostingdoelen voor uitrol",
+          "reason": "Reden"
+        },
+        "help": {
+          "ref": "Een branch, tag of commit. De starter wordt hieruit gekopieerd.",
+          "stack": "Hoe de planner deze stack noemt, in kleine letters.",
+          "label": "Wat mensen op hun repository zien.",
+          "key": "Kleine letters, cijfers en koppeltekens. Ook de naam van de kopie in motir-co. Kan later niet worden gewijzigd.",
+          "targets": "Elk doel moet bij de ref in de motir.hosting.json van de repository staan. Vink er geen aan voor een starter die Motir-hosting niet uitrolt.",
+          "reason": "Wordt met je naam in het auditlogboek geschreven."
+        },
+        "source": {
+          "placeholder": "Kies een repository",
+          "empty": "Geen repository komt overeen.",
+          "footer": "Alleen repository's die Motir heeft aangemaakt.",
+          "sub": "{project} · {role} · {state}",
+          "leaving": "wordt overgedragen aan de eigenaar",
+          "notCreated": "nog niet aangemaakt"
+        },
+        "rolePlaceholder": "Kies een rol",
+        "cancel": "Annuleren",
+        "review": "Promotie controleren",
+        "confirm": {
+          "title": "{name} promoveren tot starter?",
+          "body": "Motir kopieert <b>{repo}</b> bij <b>{ref}</b> naar <b>motir-co/{key}</b> en voegt <b>{label}</b> toe aan de bibliotheek. Vanaf dan kan de matching hem kiezen voor een nieuwe {role}-repository waar hij bij past. Bestaande repository's veranderen niet.",
+          "roleStack": "Rol · stack",
+          "uses": "Gebruik",
+          "sizes": "Omvang",
+          "hosting": "Hosting",
+          "reason": "Reden",
+          "notDeployed": "Niet uitgerold door Motir-hosting",
+          "back": "Terug",
+          "promote": "Promoveren"
+        },
+        "done": "Gepromoveerd. Nieuwe {role}-repository's op {target} kunnen nu beginnen vanuit {label}.",
+        "doneNoTarget": "Gepromoveerd. Nieuwe {role}-repository's kunnen nu beginnen vanuit {label}.",
+        "refusal": {
+          "sourceTitle": "Deze repository kan niet worden gepromoveerd.",
+          "takenOver": "Hij wordt overgedragen aan de eigenaar, of is dat al, dus Motir mag hem niet meer kopiëren.",
+          "notCreated": "Alleen een repository die Motir heeft aangemaakt kan worden gepromoveerd, en deze is nog {state}.",
+          "organizationRow": "Het is de eigen repository van de organisatie, en Motir kopieert nooit de code van een klant.",
+          "notMotirHeld": "{repo} staat niet meer in een GitHub-organisatie die Motir beheert.",
+          "notFound": "Hij bestaat niet meer. Kies een andere.",
+          "refNotFound": "‘{ref}’ is geen branch, tag of commit van {repo}.",
+          "manifestTitle": "motir.hosting.json weigert deze promotie.",
+          "manifestMissing": "De repository heeft geen motir.hosting.json bij <b>{ref}</b>, dus hij kan geen hostingdoel claimen. Voeg het bestand toe bij die ref, of vink alle hostingdoelen uit.",
+          "manifestInvalid": "Het bestand bij <b>{ref}</b> is ongeldig: <b>{field}</b> {reason}",
+          "theDocument": "het document",
+          "targetNotDeclared": "Het noemt <b>{target}</b> niet onder targets (het noemt {declared}). Vink {target} uit, of voeg het toe aan het bestand.",
+          "declaredNone": "geen",
+          "targetNotDeclaredField": "{target} staat niet in motir.hosting.json bij {ref}.",
+          "notInList": "‘{value}’ is {kind, select, role {geen rol} useCases {geen gebruik} sizes {geen omvang} other {geen hostingdoel}}. Kies uit {list}.",
+          "keyTaken": "De sleutel {key} is al in gebruik.",
+          "templateNameTaken": "motir-co/{key} bestaat al en is niet de kopie van deze starter. Kies een andere sleutel, of verwijder eerst die repository.",
+          "genericTitle": "Motir kon deze repository niet promoveren.",
+          "genericBody": "Er is niets gekopieerd. Probeer het opnieuw."
+        }
+      }
     }
   },
   "legal": {
@@ -12563,8 +13245,8 @@
       "creditsUnknown": "Motir kon de credits van je organisatie nu niet controleren. Probeer het zo opnieuw.",
       "userCap": "Het {plan}-abonnement van je organisatie staat {limit, plural, one {# agent} other {# agents}} per persoon toe. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
       "userCapNoFigure": "Je hebt al zoveel agents als het abonnement van je organisatie per persoon toestaat. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
-      "orgRunningLimit": "Het {plan}-abonnement van je organisatie draait {limit, plural, one {# agent} other {# agents}} tegelijk, en die draaien allemaal. Zet er een in slaap om een andere te starten.",
-      "orgRunningLimitNoFigure": "Je organisatie draait al zoveel agents tegelijk als haar abonnement toestaat. Zet er een in slaap om een andere te starten.",
+      "orgCap": "Het {plan}-abonnement van je organisatie staat {limit, plural, one {# agent} other {# agents}} in de organisatie toe, draaiend of slapend. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
+      "orgCapNoFigure": "Je organisatie heeft al zoveel agents als haar abonnement toestaat, draaiend of slapend. Voor elk ervan wordt elke dag opslag gerekend, ook als hij slaapt. Verwijder er een om een nieuwe te maken.",
       "busy": "Motir draait op dit moment zoveel machines als het kan. Probeer het over een paar minuten opnieuw.",
       "notOffered": "Die codeeragent wordt niet aangeboden: de voorwaarden staan nog niet toe dat een platform hem host. Kies een andere codeeragent.",
       "nameTaken": "Je hebt al een agent met de naam {name} in dit project.",
@@ -12578,7 +13260,7 @@
       "aiPlanUnknown": "Kan je AI-abonnement niet controleren",
       "credits": "Geen credits meer",
       "userCap": "Jouw limiet",
-      "orgRunningLimit": "De limiet van je organisatie"
+      "orgCap": "De limiet van je organisatie"
     },
     "lapse": {
       "bannerLead": "Het AI-abonnement van je organisatie is beëindigd.",
@@ -13620,6 +14302,10 @@
         "next": "Er is niets goedgekeurd en niets gemerged. Los het conflict op de branch op — motir fix geeft het aan een agent — en Motir vraagt het opnieuw zodra de checks groen zijn.",
         "atPress": "{host} meldt dat {pr} conflicteert met {base}. De druk op de knop is geweigerd voordat er iets is geschreven, dus {key} is niet verplaatst.",
         "atPressNoBase": "{host} meldt dat {pr} conflicteert met de basisbranch. De druk op de knop is geweigerd voordat er iets is geschreven, dus {key} is niet verplaatst."
+      },
+      "mergeOutOfDate": {
+        "title": "Deze pull request loopt achter op de basisbranch.",
+        "next": "Er is niets gemerged. De basisbranch eist dat pull requests bijgewerkt zijn voordat ze mergen, en deze loopt erachter. Haal de basisbranch erin — werk de branch bij, of laat motir fix het aan een agent geven — en Motir vraagt het opnieuw zodra de checks groen zijn."
       },
       "mergeBranchProtected": {
         "title": "De beveiligingsregels van de branch staan deze merge nog niet toe.",
@@ -14792,6 +15478,7 @@
       "run_died": "Te repareren · run gestorven",
       "queue_failed": "Te repareren · mislukt in de merge-wachtrij",
       "conflicted": "Te repareren · conflicteert met de basisbranch",
+      "out_of_date": "Te repareren · loopt achter op de basisbranch",
       "ci_failed": "Te repareren · CI mislukt",
       "changes_requested": "Te repareren · wijzigingen gevraagd",
       "sent_back_by_agent": "Te repareren · teruggestuurd door de reviewagent",
@@ -14803,6 +15490,8 @@
       "queueFailedBare": "Dit moet worden gerepareerd: het is mislukt in de merge-wachtrij.",
       "conflicted": "Dit moet worden gerepareerd: het conflicteert met <code>{base}</code>.",
       "conflictedNoBase": "Dit moet worden gerepareerd: het conflicteert met de basisbranch.",
+      "outOfDate": "Dit moet worden gerepareerd: het loopt achter op <code>{base}</code>.",
+      "outOfDateNoBase": "Dit moet worden gerepareerd: het loopt achter op de basisbranch.",
       "ciFailed": "Dit moet worden gerepareerd: CI is mislukt (check <code>{check}</code>).",
       "ciFailedBare": "Dit moet worden gerepareerd: CI is mislukt.",
       "changesRequested": "Dit moet worden gerepareerd: <b>{name}</b> heeft wijzigingen gevraagd — ‘{note}’",
@@ -15396,5 +16085,85 @@
     "pendingMark": "Bezig met vertalen",
     "showOriginal": "Origineel tonen",
     "showTranslation": "Vertaling tonen"
+  },
+  "previewGate": {
+    "frame": {
+      "tag": "Preview",
+      "brand": "Motir",
+      "footer": "Je bent op <chip>{host}</chip>, een preview die Motir draait voor een pull request. Motir vraagt op dit adres nooit om je wachtwoord. Inloggen gebeurt alleen op app.motir.co."
+    },
+    "signIn": {
+      "banner": "Log in om de preview op <chip>{host}</chip> te openen. Previews zijn alleen open voor leden van het project."
+    },
+    "refused": {
+      "metaTitle": "Geen toegang tot deze preview",
+      "pill": "Preview",
+      "title": "Je hebt geen toegang tot deze preview",
+      "body": "Previews zijn alleen open voor leden van het project waar ze bij horen. Heeft iemand deze link met je gedeeld? Vraag diegene dan om je aan het project toe te voegen en open de link opnieuw.",
+      "signedInAs": "Ingelogd als <strong>{email}</strong>",
+      "home": "Naar Motir",
+      "switch": "Inloggen met een ander account",
+      "switchHint": "Na het inloggen kom je terug bij deze preview."
+    },
+    "building": {
+      "pill": "Bouwen",
+      "title": "Deze preview wordt gebouwd",
+      "body": "De CI van de repository bouwt de preview-image voor de nieuwste commit van deze pull request. Dat duurt meestal een paar minuten.",
+      "refresh": "Deze pagina controleert elke 10 seconden opnieuw en opent de preview zodra die klaar is."
+    },
+    "starting": {
+      "pill": "Starten",
+      "title": "Deze preview wordt gestart",
+      "body": "De image is gebouwd. Motir start hem en wacht tot de statuscontrole slaagt."
+    },
+    "steps": {
+      "label": "Voortgang",
+      "build": "De image bouwen",
+      "start": "De preview starten",
+      "ready": "Klaar"
+    },
+    "facts": {
+      "workItem": "Werkitem",
+      "pullRequest": "Pull request",
+      "pullRequestValue": "{repo} · #{n}"
+    },
+    "action": {
+      "openWorkItem": "{key} openen in Motir",
+      "openPullRequest": "Pull request #{n} openen op GitHub"
+    },
+    "failed": {
+      "pill": "Mislukt",
+      "title": "Deze preview is niet gestart",
+      "body": "Er draait niets voor de nieuwste commit van deze pull request. Een nieuwe push bouwt hem opnieuw.",
+      "reasonTitle": "Wat er misging",
+      "checks": "Het werkitem toont de controles van deze pull request en hun logboeken.",
+      "reason": {
+        "imageBuild": "De preview-image is niet gebouwd: de workflow ‘Preview image’ eindigde met ‘{conclusion}’. Het uitvoeringslogboek op GitHub vertelt waarom.",
+        "healthTimeout": "De preview is niet binnen {minutes} minuten door de statuscontrole gekomen.",
+        "healthFailed": "De preview is gestart, maar de statuscontrole is mislukt.",
+        "fallback": "De preview kon niet starten."
+      }
+    },
+    "unsupported": {
+      "pill": "Niet beschikbaar in previews",
+      "title": "Previews kunnen dit niet",
+      "websocket": "Live-verbindingen (websockets) gaan niet door de preview-gateway. De rest van de preview werkt zoals gewoonlijk.",
+      "tooLarge": "Verzoeken groter dan 10 MB kunnen niet naar een preview worden gestuurd.",
+      "noLength": "Dit verzoek gaf zijn grootte niet op, dus de preview-gateway kan het niet aannemen."
+    },
+    "closed": {
+      "pill": "Gesloten",
+      "title": "Deze preview is uitgeschakeld",
+      "merged": "Pull request #{n} is gemerged, dus Motir heeft de preview uitgeschakeld en de database verwijderd.",
+      "closed": "Pull request #{n} is gesloten zonder merge, dus Motir heeft de preview uitgeschakeld en de database verwijderd.",
+      "takenOver": "Deze repository heeft Motir verlaten, dus Motir heeft de previews uitgeschakeld en hun databases verwijderd.",
+      "unknown": "Motir heeft deze preview uitgeschakeld en de database verwijderd."
+    },
+    "notFound": {
+      "pill": "Niet beschikbaar",
+      "title": "Hier is geen preview",
+      "body": "Dit adres hoort niet bij een draaiende preview. Mogelijk is die uitgeschakeld, of is de link verkeerd getypt.",
+      "home": "Naar Motir"
+    }
   }
 }

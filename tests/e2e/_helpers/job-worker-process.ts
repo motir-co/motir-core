@@ -3,6 +3,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import {
+  E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
   E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
   E2E_PROVISIONING_ORG,
   E2E_STUDIO_APP_ID,
@@ -204,6 +205,54 @@ export function hostedRunSeamEnv(): Record<string, string> {
 }
 
 /**
+ * THE FAKE HOSTING PORT'S SHARED STORE (Story MOTIR-5766 · MOTIR-10098). A
+ * preview's lifecycle deploys, polls and destroys in THIS process (its effects
+ * are jobs), while the app server's gate reads the release and the spec arranges
+ * both — so all three must read one file. The runner defaults the path in both
+ * lane configs; it is forwarded here BY NAME, from both spawn sites, rather than
+ * left to `...process.env`, under this file's rule that a variable a job handler
+ * reads is mirrored here.
+ */
+export function previewHostingSeamEnv(): Record<string, string> {
+  const path = process.env['MOTIR_FAKE_HOSTING_STATE_PATH'];
+  return path ? { MOTIR_FAKE_HOSTING_STATE_PATH: path } : {};
+}
+
+/** The preview configuration a lifecycle effect reads, by name, when the lane sets it. */
+const PREVIEW_WORKER_ENV = [
+  'MOTIR_PREVIEW_DOMAIN',
+  'MOTIR_PREVIEW_SCHEME',
+  'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
+] as const;
+
+/**
+ * A PREVIEW'S GITHUB CALLS, mirrored into the worker (Story MOTIR-5766 ·
+ * MOTIR-5781). The lifecycle's effects run HERE: they create the preview's GitHub
+ * deployment, post its statuses and read the hosting manifest at the pull
+ * request's head, so the seam that answers them (`lib/test-github-preview-mock.ts`)
+ * must be installed in this process, with its control and journal files. Its state
+ * lives in those files, so a copy in the app server would agree with this one.
+ *
+ * ⚠️ IT CARRIES NO TOKEN MINT OF ITS OWN: the installation token those calls carry is
+ * the merge seam's (`githubMergeSeamEnv`), so the lane turns both on together.
+ *
+ * Opt-in (`E2E_JOB_WORKER_GITHUB_PREVIEW_SEAM=1`, set by the acceptance config).
+ */
+export function githubPreviewSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_GITHUB_PREVIEW_SEAM'] !== '1') return {};
+  const env: Record<string, string> = { E2E_TEST_GITHUB_PREVIEW: '1' };
+  for (const name of [
+    'MOTIR_GITHUB_PREVIEW_CONTROL_PATH',
+    'MOTIR_GITHUB_PREVIEW_JOURNAL_PATH',
+    ...PREVIEW_WORKER_ENV,
+  ]) {
+    const value = process.env[name];
+    if (value) env[name] = value;
+  }
+  return env;
+}
+
+/**
  * THE motir-ai EMBEDDINGS SEAM, mirrored into the worker (Story MOTIR-9490 ·
  * MOTIR-9577).
  *
@@ -229,6 +278,50 @@ export function embeddingsSeamEnv(): Record<string, string> {
     ...(process.env['MOTIR_AI_EMBEDDINGS_JOURNAL_PATH']
       ? { MOTIR_AI_EMBEDDINGS_JOURNAL_PATH: process.env['MOTIR_AI_EMBEDDINGS_JOURNAL_PATH'] }
       : {}),
+  };
+}
+
+/**
+ * A PRODUCTION RELEASE'S SEAMS, mirrored into the worker (Story MOTIR-9797 ·
+ * MOTIR-10040).
+ *
+ * A merge's release is the `hosting/merge-release.requested` JOB, so it runs
+ * HERE: it reads the hosting manifest from GitHub, creates and migrates the
+ * production database through the database port, deploys through the hosting
+ * port, and `hosted-release.status` posts the GitHub deployment. The rollback
+ * that follows runs in the webServer. So:
+ *
+ *   * the hosting fake's cross-process store (`MOTIR_FAKE_HOSTING_STATE_PATH`) —
+ *     the release this process makes live is the one the webServer rolls back,
+ *     and its hold sidecar is how the spec keeps a deploy open;
+ *   * the GitHub seam (`lib/test-production-release-mock.ts`) with its control
+ *     and journal, and the org + App it mints a token as — the token mint itself
+ *     is the merge seam's, which the lane mirrors here already;
+ *   * the environment-configuration key, which seals the production database's
+ *     connection string and is otherwise set on the webServer only.
+ *
+ * The database fake stays in this process's memory: only a release reaches it.
+ *
+ * Opt-in (`E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM=1`, set by
+ * `playwright.acceptance.config.ts`), because only that lane holds the store.
+ */
+export function productionReleaseSeamEnv(): Record<string, string> {
+  if (process.env['E2E_JOB_WORKER_PRODUCTION_RELEASE_SEAM'] !== '1') return {};
+  const mirrored = [
+    'MOTIR_FAKE_HOSTING_STATE_PATH',
+    'MOTIR_PRODUCTION_RELEASE_CONTROL_PATH',
+    'MOTIR_PRODUCTION_RELEASE_JOURNAL_PATH',
+  ] as const;
+  return {
+    E2E_TEST_PRODUCTION_RELEASE: '1',
+    MOTIR_FLEET_ORCHESTRATOR: 'fake',
+    ...Object.fromEntries(
+      mirrored.flatMap((name) => (process.env[name] ? [[name, process.env[name]!]] : [])),
+    ),
+    ENVIRONMENT_CONFIG_ENCRYPTION_KEY: E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
+    GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+    GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+    GITHUB_STUDIO_APP_PRIVATE_KEY: generateAppPrivateKey(),
   };
 }
 
@@ -415,6 +508,12 @@ export async function startJobWorker(): Promise<void> {
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
       ...embeddingsSeamEnv(),
+      // The fake hosting port's shared store — see `previewHostingSeamEnv`.
+      ...previewHostingSeamEnv(),
+      // A preview's GitHub deployment and manifest — see `githubPreviewSeamEnv`.
+      ...githubPreviewSeamEnv(),
+      // A production release's hosting store and GitHub — see `productionReleaseSeamEnv`.
+      ...productionReleaseSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -536,6 +635,11 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
       // The hosted-run gateway/motir-ai/GitHub seams — see `hostedRunSeamEnv`.
       ...hostedRunSeamEnv(),
       ...embeddingsSeamEnv(),
+      // The fake hosting port's shared store — see `previewHostingSeamEnv`.
+      ...previewHostingSeamEnv(),
+      // A preview's GitHub deployment and manifest — see `githubPreviewSeamEnv`.
+      ...githubPreviewSeamEnv(),
+      ...productionReleaseSeamEnv(),
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });

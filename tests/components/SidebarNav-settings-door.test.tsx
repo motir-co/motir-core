@@ -350,11 +350,10 @@ describe('the settings door yields to a more specific workspace sub-route', () =
     // The door's `active` predicate negates NOTHING now: there is nothing below
     // it in this section to be more specific than it.
     expect(door).not.toContain("!isActive(pathname, '/settings/workspace/security')");
-    expect(door).not.toContain("!isActive(pathname, '/settings/workspace/jobs')");
     expect(door).not.toContain("!isActive(pathname, '/settings/organization/git')");
   });
 
-  it.each([['/settings/workspace/security'], ['/settings/workspace/jobs']])(
+  it.each([['/settings/workspace/security'], ['/settings/workspace/roles']])(
     'renders no bottom section AT ALL on %s — the area branch answers first',
     (path) => {
       // The replacement for the deleted rows of the table above, and a stronger
