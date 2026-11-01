@@ -250,12 +250,27 @@ describe('findOrganizationAccount', () => {
       AssumeRoleCommand: assume,
       ListAccountsCommand: (input) =>
         input['NextToken']
-          ? { Accounts: [{ Id: '222222222222', Name: 'ci-runner-use1-2', State: 'ACTIVE' }] }
+          ? {
+              Accounts: [
+                {
+                  Id: '222222222222',
+                  Name: 'ci-runner-use1-2',
+                  State: 'ACTIVE',
+                  JoinedTimestamp: new Date('2026-11-01T21:28:51Z'),
+                },
+              ],
+            }
           : { Accounts: [{ Id: '111111111111', Name: 'other' }], NextToken: 'p2' },
     });
 
+    // When it joined is what tells a new account's EC2 activation apart (MOTIR-10204).
     expect(await api.findOrganizationAccount('ci-runner-use1-2')).toEqual({
-      account: { accountId: '222222222222', name: 'ci-runner-use1-2', status: 'ACTIVE' },
+      account: {
+        accountId: '222222222222',
+        name: 'ci-runner-use1-2',
+        status: 'ACTIVE',
+        joinedAt: new Date('2026-11-01T21:28:51Z'),
+      },
       inProgressRequestId: null,
     });
     expect(calls[0]).toMatchObject({
@@ -338,7 +353,14 @@ describe('createOrganizationAccount', () => {
         polls += 1;
         return polls < 3
           ? { CreateAccountStatus: { Id: 'car-9', State: 'IN_PROGRESS' } }
-          : { CreateAccountStatus: { Id: 'car-9', State: 'SUCCEEDED', AccountId: '333333333333' } };
+          : {
+              CreateAccountStatus: {
+                Id: 'car-9',
+                State: 'SUCCEEDED',
+                AccountId: '333333333333',
+                CompletedTimestamp: new Date('2026-11-01T21:28:51Z'),
+              },
+            };
       },
     });
 
@@ -346,6 +368,7 @@ describe('createOrganizationAccount', () => {
       accountId: '333333333333',
       name: 'n',
       status: 'ACTIVE',
+      joinedAt: new Date('2026-11-01T21:28:51Z'),
     });
     expect(calls.filter((c) => c.command === 'CreateAccountCommand')).toHaveLength(1);
     expect(calls.find((c) => c.command === 'CreateAccountCommand')!.input).toEqual({
@@ -373,6 +396,22 @@ describe('createOrganizationAccount', () => {
       expect(err).toMatchObject({ accountName: 'n', reason });
     },
   );
+
+  it('a SUCCEEDED answer with no completion time dates the account to now (MOTIR-10204)', async () => {
+    const { api, clock } = harness({
+      AssumeRoleCommand: assume,
+      DescribeCreateAccountStatusCommand: () => ({
+        CreateAccountStatus: { State: 'SUCCEEDED', AccountId: '444444444444' },
+      }),
+    });
+    clock.t = Date.parse('2026-11-01T21:30:00Z');
+    expect(await api.waitForCreateAccount('car-9', 'n')).toEqual({
+      accountId: '444444444444',
+      name: 'n',
+      status: 'ACTIVE',
+      joinedAt: new Date('2026-11-01T21:30:00Z'),
+    });
+  });
 
   it('a FAILED with no reason says UNKNOWN', async () => {
     const { api } = harness({
