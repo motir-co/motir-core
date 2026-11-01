@@ -103,7 +103,8 @@ export interface TopNavProps {
   /** Whether AI planning is configured — gates the project tier's "Plan a new
    *  project with AI" door, the same gate the launcher uses. */
   aiConfigured: boolean;
-  user: { name: string; email: string };
+  /** `image` is the RESOLVED profile-photo URL (`storedAssetUrl`), never the key. */
+  user: { name: string; email: string; image?: string | null };
   /**
    * The acting user is platform staff — surfaces the staff-only "Platform
    * admin" row in the account menu (design `platform-admin/` Panel 1). Resolved
@@ -323,7 +324,12 @@ export async function TopNav({
           {initialUnreadCount !== null ? (
             <NotificationBell initialUnreadCount={initialUnreadCount} />
           ) : null}
-          <UserMenu name={user.name} email={user.email} platformStaff={platformStaff} />
+          <UserMenu
+            name={user.name}
+            email={user.email}
+            image={user.image}
+            platformStaff={platformStaff}
+          />
         </div>
       </nav>
     </header>

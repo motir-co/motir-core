@@ -23,7 +23,8 @@ export async function VisitorTopNav({
   projectKey: string;
   /** The project's motir.co landing, `https://motir.co/p/<identifier>`. */
   landingHref: string;
-  user: { name: string | null; email: string };
+  /** `image` is the RESOLVED profile-photo URL (`storedAssetUrl`), never the key. */
+  user: { name: string | null; email: string; image?: string | null };
 }) {
   const [t, tv] = await Promise.all([getTranslations('shell'), getTranslations('visitor.shell')]);
   return (
@@ -58,7 +59,7 @@ export async function VisitorTopNav({
         </div>
         <div className="flex flex-none items-center gap-2">
           <ThemeToggle placement="bar" />
-          <UserMenu name={user.name ?? ''} email={user.email} />
+          <UserMenu name={user.name ?? ''} email={user.email} image={user.image} />
         </div>
       </nav>
     </header>

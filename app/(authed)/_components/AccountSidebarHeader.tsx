@@ -6,6 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils/cn';
 import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
+import { UserAvatarFace } from './UserAvatarFace';
 
 // The account-settings-area rail header (Story 7.8 · Subtask 7.8.12). When the
 // rail is in the account-settings area it REPLACES the SidebarHeader/ProjectSwitcher
@@ -35,22 +36,25 @@ import { AUTHED_LANDING_PATH } from '@/lib/navigation/landing';
 const BACK_HREF = AUTHED_LANDING_PATH;
 
 export interface AccountSidebarHeaderProps {
-  user: { name: string; email: string };
+  /** `image` is the RESOLVED profile-photo URL (`storedAssetUrl`), never the key. */
+  user: { name: string; email: string; image?: string | null };
   /** When true, render the icon-only (collapsed rail) affordance. */
   collapsed?: boolean;
 }
 
-/** The signed-in user's circular initial tile — mirrors the UserMenu avatar
- *  grammar (ink fill, inverted text, circular). `rounded-full` is a genuine
- *  circle, so it stays raw (not a shape token). */
-function UserAvatar({ initial, size }: { initial: string; size: number }) {
+/** The signed-in user's circular identity tile — mirrors the UserMenu avatar
+ *  grammar (ink fill, inverted text, circular): their profile photo cropped to
+ *  the circle, or their initial when there is none (MOTIR-10182).
+ *  `rounded-full` is a genuine circle, so it stays raw (not a shape token). */
+function UserAvatar({ name, image, size }: { name: string; image?: string | null; size: number }) {
   return (
     <span
       aria-hidden
+      data-testid="account-rail-avatar"
       style={{ width: size, height: size }}
-      className="inline-flex shrink-0 items-center justify-center rounded-full bg-(--el-text) font-sans text-[13px] font-semibold text-(--el-text-inverted)"
+      className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-(--el-text) font-sans text-[13px] font-semibold text-(--el-text-inverted)"
     >
-      {initial}
+      <UserAvatarFace image={image} name={name} />
     </span>
   );
 }
@@ -59,7 +63,6 @@ export function AccountSidebarHeader({ user, collapsed = false }: AccountSidebar
   const t = useTranslations('settings.account');
   const backLabel = t('back');
   const displayName = user.name || user.email;
-  const initial = displayName.trim().charAt(0).toUpperCase() || '?';
 
   // Collapsed rail (56px): a back-arrow icon button (tooltip) above the user
   // tile, mirroring the SettingsSidebarHeader collapsed treatment.
@@ -79,7 +82,7 @@ export function AccountSidebarHeader({ user, collapsed = false }: AccountSidebar
             <ArrowLeft className="h-4 w-4" aria-hidden />
           </Link>
         </Tooltip>
-        <UserAvatar initial={initial} size={32} />
+        <UserAvatar name={displayName} image={user.image} size={32} />
       </div>
     );
   }
@@ -100,7 +103,7 @@ export function AccountSidebarHeader({ user, collapsed = false }: AccountSidebar
       </Link>
 
       <div className="flex items-center gap-2.5 px-(--spacing-control-x) pb-0.5 pt-1.5">
-        <UserAvatar initial={initial} size={30} />
+        <UserAvatar name={displayName} image={user.image} size={30} />
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-sans text-[13.5px] font-semibold text-(--el-text)">
             {displayName}

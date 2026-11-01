@@ -26,6 +26,7 @@ import { resolveReconsentHold } from '@/lib/legal/reconsentGate';
 import { legalIndexUrl as resolveLegalIndexUrl } from '@/lib/legal/links';
 import { docsIndexUrl as resolveDocsIndexUrl } from '@/lib/docs/links';
 import { toWorkspaceSummaryDTO } from '@/lib/mappers/workspaceMappers';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { ToastProvider } from '@/components/ui/Toast';
 import { AppLayout } from '@/components/ui/AppLayout';
 import { SidebarDrawer } from '@/components/ui/SidebarDrawer';
@@ -95,6 +96,16 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // Inside a staff session the TARGET's identity is `session.user`; the
   // operator's own is `session.impersonation.operator`.
   const staffSession = session.impersonation ?? null;
+  // The signed-in user as every shell surface draws them — the top bar's account
+  // menu and the account-settings rail head (MOTIR-10182). `User.image` stores
+  // the object KEY; what reaches `src` is its resolved public URL, the same
+  // `storedAssetUrl` every other user-image DTO goes through, and null when the
+  // user has no photo.
+  const shellUser = {
+    name: session.user.name,
+    email: session.user.email,
+    image: storedAssetUrl(session.user.image),
+  };
 
   // ⚠️ THE GATE ABOVE STAYS FIRST AND STAYS SEQUENTIAL (MOTIR-3433). Everything
   // below runs only for a request that already has a session; `getSession()` is
@@ -529,7 +540,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           canCreateProject={canCreateProject}
                           projects={projects}
                           aiConfigured={aiPlanningConfigured}
-                          user={{ name: session.user.name, email: session.user.email }}
+                          user={shellUser}
                           platformStaff={isPlatformStaff}
                           initialUnreadCount={initialUnreadCount}
                           buildInPublicProjectKey={buildInPublicProjectKey}
@@ -544,7 +555,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                           activeProject={activeProject}
                           variant="rail"
                           settingsPermissions={settingsPermissions}
-                          user={{ name: session.user.name, email: session.user.email }}
+                          user={shellUser}
                           organization={
                             activeOrg
                               ? {
@@ -664,7 +675,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                         activeProject={activeProject}
                         variant="drawer"
                         settingsPermissions={settingsPermissions}
-                        user={{ name: session.user.name, email: session.user.email }}
+                        user={shellUser}
                         organization={
                           activeOrg
                             ? {
