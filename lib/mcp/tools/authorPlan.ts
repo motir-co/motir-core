@@ -26,6 +26,7 @@ import {
 } from '@/lib/dto/plans';
 import { PLAN_NARRATION_BATCH_MAX, PLAN_NARRATION_SENTENCE_MAX } from '@/lib/plans/planNarration';
 import { PLAN_CODE_READ_BATCH_MAX } from '@/lib/plans/planCodeRead';
+import { PLAN_LESSON_CALL_BATCH_MAX, PLAN_LESSON_CALL_KINDS } from '@/lib/plans/planLessonCall';
 import { PLAN_GAP_BATCH_MAX } from '@/lib/plans/planRaisedGap';
 import {
   TODO_COMMAND_MAX_LENGTH,
@@ -1291,7 +1292,7 @@ const reportPlanStepInputSchema = {
         '`author` (writing `target`, or an item not on the plan yet with no target), or `end` ' +
         '(the session finished — clears its step; never a target). A step report also records ' +
         'the words a person reads at the head of that session’s narration. Send exactly one ' +
-        'of `step`, `narration`, `codeReads` or `gaps`.',
+        'of `step`, `narration`, `codeReads`, `gaps` or `lessonCalls`.',
     ),
   narration: z
     .array(z.string())
@@ -1417,6 +1418,68 @@ const reportPlanStepInputSchema = {
         'PLAN_STEP_INVALID when sent with `step` or `target`, when an entry is malformed, or ' +
         'when an `amend` names an id the plan does not hold. Nothing is recorded on a refusal.',
     ),
+  lessonCalls: z
+    .array(
+      z.object({
+        kind: z
+          .enum(PLAN_LESSON_CALL_KINDS)
+          .describe(
+            '`search` (a `search_lessons` call), `reinforce` (`reinforce_lesson`), `add` ' +
+              '(`add_lesson`), or `injected` (lessons composed into the session’s prompt in ' +
+              'code, not searched).',
+          ),
+        query: z.string().optional().describe('`search`: the query it asked.'),
+        filters: z
+          .object({
+            kinds: z.array(z.string()).optional(),
+            types: z.array(z.string()).optional(),
+            phases: z.array(z.string()).optional(),
+            subject: z.string().optional(),
+            limit: z.number().int().min(1).optional(),
+          })
+          .optional()
+          .describe('`search`: the axes it narrowed by; omit an axis it left open.'),
+        lessonIds: z
+          .array(z.string())
+          .optional()
+          .describe(
+            '`search`: the lesson ids it RETURNED, in rank order (`[]` for none). `injected`: ' +
+              'the ids composed into the prompt, in order.',
+          ),
+        lessonId: z
+          .string()
+          .optional()
+          .describe('`reinforce`: the lesson it named. `add`: the lesson it created.'),
+        occurrenceRef: z
+          .string()
+          .optional()
+          .describe('`reinforce`: its `occurrenceRef`. `add`: its `sourceRef`.'),
+        outcome: z
+          .string()
+          .describe(
+            'The call’s outcome code: `matched`, `nothing-matched`, `unavailable`, `counted`, ' +
+              '`already_counted`, `added`, `injected`, `error`, …',
+          ),
+        counted: z
+          .boolean()
+          .optional()
+          .describe('`reinforce` / `add`: whether it counted (`false` = already recorded).'),
+        detail: z
+          .string()
+          .optional()
+          .describe('A short refusal or failure detail — never a lesson’s text.'),
+      }),
+    )
+    .optional()
+    .describe(
+      'Instead of `step`: the session’s LESSON CALLS, in the order it made them, appended to ' +
+        `the plan’s kept lesson log under \`sessionKey\` (at most ${PLAN_LESSON_CALL_BATCH_MAX} ` +
+        'per call). Records lesson IDS only — never a lesson’s text. An EMPTY array is a report ' +
+        'too: it marks the session recorded with no lesson call, so a reader can tell "never ' +
+        'searched" from "not recorded" — send it once when a session made none. Needs no step. ' +
+        'Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a call is ' +
+        'malformed. Nothing is recorded on a refusal. Read them back with `get_plan_lesson_log`.',
+    ),
   target: z
     .string()
     .trim()
@@ -1438,6 +1501,7 @@ interface ReportPlanStepArgs {
   narration?: string[];
   codeReads?: unknown[];
   gaps?: unknown[];
+  lessonCalls?: unknown[];
 }
 
 interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
@@ -2245,9 +2309,25 @@ export async function runReportPlanStep(
       ...(args.narration !== undefined ? { narration: args.narration } : {}),
       ...(args.codeReads !== undefined ? { codeReads: args.codeReads } : {}),
       ...(args.gaps !== undefined ? { gaps: args.gaps } : {}),
+      ...(args.lessonCalls !== undefined ? { lessonCalls: args.lessonCalls } : {}),
     },
     ctx,
   );
+  if (result.kind === 'lessonCalls') {
+    const n = result.lessonCalls.length;
+    const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
+      planId: args.planId,
+      sessionKey: args.sessionKey,
+      lessonCalls: result.lessonCalls.map((row) => ({ seq: row.seq, kind: row.kind })),
+    });
+    return toolOk(
+      n === 0
+        ? `Recorded session \`${args.sessionKey}\` on plan ${args.planId} as making no lesson call.`
+        : `Recorded ${n} lesson call${n === 1 ? '' : 's'} for session \`${args.sessionKey}\` on ` +
+            `plan ${args.planId}.`,
+      payload,
+    );
+  }
   if (result.kind === 'gaps') {
     const { raised, alreadyRaised, amended } = result.gaps;
     const payload = exempt(REPORT_PLAN_STEP_TOOL_NAME, {
@@ -2730,6 +2810,11 @@ export function registerAuthorPlan(server: McpServer, resolveContext: McpContext
         'Send `gaps` (instead of `step`) the moment an author session raises a gap, and again ' +
         'once its level’s amend is handed it: a gap lives on the plan, not in your walk, so a ' +
         'resumed walk reads the unamended ones back from `get_plan`’s `raisedGaps`. ' +
+        'Send `lessonCalls` (instead of `step`) with the session’s lesson calls — each ' +
+        '`search_lessons` with its query, filters and the ids it returned, each ' +
+        '`reinforce_lesson` / `add_lesson` with its lesson and outcome; ids only — and an empty ' +
+        'array for a session that made none, so a check of the plan can see what each card was ' +
+        'written with; read them back with `get_plan_lesson_log`. ' +
         'IT IS ADVISORY: every refusal ' +
         'comes back as a code and a sentence, and a refused report should NOT stop you ' +
         'planning — carry on with the plan. It changes nothing about the plan’s proposals. ' +

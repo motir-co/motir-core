@@ -32,6 +32,7 @@ import type {
   ProposalRescopeWarningDto,
   PlanNarrationDto,
   PlanCodeReadDto,
+  PlanLessonCallDto,
   PlanGapsRecordedDto,
   PlanRaisedGapDto,
   PlanStepDto,
@@ -513,6 +514,8 @@ export const aiGenerationService = {
       codeReads?: unknown[];
       /** The gaps raised and amended (MOTIR-10176) — sent INSTEAD of `step`. */
       gaps?: unknown[];
+      /** The session's lesson calls (MOTIR-10191) — sent INSTEAD of `step`. */
+      lessonCalls?: unknown[];
     },
     auth: { ctx: ServiceContext; projectId: string },
   ): Promise<
@@ -520,6 +523,7 @@ export const aiGenerationService = {
     | { planId: string; narration: PlanNarrationDto[] }
     | { planId: string; codeReads: PlanCodeReadDto[] }
     | { planId: string; gaps: PlanGapsRecordedDto }
+    | { planId: string; lessonCalls: PlanLessonCallDto[] }
     | { planId: string; providerWait: PlanStepProviderWaitDto | null }
   > {
     const { ctx, projectId } = auth;
@@ -539,12 +543,16 @@ export const aiGenerationService = {
         ...(input.providerRetry !== undefined ? { providerRetry: input.providerRetry } : {}),
         ...(input.codeReads !== undefined ? { codeReads: input.codeReads } : {}),
         ...(input.gaps !== undefined ? { gaps: input.gaps } : {}),
+        ...(input.lessonCalls !== undefined ? { lessonCalls: input.lessonCalls } : {}),
       },
       ctx,
     );
     if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
     if (result.kind === 'codeReads') return { planId: plan.id, codeReads: result.codeReads };
     if (result.kind === 'gaps') return { planId: plan.id, gaps: result.gaps };
+    if (result.kind === 'lessonCalls') {
+      return { planId: plan.id, lessonCalls: result.lessonCalls };
+    }
     if (result.kind === 'providerRetry') {
       return { planId: plan.id, providerWait: result.providerWait };
     }

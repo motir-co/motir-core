@@ -1743,6 +1743,36 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_plan_lesson_log: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+      sessionKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL — only this session’s calls (the key `report_plan_step` carried).',
+      },
+      afterSeq: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'OPTIONAL — the next page: pass the previous page’s `nextAfterSeq`. Omit for the first.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 500,
+        description: 'OPTIONAL — calls per page, at most 500 (the default).',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_plan_status: {
     type: 'object',
     properties: {
@@ -2855,7 +2885,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['settle', 'lay', 'author', 'end'],
         description:
-          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration`, `codeReads` or `gaps`.',
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration`, `codeReads`, `gaps` or `lessonCalls`.',
       },
       narration: {
         type: 'array',
@@ -2980,6 +3010,64 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         },
         description:
           'Instead of `step`: the GAPS your author sessions raised and the ones a level’s amend was handed (at most 50 per call), kept ON THE PLAN so a walk that dies and is resumed can hand the amend what the dead attempt raised. `get_plan` reads them back as `raisedGaps`, each with `amended`. Needs no step. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when an entry is malformed, or when an `amend` names an id the plan does not hold. Nothing is recorded on a refusal.',
+      },
+      lessonCalls: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            kind: {
+              type: 'string',
+              enum: ['search', 'reinforce', 'add', 'injected'],
+              description:
+                '`search` (a `search_lessons` call), `reinforce` (`reinforce_lesson`), `add` (`add_lesson`), or `injected` (lessons composed into the session’s prompt in code, not searched).',
+            },
+            query: { type: 'string', description: '`search`: the query it asked.' },
+            filters: {
+              type: 'object',
+              properties: {
+                kinds: { type: 'array', items: { type: 'string' } },
+                types: { type: 'array', items: { type: 'string' } },
+                phases: { type: 'array', items: { type: 'string' } },
+                subject: { type: 'string' },
+                limit: { type: 'integer', minimum: 1 },
+              },
+              additionalProperties: false,
+              description: '`search`: the axes it narrowed by; omit an axis it left open.',
+            },
+            lessonIds: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`search`: the lesson ids it RETURNED, in rank order (`[]` for none). `injected`: the ids composed into the prompt, in order.',
+            },
+            lessonId: {
+              type: 'string',
+              description: '`reinforce`: the lesson it named. `add`: the lesson it created.',
+            },
+            occurrenceRef: {
+              type: 'string',
+              description: '`reinforce`: its `occurrenceRef`. `add`: its `sourceRef`.',
+            },
+            outcome: {
+              type: 'string',
+              description:
+                'The call’s outcome code: `matched`, `nothing-matched`, `unavailable`, `counted`, `already_counted`, `added`, `injected`, `error`, …',
+            },
+            counted: {
+              type: 'boolean',
+              description: '`reinforce` / `add`: whether it counted (`false` = already recorded).',
+            },
+            detail: {
+              type: 'string',
+              description: 'A short refusal or failure detail — never a lesson’s text.',
+            },
+          },
+          required: ['kind', 'outcome'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the session’s LESSON CALLS, in the order it made them, appended to the plan’s kept lesson log under `sessionKey` (at most 50 per call). Records lesson IDS only — never a lesson’s text. An EMPTY array is a report too: it marks the session recorded with no lesson call, so a reader can tell "never searched" from "not recorded" — send it once when a session made none. Needs no step. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a call is malformed. Nothing is recorded on a refusal. Read them back with `get_plan_lesson_log`.',
       },
       target: {
         type: 'string',
@@ -4619,6 +4707,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_plan: 'Read plan proposals',
   get_plan_authoring_state: 'Read which proposals are authored',
   get_plan_code_reads: 'Read what each planning session read',
+  get_plan_lesson_log: 'Read which lessons each planning session saw',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
   get_section_sets: 'Get section sets',
@@ -4930,6 +5019,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   get_plan_code_reads: {
     title: 'Read what each planning session read',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  get_plan_lesson_log: {
+    title: 'Read which lessons each planning session saw',
     readOnlyHint: true,
     openWorldHint: false,
   },

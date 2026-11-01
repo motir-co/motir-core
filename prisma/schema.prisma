@@ -7621,6 +7621,13 @@ model Plan {
   /// which commit, and how much came back; never the contents. Append-only and
   /// kept as long as the narration.
   codeReads         PlanCodeRead[]
+  /// Every LESSON CALL a planner session made (MOTIR-10191) — its searches with
+  /// the ids they returned in rank order, its reinforcements and additions, and the
+  /// ids a hosted session was handed in code. Ids only; kept as long as the narration.
+  lessonCalls       PlanLessonCall[]
+  /// The sessions whose lesson log was recorded at all (MOTIR-10191) — what makes
+  /// an empty log read "made no lesson call" rather than "not recorded".
+  lessonSessions    PlanLessonSession[]
   /// Every GAP a planner's author session raised on this plan (MOTIR-10176) — kept
   /// on the plan rather than in the walk's memory, so a resumed walk hands its
   /// level's amend the gaps the dead attempt raised.
@@ -7978,6 +7985,68 @@ model PlanCodeRead {
   @@unique([planId, seq])
   @@index([planId, sessionKey])
   @@map("plan_code_read")
+}
+
+/// One LESSON CALL a planner session made (MOTIR-10191): a `search_lessons` with
+/// its query, filters and the lesson ids it returned in RANK order; a
+/// `reinforce_lesson` / `add_lesson` with its lesson, occurrence ref and whether it
+/// counted; or, for the hosted planner, the ids composed into the session's prompt
+/// in code (`injected`). Lets a check of a plan tell a session that never searched
+/// from one whose search missed a lesson and one that was shown the lesson and
+/// wrote against it. IDS ONLY, never a lesson's text. APPEND-ONLY KEPT HISTORY,
+/// exactly as `PlanCodeRead`: never updated, deleted only by the plan's cascade,
+/// keyed by the same opaque `sessionKey`, with no FK to `plan_step`.
+model PlanLessonCall {
+  id            String   @id @default(cuid())
+  planId        String   @map("plan_id")
+  /// The calling session's opaque key, the value `plan_step` and narration carry.
+  sessionKey    String   @map("session_key")
+  /// Per-plan order, gapless from 1, taken under the plan row lock.
+  seq           Int
+  /// `search` · `reinforce` · `add` · `injected`.
+  kind          String
+  /// A search's query.
+  query         String?
+  /// A search's filters as `{ kinds?, types?, phases?, subject?, limit? }` — `{}`
+  /// when it narrowed by nothing, and for every other kind.
+  filters       Json
+  /// A search's result ids in rank order, or the ids injected — `[]` otherwise.
+  lessonIds     Json     @map("lesson_ids")
+  /// The lesson a reinforce named or an add created.
+  lessonId      String?  @map("lesson_id")
+  /// The occurrence a reinforce counted (`occurrenceRef`) or an add cited (`sourceRef`).
+  occurrenceRef String?  @map("occurrence_ref")
+  /// The call's own outcome code: `matched`, `nothing-matched`, `unavailable`,
+  /// `counted`, `already_counted`, `added`, `injected`, `error`, …
+  outcome       String
+  /// Whether a reinforce / add counted; NULL for a search or an injection.
+  counted       Boolean?
+  /// A short refusal or failure detail, capped; never a lesson's text.
+  detail        String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, seq])
+  @@index([planId, sessionKey])
+  @@map("plan_lesson_call")
+}
+
+/// A planner session whose LESSON LOG was recorded (MOTIR-10191) — one row per
+/// session, written by every lesson report, an empty one included. A session with
+/// this row and no `PlanLessonCall` made no lesson call; a session without it was
+/// not recorded. Kept with the plan, deleted only by its cascade.
+model PlanLessonSession {
+  id             String   @id @default(cuid())
+  planId         String   @map("plan_id")
+  sessionKey     String   @map("session_key")
+  firstReportAt  DateTime @default(now()) @map("first_report_at")
+  lastReportAt   DateTime @default(now()) @map("last_report_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, sessionKey])
+  @@map("plan_lesson_session")
 }
 
 /// One GAP a planner's author session raised (MOTIR-10176): work it found that no

@@ -201,6 +201,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_plan_authoring_state: { readOnlyHint: true, openWorldHint: false },
   // R: getPlanCodeReads.ts → plansService.listPlanCodeReads — planCodeReadRepository / planNarrationRepository reads
   get_plan_code_reads: { readOnlyHint: true, openWorldHint: false },
+  // R: getPlanLessonLog.ts → plansService.listPlanLessonLog — planLessonCallRepository / planNarrationRepository reads
+  get_plan_lesson_log: { readOnlyHint: true, openWorldHint: false },
   // R: getApprovedShapeVerdict.ts → plansService.listPlanHistoryForWorkItem / resolveApprovedShapeVerdict
   get_approved_shape_verdict: { readOnlyHint: true, openWorldHint: false },
   // W: reportUnbuildableTarget.ts → runFoundReportService.reportUnbuildableTarget — ledger row + markOutcome, files a bug; may append a finding per call

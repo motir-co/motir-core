@@ -184,6 +184,9 @@ describe('add_lesson — refused BEFORE any upstream call', () => {
     expect(upstream.calls).toHaveLength(1);
     expect(upstream.calls[0]).toContain('/v1/lessons');
     expect(result.structuredContent).toMatchObject({ id: 'les_1', title: INPUT.title });
+    // The id rides the prose too (MOTIR-10191): a driver that sees only the text records it.
+    const text = (result.content as { type: string; text: string }[])[0]!.text;
+    expect(text.split('\n')[0]).toMatch(/· id les_1\.$/);
   });
 });
 

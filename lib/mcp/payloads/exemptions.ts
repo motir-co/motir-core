@@ -70,6 +70,11 @@ export const EXEMPT_TOOLS = {
   validate_sprint:
     'The same verdict shape over a sprint’s membership. Same boundary, same reason — it ' +
     'describes whether a set of work can finish, which is not a thing v1 returns.',
+  get_plan_lesson_log:
+    'Returns the LESSON CALLS each planner session of a plan made — its searches with the ' +
+    'lesson ids they returned, its reinforcements and additions, the ids injected in code — ' +
+    'a planning-evidence read for a check of the plan, not a resource. No `/api/v1` operation ' +
+    'returns plan sessions or lessons (MOTIR-10191).',
   get_plan_code_reads:
     'Returns the CODE READS each planner session of a plan made — tool, arguments, the ' +
     'commits read at and the outcome — a planning-evidence read for a check of the plan, not ' +

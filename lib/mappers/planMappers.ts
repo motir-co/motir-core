@@ -7,6 +7,7 @@ import type {
   PlanItem,
   PlanNarration,
   PlanCodeRead,
+  PlanLessonCall,
   PlanRaisedGap,
   PlanNarrationSession,
   PlanStep,
@@ -19,6 +20,7 @@ import type {
   PlanItemProposedFields,
   PlanNarrationDto,
   PlanCodeReadDto,
+  PlanLessonCallDto,
   PlanRaisedGapDto,
   PlanNarrationSessionDto,
   PlanStepDto,
@@ -172,6 +174,33 @@ export function toPlanRaisedGapDto(row: PlanRaisedGap): PlanRaisedGapDto {
     amendedAt: row.amendedAt?.toISOString() ?? null,
     answer: row.amendedAt !== null ? { refs: [...row.answerRefs], open: row.answerOpen } : null,
     raisedAt: row.createdAt.toISOString(),
+  };
+}
+
+/** A JSON column read back as a list of strings — anything else reads as none. */
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+/** One stored lesson call as it crosses the boundary (MOTIR-10191). */
+export function toPlanLessonCallDto(row: PlanLessonCall): PlanLessonCallDto {
+  const filters =
+    row.filters !== null && typeof row.filters === 'object' && !Array.isArray(row.filters)
+      ? (row.filters as PlanLessonCallDto['filters'])
+      : {};
+  return {
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    kind: row.kind as PlanLessonCallDto['kind'],
+    query: row.query,
+    filters,
+    lessonIds: stringList(row.lessonIds),
+    lessonId: row.lessonId,
+    occurrenceRef: row.occurrenceRef,
+    outcome: row.outcome,
+    counted: row.counted,
+    detail: row.detail,
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
