@@ -187,7 +187,12 @@ describe('public_follow', () => {
     const seeded = await adminDb.publicFollow.create({
       data: { workspaceId: fx.workspaceId, projectId: fx.projectId, email: 'seed@example.com' },
     });
-    const row = { workspaceId: fx.workspaceId, projectId: fx.projectId, email: 'x@example.com' };
+    const row = {
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      email: 'x@example.com',
+      digestOptIn: false,
+    };
 
     await expect(
       withSystemContext((tx) => publicFollowRepository.create(row, tx)),
