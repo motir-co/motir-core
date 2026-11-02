@@ -74,6 +74,54 @@ motir-gateway's `fly-deploy.yml` runs on the image), so it is `runnable`. #864, 
 and #869 only added `pnpm coverage:*` steps to existing `ci.yml` jobs, whose
 evidence lines move with the insertions. 27 jobs, every one `runnable`.
 
+**Added jobs no longer stale an entry, and a daily probe re-reads every entry
+(MOTIR-10211, 2026-11-02):** motir-infra#7 (MOTIR-9728) added a `verify` job to
+`main.yml` on the seam, using only actions and executables `deploy` already used,
+and the readiness verdict read the entry `inventory_stale` from 2026-10-28 until
+somebody opened /admin/fleet-settings on 2026-11-02. Two gaps, both left over from
+MOTIR-8870:
+
+- _The digest counted job ids._ `workflowStructure` keyed every job by
+  `<path>#<jobId>`, so any added job moved it. The digest now reads the
+  repository-wide SETS of distinct runners and reusable workflows, beside the
+  actions, executables and shells (`structureDigest`). A job added on a known
+  runner with known tools leaves it put; a new runner, reusable workflow, action,
+  executable or shell anywhere still moves it, and so does removing the last job
+  on a runner (it fails closed).
+- _A flat set cannot see a job MOVE._ A recorded job going from `ubuntu-latest` to
+  the seam, in a repository that already used both, changes what requests the
+  fleet without changing the set. So an entry is current only when the digest is
+  unchanged AND every recorded job still present at the head has its recorded
+  `runsOn` (a reusable-workflow caller: its recorded `calls`)
+  (`lib/ciFleet/inventoryStaleness.ts`, `recordedJobsMoved`). The recorded
+  `runsOn` of every private entry was checked against its workflows at its sha:
+  none differs. A removed job is not a change.
+- _Nothing re-measured, and nobody was told._ `system.daily-health-check` now
+  carries a ninth probe, fleet inventory drift
+  (`lib/services/fleetInventoryDriftService.ts`), which asks readiness's own
+  question by readiness's own rule (the same `entryStaleness`) for every PRIVATE
+  entry, once a day at 09:00 UTC, through the provisioning App. A stale entry
+  fails the run: the DLQ row on `/admin/jobs` and the job-failure Sentry email
+  name the repository, the measured and head shas, what moved, and the jobs at
+  the head the entry does not record. A read GitHub refused is `indeterminate`
+  and not loud; a deployment without the provisioning App is `not_applicable`.
+  **The probe alerts; it never writes the inventory**: whether the image can run
+  a job is a judgement against the runner image this process cannot make, so a
+  job it cannot judge is never recorded as `runnable` — it records no job at all.
+
+Every recorded `structureFingerprint` was recomputed at its entry's sha under the
+new digest (motir-ai `fe39e5195`, motir-gateway `24a54f497`, motir-meta
+`ba13df74d`); each is also the digest at that repository's current `main`.
+`tests/ciFleet/workflowFingerprint.test.ts` pins the digest of a fixed workflow,
+so a later change to the digest's inputs fails there until every fingerprint is
+recomputed in the same change. motir-infra is re-measured at `8972a83fb` (its
+`main` head; newest workflow commit `3f2d689cb`): `verify` is `runnable`, on the
+seam, and needs checkout, pnpm's setup action, setup-node,
+`aws-actions/configure-aws-credentials` and `pnpm`, exactly `deploy`'s set, so it
+is judged against the same Dockerfile (`4064243068`). `main.yml` gained a daily
+`schedule` trigger in the same pull request, so its three jobs list `schedule`;
+`checks` and `deploy` skip it with an `if:`. Five jobs, every one `runnable`.
+
 **Image under test:** `infra/ci-runner/Dockerfile` on `motir-core` `main` at
 `4064243068` (last commit touching the file, 2026-10-12). Every "absent from the
 image" below is read from that file: it installs Ubuntu 24.04 (by digest), the
@@ -141,6 +189,28 @@ own file. So every job key in every file appears exactly once.
 | `motir-marketing` @ `06c0411e3`              | 2                        | 9               |
 | `motir-skills` @ `08d08eb15`                 | 1                        | 2               |
 | `nextjs-prisma-vercel-starter` @ `2856141b9` | 3                        | 8               |
+
+### Re-measuring an entry
+
+Whenever the daily probe fails with `FleetInventoryStaleError`, or the readiness
+verdict reads `inventory_stale`, re-measure the named repository:
+
+1. Check out the repository and fetch its default branch; note the head sha.
+2. Read every workflow and composite action at that sha, as above, and update the
+   entry's `workflows`: add each job the probe listed as not yet recorded, move
+   each job it listed as moved, and give every job a verdict against
+   `infra/ci-runner/Dockerfile`. A job not read through to its tools is recorded
+   `needs-image` with `missing: ["unverified"]`, never `runnable`.
+3. Set `sha`, `measuredAt` and `jobCount`, and record the digest:
+
+   ```sh
+   pnpm exec tsx scripts/ci-fleet/fingerprint-workflows.ts <checkout> <sha>
+   ```
+
+4. Add a dated paragraph at the top of this file saying what changed and why
+   each new job has its verdict.
+
+The probe clears on the first daily run after the merge.
 
 **What this run could not do:** `docker run` the published image. This session
 has a Docker client but no daemon (`docker info` → _failed to connect to the

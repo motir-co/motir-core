@@ -679,7 +679,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-27T20:00:00Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "d641b47921344893fc5e946687a939f43df2f3754a0a840a452b35bdf83d43b4",
+      "structureFingerprint": "f22591edd1790e221660ea1a87dde1e069587faf0dc34e8bca50f3806d9a8bf6",
       "workflows": [
         {
           "path": ".github/workflows/ci.yml",
@@ -949,7 +949,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-24T01:50:00Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "b4a9ef5cd44bb2642578e8482c7f5af093f22734650a007bede461016b4f9243",
+      "structureFingerprint": "1dfdcea67e5b002407f24abee664109e1bbcedadf1a4f2d9c32bf5ce00617414",
       "workflows": [
         {
           "path": ".github/workflows/catalog-refresh.yml",
@@ -1053,7 +1053,7 @@
       "visibility": "private",
       "measuredAt": "2026-10-24T01:50:00Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "d23779c44102f96bbc43e895cf6d0620ff7bd32111ba8aaa99ba375bc666a864",
+      "structureFingerprint": "222df68c52b93d676632a66cddd22d588928d8ae7e026a17b486e9308e8caf7b",
       "workflows": [
         {
           "path": ".github/workflows/guards.yml",
@@ -1313,11 +1313,11 @@
     "motir-co/motir-infra": {
       "repoRef": "motir-co/motir-infra",
       "ref": "main",
-      "sha": "b5221db3f6974310391f14411bbd1b2854c9d63a",
+      "sha": "8972a83fbb94f92787e146d5c62ee1c1c790cf85",
       "visibility": "private",
-      "measuredAt": "2026-10-27T19:40:00Z",
+      "measuredAt": "2026-11-02T10:00:00Z",
       "imageDockerfileSha": "406424306b766f625d3d8c1c6f2880662c8a4377",
-      "structureFingerprint": "a82299d30db0e9e57d93674e9911ecfdad68fe4fbeb7e482d4ae0cff3b9a0df9",
+      "structureFingerprint": "e21228523b444ffc412a76d167e32fbe51a4fb661d83ed2c7713fa5ecbc4028f",
       "workflows": [
         {
           "path": ".github/workflows/main.yml",
@@ -1325,18 +1325,26 @@
             {
               "jobId": "checks",
               "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
-              "triggers": ["push", "workflow_dispatch"],
+              "triggers": ["push", "workflow_dispatch", "schedule"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/main.yml:23"
+              "evidence": ".github/workflows/main.yml:30"
             },
             {
               "jobId": "deploy",
               "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
-              "triggers": ["push", "workflow_dispatch"],
+              "triggers": ["push", "workflow_dispatch", "schedule"],
               "verdict": "runnable",
               "missing": [],
-              "evidence": ".github/workflows/main.yml:37"
+              "evidence": ".github/workflows/main.yml:44"
+            },
+            {
+              "jobId": "verify",
+              "runsOn": "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+              "triggers": ["push", "workflow_dispatch", "schedule"],
+              "verdict": "runnable",
+              "missing": [],
+              "evidence": ".github/workflows/main.yml:76"
             }
           ]
         },
@@ -1362,7 +1370,7 @@
           ]
         }
       ],
-      "jobCount": 4
+      "jobCount": 5
     }
   }
 }

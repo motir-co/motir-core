@@ -140,6 +140,7 @@ const NAMED_PIPELINE_FILES = [
   'lib/services/projectRunnerGroupService.ts',
   'lib/repositories/projectRunnerGroupRepository.ts',
   'lib/services/fleetReadinessService.ts',
+  'lib/services/fleetInventoryDriftService.ts',
   'lib/services/fleetOrgCiSettingService.ts',
   'lib/repositories/platformFleetOrgCiRepository.ts',
   'lib/services/ciRunnerProvisioningService.ts',
