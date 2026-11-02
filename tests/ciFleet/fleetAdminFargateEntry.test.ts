@@ -6,7 +6,6 @@ import path from 'node:path';
 import tls from 'node:tls';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { adminDb } from '../helpers/adminDb';
 import {
   composeDatabaseUrl,
@@ -375,11 +374,10 @@ describe('the fleet-admin bundle in a Fargate-shaped process', () => {
     const testUrl = new URL(process.env['DATABASE_URL'] ?? '');
     database = decodeURIComponent(testUrl.pathname.slice(1));
     // The login gets exactly the privileges of the role the code under test
-    // connects as (`@/lib/db`'s — the runtime role under TEST_DB_APP_ROLE=1), as
-    // a member of it; only its name and password are new.
-    const [current] = await db.$queryRaw<Array<{ role: string }>>`
-      SELECT current_user::text AS role`;
-    const runtimeRole = current?.role ?? '';
+    // connects as (`@/lib/db`'s URL — the runtime role under TEST_DB_APP_ROLE=1),
+    // as a member of it; only its name and password are new. Read from the URL,
+    // not queried, so the singleton runs no raw statement here.
+    const runtimeRole = decodeURIComponent(testUrl.username);
     await adminDb.$executeRawUnsafe(`DROP ROLE IF EXISTS "${ROLE}"`);
     const [create] = await adminDb.$queryRaw<Array<{ sql: string }>>`
       SELECT format('CREATE ROLE %I LOGIN PASSWORD %L IN ROLE %I',
