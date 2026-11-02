@@ -174,12 +174,13 @@ export interface SystemTransactionOptions {
  *     workspaces (the 1.6.5 dashboard's system tab).
  *
  * ⚠️ IT IS NOT A UNIVERSAL ESCAPE HATCH, AND THE FAILURE IS SILENT (MOTIR-2880).
- * `app.system_admin` is read by a policy ARM, and that arm was added per table for
- * operator tooling — measured on the migrated schema, **24 of the 69 RLS tables
- * carry one on a SELECT/ALL policy and 45 do not**, `work_item` / `workspace` /
- * `workspace_membership` / `organization` / `sprint` / `comment` among them. A read
- * of an unarmed table inside this context returns ZERO ROWS AND RAISES NOTHING, so
- * the caller reads a real row's absence as data. The rule that follows:
+ * `app.system_admin` is read by a policy ARM, and that arm is added TABLE BY TABLE —
+ * many RLS tables carry none (when MOTIR-2880 measured it, `work_item` / `workspace`
+ * / `workspace_membership` / `organization` / `sprint` / `comment` were among them).
+ * Whether a given table admits this context is a property of THAT table's policy, so
+ * read the policy (`pg_policies`, or the migration that created it) rather than a
+ * count. A read of an unarmed table inside this context returns ZERO ROWS AND RAISES
+ * NOTHING, so the caller reads a real row's absence as data. The rule that follows:
  *
  *   * The CONNECTION tier — `github_installation` / `github_repo` /
  *     `github_pull_request` / `job_run` / the CI meters — is what this context is
@@ -191,10 +192,20 @@ export interface SystemTransactionOptions {
  *     cross-workspace live-project resolve, the meta/tenant cost split) is the only
  *     case that earns a new `system_admin` READ arm on the table.
  *
- * The arms are READ-side only, deliberately: `withSystemContext` is REFUSED on the
- * tenant-root WRITE policies (`membership_insert_active_or_bootstrap` and friends,
- * MOTIR-2865) and that refusal is load-bearing. Do not answer a blind read by arming
- * an INSERT/UPDATE policy.
+ * WRITES follow the same per-table rule, on the policy's `WITH CHECK` clause. A
+ * write under this context passes only where the system-admin arm also covers new
+ * rows: the job ledger (`job_run_workspace_or_system_admin`), deliveries
+ * (`work_item_delivery_workspace_or_system`) and hosted applications
+ * (`hosted_application_workspace_or_system`) carry it on both `USING` and
+ * `WITH CHECK`, which is why jobRunsService and emailDeliveryService write here on
+ * purpose. An arm on `USING` alone admits the read and refuses the write.
+ *
+ * The tenant-root WRITE policies (`membership_insert_active_or_bootstrap` and
+ * friends, MOTIR-2865) REFUSE this context, and that refusal is load-bearing. System
+ * code writing a tenant row binds the workspace first (`withWorkspaceServiceContext`,
+ * or {@link bindWorkspaceContext} inside this transaction), taking the id from the
+ * row it read; a new `WITH CHECK` arm is added only where no workspace can be known
+ * first. Never answer a blind read by arming an INSERT/UPDATE policy.
  *
  * SECURITY: this helper is NEVER fed user input — it binds a constant. A tenant
  * request path uses withWorkspaceContext (which binds only user/workspace/
@@ -230,7 +241,7 @@ export async function withSystemContext<T>(
  * the WORKSPACE is learned from a connection-tier row mid-read.
  *
  * ⚠️ THE CASE IT EXISTS FOR (MOTIR-2880). `withSystemContext` binds ONE flag, and
- * only 24 of the 69 RLS tables carry an arm that reads it. A webhook / job path
+ * only the tables whose policy carries a system-admin arm read it. A webhook / job path
  * legitimately opens a system transaction to reach the CONNECTION tier — the
  * `github_installation` / `github_repo` / `job_run` family, whose policies are
  * `system_admin OR workspace_id = app.workspace_id` — and then reads TENANT tables
