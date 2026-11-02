@@ -1549,7 +1549,7 @@ jobs:
     # `fullyParallel: false` ON PURPOSE — every spec shares one Postgres and a
     # global truncate, so parallel workers IN ONE PROCESS would race. We can't
     # parallelize inside a job, so we parallelize ACROSS jobs: each matrix leg is
-    # its own runner with its OWN ephemeral `pgvector/pgvector:pg16` container
+    # its own runner with its OWN ephemeral `pgvector/pgvector:pg18` container
     # (started by ./.github/actions/postgres), so there is zero cross-leg DB
     # contention (the local shared-:5433
     # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)

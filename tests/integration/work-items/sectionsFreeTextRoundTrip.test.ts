@@ -289,7 +289,10 @@ describe('a hand-written body is stored as sent and never rewritten', () => {
     await runValidatePlan({ planId: plan.id }, fx.ctx);
 
     expect(await snapshot(fx)).toEqual(before);
-  });
+    // Seeding the corpus, a plan over it and two reads per card take ~11.7s on an
+    // idle machine on both Postgres 16 and 18, so the suite's 15s budget left no
+    // room for a loaded CI shard, where it timed out twice (MOTIR-10221).
+  }, 60_000);
 
   it('validate_work_item names each not-done card’s missing sections exactly as parseSections does, and skips done cards', async () => {
     const fx = await makeWorkItemFixture();

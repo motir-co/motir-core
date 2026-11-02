@@ -8,6 +8,7 @@ import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixt
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectRestrictViolation } from '../helpers/restrictViolation';
 
 // Repository-layer tests for the custom-fields data-access leaves (Story 5.3
 // · Subtask 5.3.1): customFieldDefinitionRepository /
@@ -359,9 +360,9 @@ describe('customFieldOptionRepository', () => {
 
     // The only-when-unused rule's DB backstop: the value FK's ON DELETE
     // RESTRICT rejects the hard delete while a value row holds the option.
-    await expect(
+    await expectRestrictViolation(
       adminDb.$transaction(async (tx) => customFieldOptionRepository.delete(inUse.id, tx)),
-    ).rejects.toMatchObject({ code: 'P2003' });
+    );
     // The value row (and the option) survive the rejected delete.
     expect(
       (

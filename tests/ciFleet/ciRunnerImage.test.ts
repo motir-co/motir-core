@@ -199,7 +199,7 @@ describe('dockerd must be able to unpack a layer, not merely answer (MOTIR-8821)
 
   it('the boot smoke pulls a whiteout-bearing image through the production script', () => {
     expect(code(proveBoot)).toContain('motir-ci-runner-dockerd');
-    expect(code(proveBoot)).toContain('docker pull pgvector/pgvector:pg16');
+    expect(code(proveBoot)).toContain('docker pull pgvector/pgvector:pg18');
     expect(code(proveBoot)).not.toContain('MOTIR_RUNNER_SKIP_DOCKER');
   });
 });

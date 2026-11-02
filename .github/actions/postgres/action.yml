@@ -32,9 +32,14 @@ inputs:
     required: false
     default: pgvector/pgvector
   image-tag:
-    description: Postgres image tag. Keep in sync with docker-compose.yml.
+    description: >-
+      Postgres image tag. Keep in sync with docker-compose.yml. The MAJOR is
+      production's: both production databases run PostgreSQL 18 (18.6, read
+      with `show server_version` on 2026-11-02), so CI runs 18 too — a
+      migration, plan or behaviour that differs between majors must fail here,
+      not first in production (MOTIR-10221).
     required: false
-    default: pg16
+    default: pg18
   container-name:
     description: Docker container name (one Postgres per job, so the default is fine).
     required: false

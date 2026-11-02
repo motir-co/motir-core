@@ -38,7 +38,7 @@ playbook as GitLab, Sentry, Plane, and Mattermost.
 - **Framework**: [Next.js 16](https://nextjs.org) (App Router, React Server Components, Turbopack)
 - **Language**: [TypeScript](https://www.typescriptlang.org) (strict mode; `noUncheckedIndexedAccess`, `noImplicitOverride`, `noFallthroughCasesInSwitch`)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com)
-- **Persistence**: [Postgres 16](https://www.postgresql.org) (local Docker; host port `5433` to coexist with other local Postgres instances) + [Prisma 7](https://www.prisma.io) with [`@prisma/adapter-pg`](https://www.npmjs.com/package/@prisma/adapter-pg). Connection URL lives in [`prisma.config.ts`](prisma.config.ts) (Prisma 7 split it out of `schema.prisma`).
+- **Persistence**: [Postgres 18](https://www.postgresql.org) with pgvector — production's major (local Docker; host port `5433` to coexist with other local Postgres instances) + [Prisma 7](https://www.prisma.io) with [`@prisma/adapter-pg`](https://www.npmjs.com/package/@prisma/adapter-pg). Connection URL lives in [`prisma.config.ts`](prisma.config.ts) (Prisma 7 split it out of `schema.prisma`).
 - **Auth**: NextAuth / Better-Auth (lands in Story 1.1 — not yet present)
 - **Testing**: [Vitest](https://vitest.dev) unit + [Playwright](https://playwright.dev) e2e (scaffolding lands in later Subtasks)
 - **Lint / format**: [ESLint 9](https://eslint.org) (flat config) + [Prettier 3](https://prettier.io). [Husky](https://typicode.github.io/husky) pre-commit hook runs [lint-staged](https://github.com/lint-staged/lint-staged) to auto-fix staged files on every commit.
@@ -65,6 +65,51 @@ pnpm dev                   # http://localhost:3000
 
 You should see a placeholder "Motir" page on a dark theme — not the default
 `create-next-app` welcome page.
+
+### Coming from the PostgreSQL 16 dev database
+
+The dev database runs PostgreSQL 18, production's major (MOTIR-10221). A 16 data
+directory cannot start under 18, so `docker-compose.yml` uses a new volume,
+`prodect-pg18-data`, and `./scripts/db-up.sh` initialises it empty. Your old
+`prodect-pg-data` volume is left as it was. List it with:
+
+```bash
+docker volume ls --filter name=prodect-pg-data
+```
+
+**Start fresh (recommended).** Dev data is reproducible with `pnpm db:seed` /
+`pnpm db:seed:large`. Once you no longer need the old data, remove the old
+volume, using the name the command above printed:
+
+```bash
+docker volume rm motir-core_prodect-pg-data
+```
+
+**Keep the data.** Dump it while the 16 container still runs, _before_ you pull
+this change (or check out an older commit and run `docker compose up -d postgres`
+there first):
+
+```bash
+docker exec prodect-postgres pg_dumpall -U prodect > prodect-pg16.sql
+```
+
+Then, on this change, start the empty 18 database, load the dump and finish the
+setup:
+
+```bash
+docker compose rm -sf postgres && docker compose up -d postgres
+```
+
+```bash
+docker exec -i prodect-postgres psql -q -U prodect -d postgres < prodect-pg16.sql
+```
+
+```bash
+./scripts/db-up.sh
+```
+
+The load reports `role "prodect" already exists` and `database "prodect" already
+exists`. Those are expected, because the container creates both at first boot.
 
 ### Scripts
 
@@ -122,7 +167,7 @@ Three parallel jobs:
 - **Lint** — `pnpm lint` + `pnpm format:check`
 - **TypeScript** — `pnpm prisma generate` then `pnpm typecheck`
 - **Build** — `pnpm prisma migrate deploy` then `pnpm build`, against a
-  Postgres 16 container (started by `.github/actions/postgres`, which pulls the
+  Postgres 18 container (started by `.github/actions/postgres`, which pulls the
   image mirror-first and retries — a `services:` block cannot, MOTIR-1742)
 
 The full suite targets <3 min on a fresh clone. The pre-commit hook (Husky +

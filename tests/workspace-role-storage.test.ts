@@ -9,6 +9,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { CUSTOM_WORKSPACE_ROLE_TIER, WORKSPACE_ROLES } from '@/lib/workspaces/roles';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { expectRestrictViolation } from './helpers/restrictViolation';
 
 // Schema + tenancy + repository proof for the workspace role STORAGE (Story
 // MOTIR-6168 · Subtask MOTIR-6457) — the EXPAND step. It covers only what that
@@ -225,14 +226,9 @@ describe('the RESTRICT foreign key', () => {
         tx,
       ),
     );
-    let caught: unknown;
-    try {
-      await adminDb.$transaction((tx) => workspaceRoleDefinitionRepository.delete(fx.roleW1, tx));
-    } catch (err) {
-      caught = err;
-    }
-    expect(caught).toBeInstanceOf(Prisma.PrismaClientKnownRequestError);
-    expect((caught as Prisma.PrismaClientKnownRequestError).code).toBe('P2003');
+    await expectRestrictViolation(
+      adminDb.$transaction((tx) => workspaceRoleDefinitionRepository.delete(fx.roleW1, tx)),
+    );
     expect(
       await adminDb.workspaceRoleDefinition.findUnique({ where: { id: fx.roleW1 } }),
     ).not.toBeNull();
