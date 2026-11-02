@@ -16,6 +16,10 @@ import { Prisma } from '@/generated/prisma/client';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { classifyRunner, MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
+import { generateKeyPairSync } from 'node:crypto';
+import checkedInInventory from '@/lib/ciFleet/fleetJobInventory.json';
+import type { FleetJobInventory } from '@/lib/ciFleet/fleetJobInventoryTypes';
+import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 
 // Scheduled-job primitive (Story 1.6 · Subtask 1.6.4) — the replacement for the
 // 1.6.2 system.ping smoke test. Drives the `system.daily-health-check` cron job
@@ -947,6 +951,118 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
           'credential-expiry',
           'hosted-run-probe',
         ]),
+      );
+    });
+  });
+
+  // ── The NINTH probe: fleet inventory drift (MOTIR-10211) ──────────────────
+  //
+  // Its fixture is GitHub (`fetch`) and the checked-in inventory. The probe's own
+  // arms are pinned in `tests/ciFleet/fleetInventoryDriftService.test.ts`; these
+  // assert the job surface: the verdict on the row, and a stale entry failing
+  // the run with a message an operator can act on.
+
+  describe('fleet inventory drift', () => {
+    const INFRA_HEAD = 'feedfacefeedfacefeedfacefeedfacefeedface';
+
+    function stubGithubWithStaleInfra() {
+      const { privateKey } = generateKeyPairSync('rsa', {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: 'spki', format: 'pem' },
+        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+      });
+      vi.stubEnv('GITHUB_STUDIO_APP_ID', '4242');
+      vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
+      _resetInstallationTokenCache();
+      const registry = registryServing([RUNNER_REPO]);
+      const shipped = checkedInInventory as FleetJobInventory;
+      const workflow = [
+        'jobs:',
+        '  image:',
+        "    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+        '    steps:',
+        '      - uses: docker/setup-qemu-action@v3',
+        '',
+      ].join('\n');
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (rawUrl: string, init?: RequestInit) => {
+          const url = new URL(String(rawUrl));
+          if (url.host !== 'api.github.com') return registry(rawUrl, init);
+          if (/^\/orgs\/[^/]+\/installation$/.test(url.pathname)) {
+            return jsonRes(200, { id: 9001, permissions: {}, events: [], suspended_at: null });
+          }
+          if (/\/access_tokens$/.test(url.pathname)) {
+            return jsonRes(200, {
+              token: 'ghs_drift',
+              expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+            });
+          }
+          const commits = /^\/repos\/([^/]+)\/([^/]+)\/commits$/.exec(url.pathname);
+          if (commits) {
+            const entry = shipped.repos[`${commits[1]}/${commits[2]}`]!;
+            return commits[2] === 'motir-infra'
+              ? jsonRes(200, [
+                  { sha: INFRA_HEAD, commit: { committer: { date: '2099-01-01T00:00:00Z' } } },
+                ])
+              : jsonRes(200, [
+                  { sha: entry.sha, commit: { committer: { date: entry.measuredAt } } },
+                ]);
+          }
+          if (/\/git\/trees\//.test(url.pathname)) {
+            return jsonRes(200, {
+              truncated: false,
+              tree: [{ type: 'blob', path: '.github/workflows/main.yml' }],
+            });
+          }
+          if (/\/contents\//.test(url.pathname)) {
+            return jsonRes(200, {
+              encoding: 'base64',
+              content: Buffer.from(workflow).toString('base64'),
+            });
+          }
+          return jsonRes(500, { message: `unexpected ${url.href}` });
+        }),
+      );
+    }
+
+    it('PASSES and records not_applicable on a deployment with no provisioning App', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.stubEnv('GITHUB_STUDIO_APP_ID', '');
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        fleetInventory: { verdict: 'not_applicable', reason: 'app_not_configured' },
+      });
+    });
+
+    it('FAILS on a stale private entry, naming the repository, both shas and the re-measure path', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      stubGithubWithStaleInfra();
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error, ctx } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('FleetInventoryStaleError');
+      expect(error?.message).toContain('motir-co/motir-infra (measured 8972a83fb, head feedfacef');
+      expect(error?.message).toContain(
+        'a new runner, reusable workflow, action, executable or shell',
+      );
+      expect(error?.message).toContain('not yet recorded: .github/workflows/main.yml#image');
+      expect(error?.message).toContain('inventory_stale');
+      expect(error?.message).toContain('scripts/ci-fleet/fingerprint-workflows.ts');
+      expect(error?.message).toContain('docs/research/fleet-job-inventory.md');
+      expect(error?.message).not.toContain('ghs_drift');
+      // Every other probe still ran and recorded its verdict first.
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      expect(stepIds).toEqual(
+        expect.arrayContaining(['hosted-run-probe', 'fleet-inventory-drift']),
       );
     });
   });

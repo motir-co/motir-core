@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalRunsOn,
   commandWords,
   isFingerprintedPath,
+  structureDigest,
   workflowFingerprint,
   workflowStructure,
 } from '@/lib/ciFleet/workflowFingerprint';
@@ -131,10 +133,26 @@ describe('workflowFingerprint', () => {
     expect(fp(ci('', 'ubuntu-latest'))).not.toBe(fp(ci()));
   });
 
-  it('moves when a job is added or removed', () => {
+  // MOTIR-10211: motir-infra#7 added a `verify` job on the seam with the actions
+  // and executables `deploy` already used, and the per-job key moved the digest.
+  it('does not move for a job added on a runner and with tools the repository already uses', () => {
     expect(
       fp(`${ci()}  extra:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pnpm lint\n`),
+    ).toBe(fp(ci()));
+    const seam = "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}";
+    expect(
+      fp(`${ci()}  verify:\n    runs-on: ${seam}\n    steps:\n      - uses: actions/checkout@v4\n`),
+    ).toBe(fp(ci()));
+  });
+
+  it('moves for a job added on a runner the repository does not use yet', () => {
+    expect(
+      fp(`${ci()}  mac:\n    runs-on: macos-latest\n    steps:\n      - run: pnpm lint\n`),
     ).not.toBe(fp(ci()));
+  });
+
+  it('moves when the last job on a runner is removed — it fails closed', () => {
+    expect(fp(ci().replace(/ {2}deploy:[\s\S]*$/, ''))).not.toBe(fp(ci()));
   });
 
   it('moves for a new executable', () => {
@@ -200,5 +218,39 @@ describe('isFingerprintedPath / workflowStructure', () => {
     expect(s.actions).toEqual(['actions/checkout', 'pnpm/action-setup']);
     expect(s.commands).toContain('flyctl');
     expect(s.shells).toEqual(['python3 {0}']);
+  });
+
+  it('records the distinct runners and reusable calls repository-wide', () => {
+    const s = workflowStructure([
+      {
+        path: CI,
+        text: `${ci()}  again:\n    runs-on: ubuntu-latest\n    steps:\n      - run: ls\n  image:\n    uses: ./.github/workflows/image.yml@main\n`,
+      },
+    ]);
+    expect(s.runners).toEqual([
+      canonicalRunsOn("${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}"),
+      canonicalRunsOn('ubuntu-latest'),
+    ]);
+    // A caller job contributes its call, never a runner of its own.
+    expect(s.calls).toEqual(['./.github/workflows/image.yml']);
+    expect(s.jobs[`${CI}#image`]).toEqual({ runsOn: null, calls: './.github/workflows/image.yml' });
+  });
+
+  it('spells a runner the same way whatever its key order, and a missing one as null', () => {
+    expect(canonicalRunsOn({ labels: ['x'], group: 'g' })).toBe(
+      canonicalRunsOn({ group: 'g', labels: ['x'] }),
+    );
+    expect(canonicalRunsOn(undefined)).toBe('null');
+  });
+
+  // ⚠️ A CHANGE TO THE DIGEST'S INPUTS IS A CHANGE TO EVERY RECORDED FINGERPRINT.
+  // This literal is the digest of a fixed workflow: when it has to change, every
+  // `structureFingerprint` in `lib/ciFleet/fleetJobInventory.json` must be
+  // recomputed at its entry's sha in the same change (MOTIR-10211), or each entry
+  // reads `inventory_stale` the moment its repository's workflows next move.
+  it('pins the digest of a fixed workflow, so an input change cannot ship unnoticed', () => {
+    const s = workflowStructure([{ path: CI, text: ci() }]);
+    expect(structureDigest(s)).toBe(fp(ci()));
+    expect(fp(ci())).toBe('4ed232b1b99bf1534215b65cb20ba52aba2116574a9d7b3a02107a3e9df9a360');
   });
 });

@@ -21,6 +21,17 @@ import { parse } from 'yaml';
 // must be cheap to keep honest, and a missed case costs a job that fails on the
 // fleet and is switched off by the rule the ON window already has. A NEW tool,
 // action or runner anywhere in the repository always moves the digest.
+//
+// ⚠️ AND SO IS THE SET OF RUNNERS (MOTIR-10211). The digest used to key every job
+// by `<path>#<jobId>`, so a job ADDED on a runner the repository already used,
+// running only tools it already used, still moved it: motir-infra#7's `verify`
+// job held the switch off for five days with nothing new to measure. The digest
+// now reads the distinct runners and reusable workflows, like the other sets.
+// What a flat set cannot see — an EXISTING job moving between two runners the
+// repository both already used, e.g. onto the seam — is the second half of the
+// check, `recordedJobsMoved` in `lib/ciFleet/inventoryStaleness.ts`, which reads
+// each job's recorded `runsOn` against its runner at the head. `jobs` stays in
+// the structure for that check; it is no longer an input to the digest.
 
 export interface WorkflowSourceFile {
   /** Repository-relative, e.g. `.github/workflows/ci.yml`. */
@@ -260,8 +271,13 @@ function canonical(value: unknown): string {
 }
 
 export interface WorkflowStructure {
-  /** `path#jobId` → the job's `runs-on` and the reusable workflow it calls. */
+  /** `path#jobId` → the job's `runs-on` and the reusable workflow it calls. Read
+   *  per job by `recordedJobsMoved`; NOT an input to the digest (MOTIR-10211). */
   jobs: Record<string, { runsOn: unknown; calls: string | null }>;
+  /** Every distinct `runs-on`, canonical JSON, across the repository. */
+  runners: string[];
+  /** Every reusable workflow a job calls, without its version, across the repository. */
+  calls: string[];
   /** Every action reference without its version, across the repository. */
   actions: string[];
   /** Every executable a `run:` body invokes, across the repository. */
@@ -312,17 +328,45 @@ export function workflowStructure(files: WorkflowSourceFile[]): WorkflowStructur
     }
   }
 
+  const runners = new Set<string>();
+  const calls = new Set<string>();
+  for (const job of Object.values(jobs)) {
+    // A caller job has no `runs-on` of its own; its runners are its callee's jobs.
+    if (job.calls !== null) calls.add(job.calls);
+    else runners.add(canonical(job.runsOn));
+  }
+
   return {
     jobs,
+    runners: [...runners].sort(),
+    calls: [...calls].sort(),
     actions: [...actions].sort(),
     commands: [...commands].sort(),
     shells: [...shells].sort(),
   };
 }
 
+/** Canonical JSON of a `runs-on` value — how `runners` spells a runner, and how
+ *  a recorded job's runner is compared with its runner at the head. */
+export function canonicalRunsOn(runsOn: unknown): string {
+  return canonical(runsOn ?? null);
+}
+
+/** The digest of a structure's REPOSITORY-WIDE inputs — never the per-job map,
+ *  so adding a job on a known runner with known tools leaves it put (MOTIR-10211). */
+export function structureDigest(structure: WorkflowStructure): string {
+  const { runners, calls, actions, commands, shells } = structure;
+  return createHash('sha256')
+    .update(canonical({ runners, calls, actions, commands, shells }))
+    .digest('hex');
+}
+
+/** The fingerprinted files' structure — every other path is ignored. */
+export function fingerprintedStructure(files: WorkflowSourceFile[]): WorkflowStructure {
+  return workflowStructure(files.filter((f) => isFingerprintedPath(f.path)));
+}
+
 /** The digest the inventory records and readiness recomputes. */
 export function workflowFingerprint(files: WorkflowSourceFile[]): string {
-  return createHash('sha256')
-    .update(canonical(workflowStructure(files.filter((f) => isFingerprintedPath(f.path)))))
-    .digest('hex');
+  return structureDigest(fingerprintedStructure(files));
 }
