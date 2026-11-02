@@ -388,6 +388,18 @@ export const ja: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_run_records: {
+    summary:
+      'プロジェクトの実行一覧（新しい順）— カード・スコープ・ステータスで絞り込み、レッグは件数、該当なしは名前付きの結果。',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      'プロジェクトの 1 つの実行 — どう終わったか、レッグごとに相違として記録した内容をそのまま。不明な実行は名前付きの結果。',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       '未承認の計画をなぜ変更しなければならなかったかを記録します。4つの分岐があり、うち2つは計画バグを起票します。計画自体には何も変更を加えません。',

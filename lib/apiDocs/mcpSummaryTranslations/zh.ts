@@ -358,6 +358,17 @@ export const zh: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_run_records: {
+    summary:
+      '项目的运行记录，最新优先——可按卡片、范围或状态筛选，各环节以计数呈现，无匹配为具名结果。',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary: '项目的一次运行——如何结束，以及每个环节原样记录的差异；未知运行为具名结果。',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       '记录未批准的计划为何（WHY）必须修改：共四个分支，其中两个会提交规划缺陷；它不会对计划做任何改动。',

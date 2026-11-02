@@ -428,6 +428,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // metadata off the same git host `read_file` and `list_changed_files` read, on
   // the same argument (AMENDMENT 3 to §4).
   get_code_history: 'ai:plan',
+  // MOTIR-10240 — a run of the project, read: the same `project:browse` the Runs
+  // room and the card's run section are read on.
+  search_run_records: 'project:browse',
+  get_run_record: 'project:browse',
   // MOTIR-7862 — the hosted code graph's explore and search, the same argument:
   // the hosted planner's own `code_explore` / `code_search` already show every
   // `ai:plan` holder these answers.

@@ -385,6 +385,18 @@ export const ko: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_run_records: {
+    summary:
+      '프로젝트의 실행 목록(최신순) — 카드, 범위 또는 상태로 좁히고 레그는 개수로, 일치 없음은 이름 있는 결과.',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      '프로젝트의 실행 하나 — 어떻게 끝났는지와 레그별로 차이로 기록한 내용을 그대로. 알 수 없는 실행은 이름 있는 결과.',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       '승인되지 않은 계획을 왜 바꿔야 했는지 기록합니다 — 네 가지 분기 중 두 가지는 계획 버그를 등록하며, 계획 자체는 전혀 바꾸지 않습니다.',

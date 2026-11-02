@@ -1841,6 +1841,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_run_record: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The run id — a `search_run_records` row’s `id`.',
+      },
+    },
+    required: ['projectKey', 'runId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_section_sets: {
     type: 'object',
     properties: {
@@ -3235,6 +3254,50 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'q'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  search_run_records: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      workItemKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL. Runs that carried a LEG for this card (e.g. "ACME-7").',
+      },
+      scopeWorkItemKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Runs whose SCOPE is this container (a parent or story run). Give this or `workItemKey`, not both.',
+      },
+      statuses: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['running', 'succeeded', 'failed', 'cancelled', 'timed_out'],
+        },
+        description: 'OPTIONAL. Only runs in these statuses.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description: 'The `nextCursor` a previous call returned, to read the next page.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+        description: 'OPTIONAL. Runs per page, 1 to 100; default 25.',
+      },
+    },
+    required: ['projectKey'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -4748,6 +4811,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_plan_lesson_log: 'Read which lessons each planning session saw',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
+  get_run_record: 'Get run record',
   get_section_sets: 'Get section sets',
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
@@ -4784,6 +4848,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   report_unbuildable_target: 'Report a card you cannot build',
   search_lessons: 'Search lessons by meaning',
   search_pages: 'Search pages',
+  search_run_records: 'Search run records',
   search_work_items: 'Search work items',
   search_work_items_semantic: 'Search work items by meaning',
   set_work_item_todo_done: 'Tick or untick a to-do step',
@@ -5068,6 +5133,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
+  get_run_record: { title: 'Get run record', readOnlyHint: true, openWorldHint: false },
   get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
   get_work_item: { title: 'Get work item', readOnlyHint: true, openWorldHint: false },
   get_work_item_activity: {
@@ -5250,6 +5316,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   search_pages: { title: 'Search pages', readOnlyHint: true, openWorldHint: false },
+  search_run_records: { title: 'Search run records', readOnlyHint: true, openWorldHint: false },
   search_work_items: { title: 'Search work items', readOnlyHint: true, openWorldHint: false },
   search_work_items_semantic: {
     title: 'Search work items by meaning',

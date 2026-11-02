@@ -553,6 +553,10 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   list_changed_files: { readOnlyHint: true, openWorldHint: true },
   // R: getCodeHistory.ts → repoHistoryService.readProjectHistory → GitProvider.readCodeHistory (the THIRD-PARTY git host — open world, as list_changed_files)
   get_code_history: { readOnlyHint: true, openWorldHint: true },
+  // R: runRecords.ts → runRecordReadService.searchRuns → dispatchRunService.listRunsFor* (Motir's own rows)
+  search_run_records: { readOnlyHint: true, openWorldHint: false },
+  // R: runRecords.ts → runRecordReadService.readRun → dispatchRunService.getRunDetail + the discrepancy comment
+  get_run_record: { readOnlyHint: true, openWorldHint: false },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (Motir's own hosted graph over the private boundary — no third-party call)
   code_explore: { readOnlyHint: true, openWorldHint: false },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (as code_explore)

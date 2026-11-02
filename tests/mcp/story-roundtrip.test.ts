@@ -588,6 +588,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // MOTIR-10069 — no repository set, so `repo_not_in_project` before any host call.
         list_changed_files: { projectKey: 'PROD', repo: 'motir-core', head: 'feat/x' },
         get_code_history: { projectKey: 'PROD', repo: 'motir-core', path: 'lib/a.ts', kind: 'log' },
+        search_run_records: { projectKey: 'PROD' },
+        get_run_record: { projectKey: 'PROD', runId: 'run_unknown' },
         // MOTIR-7862 — no repository set, so `no_repositories`, decided in core with
         // no motir-ai call.
         code_explore: { projectKey: 'PROD', query: 'readFile' },

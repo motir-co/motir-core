@@ -52,7 +52,7 @@ export function isSharedResourceName(value: string): value is SharedResourceName
  */
 export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, string>> = {
   DispatchRun:
-    'No MCP tool READS a dispatch run. The original ruling (Story MOTIR-1789 · MOTIR-1792) kept ' +
+    'No MCP tool returns this RESOURCE. The original ruling (Story MOTIR-1789 · MOTIR-1792) kept ' +
     'the whole ingest off MCP because the agent was the SUBJECT of a run, never its reporter. ' +
     'AMENDMENT 3 of `docs/decisions/dispatch-run-record.md` (`agent-reported-runs.md`, Story ' +
     'MOTIR-7446) narrows that: an agent with no CLI around it — the Motir skill in Claude Code, ' +
@@ -60,7 +60,10 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     '`report_action` and `close_work_item_run`. Every event it writes is marked ' +
     '`reportedBy: agent`, so its account is never mistaken for a runner’s, and it may send only ' +
     'four milestone kinds. Those tools answer a receipt and a liveness shape (their ' +
-    '`EXEMPT_TOOLS` entries), never this resource, and the run READ stays where it was: on ' +
+    '`EXEMPT_TOOLS` entries), never this resource. A run IS read over MCP since MOTIR-10240 — ' +
+    '`search_run_records` and `get_run_record` answer a planner which runs touched a card and ' +
+    'how one ended — but through their own NARROW shapes (their `EXEMPT_TOOLS` entries): the ' +
+    'whole resource, with its legs, deliveries, gates, cost and stream cursor, stays on ' +
     '`/api/v1` and the UI, for the people and processes that watch runs. The repair and ' +
     'continue tools (MOTIR-6807, MOTIR-7262) keep the same boundary — a lock the agent holds and ' +
     'a narrow liveness answer.',
@@ -68,15 +71,16 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'The CLOSE-OUT prompt (Story MOTIR-4906 · MOTIR-5357) is assembled for the process AROUND ' +
     'the agent: the CLI fetches it over `/api/v1` and hands it to one agent before the run marks ' +
     'its pull requests ready. It is a run read, so it shares `DispatchRun`’s reason — no MCP ' +
-    'tool returns a run, and the agent receives this text as its prompt rather than calling for it.',
+    'tool returns the run resource, and the agent receives this text as its prompt rather than calling for it.',
   CurrentTestInstructions:
     'The HOW TO TEST read (Story MOTIR-4906 · MOTIR-5358) serves the CLI’s close-out summary over ' +
     '`/api/v1`. The agent WRITES the record through `publish_test_instructions`, whose result is ' +
     'its own receipt (`{ id, bodyBytes, … }`), not this read; an agent that just wrote the ' +
     'instructions has no use for reading them back, so no MCP payload returns this shape.',
   DispatchRunCard:
-    'The run’s LEG rides on `DispatchRun` and shares its reason: no MCP tool returns a run at ' +
-    'all, so no payload carries a leg. Listed separately because the guard reads RESOURCES ' +
+    'The run’s LEG rides on `DispatchRun` and shares its reason: no MCP tool returns the run ' +
+    'resource, so no payload carries this leg shape (`get_run_record` answers its own narrow ' +
+    'leg). Listed separately because the guard reads RESOURCES ' +
     'rather than the operations that return them.',
   DispatchRunOpened:
     'The OPEN result (`{ run, created }`) is the ingest’s own envelope and exists only on the ' +

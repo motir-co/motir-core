@@ -394,6 +394,18 @@ export const it: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_run_records: {
+    summary:
+      'Le esecuzioni di un progetto, dalla più recente – filtrate per scheda, ambito o stato, tratti come conteggi, nessuna corrispondenza un esito con nome.',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      'Un’esecuzione di un progetto – come è terminata e, per tratto, cosa ha registrato come diverso, alla lettera; un’esecuzione sconosciuta un esito con nome.',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       'Registra PERCHÉ un Piano non approvato ha dovuto cambiare: quattro rami, due dei quali aprono un Bug di pianificazione; non cambia nulla del Piano.',

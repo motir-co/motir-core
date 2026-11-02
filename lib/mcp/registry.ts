@@ -120,6 +120,11 @@ import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import { LIST_CHANGED_FILES_TOOL_NAME, registerListChangedFiles } from './tools/listChangedFiles';
 import { GET_CODE_HISTORY_TOOL_NAME, registerGetCodeHistory } from './tools/getCodeHistory';
 import {
+  GET_RUN_RECORD_TOOL_NAME,
+  SEARCH_RUN_RECORDS_TOOL_NAME,
+  registerRunRecords,
+} from './tools/runRecords';
+import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -281,6 +286,8 @@ export const MCP_TOOL_NAMES = [
   READ_FILE_TOOL_NAME,
   LIST_CHANGED_FILES_TOOL_NAME,
   GET_CODE_HISTORY_TOOL_NAME,
+  SEARCH_RUN_RECORDS_TOOL_NAME,
+  GET_RUN_RECORD_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -554,6 +561,10 @@ export function registerMcpTools(
   // who changed it, when and why. Gated on `ai:plan`; the repo resolves against the
   // PROJECT's set.
   registerGetCodeHistory(target, resolveContext);
+  // MOTIR-10240 — a run of the project: which runs match, and how one ended and
+  // what it recorded as different. `project:browse`; a run of another project is
+  // `not_found`.
+  registerRunRecords(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
   // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
   // `code_grep` over the indexed file contents. `ai:plan`.
