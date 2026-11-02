@@ -47,8 +47,12 @@ import {
 // WHEN to create, move and swap; this one makes each of those safe to do.
 //
 // Contexts: the writers run from the merge webhook and from jobs, so a write
-// with no `tx` opens `withSystemContext`. The reads a member's request makes take
-// the WORKSPACE, so row-level security confines them to it whatever id arrives.
+// with no `tx` opens `withSystemContext` — and every writer then binds the
+// workspace of the row it read before it writes (MOTIR-10219): the
+// `hosted_application` / `hosted_release` policies read `app.system_admin` on
+// USING only, so a system-only write is refused. The reads a member's request
+// makes take the WORKSPACE, so row-level security confines them to it whatever
+// id arrives.
 
 /** The default page of a release history. */
 const DEFAULT_RELEASE_PAGE = 20;
@@ -326,6 +330,7 @@ export const hostedApplicationService = {
   ): Promise<HostedReleaseDto> {
     return inSystem(callerTx, async (tx) => {
       const app = await requireApplication(input.applicationId, tx);
+      await bindWorkspaceContext(tx, app.workspaceId);
       const row = await hostedReleaseRepository.create(
         {
           workspaceId: app.workspaceId,
@@ -357,6 +362,9 @@ export const hostedApplicationService = {
     callerTx?: Prisma.TransactionClient,
   ): Promise<HostedReleaseDto> {
     return inSystem(callerTx, async (tx) => {
+      // A missing release binds nothing and fails in `moveRelease` exactly as before.
+      const workspaceId = await hostedReleaseRepository.findWorkspaceId(releaseId, tx);
+      if (workspaceId !== null) await bindWorkspaceContext(tx, workspaceId);
       await moveRelease(releaseId, from, to, details, tx);
       return toHostedReleaseDto((await hostedReleaseRepository.findById(releaseId, tx))!);
     });
@@ -384,6 +392,7 @@ export const hostedApplicationService = {
     }
     const app = await requireApplication(applicationId, tx);
     if (app.currentReleaseId === releaseId) return toHostedApplicationDto(app);
+    await bindWorkspaceContext(tx, app.workspaceId);
 
     const outgoing = app.currentRelease;
     if (outgoing?.state === 'live') {

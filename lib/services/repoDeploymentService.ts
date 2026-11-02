@@ -1,5 +1,5 @@
 import type { GithubRepo, Prisma } from '@/generated/prisma/client';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import type { GitProviderId, NormalizedDeploymentStatus } from '@/lib/git/types';
 import { repoDeploymentRepository } from '@/lib/repositories/repoDeploymentRepository';
 
@@ -51,6 +51,9 @@ export const repoDeploymentService = {
     return withSystemContext(async (tx) => {
       const repo = await resolveRepo(tx);
       if (!repo) return 'unknown_repo';
+      // The repository row's own workspace (MOTIR-10219): `repo_deployment`'s
+      // policy reads `app.system_admin` on USING only, so the write binds it.
+      await bindWorkspaceContext(tx, repo.workspaceId);
       const id = await repoDeploymentRepository.upsertIfNotOlder(
         {
           workspaceId: repo.workspaceId,
