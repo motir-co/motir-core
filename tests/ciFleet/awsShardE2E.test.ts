@@ -9,7 +9,7 @@ import type {
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
-import { SHARD_VCPU_QUOTA_TARGET, wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
+import { poolAccountRaiseTargetVcpu, wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import { registerShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -178,7 +178,7 @@ async function shardRows() {
 /** Add-shard through to an active row: a first run, then the person's quota step. */
 async function activeShard() {
   expect(await addShard()).toBe(EXIT_PENDING);
-  organization.quota = SHARD_VCPU_QUOTA_TARGET;
+  organization.quota = poolAccountRaiseTargetVcpu('ci_runner');
   expect(await addShard()).toBe(EXIT_OK);
   const [row] = await shardRows();
   return row!;
@@ -315,6 +315,8 @@ beforeEach(async () => {
   installAddShardGithub(newGithubWorld(), 'ghs_installation');
   world.ec2 = new AwsEc2Fake();
   organization = new FakeOrganization(SESSION);
+  // Under CI's own target, so the first run leaves the quota step pending.
+  organization.quota = poolAccountRaiseTargetVcpu('ci_runner') - 50;
   buildStacksInto(organization, () => ec2());
   // The real provider; only its management API is the in-memory organization.
   unregister = registerShardProvisioningProvider(
@@ -435,7 +437,7 @@ describe('add-shard for aws, from nothing', () => {
     const mutations = ec2().mutations().length;
     const created = organization.calls.filter((c) => c.startsWith('create')).length;
 
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = poolAccountRaiseTargetVcpu('ci_runner');
     expect(await addShard()).toBe(EXIT_OK);
 
     const rows = await shardRows();
