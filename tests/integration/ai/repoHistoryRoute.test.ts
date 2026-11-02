@@ -6,6 +6,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { getGitProvider } from '@/lib/git';
 import { GET } from '@/app/api/internal/ai/repo-history/route';
+import { repoHistoryService } from '@/lib/services/repoHistoryService';
 import { createTestWorkspace, createTestProject } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
@@ -399,5 +400,32 @@ describe('GET /api/internal/ai/repo-history — an in-set repository', () => {
     expect(body).not.toContain('@@ hunk');
     expect(body).not.toContain(SERVICE_SECRET);
     expect(body).not.toContain(token);
+  });
+});
+
+describe('GET /api/internal/ai/repo-history — an unexpected failure', () => {
+  it('a service failure that is not the out-of-set refusal is rethrown', async () => {
+    const { token } = await seed();
+    vi.spyOn(repoHistoryService, 'readHistory').mockRejectedValueOnce(new Error('db down'));
+    await expect(
+      GET(
+        req(`${URL_BASE}?repoRef=moooon/motir-core&path=a.ts&kind=log`, {
+          bearer: SERVICE_SECRET,
+          token,
+        }),
+      ),
+    ).rejects.toThrow('db down');
+  });
+
+  it('a provider that throws a non-Error is host_error "unknown"', async () => {
+    const { token } = await seed();
+    vi.spyOn(getGitProvider('github'), 'readCodeHistory').mockRejectedValueOnce('weird');
+    const res = await GET(
+      req(`${URL_BASE}?repoRef=moooon/motir-core&path=a.ts&kind=log`, {
+        bearer: SERVICE_SECRET,
+        token,
+      }),
+    );
+    expect((await res.json()).result).toMatchObject({ outcome: 'host_error', detail: 'unknown' });
   });
 });

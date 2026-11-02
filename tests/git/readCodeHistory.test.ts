@@ -610,3 +610,65 @@ describe('gitlab.readCodeHistory', () => {
     expect(hostCalls).toEqual([]);
   });
 });
+
+describe('readCodeHistory — bodies the host could not deliver', () => {
+  /** A refusal whose body cannot be read at all. */
+  const unreadable = (status: number) =>
+    ({
+      status,
+      ok: false,
+      headers: new Headers(),
+      text: () => Promise.reject(new Error('stream broke')),
+      json: () => Promise.reject(new Error('stream broke')),
+    }) as unknown as Response;
+
+  it('github: an unreadable refusal and a non-JSON success are host_error', async () => {
+    reply = () => unreadable(502);
+    expect((await github.readCodeHistory('i', 'acme', 'web', 'log', 'a.ts', 'main')).outcome).toBe(
+      'host_error',
+    );
+    expect(
+      (await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'main')).outcome,
+    ).toBe('host_error');
+    reply = () => new Response('not json', { status: 200 });
+    expect(await github.readCodeHistory('i', 'acme', 'web', 'log', 'a.ts', 'main')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'GitHub commits returned no commit list',
+    });
+  });
+
+  it('github blame: a tag with no target is no_such_ref; an unclassifiable error is not ok', async () => {
+    reply = () => json({ data: { repository: { object: { __typename: 'Tag', target: null } } } });
+    expect((await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'v1')).outcome).toBe(
+      'no_such_ref',
+    );
+    reply = () =>
+      json({
+        data: { repository: { object: { __typename: 'Commit', blame: null } } },
+        errors: [{ type: 'INTERNAL', message: 42 }],
+      });
+    expect(
+      (await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'main')).outcome,
+    ).not.toBe('ok');
+  });
+
+  it('gitlab: an unreadable refusal, non-JSON successes, a dead host and malformed groups', async () => {
+    vi.spyOn(gitlabConnectionService, 'getAccessToken').mockResolvedValue({
+      token: GL_TOKEN,
+    } as Awaited<ReturnType<typeof gitlabConnectionService.getAccessToken>>);
+    const glLog = () => gitlab.readCodeHistory('c', 'acme', 'web', 'log', 'a.ts', 'main');
+    const glBlame = () => gitlab.readCodeHistory('c', 'acme', 'web', 'blame', 'a.ts', 'main');
+
+    reply = () => unreadable(502);
+    expect((await glLog()).outcome).toBe('host_error');
+    reply = () => new Response('not json', { status: 200 });
+    expect(await glLog()).toMatchObject({ detail: 'GitLab commits returned no commit list' });
+    expect(await glBlame()).toMatchObject({ detail: 'GitLab blame returned no blame list' });
+    reply = () => {
+      throw new Error('ECONNREFUSED');
+    };
+    expect(await glBlame()).toMatchObject({ outcome: 'host_error', detail: 'ECONNREFUSED' });
+    reply = () => json([null, ['not', 'a', 'group'], { lines: 'x' }]);
+    expect(await glBlame()).toMatchObject({ outcome: 'ok', blame: [] });
+  });
+});

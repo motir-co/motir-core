@@ -391,3 +391,76 @@ describe('get_code_history — every absence is named and distinct', () => {
     expect(odd.summary).toContain('does not recognise ("weird")');
   });
 });
+
+describe('get_code_history — rendering the sparse fields', () => {
+  const base = { repoRef: 'acme/alpha', path: 'lib/a.ts', ref: 'main' } as const;
+
+  it('an empty ok log, cut or not, says nothing can be concluded', () => {
+    const plain = renderGetCodeHistory({
+      ...base,
+      outcome: 'ok',
+      kind: 'log',
+      commits: [],
+      truncated: false,
+    });
+    expect(plain.summary).toContain('EMPTY log');
+    expect(plain.summary).not.toContain('was cut');
+    const cut = renderGetCodeHistory({
+      ...base,
+      outcome: 'ok',
+      kind: 'log',
+      commits: [],
+      truncated: true,
+    });
+    expect(cut.summary).toContain('said the answer was cut');
+  });
+
+  it('a commit with no date, author or subject still renders one line', () => {
+    const one = renderGetCodeHistory({
+      ...base,
+      outcome: 'ok',
+      kind: 'log',
+      commits: [{ sha: SHA_A, author: null, date: null, subject: '' }],
+      truncated: false,
+    });
+    expect(one.summary).toContain('changed by 1 commit, newest first');
+    expect(one.summary).toContain('unknown date unknown author — (no subject)');
+  });
+
+  it('a blame range with no date, author or subject; one range is singular', () => {
+    const one = renderGetCodeHistory({
+      ...base,
+      outcome: 'ok',
+      kind: 'blame',
+      blame: [{ startLine: 1, endLine: 1, sha: SHA_A, author: null, date: null, subject: null }],
+      truncated: false,
+    });
+    expect(one.summary).toContain('1 line range:');
+    expect(one.summary).toContain('unknown date unknown author');
+    expect(one.summary).not.toContain(' — ');
+  });
+
+  it('a host_error with no detail says so', () => {
+    const r = renderGetCodeHistory({ ...base, outcome: 'host_error', kind: 'blame', detail: '' });
+    expect(r.summary).toContain('(no detail)');
+    expect(r.summary).toContain('the blame of lib/a.ts');
+  });
+
+  it('a list longer than the render cap is cut in the render too', () => {
+    const commits = Array.from({ length: CODE_HISTORY_COMMIT_RENDER_CAP + 1 }, () => ({
+      sha: SHA_A,
+      author: 'a',
+      date: 'd',
+      subject: 's',
+    }));
+    const r = renderGetCodeHistory({
+      ...base,
+      outcome: 'ok',
+      kind: 'log',
+      commits,
+      truncated: false,
+    });
+    expect(r.structured['truncated']).toBe(true);
+    expect(r.summary).toContain('[TRUNCATED');
+  });
+});
