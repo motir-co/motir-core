@@ -7448,3 +7448,129 @@ left in.
 - **GIVES:** the overlay banner build — the three elements, the failure-wins precedence, the copy
   keys. **TAKES:** nothing; the shipped faces, their resuming and _again_ states are composed as
   they ship.
+
+## ⭐ A halted planning job's not-planned-yet list — under the stop line, in the overlay, To resume and Plans (2026-11-02)
+
+Mock: `planning-workspace--not-planned-yet.mock.html` (a DELTA; holds only the panels that change).
+It amends, and does not edit:
+
+- § _The overlay waits with you_ and its mock `planning-workspace--waiting-on-you.mock.html`: the
+  **failed-walk face** (`FailedWaitingNotice`), and the delta beside it,
+  `planning-workspace--provider-limit.mock.html`, whose stopped wording the list sits under
+  unchanged;
+- `design/workbench/design-notes.md` § 37.2 and its mock
+  `design/workbench/workbench--planning-session-needs-you.mock.html`: the **To resume entry**,
+  form A (a failed walk);
+- `design/ai-planning/design-notes.md` and its mock
+  `design/ai-planning/plans-tabbed-list--waiting-to-resume.mock.html`: the **Plans session row**
+  in its _Waiting to resume_ state.
+
+The three surfaces are drawn in one delta because they carry the same element under the same stop
+line, with one rule. Each panel is the shipped part (`FailedWaitingNotice`,
+`PlanningSessionResumeEntry`, `SessionRow`) rendered as it ships, with the list added. Nothing else
+in any panel moves.
+
+When a hosted planning job halts, it writes no briefing. Instead its terminal stop carries
+`walkStop.notPlannedYet`: an array of lines the planner has already worded for the person, one per
+card left unplanned. For example: _"D" is not planned yet: plan "B" first, then plan "D"._ and _Not
+written yet: "T" waits on "S", and planning stopped before it was written — continuing this plan
+writes it._ This design shows those lines where the halted job's failure is shown.
+
+### The two elements
+
+1. **The not-planned-yet list** (`data-testid="not-planned-yet"`). A `ul` of the lines, **verbatim
+   and in the order received**, one `li` per line. Lines are never reworded, merged, numbered,
+   truncated mid-line or re-sorted.
+   - **Type and ink:** `text-xs`, `leading-relaxed`, `--el-text-secondary`, a disc marker in the
+     same ink, and `pl-4` for the marker. It uses the stop line's own size and ink, so the list
+     reads as the stop line's detail, not a new block. No new token, no new primitive, no icon.
+   - **Placement:**
+     - Overlay: inside the failed-walk block, directly under the stop line (_Stopped at … · because
+       … · failed … ago_) and above the kept sentence and Resume. It takes the block's existing
+       `gap-2` rhythm.
+     - To resume entry: under the entry's stop line (line 2) and above the _also waiting_ line
+       when the entry has one. Resume stays in line 1, where it ships.
+     - Plans row: under the row's meta line (anchor · stop line · starter · destination), inside
+       the row's text column. The row grows; the state chip stays vertically centred.
+   - **Wrapping:** each line wraps at the surface's width (`break-words`), whole. A single long line
+     wraps over as many lines as it needs (panel 3, 352px).
+   - **Name:** the `ul` carries `aria-label` _Not planned yet_
+     (`workbench.planningSession.notPlannedYet.label`), so a screen reader announces a list of N
+     items with its name. No heading is drawn, because each line already says _not planned yet_ or
+     _not written yet_ in its own words.
+2. **The not-planned-yet count line** (`data-testid="not-planned-yet-more"`). It appears only on
+   the two ROW surfaces (To resume, Plans) and only when the list is held back (the long-list rule
+   below). It is plain text in the list's ink, indented to the lines' text: _and {count} more cards
+   not planned yet — open it to see them all_ (`workbench.planningSession.notPlannedYet.more`,
+   plural on `count`). **It is not a control.** The way to the rest is the row's existing door,
+   which opens the session in the overlay, where every line is shown.
+
+### The long-list rule
+
+- **Overlay: every line is shown.** The overlay is the destination: the session opens there, and the
+  conversation rail already scrolls. So the block grows by however many lines the halt carries, and
+  nothing is held back (panel 3: nine lines at 640px). There is no count line in the overlay.
+- **Rows (To resume, Plans): at most three lines.**
+  - One to three lines: all are shown.
+  - Four or more: the first **two** are shown, in order, and the count line takes the third place
+    and names the rest (panels 6 and 7). The count line never stands in for a single hidden line,
+    because a row never hides exactly one line.
+  - The order never changes, and the lines shown are always the first ones.
+
+### States
+
+| state                                              | every surface                                                                                                       |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| field **absent or malformed** (not a string array) | exactly as shipped: no list, no heading, no gap. Drawn as the control beside each changed panel (panels 1, 5, 6, 7) |
+| **one line**                                       | one line under the stop line (panels 1, 6, 7)                                                                       |
+| **several lines** (three to five)                  | in order. Overlay: all shown (panel 2). Rows: three are all shown; five show two plus the count line (panels 6, 7)  |
+| **a long list**                                    | overlay: all shown (panel 3); rows: two plus the count line (panels 6, 7)                                           |
+
+The list is the same inside every shipped failed-walk state, and none of them changes around it
+(panel 4):
+
+- **failed again:** the _Second attempt_ pill stays;
+- **resuming:** the _Resuming…_ pill and the disabled button stay, the list stays until the row or
+  block clears, and on To resume the shipped _Picking the walk up…_ note sits below it (panel 6);
+- **provider limit, stopped:** the `providerLimit.walkBecause` / `walkKept` wording stays;
+- **read-only:** _Only {name} or a project manager can resume this_ stays, with no Resume.
+
+No panel draws a new control, a second Resume, a retry, a link inside a line, or any other new
+action.
+
+**Not drawn, on purpose:** `WaitingPlanFailureLine` (an OPEN failed session whose plan waits) and
+To resume forms B and C. Those are one-sentence faces with no stop line to put a list under, and a
+halt that writes `notPlannedYet` is a failed walk, which is form A.
+
+### Dark, widths and language
+
+- Dark (panels 5 and 8): the same tokens resolve under `[data-theme='dark']`. `--el-text-secondary`
+  is the list's ink in both themes.
+- Overlay widths: 640px (the widest rail) and 352px (the narrowest), panels 1–5. Rows are drawn at
+  the shipped list width.
+- Language (panel 9): the lines arrive already worded by the planner, in the plan's language, and
+  are shown as received. Only the count line and the list's name are Motir's copy, and they are
+  translated.
+
+### Accessibility
+
+- The list is a real `ul` / `li` with an accessible name, so its length and order are announced.
+- Contrast: `--el-text-secondary` on the failed-walk block's `--el-page-bg` card and on the To resume
+  entry's page, and on the Plans row's `--el-surface`. Each pair is 6.18:1 or more, light and dark.
+  No `--el-text-muted` or `--el-text-faint` carries text.
+- Nothing is carried by colour or marker alone: each line says what is not planned and why, in
+  words.
+
+### Copy (en / zh) — the new strings, under `workbench.planningSession.notPlannedYet`
+
+| key     | en                                                                                                    | zh                                          |
+| ------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `label` | Not planned yet                                                                                       | 尚未规划                                    |
+| `more`  | and {count, plural, one {# more card} other {# more cards}} not planned yet — open it to see them all | 还有 {count} 张卡片尚未规划——打开它查看全部 |
+
+The build adds these to `messages/en.json` and `messages/zh.json` as written, and carries them into
+the app's other locale catalogues. The lines themselves are never translated by Motir.
+
+- **GIVES:** the not-planned-yet list and the not-planned-yet count line, the long-list rule, and
+  the absent case, on the three surfaces. **TAKES:** the failed-walk face, the To resume entry and
+  the Plans row, each composed as it ships.
