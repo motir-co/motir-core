@@ -389,6 +389,12 @@ export const pt: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_past_plans: {
+    summary:
+      'Os planos de um projeto em qualquer status, os recusados com o motivo do seu fim — mais recentes primeiro, por palavras ou status; nenhuma correspondência é um resultado nomeado.',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
   search_run_records: {
     summary:
       'As execuções de um projeto, a mais recente primeiro – filtradas por cartão, escopo ou status, etapas como contagens, nenhuma correspondência um resultado nomeado.',

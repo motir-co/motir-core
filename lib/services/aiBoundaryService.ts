@@ -44,6 +44,13 @@ import {
   type AiDecisionBlock,
 } from '@/lib/dto/ai';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { PlanNotFoundError } from '@/lib/plans/errors';
+import {
+  toPastPlanRow,
+  type PastPlanReadResult,
+  type PastPlanSearchFilters,
+  type PastPlanSearchResult,
+} from '@/lib/plans/pastPlans';
 
 // The ai→core boundary service (Subtask 7.1.6). The READ-back side of the
 // boundary: the project's work-item skeleton (plan-tree) + the calling org's
@@ -194,6 +201,59 @@ export const aiBoundaryService = {
       plans: toPendingPlanRows(page.plans),
       truncated: page.nextCursor !== null,
     };
+  },
+
+  // GET /api/internal/ai/past-plans (MOTIR-10241) — the token's project's plans
+  // in EVERY status, declined and abandoned included, each row with its
+  // `decisionReason`: how similar work was shaped before, and why a plan ended.
+  // A metadata read — no proposals. The browse denial is translated HERE, as
+  // `readPendingPlans` does, so "a project you cannot see does not exist" is
+  // decided at the boundary, not per route.
+  async searchPastPlans(
+    projectId: string,
+    filters: PastPlanSearchFilters,
+    ctx: ServiceContext,
+  ): Promise<PastPlanSearchResult> {
+    let page;
+    try {
+      page = await plansService.searchPlans(projectId, ctx, filters);
+    } catch (err) {
+      if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
+        throw new ProjectNotFoundError(projectId);
+      }
+      throw err;
+    }
+    const plans = page.plans.map(toPastPlanRow);
+    return {
+      outcome: plans.length === 0 ? 'nothing-matched' : 'ok',
+      plans,
+      nextCursor: page.nextCursor,
+    };
+  },
+
+  // GET /api/internal/ai/past-plan (MOTIR-10241) — ONE plan of the token's
+  // project with its proposals, through the Plans room's record-level admit
+  // (`plansService.admitPlanReader`). A plan of ANOTHER project — which the admit
+  // alone would serve to a reader who can browse that project — and any refusal
+  // the admit raises (unknown id, another workspace, not admitted, a project the
+  // reader cannot browse) are ONE answer: `PlanNotFoundError`, so the read never
+  // says which of them it was.
+  async readPastPlan(
+    projectId: string,
+    planId: string,
+    ctx: ServiceContext,
+  ): Promise<PastPlanReadResult> {
+    let row;
+    try {
+      row = await plansService.admitPlanReader(planId, ctx);
+    } catch (err) {
+      if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
+        throw new PlanNotFoundError(planId);
+      }
+      throw err;
+    }
+    if (row.projectId !== projectId) throw new PlanNotFoundError(planId);
+    return { plan: await plansService.loadAdmittedPlanWithItems(row, ctx) };
   },
 
   // GET /api/internal/ai/terminal-statuses (MOTIR-4158) — the project's TERMINAL

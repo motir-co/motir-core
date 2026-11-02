@@ -390,6 +390,12 @@ export const nl: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_past_plans: {
+    summary:
+      'De plannen van een project in elke status, afgewezen plannen met de reden van hun einde — nieuwste eerst, op woorden of status; geen treffer is een benoemde uitkomst.',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
   search_run_records: {
     summary:
       'De runs van een project, nieuwste eerst – gefilterd op kaart, scope of status, legs als aantallen, geen treffer een benoemde uitkomst.',

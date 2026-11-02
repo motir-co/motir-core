@@ -240,6 +240,7 @@ import type {
   PlanListPageDto,
   PlanApprovabilityRejectionDto,
   PlanStatusCountsDto,
+  PlanStatusDto,
   PlanWithItemsDto,
   PlanWithItemsAndWarningsDto,
   ProposalLinkWarningDto,
@@ -6637,6 +6638,47 @@ export const plansService = {
     );
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
+    const counts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.countByPlanIds(
+        page.map((p) => p.id),
+        tx,
+      ),
+    );
+    return {
+      plans: page.map((p) => toPlanDto(p, counts.get(p.id) ?? 0)),
+      nextCursor: hasMore ? page[page.length - 1]!.id : null,
+    };
+  },
+
+  /**
+   * SEARCH a project's plans (MOTIR-10241) — the past-plans read: every status,
+   * declined and abandoned included, optionally narrowed to a status set and to a
+   * case-insensitive substring of `title` or `summary`, newest first and
+   * keyset-paged. The same browse floor and row DTO as {@link listPlans} (the
+   * Plans list page reads at that floor); the record-level reader admit stays on
+   * the read of ONE plan, where the proposals' content is returned. Read only.
+   */
+  async searchPlans(
+    projectId: string,
+    ctx: ServiceContext,
+    opts: {
+      q: string | null;
+      statuses: readonly PlanStatusDto[] | null;
+      cursor: string | null;
+      limit: number;
+    },
+  ): Promise<PlanListPageDto> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.searchByProject(
+        projectId,
+        ctx.workspaceId,
+        { statuses: opts.statuses, q: opts.q, limit: opts.limit + 1, cursorId: opts.cursor },
+        tx,
+      ),
+    );
+    const hasMore = rows.length > opts.limit;
+    const page = hasMore ? rows.slice(0, opts.limit) : rows;
     const counts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planItemRepository.countByPlanIds(
         page.map((p) => p.id),

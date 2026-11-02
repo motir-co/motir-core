@@ -3257,6 +3257,37 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  search_past_plans: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      q: {
+        type: 'string',
+        description:
+          "OPTIONAL. Words to find in a plan's title or summary (case-insensitive substring, at most 200 characters). Omit to list every plan.",
+      },
+      status: {
+        type: 'array',
+        items: { type: 'string', enum: ['generating', 'planned', 'stale', 'approved', 'declined'] },
+        description:
+          'OPTIONAL. Only plans in these statuses. A declined plan carries its `decisionReason` (`reviewed`, `discarded` or `abandoned`).',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `nextCursor` a previous `search_past_plans` call returned, to read the next page.',
+      },
+    },
+    required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   search_run_records: {
     type: 'object',
     properties: {
@@ -4848,6 +4879,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   report_unbuildable_target: 'Report a card you cannot build',
   search_lessons: 'Search lessons by meaning',
   search_pages: 'Search pages',
+  search_past_plans: 'Search past plans',
   search_run_records: 'Search run records',
   search_work_items: 'Search work items',
   search_work_items_semantic: 'Search work items by meaning',
@@ -5316,6 +5348,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   search_pages: { title: 'Search pages', readOnlyHint: true, openWorldHint: false },
+  search_past_plans: { title: 'Search past plans', readOnlyHint: true, openWorldHint: false },
   search_run_records: { title: 'Search run records', readOnlyHint: true, openWorldHint: false },
   search_work_items: { title: 'Search work items', readOnlyHint: true, openWorldHint: false },
   search_work_items_semantic: {

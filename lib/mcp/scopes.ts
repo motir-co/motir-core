@@ -207,6 +207,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   list_changed_files: 'read',
   get_code_history: 'read',
   search_run_records: 'read',
+  search_past_plans: 'read',
   get_run_record: 'read',
   code_explore: 'read',
   code_search: 'read',

@@ -388,6 +388,12 @@ export const ja: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_past_plans: {
+    summary:
+      'プロジェクトのあらゆるステータスのプラン。却下されたものは終了理由付き。新しい順に、語句またはステータスで絞り込み。一致なしは名前付きの結果。',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
   search_run_records: {
     summary:
       'プロジェクトの実行一覧（新しい順）— カード・スコープ・ステータスで絞り込み、レッグは件数、該当なしは名前付きの結果。',

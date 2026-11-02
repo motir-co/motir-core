@@ -124,6 +124,7 @@ import {
   SEARCH_RUN_RECORDS_TOOL_NAME,
   registerRunRecords,
 } from './tools/runRecords';
+import { SEARCH_PAST_PLANS_TOOL_NAME, registerSearchPastPlans } from './tools/searchPastPlans';
 import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
@@ -288,6 +289,7 @@ export const MCP_TOOL_NAMES = [
   GET_CODE_HISTORY_TOOL_NAME,
   SEARCH_RUN_RECORDS_TOOL_NAME,
   GET_RUN_RECORD_TOOL_NAME,
+  SEARCH_PAST_PLANS_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -565,6 +567,9 @@ export function registerMcpTools(
   // what it recorded as different. `project:browse`; a run of another project is
   // `not_found`.
   registerRunRecords(target, resolveContext);
+  // MOTIR-10241 — a project's plans in every status, declined ones with their
+  // `decisionReason`. `project:browse`, the Plans list page's floor.
+  registerSearchPastPlans(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
   // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
   // `code_grep` over the indexed file contents. `ai:plan`.

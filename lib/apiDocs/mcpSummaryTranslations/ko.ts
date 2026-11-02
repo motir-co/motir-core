@@ -385,6 +385,12 @@ export const ko: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_past_plans: {
+    summary:
+      '프로젝트의 모든 상태의 계획, 거절된 계획은 종료 이유와 함께 — 최신순, 단어나 상태로 검색하며 일치 없음은 이름 있는 결과입니다.',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
   search_run_records: {
     summary:
       '프로젝트의 실행 목록(최신순) — 카드, 범위 또는 상태로 좁히고 레그는 개수로, 일치 없음은 이름 있는 결과.',

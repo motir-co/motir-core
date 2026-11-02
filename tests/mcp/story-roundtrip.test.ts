@@ -590,6 +590,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_code_history: { projectKey: 'PROD', repo: 'motir-core', path: 'lib/a.ts', kind: 'log' },
         search_run_records: { projectKey: 'PROD' },
         get_run_record: { projectKey: 'PROD', runId: 'run_unknown' },
+        search_past_plans: { projectKey: 'PROD' },
         // MOTIR-7862 — no repository set, so `no_repositories`, decided in core with
         // no motir-ai call.
         code_explore: { projectKey: 'PROD', query: 'readFile' },

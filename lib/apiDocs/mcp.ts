@@ -663,6 +663,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Pinned from the LIVE handshake, never hand-computed.
     descriptionFingerprint: '95889dcd4e65',
   },
+  search_past_plans: {
+    // MOTIR-10241 — the project's plans, searched, on the MCP.
+    summary:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '8908258fbd2f',
+  },
   code_explore: {
     summary:
       "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",

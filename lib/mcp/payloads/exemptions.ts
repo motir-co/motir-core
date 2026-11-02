@@ -134,6 +134,11 @@ export const EXEMPT_TOOLS = {
     'reason, exit code and the discrepancy comment it points to \u2014 plus a named `outcome`, not ' +
     'the v1 `DispatchRun` resource: no event stream, cost, deliveries or machine time, which stay ' +
     'on `/api/v1` and the UI (MOTIR-10240).',
+  search_past_plans:
+    'Returns NARROW plan rows \u2014 id, title, status, `decisionReason`, a bounded summary ' +
+    'excerpt, proposal count and lifecycle times \u2014 plus a named `outcome`, not the v1 `Plan` ' +
+    'resource: a project-wide search over plans, which no `/api/v1` operation returns. One plan ' +
+    'with its proposals is `get_plan` (MOTIR-10241).',
   code_explore:
     'Returns the hosted planner\u2019s own `code_explore` TEXT verbatim, or a named `state` \u2014 a ' +
     'graph read assembled in motir-ai for an agent planning over the MCP. No `/api/v1` operation ' +

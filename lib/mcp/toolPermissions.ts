@@ -432,6 +432,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // room and the card's run section are read on.
   search_run_records: 'project:browse',
   get_run_record: 'project:browse',
+  // MOTIR-10241 — a project's plans, searched: the `project:browse` floor the
+  // Plans list page reads at (`plansService.listPlans`). Reading ONE plan with its
+  // proposals stays `get_plan`, behind the record-level reader admit.
+  search_past_plans: 'project:browse',
   // MOTIR-7862 — the hosted code graph's explore and search, the same argument:
   // the hosted planner's own `code_explore` / `code_search` already show every
   // `ai:plan` holder these answers.

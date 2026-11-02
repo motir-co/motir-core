@@ -358,6 +358,12 @@ export const zh: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  search_past_plans: {
+    summary:
+      '项目中所有状态的计划，被拒绝的计划附带其结束原因——最新的在前，可按词语或状态筛选；无匹配是一个具名结果。',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
   search_run_records: {
     summary:
       '项目的运行记录，最新优先——可按卡片、范围或状态筛选，各环节以计数呈现，无匹配为具名结果。',

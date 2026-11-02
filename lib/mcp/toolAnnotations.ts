@@ -555,6 +555,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   get_code_history: { readOnlyHint: true, openWorldHint: true },
   // R: runRecords.ts → runRecordReadService.searchRuns → dispatchRunService.listRunsFor* (Motir's own rows)
   search_run_records: { readOnlyHint: true, openWorldHint: false },
+  // R: searchPastPlans.ts → aiBoundaryService.searchPastPlans → plansService.searchPlans → planRepository.searchByProject (Motir's own rows)
+  search_past_plans: { readOnlyHint: true, openWorldHint: false },
   // R: runRecords.ts → runRecordReadService.readRun → dispatchRunService.getRunDetail + the discrepancy comment
   get_run_record: { readOnlyHint: true, openWorldHint: false },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (Motir's own hosted graph over the private boundary — no third-party call)

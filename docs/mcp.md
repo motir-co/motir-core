@@ -5961,6 +5961,36 @@ tools' own sentences.
 selects **within** the token's workspace; another tenant's key reads as a plain
 `PROJECT_NOT_FOUND`.
 
+#### `search_past_plans`
+
+**How similar work was shaped before, and why a plan ended** (MOTIR-10241): a
+search over one project's plans in **every** status, declined and abandoned ones
+included. It reads through `aiBoundaryService.searchPastPlans`, the service the
+hosted planner reads through `GET /api/internal/ai/past-plans`, with the same
+input rules, so both return the same rows. Reading one plan with its proposals
+is `get_plan`.
+
+**Input**
+
+| Field        | Type     | Required | Notes                                                                  |
+| ------------ | -------- | -------- | ---------------------------------------------------------------------- |
+| `projectKey` | string   | yes      | Project key, e.g. `"ACME"`.                                            |
+| `q`          | string   | no       | Case-insensitive substring of the title or summary, at most 200 chars. |
+| `status`     | string[] | no       | `generating`, `planned`, `stale`, `approved`, `declined`.              |
+| `cursor`     | string   | no       | The `nextCursor` a previous call returned.                             |
+
+Newest first, 20 a page. Each row is `{ id, title, status, decisionReason,
+summaryExcerpt, summaryTruncated, itemCount, createdAt, plannedAt, decidedAt }`.
+`decisionReason` is the kind core stores for a declined plan (`reviewed`,
+`discarded`, `abandoned`; null when not recorded); core stores no free-text
+decline note. `outcome` is `ok`, or `nothing-matched` with an empty `plans` — a
+normal result, not an error. A bad status or an over-long `q` is refused
+`PAST_PLANS_QUERY_INVALID`.
+
+**Permission: `project:browse`**, the floor the Plans list page reads at.
+**Read-only**, closed-world. `projectKey` selects **within** the token's
+workspace; another tenant's key reads as a plain `PROJECT_NOT_FOUND`.
+
 #### `code_explore` and `code_search`
 
 The **hosted code graph**, for an agent planning over the MCP: the hosted
