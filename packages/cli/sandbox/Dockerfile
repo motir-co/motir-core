@@ -228,16 +228,19 @@ RUN apt-get update \
 # documents — the `docker run` one-liner at the foot of this file, and the
 # devcontainer route, which is a single container by construction.
 #
-# ⚠️ WHY 16 AND NOT THE NEWEST — THIS ONE ENTRY IS A DELIBERATE CARVE-OUT FROM
-# "latest", AND IT IS NOT AN OVERSIGHT TO FIX. A debugging database has one job:
-# reproduce the failure being chased and manufacture none of its own. Three
-# properties decide that, and all three point away from `newest`:
+# ⚠️ WHY 18 — THE MAJOR IS PRODUCTION'S, NOT "LATEST", AND NOT AN OVERSIGHT TO
+# BUMP. A debugging database has one job: reproduce the failure being chased and
+# manufacture none of its own. Three properties decide that:
 #
-#   Postgres 16  — motir-core `docker-compose.yml` + `.github/actions/postgres`
-#                  (`image-tag: pg16`), motir-ai `docker-compose.yml` + its
-#                  `ci.yml`, and nextjs-prisma-serverless-starter `docker-compose.yml`
-#                  + `ci.yml` all pin 16. Unanimous across four repositories, so
-#                  a newer major here debugs on an engine no CI ever runs.
+#   Postgres 18  — both production databases run PostgreSQL 18 (18.6, read with
+#                  `show server_version` on 2026-11-02), and MOTIR-10221 moved
+#                  motir-core's `docker-compose.yml` + `.github/actions/postgres`
+#                  (`image-tag: pg18`) and motir-ai's `docker-compose.yml` + its
+#                  `ci.yml` to 18 to match. The minor is production's too. Any
+#                  other major here debugs on an engine neither production nor
+#                  CI runs, so a reproduction would mean less, not more. When
+#                  production moves, this pin moves with it, in the same change
+#                  as CI (MOTIR-10223).
 #   pgvector     — motir-core's `work_item_embedding` migration runs
 #                  `CREATE EXTENSION vector` (MOTIR-2696) and motir-ai's
 #                  `20260624000000_enable_pgvector` does the same. Both repos
@@ -253,13 +256,14 @@ RUN apt-get update \
 #                  worse than no database.
 #
 # Versions read from apt.postgresql.org's bookworm-pgdg Packages index on
-# 2026-09-24 and pinned exactly; both published architectures carry the same
-# two versions, so the arm64 leg cannot diverge:
+# 2026-11-02 and pinned exactly; both published architectures carry the same
+# versions, so the arm64 leg cannot diverge. pgvector 0.8.7 is also what CI's
+# `pgvector/pgvector:pg18` ships (its `0.8.7-pg18` tag is the same digest):
 #   curl -fsSL https://apt.postgresql.org/pub/repos/apt/dists/bookworm-pgdg/main/binary-$arch/Packages.gz \
-#     | gunzip | awk '/^Package: (postgresql-16|postgresql-16-pgvector)$/{p=$2} /^Version:/{if(p){print p" "$2; p=""}}'
-ARG PG_MAJOR=16
-ARG PG_VERSION=16.15-1.pgdg12+2
-ARG PGVECTOR_VERSION=0.8.6-1.pgdg12+2
+#     | gunzip | awk '/^Package: (postgresql-18|postgresql-18-pgvector)$/{p=$2} /^Version:/{if(p){print p" "$2; p=""}}'
+ARG PG_MAJOR=18
+ARG PG_VERSION=18.6-1.pgdg12+2
+ARG PGVECTOR_VERSION=0.8.7-1.pgdg12+1
 # The cluster lives outside /var/lib/postgresql so it is plainly not Debian's.
 # `create_main_cluster = false` below stops postgresql-common making one at all:
 # its cluster is initialised under the SYSTEM locale, which is exactly the
@@ -299,7 +303,7 @@ RUN set -eux; \
 # absolute path) — this is for the person who types `psql`.
 RUN printf '%s\n' \
     '# motir-sandbox: the Postgres client binaries, for a LOGIN shell (MOTIR-6204).' \
-    'case ":$PATH:" in *:/usr/lib/postgresql/16/bin:*) ;; *) PATH="/usr/lib/postgresql/16/bin:$PATH" ;; esac' \
+    'case ":$PATH:" in *:/usr/lib/postgresql/18/bin:*) ;; *) PATH="/usr/lib/postgresql/18/bin:$PATH" ;; esac' \
     'export PATH' \
     > /etc/profile.d/motir-postgres-path.sh
 

@@ -890,7 +890,7 @@ way around that from the inside. Three runtimes are therefore baked in.
 | **Postgres** | **16** + pgvector, `C.UTF-8`                              | The **consumer's**, not the newest — see below.                                                                                                                                                                  |
 | **Browser**  | chromium via Playwright 1.62.1, plus its system libraries | The repositories this image serves resolve 1.62.x. `PLAYWRIGHT_BROWSERS_PATH=/opt/motir-browsers`, writable by `node`.                                                                                           |
 
-### The database is for DEBUGGING — and that is why it is 16
+### The database is for DEBUGGING — and that is why it is 18, production's major
 
 `motir-sandbox-postgres` drives an initialised cluster that the image ships:
 
@@ -917,11 +917,12 @@ cluster dies with the container. A suite-wide number is the pull request's CI to
 answer, not this.
 
 **Three properties are load-bearing, and one of them is why this entry is pinned
-BELOW the newest release:**
+to production's major rather than to the newest release:**
 
-- **Postgres 16** — `motir-core`, `motir-ai` and the starter all pin 16, in
-  compose and in CI. A newer major here would debug against an engine no CI
-  runs, so a reproduction would mean less, not more.
+- **Postgres 18** — both production databases run 18 (18.6), and `motir-core`
+  and `motir-ai` run 18 in compose and in CI to match (MOTIR-10221). The image
+  pins 18.6 exactly. Any other major would debug against an engine neither
+  production nor CI runs, so a reproduction would mean less, not more.
 - **pgvector** — `motir-core`'s `work_item_embedding` migration and `motir-ai`'s
   `20260624000000_enable_pgvector` both run `CREATE EXTENSION vector`. Without
   it the migrations fail and no database test runs at all.

@@ -269,14 +269,16 @@ describe('sandbox Dockerfile', () => {
     expect(dockerfile).not.toContain('DISABLE_AUTOUPDATER');
   });
 
-  it('ships a DEBUGGING Postgres — 16, pgvector, C.UTF-8, owned by node (MOTIR-6204)', () => {
+  it('ships a DEBUGGING Postgres — 18, pgvector, C.UTF-8, owned by node (MOTIR-6204, MOTIR-10223)', () => {
     // The image is unprivileged with no sudo, so a database absent at build
     // time is absent for every run. These four properties are what make the one
     // it ships usable AND honest; three of them are invisible to a `--version`.
     const directives = directivesOf(dockerfile);
     // Pinned exactly, and on BOTH published architectures — an unpinned apt
     // install is how two builds of one immutable tag come to differ.
-    expect(directives).toMatch(/^ARG PG_VERSION=16\.\d+-\d+\.pgdg\d+\+\d+$/m);
+    // The major is production's (18.6 on both databases) and CI's (MOTIR-10221).
+    expect(directives).toMatch(/^ARG PG_MAJOR=18$/m);
+    expect(directives).toMatch(/^ARG PG_VERSION=18\.\d+-\d+\.pgdg\d+\+\d+$/m);
     expect(directives).toMatch(/^ARG PGVECTOR_VERSION=\d+\.\d+\.\d+-\d+\.pgdg\d+\+\d+$/m);
     expect(directives).toContain('"postgresql-${PG_MAJOR}=${PG_VERSION}"');
     expect(directives).toContain('"postgresql-${PG_MAJOR}-pgvector=${PGVECTOR_VERSION}"');
@@ -317,7 +319,21 @@ describe('sandbox Dockerfile', () => {
     // while working perfectly under the `bash -c` the smoke suite uses. That
     // asymmetry is what made MOTIR-6183's agent PATH need the same hook.
     expect(directives).toContain('> /etc/profile.d/motir-postgres-path.sh');
-    expect(directives).toMatch(/PATH="\/usr\/lib\/postgresql\/16\/bin:\$PATH"/);
+    expect(directives).toMatch(/PATH="\/usr\/lib\/postgresql\/18\/bin:\$PATH"/);
+  });
+
+  it('names ONE Postgres major everywhere the binaries are spelled out (MOTIR-10223)', () => {
+    // The login-shell PATH hook and the helper's PG_BIN default spell the bin
+    // directory as a literal, not through ${PG_MAJOR}. A major bump that misses
+    // one leaves `psql` or `motir-sandbox-postgres` pointing at a directory the
+    // image no longer has — a failure only a person in the container would see.
+    const major = /^ARG PG_MAJOR=(\d+)$/m.exec(directivesOf(dockerfile))?.[1];
+    expect(major).toBeDefined();
+    const spelled = [dockerfile, read('postgres.sh')].flatMap((source) =>
+      [...source.matchAll(/\/usr\/lib\/postgresql\/(\d+)\/bin/g)].map((m) => m[1]),
+    );
+    expect(spelled.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(spelled)).toEqual(new Set([major]));
   });
 
   it('ships a browser AND the libraries only root could install (MOTIR-6204)', () => {
