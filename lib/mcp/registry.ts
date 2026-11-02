@@ -126,6 +126,14 @@ import {
 } from './tools/runRecords';
 import { SEARCH_PAST_PLANS_TOOL_NAME, registerSearchPastPlans } from './tools/searchPastPlans';
 import {
+  LIST_DEPENDENCY_VERSIONS_TOOL_NAME,
+  registerListDependencyVersions,
+} from './tools/listDependencyVersions';
+import {
+  READ_DEPENDENCY_SOURCE_TOOL_NAME,
+  registerReadDependencySource,
+} from './tools/readDependencySource';
+import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -290,6 +298,8 @@ export const MCP_TOOL_NAMES = [
   SEARCH_RUN_RECORDS_TOOL_NAME,
   GET_RUN_RECORD_TOOL_NAME,
   SEARCH_PAST_PLANS_TOOL_NAME,
+  LIST_DEPENDENCY_VERSIONS_TOOL_NAME,
+  READ_DEPENDENCY_SOURCE_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -570,6 +580,10 @@ export function registerMcpTools(
   // MOTIR-10241 — a project's plans in every status, declined ones with their
   // `decisionReason`. `project:browse`, the Plans list page's floor.
   registerSearchPastPlans(target, resolveContext);
+  // MOTIR-10242 — a package's published versions and source, read by core from the
+  // public npm registry. `ai:plan`, as `read_file`; the text is framed as data.
+  registerListDependencyVersions(target, resolveContext);
+  registerReadDependencySource(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
   // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
   // `code_grep` over the indexed file contents. `ai:plan`.

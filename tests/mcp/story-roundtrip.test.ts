@@ -591,6 +591,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         search_run_records: { projectKey: 'PROD' },
         get_run_record: { projectKey: 'PROD', runId: 'run_unknown' },
         search_past_plans: { projectKey: 'PROD' },
+        // MOTIR-10242 — an invalid name, so `invalid_package` before any registry request.
+        list_dependency_versions: { projectKey: 'PROD', package: 'http://x' },
+        read_dependency_source: { projectKey: 'PROD', package: 'http://x', version: '1.0.0' },
         // MOTIR-7862 — no repository set, so `no_repositories`, decided in core with
         // no motir-ai call.
         code_explore: { projectKey: 'PROD', query: 'readFile' },

@@ -358,6 +358,18 @@ export const zh: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  list_dependency_versions: {
+    summary:
+      '来自公共 npm 注册表的软件包已发布版本和 dist-tag——每种缺失都是具名结果，第三方数据标记为数据。',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      '某个版本的软件包已发布源码中的一个文件或目录——有大小限制，标记为第三方数据，每种缺失都是具名结果。',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
   search_past_plans: {
     summary:
       '项目中所有状态的计划，被拒绝的计划附带其结束原因——最新的在前，可按词语或状态筛选；无匹配是一个具名结果。',

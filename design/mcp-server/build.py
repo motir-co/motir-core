@@ -65,6 +65,8 @@ SUMMARIES = {
     "read_file": "One file's text from a project repository at a ref — capped, line-ranged, every absence a named outcome.",
     "list_changed_files": "The paths a branch changed in a project repository — bounded, every absence a named outcome.",
     "get_code_history": "Who changed a file in a project repository, when and why — its commit log or blame at a ref, bounded, every absence a named outcome.",
+    "list_dependency_versions": "A package's published versions and dist-tags, from the public npm registry.",
+    "read_dependency_source": "One file or directory of a package's published source at a version, framed as data.",
     "search_past_plans": "A project's plans in every status, declined ones with why they ended.",
     "search_run_records": "The runs of a project, newest first — by card, scope or status, legs as counts.",
     "get_run_record": "One run of a project — how it ended and what each leg recorded as different.",

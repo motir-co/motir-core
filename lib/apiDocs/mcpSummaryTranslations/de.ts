@@ -395,6 +395,18 @@ export const de: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  list_dependency_versions: {
+    summary:
+      'Die veröffentlichten Versionen und Dist-Tags eines Pakets aus der öffentlichen npm-Registry – jedes Fehlen ein benanntes Ergebnis, Daten Dritter als Daten gekennzeichnet.',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      'Eine Datei oder ein Verzeichnis des veröffentlichten Quellcodes eines Pakets in einer Version – größenbegrenzt, als Daten Dritter gekennzeichnet, jedes Fehlen ein benanntes Ergebnis.',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
   search_past_plans: {
     summary:
       'Die Pläne eines Projekts in jedem Status, abgelehnte mit dem Grund ihres Endes – neueste zuerst, nach Wörtern oder Status, kein Treffer ein benanntes Ergebnis.',

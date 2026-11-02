@@ -119,6 +119,15 @@ export const EXEMPT_TOOLS = {
     'repo_not_in_project) \u2014 a listing made against the git host for an agent planning over the ' +
     'MCP, the same reason as `read_file`. No `/api/v1` operation returns a branch comparison, and ' +
     'no REST client has asked for one (MOTIR-10069).',
+  list_dependency_versions:
+    'Returns a PACKAGE\u2019s published versions and dist-tags read from the public npm registry, ' +
+    'plus a named `outcome` and `framing: "data"` \u2014 third-party registry data, not a Motir ' +
+    'resource. No `/api/v1` operation returns it (MOTIR-10242).',
+  read_dependency_source:
+    'Returns one FILE\u2019s text (or one directory\u2019s entries) of a package\u2019s published ' +
+    'source at a version, plus a named `outcome` and `framing: "data"` \u2014 third-party package ' +
+    'content read from the public npm registry, not a Motir resource. No `/api/v1` operation ' +
+    'returns it (MOTIR-10242).',
   get_code_history:
     'Returns the commit LOG or BLAME of one repository path at a git ref \u2014 commit metadata ' +
     '(sha, author, date, subject, line ranges) plus a named `outcome` \u2014 read from the git host ' +

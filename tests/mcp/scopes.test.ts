@@ -290,6 +290,9 @@ describe('LEGACY_SCOPE_PERMISSIONS (the forward map)', () => {
       list_changed_files: true,
       // MOTIR-10237 — `get_code_history`, the same loss and the same reason.
       get_code_history: true,
+      // MOTIR-10242 — the two dependency reads, the same loss and the same reason.
+      list_dependency_versions: true,
+      read_dependency_source: true,
       // MOTIR-7862 — the two graph reads, the same loss and the same reason.
       code_explore: true,
       code_search: true,

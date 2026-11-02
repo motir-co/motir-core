@@ -385,6 +385,18 @@ export const ko: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  list_dependency_versions: {
+    summary:
+      '공개 npm 레지스트리에서 가져온 패키지의 게시된 버전과 dist-tag — 모든 부재는 이름 있는 결과이며, 제3자 데이터는 데이터로 표시됩니다.',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      '특정 버전에서 패키지의 게시된 소스 중 파일 또는 디렉터리 하나 — 크기 제한, 제3자 데이터로 표시, 모든 부재는 이름 있는 결과입니다.',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
   search_past_plans: {
     summary:
       '프로젝트의 모든 상태의 계획, 거절된 계획은 종료 이유와 함께 — 최신순, 단어나 상태로 검색하며 일치 없음은 이름 있는 결과입니다.',

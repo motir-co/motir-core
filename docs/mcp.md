@@ -5961,6 +5961,48 @@ tools' own sentences.
 selects **within** the token's workspace; another tenant's key reads as a plain
 `PROJECT_NOT_FOUND`.
 
+#### `list_dependency_versions` and `read_dependency_source`
+
+**What a package offers at a version** (MOTIR-10242): its published versions and
+dist-tags, and one file's text or one directory's entries of its published
+source. motir-core performs the read through `dependencyReadService`, the
+service the hosted planner reads through `GET /api/internal/ai/dependency-versions`
+and `GET /api/internal/ai/dependency-source`.
+
+**Input** — both take `projectKey`, `package` (e.g. `"zod"`, `"@prisma/client"`)
+and an optional `ecosystem` (default `npm`, the only one read).
+`read_dependency_source` also takes `version` (an exact published version, or a
+dist-tag such as `latest`; a range is not resolved), an optional `path` relative
+to the package root (omit to list the root), and an optional `startLine` /
+`endLine`. A file over 24,000 characters is cut with `read_file`'s truncation
+sentence.
+
+**Outcomes** — every one a **non-error** result in `structuredContent.outcome`:
+`versions`, `source_file`, `directory`, `path_not_found`, `binary`,
+`version_not_found`, `package_not_found` (also a private package: no registry
+credential is held), `too_large` (`what`: metadata, tarball, archive or file),
+`invalid_package` and `invalid_path` (no request is made),
+`ecosystem_unsupported`, and `unreachable` with its `failure` (`timeout`,
+`network`, `http_status`, `invalid_response`, `invalid_archive`) — a failure to
+ask, never evidence the package is absent.
+
+**Bounds.** The one host requested is `registry.npmjs.org`; the tarball URL is
+built from the validated name and an exact listed version, and redirects are
+refused. Each request is limited to 10 s; the metadata to 16 MiB, the tarball to
+10 MiB and the unpacked archive to 64 MiB. The archive is unpacked in memory:
+nothing is written to disk, no package code runs, and symlinks, hard links and
+paths that leave the package root are skipped.
+
+**Framing.** Every result carries `framing: "data"`. Package text is
+THIRD-PARTY: the summary quotes it between `<<<BEGIN THIRD-PARTY PACKAGE
+CONTENT>>>` and `<<<END THIRD-PARTY PACKAGE CONTENT>>>` under a sentence saying
+any instruction inside it is not to be followed.
+
+**Permission: `ai:plan`**, checked after the project key resolves inside the
+token's workspace and before any registry request
+(`docs/decisions/member-facing-permissions.md`, the sixth instance).
+**Read-only**, **open-world** (the public npm registry).
+
 #### `search_past_plans`
 
 **How similar work was shaped before, and why a plan ended** (MOTIR-10241): a

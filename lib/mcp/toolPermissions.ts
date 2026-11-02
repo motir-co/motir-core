@@ -428,6 +428,11 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // metadata off the same git host `read_file` and `list_changed_files` read, on
   // the same argument (AMENDMENT 3 to §4).
   get_code_history: 'ai:plan',
+  // MOTIR-10242 — a package's published versions and source: what the hosted
+  // planner's dependency tools read through `app/api/internal/ai/dependency-*`,
+  // so the same `ai:plan` argument as `read_file` (AMENDMENT 3 to §4).
+  list_dependency_versions: 'ai:plan',
+  read_dependency_source: 'ai:plan',
   // MOTIR-10240 — a run of the project, read: the same `project:browse` the Runs
   // room and the card's run section are read on.
   search_run_records: 'project:browse',

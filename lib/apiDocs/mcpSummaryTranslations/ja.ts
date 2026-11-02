@@ -388,6 +388,18 @@ export const ja: McpSummaryTranslations = {
     source:
       "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
   },
+  list_dependency_versions: {
+    summary:
+      '公開 npm レジストリから取得したパッケージの公開バージョンと dist-tag。欠落はすべて名前付きの結果で、第三者データはデータとして扱われます。',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      'あるバージョンのパッケージ公開ソースのファイルまたはディレクトリ 1 つ。サイズ制限付きで第三者データとして扱われ、欠落はすべて名前付きの結果です。',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
   search_past_plans: {
     summary:
       'プロジェクトのあらゆるステータスのプラン。却下されたものは終了理由付き。新しい順に、語句またはステータスで絞り込み。一致なしは名前付きの結果。',

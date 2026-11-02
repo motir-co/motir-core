@@ -553,6 +553,10 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   list_changed_files: { readOnlyHint: true, openWorldHint: true },
   // R: getCodeHistory.ts → repoHistoryService.readProjectHistory → GitProvider.readCodeHistory (the THIRD-PARTY git host — open world, as list_changed_files)
   get_code_history: { readOnlyHint: true, openWorldHint: true },
+  // R: listDependencyVersions.ts → dependencyReadService.listVersions → the public npm registry (THIRD-PARTY — open world)
+  list_dependency_versions: { readOnlyHint: true, openWorldHint: true },
+  // R: readDependencySource.ts → dependencyReadService.readSource → the public npm registry tarball, unpacked in memory (THIRD-PARTY — open world)
+  read_dependency_source: { readOnlyHint: true, openWorldHint: true },
   // R: runRecords.ts → runRecordReadService.searchRuns → dispatchRunService.listRunsFor* (Motir's own rows)
   search_run_records: { readOnlyHint: true, openWorldHint: false },
   // R: searchPastPlans.ts → aiBoundaryService.searchPastPlans → plansService.searchPlans → planRepository.searchByProject (Motir's own rows)

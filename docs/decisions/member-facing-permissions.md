@@ -397,6 +397,14 @@ same argument: it reads commit METADATA off the same git host `read_file` and
 `list_changed_files` already read for every `ai:plan` holder, and the hosted planner reads the
 same history through `app/api/internal/ai/repo-history`.
 
+**A sixth (MOTIR-10242, 2026-11-02):** the `list_dependency_versions` and `read_dependency_source`
+MCP tools — a package's published versions and source, read by motir-core from the public npm
+registry (`dependencyReadService`; `TOOL_PERMISSIONS.list_dependency_versions`,
+`TOOL_PERMISSIONS.read_dependency_source`) — are gated on `ai:plan` at the door and in the tool
+before any registry request, on the same argument: the hosted planner reads the same evidence
+through `app/api/internal/ai/dependency-versions` and `dependency-source`, and the reads touch no
+tenant data, so nobody's reach widens.
+
 **A third (MOTIR-7862, 2026-10-08):** the `code_explore` / `code_search` MCP tools — the hosted code
 graph, read through motir-ai's `POST /v1/code-graph/read` (`codeGraphReadService.read`) — are gated
 on `ai:plan` for the same reason: the hosted planner's own graph tools already show those answers

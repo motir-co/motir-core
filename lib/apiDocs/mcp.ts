@@ -663,6 +663,20 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Pinned from the LIVE handshake, never hand-computed.
     descriptionFingerprint: '95889dcd4e65',
   },
+  list_dependency_versions: {
+    // MOTIR-10242 — a package's versions, on the MCP.
+    summary:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '2eebcd1acd1f',
+  },
+  read_dependency_source: {
+    // MOTIR-10242 — a package's published source, on the MCP.
+    summary:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '830c8ee73c32',
+  },
   search_past_plans: {
     // MOTIR-10241 — the project's plans, searched, on the MCP.
     summary:

@@ -2102,6 +2102,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  list_dependency_versions: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      ecosystem: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The package ecosystem; default "npm". Read: npm — any other is answered `ecosystem_unsupported`.',
+      },
+      package: {
+        type: 'string',
+        minLength: 1,
+        description: 'The package name as published, e.g. "zod" or "@prisma/client". Never a URL.',
+      },
+    },
+    required: ['projectKey', 'package'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   list_designs: {
     type: 'object',
     properties: {
@@ -2664,6 +2689,52 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key', 'bodyMd'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  read_dependency_source: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      ecosystem: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The package ecosystem; default "npm". Read: npm — any other is answered `ecosystem_unsupported`.',
+      },
+      package: {
+        type: 'string',
+        minLength: 1,
+        description: 'The package name as published, e.g. "zod" or "@prisma/client". Never a URL.',
+      },
+      version: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'An exact published version ("4.2.1"), or a dist-tag the registry resolves ("latest"). A range ("^4") is not resolved — list the versions first with `list_dependency_versions`.',
+      },
+      path: {
+        type: 'string',
+        description:
+          'OPTIONAL. A path RELATIVE TO THE PACKAGE ROOT, e.g. "package.json" or "lib/index.d.ts", or a directory to list it. Omit to list the package root. Never absolute, never "..".',
+      },
+      startLine: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL, 1-based and inclusive. Read from this line.',
+      },
+      endLine: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL, 1-based and inclusive. Read up to this line.',
+      },
+    },
+    required: ['projectKey', 'package', 'version'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -4851,6 +4922,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
   list_changed_files: 'List changed files',
+  list_dependency_versions: 'List dependency versions',
   list_designs: 'List designs',
   list_folders: 'List folders',
   list_projects: 'List projects',
@@ -4869,6 +4941,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_decision_page: 'Publish decision page',
   publish_design_result: 'Publish design result',
   publish_test_instructions: 'Publish How to test',
+  read_dependency_source: 'Read dependency source',
   read_file: 'Read a file',
   record_plan_revision_reason: 'Record WHY a plan had to change',
   record_run_discrepancy: 'Record what you built differently from the plan',
@@ -5202,6 +5275,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   list_changed_files: { title: 'List changed files', readOnlyHint: true, openWorldHint: true },
+  list_dependency_versions: {
+    title: 'List dependency versions',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   list_designs: { title: 'List designs', readOnlyHint: true, openWorldHint: false },
   list_folders: { title: 'List folders', readOnlyHint: true, openWorldHint: false },
   list_projects: { title: 'List projects', readOnlyHint: true, openWorldHint: false },
@@ -5289,6 +5367,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     destructiveHint: true,
     idempotentHint: true,
     openWorldHint: false,
+  },
+  read_dependency_source: {
+    title: 'Read dependency source',
+    readOnlyHint: true,
+    openWorldHint: true,
   },
   read_file: { title: 'Read a file', readOnlyHint: true, openWorldHint: true },
   record_plan_revision_reason: {
