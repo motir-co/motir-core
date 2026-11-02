@@ -382,6 +382,12 @@ export const ja: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'プロジェクトのリポジトリセット内のリポジトリにあるファイルの、ref 時点のコミットログまたは blame — コミットのメタデータのみ、上限付き、すべての不在は名前付きの結果。',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
   record_plan_revision_reason: {
     summary:
       '未承認の計画をなぜ変更しなければならなかったかを記録します。4つの分岐があり、うち2つは計画バグを起票します。計画自体には何も変更を加えません。',

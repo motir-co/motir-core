@@ -383,6 +383,12 @@ export const pl: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'Log commitów lub blame pliku w repozytorium z zestawu projektu, na danym ref — tylko metadane commitów, ograniczone, każdy brak to nazwany wynik.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
   record_plan_revision_reason: {
     summary:
       'Zapisz, DLACZEGO niezatwierdzony Plan musiał się zmienić — cztery gałęzie, z których dwie zgłaszają błąd planowania; nie zmienia niczego w Planie.',

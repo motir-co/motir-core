@@ -64,6 +64,7 @@ SUMMARIES = {
     "update_coding_convention": "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
     "read_file": "One file's text from a project repository at a ref — capped, line-ranged, every absence a named outcome.",
     "list_changed_files": "The paths a branch changed in a project repository — bounded, every absence a named outcome.",
+    "get_code_history": "Who changed a file in a project repository, when and why — its commit log or blame at a ref, bounded, every absence a named outcome.",
     "code_explore": "Explore the hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",
     "code_search": "Search the hosted code graph for symbols by name — the hosted planner's own answer, paged.",
     "code_grep": "Search the indexed file contents for text — string literals, comments and non-code files the symbol search cannot see.",

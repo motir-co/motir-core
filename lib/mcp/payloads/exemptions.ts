@@ -119,6 +119,11 @@ export const EXEMPT_TOOLS = {
     'repo_not_in_project) \u2014 a listing made against the git host for an agent planning over the ' +
     'MCP, the same reason as `read_file`. No `/api/v1` operation returns a branch comparison, and ' +
     'no REST client has asked for one (MOTIR-10069).',
+  get_code_history:
+    'Returns the commit LOG or BLAME of one repository path at a git ref \u2014 commit metadata ' +
+    '(sha, author, date, subject, line ranges) plus a named `outcome` \u2014 read from the git host ' +
+    'for an agent planning over the MCP, the same reason as `read_file`. No `/api/v1` operation ' +
+    'returns repository history, and no REST client has asked for it (MOTIR-10237).',
   code_explore:
     'Returns the hosted planner\u2019s own `code_explore` TEXT verbatim, or a named `state` \u2014 a ' +
     'graph read assembled in motir-ai for an agent planning over the MCP. No `/api/v1` operation ' +

@@ -352,6 +352,12 @@ export const zh: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      '项目仓库集合中某个仓库里一个文件在某个 ref 处的提交日志或 blame——仅提交元数据，有上限，每种缺失都是一个具名结果。',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
   record_plan_revision_reason: {
     summary:
       '记录未批准的计划为何（WHY）必须修改：共四个分支，其中两个会提交规划缺陷；它不会对计划做任何改动。',

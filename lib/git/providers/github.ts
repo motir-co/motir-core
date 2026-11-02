@@ -55,6 +55,8 @@ import type {
   ChangedFile,
   ChangedFileStatus,
   ChangedFilesResult,
+  CodeHistoryKind,
+  CodeHistoryResult,
   DeploymentState,
   ChangeRequestMergeability,
   ChangeRequestMergeabilityInput,
@@ -74,6 +76,7 @@ import type {
   RepositoryPermissionInput,
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
+import { githubReadCodeBlame, githubReadCodeLog } from './githubCodeHistory';
 
 // The GitHub implementation of the GitProvider seam (Story 7.10 · MOTIR-891) —
 // the FIRST registered provider. It normalizes GitHub's `pull_request` and
@@ -509,16 +512,25 @@ function githubChangedFile(value: unknown): ChangedFile | null {
  * GitHub's raw body.
  */
 function githubMintFailure(err: unknown, refs: { base: string; head: string }): ChangedFilesResult {
-  if (err instanceof GithubAppNotConfiguredError) return { outcome: 'not_connected', ...refs };
+  const outcome = githubMintOutcome(err);
+  return outcome.outcome === 'host_error'
+    ? { outcome: 'host_error', ...refs, detail: outcome.detail }
+    : { outcome: outcome.outcome, ...refs };
+}
+
+/** The named absence a failed mint is, shared by every read that mints (MOTIR-10237). */
+function githubMintOutcome(
+  err: unknown,
+): { outcome: 'not_connected' | 'revoked' } | { outcome: 'host_error'; detail: string } {
+  if (err instanceof GithubAppNotConfiguredError) return { outcome: 'not_connected' };
   if (
     err instanceof GithubAppTokenError &&
     (err.status === 401 || err.status === 403 || err.status === 404)
   ) {
-    return { outcome: 'revoked', ...refs };
+    return { outcome: 'revoked' };
   }
   return {
     outcome: 'host_error',
-    ...refs,
     detail: err instanceof Error ? err.message : 'the installation token could not be minted',
   };
 }
@@ -1007,6 +1019,33 @@ export const githubProvider: GitProvider = {
       headSha:
         commits.length > 0 ? shaOf(commits[commits.length - 1]) : shaOf(body['merge_base_commit']),
     };
+  },
+
+  /**
+   * The LOG or BLAME of a path at a ref (MOTIR-10237) — minted here, read in
+   * `githubCodeHistory.ts`: REST `commits?sha&path` for the log, GraphQL
+   * `Commit.blame(path)` for the blame (GitHub's REST API has no blame). A failed
+   * mint is the same named absence `listChangedFiles` gives it.
+   */
+  async readCodeHistory(
+    installationId: string,
+    owner: string,
+    name: string,
+    kind: CodeHistoryKind,
+    path: string,
+    ref: string,
+  ): Promise<CodeHistoryResult> {
+    const asked = { kind, path, ref };
+    let token: string;
+    try {
+      const role = githubAppRoleForRepo({ owner }, await motirOwnedOrgLogins());
+      ({ token } = await mintInstallationToken(installationId, role));
+    } catch (err) {
+      return { ...githubMintOutcome(err), ...asked };
+    }
+    return kind === 'blame'
+      ? githubReadCodeBlame(token, owner, name, asked)
+      : githubReadCodeLog(token, owner, name, asked);
   },
 
   async readFileAtRef(

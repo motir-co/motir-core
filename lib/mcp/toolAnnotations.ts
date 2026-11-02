@@ -551,6 +551,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   read_file: { readOnlyHint: true, openWorldHint: true },
   // R: listChangedFiles.ts → repoChangesService.listProjectChangedFiles → GitProvider.listChangedFiles (the THIRD-PARTY git host — open world, as read_file)
   list_changed_files: { readOnlyHint: true, openWorldHint: true },
+  // R: getCodeHistory.ts → repoHistoryService.readProjectHistory → GitProvider.readCodeHistory (the THIRD-PARTY git host — open world, as list_changed_files)
+  get_code_history: { readOnlyHint: true, openWorldHint: true },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (Motir's own hosted graph over the private boundary — no third-party call)
   code_explore: { readOnlyHint: true, openWorldHint: false },
   // R: codeGraphRead.ts → codeGraphReadService.read → motir-ai POST /v1/code-graph/read (as code_explore)

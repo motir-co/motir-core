@@ -20,6 +20,8 @@ import type {
   RefResolution,
   CommitComparison,
   ChangedFilesResult,
+  CodeHistoryKind,
+  CodeHistoryResult,
   ChangeRequestMergeability,
   ChangeRequestMergeabilityInput,
   ReleaseContainment,
@@ -106,6 +108,29 @@ export const CHANGED_FILES_TIMEOUT_MS = 10_000;
  * host cap is indistinguishable from one that was cut.
  */
 export const CHANGED_FILES_MAX = 300;
+
+/**
+ * Deadline for a code-history read (MOTIR-10237), in ms — {@link CHANGED_FILES_TIMEOUT_MS}'
+ * reasoning: it runs inside a planning session's turn, where a named `host_error`
+ * beats a long silence. It must stay under the history route's `maxDuration`
+ * (`app/api/internal/ai/repo-history/route.ts`); `tests/git/readCodeHistory.test.ts`
+ * asserts that ordering.
+ */
+export const CODE_HISTORY_TIMEOUT_MS = 10_000;
+
+/**
+ * The most commits one `kind: 'log'` answer carries — GitHub's and GitLab's own
+ * page size cap (`per_page` ≤ 100), so the one page each host returns is the
+ * whole bound. A log that has a further page reports `truncated: true`.
+ */
+export const CODE_HISTORY_MAX_COMMITS = 100;
+
+/**
+ * The most blame ranges one `kind: 'blame'` answer carries. A blame is one range
+ * per run of lines a single commit last changed, so a long, much-edited file can
+ * hold thousands; past this the answer is cut and reports `truncated: true`.
+ */
+export const CODE_HISTORY_MAX_RANGES = 500;
 
 /**
  * Deadline for EACH host call a merge makes, in ms (MOTIR-5514). A merge is a write
@@ -379,6 +404,41 @@ export interface GitProvider {
     base: string,
     head: string,
   ): Promise<ChangedFilesResult>;
+
+  /**
+   * WHO CHANGED A PATH, WHEN AND WHY, at a ref (MOTIR-10237) — the commit LOG of
+   * `path` reachable from `ref` (newest first), or its BLAME at `ref` (per line
+   * range, the commit that last changed it).
+   *
+   * ⚠️ REQUIRED, for {@link listChangedFiles}' reason: both hosts answer it from
+   * their API — GitHub's `GET /repos/{owner}/{name}/commits?sha&path` and its
+   * GraphQL `Commit.blame(path)` (the REST API has no blame), GitLab's
+   * `GET /api/v4/projects/:id/repository/commits?ref_name&path` and
+   * `…/repository/files/:path/blame?ref` — and the call happens here, in the
+   * process holding the token.
+   *
+   * ⚠️ METADATA ONLY. A commit's sha, author, date and subject; a blame range's
+   * lines and commit. No diff, no hunk and no line content — the file's text is
+   * {@link readFileAtRef}'s.
+   *
+   * ⚠️ IT RETURNS ITS FAILURES as named members of {@link CodeHistoryResult} and
+   * never throws for any of them. Implementations MUST bound the request with
+   * {@link CODE_HISTORY_TIMEOUT_MS}, MUST cap the answer at
+   * {@link CODE_HISTORY_MAX_COMMITS} / {@link CODE_HISTORY_MAX_RANGES}, and MUST
+   * NOT put the token — or any URL carrying one — into the result.
+   *
+   * ⚠️ NO CALLER MAY INVOKE THIS ON A RENDER PATH. Its callers are
+   * `GET /api/internal/ai/repo-history` and the MCP `get_code_history` tool, on
+   * demand.
+   */
+  readCodeHistory(
+    installationId: string,
+    owner: string,
+    name: string,
+    kind: CodeHistoryKind,
+    path: string,
+    ref: string,
+  ): Promise<CodeHistoryResult>;
 
   /**
    * MERGE one change request on the host (Story MOTIR-4882 · MOTIR-5514;

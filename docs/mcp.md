@@ -5871,6 +5871,53 @@ same argument (`docs/decisions/member-facing-permissions.md` AMENDMENT 3).
 `projectKey` selects **within** the token's workspace; another tenant's key reads
 as a plain not-found.
 
+#### `get_code_history`
+
+**Who changed a file, when and why**, in one of the project's repositories: the
+commit **log** of a path at a ref (newest first), or its **blame** (per line
+range, the commit that last changed it) — commit metadata only, no file content
+and no diff (MOTIR-10237). `read_file` answers "the file at a commit"; this
+answers the history around it. The hosted planner reads the same history through
+`app/api/internal/ai/repo-history`.
+
+**Input**
+
+| Field        | Type   | Required | Notes                                                                                                |
+| ------------ | ------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                                          |
+| `repo`       | string | yes      | A repository in the project's set: the bare name (`motir-core`) or `owner/name`, case-insensitively. |
+| `path`       | string | yes      | The repository-relative path of the file.                                                            |
+| `kind`       | string | yes      | `log` (the commits that changed the path) or `blame` (per line range, the last commit).              |
+| `ref`        | string | no       | The branch, tag or commit to read at. Omitted ⇒ the repository's default branch, as stored.          |
+
+**The bound.** A log lists at most **100 commits** (the hosts' own page size) and a
+blame at most **500 line ranges**. A cut answer says so in `truncated` and ends its
+text with a SENTENCE saying the list is incomplete.
+
+**Output** — `structuredContent.outcome` names what happened, and every outcome is
+a **non-error** result with its own summary sentence:
+
+| `outcome`             | Meaning                                                                                                   | Extra fields                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `ok`                  | `kind: log` — `commits`, each `{ sha, author, date, subject }`; `kind: blame` — `blame`, each line range. | `repoRef`, `kind`, `path`, `ref`, `commits` or `blame`, `truncated` |
+| `no_such_ref`         | `ref` does not resolve in the repository.                                                                 | `repoRef`, `kind`, `path`, `ref`                                    |
+| `path_not_found`      | The ref resolves and the path has no history at it.                                                       | `repoRef`, `kind`, `path`, `ref`                                    |
+| `invalid_path`        | The path is not a repository-relative path (absolute, a URL, `..`). Nothing was asked.                    | `repoRef`, `kind`, `path`, `ref`, `reason`                          |
+| `not_connected`       | No usable connection on this deployment.                                                                  | `repoRef`, `kind`, `path`, `ref`                                    |
+| `revoked`             | The host refused the stored credential. The history is unknown.                                           | `repoRef`, `kind`, `path`, `ref`                                    |
+| `too_large`           | The host declined to compute a history that large.                                                        | `repoRef`, `kind`, `path`, `ref`                                    |
+| `host_error`          | The host did not answer — a failure to ASK, not an answer.                                                | `repoRef`, `kind`, `path`, `ref`, `detail`                          |
+| `repo_not_connected`  | The repository is in the set but not connected to the organisation.                                       | `repoRef`, `kind`, `path`, `ref`                                    |
+| `repo_not_in_project` | `repo` matches no repository in the project's set. Answered **before** any host call.                     | `repo`, `repoSet`                                                   |
+
+None of them carries a provider credential, a diff or a host URL.
+
+**Permission: `ai:plan`, at the door and in the service** — as `read_file`, on the
+same argument (`docs/decisions/member-facing-permissions.md` AMENDMENT 3).
+**Read-only**, but **open-world**: the read calls the third-party git host.
+`projectKey` selects **within** the token's workspace; another tenant's key reads
+as a plain not-found.
+
 #### `code_explore` and `code_search`
 
 The **hosted code graph**, for an agent planning over the MCP: the hosted

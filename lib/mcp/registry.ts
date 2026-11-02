@@ -118,6 +118,7 @@ import {
 } from './tools/updateCodingConvention';
 import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import { LIST_CHANGED_FILES_TOOL_NAME, registerListChangedFiles } from './tools/listChangedFiles';
+import { GET_CODE_HISTORY_TOOL_NAME, registerGetCodeHistory } from './tools/getCodeHistory';
 import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
@@ -279,6 +280,7 @@ export const MCP_TOOL_NAMES = [
   UPDATE_CODING_CONVENTION_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   LIST_CHANGED_FILES_TOOL_NAME,
+  GET_CODE_HISTORY_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -548,6 +550,10 @@ export function registerMcpTools(
   // read off `get_work_item`'s `inFlightCode`. Gated on `ai:plan`; the repo
   // resolves against the PROJECT's set.
   registerListChangedFiles(target, resolveContext);
+  // MOTIR-10237 — the LOG or BLAME of a path in one of the project's repositories:
+  // who changed it, when and why. Gated on `ai:plan`; the repo resolves against the
+  // PROJECT's set.
+  registerGetCodeHistory(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
   // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
   // `code_grep` over the indexed file contents. `ai:plan`.

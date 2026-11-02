@@ -390,6 +390,13 @@ changed in a project repository (`repoChangesService.listProjectChangedFiles`;
 the same argument: the hosted planner's own `list_changed_files` already shows that listing to
 every `ai:plan` holder.
 
+**A fifth (MOTIR-10237, 2026-11-02):** the `get_code_history` MCP tool — the commit log or blame
+of a path in a project repository (`repoHistoryService.readProjectHistory`;
+`TOOL_PERMISSIONS.get_code_history`) — is gated on `ai:plan` at the door and in the service on the
+same argument: it reads commit METADATA off the same git host `read_file` and
+`list_changed_files` already read for every `ai:plan` holder, and the hosted planner reads the
+same history through `app/api/internal/ai/repo-history`.
+
 **A third (MOTIR-7862, 2026-10-08):** the `code_explore` / `code_search` MCP tools — the hosted code
 graph, read through motir-ai's `POST /v1/code-graph/read` (`codeGraphReadService.read`) — are gated
 on `ai:plan` for the same reason: the hosted planner's own graph tools already show those answers

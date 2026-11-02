@@ -384,6 +384,12 @@ export const nl: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'De commitlog of blame van een bestand in een repository uit de set van het project, op een ref — alleen commitmetadata, begrensd, elke afwezigheid een benoemde uitkomst.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
   record_plan_revision_reason: {
     summary:
       'Leg vast WAAROM een niet-goedgekeurd Plan moest veranderen — vier takken, waarvan twee een planningsbug aanmaken; het verandert niets aan het Plan.',

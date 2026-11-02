@@ -1616,6 +1616,43 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_code_history: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively.',
+      },
+      path: {
+        type: 'string',
+        minLength: 1,
+        description: 'The repository-relative path of the file, e.g. "lib/foo.ts".',
+      },
+      kind: {
+        type: 'string',
+        enum: ['log', 'blame'],
+        description:
+          '`log` — the commits that changed the path, newest first (sha, author, date, subject). `blame` — per line range, the commit that last changed those lines.',
+      },
+      ref: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The branch, tag or commit to read at. Omit for the repository’s default branch.',
+      },
+    },
+    required: ['projectKey', 'repo', 'path', 'kind'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_coding_convention: {
     type: 'object',
     properties: {
@@ -4701,6 +4738,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_code_health: 'Get code health',
+  get_code_history: 'Get code history',
   get_coding_convention: 'Get coding convention',
   get_design: 'Get design',
   get_page: 'Get page',
@@ -5004,6 +5042,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   get_code_health: { title: 'Get code health', readOnlyHint: true, openWorldHint: false },
+  get_code_history: { title: 'Get code history', readOnlyHint: true, openWorldHint: true },
   get_coding_convention: {
     title: 'Get coding convention',
     readOnlyHint: true,

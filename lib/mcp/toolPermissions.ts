@@ -424,6 +424,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner's `list_changed_files` already shows exactly this to every `ai:plan`
   // holder — the same AMENDMENT 3 to §4 as `read_file`.
   list_changed_files: 'ai:plan',
+  // MOTIR-10237 — the log or blame of a path in a project repository: commit
+  // metadata off the same git host `read_file` and `list_changed_files` read, on
+  // the same argument (AMENDMENT 3 to §4).
+  get_code_history: 'ai:plan',
   // MOTIR-7862 — the hosted code graph's explore and search, the same argument:
   // the hosted planner's own `code_explore` / `code_search` already show every
   // `ai:plan` holder these answers.

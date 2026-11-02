@@ -386,6 +386,12 @@ export const fr: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'Le journal des commits ou le blame d’un fichier dans un dépôt de l’ensemble du projet, à une ref — métadonnées de commit uniquement, borné, chaque absence un résultat nommé.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
   record_plan_revision_reason: {
     summary:
       'Enregistrer POURQUOI un Plan non approuvé a dû changer — quatre branches, dont deux déposent un bug de planification ; cela ne change rien au Plan.',

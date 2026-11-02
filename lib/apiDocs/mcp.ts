@@ -642,6 +642,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Pinned from the LIVE handshake, never hand-computed.
     descriptionFingerprint: 'd2536eb87f90',
   },
+  get_code_history: {
+    // MOTIR-10237 — who changed a file, when and why, on the MCP.
+    summary:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '40804f6edca5',
+  },
   code_explore: {
     summary:
       "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",

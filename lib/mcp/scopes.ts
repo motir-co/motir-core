@@ -205,6 +205,7 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   update_coding_convention: 'work_items:write',
   read_file: 'read',
   list_changed_files: 'read',
+  get_code_history: 'read',
   code_explore: 'read',
   code_search: 'read',
   code_grep: 'read',

@@ -379,6 +379,12 @@ export const ko: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      '프로젝트 리포지토리 집합에 있는 리포지토리 파일의 특정 ref 시점 커밋 로그 또는 blame — 커밋 메타데이터만, 상한 있음, 모든 부재는 이름이 있는 결과.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
   record_plan_revision_reason: {
     summary:
       '승인되지 않은 계획을 왜 바꿔야 했는지 기록합니다 — 네 가지 분기 중 두 가지는 계획 버그를 등록하며, 계획 자체는 전혀 바꾸지 않습니다.',
