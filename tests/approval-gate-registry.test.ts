@@ -145,7 +145,11 @@ describe('the approval-gate registry — totality at COMPILE time', () => {
   // a build.
   //
   // It compiles a tiny throwaway module against the repo's own paths, so it is
-  // testing the real types rather than a copy of them. ~2–4 s.
+  // testing the real types rather than a copy of them. It was ~2–4 s when it was
+  // written; the probe's import graph now reaches ~5,000 files, and the same
+  // `tsc -p` measures ~37 s on main and on the MOTIR-10236 branch alike (check
+  // time ~30 s). On a loaded CI shard that crossed the old 60 s budget twice in a
+  // row, so the budget is 180 s — what is measured is still the build failing.
   it('promoting a kind into the registered set FAILS the build until its handler exists', () => {
     // The probe lives INSIDE the repo (and is removed in `finally`) so its
     // tsconfig can `extends` the repo's own base — the `paths` mapping cannot be
@@ -205,5 +209,5 @@ describe('the approval-gate registry — totality at COMPILE time', () => {
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
-  }, 60_000);
+  }, 180_000);
 });
