@@ -16,7 +16,8 @@ import { dbRead } from '@/lib/db';
 // Prisma operation, the relation filter compiles into the same query.
 //
 // No error translation EXCEPT delete: an in-use option hard-delete trips the
-// value FK's ON DELETE RESTRICT (P2003), which the SERVICE translates to its
+// value FK's ON DELETE RESTRICT (`isRestrictViolation` reads the refusal,
+// whose Prisma code depends on the server), which the SERVICE translates to its
 // typed OptionInUseError after its own countByOption pre-check (the DB is
 // the backstop, not the messenger).
 
@@ -51,7 +52,7 @@ export const customFieldOptionRepository = {
    * team-managed "Optimize" rule). The service pre-checks
    * customFieldValueRepository.countByOption === 0 inside the same
    * transaction; the value FK's ON DELETE RESTRICT rejects anything that
-   * slips past (P2003).
+   * slips past (a RESTRICT violation — `lib/prisma/restrictViolation.ts`).
    */
   async delete(id: string, tx: Prisma.TransactionClient): Promise<CustomFieldOption> {
     return tx.customFieldOption.delete({ where: { id } });

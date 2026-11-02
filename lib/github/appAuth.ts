@@ -97,6 +97,13 @@ function resolveConfig(role: GithubAppRole): AppConfig {
   return { appId, privateKeyPem };
 }
 
+/** Whether the App registration for `role` is wired on this deployment — both of
+ *  its variables set. Read at call time, never at import, like `resolveConfig`. */
+export function isGithubAppConfigured(role: GithubAppRole): boolean {
+  const env = APP_ENV[role];
+  return Boolean(process.env[env.appId]) && Boolean(process.env[env.privateKey]);
+}
+
 const b64url = (input: Buffer | string): string => Buffer.from(input).toString('base64url');
 
 /**

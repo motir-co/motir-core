@@ -48,6 +48,8 @@ const OPTIONS_INTERFACE: Record<string, string | null> = {
   'auth login': 'AuthLoginOptions',
   'auth status': 'AuthScopeOptions',
   'auth logout': 'AuthScopeOptions',
+  // `AuthRefreshOptions.browser` is `--no-browser`, as on `login`.
+  'auth refresh': 'AuthRefreshOptions',
   link: 'LinkOptions',
   'link add': null,
   'link remove': null,

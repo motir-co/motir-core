@@ -140,6 +140,29 @@
       "notClaimed": "Straciliśmy ślad tego kodu. Wpisz go ponownie, aby kontynuować.",
       "network": "Nie udało się połączyć z Motir. Sprawdź połączenie i spróbuj ponownie.",
       "unexpected": "Coś poszło nie tak po naszej stronie. Spróbuj ponownie lub uruchom motir login, aby otrzymać nowy kod."
+    },
+    "update": {
+      "heading": "Zaktualizować uprawnienia tego terminala?",
+      "subhead": "Sprawdź token i zmiany, zanim zatwierdzisz.",
+      "updating": "Aktualizowany",
+      "tokenSub": "Token <chip>{prefix}…</chip> · ten sam sekret, nic do kopiowania",
+      "askedAgo": "Kod <chip>{code}</chip> · zażądano {ago}",
+      "workspaceSub": "Obszar roboczy tokena. Nie zmienia się.",
+      "expiresValue": "Za {days} dni",
+      "expiresSub": "Ta aktualizacja tego nie zmienia.",
+      "changes": "Zmiany",
+      "unchanged": "{count, plural, one {# inne uprawnienie pozostaje bez zmian.} few {# inne uprawnienia pozostają bez zmian.} many {# innych uprawnień pozostaje bez zmian.} other {# innego uprawnienia pozostaje bez zmian.}}",
+      "warning": "Zatwierdź tylko wtedy, gdy przed chwilą samodzielnie uruchomiłeś <cmd>motir auth refresh</cmd> na {hostname}. Jeśli ktoś przesłał Ci ten kod, <strong>odrzuć go</strong>: zatwierdzenie nada temu tokenowi powyższe zmiany.",
+      "actions": "Zatwierdź lub odrzuć tę aktualizację",
+      "approve": "Zatwierdź aktualizację",
+      "deny": "Odrzuć",
+      "approvedHeading": "Uprawnienia zaktualizowane",
+      "approvedSubhead": "Nie musisz tu nic więcej robić.",
+      "approvedBody": "Wróć do terminala — <cmd>motir auth refresh</cmd> zakończyło działanie. <strong>{label}</strong> ma teraz bieżące uprawnienia CLI i zachowuje swój token.",
+      "deniedBody": "Nic się nie zmieniło. <strong>{label}</strong> zachowuje dotychczasowe uprawnienia, a terminal zachowuje swój token.",
+      "deniedRetry": "Odrzucono przez pomyłkę? Uruchom ponownie <cmd>motir auth refresh</cmd>, aby otrzymać nowy kod — tego nie można użyć ponownie.",
+      "expiredBody": "Kod <chip>{code}</chip> jest już nieważny i nic nie zostało zmienione. Uruchom ponownie <cmd>motir auth refresh</cmd>, aby otrzymać nowy kod.",
+      "expiredNote": "Terminal przestał już czekać — zgłasza, że kod wygasł."
     }
   },
   "markdownEditor": {
@@ -3890,6 +3913,40 @@
       "expiresNever": "Nigdy",
       "lastUsedNever": "Nigdy",
       "revokeAria": "Unieważnij token {label}",
+      "editAria": "Edytuj uprawnienia tokenu {label}",
+      "edit": {
+        "title": "Edytuj uprawnienia",
+        "description": "Zmień, co może robić ten token. Sam token pozostaje ten sam.",
+        "facts": {
+          "label": "Etykieta",
+          "token": "Token",
+          "boundTo": "Powiązany z",
+          "expires": "Wygasa"
+        },
+        "factsLocked": "Te dane pozostają bez zmian. Aby je zmienić, utwórz nowy token.",
+        "sameSecret": "Ten sam token, ten sam sekret. Agenci, którzy już go używają, otrzymają nowe uprawnienia przy następnym wywołaniu — nie trzeba niczego kopiować ponownie.",
+        "changes": {
+          "label": "Zmiany",
+          "adding": "Dodawane",
+          "removing": "Usuwane",
+          "none": "Brak zmian. Włącz lub wyłącz uprawnienie, aby je zmienić."
+        },
+        "emptyError": "Zostaw co najmniej jedno uprawnienie. Aby ten token przestał działać, unieważnij go.",
+        "refused": "Nie możesz nadać uprawnienia <strong>{permission}</strong> w {project}, więc nic nie zostało zmienione. Jest wyłączone poniżej — zapisz ponownie bez niego.",
+        "gone": {
+          "title": "Ten token już nie istnieje",
+          "body": "Został unieważniony w innym miejscu, więc nie ma czego zmieniać. Zamknij to okno, a token zniknie z listy.",
+          "close": "Zamknij"
+        },
+        "save": "Zapisz uprawnienia",
+        "cancel": "Anuluj",
+        "errorTitle": "Nie udało się zaktualizować uprawnień",
+        "errorGeneric": "Coś poszło nie tak. Nic nie zostało zmienione — spróbuj ponownie.",
+        "staffUnavailable": "W sesji personelu nie możesz edytować uprawnień tokenu.",
+        "cliUnavailable": "Logowanie z CLI ma własne uprawnienia CLI. Aby je zaktualizować, uruchom motir auth refresh w tym terminalu.",
+        "updatedTitle": "Uprawnienia zaktualizowane",
+        "updatedBody": "„{label}” zachowuje swój sekret. Agenci zastosują zmianę przy następnym wywołaniu."
+      },
       "expiry": {
         "d30": "30 dni",
         "d90": "90 dni",
@@ -10280,6 +10337,10 @@
         "walk": {
           "alsoWaiting": "Czeka też na Twoje zatwierdzenie:"
         }
+      },
+      "notPlannedYet": {
+        "label": "Jeszcze niezaplanowane",
+        "more": "i {count, plural, one {# kolejny element} few {# kolejne elementy} many {# kolejnych elementów} other {# kolejnego elementu}} jeszcze niezaplanowane — otwórz, aby zobaczyć wszystkie"
       }
     }
   },

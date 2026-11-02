@@ -1,8 +1,17 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { resolveExpectedRepos } from '@/lib/workItems/expectedRepos';
+import {
+  deliveryMembersOf,
+  deliverySetShortfall,
+  hasDeliverySetShortfall,
+  hasLandedDelivery,
+  EMPTY_DELIVERY_SHORTFALL,
+  type DeliverySetShortfall,
+} from '@/lib/workItems/deliverySet';
 import {
   classifyRepoDelivery,
   hasRepoSetShortfall,
@@ -39,6 +48,15 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 // `workItemsService.updateStatus` (the shipped write authority). What is new here
 // is only WHEN the question is asked and, below, which gate stands in for
 // MOTIR-1604's when there is no delivering change request to exclude.
+//
+// ⚠️ AND IT ASKS THE MERGE'S QUESTION, NOT AN OLDER ONE (MOTIR-10135). The merge
+// sync no longer reads the repository set: an item with a LANDED delivery (one
+// merged onto its own repository's default branch) completes on its delivery set
+// alone. So the same item completes here on the same facts — every linked change
+// request closed, none open, none merged off the trunk or onto an unrecorded base
+// — and the repository set is asked only of an item with NO landed delivery,
+// where there is no evidence the work happened at all. A re-check that held what
+// a merge would complete is the one-way door this module exists to remove.
 
 /** What one re-evaluation concluded.
  *
@@ -58,8 +76,13 @@ export type RepoSetReevaluationOutcome =
   /** The item names no repository. The gate ABSTAINS on an empty set — exactly as
    *  it does on a delivery — so re-evaluation must not complete it either. */
   | 'abstained_no_repo_set'
-  /** Some repository the item carries is `awaiting` or `unknown`. */
+  /** The item has NO landed delivery, and some repository it carries is
+   *  `awaiting`, `unknown` or `unestablished`. */
   | 'held_incomplete_repo_set'
+  /** The item has a landed delivery, and another linked change request merged off
+   *  its repository's trunk or onto a base Motir never recorded (MOTIR-3659's
+   *  rule, read the way the merge sync reads it — MOTIR-10135). */
+  | 'held_incomplete_delivery_set'
   /** A linked change request is still OPEN (the MOTIR-1604 rule, event-free). */
   | 'held_open_change_request'
   /** The project's workflow has no status in the done category. */
@@ -78,6 +101,9 @@ export interface RepoSetReevaluationResult {
   /** The repositories that do NOT satisfy the gate, split by which question a
    *  reader has to answer. Empty for every outcome but `held_incomplete_repo_set`. */
   shortfall: RepoSetShortfall;
+  /** The linked change requests that have not landed. Present only on
+   *  `held_incomplete_delivery_set`. */
+  deliveryShortfall?: DeliverySetShortfall;
   /** The status the item was moved to (`transitioned` / `noop` only). */
   toStatus?: string;
 }
@@ -85,6 +111,41 @@ export interface RepoSetReevaluationResult {
 /** Options a caller may pass; `dryRun` decides and reports without writing. */
 export interface RepoSetReevaluationOptions {
   dryRun: boolean;
+}
+
+/**
+ * The two shortfalls a re-check can hold on, for an item with no OPEN linked
+ * change request (MOTIR-10135).
+ *
+ * A LANDED delivery retires the repository set: the item is then decided by its
+ * delivery set alone, exactly as the merge sync decides it, so the repository
+ * shortfall is empty whatever the list names. With none landed there is no
+ * evidence of shipped work, and the repository set is asked as it always was —
+ * which is what still holds an item whose only pull requests were closed
+ * unmerged, or whose one merge awaits a base-ref backfill.
+ */
+async function completionShortfalls(
+  workItemId: string,
+  targetRepos: string[],
+  tx: Prisma.TransactionClient,
+): Promise<{ deliveryShortfall: DeliverySetShortfall; shortfall: RepoSetShortfall }> {
+  const members = deliveryMembersOf(
+    await workItemDeliveryRepository.listByWorkItem(workItemId, tx),
+  );
+  if (hasLandedDelivery(members))
+    return { deliveryShortfall: deliverySetShortfall(members), shortfall: EMPTY_SHORTFALL };
+  return {
+    deliveryShortfall: EMPTY_DELIVERY_SHORTFALL,
+    shortfall: repoSetShortfall(
+      classifyRepoDelivery(
+        // Through the REFERENCES — see `resolveExpectedRepos`. Same reason as the
+        // sync's own site used to be: a renamed repository leaves the stored
+        // projection naming something that no longer exists.
+        await resolveExpectedRepos(workItemId, targetRepos, tx),
+        await workItemDeliveryRepository.listCompletionFactsByWorkItem(workItemId, tx),
+      ),
+    ),
+  };
 }
 
 export const repoSetCompletionService = {
@@ -159,18 +220,10 @@ export const repoSetCompletionService = {
         tx,
       );
 
-      const shortfall =
+      const gates =
         openChangeRequests > 0
-          ? EMPTY_SHORTFALL
-          : repoSetShortfall(
-              classifyRepoDelivery(
-                // Through the REFERENCES — see `resolveExpectedRepos`. Same
-                // reason as the sync's own site: a renamed repository leaves the
-                // stored projection naming something that no longer exists.
-                await resolveExpectedRepos(workItemId, item.targetRepos, tx),
-                await workItemDeliveryRepository.listCompletionFactsByWorkItem(workItemId, tx),
-              ),
-            );
+          ? { deliveryShortfall: EMPTY_DELIVERY_SHORTFALL, shortfall: EMPTY_SHORTFALL }
+          : await completionShortfalls(workItemId, item.targetRepos, tx);
 
       const owner = await workspaceMembershipRepository.findStandInManagerByWorkspace(
         workspaceId,
@@ -182,7 +235,7 @@ export const repoSetCompletionService = {
         projectId: item.projectId,
         currentStatus: item.status,
         openChangeRequests,
-        shortfall,
+        ...gates,
         ownerUserId: owner?.userId ?? null,
       };
     });
@@ -196,6 +249,14 @@ export const repoSetCompletionService = {
 
     if (resolved.openChangeRequests > 0)
       return { workItemId, outcome: 'held_open_change_request', shortfall: EMPTY_SHORTFALL };
+
+    if (hasDeliverySetShortfall(resolved.deliveryShortfall))
+      return {
+        workItemId,
+        outcome: 'held_incomplete_delivery_set',
+        shortfall: EMPTY_SHORTFALL,
+        deliveryShortfall: resolved.deliveryShortfall,
+      };
 
     if (hasRepoSetShortfall(resolved.shortfall))
       return {

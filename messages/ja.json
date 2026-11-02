@@ -140,6 +140,29 @@
       "notClaimed": "コードを確認できなくなりました。続行するにはもう一度入力してください。",
       "network": "Motir に接続できませんでした。接続を確認して、もう一度お試しください。",
       "unexpected": "こちらで問題が発生しました。もう一度お試しいただくか、motir login を実行して新しいコードを取得してください。"
+    },
+    "update": {
+      "heading": "このターミナルの権限を更新しますか？",
+      "subhead": "承認する前に、トークンと変更内容を確認してください。",
+      "updating": "更新対象",
+      "tokenSub": "トークン <chip>{prefix}…</chip> · シークレットは同じで、コピーは不要です",
+      "askedAgo": "コード <chip>{code}</chip> · {ago}に要求",
+      "workspaceSub": "トークンのワークスペースです。変更されません。",
+      "expiresValue": "{days} 日後",
+      "expiresSub": "この更新では変わりません。",
+      "changes": "変更内容",
+      "unchanged": "{count, plural, other {ほかの # 件の権限はそのままです。}}",
+      "warning": "{hostname} で自分で <cmd>motir auth refresh</cmd> を実行した直後の場合にのみ承認してください。誰かからこのコードが送られてきた場合は、<strong>拒否してください</strong>。承認すると、そのトークンに上記の変更が適用されます。",
+      "actions": "この更新を承認または拒否",
+      "approve": "更新を承認",
+      "deny": "拒否",
+      "approvedHeading": "権限を更新しました",
+      "approvedSubhead": "ここでの操作はこれで完了です。",
+      "approvedBody": "ターミナルに戻ってください。<cmd>motir auth refresh</cmd> は完了しています。<strong>{label}</strong> には CLI の現在の権限が付与され、トークンはそのまま使えます。",
+      "deniedBody": "何も変更されていません。<strong>{label}</strong> の権限は以前のままで、ターミナルのトークンもそのままです。",
+      "deniedRetry": "誤って拒否しましたか？ <cmd>motir auth refresh</cmd> をもう一度実行して新しいコードを取得してください。このコードは再利用できません。",
+      "expiredBody": "<chip>{code}</chip> は無効になっており、何も変更されていません。<cmd>motir auth refresh</cmd> をもう一度実行して新しいコードを取得してください。",
+      "expiredNote": "ターミナルはすでに待機を終了し、コードの有効期限切れを報告しています。"
     }
   },
   "markdownEditor": {
@@ -3890,6 +3913,40 @@
       "expiresNever": "なし",
       "lastUsedNever": "なし",
       "revokeAria": "トークン {label} を取り消す",
+      "editAria": "{label} の権限を編集",
+      "edit": {
+        "title": "権限を編集",
+        "description": "このトークンでできることを変更します。トークン自体は変わりません。",
+        "facts": {
+          "label": "ラベル",
+          "token": "トークン",
+          "boundTo": "紐付け先",
+          "expires": "有効期限"
+        },
+        "factsLocked": "これらは変更されません。変更するには、新しいトークンを作成してください。",
+        "sameSecret": "トークンもシークレットも同じままです。すでに使用しているエージェントには、次回の呼び出しから新しい権限が適用されます。コピーし直す必要はありません。",
+        "changes": {
+          "label": "変更内容",
+          "adding": "追加",
+          "removing": "削除",
+          "none": "まだ変更はありません。権限をオンまたはオフにすると変更されます。"
+        },
+        "emptyError": "権限を少なくとも 1 つ残してください。このトークンを使えなくするには、代わりに取り消してください。",
+        "refused": "{project} では <strong>{permission}</strong> を付与できないため、何も変更されませんでした。下でオフになっています。その権限を外して再度保存してください。",
+        "gone": {
+          "title": "このトークンはもう存在しません",
+          "body": "別の場所で取り消されたため、変更するものはありません。閉じると一覧から消えます。",
+          "close": "閉じる"
+        },
+        "save": "権限を保存",
+        "cancel": "キャンセル",
+        "errorTitle": "権限を更新できませんでした",
+        "errorGeneric": "問題が発生しました。何も変更されていません。もう一度お試しください。",
+        "staffUnavailable": "スタッフセッション中はトークンの権限を編集できません。",
+        "cliUnavailable": "CLI のサインインには CLI 独自の権限があります。更新するには、その端末で motir auth refresh を実行してください。",
+        "updatedTitle": "権限を更新しました",
+        "updatedBody": "「{label}」のシークレットはそのままです。エージェントには次回の呼び出しから変更が適用されます。"
+      },
       "expiry": {
         "d30": "30 日",
         "d90": "90 日",
@@ -10277,6 +10334,10 @@
         "walk": {
           "alsoWaiting": "承認待ちの計画がもう1件あります:"
         }
+      },
+      "notPlannedYet": {
+        "label": "未計画",
+        "more": "まだ計画されていない項目がほかに{count, plural, other {#件}}あります。開くとすべて表示されます"
       }
     }
   },

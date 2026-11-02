@@ -131,13 +131,15 @@ describe('toSkeletonRows', () => {
     expect(rows[0]!.folderId).toBe('fold_9');
   });
 
-  // MOTIR-5958 — a `human` decision's confirmation rides the row from the batched
-  // map; every other row carries `decision: null`.
+  // MOTIR-5958 / MOTIR-10146 — a decision's deciding gate rides the row from the
+  // batched map; every other row carries `decision: null`.
   it('carries the decision block for a decision row and null for every other row', () => {
     const block = {
+      kind: 'decision_approval' as const,
       state: 'confirmed' as const,
       decidedAt: '2026-09-21T00:00:00.000Z',
       replanOwed: null,
+      noteMd: null,
     };
     const rows = toSkeletonRows(
       [

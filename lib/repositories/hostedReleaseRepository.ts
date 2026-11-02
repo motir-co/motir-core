@@ -48,6 +48,8 @@ export type HostedReleaseStamp = Partial<
 
 /** The facts posting a release's GitHub deployment status reads (MOTIR-10033). */
 export interface ReleaseStatusTarget {
+  /** The release's own workspace — what the writes that follow bind (MOTIR-10219). */
+  workspaceId: string;
   state: HostedReleaseState;
   commitSha: string;
   githubDeploymentId: string | null;
@@ -58,6 +60,8 @@ export interface ReleaseStatusTarget {
 
 /** The facts settling a release's usage reads (MOTIR-10034). */
 export interface ReleaseUsageTarget {
+  /** The release's own workspace — what the usage write binds (MOTIR-10219). */
+  workspaceId: string;
   state: HostedReleaseState;
   liveAt: Date | null;
   usageSettledUntil: Date | null;
@@ -138,6 +142,7 @@ export const hostedReleaseRepository = {
     const row = await tx.hostedRelease.findUnique({
       where: { id },
       select: {
+        workspaceId: true,
         state: true,
         commitSha: true,
         githubDeploymentId: true,
@@ -147,6 +152,7 @@ export const hostedReleaseRepository = {
     });
     if (!row) return null;
     return {
+      workspaceId: row.workspaceId,
       state: row.state,
       commitSha: row.commitSha,
       githubDeploymentId: row.githubDeploymentId,
@@ -199,6 +205,7 @@ export const hostedReleaseRepository = {
     const row = await tx.hostedRelease.findUnique({
       where: { id },
       select: {
+        workspaceId: true,
         state: true,
         liveAt: true,
         usageSettledUntil: true,

@@ -6,6 +6,9 @@ import type {
   Plan,
   PlanItem,
   PlanNarration,
+  PlanCodeRead,
+  PlanLessonCall,
+  PlanRaisedGap,
   PlanNarrationSession,
   PlanStep,
 } from '@/generated/prisma/client';
@@ -16,6 +19,9 @@ import type {
   PlanItemPatch,
   PlanItemProposedFields,
   PlanNarrationDto,
+  PlanCodeReadDto,
+  PlanLessonCallDto,
+  PlanRaisedGapDto,
   PlanNarrationSessionDto,
   PlanStepDto,
   PlanWithItemsDto,
@@ -126,6 +132,74 @@ export function toPlanNarrationDto(row: PlanNarration): PlanNarrationDto {
     sessionKey: row.sessionKey,
     seq: row.seq,
     body: row.body,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One stored code read as it crosses the boundary (MOTIR-10122). */
+export function toPlanCodeReadDto(row: PlanCodeRead): PlanCodeReadDto {
+  return {
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    tool: row.tool,
+    repo: row.repo,
+    path: row.path,
+    startLine: row.startLine,
+    endLine: row.endLine,
+    askedRef: row.askedRef,
+    query: row.query,
+    commits: Array.isArray(row.commits) ? (row.commits as PlanCodeReadDto['commits']) : [],
+    outcome: row.outcome,
+    lines: row.lines,
+    hits: row.hits,
+    detail: row.detail,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** One stored gap as it crosses the boundary (MOTIR-10176). */
+export function toPlanRaisedGapDto(row: PlanRaisedGap): PlanRaisedGapDto {
+  return {
+    id: row.gapId,
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    level: row.level,
+    raisedBy: row.raisedBy,
+    what: row.what,
+    decision: row.decision,
+    after: row.after,
+    before: row.before,
+    note: row.note,
+    amended: row.amendedAt !== null,
+    amendedAt: row.amendedAt?.toISOString() ?? null,
+    answer: row.amendedAt !== null ? { refs: [...row.answerRefs], open: row.answerOpen } : null,
+    raisedAt: row.createdAt.toISOString(),
+  };
+}
+
+/** A JSON column read back as a list of strings — anything else reads as none. */
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
+/** One stored lesson call as it crosses the boundary (MOTIR-10191). */
+export function toPlanLessonCallDto(row: PlanLessonCall): PlanLessonCallDto {
+  const filters =
+    row.filters !== null && typeof row.filters === 'object' && !Array.isArray(row.filters)
+      ? (row.filters as PlanLessonCallDto['filters'])
+      : {};
+  return {
+    seq: row.seq,
+    sessionKey: row.sessionKey,
+    kind: row.kind as PlanLessonCallDto['kind'],
+    query: row.query,
+    filters,
+    lessonIds: stringList(row.lessonIds),
+    lessonId: row.lessonId,
+    occurrenceRef: row.occurrenceRef,
+    outcome: row.outcome,
+    counted: row.counted,
+    detail: row.detail,
     createdAt: row.createdAt.toISOString(),
   };
 }

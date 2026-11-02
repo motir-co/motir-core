@@ -496,9 +496,13 @@ describe('the backfill never guesses, and never rewrites', () => {
     // Its OWN default branch — `trunk`, never a hard-coded `main`.
     expect(await baseRefOf(aiRow.id)).toBe('trunk');
     // And the item is still held, because motir-core is still unknown. One repo
-    // repaired is not a repaired card.
-    expect(report.reevaluated[0]!.outcome).toBe('held_incomplete_repo_set');
-    expect(report.reevaluated[0]!.shortfall.unknownBase).toEqual(['motir-core']);
+    // repaired is not a repaired card. Since MOTIR-10135 motir-ai's repaired merge
+    // is a LANDED delivery, so the hold is the delivery set's and names the pull
+    // request rather than the repository.
+    expect(report.reevaluated[0]!.outcome).toBe('held_incomplete_delivery_set');
+    expect(report.reevaluated[0]!.deliveryShortfall?.unknownBase).toEqual([
+      'moooon-B-V/motir-core#80',
+    ]);
     expect(await statusOf(item.id)).toBe('in_review');
   });
 });
@@ -515,10 +519,15 @@ describe('the re-evaluation path, without any delivery', () => {
     });
     await preColumnMergedRow({ repoId: repoIds['motir-ai']!, number: 91, workItemId: item.id });
 
-    expect((await repoSetCompletionService.reevaluateItem(item.id)).shortfall).toEqual({
-      outstanding: [],
-      unknownBase: ['motir-ai'],
-      unestablished: [],
+    // motir-core's merge LANDED, so since MOTIR-10135 the delivery set decides,
+    // and it holds on motir-ai's unrecorded base.
+    expect(await repoSetCompletionService.reevaluateItem(item.id)).toMatchObject({
+      outcome: 'held_incomplete_delivery_set',
+      deliveryShortfall: {
+        outstanding: [],
+        strandedBase: [],
+        unknownBase: ['moooon-B-V/motir-ai#91'],
+      },
     });
 
     serveBases({ 91: 'trunk' });

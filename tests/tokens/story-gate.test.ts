@@ -180,6 +180,9 @@ describe('SEAM 2 — the LEGACY-ROW promise, key by key, against real Postgres',
       archive_page: true,
       // MOTIR-9558 — `page:edit`: a stale row must not start linking pages.
       link_page: true,
+      // MOTIR-10183 — `ai:configure`, which no legacy string confers: a stale row
+      // must not start rewriting a repository's coding convention.
+      update_coding_convention: true,
     };
     for (const name of MCP_TOOL_NAMES) {
       const reachable = verified.grant.includes(TOOL_PERMISSIONS[name]);

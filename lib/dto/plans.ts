@@ -269,8 +269,8 @@ export interface PlanItemProposedFields {
    * a card they already approved, with a window in between where dispatch routes
    * on the WRONG pin.
    *
-   * Element 0 is the PRIMARY — the repository dispatch routes to — and the item
-   * does not complete until every element has a merged pull request of its own.
+   * Element 0 is the PRIMARY — the repository dispatch routes to. The list does
+   * not decide completion: the item's linked pull requests do (MOTIR-10135).
    * Bare names or the `owner/name` ref form, validated at approve against the
    * PROJECT's repository domain by the SAME resolver the direct path calls
    * (`resolveAuthoredRepoPinsInProject`), so the two doors cannot disagree about
@@ -842,6 +842,134 @@ export interface PlanNarrationDto {
   seq: number;
   body: string;
   createdAt: string;
+}
+
+/**
+ * One CODE READ a planner session made (MOTIR-10122): what it asked, the commits
+ * it was read at and how much came back — never the code. `seq` is the plan-wide
+ * call order; within one `sessionKey` it is that session's call order.
+ */
+export interface PlanCodeReadDto {
+  seq: number;
+  sessionKey: string;
+  tool: string;
+  repo: string | null;
+  path: string | null;
+  startLine: number | null;
+  endLine: number | null;
+  /** The ref the call asked for — a label; what it was read AT is `commits`. */
+  askedRef: string | null;
+  query: string | null;
+  /** Every commit the read was made at: a resolved hex id, never a branch name. */
+  commits: { repo?: string; sha: string; dirty?: boolean }[];
+  outcome: string;
+  lines: number | null;
+  hits: number | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * One page of a plan's code reads (MOTIR-10122), ascending `seq`, with the step
+ * words of every session that appears on it — so a reader can tell which card a
+ * session was writing — and the cursor for the next page (`null` on the last).
+ */
+/**
+ * One GAP a planner's author session raised (MOTIR-10176): the uncovered work, the
+ * decision it turns on, and whether its level's amend has been handed it. `amended`
+ * false is a gap no amend has seen yet — what a resumed walk hands its level's
+ * amend. Refs (`level`, `raisedBy`, `answer.refs`) are the planner's own spelling.
+ */
+export interface PlanRaisedGapDto {
+  /** The planner's own id for the gap — what its `amend` entry names. */
+  id: string;
+  seq: number;
+  sessionKey: string;
+  level: string | null;
+  raisedBy: string | null;
+  what: string;
+  decision: string | null;
+  after: string | null;
+  before: string | null;
+  note: string | null;
+  amended: boolean;
+  amendedAt: string | null;
+  /** What the amend answered it with; null until it was handed one. */
+  answer: { refs: string[]; open: string | null } | null;
+  raisedAt: string;
+}
+
+/** What a `gaps` call recorded (MOTIR-10176): the ids it raised and the ids it stamped. */
+export interface PlanGapsRecordedDto {
+  raised: string[];
+  /** Raises of an id the plan already held — a repeated report, kept as it was. */
+  alreadyRaised: string[];
+  amended: string[];
+}
+
+export interface PlanCodeReadPageDto {
+  planId: string;
+  reads: PlanCodeReadDto[];
+  sessions: PlanNarrationSessionDto[];
+  nextAfterSeq: number | null;
+}
+
+/**
+ * One LESSON CALL a planner session made (MOTIR-10191) — ids only, never a
+ * lesson's text. `kind` says what it was: a `search` (its `query`, `filters` and
+ * the `lessonIds` it returned in RANK order), a `reinforce` / `add` (its
+ * `lessonId`, `occurrenceRef` and whether it `counted`), or an `injected` set —
+ * the ids the hosted planner composed into the session's prompt in code, in the
+ * order they were rendered. `seq` is the plan-wide call order.
+ */
+export interface PlanLessonCallDto {
+  seq: number;
+  sessionKey: string;
+  kind: 'search' | 'reinforce' | 'add' | 'injected';
+  query: string | null;
+  filters: {
+    kinds?: string[];
+    types?: string[];
+    phases?: string[];
+    subject?: string;
+    limit?: number;
+  };
+  lessonIds: string[];
+  lessonId: string | null;
+  occurrenceRef: string | null;
+  outcome: string;
+  counted: boolean | null;
+  detail: string | null;
+  createdAt: string;
+}
+
+/**
+ * A session whose lesson log WAS recorded (MOTIR-10191). `calls: 0` is the
+ * explicit empty list — the session made no lesson call — and is not the same as
+ * a session missing from the log, which was not recorded. `step` is the session's
+ * step words when it reported a step (plan.py's conversation never does).
+ */
+export interface PlanLessonLogSessionDto {
+  sessionKey: string;
+  calls: number;
+  firstReportAt: string;
+  lastReportAt: string;
+  step: PlanNarrationSessionDto | null;
+}
+
+/**
+ * One page of a plan's lesson log (MOTIR-10191): `calls` in ascending `seq`;
+ * `sessions`, every session whose log was recorded (on every page, so a session
+ * with no call is never paged away); `unrecordedSessions`, the sessions that
+ * reported a step but whose lesson log was never recorded; and the cursor for the
+ * next page of calls (`null` on the last).
+ */
+export interface PlanLessonLogPageDto {
+  planId: string;
+  calls: PlanLessonCallDto[];
+  sessions: PlanLessonLogSessionDto[];
+  unrecordedSessions: PlanNarrationSessionDto[];
+  nextAfterSeq: number | null;
 }
 
 /**

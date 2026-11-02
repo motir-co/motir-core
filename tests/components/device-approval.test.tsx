@@ -33,6 +33,7 @@ const GRANT: DeviceGrantDescriptionDTO = {
   expiresAt: '2026-07-30T12:15:00.000Z',
   permissions: ['project:browse', 'work_item:edit', 'comment:add', 'ai:plan'],
   clientId: 'motir-cli',
+  update: null,
 };
 
 const USER = { name: 'Zhu Yue', email: 'zhuyue11@gmail.com', image: null };

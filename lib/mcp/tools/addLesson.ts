@@ -184,7 +184,7 @@ function summarize(projectKey: string, lesson: ProjectLessonDTO): string {
   ].filter(Boolean);
   const routing = axes.length > 0 ? axes.join(' · ') : 'applies to every card';
   return [
-    `Recorded a lesson for ${projectKey} (${routing}).`,
+    `Recorded a lesson for ${projectKey} (${routing}) · id ${lesson.id}.`,
     lesson.title,
     'Future plans for this project will be given it.',
   ].join('\n');

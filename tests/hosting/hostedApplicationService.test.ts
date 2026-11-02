@@ -16,7 +16,7 @@ import {
 import { hostedApplicationService as service } from '@/lib/services/hostedApplicationService';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -442,7 +442,11 @@ describe('the repositories', () => {
     );
     expect(found?.id).toBe(app.id);
 
-    await withSystemContext((tx) => hostedApplicationRepository.setSlug(app.id, 'shop', tx));
+    // A write binds the application's workspace: the policy admits no system-only
+    // write since MOTIR-10219.
+    await withWorkspaceServiceContext(app.workspaceId, (tx) =>
+      hostedApplicationRepository.setSlug(app.id, 'shop', tx),
+    );
     const row = await adminDb.hostedApplication.findUniqueOrThrow({ where: { id: app.id } });
     expect(row.slug).toBe('shop');
   });
@@ -450,7 +454,7 @@ describe('the repositories', () => {
   it('inserts nothing when the repository already has an application', async () => {
     const fx = await workspace();
     const app = await service.ensureApplication(await repo(fx));
-    const again = await withSystemContext((tx) =>
+    const again = await withWorkspaceServiceContext(app.workspaceId, (tx) =>
       hostedApplicationRepository.insertIfAbsent(
         {
           workspaceId: app.workspaceId,

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
+import { NotPlannedYetList } from '@/components/planning/NotPlannedYetList';
 import { useRelativeLabel } from '@/components/approvals/useRelativeLabel';
 import { fetchPlanReview } from '@/lib/planning/planReviewClient';
 import { AI_DECIDED_PLAN_STATUSES } from '@/lib/dto/ai';
@@ -58,6 +59,13 @@ function FailedWalkBody({ entry }: { entry: Entry }) {
           </>
         ) : null}
       </div>
+      {/* The cards the halt left unplanned (MOTIR-10209), under the stop line — a cell of the
+          entry's row, as line 2 is; a long list is held back behind a count. */}
+      {failure.notPlannedYet && failure.notPlannedYet.length > 0 ? (
+        <div role="cell" className="min-w-0">
+          <NotPlannedYetList lines={failure.notPlannedYet} surface="row" />
+        </div>
+      ) : null}
       {entry.waitingPlan ? (
         <p className="text-xs text-(--el-text-secondary)" data-testid="to-resume-also-waiting">
           {t('form.walk.alsoWaiting')}{' '}

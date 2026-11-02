@@ -777,18 +777,19 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `integration`
 
-| Operation                             | Verbs    | Gate today   | Permission | Decision     | Why |
-| ------------------------------------- | -------- | ------------ | ---------- | ------------ | --- |
-| `/api/cli/device/approve`             | POST     | session only | —          | token-scoped | R30 |
-| `/api/cli/device/grant`               | GET      | session only | —          | token-scoped | R30 |
-| `/api/cli/device/start`               | POST     | — none —     | —          | token-scoped | R30 |
-| `/api/cli/device/token`               | POST     | — none —     | —          | token-scoped | R30 |
-| `/api/mcp`                            | —        | — none —     | —          | token-scoped | R30 |
-| `/api/account/oauth-connections`      | GET      | session only | —          | user-scoped  | R35 |
-| `/api/account/oauth-connections/[id]` | DELETE   | session only | —          | user-scoped  | R35 |
-| `/api/oauth/consent`                  | POST     | session only | —          | user-scoped  | R35 |
-| `/api/me/api-tokens`                  | GET/POST | session only | —          | user-scoped  | R35 |
-| `/api/me/api-tokens/[tokenId]`        | DELETE   | session only | —          | user-scoped  | R35 |
+| Operation                             | Verbs        | Gate today   | Permission | Decision     | Why |
+| ------------------------------------- | ------------ | ------------ | ---------- | ------------ | --- |
+| `/api/cli/device/approve`             | POST         | session only | —          | token-scoped | R30 |
+| `/api/cli/device/grant`               | GET          | session only | —          | token-scoped | R30 |
+| `/api/cli/device/start`               | POST         | — none —     | —          | token-scoped | R30 |
+| `/api/cli/device/token`               | POST         | — none —     | —          | token-scoped | R30 |
+| `/api/cli/token`                      | GET          | bearer       | —          | token-scoped | R30 |
+| `/api/mcp`                            | —            | — none —     | —          | token-scoped | R30 |
+| `/api/account/oauth-connections`      | GET          | session only | —          | user-scoped  | R35 |
+| `/api/account/oauth-connections/[id]` | DELETE       | session only | —          | user-scoped  | R35 |
+| `/api/oauth/consent`                  | POST         | session only | —          | user-scoped  | R35 |
+| `/api/me/api-tokens`                  | GET/POST     | session only | —          | user-scoped  | R35 |
+| `/api/me/api-tokens/[tokenId]`        | DELETE/PATCH | session only | —          | user-scoped  | R35 |
 
 ### `member`
 

@@ -48,7 +48,9 @@ export function fixture(kind: IssueType, type: SectionType): WorkItemSections {
     acceptanceCriteria: CRITERIA,
     contextRefs: REFS,
     decisionBrief: 'No intent classifier.',
+    alternatives: ['An intent classifier — it guesses a WHAT the person never said'],
     whatChanged: '**Change:** workflow\nIt said X; it says Y.',
+    consumers: ['The export work item builds it', '`lib/a/b.ts` `route()`'],
     supersedes: 'MOTIR-1, MOTIR-2',
     resultingDirection: 'The whole direction.',
   };

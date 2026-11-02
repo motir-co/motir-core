@@ -140,6 +140,29 @@
       "notClaimed": "Nous avons perdu la trace de ce code. Saisissez-le de nouveau pour continuer.",
       "network": "Impossible de joindre Motir. Vérifiez votre connexion et réessayez.",
       "unexpected": "Une erreur s’est produite de notre côté. Réessayez, ou exécutez motir login pour obtenir un nouveau code."
+    },
+    "update": {
+      "heading": "Mettre à jour les autorisations de ce terminal ?",
+      "subhead": "Vérifiez le jeton et les modifications avant d’approuver.",
+      "updating": "Mise à jour",
+      "tokenSub": "Jeton <chip>{prefix}…</chip> · même secret, rien à copier",
+      "askedAgo": "Code <chip>{code}</chip> · demandé {ago}",
+      "workspaceSub": "L’espace de travail du jeton. Il ne change pas.",
+      "expiresValue": "Dans {days} jours",
+      "expiresSub": "Inchangé par cette mise à jour.",
+      "changes": "Modifications",
+      "unchanged": "{count, plural, one {# autre autorisation reste inchangée.} other {# autres autorisations restent inchangées.}}",
+      "warning": "N’approuvez que si vous venez d’exécuter <cmd>motir auth refresh</cmd> vous-même sur {hostname}. Si quelqu’un vous a envoyé ce code, <strong>refusez-le</strong> : l’approuver applique à ce jeton les modifications ci-dessus.",
+      "actions": "Approuver ou refuser cette mise à jour",
+      "approve": "Approuver la mise à jour",
+      "deny": "Refuser",
+      "approvedHeading": "Autorisations mises à jour",
+      "approvedSubhead": "Vous n’avez plus rien à faire ici.",
+      "approvedBody": "Revenez à votre terminal : <cmd>motir auth refresh</cmd> est terminé. <strong>{label}</strong> dispose maintenant des autorisations actuelles de la CLI et conserve son jeton.",
+      "deniedBody": "Rien n’a changé. <strong>{label}</strong> conserve ses autorisations, et le terminal conserve son jeton.",
+      "deniedRetry": "Refusé par erreur ? Exécutez de nouveau <cmd>motir auth refresh</cmd> pour obtenir un nouveau code : celui-ci ne peut pas être réutilisé.",
+      "expiredBody": "<chip>{code}</chip> n’est plus valide et rien n’a été modifié. Exécutez de nouveau <cmd>motir auth refresh</cmd> pour obtenir un nouveau code.",
+      "expiredNote": "Votre terminal a déjà cessé d’attendre : il indique que le code a expiré."
     }
   },
   "markdownEditor": {
@@ -3890,6 +3913,40 @@
       "expiresNever": "Jamais",
       "lastUsedNever": "Jamais",
       "revokeAria": "Révoquer le jeton {label}",
+      "editAria": "Modifier les permissions de {label}",
+      "edit": {
+        "title": "Modifier les permissions",
+        "description": "Changez ce que ce jeton peut faire. Le jeton lui-même reste le même.",
+        "facts": {
+          "label": "Libellé",
+          "token": "Jeton",
+          "boundTo": "Lié à",
+          "expires": "Expiration"
+        },
+        "factsLocked": "Ces informations restent inchangées. Pour les modifier, créez un nouveau jeton.",
+        "sameSecret": "Même jeton, même secret. Les agents qui l’utilisent déjà reçoivent les nouvelles permissions à leur prochain appel — il n’y a rien à recopier.",
+        "changes": {
+          "label": "Modifications",
+          "adding": "Ajout",
+          "removing": "Retrait",
+          "none": "Aucune modification pour l’instant. Activez ou désactivez une permission pour la modifier."
+        },
+        "emptyError": "Gardez au moins une permission. Pour que ce jeton cesse de fonctionner, révoquez-le plutôt.",
+        "refused": "Vous ne pouvez pas accorder <strong>{permission}</strong> dans {project} : rien n’a donc été modifié. Elle est désactivée ci-dessous — enregistrez à nouveau sans elle.",
+        "gone": {
+          "title": "Ce jeton n’existe plus",
+          "body": "Il a été révoqué ailleurs : il n’y a donc rien à modifier. Fermez cette fenêtre et il disparaîtra de la liste.",
+          "close": "Fermer"
+        },
+        "save": "Enregistrer les permissions",
+        "cancel": "Annuler",
+        "errorTitle": "Impossible de mettre à jour les permissions",
+        "errorGeneric": "Un problème est survenu. Rien n’a été modifié — veuillez réessayer.",
+        "staffUnavailable": "Vous ne pouvez pas modifier les permissions d’un jeton dans une session staff.",
+        "cliUnavailable": "Une connexion CLI a les permissions propres à la CLI. Exécutez motir auth refresh dans ce terminal pour la mettre à jour.",
+        "updatedTitle": "Permissions mises à jour",
+        "updatedBody": "« {label} » conserve son secret. Les agents appliquent la modification à leur prochain appel."
+      },
       "expiry": {
         "d30": "30 jours",
         "d90": "90 jours",
@@ -10280,6 +10337,10 @@
         "walk": {
           "alsoWaiting": "Également en attente de votre approbation :"
         }
+      },
+      "notPlannedYet": {
+        "label": "Pas encore planifié",
+        "more": "et {count, plural, one {# autre élément} other {# autres éléments}} pas encore planifiés — ouvrez-la pour les voir tous"
       }
     }
   },

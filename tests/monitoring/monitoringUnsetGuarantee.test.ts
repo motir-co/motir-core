@@ -181,6 +181,9 @@ describe('with the namespace set and no metrics port', () => {
     expect(started.server).toBeNull();
     expect(started.delay).not.toBeNull();
     expect(started.watchdog).not.toBeNull();
+    // The delay publisher's first tick is the boot window and publishes nothing
+    // (MOTIR-10141); the block below lands in the interval after it.
+    vi.advanceTimersByTime(EMF_INTERVAL_MS);
     await sleep(300);
     blockLoop(600);
     await sleep(300);

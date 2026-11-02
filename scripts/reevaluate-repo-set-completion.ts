@@ -82,6 +82,12 @@ async function main() {
       v.shortfall.unknownBase.length > 0
         ? `no recorded base: ${v.shortfall.unknownBase.join(', ')}`
         : '',
+      v.deliveryShortfall && v.deliveryShortfall.strandedBase.length > 0
+        ? `merged off the trunk: ${v.deliveryShortfall.strandedBase.join(', ')}`
+        : '',
+      v.deliveryShortfall && v.deliveryShortfall.unknownBase.length > 0
+        ? `no recorded base: ${v.deliveryShortfall.unknownBase.join(', ')}`
+        : '',
     ]
       .filter(Boolean)
       .join(' · ');

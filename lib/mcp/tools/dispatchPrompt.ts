@@ -194,8 +194,7 @@ function advisorySummary(dto: DispatchPromptDto): string[] {
  * The `Repo:` line. A card carrying MORE THAN ONE repository names every one of
  * them, in set order with the primary first, each with its delivery state
  * (MOTIR-3131) — because a reader told only the primary cannot tell a fresh card
- * from one whose other half already merged, and the completion gate holds the
- * card until every repository has.
+ * from one whose other half already merged.
  *
  * BYTE-IDENTICAL for a card with one repository or none: those are the shapes
  * every existing caller and test reads, and this card changes the envelope, not

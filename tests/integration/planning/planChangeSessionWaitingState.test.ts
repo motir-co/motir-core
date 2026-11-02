@@ -286,6 +286,28 @@ describe('the conditional writes', () => {
     expect(row.failureStopRef).toBeNull();
   });
 
+  it('markFailed stores the halted walk’s not-planned-yet lines in order, and clearFailure empties them (MOTIR-10209)', async () => {
+    const id = await openSession();
+    const lines = [
+      '"D" is not planned yet: plan "B" first, then plan "D".',
+      'Not written yet: "T" waits on "S", and planning stopped before it was written — continuing this plan writes it.',
+    ];
+
+    await markFailed(id, { ...FAILURE, failureNotPlannedYet: lines });
+
+    expect((await rowOf(id)).failureNotPlannedYet).toEqual(lines);
+    expect(toPlanChangeSessionDto(await rowOf(id), []).failure?.notPlannedYet).toEqual(lines);
+
+    await withWorkspaceContext(wctx(), (tx) => planChangeSessionRepository.clearFailure(id, tx));
+    expect((await rowOf(id)).failureNotPlannedYet).toEqual([]);
+  });
+
+  it('a failure recorded without lines stores none (MOTIR-10209)', async () => {
+    const id = await openSession();
+    await markFailed(id);
+    expect((await rowOf(id)).failureNotPlannedYet).toEqual([]);
+  });
+
   it('markAwaitingPerson marks an open session and returns true', async () => {
     const id = await openSession();
 
@@ -315,7 +337,7 @@ describe('the conditional writes', () => {
     expect((await rowOf(id)).awaitingPersonSince).toBeNull();
   });
 
-  it('clearFailure nulls only the seven failure columns', async () => {
+  it('clearFailure nulls only the failure columns', async () => {
     const id = await openSession();
     await markFailed(id);
 
@@ -609,6 +631,7 @@ describe('toPlanChangeSessionDto', () => {
       stopPhase: 'author',
       stopRef: 'planItem:pi_3',
       stopTitle: 'Task three',
+      notPlannedYet: [],
     });
     expect(failed.awaitingPerson).toBeNull();
     expect(waiting.awaitingPerson).toMatchObject({ cause: 'question' });

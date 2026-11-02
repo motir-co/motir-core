@@ -133,7 +133,8 @@ const WALLED_SITES: Record<string, string> = {
     'githubRepoRepository.findByInstallationAndRepoId; GitLab — ' +
     'githubRepoRepository.findByRepoIdAndProvider with its installation relation. ' +
     'github_installation and github_repo, both armed, and nothing else. The write that follows is ' +
-    'repo_deployment, whose repo_deployment_workspace_or_system policy carries the arm. ' +
+    'repo_deployment, made after bindWorkspaceContext(tx, repo.workspaceId): since MOTIR-10219 ' +
+    'its repo_deployment_workspace_or_system policy reads app.system_admin on USING only. ' +
     'No member, no work item, no tenant-only table. CLEAN.',
   'lib/services/ciPreviewUsageMeterService.ts#writeSlices':
     'build ∈ { the three inline closures in the same file: accrueRelease, recordBranchUsage ' +

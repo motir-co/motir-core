@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AWS_INDEX_EXIT_MARKER,
+  AWS_INDEX_IAM_ROLE,
   AWS_INDEX_PULL_FAILED_MARKER,
   AWS_DISPATCH_RUN_TAG_KEY,
   AWS_REAP_PAGE_SIZE,
@@ -16,6 +17,7 @@ import {
   consoleExitCode,
   consoleShowsPullFailure,
   createAwsOrchestrator,
+  ecrRegistryOf,
   transitionTimeOf,
   type ContainerHandle,
   type ContainerOrchestrator,
@@ -96,7 +98,7 @@ describe('provision', () => {
       },
       instanceInitiatedShutdownBehavior: 'terminate',
     });
-    expect(request).not.toHaveProperty('iamInstanceProfile');
+    expect(request).not.toHaveProperty('iamInstanceProfileName');
     expect(request).not.toHaveProperty('keyName');
     expect(handle).toMatchObject({ provider: 'aws', region: 'us-east-1' });
   });
@@ -509,7 +511,7 @@ describe('provision — a hosted agent run in container mode (MOTIR-9422)', () =
       instanceInitiatedShutdownBehavior: 'terminate',
       blockDeviceMappings: [],
     });
-    expect(request).not.toHaveProperty('iamInstanceProfile');
+    expect(request).not.toHaveProperty('iamInstanceProfileName');
     expect(request).not.toHaveProperty('keyName');
     expect(Buffer.from(request.userData, 'base64').toString('utf8')).toBe(
       buildContainerUserData({ image: AWS_HOSTED_IMAGE, env: AWS_HOSTED_ENV }),
@@ -780,7 +782,11 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
       metadataOptions: { httpTokens: 'required', httpPutResponseHopLimit: 1 },
       // Held stopped after its power-off, so describe reads the exit code first.
       instanceInitiatedShutdownBehavior: 'stop',
+      // Its one AWS permission: pulling the indexer image from ECR (MOTIR-10123).
+      iamInstanceProfileName: AWS_INDEX_IAM_ROLE,
     });
+    expect(AWS_INDEX_IAM_ROLE).toBe('motir-fleet-index');
+    expect(request).not.toHaveProperty('keyName');
     // The shard's network: a public IP on launch and a group with no inbound rule.
     expect(ec2.subnets.get(request.subnetId)!.mapPublicIpOnLaunch).toBe(true);
     expect(ec2.securityGroups.get(`sg-${AWS_SHARD_TAG}`)!.ingressRuleCount).toBe(0);
@@ -802,6 +808,7 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     const handle = await orchestrator.provision(AWS_SPEC);
 
     expect(ec2.requestOf(handle.id).imageId).toBe(AWS_AMI_ID);
+    expect(ec2.requestOf(handle.id)).not.toHaveProperty('iamInstanceProfileName');
     expect(scriptOf(handle.id)).toMatch(/^ACTIONS_RUNNER_INPUT_JITCONFIG=/);
     expect(ec2.indexImageOf(handle.id)).toBeNull();
   });
@@ -834,6 +841,64 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
       IndexUserDataError,
     );
     expect(ec2.calls).toEqual([]);
+  });
+
+  it('logs in to the ECR registry the image names before it pulls (MOTIR-10123)', () => {
+    const image = `944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer@sha256:${'b'.repeat(64)}`;
+    const script = buildIndexUserData({ image, env: {} });
+    const lines = script.split('\n');
+    const login = lines.findIndex((l) => l.includes('aws ecr get-login-password'));
+    const pull = lines.indexOf('if ! docker pull "$IMAGE"; then');
+    expect(login).toBeGreaterThan(-1);
+    expect(login).toBeLessThan(pull);
+    expect(lines[login]).toBe(
+      "if ! aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin '944842271421.dkr.ecr.us-east-1.amazonaws.com'; then",
+    );
+    // The CLI is installed only when the AMI has none, before the login.
+    expect(lines[login - 1]).toBe(
+      'if ! command -v aws >/dev/null 2>&1; then dnf install -y -q awscli-2; fi',
+    );
+    // A failed login is a failed pull: the same marker, then power off.
+    expect(lines.slice(login + 1, login + 5)).toEqual([
+      `  console '${AWS_INDEX_PULL_FAILED_MARKER}'`,
+      '  shutdown -h now',
+      '  exit 0',
+      'fi',
+    ]);
+    // pipefail, so a CLI that fails is the pipe's failure, not docker's.
+    expect(script).toContain('\nset -u -o pipefail\n');
+    // The login runs on the host, after the env file and the console are set up.
+    expect(login).toBeGreaterThan(lines.indexOf('exec >>/var/log/motir-index-boot.log 2>&1'));
+  });
+
+  it('pulls an image outside ECR with no login, and still marks a failed pull', () => {
+    const script = buildIndexUserData({ image: INDEX_IMAGE, env: {} });
+    expect(script).not.toContain('docker login');
+    expect(script).not.toContain('awscli');
+    expect(script).toContain(
+      `if ! docker pull "$IMAGE"; then\n  console '${AWS_INDEX_PULL_FAILED_MARKER}'\n`,
+    );
+  });
+
+  it.each([
+    ['944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer', 'us-east-1'],
+    ['123456789012.dkr.ecr.us-gov-west-1.amazonaws.com/x', 'us-gov-west-1'],
+    ['123456789012.dkr.ecr.cn-north-1.amazonaws.com.cn/x', 'cn-north-1'],
+  ])('reads the ECR registry and region of %s', (image, region) => {
+    expect(ecrRegistryOf(`${image}@sha256:${'c'.repeat(64)}`)).toEqual({
+      registry: image.slice(0, image.indexOf('/')),
+      region,
+    });
+  });
+
+  it.each([
+    'registry.fly.io/motir-index-runners',
+    'ghcr.io/motir-co/motir-indexer',
+    '12345.dkr.ecr.us-east-1.amazonaws.com/x',
+    '944842271421.dkr.ecr.us-east-1.amazonaws.com.evil.example/x',
+    'motir-indexer',
+  ])('treats %s as not ECR', (image) => {
+    expect(ecrRegistryOf(`${image}@sha256:${'c'.repeat(64)}`)).toBeNull();
   });
 
   it('an image the VM cannot pull reads as imagePullFailed on the stopped VM', async () => {

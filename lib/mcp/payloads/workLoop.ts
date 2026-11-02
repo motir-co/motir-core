@@ -281,6 +281,31 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
    * `update_plan`; absent on the other plan payloads.
    */
   plannerRecord: z.record(z.string(), z.unknown()).nullable().optional(),
+  /**
+   * The GAPS the plan's author sessions raised (MOTIR-10176), in raise order, each
+   * with `amended` — whether its level's amend has been handed it. A resumed walk
+   * hands the amend the unamended ones. Present on `get_plan`; absent elsewhere.
+   */
+  raisedGaps: z
+    .array(
+      z.object({
+        id: z.string(),
+        seq: z.number(),
+        sessionKey: z.string(),
+        level: z.string().nullable(),
+        raisedBy: z.string().nullable(),
+        what: z.string(),
+        decision: z.string().nullable(),
+        after: z.string().nullable(),
+        before: z.string().nullable(),
+        note: z.string().nullable(),
+        amended: z.boolean(),
+        amendedAt: z.string().nullable(),
+        answer: z.object({ refs: z.array(z.string()), open: z.string().nullable() }).nullable(),
+        raisedAt: z.string(),
+      }),
+    )
+    .optional(),
   items: z.array(z.unknown()),
   /**
    * The OPTIONAL sections view (MOTIR-9033): each `add` proposal's body parsed at

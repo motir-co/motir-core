@@ -203,6 +203,7 @@ describe('DISPATCH edges', () => {
       async (_id, fn) =>
         fn({
           installationRowId: 'x',
+          workspaceId: target.workspaceId,
           provider: 'sentry',
           orgSlug: null,
           token: 't',

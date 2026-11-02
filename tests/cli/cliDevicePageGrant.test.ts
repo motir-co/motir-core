@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { asMinted } from '../helpers/devicePoll';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
@@ -74,7 +75,7 @@ async function deviceLogin(owner: User, workspaceId: string): Promise<string> {
     deviceCode: grant.device_code,
     clientId: CLI_CLIENT_ID,
   });
-  return minted.access_token;
+  return asMinted(minted).access_token;
 }
 
 async function connect(token: string): Promise<Client> {

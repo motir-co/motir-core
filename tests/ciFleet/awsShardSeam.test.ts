@@ -10,6 +10,7 @@ import {
   type Ec2RunInstanceInput,
   type UsageAttribution,
 } from '@motir/orchestrator';
+import { poolAccountRaiseTargetVcpu } from '@/lib/ciFleet/shardTargets';
 import { db } from '@/lib/db';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
@@ -193,6 +194,8 @@ beforeEach(async () => {
   world.keys = [];
   runnerRole.reset();
   organization = new FakeOrganization(SESSION);
+  // Under CI's own target, so the first run leaves the quota step pending.
+  organization.quota = poolAccountRaiseTargetVcpu('ci_runner') - 50;
   buildStacksInto(organization, () => ec2());
   // The real provider; only its management API is the in-memory organization.
   // Its EC2 goes through the package's `createEc2Api`, the same seam the adapter

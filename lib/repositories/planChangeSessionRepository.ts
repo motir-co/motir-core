@@ -649,7 +649,7 @@ export const planChangeSessionRepository = {
     return result.count > 0;
   },
 
-  /** Null the seven failure columns — a resume's new attempt has bound. */
+  /** Clear the failure columns — a resume's new attempt has bound. */
   async clearFailure(id: string, tx: Prisma.TransactionClient): Promise<boolean> {
     const result = await tx.planChangeSession.updateMany({
       where: { id },
@@ -705,6 +705,7 @@ export const planChangeSessionRepository = {
         failureStopPhase: true,
         failureStopRef: true,
         failureStopTitle: true,
+        failureNotPlannedYet: true,
         awaitingPersonSince: true,
         awaitingPersonCause: true,
         autoResumeCount: true,
@@ -743,6 +744,7 @@ export const planChangeSessionRepository = {
         failureStopPhase: true,
         failureStopRef: true,
         failureStopTitle: true,
+        failureNotPlannedYet: true,
         // The newest plan, with what the To resume entry names and the progress read
         // needs (MOTIR-7914) — one join, no per-row read.
         plans: {
@@ -991,6 +993,7 @@ export const planChangeSessionRepository = {
              s."failed_at" AS "failedAt", s."failure_reason"::text AS "failureReason",
              s."failure_stop_phase"::text AS "failureStopPhase",
              s."failure_stop_title" AS "failureStopTitle",
+             s."failure_not_planned_yet" AS "failureNotPlannedYet",
              s."ended_at" AS "endedAt", s."end_reason"::text AS "endReason",
              eb."id" AS "endedById", eb."name" AS "endedByName",
              cf."id" AS "copiedFromId", cf."ended_at" AS "copiedFromEndedAt",
@@ -1168,6 +1171,8 @@ export interface PlanSessionListRow {
   failureReason: string | null;
   failureStopPhase: string | null;
   failureStopTitle: string | null;
+  /** The halted walk's "not planned yet" lines (MOTIR-10209); `{}` when none. */
+  failureNotPlannedYet: string[];
   endedAt: Date | null;
   endReason: string | null;
   endedById: string | null;

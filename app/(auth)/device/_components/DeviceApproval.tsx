@@ -27,6 +27,10 @@ import {
 } from '@/app/(authed)/settings/account/_components/permissionMeta';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { permissionSlug } from '@/lib/permissions/catalog';
+import {
+  PermissionChangeSummary,
+  diffGrant,
+} from '@/app/(authed)/settings/account/_components/PermissionChangeSummary';
 
 // The `/device` page's interactive half (Story MOTIR-1863 · Subtask MOTIR-1867),
 // built to `design/cli-connect/` Panels 1–7. One island, six states, because they
@@ -75,6 +79,10 @@ export function DeviceApproval({
   activeWorkspaceId,
 }: DeviceApprovalProps) {
   const t = useTranslations('device');
+  // `motir auth refresh`'s copy (MOTIR-10189, design
+  // `account-settings--edit-token-permissions.mock.html` Panels 10–13): the same
+  // island and the same flow, with an UPDATE grant's own words.
+  const tu = useTranslations('device.update');
   const format = useFormatter();
   const router = useRouter();
 
@@ -242,22 +250,37 @@ export function DeviceApproval({
   }
 
   async function handleApprove() {
-    if (!workspaceId) return;
+    // An UPDATE grant binds nothing: the token it changes already has its
+    // workspace, so the approval names none.
+    const updating = grant?.update ?? null;
+    if (!updating && !workspaceId) return;
     setPageError('');
     setBusy(true);
-    const chosen = workspaces.find((w) => w.id === workspaceId)?.label ?? null;
+    const chosen = updating
+      ? updating.workspaceName
+      : (workspaces.find((w) => w.id === workspaceId)?.label ?? null);
     try {
       const res = await fetch('/api/cli/device/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userCode: canonical, workspaceId }),
+        body: JSON.stringify(
+          updating ? { userCode: canonical } : { userCode: canonical, workspaceId },
+        ),
       });
       if (res.ok) {
         setApprovedWorkspace(chosen);
         setPhase('approved');
         return;
       }
-      const failure = classify(res.status, await readErrorCode(res));
+      const errorCode = await readErrorCode(res);
+      // The token could not be updated — it was revoked, is not this person's, or
+      // the approval came from a staff session. The server DENIED the grant, so the
+      // terminal has already been told; this screen says the same: nothing changed.
+      if (errorCode === 'DEVICE_UPDATE_REFUSED') {
+        setPhase('denied');
+        return;
+      }
+      const failure = classify(res.status, errorCode);
       if (failure.kind === 'refresh') await refreshState(canonical);
       else applyFailure(failure);
     } catch {
@@ -390,6 +413,110 @@ export function DeviceApproval({
     );
   }
 
+  // ── State 2u — CONFIRM an UPDATE (`motir auth refresh`, MOTIR-10189 Panel 10). The
+  //    same defence, naming the token that changes instead of a terminal connecting.
+  const update = grant?.update ?? null;
+  if (phase === 'confirm' && update) {
+    const { added, removed } = diffGrant(update.permissions, CLI_TOKEN_GRANT);
+    const unchanged = CLI_TOKEN_GRANT.filter((k) => update.permissions.includes(k)).length;
+    const expiresInDays = update.expiresAt
+      ? Math.max(
+          0,
+          Math.ceil(
+            (new Date(update.expiresAt).getTime() - (describedAt ?? new Date()).getTime()) / DAY_MS,
+          ),
+        )
+      : null;
+    return (
+      <div data-auth-wide>
+        <AuthShell headline={tu('heading')} subhead={tu('subhead')} tight>
+          <div className="flex flex-col gap-3">
+            {banner}
+            <div className="grid rounded-(--radius-card) border border-(--el-border) sm:grid-cols-2">
+              <DetailColumn>
+                <DetailBlock label={t('confirm.you')}>
+                  <WhoIsApproving user={user} busy={busy} onSwitch={handleSignOutAndSwitch} />
+                </DetailBlock>
+                {/* WHICH TOKEN changes — its label, its display prefix, and the code
+                    with its freshness cue. Same secret: nothing is handed over. */}
+                <DetailBlock label={tu('updating')}>
+                  <span className="flex items-center gap-2 font-sans text-sm font-medium text-(--el-text)">
+                    <Terminal className="text-(--el-text-muted) h-4 w-4 shrink-0" aria-hidden />
+                    <span className="truncate">{update.label}</span>
+                  </span>
+                  <DetailSub>
+                    {tu.rich('tokenSub', {
+                      prefix: update.tokenPrefix,
+                      chip: (chunks) => <CodeChip>{chunks}</CodeChip>,
+                    })}
+                  </DetailSub>
+                  <DetailSub>
+                    {tu.rich('askedAgo', {
+                      code: formatUserCode(grant?.userCode ?? canonical),
+                      ago:
+                        grant && describedAt
+                          ? format.relativeTime(new Date(grant.askedAt), describedAt)
+                          : '',
+                      chip: (chunks) => <CodeChip>{chunks}</CodeChip>,
+                    })}
+                  </DetailSub>
+                </DetailBlock>
+                {/* The token's workspace — fixed, so a fact rather than a picker. */}
+                <DetailBlock label={t('confirm.workspace')}>
+                  <span className="line-clamp-2 font-sans text-sm font-medium text-(--el-text)">
+                    {update.workspaceName}
+                  </span>
+                  <DetailSub>{tu('workspaceSub')}</DetailSub>
+                </DetailBlock>
+                {expiresInDays !== null ? (
+                  <DetailBlock label={t('confirm.expires')}>
+                    <span className="font-sans text-sm font-medium text-(--el-text)">
+                      {tu('expiresValue', { days: expiresInDays })}
+                    </span>
+                    <DetailSub>{tu('expiresSub')}</DetailSub>
+                  </DetailBlock>
+                ) : null}
+              </DetailColumn>
+              <DetailColumn divided>
+                {/* WHAT CHANGES, against `CLI_TOKEN_GRANT` — shorter than the login
+                    screen's full list, which is what keeps this inside the fold. */}
+                <DetailBlock label={tu('changes')}>
+                  <PermissionChangeSummary added={added} removed={removed} compact />
+                  <DetailSub>{tu('unchanged', { count: unchanged })}</DetailSub>
+                  <DetailSub>{t('confirm.cant')}</DetailSub>
+                </DetailBlock>
+              </DetailColumn>
+            </div>
+
+            <Callout tone="warn" icon={<ShieldAlert className="h-5 w-5" aria-hidden />}>
+              {tu.rich('warning', {
+                hostname: hostname ?? update.label,
+                cmd: (chunks) => <Cmd>{chunks}</Cmd>,
+                strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+              })}
+            </Callout>
+
+            <div role="group" aria-label={tu('actions')} className="flex gap-3">
+              <Button
+                variant="secondary"
+                size="lg"
+                onClick={handleDeny}
+                disabled={busy}
+                leftIcon={<CircleX className="h-4 w-4" />}
+                className="w-full border-(--el-danger)"
+              >
+                {tu('deny')}
+              </Button>
+              <Button size="lg" onClick={handleApprove} loading={busy} className="w-full">
+                {tu('approve')}
+              </Button>
+            </div>
+          </div>
+        </AuthShell>
+      </div>
+    );
+  }
+
   // ── State 2 — CONFIRM (Panels 3 + 4). The phishing defence. ──────────────────
   if (phase === 'confirm') {
     const multiWorkspace = workspaces.length > 1;
@@ -412,36 +539,7 @@ export function DeviceApproval({
               <DetailColumn>
                 {/* 1 — WHO */}
                 <DetailBlock label={t('confirm.you')}>
-                  <span className="flex items-center gap-2.5">
-                    <span
-                      aria-hidden
-                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
-                    >
-                      {(user.name || user.email).trim().charAt(0).toUpperCase() || '?'}
-                    </span>
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate font-sans text-sm font-medium text-(--el-text)">
-                        {user.name || user.email}
-                      </span>
-                      <span className="text-(--el-text-muted) truncate font-sans text-xs">
-                        {user.email}
-                      </span>
-                    </span>
-                  </span>
-                  <DetailSub>
-                    {t.rich('confirm.notYou', {
-                      link: (chunks) => (
-                        <button
-                          type="button"
-                          onClick={handleSignOutAndSwitch}
-                          disabled={busy}
-                          className="rounded-(--radius-control) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-50"
-                        >
-                          {chunks}
-                        </button>
-                      ),
-                    })}
-                  </DetailSub>
+                  <WhoIsApproving user={user} busy={busy} onSwitch={handleSignOutAndSwitch} />
                 </DetailBlock>
 
                 {/* 2 — WHAT is connecting. `hostname` is attacker-suppliable text
@@ -574,6 +672,37 @@ export function DeviceApproval({
   }
 
   // ── States 3–5 — the terminal screens (Panels 5, 6, 7) ───────────────────────
+  if (phase === 'approved' && update) {
+    const { added, removed } = diffGrant(update.permissions, CLI_TOKEN_GRANT);
+    return (
+      <TerminalState
+        headline={tu('approvedHeading')}
+        subhead={tu('approvedSubhead')}
+        foot={t('foot.close')}
+      >
+        <Callout tone="success" icon={<CircleCheckBig className="h-5 w-5" aria-hidden />}>
+          {tu.rich('approvedBody', {
+            label: update.label,
+            cmd: (chunks) => <Cmd>{chunks}</Cmd>,
+            strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+          })}
+        </Callout>
+        {/* What was applied — empty after a re-read of an already-approved grant,
+            whose token now holds the CLI set, which the summary says plainly. */}
+        {grant?.status === 'approved' ? null : (
+          <PermissionChangeSummary added={added} removed={removed} />
+        )}
+        <Link
+          href="/settings/account/tokens"
+          className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'w-full')}
+        >
+          <KeyRound className="h-4 w-4" aria-hidden />
+          {t('approved.viewTokens')}
+        </Link>
+      </TerminalState>
+    );
+  }
+
   if (phase === 'approved') {
     const tokenLabel = hostname ? `CLI · ${hostname}` : null;
     return (
@@ -620,6 +749,29 @@ export function DeviceApproval({
     );
   }
 
+  if (phase === 'denied' && update) {
+    return (
+      <TerminalState
+        headline={t('heading.denied')}
+        subhead={t('subhead.denied')}
+        foot={t('foot.close')}
+      >
+        <Callout tone="danger" icon={<CircleX className="h-5 w-5" aria-hidden />}>
+          {tu.rich('deniedBody', {
+            label: update.label,
+            strong: (chunks) => <strong className="font-semibold">{chunks}</strong>,
+          })}
+        </Callout>
+        <p className="font-sans text-sm leading-relaxed text-(--el-text-secondary)">
+          {tu.rich('deniedRetry', { cmd: (chunks) => <Cmd>{chunks}</Cmd> })}
+        </p>
+        <Button variant="secondary" onClick={restart} className="w-full">
+          {t('denied.another')}
+        </Button>
+      </TerminalState>
+    );
+  }
+
   if (phase === 'denied') {
     return (
       <TerminalState
@@ -640,15 +792,15 @@ export function DeviceApproval({
     );
   }
 
-  // phase === 'expired'
+  // phase === 'expired' — with an UPDATE grant's copy when the code was a refresh's.
   return (
     <TerminalState
       headline={t('heading.expired')}
       subhead={t('subhead.expired', { minutes: DEVICE_CODE_EXPIRES_MINUTES })}
-      foot={t('expired.terminalNote')}
+      foot={update ? tu('expiredNote') : t('expired.terminalNote')}
     >
       <Callout tone="warn" icon={<Clock className="h-5 w-5" aria-hidden />}>
-        {t.rich('expired.body', {
+        {(update ? tu.rich : t.rich)(update ? 'expiredBody' : 'expired.body', {
           code: formatUserCode(canonical),
           cmd: (chunks) => <Cmd>{chunks}</Cmd>,
           chip: (chunks) => <CodeChip>{chunks}</CodeChip>,
@@ -658,6 +810,54 @@ export function DeviceApproval({
         {t('expired.newCode')}
       </Button>
     </TerminalState>
+  );
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** WHO is approving — the signed-in reader, with the way out if it is the wrong
+ *  account. Shared by both confirm screens so the identity check reads the same. */
+function WhoIsApproving({
+  user,
+  busy,
+  onSwitch,
+}: {
+  user: DeviceApprovalProps['user'];
+  busy: boolean;
+  onSwitch: () => void;
+}) {
+  const t = useTranslations('device');
+  return (
+    <>
+      <span className="flex items-center gap-2.5">
+        <span
+          aria-hidden
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--el-text) font-sans text-sm font-semibold text-(--el-text-inverted)"
+        >
+          {(user.name || user.email).trim().charAt(0).toUpperCase() || '?'}
+        </span>
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate font-sans text-sm font-medium text-(--el-text)">
+            {user.name || user.email}
+          </span>
+          <span className="text-(--el-text-muted) truncate font-sans text-xs">{user.email}</span>
+        </span>
+      </span>
+      <DetailSub>
+        {t.rich('confirm.notYou', {
+          link: (chunks) => (
+            <button
+              type="button"
+              onClick={onSwitch}
+              disabled={busy}
+              className="rounded-(--radius-control) underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-50"
+            >
+              {chunks}
+            </button>
+          ),
+        })}
+      </DetailSub>
+    </>
   );
 }
 

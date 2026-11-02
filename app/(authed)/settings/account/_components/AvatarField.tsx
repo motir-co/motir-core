@@ -28,8 +28,9 @@ import { updateProfileAvatarAction } from '../profile/actions';
 //
 // Page-state contract (CLAUDE.md): the avatar is a client island holding its own
 // optimistic `image`, so on success we KEEP the new value here (no revert) AND
-// call `router.refresh()` — the only OTHER surface is the SERVER-rendered rail
-// identity header, which re-reads `user.image`. `router.refresh()` cannot reach
+// call `router.refresh()` — the OTHER surfaces are the shell's top-bar account
+// menu and the account rail's identity tile, both fed from the authed layout's
+// re-read of `session.user.image` (MOTIR-10182). `router.refresh()` cannot reach
 // this island's `useState`, so the optimistic value is safe.
 
 // The design copy narrows the shared upload allowlist to PNG/JPG ≤ 2 MB for the
@@ -95,7 +96,7 @@ export function AvatarField({ initialImage, name }: AvatarFieldProps) {
 
       setImage(result.image);
       toast({ variant: 'success', title: t('uploaded') });
-      // Update the server-rendered rail identity header (reads user.image); the
+      // Update the shell's avatar (top bar + rail head, read from user.image); the
       // island keeps its own optimistic `image` (router.refresh can't reach it).
       router.refresh();
     } catch {

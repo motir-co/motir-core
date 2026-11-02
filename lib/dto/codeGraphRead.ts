@@ -56,6 +56,14 @@ export interface CodeGraphDriftDTO {
   changedPathsInQueryArea: string[] | null;
 }
 
+/** One repository's graph commit, as an `ok` read carries it (MOTIR-10122). */
+export interface CodeGraphCommitDTO {
+  /** `owner/name`. */
+  repoRef: string;
+  /** The full commit id the repository's graph was built from. */
+  indexedSha: string;
+}
+
 /** The compare outcomes that leave a drift without a path list. */
 export type CodeGraphDriftUnavailable =
   | 'too_large'
@@ -68,6 +76,13 @@ export type CodeGraphReadDTO =
   | {
       state: 'ok';
       text: string;
+      /**
+       * The commit each repository's graph was built at, for every repository the
+       * read covered that HAS a graph (MOTIR-10122) — what a recorded planning
+       * read cites, so a check can open the code the answer came from. A graph
+       * can trail its branch; this is the graph's commit, never the branch head.
+       */
+      commits: CodeGraphCommitDTO[];
       /** Only when some repository read is behind its default branch (MOTIR-10094). */
       drift?: CodeGraphDriftDTO[];
     }

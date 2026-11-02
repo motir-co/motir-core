@@ -64,7 +64,7 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // (MOTIR-1531 — the `baseRevision` a modify/remove anchors on) and the folder a
 // filed item sits in (MOTIR-5410). Shared by every read in the skeleton family, so
 // a row can never carry one anchor on one read and miss it on another.
-// The third anchor is a `human` DECISION's confirmation (MOTIR-5958): ONE batched
+// The third anchor is a DECISION's deciding gate (MOTIR-5958, MOTIR-10146): ONE batched
 // read for the whole set, so the planner can date and order an epic's decisions
 // without a `get-item` per child.
 async function readRowAnchors(
@@ -82,12 +82,12 @@ async function readRowAnchors(
   }));
 }
 
-/** Every `human` decision's confirmation in a set, keyed by work-item id — one query. */
+/** Every decision's latest deciding gate in a set, keyed by work-item id — one query. */
 async function readDecisionBlocks(
   workItemIds: string[],
-  tx: Parameters<typeof approvalGateRepository.findDecisionConfirmationsByWorkItemIds>[1],
+  tx: Parameters<typeof approvalGateRepository.findDecisionGatesByWorkItemIds>[1],
 ): Promise<Map<string, AiDecisionBlock>> {
-  const rows = await approvalGateRepository.findDecisionConfirmationsByWorkItemIds(workItemIds, tx);
+  const rows = await approvalGateRepository.findDecisionGatesByWorkItemIds(workItemIds, tx);
   return new Map(rows.map((row) => [row.workItemId, aiDecisionBlockOf(row)]));
 }
 
@@ -279,7 +279,7 @@ export const aiBoundaryService = {
     const links = await workItemsService.getRelationshipLinks(item.id, ctx, {
       restrictToProjectId: projectId,
     });
-    // A `human` decision's confirmation (MOTIR-5958), through the SAME one-query read
+    // A decision's deciding gate (MOTIR-5958, MOTIR-10146), through the SAME one-query read
     // the skeleton rows use — so the item and its row can never disagree.
     const decisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       readDecisionBlocks([item.id], tx),

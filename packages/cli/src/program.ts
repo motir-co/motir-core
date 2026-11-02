@@ -1,7 +1,7 @@
 import { Command, Option } from 'commander';
 import { CLI_VERSION } from './version.js';
 import { COMMAND_CATALOG, type CommandCatalogEntry } from './commandCatalog.js';
-import { authLogin, authLogout, authStatus } from './commands/auth.js';
+import { authLogin, authLogout, authRefresh, authStatus } from './commands/auth.js';
 import { loginCommand } from './commands/login.js';
 import { linkAddCommand, linkCommand, linkRemoveCommand } from './commands/link.js';
 import {
@@ -164,6 +164,21 @@ export function buildProgram(): Command {
   register(auth, 'auth logout')
     .option('--server <url>', 'Server to log out of (defaults to the linked / single server).')
     .action(authLogout);
+  register(auth, 'auth refresh')
+    .option('--server <url>', 'Server to refresh (defaults to the linked / single server).')
+    .option('--no-browser', 'Do not launch a browser — just print the code and the URL.')
+    .addHelpText(
+      'after',
+      [
+        '',
+        'Gives the token `motir login` stored the permissions this CLI uses now. You',
+        'approve it in a browser, as with `motir login`; the token stays the same, so',
+        'nothing is copied or re-pasted. A token from MOTIR_TOKEN is refused — change',
+        'it in Settings → Account → Tokens instead.',
+      ].join('\n'),
+    )
+    // Arity-1 wrapper, as for `login`: keep commander's Command out of the deps.
+    .action((opts) => authRefresh(opts));
 
   // ── link ───────────────────────────────────────────────────────────────────
   const link = register(program, 'link')

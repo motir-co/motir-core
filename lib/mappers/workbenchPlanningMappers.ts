@@ -56,6 +56,7 @@ export function toToResumePlanningSessionDto(
     failureStopPhase?: 'lay' | 'author' | null;
     failureStopRef?: string | null;
     failureStopTitle?: string | null;
+    failureNotPlannedYet?: readonly string[] | null;
     endedAt?: Date | null;
     latestPlan?: { id: string; title: string | null } | null;
   },
@@ -90,6 +91,7 @@ export function toToResumePlanningSessionDto(
             stopPhase: row.failureStopPhase ?? null,
             stopRef: row.failureStopRef ?? null,
             stopTitle: row.failureStopTitle ?? null,
+            notPlannedYet: [...(row.failureNotPlannedYet ?? [])],
           },
     endedAt:
       form === 'ended_with_waiting_plan' ? ((row.endedAt ?? null)?.toISOString() ?? null) : null,

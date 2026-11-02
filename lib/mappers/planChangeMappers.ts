@@ -224,6 +224,7 @@ function toPlanSessionFailureDto(row: PlanChangeSession): PlanSessionFailureDto 
     stopPhase: row.failureStopPhase ?? null,
     stopRef: row.failureStopRef ?? null,
     stopTitle: row.failureStopTitle ?? null,
+    notPlannedYet: row.failureNotPlannedYet ?? [],
   };
 }
 

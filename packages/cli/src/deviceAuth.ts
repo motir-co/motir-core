@@ -17,6 +17,13 @@ import { CliError } from './errors.js';
 // The exception is bounded by construction: two endpoints, both unauthenticated by
 // design, both reached only from `commands/login.ts`, and the moment the poll
 // succeeds the CLI holds a PAT and everything after it is `/api/v1`.
+//
+// `motir auth refresh` (MOTIR-10189) reuses the same two endpoints with the token
+// it already holds as the bearer on `start`: that opens an UPDATE grant for the
+// token, whose approval changes the token's permissions and mints nothing. The
+// third route, `GET /api/cli/token`, answers `motir auth status`'s one question
+// (does this token lack anything the CLI now needs?). It compares against the
+// CLI's own fixed set, which is this flow's business, not the public API's.
 
 /**
  * The `client_id` this CLI presents. Pinned server-side too
@@ -32,6 +39,11 @@ const DEVICE_CODE_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code';
 
 export const DEVICE_START_PATH = '/api/cli/device/start';
 export const DEVICE_TOKEN_PATH = '/api/cli/device/token';
+export const CLI_TOKEN_STATUS_PATH = '/api/cli/token';
+
+/** Which command a grant serves. It changes only the words a failure prints: the
+ *  wire is the same, and a refresh's failures all say the token is unchanged. */
+export type DeviceFlow = 'login' | 'refresh';
 
 /** The grant, as `POST /api/cli/device/start` hands it back (RFC 8628 §3.2). */
 export interface DeviceGrant {
@@ -62,6 +74,19 @@ export interface DeviceCredential {
 }
 
 /**
+ * The successful poll of an UPDATE grant (`motir auth refresh`). There is no token
+ * in it: the terminal keeps the secret it holds, which now carries `scope`.
+ */
+export interface DeviceUpdate {
+  updated: true;
+  /** The token's label, e.g. `CLI · yue-mbp`. */
+  label: string;
+  scope: string;
+  user: { id: string; name: string; email: string };
+  workspace: { id: string; name: string };
+}
+
+/**
  * What one poll answered. The three NON-terminal states are values; the three
  * terminal failures are thrown, because there is nothing for the caller to decide
  * about them.
@@ -72,6 +97,7 @@ export interface DeviceCredential {
  */
 export type PollResult =
   | { state: 'granted'; credential: DeviceCredential }
+  | { state: 'updated'; update: DeviceUpdate }
   | { state: 'pending' }
   | { state: 'slow_down' }
   /** HTTP 500 `server_error` — "not your fault, try again." Keep polling. */
@@ -95,11 +121,20 @@ async function readJson(res: Response): Promise<unknown> {
  * mistyped `--server` or the host is down — and the raw `TypeError: fetch failed`
  * says none of that.
  */
-async function postJson(url: string, body: unknown, serverUrl: string): Promise<Response> {
+async function postJson(
+  url: string,
+  body: unknown,
+  serverUrl: string,
+  bearer?: string,
+): Promise<Response> {
   try {
     return await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+      },
       body: JSON.stringify(body),
     });
   } catch {
@@ -127,14 +162,37 @@ function oauthErrorCode(body: unknown): string | undefined {
 export async function startDeviceGrant(input: {
   serverUrl: string;
   hostname: string;
+  /** The token `motir auth refresh` holds. Present, it opens an UPDATE grant for
+   *  that token instead of a login. */
+  updateToken?: string;
 }): Promise<DeviceGrant> {
   const res = await postJson(
     input.serverUrl + DEVICE_START_PATH,
     { hostname: input.hostname },
     input.serverUrl,
+    input.updateToken,
   );
   const body = await readJson(res);
 
+  if (!res.ok && input.updateToken !== undefined) {
+    // A refresh's refusals each name the one way forward, and none changed anything.
+    if (res.status === 401) {
+      throw new CliError('This terminal’s token is no longer valid, so it cannot be refreshed.', {
+        hint: 'It was revoked or has expired. Run `motir login` to connect this terminal again.',
+      });
+    }
+    if (res.status === 422) {
+      throw new CliError(
+        'This token was not created by `motir login`, so it cannot be refreshed.',
+        {
+          hint: 'Change its permissions in Settings → Account → Tokens, or run `motir login` to connect this terminal with a CLI sign-in.',
+        },
+      );
+    }
+    throw new CliError(`${input.serverUrl} refused to start a refresh (HTTP ${res.status}).`, {
+      hint: 'Nothing was changed. If this is a self-hosted Motir, it may predate `motir auth refresh`.',
+    });
+  }
   if (!res.ok) {
     throw new CliError(`${input.serverUrl} refused to start a login (HTTP ${res.status}).`, {
       hint: 'If this is a self-hosted Motir, it may predate `motir login` — use `motir auth login --token <pat>` instead.',
@@ -166,7 +224,9 @@ export async function startDeviceGrant(input: {
 export async function pollDeviceGrant(input: {
   serverUrl: string;
   deviceCode: string;
+  flow?: DeviceFlow;
 }): Promise<PollResult> {
+  const refresh = input.flow === 'refresh';
   const res = await postJson(
     input.serverUrl + DEVICE_TOKEN_PATH,
     {
@@ -179,6 +239,22 @@ export async function pollDeviceGrant(input: {
   const body = await readJson(res);
 
   if (res.ok) {
+    // An update grant answers with the token's new grant and no secret.
+    if ((body as { updated?: unknown } | undefined)?.updated === true) {
+      return { state: 'updated', update: body as DeviceUpdate };
+    }
+    if (refresh) {
+      // Never a new secret for a refresh: the terminal keeps the one it holds, and
+      // nothing is written, whatever the body carried.
+      const minted =
+        typeof (body as { access_token?: unknown } | undefined)?.access_token === 'string';
+      throw new CliError(
+        minted
+          ? `${input.serverUrl} answered the refresh with a new token instead of an update. Nothing was written.`
+          : `${input.serverUrl} answered the refresh with something unexpected.`,
+        { hint: 'Run `motir auth status` to see the token’s permissions now.' },
+      );
+    }
     const credential = body as Partial<DeviceCredential> | undefined;
     if (typeof credential?.access_token !== 'string') {
       throw new CliError(`${input.serverUrl} approved the login but returned no token.`);
@@ -194,19 +270,71 @@ export async function pollDeviceGrant(input: {
     case 'server_error':
       return { state: 'retry' };
     case 'access_denied':
+      // A refresh is also denied when the token could not be updated (revoked
+      // meanwhile, or approved from a staff session) — the token is unchanged
+      // either way, which is the one thing the person needs to know.
+      if (refresh) {
+        throw new CliError('The refresh was denied. The token’s permissions are unchanged.', {
+          hint: 'Run `motir auth refresh` again to ask for a fresh code.',
+        });
+      }
       throw new CliError('Approval was denied. No credential was written.', {
         hint: 'Run `motir login` again if that was not you — and revoke nothing: nothing was created.',
       });
     case 'expired_token':
+      if (refresh) {
+        throw new CliError('The code expired before it was approved. Nothing was changed.', {
+          hint: 'Codes last 15 minutes. Run `motir auth refresh` again for a fresh one.',
+        });
+      }
       throw new CliError('The code expired before it was approved.', {
         hint: 'Codes last 15 minutes. Run `motir login` again for a fresh one.',
       });
     default:
       // `invalid_grant` (unknown / already-consumed device code, client mismatch),
       // `invalid_request`, or an unrecognised body. All are bugs or tampering, not
-      // something a retry fixes.
+      // something a retry fixes. For a refresh, a REVOKED token lands here too: its
+      // grant row goes with it, so the device code is unknown.
+      if (refresh) {
+        throw new CliError(`The refresh could not be completed (HTTP ${res.status}).`, {
+          hint: 'If the token was revoked, run `motir login` to connect this terminal again; otherwise run `motir auth refresh` again.',
+        });
+      }
       throw new CliError(`The login could not be completed (HTTP ${res.status}).`, {
         hint: 'Run `motir login` again to start a fresh grant.',
       });
+  }
+}
+
+/** `GET /api/cli/token`'s answer: is the token a CLI sign-in, and which of the
+ *  CLI's current permissions does it lack? */
+export interface CliTokenStatus {
+  cliSignIn: boolean;
+  missing: string[];
+}
+
+/**
+ * Ask the server about the token this terminal holds, for `motir auth status`'s
+ * refresh hint. Best-effort by contract: ANY failure (an older server without the
+ * route, a network blip, a body of the wrong shape) answers `undefined`, and the
+ * status command simply prints no hint. It never fails the command it decorates.
+ */
+export async function fetchTokenStatus(input: {
+  serverUrl: string;
+  token: string;
+}): Promise<CliTokenStatus | undefined> {
+  try {
+    const res = await fetch(input.serverUrl + CLI_TOKEN_STATUS_PATH, {
+      headers: { Accept: 'application/json', Authorization: `Bearer ${input.token}` },
+    });
+    if (!res.ok) return undefined;
+    const body = (await readJson(res)) as Partial<CliTokenStatus> | undefined;
+    if (typeof body?.cliSignIn !== 'boolean' || !Array.isArray(body.missing)) return undefined;
+    return {
+      cliSignIn: body.cliSignIn,
+      missing: body.missing.filter((k) => typeof k === 'string'),
+    };
+  } catch {
+    return undefined;
   }
 }

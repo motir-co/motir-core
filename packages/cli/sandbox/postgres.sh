@@ -2,7 +2,7 @@
 #
 # THE SANDBOX'S DEBUGGING DATABASE (MOTIR-6204) — `motir-sandbox-postgres`.
 #
-# The image ships an initialised Postgres 16 cluster with pgvector, collated
+# The image ships an initialised Postgres 18 cluster with pgvector, collated
 # C.UTF-8, owned by the runtime user. This is how you drive it.
 #
 #   motir-sandbox-postgres start     start it (idempotent; prints the URL)
@@ -26,7 +26,7 @@
 # number — see the sandbox README.
 set -euo pipefail
 
-PG_BIN="${PG_BIN:-/usr/lib/postgresql/16/bin}"
+PG_BIN="${PG_BIN:-/usr/lib/postgresql/18/bin}"
 PGDATA="${PGDATA:-/var/lib/motir-postgres}"
 PGUSER_NAME='prodect'
 PGDATABASE_NAME='prodect'

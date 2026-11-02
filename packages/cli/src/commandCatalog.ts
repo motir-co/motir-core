@@ -235,6 +235,23 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
     ],
   },
   {
+    path: 'auth refresh',
+    signature: '',
+    description:
+      'Give the token `motir login` stored the permissions this CLI uses now, keeping the token.',
+    helpGroup: null,
+    options: [
+      {
+        flags: '--server <url>',
+        description: 'Server to refresh (defaults to the linked / single server).',
+      },
+      {
+        flags: '--no-browser',
+        description: 'Do not launch a browser — just print the code and the URL.',
+      },
+    ],
+  },
+  {
     path: 'link',
     signature: '',
     description:

@@ -2,13 +2,14 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AwsManagementApiError,
+  Ec2ApiError,
   type AwsCredentialsConfig,
   type AwsSessionCredentials,
   type Ec2Api,
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import type { PlatformRole } from '@/generated/prisma/client';
-import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
+import { poolAccountRaiseTargetVcpu } from '@/lib/ciFleet/shardTargets';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
   findShardProvisioningProvider,
@@ -51,6 +52,9 @@ const ORG = 'motir-fleet-use1-2';
 const NAME = 'ci-runner-use1-2';
 const PREFIX = 'FLEET_SHARD_CI_RUNNER_USE1_2';
 const ACCOUNT_EMAIL = 'aws+ci-runner-use1-2@motir.co';
+const CI_TARGET = poolAccountRaiseTargetVcpu('ci_runner');
+/** Under the kind's own target, so a first run leaves the quota pending. */
+const BELOW_TARGET = CI_TARGET - 50;
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
@@ -73,6 +77,8 @@ let organization: FakeOrganization;
 let ec2: Ec2Fake;
 /** Which access key id each EC2 surface was built with. */
 let ec2Keys: string[];
+/** The waits the provider slept, on an injected timer (MOTIR-10204). */
+let sleeps: number[];
 let unregister: () => void;
 let operatorEmail: string;
 
@@ -147,9 +153,11 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   organization = new FakeOrganization(SESSION);
+  organization.quota = BELOW_TARGET;
   buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
+  sleeps = [];
   installAddShardGithub(github, SECRETS.installation);
   unregister = registerShardProvisioningProvider(
     createAwsShardProvisioningProvider({
@@ -159,6 +167,9 @@ beforeEach(async () => {
         return ec2;
       },
       env: () => process.env,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
     }),
   );
   operatorEmail = await staff('superadmin');
@@ -206,7 +217,7 @@ describe('add-shard --provider aws, first run', () => {
       githubOrg: ORG,
       githubInstallationId: '9001',
       credentialRef: PREFIX,
-      vcpuQuota: SHARD_VCPU_QUOTA_TARGET - 1_000,
+      vcpuQuota: BELOW_TARGET,
     });
     expect(row!.limitsSource).toMatchObject({
       vcpuQuota: 'provider_read',
@@ -219,8 +230,7 @@ describe('add-shard --provider aws, first run', () => {
     );
     expect(result.out).toContain('Pending manual steps:');
     expect(result.out).toContain(
-      `raise the account's vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 1_000} to at least ` +
-        `${SHARD_VCPU_QUOTA_TARGET}`,
+      `raise the account's vCPU quota from ${BELOW_TARGET} to at least ` + `${CI_TARGET}`,
     );
     // The runner role the stack built is confirmed by assuming it: no person is
     // asked to mint a key (MOTIR-9847).
@@ -268,7 +278,7 @@ describe('add-shard --provider aws, first run', () => {
 
   it('with the quota at target, a resume makes the row active and exits 0', async () => {
     await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = CI_TARGET;
     organization.calls.length = 0;
 
     const result = await run(args());
@@ -282,14 +292,14 @@ describe('add-shard --provider aws, first run', () => {
     expect(ec2.mutations().some((m) => /run|terminate/.test(m.method))).toBe(false);
     expect(await shardRow()).toMatchObject({
       state: 'active',
-      vcpuQuota: SHARD_VCPU_QUOTA_TARGET,
+      vcpuQuota: CI_TARGET,
     });
   });
 
   it('a runner role that cannot be assumed yet stays pending, with the role step', async () => {
     // The first run creates the account; the role is refused on the second.
     await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = CI_TARGET;
     const accountId = organization.accounts.get(NAME)!.accountId;
     organization.runnerAssumeFailures.set(
       accountId,
@@ -302,6 +312,51 @@ describe('add-shard --provider aws, first run', () => {
     expect(result.out).toMatch(/^runtime_credential\s+pending/m);
     expect(result.out).toContain(roleStep(accountId));
     expect((await shardRow())!.state).toBe('provisioning');
+  });
+});
+
+describe('a just-created account whose EC2 is still activating (MOTIR-10204)', () => {
+  /** EC2 answers the next `times` VPC reads with OptInRequired, as a new account
+   *  does until its activation finishes. The refusal is the package's own
+   *  `Ec2ApiError` — the class the provider reads, not the fake's source copy. */
+  function refuseVpcReads(times: number): void {
+    const read = ec2.describeVpcs.bind(ec2);
+    let refused = 0;
+    ec2.describeVpcs = async (filters) => {
+      if (refused < times) {
+        refused += 1;
+        throw new Ec2ApiError('OptInRequired', 401, false);
+      }
+      return read(filters);
+    };
+  }
+
+  it('waits out OptInRequired on the first EC2 call and builds the account in the same run', async () => {
+    refuseVpcReads(1);
+
+    const result = await run(args());
+
+    expect(result.code).toBe(2);
+    expect(result.err).not.toContain('OptInRequired');
+    expect(sleeps).toEqual([15_000]);
+    expect(result.out).toMatch(/^network\s+done — created unit-membership:.*stack-instance:/m);
+    expect((await shardRow())!.state).toBe('provisioning');
+  });
+
+  it('an account older than a day answering OptInRequired is refused at once, unwaited', async () => {
+    await run(args());
+    const account = organization.accounts.get(NAME)!;
+    organization.accounts.set(NAME, {
+      ...account,
+      joinedAt: new Date(Date.now() - 2 * 24 * 60 * 60_000),
+    });
+    refuseVpcReads(1);
+
+    const result = await run(args());
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('EC2 refused a call (OptInRequired, HTTP 401)');
+    expect(sleeps).toEqual([]);
   });
 });
 
@@ -415,7 +470,7 @@ describe('refusals', () => {
 describe('the secrets', () => {
   it('mints no key, and no secret or session credential reaches stdout, stderr or the audit row', async () => {
     const first = await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = CI_TARGET;
     const second = await run(args());
 
     expect(organization.calls.some((c) => /AccessKey/i.test(c))).toBe(false);

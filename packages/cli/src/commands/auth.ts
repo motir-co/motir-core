@@ -1,5 +1,10 @@
+import { hostname } from 'node:os';
+import { setTimeout as delay } from 'node:timers/promises';
+import { openUrl } from '../browser.js';
 import { MotirClient } from '../client.js';
+import { fetchTokenStatus, startDeviceGrant } from '../deviceAuth.js';
 import { CliError } from '../errors.js';
+import { awaitApproval, printGrant } from './login.js';
 import { info, out } from '../output.js';
 import { isInteractive, promptLine, promptSecret } from '../prompts.js';
 import { DEFAULT_SERVER_URL, resolveServerUrl } from '../serverResolve.js';
@@ -88,6 +93,81 @@ export async function authStatus(opts: AuthScopeOptions): Promise<void> {
   const who = await client.whoami();
   out(`User:      ${who.user.name || who.user.email} <${who.user.email}>`);
   if (who.workspace) out(`Workspace: ${who.workspace.name} (${who.workspace.slug})`);
+
+  // The refresh hint (MOTIR-10189). A CLI sign-in keeps the grant it was minted
+  // with, so a CLI release that needs a new permission leaves older sign-ins short
+  // of it. Say so here, where a person looks when a command is refused. Only for a
+  // STORED sign-in: an env token is refreshed by whoever set it, not by this
+  // terminal. Best-effort: a server without the route prints no hint.
+  if (cred.source !== 'config') return;
+  const status = await fetchTokenStatus({ serverUrl, token: cred.token });
+  if (!status?.cliSignIn || status.missing.length === 0) return;
+  const n = status.missing.length;
+  out(
+    `Permissions: missing ${n} the CLI now uses (${status.missing.join(', ')}). Run \`motir auth refresh\` to add ${n === 1 ? 'it' : 'them'}.`,
+  );
+}
+
+/** Injectable seams for `motir auth refresh`; never overridden in production. */
+export interface AuthRefreshDeps {
+  sleep?: (ms: number) => Promise<void>;
+  openUrl?: typeof openUrl;
+  hostname?: () => string;
+}
+
+export interface AuthRefreshOptions extends AuthScopeOptions {
+  /** `false` for `--no-browser`, as on `motir login`. */
+  browser?: boolean;
+}
+
+/**
+ * `motir auth refresh` (MOTIR-10189) — bring this terminal's CLI sign-in up to the
+ * permissions the CLI uses today, keeping the token.
+ *
+ * It is `motir login`'s device flow with the held token as the bearer on `start`:
+ * the person approves in a browser, the server updates THAT token's grant, and the
+ * poll answers `{ updated: true }` with no secret. So nothing is written to disk on
+ * any path — the stored token is the same token before and after, which is also why
+ * every failure can promise the token is unchanged.
+ */
+export async function authRefresh(
+  opts: AuthRefreshOptions,
+  deps: AuthRefreshDeps = {},
+): Promise<void> {
+  const serverUrl = resolveServerUrl(opts.server);
+  const cred = resolveCredential(serverUrl);
+  if (!cred) {
+    throw new CliError(`Not logged in to ${serverUrl}.`, {
+      hint: 'Run `motir login` to connect this terminal.',
+    });
+  }
+  // A token from the environment belongs to whoever exported it. Refreshing it
+  // from here would change a credential this terminal did not mint, and the CLI
+  // never writes an env token to disk, so refuse and say where to change it.
+  if (cred.source === 'environment') {
+    throw new CliError(`The token comes from ${cred.origin}, so this terminal cannot refresh it.`, {
+      hint: 'Change that token’s permissions in Settings → Account → Tokens, or unset the variable and run `motir login`.',
+    });
+  }
+
+  const sleep = deps.sleep ?? delay;
+  const open = deps.openUrl ?? openUrl;
+  const grant = await startDeviceGrant({
+    serverUrl,
+    hostname: (deps.hostname ?? hostname)(),
+    updateToken: cred.token,
+  });
+  printGrant(grant);
+
+  const opened = opts.browser === false ? false : await open(grant.verification_uri_complete);
+  if (opened) info('Opened your browser — approve the update there.');
+  else info('Open that URL on any device, sign in, and enter the code.');
+  info('Waiting for approval…');
+
+  const update = await awaitApproval({ serverUrl, grant, sleep, flow: 'refresh' });
+  info(
+    `Updated ${update.label} on ${serverUrl} (workspace ${update.workspace.name}). It keeps its token and now has the CLI’s current permissions.`,
+  );
 }
 
 export async function authLogout(opts: AuthScopeOptions): Promise<void> {

@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   AWS_CREATE_ACCOUNT_TIMEOUT_MS,
   AWS_EC2_VCPU_QUOTA_CODE,
+  AWS_INDEX_IAM_ROLE,
   AWS_MANAGEMENT_ENV,
   AWS_RUNNER_IAM_POLICY,
   AWS_RUNNER_IAM_ROLE,
@@ -249,12 +250,27 @@ describe('findOrganizationAccount', () => {
       AssumeRoleCommand: assume,
       ListAccountsCommand: (input) =>
         input['NextToken']
-          ? { Accounts: [{ Id: '222222222222', Name: 'ci-runner-use1-2', State: 'ACTIVE' }] }
+          ? {
+              Accounts: [
+                {
+                  Id: '222222222222',
+                  Name: 'ci-runner-use1-2',
+                  State: 'ACTIVE',
+                  JoinedTimestamp: new Date('2026-11-01T21:28:51Z'),
+                },
+              ],
+            }
           : { Accounts: [{ Id: '111111111111', Name: 'other' }], NextToken: 'p2' },
     });
 
+    // When it joined is what tells a new account's EC2 activation apart (MOTIR-10204).
     expect(await api.findOrganizationAccount('ci-runner-use1-2')).toEqual({
-      account: { accountId: '222222222222', name: 'ci-runner-use1-2', status: 'ACTIVE' },
+      account: {
+        accountId: '222222222222',
+        name: 'ci-runner-use1-2',
+        status: 'ACTIVE',
+        joinedAt: new Date('2026-11-01T21:28:51Z'),
+      },
       inProgressRequestId: null,
     });
     expect(calls[0]).toMatchObject({
@@ -337,7 +353,14 @@ describe('createOrganizationAccount', () => {
         polls += 1;
         return polls < 3
           ? { CreateAccountStatus: { Id: 'car-9', State: 'IN_PROGRESS' } }
-          : { CreateAccountStatus: { Id: 'car-9', State: 'SUCCEEDED', AccountId: '333333333333' } };
+          : {
+              CreateAccountStatus: {
+                Id: 'car-9',
+                State: 'SUCCEEDED',
+                AccountId: '333333333333',
+                CompletedTimestamp: new Date('2026-11-01T21:28:51Z'),
+              },
+            };
       },
     });
 
@@ -345,6 +368,7 @@ describe('createOrganizationAccount', () => {
       accountId: '333333333333',
       name: 'n',
       status: 'ACTIVE',
+      joinedAt: new Date('2026-11-01T21:28:51Z'),
     });
     expect(calls.filter((c) => c.command === 'CreateAccountCommand')).toHaveLength(1);
     expect(calls.find((c) => c.command === 'CreateAccountCommand')!.input).toEqual({
@@ -372,6 +396,22 @@ describe('createOrganizationAccount', () => {
       expect(err).toMatchObject({ accountName: 'n', reason });
     },
   );
+
+  it('a SUCCEEDED answer with no completion time dates the account to now (MOTIR-10204)', async () => {
+    const { api, clock } = harness({
+      AssumeRoleCommand: assume,
+      DescribeCreateAccountStatusCommand: () => ({
+        CreateAccountStatus: { State: 'SUCCEEDED', AccountId: '444444444444' },
+      }),
+    });
+    clock.t = Date.parse('2026-11-01T21:30:00Z');
+    expect(await api.waitForCreateAccount('car-9', 'n')).toEqual({
+      accountId: '444444444444',
+      name: 'n',
+      status: 'ACTIVE',
+      joinedAt: new Date('2026-11-01T21:30:00Z'),
+    });
+  });
 
   it('a FAILED with no reason says UNKNOWN', async () => {
     const { api } = harness({
@@ -691,6 +731,12 @@ describe('the runner role (MOTIR-9460)', () => {
   });
 });
 
+/** Every IAM action a policy document allows: the index role's pass, and no other. */
+const iamActionsOf = (doc: { Statement: Array<Record<string, unknown>> }) =>
+  doc.Statement.flatMap((s) => [s['Action']].flat() as string[]).filter((a) =>
+    a.startsWith('iam:'),
+  );
+
 describe('awsRunnerPolicyDocument', () => {
   it('allows the adapter’s EC2 calls only, tag-scoped where EC2 supports it', () => {
     const doc = awsRunnerPolicyDocument({ shardTag: 's1', regionId: 'us-east-1' });
@@ -704,9 +750,22 @@ describe('awsRunnerPolicyDocument', () => {
         'ec2:CreateTags',
         'ec2:TerminateInstances',
         'ec2:GetConsoleOutput',
+        'iam:PassRole',
       ]),
     );
-    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+    // Its one IAM action passes the index role, to EC2 only (MOTIR-10123).
+    expect(doc.Statement.filter((s) => JSON.stringify(s).includes('iam:'))).toEqual([
+      {
+        Sid: 'PassIndexRole',
+        Effect: 'Allow',
+        Action: 'iam:PassRole',
+        Resource: `arn:aws:iam::*:role/${AWS_INDEX_IAM_ROLE}`,
+        Condition: { StringEquals: { 'iam:PassedToService': 'ec2.amazonaws.com' } },
+      },
+    ]);
+    expect(AWS_INDEX_IAM_ROLE).toBe('motir-fleet-index');
+    expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
+    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
     const terminate = doc.Statement.find((s) => s['Sid'] === 'TerminateOwn')!;
     expect(terminate['Condition']).toEqual({
       StringEquals: { 'aws:ResourceTag/motir-shard': 's1' },
@@ -741,7 +800,8 @@ describe('awsRunnerPolicyDocument', () => {
     });
     expect(any).not.toHaveProperty('Condition');
     // Nothing else widens: the same actions as a runner account.
-    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+    expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
+    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
   });
 });
 
@@ -771,7 +831,8 @@ describe('awsAgentHosterPolicyDocument', () => {
     expect(added.find((s) => s['Sid'] === 'DeleteOwnDisk')!['Resource']).toBe(
       'arn:aws:ec2:us-east-1:*:volume/*',
     );
-    expect(JSON.stringify(doc)).not.toMatch(/iam:|CreateAccessKey|ec2:\*/);
+    expect(JSON.stringify(doc)).not.toMatch(/CreateAccessKey|ec2:\*/);
+    expect(iamActionsOf(doc)).toEqual(['iam:PassRole']);
   });
 });
 

@@ -5,6 +5,8 @@ import {
   CLEARED_FAILURE_COLUMNS,
   FAILED_WAITING_WHERE,
   FAILURE_DETAIL_MAX,
+  FAILURE_NOT_PLANNED_YET_LINE_MAX,
+  FAILURE_NOT_PLANNED_YET_MAX_LINES,
   FAILURE_STOP_REF_MAX,
   FAILURE_STOP_TITLE_MAX,
   NOT_WAITING_WHERE,
@@ -72,18 +74,23 @@ describe('the predicates mirror their where fragments', () => {
 });
 
 describe('the cleared-column lists name every column, once', () => {
-  it('the eight failure columns and the two awaiting columns are all null', () => {
+  it('the nine failure columns are cleared and the two awaiting columns are all null', () => {
     expect(Object.keys(CLEARED_FAILURE_COLUMNS).sort()).toEqual([
       'failedAt',
       'failedJobId',
       'failureDetail',
+      'failureNotPlannedYet',
       'failureReason',
       'failureResumable',
       'failureStopPhase',
       'failureStopRef',
       'failureStopTitle',
     ]);
-    expect(Object.values(CLEARED_FAILURE_COLUMNS).every((v) => v === null)).toBe(true);
+    // A list column cannot be NULL: the not-planned-yet lines clear to the empty list
+    // (MOTIR-10209); every other failure column clears to null.
+    const { failureNotPlannedYet, ...scalars } = CLEARED_FAILURE_COLUMNS;
+    expect(failureNotPlannedYet).toEqual([]);
+    expect(Object.values(scalars).every((v) => v === null)).toBe(true);
     expect(Object.keys(CLEARED_AWAITING_COLUMNS).sort()).toEqual([
       'awaitingPersonCause',
       'awaitingPersonSince',
@@ -103,7 +110,28 @@ describe('parsePlanSessionFailureRecord', () => {
       failureStopRef: null,
       failureStopTitle: null,
       failureResumable: null,
+      failureNotPlannedYet: [],
     });
+  });
+
+  it('keeps the not-planned-yet lines in order, trimmed, without blanks, and capped (MOTIR-10209)', () => {
+    expect(
+      parsePlanSessionFailureRecord({
+        ...base,
+        failureNotPlannedYet: ['  "D" is not planned yet.  ', '', '   ', 'Not written yet: "T".'],
+      }).failureNotPlannedYet,
+    ).toEqual(['"D" is not planned yet.', 'Not written yet: "T".']);
+    const many = Array.from(
+      { length: FAILURE_NOT_PLANNED_YET_MAX_LINES + 5 },
+      (_, i) => `line ${i}`,
+    );
+    const parsed = parsePlanSessionFailureRecord({
+      ...base,
+      failureNotPlannedYet: ['x'.repeat(FAILURE_NOT_PLANNED_YET_LINE_MAX + 50), ...many],
+    }).failureNotPlannedYet;
+    expect(parsed).toHaveLength(FAILURE_NOT_PLANNED_YET_MAX_LINES);
+    expect(parsed[0]).toHaveLength(FAILURE_NOT_PLANNED_YET_LINE_MAX);
+    expect(parsed[1]).toBe('line 0');
   });
 
   it.each(PLAN_SESSION_FAILURE_REASONS)('accepts the reason %s', (failureReason) => {

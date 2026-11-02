@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { BILLING_CATALOG } from '@/lib/billing/catalog';
+import { calculatorEstimateRequestSchema } from '@/lib/dto/billing';
 import {
   PINNED_CALCULATOR_REQUEST,
   PINNED_CATEGORIES_ANSWER,
@@ -61,21 +63,52 @@ describe('the pinned calculator vector', () => {
     );
   });
 
-  it('the pinned input is a legal engine request — one range, one to three categories, one cadence', () => {
-    const { itemsPerMonth, categories, cadence } = PINNED_CALCULATOR_REQUEST;
+  it('the pinned input is a legal request in the CURRENT shape — two ranges, shares, one cadence', () => {
+    const { plannedPerMonth, runPerMonth, categories, shares, cadence } = PINNED_CALCULATOR_REQUEST;
     expect(Object.keys(PINNED_CALCULATOR_REQUEST).sort()).toEqual([
       'cadence',
       'categories',
-      'itemsPerMonth',
+      'plannedPerMonth',
+      'runPerMonth',
+      'shares',
     ]);
-    expect(isWholeNonNegative(itemsPerMonth.low)).toBe(true);
-    expect(isWholeNonNegative(itemsPerMonth.high)).toBe(true);
-    expect(itemsPerMonth.low).toBeLessThanOrEqual(itemsPerMonth.high);
-    expect(categories.length).toBeGreaterThanOrEqual(1);
+    // The schema the app's own estimate route parses with (strict: the retired
+    // `itemsPerMonth` is refused by name), so the record cannot drift from the wire.
+    expect(calculatorEstimateRequestSchema.safeParse(PINNED_CALCULATOR_REQUEST).success).toBe(true);
+    for (const range of [plannedPerMonth, runPerMonth]) {
+      expect(isWholeNonNegative(range.low)).toBe(true);
+      expect(isWholeNonNegative(range.high)).toBe(true);
+      expect(range.low).toBeLessThanOrEqual(range.high);
+    }
+    // Two DIFFERENT ranges and UNEQUAL shares, so a surface that copies one range into
+    // the other, or splits the run evenly, cannot render the recorded answer.
+    expect(plannedPerMonth).not.toEqual(runPerMonth);
+    expect(new Set(Object.values(shares)).size).toBe(categories.length);
+    expect(categories.length).toBeGreaterThanOrEqual(2);
     expect(categories.length).toBeLessThanOrEqual(3);
     expect(new Set(categories).size).toBe(categories.length);
     // The cadences the shipped catalog prices — read, not typed as a pair here.
     expect(Object.keys(BILLING_CATALOG.seatPlan.prices)).toContain(cadence);
+  });
+
+  it('the record is the recorder’s output — the commands it names sent exactly this request', () => {
+    const [categoriesCommand, estimateCommand] = PINNED_VECTOR_BASIS.commands;
+    expect(categoriesCommand).toBe(
+      `curl -sS -X GET ${PINNED_VECTOR_BASIS.host}/v1/public/calculator/categories`,
+    );
+    const sent = /--data '(.*)' https:/.exec(estimateCommand ?? '')?.[1];
+    expect(JSON.parse(sent ?? 'null')).toStrictEqual(PINNED_CALCULATOR_REQUEST);
+    expect(estimateCommand).toContain(`${PINNED_VECTOR_BASIS.host}/v1/public/calculator/estimate`);
+    // The recorder writes the file whole, and its source names this file.
+    const recorder = readFileSync('scripts/record-calculator-pinned-vector.mjs', 'utf8');
+    expect(recorder).toContain('tests/fixtures/calculatorPinnedVector.json');
+  });
+
+  it('the answer echoes the two ranges it priced', () => {
+    expect(PINNED_ESTIMATE_ANSWER.plannedPerMonth).toStrictEqual(
+      PINNED_CALCULATOR_REQUEST.plannedPerMonth,
+    );
+    expect(PINNED_ESTIMATE_ANSWER.runPerMonth).toStrictEqual(PINNED_CALCULATOR_REQUEST.runPerMonth);
   });
 
   it('the recorded answer is an ordered estimate at the request’s cadence', () => {
@@ -97,9 +130,9 @@ describe('the pinned calculator vector', () => {
     const { split } = PINNED_ESTIMATE_ANSWER;
     expect(split.categories.map((c) => c.key)).toEqual([...PINNED_CALCULATOR_REQUEST.categories]);
     expect(split.count).toBe(split.categories.length);
-    // An equal split: the weights are one share each and sum to one.
+    // The split is the shares the request set, as fractions of the run.
     for (const c of split.categories) {
-      expect(c.weight).toBeCloseTo(1 / split.count, 10);
+      expect(c.weight).toBeCloseTo(PINNED_CALCULATOR_REQUEST.shares[c.key]! / 100, 10);
       expect(c.models.length).toBeGreaterThan(0);
     }
   });

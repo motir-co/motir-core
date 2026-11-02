@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { getSession } from '@/lib/auth';
 import { assertTwoFactorCompliance } from '@/lib/auth/twoFactorGate';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { enforcePublicReadRateLimit } from '@/lib/rateLimit/publicReadGuard';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { visitorPageContext, type ProjectPageContext } from '@/lib/pages/projectPageContext';
@@ -56,11 +57,14 @@ export function visitorEnterPath(identifier: string, next: string): string {
 /**
  * Settle who this reader is on `identifier`: every verdict but `visitor` ends the
  * request here (a not-found, or a redirect), in the order above. Returns the
- * Visitor's read context, and their own name and email for their account menu.
+ * Visitor's read context, and their own name, email and photo for their account menu.
  */
-export async function settleVisitor(
-  identifier: string,
-): Promise<{ ctx: VisitorReadContext; actorName: string | null; actorEmail: string }> {
+export async function settleVisitor(identifier: string): Promise<{
+  ctx: VisitorReadContext;
+  actorName: string | null;
+  actorEmail: string;
+  actorImage: string | null;
+}> {
   const { session, verdict } = await resolveRequest(identifier);
   if (verdict.kind === 'not_found') notFound();
   const here = await currentVisitorPath(identifier);
@@ -76,6 +80,9 @@ export async function settleVisitor(
     ctx: verdict.ctx,
     actorName: session.user.name ?? null,
     actorEmail: session.user.email,
+    // The RESOLVED profile-photo URL for the account menu (MOTIR-10182) — the
+    // stored value is an object key and never reaches `src` as one.
+    actorImage: storedAssetUrl(session.user.image),
   };
 }
 

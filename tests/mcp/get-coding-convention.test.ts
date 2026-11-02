@@ -209,8 +209,11 @@ describe('get_coding_convention — registered, permissioned, documented', () =>
     expect(EXEMPT_TOOLS).toHaveProperty(GET_CODING_CONVENTION_TOOL_NAME);
     expect(isBillableTool(GET_CODING_CONVENTION_TOOL_NAME)).toBe(false);
     expect(CLI_TOKEN_GRANT).toContain('ai:plan');
-    expect(GRANTABLE_PERMISSIONS).not.toContain('ai:configure');
-    expect(UNGRANTABLE_PERMISSIONS).toContain('ai:configure');
+    // The READ stays on `ai:plan`; `ai:configure` is the WRITE's key
+    // (`update_coding_convention`, MOTIR-10183) and the CLI grant never holds it.
+    expect(CLI_TOKEN_GRANT).not.toContain('ai:configure');
+    expect(GRANTABLE_PERMISSIONS).toContain('ai:configure');
+    expect(UNGRANTABLE_PERMISSIONS).not.toContain('ai:configure');
   });
 
   it('the design build script carries it (docs/mcp.md is held by mcp-doc-guards)', () => {

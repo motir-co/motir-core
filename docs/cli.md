@@ -188,6 +188,28 @@ Motir stores only a hash, so the plaintext is shown exactly once
 motir auth status     # server, token prefix, owning user, active workspace
 ```
 
+### Refreshing a CLI sign-in's permissions
+
+A token minted by `motir login` keeps the permissions it was created with. When a
+newer CLI needs a permission that older sign-ins lack, `motir auth status` says
+so on a `Permissions:` line, and one command fixes it without replacing the token:
+
+```sh
+motir auth refresh                  # approve the update in a browser, as with login
+motir auth refresh --no-browser     # …over SSH: just print the code
+```
+
+It runs the same device flow as `motir login`, with the token you hold presented
+on the request. The approval screen names the token and lists exactly what is
+added and removed; approving changes that token's grant in place. The secret,
+label, workspace and expiry stay as they were, so nothing is written to disk and
+any agent already holding the token gets the new grant on its next call.
+
+- A denied, expired or refused refresh leaves the token's permissions unchanged.
+- A revoked or expired token cannot be refreshed: run `motir login` instead.
+- A token from `MOTIR_TOKEN`, or one not created by `motir login`, is refused;
+  change its permissions in **Settings → Account → Tokens** instead.
+
 ### Disconnecting
 
 Two different actions, and only one of them is a kill switch:
@@ -666,6 +688,7 @@ Every command and flag the binary registers. `motir`, `motir help`, and
 | `motir auth login`             | `--server <url>` · `--token <pat>`                                                           |
 | `motir auth status`            | `--server <url>`                                                                             |
 | `motir auth logout`            | `--server <url>`                                                                             |
+| `motir auth refresh`           | `--server <url>` · `--no-browser`                                                            |
 | `motir link`                   | `--server <url>` · `--workspace <slug>` · `--project <key>` · `--repo <name>` · `--no-clone` |
 | `motir link add <repo> <path>` | —                                                                                            |
 | `motir link remove <repo>`     | —                                                                                            |

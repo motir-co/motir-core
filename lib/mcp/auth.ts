@@ -8,6 +8,7 @@ import {
 import { TOKEN_PREFIX } from '@/lib/apiTokens/token';
 import { oauthConnectionsService } from '@/lib/services/oauthConnectionsService';
 import { OAuthAccessTokenRejectedError } from '@/lib/oauth/errors';
+import { isConnectionError, retryReadOnceOnConnectionError } from '@/lib/prisma/connectionError';
 import type { McpAuthExtra } from './context';
 
 // The MCP server's transport-level auth gate (Story 7.8 · Subtask 7.8.4).
@@ -43,6 +44,61 @@ import type { McpAuthExtra } from './context';
 // on either arm is `undefined`, which `withMcpAuth` answers 401 with
 // `WWW-Authenticate: Bearer … resource_metadata="<base>/.well-known/oauth-protected-resource"`
 // (`app/api/mcp/route.ts`), the pointer an MCP client follows to start OAuth.
+//
+// A DROPPED CONNECTION IS NOT A REFUSAL (MOTIR-10168). `withMcpAuth` answers
+// EVERY throw out of this verifier with the same 401 `invalid_token` a bad token
+// gets — mcp-handler 1.1.0 catches it, `console.error`s it and refuses — so a
+// database that dropped its pooled connections (a machine waking, a failover)
+// told every client its valid credential was rejected, and the clients asked
+// their people to re-authorise. So the lookup on BOTH arms is retried once on a
+// connection error, and a second one is raised as `McpAuthUnavailableError`,
+// which the route answers 503 with `Retry-After` and reports. Anything else that
+// is not a refusal propagates untouched, and the route re-throws it as the
+// unhandled fault it is.
+
+/**
+ * `Retry-After` on the 503 a token check answers when its database connection
+ * dropped twice (MOTIR-10168). A dropped pooled connection is replaced within
+ * moments — the same horizon as the session read's and the public ideas
+ * routes' 503s (`SESSION_UNAVAILABLE`, MOTIR-5864 · MOTIR-8350).
+ */
+export const MCP_AUTH_RETRY_AFTER_SECONDS = 5;
+
+/**
+ * The token check could not REACH the database: the connection dropped on the
+ * first attempt and on the one retry. Not a refusal — the credential was never
+ * judged — so the route answers 503 with `Retry-After`, never the 401 that would
+ * send an MCP client into re-authorisation.
+ */
+export class McpAuthUnavailableError extends Error {
+  readonly code = 'MCP_AUTH_UNAVAILABLE';
+
+  constructor(cause: unknown) {
+    super('The token could not be checked: the database connection was lost.', { cause });
+    this.name = 'McpAuthUnavailableError';
+  }
+}
+
+/**
+ * Run one arm's token lookup, retried ONCE on a dropped connection
+ * (`retryReadOnceOnConnectionError`, MOTIR-8350); a second connection error in a
+ * row becomes {@link McpAuthUnavailableError}.
+ *
+ * ⚠️ The helper is for reads, and each lookup also WRITES a throttled
+ * `lastUsedAt` touch in the same transaction. Repeating it is safe all the same:
+ * the touch stamps "now" on the row the read just found, so a first attempt that
+ * committed before its connection dropped leaves the retry either skipping the
+ * touch (inside the throttle window) or stamping a later "now" — the same row,
+ * the same meaning, nothing counted twice.
+ */
+async function lookupWithOneRetry<T>(lookup: () => Promise<T>): Promise<T> {
+  try {
+    return await retryReadOnceOnConnectionError(lookup);
+  } catch (err) {
+    if (isConnectionError(err)) throw new McpAuthUnavailableError(err);
+    throw err;
+  }
+}
 
 /** Extract the `Bearer` credential from an Authorization header value. */
 function bearerFromHeader(header: string | null): string | undefined {
@@ -62,8 +118,11 @@ function bearerFromHeader(header: string | null): string | undefined {
  * header); we fall back to parsing the header off `req` so the function is also
  * usable/testable standalone. Unknown / revoked / expired / malformed tokens
  * all resolve to `undefined` — a uniform rejection that never distinguishes the
- * reason to a caller. Any OTHER error (a real outage) propagates, so it surfaces
- * as a 500 rather than masquerading as an auth failure.
+ * reason to a caller. A lookup whose database connection drops is retried once;
+ * a second drop throws {@link McpAuthUnavailableError}. Any OTHER error
+ * propagates. Neither may reach `withMcpAuth` as a throw — it would answer it
+ * 401 like a refusal — so `app/api/mcp/route.ts` catches both around this call:
+ * the first becomes a 503, the second is re-thrown as a 500.
  */
 export async function verifyMcpToken(
   req: Request,
@@ -79,7 +138,9 @@ export async function verifyMcpToken(
   let projectId: string | null;
   let dispatchRunId: string | null;
   try {
-    ({ user, workspaceId, grant, projectId, dispatchRunId } = await apiTokensService.verify(token));
+    ({ user, workspaceId, grant, projectId, dispatchRunId } = await lookupWithOneRetry(() =>
+      apiTokensService.verify(token),
+    ));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -123,12 +184,13 @@ export async function verifyMcpToken(
  * The OAuth arm (MOTIR-6983): resolve an access token to its connection and build
  * the same {@link AuthInfo} the PAT arm does. Every refusal — unknown, expired,
  * unbound, a person who left the workspace — is the same `undefined` (→ 401);
- * any other error propagates, as on the PAT arm.
+ * a dropped connection is retried once, and every other error propagates, as on
+ * the PAT arm.
  */
 async function verifyOAuthAccessToken(token: string): Promise<AuthInfo | undefined> {
   let resolved;
   try {
-    resolved = await oauthConnectionsService.resolveAccessToken(token);
+    resolved = await lookupWithOneRetry(() => oauthConnectionsService.resolveAccessToken(token));
   } catch (err) {
     if (err instanceof OAuthAccessTokenRejectedError) return undefined;
     throw err;

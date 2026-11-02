@@ -102,6 +102,28 @@ describe('buildSessionRowViews', () => {
     expect(walk!.failure!.timeLabel).toBe('at 2026-09-22T23:55:00.000Z');
   });
 
+  it('carries the halted walk’s not-planned-yet lines in order, and none as an empty list (MOTIR-10209)', async () => {
+    const failure = {
+      failedAt: '2026-09-22T23:55:00.000Z',
+      reason: 'job_failed',
+      stopPhase: 'author' as const,
+      stopTitle: 'Export a report',
+    };
+    const lines = [
+      '"D" is not planned yet: plan "B" first, then plan "D".',
+      'Not written yet: "T".',
+    ];
+    const [withLines, without] = await buildSessionRowViews(
+      [
+        dto({ state: 'waiting', failure: { ...failure, notPlannedYet: lines } }),
+        dto({ id: 's_2', state: 'waiting', failure }),
+      ],
+      'u1',
+    );
+    expect(withLines!.failure!.notPlannedYet).toEqual(lines);
+    expect(without!.failure!.notPlannedYet).toEqual([]);
+  });
+
   it('passes the seed through untouched (MOTIR-6209)', async () => {
     const seed = {
       cardKey: 'ACME-44',

@@ -7,7 +7,7 @@ import {
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import type { PlatformRole } from '@/generated/prisma/client';
-import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
+import { poolAccountRaiseTargetVcpu } from '@/lib/ciFleet/shardTargets';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import { registerShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -51,6 +51,10 @@ const ORG = 'motir-fleet-use1-3';
 const NAME = 'code-graph-index-use1-1';
 const PREFIX = 'FLEET_SHARD_CODE_GRAPH_INDEX_USE1_1';
 const ACCOUNT_EMAIL = 'aws+code-graph-index-use1-1@motir.co';
+const INDEX_TARGET = poolAccountRaiseTargetVcpu('code_graph_index');
+/** Under every kind's target (the indexer's is the smallest), so a first run of
+ *  either kind leaves the quota pending. */
+const BELOW_TARGET = INDEX_TARGET - 8;
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
@@ -151,6 +155,7 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   organization = new FakeOrganization(SESSION);
+  organization.quota = BELOW_TARGET;
   buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
@@ -194,21 +199,19 @@ describe('add-shard --provider aws --fleet-kind code_graph_index', () => {
       awsAccountId: account.accountId,
       awsRegion: 'us-east-1',
       credentialRef: PREFIX,
-      vcpuQuota: SHARD_VCPU_QUOTA_TARGET - 1_000,
+      vcpuQuota: BELOW_TARGET,
     });
     // Pending on the quota only: the runner role the stack built is confirmed
     // by assuming it, so no key is asked for (MOTIR-9847).
     expect(result.out).toContain('Pending manual steps:');
-    expect(result.out).toContain(
-      `raise the account's vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 1_000} to at least`,
-    );
+    expect(result.out).toContain(`raise the account's vCPU quota from ${BELOW_TARGET} to at least`);
     expect(organization.calls).toContain(`assumeRunnerRole:${account.accountId}`);
     expect(result.out).not.toContain('access key');
   });
 
   it('becomes active, and exits 0, once the quota is met', async () => {
     await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = INDEX_TARGET;
 
     const result = await run(args());
 

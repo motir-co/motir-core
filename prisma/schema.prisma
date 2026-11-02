@@ -1253,20 +1253,29 @@ model DeviceCode {
   /// picker). Written at approval, BEFORE the status flip, so a poll that
   /// observes `approved` always has a workspace to mint into. Cascade: deleting
   /// the workspace drops grants that would mint into it.
-  workspaceId String? @map("workspace_id")
+  workspaceId   String? @map("workspace_id")
   /// The hostname the CLI reported at `POST /api/cli/device/start`. Display-only
   /// (the approval screen's "what is connecting", and the token's `CLI · <host>`
   /// label) — never interpreted, never trusted.
-  hostname    String?
+  hostname      String?
+  /// The CLI token this grant UPDATES (`motir auth refresh`, MOTIR-10189), or
+  /// null for an ordinary `motir login` grant. Written at start, from the bearer
+  /// secret the terminal presented — so it is proof of possession, never a
+  /// value the request names. Approval sets that token's grant to
+  /// `CLI_TOKEN_GRANT` instead of minting. Cascade: revoking the token drops
+  /// the grant that would have updated it.
+  updateTokenId String? @map("update_token_id")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  updateToken ApiToken?  @relation("DeviceCodeUpdateToken", fields: [updateTokenId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([workspaceId])
+  @@index([updateTokenId])
   @@map("device_code")
 }
 
@@ -7272,6 +7281,8 @@ model ApiToken {
   oauthAccessTokens  OauthAccessToken[]
   oauthRefreshTokens OauthRefreshToken[]
   oauthConsents      OauthConsent[]
+  /// In-flight `motir auth refresh` grants that would update this token (MOTIR-10189).
+  updateGrants       DeviceCode[]        @relation("DeviceCodeUpdateToken")
 
   // The settings-surface read: a user's tokens in a workspace, newest first.
   @@index([userId])
@@ -7579,6 +7590,21 @@ model Plan {
   /// Each planner session's STEP WORDS (MOTIR-8062) — kind + target title as
   /// last reported, kept after the session's `end` deletes its `PlanStep`.
   narrationSessions PlanNarrationSession[]
+  /// Every CODE READ a planner session made (MOTIR-10122) — what it asked, at
+  /// which commit, and how much came back; never the contents. Append-only and
+  /// kept as long as the narration.
+  codeReads         PlanCodeRead[]
+  /// Every LESSON CALL a planner session made (MOTIR-10191) — its searches with
+  /// the ids they returned in rank order, its reinforcements and additions, and the
+  /// ids a hosted session was handed in code. Ids only; kept as long as the narration.
+  lessonCalls       PlanLessonCall[]
+  /// The sessions whose lesson log was recorded at all (MOTIR-10191) — what makes
+  /// an empty log read "made no lesson call" rather than "not recorded".
+  lessonSessions    PlanLessonSession[]
+  /// Every GAP a planner's author session raised on this plan (MOTIR-10176) — kept
+  /// on the plan rather than in the walk's memory, so a resumed walk hands its
+  /// level's amend the gaps the dead attempt raised.
+  raisedGaps        PlanRaisedGap[]
   /// The targets this plan has PARKED at `planning` while it is open
   /// (MOTIR-5645). Cascade-deleted with the plan, so a deleted plan holds
   /// nothing — the restore is the release path's job, not the FK's.
@@ -7878,6 +7904,168 @@ model PlanNarration {
   @@unique([planId, seq])
   @@index([planId, sessionKey])
   @@map("plan_narration")
+}
+
+/// One CODE READ a planner session made (MOTIR-10122): the tool, what it asked
+/// (a file and range, or a query and its scope), the COMMIT the code was read at
+/// and how much came back — never the code itself. Lets a check of a plan tell a
+/// session that read the file holding a fact and wrote against it from one that
+/// read another file, or nothing. APPEND-ONLY KEPT HISTORY, exactly as
+/// `PlanNarration`: never updated, deleted only by the plan's cascade, and keyed
+/// by the same opaque `sessionKey`. No FK to `plan_step`: a read outlives its
+/// session's step, and `plan.py`'s PART 1 session reads before it holds one.
+model PlanCodeRead {
+  id         String   @id @default(cuid())
+  planId     String   @map("plan_id")
+  /// The reading session's opaque key, the value `plan_step` and narration carry.
+  sessionKey String   @map("session_key")
+  /// Per-plan order, gapless from 1, taken under the plan row lock — call order
+  /// within a session, because one session's reads arrive in order.
+  seq        Int
+  /// The tool, as the planner named it: `read_file` · `code_explore` ·
+  /// `code_search` · `code_grep`, and `plan.py`'s local `Read` · `Grep` · `Glob`
+  /// · `git show` · `git grep` · `git log`.
+  tool       String
+  /// `owner/name`, or the local checkout's name; NULL when the read named none.
+  repo       String?
+  /// A read's path, or a search's path prefix / glob.
+  path       String?
+  startLine  Int?     @map("start_line")
+  endLine    Int?     @map("end_line")
+  /// The ref the call ASKED for (`main`, `origin/main`), when it named one. A
+  /// LABEL only: what the read was made AT is `commits`.
+  askedRef   String?  @map("asked_ref")
+  /// A search's query or pattern.
+  query      String?
+  /// Every commit the read was made at, as `[{ repo?, sha, dirty? }]`: one for a
+  /// file read, one per repository for a graph read across a set. `sha` is a
+  /// resolved hex id, never a branch name; `dirty` marks a local checkout whose
+  /// working tree had changes. EMPTY only when nothing resolved (a refused
+  /// path, a ref that names nothing, a failure to ask).
+  commits    Json
+  /// The result's own outcome code: `found`, `ok`, `not_found`, `too_large`, …
+  outcome    String
+  /// Lines returned by a read, when it returned any.
+  lines      Int?
+  /// Matches a search returned, when it is a search.
+  hits       Int?
+  /// A short refusal or failure detail, capped; never content.
+  detail     String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, seq])
+  @@index([planId, sessionKey])
+  @@map("plan_code_read")
+}
+
+/// One LESSON CALL a planner session made (MOTIR-10191): a `search_lessons` with
+/// its query, filters and the lesson ids it returned in RANK order; a
+/// `reinforce_lesson` / `add_lesson` with its lesson, occurrence ref and whether it
+/// counted; or, for the hosted planner, the ids composed into the session's prompt
+/// in code (`injected`). Lets a check of a plan tell a session that never searched
+/// from one whose search missed a lesson and one that was shown the lesson and
+/// wrote against it. IDS ONLY, never a lesson's text. APPEND-ONLY KEPT HISTORY,
+/// exactly as `PlanCodeRead`: never updated, deleted only by the plan's cascade,
+/// keyed by the same opaque `sessionKey`, with no FK to `plan_step`.
+model PlanLessonCall {
+  id            String   @id @default(cuid())
+  planId        String   @map("plan_id")
+  /// The calling session's opaque key, the value `plan_step` and narration carry.
+  sessionKey    String   @map("session_key")
+  /// Per-plan order, gapless from 1, taken under the plan row lock.
+  seq           Int
+  /// `search` · `reinforce` · `add` · `injected`.
+  kind          String
+  /// A search's query.
+  query         String?
+  /// A search's filters as `{ kinds?, types?, phases?, subject?, limit? }` — `{}`
+  /// when it narrowed by nothing, and for every other kind.
+  filters       Json
+  /// A search's result ids in rank order, or the ids injected — `[]` otherwise.
+  lessonIds     Json     @map("lesson_ids")
+  /// The lesson a reinforce named or an add created.
+  lessonId      String?  @map("lesson_id")
+  /// The occurrence a reinforce counted (`occurrenceRef`) or an add cited (`sourceRef`).
+  occurrenceRef String?  @map("occurrence_ref")
+  /// The call's own outcome code: `matched`, `nothing-matched`, `unavailable`,
+  /// `counted`, `already_counted`, `added`, `injected`, `error`, …
+  outcome       String
+  /// Whether a reinforce / add counted; NULL for a search or an injection.
+  counted       Boolean?
+  /// A short refusal or failure detail, capped; never a lesson's text.
+  detail        String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, seq])
+  @@index([planId, sessionKey])
+  @@map("plan_lesson_call")
+}
+
+/// A planner session whose LESSON LOG was recorded (MOTIR-10191) — one row per
+/// session, written by every lesson report, an empty one included. A session with
+/// this row and no `PlanLessonCall` made no lesson call; a session without it was
+/// not recorded. Kept with the plan, deleted only by its cascade.
+model PlanLessonSession {
+  id            String   @id @default(cuid())
+  planId        String   @map("plan_id")
+  sessionKey    String   @map("session_key")
+  firstReportAt DateTime @default(now()) @map("first_report_at")
+  lastReportAt  DateTime @default(now()) @map("last_report_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, sessionKey])
+  @@map("plan_lesson_session")
+}
+
+/// One GAP a planner's author session raised (MOTIR-10176): work it found that no
+/// card covers, the open decision it turns on, and whether the level's ONE amend
+/// session has been handed it. Written through the step doors' `gaps` arm the
+/// moment it is raised, so it is on the plan before the next session opens; a
+/// walk that dies and resumes reads the unamended ones back and hands them to the
+/// amend, and the briefing reads the same rows. The planner names each gap
+/// (`gapId`), because the raise and the amend are two calls that may come from two
+/// jobs. Refs are stored in the planner's own spelling and are not resolved here.
+model PlanRaisedGap {
+  id         String    @id @default(cuid())
+  planId     String    @map("plan_id")
+  /// The planner's id for the gap, unique on the plan — what its `amend` names.
+  gapId      String    @map("gap_id")
+  /// The raising session's opaque key, the value `plan_step` and narration carry.
+  sessionKey String    @map("session_key")
+  /// Per-plan raise order, gapless from 1, taken under the plan row lock.
+  seq        Int
+  /// The level the gap is about — the raising card's parent ref; NULL for the
+  /// project's own top level.
+  level      String?
+  /// The card whose author session raised it.
+  raisedBy   String?   @map("raised_by")
+  /// The uncovered work, in the session's own words.
+  what       String
+  /// The open decision it turns on, and who decides it.
+  decision   String?
+  /// Where it sits — refs of the siblings it falls between, as the session named them.
+  after      String?
+  before     String?
+  note       String?
+  /// When the level's amend was handed this gap (or, raised after the amend, when it
+  /// was raised). NULL while no amend has seen it — the gaps a resume hands on.
+  amendedAt  DateTime? @map("amended_at")
+  /// The refs the amend named for THIS gap; empty when it answered nothing.
+  answerRefs String[]  @default([]) @map("answer_refs")
+  /// The part of the gap those refs leave uncovered.
+  answerOpen String?   @map("answer_open")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, gapId])
+  @@unique([planId, seq])
+  @@map("plan_raised_gap")
 }
 
 /// One planner session's STEP WORDS on a plan (MOTIR-8062): the step kind, its
@@ -9396,19 +9584,19 @@ enum MigrateOnboardingStatus {
 /// exactly one session through `Plan.sessionId` (§5). Workspace-scoped tenant
 /// data (RLS in the same migration).
 model PlanChangeSession {
-  id                  String                    @id @default(cuid())
-  workspaceId         String                    @map("workspace_id")
-  projectId           String                    @map("project_id")
+  id                   String                    @id @default(cuid())
+  workspaceId          String                    @map("workspace_id")
+  projectId            String                    @map("project_id")
   /// Who opened the thread. SetNull — a departed author leaves the conversation
   /// intact and unattributed (the `Notification` actor semantics).
-  createdById         String?                   @map("created_by_id")
+  createdById          String?                   @map("created_by_id")
   /// The number of turns on the thread — the READ-DERIVED value an append
   /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
   /// and re-read it inside the transaction, so two concurrent appends serialize
   /// into two ordered turns instead of colliding on `seq` (the
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
-  turnCount           Int                       @default(0) @map("turn_count")
+  turnCount            Int                       @default(0) @map("turn_count")
   /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
   /// thread "the conversation about THESE work items" rather than "the project's
   /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
@@ -9416,31 +9604,31 @@ model PlanChangeSession {
   /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
   /// `(project_id, scope_key)` unique still admits exactly one of those per
   /// project while allowing one contextual thread per distinct anchor set.
-  scopeKey            String                    @default("") @map("scope_key")
+  scopeKey             String                    @default("") @map("scope_key")
   /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
   /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
   /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
   /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
   /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
   /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
-  targetKeys          String[]                  @default([]) @map("target_keys")
+  targetKeys           String[]                  @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
-  lastJobId           String?                   @map("last_job_id")
+  lastJobId            String?                   @map("last_job_id")
   /// When that submission happened. Null until the thread has been submitted at
   /// least once (a thread can accumulate turns without ever submitting).
-  lastSubmittedAt     DateTime?                 @map("last_submitted_at")
+  lastSubmittedAt      DateTime?                 @map("last_submitted_at")
   /// When the session was last USED — every turn (user, assistant, system) and
   /// every submit moves it (AMENDMENT 17 §3). The resume window and the Plans
   /// page's newest-activity order both read it. Not `updatedAt`, which any
   /// bookkeeping write (a lock, a label) would also move.
-  lastActivityAt      DateTime                  @default(now()) @map("last_activity_at")
+  lastActivityAt       DateTime                  @default(now()) @map("last_activity_at")
   /// WHICH DOOR opened the session (AMENDMENT 17 §4) — NOT `Plan.origin`, which
   /// answers what decided to start a plan. `legacy` is written only by the
   /// MOTIR-6020 backfill, for a pre-existing plan whose conversation cannot be
   /// identified.
-  origin              PlanSessionOrigin         @default(conversation)
+  origin               PlanSessionOrigin         @default(conversation)
   /// The REFUSED approval gate that SEEDED this session (story MOTIR-6068 ·
   /// MOTIR-6207; `agent-authored-plans.md` AMENDMENT 17 §9). Written ONLY at the
   /// session's creation by a seeded first turn
@@ -9448,7 +9636,7 @@ model PlanChangeSession {
   /// afterwards; NULL on every unseeded session. A seeded start resumes only a
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
-  seedGateId          String?                   @map("seed_gate_id")
+  seedGateId           String?                   @map("seed_gate_id")
   /// The GUIDE REPLY TURN whose re-plan offer SEEDED this session (Story MOTIR-8684 ·
   /// MOTIR-8691; decision MOTIR-8685): the `assistant` turn of a guide conversation
   /// that holds the offer. Written ONLY at creation, by the guide-seeded first turn
@@ -9457,21 +9645,21 @@ model PlanChangeSession {
   /// into because the person already held the target. EXCLUSIVE with `seedGateId`
   /// (the `plan_change_session_one_seed` CHECK). SetNull — a turn that goes leaves
   /// the conversation intact and unseeded.
-  seedGuideTurnId     String?                   @map("seed_guide_turn_id")
+  seedGuideTurnId      String?                   @map("seed_guide_turn_id")
   /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
   /// NULL.** An ended session is never resumed and accepts no turn. Written only
   /// by the one end operation, together with `endReason` and `endedById`.
-  endedAt             DateTime?                 @map("ended_at")
+  endedAt              DateTime?                 @map("ended_at")
   /// Why it ended — see `PlanSessionEndReason`. Null exactly when `endedAt` is.
-  endReason           PlanSessionEndReason?     @map("end_reason")
+  endReason            PlanSessionEndReason?     @map("end_reason")
   /// The person who ended it (a decider, or the person who restarted); NULL when
   /// Motir ended it (a failure, the idle sweep). SetNull — a departed member
   /// leaves the end recorded and unattributed.
-  endedById           String?                   @map("ended_by_id")
+  endedById            String?                   @map("ended_by_id")
   /// The ENDED session this one's conversation was copied from (AMENDMENT 23
   /// §6) — written once, at creation, by the copy start; NULL otherwise. SetNull:
   /// the copy outlives its source.
-  copiedFromSessionId String?                   @map("copied_from_session_id")
+  copiedFromSessionId  String?                   @map("copied_from_session_id")
   // ── THE SESSION'S WAITING STATE (Story MOTIR-7905 · MOTIR-7908) ───────────────
   // An OPEN session can be waiting on its person in one of two ways, and never both
   // (the `plan_change_session_one_wait` CHECK). Both are cleared by the one end write
@@ -9484,58 +9672,64 @@ model PlanChangeSession {
   /// walk. Written by the failure path (`markFailed`), cleared by the resume when the
   /// new attempt binds (`clearFailure`) or by the end. **failed-waiting ⟺ ended_at IS
   /// NULL AND failed_at IS NOT NULL.**
-  failedAt            DateTime?                 @map("failed_at")
+  failedAt             DateTime?                 @map("failed_at")
   /// The motir-ai job that failed (an OPAQUE token, like `lastJobId`). The resume
   /// submits it as `resume.fromJobId`: the failed attempt's settled PART 1 lives on
   /// that job's row in motir-ai.
-  failedJobId         String?                   @map("failed_job_id")
+  failedJobId          String?                   @map("failed_job_id")
   /// WHY, as motir-ai's closed code — never its English.
-  failureReason       PlanSessionFailureReason? @map("failure_reason")
+  failureReason        PlanSessionFailureReason? @map("failure_reason")
   /// motir-ai's `walkStop.detail` (at most 300 characters). For support and logs
   /// ONLY — never rendered to the person and never on the DTO.
-  failureDetail       String?                   @map("failure_detail")
+  failureDetail        String?                   @map("failure_detail")
   /// The kind of session the walk had open; null when the attempt failed before it
   /// reached a level.
-  failureStopPhase    PlanSessionWalkPhase?     @map("failure_stop_phase")
+  failureStopPhase     PlanSessionWalkPhase?     @map("failure_stop_phase")
   /// An opaque reference to the level's parent, or to the card being authored (a
   /// `planItem:<id>` or a work-item key), stored exactly as motir-ai reports it.
   /// Core never resolves it to a row: the resume reads the PLAN's own state.
-  failureStopRef      String?                   @map("failure_stop_ref")
+  failureStopRef       String?                   @map("failure_stop_ref")
   /// That level's or card's title at the moment of failure, so a row can name it
   /// without a second read.
-  failureStopTitle    String?                   @map("failure_stop_title")
+  failureStopTitle     String?                   @map("failure_stop_title")
   /// Whether the failed attempt can be RESUMED (MOTIR-9121): motir-ai's own verdict on
   /// the failed job (`resumable` on `GET /v1/jobs/:id`) — `false` when the job failed
   /// before its conversation settled, so a resume has nothing to continue from. A
   /// `false` record offers no Resume, has released the attempt's targets, and lets the
   /// next turn plan again. Null when unknown (a motir-ai that does not say, or a failure
   /// recorded before this column), which reads as resumable, as it always did.
-  failureResumable    Boolean?                  @map("failure_resumable")
+  failureResumable     Boolean?                  @map("failure_resumable")
+  /// The cards the halted walk left unplanned, one line each, as motir-ai words them on
+  /// its terminal `Problem.walkStop.notPlannedYet` (MOTIR-10209). A halted job writes no
+  /// briefing, so this is the only place those lines reach the person; rendered
+  /// verbatim and in order under the stop line. Empty when motir-ai sent none (or a
+  /// malformed value), which renders exactly as a record without it always did.
+  failureNotPlannedYet String[]                  @default([]) @map("failure_not_planned_yet")
   // ── AWAITING ITS PERSON ───────────────────────────────────────────────────────
   /// When the conversation began waiting on its owner's next turn. Written by the
   /// planning-session gate (`markAwaitingPerson`), cleared by the person's next turn
   /// or by the end. **awaiting-person ⟺ ended_at IS NULL AND awaiting_person_since
   /// IS NOT NULL.**
-  awaitingPersonSince DateTime?                 @map("awaiting_person_since")
+  awaitingPersonSince  DateTime?                 @map("awaiting_person_since")
   /// `question` or `reply` — see `PlanSessionAwaitingCause`.
-  awaitingPersonCause PlanSessionAwaitingCause? @map("awaiting_person_cause")
+  awaitingPersonCause  PlanSessionAwaitingCause? @map("awaiting_person_cause")
   /// How many bugs a GUIDE conversation has filed through its `file_bug` action
   /// (Story MOTIR-7797 · MOTIR-7800; decision MOTIR-7798 Q3). Read and bumped
   /// under this row's lock in the transaction that files the bug, so two
   /// concurrent filings cannot both pass `GUIDE_BUGS_PER_CONVERSATION`. Always 0
   /// on a session that is not a guide.
-  guideBugsFiled      Int                       @default(0) @map("guide_bugs_filed")
+  guideBugsFiled       Int                       @default(0) @map("guide_bugs_filed")
   // ── AUTOMATIC RESUME ──────────────────────────────────────────────────────────
   /// How many times Motir has resumed this conversation by itself after its
   /// planning machine was lost (Story MOTIR-8301 · MOTIR-8305). Bumped by
   /// `recordAutoResume` in ONE statement that also enforces the bound
   /// (`AUTO_RESUMES_PER_SESSION`), so two concurrent callers cannot both pass it.
   /// A CHECK keeps it non-negative.
-  autoResumeCount     Int                       @default(0) @map("auto_resume_count")
+  autoResumeCount      Int                       @default(0) @map("auto_resume_count")
   /// When Motir last resumed this conversation by itself. Null until the first.
-  lastAutoResumedAt   DateTime?                 @map("last_auto_resumed_at")
-  createdAt           DateTime                  @default(now()) @map("created_at")
-  updatedAt           DateTime                  @updatedAt @map("updated_at")
+  lastAutoResumedAt    DateTime?                 @map("last_auto_resumed_at")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
 
   workspace       Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)

@@ -547,6 +547,32 @@ describe('option lifecycle', () => {
     expect(listed[0]!.options).toEqual([]);
   });
 
+  it('turns the ON DELETE RESTRICT backstop into the typed 409 when the pre-check counts zero (MOTIR-10227)', async () => {
+    // The race the backstop exists for — a value set between the count and the
+    // delete — made deterministic: the holding value row carries ANOTHER
+    // workspace's id, so the workspace-scoped countByOption sees none while the
+    // value FK, which knows nothing of workspaces, still refuses the delete. The
+    // refusal is a 23503 / P2003 on PostgreSQL <= 17 and a 23001 / P2039 on 18
+    // under adapter-pg 7.9; the service owes OptionInUseError on both.
+    const fx = await makeWorkItemFixture();
+    const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
+    const field = await createField(fx, 'Severity', 'select', { options: ['Low'] });
+    const [low] = field.options;
+    const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Holder' });
+    await setOptionValue(other, issue.id, field.id, low!.id);
+    const base = { actorUserId: fx.ownerId, ctx: fx.ctx };
+
+    const err = await customFieldsService
+      .deleteOption({ ...base, optionId: low!.id })
+      .then(() => null)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OptionInUseError);
+    expect((err as OptionInUseError).valueCount).toBe(1);
+    // The refused delete rolled back: the option is still there.
+    const listed = await customFieldsService.listFields(actorInput(fx));
+    expect(listed[0]!.options.map((o) => o.id)).toEqual([low!.id]);
+  });
+
   it('404s a cross-workspace option id (no existence leak)', async () => {
     const fx = await makeWorkItemFixture();
     const field = await createField(fx, 'Severity', 'select', { options: ['Low'] });

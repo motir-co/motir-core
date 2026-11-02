@@ -733,8 +733,10 @@ describe('image_coverage', () => {
 
   describe('a newer workflow commit that leaves the structure alone (MOTIR-8870)', () => {
     const CI = '.github/workflows/ci.yml';
-    const ci = (steps: string) =>
-      `jobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm test\n${steps}`;
+    // `build` runs on the seam, as the recorded job does; `lint` keeps
+    // `ubuntu-latest` in use, so a move between the two leaves the digest put.
+    const ci = (steps: string, buildRunsOn = SEAM, extraJobs = '') =>
+      `jobs:\n  build:\n    runs-on: ${buildRunsOn}\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm test\n${steps}  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pnpm lint\n${extraJobs}`;
     const measured = [{ path: CI, text: ci('') }];
 
     function recorded(): FleetJobInventory {
@@ -752,6 +754,40 @@ describe('image_coverage', () => {
       const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
       expect(result.ready).toBe(true);
       expect(cond(result, 'image_coverage').state).toBe('met');
+    });
+
+    // MOTIR-10211: motir-infra#7's `verify` job, on the seam with known tools.
+    it('a job added on a runner and with tools the repository already uses ⇒ met', async () => {
+      const verify = `  verify:\n    runs-on: ${SEAM}\n    steps:\n      - run: pnpm test\n`;
+      world.files.set('api', [{ path: CI, text: ci('', SEAM, verify) }]);
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expect(result.ready).toBe(true);
+      expect(cond(result, 'image_coverage').state).toBe('met');
+    });
+
+    it('a job added on a runner the repository does not use yet ⇒ inventory_stale', async () => {
+      const mac = `  mac:\n    runs-on: macos-latest\n    steps:\n      - run: pnpm test\n`;
+      world.files.set('api', [{ path: CI, text: ci('', SEAM, mac) }]);
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
+    });
+
+    it('a recorded job moving to another runner the repository already uses ⇒ inventory_stale', async () => {
+      // `seam` keeps the seam in use, so the repository-wide runners are unchanged.
+      const moved = ci(
+        '',
+        'ubuntu-latest',
+        `  seam:\n    runs-on: ${SEAM}\n    steps:\n      - run: pnpm test\n`,
+      );
+      world.files.set('api', [{ path: CI, text: moved }]);
+      // The digest cannot see this move; the per-job runner check does.
+      expect(workflowFingerprint([{ path: CI, text: moved }])).toBe(workflowFingerprint(measured));
+      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
+      expectOnly(result, 'image_coverage', 'unmet');
+      expect(cond(result, 'image_coverage')).toMatchObject({
+        reasonCode: 'inventory_stale',
+        params: { stale: [{ repository: `${ORG}/api`, measuredSha: 'sha-api', headSha: 'newer' }] },
+      });
     });
 
     it('a new executable ⇒ inventory_stale', async () => {

@@ -2,7 +2,7 @@ import { OrchestratorApiError } from '@motir/orchestrator';
 import { releaseHandleFor, settledWindow, usageWindowStart } from '@/lib/hosting/releaseUsage';
 import { getHostingDeployPort } from '@/lib/orchestrator/hosting';
 import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseRepository';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // A production release's RUNNING TIME, recorded on the release (Story MOTIR-9797
 // · MOTIR-10034). `settleReleaseUsage` asks the deploy port how long the LIVE
@@ -82,7 +82,8 @@ async function settleReleaseUsage(releaseId: string): Promise<SettleReleaseUsage
 
   const window = settledWindow(since, usage);
   try {
-    const added = await withSystemContext((tx) =>
+    // The release's own workspace, from the row read above (MOTIR-10219).
+    const added = await withWorkspaceServiceContext(release.workspaceId, (tx) =>
       hostedReleaseRepository.addSettledUsage(
         releaseId,
         { expectedSettledUntil: release.usageSettledUntil, ...window },

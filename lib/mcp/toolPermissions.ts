@@ -148,6 +148,12 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // The AUTHORING-STATE read (MOTIR-9821) — the same reader gate as `get_plan`
   // (`plansService.getPlanForReader`), and a pure read, so `project:browse`.
   get_plan_authoring_state: 'project:browse',
+  // The CODE-READ log (MOTIR-10122) — the same reader gate as `get_plan`
+  // (`plansService.admitPlanReader`), and a pure read, so `project:browse`.
+  get_plan_code_reads: 'project:browse',
+  // The LESSON LOG (MOTIR-10191) — the same reader gate as `get_plan`
+  // (`plansService.admitPlanReader`), and a pure read, so `project:browse`.
+  get_plan_lesson_log: 'project:browse',
   // ⚠️ THE PLAN READS' ROW IS A FLOOR, NOT THE WHOLE ANSWER (Story MOTIR-6179 ·
   // MOTIR-6330). `get_plan`, `get_plan_status` and `validate_plan` stay
   // `project:browse` here, because every reader may read their OWN plans. Whether
@@ -400,6 +406,16 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // (AMENDMENT 3 to §4), and `CLI_TOKEN_GRANT` holds the key, so every `motir run`
   // token reaches it without the grant widening.
   get_coding_convention: 'ai:plan',
+  // ── ai:configure — the convention WRITE (MOTIR-10183) ─────────────────────
+  // `aiConventionService.saveConventionByKey` → `saveConvention` asserts
+  // `ai:configure` by name — the key the /code editor's save checks, which the
+  // admin role holds — so the door asks the service's question. It is the FIRST
+  // tool to assert `ai:configure`, which therefore becomes GRANTABLE
+  // (`docs/decisions/member-facing-permissions.md` AMENDMENT 5): a token reaches
+  // the write only when its grant carries the key AND its owner's role holds it.
+  // `CLI_TOKEN_GRANT` is deliberately NOT widened — a `motir run` agent edits no
+  // repository's house rules, and no planner session lists this tool.
+  update_coding_convention: 'ai:configure',
   // MOTIR-7861 — a file's text from a project repository at a ref. The hosted
   // planner's `read_file` already shows exactly this to every `ai:plan` holder;
   // the same AMENDMENT 3 to §4 names it as a second instance.

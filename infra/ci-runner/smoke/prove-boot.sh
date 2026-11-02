@@ -138,8 +138,8 @@ docker exec motir-runner-svc bash -c '
   # `motir-ci-runner-dockerd` the entrypoint runs, with no MOTIR_RUNNER_SKIP_DOCKER.
   for _ in $(seq 1 120); do docker version >/dev/null 2>&1 && break; sleep 1; done
   docker version >/dev/null
-  docker pull pgvector/pgvector:pg16 >/dev/null
-  docker run --rm pgvector/pgvector:pg16 true
+  docker pull pgvector/pgvector:pg18 >/dev/null
+  docker run --rm pgvector/pgvector:pg18 true
   docker run -d --name pg -p 5432:5432 \
     -e POSTGRES_USER=nextjs_prisma_vercel_starter \
     -e POSTGRES_PASSWORD=nextjs_prisma_vercel_starter \

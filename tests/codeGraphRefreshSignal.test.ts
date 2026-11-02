@@ -69,6 +69,15 @@ async function seedRun(
       ...(opts.repoRef ? { output: { repoRef: opts.repoRef } } : {}),
     },
   });
+  // A succeeded index also stamps the repository row — the fact every index state
+  // reads (`hasBuiltGraph`, Bug MOTIR-10171).
+  if (status === 'succeeded' && opts.repoRef && opts.functionId === 'system.code-graph-index') {
+    const [owner, name] = opts.repoRef.split('/');
+    await adminDb.githubRepo.updateMany({
+      where: { owner, name, indexedAt: null },
+      data: { indexedAt: new Date() },
+    });
+  }
   return run.id;
 }
 

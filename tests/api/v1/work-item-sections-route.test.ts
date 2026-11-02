@@ -126,7 +126,7 @@ describe('PATCH /work-items/{key} with sections', () => {
     const body = (await res.json()) as { code: string; sections: { missing: string[] } };
     expect(res.status).toBe(422);
     expect(body.code).toBe('INVALID_SECTIONS');
-    expect(body.sections.missing).toContain('options');
+    expect(body.sections.missing).toContain('alternatives');
   });
 
   it('answers 422 SECTIONS_AND_DESCRIPTION_CONFLICT for both fields', async () => {

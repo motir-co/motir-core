@@ -621,10 +621,19 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       "One repository's coding convention in full — derived or edited by a person, with its version — what a change in that repository follows.",
     descriptionFingerprint: '1c7784e4be1f',
   },
+  update_coding_convention: {
+    // MOTIR-10183 — the convention write, the /code editor's save on the MCP.
+    summary:
+      "Write one repository's coding convention — a new version edited by you, refused when a newer one was saved since. Admins only.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'c9624fe0c6f8',
+  },
   read_file: {
     summary:
       "One file's text, or a directory's immediate entries, from a repository in the project's set, at a ref — capped and line-ranged like the hosted planner's read, every absence a named outcome.",
-    descriptionFingerprint: '8c24af03ed4e',
+    // Re-pinned for MOTIR-10143: the description now says a file over 1 MB is read only by
+    // range. The summary was re-read and still says what the tool does.
+    descriptionFingerprint: 'a3b5e1fed782',
   },
   list_changed_files: {
     // MOTIR-10069 — the hosted planner's `list_changed_files`, on the MCP.
@@ -863,6 +872,20 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // now exempts `type: test` beside `type: design` — advisory channel only.
     descriptionFingerprint: '2601f9f3a510',
   },
+  get_plan_code_reads: {
+    // MOTIR-10122: what each planner session read, at which commit — the evidence a check of a
+    // plan attributes a defect from.
+    summary:
+      'Read the code reads each planner session of a plan made — file and range or query, the commit it was read at, and what came back — in call order.',
+    descriptionFingerprint: 'b9865a0cd819',
+  },
+  get_plan_lesson_log: {
+    // MOTIR-10191: which lessons each planner session searched for, was shown and reinforced —
+    // read beside the code reads, so a check can tell "never searched" from "shown and ignored".
+    summary:
+      'Read which lessons each planner session of a plan searched for, was shown, injected with and reinforced — ids only, in call order.',
+    descriptionFingerprint: 'bc1b35016694',
+  },
   get_plan_authoring_state: {
     // MOTIR-9821: the live read an author session makes before it wires an edge onto a sibling.
     // SUMMARY REWRITTEN for MOTIR-10001: it now answers committed cards too, `not_in_walk` among them.
@@ -947,7 +970,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much — including a proposed obsolescence mark (current → proposed, with its note), its supersedes edges named by key, and the steps a change replaces with how many were ticked.',
     // Re-pinned for MOTIR-9033, summary UNCHANGED: the opt-in `includeSections` parses
     // each `add`'s body into sections on request; the summary describes what is bundled.
-    descriptionFingerprint: '00accdd86bbd',
+    // Re-pinned for MOTIR-10176, summary UNCHANGED: the description names `raisedGaps`.
+    descriptionFingerprint: '8651b90a8d88',
   },
   get_approved_shape_verdict: {
     // The line has to carry the one thing a reader choosing between this and
@@ -1065,7 +1089,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Report the step a planner session is on (settle, lay, author), narrate it, or end it — an advisory progress signal on a generating plan.',
     // Regenerated from a live `tools/list` handshake, never from the source.
     // Re-pinned for MOTIR-8062: the `narration` arm joins the description.
-    descriptionFingerprint: '8a4719704960',
+    // Re-pinned for MOTIR-10122, summary UNCHANGED: the `codeReads` arm joins the input schema
+    // and the step's exclusive-forms sentence.
+    // Re-pinned for MOTIR-10176, summary UNCHANGED: the `gaps` arm joins the input schema,
+    // the exclusive-forms sentence and the description.
+    // Re-pinned for MOTIR-10191, summary UNCHANGED: the `lessonCalls` arm joins the input
+    // schema, the exclusive-forms sentence and the description.
+    descriptionFingerprint: '98ee023887b8',
   },
   hold_plan_revision: {
     // What a reader picks this one on: it is the only plan door that re-opens a

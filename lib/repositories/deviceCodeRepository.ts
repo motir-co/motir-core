@@ -85,6 +85,17 @@ export const deviceCodeRepository = {
     return tx.deviceCode.update({ where: { id }, data: { hostname } });
   },
 
+  /** Record the CLI token this grant UPDATES (`motir auth refresh`, MOTIR-10189).
+   * Written at start, inside the same transaction as the hostname, from the
+   * token the presented bearer secret resolved to. */
+  async setUpdateToken(
+    id: string,
+    updateTokenId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<DeviceCode> {
+    return tx.deviceCode.update({ where: { id }, data: { updateTokenId } });
+  },
+
   /** Record the workspace the approver chose. Written BEFORE the plugin flips the
    * status, so a poll that sees `approved` always has somewhere to mint. */
   async setWorkspaceBinding(

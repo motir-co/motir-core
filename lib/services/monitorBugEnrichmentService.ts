@@ -19,7 +19,11 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
 // The bug ENRICHMENT trigger's dispatch (Story MOTIR-4930 · Subtask MOTIR-5849) —
@@ -217,7 +221,9 @@ export const monitorBugEnrichmentService = {
       { userId: binder.userId },
     );
 
-    await withSystemContext((tx) =>
+    // The link's own workspace (MOTIR-10219): `monitor_issue` admits no
+    // system-only write.
+    await withWorkspaceServiceContext(link.workspaceId, (tx) =>
       monitorIssueRepository.markAuthoringDispatched(link.id, jobId, tx),
     );
     return { dispatched: true, jobId, framesRead: context !== null };

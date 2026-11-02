@@ -5,15 +5,13 @@ import inventoryManifest from '@/lib/ciFleet/fleetJobInventory.json';
 import type { FleetJobInventory, FleetInventoryRepo } from '@/lib/ciFleet/fleetJobInventoryTypes';
 import {
   getOrgInstallation,
-  latestWorkflowCommit,
   listInstallationRepositoryIds,
-  readWorkflowSources,
   OrgInstallationReadError,
   type OrgInstallation,
 } from '@/lib/github/orgInstallation';
 import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import { repoVisibilityClient, RepoVisibilityApiError } from '@/lib/github/repoVisibility';
-import { workflowFingerprint } from '@/lib/ciFleet/workflowFingerprint';
+import { entryStaleness } from '@/lib/services/fleetInventoryDriftService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
@@ -603,32 +601,6 @@ async function runnerGroupCondition(
   );
 }
 
-/**
- * A newer workflow commit does not move a verdict unless it changes a runner, a
- * reusable workflow, an action or an executable (MOTIR-8870). True only when the
- * entry recorded a fingerprint AND the head's workflows digest to the same one.
- * ⚠️ FAILS CLOSED: no recorded fingerprint, an unreadable file or invalid YAML
- * all answer false, so the entry is stale exactly as it was before this check.
- */
-async function structureUnchanged(
-  orgTarget: GithubOrgTarget,
-  repo: OrgRepo,
-  headSha: string,
-  entry: FleetInventoryRepo,
-): Promise<boolean> {
-  if (!entry.structureFingerprint) return false;
-  try {
-    const files = await readWorkflowSources(orgTarget, repo.owner, repo.name, headSha);
-    return workflowFingerprint(files) === entry.structureFingerprint;
-  } catch (err) {
-    console.warn('[fleetReadinessService] the workflow structure read failed', {
-      repository: fullName(repo),
-      status: statusOf(err),
-    });
-    return false;
-  }
-}
-
 async function imageCoverageCondition(
   orgTarget: GithubOrgTarget,
   privateRepos: OrgRepo[],
@@ -667,23 +639,31 @@ async function imageCoverageCondition(
       notInventoried.push(fullName(repo));
       continue;
     }
-    let head;
-    try {
-      head = await latestWorkflowCommit(orgTarget, repo.owner, repo.name);
-    } catch (err) {
+    // A newer workflow commit moves no verdict unless it adds a runner, a reusable
+    // workflow, an action, an executable or a shell, or moves a recorded job to
+    // another runner (MOTIR-8870 · MOTIR-10211) — `entryStaleness` is the rule,
+    // shared with the daily drift probe.
+    const staleness = await entryStaleness(orgTarget, repo.owner, repo.name, entry);
+    if (staleness.state === 'unreadable' && staleness.phase === 'head') {
       return failedRead(
         'image_coverage',
         `whether ${fullName(repo)}'s workflows changed since they were inventoried`,
-        err,
+        staleness.error,
       );
     }
-    if (
-      head &&
-      head.sha !== entry.sha &&
-      new Date(head.committedAt).getTime() > new Date(entry.measuredAt).getTime() &&
-      !(await structureUnchanged(orgTarget, repo, head.sha, entry))
-    ) {
-      stale.push({ repository: fullName(repo), measuredSha: entry.sha, headSha: head.sha });
+    if (staleness.state === 'unreadable') {
+      // ⚠️ FAILS CLOSED: files that cannot be read are never "unchanged".
+      console.warn('[fleetReadinessService] the workflow structure read failed', {
+        repository: fullName(repo),
+        status: statusOf(staleness.error),
+      });
+    }
+    if (staleness.state !== 'current') {
+      stale.push({
+        repository: fullName(repo),
+        measuredSha: entry.sha,
+        headSha: staleness.headSha,
+      });
     }
     for (const workflow of entry.workflows) {
       for (const job of workflow.jobs) {

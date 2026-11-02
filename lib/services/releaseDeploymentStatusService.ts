@@ -11,7 +11,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { hostedReleaseRepository } from '@/lib/repositories/hostedReleaseRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // EVERY RELEASE POSTS ITS GITHUB DEPLOYMENT STATUS (Story MOTIR-9797 ·
 // MOTIR-10033). A release's state change enqueues `hosted-release.status` after
@@ -95,8 +95,9 @@ async function postUnderLock(releaseId: string): Promise<PostReleaseStatusOutcom
         description: `Motir production release ${releaseId}`,
       }),
     );
-    // BEFORE any status: a retry after a failed post must find it.
-    await withSystemContext((tx) =>
+    // BEFORE any status: a retry after a failed post must find it. Written with
+    // the release's own workspace bound, from the row read above (MOTIR-10219).
+    await withWorkspaceServiceContext(target.workspaceId, (tx) =>
       hostedReleaseRepository.setDeploymentHandle(releaseId, { githubDeploymentId: created }, tx),
     );
     deploymentId = created;
@@ -115,7 +116,7 @@ async function postUnderLock(releaseId: string): Promise<PostReleaseStatusOutcom
         environmentUrl,
       }),
     );
-    await withSystemContext((tx) =>
+    await withWorkspaceServiceContext(target.workspaceId, (tx) =>
       hostedReleaseRepository.markStatusPosted(releaseId, { from, to: state }, tx),
     );
     from = state;

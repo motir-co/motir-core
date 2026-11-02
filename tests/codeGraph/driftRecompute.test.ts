@@ -94,9 +94,10 @@ function seedRepo(
  * A succeeded index in the LEDGER — the other half of `stale`.
  *
  * `deriveCodeGraphIndexState` reaches the sha comparison only when a graph
- * provably exists, and "exists" is a succeeded `system.code-graph-index` run
- * carrying the ref. Differing shas alone report `never`, which is correct and is
- * not the case this file is about.
+ * provably exists, and "exists" is the row's `indexedAt`, which the settle of a
+ * succeeded `system.code-graph-index` run stamps (MOTIR-10171) — so this seeds
+ * both. Differing shas alone report `never`, which is correct and is not the case
+ * this file is about.
  */
 async function seedSucceededIndex(repoRef: string) {
   await adminDb.jobRun.create({
@@ -110,6 +111,13 @@ async function seedSucceededIndex(repoRef: string) {
       status: 'succeeded',
       output: { repoRef },
     },
+  });
+  // …and the settle's stamp on the repository row, which is what every index
+  // state reads (`hasBuiltGraph`, Bug MOTIR-10171): a real success writes both.
+  const [owner, name] = repoRef.split('/');
+  await adminDb.githubRepo.updateMany({
+    where: { owner, name, indexedAt: null },
+    data: { indexedAt: new Date() },
   });
 }
 

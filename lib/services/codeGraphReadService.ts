@@ -7,6 +7,7 @@ import {
 } from '@/lib/ai/errors';
 import type { CodeContextRepoDTO } from '@/lib/dto/codeContext';
 import type {
+  CodeGraphCommitDTO,
   CodeGraphDriftDTO,
   CodeGraphReadDTO,
   CodeGraphReadTool,
@@ -63,9 +64,17 @@ function failureReason(err: unknown): string | null {
   return null;
 }
 
+/** Every read repository's graph commit, in set order; a repository with no graph is left out. */
+function graphCommits(readRepos: readonly CodeContextRepoDTO[]): CodeGraphCommitDTO[] {
+  return readRepos.flatMap((r) =>
+    r.indexedSha ? [{ repoRef: r.repoRef, indexedSha: r.indexedSha }] : [],
+  );
+}
+
 function enrich(
   answer: RawCodeGraphRead,
   repos: readonly CodeContextRepoDTO[],
+  readRepos: readonly CodeContextRepoDTO[],
   repoSet: readonly string[],
   drift: readonly CodeGraphDriftDTO[],
 ): CodeGraphReadDTO {
@@ -94,11 +103,14 @@ function enrich(
     // core disagree about the set — reported with core's set, the one bound.
     case 'repo_not_in_set':
       return { state: 'repo_not_in_set', repo: answer.repoRef, available: [...repoSet] };
-    case 'ok':
+    case 'ok': {
+      // The graph commits the read covered (MOTIR-10122), from core's own mirror.
+      const commits = graphCommits(readRepos);
       // A graph at its head carries no drift fields at all.
       return drift.length > 0
-        ? { state: 'ok', text: answer.text, drift: [...drift] }
-        : { state: 'ok', text: answer.text };
+        ? { state: 'ok', text: answer.text, commits, drift: [...drift] }
+        : { state: 'ok', text: answer.text, commits };
+    }
     case 'graph_unavailable':
       return { state: 'graph_unavailable', reason: answer.reason };
     case 'no_graph':
@@ -200,6 +212,6 @@ export const codeGraphReadService = {
       if (reason === null) throw failure;
       return { state: 'graph_unavailable', reason };
     }
-    return enrich(answer, repos, repoSet, answer.state === 'ok' ? drift : []);
+    return enrich(answer, repos, readRepos, repoSet, answer.state === 'ok' ? drift : []);
   },
 };

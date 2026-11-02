@@ -314,6 +314,23 @@ describe('intra-plan item-link tokens (MOTIR-1418)', () => {
     expect(parseIntraPlanRefIds(handed)).toEqual(['piA']);
   });
 
+  // Bug MOTIR-10193 — the ordinary scheme with the token's `planItem:` prefix
+  // carried over. It matched neither alternative, so it shipped verbatim.
+  it('rewrites a `motir:planItem:<id>` link to a sibling add, the prefix in any case (MOTIR-10193)', () => {
+    const body = 'See [A](motir:planItem:piA) and [B](motir:PlanItem:piB).';
+    const { body: out, unresolved } = rewriteIntraPlanRefs(body, resolve);
+    expect(out).toBe('See [A](motir:wiA) and [B](motir:wiB).');
+    expect(unresolved).toEqual([]);
+    expect(rewriteIntraPlanRefs(out, resolve).body).toBe(out);
+  });
+
+  it('leaves a `motir:planItem:<id>` naming no proposal verbatim and reports it, never half-rewritten', () => {
+    const body = '[X](motir:planItem:piGone) beside [A](motir:planItem:piA)';
+    const { body: out, unresolved } = rewriteIntraPlanRefs(body, resolve);
+    expect(out).toBe('[X](motir:planItem:piGone) beside [A](motir:wiA)');
+    expect(unresolved).toEqual(['piGone']);
+  });
+
   it('a label still carrying a bracket is NOT a token — why the planners hand none', () => {
     const raw = '[Gate [beta] pairs](motir-ref:planItem:piA)';
     expect(rewriteIntraPlanRefs(raw, resolve).body).toBe(raw);

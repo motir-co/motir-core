@@ -574,6 +574,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         get_code_health: { projectKey: 'PROD' },
         // MOTIR-9083 — no repository set, so `repo_not_in_project`, a named non-error.
         get_coding_convention: { projectKey: 'PROD', repo: 'motir-core' },
+        // MOTIR-10183 — no repository set, so `repo_not_in_project` when the grant and
+        // role allow it; nothing is written and motir-ai is never called.
+        update_coding_convention: {
+          projectKey: 'PROD',
+          repo: 'motir-core',
+          contentMd: '# House rules',
+          baseVersion: 0,
+        },
         // MOTIR-7861 — no repository set, so `repo_not_in_project`: a named,
         // non-error outcome answered before any host call.
         read_file: { projectKey: 'PROD', repo: 'motir-core', path: 'README.md' },
@@ -673,6 +681,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // The caller's OWN plan — a read-scoped tool the loop asserts EXECUTES.
         validate_plan: { planId: plan.id },
         get_plan_authoring_state: { planId: plan.id },
+        get_plan_code_reads: { planId: plan.id },
+        get_plan_lesson_log: { planId: plan.id },
         create_work_item: { projectKey: 'PROD', kind: 'task', title: 'scoped create' },
         expand_item: { key: item1 },
         update_work_item: { key: item1, title: 'scoped edit' },

@@ -560,7 +560,10 @@ export type RepoFileReadResult =
   | { outcome: 'binary'; path: string; ref: string; bytes: number }
   | { outcome: 'not_found'; path: string; ref: string }
   | { outcome: 'ref_not_found'; path: string; ref: string }
-  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number }
+  /** Over `limitBytes`. `totalLines` is set when the file WAS fetched and the
+   *  limit refused only a whole-file read (MOTIR-10143): the caller can read it
+   *  by line range. Absent when the blob was over what a provider fetches. */
+  | { outcome: 'too_large'; path: string; ref: string; limitBytes: number; totalLines?: number }
   | { outcome: 'unauthorized'; path: string; ref: string }
   | { outcome: 'invalid_path'; path: string; reason: string }
   | {
@@ -570,6 +573,21 @@ export type RepoFileReadResult =
       failure: RepoFileReadTransportFailure;
       detail: string;
     };
+
+/**
+ * WHICH COMMIT a ref names right now (MOTIR-10122) — what a recorded code read
+ * cites, so a check opens the exact code a planning session saw rather than
+ * whatever the branch holds by then.
+ *
+ * ⚠️ A RESULT UNION, for {@link RepoFileReadResult}'s reason: "that ref names no
+ * commit" is an answer about the ref, and "the host did not answer" is a failure
+ * to ask. `sha` is the full, lower-cased object id the host resolved.
+ */
+export type RefResolution =
+  | { outcome: 'resolved'; ref: string; sha: string }
+  | { outcome: 'ref_not_found'; ref: string }
+  | { outcome: 'unauthorized'; ref: string }
+  | { outcome: 'unreachable'; ref: string; failure: RepoFileReadTransportFailure; detail: string };
 
 /**
  * The answer to "how far is HEAD ahead of the indexed commit?" (MOTIR-4644).

@@ -447,6 +447,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ checkedAt: string; offenders: Array<{ completedAt: string; families: Array<string>; org: string; repo: string; runAttempt: number; runId: string }>; ownedOrgs: Array<string>; runsChecked: number; verdict: "hosted_runs"; windowStart: string } | { checkedAt: string; ownedOrgs: Array<string>; runsChecked: number; verdict: "not_applicable"; windowStart: string } | { checkedAt: string; ownedOrgs: Array<string>; runsChecked: number; verdict: "ok"; windowStart: string }',
   },
+  'fleet-inventory-drift': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ checked: Array<string>; checkedAt: string; stale: Array<{ addedJobs: Array<string>; headSha: string; measuredSha: string; movedJobs: Array<string>; reason: "digest_moved" | "invalid_yaml" | "job_moved" | "no_fingerprint"; repository: string }>; unreadable: Array<{ phase: "files" | "head" | "installation"; repository: string; status: null | number }>; verdict: "stale" } | { checked: Array<string>; checkedAt: string; unreadable: Array<{ phase: "files" | "head" | "installation"; repository: string; status: null | number }>; verdict: "indeterminate" } | { checked: Array<string>; checkedAt: string; verdict: "current" } | { checkedAt: string; reason: "app_not_configured" | "no_private_entries"; verdict: "not_applicable" }',
+  },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',

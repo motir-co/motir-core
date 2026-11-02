@@ -134,6 +134,12 @@ three plan-session tools, all of which spend the workspace's AI credits. Under
 the old vocabulary they travelled with _edit work items_ because nothing
 narrower existed; an agent wired only to file work items can now be denied them.
 
+**Editing a repository's coding convention is `ai:configure`** — the admin key
+the Code page's editor checks. Only `update_coding_convention` asserts it, and a
+token reaches that tool only when its grant carries the key **and** its owner is
+an admin of the project. Tokens minted before the key became grantable
+(MOTIR-10183) do not carry it.
+
 ## Authorization
 
 Besides a personal access token, an MCP client can connect with **OAuth 2.1** —
@@ -329,7 +335,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **108 tools**.
+`initialize` handshake and registers **111 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -4051,6 +4057,15 @@ superseded by +ACME-9` — the old mark read from the target's live row, each re
   by its key.
 - **`supersedesRefs`** (`add`) — the older cards the new card replaces; rendered
   as `· supersedes ACME-3, ACME-4`. `[]` on every other op.
+
+Beside `items[]`, **`raisedGaps[]`** (MOTIR-10176) lists every gap the plan's author
+sessions raised through `report_plan_step`'s `gaps` arm, in raise order: `id` (the
+planner's own), `seq`, `sessionKey`, `level`, `raisedBy`, `what`, `decision`,
+`after`, `before`, `note`, `amended` (its level's amend was handed it), `amendedAt`,
+`answer` (`{ refs, open }` once amended, else `null`) and `raisedAt`. A resumed walk
+hands the ones with `amended: false` to their level's amend; a briefing lists every
+one an amend left open.
+
 - **`workItemId`** — the target of a `modify` / `remove`; **`null` for an
   un-materialized `add`**.
 - **`decisionReason`** — on a `declined` plan, WHY it ended: `reviewed` (a
@@ -5007,6 +5022,83 @@ report_plan_step({ planId, sessionKey: "author-3", narration: ["Splitting the ex
 // → { planId, sessionKey: "author-3", narration: [{ seq: 7, body: "Splitting the export into two stories." }] }
 ```
 
+**Record the session's code reads (MOTIR-10122).** Send `codeReads` (instead of
+`step`, and with no `target`) with the reads the session made, in the order it made
+them — at most 50 per call. Each is `{ tool, repo?, path?, startLine?, endLine?,
+askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+detail? }`: what it asked, the commits it was read at, and how much came back,
+**never the code** (a read carrying `text` or `content` is refused, and every
+string is capped). `sha` is a RESOLVED commit id — 7 to 64 hex characters, never a
+branch name; a read whose ref resolved to nothing carries `commits: []`. A local
+planner records its checkout's `HEAD` and marks `dirty: true` when the working
+tree had changes. Unlike narration, a code read needs NO step: plan.py's
+conversation session reads code before the plan exists, and posts its reads once
+it does. They are kept with the plan; read them back with
+[`get_plan_code_reads`](#get_plan_code_reads--what-each-planning-session-read).
+
+```jsonc
+report_plan_step({ planId, sessionKey: "author-3", codeReads: [
+  { tool: "read_file", repo: "acme/web", path: "lib/export.ts", startLine: 1, endLine: 80,
+    askedRef: "main", commits: [{ sha: "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b" }],
+    outcome: "found", lines: 80 } ] })
+// → { planId, sessionKey: "author-3", codeReads: [{ seq: 12, tool: "read_file" }] }
+```
+
+**Record the gaps your author sessions raise (MOTIR-10176).** Send `gaps` (instead of
+`step`, and with no `target`) the moment an author session raises a gap — before the
+next session opens — and again once that level's amend is handed it. At most 50
+entries per call, each either `{ op: "raise", id, level?, raisedBy?, what, decision?,
+after?, before?, note?, amended? }` or `{ op: "amend", id, refs?, open? }`. `id` is
+YOUR id for the gap, unique on the plan; a second `raise` of an id the plan already
+holds is a repeated report and is kept as it was (`alreadyRaised`). `amended: true` on
+a raise says the level's amend has already run, so no amend will answer it. An
+`amend` stamps the gap with the refs the amend named for it and the part they leave
+`open`, and is refused when the plan does not hold its id. A gap lives on the plan,
+not in your walk: a walk that dies and is resumed reads them back from `get_plan`'s
+`raisedGaps` and hands the unamended ones to that level's amend. Needs no step.
+
+```jsonc
+report_plan_step({ planId, sessionKey: "author-6", gaps: [
+  { op: "raise", id: "run-2:gap-1", level: "planItem:story", raisedBy: "planItem:adapter",
+    what: "Nothing creates the Lambda execution role.",
+    decision: "Which account owns it — the infra owner decides." } ] })
+// → { planId, sessionKey: "author-6", gaps: { raised: ["run-2:gap-1"], alreadyRaised: [], amended: [] } }
+```
+
+**Record the session's lesson calls (MOTIR-10191).** Send `lessonCalls` (instead of
+`step`, and with no `target`) with the lesson calls the session made, in the order it
+made them — at most 50 per call. Each is `{ kind, query?, filters?, lessonIds?,
+lessonId?, occurrenceRef?, outcome, counted?, detail? }`, **ids only, never a lesson's
+text** (a call carrying `title`, `body`, `why`, `howToApply`, `text` or `content` is
+refused, and every string is capped):
+
+| `kind`      | What it records                                                                                     | Fields                                                                  |
+| ----------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `search`    | a `search_lessons` call                                                                             | `query`, `filters`, `lessonIds` in RANK order                           |
+| `reinforce` | a `reinforce_lesson` call                                                                           | `lessonId`, `occurrenceRef`, `counted`                                  |
+| `add`       | an `add_lesson` call                                                                                | `lessonId` (when created), `occurrenceRef` (its `sourceRef`), `counted` |
+| `injected`  | the lessons the hosted planner composed into the session's prompt in code — shown, but not searched | `lessonIds` in render order                                             |
+
+`filters` is `{ kinds?, types?, phases?, subject?, limit? }`, each axis absent when the
+search left it open. `outcome` is the call's own code — `matched`, `nothing-matched`,
+`unavailable`, `counted`, `already_counted`, `added`, `injected`, `error`, …
+
+**An EMPTY array is a report too.** It marks the session's lesson log RECORDED with no
+call, so `get_plan_lesson_log` can say "this session made no lesson call" rather than
+"this session was not recorded" — send it once for a session that made none. Like code
+reads, a lesson call needs NO step; read them back with
+[`get_plan_lesson_log`](#get_plan_lesson_log--which-lessons-each-planning-session-saw).
+
+```jsonc
+report_plan_step({ planId, sessionKey: "lay-2", lessonCalls: [
+  { kind: "search", query: "wiring a dependency edge across two repositories the wrong way",
+    filters: { kinds: ["story"], phases: ["lay"] },
+    lessonIds: ["cstr77ecwfcozfr3frq8l7pxl", "clx0…"], outcome: "matched" },
+  { kind: "reinforce", lessonId: "cstr77ecwfcozfr3frq8l7pxl", occurrenceRef: "plan:cmv…#lay-2",
+    outcome: "counted", counted: true } ] })
+// → { planId, sessionKey: "lay-2", lessonCalls: [{ seq: 4, kind: "search" }, { seq: 5, kind: "reinforce" }] }
+```
+
 Requires **`ai:view_plan`**, the key every plan-authoring write names. A `motir run`
 credential (`CLI_TOKEN_GRANT`) does not carry it and cannot reach this tool: a run
 executing one work item has no business reporting progress on a plan.
@@ -5015,7 +5107,15 @@ Errors: `PLAN_NOT_FOUND`; `PLAN_NOT_GENERATING` off `generating`, naming the
 status; `PLAN_STEP_INVALID` for a target on `settle` or `end`, a ref naming nothing
 on this plan or in its project, a `folder:` ref, or a key that names no work item;
 and, for `narration`, both or neither of `step` / `narration`, a `target`, an empty
-or over-long batch, a blank sentence, or a session that holds no step.
+or over-long batch, a blank sentence, or a session that holds no step; for
+`codeReads`, another arm or a `target` alongside it, an empty or over-long batch,
+a read with no `tool` or `outcome`, a `sha` that is not hex, or a read carrying
+`text` / `content`; for `gaps`, another arm or a `target` alongside it, an empty or
+over-long batch, an entry with no `id`, a `raise` with no `what`, an unknown `op`, or
+an `amend` naming an id the plan does not hold; for `lessonCalls`, another arm or a
+`target` alongside it, an over-long batch, an unknown `kind`, a call with no `outcome`,
+a `search` / `injected` naming a `lessonId` or a `reinforce` / `add` naming
+`lessonIds`, a malformed lesson id, or a call carrying a lesson's text.
 
 ##### `hold_plan_revision` — hold a plan still while you revise it
 
@@ -5171,6 +5271,65 @@ the plan DECISIONS (approve / decline / append), and this one decides nothing.
 
 Errors: an unknown / other-tenant `planId` returns `PLAN_NOT_FOUND`
 (404-not-403, no existence leak).
+
+##### `get_plan_code_reads` — what each planning session read
+
+The code reads a plan's planner sessions recorded through `report_plan_step`'s
+`codeReads`, in call order (a plan-wide `seq`), for BOTH planners: the hosted
+planner's `read_file` / `code_explore` / `code_search` / `code_grep`, and plan.py's
+own MCP reads beside its local `Read`, `Grep`, `Glob`, `git show`, `git grep` and
+`git log`. A check of the plan reads it to tell a session that read the file
+holding a fact from one that read another file, or nothing.
+
+```jsonc
+get_plan_code_reads({ planId, sessionKey?: "author-3", afterSeq?: 0, limit?: 500 })
+// → { planId,
+//     reads: [{ seq: 12, sessionKey: "author-3", tool: "read_file", repo: "acme/web",
+//               path: "lib/export.ts", startLine: 1, endLine: 80, askedRef: "main", query: null,
+//               commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
+//               detail: null, createdAt: "…" }],
+//     sessions: [{ sessionKey: "author-3", stepKind: "author", targetRef: "planItem:…", targetTitle: "…" }],
+//     nextAfterSeq: null }
+```
+
+`sessions` carries the step words of every session on the page (a session that
+never reported a step — plan.py's conversation — has none). Page with
+`afterSeq: nextAfterSeq` until it is `null`. `project:browse`, through the same
+reader gate as `get_plan`, on a plan in any status; read-only. Errors:
+`PLAN_NOT_FOUND` for an unknown or other-tenant plan.
+
+##### `get_plan_lesson_log` — which lessons each planning session saw
+
+The lesson calls a plan's planner sessions recorded through `report_plan_step`'s
+`lessonCalls`, in call order (a plan-wide `seq`), for BOTH planners: every
+`search_lessons` with its query, filters and the ids it returned in rank order, every
+`reinforce_lesson` / `add_lesson`, and the hosted planner's `injected` ids. Ids only. A
+check of the plan reads it beside `get_plan_code_reads` to tell three defects apart
+when a card was written against a recorded lesson: the session never searched (a
+skipped step), it searched and the lesson was not among the ids returned (a retrieval
+gap), or the lesson WAS returned or injected and the card went against it (the model).
+
+```jsonc
+get_plan_lesson_log({ planId, sessionKey?: "lay-2", afterSeq?: 0, limit?: 500 })
+// → { planId,
+//     calls: [{ seq: 4, sessionKey: "lay-2", kind: "search", query: "…",
+//               filters: { kinds: ["story"], phases: ["lay"] },
+//               lessonIds: ["cstr77ecwfcozfr3frq8l7pxl"], lessonId: null, occurrenceRef: null,
+//               outcome: "matched", counted: null, detail: null, createdAt: "…" }],
+//     sessions: [{ sessionKey: "lay-2", calls: 1, firstReportAt: "…", lastReportAt: "…",
+//                  step: { sessionKey: "lay-2", stepKind: "lay", targetRef: "MOTIR-9796", … } },
+//                { sessionKey: "author-3", calls: 0, …, step: { … } }],
+//     unrecordedSessions: [{ sessionKey: "author-4", stepKind: "author", … }],
+//     nextAfterSeq: null }
+```
+
+`sessions` is EVERY session whose lesson log was recorded, on every page: `calls: 0`
+is the explicit empty list — that session made no lesson call. `unrecordedSessions`
+are sessions that reported a step but never reported a lesson log (a planner older
+than MOTIR-10191, or a recording that failed), which is NOT evidence that they never
+searched. Page with `afterSeq: nextAfterSeq` until it is `null`. `project:browse`,
+through the same reader gate as `get_plan`, on a plan in any status; read-only.
+Errors: `PLAN_NOT_FOUND` for an unknown or other-tenant plan.
 
 ##### `get_plan_authoring_state` — WHICH SIBLINGS have not started (MOTIR-9821)
 
@@ -5606,12 +5765,23 @@ to CHECK a code fact before writing it into a card.
 | `startLine`  | integer | no       | 1-based, inclusive. With `endLine`, the range is clamped to the file and headed `lines a-b of N`.    |
 | `endLine`    | integer | no       | 1-based, inclusive. Omit with `startLine` set to read to the end of the file.                        |
 
+**The commit it was read at (MOTIR-10122).** The ref is resolved to the commit it
+names first, and the file is read AT that commit, so a moving branch cannot change
+between the two. Every outcome that reached the host with a resolved ref carries
+`commitSha` (the full id), and its summary says `at <ref> (commit <sha>)` — the
+text a session stream carries, which is where plan.py records it from.
+
 **The cap and the range.** The text returned — the range when one is asked for,
 else the whole file — is capped at **24,000 characters**, motir-ai's
 `FILE_CONTENT_CAP`. Over the cap it is cut, and ends with a SENTENCE, never a
 bare ellipsis: _the first 24000 of N characters; the file continues; re-read with
 startLine / endLine_. The cap, the marker and the range semantics are copied from
 the planner's tool, so both planners read the same evidence in the same shape.
+
+**A file over 1 MB is read by range (MOTIR-10143).** A read with `startLine` or
+`endLine` is served for any text file up to the host's raw limit (100 MB), and
+returns the range under the same cap. Read whole, a file over 1 MB answers
+`too_large` with `totalLines`, so the next call can ask for a range.
 
 **Output** — `structuredContent.outcome` names what happened, and every outcome is
 a **non-error** result with its own summary sentence:
@@ -5622,7 +5792,7 @@ a **non-error** result with its own summary sentence:
 | `directory`            | The path is a directory: its immediate entries (`name`, `type` file/dir/symlink/submodule), sorted by name, at most 1,000. | `repoRef`, `path`, `ref`, `entries`, `truncated`                |
 | `not_found`            | The ref resolved and the path is not there. A fact about the PATH, not the repository.                                     | `repoRef`, `path`, `ref`                                        |
 | `ref_not_found`        | The ref does not exist. Says nothing about the path.                                                                       | `repoRef`, `path`, `ref`                                        |
-| `too_large`            | The file exists and is over what the host serves inline.                                                                   | `repoRef`, `path`, `ref`, `limitBytes`                          |
+| `too_large`            | The file exists and was read whole over 1 MB (`totalLines` set — read it by range), or is over the host's 100 MB.          | `repoRef`, `path`, `ref`, `limitBytes`, `totalLines`            |
 | `binary`               | The file exists and holds a NUL character, so no text is returned.                                                         | `repoRef`, `path`, `ref`, `bytes`                               |
 | `unauthorized`         | The host refused the stored credential. The file's existence is unknown.                                                   | `repoRef`, `path`, `ref`                                        |
 | `invalid_path`         | The path was refused before any request.                                                                                   | `repoRef`, `path`, `reason`                                     |
@@ -5727,16 +5897,22 @@ amendment).
 
 **Output** — `structuredContent.state`, every one a **non-error** result:
 
-| `state`             | Meaning                                                                                                     | Extra fields                                                                |
-| ------------------- | ----------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `ok`                | The executor's text, unchanged — plus the drift note below when a repository read is behind.                | `text`, `drift` (only when behind)                                          |
-| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                    | —                                                                           |
-| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                           | `repo`, `available`                                                         |
-| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                      | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
-| `no_graph`          | No repository of the set has a graph.                                                                       | —                                                                           |
-| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                 | —                                                                           |
-| `invalid_cursor`    | A cursor this read did not issue.                                                                           | —                                                                           |
-| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`. | `reason`                                                                    |
+| `state`             | Meaning                                                                                                            | Extra fields                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `ok`                | The executor's text, unchanged — plus the drift note below when a repository read is behind, then the commit line. | `text`, `commits`, `drift` (only when behind)                               |
+| `no_repositories`   | The project's set holds no realized repository. Decided in core; motir-ai is not called.                           | —                                                                           |
+| `repo_not_in_set`   | `repo` matches no repository in the set. Decided in core; motir-ai is not called.                                  | `repo`, `available`                                                         |
+| `not_indexed`       | A repository in the set has no graph yet. Enriched with core's own code-context facts.                             | `repoRef`, `indexState`, `commitsBehind`, `refreshFailing`, `graphTooLarge` |
+| `no_graph`          | No repository of the set has a graph.                                                                              | —                                                                           |
+| `stale_cursor`      | The code changed since that page — re-run without `cursor`.                                                        | —                                                                           |
+| `invalid_cursor`    | A cursor this read did not issue.                                                                                  | —                                                                           |
+| `graph_unavailable` | The graph could not be read: motir-ai's own reason, or `ai_unreachable` / `ai_not_configured` / `ai_error`.        | `reason`                                                                    |
+
+**The commit line (MOTIR-10122).** An `ok` answer carries `commits: [{ repoRef,
+indexedSha }]` — the commit each read repository's graph was built at, full id —
+and its text ends with `Graph commit(s) read: owner/name@<sha>, ….`. A repository
+with no graph is left out; a planning session records these as the commits its
+graph read was made at.
 
 A request motir-ai rejects as malformed stays an error, so it is seen rather
 than read as a soft state.
@@ -5847,6 +6023,52 @@ beside a person's edited text; the text returned is still the one in force.
 **Permission: `ai:plan`, at the door and in the service** — as `get_code_health`
 and `read_file`, on the same argument (`docs/decisions/member-facing-permissions.md`
 AMENDMENT 3). Every `motir run` token holds it. **Read-only**, closed-world.
+
+#### `update_coding_convention`
+
+**Write one repository's coding convention** — the same save the Code page's
+editor makes, for an admin working with an agent who has approved an edit to a
+repository's house rules (MOTIR-10183). It is a thin adapter over
+`aiConventionService.saveConvention`, the editor's own method, so every rule of
+that save holds here unchanged: `contentMd` is the **whole** document and becomes
+a **new version**, `edited` by the person behind the token, and every earlier
+version stays in the history the editor shows.
+
+**Input**
+
+| Field         | Type    | Required | Notes                                                                                                          |
+| ------------- | ------- | -------- | -------------------------------------------------------------------------------------------------------------- |
+| `projectKey`  | string  | yes      | Project key, e.g. `"ACME"`.                                                                                    |
+| `repo`        | string  | yes      | A repository in the project's set — bare name or `owner/name`, case-insensitively, as `get_coding_convention`. |
+| `contentMd`   | string  | yes      | The whole convention, as Markdown. Not blank, at most 65,536 characters (the editor's limit).                  |
+| `baseVersion` | integer | yes      | The `version` the edit is based on — what `get_coding_convention` returned; `0` for a repository with none.    |
+
+**Output.** `structuredContent.state` is one of these:
+
+| `state`               | Meaning                                                                                          | Extra fields                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `saved`               | The new version was written; the fields are the version as `get_coding_convention` now reads it. | `repoRef`, `version`, `authorKind`, `editedByName`, `editedByUserId`, `updatedAt`, `contentMd` |
+| `repo_not_in_project` | `repo` matches no repository in the set. Nothing was written; motir-ai is not called.            | `repo`, `repoSet`                                                                              |
+
+**Refusals** — each an `isError` result, and nothing is written:
+
+| Code                          | When                                                                                                                                                                         |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PERMISSION_NOT_GRANTED`      | The token's grant does not carry `ai:configure`.                                                                                                                             |
+| `PERMISSION_DENIED`           | The token's owner does not hold `ai:configure` in the project (a member or viewer).                                                                                          |
+| `CONVENTION_BLANK`            | `contentMd` is empty or whitespace — the editor's 422.                                                                                                                       |
+| `CONVENTION_TOO_LONG`         | `contentMd` is over 65,536 characters — the editor's 422.                                                                                                                    |
+| `CONVENTION_VERSION_CONFLICT` | A newer version was saved since `baseVersion` — the editor's 409. `structuredContent` carries `latestVersion` and `latest` (the version that won, with its text and author). |
+
+**Permission: `ai:configure`, at the door and in the service** — the key the
+editor's save checks, which the admin role holds. It is the first tool to assert
+that key, which is what makes it grantable to a token
+(`docs/decisions/member-facing-permissions.md` AMENDMENT 5). A token minted before
+it became grantable does not carry it; mint a new one to use this tool. It is
+**not** in the CLI's device grant, so a `motir run` agent cannot write a
+convention, and no planning session is given the tool. A write, **additive** (the
+replaced text stays a version) and not idempotent (a replay at the same
+`baseVersion` is a conflict); closed-world.
 
 #### `skeleton`
 

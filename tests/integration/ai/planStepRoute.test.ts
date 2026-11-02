@@ -22,7 +22,7 @@ const SERVICE_SECRET = 'core-callback-secret-test';
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "plan_step", "plan_revision", "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "plan_code_read", "plan_step", "plan_revision", "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
 }
@@ -338,6 +338,215 @@ describe('the narration arm (Story MOTIR-8060 · MOTIR-8062)', () => {
     await plansService.markPlanned(planId, fx.ctx);
 
     const res = await report(fx, jobId, { sessionKey: 's', narration: ['Late.'] });
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('the code-reads arm (MOTIR-10122)', () => {
+  const SHA = 'abcdef0123456789abcdef0123456789abcdef01';
+  const read = {
+    tool: 'read_file',
+    repo: 'moooon/motir-core',
+    path: 'lib/x.ts',
+    startLine: 1,
+    endLine: 40,
+    askedRef: 'main',
+    commits: [{ sha: SHA }],
+    outcome: 'found',
+    lines: 40,
+  };
+
+  it('appends a session’s reads in call order, with no step needed, and returns them', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_code_reads_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    const res = await report(fx, jobId, {
+      sessionKey: 'ai:job:1',
+      codeReads: [read, { tool: 'code_search', query: 'chooseInTx', commits: [], outcome: 'ok' }],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      planId: string;
+      codeReads: { seq: number; tool: string; commits: unknown[] }[];
+    };
+    expect(body.planId).toBe(planId);
+    expect(body.codeReads.map((r) => [r.seq, r.tool])).toEqual([
+      [1, 'read_file'],
+      [2, 'code_search'],
+    ]);
+    expect(body.codeReads[0]!.commits).toEqual([{ sha: SHA }]);
+  });
+
+  it('400 on a malformed body, 422 on a read the store refuses, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_code_reads_refused';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    for (const extra of [
+      { codeReads: 'not an array' },
+      { codeReads: [read], narration: ['Both.'] },
+      { codeReads: [read], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    for (const codeReads of [
+      [],
+      [{ ...read, commits: [{ sha: 'main' }] }],
+      [{ ...read, content: 'export const x = 1;' }],
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', codeReads });
+      expect(res.status, JSON.stringify(codeReads)).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planCodeRead.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_code_reads_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await plansService.markPlanned(planId, fx.ctx);
+    const res = await report(fx, jobId, { sessionKey: 's', codeReads: [read] });
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('the gaps arm (MOTIR-10176)', () => {
+  const gap = {
+    op: 'raise',
+    id: 'gap-1',
+    level: 'planItem:story',
+    raisedBy: 'planItem:adapter',
+    what: 'Nothing creates the Lambda execution role.',
+    decision: 'Which account owns it — the infra owner decides.',
+  };
+
+  it('records a raise and its amend with no step needed, answering what it stored', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gaps_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    const res = await report(fx, jobId, { sessionKey: 'ai:job:1', gaps: [gap] });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      planId,
+      gaps: { raised: ['gap-1'], alreadyRaised: [], amended: [] },
+    });
+    const amend = await report(fx, jobId, {
+      sessionKey: 'ai:job:2',
+      gaps: [{ op: 'amend', id: 'gap-1', refs: ['planItem:role'] }],
+    });
+    expect(amend.status).toBe(200);
+    const row = await adminDb.planRaisedGap.findFirstOrThrow({ where: { planId } });
+    expect([row.gapId, row.amendedAt !== null, row.answerRefs]).toEqual([
+      'gap-1',
+      true,
+      ['planItem:role'],
+    ]);
+  });
+
+  it('400 on a malformed body, 422 on an entry the store refuses, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gaps_refused';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    for (const extra of [
+      { gaps: 'not an array' },
+      { gaps: [gap], narration: ['Both.'] },
+      { gaps: [gap], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    for (const gaps of [[], [{ ...gap, what: '' }], [{ op: 'amend', id: 'unknown' }]]) {
+      const res = await report(fx, jobId, { sessionKey: 's', gaps });
+      expect(res.status, JSON.stringify(gaps)).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planRaisedGap.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_gaps_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await plansService.markPlanned(planId, fx.ctx);
+    const res = await report(fx, jobId, { sessionKey: 's', gaps: [gap] });
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('the lessonCalls arm (MOTIR-10191)', () => {
+  const search = {
+    kind: 'search',
+    query: 'wiring a cross-repository edge the wrong way',
+    filters: { kinds: ['story'], phases: ['lay'] },
+    lessonIds: ['cstr77ecwfcozfr3frq8l7pxl'],
+    outcome: 'matched',
+  };
+
+  it('records the calls with no step needed, and an empty report as a recorded session', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_lessons_happy';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    const res = await report(fx, jobId, {
+      sessionKey: 'ai:job:1',
+      lessonCalls: [search, { kind: 'injected', lessonIds: ['clx1'], outcome: 'injected' }],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      planId: string;
+      lessonCalls: { seq: number; kind: string }[];
+    };
+    expect(body.planId).toBe(planId);
+    expect(body.lessonCalls.map((c) => [c.seq, c.kind])).toEqual([
+      [1, 'search'],
+      [2, 'injected'],
+    ]);
+    const empty = await report(fx, jobId, { sessionKey: 'ai:job:2', lessonCalls: [] });
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toEqual({ planId, lessonCalls: [] });
+    const markers = await adminDb.planLessonSession.findMany({
+      where: { planId },
+      orderBy: { firstReportAt: 'asc' },
+    });
+    expect(markers.map((m) => m.sessionKey)).toEqual(['ai:job:1', 'ai:job:2']);
+  });
+
+  it('400 on a malformed body, 422 on a call the store refuses, writing nothing', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_lessons_refused';
+    const { planId } = await generatingPlan(fx, jobId);
+
+    for (const extra of [
+      { lessonCalls: 'not an array' },
+      { lessonCalls: [search], codeReads: [] },
+      { lessonCalls: [search], target: 'planItem:x' },
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', ...extra });
+      expect(res.status, JSON.stringify(extra)).toBe(400);
+    }
+    for (const lessonCalls of [
+      [{ ...search, kind: 'browse' }],
+      [{ ...search, body: 'the lesson text' }],
+    ]) {
+      const res = await report(fx, jobId, { sessionKey: 's', lessonCalls });
+      expect(res.status, JSON.stringify(lessonCalls)).toBe(422);
+      expect(((await res.json()) as { code: string }).code).toBe('PLAN_STEP_INVALID');
+    }
+    expect(await adminDb.planLessonCall.count({ where: { planId } })).toBe(0);
+    expect(await adminDb.planLessonSession.count({ where: { planId } })).toBe(0);
+  });
+
+  it('409 once the plan is not generating', async () => {
+    const fx = await makeFixture();
+    const jobId = 'job_lessons_409';
+    const { planId } = await generatingPlan(fx, jobId);
+    await plansService.markPlanned(planId, fx.ctx);
+    const res = await report(fx, jobId, { sessionKey: 's', lessonCalls: [] });
     expect(res.status).toBe(409);
   });
 });

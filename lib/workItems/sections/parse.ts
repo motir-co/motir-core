@@ -258,7 +258,9 @@ export function parseSections(
   const set = sectionSetFor(kind, type);
   const signals: ParseSignal[] = [];
   const done = (sections: WorkItemSections, invalid: ParsedBody['invalid']): ParsedBody => {
-    const check = checkSections(kind, type, sections);
+    // A stored body is read, so a committed card in its type's legacy shape
+    // reads complete (MOTIR-10206).
+    const check = checkSections(kind, type, sections, { acceptLegacy: true });
     return {
       sections,
       found: set.sections.filter((name) => sections[name] !== undefined),

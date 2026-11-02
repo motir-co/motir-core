@@ -124,6 +124,27 @@ describe('the server-rendered chrome', () => {
     // No create door, no switcher, no search: the only buttons are the theme,
     // the menu toggle and the account menu.
     expect(screen.queryByRole('button', { name: /create/i })).toBeNull();
+    // No photo ⇒ the account menu draws the email's initial (MOTIR-10182).
+    const account = screen.getByRole('button', { name: /account menu/i });
+    expect(account.querySelector('img')).toBeNull();
+    expect(account.textContent).toBe('R');
+  });
+
+  it('the top bar’s account menu shows the reader’s profile photo (MOTIR-10182)', async () => {
+    const photo = 'https://assets.example.com/avatars/riya.png';
+    render(
+      <ThemeProvider>
+        {await VisitorTopNav({
+          projectName: 'Northwind',
+          projectKey: 'NW',
+          landingHref: 'https://motir.co/p/NW',
+          user: { name: 'Riya', email: 'riya@example.com', image: photo },
+        })}
+      </ThemeProvider>,
+    );
+    const account = screen.getByRole('button', { name: /account menu/i });
+    expect(account.querySelector('img')?.getAttribute('src')).toBe(photo);
+    expect(account.textContent).toBe('');
   });
 });
 

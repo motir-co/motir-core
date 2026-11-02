@@ -200,6 +200,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   get_project_state: 'read',
   get_code_health: 'read',
   get_coding_convention: 'read',
+  // MOTIR-10183 — the convention write. Filed under `work_items:write` for totality
+  // only; its real gate is `ai:configure`, which no legacy scope confers.
+  update_coding_convention: 'work_items:write',
   read_file: 'read',
   list_changed_files: 'read',
   code_explore: 'read',
@@ -243,6 +246,8 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // governs nothing but the deprecated docs rendering.
   validate_plan: 'read',
   get_plan_authoring_state: 'read',
+  get_plan_code_reads: 'read',
+  get_plan_lesson_log: 'read',
   get_plan_status: 'read',
   get_plan: 'read',
   // The approved-shape verdict (MOTIR-6227). A pure READ, and still filed under

@@ -140,6 +140,29 @@
       "notClaimed": "我们丢失了该验证码的会话。请重新输入以继续。",
       "network": "无法连接Motir。请检查网络后重试。",
       "unexpected": "我们这边出了点问题。请重试，或运行motir login获取新验证码。"
+    },
+    "update": {
+      "heading": "要更新这个终端的权限吗？",
+      "subhead": "批准前请先核对令牌和改动。",
+      "updating": "更新对象",
+      "tokenSub": "令牌<chip>{prefix}…</chip> · 密钥不变，无需复制",
+      "askedAgo": "验证码<chip>{code}</chip> · 申请于{ago}",
+      "workspaceSub": "令牌所属的工作区，不会改变。",
+      "expiresValue": "{days}天后过期",
+      "expiresSub": "这次更新不会改变它。",
+      "changes": "改动",
+      "unchanged": "{count, plural, other {其余 # 项权限保持不变。}}",
+      "warning": "仅当你刚在{hostname}上亲自运行了<cmd>motir auth refresh</cmd>时才批准。如果这个验证码是别人发给你的，请<strong>拒绝</strong>：批准就会把上述改动应用到该令牌。",
+      "actions": "批准或拒绝这次更新",
+      "approve": "批准更新",
+      "deny": "拒绝",
+      "approvedHeading": "权限已更新",
+      "approvedSubhead": "这里没有其他需要做的了。",
+      "approvedBody": "回到你的终端——<cmd>motir auth refresh</cmd>已完成。<strong>{label}</strong>现在拥有 CLI 当前的权限，令牌保持不变。",
+      "deniedBody": "没有任何改动。<strong>{label}</strong>保留原有的权限，终端也保留它的令牌。",
+      "deniedRetry": "不小心拒绝了？重新运行<cmd>motir auth refresh</cmd>获取新验证码——这个验证码不能再次使用。",
+      "expiredBody": "<chip>{code}</chip>已失效，没有做任何改动。重新运行<cmd>motir auth refresh</cmd>获取新验证码。",
+      "expiredNote": "你的终端已停止等待，并提示验证码已过期。"
     }
   },
   "markdownEditor": {
@@ -3890,6 +3913,40 @@
       "expiresNever": "永不",
       "lastUsedNever": "从未",
       "revokeAria": "吊销令牌 {label}",
+      "editAria": "编辑 {label} 的权限",
+      "edit": {
+        "title": "编辑权限",
+        "description": "更改此令牌可以执行的操作。令牌本身保持不变。",
+        "facts": {
+          "label": "名称",
+          "token": "令牌",
+          "boundTo": "绑定到",
+          "expires": "过期时间"
+        },
+        "factsLocked": "这些信息保持不变。如需更改，请创建新令牌。",
+        "sameSecret": "令牌和密钥都不变。已在使用它的智能体会在下一次调用时获得新权限，无需重新复制。",
+        "changes": {
+          "label": "更改",
+          "adding": "新增",
+          "removing": "移除",
+          "none": "尚无更改。打开或关闭某项权限即可更改。"
+        },
+        "emptyError": "请至少保留一项权限。如果想让此令牌停止工作，请改为吊销它。",
+        "refused": "你无法在 {project} 中授予<strong>{permission}</strong>，因此未做任何更改。该权限已在下方关闭，请在不包含它的情况下重新保存。",
+        "gone": {
+          "title": "此令牌已不存在",
+          "body": "它已在其他地方被吊销，因此没有可更改的内容。关闭后它会从列表中移除。",
+          "close": "关闭"
+        },
+        "save": "保存权限",
+        "cancel": "取消",
+        "errorTitle": "无法更新权限",
+        "errorGeneric": "出错了。未做任何更改，请重试。",
+        "staffUnavailable": "在员工会话中无法编辑令牌的权限。",
+        "cliUnavailable": "CLI 登录拥有 CLI 自身的权限。请在该终端中运行 motir auth refresh 以更新它。",
+        "updatedTitle": "权限已更新",
+        "updatedBody": "“{label}”保留其密钥。智能体会在下一次调用时应用此更改。"
+      },
       "expiry": {
         "d30": "30 天",
         "d90": "90 天",
@@ -10271,6 +10328,10 @@
         "walk": {
           "alsoWaiting": "另有一个计划在等你批准："
         }
+      },
+      "notPlannedYet": {
+        "label": "尚未规划",
+        "more": "还有 {count, plural, other {# 个工作项}}尚未规划——打开它查看全部"
       }
     }
   },

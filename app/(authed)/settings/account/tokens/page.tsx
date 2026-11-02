@@ -76,6 +76,9 @@ export default async function AccountApiTokensPage() {
         scopeOrgs={scopeOrgs}
         activeWorkspaceId={ctx?.workspaceId ?? null}
         activeProjectId={activeProject?.id ?? null}
+        // A staff "View as" session cannot change a credential's authority
+        // (MOTIR-749), so the edit controls render disabled with the reason.
+        staffSession={Boolean(session.impersonation)}
       />
 
       {/* Connected apps — the LAST card, below the tokens, whatever the tokens

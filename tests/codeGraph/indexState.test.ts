@@ -70,9 +70,17 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
-/** A succeeded ledger row for `REPO_REF` — what "a graph exists" means. */
-function seedSucceededIndex(output: Prisma.InputJsonObject = { indexed: true, repoRef: REPO_REF }) {
-  return adminDb.jobRun.create({
+/**
+ * What a succeeded index writes: the ledger row for `REPO_REF` and, when it
+ * indexed something, the settle's `indexedAt` stamp on the repository row — the
+ * fact "a graph exists" is read from (`hasBuiltGraph`, Bug MOTIR-10171).
+ * `stampRow: false` writes the ledger row alone.
+ */
+async function seedSucceededIndex(
+  output: Prisma.InputJsonObject = { indexed: true, repoRef: REPO_REF },
+  opts: { stampRow?: boolean } = {},
+) {
+  const run = await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -85,6 +93,10 @@ function seedSucceededIndex(output: Prisma.InputJsonObject = { indexed: true, re
       output,
     },
   });
+  if (typeof output.repoRef === 'string' && opts.stampRow !== false) {
+    await adminDb.githubRepo.update({ where: { id: repoRowId }, data: { indexedAt: new Date() } });
+  }
+  return run;
 }
 
 async function stateOf(): Promise<string | undefined> {
@@ -225,6 +237,31 @@ describe('END TO END, against real Postgres — the four states as the inventory
     // carries no `repoRef`, and must not count as an index.
     await seedSucceededIndex({ indexed: false, reason: 'no projects' });
     expect(await stateOf()).toBe('never');
+  });
+
+  it('⚠️ NEVER — a succeeded run names the ref but the row was never stamped (MOTIR-10171)', async () => {
+    // The ledger is not the source: whether a graph exists is the row's
+    // `indexedAt`, the same column the surfaces print beside the state.
+    await seedSucceededIndex(undefined, { stampRow: false });
+    expect(await stateOf()).toBe('never');
+  });
+
+  it('⚠️ the settle stamps `indexedAt` on a success with NO known head, and writes no sha (MOTIR-10171)', async () => {
+    // The path that produced `indexed` + `indexedAt: null`: an index that started
+    // before any push recorded a head settled without stamping the row at all.
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexSettled(
+        REPO_REF,
+        fx.workspace.organizationId,
+        { headSha: null },
+        tx,
+      ),
+    );
+    const row = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: repoRowId } });
+    expect(row.indexedAt).toBeInstanceOf(Date);
+    expect(row.indexedHeadSha).toBeNull();
+    expect(row.indexingRunId).toBeNull();
+    expect(await stateOf()).toBe('indexed');
   });
 
   it('INDEXED — a graph exists and nothing says the head has moved', async () => {

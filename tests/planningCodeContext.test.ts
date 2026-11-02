@@ -79,7 +79,8 @@ async function setIndexed(
     data: { indexedHeadSha, indexedAt: isIndexed ? new Date('2026-09-01T10:00:00Z') : null },
   });
   if (!isIndexed) return;
-  // `hasSucceededIndex` is a LEDGER fact — a succeeded run carrying the ref.
+  // The ledger row a real index writes beside the `indexedAt` stamp above, which is
+  // what `hasSucceededIndex` is read from (`hasBuiltGraph`, Bug MOTIR-10171).
   await adminDb.jobRun.create({
     data: {
       workspaceId,

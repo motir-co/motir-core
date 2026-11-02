@@ -140,6 +140,29 @@
       "notClaimed": "Hemos perdido el rastro de ese código. Vuelve a introducirlo para continuar.",
       "network": "No pudimos conectar con Motir. Comprueba tu conexión y vuelve a intentarlo.",
       "unexpected": "Algo ha fallado por nuestra parte. Vuelve a intentarlo o ejecuta motir login para obtener un código nuevo."
+    },
+    "update": {
+      "heading": "¿Actualizar los permisos de este terminal?",
+      "subhead": "Revisa el token y los cambios antes de aprobar.",
+      "updating": "Actualizando",
+      "tokenSub": "Token <chip>{prefix}…</chip> · el mismo secreto, nada que copiar",
+      "askedAgo": "Código <chip>{code}</chip> · solicitado {ago}",
+      "workspaceSub": "El espacio de trabajo del token. No cambia.",
+      "expiresValue": "En {days} días",
+      "expiresSub": "No cambia con esta actualización.",
+      "changes": "Cambios",
+      "unchanged": "{count, plural, one {# permiso más se queda como está.} other {# permisos más se quedan como están.}}",
+      "warning": "Aprueba solo si acabas de ejecutar tú mismo <cmd>motir auth refresh</cmd> en {hostname}. Si alguien te ha enviado este código, <strong>deniégalo</strong>: aprobarlo da a ese token los cambios anteriores.",
+      "actions": "Aprobar o denegar esta actualización",
+      "approve": "Aprobar actualización",
+      "deny": "Denegar",
+      "approvedHeading": "Permisos actualizados",
+      "approvedSubhead": "No tienes que hacer nada más aquí.",
+      "approvedBody": "Vuelve a tu terminal: <cmd>motir auth refresh</cmd> ha terminado. <strong>{label}</strong> tiene ahora los permisos actuales de la CLI y conserva su token.",
+      "deniedBody": "No ha cambiado nada. <strong>{label}</strong> conserva los permisos que tenía y el terminal conserva su token.",
+      "deniedRetry": "¿Lo has denegado por error? Vuelve a ejecutar <cmd>motir auth refresh</cmd> para obtener un código nuevo: este no se puede reutilizar.",
+      "expiredBody": "<chip>{code}</chip> ya no es válido y no se ha cambiado nada. Vuelve a ejecutar <cmd>motir auth refresh</cmd> para obtener un código nuevo.",
+      "expiredNote": "Tu terminal ya ha dejado de esperar: indica que el código ha caducado."
     }
   },
   "markdownEditor": {
@@ -3890,6 +3913,40 @@
       "expiresNever": "Nunca",
       "lastUsedNever": "Nunca",
       "revokeAria": "Revocar el token {label}",
+      "editAria": "Editar los permisos de {label}",
+      "edit": {
+        "title": "Editar permisos",
+        "description": "Cambia lo que puede hacer este token. El token en sí no cambia.",
+        "facts": {
+          "label": "Nombre",
+          "token": "Token",
+          "boundTo": "Vinculado a",
+          "expires": "Caduca"
+        },
+        "factsLocked": "Estos datos se mantienen. Para cambiarlos, crea un token nuevo.",
+        "sameSecret": "El mismo token, el mismo secreto. Los agentes que ya lo usan reciben los nuevos permisos en su próxima llamada: no hay nada que volver a copiar.",
+        "changes": {
+          "label": "Cambios",
+          "adding": "Se añade",
+          "removing": "Se quita",
+          "none": "Aún no hay cambios. Activa o desactiva un permiso para cambiarlo."
+        },
+        "emptyError": "Mantén al menos un permiso. Para que este token deje de funcionar, revócalo.",
+        "refused": "No puedes conceder <strong>{permission}</strong> en {project}, así que no se ha cambiado nada. Está desactivado abajo: vuelve a guardar sin él.",
+        "gone": {
+          "title": "Este token ya no existe",
+          "body": "Se revocó en otro lugar, así que no hay nada que cambiar. Cierra esto y desaparecerá de la lista.",
+          "close": "Cerrar"
+        },
+        "save": "Guardar permisos",
+        "cancel": "Cancelar",
+        "errorTitle": "No se pudieron actualizar los permisos",
+        "errorGeneric": "Algo salió mal. No se ha cambiado nada; vuelve a intentarlo.",
+        "staffUnavailable": "No puedes editar los permisos de un token en una sesión de personal.",
+        "cliUnavailable": "Un inicio de sesión de la CLI tiene los permisos propios de la CLI. Ejecuta motir auth refresh en ese terminal para actualizarlo.",
+        "updatedTitle": "Permisos actualizados",
+        "updatedBody": "«{label}» conserva su secreto. Los agentes aplican el cambio en su próxima llamada."
+      },
       "expiry": {
         "d30": "30 días",
         "d90": "90 días",
@@ -10280,6 +10337,10 @@
         "walk": {
           "alsoWaiting": "También esperando tu aprobación:"
         }
+      },
+      "notPlannedYet": {
+        "label": "Aún sin planificar",
+        "more": "y {count, plural, one {# elemento más} other {# elementos más}} aún sin planificar — ábrela para verlos todos"
       }
     }
   },

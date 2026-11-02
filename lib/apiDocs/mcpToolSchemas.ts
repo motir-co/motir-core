@@ -225,7 +225,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                   type: 'array',
                   items: { type: 'string' },
                   description:
-                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to, and the item does not complete until every one of them has a merged pull request. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
+                    'EVERY repository this item ships in, ORDERED — the first element is the PRIMARY dispatch routes to. The list does not decide completion: the item completes when every pull request LINKED to it has merged. Bare names or the `owner/name` form, validated against the PROJECT’s repository domain at approve by the same resolver `create_work_item` uses. MUTUALLY EXCLUSIVE with `targetRepo` and `targetRepositories` — one field, three spellings — and supplying two is rejected here rather than silently resolved. `[]` is the empty set.',
                 },
                 targetRepositories: {
                   type: 'array',
@@ -1378,7 +1378,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: { type: 'string' },
         description:
-          'Optional: EVERY repository this item ships in, ORDERED — bare repo names (e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST element is the PRIMARY: the one dispatch routes the CLI to. The rest record where the item\'s other work lands, and the item does not complete until EVERY repository on the list has a pull request merged onto that repository\'s own default branch. Each element is validated against the project\'s repository domain; duplicates collapse, blank elements are dropped, and one unknown element rejects the whole write. Use it for a card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, so this is for a story or a task, not a subtask. `[]` is the empty set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list\'s first element: supplying both is rejected rather than silently resolved.',
+          'Optional: EVERY repository this item ships in, ORDERED — bare repo names (e.g. ["motir-core", "motir-ai"]) or the "owner/name" form. The FIRST element is the PRIMARY: the one dispatch routes the CLI to. The rest record where the item\'s other work may land. The list does not decide completion: the item completes when every pull request LINKED to it has merged onto its repository\'s default branch, so a listed repository that needed no change never holds it open. Each element is validated against the project\'s repository domain; duplicates collapse, blank elements are dropped, and one unknown element rejects the whole write. Use it for a card that legitimately spans repositories — ONE SUBTASK is still ONE REPO, so this is for a story or a task, not a subtask. `[]` is the empty set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list\'s first element: supplying both is rejected rather than silently resolved.',
       },
       targetRepositories: {
         type: 'array',
@@ -1707,6 +1707,66 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         maxItems: 50,
         description:
           'OPTIONAL — committed work items to answer for, by key (`ACME-7`) or id, beside the ones the walk re-authors. A named card the walk does not re-author reads `not_in_walk`.',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  get_plan_code_reads: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+      sessionKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL — only this session’s reads (the key `report_plan_step` carried).',
+      },
+      afterSeq: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'OPTIONAL — the next page: pass the previous page’s `nextAfterSeq`. Omit for the first.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 500,
+        description: 'OPTIONAL — reads per page, at most 500 (the default).',
+      },
+    },
+    required: ['planId'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  get_plan_lesson_log: {
+    type: 'object',
+    properties: {
+      planId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The plan id `create_plan` returned (or the id shown on the plan in Motir).',
+      },
+      sessionKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL — only this session’s calls (the key `report_plan_step` carried).',
+      },
+      afterSeq: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'OPTIONAL — the next page: pass the previous page’s `nextAfterSeq`. Omit for the first.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 500,
+        description: 'OPTIONAL — calls per page, at most 500 (the default).',
       },
     },
     required: ['planId'],
@@ -2825,13 +2885,189 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         enum: ['settle', 'lay', 'author', 'end'],
         description:
-          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step` or `narration`.',
+          'The step the session is starting: `settle` (settling the brief — never a target), `lay` (laying the children of `target`, or the project’s top level with no target), `author` (writing `target`, or an item not on the plan yet with no target), or `end` (the session finished — clears its step; never a target). A step report also records the words a person reads at the head of that session’s narration. Send exactly one of `step`, `narration`, `codeReads`, `gaps` or `lessonCalls`.',
       },
       narration: {
         type: 'array',
         items: { type: 'string' },
         description:
           'Instead of `step`: one or more plain-language sentences saying what the session is doing and why, appended in order to the plan’s kept narration under `sessionKey` (at most 20 per call; whitespace is collapsed and a sentence longer than 240 characters is cut with an ellipsis). Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when a sentence is empty, or when the session has not reported `settle`, `lay` or `author` yet. Nothing is recorded on a refusal.',
+      },
+      codeReads: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            tool: {
+              type: 'string',
+              description:
+                'The tool: `read_file` · `code_explore` · `code_search` · `code_grep`, or a local one (`Read` · `Grep` · `Glob` · `git show` · `git grep` · `git log`).',
+            },
+            repo: { type: 'string', description: '`owner/name`, or the local checkout’s name.' },
+            path: {
+              type: 'string',
+              description: 'A read’s path, or a search’s path prefix / glob.',
+            },
+            startLine: { type: 'integer', minimum: 1 },
+            endLine: { type: 'integer', minimum: 1 },
+            askedRef: {
+              type: 'string',
+              description:
+                'The ref the call ASKED for (`main`) — a label, not what it was read at.',
+            },
+            query: { type: 'string', description: 'A search’s query or pattern.' },
+            commits: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  repo: { type: 'string' },
+                  sha: {
+                    type: 'string',
+                    description: 'The RESOLVED commit id, 7–64 hex — never a branch name.',
+                  },
+                  dirty: {
+                    type: 'boolean',
+                    description: 'A local checkout with uncommitted changes.',
+                  },
+                },
+                required: ['sha'],
+                additionalProperties: false,
+              },
+              description:
+                'Every commit the read was made at: the resolved ref of a file read, the graph’s commit for a code-graph read, the checkout HEAD for a local read. Empty only when nothing resolved.',
+            },
+            outcome: {
+              type: 'string',
+              description: 'The result’s outcome code: `found`, `ok`, `not_found`, `too_large`, …',
+            },
+            lines: { type: 'integer', minimum: 0, description: 'Lines a read returned.' },
+            hits: { type: 'integer', minimum: 0, description: 'Matches a search returned.' },
+            detail: {
+              type: 'string',
+              description: 'A short refusal or failure detail — never content.',
+            },
+          },
+          required: ['tool', 'outcome'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the session’s CODE READS, in the order it made them, appended to the plan’s kept read log under `sessionKey` (at most 50 per call). Records what was asked, the commit it was read at and how much came back — never the code. Needs no step: a session may post its reads before or after it holds one. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a read is malformed (a `sha` that is not hex is refused). Nothing is recorded on a refusal. Read them back with `get_plan_code_reads`.',
+      },
+      gaps: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            op: {
+              type: 'string',
+              enum: ['raise', 'amend'],
+              description:
+                '`raise`: an author session found work no card covers — declare it NOW, before the next session opens. `amend`: the level’s amend session was handed the gap.',
+            },
+            id: {
+              type: 'string',
+              description:
+                'YOUR id for the gap, unique on the plan — the `amend` names it. A second `raise` of the same id is a repeated report and is kept as it was.',
+            },
+            level: {
+              type: 'string',
+              description: '`raise`: the level the gap is about — the raising card’s parent ref.',
+            },
+            raisedBy: {
+              type: 'string',
+              description: '`raise`: the card whose author session raised it.',
+            },
+            what: {
+              type: 'string',
+              description: '`raise`: the uncovered work, in the session’s words.',
+            },
+            decision: {
+              type: 'string',
+              description: '`raise`: the open decision it turns on, and who decides it.',
+            },
+            after: { type: 'string', description: '`raise`: the sibling it falls after.' },
+            before: { type: 'string', description: '`raise`: the sibling it falls before.' },
+            note: { type: 'string' },
+            amended: {
+              type: 'boolean',
+              description:
+                '`raise`: true when the level’s amend has ALREADY run, so no amend will answer it.',
+            },
+            refs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`amend`: the cards the amend named for THIS gap; omit when it named none.',
+            },
+            open: {
+              type: 'string',
+              description: '`amend`: the part of the gap those refs leave uncovered.',
+            },
+          },
+          required: ['op', 'id'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the GAPS your author sessions raised and the ones a level’s amend was handed (at most 50 per call), kept ON THE PLAN so a walk that dies and is resumed can hand the amend what the dead attempt raised. `get_plan` reads them back as `raisedGaps`, each with `amended`. Needs no step. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, when an entry is malformed, or when an `amend` names an id the plan does not hold. Nothing is recorded on a refusal.',
+      },
+      lessonCalls: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            kind: {
+              type: 'string',
+              enum: ['search', 'reinforce', 'add', 'injected'],
+              description:
+                '`search` (a `search_lessons` call), `reinforce` (`reinforce_lesson`), `add` (`add_lesson`), or `injected` (lessons composed into the session’s prompt in code, not searched).',
+            },
+            query: { type: 'string', description: '`search`: the query it asked.' },
+            filters: {
+              type: 'object',
+              properties: {
+                kinds: { type: 'array', items: { type: 'string' } },
+                types: { type: 'array', items: { type: 'string' } },
+                phases: { type: 'array', items: { type: 'string' } },
+                subject: { type: 'string' },
+                limit: { type: 'integer', minimum: 1 },
+              },
+              additionalProperties: false,
+              description: '`search`: the axes it narrowed by; omit an axis it left open.',
+            },
+            lessonIds: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '`search`: the lesson ids it RETURNED, in rank order (`[]` for none). `injected`: the ids composed into the prompt, in order.',
+            },
+            lessonId: {
+              type: 'string',
+              description: '`reinforce`: the lesson it named. `add`: the lesson it created.',
+            },
+            occurrenceRef: {
+              type: 'string',
+              description: '`reinforce`: its `occurrenceRef`. `add`: its `sourceRef`.',
+            },
+            outcome: {
+              type: 'string',
+              description:
+                'The call’s outcome code: `matched`, `nothing-matched`, `unavailable`, `counted`, `already_counted`, `added`, `injected`, `error`, …',
+            },
+            counted: {
+              type: 'boolean',
+              description: '`reinforce` / `add`: whether it counted (`false` = already recorded).',
+            },
+            detail: {
+              type: 'string',
+              description: 'A short refusal or failure detail — never a lesson’s text.',
+            },
+          },
+          required: ['kind', 'outcome'],
+          additionalProperties: false,
+        },
+        description:
+          'Instead of `step`: the session’s LESSON CALLS, in the order it made them, appended to the plan’s kept lesson log under `sessionKey` (at most 50 per call). Records lesson IDS only — never a lesson’s text. An EMPTY array is a report too: it marks the session recorded with no lesson call, so a reader can tell "never searched" from "not recorded" — send it once when a session made none. Needs no step. Refused with PLAN_STEP_INVALID when sent with `step` or `target`, or when a call is malformed. Nothing is recorded on a refusal. Read them back with `get_plan_lesson_log`.',
       },
       target: {
         type: 'string',
@@ -3411,6 +3647,37 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['fromKey', 'toKey', 'relationship'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  update_coding_convention: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository whose convention to write — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively, as `get_coding_convention` takes it.',
+      },
+      contentMd: {
+        type: 'string',
+        description:
+          'The WHOLE convention document as Markdown — it replaces the current text as a new version; the older versions stay in the history. Not blank, at most 65536 characters.',
+      },
+      baseVersion: {
+        type: 'integer',
+        minimum: 0,
+        description:
+          'The `version` your edit is based on — what `get_coding_convention` returned (0 when the repository has no convention yet). If a newer version was saved since, nothing is written and the answer carries the version that won.',
+      },
+    },
+    required: ['projectKey', 'repo', 'contentMd', 'baseVersion'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -4207,7 +4474,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'array',
         items: { type: 'string' },
         description:
-          "Replace the repository SET wholesale — EVERY repository this item ships in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched into. The item does not complete until every repository on the list has a pull request merged onto that repository's own default branch, so use it for a card that legitimately spans repositories (a story or a task — ONE SUBTASK is still ONE REPO). Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: supplying both is rejected rather than silently resolved.",
+          "Replace the repository SET wholesale — EVERY repository this item ships in, ORDERED, the FIRST element being the PRIMARY the CLI is dispatched into. The list does not decide completion: the item completes when every pull request LINKED to it has merged onto its repository's default branch. Use it for a card that legitimately spans repositories (a story or a task — ONE SUBTASK is still ONE REPO). Same validation as create; `[]` clears the set. MUTUALLY EXCLUSIVE with targetRepo, which IS this list's first element: supplying both is rejected rather than silently resolved.",
       },
       targetRepositories: {
         type: 'array',
@@ -4439,6 +4706,8 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_page: 'Get page',
   get_plan: 'Read plan proposals',
   get_plan_authoring_state: 'Read which proposals are authored',
+  get_plan_code_reads: 'Read what each planning session read',
+  get_plan_lesson_log: 'Read which lessons each planning session saw',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
   get_section_sets: 'Get section sets',
@@ -4490,6 +4759,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   unarchive_work_item: 'Unarchive work item',
   unlink_pull_request: 'Unlink pull request',
   unlink_work_items: 'Unlink work items',
+  update_coding_convention: 'Update coding convention',
   update_folder: 'Update folder',
   update_page: 'Update page',
   update_plan: "Correct a plan's own title and summary",
@@ -4744,6 +5014,16 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   get_plan: { title: 'Read plan proposals', readOnlyHint: true, openWorldHint: false },
   get_plan_authoring_state: {
     title: 'Read which proposals are authored',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  get_plan_code_reads: {
+    title: 'Read what each planning session read',
+    readOnlyHint: true,
+    openWorldHint: false,
+  },
+  get_plan_lesson_log: {
+    title: 'Read which lessons each planning session saw',
     readOnlyHint: true,
     openWorldHint: false,
   },
@@ -5008,6 +5288,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: true,
+    openWorldHint: false,
+  },
+  update_coding_convention: {
+    title: 'Update coding convention',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
     openWorldHint: false,
   },
   update_folder: {

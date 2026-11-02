@@ -70,6 +70,15 @@ export const EXEMPT_TOOLS = {
   validate_sprint:
     'The same verdict shape over a sprint’s membership. Same boundary, same reason — it ' +
     'describes whether a set of work can finish, which is not a thing v1 returns.',
+  get_plan_lesson_log:
+    'Returns the LESSON CALLS each planner session of a plan made — its searches with the ' +
+    'lesson ids they returned, its reinforcements and additions, the ids injected in code — ' +
+    'a planning-evidence read for a check of the plan, not a resource. No `/api/v1` operation ' +
+    'returns plan sessions or lessons (MOTIR-10191).',
+  get_plan_code_reads:
+    'Returns the CODE READS each planner session of a plan made — tool, arguments, the ' +
+    'commits read at and the outcome — a planning-evidence read for a check of the plan, not ' +
+    'a resource. No `/api/v1` operation returns plan sessions or their reads (MOTIR-10122).',
   get_plan_authoring_state:
     'Returns each proposal’s AUTHORING STATE (`not_started` / `authoring` / `authored`), ' +
     'derived from the plan’s live planner-session steps — a planning read for an author ' +
@@ -94,6 +103,11 @@ export const EXEMPT_TOOLS = {
     'edited by), or a named `state` (absent / unavailable / repo_not_in_project) \u2014 a read of ' +
     'motir-ai\u2019s convention store assembled for an agent about to write code. No `/api/v1` ' +
     'operation returns a convention document, and no REST client has asked for one (MOTIR-9083).',
+  update_coding_convention:
+    'Answers the version a CONVENTION SAVE wrote (version, author, text) or the repository set ' +
+    '\u2014 the same convention document `get_coding_convention` returns, written through ' +
+    'motir-ai\u2019s convention store. No `/api/v1` operation returns or writes a convention ' +
+    'document (MOTIR-10183).',
   read_file:
     'Returns one repository FILE\u2019s TEXT at a git ref, plus a named `outcome` (found / not_found / ' +
     'ref_not_found / too_large / binary / \u2026 / repo_not_in_project) \u2014 a read made against the ' +

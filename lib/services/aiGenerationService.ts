@@ -31,6 +31,10 @@ import type {
   ProposalLinkWarningDto,
   ProposalRescopeWarningDto,
   PlanNarrationDto,
+  PlanCodeReadDto,
+  PlanLessonCallDto,
+  PlanGapsRecordedDto,
+  PlanRaisedGapDto,
   PlanStepDto,
   PlanStepProviderWaitDto,
   PlanStepKindDto,
@@ -506,11 +510,20 @@ export const aiGenerationService = {
       narration?: string[];
       /** The session's provider-retry wait (MOTIR-9619) — sent INSTEAD of `step`. */
       providerRetry?: PlanProviderRetryInput;
+      /** The session's code reads (MOTIR-10122) — sent INSTEAD of `step`. */
+      codeReads?: unknown[];
+      /** The gaps raised and amended (MOTIR-10176) — sent INSTEAD of `step`. */
+      gaps?: unknown[];
+      /** The session's lesson calls (MOTIR-10191) — sent INSTEAD of `step`. */
+      lessonCalls?: unknown[];
     },
     auth: { ctx: ServiceContext; projectId: string },
   ): Promise<
     | { planId: string; step: PlanStepKindDto | 'end'; inFlight: PlanStepDto | null }
     | { planId: string; narration: PlanNarrationDto[] }
+    | { planId: string; codeReads: PlanCodeReadDto[] }
+    | { planId: string; gaps: PlanGapsRecordedDto }
+    | { planId: string; lessonCalls: PlanLessonCallDto[] }
     | { planId: string; providerWait: PlanStepProviderWaitDto | null }
   > {
     const { ctx, projectId } = auth;
@@ -528,10 +541,18 @@ export const aiGenerationService = {
         ...(input.step !== undefined ? { step: input.step } : {}),
         ...(input.narration !== undefined ? { narration: input.narration } : {}),
         ...(input.providerRetry !== undefined ? { providerRetry: input.providerRetry } : {}),
+        ...(input.codeReads !== undefined ? { codeReads: input.codeReads } : {}),
+        ...(input.gaps !== undefined ? { gaps: input.gaps } : {}),
+        ...(input.lessonCalls !== undefined ? { lessonCalls: input.lessonCalls } : {}),
       },
       ctx,
     );
     if (result.kind === 'narration') return { planId: plan.id, narration: result.narration };
+    if (result.kind === 'codeReads') return { planId: plan.id, codeReads: result.codeReads };
+    if (result.kind === 'gaps') return { planId: plan.id, gaps: result.gaps };
+    if (result.kind === 'lessonCalls') {
+      return { planId: plan.id, lessonCalls: result.lessonCalls };
+    }
     if (result.kind === 'providerRetry') {
       return { planId: plan.id, providerWait: result.providerWait };
     }
@@ -730,12 +751,20 @@ export const aiGenerationService = {
   //
   // Resolved by `sourceJobId` like every seam beside it, so a job token cannot
   // read another job's plan. Read-only: it creates nothing and changes nothing.
-  async readPlanProposals(jobId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {
+  // ⚠️ AND THE GAPS ITS AUTHOR SESSIONS RAISED (MOTIR-10176). A resumed walk reads
+  // the plan from here, and a gap the dead attempt raised is on the plan, not in any
+  // memory that survived — so the amend of its level is handed it from this read.
+  async readPlanProposals(
+    jobId: string,
+    ctx: ServiceContext,
+  ): Promise<PlanWithItemsDto & { raisedGaps: PlanRaisedGapDto[] }> {
     const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
     );
     if (!plan) throw new NoPlanForJobError(jobId);
-    return plansService.getPlan(plan.id, ctx);
+    const withItems = await plansService.getPlan(plan.id, ctx);
+    const raisedGaps = await plansService.listPlanRaisedGaps(plan.id, ctx);
+    return { ...withItems, raisedGaps };
   },
 
   // The INTERNAL CORRECTION seam (Story MOTIR-3595 · Subtask MOTIR-3598) — the

@@ -535,20 +535,20 @@ closedness of the enum stand exactly as written.
   artifact is `decision`"_) say it is the JUDGEMENT, with no artifact at all.
 
 Those are two different acts with two different actors. In the first, the
-decision has already been made — by an agent that researched it, or by the
-planner with a person in the conversation — and what is left is to write it
-down so a person can accept it. In the second, nobody has decided: the planner
-correctly declined to choose between options that are all correct, and a person
-has to PICK one. The approval gates ADR already gives the second act its own
+decision has already been made — by the planner with a person in the
+conversation (Amendment 4 removed the agent that researched it) — and what is
+left is to write it down so a person can accept it. In the second, nobody has
+decided: the planner correctly declined to choose between options that are all
+correct, and a person has to PICK one. The approval gates ADR already gives the second act its own
 gate kind (`decision_choice`), and until this amendment there was no type it
 could key on — so it was keyed on `type: decision` with a human executor, the
 same pair that also means _"accept this written record."_
 
 ### 1c. The fifteenth member — `choice`
 
-| Member   | Authoritative gloss                                                                                                                                                                                                                          | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                            |
-| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `choice` | A question the planner correctly declined to decide — two or more options, each with its WHY and what it is best for, and a person PICKS one. It has no artifact but the pick, and it always decides FOLLOW-UP work that is not yet planned. | vs `decision`: a `decision` is already decided and is written down for a person to ACCEPT; a `choice` is undecided and a person PICKS among its options. If a recommendation exists, it is a `decision`. If the work item's body is a set of options with no recommendation, it is a `choice`. |
+| Member   | Authoritative gloss                                                                                                                                                                                                                          | Nearest neighbour, and the boundary                                                                                                                                                                                                                                                         |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `choice` | A question the planner correctly declined to decide — two or more options, each with its WHY and what it is best for, and a person PICKS one. It has no artifact but the pick, and it always decides FOLLOW-UP work that is not yet planned. | vs `decision`: a `decision` was made in the conversation and its run writes it up for a person to ACCEPT; a `choice` is undecided and a person PICKS among its options. A question still open when planning ends is a `choice`, never a `decision` for its run to research. _(Amendment 4)_ |
 
 **Kind.** Leaf-only, like every type (§2). The shape a planner lays is a
 **`task` under an epic, laid in the place a story would have taken** — the
@@ -573,9 +573,11 @@ that teaches a planner to write that structure is the `type-choice` pack
 
 §1's `decision` gloss is amended to:
 
-> `decision` — A decision already made — by the agent researching it, or by the
-> planner with the person in conversation — written down so a person can accept
-> it.
+> `decision` — A decision the conversation already made — the planner with the
+> person, in planning — recorded so a person can accept it; its run writes it up
+> and never re-opens it. An open question is a `choice`.
+
+_(Restated by Amendment 4, which records the wording it replaced and why.)_
 
 And the two sentences that described the artifact-free judgement are
 reconciled with it:
@@ -762,3 +764,87 @@ delta MOTIR-5888 draws carries `--el-type-choice`.
 - MOTIR-4155 — `decision` defined twice; its §1 half is settled here, its
   `content` half is not.
 - MOTIR-4915 — where a `choice` is laid.
+
+---
+
+## Amendment 4 (2026-11-02) — a `decision` is made in the conversation and written up by its run; it is never researched
+
+> **Written by MOTIR-10207**, found while running MOTIR-10206. It changes
+> WORDING only: no member is admitted or removed, no executor default moves,
+> and §1e's canonical order, §2's leaf-only rule, §3/§3a/§3b's default map, §4's
+> Jira deviation and the closedness of the enum all stand exactly as written.
+>
+> **Numbered 4** — verified before numbering: `origin/main` (`9947bd1`) carries
+> Amendments 1, 2 and 3 only, and MOTIR-10206's open pull request (#3910), the
+> one in-flight change about `decision` work items, does not touch this file.
+
+**Amends §1c** (the `choice` boundary) **and §1d** (the `decision` gloss). Both
+are edited in place above, each marked _(Amendment 4)_, so a reader of §1c or
+§1d reads the wording in force. The table below is the record of what they
+said before.
+
+### The problem this fixes
+
+Amendment 3 told the two acts apart correctly — a `decision` is already made
+and a person ACCEPTS it, a `choice` is undecided and a person PICKS — but it
+kept two phrases from the shape it was splitting:
+
+- §1d said a decision is made _"by the agent researching it, or by the planner
+  with the person in conversation"_. That leaves a `decision` work item room to
+  hold an open question for its run to research and answer.
+- §1c's boundary said _"If a recommendation exists, it is a `decision`"_. That
+  makes a recommendation — an agent's proposal on an open question — the thing
+  that turns a question into a decision.
+
+MOTIR-10206 settled the rule in both planners' corpora and in motir-core's
+`decision` section set: planning is where decisions are made, by the planner
+with the person in the conversation, and a `decision` work item is the WRITE-UP
+of one such decision. Its run writes it up so the person can confirm the planner
+understood them; it does not research, weigh or propose. A question the
+conversation has not settled is never laid as a `decision`: either it is a
+`choice` a person picks, or it goes back to the conversation. This ADR's two
+phrases were the last statement of the old shape, and `motir-ai`'s
+`WORK_ITEM_TYPE_GLOSSES` carries them verbatim into the hosted planner's type
+vocabulary.
+
+### What changes
+
+| Section | Field             | Was                                                                                                                                                                                                                                | Now                                                                                                                                                                                                                                                                         |
+| ------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §1d     | `decision` gloss  | A decision already made — by the agent researching it, or by the planner with the person in conversation — written down so a person can accept it.                                                                                 | A decision the conversation already made — the planner with the person, in planning — recorded so a person can accept it; its run writes it up and never re-opens it. An open question is a `choice`.                                                                       |
+| §1c     | `choice` boundary | vs `decision`: a `decision` is already decided and is written down for a person to ACCEPT; … If a recommendation exists, it is a `decision`. If the work item's body is a set of options with no recommendation, it is a `choice`. | vs `decision`: a `decision` was made in the conversation and its run writes it up for a person to ACCEPT; a `choice` is undecided and a person PICKS among its options. A question still open when planning ends is a `choice`, never a `decision` for its run to research. |
+
+`choice`'s own gloss in §1c (_"A question the planner correctly declined to
+decide — … a person PICKS one."_) is unchanged: it already says the question is
+open and the person decides it.
+
+**What tells the two apart now is whether the conversation decided it, not
+whether a recommendation exists.** A `choice` still carries no recommendation
+(the `type-choice` packs say _a person picks; nothing is recommended_), but the
+absence of one is a property of a `choice`, not its test.
+
+**§3's executor rationale stands** (_"Accepting a written decision is a
+person's sign-off."_), and so does the default `decision → human`. Which
+executor a planner LAYS a `decision` with, and which gate each executor raises,
+are the planning corpora's and the approval gates ADR's to say, not this
+taxonomy's.
+
+### Consequences
+
+- **`motir-ai` `src/llm/workItemTypes.ts` `WORK_ITEM_TYPE_GLOSSES`** — the
+  `decision` scope and the `choice` boundary take the new wording verbatim, and
+  `tests/workItemTypeVocabulary.test.ts`'s independent transcription
+  (`ADR_SCOPE` / `ADR_BOUNDARY`) and `tests/choiceTypeStoryGate.test.ts` move
+  with them. `tests/fixtures/sharedPlanningRules.baseline.txt` is regenerated by
+  its script. MOTIR-10207.
+- **`motir-meta` `prompts/_shared.md`** — the data model's `type` line is
+  plan.py's type vocabulary (`plan.py` composes it into every session). It
+  becomes the fifteen-member list with the `decision` and `choice` glosses
+  carried verbatim. MOTIR-10207.
+- **This document is the first edit**, as Amendments 2 and 3 record: the mirror
+  is held to this text, never the reverse.
+
+### References added by this amendment
+
+- MOTIR-10207 (this amendment), MOTIR-10206 (a `decision` work item is the
+  write-up of a decision made in planning).

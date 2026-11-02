@@ -21,6 +21,10 @@
 //   - GET  /repos/{owner}/{name}/contents/{path}?ref=   → a file's raw text (MOTIR-5681),
 //                                                         at that ref when the control
 //                                                         keys it by ref (MOTIR-7866)
+//   - GET  /repos/{owner}/{name}/commits/{ref}          → the commit a ref names, as the SHA
+//                                                         media type: {@link e2eRefSha} of the
+//                                                         ref, which the contents read below
+//                                                         maps back to it (MOTIR-10122)
 //   - GET  /repos/{owner}/{name}/commits/{sha}/check-runs
 //                                                       → a commit's check runs, ONLY for a
 //                                                         commit the control names (MOTIR-6851)
@@ -50,6 +54,7 @@
 // repository's owner selects (`githubAppRoleForRepo`). That is the lane's wiring, not
 // this seam's.
 
+import { createHash } from 'node:crypto';
 import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 
@@ -225,6 +230,7 @@ const MERGE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/merge$/;
 const RULES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/rules\/branches\/[^?]+$/;
 const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
 const CONTENTS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/contents\/([^?]+)(?:\?.*)?$/;
+const COMMIT_REF_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits\/([^/?]+)(?:\?.*)?$/;
 const CHECK_RUNS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits\/([0-9a-fA-F]+)\/check-runs(?:\?.*)?$/;
 const PERMISSION_PATH = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/?]+)\/permission(?:\?.*)?$/;
 
@@ -238,6 +244,15 @@ function scopedPermission(path: string): { repository: string; username: string 
 }
 
 /** A path's repository and pull request, when this seam answers for that repository. */
+/** The fake commit the seam answers for `ref` in `repository` — stable, so a spec can
+ *  compute the commit a read was made at (MOTIR-10122). */
+export function e2eRefSha(repository: string, ref: string): string {
+  return createHash('sha1').update(`${repository.toLowerCase()}@${ref}`).digest('hex');
+}
+
+/** Every fake commit handed out, back to the ref it stands for. */
+const refOfSha = new Map<string, string>();
+
 function scoped(pattern: RegExp, path: string): { repository: string; key: string | null } | null {
   const m = pattern.exec(path);
   if (!m) return null;
@@ -444,6 +459,24 @@ export function installGithubMergeMock(agent: MockAgent): void {
     })
     .persist();
 
+  // ── The commit a ref names (MOTIR-10122) ──────────────────────────────────
+  // `read_file` resolves its ref to a commit and reads AT it. The seam answers a stable
+  // fake commit per (repository, ref) — `e2eRefSha` — and remembers the pair, so the
+  // contents read below still finds the text a control keyed by the ref's NAME.
+  pool
+    .intercept({ path: (p) => scoped(COMMIT_REF_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const m = COMMIT_REF_PATH.exec(path)!;
+      const repository = `${m[1]}/${m[2]}`;
+      const ref = decodeURIComponent(m[3]!);
+      journal({ method: 'GET', path, body: null, pullRequest: null });
+      const sha = /^[0-9a-f]{40}$/.test(ref) ? ref : e2eRefSha(repository, ref);
+      refOfSha.set(sha, ref);
+      return reply(200, sha, { 'content-type': 'text/plain; charset=utf-8' });
+    })
+    .persist();
+
   // ── A file's contents at a ref, RAW (Story MOTIR-4907 · MOTIR-5681) ─────────
   // The decision port reads the document through `readFileAtRef`, which asks for the raw
   // media type. Scoped like every intercept here; a path the control does not name is the
@@ -455,7 +488,9 @@ export function installGithubMergeMock(agent: MockAgent): void {
       const m = CONTENTS_PATH.exec(path)!;
       const repository = `${m[1]}/${m[2]}`;
       const filePath = decodeURIComponent(m[3]!);
-      const ref = queryParam(path, 'ref');
+      const asked = queryParam(path, 'ref');
+      // A read at a commit the seam handed out reads at the ref that commit stands for.
+      const ref = asked !== null ? (refOfSha.get(asked) ?? asked) : null;
       journal({ method: 'GET', path, body: null, pullRequest: null });
       // The REF-qualified key first (`owner/name@ref:path`, MOTIR-7866), so one path can
       // read differently at two refs; then the ref-blind `owner/name:path` key every

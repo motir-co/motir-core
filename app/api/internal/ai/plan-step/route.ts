@@ -47,6 +47,30 @@ import {
 // session's step, and it answers `{ planId, providerWait }` (`null` once
 // cleared). Exactly one of `step` / `narration` / `providerRetry` is sent.
 //
+// CODE READS (MOTIR-10122): the body may carry `codeReads` INSTEAD — an array of
+// the session's code reads, each `{ tool, repo?, path?, startLine?, endLine?,
+// askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+// detail? }`, never file content. Shape and caps are the store's
+// (`plansService.recordPlanCodeReads`, `lib/plans/planCodeRead.ts`), refused 422;
+// it names no `target` and needs no step. Answers `{ planId, codeReads }`.
+//
+// GAPS (MOTIR-10176): the body may carry `gaps` INSTEAD — an array of `{ op: 'raise',
+// id, level?, raisedBy?, what, decision?, after?, before?, note?, amended? }` (a gap an
+// author session raised, declared on the plan before the next session opens) or
+// `{ op: 'amend', id, refs?, open? }` (a gap its level's amend was handed, with what
+// it answered it with). Shape and caps are the store's (`plansService.recordPlanGaps`,
+// `lib/plans/planRaisedGap.ts`), refused 422; it names no `target` and needs no step.
+// Answers `{ planId, gaps: { raised, alreadyRaised, amended } }`. A resumed walk reads
+// them back on `GET /api/internal/ai/plan-proposals` as `raisedGaps`.
+//
+// LESSON CALLS (MOTIR-10191): the body may carry `lessonCalls` INSTEAD — an array
+// (possibly EMPTY, which marks the session recorded with no call) of the session's
+// lesson calls, each `{ kind: 'search' | 'reinforce' | 'add' | 'injected', query?,
+// filters?, lessonIds?, lessonId?, occurrenceRef?, outcome, counted?, detail? }`,
+// ids only, never a lesson's text. Shape and caps are the store's
+// (`plansService.recordPlanLessonCalls`, `lib/plans/planLessonCall.ts`), refused
+// 422; it names no `target` and needs no step. Answers `{ planId, lessonCalls }`.
+//
 // The signal is ADVISORY, so every refusal is a stable `{ code, error }` and
 // never a 500: the walk matches the code and carries on.
 //
@@ -124,10 +148,29 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof sessionKey !== 'string') {
     return fail(INVALID, '`sessionKey` is required and must be a string.', 400);
   }
-  const { narration, providerRetry } = b;
-  const forms = [step, narration, providerRetry].filter((form) => form !== undefined).length;
+  const { narration, providerRetry, codeReads, gaps, lessonCalls } = b;
+  const forms = [step, narration, providerRetry, codeReads, gaps, lessonCalls].filter(
+    (form) => form !== undefined,
+  ).length;
   if (forms !== 1) {
-    return fail(INVALID, 'Send exactly one of `step`, `narration` or `providerRetry`.', 400);
+    return fail(
+      INVALID,
+      'Send exactly one of `step`, `narration`, `providerRetry`, `codeReads`, `gaps` or ' +
+        '`lessonCalls`.',
+      400,
+    );
+  }
+  if (gaps !== undefined) {
+    if (!Array.isArray(gaps)) return fail(INVALID, '`gaps` must be an array.', 400);
+    if (target != null) return fail(INVALID, 'A `gaps` call names no `target`.', 400);
+  }
+  if (lessonCalls !== undefined) {
+    if (!Array.isArray(lessonCalls)) return fail(INVALID, '`lessonCalls` must be an array.', 400);
+    if (target != null) return fail(INVALID, 'A `lessonCalls` call names no `target`.', 400);
+  }
+  if (codeReads !== undefined) {
+    if (!Array.isArray(codeReads)) return fail(INVALID, '`codeReads` must be an array.', 400);
+    if (target != null) return fail(INVALID, 'A `codeReads` call names no `target`.', 400);
   }
   if (step !== undefined && !isStep(step)) {
     return fail(INVALID, `\`step\` must be one of: ${STEPS.join(', ')}.`, 400);
@@ -164,6 +207,9 @@ export async function POST(req: Request): Promise<Response> {
         ...(providerRetry !== undefined
           ? { providerRetry: providerRetry as PlanProviderRetryInput }
           : {}),
+        ...(codeReads !== undefined ? { codeReads: codeReads as unknown[] } : {}),
+        ...(gaps !== undefined ? { gaps: gaps as unknown[] } : {}),
+        ...(lessonCalls !== undefined ? { lessonCalls: lessonCalls as unknown[] } : {}),
       },
       auth,
     );

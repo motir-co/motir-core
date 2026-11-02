@@ -261,6 +261,20 @@ export type PlanningConventionDTO =
   | { state: 'unavailable'; repoRef: string; code: string }
   | { state: 'repo_not_in_project'; repo: string; repoSet: string[] };
 
+// What `update_coding_convention` answers for ONE repository (MOTIR-10183): the
+// version the save wrote, read back exactly as `get_coding_convention` reads it,
+// or the repository set when `repo` names none of it. A refusal (permission,
+// blank, too long, a stale `baseVersion`) is a thrown typed error, never a state.
+export type SavedConventionDTO =
+  | {
+      state: 'saved';
+      repoRef: string;
+      // The current version after the save — the edited one it wrote. Null only
+      // if motir-ai stored the version and then answered the re-read with none.
+      convention: CodingConventionDTO | null;
+    }
+  | { state: 'repo_not_in_project'; repo: string; repoSet: string[] };
+
 export interface PlanningCodeHealthRepoDTO extends Pick<
   CodeContextRepoDTO,
   'repoRef' | 'indexState' | 'indexedAt' | 'commitsBehind' | 'refreshFailing'

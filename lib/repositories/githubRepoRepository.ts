@@ -61,6 +61,8 @@ export interface IndexCatchUpCandidate {
   organizationId: string;
   defaultBranch: string;
   indexPausedReason: string;
+  /** When the last index succeeded — whether a graph exists (`hasBuiltGraph`). */
+  indexedAt: Date | null;
   indexedHeadSha: string | null;
   defaultBranchHeadSha: string | null;
   /** The id the HOST knows — what the index/refresh event carries. */
@@ -235,6 +237,7 @@ export const githubRepoRepository = {
         gr."owner"                    AS "owner",
         gr."name"                     AS "name",
         gr."provider"                 AS "provider",
+        gr."indexed_at"               AS "indexedAt",
         gr."indexed_head_sha"         AS "indexedHeadSha",
         gr."default_branch_head_sha"  AS "defaultBranchHeadSha",
         gi."installation_id"          AS "hostInstallationId"
@@ -316,10 +319,15 @@ export const githubRepoRepository = {
     return result.count;
   },
 
-  /** Settle a finished index: record what it indexed and release the claim.
-   *  `headSha` is the head observed when the run STARTED (see above); a run that
-   *  failed passes none, so the row keeps whatever it last successfully indexed
-   *  and only the in-flight claim is cleared. */
+  /** Settle a SUCCESSFUL index: stamp when it succeeded, record the head it was
+   *  built from when that is known, and release the claim.
+   *
+   *  `headSha` is the head observed when the run STARTED (see above), or null when
+   *  no push had recorded one. ⚠️ `indexedAt` is stamped EITHER WAY (Bug
+   *  MOTIR-10171): it is the row's record that a graph exists, which every index
+   *  state reads (`hasBuiltGraph`), and a success with no known head is still a
+   *  built graph. Only the sha is skipped — the row keeps its last real one rather
+   *  than gaining a false one. */
   async markIndexSettled(
     repoRef: string,
     organizationId: string,
@@ -332,9 +340,8 @@ export const githubRepoRepository = {
       where: { owner, name, organizationId },
       data: {
         indexingRunId: null,
-        ...(args.headSha
-          ? { indexedHeadSha: args.headSha, indexedAt: args.indexedAt ?? new Date() }
-          : {}),
+        indexedAt: args.indexedAt ?? new Date(),
+        ...(args.headSha ? { indexedHeadSha: args.headSha } : {}),
       },
     });
     return result.count;
@@ -417,6 +424,7 @@ export const githubRepoRepository = {
         gr."organization_id"          AS "organizationId",
         gr."default_branch"           AS "defaultBranch",
         gr."index_paused_reason"      AS "indexPausedReason",
+        gr."indexed_at"               AS "indexedAt",
         gr."indexed_head_sha"         AS "indexedHeadSha",
         gr."default_branch_head_sha"  AS "defaultBranchHeadSha",
         gi."installation_id"          AS "hostInstallationId"

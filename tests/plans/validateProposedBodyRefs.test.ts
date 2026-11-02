@@ -179,6 +179,45 @@ describe('findBodyLinkCandidates', () => {
   });
 });
 
+describe('findBodyLinkCandidates — `motir:planItem:<id>` (MOTIR-10193)', () => {
+  it('reads past the `planItem:` prefix in any case, and marks the link prefixed', () => {
+    expect(
+      findBodyLinkCandidates({
+        descriptionMd:
+          'After [a](motir:planItem:pi1), [b](motir:PLANITEM:pi2), [c](motir:planItem:<id>) and [d](motir:pi3).',
+      }),
+    ).toEqual([
+      {
+        field: 'descriptionMd',
+        link: '[a](motir:planItem:pi1)',
+        label: 'a',
+        id: 'pi1',
+        scheme: 'motir',
+        planItemPrefixed: true,
+      },
+      {
+        field: 'descriptionMd',
+        link: '[b](motir:PLANITEM:pi2)',
+        label: 'b',
+        id: 'pi2',
+        scheme: 'motir',
+        planItemPrefixed: true,
+      },
+      { field: 'descriptionMd', link: '[d](motir:pi3)', label: 'd', id: 'pi3', scheme: 'motir' },
+    ]);
+  });
+
+  it('ignores the spelling inside inline code and a fenced block', () => {
+    const descriptionMd = [
+      'Syntax `[x](motir:planItem:pi1)`.',
+      '```',
+      '[y](motir:planItem:pi2)',
+      '```',
+    ].join('\n');
+    expect(findBodyLinkCandidates({ descriptionMd })).toEqual([]);
+  });
+});
+
 describe('judgeBodyLinks', () => {
   const known: BodyLinkResolution = {
     thisPlanAddIds: new Set(['pi_here']),
@@ -196,6 +235,36 @@ describe('judgeBodyLinks', () => {
       expect(w).toMatchObject({ link, correctedLink: '[x](motir-ref:planItem:pi_here)' });
       expect(w!.canonicalForms).toBeUndefined();
     }
+  });
+
+  // Bug MOTIR-10193 — the card scheme with the token's prefix carried over.
+  it('corrects `motir:planItem:<id>` naming THIS plan’s proposal to the canonical token, as for `motir:<id>`', () => {
+    const [w] = judge('[x](motir:planItem:pi_here)');
+    expect(w).toMatchObject({
+      link: '[x](motir:planItem:pi_here)',
+      correctedLink: '[x](motir-ref:planItem:pi_here)',
+    });
+    expect(w!.canonicalForms).toBeUndefined();
+    expect(w!.reason).toContain('planItem:');
+  });
+
+  it('warns every `motir:planItem:<id>` that names no proposal on this plan', () => {
+    expect(judge('[old](motir:planItem:pi_old)')).toEqual([
+      expect.objectContaining({ correctedLink: '[old](motir:cm_card)' }),
+    ]);
+    // A card's id behind the prefix opens nothing either, so it is warned — never passed.
+    expect(judge('[c](motir:planItem:cm_other)')).toEqual([
+      expect.objectContaining({ correctedLink: '[c](motir:cm_other)' }),
+    ]);
+    expect(judge('[MOTIR-12](motir:planItem:pi_gone)')).toEqual([
+      expect.objectContaining({ correctedLink: '[MOTIR-12](motir:cm_twelve)' }),
+    ]);
+    expect(judge('[g](motir:planItem:pi_gone)')).toEqual([
+      expect.objectContaining({
+        correctedLink: null,
+        canonicalForms: [...CANONICAL_ITEM_LINK_FORMS],
+      }),
+    ]);
   });
 
   it('corrects a link to an earlier plan’s proposal to the card it became, in either scheme', () => {

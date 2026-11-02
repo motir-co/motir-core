@@ -5,6 +5,7 @@ import type {
   DeviceGrantStartDTO,
   DeviceGrantStatus,
   DeviceGrantTokenDTO,
+  DeviceGrantUpdatedDTO,
 } from '@/lib/dto/cliDevice';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { InvalidDeviceGrantError } from '@/lib/cliDevice/errors';
@@ -98,7 +99,26 @@ function toGrantStatus(raw: string): DeviceGrantStatus {
  * page's DTO is built field-by-field from the row rather than spread from it, so a new
  * column cannot leak onto a browser surface by default.
  */
-export function toDeviceGrantDescriptionDTO(row: DeviceCode): DeviceGrantDescriptionDTO {
+/** An approved UPDATE's poll answer (MOTIR-10189) — the token as it now stands. */
+export function toDeviceGrantUpdatedDTO(input: {
+  dto: ApiTokenDto;
+  user: User;
+}): DeviceGrantUpdatedDTO {
+  return {
+    updated: true,
+    label: input.dto.label,
+    scope: input.dto.permissions.join(' '),
+    user: { id: input.user.id, name: input.user.name, email: input.user.email },
+    workspace: { id: input.dto.workspace.id, name: input.dto.workspace.name },
+  };
+}
+
+/** `update` is the token an UPDATE grant would change (MOTIR-10189), read by the
+ * service as the approver; omitted for a `motir login` grant. */
+export function toDeviceGrantDescriptionDTO(
+  row: DeviceCode,
+  update?: ApiTokenDto,
+): DeviceGrantDescriptionDTO {
   return {
     userCode: row.userCode,
     status: toGrantStatus(row.status),
@@ -107,5 +127,14 @@ export function toDeviceGrantDescriptionDTO(row: DeviceCode): DeviceGrantDescrip
     expiresAt: row.expiresAt.toISOString(),
     permissions: [...CLI_TOKEN_GRANT],
     clientId: row.clientId,
+    update: update
+      ? {
+          label: update.label,
+          tokenPrefix: update.tokenPrefix,
+          workspaceName: update.workspace.name,
+          expiresAt: update.expiresAt,
+          permissions: update.permissions,
+        }
+      : null,
   };
 }

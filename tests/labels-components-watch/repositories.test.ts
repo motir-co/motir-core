@@ -10,6 +10,7 @@ import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixt
 import type { WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { expectRestrictViolation } from '../helpers/restrictViolation';
 
 // Repository-layer tests for the Story 5.4 data-access leaves (Subtask
 // 5.4.1): labelRepository / workItemLabelRepository / componentRepository /
@@ -428,9 +429,10 @@ describe('componentRepository + workItemComponentRepository', () => {
       workItemComponentRepository.create({ workItemId: c.issue.id, componentId: id }, tx),
     );
 
-    await expect(
+    // FK RESTRICT violation — the DB backstop.
+    await expectRestrictViolation(
       adminDb.$transaction(async (tx) => componentRepository.delete(id, tx)),
-    ).rejects.toMatchObject({ code: 'P2003' }); // FK violation — the DB backstop
+    );
 
     await adminDb.$transaction(async (tx) => {
       expect(await componentRepository.lockById(id, tx)).toEqual({ id });

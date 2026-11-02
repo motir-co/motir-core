@@ -102,6 +102,7 @@ import {
 } from '@/lib/planChange/errors';
 import { InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError } from '@/lib/ai/errors';
+import { CodeHealthError, ConventionVersionConflictError } from '@/lib/codeHealth/errors';
 import {
   AgentRunEventKindNotAllowedError,
   AgentRunNoOpenRunError,
@@ -599,6 +600,14 @@ export function toToolError(err: unknown): CallToolResult {
     err instanceof NoPlanForJobError ||
     err instanceof MotirAiError
   ) {
+    return toolError(err.code, err.message);
+  }
+  // The coding-convention save's refusals (MOTIR-10183), the ones the /code editor
+  // gets as a 422 — CONVENTION_BLANK, CONVENTION_TOO_LONG — and its stale-version
+  // 409, CONVENTION_VERSION_CONFLICT. `update_coding_convention` answers the
+  // conflict itself, with the version that won in `structuredContent`; this arm is
+  // the floor for any other caller, and its message still names that version.
+  if (err instanceof CodeHealthError || err instanceof ConventionVersionConflictError) {
     return toolError(err.code, err.message);
   }
   // Plan-AUTHORING refusals (MOTIR-3090). The proposal substrate's typed errors

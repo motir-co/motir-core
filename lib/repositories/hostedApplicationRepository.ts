@@ -24,6 +24,7 @@ const WITHOUT_SECRET = { databaseUrlCiphertext: true } as const;
 /** What the production database service reads of an application. */
 export interface HostedApplicationDatabaseRow {
   id: string;
+  workspaceId: string;
   projectRepositoryId: string;
   target: HostingTarget;
   databaseProjectId: string | null;
@@ -210,6 +211,7 @@ export const hostedApplicationRepository = {
       where: { id },
       select: {
         id: true,
+        workspaceId: true,
         projectRepositoryId: true,
         target: true,
         databaseProjectId: true,

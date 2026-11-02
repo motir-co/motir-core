@@ -1429,9 +1429,9 @@ describe('the MULTI-REPOSITORY per-item-PR workflow', () => {
         'If one repository turns out to need no change at all, open no pull request there.',
         'Take it off the card instead: call the update_work_item tool with key PROD-7',
         'and targetRepos set to the repositories you DID change, in their current order.',
-        'The item completes only when every repository on its list has merged, so a',
-        'repository left there holds it open for ever. Then record why as a point of your',
-        'ONE record_run_discrepancy call — planAsked: that repository; built: no change;',
+        'The list records where the work shipped, so a repository left on it misreports',
+        'the card. Then record why as a point of your ONE record_run_discrepancy call —',
+        'planAsked: that repository; built: no change;',
         'why: what made the change unnecessary — and name it in your outcome report.',
       ].join('\n'),
     );

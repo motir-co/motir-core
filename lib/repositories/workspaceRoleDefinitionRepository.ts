@@ -9,9 +9,10 @@ import { type Prisma, type WorkspaceRoleDefinition } from '@/generated/prisma/cl
 //
 // NO VALIDATION AND NO ERROR TRANSLATION LIVE HERE, for the reasons its project
 // twin records: a duplicate `(workspaceId, name)` raises P2002 and the SERVICE
-// names it; a delete that a holder still points at raises P2003 from the
-// `ON DELETE RESTRICT` foreign key, and the service's reassign-then-delete is the
-// path that never reaches it.
+// names it; a delete that a holder still points at is refused by the
+// `ON DELETE RESTRICT` foreign key — a RESTRICT violation, whose Prisma code
+// depends on the server (`lib/prisma/restrictViolation.ts` reads every shape) —
+// and the service's reassign-then-delete is the path that never reaches it.
 //
 // RLS: the table carries its own `workspace_id` and a FOR ALL policy keyed on the
 // per-transaction `app.workspace_id` GUC that `withWorkspaceContext` binds. So

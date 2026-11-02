@@ -39,7 +39,11 @@ import { githubInstallationRepository } from '@/lib/repositories/githubInstallat
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { previewDeploymentRepository } from '@/lib/repositories/previewDeploymentRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
-import { withSystemContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 
 // THE PREVIEW LIFECYCLE (Story MOTIR-5766 · MOTIR-5776, decision MOTIR-5769 §4,
 // §6 and §9). The events Motir already receives, wired to a pull request's
@@ -226,23 +230,30 @@ async function enqueue(data: PreviewEffectRequestedData): Promise<void> {
   await sendEvent('preview/effect.requested', data);
 }
 
-/** Commit a transition in its own short system-context transaction. */
+/** The row a write is made ON: its id and the workspace its own row carries.
+ *  `preview_deployment`'s policy reads `app.system_admin` on USING only, so
+ *  every write binds that workspace (MOTIR-10219). */
+type PreviewRowRef = Pick<PreviewDeployment, 'id' | 'workspaceId'>;
+
+/** Commit a transition in its own short transaction, bound to the row's workspace. */
 async function commitTransition(
-  id: string,
+  row: PreviewRowRef,
   from: readonly PreviewDeploymentState[],
   to: PreviewDeploymentState,
   patch: Parameters<typeof previewDeploymentRepository.transition>[3] = {},
 ): Promise<PreviewDeployment | null> {
-  return withSystemContext((tx) => previewDeploymentRepository.transition(id, from, to, patch, tx));
+  return withWorkspaceServiceContext(row.workspaceId, (tx) =>
+    previewDeploymentRepository.transition(row.id, from, to, patch, tx),
+  );
 }
 
 async function record(
-  id: string,
+  row: PreviewRowRef,
   states: readonly PreviewDeploymentState[],
   patch: Parameters<typeof previewDeploymentRepository.recordWhileIn>[2],
 ): Promise<PreviewDeployment | null> {
-  return withSystemContext((tx) =>
-    previewDeploymentRepository.recordWhileIn(id, states, patch, tx),
+  return withWorkspaceServiceContext(row.workspaceId, (tx) =>
+    previewDeploymentRepository.recordWhileIn(row.id, states, patch, tx),
   );
 }
 
@@ -266,7 +277,7 @@ async function postStatus(
       sha: row.headSha,
       pullRequestNumber: row.pullRequestNumber,
     });
-    await record(row.id, states, { githubDeploymentId: deploymentId });
+    await record(row, states, { githubDeploymentId: deploymentId });
   }
   await previewDeploymentsClient.postStatus(coordinates, deploymentId, status);
 }
@@ -362,6 +373,9 @@ export const previewLifecycleService = {
 
       if (event.kind === 'closed') {
         if (!existing) return { outcome: 'ignored' as const };
+        // Every write below binds the workspace of the row it writes, read above
+        // (MOTIR-10219): `preview_deployment` admits no system-only write.
+        await bindWorkspaceContext(tx, existing.workspaceId);
         const closed = await previewDeploymentRepository.transition(
           existing.id,
           LIVE_PREVIEW_STATES,
@@ -379,6 +393,7 @@ export const previewLifecycleService = {
         if (existing.headSha === event.headSha && existing.state !== 'closed') {
           return { outcome: 'stale' as const, row: existing };
         }
+        await bindWorkspaceContext(tx, existing.workspaceId);
         const moved = await previewDeploymentRepository.transition(
           existing.id,
           ['building', 'starting', 'ready', 'failed', 'closed'],
@@ -398,6 +413,7 @@ export const previewLifecycleService = {
         },
         async (candidate) => (await previewDeploymentRepository.findByHost(candidate, tx)) !== null,
       );
+      await bindWorkspaceContext(tx, subject.workspaceId);
       const created = await previewDeploymentRepository.upsertForPullRequest(
         {
           workspaceId: subject.workspaceId,
@@ -447,6 +463,8 @@ export const previewLifecycleService = {
       if (!row || row.headSha !== event.headSha || row.state !== 'building') {
         return { outcome: 'stale' as const };
       }
+      // The row's own workspace, read above (MOTIR-10219).
+      await bindWorkspaceContext(tx, row.workspaceId);
       if (event.conclusion === 'success') {
         const moved = await previewDeploymentRepository.transition(
           row.id,
@@ -531,13 +549,13 @@ export const previewLifecycleService = {
     try {
       const environment = { kind: 'preview' as const, pullRequest: row.pullRequestNumber };
       const app = await port.ensureApp({ repositoryId: subject.id, environment });
-      await record(row.id, ['starting'], { flyAppName: app.appRef });
+      await record(row, ['starting'], { flyAppName: app.appRef });
 
       let databaseEnv: readonly ReleaseEnvVar[] = [];
       if (NEON_PREVIEW_TARGETS.includes(subject.hostingTarget)) {
         const database = await ensurePreviewDatabase(subject.id);
         const created = await createPreviewBranch(database, row.pullRequestNumber);
-        await record(row.id, ['starting'], {
+        await record(row, ['starting'], {
           neonProjectId: database.databaseRef,
           neonBranchId: created.branch.branchRef,
         });
@@ -566,7 +584,7 @@ export const previewLifecycleService = {
             : { mode: 'suspend', idleSeconds: PREVIEW_IDLE_SECONDS },
         ...(subject.hostingTarget === 'aws' ? { shape: 'container' as const } : {}),
       });
-      await record(row.id, ['starting'], { flyMachineId: handle.providerRef });
+      await record(row, ['starting'], { flyMachineId: handle.providerRef });
       return { status: 'deployed', handle };
     } catch (error) {
       const reason = `Motir could not start the preview: ${messageOf(error)}`;
@@ -600,7 +618,7 @@ export const previewLifecycleService = {
     const read = await readPreview(previewId);
     if (!read || read.row.headSha !== headSha) return { status: 'skipped' };
     if (health === 'healthy') {
-      const ready = await commitTransition(previewId, ['starting'], 'ready');
+      const ready = await commitTransition(read.row, ['starting'], 'ready');
       if (!ready || !read.subject) return { status: ready ? 'ready' : 'skipped' };
       await postStatus(ready, read.subject, ['ready'], {
         state: 'success',
@@ -616,7 +634,7 @@ export const previewLifecycleService = {
             (PREVIEW_START_POLLS * PREVIEW_START_POLL_MS) / 60_000
           } minutes.`
         : 'The preview started but failed its health check.');
-    const failed = await commitTransition(previewId, ['starting'], 'failed', { failureReason });
+    const failed = await commitTransition(read.row, ['starting'], 'failed', { failureReason });
     if (!failed || !read.subject) return { status: failed ? 'failed' : 'skipped' };
     await postStatus(failed, read.subject, ['failed'], {
       state: 'failure',
@@ -642,7 +660,7 @@ export const previewLifecycleService = {
       usage = await getHostingDeployPort(subject.hostingTarget).destroyApp({
         appRef: row.flyAppName,
       });
-      await record(row.id, ['closed'], { flyAppName: null, flyMachineId: null });
+      await record(row, ['closed'], { flyAppName: null, flyMachineId: null });
     }
     if (row.neonBranchId && row.neonProjectId) {
       await deletePreviewBranch({
@@ -654,7 +672,7 @@ export const previewLifecycleService = {
         branchRef: row.neonBranchId,
         name: previewBranchName(row.pullRequestNumber),
       });
-      await record(row.id, ['closed'], { neonBranchId: null });
+      await record(row, ['closed'], { neonBranchId: null });
     }
     if (row.githubDeploymentId) {
       // Cosmetic once the resources are gone, and impossible once the repository
@@ -689,6 +707,8 @@ export const previewLifecycleService = {
       const live = await previewDeploymentRepository.listOpenForRepo(subject.githubRepo.id, tx);
       const closed: PreviewDeployment[] = [];
       for (const row of live) {
+        // The row's own workspace (MOTIR-10219): no system-only write.
+        await bindWorkspaceContext(tx, row.workspaceId);
         const moved = await previewDeploymentRepository.transition(
           row.id,
           LIVE_PREVIEW_STATES,
@@ -764,7 +784,7 @@ export const previewLifecycleService = {
             )
           : false;
         if (!open) {
-          const closed = await commitTransition(row.id, LIVE_PREVIEW_STATES, 'closed');
+          const closed = await commitTransition(row, LIVE_PREVIEW_STATES, 'closed');
           if (closed) {
             counts.closed += 1;
             await this.teardown(row.id);
@@ -781,7 +801,9 @@ export const previewLifecycleService = {
         } else {
           // Checked and still open: move it to the back of the scan, so a
           // long-lived preview does not hold the scan's first rows forever.
-          await withSystemContext((tx) => previewDeploymentRepository.touch(row.id, row.state, tx));
+          await withWorkspaceServiceContext(row.workspaceId, (tx) =>
+            previewDeploymentRepository.touch(row.id, row.state, tx),
+          );
         }
       } catch (error) {
         counts.failed += 1;

@@ -39,6 +39,7 @@ import type {
   PlanningConventionDTO,
   ReauditRepoJobsDTO,
   ReauditResultDTO,
+  SavedConventionDTO,
 } from '@/lib/dto/codeHealth';
 
 // The Code-health surface service (Subtask 7.14.5 / MOTIR-926, amended by
@@ -476,6 +477,37 @@ export const aiConventionService = {
         ? ((await userRepository.findById(editorId))?.name ?? null)
         : null;
     return { state: 'present', repoRef, convention: read.convention, editedByName };
+  },
+
+  // The convention WRITE by project KEY (MOTIR-10183) — what `update_coding_convention`
+  // calls. It only resolves what an MCP caller names — the project by key inside the
+  // token's workspace, `repo` against the project's realized set the way
+  // `getPlanningConvention` does — and hands the save to `saveConvention`, so the MCP
+  // write and the /code editor's save are ONE code path: the same `ai:configure` gate,
+  // the same blank / too-long refusals, the same stale-`baseVersion` conflict carrying
+  // what won, and the same `editedByUserId: ctx.userId` author.
+  //
+  // `ai:configure` is asserted HERE, before the repository set is read, so an actor who
+  // may not edit learns nothing about the project's repositories from the refusal.
+  async saveConventionByKey(
+    projectKey: string,
+    repo: string,
+    input: { contentMd: string; baseVersion: number },
+    ctx: ServiceContext,
+  ): Promise<SavedConventionDTO> {
+    const project = await projectsService.getByKey(projectKey, ctx);
+    await projectAccessService.assertPermission(project.id, ctx, 'ai:configure');
+
+    const repoSet = (await resolveCodeContextState(project.id, ctx)).repos.map((r) => r.repoRef);
+    const repoRef = matchRepoInSet(repo, repoSet);
+    if (!repoRef) return { state: 'repo_not_in_project', repo, repoSet };
+
+    const surface = await aiConventionService.saveConvention(project.id, ctx, {
+      repoKey: repoRef,
+      contentMd: input.contentMd,
+      baseVersion: input.baseVersion,
+    });
+    return { state: 'saved', repoRef, convention: surface.convention };
   },
 
   // Trigger a re-audit + re-propose for the project (the "Deepen this audit" →
