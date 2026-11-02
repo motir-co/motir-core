@@ -99,8 +99,10 @@ const pane = (page: Page) => page.getByRole('main');
 /** A domain row — the `li` the pane marks with its status. */
 const rows = (page: Page) => pane(page).locator('li[data-status]');
 // Exact on the hostname: `acme.test` is a suffix of the other hosts this file adds.
+// `text="…"` is `getByText(…, { exact: true })`'s own selector, written so the
+// match is queried INSIDE each row rather than page-rooted (MOTIR-5035's guard).
 const row = (page: Page, host: string) =>
-  rows(page).filter({ has: page.getByText(host, { exact: true }) });
+  rows(page).filter({ has: page.locator(`text=${JSON.stringify(host)}`) });
 
 /** The committed row, read from the list route rather than from the pane. */
 async function storedRow(page: Page, host: string): Promise<PublicAddressDto | undefined> {
