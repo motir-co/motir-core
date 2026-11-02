@@ -1,0 +1,20 @@
+{
+  "name": "@motir/hosting-edge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "motir-edge's forwarder: it resolves a customer domain's Host against Motir's host contract and forwards the request to the application the domain names, or answers one of its own four pages. Dependency-free; the image runs its TypeScript source directly.",
+  "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/motir-co/motir-core.git",
+    "directory": "packages/hosting-edge"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc -b tsconfig.json"
+  }
+}

@@ -190,13 +190,9 @@ describe('cleanupLegacyAliases', () => {
         status: 'issued',
       },
     });
-    const project = await adminDb.project.create({
-      data: { workspaceId, name: 'P', slug: 'p', identifier: 'PRJ' },
-    });
     await adminDb.publicAddress.create({
       data: {
         workspaceId,
-        projectId: project.id,
         hostname: 'docs.customer.example',
         kind: 'custom_domain',
         status: 'issued',

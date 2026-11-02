@@ -398,6 +398,7 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
       'clipboard verb — copies a How to test command block (MOTIR-5336)',
     'publicProjects.copyFeed': 'clipboard verb — copies the public feed URL',
     'settings.apiTokens.created.copy': 'clipboard verb — copies the new API token',
+    'settings.customDomains.action.copy': 'clipboard verb — copies a DNS record value (MOTIR-9529)',
     'settings.workspaceAddress.review':
       'button verb — opens the dated confirm for a workspace rename (MOTIR-9514)',
     'settings.public.copy': 'clipboard verb — copies the public project URL',
@@ -473,7 +474,6 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // splits these (Verify / Validate) and zh does not. All three are buttons on
     // surfaces that render no type chip.
     'auth.twoFactor.verify': 'button verb — submits the 2FA code',
-    'settings.publicAddress.domains.addModal.verify': 'button verb — checks the domain DNS record',
     'roadmap.canvas.origin.validate': 'button verb — validates the canvas origin',
     // `翻译` is the `translate` TYPE noun and also the machine-translation verb and
     // its group's name (MOTIR-8122): the bar under the item title, read as one

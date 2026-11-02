@@ -1,0 +1,122 @@
+# The EDGE FORWARDER image — build, prove, publish (MOTIR-10127).
+#
+# `packages/hosting-edge/` is the process the `motir-edge` Fly app runs: it
+# resolves a customer domain's Host against Motir's host contract and forwards
+# the request to the application the domain names, or answers one of its own
+# four pages. This workflow is its whole lane, on `hosting-guard-image.yml`'s
+# pattern:
+#
+#   - on a PULL REQUEST touching it: build the image and prove it — it refuses to
+#     start without its configuration, and against a stand-in contract and a
+#     stand-in TLS upstream it forwards, answers the Unavailable page at 503 and
+#     the Not-found page at 404. No push.
+#   - on a PUSH TO `main` touching it: the same build and proofs, then a push to
+#     Fly's registry as `registry.fly.io/motir-hosting-edge:<sha>`, printing the
+#     DIGEST, because the deploy runs the image by digest, never by tag.
+#
+# ── Where the image lives ───────────────────────────────────────────────────
+# The Fly app `motir-edge` in org `motir-hosting` (MOTIR-10126). The push
+# authenticates with the repository secret `FLY_EDGE_TOKEN`, mapped to
+# `FLY_API_TOKEN` — the same secret the deploy lane reads. Until a person has set
+# it the publish steps are SKIPPED with a notice, never failed: the build and the
+# proofs still gate.
+
+name: Hosting edge image
+
+on:
+  pull_request:
+    paths:
+      - 'packages/hosting-edge/**'
+      - '.github/workflows/hosting-edge-image.yml'
+      - '.github/actions/buildx/**'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/hosting-edge/**'
+      - '.github/workflows/hosting-edge-image.yml'
+      - '.github/actions/buildx/**'
+
+# A pull request's newer push supersedes its older run; a publish is never
+# cancelled mid-push.
+concurrency:
+  group: hosting-edge-image-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  IMAGE: registry.fly.io/motir-hosting-edge
+  LOCAL_TAG: motir-hosting-edge:ci
+
+jobs:
+  hosting-edge-image:
+    name: Build, prove, publish
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # No run on record yet — this lane is new (MOTIR-10127). The image is one
+    # alpine Node layer plus its source, and the smoke pulls node:22-alpine for
+    # two stand-ins; expected about 2 min. 10 min is the short-job floor.
+    # Re-measure once it has run and replace this comment.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      # One secret for both edge lanes: this one and the deploy lane read
+      # `FLY_EDGE_TOKEN` as `FLY_API_TOKEN`.
+      FLY_API_TOKEN: ${{ secrets.FLY_EDGE_TOKEN }}
+      HAS_PUSH_TOKEN: ${{ secrets.FLY_EDGE_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/buildx
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/hosting-edge
+          platforms: linux/amd64
+          tags: ${{ env.LOCAL_TAG }}
+          load: true
+          cache-from: type=gha,scope=hosting-edge
+          cache-to: type=gha,scope=hosting-edge,mode=max
+
+      # The proofs live in the package's own script, so they run the same way
+      # on a laptop: it refuses to start unconfigured, forwards over TLS with the
+      # derived origin secret, and answers its 503 and 404 pages.
+      - name: Smoke the image
+        run: packages/hosting-edge/smoke.sh "$LOCAL_TAG"
+
+      # ── Publish: a push to `main` only, and only now the image is proven. ──
+      - name: No push token yet
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN != 'true' }}
+        run: echo "::notice::FLY_EDGE_TOKEN is not set; the image was built and proven but not published."
+      - name: Log in to Fly's registry
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: registry.fly.io
+          username: x
+          password: ${{ env.FLY_API_TOKEN }}
+      - name: Publish
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN == 'true' }}
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/hosting-edge
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha,scope=hosting-edge
+      - name: Print the published digest
+        if: ${{ github.event_name == 'push' && env.HAS_PUSH_TOKEN == 'true' }}
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DIGEST" ]; then
+            echo "::error::the push reported no digest"
+            exit 1
+          fi
+          echo "Published ${IMAGE}@${DIGEST}"
+          {
+            echo '### Hosting edge image published'
+            echo
+            echo "\`${IMAGE}@${DIGEST}\`"
+            echo
+            echo 'Deploy `motir-edge` from this reference — a digest, never a tag.'
+          } >> "$GITHUB_STEP_SUMMARY"

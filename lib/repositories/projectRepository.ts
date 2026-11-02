@@ -459,44 +459,11 @@ export const projectRepository = {
    * exists.
    */
   /**
-   * One project by id, for a path that has ALREADY established the caller may
-   * see it — host resolution (MOTIR-4217), which got here by resolving a
-   * `public_address` row that RLS admitted only because the project is public.
-   *
-   * ⚠️ It carries no `accessMode` filter of its own, and that is why the name
-   * says `Internal`. It is not a public-by-key lookup: the gate ran one step
-   * earlier, on the address. Do not reach for this from a path that has not
-   * already passed one — `findPublicByIdentifier` is the gated read.
-   */
-  async findPublicByIdInternal(
-    id: string,
-  ): Promise<Pick<Project, 'identifier' | 'name' | 'primaryAddressId'> | null> {
-    return db.project.findFirst({
-      where: { id, archivedAt: null },
-      select: { identifier: true, name: true, primaryAddressId: true },
-    });
-  },
-
-  /**
    * The workspace's display NAME, for a subdomain root that lists its projects.
    * Anonymous — admitted by `workspace_public_project_read`, which requires the
    * workspace to hold at least one public project, so a workspace with none
    * answers `null` and the host 404s.
    */
-  /**
-   * `primaryAddressId` for several projects at once — the batch companion to
-   * {@link findPublicByIdInternal}, for the crawl index (MOTIR-4217). Absent
-   * keys mean the project has promoted no custom domain.
-   */
-  async listPrimaryAddressIds(ids: readonly string[]): Promise<Map<string, string>> {
-    if (ids.length === 0) return new Map();
-    const rows = await db.project.findMany({
-      where: { id: { in: [...ids] }, primaryAddressId: { not: null } },
-      select: { id: true, primaryAddressId: true },
-    });
-    return new Map(rows.map((r) => [r.id, r.primaryAddressId as string]));
-  },
-
   async findWorkspaceNameForPublic(workspaceId: string): Promise<string | null> {
     const row = await db.workspace.findFirst({
       where: { id: workspaceId },

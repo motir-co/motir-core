@@ -1,0 +1,589 @@
+<!doctype html>
+<html
+  lang="en"
+  data-theme="light"
+  data-style="warm-editorial"
+  data-palette="motir"
+  data-type="motir"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Edge pages — what a customer domain answers when there is nothing to forward to
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE EDGE PAGES.
+
+      Four visitor-facing documents the edge answers on a customer's own domain
+      when the lookup resolved but there is nothing to forward to: the
+      No-application page, the Members-only page (two variants), the
+      Unavailable page and the Not-found page. Each is drawn inside a frame
+      that stands for the visitor's browser viewport; the frame and the panel
+      captions are board chrome, not the page.
+
+      ── WHAT IT IS BUILT FROM ────────────────────────────────────────────────
+      The token block below carries the shipped defaults (data-style
+      warm-editorial, data-palette motir, light and dark), each value read from
+      packages/design-system/theme.css. The pages use ONLY --el-page-bg,
+      --el-text, --el-text-secondary, --el-link and --el-accent, plus the serif
+      and mono stacks — the same set the notes' Token block gives a renderer
+      that has no packages. No card, no rule, no border and no shadow inside a
+      page; no image, no script, no webfont.
+
+      ── PANELS ───────────────────────────────────────────────────────────────
+        1–3   No-application page — desktop, narrow, a 60-character name
+        4–6   Members-only page — with address (focus shown), without
+              address, narrow with a long address
+        7–9   Unavailable page — desktop, narrow, a 60-character name
+        10–12 Not-found page — desktop, narrow, every reason drawn once
+        13    all four, dark
+        14    index — each lookup answer and its page
+
+      ── INK ─────────────────────────────────────────────────────────────────
+      Secondary copy is --el-text-secondary. --el-text-muted and
+      --el-text-faint carry no text.
+    -->
+    <style>
+      :root {
+        /* Tier 0 — [data-palette='motir'] (theme.css), light */
+        --color-background: #ffffff;
+        --color-foreground: #16191d;
+        --color-charcoal: #20242a;
+        --color-slate: #565c64;
+        --color-surface: #eef0f3;
+        --color-border: #e2e4e9;
+        --color-link: #155bc4;
+        --color-primary-fill: #1a1d21;
+        --font-serif: Georgia, 'Times New Roman', serif;
+        --font-mono: 'SF Mono', Menlo, monospace;
+        --font-sans: 'Segoe UI', Roboto, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      :root,
+      [data-theme] {
+        /* Tier 3 — the element tokens the pages consume */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-surface: var(--color-surface);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary-fill);
+      }
+      /* Tier 0 — [data-palette='motir'][data-theme='dark'] (theme.css) */
+      .ep-dark,
+      [data-theme='dark'] {
+        --color-background: #0c0d0f;
+        --color-foreground: #edeef0;
+        --color-charcoal: #d7d9dd;
+        --color-slate: #a9adb5;
+        --color-surface: #18191c;
+        --color-border: #282a2e;
+        --color-link: #7db1ff;
+        --color-primary-fill: #edeef0;
+      }
+      .ep-dark {
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-surface: var(--color-surface);
+        --el-border: var(--color-border);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary-fill);
+      }
+
+      /* ── Board chrome (not the page) ───────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+      }
+      .board {
+        padding: 32px;
+        max-width: 1400px;
+      }
+      .boardTitle {
+        font-size: 22px;
+        margin: 0 0 6px;
+        color: var(--el-text);
+      }
+      .boardSub {
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 0 0 24px;
+        color: var(--el-text-secondary);
+        max-width: 72ch;
+      }
+      .panel {
+        margin: 0 0 40px;
+      }
+      .panelLabel {
+        font-size: 13px;
+        font-weight: 700;
+        margin: 0 0 4px;
+        color: var(--el-text-strong);
+      }
+      .panelNote {
+        font-size: 13px;
+        line-height: 1.5;
+        margin: 0 0 12px;
+        color: var(--el-text-secondary);
+        max-width: 80ch;
+      }
+      .frameWrap {
+        min-width: 0;
+      }
+      .frameCap {
+        font-size: 12px;
+        margin: 0 0 6px;
+        color: var(--el-text-secondary);
+      }
+      .ep-frame {
+        width: 1280px;
+        max-width: 100%;
+        min-height: 360px;
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        overflow: hidden;
+        padding: 120px 24px 48px;
+      }
+      .ep-frame.narrow {
+        width: 390px;
+        padding: 96px 20px 40px;
+      }
+      .row2 {
+        display: grid;
+        grid-template-columns: 1fr 390px;
+        gap: 24px;
+        align-items: start;
+      }
+      .row4 {
+        display: grid;
+        grid-template-columns: repeat(4, 390px);
+        gap: 16px;
+        overflow-x: auto;
+      }
+      .ep-dark {
+        background: var(--el-surface);
+        padding: 16px;
+        color: var(--el-text);
+      }
+      .reasons {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 14px;
+        line-height: 1.8;
+        color: var(--el-text);
+      }
+      .index {
+        border-collapse: collapse;
+        font-size: 13px;
+        background: var(--el-page-bg);
+        color: var(--el-text);
+      }
+      .index th,
+      .index td {
+        text-align: left;
+        padding: 8px 12px;
+        border: 1px solid var(--el-border);
+        vertical-align: top;
+      }
+      .index th {
+        color: var(--el-text-secondary);
+        font-weight: 600;
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+
+      /* ── The page (what the edge emits) ──────────────────────────────── */
+      .ep-main {
+        max-width: 30rem;
+        margin: 0 auto;
+      }
+      .ep-eyebrow {
+        margin: 0 0 12px;
+        font-size: 13px;
+        letter-spacing: 0.02em;
+        color: var(--el-text-secondary);
+        overflow-wrap: anywhere;
+      }
+      .ep-heading {
+        margin: 0 0 12px;
+        font-family: var(--font-serif);
+        font-size: 30px;
+        line-height: 1.15;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--el-text);
+      }
+      .ep-sentence {
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .ep-addr {
+        font-family: var(--font-mono);
+        font-size: 15px;
+        color: var(--el-link);
+        overflow-wrap: anywhere;
+      }
+      .ep-addr:focus-visible,
+      .ep-addr.is-focus {
+        outline: 2px solid var(--el-accent);
+        outline-offset: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="board">
+      <h1 class="boardTitle">
+        Edge pages — what a customer domain answers when there is nothing to forward to
+      </h1>
+      <p class="boardSub">
+        A visitor typed a domain that belongs to a business, and there is no site to show them. Each
+        page names whose address it is — never the domain they typed — and carries none of Motir’s
+        own chrome. Scenario: the site owner is Acme Studio.
+      </p>
+      <section class="panel">
+        <p class="panelLabel">Panel 1 — No-application page · desktop 1280</p>
+        <p class="panelNote">
+          The answer when the domain names no site that is published. The site owner’s name as the
+          eyebrow, one heading, one sentence; nothing else on the page. Served 200.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">1280 wide</p>
+          <div class="ep-frame">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">Nothing is published here yet</h1>
+              <p class="ep-sentence">Acme Studio hasn’t published a site at this address yet.</p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 2 — No-application page · narrow 390</p>
+        <p class="panelNote">
+          The same block in one column; side padding steps to 20px; every line wraps, nothing hides.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">390 wide</p>
+          <div class="ep-frame narrow">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">Nothing is published here yet</h1>
+              <p class="ep-sentence">Acme Studio hasn’t published a site at this address yet.</p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 3 — No-application page · a 60-character name</p>
+        <p class="panelNote">
+          The eyebrow wraps to two lines inside the column and truncates nothing.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">390 wide</p>
+          <div class="ep-frame narrow">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Northwind Cooperative Bakery and Neighbourhood Kitchen Trust</p>
+              <h1 class="ep-heading">Nothing is published here yet</h1>
+              <p class="ep-sentence">
+                Northwind Cooperative Bakery and Neighbourhood Kitchen Trust hasn’t published a site
+                at this address yet.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 4 — Members-only page · with its address · focus shown</p>
+        <p class="panelNote">
+          The site opens only to members, at its own address. The address is the page’s only
+          focusable element: mono, link ink, same tab; drawn here with its focus outline. Served
+          200.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">1280 wide</p>
+          <div class="ep-frame">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">This site is for members only</h1>
+              <p class="ep-sentence">
+                Acme Studio opens this site to its members at
+                <a class="ep-addr is-focus" href="#">shop--acme-studio.motir.site</a>.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 5 — Members-only page · without an address</p>
+        <p class="panelNote">
+          No address is known, so the second sentence is a DIFFERENT sentence and there is no link —
+          never the first one with its link taken out. Served 200.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">1280 wide</p>
+          <div class="ep-frame">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">This site is for members only</h1>
+              <p class="ep-sentence">
+                Acme Studio has made this site available to its members only.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 6 — Members-only page · narrow 390, a long address</p>
+        <p class="panelNote">
+          The address wraps at its own dots and hyphens inside the column; no horizontal scroll.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">390 wide</p>
+          <div class="ep-frame narrow">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">This site is for members only</h1>
+              <p class="ep-sentence">
+                Acme Studio opens this site to its members at
+                <a class="ep-addr" href="#"
+                  >customer-<wbr />accounts-<wbr />and-<wbr />storefront-<wbr />-<wbr />northwind-<wbr />cooperative.<wbr />motir.<wbr />site</a
+                >.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 7 — Unavailable page · desktop 1280</p>
+        <p class="panelNote">
+          The site exists and is published, but this edge cannot reach it right now. Names the site
+          owner; no link, no retry control, no platform detail. Served 503.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">1280 wide</p>
+          <div class="ep-frame">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">This site can’t be reached right now</h1>
+              <p class="ep-sentence">
+                Acme Studio’s site exists, but it can’t be reached at the moment. Please try again
+                later.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 8 — Unavailable page · narrow 390</p>
+        <p class="panelNote">The sentence runs to three lines rather than being cut.</p>
+        <div class="frameWrap">
+          <p class="frameCap">390 wide</p>
+          <div class="ep-frame narrow">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Acme Studio</p>
+              <h1 class="ep-heading">This site can’t be reached right now</h1>
+              <p class="ep-sentence">
+                Acme Studio’s site exists, but it can’t be reached at the moment. Please try again
+                later.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 9 — Unavailable page · a 60-character name</p>
+        <p class="panelNote">As panel 3: the eyebrow wraps and truncates nothing.</p>
+        <div class="frameWrap">
+          <p class="frameCap">390 wide</p>
+          <div class="ep-frame narrow">
+            <main class="ep-main">
+              <p class="ep-eyebrow">Northwind Cooperative Bakery and Neighbourhood Kitchen Trust</p>
+              <h1 class="ep-heading">This site can’t be reached right now</h1>
+              <p class="ep-sentence">
+                Northwind Cooperative Bakery and Neighbourhood Kitchen Trust’s site exists, but it
+                can’t be reached at the moment. Please try again later.
+              </p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 10 — Not-found page · desktop 1280</p>
+        <p class="panelNote">
+          The one 404. A heading and a sentence; no eyebrow, no name, no address, no link.
+        </p>
+        <div class="frameWrap">
+          <p class="frameCap">1280 wide</p>
+          <div class="ep-frame">
+            <main class="ep-main">
+              <h1 class="ep-heading">There’s no site here</h1>
+              <p class="ep-sentence">Check the address you typed and try again.</p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 11 — Not-found page · narrow 390</p>
+        <p class="panelNote">The same two lines; the sentence may run to three lines.</p>
+        <div class="frameWrap">
+          <p class="frameCap">390 wide</p>
+          <div class="ep-frame narrow">
+            <main class="ep-main">
+              <h1 class="ep-heading">There’s no site here</h1>
+              <p class="ep-sentence">Check the address you typed and try again.</p>
+            </main>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">
+          Panel 12 — Not-found page · every reason that reveals nothing, drawn once
+        </p>
+        <p class="panelNote">
+          The same document, byte for byte, for each reason below — a page that varied by reason
+          would tell a visitor which one applied.
+        </p>
+        <div class="row2">
+          <ul class="reasons">
+            <li>an unknown domain</li>
+            <li>a removed domain</li>
+            <li>a domain whose certificate is not yet issued, or has failed</li>
+            <li>the tenant base domain itself</li>
+            <li>a forward with no target</li>
+            <li>a forward whose target is not an <code>https:</code> origin</li>
+          </ul>
+          <div class="frameWrap">
+            <p class="frameCap">one page for all six</p>
+            <div class="ep-frame narrow">
+              <main class="ep-main">
+                <h1 class="ep-heading">There’s no site here</h1>
+                <p class="ep-sentence">Check the address you typed and try again.</p>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 13 — All four · dark (prefers-color-scheme: dark)</p>
+        <p class="panelNote">
+          The same layout with the colour tokens flipped by one @media block; no second layout, no
+          image.
+        </p>
+        <div class="ep-dark row4">
+          <div class="frameWrap">
+            <p class="frameCap">No-application</p>
+            <div class="ep-frame narrow">
+              <main class="ep-main">
+                <p class="ep-eyebrow">Acme Studio</p>
+                <h1 class="ep-heading">Nothing is published here yet</h1>
+                <p class="ep-sentence">Acme Studio hasn’t published a site at this address yet.</p>
+              </main>
+            </div>
+          </div>
+          <div class="frameWrap">
+            <p class="frameCap">Members-only</p>
+            <div class="ep-frame narrow">
+              <main class="ep-main">
+                <p class="ep-eyebrow">Acme Studio</p>
+                <h1 class="ep-heading">This site is for members only</h1>
+                <p class="ep-sentence">
+                  Acme Studio opens this site to its members at
+                  <a class="ep-addr" href="#">shop--acme-studio.motir.site</a>.
+                </p>
+              </main>
+            </div>
+          </div>
+          <div class="frameWrap">
+            <p class="frameCap">Unavailable</p>
+            <div class="ep-frame narrow">
+              <main class="ep-main">
+                <p class="ep-eyebrow">Acme Studio</p>
+                <h1 class="ep-heading">This site can’t be reached right now</h1>
+                <p class="ep-sentence">
+                  Acme Studio’s site exists, but it can’t be reached at the moment. Please try again
+                  later.
+                </p>
+              </main>
+            </div>
+          </div>
+          <div class="frameWrap">
+            <p class="frameCap">Not-found</p>
+            <div class="ep-frame narrow">
+              <main class="ep-main">
+                <h1 class="ep-heading">There’s no site here</h1>
+                <p class="ep-sentence">Check the address you typed and try again.</p>
+              </main>
+            </div>
+          </div>
+        </div>
+      </section>
+      <section class="panel">
+        <p class="panelLabel">Panel 14 — Index · each lookup answer and the page that answers it</p>
+        <p class="panelNote">
+          Total over the lookup’s answers. The forwarded case draws no page: the visitor meets the
+          site itself. Every page is no-store and noindex, nofollow.
+        </p>
+        <table class="index">
+          <thead>
+            <tr>
+              <th>Answer</th>
+              <th>Page</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>application</code>, a target the edge can present</td>
+              <td>none — the request is forwarded; the document ends here</td>
+              <td>the target’s</td>
+            </tr>
+            <tr>
+              <td><code>application</code>, credential <code>aws_sigv4</code></td>
+              <td>Unavailable page (panels 7–9)</td>
+              <td>503</td>
+            </tr>
+            <tr>
+              <td><code>application</code>, no target, or a non-<code>https:</code> origin</td>
+              <td>Not-found page (panels 10–12)</td>
+              <td>404</td>
+            </tr>
+            <tr>
+              <td><code>no_application</code></td>
+              <td>No-application page (panels 1–3)</td>
+              <td>200</td>
+            </tr>
+            <tr>
+              <td><code>members_only_application</code>, <code>opensAt</code> set</td>
+              <td>Members-only page, with address (panels 4, 6)</td>
+              <td>200</td>
+            </tr>
+            <tr>
+              <td><code>members_only_application</code>, <code>opensAt</code> null</td>
+              <td>Members-only page, without address (panel 5)</td>
+              <td>200</td>
+            </tr>
+            <tr>
+              <td>404 from the lookup, for any reason</td>
+              <td>Not-found page (panels 10–12)</td>
+              <td>404</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+  </body>
+</html>

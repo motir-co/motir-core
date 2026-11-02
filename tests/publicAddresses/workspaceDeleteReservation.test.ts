@@ -83,14 +83,9 @@ async function claimant() {
 }
 
 async function addRow(workspaceId: string, hostname: string, kind: PublicAddressKind) {
-  const projectId =
-    kind === 'custom_domain'
-      ? (await adminDb.project.findFirst({ where: { workspaceId } }))?.id
-      : undefined;
   return adminDb.publicAddress.create({
     data: {
       workspaceId,
-      projectId: projectId ?? null,
       hostname,
       kind,
       status: kind === 'workspace_subdomain_alias' ? 'alias' : 'unverified',

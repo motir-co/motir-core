@@ -102,7 +102,9 @@
     { "path": "./tsconfig.scripts.json" },
     { "path": "./tsconfig.tests.json" },
     // `tests/hosting/hostingGuard.test.ts` runs the guard image's own source
-    // (MOTIR-9947), which lives in its package's project.
-    { "path": "./packages/hosting-guard" }
+    // (MOTIR-9947), which lives in its package's project; the edge forwarder's
+    // tests run its own (MOTIR-10127).
+    { "path": "./packages/hosting-guard" },
+    { "path": "./packages/hosting-edge" }
   ]
 }

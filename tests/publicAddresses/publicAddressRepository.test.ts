@@ -114,7 +114,7 @@ describe('the policies, read from the catalog', () => {
 });
 
 describe('the public read arm', () => {
-  it("ADMITS a public project's custom domain with nothing bound", async () => {
+  it('ADMITS an ISSUED custom domain with nothing bound', async () => {
     // The admit case first. This is the read `GET /api/public/hosts/{host}`
     // makes on every request, anonymously: no workspace, no user, no system flag.
     await seedCustomDomain(host, 'roadmap.acme.example');
@@ -128,13 +128,26 @@ describe('the public read arm', () => {
     expect(rows).toHaveLength(1);
   });
 
-  it('REFUSES a custom domain whose project is not public', async () => {
-    // The narrowing, and the whole reason the arm is a join rather than
-    // `USING (true)`. A private project's domain must resolve to nothing for an
-    // anonymous reader — including the fact that it exists.
+  it('REFUSES a custom domain whose certificate has not issued', async () => {
+    // ADR MOTIR-9521 §1 / MOTIR-9523: a customer domain belongs to the WORKSPACE
+    // and names no project, so the arm cannot ask a project's access mode. It
+    // admits a custom domain only once it serves — every other status stays
+    // invisible to an anonymous reader, including the fact that it exists.
+    for (const status of ['unverified', 'pending_certificate'] as const) {
+      await seedCustomDomain(host, `${status}.acme.example`, status);
+      const rows = await asAppRole({}, (tx) => selectAddress(tx, `${status}.acme.example`));
+      expect(rows, `status=${status} must stay hidden`).toHaveLength(0);
+    }
+  });
+
+  it("does not depend on any project's access mode — the domain is the workspace's", async () => {
+    // The neighbour's only project is members-only. Its issued domain is still a
+    // live host (what it answers is the host contract's decision, MOTIR-9819),
+    // and its unissued one is still hidden.
     await seedCustomDomain(neighbour, 'roadmap.nbr.example');
-    const rows = await asAppRole({}, (tx) => selectAddress(tx, 'roadmap.nbr.example'));
-    expect(rows).toHaveLength(0);
+    await seedCustomDomain(neighbour, 'pending.nbr.example', 'unverified');
+    expect(await asAppRole({}, (tx) => selectAddress(tx, 'roadmap.nbr.example'))).toHaveLength(1);
+    expect(await asAppRole({}, (tx) => selectAddress(tx, 'pending.nbr.example'))).toHaveLength(0);
   });
 
   it('REFUSES a subdomain of a workspace with no public project', async () => {
@@ -143,22 +156,18 @@ describe('the public read arm', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('follows the PROJECT: making it non-public hides its domain, and back', async () => {
-    // The arm reads the project's live `access_mode`, so a project going private
-    // takes its address out of the public set with no write to this table. Both
-    // directions on the SAME row, so the only variable is the access mode.
-    await seedCustomDomain(host, 'roadmap.acme.example');
-    for (const mode of ['workspace', 'members'] as const) {
-      await setProjectAccess(adminDb, host.projectId, mode);
-      const hidden = await asAppRole({}, (tx) => selectAddress(tx, 'roadmap.acme.example'));
-      expect(hidden, `accessMode=${mode} must hide the address`).toHaveLength(0);
-    }
+  it('follows the WORKSPACE for a subdomain: no public project hides it, and back', async () => {
+    // The subdomain arm reads the workspace's live project access modes, so a
+    // workspace going private takes its subdomain out of the public set with no
+    // write to this table. Both directions on the SAME row.
+    await seedSubdomain(host, 'acme.motir.example');
+    await setProjectAccess(adminDb, host.projectId, 'members');
+    expect(await asAppRole({}, (tx) => selectAddress(tx, 'acme.motir.example'))).toHaveLength(0);
     await adminDb.project.update({
       where: { id: host.projectId },
       data: projectAccessData('public'),
     });
-    const shown = await asAppRole({}, (tx) => selectAddress(tx, 'roadmap.acme.example'));
-    expect(shown).toHaveLength(1);
+    expect(await asAppRole({}, (tx) => selectAddress(tx, 'acme.motir.example'))).toHaveLength(1);
   });
 
   it('does NOT let an unbound reader DELETE the address it can now read', async () => {
@@ -268,27 +277,45 @@ describe('the hostname race', () => {
   });
 });
 
-describe('the primary FK', () => {
-  it('falls back to the default rather than deleting the project when the address goes', async () => {
-    // SET NULL, not CASCADE. "Remove this domain" must not delete the project it
-    // served — which is the reading a cascade here would ship.
-    const address = await seedCustomDomain(host, 'roadmap.acme.example');
-    await db.$transaction(async (tx) => {
+describe('the application FK (MOTIR-9523)', () => {
+  it('a domain is created UNBOUND, in the workspace, with no project', async () => {
+    const row = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${host.workspaceId}, true)`;
-      await publicAddressRepository.setPrimary(host.projectId, address.id, tx);
+      return publicAddressRepository.createCustomDomain(
+        {
+          workspaceId: host.workspaceId,
+          applicationId: null,
+          hostname: 'new.acme.example',
+          verificationToken: 'motir-verify-x',
+        },
+        tx,
+      );
     });
-    expect(
-      (await adminDb.project.findUnique({ where: { id: host.projectId } }))?.primaryAddressId,
-    ).toBe(address.id);
+    expect(row).toMatchObject({ kind: 'custom_domain', status: 'unverified', applicationId: null });
+    expect(row).not.toHaveProperty('projectId');
+  });
 
-    await db.$transaction(async (tx) => {
-      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${host.workspaceId}, true)`;
-      await publicAddressRepository.remove(address.id, tx);
-    });
+  it('removing the APPLICATION unbinds its domain rather than deleting it', async () => {
+    // SET NULL, not CASCADE (ADR MOTIR-9790 §3): the customer still owns the
+    // domain and its DNS, and re-pointing it is a PATCH, not a re-verify.
+    const applicationId = await seedApplication(host);
+    const address = await seedCustomDomain(host, 'roadmap.acme.example', 'issued', applicationId);
+    await adminDb.hostedApplication.delete({ where: { id: applicationId } });
+    const after = await adminDb.publicAddress.findUnique({ where: { id: address.id } });
+    expect(after, 'the domain must survive its application').not.toBeNull();
+    expect(after?.applicationId).toBeNull();
+  });
 
-    const project = await adminDb.project.findUnique({ where: { id: host.projectId } });
-    expect(project, 'the project must survive its address being removed').not.toBeNull();
-    expect(project?.primaryAddressId).toBeNull();
+  it("lists only the workspace's CUSTOM domains, under its own tenancy", async () => {
+    await seedSubdomain(host, 'acme.motir.example');
+    await seedCustomDomain(host, 'b.acme.example');
+    await seedCustomDomain(host, 'a.acme.example');
+    await seedCustomDomain(neighbour, 'roadmap.nbr.example');
+    const rows = await asAppRole({ workspaceId: host.workspaceId }, (tx) =>
+      publicAddressRepository.listCustomDomainsForWorkspaceInTx(host.workspaceId, tx),
+    );
+    // Oldest first, and neither the subdomain nor the neighbour's domain.
+    expect(rows.map((r) => r.hostname)).toEqual(['b.acme.example', 'a.acme.example']);
   });
 });
 
@@ -306,10 +333,17 @@ describe('the job sweep read', () => {
 
     // Bound: the sweep is cross-tenant, so the job binds a system context for
     // it rather than reading unbound (where the public arm would silently
-    // narrow it to public projects and return a plausible, wrong subset).
-    const due = await db.$transaction((tx) =>
-      publicAddressRepository.listByStatusOlderThan('pending_certificate', new Date(), 10, tx),
-    );
+    // narrow it — since MOTIR-9523 to issued domains only, which hides every
+    // row this sweep exists for).
+    const due = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
+      return publicAddressRepository.listByStatusOlderThan(
+        'pending_certificate',
+        new Date(),
+        10,
+        tx,
+      );
+    });
     expect(due.map((a) => a.hostname)).toEqual(['never.acme.example', 'old.acme.example']);
     expect(due[0]!.id).toBe(never.id);
   });
@@ -356,11 +390,12 @@ function seedCustomDomain(
   tenant: Tenant,
   hostname: string,
   status: 'unverified' | 'issued' | 'pending_certificate' = 'issued',
+  applicationId: string | null = null,
 ) {
   return adminDb.publicAddress.create({
     data: {
       workspaceId: tenant.workspaceId,
-      projectId: tenant.projectId,
+      applicationId,
       hostname,
       kind: 'custom_domain',
       status,
@@ -404,4 +439,28 @@ async function seedTenant(
     workspaceId: workspace.id,
     projectId: project.id,
   };
+}
+
+/** A hosted application in the tenant's project — the thing a domain names. */
+async function seedApplication(tenant: Tenant): Promise<string> {
+  const repo = await adminDb.projectRepo.create({
+    data: {
+      workspaceId: tenant.workspaceId,
+      projectId: tenant.projectId,
+      role: 'web',
+      name: 'shop',
+      position: 'a0',
+      seedSource: 'initialised',
+    },
+  });
+  const app = await adminDb.hostedApplication.create({
+    data: {
+      workspaceId: tenant.workspaceId,
+      projectId: tenant.projectId,
+      projectRepositoryId: repo.id,
+      target: 'fly',
+      slug: 'shop',
+    },
+  });
+  return app.id;
 }

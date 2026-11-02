@@ -773,7 +773,8 @@ export default defineConfig({
         'lib/jobs/definitions/publicAddressCertificateRefresh.ts',
         'app/api/public/hosts/**/route.ts',
         'app/api/workspaces/**/public-subdomain/route.ts',
-        'app/api/projects/**/public-addresses/**/route.ts',
+        'app/api/workspaces/**/custom-domains/**/route.ts',
+        'app/**/settings/workspace/custom-domains/_components/CustomDomainsPane.tsx',
         'app/**/settings/project/public-address/_components/*.tsx',
 
         // Story MOTIR-1215 · Subtask MOTIR-3646 — the require-2FA control and

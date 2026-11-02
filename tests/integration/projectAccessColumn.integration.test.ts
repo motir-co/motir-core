@@ -101,14 +101,15 @@ async function seedSurface(mode: ProjectAccessMode): Promise<Surface> {
   });
   const voter = await createTestUser({ email: `pac-voter-${n}@example.com` });
   await adminDb.publicRequestVote.create({ data: { workItemId: workItem.id, userId: voter.id } });
+  // A workspace SUBDOMAIN: since MOTIR-9523 it is the one address kind whose
+  // public read follows the workspace's project access modes (a customer domain
+  // names no project, and is admitted once issued).
   await adminDb.publicAddress.create({
     data: {
       workspaceId: workspace.id,
-      projectId: project.id,
       hostname: `pac-${n}.example.test`,
-      kind: 'custom_domain',
-      status: 'issued',
-      verificationToken: `motir-verify-pac-${n}`,
+      kind: 'workspace_subdomain',
+      status: 'active',
     },
   });
   const tagSlug = `pac-tag-${n}`;
@@ -165,7 +166,7 @@ async function policyReads(s: Surface): Promise<Record<string, number>> {
         Prisma.sql`SELECT count(*) AS n FROM "public_request_vote" WHERE "work_item_id" = ${s.workItemId}`,
       ),
       public_address: await count(
-        Prisma.sql`SELECT count(*) AS n FROM "public_address" WHERE "project_id" = ${s.projectId}`,
+        Prisma.sql`SELECT count(*) AS n FROM "public_address" WHERE "workspace_id" = ${s.workspaceId}`,
       ),
     };
   });

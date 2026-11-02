@@ -30,7 +30,7 @@ const { publicAddressesService } = await import('@/lib/services/publicAddressesS
 const { hostnameReservationHash } = await import('@/lib/publicAddresses/hostnameReservation');
 const { publicSiteOrigin, publicProjectPath } = await import('@/lib/publicProjects/urls');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
-const { createTestWorkspace, createTestUser, createTestProject } = await import('../fixtures');
+const { createTestWorkspace, createTestUser } = await import('../fixtures');
 const {
   HostnameTakenError,
   NameQuarantinedError,
@@ -567,67 +567,30 @@ describe('release', () => {
     expect(await adminDb.publicSubdomainChange.count(), 'and spend no change').toBe(0);
   });
 
-  it('leaves a CUSTOM DOMAIN on the same workspace untouched — still issued, still primary', async () => {
+  it('leaves a CUSTOM DOMAIN on the same workspace untouched — still there, still issued', async () => {
     // `reservesItsHostname` is what chooses the rows, and it excludes a customer
     // domain for a stated reason: that name is theirs, and holding it would be a
     // hostage. A hand-written kind list is the mistake this pins.
     await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    const project = await createTestProject({
-      workspaceId: fx.workspaceId,
-      actorUserId: fx.ownerId,
-    });
     const custom = await adminDb.publicAddress.create({
       data: {
         workspaceId: fx.workspaceId,
-        projectId: project.id,
         kind: 'custom_domain',
         hostname: 'docs.acme.example',
         status: 'issued',
       },
     });
-    await adminDb.project.update({
-      where: { id: project.id },
-      data: { primaryAddressId: custom.id },
-    });
 
     await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
 
     const after = await adminDb.publicAddress.findUnique({ where: { id: custom.id } });
-    expect(after?.status).toBe('issued');
-    expect(
-      (await adminDb.project.findUnique({ where: { id: project.id } }))?.primaryAddressId,
-      'a promoted custom domain stays the canonical — release changes nothing for it',
-    ).toBe(custom.id);
+    expect(after?.status, 'release changes nothing for a customer domain').toBe('issued');
     expect(
       await adminDb.publicHostnameReservation.count({
         where: { hostnameHash: hostnameReservationHash('docs.acme.example') },
       }),
       'reserving a name we do not own is a hostage, not a protection',
     ).toBe(0);
-  });
-
-  it('lets a project whose primary WAS the subdomain fall back, with no manual sweep', async () => {
-    // `project.primary_address_id` is ON DELETE SET NULL, so the fallback is the
-    // database's. Asserted rather than implemented — a hand-run setPrimary(null)
-    // would be a second copy of a constraint that already holds.
-    await publicSubdomainService.claim(fx.workspaceId, 'acme', fx.ownerId);
-    const project = await createTestProject({
-      workspaceId: fx.workspaceId,
-      actorUserId: fx.ownerId,
-    });
-    const live = await adminDb.publicAddress.findFirstOrThrow({
-      where: { workspaceId: fx.workspaceId, kind: 'workspace_subdomain' },
-    });
-    await adminDb.project.update({
-      where: { id: project.id },
-      data: { primaryAddressId: live.id },
-    });
-
-    await publicSubdomainService.release(fx.workspaceId, fx.ownerId);
-
-    const after = await adminDb.project.findUnique({ where: { id: project.id } });
-    expect(after, 'the PROJECT must survive its primary address being deleted').not.toBeNull();
-    expect(after?.primaryAddressId).toBeNull();
   });
 
   it('refuses to re-claim a held name — to another workspace AND to itself', async () => {

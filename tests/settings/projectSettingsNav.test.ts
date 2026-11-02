@@ -737,14 +737,12 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
     source: 'lib/services/automationRulesService.ts',
     gate: 'assertPermission',
   },
-  // MOTIR-4221 — the Public address room. Its writes live in the customer-domain
-  // lifecycle, which asserts `project:manage_access` on add / verify / remove /
-  // makePrimary / clearPrimary. The room's OTHER half (the workspace subdomain)
-  // is gated on the workspace ROLE, an axis the registry cannot express — see the
-  // entry's own comment for why the project key is the honest one for the rail.
+  // MOTIR-4221 · MOTIR-9529 — the Public address room, now a read-only echo:
+  // the customer-domain writes moved to workspace settings. Its key is the
+  // Access group's `project:manage_access`, asserted by the access-mode writes.
   'public-address': {
     permission: 'project:manage_access',
-    source: 'lib/services/customDomainService.ts',
+    source: 'lib/services/projectMembersService.ts',
     gate: 'assertPermission',
   },
   // MOTIR-6995 — the Hosted agent room's WRITE: `update` asserts `ai:configure`.
