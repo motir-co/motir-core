@@ -2,6 +2,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AwsManagementApiError,
+  Ec2ApiError,
   type AwsCredentialsConfig,
   type AwsSessionCredentials,
   type Ec2Api,
@@ -73,6 +74,8 @@ let organization: FakeOrganization;
 let ec2: Ec2Fake;
 /** Which access key id each EC2 surface was built with. */
 let ec2Keys: string[];
+/** The waits the provider slept, on an injected timer (MOTIR-10204). */
+let sleeps: number[];
 let unregister: () => void;
 let operatorEmail: string;
 
@@ -150,6 +153,7 @@ beforeEach(async () => {
   buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
+  sleeps = [];
   installAddShardGithub(github, SECRETS.installation);
   unregister = registerShardProvisioningProvider(
     createAwsShardProvisioningProvider({
@@ -159,6 +163,9 @@ beforeEach(async () => {
         return ec2;
       },
       env: () => process.env,
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
     }),
   );
   operatorEmail = await staff('superadmin');
@@ -302,6 +309,51 @@ describe('add-shard --provider aws, first run', () => {
     expect(result.out).toMatch(/^runtime_credential\s+pending/m);
     expect(result.out).toContain(roleStep(accountId));
     expect((await shardRow())!.state).toBe('provisioning');
+  });
+});
+
+describe('a just-created account whose EC2 is still activating (MOTIR-10204)', () => {
+  /** EC2 answers the next `times` VPC reads with OptInRequired, as a new account
+   *  does until its activation finishes. The refusal is the package's own
+   *  `Ec2ApiError` — the class the provider reads, not the fake's source copy. */
+  function refuseVpcReads(times: number): void {
+    const read = ec2.describeVpcs.bind(ec2);
+    let refused = 0;
+    ec2.describeVpcs = async (filters) => {
+      if (refused < times) {
+        refused += 1;
+        throw new Ec2ApiError('OptInRequired', 401, false);
+      }
+      return read(filters);
+    };
+  }
+
+  it('waits out OptInRequired on the first EC2 call and builds the account in the same run', async () => {
+    refuseVpcReads(1);
+
+    const result = await run(args());
+
+    expect(result.code).toBe(2);
+    expect(result.err).not.toContain('OptInRequired');
+    expect(sleeps).toEqual([15_000]);
+    expect(result.out).toMatch(/^network\s+done — created unit-membership:.*stack-instance:/m);
+    expect((await shardRow())!.state).toBe('provisioning');
+  });
+
+  it('an account older than a day answering OptInRequired is refused at once, unwaited', async () => {
+    await run(args());
+    const account = organization.accounts.get(NAME)!;
+    organization.accounts.set(NAME, {
+      ...account,
+      joinedAt: new Date(Date.now() - 2 * 24 * 60 * 60_000),
+    });
+    refuseVpcReads(1);
+
+    const result = await run(args());
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('EC2 refused a call (OptInRequired, HTTP 401)');
+    expect(sleeps).toEqual([]);
   });
 });
 

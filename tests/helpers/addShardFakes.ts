@@ -200,7 +200,12 @@ export class FakeOrganization implements AwsManagementApi {
       throw new AwsAccountCreationRefusedError(input.name, 'EMAIL_ALREADY_EXISTS');
     }
     this.usedEmails.add(input.email);
-    const account = { accountId: this.nextAccountId(), name: input.name, status: 'ACTIVE' };
+    const account = {
+      accountId: this.nextAccountId(),
+      name: input.name,
+      status: 'ACTIVE',
+      joinedAt: new Date(),
+    };
     this.accounts.set(input.name, account);
     this.failOnceAfter('createOrganizationAccount');
     return account;
@@ -209,7 +214,12 @@ export class FakeOrganization implements AwsManagementApi {
   async waitForCreateAccount(requestId: string, name: string) {
     this.calls.push(`waitForCreateAccount:${requestId}`);
     this.inProgress.delete(name);
-    const account = { accountId: this.nextAccountId(), name, status: 'ACTIVE' };
+    const account = {
+      accountId: this.nextAccountId(),
+      name,
+      status: 'ACTIVE',
+      joinedAt: new Date(),
+    };
     this.accounts.set(name, account);
     return account;
   }

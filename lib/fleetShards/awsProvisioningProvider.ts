@@ -10,6 +10,7 @@ import {
   createAwsManagementApi,
   createEc2Api,
   readAwsShardNetwork,
+  withAwsEc2Activation,
   type AwsCredentialsConfig,
   type AwsManagementApi,
   type AwsSessionCredentials,
@@ -77,6 +78,8 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface AwsAccountState {
   accountId: string;
   credentials: AwsSessionCredentials;
+  /** When the account joined the organization, when AWS said (MOTIR-10204). */
+  joinedAt: Date | null;
 }
 
 export interface AwsProvisioningDeps {
@@ -86,6 +89,9 @@ export interface AwsProvisioningDeps {
   ec2(config: AwsCredentialsConfig): Ec2Api;
   /** This deployment's configuration: the management credential and the pool definition. */
   env(): Readonly<Record<string, string | undefined>>;
+  /** The wait between polls of a new account's EC2 activation (MOTIR-10204);
+   *  a real timer when absent. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 const defaultDeps: AwsProvisioningDeps = {
@@ -179,16 +185,20 @@ export function createAwsShardProvisioningProvider(
     async account(ctx) {
       const lookup = await api().findOrganizationAccount(ctx.name);
       let accountId: string;
+      let joinedAt: Date | null = null;
       let created = false;
       let detail: string;
       try {
         if (lookup.account) {
           accountId = lookup.account.accountId;
+          joinedAt = lookup.account.joinedAt ?? null;
           detail = `AWS account ${accountId} (${ctx.name}) found`;
         } else if (lookup.inProgressRequestId) {
           // An earlier run filed it: wait on that request, never file a second.
-          accountId = (await api().waitForCreateAccount(lookup.inProgressRequestId, ctx.name))
-            .accountId;
+          ({ accountId, joinedAt = null } = await api().waitForCreateAccount(
+            lookup.inProgressRequestId,
+            ctx.name,
+          ));
           created = true;
           detail = `waited on the CreateAccount an earlier run filed; AWS account ${accountId}`;
         } else {
@@ -198,7 +208,10 @@ export function createAwsShardProvisioningProvider(
               `no AWS account is named ${ctx.name}; pass --account-email <email> to create it`,
             ]);
           }
-          accountId = (await api().createOrganizationAccount({ name: ctx.name, email })).accountId;
+          ({ accountId, joinedAt = null } = await api().createOrganizationAccount({
+            name: ctx.name,
+            email,
+          }));
           created = true;
           detail = `created AWS account ${accountId} (${ctx.name})`;
         }
@@ -222,7 +235,7 @@ export function createAwsShardProvisioningProvider(
         if (!(err instanceof AwsManagementApiError)) throw err;
         throw new MemberRoleAssumeFailedError(accountId, AWS_MEMBER_ROLE_NAME, err.awsCode);
       }
-      const account: AwsAccountState = { accountId, credentials };
+      const account: AwsAccountState = { accountId, credentials, joinedAt };
       return { created, detail, account };
     },
 
@@ -246,8 +259,18 @@ export function createAwsShardProvisioningProvider(
 
       // A network the definition did not build — an existing account not yet
       // adopted — is refused BEFORE the move: in the unit, auto-deployment would
-      // build a second network beside it.
-      if (await awsShardVpcExists({ ec2, regionId: region, shardTag: ctx.name })) {
+      // build a second network beside it. This is the run's first EC2 call in the
+      // account, so a just-created account's activation is waited out on it
+      // (MOTIR-10204); every later call finds EC2 active.
+      const vpcExists = await withAwsEc2Activation(
+        () => awsShardVpcExists({ ec2, regionId: region, shardTag: ctx.name }),
+        {
+          accountId,
+          accountJoinedAt: accountStateOf(ctx)?.joinedAt ?? null,
+          ...(deps.sleep ? { sleep: deps.sleep } : {}),
+        },
+      );
+      if (vpcExists) {
         try {
           await api().readStackInstanceOutputs(target);
         } catch (err) {
