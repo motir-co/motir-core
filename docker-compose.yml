@@ -1,6 +1,6 @@
 services:
   postgres:
-    # pgvector/pgvector (Postgres 16 + pgvector preinstalled) — Story MOTIR-2694 ·
+    # pgvector/pgvector (Postgres + pgvector preinstalled) — Story MOTIR-2694 ·
     # Subtask MOTIR-2696 adds `work_item_embedding`, whose migration runs
     # `CREATE EXTENSION vector`; the vanilla `postgres:16-alpine` this used to run
     # does not ship the extension, so that migration fails on it outright. Same PG
@@ -21,7 +21,17 @@ services:
     # and made the same move (its `docker-compose.yml` carries that note). Keep
     # this tag in sync with `.github/actions/postgres`'s `image-repository` /
     # `image-tag` defaults — that action's inputs say so too.
-    image: pgvector/pgvector:pg16
+    #
+    # ⚠️ POSTGRES 18, PRODUCTION'S MAJOR (18.6 on both production databases,
+    # MOTIR-10221). A PostgreSQL 16 data directory does not start under 18, and
+    # the 18 image moved its data directory: PGDATA is now
+    # `/var/lib/postgresql/18/docker`, and the entrypoint REFUSES to start while
+    # anything is mounted at the old `/var/lib/postgresql/data`. So the volume is
+    # mounted at `/var/lib/postgresql` and has a NEW name, `prodect-pg18-data`:
+    # an existing 16 volume is left untouched instead of half-reused, and the
+    # first `docker compose up` initialises an empty 18 cluster with the pinned
+    # locale below. README.md § *Local setup* says what to do with the old one.
+    image: pgvector/pgvector:pg18
     container_name: prodect-postgres
     restart: unless-stopped
     environment:
@@ -49,7 +59,7 @@ services:
       # Container port stays 5432 so Postgres tooling inside the container is unaffected.
       - '5433:5432'
     volumes:
-      - prodect-pg-data:/var/lib/postgresql/data
+      - prodect-pg18-data:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U prodect -d prodect']
       interval: 2s
@@ -58,4 +68,4 @@ services:
       start_period: 3s
 
 volumes:
-  prodect-pg-data:
+  prodect-pg18-data:

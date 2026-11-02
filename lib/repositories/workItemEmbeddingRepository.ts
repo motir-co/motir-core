@@ -368,7 +368,7 @@ export const workItemEmbeddingRepository = {
    * pass came up short, paid only then.
    *
    * (This is NOT a guess about availability: production is Neon, which offers
-   * pgvector 0.8.0, and the CI/dev image is `pgvector/pgvector:pg16` — iterative
+   * pgvector 0.8.0, and the CI/dev image is `pgvector/pgvector:pg18` — iterative
    * scans WOULD work on both. The point is that neither is the whole audience for
    * an open-source repo, and a guarantee that holds on every build costs nothing
    * more than one that holds on most.)

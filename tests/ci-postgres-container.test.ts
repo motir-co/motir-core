@@ -240,7 +240,7 @@ describe('the postgres composite action', () => {
     // MOTIR-2696 spent a CI round learning. Both files carry a comment pointing
     // at the other; this is the check that makes the pointer true.
     const compose = readFileSync(join(process.cwd(), 'docker-compose.yml'), 'utf8');
-    expect(compose).toMatch(/image:\s*pgvector\/pgvector:pg16/);
+    expect(compose).toMatch(/image:\s*pgvector\/pgvector:pg18/);
     expect(compose).toMatch(/POSTGRES_INITDB_ARGS:\s*'--locale=C\.UTF-8'/);
   });
 
@@ -250,7 +250,7 @@ describe('the postgres composite action', () => {
     // migrations needs this one. Guarded here because the workflow files are not
     // type-checked, linted or executed by any other suite.
     expect(action).toMatch(/default:\s*pgvector\/pgvector/);
-    expect(action).toMatch(/default:\s*pg16/);
+    expect(action).toMatch(/default:\s*pg18/);
   });
 
   it("PINS the initdb locale to production's byte-ordering collation", () => {
