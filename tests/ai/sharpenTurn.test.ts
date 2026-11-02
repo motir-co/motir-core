@@ -91,10 +91,36 @@ describe('parseSharpenTurn', () => {
       },
     ],
     ['an unknown topic', { kind: 'question', question: { ...question, topic: 'stack' }, ...base }],
+    [
+      'a branch near product_fit that is not in the closed set',
+      { kind: 'question', question: { ...question, topic: 'naming' }, ...base },
+    ],
     ['a malformed settled entry', { kind: 'finished', ...base, settled: [{ answer: 1 }] }],
     ['a malformed writeBack', { kind: 'finished', ...base, writeBack: { ok: 'yes' } }],
   ])('refuses %s', (_label, raw) => {
     expect(parseSharpenTurn(raw)).toBeNull();
+  });
+
+  // MOTIR-10254: naming, placement and connections are their own branch, so a
+  // question on it and an answer settled on it both cross the boundary.
+  it('reads a product_fit question and a product_fit settled answer', () => {
+    const fit = { ...question, text: 'Where does the export appear?', topic: 'product_fit' };
+    const settledFit = {
+      questionId: 'q0',
+      question: 'What is it called?',
+      answer: 'Saved view',
+      topic: 'product_fit',
+      readingId: 'a',
+      source: 'person',
+    };
+    const parsed = parseSharpenTurn({
+      kind: 'question',
+      question: fit,
+      ...base,
+      settled: [settledFit],
+    });
+    expect(parsed?.question?.topic).toBe('product_fit');
+    expect(parsed?.settled).toEqual([settledFit]);
   });
 
   it('caps long strings', () => {

@@ -253,8 +253,17 @@ export interface BugAnalysisContext {
   confidentialTerms?: string[];
 }
 
-/** The four grilling branches a Sharpen question belongs to (motir-ai's closed set). */
-export type GrillingBranch = 'workflow' | 'alternative' | 'non_happy' | 'technical_thread';
+/**
+ * The grilling branches a Sharpen question belongs to (motir-ai's closed set,
+ * `GRILLING_BRANCHES`). `product_fit` — what a thing is called, where it appears and
+ * how it connects to what is already there — joined in MOTIR-10254.
+ */
+export type GrillingBranch =
+  | 'workflow'
+  | 'alternative'
+  | 'non_happy'
+  | 'product_fit'
+  | 'technical_thread';
 
 /** What the person did on a Sharpen turn. `start` opens a session. */
 export type SharpenAction = 'start' | 'answer' | 'own_words' | 'skip' | 'you_decide' | 'stop';

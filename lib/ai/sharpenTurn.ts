@@ -46,6 +46,7 @@ const BRANCHES: readonly GrillingBranch[] = [
   'workflow',
   'alternative',
   'non_happy',
+  'product_fit',
   'technical_thread',
 ];
 

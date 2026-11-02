@@ -11,7 +11,8 @@ import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 // panels 7 and 8).
 //
 // "What you settled", counted, grouped by the part of the plan's requirement each
-// answer fills: Behaviour (workflow questions), Scope edge (the other ways of
+// answer fills: Behaviour (workflow questions, and the naming, placement and
+// connections of `product_fit`, MOTIR-10254), Scope edge (the other ways of
 // doing it), Constraints (technical threads), Acceptance (what happens when things
 // go wrong), and the planner's Assumptions (Skip / You decide). Empty groups are
 // not drawn. An answer is never drawn like an assumption: the person's are
@@ -24,6 +25,7 @@ import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 
 const GROUP_OF: Record<GrillingBranch, 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance'> = {
   workflow: 'behaviour',
+  product_fit: 'behaviour',
   alternative: 'scopeEdge',
   technical_thread: 'constraints',
   non_happy: 'acceptance',
