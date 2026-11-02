@@ -124,7 +124,33 @@ describe('toToResumePlanningSessionDto', () => {
       stopPhase: null,
       stopRef: null,
       stopTitle: null,
+      notPlannedYet: [],
     });
+  });
+
+  it('carries the halted walk’s not-planned-yet lines in order, and none as an empty list (MOTIR-10209)', () => {
+    const lines = [
+      '"D" is not planned yet: plan "B" first, then plan "D".',
+      'Not written yet: "T".',
+    ];
+    const withLines = toToResumePlanningSessionDto(
+      { id: 'x', targetKeys: [], failedAt: new Date(0), failureNotPlannedYet: lines },
+      null,
+      plans,
+      'Acme',
+      titles,
+      null,
+    );
+    expect(withLines.failure?.notPlannedYet).toEqual(lines);
+    const withNull = toToResumePlanningSessionDto(
+      { id: 'x', targetKeys: [], failedAt: new Date(0), failureNotPlannedYet: null },
+      null,
+      plans,
+      'Acme',
+      titles,
+      null,
+    );
+    expect(withNull.failure?.notPlannedYet).toEqual([]);
   });
 
   it('an unresolved session with no plan at all has no entry plan', () => {

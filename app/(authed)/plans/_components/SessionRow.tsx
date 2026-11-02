@@ -18,6 +18,7 @@ import {
 import { Pill } from '@/components/ui/Pill';
 import { PlanDestinationTag } from '@/components/planning/PlanDestinationTag';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
+import { NotPlannedYetList } from '@/components/planning/NotPlannedYetList';
 import { cn } from '@/lib/utils/cn';
 import {
   isPlainPrimaryClick,
@@ -495,6 +496,11 @@ export function SessionRow({
             <ContinuedFromLink from={view.copiedFrom} anchorKey={view.targetKeys[0] ?? null} />
           ) : null}
         </div>
+        {/* A halted WALK's unplanned cards (MOTIR-10209), under the meta line. A failure beside a
+            waiting plan (`change`) has no stop line to put them under, and is not drawn. */}
+        {view.failure?.kind === 'walk' ? (
+          <NotPlannedYetList lines={view.failure.notPlannedYet} surface="row" />
+        ) : null}
       </div>
 
       <div className="flex w-full shrink-0 items-center gap-2 pl-11 sm:w-auto sm:pl-0">

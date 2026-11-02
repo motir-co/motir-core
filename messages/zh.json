@@ -10321,6 +10321,10 @@
         "walk": {
           "alsoWaiting": "另有一个计划在等你批准："
         }
+      },
+      "notPlannedYet": {
+        "label": "尚未规划",
+        "more": "还有 {count, plural, other {# 个工作项}}尚未规划——打开它查看全部"
       }
     }
   },

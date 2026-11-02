@@ -129,6 +129,11 @@ export const AUTO_RESUMES_PER_SESSION = 2;
 export const FAILURE_DETAIL_MAX = 300;
 export const FAILURE_STOP_REF_MAX = 200;
 export const FAILURE_STOP_TITLE_MAX = 500;
+/** The halted walk's "not planned yet" lines (MOTIR-10209): at most this many lines, each
+ *  cut to this many characters. A run-wide halt names one line per waiting card, so the
+ *  line cap is generous; it only bounds a runaway wire value. */
+export const FAILURE_NOT_PLANNED_YET_MAX_LINES = 200;
+export const FAILURE_NOT_PLANNED_YET_LINE_MAX = 1000;
 
 /** The closed vocabulary, mirrored from the Prisma enum so a stray string is refused. */
 export const PLAN_SESSION_FAILURE_REASONS = [
@@ -170,6 +175,17 @@ export const planSessionFailureRecordSchema = z.object({
   failureStopRef: capped(FAILURE_STOP_REF_MAX),
   failureStopTitle: capped(FAILURE_STOP_TITLE_MAX),
   failureResumable: z.boolean().nullable().optional().default(null),
+  // Verbatim and in order; a blank line carries nothing and is dropped. Capped, never
+  // refused, for the same reason as `capped`.
+  failureNotPlannedYet: z
+    .array(z.string())
+    .optional()
+    .transform((lines) =>
+      (lines ?? [])
+        .map((line) => line.trim().slice(0, FAILURE_NOT_PLANNED_YET_LINE_MAX))
+        .filter((line) => line !== '')
+        .slice(0, FAILURE_NOT_PLANNED_YET_MAX_LINES),
+    ),
 });
 
 export interface PlanSessionFailureRecord {
@@ -185,6 +201,9 @@ export interface PlanSessionFailureRecord {
   /** motir-ai's verdict on whether the failed job can be resumed (MOTIR-9121); `false`
    *  when it failed before its conversation settled. `null` / absent: unknown. */
   failureResumable?: boolean | null;
+  /** The cards the halted walk left unplanned, one person-facing line each, as motir-ai
+   *  words them (`walkStop.notPlannedYet`, MOTIR-10209). Absent or empty: none. */
+  failureNotPlannedYet?: readonly string[];
 }
 
 /** The wait `markAwaitingPerson` writes. */
@@ -226,6 +245,7 @@ export const CLEARED_FAILURE_COLUMNS = {
   failureStopRef: null,
   failureStopTitle: null,
   failureResumable: null,
+  failureNotPlannedYet: [] as string[],
 } as const;
 
 /** The two awaiting columns, set to null. */

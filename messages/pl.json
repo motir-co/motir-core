@@ -10330,6 +10330,10 @@
         "walk": {
           "alsoWaiting": "Czeka też na Twoje zatwierdzenie:"
         }
+      },
+      "notPlannedYet": {
+        "label": "Jeszcze niezaplanowane",
+        "more": "i {count, plural, one {# kolejny element} few {# kolejne elementy} many {# kolejnych elementów} other {# kolejnego elementu}} jeszcze niezaplanowane — otwórz, aby zobaczyć wszystkie"
       }
     }
   },

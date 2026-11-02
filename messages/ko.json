@@ -10324,6 +10324,10 @@
         "walk": {
           "alsoWaiting": "승인을 기다리는 계획이 하나 더 있습니다:"
         }
+      },
+      "notPlannedYet": {
+        "label": "아직 계획되지 않음",
+        "more": "아직 계획되지 않은 항목이 {count, plural, other {#개}} 더 있습니다. 열어서 모두 확인하세요"
       }
     }
   },

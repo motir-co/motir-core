@@ -10330,6 +10330,10 @@
         "walk": {
           "alsoWaiting": "Wacht ook op je goedkeuring:"
         }
+      },
+      "notPlannedYet": {
+        "label": "Nog niet gepland",
+        "more": "en nog {count, plural, one {# item} other {# items}} niet gepland — open het om ze allemaal te zien"
       }
     }
   },
