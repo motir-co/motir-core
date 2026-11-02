@@ -34,6 +34,10 @@ export const jobWalkStopSchema = z.object({
   planId: z.string().nullable().optional(),
   reasonCode: z.string(),
   detail: z.string().optional(),
+  // The cards the halt left unplanned, worded for the person (motir-ai#929, MOTIR-10209).
+  // A malformed value is IGNORED, never allowed to fail the whole walk stop: the stop
+  // point and reason must still reach the record when this one field is bad.
+  notPlannedYet: z.array(z.string()).optional().catch(undefined),
 });
 
 /** Parse a wire `walkStop`; a missing or malformed member reads `null` and never throws. */
@@ -129,7 +133,8 @@ export interface FailureRecordInput {
  * The record `markFailed` writes. The stop point is `walkStop`, else the last
  * relayed position, else null; the reason is `walkStop.reasonCode` when it is one
  * of the closed set, else the mapped error; the detail is `walkStop.detail`, else the
- * error's message, capped (the data card's schema caps again on write).
+ * error's message, capped (the data card's schema caps again on write). The "not planned
+ * yet" lines are the walk stop's, verbatim and in order, else none.
  */
 export function failureRecordFrom(input: FailureRecordInput): PlanSessionFailureRecord {
   const { walkStop, lastPosition, error } = input;
@@ -148,5 +153,7 @@ export function failureRecordFrom(input: FailureRecordInput): PlanSessionFailure
     failureStopRef: stop?.target ?? null,
     failureStopTitle: stop?.targetTitle ?? null,
     failureResumable: input.resumable ?? null,
+    // Only the walk stop carries them; a relayed position or a bare error has none.
+    failureNotPlannedYet: walkStop?.notPlannedYet ?? [],
   };
 }

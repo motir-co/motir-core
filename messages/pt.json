@@ -10330,6 +10330,10 @@
         "walk": {
           "alsoWaiting": "Também aguardando sua aprovação:"
         }
+      },
+      "notPlannedYet": {
+        "label": "Ainda não planejado",
+        "more": "e mais {count, plural, one {# item} other {# itens}} ainda não planejados — abra para ver todos"
       }
     }
   },

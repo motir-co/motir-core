@@ -8,6 +8,7 @@ import { Pill } from '@/components/ui/Pill';
 import { Spinner } from '@/components/ui/Spinner';
 import { providerLimitView } from '@/lib/planChange/providerLimitView';
 import { PlanOverlayDoor } from '@/components/planning/PlanOverlayDoor';
+import { NotPlannedYetList } from '@/components/planning/NotPlannedYetList';
 import type { PlanChangeSessionDto, PlanSessionFailureDto } from '@/lib/dto/planChange';
 import {
   refusalEndsWaiting,
@@ -102,6 +103,9 @@ export function FailedWaitingNotice({
           {t('failedAt', { when: format.relativeTime(new Date(failure.failedAt)) })}
         </span>
       </p>
+      {/* The halted walk's own account of what it left unplanned (MOTIR-10209): every line —
+          the overlay is where a row's held-back lines are read. */}
+      <NotPlannedYetList lines={failure.notPlannedYet} surface="all" />
       <p
         data-testid={providerLimit ? 'provider-limit-kept' : undefined}
         className="text-xs leading-relaxed text-(--el-text-secondary)"

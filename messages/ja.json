@@ -10327,6 +10327,10 @@
         "walk": {
           "alsoWaiting": "承認待ちの計画がもう1件あります:"
         }
+      },
+      "notPlannedYet": {
+        "label": "未計画",
+        "more": "まだ計画されていない項目がほかに{count, plural, other {#件}}あります。開くとすべて表示されます"
       }
     }
   },

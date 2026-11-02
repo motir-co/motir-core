@@ -56,6 +56,7 @@ export async function buildSessionRowViews(
           reason: session.failure.reason,
           stopPhase: session.failure.stopPhase,
           stopTitle: session.failure.stopTitle,
+          notPlannedYet: session.failure.notPlannedYet ?? [],
           timeLabel: format.relativeTime(new Date(session.failure.failedAt)),
           fullLabel: format.dateTime(new Date(session.failure.failedAt), {
             dateStyle: 'medium',

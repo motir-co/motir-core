@@ -320,6 +320,7 @@ describe('planChangeMappers — no Prisma row crosses the boundary', () => {
       failureStopRef: null,
       failureStopTitle: null,
       failureResumable: null,
+      failureNotPlannedYet: [],
       awaitingPersonSince: null,
       awaitingPersonCause: null,
       createdAt: now,

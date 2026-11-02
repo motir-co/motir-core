@@ -10327,6 +10327,10 @@
         "walk": {
           "alsoWaiting": "Also waiting for your approval:"
         }
+      },
+      "notPlannedYet": {
+        "label": "Not planned yet",
+        "more": "and {count, plural, one {# more item} other {# more items}} not planned yet — open it to see them all"
       }
     }
   },

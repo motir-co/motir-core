@@ -265,6 +265,10 @@ export interface ToResumePlanningSessionDto {
     stopPhase: 'lay' | 'author' | null;
     stopRef: string | null;
     stopTitle: string | null;
+    /** The cards the halted walk left unplanned, one line each, worded by motir-ai for the
+     *  person (`walkStop.notPlannedYet`, MOTIR-10209) — rendered verbatim and in order. Absent
+     *  or empty: none, and the failure renders as it always did. */
+    notPlannedYet?: string[];
   } | null;
   /** ISO-8601 — when the session ended; set only on `ended_with_waiting_plan`. */
   endedAt: string | null;

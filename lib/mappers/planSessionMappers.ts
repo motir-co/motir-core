@@ -103,6 +103,7 @@ export function toPlanSessionRowDto(row: PlanSessionListRow): PlanSessionRowDto 
                 ? row.failureStopPhase
                 : null,
             stopTitle: row.failureStopTitle ?? null,
+            notPlannedYet: row.failureNotPlannedYet ?? [],
           }
         : null,
     endedAt: row.endedAt ? row.endedAt.toISOString() : null,

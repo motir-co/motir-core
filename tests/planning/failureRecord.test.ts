@@ -48,6 +48,33 @@ describe('parseJobWalkStop', () => {
   ])('reads %s as null and never throws', (_name, raw) => {
     expect(parseJobWalkStop(raw)).toBeNull();
   });
+
+  // MOTIR-10209 — a strict object stripped this field, so the halt's lines never reached the
+  // record. They are kept, in order; a malformed value is IGNORED and never fails the stop.
+  it('keeps notPlannedYet, verbatim and in order', () => {
+    const lines = [
+      '"D" is not planned yet: plan "B" first, then plan "D".',
+      'Not written yet: "T".',
+    ];
+    expect(parseJobWalkStop({ ...WALK_STOP, notPlannedYet: lines })?.notPlannedYet).toEqual(lines);
+  });
+
+  it('reads a walkStop without notPlannedYet as before', () => {
+    const parsed = parseJobWalkStop(WALK_STOP);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.notPlannedYet).toBeUndefined();
+  });
+
+  it.each([
+    ['a string', 'D is not planned yet'],
+    ['an array holding a non-string', ['ok', 7]],
+    ['an object', { 0: 'D' }],
+    ['null', null],
+  ])('ignores a malformed notPlannedYet (%s) and keeps the rest of the stop', (_name, bad) => {
+    const parsed = parseJobWalkStop({ ...WALK_STOP, notPlannedYet: bad });
+    expect(parsed).toMatchObject({ phase: 'author', reasonCode: 'rate_limited' });
+    expect(parsed?.notPlannedYet).toBeUndefined();
+  });
 });
 
 describe('reasonCodeFromError — total', () => {
@@ -85,7 +112,30 @@ describe('failureRecordFrom', () => {
       failureStopRef: 'planItem:abc',
       failureStopTitle: 'Export a report',
       failureResumable: null,
+      failureNotPlannedYet: [],
     });
+  });
+
+  it('carries the walk stop’s not-planned-yet lines verbatim and in order (MOTIR-10209)', () => {
+    const lines = [
+      '"D" is not planned yet: plan "B" first, then plan "D".',
+      'Not written yet: "T" waits on "S", and planning stopped before it was written — continuing this plan writes it.',
+    ];
+    const rec = failureRecordFrom({
+      ...base,
+      walkStop: parseJobWalkStop({ ...WALK_STOP, notPlannedYet: lines }),
+    });
+    expect(rec.failureNotPlannedYet).toEqual(lines);
+  });
+
+  it('records no lines from a relayed position or a bare error (MOTIR-10209)', () => {
+    const rec = failureRecordFrom({
+      ...base,
+      walkStop: null,
+      lastPosition: { phase: 'lay', target: null, depth: 0 },
+      error: new MotirAiOutOfCreditsError('out'),
+    });
+    expect(rec.failureNotPlannedYet).toEqual([]);
   });
 
   it('falls back to the last relayed position when walkStop is absent', () => {
@@ -401,6 +451,12 @@ describe('getJob parses walkStop tolerantly', () => {
     code: 'ai_job_failed',
     detail: 'boom',
   };
+
+  it('carries walkStop.notPlannedYet through to the job view (MOTIR-10209)', async () => {
+    stub({ ...problem, walkStop: { ...WALK_STOP, notPlannedYet: ['"D" is not planned yet.'] } });
+    const view = await getJob('j', 'pj');
+    expect(view.walkStop?.notPlannedYet).toEqual(['"D" is not planned yet.']);
+  });
 
   it('carries walkStop when the problem has one', async () => {
     stub({ ...problem, walkStop: WALK_STOP });

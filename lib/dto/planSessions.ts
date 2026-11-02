@@ -129,6 +129,10 @@ export interface PlanSessionRowDto {
     reason: string;
     stopPhase: 'lay' | 'author' | null;
     stopTitle: string | null;
+    /** The cards the halted walk left unplanned, one line each, worded by motir-ai for the
+     *  person (`walkStop.notPlannedYet`, MOTIR-10209) — rendered verbatim and in order. Absent
+     *  or empty: none, and the failure renders as it always did. */
+    notPlannedYet?: string[];
   } | null;
   /** When it ended, or null while it is OPEN. */
   endedAt: string | null;

@@ -26,6 +26,7 @@ function row(over: Partial<PlanSessionListRow> = {}): PlanSessionListRow {
     failureReason: null,
     failureStopPhase: null,
     failureStopTitle: null,
+    failureNotPlannedYet: [],
     endedAt: null,
     endReason: null,
     endedById: null,
@@ -132,5 +133,36 @@ describe('toPlanSessionRowDto — gate seeds and no seed, unchanged', () => {
     const dto = toPlanSessionRowDto(row());
     expect(dto.seed).toBeNull();
     expect(dto.firstTurn).not.toBeNull();
+  });
+});
+
+describe('toPlanSessionRowDto — a halted walk’s not-planned-yet lines (MOTIR-10209)', () => {
+  const failed = {
+    failedAt: new Date('2026-11-02T00:00:00.000Z'),
+    failureReason: 'job_failed',
+    failureStopPhase: 'author',
+    failureStopTitle: 'Send invoice reminders',
+  };
+
+  it('carries the lines verbatim and in order onto the failure', () => {
+    const lines = [
+      '"D" is not planned yet: plan "B" first, then plan "D".',
+      'Not written yet: "T".',
+    ];
+    const dto = toPlanSessionRowDto(row({ ...failed, failureNotPlannedYet: lines }));
+    expect(dto.failure?.notPlannedYet).toEqual(lines);
+  });
+
+  it('reads a row without lines as an empty list, the failure otherwise unchanged', () => {
+    const dto = toPlanSessionRowDto(
+      row({ ...failed, failureNotPlannedYet: null as unknown as string[] }),
+    );
+    expect(dto.failure).toEqual({
+      failedAt: '2026-11-02T00:00:00.000Z',
+      reason: 'job_failed',
+      stopPhase: 'author',
+      stopTitle: 'Send invoice reminders',
+      notPlannedYet: [],
+    });
   });
 });

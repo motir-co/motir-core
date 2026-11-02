@@ -8249,6 +8249,8 @@
   "workbench.planningSession.form.c.gloss": "Your next message carries the plan into a new conversation.",
   "workbench.planningSession.form.c.chip": "Conversation ended",
   "workbench.planningSession.form.walk.alsoWaiting": "Also waiting for your approval:",
+  "workbench.planningSession.notPlannedYet.label": "Not planned yet",
+  "workbench.planningSession.notPlannedYet.more": "and {count, plural, one {# more item} other {# more items}} not planned yet — open it to see them all",
   "approvalRecords.heading": "Approval records",
   "approvalRecords.subtitle.full": "Every approval in this project — waiting first, then decided.",
   "approvalRecords.subtitle.own": "Approvals waiting on you, and the ones you decided.",

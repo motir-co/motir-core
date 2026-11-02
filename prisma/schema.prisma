@@ -8037,11 +8037,11 @@ model PlanLessonCall {
 /// this row and no `PlanLessonCall` made no lesson call; a session without it was
 /// not recorded. Kept with the plan, deleted only by its cascade.
 model PlanLessonSession {
-  id             String   @id @default(cuid())
-  planId         String   @map("plan_id")
-  sessionKey     String   @map("session_key")
-  firstReportAt  DateTime @default(now()) @map("first_report_at")
-  lastReportAt   DateTime @default(now()) @map("last_report_at")
+  id            String   @id @default(cuid())
+  planId        String   @map("plan_id")
+  sessionKey    String   @map("session_key")
+  firstReportAt DateTime @default(now()) @map("first_report_at")
+  lastReportAt  DateTime @default(now()) @map("last_report_at")
 
   plan Plan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
@@ -9611,19 +9611,19 @@ enum MigrateOnboardingStatus {
 /// exactly one session through `Plan.sessionId` (§5). Workspace-scoped tenant
 /// data (RLS in the same migration).
 model PlanChangeSession {
-  id                  String                    @id @default(cuid())
-  workspaceId         String                    @map("workspace_id")
-  projectId           String                    @map("project_id")
+  id                   String                    @id @default(cuid())
+  workspaceId          String                    @map("workspace_id")
+  projectId            String                    @map("project_id")
   /// Who opened the thread. SetNull — a departed author leaves the conversation
   /// intact and unattributed (the `Notification` actor semantics).
-  createdById         String?                   @map("created_by_id")
+  createdById          String?                   @map("created_by_id")
   /// The number of turns on the thread — the READ-DERIVED value an append
   /// allocates the next `seq` from. Appends lock this row (`SELECT … FOR UPDATE`)
   /// and re-read it inside the transaction, so two concurrent appends serialize
   /// into two ordered turns instead of colliding on `seq` (the
   /// lock-before-read-derived-update rule); the `(session_id, seq)` unique is the
   /// DB-level backstop, translated to a typed error.
-  turnCount           Int                       @default(0) @map("turn_count")
+  turnCount            Int                       @default(0) @map("turn_count")
   /// The CANONICAL anchor-set discriminator (7.12.3 · MOTIR-909) — what makes a
   /// thread "the conversation about THESE work items" rather than "the project's
   /// conversation". Derived, never client-supplied: `targetKeys` deduped, sorted,
@@ -9631,31 +9631,31 @@ model PlanChangeSession {
   /// PROJECT-WIDE thread — the shipped 7.30 conversation, unchanged — so the
   /// `(project_id, scope_key)` unique still admits exactly one of those per
   /// project while allowing one contextual thread per distinct anchor set.
-  scopeKey            String                    @default("") @map("scope_key")
+  scopeKey             String                    @default("") @map("scope_key")
   /// The anchor SET this thread is scoped to, as work-item IDENTIFIERS ("MOTIR-812"),
   /// in the same canonical order `scopeKey` is built from. Empty on the project-wide
   /// thread. Stored (not re-derived from `scopeKey`) because it is what a RESUMED
   /// thread re-submits as the motir-ai `context.targetKeys` anchor set, and what the
   /// panel labels the conversation with. Identifiers, not FKs — the same opaque-token
   /// posture `last_job_id` takes; a deleted anchor must not cascade the conversation.
-  targetKeys          String[]                  @default([]) @map("target_keys")
+  targetKeys           String[]                  @default([]) @map("target_keys")
   /// The most recent plan-edit job this thread submitted (an OPAQUE motir-ai job
   /// token — a plain scalar, NOT an FK; the `plan.sourceJobId` precedent). What
   /// a resumed rail re-attaches its stream / diff review to.
-  lastJobId           String?                   @map("last_job_id")
+  lastJobId            String?                   @map("last_job_id")
   /// When that submission happened. Null until the thread has been submitted at
   /// least once (a thread can accumulate turns without ever submitting).
-  lastSubmittedAt     DateTime?                 @map("last_submitted_at")
+  lastSubmittedAt      DateTime?                 @map("last_submitted_at")
   /// When the session was last USED — every turn (user, assistant, system) and
   /// every submit moves it (AMENDMENT 17 §3). The resume window and the Plans
   /// page's newest-activity order both read it. Not `updatedAt`, which any
   /// bookkeeping write (a lock, a label) would also move.
-  lastActivityAt      DateTime                  @default(now()) @map("last_activity_at")
+  lastActivityAt       DateTime                  @default(now()) @map("last_activity_at")
   /// WHICH DOOR opened the session (AMENDMENT 17 §4) — NOT `Plan.origin`, which
   /// answers what decided to start a plan. `legacy` is written only by the
   /// MOTIR-6020 backfill, for a pre-existing plan whose conversation cannot be
   /// identified.
-  origin              PlanSessionOrigin         @default(conversation)
+  origin               PlanSessionOrigin         @default(conversation)
   /// The REFUSED approval gate that SEEDED this session (story MOTIR-6068 ·
   /// MOTIR-6207; `agent-authored-plans.md` AMENDMENT 17 §9). Written ONLY at the
   /// session's creation by a seeded first turn
@@ -9663,7 +9663,7 @@ model PlanChangeSession {
   /// afterwards; NULL on every unseeded session. A seeded start resumes only a
   /// session of the SAME seed. SetNull — a gate row that goes leaves the
   /// conversation intact and unseeded.
-  seedGateId          String?                   @map("seed_gate_id")
+  seedGateId           String?                   @map("seed_gate_id")
   /// The GUIDE REPLY TURN whose re-plan offer SEEDED this session (Story MOTIR-8684 ·
   /// MOTIR-8691; decision MOTIR-8685): the `assistant` turn of a guide conversation
   /// that holds the offer. Written ONLY at creation, by the guide-seeded first turn
@@ -9672,21 +9672,21 @@ model PlanChangeSession {
   /// into because the person already held the target. EXCLUSIVE with `seedGateId`
   /// (the `plan_change_session_one_seed` CHECK). SetNull — a turn that goes leaves
   /// the conversation intact and unseeded.
-  seedGuideTurnId     String?                   @map("seed_guide_turn_id")
+  seedGuideTurnId      String?                   @map("seed_guide_turn_id")
   /// When the session ENDED (AMENDMENT 23 §1). **A session is OPEN ⟺ this is
   /// NULL.** An ended session is never resumed and accepts no turn. Written only
   /// by the one end operation, together with `endReason` and `endedById`.
-  endedAt             DateTime?                 @map("ended_at")
+  endedAt              DateTime?                 @map("ended_at")
   /// Why it ended — see `PlanSessionEndReason`. Null exactly when `endedAt` is.
-  endReason           PlanSessionEndReason?     @map("end_reason")
+  endReason            PlanSessionEndReason?     @map("end_reason")
   /// The person who ended it (a decider, or the person who restarted); NULL when
   /// Motir ended it (a failure, the idle sweep). SetNull — a departed member
   /// leaves the end recorded and unattributed.
-  endedById           String?                   @map("ended_by_id")
+  endedById            String?                   @map("ended_by_id")
   /// The ENDED session this one's conversation was copied from (AMENDMENT 23
   /// §6) — written once, at creation, by the copy start; NULL otherwise. SetNull:
   /// the copy outlives its source.
-  copiedFromSessionId String?                   @map("copied_from_session_id")
+  copiedFromSessionId  String?                   @map("copied_from_session_id")
   // ── THE SESSION'S WAITING STATE (Story MOTIR-7905 · MOTIR-7908) ───────────────
   // An OPEN session can be waiting on its person in one of two ways, and never both
   // (the `plan_change_session_one_wait` CHECK). Both are cleared by the one end write
@@ -9699,58 +9699,64 @@ model PlanChangeSession {
   /// walk. Written by the failure path (`markFailed`), cleared by the resume when the
   /// new attempt binds (`clearFailure`) or by the end. **failed-waiting ⟺ ended_at IS
   /// NULL AND failed_at IS NOT NULL.**
-  failedAt            DateTime?                 @map("failed_at")
+  failedAt             DateTime?                 @map("failed_at")
   /// The motir-ai job that failed (an OPAQUE token, like `lastJobId`). The resume
   /// submits it as `resume.fromJobId`: the failed attempt's settled PART 1 lives on
   /// that job's row in motir-ai.
-  failedJobId         String?                   @map("failed_job_id")
+  failedJobId          String?                   @map("failed_job_id")
   /// WHY, as motir-ai's closed code — never its English.
-  failureReason       PlanSessionFailureReason? @map("failure_reason")
+  failureReason        PlanSessionFailureReason? @map("failure_reason")
   /// motir-ai's `walkStop.detail` (at most 300 characters). For support and logs
   /// ONLY — never rendered to the person and never on the DTO.
-  failureDetail       String?                   @map("failure_detail")
+  failureDetail        String?                   @map("failure_detail")
   /// The kind of session the walk had open; null when the attempt failed before it
   /// reached a level.
-  failureStopPhase    PlanSessionWalkPhase?     @map("failure_stop_phase")
+  failureStopPhase     PlanSessionWalkPhase?     @map("failure_stop_phase")
   /// An opaque reference to the level's parent, or to the card being authored (a
   /// `planItem:<id>` or a work-item key), stored exactly as motir-ai reports it.
   /// Core never resolves it to a row: the resume reads the PLAN's own state.
-  failureStopRef      String?                   @map("failure_stop_ref")
+  failureStopRef       String?                   @map("failure_stop_ref")
   /// That level's or card's title at the moment of failure, so a row can name it
   /// without a second read.
-  failureStopTitle    String?                   @map("failure_stop_title")
+  failureStopTitle     String?                   @map("failure_stop_title")
   /// Whether the failed attempt can be RESUMED (MOTIR-9121): motir-ai's own verdict on
   /// the failed job (`resumable` on `GET /v1/jobs/:id`) — `false` when the job failed
   /// before its conversation settled, so a resume has nothing to continue from. A
   /// `false` record offers no Resume, has released the attempt's targets, and lets the
   /// next turn plan again. Null when unknown (a motir-ai that does not say, or a failure
   /// recorded before this column), which reads as resumable, as it always did.
-  failureResumable    Boolean?                  @map("failure_resumable")
+  failureResumable     Boolean?                  @map("failure_resumable")
+  /// The cards the halted walk left unplanned, one line each, as motir-ai words them on
+  /// its terminal `Problem.walkStop.notPlannedYet` (MOTIR-10209). A halted job writes no
+  /// briefing, so this is the only place those lines reach the person; rendered
+  /// verbatim and in order under the stop line. Empty when motir-ai sent none (or a
+  /// malformed value), which renders exactly as a record without it always did.
+  failureNotPlannedYet String[]                  @default([]) @map("failure_not_planned_yet")
   // ── AWAITING ITS PERSON ───────────────────────────────────────────────────────
   /// When the conversation began waiting on its owner's next turn. Written by the
   /// planning-session gate (`markAwaitingPerson`), cleared by the person's next turn
   /// or by the end. **awaiting-person ⟺ ended_at IS NULL AND awaiting_person_since
   /// IS NOT NULL.**
-  awaitingPersonSince DateTime?                 @map("awaiting_person_since")
+  awaitingPersonSince  DateTime?                 @map("awaiting_person_since")
   /// `question` or `reply` — see `PlanSessionAwaitingCause`.
-  awaitingPersonCause PlanSessionAwaitingCause? @map("awaiting_person_cause")
+  awaitingPersonCause  PlanSessionAwaitingCause? @map("awaiting_person_cause")
   /// How many bugs a GUIDE conversation has filed through its `file_bug` action
   /// (Story MOTIR-7797 · MOTIR-7800; decision MOTIR-7798 Q3). Read and bumped
   /// under this row's lock in the transaction that files the bug, so two
   /// concurrent filings cannot both pass `GUIDE_BUGS_PER_CONVERSATION`. Always 0
   /// on a session that is not a guide.
-  guideBugsFiled      Int                       @default(0) @map("guide_bugs_filed")
+  guideBugsFiled       Int                       @default(0) @map("guide_bugs_filed")
   // ── AUTOMATIC RESUME ──────────────────────────────────────────────────────────
   /// How many times Motir has resumed this conversation by itself after its
   /// planning machine was lost (Story MOTIR-8301 · MOTIR-8305). Bumped by
   /// `recordAutoResume` in ONE statement that also enforces the bound
   /// (`AUTO_RESUMES_PER_SESSION`), so two concurrent callers cannot both pass it.
   /// A CHECK keeps it non-negative.
-  autoResumeCount     Int                       @default(0) @map("auto_resume_count")
+  autoResumeCount      Int                       @default(0) @map("auto_resume_count")
   /// When Motir last resumed this conversation by itself. Null until the first.
-  lastAutoResumedAt   DateTime?                 @map("last_auto_resumed_at")
-  createdAt           DateTime                  @default(now()) @map("created_at")
-  updatedAt           DateTime                  @updatedAt @map("updated_at")
+  lastAutoResumedAt    DateTime?                 @map("last_auto_resumed_at")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
 
   workspace       Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)

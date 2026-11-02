@@ -40,6 +40,8 @@ export interface SessionRowView {
     reason: string;
     stopPhase: 'lay' | 'author' | null;
     stopTitle: string | null;
+    /** The halted walk's "not planned yet" lines, verbatim and in order (MOTIR-10209). */
+    notPlannedYet?: readonly string[];
     timeLabel: string;
     fullLabel: string;
   } | null;
