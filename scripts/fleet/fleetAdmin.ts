@@ -1,7 +1,10 @@
 /**
  * `fleet-admin` — a platform admin's fleet ACCOUNT commands (Story MOTIR-8953 ·
- * MOTIR-8967), run inside a motir-core machine so they use that deployment's
- * secrets:
+ * MOTIR-8967), run inside a core machine or task so they use that deployment's
+ * secrets and database.
+ *
+ * ON FLY, over `fly ssh console`, in a machine whose environment holds
+ * `DATABASE_URL`:
  *
  *   fly ssh console -a motir-core -C "node fleet/fleet-admin.mjs add-shard \
  *     --provider <provider> --fleet-kind <kind> --name <name> --region <region> \
@@ -13,6 +16,35 @@
  *
  *   fly ssh console -a motir-core -C "node fleet/fleet-admin.mjs add-spare \
  *     --fleet-kind <kind> --operator <email>"
+ *
+ * ON AWS (MOTIR-10264), over ECS Exec into a running task of the core WORKER
+ * service — any command, in place of `pool-status`:
+ *
+ *   aws ecs execute-command --region us-east-1 --cluster motir-core \
+ *     --task "$(aws ecs list-tasks --region us-east-1 --cluster motir-core \
+ *       --service-name motir-core-worker --desired-status RUNNING \
+ *       --query 'taskArns[0]' --output text)" \
+ *     --container worker --interactive \
+ *     --command "node /app/fleet/fleet-admin.mjs pool-status"
+ *
+ *   - THE TASK: the worker service's (`motir-core-worker` in cluster
+ *     `motir-core`; `<namePrefix>-core-worker` in another install). Its task
+ *     definition injects the database login parts (`MOTIR_DB_*`) and
+ *     `NODE_EXTRA_CA_CERTS`, its task role assumes the management role the pool
+ *     commands use, ECS Exec is enabled on it, and it serves no traffic. The
+ *     command composes `DATABASE_URL` from those parts exactly as the services
+ *     do, with `sslmode=verify-full` (`fleetAdminDatabaseUrl.ts`).
+ *   - THE CALLER'S PERMISSIONS: `ecs:ListTasks` on the cluster and
+ *     `ecs:ExecuteCommand` on the cluster and its tasks, in the services
+ *     account, plus the Session Manager plugin for the AWS CLI on the caller's
+ *     machine. The task role already holds the `ssmmessages` actions ECS Exec
+ *     needs.
+ *   - THE EXIT CODE: `aws ecs execute-command` does not return the remote
+ *     command's exit code, so on this path the LAST line printed is
+ *     `fleet-admin exit <0|1|2>` (the codes below). Read that line, not `$?`.
+ *   - QUOTING: ECS Exec runs `--command` without a shell, so an argument with a
+ *     space (a `--reason`) needs the whole command wrapped:
+ *     `--command "sh -c 'node /app/fleet/fleet-admin.mjs disable --name <a> --reason \"<text>\" --operator <email>'"`.
  *
  * `add-spare` (MOTIR-10065) gives a fleet kind its Motir spare on AWS, before or
  * after the kind is switched, through the same `addSpareShard` path the pool
@@ -46,15 +78,15 @@
  * pending or one failed (run it again), 1 on a refusal or an error.
  *
  * ⚠️ IT IS BUNDLED, NOT RUN FROM SOURCE — `pnpm build:fleet-admin` esbuilds this
- * file into `.fleet-admin/fleet-admin.mjs`, which the Dockerfile stages at
- * `/app/fleet/`, for the reason `scripts/worker.ts`'s header gives: the runtime
+ * file, behind its entry `fleetAdminMain.ts` (which sets `DATABASE_URL` before
+ * this file's imports reach the database client), into
+ * `.fleet-admin/fleet-admin.mjs`, which the Dockerfile stages at `/app/fleet/`, for the reason `scripts/worker.ts`'s header gives: the runtime
  * image is a Next standalone output and carries no `scripts/` or `lib/`.
  *
  * ⚠️ NOTHING HERE PRINTS A SECRET: it prints step outcomes and the provider's
  * worded manual steps, and an error's one-line message.
  */
 import { parseArgs } from 'node:util';
-import { pathToFileURL } from 'node:url';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import { findShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';
@@ -329,19 +361,4 @@ export async function runFleetAdmin(
     io.err(scrubSecrets(`error: ${err instanceof Error ? err.message : 'unknown'}`));
     return EXIT_ERROR;
   }
-}
-
-const isEntry =
-  typeof process.argv[1] === 'string' && import.meta.url === pathToFileURL(process.argv[1]).href;
-
-if (isEntry) {
-  const io: FleetAdminIo = {
-    out: (line) => process.stdout.write(`${line}\n`),
-    err: (line) => process.stderr.write(`${line}\n`),
-  };
-  void runFleetAdmin(process.argv.slice(2), io).then(async (code) => {
-    const { db } = await import('@/lib/db');
-    await db.$disconnect().catch(() => undefined);
-    process.exit(code);
-  });
 }
