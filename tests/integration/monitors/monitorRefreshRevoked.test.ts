@@ -12,7 +12,7 @@ import { encryptToken } from '@/lib/monitors/tokenCrypto';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { monitorCredentialService } from '@/lib/services/monitorCredentialService';
 import { monitorIngestionService } from '@/lib/services/monitorIngestionService';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
@@ -165,8 +165,9 @@ describe('a PERMANENTLY refused grant is left out of the next tick', () => {
     );
     expect(await pollableIds()).toEqual([]);
 
-    // The connect flow's write: a fresh token set on the same provider installation.
-    await withSystemContext((tx) =>
+    // The connect flow's write: a fresh token set on the same provider installation,
+    // bound to the grant's workspace as the connect flow's own context is.
+    await withWorkspaceServiceContext(b.workspaceId, (tx) =>
       monitorInstallationRepository.upsertByProviderInstallation(
         {
           provider: 'sentry',

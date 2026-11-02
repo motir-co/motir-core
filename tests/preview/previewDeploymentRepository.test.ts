@@ -10,7 +10,11 @@ import { previewDeploymentRepository as repo } from '@/lib/repositories/previewD
 import { isLegalPreviewTransition, legalSourcesFor, PREVIEW_STATES } from '@/lib/preview/states';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { usersService } from '@/lib/services/usersService';
-import { withSystemContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -52,8 +56,11 @@ async function connectedRepo(tag: string, installationId: number) {
   return { userId: user.id, workspaceId: workspace.id, repoId: row.id };
 }
 
+// The writes bind the row's workspace, as the lifecycle's do: since MOTIR-10219 the
+// table's policy reads `app.system_admin` on USING only, so a system-only write is
+// refused (`tests/rls/systemWriteArmRemoved.test.ts`).
 function upsert(r: { workspaceId: string; repoId: string }, n: number, headSha = SHA_1) {
-  return withSystemContext((tx) =>
+  return withWorkspaceServiceContext(r.workspaceId, (tx) =>
     repo.upsertForPullRequest(
       {
         workspaceId: r.workspaceId,
@@ -73,7 +80,11 @@ function transition(
   to: PreviewDeploymentState,
   patch: Parameters<typeof repo.transition>[3] = {},
 ) {
-  return withSystemContext((tx) => repo.transition(id, from, to, patch, tx));
+  return withSystemContext(async (tx) => {
+    const row = await repo.findById(id, tx);
+    if (row) await bindWorkspaceContext(tx, row.workspaceId);
+    return repo.transition(id, from, to, patch, tx);
+  });
 }
 
 describe('the state machine', () => {
@@ -186,14 +197,14 @@ describe('previewDeploymentRepository', () => {
     const aHolds = new Promise<void>((resolve) => (releaseA = resolve));
     let aMoved!: () => void;
     const aHasMoved = new Promise<void>((resolve) => (aMoved = resolve));
-    const a = withSystemContext(async (tx: Prisma.TransactionClient) => {
+    const a = withWorkspaceServiceContext(r.workspaceId, async (tx: Prisma.TransactionClient) => {
       const row = await repo.transition(id, ['building'], 'starting', {}, tx);
       aMoved();
       await aHolds;
       return row;
     });
     await aHasMoved;
-    const b = withSystemContext((tx) =>
+    const b = withWorkspaceServiceContext(r.workspaceId, (tx) =>
       repo.transition(id, ['building'], 'failed', { failureReason: 'lost the race' }, tx),
     );
     // B is now blocked on A's row lock; give it time to reach the lock.

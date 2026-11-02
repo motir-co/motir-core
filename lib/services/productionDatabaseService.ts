@@ -11,7 +11,11 @@ import {
 import { environmentConfigCrypto } from '@/lib/environmentConfig/crypto';
 import { getDatabasePort } from '@/lib/orchestrator/database';
 import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicationRepository';
-import { withSystemContext, type SystemTransactionOptions } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  type SystemTransactionOptions,
+} from '@/lib/workspaces/context';
 
 // A Motir repository's PRODUCTION DATABASE (Story MOTIR-9797 · MOTIR-10028): one
 // long-lived serverless Postgres per hosted application, created on its first
@@ -68,6 +72,9 @@ async function ensureProductionDatabase(applicationId: string): Promise<Producti
     }
     const app = await hostedApplicationRepository.findDatabaseById(applicationId, tx);
     if (!app) throw new ApplicationNotFoundError(applicationId);
+    // The write below stays in this locked transaction, so the application's
+    // own workspace is bound here, from its row (MOTIR-10219).
+    await bindWorkspaceContext(tx, app.workspaceId);
     if (app.databaseUrlCiphertext !== null && app.databaseProjectId !== null) {
       return { databaseProjectId: app.databaseProjectId, created: false };
     }

@@ -17,7 +17,11 @@ import { monitorCredentialService } from '@/lib/services/monitorCredentialServic
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { AssigneeNotInWorkspaceError } from '@/lib/workItems/errors';
-import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 
 // The monitor SYNC service (Story MOTIR-4931) — what Motir writes BACK to a
 // monitor, and what it takes from one, once ingestion (MOTIR-4929) has linked a
@@ -172,14 +176,16 @@ export function monitorIssueGoneComment(link: {
   );
 }
 
+/** A connection's SYNC failure, written with the connection's own workspace
+ *  bound (MOTIR-10219): its policy no longer admits a system-only write. */
 async function recordConnectionFailure(
-  connectionId: string,
+  connection: { id: string; workspaceId: string },
   reason: string,
   workItemIdentifier: string | null,
 ): Promise<void> {
-  await withSystemContext((tx) =>
+  await withWorkspaceServiceContext(connection.workspaceId, (tx) =>
     monitorConnectionRepository.recordSyncFailure(
-      connectionId,
+      connection.id,
       { reason, workItemIdentifier, at: new Date() },
       tx,
     ),
@@ -237,8 +243,10 @@ export const monitorSyncService = {
     );
     if (!connection || !connection.resolveOnDone) return 'switched_off';
 
+    // Every write below binds the LINK's own workspace (MOTIR-10219) — the row
+    // read above, never the caller's input. The policy refuses a system-only write.
     const now = new Date();
-    const won = await withSystemContext((tx) =>
+    const won = await withWorkspaceServiceContext(link.workspaceId, (tx) =>
       monitorIssueRepository.claimResolve(
         link.id,
         now,
@@ -257,21 +265,23 @@ export const monitorSyncService = {
       );
     } catch (err) {
       if (err instanceof MonitorIssueGoneError) {
-        await withSystemContext((tx) => monitorIssueRepository.recordGone(link.id, tx));
-        await sayGoneOnTheCard(link, bug, connection.id, connection.boundByUserId);
+        await withWorkspaceServiceContext(link.workspaceId, (tx) =>
+          monitorIssueRepository.recordGone(link.id, tx),
+        );
+        await sayGoneOnTheCard(link, bug, connection);
         return 'gone';
       }
       if (err instanceof MonitorProviderCallError) {
-        await withSystemContext((tx) =>
+        await withWorkspaceServiceContext(link.workspaceId, (tx) =>
           monitorIssueRepository.recordResolveFailed(link.id, err.providerReason, tx),
         );
-        await recordConnectionFailure(connection.id, err.providerReason, bug.identifier);
+        await recordConnectionFailure(connection, err.providerReason, bug.identifier);
         return 'failed';
       }
       throw err;
     }
 
-    await withSystemContext(async (tx) => {
+    await withWorkspaceServiceContext(link.workspaceId, async (tx) => {
       await monitorIssueRepository.recordResolved(link.id, new Date(), tx);
       await monitorConnectionRepository.clearSyncFailure(connection.id, tx);
     });
@@ -436,7 +446,7 @@ export const monitorSyncService = {
         if (!(err instanceof MonitorProviderCallError)) throw err;
         failed += 1;
       }
-      await withSystemContext((tx) =>
+      await withWorkspaceServiceContext(link.workspaceId, (tx) =>
         monitorIssueRepository.markAssigneeChecked(link.id, new Date(), tx),
       );
     }
@@ -518,12 +528,12 @@ function tally(summary: MonitorResolveSummary, outcome: MonitorResolveOutcome): 
 async function sayGoneOnTheCard(
   link: MonitorIssue,
   bug: LinkedBug,
-  connectionId: string,
-  binderId: string | null,
+  connection: { id: string; workspaceId: string; boundByUserId: string | null },
 ): Promise<void> {
+  const binderId = connection.boundByUserId;
   if (!binderId) {
     await recordConnectionFailure(
-      connectionId,
+      connection,
       `The monitor issue for ${bug.identifier} no longer exists, and this connection has no binder to say so on the bug. Bind the monitored project again.`,
       bug.identifier,
     );
@@ -538,7 +548,7 @@ async function sayGoneOnTheCard(
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
     await recordConnectionFailure(
-      connectionId,
+      connection,
       `The monitor issue for ${bug.identifier} no longer exists, and saying so on the bug failed: ${why}`,
       bug.identifier,
     );

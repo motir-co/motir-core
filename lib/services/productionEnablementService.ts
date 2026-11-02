@@ -26,7 +26,7 @@ import { hostedApplicationRepository } from '@/lib/repositories/hostedApplicatio
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { hostedRepositoryAccessService } from '@/lib/services/hostedRepositoryAccessService';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // SWITCH PRODUCTION ON for a Motir repository (Story MOTIR-9797 · MOTIR-10027):
 // its application record, its production Fly app through the deploy port, an
@@ -254,8 +254,10 @@ export const productionEnablementService = {
       });
     }
     const at = now();
+    // The application's own workspace, from the row `ensureApplication` returned
+    // (MOTIR-10219): its policy admits no system-only write.
     await step(facts.id, 'record', () =>
-      withSystemContext((tx) =>
+      withWorkspaceServiceContext(application.workspaceId, (tx) =>
         hostedApplicationRepository.markProductionEnabled(
           application.id,
           { appName: app.appRef, enabledAt: enabledAt ?? at, mintedAt: at },

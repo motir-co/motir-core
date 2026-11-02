@@ -11,7 +11,11 @@ import { decryptToken, encryptToken } from '@/lib/monitors/tokenCrypto';
 import { monitorInstallationRepository } from '@/lib/repositories/monitorInstallationRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withSystemContext } from '@/lib/workspaces/context';
+import {
+  bindWorkspaceContext,
+  withSystemContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 
 // The monitor CREDENTIAL LIFECYCLE (Story MOTIR-4926 · Subtask MOTIR-5261) —
 // the refresh that keeps a grant usable past eight hours, the on-demand health
@@ -75,6 +79,9 @@ const STORE_ATTEMPTS = 3;
 /** What a caller gets to make one provider call with. */
 export interface MonitorAccessToken {
   installationRowId: string;
+  /** The grant's own workspace, from its row — what every write about the grant
+   *  binds (MOTIR-10219). */
+  workspaceId: string;
   provider: string;
   orgSlug: string | null;
   token: string;
@@ -110,6 +117,7 @@ type RefreshOutcome =
   | {
       kind: 'refused';
       installationRowId: string;
+      workspaceId: string;
       provider: string;
       reason: string;
       error: unknown;
@@ -127,6 +135,7 @@ type LeaseDecision =
       kind: 'refresh';
       grant: {
         id: string;
+        workspaceId: string;
         provider: string;
         installationId: string;
         refreshTokenEncrypted: string;
@@ -153,6 +162,9 @@ async function decide(installationRowId: string, force: boolean): Promise<LeaseD
     await monitorInstallationRepository.lockById(installationRowId, tx);
     const grant = await monitorInstallationRepository.findCredentialById(installationRowId, tx);
     if (!grant) throw new MonitorGrantNotFoundError(installationRowId);
+    // The lease below is written in THIS transaction, under the lock — so the
+    // grant's own workspace is bound here rather than in a second one (MOTIR-10219).
+    await bindWorkspaceContext(tx, grant.workspaceId);
 
     const orgSlug = readOrgSlug(grant.metadata);
     const now = Date.now();
@@ -174,6 +186,7 @@ async function decide(installationRowId: string, force: boolean): Promise<LeaseD
         kind: 'fresh',
         credential: {
           installationRowId: grant.id,
+          workspaceId: grant.workspaceId,
           provider: grant.provider,
           orgSlug,
           token: decryptToken(grant.accessTokenEncrypted),
@@ -191,6 +204,7 @@ async function decide(installationRowId: string, force: boolean): Promise<LeaseD
       kind: 'refresh',
       grant: {
         id: grant.id,
+        workspaceId: grant.workspaceId,
         provider: grant.provider,
         installationId: grant.installationId,
         refreshTokenEncrypted: grant.refreshTokenEncrypted,
@@ -203,13 +217,13 @@ async function decide(installationRowId: string, force: boolean): Promise<LeaseD
 
 /** Short transaction #2: the rotated pair, ALONE, retried on a transient error. */
 async function storeRotatedPair(
-  installationRowId: string,
+  grant: { id: string; workspaceId: string },
   tokens: { accessTokenEncrypted: string; refreshTokenEncrypted: string; tokenExpiresAt: Date },
 ): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      await withSystemContext((tx) =>
-        monitorInstallationRepository.storeRefreshedTokens(installationRowId, tokens, tx),
+      await withWorkspaceServiceContext(grant.workspaceId, (tx) =>
+        monitorInstallationRepository.storeRefreshedTokens(grant.id, tokens, tx),
       );
       return;
     } catch (error) {
@@ -251,7 +265,7 @@ async function refreshWithLease(
     // refusal: the request may have reached the provider and rotated the token.
     // So the stored pair is left exactly as it is, and the moment is recorded.
     const noAnswer = error instanceof MonitorProviderCallError && error.status === null;
-    const released = await withSystemContext((tx) =>
+    const released = await withWorkspaceServiceContext(grant.workspaceId, (tx) =>
       monitorInstallationRepository.releaseRefreshLease(
         grant.id,
         { uncertainAt: noAnswer ? new Date() : null },
@@ -263,6 +277,7 @@ async function refreshWithLease(
     return {
       kind: 'refused',
       installationRowId: grant.id,
+      workspaceId: grant.workspaceId,
       provider: grant.provider,
       reason:
         error instanceof MonitorProviderCallError ? error.providerReason : 'The refresh failed.',
@@ -273,7 +288,7 @@ async function refreshWithLease(
   }
 
   // FIRST, AND ALONE: the rotated pair. Nothing shares this transaction.
-  await storeRotatedPair(grant.id, {
+  await storeRotatedPair(grant, {
     accessTokenEncrypted: encryptToken(refreshed.accessToken),
     refreshTokenEncrypted: encryptToken(refreshed.refreshToken),
     tokenExpiresAt: refreshed.expiresAt,
@@ -296,7 +311,7 @@ async function refreshWithLease(
   // re-authorised connection that keeps reading `degraded` is the same silent
   // wrongness one polarity over. A failure here costs a stale badge, never the
   // pair, which is why it is a second transaction.
-  await withSystemContext((tx) =>
+  await withWorkspaceServiceContext(grant.workspaceId, (tx) =>
     monitorInstallationRepository.updateHealth(
       grant.id,
       { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
@@ -308,6 +323,7 @@ async function refreshWithLease(
     kind: 'ok',
     credential: {
       installationRowId: grant.id,
+      workspaceId: grant.workspaceId,
       provider: grant.provider,
       orgSlug,
       token: refreshed.accessToken,
@@ -375,7 +391,7 @@ async function settle(outcome: RefreshOutcome): Promise<MonitorAccessToken> {
   };
 
   if (isPermanentRefreshRefusal(outcome.error)) {
-    const firstRecorded = await withSystemContext(async (tx) => {
+    const firstRecorded = await withWorkspaceServiceContext(outcome.workspaceId, async (tx) => {
       const marked = await monitorInstallationRepository.markRefreshRevoked(
         outcome.installationRowId,
         { healthReason: outcome.reason, at: new Date() },
@@ -394,7 +410,9 @@ async function settle(outcome: RefreshOutcome): Promise<MonitorAccessToken> {
     throw outcome.error;
   }
 
-  await withSystemContext((tx) => writeDegraded(outcome.installationRowId, outcome.reason, tx));
+  await withWorkspaceServiceContext(outcome.workspaceId, (tx) =>
+    writeDegraded(outcome.installationRowId, outcome.reason, tx),
+  );
   console.warn('[monitorCredentialService] refresh refused; connection marked degraded', fields);
   throw outcome.error;
 }
@@ -453,7 +471,7 @@ export const monitorCredentialService = {
         return await fn(refreshed);
       } catch (retryErr) {
         if (retryErr instanceof MonitorProviderCallError) {
-          await withSystemContext((tx) =>
+          await withWorkspaceServiceContext(refreshed.workspaceId, (tx) =>
             writeDegraded(installationRowId, retryErr.providerReason, tx),
           );
         }
@@ -549,7 +567,7 @@ export const monitorCredentialService = {
       orgSlug: credential.orgSlug ?? '',
     });
 
-    await withSystemContext((tx) =>
+    await withWorkspaceServiceContext(credential.workspaceId, (tx) =>
       monitorInstallationRepository.updateHealth(
         installationRowId,
         {

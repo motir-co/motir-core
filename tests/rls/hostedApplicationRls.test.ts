@@ -1,12 +1,13 @@
 // MOTIR-10026 — row-level security on `hosted_application` and `hosted_release`:
 // a session in workspace B neither reads nor writes workspace A's rows, a
-// session in A does, and the system context the release paths run under writes.
+// session in A does, and the system context the release paths run under writes
+// once it has bound the row's workspace (MOTIR-10219).
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { hostedApplicationService } from '@/lib/services/hostedApplicationService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { bindWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -130,14 +131,19 @@ describe('hosted_application and hosted_release RLS', () => {
     expect(app.productionAddress).toBeNull();
   });
 
-  it('admits a system-context write', async () => {
+  it('admits a system-context write only once the row’s workspace is bound', async () => {
+    // MOTIR-10219: the system arm is on USING only, so the release paths bind the
+    // workspace of the row they read before they write.
     const a = await applicationIn('AAA');
-    await withSystemContext((tx) =>
-      tx.hostedRelease.update({
-        where: { id: a.release.id },
-        data: { artifactRef: 'img@sha256:1' },
-      }),
-    );
+    const write = { where: { id: a.release.id }, data: { artifactRef: 'img@sha256:1' } };
+    await expect(
+      withSystemContext((tx) => tx.hostedRelease.update(write)),
+      RLS_DENIAL,
+    ).rejects.toSatisfy(isRlsDenial);
+    await withSystemContext(async (tx) => {
+      await bindWorkspaceContext(tx, a.fx.workspaceId);
+      return tx.hostedRelease.update(write);
+    });
     const row = await adminDb.hostedRelease.findUniqueOrThrow({ where: { id: a.release.id } });
     expect(row.artifactRef).toBe('img@sha256:1');
   });

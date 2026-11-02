@@ -45,6 +45,7 @@ import {
   bindWorkspaceContext,
   withSystemContext,
   withWorkspaceContext,
+  withWorkspaceServiceContext,
 } from '@/lib/workspaces/context';
 
 // The monitor-issue INGESTION service (Story MOTIR-4929) — the reconciler that
@@ -506,13 +507,18 @@ async function sweepBackfill(
   return done;
 }
 
+/** The connection a write is made ON — its id and the workspace its own row
+ *  carries. Every connection write binds that workspace (MOTIR-10219): the
+ *  `monitor_*` policies no longer admit a system-only write. */
+type ConnectionRef = { id: string; workspaceId: string };
+
 async function recordOutcome(
-  connectionId: string,
+  connection: ConnectionRef,
   outcome: { status: 'ok' | 'failed'; error: string | null; filedCount: number | null },
 ): Promise<void> {
-  await withSystemContext((tx) =>
+  await withWorkspaceServiceContext(connection.workspaceId, (tx) =>
     monitorConnectionRepository.recordPollOutcome(
-      connectionId,
+      connection.id,
       { ...outcome, polledAt: new Date() },
       tx,
     ),
@@ -530,15 +536,15 @@ async function recordOutcome(
  * recorded; an unexpected sweep error is caught and recorded on the connection's
  * SYNC failure, where the room shows it, and the poll's summary stands.
  */
-async function sweepResolveBack(connectionId: string, resolveOnDone: boolean): Promise<void> {
+async function sweepResolveBack(connection: ConnectionRef, resolveOnDone: boolean): Promise<void> {
   if (!resolveOnDone) return;
   try {
-    await monitorSyncService.sweepConnection(connectionId);
+    await monitorSyncService.sweepConnection(connection.id);
   } catch (err) {
     const why = err instanceof Error ? err.message : String(err);
-    await withSystemContext((tx) =>
+    await withWorkspaceServiceContext(connection.workspaceId, (tx) =>
       monitorConnectionRepository.recordSyncFailure(
-        connectionId,
+        connection.id,
         {
           reason: `Resolving done bugs in the monitor stopped: ${why}`,
           workItemIdentifier: null,
@@ -557,11 +563,11 @@ async function doneKeysOf(projectId: string, workspaceId: string): Promise<Set<s
 
 /** Record an unexpected assignee-sync error on the connection's SYNC failure —
  *  never on the poll's ingestion outcome, which stands. */
-async function recordAssigneeError(connectionId: string, err: unknown): Promise<void> {
+async function recordAssigneeError(connection: ConnectionRef, err: unknown): Promise<void> {
   const why = err instanceof Error ? err.message : String(err);
-  await withSystemContext((tx) =>
+  await withWorkspaceServiceContext(connection.workspaceId, (tx) =>
     monitorConnectionRepository.recordSyncFailure(
-      connectionId,
+      connection.id,
       {
         reason: `Taking assignees from the monitor stopped: ${why}`,
         workItemIdentifier: null,
@@ -582,7 +588,7 @@ async function applyAssigneeQuietly(
   try {
     await monitorSyncService.applyAssignee(target, issue.externalId, issue.assignee, doneKeys);
   } catch (err) {
-    await recordAssigneeError(target.id, err);
+    await recordAssigneeError(target, err);
   }
 }
 
@@ -602,7 +608,7 @@ async function refreshAssigneesQuietly(
   try {
     await monitorSyncService.refreshAssignees(connection, doneKeys);
   } catch (err) {
-    await recordAssigneeError(connection.id, err);
+    await recordAssigneeError(connection, err);
   }
 }
 
@@ -1054,6 +1060,9 @@ export const monitorIngestionService = {
     // The credential the LAST successful page was read with — the one the
     // context reads reuse (MOTIR-5729), so they cost no credential round trip.
     let listingCredential: MonitorAccessToken | null = null;
+    // The GRANT's workspace, as its own row reports it through the credential —
+    // what the health write at the end binds (MOTIR-10219).
+    let grantWorkspaceId: string | null = null;
     let pages = 0;
     let cursor: string | null = null;
     try {
@@ -1063,7 +1072,7 @@ export const monitorIngestionService = {
             `More than ${MONITOR_POLL_MAX_PAGES * MONITOR_ISSUES_PAGE_LIMIT} issues ` +
             `(${MONITOR_POLL_MAX_PAGES} pages) since the last check. Nothing was skipped silently: ` +
             'raise the minimum level, or the next check reads them again.';
-          await recordOutcome(connection.id, { status: 'failed', error: reason, filedCount: null });
+          await recordOutcome(connection, { status: 'failed', error: reason, filedCount: null });
           return { ...NOTHING_POLLED, status: 'failed', pages };
         }
         const pageCursor: string | null = cursor;
@@ -1078,6 +1087,7 @@ export const monitorIngestionService = {
               cursor: pageCursor,
             });
             listingCredential = credential;
+            grantWorkspaceId = credential.workspaceId;
             return read;
           },
         );
@@ -1089,7 +1099,7 @@ export const monitorIngestionService = {
       if (!(err instanceof MonitorProviderCallError)) throw err;
       // `withFreshCredential` has already written `degraded` where the refusal
       // was the credential's. Either way the reason is the PROVIDER's own words.
-      await recordOutcome(connection.id, {
+      await recordOutcome(connection, {
         status: 'failed',
         error: err.providerReason,
         filedCount: null,
@@ -1211,13 +1221,13 @@ export const monitorIngestionService = {
         failures.length === 1
           ? failures[0]!
           : `${failures[0]!} (and ${failures.length - 1} more issue${failures.length === 2 ? '' : 's'})`;
-      await recordOutcome(connection.id, { status: 'failed', error, filedCount: null });
+      await recordOutcome(connection, { status: 'failed', error, filedCount: null });
       return { ...summary, status: 'failed' };
     }
 
     if (listed.length > 0) {
       const newest = new Date(Math.max(...listed.map((issue) => issue.lastSeenAt.getTime())));
-      await withSystemContext((tx) =>
+      await withWorkspaceServiceContext(connection.workspaceId, (tx) =>
         monitorConnectionRepository.advanceWatermark(
           connection.id,
           newest,
@@ -1226,19 +1236,21 @@ export const monitorIngestionService = {
         ),
       );
     }
-    await recordOutcome(connection.id, {
+    await recordOutcome(connection, {
       status: 'ok',
       error: null,
       filedCount: summary.filed + summary.refiled,
     });
-    await withSystemContext((tx) =>
+    // The GRANT's own workspace, from the credential its row produced; a binding
+    // and its grant share one (`bindProject` binds the workspace's own grant).
+    await withWorkspaceServiceContext(grantWorkspaceId ?? connection.workspaceId, (tx) =>
       monitorInstallationRepository.updateHealth(
         connection.installationId,
         { health: 'connected', healthReason: null, healthCheckedAt: new Date() },
         tx,
       ),
     );
-    await sweepResolveBack(connection.id, connection.resolveOnDone);
+    await sweepResolveBack(connection, connection.resolveOnDone);
     if (assigneeDoneKeys) {
       await refreshAssigneesQuietly(connection, assigneeDoneKeys);
     }
@@ -1267,6 +1279,8 @@ export const monitorIngestionService = {
     await withSystemContext(async (tx) => {
       const row = await monitorConnectionRepository.findById(connectionId, tx);
       if (!row) return;
+      // The row's own workspace, found by the system read above (MOTIR-10219).
+      await bindWorkspaceContext(tx, row.workspaceId);
       await monitorConnectionRepository.recordPollOutcome(
         connectionId,
         {
