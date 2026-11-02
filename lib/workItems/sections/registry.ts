@@ -31,10 +31,11 @@ export type SectionShape =
 
 /** The canonical order sections are emitted in: the unheaded `framing`, the
  *  per-type prose and typed extras, then the boundary, the criteria and the
- *  refs, then a planner-recorded decision's brief, with `otherSections` (every
- *  heading no section defines) last. The brief follows the refs because that is
- *  where it stood while it travelled as `otherSections`, so a body written then
- *  re-renders in the same order. */
+ *  refs, then a decision's writing brief, with `otherSections` (every heading no
+ *  section defines) last. The brief follows the refs because that is where it
+ *  stood while it travelled as `otherSections`, so a body written then
+ *  re-renders in the same order; `alternatives` and `consumers` (MOTIR-10206)
+ *  slot between its four original headings, which no stored body carried. */
 export const SECTION_ORDER = [
   'framing',
   'question',
@@ -61,7 +62,9 @@ export const SECTION_ORDER = [
   'acceptanceCriteria',
   'contextRefs',
   'decisionBrief',
+  'alternatives',
   'whatChanged',
+  'consumers',
   'supersedes',
   'resultingDirection',
   'otherSections',
@@ -78,11 +81,11 @@ interface CatalogueEntry {
 const str: SectionShape = { type: 'string' };
 const list: SectionShape = { type: 'stringList' };
 
-/** One entry per section. `options` (a decision's) and `choiceOptions` (a
+/** One entry per section. `options` (a legacy decision's) and `choiceOptions` (a
  *  choice's) share the `## Options` heading because they never share a set.
- *  `decisionBrief` · `whatChanged` · `supersedes` · `resultingDirection` are the
- *  four headings a PLANNER-RECORDED decision carries (`motir-meta`
- *  `plan-rules/type-decision.md`), MOTIR-9211. */
+ *  `decisionBrief` · `alternatives` · `whatChanged` · `consumers` · `supersedes` ·
+ *  `resultingDirection` are the six headings of a decision's writing brief
+ *  (`motir-meta` `plan-rules/type-decision.md`; MOTIR-9211, MOTIR-10206). */
 export const SECTION_CATALOGUE: Record<SectionName, CatalogueEntry> = {
   framing: { heading: null, shape: str },
   question: { heading: 'Question', shape: str },
@@ -158,7 +161,9 @@ export const SECTION_CATALOGUE: Record<SectionName, CatalogueEntry> = {
     shape: { type: 'objectList', fields: { ref: { type: 'string' }, why: { type: 'string' } } },
   },
   decisionBrief: { heading: 'Decision', shape: str },
+  alternatives: { heading: 'Alternatives considered', shape: list },
   whatChanged: { heading: 'What changed', shape: str },
+  consumers: { heading: 'Consumed by', shape: list },
   supersedes: { heading: 'Supersedes', shape: str },
   resultingDirection: { heading: 'Resulting direction', shape: str },
   otherSections: {
@@ -175,6 +180,12 @@ export const SECTION_CATALOGUE: Record<SectionName, CatalogueEntry> = {
 interface TypeExtras {
   required: readonly SectionName[];
   optional: readonly SectionName[];
+  /** A LEGACY shape a STORED body may still carry: a body holding every section
+   *  of it reads complete, so a committed card written before the type's
+   *  required set changed is not reported missing. Honoured only when the caller
+   *  asks (`checkSections`' `acceptLegacy`): a read of a stored body, never a new
+   *  card's write. */
+  legacy?: readonly SectionName[];
 }
 const TYPE_EXTRAS: Record<WorkItemTypeDto, TypeExtras> = {
   code: { required: [], optional: ['deliverables', 'approach'] },
@@ -186,11 +197,21 @@ const TYPE_EXTRAS: Record<WorkItemTypeDto, TypeExtras> = {
   research: { required: [], optional: ['approach'] },
   review: { required: [], optional: [] },
   verification: { required: [], optional: ['steps'] },
-  // The RESEARCHED decision requires its question, options and recommendation;
-  // the PLANNER-RECORDED one's brief is optional, so neither shape is a finding.
+  // A decision is the WRITE-UP of a decision already made in planning, never an
+  // open question (MOTIR-10206): its writing brief is required. The retired
+  // RESEARCHED shape's question, options and recommendation stay readable as
+  // optional sections, and a stored body carrying all three still reads complete.
   decision: {
-    required: ['question', 'options', 'recommendation'],
-    optional: ['decisionBrief', 'whatChanged', 'supersedes', 'resultingDirection'],
+    required: [
+      'decisionBrief',
+      'alternatives',
+      'whatChanged',
+      'consumers',
+      'supersedes',
+      'resultingDirection',
+    ],
+    optional: ['question', 'options', 'recommendation'],
+    legacy: ['question', 'options', 'recommendation'],
   },
   choice: { required: ['question', 'why', 'choiceOptions', 'gates'], optional: [] },
   deploy: { required: [], optional: ['steps', 'postDeployVerification', 'rollback'] },
@@ -208,6 +229,9 @@ export interface SectionSet {
   sections: readonly SectionName[];
   /** The subset that must be present and non-empty. */
   required: readonly SectionName[];
+  /** A legacy shape a stored body may carry in place of the type's required
+   *  extras, in canonical order; empty when the type has none. */
+  legacy: readonly SectionName[];
 }
 
 /** The value of one section, as an input / parsed-view type. Never persisted. */
@@ -237,7 +261,9 @@ export type WorkItemSections = Partial<{
   acceptanceCriteria: string[];
   contextRefs: { ref: string; why: string }[];
   decisionBrief: string;
+  alternatives: string[];
   whatChanged: string;
+  consumers: string[];
   supersedes: string;
   resultingDirection: string;
   otherSections: { heading: string; body: string }[];
@@ -263,7 +289,7 @@ function assertNever(value: never): never {
 function setFor(
   kind: IssueType,
   type: SectionType,
-): { required: SectionName[]; optional: SectionName[] } {
+): { required: SectionName[]; optional: SectionName[]; legacy?: readonly SectionName[] } {
   switch (kind) {
     case 'epic':
       return { required: ['framing', 'scopeBoundary'], optional: ['contextRefs', 'assumptions'] };
@@ -285,7 +311,7 @@ function setFor(
       const extras = type ? TYPE_EXTRAS[type] : { required: [], optional: [] };
       const required = [...LEAF_CORE_REQUIRED, ...extras.required];
       if (kind === 'bug') required.push('reproduction');
-      return { required, optional: ['assumptions', ...extras.optional] };
+      return { required, optional: ['assumptions', ...extras.optional], legacy: extras.legacy };
     }
     default:
       return assertNever(kind);
@@ -294,15 +320,17 @@ function setFor(
 
 /** The set for one kind × type cell. TOTAL over the imported enumerations. */
 export function sectionSetFor(kind: IssueType, type: SectionType): SectionSet {
-  const { required, optional } = setFor(kind, type);
+  const { required, optional, legacy = [] } = setFor(kind, type);
   const wanted = new Set<SectionName>([...required, ...optional, 'otherSections']);
   const sections = SECTION_ORDER.filter((name) => wanted.has(name));
   const requiredSet = new Set(required);
+  const legacySet = new Set(legacy);
   return {
     kind,
     type: kind === 'story' || kind === 'epic' ? null : type,
     sections,
     required: SECTION_ORDER.filter((name) => requiredSet.has(name)),
+    legacy: SECTION_ORDER.filter((name) => legacySet.has(name)),
   };
 }
 
@@ -362,10 +390,22 @@ function isEmpty(value: unknown): boolean {
   return false;
 }
 
+export interface CheckSectionsOptions {
+  /** Read a STORED body: one carrying every section of its type's legacy shape
+   *  is complete, so only the leaf core and the kind's own sections can be
+   *  missing. A new card's write never sets it. */
+  acceptLegacy?: boolean;
+}
+
 /** Check a sections value against its cell and answer by section NAME. Never
  *  throws. The same check serves a door's sections input and the parser's read
  *  of a stored body. */
-export function checkSections(kind: IssueType, type: SectionType, value: unknown): SectionCheck {
+export function checkSections(
+  kind: IssueType,
+  type: SectionType,
+  value: unknown,
+  options: CheckSectionsOptions = {},
+): SectionCheck {
   const set = sectionSetFor(kind, type);
   const input =
     value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -373,7 +413,18 @@ export function checkSections(kind: IssueType, type: SectionType, value: unknown
       : {};
   const defined = new Set<string>(set.sections);
   const unknown = Object.keys(input).filter((key) => !defined.has(key));
-  const missing = set.required.filter((name) => isEmpty(input[name]));
+  const legacyHeld =
+    options.acceptLegacy === true &&
+    set.legacy.length > 0 &&
+    set.legacy.every((name) => !isEmpty(input[name]));
+  const typeRequired = new Set<SectionName>(
+    type && (kind === 'task' || kind === 'subtask' || kind === 'bug')
+      ? TYPE_EXTRAS[type].required
+      : [],
+  );
+  const missing = set.required.filter(
+    (name) => isEmpty(input[name]) && !(legacyHeld && typeRequired.has(name)),
+  );
   const invalid: SectionCheck['invalid'] = [];
   for (const name of set.sections) {
     if (isEmpty(input[name]) && name !== 'otherSections') continue;

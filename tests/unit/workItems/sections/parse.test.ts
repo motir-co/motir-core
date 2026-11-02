@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ISSUE_TYPES } from '@/lib/issues/parentRules';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 import { renderSections } from '@/lib/workItems/sections/render';
@@ -129,23 +131,29 @@ describe('parseSections — fixtures', () => {
     ]);
   });
 
-  it('a decision body missing Options names options', () => {
-    const body = renderSections('task', 'decision', fixture('task', 'decision')).replace(
-      /## Options[\s\S]*?(?=## Recommendation)/,
-      '',
-    );
-    expect(parseSections(body, 'task', 'decision').missing).toContain('options');
+  it('a decision body missing its Alternatives names alternatives', () => {
+    const body = renderSections('task', 'decision', fixture('task', 'decision'))
+      .replace(/## Alternatives considered[\s\S]*?(?=## What changed)/, '')
+      .replace(/## Question[\s\S]*?(?=## Scope BOUNDARY)/, '');
+    expect(parseSections(body, 'task', 'decision').missing).toEqual(['alternatives']);
   });
 
-  // MOTIR-9211: the planner-recorded decision's brief is four registry sections.
+  // MOTIR-9211 · MOTIR-10206: the decision's writing brief is six registry sections.
   it.each(['task', 'subtask'] as const)(
-    'a %s decision body carrying the planner-recorded brief reads it as named sections',
+    'a %s decision body carrying the writing brief reads it as named sections',
     (kind) => {
       const sections = fixture(kind, 'decision');
       const body = renderSections(kind, 'decision', sections);
       const parsed = parseSections(body, kind, 'decision');
       expect(parsed.sections.decisionBrief).toBe('No intent classifier.');
+      expect(parsed.sections.alternatives).toEqual([
+        'An intent classifier — it guesses a WHAT the person never said',
+      ]);
       expect(parsed.sections.whatChanged).toBe('**Change:** workflow\nIt said X; it says Y.');
+      expect(parsed.sections.consumers).toEqual([
+        'The export work item builds it',
+        '`lib/a/b.ts` `route()`',
+      ]);
       expect(parsed.sections.supersedes).toBe('MOTIR-1, MOTIR-2');
       expect(parsed.sections.resultingDirection).toBe('The whole direction.');
       expect(parsed.sections.otherSections).toBeUndefined();
@@ -154,31 +162,65 @@ describe('parseSections — fixtures', () => {
     },
   );
 
-  it('a planner-recorded decision body written as otherSections re-renders unchanged', () => {
-    const { decisionBrief, whatChanged, supersedes, resultingDirection, ...researched } = fixture(
-      'task',
-      'decision',
-    );
+  it('a decision body whose brief was written as otherSections re-renders unchanged', () => {
+    const {
+      decisionBrief,
+      alternatives,
+      whatChanged,
+      consumers,
+      supersedes,
+      resultingDirection,
+      ...rest
+    } = fixture('task', 'decision');
     const asOthers = renderSections('task', 'decision', {
-      ...researched,
+      ...rest,
       otherSections: [
         { heading: 'Decision', body: decisionBrief as string },
+        { heading: 'Alternatives considered', body: `- ${(alternatives as string[])[0]}` },
         { heading: 'What changed', body: whatChanged as string },
+        {
+          heading: 'Consumed by',
+          body: (consumers as string[]).map((c) => `- ${c}`).join('\n'),
+        },
         { heading: 'Supersedes', body: supersedes as string },
         { heading: 'Resulting direction', body: resultingDirection as string },
       ],
     });
     const parsed = parseSections(asOthers, 'task', 'decision');
     expect(parsed.sections.otherSections).toBeUndefined();
+    expect(parsed.missing).toEqual([]);
     expect(renderSections('task', 'decision', parsed.sections)).toBe(asOthers);
   });
 
-  it('a decision body without the brief still names its missing researched sections', () => {
+  it('a decision body with neither shape names the missing writing brief', () => {
     const parsed = parseSections('Frame.\n\n## Scope BOUNDARY\n\nWall.', 'task', 'decision');
     expect(parsed.missing).toEqual(
-      expect.arrayContaining(['question', 'options', 'recommendation']),
+      expect.arrayContaining([
+        'decisionBrief',
+        'alternatives',
+        'whatChanged',
+        'consumers',
+        'supersedes',
+        'resultingDirection',
+      ]),
     );
-    expect(parsed.missing).not.toContain('decisionBrief');
+    expect(parsed.missing).not.toContain('question');
+    expect(parsed.missing).not.toContain('recommendation');
+  });
+
+  // MOTIR-10206 AC 5: a committed decision card in the old open-question shape still parses,
+  // with no `missing` section, because a STORED body is read with its legacy shape accepted.
+  it('a committed decision in the old open-question shape parses with nothing missing', () => {
+    const body = readFileSync(
+      join(__dirname, '../../../fixtures/sections/corpus/task-decision-options.md'),
+      'utf8',
+    ).replace(/^---[\s\S]*?---\n+/, '');
+    const parsed = parseSections(body, 'task', 'decision');
+    expect(parsed.missing).toEqual([]);
+    expect(parsed.invalid).toEqual([]);
+    expect(parsed.sections.question).toMatch(/download directly/);
+    expect(parsed.sections.options).toHaveLength(2);
+    expect(parsed.sections.recommendation).toMatch(/^Emailed link/);
   });
 
   it('a test body whose cases lack an arrow is invalid and keeps its text', () => {

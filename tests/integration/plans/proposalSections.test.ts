@@ -112,17 +112,24 @@ describe('an `add` carrying sections', () => {
     expect(await adminDb.planItem.count({ where: { planId: plan.id } })).toBe(0);
   });
 
-  it('refuses a decision with no options, naming `options`', async () => {
+  it('refuses a decision sent as an open question, naming its writing brief', async () => {
     const fx = await makeWorkItemFixture();
     const plan = await newPlan(fx);
     const message = await refusal(
       appendOne(fx, plan.id, {
         title: 'Decide',
         type: 'decision',
-        sections: { ...sections, question: 'Which?', recommendation: 'The first.' },
+        sections: {
+          ...sections,
+          question: 'Which?',
+          options: [{ label: 'The first', cost: 'none', forecloses: 'the second' }],
+          recommendation: 'The first.',
+        },
       }),
     );
-    expect(message).toContain('options');
+    expect(message).toContain(
+      'missing required section(s): decisionBrief, alternatives, whatChanged, consumers, supersedes, resultingDirection',
+    );
   });
 
   it('names a section the cell does not define as unknown — an epic carrying acceptanceCriteria', async () => {
@@ -279,7 +286,9 @@ describe('a sparse edit over the stored body', () => {
         fx.ctx,
       ),
     );
-    expect(message).toContain('question, options, recommendation');
+    expect(message).toContain(
+      'decisionBrief, alternatives, whatChanged, consumers, supersedes, resultingDirection',
+    );
   });
 
   it('refuses `sections` beside `descriptionMd` on an edit, naming both keys', async () => {

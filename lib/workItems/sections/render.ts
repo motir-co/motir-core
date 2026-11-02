@@ -75,6 +75,8 @@ function renderValue(name: SectionName, value: unknown): string {
     case 'acceptanceCriteria':
     case 'states':
     case 'assumptions':
+    case 'alternatives':
+    case 'consumers':
       return (value as string[]).map(bullet).join('\n');
     case 'contextRefs':
       return (value as { ref: string; why: string }[])
