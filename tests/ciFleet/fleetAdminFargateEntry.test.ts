@@ -1,5 +1,5 @@
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -364,6 +364,9 @@ describe('the fleet-admin bundle in a Fargate-shaped process', () => {
   beforeAll(async () => {
     // Built INSIDE the checkout, so the bundle's external `pg` resolves upward
     // into this repository's node_modules, as it resolves into /app's in the image.
+    // `.fleet-admin/` exists only after a `pnpm build:fleet-admin`, which CI's
+    // test jobs never run.
+    mkdirSync(path.join(ROOT, '.fleet-admin'), { recursive: true });
     work = mkdtempSync(path.join(ROOT, '.fleet-admin', 'fargate-entry-'));
     bundle = path.join(work, 'fleet-admin.mjs');
     execFileSync(process.execPath, ['scripts/build-fleet-admin.mjs', '--outfile', bundle], {
