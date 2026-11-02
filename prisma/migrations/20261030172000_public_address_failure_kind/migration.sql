@@ -12,9 +12,8 @@
 -- kind" (an issuance failure, or no failure) and "no known expiry". No RLS
 -- change: both columns ride the existing `public_address` policies.
 --
--- Rollback: ALTER TABLE "public_address" DROP COLUMN "certificate_expires_at";
---           ALTER TABLE "public_address" DROP COLUMN "failure_kind";
---           DROP TYPE "PublicAddressFailureKind";
+-- Rollback: remove `certificate_expires_at` and `failure_kind` from
+-- `public_address`, then remove the `PublicAddressFailureKind` type.
 
 CREATE TYPE "PublicAddressFailureKind" AS ENUM ('txt_lost', 'pointing_lost', 'certificate_lost');
 

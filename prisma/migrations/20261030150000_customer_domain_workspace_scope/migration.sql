@@ -8,14 +8,18 @@
 -- existing row is left unbound (`application_id` NULL) and is re-pointed by its
 -- workspace with PATCH {applicationId}.
 --
--- Rollback: re-add `public_address.project_id` (CASCADE to project) and
--- `project.primary_address_id` (SET NULL), their two indexes, and restore the
+-- SCHEMA-ONLY phase of retiring `public_address.project_id` and
+-- `project.primary_address_id` (docs/decisions/delivery-reader-migration.md §6a):
+-- both fields are `@ignore`d so the generated client stops selecting them, and
+-- both columns STAY for the image still serving during this rollout. Removing
+-- the columns is a later release's CONTRACT migration.
+--
+-- Rollback: restore the two foreign keys (`project_id` CASCADE to project,
+-- `primary_address_id` SET NULL), their two indexes, and the
 -- `public_address_public_read` policy from
--- 20260928000100_public_read_policies_on_access_mode. The project a domain
--- named is not recoverable from this schema; every row comes back unbound.
+-- 20260928000100_public_read_policies_on_access_mode.
 
--- The anonymous read policy depends on `project_id`, so it is replaced before
--- the column goes. A custom domain is admitted only once its certificate is
+-- The anonymous read policy no longer reads `project_id`. A custom domain is admitted only once its certificate is
 -- issued — the host contract never answers for a domain mid-verification. The
 -- workspace-subdomain arm is unchanged.
 DROP POLICY "public_address_public_read" ON "public_address";
@@ -33,11 +37,7 @@ DROP INDEX "project_primary_address_id_idx";
 DROP INDEX "public_address_project_id_idx";
 
 -- AlterTable
-ALTER TABLE "project" DROP COLUMN "primary_address_id";
-
--- AlterTable
-ALTER TABLE "public_address" DROP COLUMN "project_id",
-ADD COLUMN     "application_id" TEXT;
+ALTER TABLE "public_address" ADD COLUMN     "application_id" TEXT;
 
 -- CreateIndex
 CREATE INDEX "public_address_application_id_idx" ON "public_address"("application_id");
