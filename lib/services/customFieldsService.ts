@@ -10,6 +10,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
+import { isRestrictViolation } from '@/lib/prisma/restrictViolation';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   CustomFieldNotFoundError,
@@ -75,7 +76,8 @@ import type {
 //   * options archive any time (hidden from new selection, existing values
 //     keep rendering) but DELETE only when unused — countByOption pre-check
 //     inside the tx, with the value FK's ON DELETE RESTRICT as the DB
-//     backstop (P2003 → OptionInUseError).
+//     backstop (a RESTRICT violation → OptionInUseError; its Prisma code
+//     depends on the server — see lib/prisma/restrictViolation.ts).
 
 const FIELD_TYPES: readonly CustomFieldType[] = ['text', 'number', 'date', 'select', 'user'];
 
@@ -572,7 +574,8 @@ export const customFieldsService = {
    * "Optimize" rule): an in-tx countByOption pre-check throws the typed 409
    * (OptionInUseError — the UI offers archive instead), and the value FK's
    * ON DELETE RESTRICT backstops any concurrent set that slips between the
-   * check and the delete (P2003 → the same typed error).
+   * check and the delete (a RESTRICT violation, read by `isRestrictViolation`
+   * → the same typed error).
    */
   async deleteOption(input: OptionScopedInput): Promise<CustomFieldOptionDTO> {
     return withWorkspaceContext(input.ctx, async (tx) => {
@@ -592,12 +595,11 @@ export const customFieldsService = {
       try {
         await customFieldOptionRepository.delete(option.id, tx);
       } catch (err) {
-        // The DB backstop of the only-when-unused rule (see above).
-        /* istanbul ignore next -- defensive: P2003 only fires when a concurrent value-set wins between the count and the delete; not deterministically testable */
-        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2003') {
-          throw new OptionInUseError(option.id, 1);
-        }
-        /* istanbul ignore next -- rethrow of the non-P2003 branch above */
+        // The DB backstop of the only-when-unused rule (see above). The refusal's
+        // shape depends on the server and the client — `isRestrictViolation` is
+        // the one reader of it (MOTIR-10227).
+        if (isRestrictViolation(err)) throw new OptionInUseError(option.id, 1);
+        /* istanbul ignore next -- rethrow of any other failure of the delete */
         throw err;
       }
       // Deleted only when unused — the receipt's count is zero by the rule.
