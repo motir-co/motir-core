@@ -176,7 +176,7 @@ export function normalizeDependencyPath(
 }
 
 function metadataUrl(name: string): string {
-  return `https://${DEPENDENCY_REGISTRY_HOST}/${name.replace('/', '%2f')}`;
+  return `https://${DEPENDENCY_REGISTRY_HOST}/${name.replaceAll('/', '%2f')}`;
 }
 
 /** The tarball URL npm publishes at, BUILT here — never read from the registry's answer. */
