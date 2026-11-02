@@ -1776,6 +1776,12 @@ export default defineConfig({
         'scripts/aws-deploy/rollingDeploy.ts',
         'scripts/aws-deploy/taskDefinitions.ts',
         'scripts/fleet/fleetAdminCheckQuota.ts',
+        // MOTIR-10264 — the fleet-admin bundle's entry and its Fargate database URL.
+        // MEASURED against `tests/ciFleet/fleetAdminFargateEntry.test.ts`: both 100 on
+        // all four (the process-entry block is v8-ignored: its child processes run it
+        // as the real bundle, which coverage does not follow). Pinned at the floor.
+        'scripts/fleet/fleetAdminMain.ts',
+        'scripts/fleet/fleetAdminDatabaseUrl.ts',
         // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
         // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
         // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
@@ -3964,6 +3970,19 @@ export default defineConfig({
           statements: 90,
         },
         'scripts/fleet/fleetAdminCheckQuota.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-10264 — measured above, pinned at the floor.
+        'scripts/fleet/fleetAdminMain.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        'scripts/fleet/fleetAdminDatabaseUrl.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -9,18 +9,32 @@
 // command brings its own bundle. This file differs from `scripts/build-worker.mjs`
 // (whose header carries the whole argument) only in its entry and its output; the
 // external set is the worker's, for the worker's measured reason.
+//
+// The entry is `scripts/fleet/fleetAdminMain.ts` (MOTIR-10264), not
+// `fleetAdmin.ts`: it composes `DATABASE_URL` from a Fargate task's login parts
+// BEFORE the commands' imports evaluate the database client, then loads them with
+// a dynamic import that esbuild keeps lazy in this one-file bundle.
+//
+// `--outfile <path>` writes the bundle elsewhere — the entry's test builds its own
+// copy (`tests/ciFleet/fleetAdminFargateEntry.test.ts`). The default is the path
+// the Dockerfile copies from.
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import path from 'node:path';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const { values } = parseArgs({ options: { outfile: { type: 'string' } } });
+const outfile = values.outfile
+  ? path.resolve(values.outfile)
+  : path.join(root, '.fleet-admin/fleet-admin.mjs');
 
 /** The worker's external set (`scripts/build-worker.mjs`): native and present in the image. */
 const WORKER_EXTERNALS = ['pg', 'pg-native', 'argon2', 'sharp'];
 
 const result = await esbuild.build({
-  entryPoints: [path.join(root, 'scripts/fleet/fleetAdmin.ts')],
-  outfile: path.join(root, '.fleet-admin/fleet-admin.mjs'),
+  entryPoints: [path.join(root, 'scripts/fleet/fleetAdminMain.ts')],
+  outfile,
   bundle: true,
   platform: 'node',
   target: 'node22',
