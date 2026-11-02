@@ -12,7 +12,6 @@ import { ownAccountPoolCredits } from '@/lib/billing/ownAccountPlans';
 import {
   GITHUB_INSTALLATION_API_PER_HOUR,
   poolAccountRaiseTargetVcpu,
-  SHARD_VCPU_QUOTA_TARGET,
 } from '@/lib/ciFleet/shardTargets';
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import {
@@ -680,6 +679,10 @@ async function walk(
   );
 
   const quota = await provider.readQuota(ctx);
+  // A person-run primary is judged against its kind's own target, as a spare
+  // is (MOTIR-10218). SHARD_VCPU_QUOTA_TARGET sizes tenants per account; it is
+  // not what a kind needs before its account may take a job.
+  const primaryTargetVcpu = poolAccountRaiseTargetVcpu(input.fleetKind as FleetWorkloadKind);
   if (mode.raiseTargetVcpu !== null) {
     // The unattended add-shard files the kind's raise itself, after the row.
     report(
@@ -689,10 +692,10 @@ async function walk(
         ? `vCPU quota ${quota.vcpuQuota}; a raise to ${mode.raiseTargetVcpu} is filed after the row`
         : `vCPU quota ${quota.vcpuQuota}`,
     );
-  } else if (quota.vcpuQuota < SHARD_VCPU_QUOTA_TARGET) {
+  } else if (quota.vcpuQuota < primaryTargetVcpu) {
     const owed =
       `raise the account's vCPU quota from ${quota.vcpuQuota} to at least ` +
-      `${SHARD_VCPU_QUOTA_TARGET}, then run this command again`;
+      `${primaryTargetVcpu}, then run this command again`;
     report('quota', 'pending', owed);
     pending.push(owed);
   } else {

@@ -2,7 +2,8 @@ import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { PlatformRole } from '@/generated/prisma/client';
-import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
+import { poolAccountRaiseTargetVcpu, SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
+import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import {
   registerShardProvisioningProvider,
@@ -26,6 +27,9 @@ const ORG = 'motir-fleet-iad-1';
 const NAME = 'ci-runner-iad-1';
 const PREFIX = 'FLEET_SHARD_CI_RUNNER_IAD_1';
 const CLIENT_ID = 'Iv1.studio';
+const CI_TARGET = poolAccountRaiseTargetVcpu('ci_runner');
+/** Under the kind's own target, so a first run leaves the quota pending. */
+const BELOW_TARGET = CI_TARGET - 50;
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
@@ -229,7 +233,7 @@ beforeEach(async () => {
   fake = {
     accounts: new Set(),
     networks: new Set(),
-    quota: SHARD_VCPU_QUOTA_TARGET - 500,
+    quota: BELOW_TARGET,
     accountCreates: 0,
     networkCreates: 0,
   };
@@ -271,7 +275,7 @@ describe('add-shard, first run', () => {
       githubOrg: ORG,
       githubInstallationId: '9001',
       credentialRef: PREFIX,
-      vcpuQuota: SHARD_VCPU_QUOTA_TARGET - 500,
+      vcpuQuota: BELOW_TARGET,
       githubRegistrationsPer5Min: 1500,
       githubApiPerHour: 15000,
     });
@@ -282,7 +286,7 @@ describe('add-shard, first run', () => {
     });
 
     expect(result.out).toContain('Pending manual steps:');
-    expect(result.out).toContain(`vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 500}`);
+    expect(result.out).toContain(`vCPU quota from ${BELOW_TARGET}`);
     expect(result.out).toContain(`flyctl secrets set -a motir-core ${PREFIX}_ACCESS_KEY=<key>`);
   });
 
@@ -310,7 +314,7 @@ describe('add-shard, first run', () => {
 
   it('with the quota at target and the runtime key accepted, a resume makes the row active and exits 0', async () => {
     await run(args());
-    fake.quota = SHARD_VCPU_QUOTA_TARGET;
+    fake.quota = CI_TARGET;
     vi.stubEnv(`${PREFIX}_ACCESS_KEY`, SECRETS.runtimeKey);
 
     const result = await run(args());
@@ -318,8 +322,49 @@ describe('add-shard, first run', () => {
     expect(result.code).toBe(0);
     expect(result.out).not.toContain('Pending manual steps');
     const row = await shardRow();
-    expect(row).toMatchObject({ state: 'active', vcpuQuota: SHARD_VCPU_QUOTA_TARGET });
+    expect(row).toMatchObject({ state: 'active', vcpuQuota: CI_TARGET });
   });
+});
+
+describe('a primary is judged against its own kind’s target (MOTIR-10218)', () => {
+  it.each(FLEET_WORKLOAD_KINDS)(
+    '%s: at its kind’s target the quota is met and the row goes active',
+    async (kind) => {
+      const target = poolAccountRaiseTargetVcpu(kind);
+      fake.quota = target;
+      vi.stubEnv(`${PREFIX}_ACCESS_KEY`, SECRETS.runtimeKey);
+
+      const result = await run(args({ 'fleet-kind': kind }));
+
+      expect(result.code).toBe(0);
+      expect(result.out).toMatch(new RegExp(`^quota\\s+already — vCPU quota ${target}$`, 'm'));
+      expect(result.out).not.toContain('Pending manual steps');
+      expect(await shardRow()).toMatchObject({
+        fleetKind: kind,
+        state: 'active',
+        vcpuQuota: target,
+      });
+    },
+  );
+
+  it.each(FLEET_WORKLOAD_KINDS)(
+    '%s: one vCPU under its kind’s target stays provisioning, and the step names that target',
+    async (kind) => {
+      const target = poolAccountRaiseTargetVcpu(kind);
+      fake.quota = target - 1;
+      vi.stubEnv(`${PREFIX}_ACCESS_KEY`, SECRETS.runtimeKey);
+
+      const result = await run(args({ 'fleet-kind': kind }));
+
+      expect(result.code).toBe(2);
+      const owed =
+        `raise the account's vCPU quota from ${target - 1} to at least ${target}, ` +
+        'then run this command again';
+      expect(result.out.split('\n')).toContainEqual(`${'quota'.padEnd(20)} pending: ${owed}`);
+      expect(result.out).not.toContain(`to at least ${SHARD_VCPU_QUOTA_TARGET}`);
+      expect(await shardRow()).toMatchObject({ fleetKind: kind, state: 'provisioning' });
+    },
+  );
 });
 
 describe('refusals before any external call', () => {
@@ -414,7 +459,7 @@ describe('the audit and the secrets', () => {
   it('no stubbed secret value reaches stdout, stderr or the audit row', async () => {
     const first = await run(args());
     vi.stubEnv(`${PREFIX}_ACCESS_KEY`, SECRETS.runtimeKey);
-    fake.quota = SHARD_VCPU_QUOTA_TARGET;
+    fake.quota = CI_TARGET;
     const second = await run(args());
 
     const printed = [first.out, first.err, second.out, second.err].join('\n');

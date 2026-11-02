@@ -9,7 +9,7 @@ import {
 } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import type { PlatformRole } from '@/generated/prisma/client';
-import { SHARD_VCPU_QUOTA_TARGET } from '@/lib/ciFleet/shardTargets';
+import { poolAccountRaiseTargetVcpu } from '@/lib/ciFleet/shardTargets';
 import { createAwsShardProvisioningProvider } from '@/lib/fleetShards/awsProvisioningProvider';
 import {
   findShardProvisioningProvider,
@@ -52,6 +52,9 @@ const ORG = 'motir-fleet-use1-2';
 const NAME = 'ci-runner-use1-2';
 const PREFIX = 'FLEET_SHARD_CI_RUNNER_USE1_2';
 const ACCOUNT_EMAIL = 'aws+ci-runner-use1-2@motir.co';
+const CI_TARGET = poolAccountRaiseTargetVcpu('ci_runner');
+/** Under the kind's own target, so a first run leaves the quota pending. */
+const BELOW_TARGET = CI_TARGET - 50;
 const SECRETS = {
   admin: 'ghp_ADMIN_SECRET_never_printed',
   installation: 'ghs_INSTALL_SECRET_never_printed',
@@ -150,6 +153,7 @@ beforeEach(async () => {
   _resetProvisioningInstallationCache();
   github = newGithubWorld();
   organization = new FakeOrganization(SESSION);
+  organization.quota = BELOW_TARGET;
   buildStacksInto(organization, () => ec2);
   ec2 = new AwsEc2Fake();
   ec2Keys = [];
@@ -213,7 +217,7 @@ describe('add-shard --provider aws, first run', () => {
       githubOrg: ORG,
       githubInstallationId: '9001',
       credentialRef: PREFIX,
-      vcpuQuota: SHARD_VCPU_QUOTA_TARGET - 1_000,
+      vcpuQuota: BELOW_TARGET,
     });
     expect(row!.limitsSource).toMatchObject({
       vcpuQuota: 'provider_read',
@@ -226,8 +230,7 @@ describe('add-shard --provider aws, first run', () => {
     );
     expect(result.out).toContain('Pending manual steps:');
     expect(result.out).toContain(
-      `raise the account's vCPU quota from ${SHARD_VCPU_QUOTA_TARGET - 1_000} to at least ` +
-        `${SHARD_VCPU_QUOTA_TARGET}`,
+      `raise the account's vCPU quota from ${BELOW_TARGET} to at least ` + `${CI_TARGET}`,
     );
     // The runner role the stack built is confirmed by assuming it: no person is
     // asked to mint a key (MOTIR-9847).
@@ -275,7 +278,7 @@ describe('add-shard --provider aws, first run', () => {
 
   it('with the quota at target, a resume makes the row active and exits 0', async () => {
     await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = CI_TARGET;
     organization.calls.length = 0;
 
     const result = await run(args());
@@ -289,14 +292,14 @@ describe('add-shard --provider aws, first run', () => {
     expect(ec2.mutations().some((m) => /run|terminate/.test(m.method))).toBe(false);
     expect(await shardRow()).toMatchObject({
       state: 'active',
-      vcpuQuota: SHARD_VCPU_QUOTA_TARGET,
+      vcpuQuota: CI_TARGET,
     });
   });
 
   it('a runner role that cannot be assumed yet stays pending, with the role step', async () => {
     // The first run creates the account; the role is refused on the second.
     await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = CI_TARGET;
     const accountId = organization.accounts.get(NAME)!.accountId;
     organization.runnerAssumeFailures.set(
       accountId,
@@ -467,7 +470,7 @@ describe('refusals', () => {
 describe('the secrets', () => {
   it('mints no key, and no secret or session credential reaches stdout, stderr or the audit row', async () => {
     const first = await run(args());
-    organization.quota = SHARD_VCPU_QUOTA_TARGET;
+    organization.quota = CI_TARGET;
     const second = await run(args());
 
     expect(organization.calls.some((c) => /AccessKey/i.test(c))).toBe(false);
