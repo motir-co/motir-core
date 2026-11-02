@@ -644,6 +644,12 @@ The starter (MOTIR-1941) shipped this shape from day one; motir-core now matches
 
 #### Amendment 2026-08-17 (MOTIR-2760) — the MAIN BASELINE: `push: main`, gated on membership
 
+> **⚠️ Superseded on 2026-11-02 by the amendment that follows (MOTIR-9412 ·
+> MOTIR-10277): the lane no longer runs on `push: main`; it runs nightly and on a
+> manual dispatch.** This amendment stands as the record of why the per-merge
+> baseline was chosen, including its rejection of a nightly, which the next one
+> reverses.
+
 The amendment above bought its cost saving with a blind spot it named honestly and
 left open: the `paths:` filter cuts between an app change and the specs that read
 it, so **an app change could break every acceptance spec, merge green, and wait on
@@ -714,6 +720,64 @@ green; the baseline catches it one merge later. Closing that requires the wideni
 rejected above, so the accepted cost is a red `main` for the length of one fix —
 bounded, attributed to the author who caused it, and no longer inherited by the
 next passer-by.
+
+#### Amendment 2026-11-02 (MOTIR-9412 · MOTIR-10277) — THE NIGHTLY replaces the `push: main` baseline
+
+**The decision.** The run of the whole lane against `main` moves from every push to
+`main` to a **nightly `schedule`** (03:17 UTC) plus a **manual `workflow_dispatch`**.
+The nightly is now the baseline. `push: main` is no longer a trigger of
+`.github/workflows/acceptance-tests.yml`, so a merge starts nothing in this
+workflow. MOTIR-9412 decided it on its decision page; MOTIR-10277 built it.
+
+**It reverses the 2026-08-17 amendment's rejection of a nightly, knowingly.** That
+amendment rejected a nightly because its red names a commit RANGE where the
+per-merge baseline names one merge, and because on an empty lane it is waste. The
+second reason no longer holds: since MOTIR-9411 the same workflow runs the
+regression lane, ~150 specs that are never empty, so a run against `main` costs a
+full fan-out every time — 14 acceptance and 10 regression legs at today's
+membership, a run merge-queue §9 measured at a median ~58 minutes — and `main`
+takes ~20 merges a day. The first reason is true and is **the cost taken on**:
+
+- **A break surfaces up to a day after it merges**, not on the merge that caused it.
+- **Its red names a range** — every merge since the last green night — not one merge.
+
+**What narrows the range.** A manual dispatch runs the whole lane at the head of a
+branch or tag. GitHub's dispatch API takes a ref, not a sha, so bisecting means
+pushing a branch at the commit being tried (`bisect/acceptance-<sha>`) and
+dispatching on it. The concurrency group is keyed on the commit for every event but
+`pull_request`, so dispatches at different commits run side by side, and
+`cancel-in-progress` stays PR-only, so nothing cancels a nightly or a dispatch.
+
+**A red night reaches a person, not a red check.** A scheduled run's red attaches
+to a commit nobody is looking at — MOTIR-3850's scheduled lane was red for 17 days
+and nobody was told. `.github/workflows/acceptance-nightly-notify.yml` runs on
+`workflow_run` for this workflow and, for a SCHEDULED run that did not go green
+(failed, cancelled, timed out, failed to start), opens ONE issue labelled
+`acceptance-nightly-red`, assigned to the login named once in that file, with the
+run and a compare link from the last green nightly's commit — or comments on that
+issue while it is open. A green night tells nobody, and a red dispatch tells nobody:
+whoever started it is watching. A person closes the issue.
+
+| Run                                                | Lane runs          | Publishes   | Tells a person   |
+| -------------------------------------------------- | ------------------ | ----------- | ---------------- |
+| PR touching a lane path                            | yes (derived legs) | its story   | no               |
+| PR touching nothing in the lane                    | **gate job only**  | nothing     | no               |
+| queue entry (merge-queue §9: its own diff decides) | as for a PR        | nothing     | no               |
+| nightly, lane holds ≥ 1 spec                       | yes (derived legs) | **nothing** | **if not green** |
+| manual dispatch, lane holds ≥ 1 spec               | yes (derived legs) | **nothing** | no               |
+| nightly or dispatch, lane empty                    | **gate job only**  | nothing     | no               |
+| push to `main`                                     | **no run**         | nothing     | no               |
+
+**What did not change.** The `membership` gate needed no new branch: a `schedule`
+or `workflow_dispatch` event falls through to the membership count, so each lane
+runs at its own derived legs when it holds a spec and an empty lane runs nothing.
+The receipt still publishes only from a green `pull_request` run, by the same two
+mechanisms (the step's `if:` and the empty owned-spec list on a run with no PR
+base). MOTIR-1949's "absent, not skipped" constraint is about pull requests and is
+untouched by a scheduled run.
+
+**Still not covered:** the PR that breaks a spec still goes green, and so does its
+queue entry. The nightly finds it, a day later at most.
 
 #### Amendment 2026-08-10 (MOTIR-2600) — the lane is SHARDED, and it triggers on its own definition
 

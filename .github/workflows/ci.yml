@@ -190,8 +190,9 @@ on:
 #
 # The expression is deliberately the one `acceptance-tests.yml` already carries
 # — that lane reached the same conclusion for its own reason (a blanket cancel
-# destroys the per-merge baseline that tells you WHICH merge broke it), and one
-# idiom across the repo is worth more than a second way of saying it. This
+# would cancel a nightly or a bisecting dispatch, each the only verdict for its
+# commit), and one idiom across the repo is worth more than a second way of
+# saying it. This
 # workflow now has THREE triggers — a PR, a `merge_group` entry and a push to
 # `main` — so "cancel iff pull_request" and "cancel iff not the default branch"
 # have STOPPED being the same predicate, and the event form is the one that was

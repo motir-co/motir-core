@@ -1,0 +1,99 @@
+# Tell a named person when the acceptance nightly on `main` did not go green
+# (MOTIR-10277).
+#
+# `acceptance-tests.yml` no longer runs on every push to `main`: the full
+# acceptance and regression lanes run once a night on `schedule`, and on a
+# manual `workflow_dispatch` (MOTIR-9412 decided it). A scheduled run's red
+# attaches to a commit nobody is looking at — MOTIR-3850's `sandbox-staleness`
+# lane was red on every scheduled run for 17 days and nobody was told. So this
+# lane turns a night that did not go green into an ISSUE assigned to a person.
+#
+# WHAT IT DOES. For a SCHEDULED run of `Acceptance tests` on `main` that ended
+# failed, cancelled, timed out, failed to start or anything else but `success`,
+# it opens ONE issue labelled `acceptance-nightly-red`, assigned to
+# `NOTIFY_LOGIN` below, carrying the run and the compare range since the last
+# green night — or, while that issue is open, comments on it. A lane that stays
+# red is one thread that keeps notifying. A person closes it; a green night
+# does not.
+#
+# WHAT IT DOES NOT. A green night tells nobody. A DISPATCHED run tells nobody,
+# whatever its conclusion: whoever started it is watching, and bisecting a red
+# range is a string of dispatches. A pull-request or merge-queue run is its
+# author's to read. The job-level `if:` below says so before a runner starts,
+# and `scripts/acceptanceNightlyNotify.mjs` (`decideNotify`) says it again on
+# the run as the API reports it.
+#
+# ⚠️ IT ADDS NO CHECK TO ANY PULL REQUEST. Its only trigger is `workflow_run`,
+# which attaches to the default branch, never to a PR — so a PR's checks list is
+# exactly what it was. `tests/scripts/notify-acceptance-nightly.test.ts` pins it.
+#
+# The logic lives in `scripts/acceptanceNightlyNotify.mjs` (unit-tested), and the
+# runner `scripts/notify-acceptance-nightly.mjs` is driven against a fake GitHub
+# API in `tests/scripts/notify-acceptance-nightly.test.ts`, which also asserts
+# this file's wiring — the same thin-caller arrangement as `main-ci-retry.yml`.
+#
+# ⚠️ `workflow_run` "will only trigger a workflow run if the workflow file exists
+# on the default branch", and `schedule` only fires from the default branch, so
+# neither half can run before this merges. The tests stand in for a run until
+# then; MOTIR-10278 reads the first real ones on `main`.
+
+name: Acceptance nightly — tell a person
+
+# Safe interpolation: the run id and conclusion are GitHub-generated values, not
+# user-controlled text. `display_title` is deliberately NOT used here.
+run-name: Acceptance nightly run ${{ github.event.workflow_run.id }} finished ${{ github.event.workflow_run.conclusion }}
+
+on:
+  workflow_run:
+    workflows: [Acceptance tests]
+    types: [completed]
+    branches: [main]
+
+# One notification per run, never cancelled: a cancelled notifier is a red
+# night nobody hears about.
+concurrency:
+  group: acceptance-nightly-notify-${{ github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  notify:
+    name: Tell a person the acceptance nightly was not green
+    # The same rule the script enforces, stated where it costs no runner: only a
+    # SCHEDULED run that did not go green is considered at all.
+    if: >-
+      github.event.workflow_run.event == 'schedule' &&
+      github.event.workflow_run.conclusion != 'success'
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # NO run on record — this lane cannot run before it is on `main`. Its work
+    # is a checkout, one dependency-free node script and at most six API calls,
+    # each bounded at 30 s by the script, so ~1 min is the expected run and 10
+    # is the short-job floor the other one-script lanes take.
+    timeout-minutes: 10
+    permissions:
+      # Read the run and the last green nightly.
+      actions: read
+      contents: read
+      # The red-night issue.
+      issues: write
+    env:
+      # ⚠️ THE ONE PLACE THE NOTIFIED PERSON IS NAMED. A scheduled run has no
+      # merger to assign, so the person is a fixed login: the repository's only
+      # collaborator on 2026-11-02, as `.github/` records no CODEOWNERS or
+      # maintainer. Change it here and nowhere else; a test fails if it is empty.
+      NOTIFY_LOGIN: zhuyue11
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      # No install step: the script is dependency-free, like
+      # `scripts/retry-main-ci.mjs`.
+      - name: Open or comment on the red-night issue
+        # The run id arrives as an ENV var rather than being interpolated into
+        # the script body — same discipline the rest of the lanes use.
+        env:
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/notify-acceptance-nightly.mjs

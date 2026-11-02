@@ -98,7 +98,9 @@ const acceptanceHeader = codeOf(acceptanceWorkflow.split(/^jobs:\s*$/m)[0] ?? ''
 // separately holds only ONE PENDING run per group and evicts the queued one, so
 // a per-ref group on `push: main` silently dropped 23 of 100 baselines — every
 // one `cancelled` with zero jobs, at the instant the next merge's run was
-// created. The remedy is a group that varies per COMMIT on a push.
+// created. The remedy was a group that varies per COMMIT on a push. The push
+// trigger is gone (MOTIR-10277), and the same arm now keeps a nightly and the
+// dispatches that bisect it from queueing behind one another.
 //
 // That property is ARITHMETIC over a context, not a structure, so a regex is
 // the wrong instrument: any pattern loose enough to survive a rewrite is loose
@@ -222,18 +224,21 @@ function concurrencySetting(name: 'group' | 'cancel-in-progress'): string {
   return setting[1]!.trim();
 }
 
+/** The events the workflow triggers on — and so the only ones a context may claim. */
+type LaneEvent = 'pull_request' | 'merge_group' | 'schedule' | 'workflow_dispatch';
+
 /** A fabricated `github` context for one event. */
-const contextFor = (eventName: 'push' | 'pull_request', ref: string, sha: string) => ({
+const contextFor = (eventName: LaneEvent, ref: string, sha: string) => ({
   'github.workflow': 'Acceptance tests',
   'github.event_name': eventName,
   'github.ref': ref,
   'github.sha': sha,
 });
 
-const resolvedGroup = (eventName: 'push' | 'pull_request', ref: string, sha: string): string =>
+const resolvedGroup = (eventName: LaneEvent, ref: string, sha: string): string =>
   resolveTemplate(concurrencySetting('group'), contextFor(eventName, ref, sha));
 
-const resolvedCancel = (eventName: 'push' | 'pull_request', ref: string, sha: string): string =>
+const resolvedCancel = (eventName: LaneEvent, ref: string, sha: string): string =>
   resolveTemplate(concurrencySetting('cancel-in-progress'), contextFor(eventName, ref, sha));
 
 describe('the acceptance lane is story-scoped (MOTIR-1949)', () => {
@@ -329,7 +334,8 @@ describe('the acceptance lane is story-scoped (MOTIR-1949)', () => {
 //     (`id-token: write` on the shard job alone); the action's PAT input exists
 //     for repositories with no App connection and no workflow here passes it.
 //   · PUBLISHING ONLY FROM A GREEN PR RUN. Publishing SUPERSEDES a story's
-//     receipt (MOTIR-1937), so a push, a merge-queue run or a red run must not.
+//     receipt (MOTIR-1937), so a nightly, a dispatch, a merge-queue run or a
+//     red run must not.
 //
 // Workflow files are not type-checked or linted, so these predicates are what
 // keeps a copy-paste or a "while we are in here" edit from loosening either.
@@ -371,16 +377,17 @@ describe('the lane publishes on a green PR run, over OIDC only (MOTIR-7253)', ()
     const code = codeOf(step!);
     expect(code).toMatch(/uses:\s*\.\/\.github\/actions\/upload-acceptance-video\s*$/m);
     // Both halves of the gate: a red run records nothing worth a receipt, and a
-    // push / merge_group run must never supersede a story's evidence.
+    // nightly, dispatched or merge_group run must never supersede a story's
+    // evidence.
     expect(code).toMatch(/^\s*if:\s*success\(\) && github\.event_name == 'pull_request'\s*$/m);
     // It is the ONLY publisher in the workflow.
     const publishers = steps().filter((s) => /upload-acceptance-video/.test(codeOf(s)));
     expect(publishers).toHaveLength(1);
   });
 
-  it('feeds the uploader the specs THIS PR owns, and nothing on a push', () => {
+  it('feeds the uploader the specs THIS PR owns, and nothing on any other run', () => {
     // The ownership filter (MOTIR-1937) is restored with the publisher. On a
-    // `push` or `merge_group` run there is no PR base, the list is EMPTY, and the
+    // nightly, dispatched or `merge_group` run there is no PR base, the list is EMPTY, and the
     // uploader fails closed on an empty list — the second of the two mechanisms.
     const code = codeOf(acceptanceJob!);
     expect(code).toContain('id: owned-specs');
@@ -517,37 +524,57 @@ describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
   });
 });
 
-// ── MOTIR-2760 ───────────────────────────────────────────────────────────────
+// ── MOTIR-2760 → MOTIR-10277: THE NIGHTLY ───────────────────────────────────
 //
 // The lane's `pull_request` filter is blind to the app the specs drive, so an
 // app change could break every acceptance spec, merge green, and wait on `main`
 // for an unrelated PR to inherit it (measured: MOTIR-2654 broke
 // `acceptance-ai-callout.spec.ts` at c6b5d19d; MOTIR-2664's PR #2045 found it).
-// The answer is a `push: main` baseline that TESTS and never PUBLISHES, gated on
-// the lane actually holding a spec.
+// MOTIR-2760's answer was a `push: main` baseline. MOTIR-9412 moved it to a
+// nightly `schedule` plus a manual `workflow_dispatch` (MOTIR-10277 built it),
+// trading per-merge attribution for one full run a day; a night that is not
+// green reaches a person through `acceptance-nightly-notify.yml`.
 //
-// These assertions pin the three things that make that affordable and safe, each
-// of which is silently reversible by a one-line edit: the gate, the
+// These assertions pin what makes that affordable and safe, each of which is
+// silently reversible by a one-line edit: the triggers, the gate, the
 // never-publish, and the PR-only cancellation.
-describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
+describe('THE NIGHTLY runs the lane against `main` (MOTIR-2760 · MOTIR-10277)', () => {
   const membershipJob = jobsOf(acceptanceWorkflow).get('membership');
   const buildJob = jobsOf(acceptanceWorkflow).get('build');
+  /** The `on:` block, comments stripped — so a `push:` left in prose does not count. */
+  const onBlock = (): string => {
+    const block = /^on:\s*\n((?: {2,}.*\n|\s*\n)*)/m.exec(acceptanceHeader);
+    if (!block) throw new Error('no `on:` block');
+    return block[1]!;
+  };
 
-  it('triggers on a push to main, in ADDITION to the pull_request filter', () => {
-    // Both triggers, and the PR one still first — the `paths:` assertion above
-    // matches `on:` → `pull_request:` → `paths:` as adjacent lines.
-    expect(codeOf(acceptanceWorkflow)).toMatch(/^\s*push:\s*$/m);
-    expect(codeOf(acceptanceWorkflow)).toMatch(/^\s*branches:\s*\[main\]\s*$/m);
+  it('triggers on exactly a pull request, the queue, one daily schedule and a dispatch', () => {
+    const triggers = [...onBlock().matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]);
+    expect(triggers).toEqual(['pull_request', 'merge_group', 'schedule', 'workflow_dispatch']);
   });
 
-  it('does NOT paths-filter the push trigger', () => {
-    // While the lane holds a spec, ANY merge could be the one that breaks it,
-    // and WHICH sources those specs read is exactly what a filter cannot know —
-    // that is the MOTIR-2620 rejection. The membership gate is what bounds the
-    // cost instead. A `paths:` under `push:` would silently reopen the gap.
-    const push = /^\s*push:\s*\n((?:\s{4,}.*\n|\s*\n)*)/m.exec(codeOf(acceptanceWorkflow));
-    expect(push).not.toBeNull();
-    expect(push![1]).not.toMatch(/paths:/);
+  it('has NO push trigger — a merge to main starts nothing', () => {
+    expect(onBlock()).not.toMatch(/^\s*push:/m);
+    expect(acceptanceHeader).not.toMatch(/^\s*push:/m);
+    // Non-vacuity: the prose still mentions the retired trigger, and the
+    // comment-stripped text is what makes that not count.
+    expect(acceptanceWorkflow).toMatch(/^#.*`push: main`/m);
+  });
+
+  it('schedules ONE daily run, at a fixed off-the-hour minute', () => {
+    const schedule = /^ {2}schedule:\s*\n((?: {4,}.*\n)*)/m.exec(onBlock());
+    expect(schedule).not.toBeNull();
+    const crons = [...schedule![1]!.matchAll(/^ {4}- cron:\s*'([^']+)'\s*$/gm)].map((m) => m[1]);
+    expect(crons).toEqual(['17 3 * * *']);
+    const [minute, hour, dom, month, dow] = crons[0]!.split(' ');
+    expect(minute).not.toBe('0');
+    expect(hour).toMatch(/^\d+$/);
+    expect([dom, month, dow]).toEqual(['*', '*', '*']);
+  });
+
+  it('dispatches with no inputs — the gate decides from the checkout', () => {
+    expect(onBlock()).toMatch(/^ {2}workflow_dispatch:\s*$/m);
+    expect(onBlock()).not.toMatch(/inputs:/);
   });
 
   it('gates the fan-out on the lane actually holding a spec', () => {
@@ -580,11 +607,10 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
   });
 
   it('never lets a PR see a skipped check because of the gate', () => {
-    // MOTIR-1949's requirement is about PULL REQUESTS. A `push` event attaches
-    // its checks to the commit on `main`, so a skip there costs no PR anything —
-    // but only because the gate is unconditionally true for a PR. If that ever
-    // becomes conditional, every PR touching the four lane-definition paths
-    // grows a greyed check and the requirement is gone.
+    // MOTIR-1949's requirement is about PULL REQUESTS. A `schedule` or
+    // `workflow_dispatch` run attaches its checks to a commit, not to any PR, so
+    // a skip there costs no PR anything — and a PR touching the lane-definition
+    // paths still takes the `RUN=true` arm.
     expect(membershipJob).toMatch(/EVENT_NAME[\s\S]*=[\s\S]*'pull_request'/);
     expect(membershipJob).toMatch(/RUN=true/);
   });
@@ -594,7 +620,8 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
     // a new moment to record. Since MOTIR-7253 the lane publishes again, so the
     // property is held by TWO mechanisms, and both are asserted: EVERY step that
     // runs the uploader is `if:`-gated to `pull_request`, and the owned-spec list
-    // a `push` emits is EMPTY, which the uploader fails closed on. (Between
+    // a nightly or a dispatch emits is EMPTY, which the uploader fails closed on
+    // (executed below). (Between
     // MOTIR-4096 and MOTIR-7253 it held structurally — there was no publisher.)
     const job = codeOf(acceptanceJob!);
     const publishers = job
@@ -613,17 +640,43 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
       if (id === 'acceptance') continue;
       expect(codeOf(body)).not.toMatch(/upload-acceptance-video|acceptance-evidence/);
     }
-    // The baseline still RUNS the specs — that is the whole point of MOTIR-2760,
-    // and a workflow that published nothing because it did nothing would pass
-    // every line above.
+    // The nightly still RUNS the specs — that is the whole point of it, and a
+    // workflow that published nothing because it did nothing would pass every
+    // line above.
     expect(acceptanceJob).toContain('pnpm test:e2e --config playwright.acceptance.config.ts');
   });
 
-  it('cancels superseded runs on a PR but NEVER on main', () => {
-    // The baseline's product is knowing WHICH merge broke the lane. Blanket
-    // `cancel-in-progress: true` would have back-to-back merges cancel each
-    // other and hand back exactly the ambiguity this trigger removes. Same
-    // expression, and the same assertion, as `tests/ci-fly-deploy.test.ts` —
+  it.each(['schedule', 'workflow_dispatch'])(
+    'owns NO spec on a %s run, so it can publish nothing — executed',
+    (eventName) => {
+      // The owned-spec step, run as the runner runs it, with the empty base a
+      // nightly or a dispatch has (`github.event.pull_request` does not exist).
+      const step = acceptanceJob!.split(/^ {6}- /m).find((s) => /id: owned-specs/.test(s));
+      expect(step).toBeDefined();
+      const script = /run: \|\n((?: {10}.*\n|\s*\n)*)/
+        .exec(`${step!}\n`)![1]!
+        .replace(/^ {10}/gm, '');
+      const dir = mkdtempSync(join(tmpdir(), 'acceptance-owned-'));
+      try {
+        const out = join(dir, 'github-output');
+        writeFileSync(out, '');
+        const stdout = execFileSync('bash', ['-c', script], {
+          cwd: dir,
+          env: { ...process.env, BASE_SHA: '', GITHUB_EVENT_NAME: eventName, GITHUB_OUTPUT: out },
+          encoding: 'utf8',
+        });
+        expect(stdout).toContain(`no base ref (event: ${eventName})`);
+        expect(readFileSync(out, 'utf8')).toBe('specs=\n');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it('cancels superseded runs on a PR but NEVER a nightly, a dispatch or a queue entry', () => {
+    // A cancelled nightly is a night with no verdict, and a cancelled dispatch
+    // is a bisect step lost. Blanket `cancel-in-progress: true` would do both.
+    // Same expression, and the same assertion, as `tests/ci-fly-deploy.test.ts` —
     // deliberately one idiom, not two.
     expect(codeOf(acceptanceWorkflow)).toMatch(
       /cancel-in-progress:\s*\$\{\{\s*github\.event_name == 'pull_request'\s*\}\}/,
@@ -644,9 +697,10 @@ describe('the MAIN BASELINE runs the lane on `main` (MOTIR-2760)', () => {
 // the reason the MOTIR-2908 block gives: the group is arithmetic over a context,
 // and a regex that agrees with a per-commit group agrees just as happily with a
 // per-ref one. What has to be true is a PROPERTY of the resolved values.
-describe('a push is grouped per COMMIT, so no baseline is ever evicted (MOTIR-4095)', () => {
+describe('every run but a PR is grouped per COMMIT, so none is ever evicted (MOTIR-4095 · MOTIR-10277)', () => {
   const FIRST = 'a9936655b1c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4';
   const SECOND = 'deb99250c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6';
+  const MAIN = 'refs/heads/main';
 
   it('finds the workflow-level concurrency block it is meant to guard', () => {
     // The negative control: a restructure that moved the block under a job, or
@@ -656,22 +710,37 @@ describe('a push is grouped per COMMIT, so no baseline is ever evicted (MOTIR-40
     expect(concurrencySetting('group')).toContain('${{');
   });
 
-  it('puts two merges to main in DIFFERENT groups', () => {
-    // The defect, stated as a predicate. Two pushes at different shas sharing a
-    // group is exactly the condition under which GitHub queues the second and
-    // evicts it when a third arrives.
-    const main = 'refs/heads/main';
-    expect(resolvedGroup('push', main, FIRST)).not.toBe(resolvedGroup('push', main, SECOND));
+  it('puts two dispatches at different commits in DIFFERENT groups', () => {
+    // Bisecting a red night is several dispatches at once. Sharing a group is
+    // exactly the condition under which GitHub queues the second and evicts it
+    // when a third arrives — the MOTIR-4095 defect, on the trigger that has it now.
+    const bisect = 'refs/heads/bisect/acceptance-x';
+    expect(resolvedGroup('workflow_dispatch', bisect, FIRST)).not.toBe(
+      resolvedGroup('workflow_dispatch', bisect, SECOND),
+    );
+    expect(resolvedGroup('workflow_dispatch', MAIN, FIRST)).not.toBe(
+      resolvedGroup('workflow_dispatch', MAIN, SECOND),
+    );
   });
 
-  it('varies a push group by the SHA and not by anything else', () => {
-    // Stronger than "they differ": the group must actually CARRY the commit, so
-    // a future rewrite cannot satisfy the test above with an unrelated varying
-    // value (a run id, a timestamp) that leaves two events at one sha apart.
-    const main = 'refs/heads/main';
-    expect(resolvedGroup('push', main, FIRST)).toContain(FIRST);
-    expect(resolvedGroup('push', main, FIRST)).toBe(resolvedGroup('push', main, FIRST));
-  });
+  it.each(['schedule', 'workflow_dispatch', 'merge_group'] as const)(
+    'carries the COMMIT, and nothing else that varies, for a %s run',
+    (eventName) => {
+      // Stronger than "they differ": the group must actually CARRY the commit,
+      // so a rewrite cannot satisfy the test above with an unrelated varying
+      // value (a run id, a timestamp) that leaves two events at one sha apart.
+      expect(resolvedGroup(eventName, MAIN, FIRST)).toContain(FIRST);
+      expect(resolvedGroup(eventName, MAIN, FIRST)).toBe(resolvedGroup(eventName, MAIN, FIRST));
+      expect(resolvedGroup(eventName, MAIN, FIRST)).not.toContain(MAIN);
+    },
+  );
+
+  it.each(['schedule', 'workflow_dispatch'] as const)(
+    'never cancels a %s run in progress',
+    (eventName) => {
+      expect(resolvedCancel(eventName, MAIN, FIRST)).toBe('false');
+    },
+  );
 
   it('leaves PR behaviour exactly as it was — one group per ref, newest wins', () => {
     // The saving MOTIR-2760 wanted is per-REF on a pull request: two pushes to
@@ -682,16 +751,16 @@ describe('a push is grouped per COMMIT, so no baseline is ever evicted (MOTIR-40
     expect(resolvedGroup('pull_request', pr, FIRST)).toBe(
       resolvedGroup('pull_request', pr, SECOND),
     );
-    expect(resolvedGroup('pull_request', pr, FIRST)).toContain(pr);
+    expect(resolvedGroup('pull_request', pr, FIRST)).toBe(`Acceptance tests-${pr}`);
     expect(resolvedCancel('pull_request', pr, FIRST)).toBe('true');
-    expect(resolvedCancel('push', 'refs/heads/main', FIRST)).toBe('false');
+    expect(resolvedCancel('merge_group', MAIN, FIRST)).toBe('false');
   });
 
-  it('never lets a push and a pull request collide in one group', () => {
+  it('never lets a nightly and a pull request collide in one group', () => {
     // The two arms are the same string on both events only if the expression
-    // has stopped distinguishing them, which is the fault this card fixed.
-    expect(resolvedGroup('push', 'refs/heads/main', FIRST)).not.toBe(
-      resolvedGroup('pull_request', 'refs/heads/main', FIRST),
+    // has stopped distinguishing them, which is the fault MOTIR-4095 fixed.
+    expect(resolvedGroup('schedule', MAIN, FIRST)).not.toBe(
+      resolvedGroup('pull_request', MAIN, FIRST),
     );
   });
 
@@ -700,12 +769,12 @@ describe('a push is grouped per COMMIT, so no baseline is ever evicted (MOTIR-40
     // silent `undefined` would make every group above compare equal-to-equal
     // and the suite would go green on a workflow nobody had checked.
     expect(() =>
-      resolveTemplate('${{ fromJSON(github.ref) }}', contextFor('push', 'r', 's')),
+      resolveTemplate('${{ fromJSON(github.ref) }}', contextFor('schedule', 'r', 's')),
     ).toThrow();
-    expect(() => resolveTemplate('${{ github.actor }}', contextFor('push', 'r', 's'))).toThrow(
+    expect(() => resolveTemplate('${{ github.actor }}', contextFor('schedule', 'r', 's'))).toThrow(
       /fabricated context/,
     );
-    expect(() => resolveTemplate('no expression here', contextFor('push', 'r', 's'))).toThrow();
+    expect(() => resolveTemplate('no expression here', contextFor('schedule', 'r', 's'))).toThrow();
   });
 });
 
@@ -886,7 +955,7 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
    */
   function runGate(
     specCount: number,
-    eventName: 'pull_request' | 'push' | 'merge_group',
+    eventName: LaneEvent,
     changedFiles: readonly string[] = ['tests/e2e/acceptance-story-1.spec.ts'],
     {
       bsdSeq = false,
@@ -1045,10 +1114,10 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     // cancelled at the 55-minute timeout, so the cap became ten. At 157 specs
     // leg 9/10 ran 42 min of tests and was cancelled the same way, so it is 14.
     expect(runGate(157, 'pull_request').shards).toBe('[1,2,3,4,5,6,7,8,9,10,11,12,13,14]');
-    expect(runGate(14, 'push').shards).toBe('[1,2,3,4,5,6,7,8,9,10,11,12,13,14]');
-    expect(runGate(10, 'push').shards).toBe('[1,2,3,4,5,6,7,8,9,10]');
-    expect(runGate(6, 'push').shards).toBe('[1,2,3,4,5,6]');
-    expect(runGate(4, 'push').shards).toBe('[1,2,3,4]');
+    expect(runGate(14, 'schedule').shards).toBe('[1,2,3,4,5,6,7,8,9,10,11,12,13,14]');
+    expect(runGate(10, 'schedule').shards).toBe('[1,2,3,4,5,6,7,8,9,10]');
+    expect(runGate(6, 'workflow_dispatch').shards).toBe('[1,2,3,4,5,6]');
+    expect(runGate(4, 'workflow_dispatch').shards).toBe('[1,2,3,4]');
   });
 
   it.each([1, 2, 4, 6, 10, 14])(
@@ -1066,14 +1135,17 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
   );
 
   it('floors an empty lane at ONE leg, and only on a PR', () => {
-    // A `push` against an empty lane never reaches the fan-out at all — the
-    // MOTIR-2760 gate stops at the ~10s membership job — so the floor is about
-    // the PR case: a lane-definition PR runs no tests either way, and the one
-    // leg is what still proves the harness BOOTS. Zero legs would prove nothing
-    // on precisely the PRs whose subject is this lane.
-    const push = runGate(0, 'push');
-    expect(push.run).toBe('false');
-    expect(push.legs).toBe('1');
+    // A nightly or a dispatch against an empty lane never reaches the fan-out at
+    // all — the MOTIR-2760 gate stops at the ~10s membership job — so the floor
+    // is about the PR case: a lane-definition PR runs no tests either way, and
+    // the one leg is what still proves the harness BOOTS. Zero legs would prove
+    // nothing on precisely the PRs whose subject is this lane.
+    for (const eventName of ['schedule', 'workflow_dispatch'] as const) {
+      const night = runGate(0, eventName);
+      expect(night.run).toBe('false');
+      expect(night.legs).toBe('1');
+      expect(night.summary).toContain('The lane is empty, so this run stopped here');
+    }
 
     const pr = runGate(0, 'pull_request');
     expect(pr.run).toBe('true');
@@ -1084,8 +1156,8 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
   it('counts the lane the Playwright config would collect, not the word', () => {
     // Every case above plants an `epic2-acceptance.spec.ts` decoy; this is the
     // one that reads it. A `*acceptance*` match would count it and size a
-    // one-spec lane to two legs — and hold the `push` baseline permanently on.
-    expect(runGate(0, 'push').count).toBe('0');
+    // one-spec lane to two legs — and hold the nightly permanently on.
+    expect(runGate(0, 'schedule').count).toBe('0');
     expect(runGate(1, 'pull_request').count).toBe('1');
   });
 
@@ -1207,11 +1279,11 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     expect(runGate(1, 'pull_request', buried).run).toBe('true');
   });
 
-  it('runs the queue entry only when ITS diff touches the lane; the baseline always', () => {
+  it('runs the queue entry only when ITS diff touches the lane; the nightly always', () => {
     // The queue used to run the whole lane on every entry (~60 min against a
     // 60-min check timeout). It now reads the entry's own base...head diff, like
-    // a pull request does; `push` still runs whenever the lane holds a spec, so
-    // the composed tree is checked after the merge by the main baseline.
+    // a pull request does; the nightly and a dispatch still run whenever the
+    // lane holds a spec, so the composed tree is checked against `main`.
     const untouched = ['components/planning/ProposalPeek.tsx'];
     expect(runGate(1, 'merge_group', undefined, { mergeDiff: untouched }).run).toBe('false');
     expect(
@@ -1222,10 +1294,12 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     expect(
       runGate(1, 'merge_group', undefined, { mergeDiff: ['playwright.acceptance.config.ts'] }).run,
     ).toBe('true');
-    expect(runGate(1, 'push', untouched).run).toBe('true');
-    // …and an EMPTY lane still stops early on both, which is MOTIR-2760 intact.
+    expect(runGate(1, 'schedule', untouched).run).toBe('true');
+    expect(runGate(1, 'workflow_dispatch', untouched).run).toBe('true');
+    // …and an EMPTY lane still stops early on each, which is MOTIR-2760 intact.
     expect(runGate(0, 'merge_group', undefined, { mergeDiff: untouched }).run).toBe('false');
-    expect(runGate(0, 'push', untouched).run).toBe('false');
+    expect(runGate(0, 'schedule', untouched).run).toBe('false');
+    expect(runGate(0, 'workflow_dispatch', untouched).run).toBe('false');
   });
 
   it('FAILS OPEN for a queue entry whose diff cannot be read', () => {
@@ -1241,16 +1315,35 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
   describe("the regression lane keeps the acceptance lane's triggers (MOTIR-9411)", () => {
     const appOnly = ['components/x.tsx', 'lib/dto/y.ts'];
 
-    it('runs on a push to main, sized at one leg per spec up to ten', () => {
-      const small = runGate(0, 'push', appOnly, { regressionSpecs: 3 });
-      expect(small.regression_run).toBe('true');
-      expect(small.regression_count).toBe('3');
-      expect(small.regression_legs).toBe('3');
-      expect(JSON.parse(small.regression_shards!)).toEqual([1, 2, 3]);
-      const big = runGate(0, 'push', appOnly, { regressionSpecs: 154 });
-      expect(big.regression_legs).toBe('10');
-      expect(JSON.parse(big.regression_shards!)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
-    });
+    it.each(['schedule', 'workflow_dispatch'] as const)(
+      'runs on a %s run, sized at one leg per spec up to ten',
+      (eventName) => {
+        const small = runGate(0, eventName, appOnly, { regressionSpecs: 3 });
+        expect(small.regression_run).toBe('true');
+        expect(small.regression_count).toBe('3');
+        expect(small.regression_legs).toBe('3');
+        expect(JSON.parse(small.regression_shards!)).toEqual([1, 2, 3]);
+        const big = runGate(0, eventName, appOnly, { regressionSpecs: 154 });
+        expect(big.regression_legs).toBe('10');
+        expect(JSON.parse(big.regression_shards!)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+      },
+    );
+
+    it.each(['schedule', 'workflow_dispatch'] as const)(
+      'runs BOTH lanes at their own derived legs on an app-only %s run',
+      (eventName) => {
+        const both = runGate(3, eventName, appOnly, { regressionSpecs: 12 });
+        expect(both.run).toBe('true');
+        expect(both.legs).toBe('3');
+        expect(JSON.parse(both.shards!)).toEqual([1, 2, 3]);
+        expect(both.regression_run).toBe('true');
+        expect(both.regression_legs).toBe('10');
+        // …and an empty lane on either side reports no run.
+        const empty = runGate(0, eventName, appOnly);
+        expect(empty.run).toBe('false');
+        expect(empty.regression_run).toBe('false');
+      },
+    );
 
     it('stays off an ordinary pull request, and runs on one that touches the lane', () => {
       expect(runGate(0, 'pull_request', appOnly, { regressionSpecs: 5 }).regression_run).toBe(
@@ -1287,10 +1380,10 @@ describe('the shard count is DERIVED from the lane (MOTIR-2908)', () => {
     });
 
     it('runs nothing when the lane is empty, and leaves the acceptance gate as it was', () => {
-      const empty = runGate(0, 'push', appOnly);
+      const empty = runGate(0, 'schedule', appOnly);
       expect(empty.regression_run).toBe('false');
       expect(empty.regression_legs).toBe('1');
-      const both = runGate(2, 'push', appOnly, { regressionSpecs: 4 });
+      const both = runGate(2, 'schedule', appOnly, { regressionSpecs: 4 });
       expect(both.run).toBe('true');
       expect(both.count).toBe('2');
       expect(both.regression_count).toBe('4');
