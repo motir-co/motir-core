@@ -30,10 +30,22 @@ export type FleetOrgCiVariableDTO =
   | { state: 'absent' }
   | { state: 'unknown'; status: number | null };
 
+/** Where one private repository's CodeQL default setup runs, read back from
+ *  GitHub (MOTIR-10289). Its runner is a per-repository setting no workflow
+ *  file reads, so the org variable does not move it — the flip does.
+ *  `fleet` = labelled with the fleet label; `github_hosted` = `standard`, or a
+ *  label that is not the fleet's; `not_configured` / `unavailable` = no default
+ *  setup at all; `unknown` = the read failed. */
+export type FleetOrgCiCodeScanningDTO =
+  | { repo: string; state: 'fleet' | 'github_hosted' | 'not_configured' | 'unavailable' }
+  | { repo: string; state: 'unknown'; status: number | null };
+
 /** The console's full reading of one pair. */
 export interface FleetOrgCiStateDTO extends FleetOrgCiStoredStateDTO {
   readiness: FleetReadiness;
   variable: FleetOrgCiVariableDTO;
+  /** One entry per private repository of the pair, in name order. */
+  codeScanning: FleetOrgCiCodeScanningDTO[];
 }
 
 /** What a flip answers. `unchanged` = the pair already held the asked state;

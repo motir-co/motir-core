@@ -12577,7 +12577,8 @@
         "neverChanged": "从未更改",
         "auditLink": "审计日志",
         "variable": "GitHub 变量",
-        "repositories": "仓库"
+        "repositories": "仓库",
+        "codeScanning": "CodeQL 默认设置"
       },
       "variable": {
         "present": "{org} 上的 {name} = {value}（私有仓库）—— 新作业会请求集群。",
@@ -12597,6 +12598,13 @@
       },
       "repositories": {
         "count": "{count, plural, other {# 个私有仓库}}，运行时从项目 {project} 在 {org} 上的私有仓库读取"
+      },
+      "codeScanning": {
+        "fleet": "在集群上运行（{label}）",
+        "githubHosted": "在 GitHub 托管的运行器上运行",
+        "unknownStatus": "无法读取 —— GitHub 返回 HTTP {status}",
+        "unknownUnreachable": "无法读取 —— 无法连接到 GitHub",
+        "none": "{org} 上没有任何私有仓库配置了 CodeQL 默认设置。"
       },
       "monitoringLine": "Motir 的机器显示在 监控 › 集群 中的 moooon B.V. 名下",
       "onCallout": {
@@ -12701,6 +12709,11 @@
         "githubStatus": "未{direction}：GitHub 拒绝在 {org} 上{operation} {name}（HTTP {status}）。",
         "githubUnreachable": "未{direction}：无法连接到 GitHub 以在 {org} 上{operation} {name}。",
         "nothingChanged": "没有任何更改：设置和 GitHub 变量都保持原样。",
+        "codeScanningWriteStatus": "未{direction}：GitHub 拒绝将 {repo} 的 CodeQL 默认设置移到{runner}（HTTP {status}）。",
+        "codeScanningWriteUnreachable": "未{direction}：无法连接到 GitHub 以将 {repo} 的 CodeQL 默认设置移到{runner}。",
+        "codeScanningReadStatus": "未{direction}：GitHub 拒绝读取 {repo} 的 CodeQL 默认设置（HTTP {status}）。",
+        "codeScanningReadUnreachable": "未{direction}：无法连接到 GitHub 以读取 {repo} 的 CodeQL 默认设置。",
+        "codeScanningNothingChanged": "没有任何更改：设置、GitHub 变量和每个仓库的 CodeQL 默认设置都保持原样。",
         "notReady": "未开启：此页面加载后集群已不再就绪。",
         "notReadyList": "当前未满足：{conditions}。没有任何更改。下方的就绪状态已重新检查。",
         "notPermitted": "未更改：只有超级管理员可以更改此设置。",
@@ -12714,6 +12727,10 @@
       "direction": {
         "on": "开启",
         "off": "关闭"
+      },
+      "runner": {
+        "fleet": "集群",
+        "githubHosted": "GitHub 托管的运行器"
       },
       "operation": {
         "read": "读取",

@@ -4,8 +4,8 @@
 # inside the temporary build VM; nothing here runs when a runner launches.
 #
 # It bakes what `infra/ci-runner/Dockerfile` bakes into the Fly image, layer for
-# layer, so the two fleets run the same runner, Node, Docker and Playwright
-# libraries. Read that Dockerfile for WHY each layer exists (its evidence
+# layer, so the two fleets run the same runner, Node, Docker, AWS CLI and
+# Playwright libraries. Read that Dockerfile for WHY each layer exists (its evidence
 # table); this file only repeats the steps a VM needs.
 #
 # ── Pins: passed in, never typed here ────────────────────────────────────────
@@ -14,7 +14,8 @@
 # second copy that drifts; `tests/ciFleet/awsRunnerAmi.test.ts` fails if one is.
 #
 #   RUNNER_VERSION RUNNER_SHA256 NODE_VERSION NODE_SHA256
-#   DOCKER_VERSION DOCKER_SHA256 PLAYWRIGHT_VERSION
+#   DOCKER_VERSION DOCKER_SHA256 AWSCLI_VERSION AWSCLI_SHA256
+#   PLAYWRIGHT_VERSION
 #
 # ── The scripts: copied, never rewritten ─────────────────────────────────────
 # The Packer file provisioner uploads `infra/ci-runner/entrypoint.sh`,
@@ -31,7 +32,7 @@ export DEBIAN_FRONTEND=noninteractive
 log() { printf '[provision] %s\n' "$*"; }
 die() { printf '[provision] FATAL: %s\n' "$*" >&2; exit 1; }
 
-for pin in RUNNER_VERSION RUNNER_SHA256 NODE_VERSION NODE_SHA256 DOCKER_VERSION DOCKER_SHA256 PLAYWRIGHT_VERSION; do
+for pin in RUNNER_VERSION RUNNER_SHA256 NODE_VERSION NODE_SHA256 DOCKER_VERSION DOCKER_SHA256 AWSCLI_VERSION AWSCLI_SHA256 PLAYWRIGHT_VERSION; do
   [ -n "${!pin:-}" ] || die "${pin} is not set — build-ami.sh passes it from infra/ci-runner/Dockerfile"
 done
 
@@ -103,6 +104,20 @@ install_docker() {
   dockerd --version
   # The mountpoint the boot hook mounts the data volume on.
   install -d -m 0711 /var/lib/docker
+}
+
+# The AWS CLI v2 from AWS's versioned installer zip, where the image and
+# `ubuntu-latest` put it (MOTIR-10293). The version check fails the BUILD when
+# the CLI is absent or is not the pinned version, so no AMI ships without it.
+install_aws_cli() {
+  log "aws cli ${AWSCLI_VERSION}"
+  curl -fsSLo /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"
+  echo "${AWSCLI_SHA256}  /tmp/awscliv2.zip" | sha256sum -c -
+  unzip -q /tmp/awscliv2.zip -d /tmp/awscliv2
+  /tmp/awscliv2/aws/install
+  rm -rf /tmp/awscliv2.zip /tmp/awscliv2
+  aws --version | grep -F "aws-cli/${AWSCLI_VERSION} " \
+    || die "aws ${AWSCLI_VERSION} is not on PATH after the install"
 }
 
 install_playwright_libraries() {
@@ -185,6 +200,7 @@ main() {
   install_base_packages
   install_node
   install_docker
+  install_aws_cli
   install_playwright_libraries
   install_runner
   create_runner_user

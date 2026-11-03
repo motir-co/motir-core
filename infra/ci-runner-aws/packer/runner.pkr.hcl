@@ -67,6 +67,24 @@ variable "docker_sha256" {
   }
 }
 
+variable "awscli_version" {
+  type        = string
+  description = "infra/ci-runner/Dockerfile ARG AWSCLI_VERSION."
+  validation {
+    condition     = can(regex("^[0-9]+(\\.[0-9]+)+$", var.awscli_version))
+    error_message = "The awscli_version must be a dotted version number."
+  }
+}
+
+variable "awscli_sha256" {
+  type        = string
+  description = "infra/ci-runner/Dockerfile ARG AWSCLI_SHA256."
+  validation {
+    condition     = can(regex("^[0-9a-f]{64}$", var.awscli_sha256))
+    error_message = "The awscli_sha256 must be 64 hex characters."
+  }
+}
+
 variable "playwright_version" {
   type        = string
   description = "infra/ci-runner/Dockerfile ARG PLAYWRIGHT_VERSION."
@@ -230,6 +248,8 @@ build {
       "NODE_SHA256=${var.node_sha256}",
       "DOCKER_VERSION=${var.docker_version}",
       "DOCKER_SHA256=${var.docker_sha256}",
+      "AWSCLI_VERSION=${var.awscli_version}",
+      "AWSCLI_SHA256=${var.awscli_sha256}",
       "PLAYWRIGHT_VERSION=${var.playwright_version}",
     ]
   }

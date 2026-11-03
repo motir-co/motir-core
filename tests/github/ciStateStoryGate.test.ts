@@ -576,48 +576,77 @@ describe('§3 the backfill converges on what the recompute derives (MOTIR-5477)'
 
 // ── §4 ─────────────────────────────────────────────────────────────────────
 
+/**
+ * The §4 test's own budget (MOTIR-10292) — ten two-delivery races, each a link,
+ * an open and two concurrent `check_suite` deliveries, is a LONG test, and the
+ * suite-wide 15 s `testTimeout` was sized for a query.
+ *
+ * Measured on CI shard `Vitest (16/20)`, the only shard that runs this file: the
+ * test passed in 6994–13119 ms across seven green runs (the slowest on shards of
+ * ~1420–1460 s), and was cut off at 15000 ms (reported 16089 ms) on a 1225 s
+ * shard (run 41626033679, attempt 1). The time tracks shard load, not the code:
+ * locally it is ~7 s idle and passes at 15.1 s, or times out, under CPU
+ * contention. 60 s is over four times the slowest green run.
+ *
+ * ⚠️ It is still a BOUND, not an absence of one: a race that deadlocks or hangs
+ * never settles, so the test fails by this timeout instead of running forever.
+ */
+const TEN_RACES_TIMEOUT_MS = 60_000;
+
 describe('§4 concurrency, repeated (MOTIR-5477)', () => {
-  it('ten races between two deliveries each leave the fold of the FINAL rows', async () => {
-    // ⚠️ THE REPETITION IS THE TEST. A read-derived write without the row lock
-    // still commits the right answer most of the time — the losing interleaving
-    // needs both recomputes to read before either writes. One run is a coin toss
-    // reported as a pass; ten runs that all agree is evidence.
-    const s = await makeScenario('race@example.com', 'RCE');
+  it(
+    'ten races between two deliveries each leave the fold of the FINAL rows',
+    { timeout: TEN_RACES_TIMEOUT_MS },
+    async () => {
+      // ⚠️ THE REPETITION IS THE TEST. A read-derived write without the row lock
+      // still commits the right answer most of the time — the losing interleaving
+      // needs both recomputes to read before either writes. One run is a coin toss
+      // reported as a pass; ten runs that all agree is evidence.
+      const s = await makeScenario('race@example.com', 'RCE');
 
-    for (let round = 0; round < 10; round += 1) {
-      const item = await makeCard(s, `A change, round ${round}`);
-      const a = 100 + round * 2;
-      const b = a + 1;
+      for (let round = 0; round < 10; round += 1) {
+        const item = await makeCard(s, `A change, round ${round}`);
+        const a = 100 + round * 2;
+        const b = a + 1;
 
-      for (const [name, number, repoProviderId] of [
-        ['acme', a, REPO_PROVIDER_ID],
-        ['acme-api', b, OTHER_REPO_PROVIDER_ID],
-      ] as const) {
-        await linkPrByIdentifier({
-          identifier: item.identifier,
-          owner: 'moooon',
-          name,
-          number,
-          headRef: `subtask/${item.identifier}-work`,
-          title: `A change (subtask/${item.identifier}-work)`,
-        });
-        await openPrIn(repoProviderId, `subtask/${item.identifier}-work`, number);
+        for (const [name, number, repoProviderId] of [
+          ['acme', a, REPO_PROVIDER_ID],
+          ['acme-api', b, OTHER_REPO_PROVIDER_ID],
+        ] as const) {
+          await linkPrByIdentifier({
+            identifier: item.identifier,
+            owner: 'moooon',
+            name,
+            number,
+            headRef: `subtask/${item.identifier}-work`,
+            title: `A change (subtask/${item.identifier}-work)`,
+          });
+          await openPrIn(repoProviderId, `subtask/${item.identifier}-work`, number);
+        }
+
+        // Started TOGETHER — not awaited in sequence. One green, one red.
+        //
+        // ⚠️ `allSettled`, not `all` (MOTIR-10292). `Promise.all` rejects on the
+        // FIRST rejection and stops waiting for the other delivery, which is then
+        // still holding a backend when the next round — or the next test's
+        // `TRUNCATE` — starts. Both are waited for, then both must have succeeded.
+        const settled = await Promise.allSettled([
+          ci({ conclusion: 'success', headSha: `sha-${a}`, prNumbers: [a] }),
+          ci({
+            repoProviderId: OTHER_REPO_PROVIDER_ID,
+            conclusion: 'failure',
+            headSha: `sha-${b}`,
+            prNumbers: [b],
+          }),
+        ]);
+        for (const outcome of settled) {
+          if (outcome.status === 'rejected') throw outcome.reason;
+        }
+
+        expect(await storedCiState(item.id), `round ${round}`).toBe('failing');
       }
-
-      // Started TOGETHER — not awaited in sequence. One green, one red.
-      await Promise.all([
-        ci({ conclusion: 'success', headSha: `sha-${a}`, prNumbers: [a] }),
-        ci({
-          repoProviderId: OTHER_REPO_PROVIDER_ID,
-          conclusion: 'failure',
-          headSha: `sha-${b}`,
-          prNumbers: [b],
-        }),
-      ]);
-
-      expect(await storedCiState(item.id), `round ${round}`).toBe('failing');
-    }
-  });
+    },
+  );
 });
 
 // ── §5 ─────────────────────────────────────────────────────────────────────

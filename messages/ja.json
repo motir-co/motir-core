@@ -12583,7 +12583,8 @@
         "neverChanged": "変更なし",
         "auditLink": "監査ログ",
         "variable": "GitHub 変数",
-        "repositories": "リポジトリ"
+        "repositories": "リポジトリ",
+        "codeScanning": "CodeQL の既定のセットアップ"
       },
       "variable": {
         "present": "{org} の {name} = {value}（プライベートリポジトリ）— 新しいジョブはフリートを要求します。",
@@ -12603,6 +12604,13 @@
       },
       "repositories": {
         "count": "{count, plural, other {# 件のプライベートリポジトリ}}（実行時に {org} 上のプロジェクト {project} のプライベートリポジトリから読み取り）"
+      },
+      "codeScanning": {
+        "fleet": "フリート上 ({label})",
+        "githubHosted": "GitHub ホストのランナー上",
+        "unknownStatus": "読み取れませんでした — GitHub は HTTP {status} を返しました",
+        "unknownUnreachable": "読み取れませんでした — GitHub に接続できませんでした",
+        "none": "{org} のプライベートリポジトリで CodeQL の既定のセットアップが構成されているものはありません。"
       },
       "monitoringLine": "Motir のマシンは モニタリング › フリート の moooon B.V. の下に表示されます",
       "onCallout": {
@@ -12707,6 +12715,11 @@
         "githubStatus": "{direction}にしませんでした: GitHub は {org} の {name} の{operation}を拒否しました（HTTP {status}）。",
         "githubUnreachable": "{direction}にしませんでした: {org} の {name} を{operation}するために GitHub に接続できませんでした。",
         "nothingChanged": "何も変更されていません: 設定と GitHub 変数は元のままです。",
+        "codeScanningWriteStatus": "{direction}にしませんでした: GitHub は {repo} の CodeQL の既定のセットアップを{runner}に移すことを拒否しました（HTTP {status}）。",
+        "codeScanningWriteUnreachable": "{direction}にしませんでした: {repo} の CodeQL の既定のセットアップを{runner}に移すために GitHub に接続できませんでした。",
+        "codeScanningReadStatus": "{direction}にしませんでした: GitHub は {repo} の CodeQL の既定のセットアップの読み取りを拒否しました（HTTP {status}）。",
+        "codeScanningReadUnreachable": "{direction}にしませんでした: {repo} の CodeQL の既定のセットアップを読み取るために GitHub に接続できませんでした。",
+        "codeScanningNothingChanged": "何も変更されていません: 設定、GitHub 変数、各リポジトリの CodeQL の既定のセットアップは元のままです。",
         "notReady": "オンにしませんでした: このページの読み込み後にフリートの準備が整わなくなりました。",
         "notReadyList": "現在未達: {conditions}。何も変更されていません。下の準備状況を再確認しました。",
         "notPermitted": "変更していません: この設定を変更できるのはスーパー管理者のみです。",
@@ -12720,6 +12733,10 @@
       "direction": {
         "on": "オン",
         "off": "オフ"
+      },
+      "runner": {
+        "fleet": "フリート",
+        "githubHosted": "GitHub ホストのランナー"
       },
       "operation": {
         "read": "読み取り",

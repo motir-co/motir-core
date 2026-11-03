@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import {
+  FleetOrgCiCodeScanningError,
   FleetOrgCiGithubWriteError,
   FleetOrgCiNotReadyError,
   FleetOrgCiTargetUnknownError,
@@ -52,6 +53,15 @@ export type FleetOrgCiActionResult =
       status: number | null;
       operation: 'read' | 'set' | 'delete';
     }
+  | {
+      ok: false;
+      code: 'CODE_SCANNING_FAILED';
+      org: string;
+      repo: string;
+      status: number | null;
+      operation: 'read' | 'write';
+      to: 'fleet' | 'github_hosted';
+    }
   | { ok: false; code: 'REASON_REQUIRED' | 'NOT_PERMITTED' | 'TARGET_UNKNOWN' | 'FAILED' };
 
 export async function setFleetOrgCiAction(
@@ -97,6 +107,17 @@ export async function setFleetOrgCiAction(
         org: err.org,
         status: err.status,
         operation: err.operation,
+      };
+    }
+    if (err instanceof FleetOrgCiCodeScanningError) {
+      return {
+        ok: false,
+        code: 'CODE_SCANNING_FAILED',
+        org: err.org,
+        repo: err.repo,
+        status: err.status,
+        operation: err.operation,
+        to: err.to,
       };
     }
     if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };

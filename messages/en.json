@@ -12583,7 +12583,8 @@
         "neverChanged": "Never changed",
         "auditLink": "Audit log",
         "variable": "GitHub variable",
-        "repositories": "Repositories"
+        "repositories": "Repositories",
+        "codeScanning": "CodeQL default setup"
       },
       "variable": {
         "present": "{name} = {value} on {org} (private repositories) — new jobs request the fleet.",
@@ -12603,6 +12604,13 @@
       },
       "repositories": {
         "count": "{count, plural, one {# private repository} other {# private repositories}}, read at runtime from project {project}'s private repositories on {org}"
+      },
+      "codeScanning": {
+        "fleet": "on the fleet ({label})",
+        "githubHosted": "on GitHub-hosted runners",
+        "unknownStatus": "couldn't read — GitHub answered HTTP {status}",
+        "unknownUnreachable": "couldn't read — GitHub could not be reached",
+        "none": "No private repository on {org} has CodeQL default setup configured."
       },
       "monitoringLine": "Motir's machines appear under moooon B.V. in Monitoring › Fleet",
       "onCallout": {
@@ -12707,6 +12715,11 @@
         "githubStatus": "Not turned {direction}: GitHub refused to {operation} {name} on {org} (HTTP {status}).",
         "githubUnreachable": "Not turned {direction}: GitHub could not be reached to {operation} {name} on {org}.",
         "nothingChanged": "Nothing changed: the setting and the GitHub variable are as they were.",
+        "codeScanningWriteStatus": "Not turned {direction}: GitHub refused to move the CodeQL default setup of {repo} to {runner} (HTTP {status}).",
+        "codeScanningWriteUnreachable": "Not turned {direction}: GitHub could not be reached to move the CodeQL default setup of {repo} to {runner}.",
+        "codeScanningReadStatus": "Not turned {direction}: GitHub refused to read the CodeQL default setup of {repo} (HTTP {status}).",
+        "codeScanningReadUnreachable": "Not turned {direction}: GitHub could not be reached to read the CodeQL default setup of {repo}.",
+        "codeScanningNothingChanged": "Nothing changed: the setting, the GitHub variable and every repository's CodeQL default setup are as they were.",
         "notReady": "Not turned on: the fleet stopped being ready after this page loaded.",
         "notReadyList": "Not met now: {conditions}. Nothing changed. The readiness below has been checked again.",
         "notPermitted": "Not changed: only a superadmin can change this setting.",
@@ -12720,6 +12733,10 @@
       "direction": {
         "on": "on",
         "off": "off"
+      },
+      "runner": {
+        "fleet": "the fleet",
+        "githubHosted": "GitHub-hosted runners"
       },
       "operation": {
         "read": "read",

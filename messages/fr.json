@@ -12586,7 +12586,8 @@
         "neverChanged": "Jamais modifié",
         "auditLink": "Journal d’audit",
         "variable": "Variable GitHub",
-        "repositories": "Dépôts"
+        "repositories": "Dépôts",
+        "codeScanning": "Configuration par défaut de CodeQL"
       },
       "variable": {
         "present": "{name} = {value} sur {org} (dépôts privés) : les nouveaux jobs sollicitent la flotte.",
@@ -12606,6 +12607,13 @@
       },
       "repositories": {
         "count": "{count, plural, one {# dépôt privé} other {# dépôts privés}}, lus à l’exécution parmi les dépôts privés du projet {project} sur {org}"
+      },
+      "codeScanning": {
+        "fleet": "sur la flotte ({label})",
+        "githubHosted": "sur des runners hébergés par GitHub",
+        "unknownStatus": "lecture impossible : GitHub a répondu HTTP {status}",
+        "unknownUnreachable": "lecture impossible : GitHub était injoignable",
+        "none": "Aucun dépôt privé sur {org} n’a la configuration par défaut de CodeQL activée."
       },
       "monitoringLine": "Les machines de Motir apparaissent sous moooon B.V. dans Supervision › Flotte",
       "onCallout": {
@@ -12710,6 +12718,11 @@
         "githubStatus": "Non {direction} : GitHub a refusé de {operation} {name} sur {org} (HTTP {status}).",
         "githubUnreachable": "Non {direction} : GitHub était injoignable pour {operation} {name} sur {org}.",
         "nothingChanged": "Rien n’a changé : le paramètre et la variable GitHub sont tels qu’ils étaient.",
+        "codeScanningWriteStatus": "Non {direction} : GitHub a refusé de passer la configuration par défaut de CodeQL de {repo} sur {runner} (HTTP {status}).",
+        "codeScanningWriteUnreachable": "Non {direction} : GitHub était injoignable pour passer la configuration par défaut de CodeQL de {repo} sur {runner}.",
+        "codeScanningReadStatus": "Non {direction} : GitHub a refusé de lire la configuration par défaut de CodeQL de {repo} (HTTP {status}).",
+        "codeScanningReadUnreachable": "Non {direction} : GitHub était injoignable pour lire la configuration par défaut de CodeQL de {repo}.",
+        "codeScanningNothingChanged": "Rien n’a changé : le paramètre, la variable GitHub et la configuration par défaut de CodeQL de chaque dépôt sont tels qu’ils étaient.",
         "notReady": "Non activé : la flotte a cessé d’être prête après le chargement de cette page.",
         "notReadyList": "Non remplies maintenant : {conditions}. Rien n’a changé. La disponibilité ci-dessous a été revérifiée.",
         "notPermitted": "Non modifié : seul un superadmin peut modifier ce paramètre.",
@@ -12723,6 +12736,10 @@
       "direction": {
         "on": "activé",
         "off": "désactivé"
+      },
+      "runner": {
+        "fleet": "la flotte",
+        "githubHosted": "des runners hébergés par GitHub"
       },
       "operation": {
         "read": "lire",

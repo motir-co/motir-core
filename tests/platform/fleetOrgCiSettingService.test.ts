@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import {
+  FleetOrgCiCodeScanningError,
   FleetOrgCiGithubWriteError,
   FleetOrgCiNotReadyError,
   FleetOrgCiTargetUnknownError,
@@ -54,8 +55,9 @@ vi.mock('@/lib/platform/auth', async (importOriginal) => {
   };
 });
 
-const { fleetOrgCiSettingService: service } =
+const { fleetOrgCiSettingService: service, plannedDefaultSetupMoves } =
   await import('@/lib/services/fleetOrgCiSettingService');
+const { codeScanningDefaultSetupClient } = await import('@/lib/github/codeScanningDefaultSetup');
 const { fleetReadinessService } = await import('@/lib/services/fleetReadinessService');
 const { findProvisioningInstallationId, RepoProvisioningApiError } =
   await import('@/lib/github/repoProvisioning');
@@ -69,7 +71,34 @@ interface World {
   failWrite: { method: string; status: number | null } | null;
   failRead: number | null;
   calls: string[];
+  /** Each repository's CodeQL default setup, by name; absent → not configured. */
+  setups: Record<string, GithubDefaultSetup>;
+  /** Fail the next default-setup call of this method on this repository. */
+  failSetup: { repo: string; method: string; status: number | null; message?: string } | null;
+  setupCalls: Array<{ method: string; repo: string; body: Record<string, unknown> | null }>;
 }
+
+interface GithubDefaultSetup {
+  state: 'configured' | 'not-configured';
+  runner_type: 'standard' | 'labeled' | null;
+  runner_label: string | null;
+}
+
+const LABELED: GithubDefaultSetup = {
+  state: 'configured',
+  runner_type: 'labeled',
+  runner_label: MOTIR_RUNNER_LABEL,
+};
+const STANDARD: GithubDefaultSetup = {
+  state: 'configured',
+  runner_type: 'standard',
+  runner_label: '',
+};
+const NOT_CONFIGURED: GithubDefaultSetup = {
+  state: 'not-configured',
+  runner_type: 'standard',
+  runner_label: null,
+};
 
 let world: World;
 let fx: WorkItemFixture;
@@ -94,6 +123,8 @@ function installGitHub(): void {
           expires_at: new Date(Date.now() + 3_600_000).toISOString(),
         });
       }
+      const setup = /^\/repos\/([^/]+)\/([^/]+)\/code-scanning\/default-setup$/.exec(u.pathname);
+      if (setup) return defaultSetupCall(setup[2]!, method, init?.body);
       const repo = /^\/repos\/([^/]+)\/([^/]+)$/.exec(u.pathname);
       if (repo) return json(200, { private: !repo[2]!.startsWith('site') });
       if (u.pathname.startsWith(`/orgs/${ORG}/actions/variables`)) {
@@ -128,6 +159,30 @@ function installGitHub(): void {
       return json(500, { message: `unexpected fetch ${method} ${u.href}` });
     }),
   );
+}
+
+function defaultSetupCall(repo: string, method: string, raw?: string): Response {
+  const body = raw ? (JSON.parse(raw) as Record<string, unknown>) : null;
+  world.setupCalls.push({ method, repo, body });
+  const fail = world.failSetup;
+  if (fail && fail.repo === repo && fail.method === method) {
+    world.failSetup = null;
+    if (fail.status === null) throw new TypeError('fetch failed');
+    return json(fail.status, { message: fail.message ?? 'Resource not accessible by integration' });
+  }
+  const current = world.setups[repo] ?? NOT_CONFIGURED;
+  if (method === 'GET') return json(200, { languages: ['actions'], ...current });
+  if (current.state !== 'configured') return json(422, { message: 'not configured' });
+  world.setups[repo] = {
+    state: 'configured',
+    runner_type: body?.['runner_type'] === 'labeled' ? 'labeled' : 'standard',
+    runner_label: typeof body?.['runner_label'] === 'string' ? body['runner_label'] : '',
+  };
+  return json(202, { run_id: 1, run_url: 'https://api.github.com/x' });
+}
+
+function setupWrites() {
+  return world.setupCalls.filter((c) => c.method !== 'GET');
 }
 
 function readiness(ready: boolean): FleetReadiness {
@@ -253,7 +308,15 @@ beforeEach(async () => {
   vi.stubEnv('GITHUB_STUDIO_APP_ID', '4242');
   vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', privateKey);
   _resetInstallationTokenCache();
-  world = { variable: null, failWrite: null, failRead: null, calls: [] };
+  world = {
+    variable: null,
+    failWrite: null,
+    failRead: null,
+    calls: [],
+    setups: {},
+    failSetup: null,
+    setupCalls: [],
+  };
   installGitHub();
   fx = await makeWorkItemFixture({ name: 'Motir', identifier: 'MOTIR' });
   await adminDb.organization.update({
@@ -698,5 +761,244 @@ describe('the table', () => {
     ).rejects.toThrow();
     await adminDb.project.delete({ where: { id: fx.projectId } });
     expect(await adminDb.platformFleetOrgCi.count()).toBe(0);
+  });
+});
+
+describe('CodeQL default setup travels with the flip (MOTIR-10289)', () => {
+  beforeEach(async () => {
+    // `api` is fixture's own; `site-docs` is PUBLIC (the fake: a `site` prefix).
+    await connectRepo(ORG, 'gateway');
+    await connectRepo(ORG, 'meta');
+    await connectRepo(ORG, 'docs');
+    await connectRepo(ORG, 'custom');
+    await connectRepo(ORG, 'site-docs');
+  });
+
+  it('OFF moves every private repository on the fleet label to standard, and nothing else', async () => {
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: ORG, enabled: true, lastReason: 'seeded' },
+    });
+    world.variable = { value: MOTIR_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+    world.setups = {
+      api: { ...LABELED },
+      meta: { ...LABELED },
+      gateway: { ...STANDARD },
+      docs: { ...NOT_CONFIGURED },
+      custom: { state: 'configured', runner_type: 'labeled', runner_label: 'big-box' },
+      'site-docs': { ...LABELED },
+    };
+
+    const result = await service.setEnabled(superadmin, pair(), false, 'back to hosted');
+
+    expect(result.outcome).toBe('changed');
+    expect(setupWrites()).toEqual([
+      { method: 'PATCH', repo: 'api', body: { runner_type: 'standard' } },
+      { method: 'PATCH', repo: 'meta', body: { runner_type: 'standard' } },
+    ]);
+    // No private repository is left requesting the fleet.
+    for (const name of ['api', 'meta', 'gateway', 'docs', 'custom']) {
+      expect(world.setups[name]).not.toMatchObject({ runner_label: MOTIR_RUNNER_LABEL });
+    }
+    // Already on standard, not configured, another label: exactly as they were.
+    expect(world.setups['gateway']).toEqual(STANDARD);
+    expect(world.setups['docs']).toEqual(NOT_CONFIGURED);
+    expect(world.setups['custom']).toMatchObject({ runner_label: 'big-box' });
+    // The public repository is never read, never written.
+    expect(world.setupCalls.some((c) => c.repo === 'site-docs')).toBe(false);
+    const rows = await auditRows();
+    expect(rows.at(-1)!.metadata).toMatchObject({ codeScanningMoved: ['api', 'meta'] });
+  });
+
+  it('ON moves configured repositories onto the fleet label; one not configured stays not configured', async () => {
+    world.setups = {
+      api: { ...STANDARD },
+      gateway: { ...LABELED },
+      meta: { state: 'configured', runner_type: null, runner_label: null },
+      docs: { ...NOT_CONFIGURED },
+    };
+
+    await service.setEnabled(superadmin, pair(), true, 'onto the fleet');
+
+    const fleet = { runner_type: 'labeled', runner_label: MOTIR_RUNNER_LABEL };
+    expect(setupWrites()).toEqual([
+      { method: 'PATCH', repo: 'api', body: fleet },
+      { method: 'PATCH', repo: 'meta', body: fleet },
+    ]);
+    expect(world.setups['docs']).toEqual(NOT_CONFIGURED);
+    expect(world.setups['custom']).toBeUndefined();
+    const state = await service.getState(superadmin, pair());
+    expect(state.codeScanning).toEqual([
+      { repo: 'api', state: 'fleet' },
+      { repo: 'custom', state: 'not_configured' },
+      { repo: 'docs', state: 'not_configured' },
+      { repo: 'gateway', state: 'fleet' },
+      { repo: 'meta', state: 'fleet' },
+    ]);
+  });
+
+  it.each([
+    ['a 403', 403],
+    ['a transport failure', null],
+  ] as const)(
+    '%s moving one repository refuses the flip naming it, and puts back what had moved',
+    async (_l, status) => {
+      world.setups = { api: { ...STANDARD }, gateway: { ...STANDARD } };
+      world.failSetup = { repo: 'gateway', method: 'PATCH', status };
+      const chainBefore = await adminDb.platformAuditLog.count();
+
+      const err = await service.setEnabled(superadmin, pair(), true, 'x').catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(FleetOrgCiCodeScanningError);
+      expect(err).toMatchObject({
+        org: ORG,
+        repo: 'gateway',
+        status,
+        operation: 'write',
+        to: 'fleet',
+      });
+      expect((err as Error).message).toContain(`${ORG}/gateway`);
+      // The setting's rule for a failed GitHub write: nothing stored, no row,
+      // and GitHub put back — the variable AND the repository already moved.
+      expect(await storedRow()).toBeNull();
+      expect(await adminDb.platformAuditLog.count()).toBe(chainBefore);
+      expect(world.variable).toBeNull();
+      expect(world.setups['api']).toEqual(STANDARD);
+      expect(world.setups['gateway']).toEqual(STANDARD);
+    },
+  );
+
+  it('a failed read of a default setup refuses the flip before any write', async () => {
+    world.setups = { api: { ...STANDARD } };
+    world.failSetup = { repo: 'api', method: 'GET', status: 502 };
+    const err = await service.setEnabled(superadmin, pair(), true, 'x').catch((e: unknown) => e);
+    expect(err).toMatchObject({ repo: 'api', status: 502, operation: 'read', to: 'fleet' });
+    expect(writes()).toEqual([]);
+    expect(setupWrites()).toEqual([]);
+    expect(await auditRows()).toHaveLength(0);
+  });
+
+  it("a missing App permission on the read is an error, never read as 'no default setup'", async () => {
+    world.failSetup = { repo: 'api', method: 'GET', status: 403 };
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toMatchObject({
+      repo: 'api',
+      status: 403,
+      operation: 'read',
+    });
+  });
+
+  it('a repository without code scanning is skipped by the flip and shown as unavailable', async () => {
+    world.setups = { meta: { ...STANDARD } };
+    world.failSetup = {
+      repo: 'api',
+      method: 'GET',
+      status: 403,
+      message: 'Advanced Security must be enabled for this repository to use code scanning.',
+    };
+    await service.setEnabled(superadmin, pair(), true, 'x');
+    expect(setupWrites()).toEqual([
+      {
+        method: 'PATCH',
+        repo: 'meta',
+        body: { runner_type: 'labeled', runner_label: MOTIR_RUNNER_LABEL },
+      },
+    ]);
+    world.failSetup = {
+      repo: 'api',
+      method: 'GET',
+      status: 403,
+      message: 'Code Security is not enabled',
+    };
+    expect((await service.getState(superadmin, pair())).codeScanning[0]).toEqual({
+      repo: 'api',
+      state: 'unavailable',
+    });
+  });
+
+  it('getState shows a default setup it could not read as unknown, with the status', async () => {
+    world.setups = { api: { ...LABELED }, docs: { ...STANDARD } };
+    world.failSetup = { repo: 'custom', method: 'GET', status: null };
+    const { codeScanning } = await service.getState(superadmin, pair());
+    expect(codeScanning).toEqual([
+      { repo: 'api', state: 'fleet' },
+      { repo: 'custom', state: 'unknown', status: null },
+      { repo: 'docs', state: 'github_hosted' },
+      { repo: 'gateway', state: 'not_configured' },
+      { repo: 'meta', state: 'not_configured' },
+    ]);
+  });
+
+  it('getState re-throws a default-setup failure that is not GitHub’s', async () => {
+    const boom = new RangeError('not GitHub');
+    vi.spyOn(codeScanningDefaultSetupClient, 'get').mockRejectedValueOnce(boom);
+    await expect(service.getState(superadmin, pair())).rejects.toBe(boom);
+  });
+
+  it('setEnabled re-throws non-GitHub failures of a default-setup read and write', async () => {
+    world.setups = { api: { ...STANDARD } };
+    const readBoom = new RangeError('read: not GitHub');
+    vi.spyOn(codeScanningDefaultSetupClient, 'get').mockRejectedValueOnce(readBoom);
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toBe(readBoom);
+    const writeBoom = new RangeError('write: not GitHub');
+    vi.spyOn(codeScanningDefaultSetupClient, 'setRunner').mockRejectedValueOnce(writeBoom);
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toBe(writeBoom);
+    expect(await storedRow()).toBeNull();
+    expect(world.variable).toBeNull();
+  });
+
+  it('a default setup that cannot be put back is logged with the pair and the repository', async () => {
+    world.setups = { api: { ...STANDARD } };
+    vi.spyOn(platformFleetOrgCiRepository, 'upsert').mockRejectedValueOnce(
+      new Error('commit failed'),
+    );
+    const real = codeScanningDefaultSetupClient.setRunner.bind(codeScanningDefaultSetupClient);
+    vi.spyOn(codeScanningDefaultSetupClient, 'setRunner')
+      .mockImplementationOnce(real)
+      .mockRejectedValueOnce(new Error('restore failed'));
+    await expect(service.setEnabled(superadmin, pair(), true, 'x')).rejects.toThrow(
+      'commit failed',
+    );
+    expect(vi.mocked(console.error)).toHaveBeenCalledWith(
+      expect.stringContaining('CodeQL default setups could not be put back'),
+      expect.objectContaining({ projectId: fx.projectId, org: ORG, repositories: ['api'] }),
+    );
+  });
+
+  it('a visibility read GitHub refuses while listing the pair’s repositories is a read error', async () => {
+    const spy = vi.spyOn(repoVisibilityClient, 'isPrivate');
+    // listTargets' own read (via resolveTarget) passes; the pair's repository read fails.
+    spy.mockResolvedValueOnce(true).mockRejectedValueOnce(new RepoVisibilityApiError(503, 'x'));
+    await expect(service.getState(superadmin, pair())).rejects.toMatchObject({
+      org: ORG,
+      status: 503,
+      operation: 'read',
+    });
+    spy.mockReset();
+    spy.mockResolvedValueOnce(true).mockRejectedValueOnce(new TypeError('not GitHub'));
+    await expect(service.getState(superadmin, pair())).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+describe('plannedDefaultSetupMoves', () => {
+  it('moves only configured repositories that are not where the flip wants them', () => {
+    const repo = (name: string) => ({ owner: ORG, name });
+    const reads = [
+      {
+        repo: repo('a'),
+        setup: { state: 'configured' as const, runner: { type: 'standard' as const } },
+      },
+      {
+        repo: repo('b'),
+        setup: {
+          state: 'configured' as const,
+          runner: { type: 'labeled' as const, label: MOTIR_RUNNER_LABEL },
+        },
+      },
+      { repo: repo('c'), setup: { state: 'not-configured' as const } },
+      { repo: repo('d'), setup: { state: 'unavailable' as const } },
+    ];
+    expect(plannedDefaultSetupMoves(reads, true).map((m) => m.repo.name)).toEqual(['a']);
+    expect(plannedDefaultSetupMoves(reads, false).map((m) => [m.repo.name, m.to])).toEqual([
+      ['b', { type: 'standard' }],
+    ]);
   });
 });

@@ -88,7 +88,7 @@ done < <(grep -oE '^ARG[[:space:]]+[A-Z0-9_]+=[^[:space:]]+' "${DOCKERFILE}" | s
 
 # The count guard: without it every assertion above passes vacuously the moment
 # the pattern stops matching, which is exactly how the digit bug hid.
-if [ "${pins}" -ge 8 ]; then
+if [ "${pins}" -ge 10 ]; then
   ok "found all ${pins} pinned ARGs"
 else
   fail "only ${pins} pinned ARG(s) parsed — the pin checks above are passing vacuously"
@@ -215,7 +215,7 @@ else
 fi
 
 # The derived toolchain, checked as present rather than assumed.
-for bin in node npm npx corepack git jq curl unzip zip tar docker dockerd containerd runc setpriv sudo gh gcc make python3 pipx; do
+for bin in node npm npx corepack git jq curl unzip zip tar docker dockerd containerd runc setpriv sudo gh gcc make python3 pipx aws; do
   if inspect "command -v ${bin} >/dev/null"; then ok "${bin} on PATH"
   else fail "${bin} is missing from the image"; fi
 done
@@ -223,10 +223,21 @@ done
 # The tools baked for Motir's own private repositories (MOTIR-8710): each must
 # RUN in the built image, not merely sit on PATH — a broken package link or a
 # missing shared library is exactly what `command -v` cannot see.
-for check in 'gh --version' 'gcc --version' 'make --version' 'python3 --version' 'pipx --version'; do
+for check in 'gh --version' 'gcc --version' 'make --version' 'python3 --version' 'pipx --version' 'aws --version'; do
   if inspect "${check} >/dev/null"; then ok "\`${check}\` exits 0"
   else fail "\`${check}\` fails in the built image"; fi
 done
+
+# The AWS deploy jobs (MOTIR-10293) get the CLI the Dockerfile pins, not merely
+# some `aws`: the version is read from the Dockerfile's ARG, never restated.
+awscli_pin=$(grep -E '^ARG AWSCLI_VERSION=' "${DOCKERFILE}" | head -1 | cut -d= -f2-)
+awscli_got=$(inspect 'aws --version' 2>&1 || true)
+if [ -n "${awscli_pin}" ] && grep -qF "aws-cli/${awscli_pin} " <<<"${awscli_got}"; then
+  ok "aws is the pinned AWS CLI ${awscli_pin}"
+else
+  printf '%s\n' "${awscli_got}" | sed 's/^/        | /' >&2
+  fail "aws is not the pinned AWS CLI '${awscli_pin}'"
+fi
 
 # cgo is the reason build-essential is here (motir-gateway's go-sqlite3): a C
 # toolchain that cannot compile and link a trivial program does not serve it.
