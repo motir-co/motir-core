@@ -158,6 +158,9 @@ let groups: Record<string, RunnerGroupFake>;
 let variables: Record<string, ActionsVariableFake>;
 let captured: { events: CapturedJobEvent[]; restore: () => void };
 let mintedRunnerSeq: number;
+/** The connected repository's CodeQL default setup (MOTIR-10289): configured,
+ *  on `standard` until a flip moves it. */
+let defaultSetup: { runner_type: 'standard' | 'labeled'; runner_label: string };
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -244,6 +247,17 @@ function installGitHubAndMotirAi(): void {
         )
       ) {
         return json(200, { total_count: 0, jobs: [] });
+      }
+      // The connected repository's CodeQL default setup — the flip moves it too.
+      if (u.pathname === `/repos/${CONNECTED_ORG}/${CONNECTED_REPO}/code-scanning/default-setup`) {
+        if (method === 'PATCH') {
+          defaultSetup = {
+            runner_type: body?.['runner_type'] === 'labeled' ? 'labeled' : 'standard',
+            runner_label: String(body?.['runner_label'] ?? ''),
+          };
+          return json(200, {});
+        }
+        return json(200, { state: 'configured', ...defaultSetup });
       }
       const repo = /^\/repos\/([^/]+)\/([^/]+)$/.exec(u.pathname);
       if (repo && method === 'GET') return json(200, { name: repo[2], private: true });
@@ -548,6 +562,7 @@ beforeEach(async () => {
   _resetAiPlanCache();
   githubCalls = [];
   mintedRunnerSeq = 0;
+  defaultSetup = { runner_type: 'standard', runner_label: '' };
   currentSession = null;
   groups = {
     [CONNECTED_ORG]: createRunnerGroupFake(CONNECTED_ORG),
@@ -853,6 +868,8 @@ describe('A7 — the switch, the variable and the readiness verdict, assembled',
       expect(write.url).toContain(`/orgs/${CONNECTED_ORG}/actions/variables`);
     }
     expect(JSON.stringify([...variables[MOTIR_ORG]!.variables.entries()])).toBe(motirBefore);
+    // CodeQL default setup travelled with the variable (MOTIR-10289).
+    expect(defaultSetup).toEqual({ runner_type: 'labeled', runner_label: MOTIR_RUNNER_LABEL });
 
     const off = await fleetOrgCiSettingService.setEnabled(
       fx.superadmin,
@@ -866,6 +883,7 @@ describe('A7 — the switch, the variable and the readiness verdict, assembled',
     expect(JSON.stringify([...variables[MOTIR_ORG]!.variables.entries()])).toBe(motirBefore);
     // OFF never waits on readiness.
     expect(readiness).toHaveBeenCalledTimes(1);
+    expect(defaultSetup).toEqual({ runner_type: 'standard', runner_label: '' });
 
     const audit = await adminDb.platformAuditLog.findMany({
       where: { action: { startsWith: 'fleet.org_ci.' } },
