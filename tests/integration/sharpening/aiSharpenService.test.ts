@@ -923,6 +923,35 @@ describe('the shipped-product research rides the session (MOTIR-10284)', () => {
     expect(sharpenOf(2).research).toEqual(RESEARCH);
   });
 
+  it('a turn that failed after the research ran keeps its record, and Try again sends it', async () => {
+    const planId = await plannedPlan();
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    jobs.results.set(opened.jobId!, {
+      status: 'succeeded',
+      result: {
+        sharpenTurn: {
+          kind: 'unavailable',
+          question: null,
+          settled: [],
+          assumptions: [],
+          writeBack: null,
+          unavailableReason: 'turn_failed — gateway down',
+          research: RESEARCH,
+        },
+      },
+    });
+    const r = await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    expect(r.outcome).toBe('failed');
+    const row = await adminDb.sharpenSession.findUniqueOrThrow({
+      where: { id: opened.session.id },
+    });
+    expect(row.research).toEqual(RESEARCH);
+    expect(row.pendingQuestion).toBeNull();
+
+    await aiSharpenService.resubmit(opened.session.id, opened.turnId!, pctx);
+    expect(sharpenOf(1).research).toEqual(RESEARCH);
+  });
+
   it('a conversation session keeps it too, and the newest record replaces the last', async () => {
     const session = await adminDb.planChangeSession.create({
       data: {

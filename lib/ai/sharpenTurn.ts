@@ -80,7 +80,8 @@ export const SHARPEN_CAPS = {
   requirementPart: 64_000,
   /** The ceiling on the research record, serialised (MOTIR-10284). Past it the record
    *  is DROPPED, never cut (a cut record would read as a different one) and never a
-   *  failed turn: the turn lands, and the next one researches again. */
+   *  failed turn: the turn lands and the session keeps the record it already stored,
+   *  which the next turn is sent. */
   research: 256_000,
 } as const;
 

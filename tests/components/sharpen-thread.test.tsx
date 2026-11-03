@@ -249,6 +249,26 @@ describe('the end and the summary', () => {
     expect(assumed.textContent).toContain('Remove everywhere');
   });
 
+  it('a decision settled from research links every source it names (MOTIR-10284)', () => {
+    const recommendation =
+      'Only the filtered view. — as shipped products do: Linear (https://linear.app/docs/exporting-data); Jira (https://support.atlassian.com/jira/docs/export-issues/)';
+    render({
+      session: session({
+        ...ENDED,
+        endReason: 'finished',
+        assumptions: [{ ...ENDED.assumptions![0]!, recommendation }],
+      }),
+    });
+    const assumed = screen.getByTestId('sharpen-summary-assumptions');
+    const links = [...assumed.querySelectorAll('a')];
+    expect(links.map((l) => l.getAttribute('href'))).toEqual([
+      'https://linear.app/docs/exporting-data',
+      'https://support.atlassian.com/jira/docs/export-issues/',
+    ]);
+    expect(links[0]!.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(assumed.textContent).toContain(recommendation);
+  });
+
   it('groups a product_fit answer under Behaviour (MOTIR-10254)', () => {
     render({
       session: session({

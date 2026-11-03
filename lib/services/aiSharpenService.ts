@@ -682,7 +682,7 @@ function plannerBody(result: SharpenTurnResult): string {
 async function land(
   sessionId: string,
   jobId: string,
-  outcome: { result: SharpenTurnResult } | { failure: string },
+  outcome: { result: SharpenTurnResult } | { failure: string; research?: SharpenResearchRecord },
   ctx: ProjectContext,
 ): Promise<'settled' | 'failed'> {
   return withWorkspaceContext(bindCtx(ctx), async (tx) => {
@@ -708,7 +708,18 @@ async function land(
     );
     // A person turn re-bound to a newer job since leaves this result transcript only.
     if (failed || !person || supersededByStop(row, turns, person)) {
-      await sharpenSessionRepository.updateState(row.id, { lastActivityAt: new Date() }, tx);
+      // A failed turn still keeps the research it carries (MOTIR-10284): motir-ai
+      // returns a turn that failed after checking shipped products as unavailable WITH
+      // the record, so Try again holds it and does not search again.
+      const kept =
+        failed && outcome.research && person && !supersededByStop(row, turns, person)
+          ? { research: outcome.research }
+          : {};
+      await sharpenSessionRepository.updateState(
+        row.id,
+        { ...kept, lastActivityAt: new Date() },
+        tx,
+      );
       return failed ? 'failed' : 'settled';
     }
     const r = outcome.result;
@@ -751,7 +762,11 @@ async function land(
 async function readResult(
   jobId: string,
   ctx: ProjectContext,
-): Promise<{ pending: true } | { result: SharpenTurnResult } | { failure: string }> {
+): Promise<
+  | { pending: true }
+  | { result: SharpenTurnResult }
+  | { failure: string; research?: SharpenResearchRecord }
+> {
   const job = await getJob(jobId, ctx.projectId);
   if (job.status === 'queued' || job.status === 'running') return { pending: true };
   if (job.status !== 'succeeded') {
@@ -763,7 +778,12 @@ async function readResult(
   }
   const result = parseSharpenTurn(job.result?.sharpenTurn);
   if (!result) return { failure: 'unreadable result' };
-  if (result.kind === 'unavailable') return { failure: 'planner unavailable' };
+  if (result.kind === 'unavailable') {
+    return {
+      failure: 'planner unavailable',
+      ...(result.research ? { research: result.research } : {}),
+    };
+  }
   return { result };
 }
 
