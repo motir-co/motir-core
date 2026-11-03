@@ -45,6 +45,14 @@ function designCopy(): Map<string, string> {
   const section = notes.slice(start);
   const copy = new Map<string, string>();
   for (const line of section.split('\n')) {
+    // A later amendment retires a key with a `Removed: \`key\`, …` line; the
+    // table rows above it are a record of what shipped then, not copy today.
+    if (/^Removed:/.test(line)) {
+      for (const [, key] of line.matchAll(/`((?:shell|fleetSettings)\.[A-Za-z0-9_.]+)`/g)) {
+        copy.delete(`platformAdmin.${key}`);
+      }
+      continue;
+    }
     const m = /^\|\s*`((?:shell|fleetSettings)\.[A-Za-z0-9_.]+)`\s*\|\s*(.*?)\s*\|\s*$/.exec(line);
     if (!m) continue;
     // Markdown only: the table's code spans and escaped pipes are not copy.
