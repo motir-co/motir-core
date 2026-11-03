@@ -4091,3 +4091,94 @@ Every token is § 26's or the composed asset's. No raw hex and no raw shape util
 | **MOTIR-5238 / MOTIR-5242** (the live Workbench) | Nothing they do not own: the held-row and arrival appliers are theirs and are reused as they ship.                                                                                                                                                                                            | Nothing.                                                                                              |
 
 No card's criteria are contradicted by this section, so no card is amended in this pass.
+
+## 40 · TO FIX · FIXING — a repaired card keeps its row while CI runs on the push, and a card leaves To resume once CI restarts — MOTIR-10306 (Story MOTIR-10305)
+
+**Design system (step 1).** Read `package.json` (`"@motir/design-system": "workspace:*"`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`): both hold, so this project is **on Motir Design**. Axes from `app/layout.tsx`: `warm-editorial` · `motir` · `motir`. The installed package exports `@motir/design-system/mock`, so the mock is rendered with `renderMock` over the REAL shipped parts — `WorkbenchTabStrip`, `WorkbenchList` (its To fix row, its held row, its To resume entry, its In progress row), `WorkbenchFixLine`, `WorkbenchResumeLine`, `ToFixTag`, `ToFixBanner`, `BoardCardView`, `StatusValue`, `CiStateBadge`, `IssueTypeIcon` and `Pill` — with the `en` and `zh` catalogues and the proposed keys below merged in. Only the Fixing state itself is new markup, composed from `Pill` (`severity="info"`) and `lucide-react`'s `Hammer`. No part is missing from the package; the Fixing tag is a **product-local state of the product-local `ToFixTag`**, not a proposed addition to the design system.
+
+**EXTENDS § 30 (the To fix row), § 31 (run died), § 32 (the hosted repair line), § 35 (To resume) and the work-items To fix tag and banner (`design/work-items/design-notes.md` § _The TO FIX tag and banner_), and amends none of them.** It edits no existing mock.
+
+| Surface                      | Asset                                                  | Panels                                                                                                                                                                                                                                  |
+| ---------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **To fix · Fixing**, en + zh | **`workbench--to-fix--fixing.mock.html`** (HTML delta) | 1 failure as shipped · 2 Fixing · 3 Fixing then red · 4 Fixing then green, held · 5 hosted repair and Fixing · 6 not Fixing (died run, stale head) · 7–8 the compact tag, shipped and Fixing · 9–10 the page banner, shipped and Fixing |
+| **To resume exit**, en + zh  | the same asset                                         | 11 To resume before · 12 To resume after a new CI run · 13 the card under In progress                                                                                                                                                   |
+
+Panels 1–13 are drawn in English, then again in Chinese (the board's second half, captions marked _(zh)_). **Access path:** nothing new is reached. The surfaces are the shipped Workbench To fix and To resume tabs (the strip is drawn on every Workbench panel), the `/items` List and Tree row, the board card, the quick view, and the item page.
+
+### 40.1 What Fixing is, as the reader sees it
+
+A card on To fix for a **pull-request reason** (CI failed, failed in the merge queue, conflicted, out of date, changes requested) whose pull requests now have CI **running on a head pushed after the reason arose**, and **nothing red**, is being repaired. Until now that card vanished from To fix the moment CI started and came back if CI failed again. Now:
+
+1. **The card stays on To fix and keeps its place.** The tab count does not move and the row does not jump (Panel 2: 3 before, 3 during).
+2. **The row wears the Fixing tag** in the place where line 2's reason glyph sits, and the reason sentence goes on, **quieted** to `--el-text-secondary` but readable: the reader still sees what was wrong. Line 1 is unchanged; its CI glyph is now the shipped _Checks running_ glyph, because that is what the stored CI state says.
+3. **The command is withdrawn while CI runs.** `motir fix` refuses a card whose CI is running (`ci_running`), so offering the command would hand the reader a refusal. Its slot holds one secondary sentence: _Checks are running on the new push_. Nothing is copied, nothing is pressed.
+4. **Red CI turns the tag off** (Panel 3): the row reads its failure reason again, with the new failing check, its glyph and its command, exactly as shipped.
+5. **Green CI removes the card from To fix** (Panel 4): the count has already dropped (3 → 2), and a row the reader is looking at is **held** as § 26 / § 30 Panel 3 hold it — glyph dropped, reason secondary, the colourless _Cleared_ chip in the command's place — until the next load. The hold rule is unchanged.
+6. **A hosted repair's line wins** (Panel 5): a row whose open repair runs on the hosted agent keeps § 32's _Being fixed on the hosted agent by …_ line and its run link, and the tag is **not drawn** on that row. One line says who is fixing it; a second signal for the same fact would be noise.
+7. **Not Fixing, drawn for contrast** (Panel 6): a **died run** is never Fixing (its run-died line and its continue repair are § 31 unchanged), and **CI running on a head older than the failure** (a re-run of the commit that failed) is not a push, so the row reads its failure as shipped, CI glyph _Checks running_ and all.
+
+Several pull requests: any red, conflicted, out-of-date or queue-held member keeps the failure row; the row is Fixing only when no member is red and at least one runs at a new head. A standing changes-requested refusal is Fixing only after a push moves the head (Panel 2's ACME-418, at In Review). These are the derivation's rules; the drawing is the same row either way.
+
+### 40.2 The Fixing tag — ONE tag, the To fix tag in another state
+
+It is **the To fix tag in its Fixing state**, not a second tag beside it: it takes the To fix tag's slot, size and two forms on every surface, so a card shows one tag at a time.
+
+| Form      | Where                                                                                                            | Markup                                                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **label** | Workbench To fix row line 2 · board card pill row · quick-view header after the status pill · page banner line 1 | `Pill severity="info"` with `Hammer` (12px) + the word _Fixing_ / _修复中_; `shrink-0 whitespace-nowrap`; an `sr-only` tail finishing the accessible name |
+| **glyph** | `/items` List and Tree STATUS cell, beside the status pill                                                       | the 18px disc the To fix glyph uses, `bg-(--el-tint-sky) text-(--el-text-strong)`, `Hammer` 12px, `role="img"` named by the full name                     |
+
+**Why this glyph and this colour.** The To fix tag is the ONE solid danger fill on these surfaces (the work-items notes' rule), and that fill means _stuck until repaired_. A card being repaired is no longer stuck, so the Fixing state drops the danger fill for the **sky tint** (`Pill severity="info"`, the in-progress tone) with `--el-text-strong` ink, which clears AA on the tint in every palette (finding #35's recipe). `Hammer` reads as repair under way, and it is distinct in SHAPE from the To fix tab's `Wrench`, from the reasons' `CircleX` / `Undo2` / `TriangleAlert` and from the CI badge's `CircleEllipsis`. State is never colour alone: the word is drawn on every label form, and the glyph form carries the full name as its accessible name and `title`, the bargain the shipped glyph forms make.
+
+### 40.3 The page banner while Fixing (Panels 9–10)
+
+The banner keeps its slot (`ArchivedBanner` › this › `PendingPlanNotice`) and its shape, and changes three things:
+
+- **Its surface goes calm**: `--el-surface-soft` with `--el-border-soft`, not `--el-danger-surface`. The card is no longer stuck.
+- **Line 1 is the Fixing tag and one sentence**: _A fix was pushed and its checks are running. This clears when they pass._
+- **Line 2 names the reason it was on To fix**, in the row's own reason sentence, secondary: _Before this push: CI failed · Vitest (shard 2/4)_.
+- **No command.** As on the row, `motir fix` would refuse; the banner keeps only its _See its pull requests_ link down to the Development block, where the running checks are.
+
+A hosted repair's _A hosted repair is running_ line (§ 32 Panel 4) and a dead run's banner (§ 31) are unchanged and win, exactly as on the row.
+
+### 40.4 The To resume exit (Panels 11–13)
+
+A card whose latest run stopped at a gate waits on To resume. Once **a new CI run starts on its pull request after the run stopped**, it is no longer waiting: someone is moving it. It **leaves To resume**, the To resume count drops (2 → 1), and the card is **listed under In progress** (1 → 2), because In progress is everything in progress that is neither To fix nor To resume. There is **no new element**: no chip, no notice, no hold. To resume holds only a _Resuming_ entry (§ 35.5), and this exit is not a press the reader made. A plain status move, or a pull request that was already open when the run stopped, does not move the card.
+
+### 40.5 Token map — no new token
+
+| Element                                               | Colour                                                        | Shape                                                     |
+| ----------------------------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------- |
+| Fixing tag, label form                                | `Pill severity="info"`: `--el-tint-sky` · `--el-text-strong`  | `--radius-badge` · `--spacing-chip-x/y`                   |
+| Fixing tag, glyph form                                | `--el-tint-sky` · `--el-text-strong`                          | 18px disc, `rounded-full` (a disc, like the To fix glyph) |
+| the quieted reason (row, banner line 2)               | `--el-text-secondary`                                         | —                                                         |
+| _Checks are running on the new push_                  | `--el-text-secondary`                                         | —                                                         |
+| Fixing banner surface                                 | `--el-surface-soft` · `--el-border-soft` · `--el-text-strong` | `--radius-card` · `--spacing-card-padding-12`             |
+| held row, hosted line, run-died line, To resume entry | as shipped (§ 26, § 32, § 31, § 35)                           | as shipped                                                |
+
+`--el-text-secondary` is the ink for every secondary line here because it clears AA on the page, on `--el-surface` (the row's hover fill) and on `--el-surface-soft` (the banner). No `--el-text-muted`, no `--el-text-faint`, no `--el-danger-text` off a danger fill, no raw hex and no raw shape utility in anything this section adds.
+
+### 40.6 The copy — `en` and `zh`
+
+**Five new keys.** Everything else on these panels ships.
+
+| key                                    | `en`                                                                     | `zh`                                               |
+| -------------------------------------- | ------------------------------------------------------------------------ | -------------------------------------------------- |
+| `toFix.fixing.label`                   | Fixing                                                                   | 修复中                                             |
+| `toFix.fixing.name`                    | Fixing · checks are running on a new push                                | 修复中 · 新推送的检查正在运行                      |
+| `workbench.toFix.fixing.checksRunning` | Checks are running on the new push                                       | 新推送的检查正在运行                               |
+| `toFix.banner.fixing`                  | A fix was pushed and its checks are running. This clears when they pass. | 修复已推送，检查正在运行。检查通过后此提示将消失。 |
+| `toFix.banner.fixingWas`               | Before this push: `<reason></reason>`                                    | 此次推送前：`<reason></reason>`                    |
+
+`toFix.fixing.name` is the tag's accessible name and `title`; the label form's `sr-only` tail is its words after _Fixing_. The nine other locales take the same keys through the i18n loop when the tag is built. _修复中_ is three characters and fits every slot the English word fits, at the label and glyph sizes, with no truncation (the zh half of the board).
+
+### 40.7 GIVES / TAKES
+
+| card                                   | GIVES                                                                                                                                                                                                                                               | TAKES   |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| the code card that draws the tag       | **ELEMENT:** the Fixing state of `ToFixTag` (both forms), of `WorkbenchFixLine` (tag, quieted reason, the running sentence in the command's slot) and of `ToFixBanner` (§ 40.3); the five keys; the precedence of the hosted line and the dead run. | Nothing |
+| the card that stores the Fixing signal | **PREMISE:** the surfaces read one stored fact beside the stored reason, and the card stays on To fix while it holds.                                                                                                                               | Nothing |
+| the card that adds the To resume exit  | **PREMISE:** clearing the stored resume answer is the whole of the exit; no tab, chip or string changes (Panels 11–13).                                                                                                                             | Nothing |
+| the story E2E                          | **ELEMENT:** what to assert: the tag's words in en and zh, the unchanged count, the tag gone on red, the held row on green, the To resume count and the In progress listing.                                                                        | Nothing |
+
+No tab and no workflow status is added, and no shipped card's criteria are contradicted.
