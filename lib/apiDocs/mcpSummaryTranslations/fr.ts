@@ -386,6 +386,42 @@ export const fr: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'Le journal des commits ou le blame d’un fichier dans un dépôt de l’ensemble du projet, à une ref — métadonnées de commit uniquement, borné, chaque absence un résultat nommé.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
+  list_dependency_versions: {
+    summary:
+      "Les versions publiées et les dist-tags d'un paquet depuis le registre npm public — chaque absence est un état nommé, données tierces présentées comme des données.",
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      "Un fichier ou un dossier du code publié d'un paquet à une version — taille limitée, présenté comme données tierces, chaque absence est un état nommé.",
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
+  search_past_plans: {
+    summary:
+      "Les plans d'un projet dans tous les statuts, les refusés avec la raison de leur fin — les plus récents d'abord, par mots ou par statut ; aucun résultat est un état nommé.",
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
+  search_run_records: {
+    summary:
+      'Les exécutions d’un projet, la plus récente d’abord – filtrées par carte, périmètre ou statut, étapes en décomptes, aucune correspondance un résultat nommé.',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      'Une exécution d’un projet – comment elle s’est terminée et, par étape, ce qu’elle a consigné comme différent, mot pour mot ; une exécution inconnue un résultat nommé.',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       'Enregistrer POURQUOI un Plan non approuvé a dû changer — quatre branches, dont deux déposent un bug de planification ; cela ne change rien au Plan.',

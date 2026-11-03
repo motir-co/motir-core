@@ -642,6 +642,48 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Pinned from the LIVE handshake, never hand-computed.
     descriptionFingerprint: 'd2536eb87f90',
   },
+  get_code_history: {
+    // MOTIR-10237 — who changed a file, when and why, on the MCP.
+    summary:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '40804f6edca5',
+  },
+  search_run_records: {
+    // MOTIR-10240 — the project's runs, on the MCP.
+    summary:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '56b94b327a59',
+  },
+  get_run_record: {
+    // MOTIR-10240 — one run's record, on the MCP.
+    summary:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '95889dcd4e65',
+  },
+  list_dependency_versions: {
+    // MOTIR-10242 — a package's versions, on the MCP.
+    summary:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '2eebcd1acd1f',
+  },
+  read_dependency_source: {
+    // MOTIR-10242 — a package's published source, on the MCP.
+    summary:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '830c8ee73c32',
+  },
+  search_past_plans: {
+    // MOTIR-10241 — the project's plans, searched, on the MCP.
+    summary:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '8908258fbd2f',
+  },
   code_explore: {
     summary:
       "The hosted code graph around a query — the hosted planner's own answer, paged, every absence a named state.",

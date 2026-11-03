@@ -118,6 +118,21 @@ import {
 } from './tools/updateCodingConvention';
 import { READ_FILE_TOOL_NAME, registerReadFile } from './tools/readFile';
 import { LIST_CHANGED_FILES_TOOL_NAME, registerListChangedFiles } from './tools/listChangedFiles';
+import { GET_CODE_HISTORY_TOOL_NAME, registerGetCodeHistory } from './tools/getCodeHistory';
+import {
+  GET_RUN_RECORD_TOOL_NAME,
+  SEARCH_RUN_RECORDS_TOOL_NAME,
+  registerRunRecords,
+} from './tools/runRecords';
+import { SEARCH_PAST_PLANS_TOOL_NAME, registerSearchPastPlans } from './tools/searchPastPlans';
+import {
+  LIST_DEPENDENCY_VERSIONS_TOOL_NAME,
+  registerListDependencyVersions,
+} from './tools/listDependencyVersions';
+import {
+  READ_DEPENDENCY_SOURCE_TOOL_NAME,
+  registerReadDependencySource,
+} from './tools/readDependencySource';
 import {
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
@@ -279,6 +294,12 @@ export const MCP_TOOL_NAMES = [
   UPDATE_CODING_CONVENTION_TOOL_NAME,
   READ_FILE_TOOL_NAME,
   LIST_CHANGED_FILES_TOOL_NAME,
+  GET_CODE_HISTORY_TOOL_NAME,
+  SEARCH_RUN_RECORDS_TOOL_NAME,
+  GET_RUN_RECORD_TOOL_NAME,
+  SEARCH_PAST_PLANS_TOOL_NAME,
+  LIST_DEPENDENCY_VERSIONS_TOOL_NAME,
+  READ_DEPENDENCY_SOURCE_TOOL_NAME,
   CODE_EXPLORE_TOOL_NAME,
   CODE_SEARCH_TOOL_NAME,
   CODE_GREP_TOOL_NAME,
@@ -548,6 +569,21 @@ export function registerMcpTools(
   // read off `get_work_item`'s `inFlightCode`. Gated on `ai:plan`; the repo
   // resolves against the PROJECT's set.
   registerListChangedFiles(target, resolveContext);
+  // MOTIR-10237 — the LOG or BLAME of a path in one of the project's repositories:
+  // who changed it, when and why. Gated on `ai:plan`; the repo resolves against the
+  // PROJECT's set.
+  registerGetCodeHistory(target, resolveContext);
+  // MOTIR-10240 — a run of the project: which runs match, and how one ended and
+  // what it recorded as different. `project:browse`; a run of another project is
+  // `not_found`.
+  registerRunRecords(target, resolveContext);
+  // MOTIR-10241 — a project's plans in every status, declined ones with their
+  // `decisionReason`. `project:browse`, the Plans list page's floor.
+  registerSearchPastPlans(target, resolveContext);
+  // MOTIR-10242 — a package's published versions and source, read by core from the
+  // public npm registry. `ai:plan`, as `read_file`; the text is framed as data.
+  registerListDependencyVersions(target, resolveContext);
+  registerReadDependencySource(target, resolveContext);
   // MOTIR-7862 — the hosted code graph, through motir-ai's graph-read route: the
   // planner executor's own text for `code_explore` / `code_search`, and (MOTIR-10066)
   // `code_grep` over the indexed file contents. `ai:plan`.

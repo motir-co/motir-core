@@ -80,6 +80,44 @@ export interface RepoChangesContext {
 }
 
 /**
+ * Resolve `repoRef` to the CONNECTED repository row that realizes it in the
+ * job's PROJECT SET, or throw {@link RepoNotInProjectError} — the rule every
+ * project-scoped host read shares (`list_changed_files`, and the code history
+ * read of MOTIR-10237): no host is asked about a repository the job's project
+ * does not use, and a connected repository of another project of the
+ * organisation and a name nobody has are the same miss.
+ */
+export async function resolveConnectedRepoInProject(ctx: RepoChangesContext, repoRef: string) {
+  const coords = splitRepoRef(repoRef);
+  if (!coords) throw new RepoNotInProjectError(repoRef);
+
+  const connected = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (tx) => {
+      const repo = await githubRepoRepository.findConnectedByOrganizationAndName(
+        await resolveOrganizationId(ctx.workspaceId, tx),
+        coords.owner,
+        coords.name,
+        tx,
+      );
+      if (!repo) return null;
+      // The job's project set. The project is the token's own, in the token's
+      // own workspace, so its `ProjectRepo` rows are admitted by the
+      // active-workspace arm — the org-read subtlety `listByGithubRepoId`
+      // warns about does not arise for a single project's own rows.
+      const inSet = await projectRepoRepository.findByProjectAndGithubRepoId(
+        ctx.projectId,
+        repo.id,
+        tx,
+      );
+      return inSet ? repo : null;
+    },
+  );
+  if (!connected) throw new RepoNotInProjectError(repoRef);
+  return connected;
+}
+
+/**
  * The PROJECT-KEYED answer the MCP `list_changed_files` tool renders
  * (MOTIR-10069): every {@link ChangedFilesResult} with the resolved `repoRef`,
  * plus the two misses `read_file`'s project-keyed read names the same way — a
@@ -106,32 +144,7 @@ export const repoChangesService = {
     head: string,
     base?: string,
   ): Promise<ChangedFilesResult> {
-    const coords = splitRepoRef(repoRef);
-    if (!coords) throw new RepoNotInProjectError(repoRef);
-
-    const connected = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        const repo = await githubRepoRepository.findConnectedByOrganizationAndName(
-          await resolveOrganizationId(ctx.workspaceId, tx),
-          coords.owner,
-          coords.name,
-          tx,
-        );
-        if (!repo) return null;
-        // The job's project set. The project is the token's own, in the token's
-        // own workspace, so its `ProjectRepo` rows are admitted by the
-        // active-workspace arm — the org-read subtlety `listByGithubRepoId`
-        // warns about does not arise for a single project's own rows.
-        const inSet = await projectRepoRepository.findByProjectAndGithubRepoId(
-          ctx.projectId,
-          repo.id,
-          tx,
-        );
-        return inSet ? repo : null;
-      },
-    );
-    if (!connected) throw new RepoNotInProjectError(repoRef);
+    const connected = await resolveConnectedRepoInProject(ctx, repoRef);
 
     const resolvedBase = base?.trim() || connected.defaultBranch;
     const resolvedHead = head.trim();

@@ -352,6 +352,41 @@ export const zh: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      '项目仓库集合中某个仓库里一个文件在某个 ref 处的提交日志或 blame——仅提交元数据，有上限，每种缺失都是一个具名结果。',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
+  list_dependency_versions: {
+    summary:
+      '来自公共 npm 注册表的软件包已发布版本和 dist-tag——每种缺失都是具名结果，第三方数据标记为数据。',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      '某个版本的软件包已发布源码中的一个文件或目录——有大小限制，标记为第三方数据，每种缺失都是具名结果。',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
+  search_past_plans: {
+    summary:
+      '项目中所有状态的计划，被拒绝的计划附带其结束原因——最新的在前，可按词语或状态筛选；无匹配是一个具名结果。',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
+  search_run_records: {
+    summary:
+      '项目的运行记录，最新优先——可按卡片、范围或状态筛选，各环节以计数呈现，无匹配为具名结果。',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary: '项目的一次运行——如何结束，以及每个环节原样记录的差异；未知运行为具名结果。',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       '记录未批准的计划为何（WHY）必须修改：共四个分支，其中两个会提交规划缺陷；它不会对计划做任何改动。',

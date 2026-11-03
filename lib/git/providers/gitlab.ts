@@ -24,6 +24,7 @@ import {
   GitlabOAuthNotConfiguredError,
   GitlabTokenRefreshError,
 } from '@/lib/gitlab/errors';
+import { gitlabReadCodeBlame, gitlabReadCodeLog } from './gitlabCodeHistory';
 import type {
   ChangeRequestLifecycle,
   CiConclusion,
@@ -39,6 +40,8 @@ import type {
   CommitComparison,
   ChangedFile,
   ChangedFilesResult,
+  CodeHistoryKind,
+  CodeHistoryResult,
   DeploymentState,
   NormalizedDeploymentStatus,
 } from '../types';
@@ -185,16 +188,25 @@ function gitlabTokenFailure(
   err: unknown,
   refs: { base: string; head: string },
 ): ChangedFilesResult {
+  const outcome = gitlabTokenOutcome(err);
+  return outcome.outcome === 'host_error'
+    ? { outcome: 'host_error', ...refs, detail: outcome.detail }
+    : { outcome: outcome.outcome, ...refs };
+}
+
+/** The named absence a failed token read is, shared by every read that needs one (MOTIR-10237). */
+function gitlabTokenOutcome(
+  err: unknown,
+): { outcome: 'not_connected' | 'revoked' } | { outcome: 'host_error'; detail: string } {
   if (
     err instanceof GitlabOAuthNotConfiguredError ||
     err instanceof GitlabConnectionNotFoundError
   ) {
-    return { outcome: 'not_connected', ...refs };
+    return { outcome: 'not_connected' };
   }
-  if (err instanceof GitlabTokenRefreshError) return { outcome: 'revoked', ...refs };
+  if (err instanceof GitlabTokenRefreshError) return { outcome: 'revoked' };
   return {
     outcome: 'host_error',
-    ...refs,
     detail: err instanceof Error ? err.message : 'the connection token could not be read',
   };
 }
@@ -433,6 +445,31 @@ export const gitlabProvider: GitProvider = {
           ? headCommit
           : null),
     };
+  },
+
+  /**
+   * The LOG or BLAME of a path at a ref (MOTIR-10237) — the token read here, the
+   * two REST reads in `gitlabCodeHistory.ts`. A failed token read is the same
+   * named absence `listChangedFiles` gives it.
+   */
+  async readCodeHistory(
+    installationId: string,
+    owner: string,
+    name: string,
+    kind: CodeHistoryKind,
+    path: string,
+    ref: string,
+  ): Promise<CodeHistoryResult> {
+    const asked = { kind, path, ref };
+    let token: string;
+    try {
+      ({ token } = await gitlabConnectionService.getAccessToken(installationId));
+    } catch (err) {
+      return { ...gitlabTokenOutcome(err), ...asked };
+    }
+    return kind === 'blame'
+      ? gitlabReadCodeBlame(gitlabBaseUrl(), token, owner, name, asked)
+      : gitlabReadCodeLog(gitlabBaseUrl(), token, owner, name, asked);
   },
 
   async resolveRef(

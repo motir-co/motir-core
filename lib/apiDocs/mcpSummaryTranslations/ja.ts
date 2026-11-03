@@ -382,6 +382,42 @@ export const ja: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'プロジェクトのリポジトリセット内のリポジトリにあるファイルの、ref 時点のコミットログまたは blame — コミットのメタデータのみ、上限付き、すべての不在は名前付きの結果。',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
+  list_dependency_versions: {
+    summary:
+      '公開 npm レジストリから取得したパッケージの公開バージョンと dist-tag。欠落はすべて名前付きの結果で、第三者データはデータとして扱われます。',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      'あるバージョンのパッケージ公開ソースのファイルまたはディレクトリ 1 つ。サイズ制限付きで第三者データとして扱われ、欠落はすべて名前付きの結果です。',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
+  search_past_plans: {
+    summary:
+      'プロジェクトのあらゆるステータスのプラン。却下されたものは終了理由付き。新しい順に、語句またはステータスで絞り込み。一致なしは名前付きの結果。',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
+  search_run_records: {
+    summary:
+      'プロジェクトの実行一覧（新しい順）— カード・スコープ・ステータスで絞り込み、レッグは件数、該当なしは名前付きの結果。',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      'プロジェクトの 1 つの実行 — どう終わったか、レッグごとに相違として記録した内容をそのまま。不明な実行は名前付きの結果。',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       '未承認の計画をなぜ変更しなければならなかったかを記録します。4つの分岐があり、うち2つは計画バグを起票します。計画自体には何も変更を加えません。',

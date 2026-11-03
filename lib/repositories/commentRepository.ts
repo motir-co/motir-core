@@ -98,6 +98,16 @@ export const commentRepository = {
   },
 
   /**
+   * Comments by id, in one read (MOTIR-10240) — the run-record read resolves a
+   * run's discrepancy pointers to their bodies with it. An id with no row is
+   * simply absent from the answer.
+   */
+  async findManyByIds(ids: string[], tx: Prisma.TransactionClient): Promise<Comment[]> {
+    if (ids.length === 0) return [];
+    return tx.comment.findMany({ where: { id: { in: ids } } });
+  },
+
+  /**
    * One PAGE of a work item's comment THREADS (Subtask 5.1.1, the read 5.1.2's
    * cursor-paged `listComments` composes): ROOT comments only
    * (`parentCommentId IS NULL`), each carrying its full single-level `replies`

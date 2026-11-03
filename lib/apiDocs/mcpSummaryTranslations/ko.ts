@@ -379,6 +379,42 @@ export const ko: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      '프로젝트 리포지토리 집합에 있는 리포지토리 파일의 특정 ref 시점 커밋 로그 또는 blame — 커밋 메타데이터만, 상한 있음, 모든 부재는 이름이 있는 결과.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
+  list_dependency_versions: {
+    summary:
+      '공개 npm 레지스트리에서 가져온 패키지의 게시된 버전과 dist-tag — 모든 부재는 이름 있는 결과이며, 제3자 데이터는 데이터로 표시됩니다.',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      '특정 버전에서 패키지의 게시된 소스 중 파일 또는 디렉터리 하나 — 크기 제한, 제3자 데이터로 표시, 모든 부재는 이름 있는 결과입니다.',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
+  search_past_plans: {
+    summary:
+      '프로젝트의 모든 상태의 계획, 거절된 계획은 종료 이유와 함께 — 최신순, 단어나 상태로 검색하며 일치 없음은 이름 있는 결과입니다.',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
+  search_run_records: {
+    summary:
+      '프로젝트의 실행 목록(최신순) — 카드, 범위 또는 상태로 좁히고 레그는 개수로, 일치 없음은 이름 있는 결과.',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      '프로젝트의 실행 하나 — 어떻게 끝났는지와 레그별로 차이로 기록한 내용을 그대로. 알 수 없는 실행은 이름 있는 결과.',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       '승인되지 않은 계획을 왜 바꿔야 했는지 기록합니다 — 네 가지 분기 중 두 가지는 계획 버그를 등록하며, 계획 자체는 전혀 바꾸지 않습니다.',

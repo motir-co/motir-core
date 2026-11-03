@@ -389,6 +389,42 @@ export const de: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'Das Commit-Log oder der Blame einer Datei in einem Repository der Repository-Menge des Projekts bei einem ref – nur Commit-Metadaten, begrenzt, jede Abwesenheit ein benanntes Ergebnis.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
+  list_dependency_versions: {
+    summary:
+      'Die veröffentlichten Versionen und Dist-Tags eines Pakets aus der öffentlichen npm-Registry – jedes Fehlen ein benanntes Ergebnis, Daten Dritter als Daten gekennzeichnet.',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      'Eine Datei oder ein Verzeichnis des veröffentlichten Quellcodes eines Pakets in einer Version – größenbegrenzt, als Daten Dritter gekennzeichnet, jedes Fehlen ein benanntes Ergebnis.',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
+  search_past_plans: {
+    summary:
+      'Die Pläne eines Projekts in jedem Status, abgelehnte mit dem Grund ihres Endes – neueste zuerst, nach Wörtern oder Status, kein Treffer ein benanntes Ergebnis.',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
+  search_run_records: {
+    summary:
+      'Die Runs eines Projekts, neueste zuerst – eingegrenzt nach Karte, Scope oder Status, Legs als Anzahlen, kein Treffer ein benanntes Ergebnis.',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      'Ein Run eines Projekts – wie er endete und je Leg, was er als abweichend festhielt, wörtlich; ein unbekannter Run ein benanntes Ergebnis.',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       'Festhalten, WARUM ein nicht genehmigter Plan geändert werden musste – vier Zweige, von denen zwei einen Planungs-Bug anlegen; am Plan selbst ändert es nichts.',

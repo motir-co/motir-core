@@ -1616,6 +1616,43 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  get_code_history: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      repo: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The repository — one in this project’s set, by its bare name ("motir-core") or as `owner/name`, case-insensitively.',
+      },
+      path: {
+        type: 'string',
+        minLength: 1,
+        description: 'The repository-relative path of the file, e.g. "lib/foo.ts".',
+      },
+      kind: {
+        type: 'string',
+        enum: ['log', 'blame'],
+        description:
+          '`log` — the commits that changed the path, newest first (sha, author, date, subject). `blame` — per line range, the commit that last changed those lines.',
+      },
+      ref: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The branch, tag or commit to read at. Omit for the repository’s default branch.',
+      },
+    },
+    required: ['projectKey', 'repo', 'path', 'kind'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_coding_convention: {
     type: 'object',
     properties: {
@@ -1801,6 +1838,25 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  get_run_record: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      runId: {
+        type: 'string',
+        minLength: 1,
+        description: 'The run id — a `search_run_records` row’s `id`.',
+      },
+    },
+    required: ['projectKey', 'runId'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2043,6 +2099,31 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'repo', 'head'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  list_dependency_versions: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      ecosystem: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The package ecosystem; default "npm". Read: npm — any other is answered `ecosystem_unsupported`.',
+      },
+      package: {
+        type: 'string',
+        minLength: 1,
+        description: 'The package name as published, e.g. "zod" or "@prisma/client". Never a URL.',
+      },
+    },
+    required: ['projectKey', 'package'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -2608,6 +2689,52 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['key', 'bodyMd'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  read_dependency_source: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      ecosystem: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The package ecosystem; default "npm". Read: npm — any other is answered `ecosystem_unsupported`.',
+      },
+      package: {
+        type: 'string',
+        minLength: 1,
+        description: 'The package name as published, e.g. "zod" or "@prisma/client". Never a URL.',
+      },
+      version: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'An exact published version ("4.2.1"), or a dist-tag the registry resolves ("latest"). A range ("^4") is not resolved — list the versions first with `list_dependency_versions`.',
+      },
+      path: {
+        type: 'string',
+        description:
+          'OPTIONAL. A path RELATIVE TO THE PACKAGE ROOT, e.g. "package.json" or "lib/index.d.ts", or a directory to list it. Omit to list the package root. Never absolute, never "..".',
+      },
+      startLine: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL, 1-based and inclusive. Read from this line.',
+      },
+      endLine: {
+        type: 'integer',
+        minimum: 1,
+        description: 'OPTIONAL, 1-based and inclusive. Read up to this line.',
+      },
+    },
+    required: ['projectKey', 'package', 'version'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -3198,6 +3325,81 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
     },
     required: ['projectKey', 'q'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  search_past_plans: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      q: {
+        type: 'string',
+        description:
+          "OPTIONAL. Words to find in a plan's title or summary (case-insensitive substring, at most 200 characters). Omit to list every plan.",
+      },
+      status: {
+        type: 'array',
+        items: { type: 'string', enum: ['generating', 'planned', 'stale', 'approved', 'declined'] },
+        description:
+          'OPTIONAL. Only plans in these statuses. A declined plan carries its `decisionReason` (`reviewed`, `discarded` or `abandoned`).',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The `nextCursor` a previous `search_past_plans` call returned, to read the next page.',
+      },
+    },
+    required: ['projectKey'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
+  search_run_records: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      workItemKey: {
+        type: 'string',
+        minLength: 1,
+        description: 'OPTIONAL. Runs that carried a LEG for this card (e.g. "ACME-7").',
+      },
+      scopeWorkItemKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. Runs whose SCOPE is this container (a parent or story run). Give this or `workItemKey`, not both.',
+      },
+      statuses: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['running', 'succeeded', 'failed', 'cancelled', 'timed_out'],
+        },
+        description: 'OPTIONAL. Only runs in these statuses.',
+      },
+      cursor: {
+        type: 'string',
+        minLength: 1,
+        description: 'The `nextCursor` a previous call returned, to read the next page.',
+      },
+      limit: {
+        type: 'integer',
+        minimum: 1,
+        maximum: 100,
+        description: 'OPTIONAL. Runs per page, 1 to 100; default 25.',
+      },
+    },
+    required: ['projectKey'],
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
@@ -4701,6 +4903,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_code_health: 'Get code health',
+  get_code_history: 'Get code history',
   get_coding_convention: 'Get coding convention',
   get_design: 'Get design',
   get_page: 'Get page',
@@ -4710,6 +4913,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   get_plan_lesson_log: 'Read which lessons each planning session saw',
   get_plan_status: 'Plan status',
   get_project_state: 'Get project state',
+  get_run_record: 'Get run record',
   get_section_sets: 'Get section sets',
   get_work_item: 'Get work item',
   get_work_item_activity: 'Get work item activity',
@@ -4718,6 +4922,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   link_pull_request: 'Link pull request',
   link_work_items: 'Link work items',
   list_changed_files: 'List changed files',
+  list_dependency_versions: 'List dependency versions',
   list_designs: 'List designs',
   list_folders: 'List folders',
   list_projects: 'List projects',
@@ -4736,6 +4941,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   publish_decision_page: 'Publish decision page',
   publish_design_result: 'Publish design result',
   publish_test_instructions: 'Publish How to test',
+  read_dependency_source: 'Read dependency source',
   read_file: 'Read a file',
   record_plan_revision_reason: 'Record WHY a plan had to change',
   record_run_discrepancy: 'Record what you built differently from the plan',
@@ -4746,6 +4952,8 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   report_unbuildable_target: 'Report a card you cannot build',
   search_lessons: 'Search lessons by meaning',
   search_pages: 'Search pages',
+  search_past_plans: 'Search past plans',
+  search_run_records: 'Search run records',
   search_work_items: 'Search work items',
   search_work_items_semantic: 'Search work items by meaning',
   set_work_item_todo_done: 'Tick or untick a to-do step',
@@ -5004,6 +5212,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   get_code_health: { title: 'Get code health', readOnlyHint: true, openWorldHint: false },
+  get_code_history: { title: 'Get code history', readOnlyHint: true, openWorldHint: true },
   get_coding_convention: {
     title: 'Get coding convention',
     readOnlyHint: true,
@@ -5029,6 +5238,7 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   get_plan_status: { title: 'Plan status', readOnlyHint: true, openWorldHint: false },
   get_project_state: { title: 'Get project state', readOnlyHint: true, openWorldHint: false },
+  get_run_record: { title: 'Get run record', readOnlyHint: true, openWorldHint: false },
   get_section_sets: { title: 'Get section sets', readOnlyHint: true, openWorldHint: false },
   get_work_item: { title: 'Get work item', readOnlyHint: true, openWorldHint: false },
   get_work_item_activity: {
@@ -5065,6 +5275,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   list_changed_files: { title: 'List changed files', readOnlyHint: true, openWorldHint: true },
+  list_dependency_versions: {
+    title: 'List dependency versions',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   list_designs: { title: 'List designs', readOnlyHint: true, openWorldHint: false },
   list_folders: { title: 'List folders', readOnlyHint: true, openWorldHint: false },
   list_projects: { title: 'List projects', readOnlyHint: true, openWorldHint: false },
@@ -5153,6 +5368,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     idempotentHint: true,
     openWorldHint: false,
   },
+  read_dependency_source: {
+    title: 'Read dependency source',
+    readOnlyHint: true,
+    openWorldHint: true,
+  },
   read_file: { title: 'Read a file', readOnlyHint: true, openWorldHint: true },
   record_plan_revision_reason: {
     title: 'Record WHY a plan had to change',
@@ -5211,6 +5431,8 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     openWorldHint: false,
   },
   search_pages: { title: 'Search pages', readOnlyHint: true, openWorldHint: false },
+  search_past_plans: { title: 'Search past plans', readOnlyHint: true, openWorldHint: false },
+  search_run_records: { title: 'Search run records', readOnlyHint: true, openWorldHint: false },
   search_work_items: { title: 'Search work items', readOnlyHint: true, openWorldHint: false },
   search_work_items_semantic: {
     title: 'Search work items by meaning',

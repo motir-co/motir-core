@@ -671,6 +671,82 @@ export type ChangedFilesResult =
   /** The host did not answer, or answered a status no arm above names. */
   | { outcome: 'host_error'; base: string; head: string; detail: string };
 
+/** Which history of a path {@link GitProvider.readCodeHistory} reads (MOTIR-10237). */
+export type CodeHistoryKind = 'log' | 'blame';
+
+/**
+ * One commit of a path's LOG — commit METADATA only, never a diff or content.
+ * `author` and `date` are `null` when the host's answer did not carry them.
+ */
+export interface CodeHistoryCommit {
+  sha: string;
+  author: string | null;
+  /** ISO-8601, the host's authored date (the committed date when no authored one). */
+  date: string | null;
+  /** The commit message's first line. */
+  subject: string;
+}
+
+/**
+ * One BLAME range: lines `startLine`..`endLine` (1-based, inclusive) were last
+ * changed by commit `sha`. No line content — the file's text is `readFileAtRef`'s.
+ */
+export interface CodeBlameRange {
+  startLine: number;
+  endLine: number;
+  sha: string;
+  author: string | null;
+  date: string | null;
+  /** The blamed commit's subject line, when the host's answer carried it. */
+  subject: string | null;
+}
+
+/** The fields every {@link CodeHistoryResult} member carries: what was asked. */
+interface CodeHistoryAsked {
+  kind: CodeHistoryKind;
+  path: string;
+  ref: string;
+}
+
+/**
+ * The result of {@link GitProvider.readCodeHistory} (MOTIR-10237) — who changed a
+ * path, when and why, at a ref.
+ *
+ * ⚠️ A RESULT UNION, for {@link ChangedFilesResult}'s reason: the consumer is a
+ * model, and "no such ref", "no such path", "the connection is gone", "the host
+ * would not compute it" and "the host did not answer" are different facts it must
+ * not collapse into "nobody ever changed this file".
+ *
+ * `truncated: true` means the list stopped at the cap (`CODE_HISTORY_MAX_COMMITS`
+ * or `CODE_HISTORY_MAX_RANGES`, `lib/git/provider.ts`) — the path has AT LEAST
+ * those commits / ranges.
+ */
+export type CodeHistoryResult =
+  | (CodeHistoryAsked & {
+      outcome: 'ok';
+      kind: 'log';
+      commits: CodeHistoryCommit[];
+      truncated: boolean;
+    })
+  | (CodeHistoryAsked & {
+      outcome: 'ok';
+      kind: 'blame';
+      blame: CodeBlameRange[];
+      truncated: boolean;
+    })
+  /** `ref` names nothing the host can resolve. */
+  | (CodeHistoryAsked & { outcome: 'no_such_ref' })
+  /** `ref` resolves, and `path` is not a file the host has history for at it. */
+  | (CodeHistoryAsked & { outcome: 'path_not_found' })
+  /** No usable connection on this deployment. */
+  | (CodeHistoryAsked & { outcome: 'not_connected' })
+  /** The host refused the credential. */
+  | (CodeHistoryAsked & { outcome: 'revoked' })
+  /** The host declined to compute the history at all because it is too big. */
+  | (CodeHistoryAsked & { outcome: 'too_large' })
+  /** The host did not answer, or answered a status no arm above names. */
+  | (CodeHistoryAsked & { outcome: 'host_error'; detail: string });
+
 /**
  * MERGING one change request through its host (Story MOTIR-4882 · MOTIR-5514;
  * `approval-gates.md` §4 and its second amendment, decisions 5, 7 and 8).

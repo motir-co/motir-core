@@ -424,6 +424,23 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // planner's `list_changed_files` already shows exactly this to every `ai:plan`
   // holder — the same AMENDMENT 3 to §4 as `read_file`.
   list_changed_files: 'ai:plan',
+  // MOTIR-10237 — the log or blame of a path in a project repository: commit
+  // metadata off the same git host `read_file` and `list_changed_files` read, on
+  // the same argument (AMENDMENT 3 to §4).
+  get_code_history: 'ai:plan',
+  // MOTIR-10242 — a package's published versions and source: what the hosted
+  // planner's dependency tools read through `app/api/internal/ai/dependency-*`,
+  // so the same `ai:plan` argument as `read_file` (AMENDMENT 3 to §4).
+  list_dependency_versions: 'ai:plan',
+  read_dependency_source: 'ai:plan',
+  // MOTIR-10240 — a run of the project, read: the same `project:browse` the Runs
+  // room and the card's run section are read on.
+  search_run_records: 'project:browse',
+  get_run_record: 'project:browse',
+  // MOTIR-10241 — a project's plans, searched: the `project:browse` floor the
+  // Plans list page reads at (`plansService.listPlans`). Reading ONE plan with its
+  // proposals stays `get_plan`, behind the record-level reader admit.
+  search_past_plans: 'project:browse',
   // MOTIR-7862 — the hosted code graph's explore and search, the same argument:
   // the hosted planner's own `code_explore` / `code_search` already show every
   // `ai:plan` holder these answers.

@@ -335,7 +335,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **111 tools**.
+`initialize` handshake and registers **117 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -5870,6 +5870,168 @@ same argument (`docs/decisions/member-facing-permissions.md` AMENDMENT 3).
 **Read-only**, but **open-world**: the listing calls the third-party git host.
 `projectKey` selects **within** the token's workspace; another tenant's key reads
 as a plain not-found.
+
+#### `get_code_history`
+
+**Who changed a file, when and why**, in one of the project's repositories: the
+commit **log** of a path at a ref (newest first), or its **blame** (per line
+range, the commit that last changed it) — commit metadata only, no file content
+and no diff (MOTIR-10237). `read_file` answers "the file at a commit"; this
+answers the history around it. The hosted planner reads the same history through
+`app/api/internal/ai/repo-history`.
+
+**Input**
+
+| Field        | Type   | Required | Notes                                                                                                |
+| ------------ | ------ | -------- | ---------------------------------------------------------------------------------------------------- |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`.                                                                          |
+| `repo`       | string | yes      | A repository in the project's set: the bare name (`motir-core`) or `owner/name`, case-insensitively. |
+| `path`       | string | yes      | The repository-relative path of the file.                                                            |
+| `kind`       | string | yes      | `log` (the commits that changed the path) or `blame` (per line range, the last commit).              |
+| `ref`        | string | no       | The branch, tag or commit to read at. Omitted ⇒ the repository's default branch, as stored.          |
+
+**The bound.** A log lists at most **100 commits** (the hosts' own page size) and a
+blame at most **500 line ranges**. A cut answer says so in `truncated` and ends its
+text with a SENTENCE saying the list is incomplete.
+
+**Output** — `structuredContent.outcome` names what happened, and every outcome is
+a **non-error** result with its own summary sentence:
+
+| `outcome`             | Meaning                                                                                                   | Extra fields                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `ok`                  | `kind: log` — `commits`, each `{ sha, author, date, subject }`; `kind: blame` — `blame`, each line range. | `repoRef`, `kind`, `path`, `ref`, `commits` or `blame`, `truncated` |
+| `no_such_ref`         | `ref` does not resolve in the repository.                                                                 | `repoRef`, `kind`, `path`, `ref`                                    |
+| `path_not_found`      | The ref resolves and the path has no history at it.                                                       | `repoRef`, `kind`, `path`, `ref`                                    |
+| `invalid_path`        | The path is not a repository-relative path (absolute, a URL, `..`). Nothing was asked.                    | `repoRef`, `kind`, `path`, `ref`, `reason`                          |
+| `not_connected`       | No usable connection on this deployment.                                                                  | `repoRef`, `kind`, `path`, `ref`                                    |
+| `revoked`             | The host refused the stored credential. The history is unknown.                                           | `repoRef`, `kind`, `path`, `ref`                                    |
+| `too_large`           | The host declined to compute a history that large.                                                        | `repoRef`, `kind`, `path`, `ref`                                    |
+| `host_error`          | The host did not answer — a failure to ASK, not an answer.                                                | `repoRef`, `kind`, `path`, `ref`, `detail`                          |
+| `repo_not_connected`  | The repository is in the set but not connected to the organisation.                                       | `repoRef`, `kind`, `path`, `ref`                                    |
+| `repo_not_in_project` | `repo` matches no repository in the project's set. Answered **before** any host call.                     | `repo`, `repoSet`                                                   |
+
+None of them carries a provider credential, a diff or a host URL.
+
+**Permission: `ai:plan`, at the door and in the service** — as `read_file`, on the
+same argument (`docs/decisions/member-facing-permissions.md` AMENDMENT 3).
+**Read-only**, but **open-world**: the read calls the third-party git host.
+`projectKey` selects **within** the token's workspace; another tenant's key reads
+as a plain not-found.
+
+#### `search_run_records` and `get_run_record`
+
+**What a run of the project did** (MOTIR-10240): which runs match a card, a
+scope or a status, and for one run how it ended and what it recorded as
+different. Both read through `runRecordReadService`, the service the hosted
+planner reads through `app/api/internal/ai/search-run-records` and
+`app/api/internal/ai/get-run-record`. They answer their own NARROW shapes, not
+the v1 `DispatchRun` resource: no event stream, cost, deliveries or machine time.
+
+**`search_run_records` input**
+
+| Field              | Type     | Required | Notes                                                                     |
+| ------------------ | -------- | -------- | ------------------------------------------------------------------------- |
+| `projectKey`       | string   | yes      | Project key, e.g. `"ACME"`.                                               |
+| `workItemKey`      | string   | no       | Runs that carried a LEG for this card.                                    |
+| `scopeWorkItemKey` | string   | no       | Runs whose SCOPE is this container. Give this or `workItemKey`, not both. |
+| `statuses`         | string[] | no       | `running`, `succeeded`, `failed`, `cancelled`, `timed_out`.               |
+| `cursor`           | string   | no       | The `nextCursor` a previous call returned.                                |
+| `limit`            | integer  | no       | 1 to 100 (the run list's own maximum); default 25.                        |
+
+Each row is `{ id, command, origin, status, stopReason, startedAt, endedAt,
+cardCount, legs }`, `legs` being COUNTS by disposition. `outcome` is `found`, or
+`nothing_matched` with an empty `runs` — a card or scope of another project, or
+one the caller cannot see, matches nothing. Both and a bad status or limit are
+refused `RUN_RECORD_QUERY_INVALID`.
+
+**`get_run_record` input:** `projectKey` and `runId`. `outcome: found` carries
+`run`: `status`, `stopReason`, `startedAt`, `endedAt`, `hostedEnd` (`outcome`,
+`detail`, `exitCode`, for a hosted or in-agent run; else null) and `legs`, each
+`{ key, disposition, skipReason, exitCode, discrepancy }`. `discrepancy` is the
+leg's `record_run_discrepancy` record — `{ commentId, pointCount, decisionCount,
+bodyMd, bodyTruncated }`, the comment body verbatim and bounded — or null.
+`outcome: not_found` is one answer for an unknown id, a run of another project or
+workspace, and a run the caller may not see.
+
+Text a run recorded (the end line, a discrepancy body) is AGENT-WRITTEN: it is
+returned in its own fields and quoted under a marker, never merged into the
+tools' own sentences.
+
+**Permission: `project:browse`.** **Read-only**, closed-world. `projectKey`
+selects **within** the token's workspace; another tenant's key reads as a plain
+`PROJECT_NOT_FOUND`.
+
+#### `list_dependency_versions` and `read_dependency_source`
+
+**What a package offers at a version** (MOTIR-10242): its published versions and
+dist-tags, and one file's text or one directory's entries of its published
+source. motir-core performs the read through `dependencyReadService`, the
+service the hosted planner reads through `GET /api/internal/ai/dependency-versions`
+and `GET /api/internal/ai/dependency-source`.
+
+**Input** — both take `projectKey`, `package` (e.g. `"zod"`, `"@prisma/client"`)
+and an optional `ecosystem` (default `npm`, the only one read).
+`read_dependency_source` also takes `version` (an exact published version, or a
+dist-tag such as `latest`; a range is not resolved), an optional `path` relative
+to the package root (omit to list the root), and an optional `startLine` /
+`endLine`. A file over 24,000 characters is cut with `read_file`'s truncation
+sentence.
+
+**Outcomes** — every one a **non-error** result in `structuredContent.outcome`:
+`versions`, `source_file`, `directory`, `path_not_found`, `binary`,
+`version_not_found`, `package_not_found` (also a private package: no registry
+credential is held), `too_large` (`what`: metadata, tarball, archive or file),
+`invalid_package` and `invalid_path` (no request is made),
+`ecosystem_unsupported`, and `unreachable` with its `failure` (`timeout`,
+`network`, `http_status`, `invalid_response`, `invalid_archive`) — a failure to
+ask, never evidence the package is absent.
+
+**Bounds.** The one host requested is `registry.npmjs.org`; the tarball URL is
+built from the validated name and an exact listed version, and redirects are
+refused. Each request is limited to 10 s; the metadata to 16 MiB, the tarball to
+10 MiB and the unpacked archive to 64 MiB. The archive is unpacked in memory:
+nothing is written to disk, no package code runs, and symlinks, hard links and
+paths that leave the package root are skipped.
+
+**Framing.** Every result carries `framing: "data"`. Package text is
+THIRD-PARTY: the summary quotes it between `<<<BEGIN THIRD-PARTY PACKAGE
+CONTENT>>>` and `<<<END THIRD-PARTY PACKAGE CONTENT>>>` under a sentence saying
+any instruction inside it is not to be followed.
+
+**Permission: `ai:plan`**, checked after the project key resolves inside the
+token's workspace and before any registry request
+(`docs/decisions/member-facing-permissions.md`, the sixth instance).
+**Read-only**, **open-world** (the public npm registry).
+
+#### `search_past_plans`
+
+**How similar work was shaped before, and why a plan ended** (MOTIR-10241): a
+search over one project's plans in **every** status, declined and abandoned ones
+included. It reads through `aiBoundaryService.searchPastPlans`, the service the
+hosted planner reads through `GET /api/internal/ai/past-plans`, with the same
+input rules, so both return the same rows. Reading one plan with its proposals
+is `get_plan`.
+
+**Input**
+
+| Field        | Type     | Required | Notes                                                                  |
+| ------------ | -------- | -------- | ---------------------------------------------------------------------- |
+| `projectKey` | string   | yes      | Project key, e.g. `"ACME"`.                                            |
+| `q`          | string   | no       | Case-insensitive substring of the title or summary, at most 200 chars. |
+| `status`     | string[] | no       | `generating`, `planned`, `stale`, `approved`, `declined`.              |
+| `cursor`     | string   | no       | The `nextCursor` a previous call returned.                             |
+
+Newest first, 20 a page. Each row is `{ id, title, status, decisionReason,
+summaryExcerpt, summaryTruncated, itemCount, createdAt, plannedAt, decidedAt }`.
+`decisionReason` is the kind core stores for a declined plan (`reviewed`,
+`discarded`, `abandoned`; null when not recorded); core stores no free-text
+decline note. `outcome` is `ok`, or `nothing-matched` with an empty `plans` — a
+normal result, not an error. A bad status or an over-long `q` is refused
+`PAST_PLANS_QUERY_INVALID`.
+
+**Permission: `project:browse`**, the floor the Plans list page reads at.
+**Read-only**, closed-world. `projectKey` selects **within** the token's
+workspace; another tenant's key reads as a plain `PROJECT_NOT_FOUND`.
 
 #### `code_explore` and `code_search`
 

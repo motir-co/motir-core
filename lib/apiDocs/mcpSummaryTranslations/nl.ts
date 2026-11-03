@@ -384,6 +384,42 @@ export const nl: McpSummaryTranslations = {
     source:
       "The paths a branch changed in a repository in the project's set, against its default branch or a named base — bounded like the hosted planner's listing, every absence a named outcome.",
   },
+  get_code_history: {
+    summary:
+      'De commitlog of blame van een bestand in een repository uit de set van het project, op een ref — alleen commitmetadata, begrensd, elke afwezigheid een benoemde uitkomst.',
+    source:
+      "The commit log or blame of a file in a repository in the project's set, at a ref — commit metadata only, bounded, every absence a named outcome.",
+  },
+  list_dependency_versions: {
+    summary:
+      'De gepubliceerde versies en dist-tags van een pakket uit het openbare npm-register — elke afwezigheid een benoemde uitkomst, gegevens van derden als gegevens gemarkeerd.',
+    source:
+      "A package's published versions and dist-tags from the public npm registry — every absence a named outcome, third-party data framed as data.",
+  },
+  read_dependency_source: {
+    summary:
+      'Eén bestand of map van de gepubliceerde broncode van een pakket bij een versie — begrensd in grootte, gemarkeerd als gegevens van derden, elke afwezigheid een benoemde uitkomst.',
+    source:
+      "One file or directory of a package's published source at a version — size-limited, framed as third-party data, every absence a named outcome.",
+  },
+  search_past_plans: {
+    summary:
+      'De plannen van een project in elke status, afgewezen plannen met de reden van hun einde — nieuwste eerst, op woorden of status; geen treffer is een benoemde uitkomst.',
+    source:
+      "A project's plans in every status, declined ones with why they ended — newest first, by words or status, no match a named outcome.",
+  },
+  search_run_records: {
+    summary:
+      'De runs van een project, nieuwste eerst – gefilterd op kaart, scope of status, legs als aantallen, geen treffer een benoemde uitkomst.',
+    source:
+      'The runs of a project, newest first — narrowed by a card, a scope or a status, legs as counts, no match a named outcome.',
+  },
+  get_run_record: {
+    summary:
+      'Eén run van een project – hoe die eindigde en per leg wat die als afwijkend vastlegde, letterlijk; een onbekende run een benoemde uitkomst.',
+    source:
+      'One run of a project — how it ended and, per leg, what it recorded as different, verbatim; an unknown run a named outcome.',
+  },
   record_plan_revision_reason: {
     summary:
       'Leg vast WAAROM een niet-goedgekeurd Plan moest veranderen — vier takken, waarvan twee een planningsbug aanmaken; het verandert niets aan het Plan.',

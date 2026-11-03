@@ -58,6 +58,18 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     read_file: { projectKey: t.projectKey, repo: 'motir-core', path: 'README.md' },
     // MOTIR-10069 — project-keyed the same way: not-found before any host is asked.
     list_changed_files: { projectKey: t.projectKey, repo: 'motir-core', head: 'feat/x' },
+    get_code_history: {
+      projectKey: t.projectKey,
+      repo: 'motir-core',
+      path: 'lib/a.ts',
+      kind: 'log',
+    },
+    search_run_records: { projectKey: t.projectKey },
+    get_run_record: { projectKey: t.projectKey, runId: 'run_unknown' },
+    search_past_plans: { projectKey: t.projectKey },
+    // MOTIR-10242 — a non-member reads A's key as not-found before any registry request.
+    list_dependency_versions: { projectKey: t.projectKey, package: 'zod' },
+    read_dependency_source: { projectKey: t.projectKey, package: 'zod', version: '1.0.0' },
     // MOTIR-7862 — project-keyed graph reads: a non-member reads A's key as
     // not-found before any repository set is read or motir-ai is called.
     code_explore: { projectKey: t.projectKey, query: 'readFile' },

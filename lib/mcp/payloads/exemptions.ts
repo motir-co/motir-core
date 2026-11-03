@@ -119,6 +119,35 @@ export const EXEMPT_TOOLS = {
     'repo_not_in_project) \u2014 a listing made against the git host for an agent planning over the ' +
     'MCP, the same reason as `read_file`. No `/api/v1` operation returns a branch comparison, and ' +
     'no REST client has asked for one (MOTIR-10069).',
+  list_dependency_versions:
+    'Returns a PACKAGE\u2019s published versions and dist-tags read from the public npm registry, ' +
+    'plus a named `outcome` and `framing: "data"` \u2014 third-party registry data, not a Motir ' +
+    'resource. No `/api/v1` operation returns it (MOTIR-10242).',
+  read_dependency_source:
+    'Returns one FILE\u2019s text (or one directory\u2019s entries) of a package\u2019s published ' +
+    'source at a version, plus a named `outcome` and `framing: "data"` \u2014 third-party package ' +
+    'content read from the public npm registry, not a Motir resource. No `/api/v1` operation ' +
+    'returns it (MOTIR-10242).',
+  get_code_history:
+    'Returns the commit LOG or BLAME of one repository path at a git ref \u2014 commit metadata ' +
+    '(sha, author, date, subject, line ranges) plus a named `outcome` \u2014 read from the git host ' +
+    'for an agent planning over the MCP, the same reason as `read_file`. No `/api/v1` operation ' +
+    'returns repository history, and no REST client has asked for it (MOTIR-10237).',
+  search_run_records:
+    'Returns a NARROW run row \u2014 id, command, origin, status, stop reason, start and end, and ' +
+    'its legs as COUNTS \u2014 plus a named `outcome`, not the v1 `DispatchRun` resource: a planner ' +
+    'asks which runs touched a card, and the whole resource (legs, deliveries, gates) stays off ' +
+    'MCP for the reason `MCP_UNREACHABLE_RESOURCES.DispatchRun` records (MOTIR-10240).',
+  get_run_record:
+    'Returns a NARROW run record \u2014 how the run ended and, per leg, its key, disposition, skip ' +
+    'reason, exit code and the discrepancy comment it points to \u2014 plus a named `outcome`, not ' +
+    'the v1 `DispatchRun` resource: no event stream, cost, deliveries or machine time, which stay ' +
+    'on `/api/v1` and the UI (MOTIR-10240).',
+  search_past_plans:
+    'Returns NARROW plan rows \u2014 id, title, status, `decisionReason`, a bounded summary ' +
+    'excerpt, proposal count and lifecycle times \u2014 plus a named `outcome`, not the v1 `Plan` ' +
+    'resource: a project-wide search over plans, which no `/api/v1` operation returns. One plan ' +
+    'with its proposals is `get_plan` (MOTIR-10241).',
   code_explore:
     'Returns the hosted planner\u2019s own `code_explore` TEXT verbatim, or a named `state` \u2014 a ' +
     'graph read assembled in motir-ai for an agent planning over the MCP. No `/api/v1` operation ' +

@@ -123,6 +123,23 @@ export const dispatchRunEventRepository = {
   },
 
   /**
+   * Every `discrepancy_recorded` finding on a run, oldest first (MOTIR-10240) —
+   * the leg it belongs to and its `data` POINTER (`{ commentId, pointCount,
+   * decisionCount?, dispatchRunCardId }`). The text lives in the comment the
+   * pointer names; `runRecordReadService` reads it from there.
+   */
+  async listDiscrepancyFindings(
+    dispatchRunId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<DispatchRunEvent, 'dispatchRunCardId' | 'data'>[]> {
+    return tx.dispatchRunEvent.findMany({
+      where: { dispatchRunId, kind: 'discrepancy_recorded' },
+      orderBy: { seq: 'asc' },
+      select: { dispatchRunCardId: true, data: true },
+    });
+  },
+
+  /**
    * The LATEST event of one kind on a run, or null — how the Development block
    * reads a give-up's attempt count off the `ci_gave_up` event the CLI wrote
    * (MOTIR-5466). The count is DATA the run reported, never a literal.

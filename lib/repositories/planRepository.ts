@@ -867,6 +867,49 @@ export const planRepository = {
   },
 
   /**
+   * ONE PAGE of a project's plans for a SEARCH (MOTIR-10241) — the past-plans
+   * read a planning session asks "how was similar work shaped before, and why
+   * was it declined" through. `listByProject`'s keyset walk plus an optional
+   * case-insensitive substring match on `title` OR `summary`, so the page, the
+   * order and the cursor stay a property of ONE query and a narrowed page is a
+   * full page rather than a filtered remnant of one.
+   *
+   * Every status is eligible; `statuses` narrows to a set, and an EMPTY set is
+   * honoured as "nothing" (`{ in: [] }`), never widened. `workspaceId` is an
+   * explicit predicate because RLS is inert under the dev/CI superuser (finding
+   * #26), and `projectId` keeps one project out of another's plans. Read only.
+   */
+  async searchByProject(
+    projectId: string,
+    workspaceId: string,
+    opts: {
+      statuses: readonly PlanStatus[] | null;
+      q: string | null;
+      limit: number;
+      cursorId: string | null;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<Plan[]> {
+    const client = tx ?? dbRead;
+    const statusWhere = opts.statuses === null ? {} : { status: { in: [...opts.statuses] } };
+    const textWhere =
+      opts.q === null
+        ? {}
+        : {
+            OR: [
+              { title: { contains: opts.q, mode: 'insensitive' as const } },
+              { summary: { contains: opts.q, mode: 'insensitive' as const } },
+            ],
+          };
+    return client.plan.findMany({
+      where: { projectId, workspaceId, ...statusWhere, ...textWhere },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: opts.limit,
+      ...(opts.cursorId ? { cursor: { id: opts.cursorId }, skip: 1 } : {}),
+    });
+  },
+
+  /**
    * ONE PAGE of the plans related to a work item — the paging half of the item
    * page's PLAN HISTORY read (Story MOTIR-5542 · MOTIR-5546). Returns only each
    * plan's `id` and `createdAt`: the page's order and its cursor, nothing else.
