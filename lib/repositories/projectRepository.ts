@@ -1359,14 +1359,6 @@ export const projectRepository = {
   },
 
   /**
-   * Atomically bump the per-project work-item counter and return the new
-   * value. Uses UPDATE … RETURNING (NOT a read-then-write) so allocation is
-   * gap-free under concurrency: each concurrent caller's UPDATE serializes
-   * on the row, and the RETURNING value is the post-increment number. The
-   * counter is per-project (the WHERE clause keys on id) so two projects
-   * never share or interfere with each other's numbering.
-   */
-  /**
    * Every project whose stored `image` starts with `prefix`, with its workspace
    * (MOTIR-10075) — the cutover's stored-reference rewrite counts and rewrites
    * exactly these. Cross-tenant: read inside `withSystemContext`, which
@@ -1419,6 +1411,14 @@ export const projectRepository = {
     return count;
   },
 
+  /**
+   * Atomically bump the per-project work-item counter and return the new
+   * value. Uses UPDATE … RETURNING (NOT a read-then-write) so allocation is
+   * gap-free under concurrency: each concurrent caller's UPDATE serializes
+   * on the row, and the RETURNING value is the post-increment number. The
+   * counter is per-project (the WHERE clause keys on id) so two projects
+   * never share or interfere with each other's numbering.
+   */
   async allocateWorkItemNumber(id: string, tx: Prisma.TransactionClient): Promise<number> {
     const rows = await tx.$queryRaw<Array<{ n: number }>>`
       UPDATE "project" SET "lastWorkItemNumber" = "lastWorkItemNumber" + 1

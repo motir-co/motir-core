@@ -263,8 +263,6 @@ export const userRepository = {
    * intended "most recent"). Required `tx` per CLAUDE.md (write method). The
    * `projectId` FK is validated by Postgres; an invalid id raises `P2003`.
    */
-  /** The saved account language (Story MOTIR-7730 · MOTIR-7747) — one column,
-   *  last writer wins. */
   /**
    * Every user whose stored `image` starts with `prefix` (MOTIR-10075), oldest id
    * first — the cutover's stored-reference rewrite counts and rewrites exactly
@@ -315,6 +313,8 @@ export const userRepository = {
     return count;
   },
 
+  /** The saved account language (Story MOTIR-7730 · MOTIR-7747) — one column,
+   *  last writer wins. */
   async setLocale(id: string, locale: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.user.update({ where: { id }, data: { locale } });
   },

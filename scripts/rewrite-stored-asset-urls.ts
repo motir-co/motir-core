@@ -22,7 +22,8 @@
  * it would match nothing and report a false 0. A non-`https:` base is refused before
  * any query runs.
  *
- * Usage (against the AWS core database, after the restore):
+ * Usage (against NEON's core database, after the freeze and before the dump —
+ * motir-infra `docs/core-cutover.md` step 5 says why; any core database works):
  *
  *   DATABASE_URL='<core url>' pnpm db:rewrite:stored-asset-urls \
  *     --from-base=https://motir-core-public.fly.storage.tigris.dev
