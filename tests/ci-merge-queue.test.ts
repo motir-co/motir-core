@@ -162,6 +162,10 @@ const contextFor = (event: Event): Record<string, string> => ({
   // entry reach, and a draft is the one state in which a pull request skips it.
   'github.event.pull_request.draft': 'false',
   'github.ref': event === 'push' ? 'refs/heads/main' : 'refs/pull/1/merge',
+  // The cutover's Fly off switch (MOTIR-10074), UNSET — an unset repository
+  // variable reads as the empty string, which is every repository's state until
+  // the window sets it, and which deploys.
+  'vars.MOTIR_FLY_DEPLOY_ENABLED': '',
   'needs.changes.outputs.app': 'true',
   'needs.changes.outputs.images': 'true',
   // The package lanes' flags (MOTIR-5323), `'true'` for the same reason.
