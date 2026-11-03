@@ -628,6 +628,7 @@ describe('a conversation target', () => {
       requests: ['Plan the quarter'],
       readAnswer: null,
       card: null,
+      offer: null,
     });
   });
 

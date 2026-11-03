@@ -3,8 +3,11 @@ import type {
   SettledAnswer,
   SharpenAssumption,
   SharpenQuestion,
+  RequirementRecommendation,
   SharpenReading,
+  SubmittedRequirement,
 } from '@/lib/ai/types';
+import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
 
 // The core-side READ of a `sharpen_turn` job's result (Task MOTIR-1101 · Subtask
 // MOTIR-8181) — the `sharpenTurn` key on the job result envelope, produced by
@@ -33,6 +36,12 @@ export interface SharpenTurnResult {
   assumptions: SharpenAssumption[];
   /** The write-back outcome; null when none was attempted. */
   writeBack: { ok: boolean; error?: string } | null;
+  /**
+   * The requirement a CONVERSATION grilling's end wrote for its plan offer (Bug
+   * MOTIR-10255): the offer's answer turn and the whole six-field value. Absent on
+   * every other turn.
+   */
+  requirement?: { offerTurnId: string; requirement: SubmittedRequirement };
 }
 
 const KINDS: readonly SharpenTurnKind[] = [
@@ -59,7 +68,13 @@ export const SHARPEN_CAPS = {
   answer: 4_000,
   error: 500,
   entries: 200,
+  /** One part of a written requirement (MOTIR-10255). */
+  requirementPart: 8_000,
 } as const;
+
+/** The three requirement parts a planning run refuses when blank (motir-ai's
+ *  `REQUIREMENT_REQUIRED_NON_EMPTY`). */
+const REQUIRED_PARTS = ['outcome', 'behaviour', 'acceptance'] as const;
 
 /** Thrown inside the parse; caught at its edge and turned into `null`. */
 class Unparseable extends Error {}
@@ -149,6 +164,32 @@ function writeBack(v: unknown): SharpenTurnResult['writeBack'] {
 }
 
 /**
+ * The requirement a grilling's end wrote, through the ONE shipped narrowing and then
+ * held to what a planning run reads: the three required parts non-blank, every part
+ * capped, the assumptions a list. Anything else is unparseable — a failed turn, so the
+ * offer is never shown as holding answers it does not hold.
+ */
+function writtenRequirement(v: unknown): SharpenTurnResult['requirement'] {
+  if (v === null || v === undefined) return undefined;
+  const w = obj(v);
+  const offerTurnId = str(w.offerTurnId, SHARPEN_CAPS.id);
+  const narrowed = narrowSharpenedRequirement(w.requirement);
+  if (!narrowed || !Array.isArray(narrowed.assumptions)) throw new Unparseable();
+  for (const part of REQUIRED_PARTS) str(narrowed[part], SHARPEN_CAPS.requirementPart);
+  const requirement: SubmittedRequirement = {
+    assumptions: list(narrowed.assumptions, (a: unknown) => {
+      if (typeof a === 'string') return str(a, SHARPEN_CAPS.requirementPart);
+      const entry = a as RequirementRecommendation;
+      return { ...entry, text: str(entry.text, SHARPEN_CAPS.requirementPart) };
+    }),
+  };
+  for (const part of ['outcome', 'behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const) {
+    requirement[part] = str(narrowed[part] ?? '', SHARPEN_CAPS.requirementPart, { empty: true });
+  }
+  return { offerTurnId, requirement };
+}
+
+/**
  * Parse a `sharpenTurn` result. Returns `null` for anything that is not a
  * well-formed turn — an unknown `kind`, a `question` turn with no question, a
  * question with fewer than two readings or not exactly one recommended.
@@ -159,12 +200,14 @@ export function parseSharpenTurn(raw: unknown): SharpenTurnResult | null {
     if (!KINDS.includes(r.kind as SharpenTurnKind)) return null;
     const kind = r.kind as SharpenTurnKind;
     const q = kind === 'question' ? question(r.question) : null;
+    const requirement = writtenRequirement(r.requirement);
     return {
       kind,
       question: q,
       settled: list(r.settled ?? [], settled),
       assumptions: list(r.assumptions ?? [], assumption),
       writeBack: writeBack(r.writeBack),
+      ...(requirement ? { requirement } : {}),
     };
   } catch (err) {
     if (err instanceof Unparseable) return null;

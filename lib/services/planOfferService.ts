@@ -2,6 +2,7 @@ import type { Prisma, PlanChangeTurn } from '@/generated/prisma/client';
 import type { ProjectContext } from '@/lib/projects';
 import type { AnswerOfferInput, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { AskPlanOffer } from '@/lib/planning/askResult';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { toPlanChangeTurnDto } from '@/lib/mappers/planChangeMappers';
@@ -277,6 +278,40 @@ export const planOfferService = {
       },
     );
     return threadOf(pctx, address.sessionId);
+  },
+
+  /**
+   * Store the requirement a Grill me grilling wrote for the offer on `offerTurnId`
+   * (Bug MOTIR-10255), inside the caller's transaction and under the conversation's
+   * row lock — the lock the Confirm's claim takes, so a start and this write are
+   * ordered. Only an UNDECIDED `plan` offer is written: a confirmed (or claimed),
+   * declined or superseded one keeps the requirement it was decided on, and the call
+   * answers `false` writing nothing. The requirement is REPLACED whole — it was
+   * written from the offer's own requirement — and every other key rides through.
+   */
+  async storeGrilledRequirementWithin(
+    pctx: ProjectContext,
+    address: { sessionId: string; offerTurnId: string },
+    requirement: SubmittedRequirement,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    await lockOwnSession(pctx, address.sessionId, tx);
+    const rows = await planChangeTurnRepository.listBySessionId(
+      address.sessionId,
+      pctx.workspaceId,
+      tx,
+    );
+    if (planOfferStateOf(offerTurns(rows), address.offerTurnId) !== 'undecided') return false;
+    const row = rows.find((t) => t.id === address.offerTurnId)!;
+    const offer = row.answerOffer as Record<string, unknown>;
+    if (offer['kind'] !== 'plan') return false;
+    await planChangeTurnRepository.setAnswerOffer(
+      row.id,
+      pctx.workspaceId,
+      { ...offer, requirement } as unknown as Prisma.InputJsonValue,
+      tx,
+    );
+    return true;
   },
 
   /**

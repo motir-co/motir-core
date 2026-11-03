@@ -504,8 +504,10 @@ describe('getSettledForConversation', () => {
 
 // ── the hand-off at plan submit ──────────────────────────────────────────────
 
-describe('plan submit carries the settled answers', () => {
-  it('the planning job carries them beside the requirement; the run’s grilling gets them on run.carried', async () => {
+// Bug MOTIR-10255: the planning job no longer carries the answers beside the
+// requirement — the grilling writes them into the offer's requirement when it ends.
+describe('plan submit and the settled answers', () => {
+  it('the planning job carries the requirement alone; the run’s grilling gets them on run.carried', async () => {
     const conversationId = await shippedConversation();
     await grillToEnd(conversationId, 'stopped');
     const requirement = { outcome: 'Exports keep column order' };
@@ -516,7 +518,7 @@ describe('plan submit carries the settled answers', () => {
       requirement,
     );
     expect(planJob().context['requirement']).toEqual(requirement);
-    expect(planJob().context['carriedAnswers']).toEqual(CARRIED);
+    expect('carriedAnswers' in planJob().context).toBe(false);
 
     jobs.submitted = [];
     await aiSharpenService.open({ planId }, pctx);
@@ -589,7 +591,7 @@ describe('plan submit carries the settled answers', () => {
     expect(settled).not.toHaveBeenCalled();
   });
 
-  it('a failed submit keeps the answers stored, and the retried Confirm carries them again', async () => {
+  it('a failed submit keeps the answers stored, and the retried Confirm sends none beside it', async () => {
     const conversationId = await shippedConversation();
     await grillToEnd(conversationId, 'finished');
     jobs.failNext = new MotirAiUnavailableError('down');
@@ -601,6 +603,6 @@ describe('plan submit carries the settled answers', () => {
     ).toEqual(SETTLED);
 
     await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-    expect(planJob().context['carriedAnswers']).toEqual(CARRIED);
+    expect('carriedAnswers' in planJob().context).toBe(false);
   });
 });

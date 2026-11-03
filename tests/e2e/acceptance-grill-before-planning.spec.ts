@@ -338,12 +338,15 @@ test('Grill me before planning — a vague request is grilled, Stop shows the of
     expect((await ask(page, 'yes, plan it')).outcome).toBe('redirected');
     await expect.poll(() => planEntries().length).toBe(1);
     expect(await plansOf(conversationId)).toBe(1);
-    // What motir-core sent the planner: the conversation's settled answers.
-    const carried = planEntries()[0]!.carriedAnswers;
-    expect(carried?.settled.map((s) => [s.questionId, s.answer])).toEqual([
-      [Q1.id, picked1.label],
-      [Q2.id, picked2.label],
-    ]);
+    // What motir-core sent the planner: the offer's requirement, which the grilling's
+    // end wrote the settled answers into (MOTIR-10255) — and nothing beside it.
+    const sent = planEntries()[0]!;
+    expect(sent.hasCarriedAnswers).toBe(false);
+    const written = Object.values(sent.requirement ?? {})
+      .filter((v): v is string => typeof v === 'string')
+      .join('\n');
+    expect(written).toContain(`${Q1.text} — ${picked1.label}`);
+    expect(written).toContain(`${Q2.text} — ${picked2.label}`);
 
     // The run's own grilling opens over its plan, carrying the same set — so it
     // ends with nothing to ask, and no question is drawn.

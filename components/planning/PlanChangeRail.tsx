@@ -37,7 +37,11 @@ import { ConversationGrill } from '@/components/planning/ConversationGrill';
 import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
 import { grillFailedAfterHandoff } from '@/lib/planning/grillHandoff';
 import { MOTIR_AI_UNAVAILABLE } from '@/lib/planning/submitStartingUp';
-import { useGrillSession, type GrillOffer } from '@/components/planning/useGrillSession';
+import {
+  useGrillSession,
+  type GrillOffer,
+  type OfferHold,
+} from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
 import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
@@ -364,6 +368,13 @@ export interface PlanChangeRailProps {
    */
   onConfirmPlanOffer?: (turnId: string) => void;
   onDeclinePlanOffer?: (turnId: string) => void;
+  /**
+   * RE-READ THE THREAD once a Grill me grilling over a plan offer ended (Bug
+   * MOTIR-10255): its end stored the requirement it wrote on the offer, which the rail
+   * and the left pane read from the thread. The offer stays HELD until it resolves.
+   * Optional: absent, the offer is shown as soon as the grilling ends.
+   */
+  onConversationGrillEnded?: () => Promise<void>;
   /** The offer whose answer is in flight — its controls are disabled. */
   offerAnsweringTurnId?: string | null;
   /** The last refused answer, on the offer it was for. */
@@ -420,6 +431,7 @@ export function PlanChangeRail({
   onOpenSession,
   onConfirmPlanOffer,
   onDeclinePlanOffer,
+  onConversationGrillEnded,
   offerAnsweringTurnId = null,
   offerRefusal = null,
   providerLimit = null,
@@ -734,7 +746,34 @@ export function PlanChangeRail({
         }
       : null,
   });
-  const heldOfferTurnId = convGrill.hold && latestOfferTurn ? latestOfferTurn.id : null;
+  // THE OFFER IS SHOWN ONLY ONCE ITS REQUIREMENT IS READ (Bug MOTIR-10255). The
+  // grilling's end stores the requirement it wrote ON THE OFFER, which this rail and
+  // the left pane read from the thread, so an ended grilling keeps the offer held
+  // until the thread has been read again — the person never sees, or confirms, the
+  // requirement from before their answers. Read once per ended grilling.
+  const endedGrillId =
+    convGrill.session?.scope.kind === 'conversation' && convGrill.session.status === 'ended'
+      ? convGrill.session.id
+      : null;
+  const [threadReadFor, setThreadReadFor] = useState<string | null>(null);
+  const threadReadAskedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!endedGrillId || !onConversationGrillEnded) return;
+    if (threadReadAskedRef.current === endedGrillId) return;
+    threadReadAskedRef.current = endedGrillId;
+    // A failed read still shows the offer: the server-stored requirement is what a
+    // Confirm starts from, whatever this rail drew.
+    const shown = () => setThreadReadFor(endedGrillId);
+    void onConversationGrillEnded().then(shown, shown);
+  }, [endedGrillId, onConversationGrillEnded]);
+  const convHold: OfferHold =
+    convGrill.hold === 'shown' &&
+    onConversationGrillEnded &&
+    endedGrillId !== null &&
+    threadReadFor !== endedGrillId
+      ? 'held'
+      : convGrill.hold;
+  const heldOfferTurnId = convHold && latestOfferTurn ? latestOfferTurn.id : null;
   const convGrillSession =
     convGrill.session?.scope.kind === 'conversation' && heldOfferTurnId ? convGrill.session : null;
   const [grillOwnWords, setGrillOwnWords] = useState(false);
@@ -744,7 +783,7 @@ export function PlanChangeRail({
   const grillQuestion =
     conversing && grill.session?.status === 'open' ? (grill.session.pendingQuestion ?? null) : null;
   const convQuestion =
-    convGrill.hold === 'held' && convGrillSession?.status === 'open'
+    convHold === 'held' && convGrillSession?.status === 'open'
       ? (convGrillSession.pendingQuestion ?? null)
       : null;
   /** The plan offer row's inputs for the answer turn at `i` (MOTIR-9294). */
@@ -1217,10 +1256,10 @@ export function PlanChangeRail({
             />
             {/* GRILL ME BEFORE PLANNING: the grilling over this answer's offer, and
                 the offer itself — held while it is open, shown once it ended. */}
-            {turn.id === heldOfferTurnId && convGrill.hold && turn.offer ? (
+            {turn.id === heldOfferTurnId && convHold && turn.offer ? (
               <ConversationGrill
                 session={convGrillSession}
-                hold={convGrill.hold}
+                hold={convHold}
                 pending={convGrill.pending}
                 error={convGrill.error}
                 endedBySwitch={convGrill.endedBySwitch}
@@ -1241,8 +1280,9 @@ export function PlanChangeRail({
                     offer={turn.offer}
                     workItemRefs={state.session?.workItemRefs ?? {}}
                     {...planOfferPropsFor(turn, i)}
-                    // A no-target offer that carries its requirement folds the answers into
-                    // the document in the left pane; listing them here says it twice.
+                    // An offer that carries its requirement holds the answers — the grilling's
+                    // end wrote them into it (MOTIR-10255) — and the left pane shows that
+                    // document; listing them here says it twice.
                     settled={
                       convGrillSession &&
                       convGrillSession.status === 'ended' &&
@@ -1791,14 +1831,14 @@ export function PlanChangeRail({
               convGrill.act('own_words', { text });
               return;
             }
-            if (convGrill.hold === 'held') return;
+            if (convHold === 'held') return;
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
             setLastSent(text);
             onSend(text);
           }}
           placeholder={composerPlaceholder}
           // A held message stays in the field (the send above reached nobody).
-          clearOnSubmit={!(convGrill.hold === 'held' && !convQuestion)}
+          clearOnSubmit={!(convHold === 'held' && !convQuestion)}
           autoFocus={askingForReason || initialDraftCaret !== undefined}
           {...(initialDraftCaret !== undefined ? { caretAt: initialDraftCaret } : {})}
           // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
@@ -1829,9 +1869,7 @@ export function PlanChangeRail({
               <GrillMeControl
                 on={grillOptIn.on}
                 onChange={grillOptIn.setOn}
-                hint={
-                  grill.session?.status !== 'open' && !grill.pending && convGrill.hold !== 'held'
-                }
+                hint={grill.session?.status !== 'open' && !grill.pending && convHold !== 'held'}
                 beforePlanning={beforeAnyRun}
               />
             ) : null
