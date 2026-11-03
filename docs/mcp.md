@@ -5993,6 +5993,14 @@ refused. Each request is limited to 10 s; the metadata to 16 MiB, the tarball to
 nothing is written to disk, no package code runs, and symlinks, hard links and
 paths that leave the package root are skipped.
 
+**Caching** (MOTIR-10285). A published version never changes, so each motir-core
+instance keeps the unpacked archives it has read, by `name@version`, up to
+128 MiB in total, evicting the least recently read version past it. A read of
+an exact version already held makes no registry request at all — paging a large
+file by `startLine` downloads it once. A dist-tag is resolved through the
+registry's metadata on every read, because a tag can move. A failure is never
+cached, and the archive is unpacked asynchronously, off the request thread.
+
 **Framing.** Every result carries `framing: "data"`. Package text is
 THIRD-PARTY: the summary quotes it between `<<<BEGIN THIRD-PARTY PACKAGE
 CONTENT>>>` and `<<<END THIRD-PARTY PACKAGE CONTENT>>>` under a sentence saying
