@@ -24,7 +24,7 @@ byte at build time. This directory adds only what a VM needs and a container doe
 
 Only in [`infra/ci-runner/Dockerfile`](../ci-runner/Dockerfile), as the ARGs
 `RUNNER_VERSION`, `RUNNER_SHA256`, `NODE_VERSION`, `NODE_SHA256`, `DOCKER_VERSION`,
-`DOCKER_SHA256` and `PLAYWRIGHT_VERSION`. `build-ami.sh` reads them by grep and passes them
+`DOCKER_SHA256`, `AWSCLI_VERSION`, `AWSCLI_SHA256` and `PLAYWRIGHT_VERSION`. `build-ami.sh` reads them by grep and passes them
 to Packer. Bump a version there and both the Fly image and the next AMI pick it up.
 `tests/ciFleet/awsRunnerAmi.test.ts` fails if a version or a checksum is written anywhere in
 this directory, or if `provision.sh`'s apt package list drifts from the Dockerfile's.

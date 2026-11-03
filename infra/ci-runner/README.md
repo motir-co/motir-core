@@ -130,6 +130,16 @@ build if a version stops being exact or a download stops being verified.
   Stay on the major the starters' `setup-node` asks for (22).
 - **Docker / Playwright** — `DOCKER_VERSION` + `DOCKER_SHA256` (the static
   tarball) and `PLAYWRIGHT_VERSION` (whose own `install-deps` list is used).
+- **AWS CLI v2** — `AWSCLI_VERSION` + `AWSCLI_SHA256` (AWS's versioned installer
+  zip). AWS publishes a PGP signature rather than a checksum: download
+  `awscli-exe-linux-x86_64-<x>.zip` and its `.sig`, `gpg --verify` it against
+  the AWS CLI Team key in AWS's install guide, then take the zip's `sha256sum`.
+  The AWS image's build reads the same two ARGs. Its evidence is the AWS deploy
+  jobs on `vars.MOTIR_RUNNER`, which call the CLI with no setup step:
+  motir-ai `.github/workflows/ci.yml:925` (`aws ecr describe-images`, and
+  `aws ssm get-parameter` at :898) and motir-gateway
+  `.github/workflows/aws-deploy.yml:142` (`aws ecr describe-images`, again at
+  :182, and `aws ssm get-parameter` at :109) — MOTIR-10293.
 
 Adding a toolchain entry is not a free choice: the derivation rule is that the
 image carries the **union of what the two starters' workflows actually install**,

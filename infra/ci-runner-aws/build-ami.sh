@@ -9,7 +9,7 @@
 #
 # The pins live ONCE, as ARGs in `infra/ci-runner/Dockerfile`. This script reads
 # them from there by grep and hands them to Packer, so the Fly image and the AMI
-# can never disagree about the runner, Node, Docker or Playwright version.
+# can never disagree about the runner, Node, Docker, AWS CLI or Playwright version.
 #
 # Environment it reads:
 #   AWS_ORG_ARN           optional: an AWS Organization ARN given launch
@@ -70,6 +70,8 @@ packer_vars() {
     -var "node_sha256=$(pin NODE_SHA256)"
     -var "docker_version=$(pin DOCKER_VERSION)"
     -var "docker_sha256=$(pin DOCKER_SHA256)"
+    -var "awscli_version=$(pin AWSCLI_VERSION)"
+    -var "awscli_sha256=$(pin AWSCLI_SHA256)"
     -var "playwright_version=$(pin PLAYWRIGHT_VERSION)"
     -var "git_sha=${sha}"
     -var "version=$(release_version "${sha}")"
