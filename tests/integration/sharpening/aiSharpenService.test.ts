@@ -952,6 +952,23 @@ describe('the shipped-product research rides the session (MOTIR-10284)', () => {
     expect(sharpenOf(1).research).toEqual(RESEARCH);
   });
 
+  it('a plan with no conversation behind it sends what it says it is about', async () => {
+    const planId = await plannedPlan();
+    await adminDb.plan.update({
+      where: { id: planId },
+      data: { title: '  Export the issue list  ', summary: 'As a file.' },
+    });
+    await aiSharpenService.open({ planId }, pctx);
+    expect(sharpenOf(0).subject).toBe('Export the issue list\n\nAs a file.');
+  });
+
+  it('a plan that says nothing about itself sends no subject', async () => {
+    const planId = await plannedPlan();
+    await adminDb.plan.update({ where: { id: planId }, data: { title: null, summary: ' ' } });
+    await aiSharpenService.open({ planId }, pctx);
+    expect('subject' in sharpenOf(0)).toBe(false);
+  });
+
   it('a conversation session keeps it too, and the newest record replaces the last', async () => {
     const session = await adminDb.planChangeSession.create({
       data: {

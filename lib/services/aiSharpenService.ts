@@ -129,9 +129,14 @@ type Target =
   | { kind: 'conversation'; conversationId: string; ref: string; state: string };
 
 /** What a job is grounded in: the run a plan stands inside, or the conversation. */
+/** The longest `context.sharpen.subject`; motir-ai reads a longer one as none. */
+const SHARPEN_SUBJECT_MAX = 2_000;
+
 interface Grounding {
   run?: SharpenRunContext;
   conversation?: SharpenConversationContext;
+  /** What a plan no conversation produced is about (MOTIR-10284), so it can be researched. */
+  subject?: string;
 }
 
 // A plan is open while an answer may still be written to it. A planning run in
@@ -441,10 +446,27 @@ export function conversationTurnsOf(
 
 /** What a job on this target is grounded in. A conversation with no person turn
  *  cannot be grilled — refused before anything is written. */
+/** A plan's title and summary, held to what motir-ai reads (`SHARPEN_TEXT_MAX`). */
+async function planSubjectFor(
+  target: Extract<Target, { kind: 'plan' }>,
+  ctx: ProjectContext,
+): Promise<string | null> {
+  const plan = await withWorkspaceContext(bindCtx(ctx), (tx) =>
+    planRepository.findById(target.planId, ctx.workspaceId, tx),
+  );
+  const subject = [plan?.title, plan?.summary]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join('\n\n');
+  return subject.length > 0 ? subject.slice(0, SHARPEN_SUBJECT_MAX) : null;
+}
+
 async function groundingFor(target: Target, ctx: ProjectContext): Promise<Grounding> {
   if (target.kind === 'plan') {
     const run = await runContextFor(target, ctx);
-    return run ? { run } : {};
+    if (run) return { run };
+    const subject = await planSubjectFor(target, ctx);
+    return subject ? { subject } : {};
   }
   const conversation = await conversationContextFor(target.conversationId, ctx);
   if (!conversation) {
@@ -476,6 +498,7 @@ function jobContext(
     ...(action === 'own_words' ? { text: turn.body } : {}),
     ...(grounding.run ? { run: grounding.run } : {}),
     ...(grounding.conversation ? { conversation: grounding.conversation } : {}),
+    ...(grounding.subject ? { subject: grounding.subject } : {}),
     // The shipped-product research an earlier turn returned (MOTIR-10284), so motir-ai
     // holds it on every turn without searching again.
     ...(isResearchRecord(row.research) ? { research: row.research } : {}),
