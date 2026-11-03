@@ -25,6 +25,7 @@ import {
 } from './ciPromotion';
 import { recomputeWorkItemCiState } from './deliveryVerdict';
 import { recomputeWorkItemFixReason } from './fixReasonService';
+import { recomputeWorkItemResumeState } from './resumeStateService';
 import { resolveChangeRequestWorkItemSet } from './changeRequestWorkItems';
 import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprovalGates';
 
@@ -397,6 +398,9 @@ async function applyOneCiDelivery(
         await recomputeWorkItemCiState(workItemId, tx);
         // …and the card's to-fix answer, which reads the same check rows (MOTIR-6602).
         await recomputeWorkItemFixReason(workItemId, tx);
+        // …and whether it still waits to resume: CI started since a gated run stopped
+        // means the card is moving again (MOTIR-10308).
+        await recomputeWorkItemResumeState(workItemId, tx);
       }
     }, CI_FEEDBACK_SYSTEM_TX);
     // …and a pending row at the SAME head is a set leaving green without going red
@@ -587,6 +591,9 @@ async function applyOneCiDelivery(
         await recomputeWorkItemCiState(workItemId, tx);
         // …and the card's to-fix answer, which reads the same check rows (MOTIR-6602).
         await recomputeWorkItemFixReason(workItemId, tx);
+        // …and whether it still waits to resume: CI started since a gated run stopped
+        // means the card is moving again (MOTIR-10308).
+        await recomputeWorkItemResumeState(workItemId, tx);
       }
     },
     CI_FEEDBACK_TENANT_TX,

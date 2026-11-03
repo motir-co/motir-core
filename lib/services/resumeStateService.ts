@@ -6,6 +6,7 @@ import type {
 } from '@/generated/prisma/client';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { collectDeliveries } from '@/lib/services/deliveryVerdict';
 import { dispatchRunHeldGateRepository } from '@/lib/repositories/dispatchRunHeldGateRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
@@ -24,7 +25,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // it: the approval releases it. So it is its own column, carved out of In progress
 // the way `fixReason` is, and To fix wins on the rare card where both hold.
 //
-// ── A pure function of runs and gates ──────────────────────────────────────
+// ── A function of runs, gates and the delivery set's CI ─────────────────────
 // The card's LATEST run (the continue claim's own read, `findLatestForWorkItem`)
 // decides it: a run that closed `gated` makes the card wait; anything newer — a
 // continue, a fresh run, a run that died — takes it off, and a died run is To fix's
@@ -33,6 +34,12 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // `waiting_on_gate`. Each held gate is read as the LATEST gate of its kind on its
 // card, so a design republished after the run stopped (its first gate superseded)
 // is answered by the version a person actually decided.
+//
+// Two facts outside the run take a card off as well: an open delivery at Implemented /
+// In Review / Approved (MOTIR-8611, below), and CI that STARTED on the card's delivery set
+// after the gated run ended (Story MOTIR-10305 · MOTIR-10308) — somebody pushed, so the
+// card is moving again and belongs to In progress, not to a resume nobody needs. That
+// second fact is why the CI handlers (`changeRequestCiFeedback`) recompute this column.
 //
 // ── The shape is `recomputeWorkItemFixReason`'s ─────────────────────────────
 // A read-derived write under the card's row lock, idempotent (an unchanged answer
@@ -58,6 +65,8 @@ export async function deriveResumeState(
     workspaceId: string;
     status: string;
     archivedAt: Date | null;
+    /** For the delivery set's session-branch arm (`collectDeliveries`). */
+    sessionBranch: string | null;
   },
   tx: Prisma.TransactionClient,
 ): Promise<ResumeStateValue> {
@@ -89,6 +98,17 @@ export async function deriveResumeState(
   const run = await dispatchRunRepository.findLatestForWorkItem(item.id, tx);
   if (!run || run.status !== 'succeeded' || run.stopReason !== 'gated') return NOTHING_TO_RESUME;
 
+  // ⚠️ MOVING AGAIN IS NOT PARKED (MOTIR-10308). CI that started on the delivery set after
+  // the run stopped means a push happened since — the card's work went on without a resume,
+  // so offering one would resume a run the card has moved past. The set is
+  // `collectDeliveries`', the one answer to which pull requests deliver a card.
+  if (
+    run.endedAt !== null &&
+    deliverySetHasCiStartedAfter((await collectDeliveries(item, tx)).values(), run.endedAt)
+  ) {
+    return NOTHING_TO_RESUME;
+  }
+
   const { verdict } = await readHeldGateVerdict(run.id, tx);
   // Declined / overturned stay waiting; a gate answered "changes requested" is
   // decided and releases the run to redo the work (MOTIR-9185).
@@ -96,6 +116,33 @@ export async function deriveResumeState(
     resumeState: verdict === 'released' ? 'ready_to_resume' : 'waiting_on_gate',
     resumeRunId: run.id,
   };
+}
+
+/**
+ * Whether CI STARTED on any member of a delivery set strictly after `after` (MOTIR-10308).
+ *
+ * `GithubCheckRun` has no `startedAt`, so a start is read two ways:
+ *  · a row CREATED after it — the first pending row of a run is inserted when CI starts,
+ *    and since MOTIR-3209 a new workflow run at the same commit is a new row (its key
+ *    carries `checkSuiteId`);
+ *  · a row now `pending` UPDATED after it — a re-run of jobs inside the SAME suite upserts
+ *    the existing row back to pending and keeps its `createdAt`.
+ * A row that predates `after` and is not pending again — a pull request already open at the
+ * stop — is not a start, and neither is a status move, which writes no row at all.
+ */
+export function deliverySetHasCiStartedAfter(
+  members: Iterable<{
+    checkRuns: ReadonlyArray<{ createdAt: Date; updatedAt: Date; conclusion: string }>;
+  }>,
+  after: Date,
+): boolean {
+  for (const member of members) {
+    for (const row of member.checkRuns) {
+      if (row.createdAt > after) return true;
+      if (row.conclusion === 'pending' && row.updatedAt > after) return true;
+    }
+  }
+  return false;
 }
 
 /** One gate a `gated` run stopped on, as it stands NOW. */

@@ -36,8 +36,12 @@ const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { homeService } = await import('@/lib/services/homeService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
-const { readHeldGateVerdict, recomputeWorkItemResumeState, resumeStateService } =
-  await import('@/lib/services/resumeStateService');
+const {
+  deliverySetHasCiStartedAfter,
+  readHeldGateVerdict,
+  recomputeWorkItemResumeState,
+  resumeStateService,
+} = await import('@/lib/services/resumeStateService');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 let fx: WorkItemFixture;
@@ -827,5 +831,163 @@ describe('the derivation’s edges', () => {
     await resumeStateService.afterGateDecided(leaf.id, fx.ctx);
 
     expect(await stateOf(leaf.id)).toEqual({ resumeState: 'ready_to_resume', resumeRunId: run.id });
+  });
+});
+
+// ── MOVING AGAIN (Story MOTIR-10305 · MOTIR-10308) ───────────────────────────────────
+// CI that STARTED on a card's delivery set after its gated run ended takes the card off
+// To resume: somebody pushed, so it is moving again and is listed under In progress.
+
+/** A leaf card whose own `run` stopped `gated` at an awaiting gate. */
+async function gatedLeaf() {
+  const leaf = await card(`a leaf ${Math.random()}`, { kind: 'task' });
+  const { run } = await dispatchRunService.open(
+    {
+      projectKey: fx.projectIdentifier,
+      command: 'run',
+      reportedBy: 'cli',
+      cards: [{ key: leaf.identifier, disposition: 'queued' }],
+    },
+    fx.ctx,
+  );
+  await gate(leaf);
+  await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+  expect(await stateOf(leaf.id)).toEqual({ resumeState: 'waiting_on_gate', resumeRunId: run.id });
+  return { leaf, runId: run.id };
+}
+
+describe('moving again — CI started after the gated run ended (MOTIR-10308)', () => {
+  it('the pure rule: a row created after, or pending again after; nothing earlier', () => {
+    const at = new Date('2026-11-01T10:00:00Z');
+    const before = new Date('2026-11-01T09:00:00Z');
+    const later = new Date('2026-11-01T11:00:00Z');
+    const row = (createdAt: Date, updatedAt: Date, conclusion: string) => ({
+      createdAt,
+      updatedAt,
+      conclusion,
+    });
+    expect(deliverySetHasCiStartedAfter([], at)).toBe(false);
+    expect(
+      deliverySetHasCiStartedAfter([{ checkRuns: [row(before, before, 'success')] }], at),
+    ).toBe(false);
+    // Finished after the stop, but started before it: not a new start.
+    expect(deliverySetHasCiStartedAfter([{ checkRuns: [row(before, later, 'failure')] }], at)).toBe(
+      false,
+    );
+    // Exactly at the stop is not after it.
+    expect(deliverySetHasCiStartedAfter([{ checkRuns: [row(at, at, 'pending')] }], at)).toBe(false);
+    expect(
+      deliverySetHasCiStartedAfter(
+        [{ checkRuns: [] }, { checkRuns: [row(later, later, 'success')] }],
+        at,
+      ),
+    ).toBe(true);
+    expect(deliverySetHasCiStartedAfter([{ checkRuns: [row(before, later, 'pending')] }], at)).toBe(
+      true,
+    );
+  });
+
+  it('a check row created after the stop clears it: listed under In progress, To resume one lower', async () => {
+    const { leaf } = await gatedLeaf();
+    const before = await homeService.tabCounts(hctx());
+    await deliveredPr(fx, leaf.id, await connectRepairRepo(fx, 'motir-core'), {
+      headRef: `subtask/${leaf.identifier}`,
+      checks: { Vitest: 'pending' },
+    });
+
+    expect(await recompute(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
+    expect(await stateOf(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
+    const after = await homeService.tabCounts(hctx());
+    expect(after.toResume).toBe(before.toResume - 1);
+    expect(after.inProgress).toBe(before.inProgress + 1);
+    expect(homePageItems(await homeService.listInProgress(hctx())).map((r) => r.id)).toContain(
+      leaf.id,
+    );
+    expect((await homeService.listToResume(hctx())).items.map((r) => r.id)).not.toContain(leaf.id);
+  });
+
+  it('a pull request already open at the stop, with every row before it, still waits — and a status move does not count', async () => {
+    const leaf = await card('open at the stop', { kind: 'task' });
+    const pr = await deliveredPr(fx, leaf.id, await connectRepairRepo(fx, 'motir-core'), {
+      headRef: `subtask/${leaf.identifier}`,
+      checks: { Vitest: 'success' },
+    });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        cards: [{ key: leaf.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await gate(leaf);
+    await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+    const waiting = { resumeState: 'waiting_on_gate', resumeRunId: run.id };
+    expect(await recompute(leaf.id)).toEqual(waiting);
+
+    // A status move within the category writes no check row.
+    await workItemsService.updateStatus(leaf.id, 'todo', fx.ctx);
+    await workItemsService.updateStatus(leaf.id, 'in_progress', fx.ctx);
+    expect(await stateOf(leaf.id)).toEqual(waiting);
+
+    // …and a re-run of jobs in the SAME suite, after the stop, is a start: the row goes
+    // back to pending with its `createdAt` unchanged.
+    const [row] = await adminDb.githubCheckRun.findMany({ where: { pullRequestId: pr.id } });
+    await adminDb.githubCheckRun.update({
+      where: { id: row!.id },
+      data: { conclusion: 'pending' },
+    });
+    expect(await recompute(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
+  });
+
+  it('a card with no pull requests, or whose latest run was not gated, reads as before', async () => {
+    const { leaf, runId } = await gatedLeaf();
+    expect(await recompute(leaf.id)).toEqual({
+      resumeState: 'waiting_on_gate',
+      resumeRunId: runId,
+    });
+    const loose = await card('no run', { kind: 'task' });
+    await deliveredPr(fx, loose.id, await connectRepairRepo(fx, 'motir-ai'), {
+      headRef: `subtask/${loose.identifier}`,
+      checks: { Vitest: 'pending' },
+    });
+    expect(await recompute(loose.id)).toEqual({ resumeState: null, resumeRunId: null });
+  });
+
+  it('the backfill converges a stored card to the live answer, and its dry run reports the clear', async () => {
+    const { workItemResumeStateBackfillService } =
+      await import('@/lib/services/workItemResumeStateBackfillService');
+    const { leaf } = await gatedLeaf();
+    // A row written by CI with no recompute after it — a card stored before this change.
+    const pr = await deliveredPr(fx, leaf.id, await connectRepairRepo(fx, 'motir-core'), {
+      headRef: `subtask/${leaf.identifier}`,
+    });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: pr.id,
+        commitSha: 'f'.repeat(40),
+        checkName: 'Vitest',
+        conclusion: 'pending',
+      },
+    });
+    expect((await stateOf(leaf.id)).resumeState).toBe('waiting_on_gate');
+
+    const dry = await workItemResumeStateBackfillService.backfillResumeState({
+      dryRun: true,
+      workspaceId: fx.workspaceId,
+    });
+    expect(dry.changed).toEqual([
+      { workItemId: leaf.id, identifier: leaf.identifier, from: 'waiting_on_gate', to: null },
+    ]);
+    expect((await stateOf(leaf.id)).resumeState).toBe('waiting_on_gate');
+
+    const applied = await workItemResumeStateBackfillService.backfillResumeState({
+      dryRun: false,
+      workspaceId: fx.workspaceId,
+    });
+    expect(applied.changed).toEqual(dry.changed);
+    expect(await stateOf(leaf.id)).toEqual(await recompute(leaf.id));
+    expect(await stateOf(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
   });
 });

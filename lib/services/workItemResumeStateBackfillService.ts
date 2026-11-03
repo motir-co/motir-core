@@ -12,6 +12,9 @@ import { deriveResumeState, recomputeWorkItemResumeState } from './resumeStateSe
 //
 // Why one is owed: a run that already closed `gated` before the column existed has no
 // next event coming, so its cards would read `null` and never reach To resume.
+// The same sweep converges a card the derivation now answers differently: one whose
+// delivery set started CI after its gated run ended (MOTIR-10308) is cleared, through the
+// same `recomputeWorkItemResumeState`, with no per-card step.
 
 export interface ResumeStateBackfillChange {
   workItemId: string;
