@@ -20,6 +20,10 @@ const client = vi.hoisted(() => ({
   getSharpenSession: vi.fn(),
 }));
 vi.mock('@/lib/planning/sharpenClient', () => client);
+// The paywall reads the viewer's AI access itself; this suite has no server to ask.
+vi.mock('@/lib/hooks/useAiAccess', () => ({
+  useAiAccess: () => ({ access: null, loading: false, refresh: () => {} }),
+}));
 
 import enMessages from '@/messages/en.json';
 import { renderWithIntl } from '../helpers/renderWithIntl';
@@ -137,6 +141,7 @@ function grilling(overrides: Partial<SharpenSessionDto> = {}): SharpenSessionDto
     writeBack: null,
     inFlight: null,
     turns: [],
+    notes: [],
     createdAt: GRILL_AT,
     updatedAt: GRILL_AT,
     lastActivityAt: GRILL_AT,
@@ -465,5 +470,107 @@ describe('an offer that is never held', () => {
     expect(screen.queryByTestId('plan-offer-held')).toBeNull();
     expect(screen.getByTestId('plan-offer-cannot-start')).toBeTruthy();
     expect(client.openSharpen).not.toHaveBeenCalled();
+  });
+});
+
+// ── WHILE THE GRILLING READS (MOTIR-10235) ───────────────────────────────────
+describe('while the grilling reads', () => {
+  const READING = grilling({ pendingQuestion: null, inFlight: { turnId: 'st1', jobId: 'sj1' } });
+
+  it('draws the read’s notes as each poll brings them, keeps the offer held, and keeps Stop', async () => {
+    client.settleSharpen
+      .mockResolvedValueOnce({
+        outcome: 'pending',
+        session: {
+          ...READING,
+          notes: [{ jobId: 'sj1', body: 'Reading the export decision page.' }],
+        },
+      })
+      // The next poll never answers: the read is still running.
+      .mockReturnValue(new Promise(() => {}));
+    await offeredWithGrillOn();
+
+    const note = await screen.findByTestId('conversation-note');
+    expect(note.textContent).toBe('Reading the export decision page.');
+    expect(screen.queryByTestId('sharpen-reading')).toBeNull();
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+
+    client.sharpenAct.mockResolvedValue({
+      outcome: 'sharpening',
+      jobId: 'sj-stop',
+      turnId: 'st-stop',
+      session: READING,
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sharpen-stop'));
+    });
+    expect(client.sharpenAct.mock.calls[0]!.slice(0, 2)).toEqual(['sh1', 'stop']);
+  });
+
+  it('says credits ended the read, by name, and keeps Stop to reach the offer', async () => {
+    client.settleSharpen.mockResolvedValue({
+      outcome: 'failed',
+      session: {
+        ...READING,
+        inFlight: null,
+        turns: [
+          {
+            id: 'pt1',
+            seq: 1,
+            role: 'planner',
+            action: null,
+            body: 'out_of_credits',
+            readingId: null,
+            jobId: 'sj1',
+            failed: true,
+            outOfCredits: true,
+            createdAt: GRILL_AT,
+          },
+        ],
+      },
+    });
+    await offeredWithGrillOn();
+    expect(await screen.findByTestId('sharpen-out-of-credits')).toBeTruthy();
+    expect(screen.queryByTestId('sharpen-error')).toBeNull();
+    expect(screen.getByTestId('sharpen-stop')).toBeTruthy();
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+  });
+
+  it('a read that failed for any other reason is the plain failure, with Try again', async () => {
+    client.settleSharpen.mockResolvedValue({
+      outcome: 'failed',
+      session: { ...READING, inFlight: null },
+    });
+    await offeredWithGrillOn();
+    expect(await screen.findByTestId('sharpen-error')).toBeTruthy();
+    expect(screen.queryByTestId('sharpen-out-of-credits')).toBeNull();
+  });
+});
+
+// ── THE ANSWERING SESSION'S NOTES (MOTIR-10235) ──────────────────────────────
+describe('what the answering session said', () => {
+  it('draws the stored notes above the answer their job produced, after a return to the thread', () => {
+    const answered = {
+      ...conversation([turn(0), turn(1, 'assistant'), turn(2), turn(3, 'assistant')]),
+      notes: [
+        { jobId: 'job-1', body: 'Searching the work items for exports.' },
+        { jobId: 'job-3', body: 'Reading the report service.' },
+      ],
+    };
+    renderWithIntl(rail({ session: answered }));
+    const boxes = screen.getAllByTestId('conversation-notes');
+    expect(boxes.map((b) => b.textContent)).toEqual([
+      'Searching the work items for exports.',
+      'Reading the report service.',
+    ]);
+    expect(boxes.every((b) => b.getAttribute('data-live') === 'false')).toBe(true);
+  });
+
+  it('draws nothing for an answer whose job wrote no notes', () => {
+    renderWithIntl(
+      rail({ session: { ...conversation([turn(0), turn(1, 'assistant')]), notes: [] } }),
+    );
+    expect(screen.queryByTestId('conversation-notes')).toBeNull();
   });
 });

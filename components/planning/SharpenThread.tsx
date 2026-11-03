@@ -6,6 +6,7 @@ import { Bot, RefreshCw, SkipForward, Square } from 'lucide-react';
 import { AiPaywall } from '@/components/ai/AiPaywall';
 import { Button } from '@/components/ui/Button';
 import { Bubble } from '@/components/planning/PlanChangeRail';
+import { ConversationNotes, notesOfJob } from '@/components/planning/ConversationNotes';
 import { SharpenQuestionTurn } from '@/components/planning/SharpenQuestionTurn';
 import { SharpenSummary } from '@/components/planning/SharpenSummary';
 import type { SharpenAction, SharpenAssumption } from '@/lib/ai/types';
@@ -83,7 +84,8 @@ function AssumptionCard({ assumption }: { assumption: SharpenAssumption }) {
 }
 
 /** Stop grilling where no question is pending to carry it — a conversation's
- *  failed turn or out-of-credits state (design panel 8). */
+ *  failed turn or out-of-credits state (design panel 8), and a read in flight
+ *  (MOTIR-10235). */
 function StopGrilling({ onStop }: { onStop: () => void }) {
   const t = useTranslations('sharpen.question');
   return (
@@ -133,6 +135,11 @@ export function SharpenThread({
   let lastQuestion: string | null = null;
   session.turns.forEach((turn, index) => {
     if (turn.role === 'planner') {
+      // What the job said while it worked, above what it produced (MOTIR-10235).
+      const said = notesOfJob(session.notes, turn.jobId);
+      if (said.length > 0) {
+        rows.push(<ConversationNotes key={`${turn.id}-notes`} notes={said} live={false} />);
+      }
       if (turn.failed || index === pendingIndex || isEndTurn(session, turn, index)) return;
       questionNumber += 1;
       lastQuestion = turn.body;
@@ -182,6 +189,12 @@ export function SharpenThread({
   });
 
   const nothingSettled = session.settled.length === 0 && session.assumptions.length === 0;
+  // The job in flight, in its own words — in place of the fixed reading line once
+  // it has said something (MOTIR-10235).
+  const liveNotes =
+    session.status === 'open' ? notesOfJob(session.notes, session.inFlight?.jobId) : [];
+  // Stop stays reachable while a read runs with no question on screen to carry it.
+  const readingWithoutQuestion = pending && !error && session.status === 'open' && !pendingQuestion;
 
   return (
     <div className="flex flex-col gap-3" data-testid="sharpen-thread">
@@ -201,13 +214,22 @@ export function SharpenThread({
       ) : null}
 
       {pending && !error ? (
-        <p
-          aria-live="polite"
-          className="pl-9 text-xs text-(--el-text-secondary)"
-          data-testid="sharpen-reading"
-        >
-          {tc('progress.reading')}
-        </p>
+        liveNotes.length > 0 ? (
+          <ConversationNotes notes={liveNotes} live />
+        ) : (
+          <p
+            aria-live="polite"
+            className="pl-9 text-xs text-(--el-text-secondary)"
+            data-testid="sharpen-reading"
+          >
+            {tc('progress.reading')}
+          </p>
+        )
+      ) : null}
+      {readingWithoutQuestion ? (
+        <div className="pl-9">
+          <StopGrilling onStop={onStop} />
+        </div>
       ) : null}
 
       {error === 'outOfCredits' && conversationScope ? (

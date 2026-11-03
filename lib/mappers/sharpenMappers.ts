@@ -1,3 +1,4 @@
+import type { ConversationNoteDto } from '@/lib/dto/conversationNote';
 import type { SharpenSession, SharpenTurn } from '@/generated/prisma/client';
 import type {
   CarriedAnswers,
@@ -22,6 +23,10 @@ export interface SharpenFailedRecord {
   reason: string;
 }
 
+/** A failed record's `reason` when the job stopped because the org ran out of
+ *  credits (MOTIR-10235) — the one failure the person is told about by name. */
+export const SHARPEN_OUT_OF_CREDITS_REASON = 'out_of_credits';
+
 export function isFailedRecord(record: unknown): record is SharpenFailedRecord {
   return (
     typeof record === 'object' &&
@@ -40,6 +45,10 @@ export function toSharpenTurnDto(row: SharpenTurn): SharpenTurnDto {
     readingId: row.readingId,
     jobId: row.jobId,
     failed: row.role === 'planner' && isFailedRecord(row.record),
+    outOfCredits:
+      row.role === 'planner' &&
+      isFailedRecord(row.record) &&
+      row.record.reason === SHARPEN_OUT_OF_CREDITS_REASON,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -57,6 +66,7 @@ export function inFlightTurn(turns: readonly SharpenTurn[]): SharpenTurn | null 
 export function toSharpenSessionDto(
   row: SharpenSession,
   turns: readonly SharpenTurn[],
+  notes: readonly ConversationNoteDto[] = [],
 ): SharpenSessionDto {
   const inFlight = inFlightTurn(turns);
   return {
@@ -73,6 +83,7 @@ export function toSharpenSessionDto(
     writeBack: (row.writeBack as SharpenSessionDto['writeBack']) ?? null,
     inFlight: inFlight ? { turnId: inFlight.id, jobId: inFlight.jobId } : null,
     turns: turns.map(toSharpenTurnDto),
+    notes: [...notes],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     lastActivityAt: row.lastActivityAt.toISOString(),

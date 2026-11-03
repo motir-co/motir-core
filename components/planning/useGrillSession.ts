@@ -113,6 +113,13 @@ function isOutOfCredits(err: unknown): boolean {
   );
 }
 
+/** The session's latest job stopped because the org ran out of credits — a long
+ *  read the credit gate ended (MOTIR-10235), told to the person by name. */
+export function endedOutOfCredits(session: SharpenSessionDto): boolean {
+  const last = session.turns.findLast((t) => t.role === 'planner');
+  return last?.outOfCredits === true;
+}
+
 /** The person turn a failed planner turn answers — the one Try again re-runs. */
 function failedPersonTurnId(session: SharpenSessionDto): string | null {
   const turns = session.turns;
@@ -202,9 +209,17 @@ export function useGrillSession({
         return;
       }
       if (controller.signal.aborted || !mountedRef.current) return;
+      // Drawn on every poll, pending too, so the job's notes land as it writes them
+      // (MOTIR-10235).
+      setSession(settled.session);
       if (settled.outcome !== 'pending') {
-        setSession(settled.session);
-        setError(settled.outcome === 'failed' ? 'failed' : null);
+        setError(
+          settled.outcome === 'failed'
+            ? endedOutOfCredits(settled.session)
+              ? 'outOfCredits'
+              : 'failed'
+            : null,
+        );
         return;
       }
       await new Promise((r) => setTimeout(r, SETTLE_POLL_MS));

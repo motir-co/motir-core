@@ -1,6 +1,6 @@
 import type { Prisma, SharpenSession, SharpenTurn } from '@/generated/prisma/client';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { MotirAiConfigError } from '@/lib/ai/errors';
+import { MotirAiConfigError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { getJob, submitJob } from '@/lib/ai/motirAiClient';
 import { parseSharpenTurn, type SharpenTurnResult } from '@/lib/ai/sharpenTurn';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
@@ -9,6 +9,7 @@ import type {
   SharpenAction,
   SharpenAssumption,
   SharpenConversationContext,
+  SharpenConversationTurn,
   SharpenJobContext,
   SharpenQuestion,
   SharpenRunContext,
@@ -22,6 +23,7 @@ import type {
 import {
   inFlightTurn,
   isFailedRecord,
+  SHARPEN_OUT_OF_CREDITS_REASON,
   toCarriedAnswers,
   toSharpenSessionDto,
 } from '@/lib/mappers/sharpenMappers';
@@ -38,6 +40,7 @@ import {
 } from '@/lib/repositories/sharpenSessionRepository';
 import { sharpenTurnRepository } from '@/lib/repositories/sharpenTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { conversationNoteService } from '@/lib/services/conversationNoteService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
@@ -239,7 +242,8 @@ async function readDto(
 ): Promise<SharpenSessionDto> {
   const row = await ownSession(sessionId, ctx, tx);
   const turns = await sharpenTurnRepository.listTurns(row.id, tx);
-  return toSharpenSessionDto(row, turns);
+  const notes = await conversationNoteService.listFor({ sharpenSessionId: row.id }, tx);
+  return toSharpenSessionDto(row, turns, notes);
 }
 
 function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSessionDto> {
@@ -373,7 +377,25 @@ async function conversationContextFor(
       requests,
       readAnswer: answer?.body ?? null,
       card: card ? { key: card.identifier, title: card.title } : null,
+      turns: conversationTurnsOf(turns),
     };
+  });
+}
+
+/**
+ * The WHOLE conversation, both sides, in order (MOTIR-10235): a person's "yes"
+ * agrees to what the planner said before it, so the grilling must read the
+ * planner's replies as well as the person's turns. Blank bodies are left out —
+ * motir-ai refuses a turn with no body.
+ */
+export function conversationTurnsOf(
+  turns: readonly { role: string; body: string }[],
+): SharpenConversationTurn[] {
+  return turns.flatMap((t): SharpenConversationTurn[] => {
+    if (t.body.trim().length === 0) return [];
+    if (t.role === 'user') return [{ role: 'person', body: t.body }];
+    if (t.role === 'assistant') return [{ role: 'planner', body: t.body }];
+    return [];
   });
 }
 
@@ -655,7 +677,13 @@ async function readResult(
 ): Promise<{ pending: true } | { result: SharpenTurnResult } | { failure: string }> {
   const job = await getJob(jobId, ctx.projectId);
   if (job.status === 'queued' || job.status === 'running') return { pending: true };
-  if (job.status !== 'succeeded') return { failure: `job ${job.status}` };
+  if (job.status !== 'succeeded') {
+    // Credits stop a long read (MOTIR-10235); the person is told that is what ended it.
+    if (job.error instanceof MotirAiOutOfCreditsError) {
+      return { failure: SHARPEN_OUT_OF_CREDITS_REASON };
+    }
+    return { failure: `job ${job.status}` };
+  }
   const result = parseSharpenTurn(job.result?.sharpenTurn);
   if (!result) return { failure: 'unreadable result' };
   if (result.kind === 'unavailable') return { failure: 'planner unavailable' };

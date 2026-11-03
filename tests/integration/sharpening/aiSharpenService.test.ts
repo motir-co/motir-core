@@ -15,7 +15,10 @@ import { addToProjectAs } from '../../helpers/workspaceRoleFixtures';
 const jobs = vi.hoisted(() => ({
   next: 0,
   submitted: [] as Array<{ kind: string; context: Record<string, unknown> }>,
-  results: new Map<string, { status: string; result?: Record<string, unknown> | null }>(),
+  results: new Map<
+    string,
+    { status: string; result?: Record<string, unknown> | null; error?: Error | null }
+  >(),
   failNext: null as Error | null,
 }));
 
@@ -32,13 +35,14 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   }),
   getJob: vi.fn(async (jobId: string) => {
     const r = jobs.results.get(jobId) ?? { status: 'running' };
-    return { jobId, status: r.status, result: r.result ?? null, error: null };
+    return { jobId, status: r.status, result: r.result ?? null, error: r.error ?? null };
   }),
   streamJob: vi.fn(),
 }));
 
 const { aiSharpenService } = await import('@/lib/services/aiSharpenService');
 const { plansService } = await import('@/lib/services/plansService');
+const { conversationNoteService } = await import('@/lib/services/conversationNoteService');
 const { MotirAiOutOfCreditsError } = await import('@/lib/ai/errors');
 const errors = await import('@/lib/sharpening/errors');
 const { PermissionDeniedError } = await import('@/lib/projects/errors');
@@ -379,6 +383,59 @@ describe('act and settle', () => {
     expect(re.turnId).toBe(acted.turnId);
   });
 
+  it('says by name when credits ended the read (MOTIR-10235), and not for any other failure', async () => {
+    const { sessionId } = await openWithQuestion();
+    const acted = await aiSharpenService.act(sessionId, 'answer', { readingId: 'a' }, pctx);
+    jobs.results.set(acted.jobId!, {
+      status: 'failed',
+      error: new MotirAiOutOfCreditsError('balance 0'),
+    });
+
+    const r = await aiSharpenService.settle(sessionId, acted.jobId!, pctx);
+    expect(r.outcome).toBe('failed');
+    expect(r.session.turns.at(-1)).toMatchObject({
+      role: 'planner',
+      failed: true,
+      outOfCredits: true,
+    });
+    const stored = await adminDb.sharpenTurn.findFirstOrThrow({
+      where: { sessionId, role: 'planner', jobId: acted.jobId! },
+    });
+    expect(stored.record).toEqual({ failed: true, reason: 'out_of_credits' });
+
+    // A failure for any other reason stays a plain failed turn.
+    const again = await aiSharpenService.resubmit(sessionId, acted.turnId!, pctx);
+    jobs.results.set(again.jobId!, { status: 'failed' });
+    const plain = await aiSharpenService.settle(sessionId, again.jobId!, pctx);
+    expect(plain.session.turns.at(-1)).toMatchObject({ failed: true, outOfCredits: false });
+    // A question or an answer is never an out-of-credits turn.
+    expect(plain.session.turns.filter((t) => !t.failed).every((t) => !t.outOfCredits)).toBe(true);
+  });
+
+  it('carries the notes its jobs wrote while they read (MOTIR-10235), on settle and on read', async () => {
+    const planId = await plannedPlan();
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    expect(opened.session.notes).toEqual([]);
+    await conversationNoteService.record(
+      { jobId: opened.jobId!, notes: ['Reading the export service.', 'Checking the plan.'] },
+      { ctx: { userId: pctx.userId, workspaceId: pctx.workspaceId }, projectId: pctx.projectId },
+    );
+
+    const pending = await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    expect(pending.outcome).toBe('pending');
+    expect(pending.session.notes).toEqual([
+      { jobId: opened.jobId, body: 'Reading the export service.' },
+      { jobId: opened.jobId, body: 'Checking the plan.' },
+    ]);
+    succeed(opened.jobId!, questionTurn());
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    const reread = await aiSharpenService.getOpenFor({ planId }, pctx);
+    expect(reread?.notes.map((n) => n.body)).toEqual([
+      'Reading the export service.',
+      'Checking the plan.',
+    ]);
+  });
+
   it('accepts Stop while an answer is in flight; the late answer does not change the ended state', async () => {
     const { sessionId } = await openWithQuestion();
     const answer = await aiSharpenService.act(sessionId, 'answer', { readingId: 'a' }, pctx);
@@ -615,6 +672,12 @@ describe('a conversation target', () => {
         requests: ['Add shared export presets', 'For the finance team.'],
         readAnswer: 'Presets would sit beside the export button.',
         card: { key: card.identifier, title: card.title },
+        // MOTIR-10235: both sides, in order, so an agreement reads against what it agreed to.
+        turns: [
+          { role: 'person', body: 'Add shared export presets' },
+          { role: 'planner', body: 'Presets would sit beside the export button.' },
+          { role: 'person', body: 'For the finance team.' },
+        ],
       },
     });
     expect('run' in sharpenOf()).toBe(false);
@@ -628,6 +691,7 @@ describe('a conversation target', () => {
       requests: ['Plan the quarter'],
       readAnswer: null,
       card: null,
+      turns: [{ role: 'person', body: 'Plan the quarter' }],
     });
   });
 

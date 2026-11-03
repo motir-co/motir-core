@@ -606,6 +606,22 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
   return acts.filter((act) => act.kind !== 'reading');
 }
 
+/**
+ * The act record with the `note` acts the settled thread now STORES taken out
+ * (MOTIR-10235). An answering session's notes stream live as `note` frames and are
+ * also kept against the conversation; once the answer lands the rail draws the
+ * stored copy above it, so the live copy in the record would say each one twice.
+ * A note core did not store (a refused write) stays in the record.
+ */
+export function withoutStoredNotes(
+  acts: PlanChangeProgress[],
+  session: { notes?: readonly { body: string }[] } | null,
+): PlanChangeProgress[] {
+  const stored = new Set((session?.notes ?? []).map((n) => n.body));
+  if (stored.size === 0) return acts;
+  return acts.filter((act) => act.kind !== 'note' || !stored.has(act.text));
+}
+
 const STARTING_ACT: PlanChangeProgress = { kind: 'starting' };
 
 /** The run with the starting-up act appended (MOTIR-9255), once. */
@@ -2192,7 +2208,7 @@ export function usePlanChangeConversation({
           // `reading` act would otherwise stay under the answer saying "Reading
           // your request…", and the finished job id would stay in state for the
           // NEXT run's Stop to post — a job the stop door never matched.
-          acts: withoutReading(s.acts),
+          acts: withoutStoredNotes(withoutReading(s.acts), settled.session),
           jobId: null,
           // `silent` is NOT the honest "I could not find that" — that is prose
           // the handler returns, and it lands as an ordinary answer with no

@@ -35,6 +35,22 @@ export const planChangeTurnRepository = {
     return tx.planChangeTurn.findFirst({ where: { sessionId, workspaceId, jobId, role } });
   },
 
+  /** The conversation a job was submitted for, found by the job alone, within
+   *  one project of the bound workspace (MOTIR-10235) — the `user` turn the ASK
+   *  door bound it to, or the `assistant` turn it landed as. Null when no turn
+   *  carries the job yet. */
+  async findSessionIdByJobInProject(
+    jobId: string,
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ sessionId: string } | null> {
+    return tx.planChangeTurn.findFirst({
+      where: { jobId, workspaceId, session: { projectId } },
+      select: { sessionId: true },
+    });
+  },
+
   /** ONE turn of a session, by id — the read a CORRECTION makes before it re-runs
    *  a turn under the other intent (MOTIR-1818; ADR §3). Scoped by `sessionId`
    *  AND `workspaceId`, so a turn id from another thread — or another tenant —

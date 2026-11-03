@@ -40,6 +40,7 @@ import { MOTIR_AI_UNAVAILABLE } from '@/lib/planning/submitStartingUp';
 import { useGrillSession, type GrillOffer } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
+import { ConversationNotes, notesOfJob } from '@/components/planning/ConversationNotes';
 import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
 import {
   groupNarration,
@@ -1183,6 +1184,14 @@ export function PlanChangeRail({
         {pauseAnchor < 0 ? pauseBlock : null}
         {turns.map((turn, i) => (
           <Fragment key={turn.id}>
+            {/* What the answering session said while it worked (MOTIR-10235),
+                stored against the conversation, above the answer it produced. */}
+            {turn.role === 'assistant' ? (
+              <ConversationNotes
+                notes={notesOfJob(state.session?.notes, turn.jobId)}
+                live={false}
+              />
+            ) : null}
             <Turn
               turn={turn}
               targetKeys={
