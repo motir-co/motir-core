@@ -1721,6 +1721,8 @@ export default defineConfig({
         'lib/github/orgInstallation.ts',
         'lib/github/actionsVariables.ts',
         'lib/github/repoVisibility.ts',
+        // MOTIR-10289 — the CodeQL default-setup runner the fleet flip now moves.
+        'lib/github/codeScanningDefaultSetup.ts',
         'lib/ciFleet/runnerTarget.ts',
         'lib/repositories/projectRunnerGroupRepository.ts',
         'lib/services/fleetReadinessService.ts',
@@ -6579,6 +6581,7 @@ export default defineConfig({
         'lib/github/orgInstallation.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/actionsVariables.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/github/repoVisibility.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/github/codeScanningDefaultSetup.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/ciFleet/runnerTarget.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/projectRunnerGroupRepository.ts': {
           branches: 90,

@@ -32,6 +32,13 @@
 //                                                            COLLECTION, not on the name)
 //   - PATCH  /orgs/{org}/actions/variables/{name}         → update
 //   - DELETE /orgs/{org}/actions/variables/{name}         → delete
+//   - GET    /repos/{org}/{name}/code-scanning/default-setup
+//                                                         → the repository's CodeQL default setup
+//                                                            (MOTIR-10289): the store's, else the
+//                                                            control's, else `not-configured`
+//   - PATCH  /repos/{org}/{name}/code-scanning/default-setup
+//                                                         → moves its runner in the store; 422 for
+//                                                            a repository not configured
 //
 // ⚠️ SCOPED TO THE ORGS AND INSTALLATIONS THE CONTROL NAMES, AND REGISTERED BEFORE THE
 // MERGE AND REPOS SEAMS. Undici tries intercepts in REGISTRATION order and falls through a
@@ -87,6 +94,15 @@ export interface FleetOrgCiRepository {
   workflowCommit?: { sha: string; date: string };
   /** Defaults to `true`: whether the installation reaches it. */
   granted?: boolean;
+  /** Its CodeQL default setup as the run starts; omitted → `not-configured`. */
+  defaultSetup?: FleetOrgCiDefaultSetup;
+}
+
+/** A repository's CodeQL default setup, as the fake holds it. */
+export interface FleetOrgCiDefaultSetup {
+  state: 'configured' | 'not-configured';
+  runnerType?: 'standard' | 'labeled';
+  runnerLabel?: string | null;
 }
 
 /** A forced failure for the next variable write to the org. */
@@ -134,6 +150,8 @@ export interface FleetOrgCiStore {
   variables: Record<string, Record<string, FleetOrgCiStoredVariable>>;
   /** Forced-failure ids already spent. */
   spentFailures: string[];
+  /** lowercased org → lowercased repository → its default setup after a PATCH. */
+  defaultSetups?: Record<string, Record<string, FleetOrgCiDefaultSetup>>;
 }
 
 /** One outbound call the fake answered — the journal's line shape (JSONL). */
@@ -181,6 +199,7 @@ function readStore(): FleetOrgCiStore {
     return {
       variables: parsed.variables ?? {},
       spentFailures: parsed.spentFailures ?? [],
+      defaultSetups: parsed.defaultSetups ?? {},
     };
   } catch {
     return empty;
@@ -306,6 +325,7 @@ const REPO_PATH = /^\/repos\/([^/]+)\/([^/]+)$/;
 const COMMITS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits$/;
 const VARIABLES_PATH = /^\/orgs\/([^/]+)\/actions\/variables$/;
 const VARIABLE_PATH = /^\/orgs\/([^/]+)\/actions\/variables\/([^/]+)$/;
+const DEFAULT_SETUP_PATH = /^\/repos\/([^/]+)\/([^/]+)\/code-scanning\/default-setup$/;
 
 /** A path's org (decoded), when the pattern matches and the control names that org. */
 function scopedOrg(pattern: RegExp, path: string): RegExpExecArray | null {
@@ -526,6 +546,51 @@ export function installGithubFleetOrgCiMock(agent: MockAgent): void {
     .intercept({ path: (p) => scopedOrg(VARIABLE_PATH, p) !== null, method: 'DELETE' })
     .reply(variableCall('DELETE'))
     .persist();
+
+  // ── A repository's CodeQL default setup (MOTIR-10289) ─────────────────────
+  const defaultSetupCall = (method: 'GET' | 'PATCH') => (req: MockRequest) => {
+    const path = String(req.path);
+    const m = DEFAULT_SETUP_PATH.exec(pathOnly(path))!;
+    const owner = orgControl(readControl(), decode(m[1]!))!;
+    const org = owner.login.toLowerCase();
+    const name = decode(m[2]!).toLowerCase();
+    const body = parseBody(req.body);
+    const answer = (status: number, data: object): MockReply => {
+      journal({ method, path, org, body, status });
+      return reply(status, data);
+    };
+    if (!authorised(req, owner)) return answer(401, { message: 'Bad credentials' });
+    const repo = (owner.entry.repositories ?? []).find((r) => r.name.toLowerCase() === name);
+    if (!repo) return answer(404, { message: 'Not Found' });
+    const store = readStore();
+    const setups = ((store.defaultSetups ??= {})[org] ??= {});
+    const current = setups[name] ?? repo.defaultSetup ?? { state: 'not-configured' };
+    if (method === 'GET') {
+      return answer(200, {
+        state: current.state,
+        runner_type: current.runnerType ?? 'standard',
+        runner_label: current.runnerLabel ?? null,
+      });
+    }
+    if (current.state !== 'configured') {
+      return answer(422, { message: 'Code scanning default setup is not configured' });
+    }
+    const runnerType = body?.['runner_type'] === 'labeled' ? 'labeled' : 'standard';
+    const label = body?.['runner_label'];
+    setups[name] = {
+      state: 'configured',
+      runnerType,
+      runnerLabel: runnerType === 'labeled' && typeof label === 'string' ? label : null,
+    };
+    writeStore(store);
+    return answer(200, {});
+  };
+  for (const method of ['GET', 'PATCH'] as const) {
+    pool
+      .intercept({ path: (p) => scopedOrg(DEFAULT_SETUP_PATH, p) !== null, method })
+      .reply(defaultSetupCall(method))
+      .persist();
+  }
 
   // The CREATE is on the collection.
   pool

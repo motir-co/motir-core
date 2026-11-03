@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { revalidatePath } from 'next/cache';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import {
+  FleetOrgCiCodeScanningError,
   FleetOrgCiGithubWriteError,
   FleetOrgCiNotReadyError,
   FleetOrgCiTargetUnknownError,
@@ -136,6 +137,29 @@ describe('setFleetOrgCiAction', () => {
         org: ORG,
         status,
         operation,
+      });
+      expect(revalidatePath).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    [403, 'write', 'fleet'],
+    [null, 'write', 'github_hosted'],
+    [502, 'read', 'fleet'],
+  ] as const)(
+    'CODE_SCANNING_FAILED — names the repository, status %s, operation %s, towards %s (MOTIR-10289)',
+    async (status, operation, to) => {
+      setEnabled.mockRejectedValueOnce(
+        new FleetOrgCiCodeScanningError(ORG, 'motir-ai', status, operation, to),
+      );
+      expect(await setFleetOrgCiAction(PROJECT, ORG, to === 'fleet', 'x')).toEqual({
+        ok: false,
+        code: 'CODE_SCANNING_FAILED',
+        org: ORG,
+        repo: 'motir-ai',
+        status,
+        operation,
+        to,
       });
       expect(revalidatePath).not.toHaveBeenCalled();
     },

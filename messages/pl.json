@@ -12586,7 +12586,8 @@
         "neverChanged": "Nigdy nie zmieniano",
         "auditLink": "Dziennik audytu",
         "variable": "Zmienna GitHub",
-        "repositories": "Repozytoria"
+        "repositories": "Repozytoria",
+        "codeScanning": "Domyślna konfiguracja CodeQL"
       },
       "variable": {
         "present": "{name} = {value} w {org} (prywatne repozytoria) — nowe zadania żądają floty.",
@@ -12606,6 +12607,13 @@
       },
       "repositories": {
         "count": "{count, plural, one {# prywatne repozytorium} few {# prywatne repozytoria} many {# prywatnych repozytoriów} other {# prywatnego repozytorium}}, odczytywane w czasie działania z prywatnych repozytoriów projektu {project} w {org}"
+      },
+      "codeScanning": {
+        "fleet": "we flocie ({label})",
+        "githubHosted": "na runnerach hostowanych przez GitHub",
+        "unknownStatus": "nie udało się odczytać — GitHub odpowiedział HTTP {status}",
+        "unknownUnreachable": "nie udało się odczytać — nie można połączyć się z GitHub",
+        "none": "Żadne prywatne repozytorium w {org} nie ma skonfigurowanej domyślnej konfiguracji CodeQL."
       },
       "monitoringLine": "Maszyny Motir są widoczne pod moooon B.V. w Monitorowanie › Flota",
       "onCallout": {
@@ -12710,6 +12718,11 @@
         "githubStatus": "Nie {direction}: GitHub odmówił operacji „{operation}” dla {name} w {org} (HTTP {status}).",
         "githubUnreachable": "Nie {direction}: nie można połączyć się z GitHubem, aby wykonać „{operation}” dla {name} w {org}.",
         "nothingChanged": "Nic się nie zmieniło: ustawienie i zmienna GitHub są takie jak wcześniej.",
+        "codeScanningWriteStatus": "Nie {direction}: GitHub odmówił przeniesienia domyślnej konfiguracji CodeQL repozytorium {repo} na: {runner} (HTTP {status}).",
+        "codeScanningWriteUnreachable": "Nie {direction}: nie można połączyć się z GitHub, aby przenieść domyślną konfigurację CodeQL repozytorium {repo} na: {runner}.",
+        "codeScanningReadStatus": "Nie {direction}: GitHub odmówił odczytu domyślnej konfiguracji CodeQL repozytorium {repo} (HTTP {status}).",
+        "codeScanningReadUnreachable": "Nie {direction}: nie można połączyć się z GitHub, aby odczytać domyślną konfigurację CodeQL repozytorium {repo}.",
+        "codeScanningNothingChanged": "Nic się nie zmieniło: ustawienie, zmienna GitHub i domyślna konfiguracja CodeQL każdego repozytorium są takie jak wcześniej.",
         "notReady": "Nie włączono: flota przestała być gotowa po załadowaniu tej strony.",
         "notReadyList": "Obecnie niespełnione: {conditions}. Nic się nie zmieniło. Gotowość poniżej została sprawdzona ponownie.",
         "notPermitted": "Nie zmieniono: tylko superadmin może zmienić to ustawienie.",
@@ -12723,6 +12736,10 @@
       "direction": {
         "on": "włączono",
         "off": "wyłączono"
+      },
+      "runner": {
+        "fleet": "flota",
+        "githubHosted": "runnery hostowane przez GitHub"
       },
       "operation": {
         "read": "odczyt",

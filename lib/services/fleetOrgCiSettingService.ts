@@ -4,6 +4,7 @@ import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config'
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import type {
+  FleetOrgCiCodeScanningDTO,
   FleetOrgCiFlipDTO,
   FleetOrgCiStateDTO,
   FleetOrgCiStoredStateDTO,
@@ -15,6 +16,13 @@ import {
   actionsVariableClient,
   type OrgVariable,
 } from '@/lib/github/actionsVariables';
+import {
+  CodeScanningDefaultSetupApiError,
+  codeScanningDefaultSetupClient,
+  runnerRequests,
+  type DefaultSetup,
+  type DefaultSetupRunner,
+} from '@/lib/github/codeScanningDefaultSetup';
 import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import {
   findProvisioningInstallationId,
@@ -25,6 +33,7 @@ import { toFleetOrgCiStoredStateDTO } from '@/lib/mappers/fleetOrgCiSettingMappe
 import { requirePlatformStaff, type PlatformPrincipal } from '@/lib/platform/auth';
 import { withPlatformWrite, type PlatformAuditEntry } from '@/lib/platform/context';
 import {
+  FleetOrgCiCodeScanningError,
   FleetOrgCiGithubWriteError,
   FleetOrgCiNotReadyError,
   FleetOrgCiTargetUnknownError,
@@ -69,6 +78,26 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
  * transaction. If that also fails, GitHub and the stored state disagree; a
  * constant message with the pair is logged and `getState`'s `variable` read makes
  * the drift visible afterwards.
+ *
+ * ---------------------------------------------------------------------------
+ * CODEQL DEFAULT SETUP TRAVELS WITH THE FLIP (MOTIR-10289)
+ * ---------------------------------------------------------------------------
+ * The variable moves every job a workflow FILE declares. CodeQL's default setup
+ * has no file: its `Analyze` jobs ask for whatever runner the repository's
+ * default-setup setting names, and they never read `MOTIR_RUNNER`. So the flip
+ * moves that setting too, for each private repository of the pair whose default
+ * setup is CONFIGURED: ON puts it on `labeled` + `MOTIR_RUNNER_LABEL`, OFF puts a
+ * repository on that label back on `standard`. A repository already where the
+ * flip wants it, one whose default setup is not configured, and one without code
+ * scanning are left exactly as they are — the flip never configures CodeQL.
+ * The settings are read before the transaction (with the variable, for
+ * compensation) and written inside it after the variable, under the same rule: a
+ * failed read or write refuses the flip, nothing is stored, and whatever was
+ * already moved on GitHub is put back.
+ *
+ * ⚠️ BOOT IS NOT GATED HERE. A job that requests `motir-runner` still boots
+ * whatever the switch says (`lib/ciFleet/config.ts`, "AND NOT BY TENANT FLAG");
+ * the switch controls what jobs REQUEST, never what the fleet serves.
  */
 
 const LOG = '[fleet-org-ci-setting]';
@@ -86,6 +115,7 @@ class UnchangedUnderLock extends Error {}
 function statusOf(err: unknown): number | null {
   if (
     err instanceof ActionsVariableApiError ||
+    err instanceof CodeScanningDefaultSetupApiError ||
     err instanceof OrgTargetAuthError ||
     err instanceof RepoVisibilityApiError ||
     err instanceof RepoProvisioningApiError
@@ -98,6 +128,7 @@ function statusOf(err: unknown): number | null {
 function isGithubFailure(err: unknown): boolean {
   return (
     err instanceof ActionsVariableApiError ||
+    err instanceof CodeScanningDefaultSetupApiError ||
     err instanceof OrgTargetAuthError ||
     err instanceof RepoVisibilityApiError ||
     err instanceof RepoProvisioningApiError
@@ -185,6 +216,31 @@ async function storedState(target: FleetOrgCiTargetDTO): Promise<FleetOrgCiStore
   return toFleetOrgCiStoredStateDTO(row, updater);
 }
 
+/** Undo what a failed flip moved on GitHub: the variable, then every default
+ *  setup. What cannot be put back is logged with the pair — never the token. */
+async function compensate(
+  target: FleetOrgCiTargetDTO,
+  previous: OrgVariable | null,
+  moved: DefaultSetupMove[],
+  context: Record<string, unknown>,
+): Promise<void> {
+  try {
+    await restoreVariable(previous, orgTargetFor(target));
+  } catch (restoreErr) {
+    console.error(
+      `${LOG} GitHub and the stored state now disagree: the flip's commit failed and the variable could not be restored`,
+      { ...context, restoreStatus: statusOf(restoreErr) },
+    );
+  }
+  const unrestored = await restoreDefaultSetups(target, moved);
+  if (unrestored.length > 0) {
+    console.error(
+      `${LOG} GitHub and the stored state now disagree: the flip failed and these CodeQL default setups could not be put back`,
+      { ...context, repositories: unrestored },
+    );
+  }
+}
+
 /** Put the variable back to what it was before a flip whose commit failed. */
 async function restoreVariable(
   previous: OrgVariable | null,
@@ -194,6 +250,171 @@ async function restoreVariable(
     await actionsVariableClient.ensureOrgVariable(MOTIR_RUNNER_VARIABLE, previous.value, target);
   } else {
     await actionsVariableClient.deleteOrgVariable(MOTIR_RUNNER_VARIABLE, target);
+  }
+}
+
+/** One private repository of a pair. */
+interface PairRepo {
+  owner: string;
+  name: string;
+}
+
+/** A default-setup runner move the flip makes on one repository. */
+interface DefaultSetupMove {
+  repo: PairRepo;
+  from: DefaultSetupRunner;
+  to: DefaultSetupRunner;
+}
+
+const FLEET_RUNNER: DefaultSetupRunner = { type: 'labeled', label: MOTIR_RUNNER_LABEL };
+const HOSTED_RUNNER: DefaultSetupRunner = { type: 'standard' };
+
+const direction = (enabled: boolean): 'fleet' | 'github_hosted' =>
+  enabled ? 'fleet' : 'github_hosted';
+
+/**
+ * The pair's PRIVATE repositories on its org, in name order — the set the
+ * default-setup move considers. A GitHub failure reading visibility throws
+ * `FleetOrgCiGithubWriteError` (`read`), as `offeredTargets` does.
+ */
+async function privateReposOf(target: FleetOrgCiTargetDTO): Promise<PairRepo[]> {
+  const key = target.org.toLowerCase();
+  const realized = await withWorkspaceServiceContext(target.workspaceId, (tx) =>
+    projectRepoRepository.listEstablishedRealizedRepos(target.projectId, target.workspaceId, tx),
+  );
+  const repos: PairRepo[] = [];
+  for (const repo of realized) {
+    if (repo.owner.trim().toLowerCase() !== key) continue;
+    try {
+      if (await repoVisibilityClient.isPrivate(repo.owner, repo.name, orgTargetFor(target))) {
+        repos.push({ owner: repo.owner, name: repo.name });
+      }
+    } catch (err) {
+      if (!isGithubFailure(err)) throw err;
+      throw new FleetOrgCiGithubWriteError(key, statusOf(err), 'read');
+    }
+  }
+  return repos.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Each repository's default setup, read for the flip. A failed read refuses it. */
+async function readDefaultSetups(
+  target: FleetOrgCiTargetDTO,
+  repos: PairRepo[],
+  enabled: boolean,
+): Promise<Array<{ repo: PairRepo; setup: DefaultSetup }>> {
+  const reads: Array<{ repo: PairRepo; setup: DefaultSetup }> = [];
+  for (const repo of repos) {
+    try {
+      const setup = await codeScanningDefaultSetupClient.get(
+        repo.owner,
+        repo.name,
+        orgTargetFor(target),
+      );
+      reads.push({ repo, setup });
+    } catch (err) {
+      if (!isGithubFailure(err)) throw err;
+      throw new FleetOrgCiCodeScanningError(
+        target.org.toLowerCase(),
+        repo.name,
+        statusOf(err),
+        'read',
+        direction(enabled),
+      );
+    }
+  }
+  return reads;
+}
+
+/** The moves a flip to `enabled` makes: configured repositories not yet where
+ *  the flip wants them. ON moves any other runner onto the fleet label; OFF moves
+ *  only a repository on the fleet label (another label is not the fleet's). */
+export function plannedDefaultSetupMoves(
+  reads: Array<{ repo: PairRepo; setup: DefaultSetup }>,
+  enabled: boolean,
+): DefaultSetupMove[] {
+  const moves: DefaultSetupMove[] = [];
+  for (const { repo, setup } of reads) {
+    if (setup.state !== 'configured') continue;
+    const onFleet = runnerRequests(setup.runner, MOTIR_RUNNER_LABEL);
+    if (enabled === onFleet) continue;
+    moves.push({ repo, from: setup.runner, to: enabled ? FLEET_RUNNER : HOSTED_RUNNER });
+  }
+  return moves;
+}
+
+/** Make each move, recording it in `moved` as it lands so a later failure can
+ *  put it back. A GitHub refusal throws `FleetOrgCiCodeScanningError` (`write`). */
+async function applyDefaultSetupMoves(
+  target: FleetOrgCiTargetDTO,
+  moves: DefaultSetupMove[],
+  moved: DefaultSetupMove[],
+  enabled: boolean,
+): Promise<void> {
+  for (const move of moves) {
+    try {
+      await codeScanningDefaultSetupClient.setRunner(
+        move.repo.owner,
+        move.repo.name,
+        move.to,
+        orgTargetFor(target),
+      );
+    } catch (err) {
+      if (!isGithubFailure(err)) throw err;
+      throw new FleetOrgCiCodeScanningError(
+        target.org.toLowerCase(),
+        move.repo.name,
+        statusOf(err),
+        'write',
+        direction(enabled),
+      );
+    }
+    moved.push(move);
+  }
+}
+
+/** Put back every default setup the failed flip had moved. Returns the names of
+ *  the repositories that could not be put back. */
+async function restoreDefaultSetups(
+  target: FleetOrgCiTargetDTO,
+  moved: DefaultSetupMove[],
+): Promise<string[]> {
+  const failed: string[] = [];
+  for (const move of moved) {
+    try {
+      await codeScanningDefaultSetupClient.setRunner(
+        move.repo.owner,
+        move.repo.name,
+        move.from,
+        orgTargetFor(target),
+      );
+    } catch {
+      failed.push(move.repo.name);
+    }
+  }
+  return failed;
+}
+
+/** One repository's default setup for the page; a failed read is `unknown`. */
+async function codeScanningStateOf(
+  target: FleetOrgCiTargetDTO,
+  repo: PairRepo,
+): Promise<FleetOrgCiCodeScanningDTO> {
+  try {
+    const setup = await codeScanningDefaultSetupClient.get(
+      repo.owner,
+      repo.name,
+      orgTargetFor(target),
+    );
+    if (setup.state === 'unavailable') return { repo: repo.name, state: 'unavailable' };
+    if (setup.state === 'not-configured') return { repo: repo.name, state: 'not_configured' };
+    return {
+      repo: repo.name,
+      state: runnerRequests(setup.runner, MOTIR_RUNNER_LABEL) ? 'fleet' : 'github_hosted',
+    };
+  } catch (err) {
+    if (!isGithubFailure(err)) throw err;
+    return { repo: repo.name, state: 'unknown', status: statusOf(err) };
   }
 }
 
@@ -211,8 +432,8 @@ export const fleetOrgCiSettingService = {
   },
 
   /**
-   * One pair's stored state, its readiness verdict and the variable read back
-   * from GitHub. Not audited: it reads no tenant row (the planner-model
+   * One pair's stored state, its readiness verdict, the variable read back
+   * from GitHub and each private repository's CodeQL default-setup runner. Not audited: it reads no tenant row (the planner-model
    * `getSettings` reason) — the last flip's reason is kept on the row itself.
    *
    * @throws NotPlatformStaffError below `superadmin`, before any GitHub call.
@@ -243,7 +464,9 @@ export const fleetOrgCiSettingService = {
       if (!isGithubFailure(err)) throw err;
       variable = { state: 'unknown', status: statusOf(err) };
     }
-    return { ...stored, readiness, variable };
+    const repos = await privateReposOf(target);
+    const codeScanning = await Promise.all(repos.map((repo) => codeScanningStateOf(target, repo)));
+    return { ...stored, readiness, variable, codeScanning };
   },
 
   /**
@@ -254,15 +477,20 @@ export const fleetOrgCiSettingService = {
    *   3. The REASON, before any transaction.
    *   4. The stored state: already as asked ⇒ `unchanged`, nothing written.
    *   5. ON only: the readiness verdict. OFF never reads it.
-   *   6. The variable as it is, kept for compensation.
-   *   7. The audited transaction: lock, re-read, GitHub write, upsert, audit row.
-   *   8. A failure after GitHub wrote ⇒ restore the variable read in step 6.
+   *   6. The variable and each private repository's CodeQL default setup as
+   *      they are, kept for compensation.
+   *   7. The audited transaction: lock, re-read, the variable write, the
+   *      default-setup moves, upsert, audit row.
+   *   8. A failure after GitHub wrote ⇒ restore the variable and every default
+   *      setup read in step 6.
    *
    * @throws NotPlatformStaffError below `superadmin`.
    * @throws FleetOrgCiTargetUnknownError for a pair the console does not offer.
    * @throws MissingAuditReasonError for a blank reason.
    * @throws FleetOrgCiNotReadyError when turning ON a pair that is not ready.
    * @throws FleetOrgCiGithubWriteError when GitHub refuses or cannot be reached.
+   * @throws FleetOrgCiCodeScanningError when a repository's CodeQL default setup
+   *         cannot be read or moved.
    */
   async setEnabled(
     principal: PlatformPrincipal,
@@ -317,6 +545,11 @@ export const fleetOrgCiSettingService = {
       if (!isGithubFailure(err)) throw err;
       throw new FleetOrgCiGithubWriteError(org, statusOf(err), 'read');
     }
+    const moves = plannedDefaultSetupMoves(
+      await readDefaultSetups(target, await privateReposOf(target), enabled),
+      enabled,
+    );
+    const moved: DefaultSetupMove[] = [];
 
     const operation = enabled ? 'set' : 'delete';
     let applied = false;
@@ -339,6 +572,7 @@ export const fleetOrgCiSettingService = {
           throw new FleetOrgCiGithubWriteError(org, statusOf(err), operation);
         }
         applied = true;
+        await applyDefaultSetupMoves(target, moves, moved, enabled);
 
         await platformFleetOrgCiRepository.upsert(
           {
@@ -359,6 +593,7 @@ export const fleetOrgCiSettingService = {
             from: !enabled,
             to: enabled,
             variableOutcome,
+            codeScanningMoved: moved.map((m) => m.repo.name),
           },
         };
         await record(entry);
@@ -369,21 +604,13 @@ export const fleetOrgCiSettingService = {
       }
       if (applied) {
         // The residual case in this file's header: GitHub moved, core did not.
-        try {
-          await restoreVariable(previous, ghTarget);
-        } catch (restoreErr) {
-          console.error(
-            `${LOG} GitHub and the stored state now disagree: the flip's commit failed and the variable could not be restored`,
-            {
-              projectId: target.projectId,
-              org,
-              from: !enabled,
-              to: enabled,
-              actorUserId: principal.userId,
-              restoreStatus: statusOf(restoreErr),
-            },
-          );
-        }
+        await compensate(target, previous, moved, {
+          projectId: target.projectId,
+          org,
+          from: !enabled,
+          to: enabled,
+          actorUserId: principal.userId,
+        });
       }
       throw err;
     }

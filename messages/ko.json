@@ -12580,7 +12580,8 @@
         "neverChanged": "변경된 적 없음",
         "auditLink": "감사 로그",
         "variable": "GitHub 변수",
-        "repositories": "리포지토리"
+        "repositories": "리포지토리",
+        "codeScanning": "CodeQL 기본 설정"
       },
       "variable": {
         "present": "{org}의 {name} = {value}(비공개 리포지토리) — 새 작업이 플릿을 요청합니다.",
@@ -12600,6 +12601,13 @@
       },
       "repositories": {
         "count": "비공개 리포지토리 {count, plural, other {#개}}, 실행 시 {org}에 있는 프로젝트 {project}의 비공개 리포지토리에서 읽음"
+      },
+      "codeScanning": {
+        "fleet": "플릿에서 실행 ({label})",
+        "githubHosted": "GitHub 호스팅 러너에서 실행",
+        "unknownStatus": "읽을 수 없습니다 — GitHub가 HTTP {status}을(를) 반환했습니다",
+        "unknownUnreachable": "읽을 수 없습니다 — GitHub에 연결할 수 없습니다",
+        "none": "{org}의 비공개 리포지토리 중 CodeQL 기본 설정이 구성된 곳이 없습니다."
       },
       "monitoringLine": "Motir의 머신은 모니터링 › 플릿의 moooon B.V. 아래에 표시됩니다",
       "onCallout": {
@@ -12704,6 +12712,11 @@
         "githubStatus": "{direction} 처리되지 않았습니다: GitHub가 {org}에서 {name} {operation}을(를) 거부했습니다(HTTP {status}).",
         "githubUnreachable": "{direction} 처리되지 않았습니다: {org}에서 {name} {operation}을(를) 위해 GitHub에 연결할 수 없습니다.",
         "nothingChanged": "아무것도 변경되지 않았습니다: 설정과 GitHub 변수가 그대로입니다.",
+        "codeScanningWriteStatus": "{direction} 처리되지 않았습니다: GitHub가 {repo}의 CodeQL 기본 설정을 {runner}(으)로 옮기는 것을 거부했습니다(HTTP {status}).",
+        "codeScanningWriteUnreachable": "{direction} 처리되지 않았습니다: {repo}의 CodeQL 기본 설정을 {runner}(으)로 옮기기 위해 GitHub에 연결할 수 없습니다.",
+        "codeScanningReadStatus": "{direction} 처리되지 않았습니다: GitHub가 {repo}의 CodeQL 기본 설정 읽기를 거부했습니다(HTTP {status}).",
+        "codeScanningReadUnreachable": "{direction} 처리되지 않았습니다: {repo}의 CodeQL 기본 설정을 읽기 위해 GitHub에 연결할 수 없습니다.",
+        "codeScanningNothingChanged": "아무것도 변경되지 않았습니다: 설정, GitHub 변수, 각 리포지토리의 CodeQL 기본 설정이 그대로입니다.",
         "notReady": "켜지지 않았습니다: 이 페이지가 로드된 후 플릿이 준비되지 않은 상태가 되었습니다.",
         "notReadyList": "현재 미충족: {conditions}. 아무것도 변경되지 않았습니다. 아래의 준비 상태를 다시 확인했습니다.",
         "notPermitted": "변경되지 않았습니다: 슈퍼관리자만 이 설정을 변경할 수 있습니다.",
@@ -12717,6 +12730,10 @@
       "direction": {
         "on": "켜기",
         "off": "끄기"
+      },
+      "runner": {
+        "fleet": "플릿",
+        "githubHosted": "GitHub 호스팅 러너"
       },
       "operation": {
         "read": "읽기",

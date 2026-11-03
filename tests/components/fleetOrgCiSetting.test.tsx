@@ -95,6 +95,7 @@ function state(
     updatedAt: '2026-10-13T12:00:00.000Z',
     lastReason: 'Back to hosted',
     variable: { state: 'absent' },
+    codeScanning: [],
     readiness: {
       ready: list.every((c) => c.state === 'met'),
       org: 'acme-ci',
@@ -350,6 +351,54 @@ describe('FleetOrgCiSetting', () => {
       },
       'Not met now: App permission: Variables (write).',
     ],
+    [
+      {
+        ok: false,
+        code: 'CODE_SCANNING_FAILED',
+        org: 'acme-ci',
+        repo: 'gateway',
+        status: 403,
+        operation: 'write',
+        to: 'fleet',
+      },
+      'Not turned on: GitHub refused to move the CodeQL default setup of acme-ci/gateway to the fleet (HTTP 403).',
+    ],
+    [
+      {
+        ok: false,
+        code: 'CODE_SCANNING_FAILED',
+        org: 'acme-ci',
+        repo: 'gateway',
+        status: null,
+        operation: 'write',
+        to: 'github_hosted',
+      },
+      'Not turned on: GitHub could not be reached to move the CodeQL default setup of acme-ci/gateway to GitHub-hosted runners.',
+    ],
+    [
+      {
+        ok: false,
+        code: 'CODE_SCANNING_FAILED',
+        org: 'acme-ci',
+        repo: 'api',
+        status: 502,
+        operation: 'read',
+        to: 'fleet',
+      },
+      'Not turned on: GitHub refused to read the CodeQL default setup of acme-ci/api (HTTP 502).',
+    ],
+    [
+      {
+        ok: false,
+        code: 'CODE_SCANNING_FAILED',
+        org: 'acme-ci',
+        repo: 'api',
+        status: null,
+        operation: 'read',
+        to: 'fleet',
+      },
+      'Not turned on: GitHub could not be reached to read the CodeQL default setup of acme-ci/api.',
+    ],
     [{ ok: false, code: 'NOT_PERMITTED' }, 'only a superadmin can change this setting'],
     [{ ok: false, code: 'TARGET_UNKNOWN' }, 'no longer offered this setting'],
     [{ ok: false, code: 'FAILED' }, 'Not turned on: something went wrong.'],
@@ -364,6 +413,11 @@ describe('FleetOrgCiSetting', () => {
       const band = screen.getByTestId('fleet-org-ci-answer');
       expect(band.getAttribute('role')).toBe('alert');
       expect(band.textContent).toContain(words);
+      if ((result as { code: string }).code === 'CODE_SCANNING_FAILED') {
+        expect(band.textContent).toContain(
+          "Nothing changed: the setting, the GitHub variable and every repository's CodeQL default setup are as they were.",
+        );
+      }
       if ((result as { code: string }).code === 'GITHUB_WRITE_FAILED') {
         expect(band.textContent).toContain(
           'Nothing changed: the setting and the GitHub variable are as they were.',
@@ -557,5 +611,41 @@ describe('FleetOrgCiSetting — the remaining states (MOTIR-8716)', () => {
     const again = await openConfirm();
     expect((within(again).getByLabelText(/Reason/) as HTMLInputElement).value).toBe('');
     expect(setFleetOrgCiAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('FleetOrgCiSetting — CodeQL default setup per repository (MOTIR-10289)', () => {
+  it('lists each configured repository with where its CodeQL runs, and says when a read failed', () => {
+    render(
+      state({
+        codeScanning: [
+          { repo: 'api', state: 'fleet' },
+          { repo: 'docs', state: 'not_configured' },
+          { repo: 'gateway', state: 'github_hosted' },
+          { repo: 'meta', state: 'unknown', status: 502 },
+          { repo: 'site', state: 'unavailable' },
+          { repo: 'tools', state: 'unknown', status: null },
+        ],
+      }),
+    );
+    const row = screen.getByTestId('fleet-org-ci-code-scanning');
+    expect(
+      within(row)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual([
+      'api — on the fleet (motir-runner)',
+      'gateway — on GitHub-hosted runners',
+      "meta — couldn't read — GitHub answered HTTP 502",
+      "tools — couldn't read — GitHub could not be reached",
+    ]);
+    expect(screen.getByText('CodeQL default setup')).toBeTruthy();
+  });
+
+  it('says so when no private repository has default setup configured', () => {
+    render(state({ codeScanning: [{ repo: 'docs', state: 'not_configured' }] }));
+    expect(screen.getByTestId('fleet-org-ci-code-scanning').textContent).toBe(
+      'No private repository on acme-ci has CodeQL default setup configured.',
+    );
   });
 });

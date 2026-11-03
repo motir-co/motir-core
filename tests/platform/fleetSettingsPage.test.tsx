@@ -70,6 +70,7 @@ function stateFor(org: string): FleetOrgCiStateDTO {
     updatedAt: null,
     lastReason: null,
     variable: { state: 'absent' },
+    codeScanning: [],
     readiness: {
       ready: true,
       org,
