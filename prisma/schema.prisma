@@ -1795,6 +1795,8 @@ model Workspace {
   // Sharpen sessions + their turns (Task MOTIR-1101 · MOTIR-8182). Cascade.
   sharpenSessions             SharpenSession[]
   sharpenTurns                SharpenTurn[]
+  // Conversation jobs' notes (MOTIR-10235). Cascade.
+  conversationNotes           ConversationNote[]
   // The BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what a user typed
   // while a planning job was running, and the stop that ends it.
   // Workspace-scoped tenant data; cascade with the workspace.
@@ -9731,30 +9733,32 @@ model PlanChangeSession {
   createdAt            DateTime                  @default(now()) @map("created_at")
   updatedAt            DateTime                  @updatedAt @map("updated_at")
 
-  workspace       Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project         Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  createdBy       User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  seedGate        ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
-  seedGuideTurn   PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
-  endedBy         User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
-  copiedFrom      PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
-  copies          PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
-  turns           PlanChangeTurn[]
+  workspace         Workspace                @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdBy         User?                    @relation("PlanChangeSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  seedGate          ApprovalGate?            @relation("PlanChangeSessionSeedGate", fields: [seedGateId], references: [id], onDelete: SetNull)
+  seedGuideTurn     PlanChangeTurn?          @relation("PlanChangeSessionSeedGuideTurn", fields: [seedGuideTurnId], references: [id], onDelete: SetNull)
+  endedBy           User?                    @relation("PlanChangeSessionEndedBy", fields: [endedById], references: [id], onDelete: SetNull)
+  copiedFrom        PlanChangeSession?       @relation("PlanChangeSessionCopiedFrom", fields: [copiedFromSessionId], references: [id], onDelete: SetNull)
+  copies            PlanChangeSession[]      @relation("PlanChangeSessionCopiedFrom")
+  turns             PlanChangeTurn[]
   /// Grill me sessions about this conversation (Story MOTIR-9221 · MOTIR-9314). Cascade.
-  sharpenSessions SharpenSession[]
+  sharpenSessions   SharpenSession[]
+  /// What this thread's answering sessions said while they worked (MOTIR-10235). Cascade.
+  conversationNotes ConversationNote[]
   /// The BOUNDARY MAILBOX for this thread's runs (MOTIR-4067) — one ordered
   /// sequence per job, carrying BOTH the turns typed mid-run and the stop.
   /// Cascade: a deleted thread takes its mailbox with it.
-  mailbox         PlanChangeMailboxEntry[]
+  mailbox           PlanChangeMailboxEntry[]
   /// The planner's mid-run PAUSES on this thread's runs (MOTIR-8007). Cascade.
-  runPauses       PlanChangeRunPause[]
+  runPauses         PlanChangeRunPause[]
   /// The work items this conversation currently HOLDS (Story MOTIR-2786 ·
   /// MOTIR-2787). Cascade — a deleted thread releases everything it held.
-  targetLocks     PlanTargetLock[]
+  targetLocks       PlanTargetLock[]
   /// The plans this conversation produced (AMENDMENT 17 §5) — many plans to one
   /// session: a refine or a revision writes a successor plan on the SAME
   /// session, never a new one.
-  plans           Plan[]
+  plans             Plan[]
 
   /// The composite-FK TARGET (MOTIR-1735). `id` is already unique on its own, so
   /// this adds no integrity constraint of its own — it exists solely to make
@@ -9990,6 +9994,7 @@ model PlanChangeTurn {
   @@unique([sessionId, seq])
   @@index([sessionId, seq])
   @@index([workspaceId])
+  @@index([workspaceId, jobId])
   @@map("plan_change_turn")
 }
 
@@ -10084,6 +10089,8 @@ model SharpenSession {
   plan              Plan?              @relation(fields: [planId], references: [id], onDelete: Cascade)
   planChangeSession PlanChangeSession? @relation(fields: [planChangeSessionId], references: [id], onDelete: Cascade)
   turns             SharpenTurn[]
+  /// What this session's Grill me reads said while they worked (MOTIR-10235). Cascade.
+  notes             ConversationNote[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -10123,7 +10130,41 @@ model SharpenTurn {
 
   @@unique([sessionId, seq])
   @@index([workspaceId])
+  @@index([workspaceId, jobId])
   @@map("sharpen_turn")
+}
+
+/// One plain-language NOTE a conversation job wrote while it worked (MOTIR-10235)
+/// — a Grill me turn's read (`sharpen_turn`) or an answering session
+/// (`ask_project`), in the session's own words, so a person who leaves and comes
+/// back sees what it did. The planning walk's twin is `PlanNarration`; a
+/// conversation before planning has no plan to hang its notes on, so they hang on
+/// the conversation the job was submitted for: exactly one of `sharpenSessionId` /
+/// `planChangeSessionId` is set (`conversation_note_owner_check`).
+///
+/// APPEND-ONLY KEPT HISTORY: never updated, deleted only by its owner's cascade.
+/// `seq` is gapless per job from 1 (`UNIQUE (job_id, seq)`); `jobId` is the
+/// opaque motir-ai job id, not an FK (the `sharpen_turn.job_id` precedent).
+model ConversationNote {
+  id                  String   @id @default(cuid())
+  workspaceId         String   @map("workspace_id")
+  jobId               String   @map("job_id")
+  seq                 Int
+  /// The sentence, cleaned to one line and capped (`cleanNarrationSentence`).
+  body                String
+  sharpenSessionId    String?  @map("sharpen_session_id")
+  planChangeSessionId String?  @map("plan_change_session_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  workspace         Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sharpenSession    SharpenSession?    @relation(fields: [sharpenSessionId], references: [id], onDelete: Cascade)
+  planChangeSession PlanChangeSession? @relation(fields: [planChangeSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, seq])
+  @@index([workspaceId])
+  @@index([sharpenSessionId])
+  @@index([planChangeSessionId])
+  @@map("conversation_note")
 }
 
 /// THE BOUNDARY MAILBOX (Story MOTIR-4054 · MOTIR-4067) — what the user typed

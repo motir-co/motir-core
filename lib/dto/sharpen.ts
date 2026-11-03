@@ -1,3 +1,4 @@
+import type { ConversationNoteDto } from '@/lib/dto/conversationNote';
 import type {
   SettledAnswer,
   SharpenAction,
@@ -21,6 +22,9 @@ export interface SharpenTurnDto {
   jobId: string | null;
   /** A planner turn that records a FAILED job — the person turn can be re-run. */
   failed: boolean;
+  /** A failed planner turn whose job stopped because the org ran out of credits
+   *  (MOTIR-10235) — the surface says so and offers the top-up, not a retry. */
+  outOfCredits: boolean;
   createdAt: string;
 }
 
@@ -45,6 +49,8 @@ export interface SharpenSessionDto {
   /** The person turn whose job has not settled yet, or null. */
   inFlight: { turnId: string; jobId: string | null } | null;
   turns: SharpenTurnDto[];
+  /** What the session's jobs said while they worked, oldest first (MOTIR-10235). */
+  notes: ConversationNoteDto[];
   createdAt: string;
   updatedAt: string;
   lastActivityAt: string;
