@@ -127,6 +127,25 @@ describe('the question turn', () => {
     expect(screen.getByTestId('sharpen-question').textContent).toContain('asking · question 2');
   });
 
+  // MOTIR-10254: a naming, placement or connections question is drawn like any WHAT
+  // question — no technical-thread chip, every reading offered.
+  it('draws a product_fit question like any other WHAT question', () => {
+    render({
+      session: session({
+        pendingQuestion: {
+          ...QUESTION,
+          text: 'Where do saved presets appear?',
+          topic: 'product_fit',
+        },
+      }),
+    });
+    const drawn = screen.getByTestId('sharpen-question');
+    expect(drawn.textContent).toContain('Where do saved presets appear?');
+    expect(drawn.textContent).not.toContain('Your thread');
+    expect(screen.getByTestId('sharpen-reading-ra')).toBeTruthy();
+    expect(screen.getByTestId('sharpen-reading-rb')).toBeTruthy();
+  });
+
   it('keeps the earlier question and the answer in the thread, under the opening marker', () => {
     render();
     expect(screen.getByTestId('sharpen-opening').textContent).toContain('Grill me is on');
@@ -226,6 +245,32 @@ describe('the end and the summary', () => {
     const assumed = screen.getByTestId('sharpen-summary-assumptions');
     expect(assumed.textContent).toContain("Planner's assumption");
     expect(assumed.textContent).toContain('Remove everywhere');
+  });
+
+  it('groups a product_fit answer under Behaviour (MOTIR-10254)', () => {
+    render({
+      session: session({
+        ...ENDED,
+        endReason: 'finished',
+        settled: [
+          {
+            questionId: 'q4',
+            question: 'Where do saved presets appear?',
+            answer: 'In the board toolbar',
+            topic: 'product_fit',
+            readingId: 'ra',
+            source: 'person',
+          },
+        ],
+        assumptions: [],
+      }),
+    });
+    expect(screen.getByTestId('sharpen-summary-behaviour').textContent).toContain(
+      'In the board toolbar',
+    );
+    expect(screen.queryByTestId('sharpen-summary-scopeEdge')).toBeNull();
+    expect(screen.queryByTestId('sharpen-summary-acceptance')).toBeNull();
+    expect(screen.queryByTestId('sharpen-summary-constraints')).toBeNull();
   });
 
   it('names the plan alone as where the answers were written — never a card (MOTIR-9314)', () => {

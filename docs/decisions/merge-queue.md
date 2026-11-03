@@ -412,8 +412,8 @@ also what makes `max_entries_to_merge: 5` reachable for the first time.
 `base_sha...head_sha` diff, as a pull request's file list is read, and runs the lane only when that
 diff touches a lane path (a spec, the workflow, its config, or the two helpers). Otherwise `run=false`:
 no build, no legs, and `Acceptance complete` still reports green. A payload without shas, or a diff
-that cannot be taken, fails open and runs the lane. `push: main` is unchanged and still runs the whole
-lane on the merged result.
+that cannot be taken, fails open and runs the lane. The whole lane runs against `main` in the nightly
+(see the 2026-11-02 note below), not in the queue.
 
 **Why.** Measured over the 30 most recent queue entries (2026-10-19/20): the `CI` run took 27–38 min
 (median ~34), the `Acceptance tests` run 54–67 min (median ~58), with 148 specs on at most 6 legs. The
@@ -422,5 +422,13 @@ out as `CI_TIMEOUT` with nothing red, and acceptance held a `max_entries_to_buil
 twice as long as the rest of the gate. The lane's specs are acceptance receipts, not a regression
 suite (`CLAUDE.md`), and a spec change already ran on its own PR.
 
-**Cost.** A change elsewhere that breaks an acceptance spec in the composed tree is now found by the
-`push: main` baseline, after the merge, instead of by ejection before it.
+**Cost.** A change elsewhere that breaks an acceptance spec in the composed tree is now found after
+the merge, instead of by ejection before it.
+
+**Note 2026-11-02 (MOTIR-9412 · MOTIR-10277).** When this section was written, that after-the-merge
+detector was the lane's `push: main` run. There is no push trigger any more: the whole acceptance and
+regression lanes run against `main` once a night (`schedule`) and on a manual `workflow_dispatch`, and
+a night that does not go green opens or comments on an `acceptance-nightly-red` issue assigned to a
+named person (`.github/workflows/acceptance-nightly-notify.yml`). So the break is now found up to a
+day after the merge, and its red names the range of merges since the last green night.
+`docs/decisions/acceptance-video.md`, Amendment 2026-11-02, records the trade.

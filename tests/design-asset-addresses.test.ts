@@ -255,6 +255,8 @@ function sweep(): Finding[] {
 // it finds is its own card), and MOTIR-2340 then corrected the assets and
 // deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
+  // ── ✅ RETIRED 2026-10-30 (MOTIR-9529) — the workspace Custom domains room's
+  //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-10-28 (MOTIR-9514) — the workspace address room's
   //  forward-looking row stopped applying when its page landed, and was deleted.
   // ── ✅ RETIRED 2026-09-11 (MOTIR-5170, under Bug MOTIR-4925) ──────────────

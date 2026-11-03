@@ -1,4 +1,4 @@
-import { Boxes, Link2, Shield, ShieldCheck } from 'lucide-react';
+import { Boxes, Globe, Link2, Shield, ShieldCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The WORKSPACE-settings navigation REGISTRY (Story MOTIR-4843 · MOTIR-4846).
@@ -152,6 +152,18 @@ export const WORKSPACE_SETTINGS_NAV: WorkspaceSettingsNavEntry[] = [
     href: '/settings/workspace/public-address',
     icon: Link2,
     labelKey: 'publicAddress',
+    cloudOnly: true,
+  },
+  {
+    // Story MOTIR-4533 · MOTIR-9529 — the workspace's customer domains, directly
+    // under Public address (`design/workspace-address/custom-domains.mock.html`
+    // panel 0). A customer domain is the WORKSPACE's (ADR MOTIR-9521 §1), so its
+    // room is here, not in project settings. Cloud-only, like its neighbour.
+    id: 'custom-domains',
+    group: 'access',
+    href: '/settings/workspace/custom-domains',
+    icon: Globe,
+    labelKey: 'customDomains',
     cloudOnly: true,
   },
 ];

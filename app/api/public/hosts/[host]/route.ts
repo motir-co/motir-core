@@ -2,8 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { publicSurfaceUnavailable } from '@/lib/publicProjects/cloudGate';
 import { PublicAddressesUnavailableError } from '@/lib/publicAddresses/errors';
+import { isEdgeContractCaller } from '@/lib/publicAddresses/edgeContractToken';
 import {
   HOST_CONTRACT_CACHE_CONTROL,
+  HOST_CONTRACT_CREDENTIALED_CACHE_CONTROL,
   NOT_FOUND_CACHE_CONTROL,
 } from '@/lib/publicAddresses/hostContractCache';
 import {
@@ -43,10 +45,19 @@ import {
 // not hidden by it. `lib/publicAddresses/hostContractCache.ts` holds the number
 // and the reasoning; the consumer must not stack a longer cache on top.
 //
+// ── The edge's bearer (ADR MOTIR-9521 §3) ────────────────────────────────
+//
+// An `application` answer carries its `upstream` only for `motir-edge`'s
+// `Authorization: Bearer <MOTIR_EDGE_CONTRACT_TOKEN>`. That is a comparison of
+// a server-to-server secret, not a session, so the anonymous posture above
+// holds. A credentialed 200 is `private` with the same 30-second bound, and
+// EVERY 200 varies on `Authorization`, so a shared cache can never hand the
+// edge an anonymous answer (no upstream) or a stranger the edge's.
+//
 // HTTP only: gate → one service call → map errors (the 4-layer rule).
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ host: string }> },
 ): Promise<Response> {
   // The capability gate FIRST — before anything else. With `MOTIR_CLOUD` unset
@@ -56,10 +67,19 @@ export async function GET(
 
   const { host } = await params;
 
+  const credentialed = isEdgeContractCaller(req.headers.get('authorization'));
+
   try {
-    const resolution = await publicAddressesService.resolveHost(decodeURIComponent(host));
+    const resolution = await publicAddressesService.resolveHost(decodeURIComponent(host), {
+      credentialed,
+    });
     return NextResponse.json(resolution, {
-      headers: { 'Cache-Control': HOST_CONTRACT_CACHE_CONTROL },
+      headers: {
+        'Cache-Control': credentialed
+          ? HOST_CONTRACT_CREDENTIALED_CACHE_CONTROL
+          : HOST_CONTRACT_CACHE_CONTROL,
+        Vary: 'Authorization',
+      },
     });
   } catch (err) {
     // ⚠️ ONE refusal shape for every reason — unknown host, un-issued

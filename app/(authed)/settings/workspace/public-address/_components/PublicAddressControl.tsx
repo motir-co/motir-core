@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
@@ -268,6 +269,13 @@ export function PublicAddressControl({
             url={subdomain.url}
             pill={<Pill severity="success">{t('row.live')}</Pill>}
           />
+          {/* The door to the Custom domains room (MOTIR-9529, design panel 0 ②). */}
+          <Link
+            href="/settings/workspace/custom-domains"
+            className="font-sans text-[13px] text-(--el-link) hover:text-(--el-link-pressed)"
+          >
+            {t('customDomainsLink')}
+          </Link>
           {canManage ? (
             <>
               <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

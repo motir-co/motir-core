@@ -618,6 +618,14 @@ export default defineConfig({
         // an operator could set by accident harmless. Asserted in
         // `tests/publicAddresses/dnsResolverPort.test.ts`.
         MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS: '1',
+        // The records that point a customer domain at Motir (MOTIR-9533).
+        // `lib/publicAddresses/pointingRecords.ts` omits a row whose variable is
+        // unset, so without these the customer-domain walk could not assert the
+        // CNAME a subdomain is offered or the A/AAAA pair an apex is. Documentation
+        // addresses (RFC 5737 / RFC 3849): nothing here routes anywhere.
+        MOTIR_PUBLIC_ADDRESS_CNAME_TARGET: 'edge.motir.e2e',
+        MOTIR_PUBLIC_ADDRESS_A_RECORDS: '192.0.2.10',
+        MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS: '2001:db8::10',
         E2E_TEST_BILLING: '1',
         MOTIR_AI_URL,
         E2E_TEST_CODE_HEALTH: '1',

@@ -102,6 +102,7 @@ describe('BuildKit pulls through a mirror, never anonymously from Docker Hub (MO
     expect(buildJobs.map((j) => `${j.file}:${j.id}`).sort()).toEqual([
       'aws-deploy.yml:aws-deploy',
       'hosted-agent-image.yml:hosted-agent-image',
+      'hosting-edge-image.yml:hosting-edge-image',
       'hosting-guard-image.yml:hosting-guard-image',
       'runner-image.yml:runner-image',
       'sandbox-images.yml:sandbox-profiles',

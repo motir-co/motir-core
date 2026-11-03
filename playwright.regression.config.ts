@@ -14,11 +14,12 @@ import acceptance from './playwright.acceptance.config';
 // are not restated here; a seam added there reaches both lanes.
 //
 // ⚠️ WHY NOT THE MAIN OR CLOUD LANE. Both run on every pull request that touches
-// the app (`ci.yml`'s `e2e` job). These specs used to run only when a PR touched
-// the acceptance lane's own paths, in the merge queue under the same gate, and
-// in full on every push to `main`. Promoting them into a per-PR lane would put
-// roughly an hour and a half of browser tests on every app PR. This lane keeps
-// their old triggers instead (`.github/workflows/acceptance-tests.yml`, the
+// the app (`ci.yml`'s `e2e` job). These specs run only when a PR touches the
+// acceptance lane's own paths, in the merge queue under the same gate, and in
+// full in the acceptance workflow's nightly run on `main` and on a manual
+// dispatch (MOTIR-10277). Promoting them into a per-PR lane would put roughly
+// an hour and a half of browser tests on every app PR. This lane keeps the
+// acceptance lane's triggers instead (`.github/workflows/acceptance-tests.yml`, the
 // `regression` jobs), so a PR pays for them only when it changes them.
 //
 // What the recording took, and this lane gives back:

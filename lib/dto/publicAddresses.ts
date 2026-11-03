@@ -62,21 +62,49 @@ export interface SubdomainReleaseDto {
 // application record exists yet, so every live workspace host answers
 // `no_application`; the `application` outcome is owed with that record.
 
-/** A live workspace host with no application to serve yet. */
+/** A live host with no application to serve yet. */
 export interface PublicHostNoApplicationDto {
   readonly kind: 'no_application';
   readonly workspace: { readonly name: string };
 }
 
-/** A customer domain with an issued certificate — it serves ONE project at its root. */
-export interface PublicHostProjectDto {
-  readonly kind: 'project';
-  readonly project: { readonly identifier: string; readonly name: string };
-  /** Whether this address is the project's CANONICAL one (ADR §7). */
-  readonly primary: boolean;
+/**
+ * An issued customer host whose domain names an application with a production
+ * release (ADR MOTIR-9521 §3). `upstream` is present ONLY for the edge's
+ * bearer: an anonymous caller never learns where an application lives.
+ */
+export interface PublicHostApplicationDto {
+  readonly kind: 'application';
+  readonly workspace: { readonly name: string };
+  readonly application: { readonly id: string; readonly slug: string };
+  readonly upstream?: {
+    readonly origin: string;
+    readonly appRef: string;
+    readonly credential: 'origin_secret' | 'aws_sigv4' | 'none';
+  };
 }
 
-export type PublicHostResolutionDto = PublicHostNoApplicationDto | PublicHostProjectDto;
+/**
+ * An issued customer host naming a MEMBERS-ONLY application (MOTIR-9819). The
+ * member gate stands only on `motir.site`, so the edge answers a page saying the
+ * app opens at `opensAt` (its production address, when it has one) — never the
+ * application itself.
+ */
+export interface PublicHostMembersOnlyApplicationDto {
+  readonly kind: 'members_only_application';
+  readonly workspace: { readonly name: string };
+  readonly application: { readonly id: string; readonly slug: string };
+  readonly opensAt: string | null;
+}
+
+/**
+ * What a `Host` answers. The `project` outcome is retired (ADR MOTIR-9521 §1:
+ * a customer domain serves an application, never a project).
+ */
+export type PublicHostResolutionDto =
+  | PublicHostApplicationDto
+  | PublicHostMembersOnlyApplicationDto
+  | PublicHostNoApplicationDto;
 
 /**
  * A project's addresses, as the renderer needs them (ADR §7).
@@ -96,6 +124,17 @@ export interface DnsInstructionDto {
   readonly type: 'A' | 'AAAA' | 'CNAME' | 'TXT';
   readonly name: string;
   readonly value: string;
+}
+
+/**
+ * One hosted application as the Custom domains pane's picker offers it
+ * (MOTIR-9529, design `custom-domains--application.mock.html`): the id sent as
+ * `applicationId`, the name shown and the slug beside it.
+ */
+export interface DomainApplicationDto {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
 }
 
 /**
@@ -120,7 +159,8 @@ export interface PublicAddressDto {
     | 'failed'
     | 'expired'
     | 'revoked';
-  readonly isPrimary: boolean;
+  /** The application a customer domain serves; null when unbound (ADR MOTIR-9521 §1). */
+  readonly applicationId: string | null;
   /** The ownership `TXT` — null once it no longer needs showing. */
   readonly verification: { readonly name: string; readonly value: string } | null;
   /** The records that point the hostname at us. */
@@ -129,4 +169,15 @@ export interface PublicAddressDto {
   readonly issuedAt: string | null;
   /** Always set when `status` is `failed` — a failure with no reason is not actionable. */
   readonly failureReason: string | null;
+  /**
+   * Which proof a live domain lost (MOTIR-9526); `null` on a `failed` row means
+   * the certificate was never issued.
+   */
+  readonly failureKind: 'txt_lost' | 'pointing_lost' | 'certificate_lost' | null;
+  /**
+   * When the certificate expires, as the platform last reported it (MOTIR-9526);
+   * `null` when no reading has carried a date. The pane renders it and computes
+   * none of its own.
+   */
+  readonly certificateExpiresAt: string | null;
 }

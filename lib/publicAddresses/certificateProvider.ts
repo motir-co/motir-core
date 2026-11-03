@@ -39,6 +39,15 @@ export interface CertificateState {
   readonly dnsRequirements: readonly CertificateDnsRequirement[];
   /** When this reading was taken — the value MOTIR-4219 records as `lastCheckedAt`. */
   readonly checkedAt: Date;
+  /**
+   * When the hostname's certificate stops being valid, as the PLATFORM says
+   * (MOTIR-9526) — `null` when the reading carries no date.
+   *
+   * ⚠️ READ, NEVER COMPUTED. `issuedAt` plus an assumed lifetime is a guess that
+   * goes stale the day the platform's renewal policy changes, so a provider that
+   * cannot read a date reports `null` and the pane draws no expiry line.
+   */
+  readonly expiresAt: Date | null;
 }
 
 /**

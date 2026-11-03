@@ -451,6 +451,46 @@ describe('the repositories', () => {
     expect(row.slug).toBe('shop');
   });
 
+  it('reads what the host contract needs, and nothing for an unknown id (MOTIR-9525)', async () => {
+    const fx = await workspace();
+    const app = await service.ensureApplication(await repo(fx));
+
+    const found = await withSystemContext((tx) =>
+      hostedApplicationRepository.findForHostContract(app.id, tx),
+    );
+    expect(found).toEqual({
+      id: app.id,
+      workspaceId: fx.workspaceId,
+      slug: 'shop-app',
+      target: 'fly',
+      productionAppName: null,
+      currentReleaseId: null,
+      productionAddress: 'shop-app--acme.motir.site',
+      access: null,
+    });
+    expect(
+      await withSystemContext((tx) => hostedApplicationRepository.findForHostContract('gone', tx)),
+    ).toBeNull();
+  });
+
+  it('lists the picker’s applications by project name then slug (MOTIR-9529)', async () => {
+    const fx = await workspace();
+    // Created out of order, so the listing's order is the query's, not insertion's.
+    const later = await service.ensureApplication(await repo(fx, { role: 'web', name: 'Zoo App' }));
+    const earlier = await service.ensureApplication(
+      await repo(fx, { role: 'api', name: 'Shop App' }),
+    );
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+
+    const listed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      hostedApplicationRepository.listForDomainPicker(fx.workspaceId, tx),
+    );
+    expect(listed).toEqual([
+      { id: earlier.id, name: project.name, slug: 'shop-app' },
+      { id: later.id, name: project.name, slug: 'zoo-app' },
+    ]);
+  });
+
   it('inserts nothing when the repository already has an application', async () => {
     const fx = await workspace();
     const app = await service.ensureApplication(await repo(fx));

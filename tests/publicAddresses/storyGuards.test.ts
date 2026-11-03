@@ -156,30 +156,37 @@ describe('CROSS-TENANT ISOLATION — a 404, never a 403, and never a leak', () =
     expect(rows).toBe(0);
   });
 
-  it('A’s owner cannot list or touch B’s project addresses', async () => {
+  it('A’s owner cannot list or touch B’s customer domains', async () => {
     const { customDomainService } = await import('@/lib/services/customDomainService');
     const { mapCustomDomainError } = await import('@/lib/publicAddresses/errorResponse');
 
-    // Addressed with A's OWN workspace context, as a real request would be —
-    // the project key belongs to B.
+    // Since MOTIR-9524 the domains are B's WORKSPACE's, addressed by B's
+    // workspace id in the path — which A can type, and must learn nothing from.
     //
     // ⚠️ THE CLAIM IS THE STATUS, NOT THE CLASS. Which typed error the service
     // reaches for is its business and it changes; what must never change is what
     // a caller LEARNS, and that is settled by the mapper. Asserting the class
     // would pin an implementation detail and still not prove the property.
-    const refusal = await customDomainService
-      .list({
-        key: 'BETA',
-        actorUserId: a.ownerId,
-        ctx: { workspaceId: a.workspaceId },
-      })
-      .then(
+    for (const attempt of [
+      () => customDomainService.list({ workspaceId: b.workspaceId, actorUserId: a.ownerId }),
+      () =>
+        customDomainService.add({
+          workspaceId: b.workspaceId,
+          hostname: 'roadmap.beta.test',
+          actorUserId: a.ownerId,
+        }),
+    ]) {
+      const refusal = await attempt().then(
         () => null,
         (err: unknown) => err,
       );
-    expect(refusal, 'B’s addresses were LISTED to A').not.toBeNull();
-    const mapped = mapCustomDomainError(refusal);
-    expect(mapped?.status, 'a cross-tenant read must be indistinguishable from absence').toBe(404);
+      expect(refusal, 'B’s domains were reached by A').not.toBeNull();
+      const mapped = mapCustomDomainError(refusal);
+      expect(mapped?.status, 'a cross-tenant read must be indistinguishable from absence').toBe(
+        404,
+      );
+    }
+    expect(await adminDb.publicAddress.count({ where: { workspaceId: b.workspaceId } })).toBe(0);
   });
 });
 
@@ -209,7 +216,7 @@ describe('EVERY STATUS MAP IS TOTAL', () => {
     const maps: [string, string][] = [
       ['lib/services/publicAddressCertificatesService.ts', 'Record<PublicAddressStatus, boolean>'],
       [
-        'app/(authed)/settings/project/public-address/_components/CustomDomainsSection.tsx',
+        'app/(authed)/settings/workspace/custom-domains/_components/CustomDomainsPane.tsx',
         'Record<DomainStatus, StateRow>',
       ],
     ];

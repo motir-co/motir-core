@@ -102,6 +102,7 @@ const JOB_ID = /^e2e-sharpen-(\d+)$/;
 /** motir-ai's topic → requirement-field mapping (`SHARPEN_TOPIC_FIELD`). */
 const TOPIC_FIELD: Record<GrillingBranch, Exclude<keyof SubmittedRequirement, 'assumptions'>> = {
   workflow: 'behaviour',
+  product_fit: 'behaviour',
   non_happy: 'acceptance',
   alternative: 'scopeEdge',
   technical_thread: 'constraints',

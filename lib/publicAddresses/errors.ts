@@ -246,22 +246,40 @@ export class InvalidHostnameError extends Error {
  */
 export class NotACustomerDomainError extends Error {
   readonly code = 'NOT_A_CUSTOMER_DOMAIN' as const;
-  constructor(readonly hostname: string) {
-    super(`${hostname} is a Motir address, not a domain you own.`);
+  /**
+   * WHICH Motir namespace the host is in: the tenant base (`acme.motir.site`,
+   * the workspace already answers there) or the public site origin
+   * (`motir.co`, which is Motir's own). The customer's next step differs, so
+   * the pane says a different sentence for each.
+   */
+  constructor(
+    readonly hostname: string,
+    readonly reason: 'tenant_base' | 'site_origin',
+  ) {
+    super(
+      reason === 'tenant_base'
+        ? `${hostname} is a Motir address under the workspace base domain, not a domain you own.`
+        : `${hostname} belongs to Motir's own site, not a domain you own.`,
+    );
     this.name = 'NotACustomerDomainError';
   }
 }
 
-/** An operation legal only on an `issued` address was asked of another status. */
-export class AddressNotIssuedError extends Error {
-  readonly code = 'ADDRESS_NOT_ISSUED' as const;
-  constructor(readonly status: string) {
-    super(`This address is ${status}; only a live address can be made primary.`);
-    this.name = 'AddressNotIssuedError';
+/**
+ * The application a customer domain was asked to name is not one of this
+ * workspace's (ADR MOTIR-9521 §1: only an application of the same workspace can
+ * be named). One code for "does not exist" and "is another workspace's", so the
+ * answer leaks nothing about other tenants.
+ */
+export class ApplicationNotFoundError extends Error {
+  readonly code = 'APPLICATION_NOT_FOUND' as const;
+  constructor() {
+    super('No such application in this workspace.');
+    this.name = 'ApplicationNotFoundError';
   }
 }
 
-/** The address id does not name a row in this project. */
+/** The address id does not name a customer domain in this workspace. */
 export class AddressNotFoundError extends Error {
   readonly code = 'ADDRESS_NOT_FOUND' as const;
   constructor() {

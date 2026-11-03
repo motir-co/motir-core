@@ -43,6 +43,9 @@ import {
 // `dns_configured`, `alpn_configured`, `http_configured` and
 // `ownership_txt_configured`. `dns_requirements` carries an `acme_challenge`
 // object with a `name` (e.g. `_acme-challenge.example.com`) and a `target`.
+// Each `certificates` element carries `source` (`fly` | `custom`), `status`,
+// `created_at`, `expires_at`, `issuer` and `issued` (re-read on 2026-10-30 for
+// MOTIR-9526, whose expiry arm depends on `expires_at` being there).
 
 const FLY_API = 'https://api.machines.dev/v1';
 
@@ -78,7 +81,7 @@ interface FlyCertificateResponse {
   hostname?: string;
   configured?: boolean;
   acme_requested?: boolean;
-  certificates?: unknown[];
+  certificates?: { source?: string; expires_at?: string | null }[];
   validation?: {
     dns_configured?: boolean;
     alpn_configured?: boolean;
@@ -155,7 +158,33 @@ function toCertificateState(hostname: string, body: FlyCertificateResponse): Cer
     issued: Array.isArray(body.certificates) && body.certificates.length > 0,
     dnsRequirements: requirements,
     checkedAt: new Date(),
+    expiresAt: certificateExpiry(body.certificates),
   };
+}
+
+/**
+ * `certificates[].expires_at` → the hostname's certificate expiry (MOTIR-9526).
+ *
+ * The element Fly issued (`source: "fly"`) is the one this adapter asked for, so
+ * its date wins; a hostname holding only a customer-uploaded certificate falls
+ * back to the latest date among the rest. A missing or unparseable date maps to
+ * `null` — never an error, and never a date computed from anything else.
+ */
+function certificateExpiry(certificates: FlyCertificateResponse['certificates']): Date | null {
+  if (!Array.isArray(certificates)) return null;
+  const dated = certificates
+    .map((c) => ({ source: c?.source, at: parseDate(c?.expires_at) }))
+    .filter((c): c is { source: string | undefined; at: Date } => c.at !== null);
+  const fly = dated.filter((c) => c.source === 'fly');
+  const pool = fly.length > 0 ? fly : dated;
+  if (pool.length === 0) return null;
+  return pool.reduce((latest, c) => (c.at > latest ? c.at : latest), pool[0]!.at);
+}
+
+function parseDate(value: unknown): Date | null {
+  if (typeof value !== 'string' || value === '') return null;
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? null : at;
 }
 
 /**

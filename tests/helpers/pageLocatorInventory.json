@@ -1890,30 +1890,6 @@
       "unresolved": false
     },
     {
-      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Every other address redirects here.'::1",
-      "file": "tests/e2e/regression-public-address.spec.ts",
-      "method": "getByText",
-      "arg": "'Every other address redirects here.'",
-      "occurrence": 1,
-      "line": 195,
-      "exempt": null,
-      "usage": "expect",
-      "wrapped": false,
-      "unresolved": false
-    },
-    {
-      "id": "tests/e2e/regression-public-address.spec.ts::getByText::'Primary'::1",
-      "file": "tests/e2e/regression-public-address.spec.ts",
-      "method": "getByText",
-      "arg": "'Primary'",
-      "occurrence": 1,
-      "line": 196,
-      "exempt": null,
-      "usage": "expect",
-      "wrapped": false,
-      "unresolved": false
-    },
-    {
       "id": "tests/e2e/regression-public-address.spec.ts::getByText::/never released/::1",
       "file": "tests/e2e/regression-public-address.spec.ts",
       "method": "getByText",

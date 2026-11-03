@@ -18,20 +18,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 // Postgres in this same directory; this one owns none.
 
 const listPublicIndexPage = vi.hoisted(() => vi.fn());
-// MOTIR-4217 — each row now carries the HOST its canonical lives on, so the
-// service consults the address store. Mocked EMPTY here on purpose: this suite
-// owns the pager's arithmetic, and a project with no claimed address is the
-// case where `primaryHost` falls back to the default public host. The host
-// RULE itself is proved against a real Postgres in
+// MOTIR-4217 — each row carries the HOST its canonical lives on. Since
+// MOTIR-9523 no address Motir holds is a project's (a customer domain serves an
+// application), so `primaryHost` is always the default public host; the rule is
+// proved against a real Postgres in
 // `tests/publicAddresses/publicHostResolution.test.ts`.
-const listForWorkspaces = vi.hoisted(() => vi.fn(async () => []));
-const listPrimaryAddressIds = vi.hoisted(() => vi.fn(async () => new Map()));
-
 vi.mock('@/lib/repositories/projectRepository', () => ({
-  projectRepository: { listPublicIndexPage, listPrimaryAddressIds },
-}));
-vi.mock('@/lib/repositories/publicAddressRepository', () => ({
-  publicAddressRepository: { listForWorkspaces },
+  projectRepository: { listPublicIndexPage },
 }));
 
 const { publicProjectsService } = await import('@/lib/services/publicProjectsService');

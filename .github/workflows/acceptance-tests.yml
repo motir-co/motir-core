@@ -20,8 +20,8 @@ name: Acceptance tests
 # each shard leg of a GREEN `pull_request` run publishes the recordings of the
 # specs THIS PR changed to their own story, authenticated by keyless GitHub OIDC
 # (`id-token: write`, on the shard job only). No job here holds a Motir token.
-# A `push: main` baseline, a `merge_group` run, a red run and a PR that owns no
-# spec publish nothing. The recording itself is unchanged — `video: 'on'`, the
+# A nightly or dispatched run, a `merge_group` run, a red run and a PR that owns
+# no spec publish nothing. The recording itself is unchanged — `video: 'on'`, the
 # `chapters.json` sidecars, the shard-scoped report artifact. The agent stands
 # down wherever its checkout carries this action; the MCP door stays open for
 # every other repository. `docs/decisions/acceptance-video.md` AMENDMENT
@@ -43,9 +43,10 @@ name: Acceptance tests
 #     compiles `.next/` itself — in its OWN `build` job below (MOTIR-2600), whose
 #     artifact every shard then downloads. That costs a build, but only on the
 #     PRs that own a spec, and only ONE regardless of the shard count.
-#   • It ALSO runs on `push: main`, but only while the lane actually holds a
-#     spec — the MAIN BASELINE, decided by MOTIR-2760 and described in its own
-#     section below.
+#   • It ALSO runs NIGHTLY on `main` and on a manual dispatch, but only while
+#     the lane actually holds a spec — THE NIGHTLY, decided by MOTIR-9412 and
+#     described in its own section below. (It replaced MOTIR-2760's `push: main`
+#     baseline on 2026-11-02, MOTIR-10277.)
 #   • ⚠️ A CHANGE TO A PAGE AN ACCEPTANCE SPEC READS DOES NOT RUN THIS LANE, and
 #     that is deliberate (MOTIR-2620). The specs here assert against real product
 #     surfaces, so the `paths:` filter cuts between a page and the only test that
@@ -56,81 +57,101 @@ name: Acceptance tests
 #     set of sources these specs read is most of the app, so any honest widening
 #     runs a ~30-minute lane on nearly every PR, and covering one page
 #     (`lib/apiDocs/**`) would close one instance while leaving the class.
-#     That REMAINS the rule for the pull_request trigger, and MOTIR-2760 (which
-#     owned the trigger question) did not widen it — see "THE MAIN BASELINE"
-#     below for what it did instead, and why widening got even less attractive
-#     after MOTIR-2765 rather than more.
+#     That REMAINS the rule for the pull_request trigger, and neither MOTIR-2760
+#     nor MOTIR-9412 (which each owned the trigger question) widened it — see
+#     "THE NIGHTLY" below for what runs instead.
 #     THIS LANE IS THE RECEIPT LANE, NOT A REGRESSION GATE. Behaviour a page owes
 #     on every PR belongs in a bulk-shard spec, which `ci.yml` already runs
 #     unconditionally; an acceptance spec is what a REVIEWER WATCHES. So: if you
 #     change a surface an acceptance spec drives, run this lane yourself before
 #     merging (`pnpm test:e2e --config playwright.acceptance.config.ts <spec>`),
-#     or expect the MAIN BASELINE to find it on your merge.
+#     or expect THE NIGHTLY to find it within a day of your merge.
 #
-# ── THE MAIN BASELINE — `push: main`, gated on the lane having a member ──────
-#   (MOTIR-2760; ADR amendment 2026-08-17 in `docs/decisions/acceptance-video.md`)
+# ── THE NIGHTLY — `schedule` + `workflow_dispatch`, gated on the lane ────────
+#   (MOTIR-9412 decided it · MOTIR-10277 built it · ADR amendment 2026-11-02 in
+#   `docs/decisions/acceptance-video.md`)
 #
 # WHAT RUNS WHEN, in full — this table is the whole trigger policy. The leg
-# count is DERIVED from the lane's membership (MOTIR-2908): min(specs, 4),
+# count is DERIVED from each lane's membership (MOTIR-2908): min(specs, cap),
 # floored at 1 — see "SIZED TO THE LANE" below.
 #
 #   PR changing an `acceptance*.spec.ts`      lane runs (N legs)
-#   PR changing one of the 4 lane-definition  lane runs (N legs)
+#   PR changing one of the lane-definition    lane runs (N legs)
 #     files below
-#   PR changing anything else                 NO RUN, NO CHECK  (MOTIR-1949)
-#   push to `main`, lane HAS ≥1 spec          lane runs (N legs)
-#   push to `main`, lane is EMPTY             gate job only (~10s), nothing else
+#   PR changing anything else                 NO FAN-OUT; `Acceptance complete`
+#                                             reports green (MOTIR-4257)
+#   merge-queue entry                         the same paths decision, on the
+#                                             entry's own diff (merge-queue §9)
+#   nightly at 03:17 UTC, lane HAS ≥1 spec    lane runs (N legs)
+#   manual dispatch,      lane HAS ≥1 spec    lane runs (N legs)
+#   nightly or dispatch,  lane is EMPTY       gate job only (~10s), nothing else
+#   push to `main`                            NOTHING — there is no push trigger
+#
+# The regression lane (MOTIR-9411) takes the same rows through its own outputs
+# of the same gate.
 #
 # THE PROBLEM IT CLOSES. The `pull_request` filter is deliberately blind to the
-# app (the MOTIR-2620 bullet above), so an app change that breaks an acceptance
-# spec merged green and sat on `main` until some UNRELATED PR happened to touch a
-# spec — and that PR's author inherited the diagnosis. Measured instance:
-# MOTIR-2654 moved sign-in's `callbackURL`, broke `acceptance-ai-callout.spec.ts`
-# at c6b5d19d, and it surfaced on MOTIR-2664's PR (#2045), which does not own that
-# spec. The baseline puts the red on the merge that caused it instead.
+# app (the MOTIR-2620 bullet above), and since merge-queue §9 the queue reads the
+# same paths, so a change elsewhere that breaks an acceptance or regression spec
+# merges green. Something has to run the whole lane against `main` on its own.
+# Until 2026-11-02 that was a run on every `push: main` (MOTIR-2760). With ~150
+# regression specs it cost a full fan-out per merge (merge-queue §9 measured a
+# median ~58 minutes a run), ~20 merges a day, to answer a question a person
+# reads about once a day. The nightly runs it once a day instead, and a manual
+# dispatch runs it whenever someone needs it.
 #
-# WHY THIS AND NOT THE OTHER THREE OPTIONS. MOTIR-2765 shipped between this card
-# being written and being run, and it moves the arithmetic decisively:
-#   · WIDEN `paths:` to `app/**` / `lib/**` — still rejected, and now more firmly.
-#     MOTIR-2620 rejected it on the grounds that the specs read most of the app;
-#     after the MOTIR-2769 triage the lane's steady-state membership is ZERO, so
-#     widening would run an 18-machine-minute lane on nearly every PR to execute
-#     nothing at all.
-#   · A NIGHTLY run — cheaper, but it cannot attribute. Its red names a commit
-#     RANGE; the baseline names one merge. And on an empty lane it is pure waste,
-#     which is most nights.
-#   · A CHEAP SMOKE SUBSET on every PR — there is no subset to take. The lane is
-#     usually empty, and when it is not it holds one or two specs.
+# ⚠️ THIS REVERSES A RECORDED REJECTION, KNOWINGLY. MOTIR-2760 rejected a
+# nightly because its red names a commit RANGE where a per-merge run names one
+# merge. That is still true, and it is the cost taken on: a break surfaces up to
+# a day after it merges, and its red names every merge since the last green
+# night. Two things make that acceptable now and did not exist then: the lane
+# is no longer empty most nights (the per-merge cost is real), and the range is
+# narrowed on demand by dispatching the lane at a commit inside it (below).
+#
+# ⚠️ A RED NIGHT IS AN ISSUE, NOT A RED CHECK. A scheduled run's red attaches to
+# a commit nobody is looking at — MOTIR-3850's `sandbox-staleness` lane was red
+# every night for 17 days and nobody was told. So `acceptance-nightly-notify.yml`
+# watches this workflow's `schedule` runs and, for any that did not go green
+# (failed, cancelled, timed out, failed to start), opens or comments on ONE
+# issue labelled `acceptance-nightly-red`, assigned to a named person, carrying
+# the run and the compare range since the last green night. A green night tells
+# nobody, and a red dispatch tells nobody: whoever started it is watching.
+#
+# BISECTING A RED RANGE. GitHub's dispatch API takes a branch or tag, not a sha.
+# To try a commit inside the range, push a branch at it and dispatch on it:
+#
+#   git push origin <sha>:refs/heads/bisect/acceptance-<sha>
+#   gh workflow run acceptance-tests.yml --ref bisect/acceptance-<sha>
+#
+# Each dispatch is its own concurrency group (keyed on the commit, below), so
+# dispatches at different commits run side by side and nothing cancels them.
 #
 # WHY THE GATE JOB IS THE LOAD-BEARING PART, not a nicety. MEASURED on run
 # 31740853229 (the MOTIR-2765 merge, an already-empty lane): `build` 6m + four
 # shards at 3m = 18 machine-minutes to run zero tests, because the cost is setup
-# and a `next build`, not the specs. `main` takes ~20 merges/day, so an
-# UNCONDITIONAL `push:` trigger would burn ~360 machine-minutes/day testing
-# nothing. Gated, an empty lane costs one ~10s checkout per merge, and the real
-# cost is paid only inside the receipt window a story is actually in review.
-# (MOTIR-2908 then shrank what a RUN costs inside that window — the 18 above is
+# and a `next build`, not the specs. Gated, an empty lane costs one ~10s
+# checkout per night. (MOTIR-2908 then shrank what a RUN costs — the 18 above is
 # the four-leg shape it replaced, and is left as the measurement it was.)
 #
-# ⚠️ MOTIR-1949's REQUIREMENT IS UNTOUCHED, and the reason is worth stating
-# because the gate LOOKS like the job-level `if:` that requirement forbids.
-# "Absent, not skipped" is a constraint about PULL REQUESTS — a greyed check on
-# someone's PR. A `push` event attaches its checks to the commit on `main`; it
-# adds nothing to any open PR. So the gate can skip freely on `push` and cost no
-# PR a check. On `pull_request` the gate is unconditionally `true` — the `paths:`
-# filter already decided, and a triggered PR run is never skipped.
+# ⚠️ MOTIR-1949's REQUIREMENT IS NOT WHAT THE GATE BREAKS. "Absent, not
+# skipped" was a constraint about PULL REQUESTS — a greyed check on someone's
+# PR. A `schedule` or `workflow_dispatch` run attaches its checks to a commit,
+# not to any open PR, so the gate can skip freely there. (MOTIR-4257 has since
+# given the property up on PRs too, deliberately — see the trigger.)
 #
 # ⚠️ AND `cancel-in-progress` IS PR-ONLY. Cancelling superseded runs is right for
-# a PR (only the tip matters) and WRONG here: back-to-back merges would cancel
-# each other's baseline and destroy the per-merge attribution that is this
-# trigger's entire product.
+# a PR (only the tip matters) and WRONG for a nightly or a dispatch: a nightly
+# cancelled by anything is a night with no verdict, and two bisecting dispatches
+# must both reach theirs.
 #
 # WHAT IS STILL DELIBERATELY NOT COVERED, said plainly so the next reader does
-# not have to re-derive it: the PR that BREAKS a spec still goes green. The
-# baseline catches the break one merge later, not before it lands. Closing that
-# would require the `paths:` widening rejected above, and the accepted cost is a
-# red `main` for the length of one fix — bounded, attributed, and paid by the
-# author who caused it rather than by the next passer-by.
+# not have to re-derive it: the PR that BREAKS a spec still goes green, and so
+# does its queue entry. The nightly catches the break up to a day later. Closing
+# that would require the `paths:` widening rejected above.
+#
+# (MOTIR-2760's `push: main` baseline — the per-merge detector this section
+# replaced — is recorded in `docs/decisions/acceptance-video.md`, Amendment
+# 2026-08-17, and its eviction fix in MOTIR-4095. Both stand there as history.)
 #
 # ── A SPEC IN THIS LANE HAS A LIFECYCLE — IT DOES NOT LIVE HERE FOREVER ──────
 #   (Story MOTIR-2765 · `docs/decisions/acceptance-receipt-lifecycle.md`)
@@ -206,7 +227,7 @@ name: Acceptance tests
 #
 #   legs = min(specs, 14), floored at 1
 #
-#   0 specs → 1 leg    (a PR against an empty lane; `push` skips entirely)
+#   0 specs → 1 leg    (a PR against an empty lane; the nightly skips entirely)
 #   1 spec  → 1 leg    2 specs → 2 legs    …    ≥ 14 → 14 legs
 #
 # Two things that number is chosen to protect, both of which a plain "one leg per
@@ -253,7 +274,7 @@ on:
   # ⚠️ NO `paths:` HERE ANY MORE, AND THAT IS THE POINT (MOTIR-4257).
   # The filter did not disappear — it MOVED, verbatim, into the `membership` gate
   # below, which now answers the same question for `pull_request` that it already
-  # answered for `push`. The heavy jobs are gated exactly as before; what changed
+  # answered for the runs against `main`. The heavy jobs are gated exactly as before; what changed
   # is that the workflow is TRIGGERED on every PR, so `Acceptance complete`
   # REPORTS on every PR.
   #
@@ -276,24 +297,21 @@ on:
   # red through a merge nobody checked. A tidy checks list is worth less than a
   # trunk that is green, so when the two conflict the checks list loses.
   pull_request:
-  # The MAIN BASELINE (MOTIR-2760). Deliberately NOT `paths:`-filtered: while the
-  # lane holds a spec, ANY merge could be the one that breaks it, and which
-  # sources it reads is precisely what the filter cannot know. The `membership`
-  # gate below is what keeps that affordable — see the header section.
   # ── THE MERGE QUEUE IS WHERE THIS LANE BELONGS (MOTIR-4257) ────────────────
   #
   # ⚠️ WITHOUT THIS THE TRUNK CAN GO RED AND NOTHING PREVENTS IT, which is the
   # one thing a merge queue exists to make impossible. The queue's contract is
   # that nothing lands unless the MERGED RESULT passes the required checks — so
-  # a check that runs on `push: main` and NOT in the queue is, by construction,
-  # a check that can break `main`, with no gate anywhere upstream of it.
+  # a check that runs only after a merge and NOT in the queue is, by
+  # construction, a check that can break `main`, with no gate anywhere upstream
+  # of it.
   #
   # The `pull_request:` filter above cannot close that: it selects on the files
   # a change TOUCHES, and this lane's specs read the whole app. The worked
   # example is the merge that prompted this card — `e055b6b23` (#2530) made the
   # rail's Docs row conditional on `MOTIR_DOCS_URL`, touched ZERO of the paths
-  # above, ran no acceptance check, passed the queue, and turned the baseline
-  # red on the next push. That is not a queue failure; the queue was never
+  # above, ran no acceptance check, passed the queue, and turned the lane red
+  # on `main` afterwards. That is not a queue failure; the queue was never
   # asked.
   #
   # ⚠️ THE TRIGGER AND THE RULESET ARE ONE CHANGE AND NEITHER HALF WORKS ALONE —
@@ -304,45 +322,41 @@ on:
   # `check_response_timeout_minutes` with no failing check to explain it.
   # `Acceptance complete` (below) is the context to require.
   merge_group:
-  # The MAIN BASELINE (MOTIR-2760) — KEPT as belt-and-braces, and no longer the
-  # primary signal. It is the lossy one: every push shares `github.ref`, GitHub
-  # holds one pending run per group, and a merge burst evicts the queued ones
-  # (23 of 100 runs cancelled with zero jobs, measured in the header above). A
-  # detector that misses one merge in four is a poor substitute for a gate, and
-  # with `merge_group:` above it is now a second opinion rather than the only
-  # one. Retiring it is a separate decision.
-  push:
-    branches: [main]
+  # THE NIGHTLY (MOTIR-9412 · MOTIR-10277) — the run of the whole lane against
+  # `main`, once a day, in place of the `push: main` baseline that ran it on
+  # every merge. 03:17 UTC: overnight in Europe so a red is waiting at the start
+  # of the day, and off the hour so it is not queued behind every other
+  # top-of-the-hour cron on GitHub's side. `deploy-freshness.yml` records that
+  # daily crons in this org are delivered every tick. A night that does not go
+  # green reaches a person through `acceptance-nightly-notify.yml`.
+  schedule:
+    - cron: '17 3 * * *'
+  # THE MANUAL RUN — the whole lane at the head of whatever branch or tag it is
+  # started on. It is how a red night's range is bisected: push a branch at the
+  # commit to try and dispatch on it (the header's "BISECTING A RED RANGE").
+  # No inputs: the gate decides from the checkout, as it does for the nightly.
+  workflow_dispatch:
 
-# ⚠️ THE GROUP IS PER-COMMIT ON `push`, PER-REF ON `pull_request` (MOTIR-4095).
-# `cancel-in-progress: false` is NOT enough to protect a main baseline, and the
-# comment that used to stand here said it was. It governs the run that is
-# already EXECUTING; GitHub separately holds only ONE PENDING run per group, and
-# a third event in that group EVICTS the queued one. Every push to `main` shares
-# `github.ref`, so a merge burst cancelled the middle baselines before they ran
-# a single job — measured on 2026-09-01 at 23 of the last 100 `push: main` runs,
-# every one of them `cancelled` with ZERO jobs, each at the instant the next
-# merge's run was created. That is one merge in four with no baseline at all,
-# which is precisely the "which merge broke the lane?" ambiguity MOTIR-2760
-# added this trigger to remove.
+# ⚠️ THE GROUP IS PER-COMMIT EXCEPT ON `pull_request`, WHERE IT IS PER-REF.
+# `cancel-in-progress: false` is NOT enough to keep a run from being lost. It
+# governs the run that is already EXECUTING; GitHub separately holds only ONE
+# PENDING run per group, and a third event in that group EVICTS the queued one
+# (MOTIR-4095 measured 23 of 100 `push: main` runs evicted that way, when that
+# trigger existed).
 #
-# So the group is keyed on the COMMIT for a push — two merges are never in the
-# same group, nothing is ever queued behind anything, and nothing is evicted —
-# and on the REF for a pull request, where superseding the older run is the
-# saving we want (MOTIR-2760) and `github.ref` is `refs/pull/<n>/merge`, so a PR
-# cancels only itself. `tests/ci-acceptance-lane.test.ts` asserts this by
-# RESOLVING the expression against a fabricated context rather than matching its
-# text — the group is arithmetic, not structure.
-#
-# ⚠️ AND `ci.yml` KEEPS THE PER-REF FORM ON PURPOSE — do not "finish the job"
-# there. It evicts harder (33 of its last 100 `push: main` runs, same
-# measurement, all with zero jobs), and MOTIR-3760 read that and ruled it NOT a
-# defect: ci.yml's main run answers "does the trunk build, and does it deploy",
-# and the survivor of a burst carries every commit before it, so the answer it
-# gives is still true. THIS lane answers a different question — WHICH merge
-# broke a spec — and "the survivor carries every commit before it" is exactly
-# the ambiguity that destroys. Same expression, different product: that is why
-# the fix is scoped to this file.
+# So every event but a pull request is grouped on the COMMIT:
+#   · `workflow_dispatch` — bisecting a red night means dispatching the lane at
+#     several commits at once. Keyed on the commit, those dispatches never share
+#     a group, so none waits behind another and none is evicted.
+#   · `schedule` — one run a night, at `main`'s head. Keyed on the commit, it
+#     never shares a group with a dispatch at a different commit.
+#   · `merge_group` — each entry is its own commit, and an entry must never be
+#     cancelled or evicted: its run is the queue's only evidence.
+# On a pull request it is keyed on the REF, where superseding the older run is
+# the saving we want and `github.ref` is `refs/pull/<n>/merge`, so a PR cancels
+# only itself. `tests/ci-acceptance-lane.test.ts` asserts this by RESOLVING the
+# expression against a fabricated context rather than matching its text — the
+# group is arithmetic, not structure.
 #
 # ⚠️ THE GROUP CARRIES `github.workflow`, WHICH IS THIS FILE'S `name:` — so the
 # MOTIR-4096 rename changed the group's literal prefix. That is harmless and was
@@ -356,15 +370,15 @@ on:
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   # PR-ONLY (MOTIR-2760). On a PR only the tip matters, so cancelling a
-  # superseded run saves minutes. On `main` cancelling would destroy the
-  # baseline's whole product — which merge broke the lane. Note this line alone
-  # never protected it: see the eviction above.
+  # superseded run saves minutes. Nothing ever cancels a nightly, a dispatch or
+  # a queue entry: each is the only verdict for its commit. Note this line alone
+  # never protected them: see the eviction above.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   # Is there anything in the lane to run? (MOTIR-2760.) A checkout and an `ls` —
   # no Postgres, no install, no build — so an empty lane costs ~10 seconds per
-  # merge instead of the 18 machine-minutes the full fan-out costs to run zero
+  # night instead of the 18 machine-minutes the full fan-out costs to run zero
   # tests (measured: run 31740853229).
   #
   # ⚠️ ON `pull_request` THIS JOB NOW OWNS THE PATHS DECISION (MOTIR-4257).
@@ -380,9 +394,10 @@ jobs:
   # lane matches `.github/workflows/acceptance-tests.yml` or the config, so it
   # still runs against whatever membership it leaves behind, empty or not.
   #
-  # `merge_group` and `push` are untouched and fall through to the membership
-  # count: in the queue the lane runs whenever it holds a spec, with no paths
-  # filter anywhere near it, which is the whole gate MOTIR-4257 adds.
+  # `merge_group` reads its own entry's diff (merge-queue §9). `schedule` and
+  # `workflow_dispatch` fall through to the membership count, with no paths
+  # filter anywhere near them: the nightly and a dispatch run each lane whenever
+  # it holds a spec, and an empty lane runs nothing (MOTIR-10277).
   membership:
     name: Does the lane hold a spec?
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
@@ -467,9 +482,9 @@ jobs:
             # at ~58-65 min per entry against ~34 min for the rest of the gate and
             # a 60-min `check_response_timeout_minutes` -- so it was the long pole
             # and the cause of the CI_TIMEOUT ejections. A spec/lane change already
-            # ran on its PR; the `push: main` baseline below still runs the whole
-            # lane on the merged result and is the detector for a composed-tree
-            # break. `Acceptance complete` still reports (green, no legs).
+            # ran on its PR; THE NIGHTLY (the header) runs the whole lane against
+            # `main` and is the detector for a composed-tree break. `Acceptance
+            # complete` still reports (green, no legs).
             #
             # FAIL OPEN: a payload without shas, or a diff that cannot be taken,
             # runs the lane -- an unclassifiable entry is never silently skipped.
@@ -540,8 +555,8 @@ jobs:
           # ── The REGRESSION lane's membership (MOTIR-9411) ───────────────────
           # The same question for `playwright.regression.config.ts`. The done
           # stories' specs keep the acceptance lane's triggers: a PR or queue
-          # entry runs them only when it touches the lane's own paths, a push
-          # to `main` runs them all, and an empty lane runs nothing.
+          # entry runs them only when it touches the lane's own paths, the
+          # nightly and a dispatch run them all, and an empty lane runs nothing.
           #
           # The diff is read again rather than reused from above, because the
           # acceptance branch reads it only while ITS lane holds a spec.
@@ -604,11 +619,11 @@ jobs:
               echo "This PR touches no acceptance spec, the lane's workflow, its"
               echo "Playwright config or either helper, so the fan-out was"
               echo "skipped (MOTIR-4257). \`Acceptance complete\` still reports —"
-              echo "it is a required check — and the full lane runs against the"
-              echo "MERGED result when this PR enters the merge queue."
+              echo "it is a required check — and the nightly run on \`main\`"
+              echo "runs the whole lane against the merged result."
             elif [ "${RUN}" = 'false' ]; then
               echo ""
-              echo "The lane is empty, so this baseline stopped here rather than"
+              echo "The lane is empty, so this run stopped here rather than"
               echo "spending machine-minutes to run zero tests (MOTIR-2760)."
             fi
             echo ""
@@ -899,8 +914,9 @@ jobs:
       # on every shard, and each leg publishes the intersection of "specs this PR
       # changed" with "recordings this leg produced", which are disjoint across
       # legs and together cover the set, so every receipt publishes exactly once.
-      # A `push` or `merge_group` run has no PR base, so the list is EMPTY and the
-      # uploader — which fails closed on an empty list — publishes nothing. The
+      # A nightly, dispatched or `merge_group` run has no PR base, so the list is
+      # EMPTY and the uploader — which fails closed on an empty list — publishes
+      # nothing. The
       # publish step is ALSO `if:`-gated to `pull_request`: two mechanisms,
       # because a wrong answer here supersedes a story's evidence.
       - name: Which acceptance specs does this run own?
@@ -957,8 +973,8 @@ jobs:
       # and a defect in a recording this PR does not own. What does fail it is a
       # story this PR owns ending the run without a receipt.
       #
-      # ⚠️ `pull_request` ONLY (MOTIR-2760). The main baseline and the merge
-      # queue run the specs and publish nothing: the receipt belongs to the
+      # ⚠️ `pull_request` ONLY (MOTIR-2760). The nightly, a dispatch and the
+      # merge queue run the specs and publish nothing: the receipt belongs to the
       # moment the story was in review.
       - name: Publish the acceptance receipt
         if: success() && github.event_name == 'pull_request'
@@ -997,7 +1013,7 @@ jobs:
   # The done stories' acceptance specs, renamed `regression-*.spec.ts` and run
   # without pacing or recording by `playwright.regression.config.ts`. They keep
   # the acceptance lane's TRIGGERS — a PR or queue entry that touches the lane's
-  # own paths, and every push to `main` — so moving them out of the receipt lane
+  # own paths, the nightly and a dispatch — so moving them out of the receipt lane
   # puts nothing new on an ordinary pull request. The gate is the `membership`
   # step above (its `regression_*` outputs).
   #
