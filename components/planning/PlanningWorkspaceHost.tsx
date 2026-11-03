@@ -522,6 +522,7 @@ function PlanWorkspaceHost({
     answerRestartConfirm,
     confirmPlanOffer,
     declinePlanOffer,
+    refreshThread,
     answerRunPause,
     planAgain,
     resume,
@@ -1337,6 +1338,7 @@ function PlanWorkspaceHost({
           // press starts; the hook refetches and follows.
           onConfirmPlanOffer={(turnId) => void confirmPlanOffer(turnId)}
           onDeclinePlanOffer={(turnId) => void declinePlanOffer(turnId)}
+          onConversationGrillEnded={refreshThread}
           offerAnsweringTurnId={state.offerAnsweringTurnId ?? null}
           offerRefusal={state.offerRefusal ?? null}
           providerLimit={railProviderLimit}

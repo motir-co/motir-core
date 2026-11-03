@@ -30,7 +30,7 @@ import type { RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/typ
  */
 export interface ComposedSubmit {
   requirement: SubmittedRequirement;
-  opts: { requirementConfirmed: RequirementConfirmation; omitCarriedAnswers: true };
+  opts: { requirementConfirmed: RequirementConfirmation };
 }
 
 /** The shipped submit, with a confirmed offer's requirement when there is one. */

@@ -3175,9 +3175,6 @@ export const planChangeSessionsService = {
       /** Which offer's requirement the person confirmed (MOTIR-10091): rides the job
        *  beside `requirement`, so motir-ai keeps it as the planner's own. */
       requirementConfirmed?: RequirementConfirmation;
-      /** Send NO carried answers (MOTIR-9436): a confirmed offer's composed requirement
-       *  already holds what Grill me settled, and a second copy would be folded in twice. */
-      omitCarriedAnswers?: boolean;
     } = {},
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
@@ -3287,17 +3284,14 @@ export const planChangeSessionsService = {
     // one key, and a repeat that comes back with a job already planned into gets
     // that job's plan back (`createPlan`), never a second one.
     const idempotencyKey = planningSubmitKey(turns, session.lastJobId);
-    // CARRIED ANSWERS (Story MOTIR-9221 · MOTIR-9315): what the person settled when
-    // this conversation was grilled before planning rides the run, so the run does
-    // not grill that request again. Read now, at submit, so a Stop, a finish or Grill
-    // me switched off all carry what was settled so far. A fresh run only: a plan
-    // again re-plans what an earlier run already carried.
-    const carriedAnswers =
-      claim || opts.omitCarriedAnswers ? undefined : await carriedAnswersFor(session, pctx);
+    // NO CARRIED ANSWERS (Bug MOTIR-10255): what Grill me settled before planning is
+    // written INTO the offer's requirement when the grilling ends, so a planning job
+    // carries a requirement and nothing beside it, whether Grill me was on or off. The
+    // answers stay on the grilling; the in-run grilling still reads them
+    // (`aiSharpenService`'s run context) so it does not ask the same request again.
     const submitOpts = {
       sessionId: session.id,
       ...(idempotencyKey ? { idempotencyKey } : {}),
-      ...(carriedAnswers ? { carriedAnswers } : {}),
       ...(opts.requirementConfirmed ? { requirementConfirmed: opts.requirementConfirmed } : {}),
     };
     let submitted: { jobId: string; planId: string };

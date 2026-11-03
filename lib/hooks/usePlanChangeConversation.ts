@@ -3592,6 +3592,25 @@ export function usePlanChangeConversation({
     [answerOffer],
   );
 
+  /**
+   * RE-READ THE THREAD after a Grill me grilling over its plan offer ended (Bug
+   * MOTIR-10255). The grilling's end stores the requirement it wrote ON THE OFFER,
+   * which lives on the thread rather than on the grilling, so the offer and the left
+   * pane read the requirement that holds the answers only once the thread is read
+   * again. A failed read leaves the thread as it was; it resolves either way.
+   */
+  const refreshThread = useCallback(async () => {
+    const session = stateRef.current.session;
+    if (!session) return;
+    try {
+      const read = await getPlanChangeSession(session.id);
+      if (!mountedRef.current) return;
+      setState((s) => (s.session?.id === read.id ? { ...s, session: read } : s));
+    } catch {
+      // The thread already drawn stays: nothing the person sent is lost.
+    }
+  }, []);
+
   return {
     state: exposed,
     send,
@@ -3606,6 +3625,7 @@ export function usePlanChangeConversation({
     answerRestartConfirm,
     confirmPlanOffer,
     declinePlanOffer,
+    refreshThread,
     planAgain,
     resume,
     answerRunPause,

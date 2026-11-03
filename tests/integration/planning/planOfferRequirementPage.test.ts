@@ -529,7 +529,7 @@ describe('a page that cannot be saved', () => {
 
 describe('offers the page does not touch', () => {
   it(
-    'a no-target offer with no requirement starts as before: no page asked for, carried answers kept',
+    'a no-target offer with no requirement starts as before: no page asked for, no carried answers (MOTIR-10255)',
     T,
     async () => {
       settledSpy.mockResolvedValue(SETTLED);
@@ -541,7 +541,7 @@ describe('offers the page does not touch', () => {
       expect(writeSpy).not.toHaveBeenCalled();
       expect(planContext()).not.toHaveProperty('requirement');
       expect(planContext()).not.toHaveProperty('requirementConfirmed');
-      expect(planContext()['carriedAnswers']).toBeDefined();
+      expect(planContext()).not.toHaveProperty('carriedAnswers');
       const stored = await rawOffer(offerTurnId);
       expect(stored).not.toHaveProperty('requirementPage');
       expect(stored).not.toHaveProperty('requirementPageFailed');
@@ -647,13 +647,13 @@ describe('a confirmed targeted offer with a requirement', () => {
 });
 
 describe('other entrances to submit', () => {
-  it('a plain submit still sends carried answers and no marker', T, async () => {
+  it('a plain submit sends no carried answers (MOTIR-10255) and no marker', T, async () => {
     settledSpy.mockResolvedValue(SETTLED);
     const { conversationId } = await offered();
 
     await planChangeSessionsService.submit(me(), { sessionId: conversationId });
 
-    expect(planContext()['carriedAnswers']).toBeDefined();
+    expect(planContext()).not.toHaveProperty('carriedAnswers');
     expect(planContext()).not.toHaveProperty('requirementConfirmed');
     expect(pageAsks()).toHaveLength(0);
   });

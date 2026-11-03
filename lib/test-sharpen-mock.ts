@@ -37,6 +37,7 @@ import type {
   GrillingBranch,
   SettledAnswer,
   SharpenAssumption,
+  SharpenConversationContext,
   SharpenJobContext,
   SharpenQuestion,
   SubmittedRequirement,
@@ -90,6 +91,8 @@ export interface SharpenTurnWire {
   settled: SettledAnswer[];
   assumptions: SharpenAssumption[];
   writeBack: { ok: boolean; error?: string } | null;
+  /** The requirement a conversation grilling's end wrote for its offer (MOTIR-10255). */
+  requirement?: { offerTurnId: string; requirement: SubmittedRequirement };
 }
 
 /** What one turn comes to, before any write-back is made. */
@@ -206,6 +209,41 @@ export function buildWriteBack(
   };
 }
 
+/**
+ * The requirement a CONVERSATION grilling's end writes for the offer it holds — the
+ * shape motir-ai's `writeGrillingRequirement` returns (Bug MOTIR-10255): the offer's
+ * own requirement kept, every answer folded in as `- <question> — <answer>` under its
+ * topic's field, every assumption listed under its question id. The real call has a
+ * model reword the parts; the seam keeps them, which is what the fold guarantees.
+ */
+export function buildGrillingRequirement(
+  offer: NonNullable<SharpenConversationContext['offer']>,
+  settled: SettledAnswer[],
+  assumptions: SharpenAssumption[],
+): SubmittedRequirement {
+  const base = offer.requirement ?? {};
+  const requirement: SubmittedRequirement = {
+    outcome: base.outcome ?? offer.requestMd,
+    behaviour: base.behaviour ?? offer.requestMd,
+    scopeEdge: base.scopeEdge ?? '',
+    constraints: base.constraints ?? '',
+    acceptance: base.acceptance ?? offer.requestMd,
+  };
+  for (const s of settled) {
+    const field = TOPIC_FIELD[s.topic];
+    const line = `- ${s.question} — ${s.answer}`;
+    requirement[field] = requirement[field] ? `${requirement[field]}\n${line}` : line;
+  }
+  const assumed = new Set(assumptions.map((a) => a.questionId));
+  requirement.assumptions = [
+    ...(Array.isArray(base.assumptions) ? base.assumptions : []).filter(
+      (a) => typeof a === 'string' || a.id === undefined || !assumed.has(a.id),
+    ),
+    ...assumptions.map((a) => ({ id: a.questionId, text: `${a.question} — ${a.recommendation}` })),
+  ];
+  return requirement;
+}
+
 /** motir-ai's request normalisation (`normaliseRequest`). */
 function normaliseRequest(s: string): string {
   return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
@@ -235,9 +273,24 @@ export function planSharpenTurn(
   const recorded = recordAction(ctx);
   const end = (kind: 'nothing_to_ask' | 'finished' | 'stopped'): SharpenTurnPlan => {
     const nothing = recorded.settled.length === 0 && recorded.assumptions.length === 0;
+    // A conversation grilling that settled something writes its offer's requirement.
+    const offer = ctx.conversation?.offer;
+    const requirement =
+      offer && !nothing
+        ? {
+            offerTurnId: offer.turnId,
+            requirement: buildGrillingRequirement(offer, recorded.settled, recorded.assumptions),
+          }
+        : null;
     return {
       failed: false,
-      turn: { kind, question: null, ...recorded, writeBack: null },
+      turn: {
+        kind,
+        question: null,
+        ...recorded,
+        writeBack: null,
+        ...(requirement ? { requirement } : {}),
+      },
       // A conversation has no plan yet, so it owes no write-back (MOTIR-9314).
       writeBack:
         nothing || ctx.scope.kind !== 'plan'
