@@ -677,7 +677,14 @@ export function legacyFleetLocationKey(): string {
 /** The CI runner image, whichever account boots it (`MOTIR_RUNNER_IMAGE`). The
  *  fake path has none set, and the placeholder keeps its spec well-formed. */
 export function fleetRunnerImage(): string {
-  return process.env['MOTIR_RUNNER_IMAGE']?.trim() || 'motir/ci-runner@sha256:unset';
+  return configuredFleetRunnerImage() ?? 'motir/ci-runner@sha256:unset';
+}
+
+/** The CI runner image this deployment PINS, or null when `MOTIR_RUNNER_IMAGE`
+ *  is unset — the image the fleet readiness verdict judges jobs against
+ *  (MOTIR-10290), which must never be the fake path's placeholder. */
+export function configuredFleetRunnerImage(): string | null {
+  return process.env['MOTIR_RUNNER_IMAGE']?.trim() || null;
 }
 
 /** The region a process-wide-fleet boot asks for (`FLY_FLEET_REGION`, `iad` by

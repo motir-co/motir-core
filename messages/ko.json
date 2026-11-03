@@ -12676,9 +12676,10 @@
         "not_attributable": "{repositories}에서 대기열에 들어간 작업은 프로젝트 {project}에 귀속되지 않으므로 GitHub가 만료시킬 때까지 대기열에 남습니다. 미러 행이 최신 상태가 되도록 리포지토리를 프로젝트에 다시 연결하세요.",
         "no_runner_group": "프로젝트 {project}에는 {org}의 러너 그룹이 없습니다. 운영자가 {script} --project {project}을(를) 실행합니다.",
         "sync_pending": "{org}에 있는 프로젝트의 러너 그룹이 리포지토리와 동기화되어 있지 않습니다. 운영자가 {script} --project {project}을(를) 실행합니다.",
-        "jobs_not_runnable": "작업 {count, plural, other {#개}}를 아직 플릿 러너 이미지에서 실행할 수 없습니다. 플릿 이미지 관리자가 누락된 도구를 추가합니다. 다른 운영 체제가 필요한 작업은 비공개 집합에서 빠질 때까지 실행할 수 없습니다.",
-        "not_inventoried": "{repositories}이(가) 플릿 작업 목록에 없어, 러너 이미지가 {count, plural, other {해당}} 작업을 실행할 수 있는지 아무도 확인하지 않았습니다. 목록 관리자가 다시 실행합니다.",
-        "inventory_stale": "플릿 작업 목록이 측정한 후 {repositories}의 워크플로가 변경되었습니다. 목록 관리자가 다시 실행합니다.",
+        "jobs_not_runnable": "작업 {count, plural, other {#개}}를 아직 플릿 러너 이미지에서 실행할 수 없습니다. 플릿 이미지 관리자가 누락된 도구를 추가합니다. 판단할 수 없는 작업은 워크플로가 실행하는 내용을 명시할 때까지 실행할 수 없습니다. 다른 운영 체제가 필요한 작업은 비공개 집합에서 빠질 때까지 실행할 수 없습니다.",
+        "runner_image_unset": "이 배포는 러너 이미지를 고정하지 않았습니다({variable} 미설정). 따라서 어떤 작업도 판단할 수 없습니다. 운영자가 러너 이미지의 다이제스트를 고정합니다.",
+        "image_tools_unrecorded": "고정된 러너 이미지 {image}에 도구 목록({label} 레이블)이 기록되어 있지 않아 해당 작업을 판단할 수 없습니다. 플릿 이미지 관리자가 현재 motir-core에서 다시 릴리스하고 새 다이제스트를 고정합니다.",
+        "image_unreadable": "고정된 러너 이미지 {image}의 도구 목록을 읽을 수 없습니다. 확인이 성공할 때까지 미충족으로 계산합니다.",
         "read_failed": "확인할 수 없습니다: GitHub가 HTTP {status}을(를) 반환했습니다. 확인이 성공할 때까지 미충족으로 계산합니다.",
         "read_unreachable": "확인할 수 없습니다: GitHub에 연결할 수 없습니다. 확인이 성공할 때까지 미충족으로 계산합니다.",
         "read_failedNoStatus": "확인할 수 없습니다. 확인이 성공할 때까지 미충족으로 계산합니다.",
@@ -12687,8 +12688,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} — {tools} 누락",
         "cannotHost": "{repo} · {workflow} · {job} — 호스팅 불가: {reason}",
+        "unverified": "{repo} · {workflow} · {job} — 판단 불가: {reason}",
         "more": "{count}개 더 보기",
-        "scope": "이는 main에서 빌드되어 목록화된 이미지를 다루며, 프로덕션에서 부팅하는 이미지가 아닙니다."
+        "scope": "각 저장소의 최신 커밋 시점 워크플로를 프로덕션에서 부팅하는 러너 이미지가 기록한 도구와 비교해 판단합니다."
       },
       "confirm": {
         "onTitle": "{org}의 플릿 CI를 켜시겠습니까?",

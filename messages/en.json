@@ -12679,9 +12679,10 @@
         "not_attributable": "A queued job from {repositories} would not be attributed to project {project}, so it would stay queued until GitHub expires it. Reconnect the repository to the project so its mirror row is current.",
         "no_runner_group": "Project {project} has no runner group in {org}. An operator runs {script} --project {project}.",
         "sync_pending": "The project's runner group in {org} is out of sync with its repositories. An operator runs {script} --project {project}.",
-        "jobs_not_runnable": "{count, plural, one {# job} other {# jobs}} can't run on the fleet runner image yet. Whoever maintains the fleet image adds the missing tool; a job that needs another operating system stays unrunnable until it leaves the private set.",
-        "not_inventoried": "{repositories} {count, plural, one {is} other {are}} not in the fleet job inventory, so nobody has checked the runner image can run {count, plural, one {its} other {their}} jobs. Whoever maintains the inventory re-runs it.",
-        "inventory_stale": "The workflows of {repositories} changed after the fleet job inventory measured them. Whoever maintains the inventory re-runs it.",
+        "jobs_not_runnable": "{count, plural, one {# job} other {# jobs}} can't run on the fleet runner image yet. Whoever maintains the fleet image adds the missing tool; a job that can't be judged stays unrunnable until its workflow names what it runs; a job that needs another operating system stays unrunnable until it leaves the private set.",
+        "runner_image_unset": "This deployment pins no runner image ({variable} is unset), so no job can be judged against one. An operator pins the runner image's digest.",
+        "image_tools_unrecorded": "The pinned runner image {image} records no tool list (the {label} label), so its jobs can't be judged. Whoever maintains the fleet image releases it from current motir-core and pins the new digest.",
+        "image_unreadable": "Couldn't read the tool list of the pinned runner image {image}. Counts as not met until a check succeeds.",
         "read_failed": "Couldn't check this: GitHub answered HTTP {status}. Counts as not met until a check succeeds.",
         "read_unreachable": "Couldn't check this: GitHub could not be reached. Counts as not met until a check succeeds.",
         "read_failedNoStatus": "Couldn't check this. Counts as not met until a check succeeds.",
@@ -12690,8 +12691,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} — missing {tools}",
         "cannotHost": "{repo} · {workflow} · {job} — can't be hosted: {reason}",
+        "unverified": "{repo} · {workflow} · {job} — can't be judged: {reason}",
         "more": "+{count} more",
-        "scope": "This covers the inventoried image built from main, not the image production boots."
+        "scope": "Judged from each repository's workflows at its newest commit, against the tools the runner image production boots records."
       },
       "confirm": {
         "onTitle": "Turn on fleet CI for {org}?",

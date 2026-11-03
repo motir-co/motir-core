@@ -5,6 +5,7 @@ import {
   parseBearerChallenge,
   parseImageReference,
   probeImagePull,
+  readImageLabels,
 } from '../src/index';
 
 // THE IMAGE-PULL PROBE (Story MOTIR-1916 · MOTIR-2006) — §6.1 of
@@ -593,5 +594,142 @@ describe('OrchestratorImageUnpullableError — the sentence that reaches the ope
     const err = new OrchestratorImageUnpullableError('fly', 400, PRIVATE_IMAGE, '');
     expect(err.message).toContain('(HTTP 400)');
     expect(err.message).not.toContain('HTTP 400:');
+  });
+});
+
+describe('readImageLabels — what the pinned image says about itself (MOTIR-10290)', () => {
+  const INDEX = 'sha256:index';
+  const AMD = 'sha256:amd64';
+  const CONFIG = 'sha256:config';
+  const LABEL = 'co.motir.ci-runner.tools';
+
+  /** GHCR-shaped: challenge, anonymous token, then index → platform manifest → config. */
+  function registry(
+    overrides: {
+      manifest?: (auth: boolean) => Response;
+      platformManifest?: () => Response;
+      config?: () => Response;
+      token?: () => Response;
+    } = {},
+  ) {
+    return vi.fn(async (rawUrl: string, init?: RequestInit): Promise<Response> => {
+      const url = new URL(String(rawUrl));
+      urls.push(String(rawUrl));
+      if (url.pathname === '/token') {
+        return overrides.token?.() ?? json(200, { token: 'anon-pull-token' });
+      }
+      const auth = Boolean(
+        (init?.headers as Record<string, string> | undefined)?.['authorization'],
+      );
+      if (!auth) return json(401, {}, { 'www-authenticate': GHCR_CHALLENGE });
+      if (url.pathname.endsWith(`/manifests/${AMD}`)) {
+        return (
+          overrides.platformManifest?.() ??
+          json(200, { schemaVersion: 2, config: { digest: CONFIG }, layers: [] })
+        );
+      }
+      if (url.pathname.includes('/manifests/')) {
+        return (
+          overrides.manifest?.(auth) ??
+          json(
+            200,
+            {
+              mediaType: 'application/vnd.oci.image.index.v1+json',
+              manifests: [
+                { digest: 'sha256:arm', platform: { os: 'linux', architecture: 'arm64' } },
+                { digest: AMD, platform: { os: 'linux', architecture: 'amd64' } },
+              ],
+            },
+            { 'docker-content-digest': INDEX },
+          )
+        );
+      }
+      if (url.pathname.endsWith(`/blobs/${CONFIG}`)) {
+        return (
+          overrides.config?.() ??
+          json(200, { config: { Labels: { [LABEL]: 'bash,git', other: 'x', n: 1 } } })
+        );
+      }
+      return json(404, {});
+    });
+  }
+
+  it("resolves an index to linux/amd64 and returns its config's string labels", async () => {
+    vi.stubGlobal('fetch', registry());
+    expect(await readImageLabels(PUBLIC_IMAGE)).toEqual({
+      ok: true,
+      reference: PUBLIC_IMAGE,
+      digest: AMD,
+      labels: { [LABEL]: 'bash,git', other: 'x' },
+    });
+    expect(urls.some((u) => u.includes('/token'))).toBe(true);
+  });
+
+  it('reads a single-platform manifest directly, and an image with no labels as none', async () => {
+    vi.stubGlobal(
+      'fetch',
+      registry({
+        manifest: () =>
+          json(200, { config: { digest: CONFIG } }, { 'docker-content-digest': 'sha256:single' }),
+        config: () => json(200, { config: {} }),
+      }),
+    );
+    expect(await readImageLabels(PUBLIC_IMAGE)).toEqual({
+      ok: true,
+      reference: PUBLIC_IMAGE,
+      digest: 'sha256:single',
+      labels: {},
+    });
+  });
+
+  it('answers each failure as a reason, never as an image with no labels', async () => {
+    const cases: Array<[Parameters<typeof registry>[0], string]> = [
+      [{ token: () => json(401, {}) }, 'unauthorized'],
+      [{ manifest: () => json(404, {}) }, 'absent'],
+      [{ manifest: () => json(500, {}) }, 'refused'],
+      [{ manifest: () => new Response('not json', { status: 200 }) }, 'malformed'],
+      [
+        {
+          manifest: () =>
+            json(200, { mediaType: 'application/vnd.oci.image.index.v1+json', manifests: [] }),
+        },
+        'absent',
+      ],
+      [{ platformManifest: () => json(403, {}) }, 'unauthorized'],
+      [{ platformManifest: () => new Response('[]', { status: 200 }) }, 'malformed'],
+      [{ platformManifest: () => json(200, { config: {} }) }, 'malformed'],
+      [{ config: () => json(404, {}) }, 'absent'],
+      [{ config: () => new Response('nope', { status: 200 }) }, 'malformed'],
+    ];
+    for (const [overrides, reason] of cases) {
+      vi.stubGlobal('fetch', registry(overrides));
+      const read = await readImageLabels(PUBLIC_IMAGE);
+      expect(read, reason).toMatchObject({ ok: false, reason });
+    }
+  });
+
+  it('reports an unparseable reference and an unreachable registry', async () => {
+    expect(await readImageLabels('   ')).toMatchObject({ ok: false, reason: 'unparseable' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('fetch failed');
+      }),
+    );
+    expect(await readImageLabels(PUBLIC_IMAGE)).toMatchObject({
+      ok: false,
+      reason: 'unreachable',
+    });
+  });
+
+  it('keeps a 401 when the challenge yields no token', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(401, {}, { 'www-authenticate': 'Basic realm="x"' })),
+    );
+    expect(await readImageLabels(PUBLIC_IMAGE)).toMatchObject({
+      ok: false,
+      reason: 'unauthorized',
+    });
   });
 });

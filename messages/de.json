@@ -12682,9 +12682,10 @@
         "not_attributable": "Ein wartender Job aus {repositories} würde Projekt {project} nicht zugeordnet und bliebe daher in der Warteschlange, bis GitHub ihn verfallen lässt. Verbinden Sie das Repository erneut mit dem Projekt, damit seine Spiegelzeile aktuell ist.",
         "no_runner_group": "Projekt {project} hat keine Runner-Gruppe in {org}. Ein Operator führt {script} --project {project} aus.",
         "sync_pending": "Die Runner-Gruppe des Projekts in {org} ist nicht mit seinen Repositorys synchron. Ein Operator führt {script} --project {project} aus.",
-        "jobs_not_runnable": "{count, plural, one {# Job kann} other {# Jobs können}} noch nicht auf dem Runner-Image der Flotte laufen. Wer das Flotten-Image pflegt, ergänzt das fehlende Werkzeug; ein Job, der ein anderes Betriebssystem braucht, bleibt nicht ausführbar, bis er die privaten Repositorys verlässt.",
-        "not_inventoried": "{repositories} {count, plural, one {ist} other {sind}} nicht im Job-Inventar der Flotte, daher hat niemand geprüft, ob das Runner-Image {count, plural, one {seine} other {ihre}} Jobs ausführen kann. Wer das Inventar pflegt, führt es erneut aus.",
-        "inventory_stale": "Die Workflows von {repositories} haben sich geändert, nachdem das Job-Inventar der Flotte sie gemessen hat. Wer das Inventar pflegt, führt es erneut aus.",
+        "jobs_not_runnable": "{count, plural, one {# Job kann} other {# Jobs können}} noch nicht auf dem Runner-Image der Flotte laufen. Wer das Flotten-Image pflegt, ergänzt das fehlende Werkzeug; ein Job, der sich nicht beurteilen lässt, bleibt nicht ausführbar, bis sein Workflow benennt, was er ausführt; ein Job, der ein anderes Betriebssystem braucht, bleibt nicht ausführbar, bis er die privaten Repositorys verlässt.",
+        "runner_image_unset": "Diese Bereitstellung legt kein Runner-Image fest ({variable} ist nicht gesetzt), daher lässt sich kein Job daran messen. Eine Betreiberin oder ein Betreiber legt den Digest des Runner-Images fest.",
+        "image_tools_unrecorded": "Das festgelegte Runner-Image {image} enthält keine Werkzeugliste (das Label {label}), daher lassen sich seine Jobs nicht beurteilen. Wer das Flotten-Image pflegt, veröffentlicht es aus dem aktuellen motir-core neu und legt den neuen Digest fest.",
+        "image_unreadable": "Die Werkzeugliste des festgelegten Runner-Images {image} konnte nicht gelesen werden. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
         "read_failed": "Konnte nicht geprüft werden: GitHub antwortete mit HTTP {status}. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
         "read_unreachable": "Konnte nicht geprüft werden: GitHub war nicht erreichbar. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
         "read_failedNoStatus": "Konnte nicht geprüft werden. Gilt als nicht erfüllt, bis eine Prüfung gelingt.",
@@ -12693,8 +12694,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} – fehlt: {tools}",
         "cannotHost": "{repo} · {workflow} · {job} – nicht hostbar: {reason}",
+        "unverified": "{repo} · {workflow} · {job} – nicht beurteilbar: {reason}",
         "more": "+{count} weitere",
-        "scope": "Dies betrifft das inventarisierte, aus main gebaute Image, nicht das Image, das die Produktion startet."
+        "scope": "Beurteilt anhand der Workflows jedes Repositorys bei seinem neuesten Commit, gemessen an den Werkzeugen, die das in der Produktion gestartete Runner-Image verzeichnet."
       },
       "confirm": {
         "onTitle": "Flotten-CI für {org} aktivieren?",

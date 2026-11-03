@@ -12682,9 +12682,10 @@
         "not_attributable": "Zadanie w kolejce z {repositories} nie zostałoby przypisane do projektu {project}, więc czekałoby w kolejce, aż GitHub je wygasi. Połącz repozytorium ponownie z projektem, aby jego wiersz lustrzany był aktualny.",
         "no_runner_group": "Projekt {project} nie ma grupy runnerów w {org}. Operator uruchamia {script} --project {project}.",
         "sync_pending": "Grupa runnerów projektu w {org} nie jest zsynchronizowana z jego repozytoriami. Operator uruchamia {script} --project {project}.",
-        "jobs_not_runnable": "{count, plural, one {# zadanie nie może} few {# zadania nie mogą} many {# zadań nie może} other {# zadania nie może}} jeszcze działać na obrazie runnera floty. Osoba utrzymująca obraz floty dodaje brakujące narzędzie; zadanie wymagające innego systemu operacyjnego pozostaje niemożliwe do uruchomienia, dopóki nie opuści zbioru prywatnego.",
-        "not_inventoried": "{repositories} {count, plural, one {nie jest} few {nie są} many {nie są} other {nie są}} w inwentarzu zadań floty, więc nikt nie sprawdził, czy obraz runnera może uruchomić {count, plural, one {jego} few {ich} many {ich} other {ich}} zadania. Osoba utrzymująca inwentarz uruchamia go ponownie.",
-        "inventory_stale": "Workflow {repositories} zmieniły się po tym, jak inwentarz zadań floty je zmierzył. Osoba utrzymująca inwentarz uruchamia go ponownie.",
+        "jobs_not_runnable": "{count, plural, one {# zadanie nie może} few {# zadania nie mogą} many {# zadań nie może} other {# zadania nie może}} jeszcze działać na obrazie runnera floty. Osoba utrzymująca obraz floty dodaje brakujące narzędzie; zadanie, którego nie da się ocenić, pozostaje niemożliwe do uruchomienia, dopóki jego workflow nie wskaże, co uruchamia; zadanie wymagające innego systemu operacyjnego pozostaje niemożliwe do uruchomienia, dopóki nie opuści zbioru prywatnego.",
+        "runner_image_unset": "To wdrożenie nie przypina żadnego obrazu runnera ({variable} nie jest ustawiona), więc żadnego zadania nie da się względem niego ocenić. Operator przypina digest obrazu runnera.",
+        "image_tools_unrecorded": "Przypięty obraz runnera {image} nie zapisuje listy narzędzi (etykieta {label}), więc jego zadań nie da się ocenić. Osoba utrzymująca obraz floty publikuje go ponownie z bieżącego motir-core i przypina nowy digest.",
+        "image_unreadable": "Nie udało się odczytać listy narzędzi przypiętego obrazu runnera {image}. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
         "read_failed": "Nie udało się sprawdzić: GitHub odpowiedział HTTP {status}. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
         "read_unreachable": "Nie udało się sprawdzić: nie można połączyć się z GitHubem. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
         "read_failedNoStatus": "Nie udało się sprawdzić. Liczy się jako niespełniony, dopóki sprawdzenie się nie powiedzie.",
@@ -12693,8 +12694,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} — brakuje: {tools}",
         "cannotHost": "{repo} · {workflow} · {job} — nie można hostować: {reason}",
+        "unverified": "{repo} · {workflow} · {job} — nie da się ocenić: {reason}",
         "more": "+{count} więcej",
-        "scope": "Dotyczy to zinwentaryzowanego obrazu zbudowanego z main, a nie obrazu uruchamianego na produkcji."
+        "scope": "Oceniono na podstawie workflow każdego repozytorium przy jego najnowszym commicie, względem narzędzi zapisanych w obrazie runnera uruchamianym na produkcji."
       },
       "confirm": {
         "onTitle": "Włączyć CI na flocie dla {org}?",

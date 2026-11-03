@@ -420,6 +420,17 @@ async function codeScanningStateOf(
 
 export const fleetOrgCiSettingService = {
   /**
+   * The same pairs, for a SYSTEM caller — the daily image-coverage probe
+   * (MOTIR-10290), which runs with no principal. Read-only: it changes nothing
+   * and returns what the console would offer a superadmin.
+   *
+   * @throws FleetOrgCiGithubWriteError when a repository's visibility cannot be read.
+   */
+  async systemTargets(): Promise<FleetOrgCiTargetDTO[]> {
+    return offeredTargets();
+  },
+
+  /**
    * The pairs the console offers the switch for.
    *
    * @throws NotPlatformStaffError below `superadmin`.

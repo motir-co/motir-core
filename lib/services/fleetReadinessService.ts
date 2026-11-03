@@ -1,8 +1,7 @@
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { fleetKillSwitchEngaged } from '@/lib/ciFleet/limits';
-import { isMotirFleetJob, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
-import inventoryManifest from '@/lib/ciFleet/fleetJobInventory.json';
-import type { FleetJobInventory, FleetInventoryRepo } from '@/lib/ciFleet/fleetJobInventoryTypes';
+import { requestsFleetRunner } from '@/lib/ciFleet/jobCoverage';
+import { RUNNER_IMAGE_TOOLS_LABEL } from '@/lib/ciFleet/runnerImageTools';
 import {
   getOrgInstallation,
   listInstallationRepositoryIds,
@@ -11,7 +10,8 @@ import {
 } from '@/lib/github/orgInstallation';
 import { OrgTargetAuthError, type GithubOrgTarget } from '@/lib/github/orgTarget';
 import { repoVisibilityClient, RepoVisibilityApiError } from '@/lib/github/repoVisibility';
-import { entryStaleness } from '@/lib/services/fleetInventoryDriftService';
+import { runnerImageToolsService } from '@/lib/services/runnerImageToolsService';
+import { workflowCoverageService } from '@/lib/services/workflowCoverageService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
@@ -32,7 +32,7 @@ import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupServ
 //   6 app_repositories          GitHub delivers    the installation reaches each repo
 //   7 delivery_attributable     Motir attributes   ciRunnerProvisioningService.recordQueuedJob
 //   8 runner_group              a runner registers ciRunnerBootService → requireRunnerGroupIdFor
-//   9 image_coverage            the job can run    lib/ciFleet/fleetJobInventory.json
+//   9 image_coverage            the job can run    the jobs at each repo's head vs the pinned image
 //
 // ⚠️ FAILS CLOSED. A read that failed is `unknown`, never `met`, and `ready` is
 // true only when all nine are `met`. `unknown` is its own state so a page can
@@ -94,8 +94,6 @@ export class FleetReadinessTargetNotFoundError extends Error {
 }
 
 export interface FleetReadinessOptions {
-  /** Override the checked-in manifest — tests only. */
-  inventory?: FleetJobInventory;
   now?: () => Date;
 }
 
@@ -148,32 +146,15 @@ function failedRead(key: FleetReadinessKey, what: string, err: unknown): FleetRe
 
 const fullName = (r: { owner: string; name: string }) => `${r.owner}/${r.name}`;
 
-/**
- * Can a job's recorded `runs-on` resolve to the fleet? (MOTIR-8813)
- *
- * The switch moves a job only by writing `MOTIR_RUNNER`, so only a job that reads
- * that variable — or names the fleet label outright — can land on a fleet
- * machine. Any other job (`macos-latest`, a literal `ubuntu-latest`) stays on
- * GitHub-hosted runners whether the switch is ON or OFF, so whether the image can
- * run it says nothing about whether the fleet can serve the org's CI.
- */
-export function requestsFleetRunner(runsOn: unknown): boolean {
-  if (typeof runsOn === 'string') {
-    return runsOn.includes(`vars.${MOTIR_RUNNER_VARIABLE}`) || isMotirFleetJob([runsOn]);
-  }
-  if (Array.isArray(runsOn)) return runsOn.some(requestsFleetRunner);
-  if (runsOn !== null && typeof runsOn === 'object' && 'labels' in runsOn) {
-    return requestsFleetRunner((runsOn as { labels: unknown }).labels);
-  }
-  return false;
-}
+/** Can a job's `runs-on` resolve to the fleet? (MOTIR-8813) — the rule lives with
+ *  the job judge (`lib/ciFleet/jobCoverage.ts`); re-exported for its callers. */
+export { requestsFleetRunner };
 
 export const fleetReadinessService = {
   async readinessFor(
     target: FleetReadinessTarget,
     options: FleetReadinessOptions = {},
   ): Promise<FleetReadiness> {
-    const inventory = options.inventory ?? (inventoryManifest as FleetJobInventory);
     const now = options.now ?? (() => new Date());
     const org = target.org.trim();
     const orgKey = org.toLowerCase();
@@ -384,9 +365,80 @@ export const fleetReadinessService = {
     // ── 8 · runner_group ─────────────────────────────────────────────────────
     conditions.push(await runnerGroupCondition(target, org, loaded.identifier));
     // ── 9 · image_coverage ───────────────────────────────────────────────────
-    conditions.push(await imageCoverageCondition(orgTarget, privateRepos, inventory));
+    conditions.push(await imageCoverageCondition(orgTarget, privateRepos));
 
     return finish(org, now, conditions);
+  },
+
+  /**
+   * Condition 9 alone — image coverage — for the daily probe (MOTIR-10290). The
+   * same reads, in the same order, as `readinessFor` makes for it: the
+   * installation, which of the project's repositories in `org` are private, and
+   * the coverage judgement. Every answer `readinessFor` gives condition 9 on the
+   * way (`app_not_readable`, `read_failed`, `no_private_repositories`) is given
+   * here too, so the probe and the page cannot disagree.
+   *
+   * @throws FleetReadinessTargetNotFoundError when the project does not exist.
+   */
+  async imageCoverageFor(target: FleetReadinessTarget): Promise<FleetReadinessCondition> {
+    const org = target.org.trim();
+    const orgKey = org.toLowerCase();
+    const realized = await withWorkspaceServiceContext(target.workspaceId, async (tx) => {
+      const project = await projectRepository.findById(target.projectId, tx);
+      if (!project || project.workspaceId !== target.workspaceId) return null;
+      return projectRepoRepository.listEstablishedRealizedRepos(
+        target.projectId,
+        target.workspaceId,
+        tx,
+      );
+    });
+    if (!realized) throw new FleetReadinessTargetNotFoundError(target.projectId);
+    const orgRepos: OrgRepo[] = realized.filter((r) => r.owner.trim().toLowerCase() === orgKey);
+
+    let installation: OrgInstallation | null;
+    try {
+      installation = await getOrgInstallation(org, 'provisioning');
+    } catch (err) {
+      return failedRead(
+        'image_coverage',
+        `whether the motir-studio App is installed on ${org}`,
+        err,
+      );
+    }
+    if (!installation || installation.suspendedAt) {
+      return condition(
+        'image_coverage',
+        'unknown',
+        'app_not_readable',
+        `Cannot be checked until the motir-studio App is installed and readable on ${org}: which repositories are private is read through it.`,
+        { org },
+      );
+    }
+    const orgTarget: GithubOrgTarget = {
+      org,
+      installationId: installation.id,
+      role: 'provisioning',
+    };
+    const privateRepos: OrgRepo[] = [];
+    try {
+      for (const repo of orgRepos) {
+        if (await repoVisibilityClient.isPrivate(repo.owner, repo.name, orgTarget)) {
+          privateRepos.push(repo);
+        }
+      }
+    } catch (err) {
+      return failedRead('image_coverage', `which of the project's repositories are private`, err);
+    }
+    if (privateRepos.length === 0) {
+      return condition(
+        'image_coverage',
+        'unmet',
+        'no_private_repositories',
+        `The project has no private repository in ${org}, so there is nothing for the fleet to run.`,
+        { org },
+      );
+    }
+    return imageCoverageCondition(orgTarget, privateRepos);
   },
 };
 
@@ -601,125 +653,107 @@ async function runnerGroupCondition(
   );
 }
 
+/** One job the image cannot run, or cannot be judged — `params.jobs` on the page. */
+interface CoverageGapJob {
+  repoRef: string;
+  workflow: string;
+  jobId: string;
+  verdict: 'needs-image' | 'cannot-host' | 'unverified';
+  /** Tools the image lacks; `unverified` is listed when something could not be
+   *  judged, as the hand inventory listed it (MOTIR-8870). */
+  missing: string[];
+  reason: string | null;
+}
+
+function gapWords(job: CoverageGapJob): string {
+  const tools = job.missing.filter((t) => t !== 'unverified');
+  const parts: string[] = [];
+  if (job.verdict === 'cannot-host') parts.push(`can't be hosted: ${job.reason ?? ''}`);
+  if (tools.length > 0) parts.push(`needs ${tools.join(', ')}, which the image lacks`);
+  if (job.verdict === 'unverified') parts.push(`can't be judged: ${job.reason ?? ''}`);
+  return `${job.repoRef} ${job.workflow.split('/').pop()} ${job.jobId} (${parts.join('; ')})`;
+}
+
 async function imageCoverageCondition(
   orgTarget: GithubOrgTarget,
   privateRepos: OrgRepo[],
-  inventory: FleetJobInventory,
 ): Promise<FleetReadinessCondition> {
-  // `privateRepos` all belong to the org being read, so an entry is matched by the
-  // repository's NAME within that org, never by its `owner/` segment: a GitHub org
-  // rename changes every live `owner/name` while the measured workflows stay the
-  // same (MOTIR-9410). An exact `owner/name` key still wins when two entries share
-  // a name.
-  const byKey = new Map<string, FleetInventoryRepo>();
-  const byName = new Map<string, FleetInventoryRepo>();
-  for (const [key, entry] of Object.entries(inventory.repos)) {
-    byKey.set(key.toLowerCase(), entry);
-    const name = key.slice(key.indexOf('/') + 1).toLowerCase();
-    if (!byName.has(name)) byName.set(name, entry);
+  // ⚠️ COMPUTED, NOT RECORDED (MOTIR-10290). Each private repository's jobs are
+  // read from its workflows at its newest `.github` commit and judged against the
+  // tool list the PINNED runner image records about itself. There is no snapshot
+  // of a private repository to go stale, so a workflow change is judged the next
+  // time this runs, and an unmet verdict names the job and the tool.
+  const image = await runnerImageToolsService.read();
+  if (image.state === 'unset') {
+    return condition(
+      'image_coverage',
+      'unmet',
+      'runner_image_unset',
+      'This deployment pins no runner image (MOTIR_RUNNER_IMAGE is unset), so no job can be judged against one.',
+      { variable: 'MOTIR_RUNNER_IMAGE' },
+    );
   }
-  const entryFor = (repo: OrgRepo) =>
-    byKey.get(fullName(repo).toLowerCase()) ?? byName.get(repo.name.trim().toLowerCase());
+  if (image.state === 'unreadable') {
+    console.warn('[fleetReadinessService] the runner image read failed', {
+      key: 'image_coverage',
+      reason: image.reason,
+    });
+    return condition(
+      'image_coverage',
+      'unknown',
+      'image_unreadable',
+      `Could not read the tool list of the pinned runner image ${image.image}: ${image.detail}.`,
+      { image: image.image, reason: image.reason },
+    );
+  }
+  if (image.state === 'unrecorded') {
+    return condition(
+      'image_coverage',
+      'unmet',
+      'image_tools_unrecorded',
+      `The pinned runner image ${image.image} records no tool list (the ${RUNNER_IMAGE_TOOLS_LABEL} label), so its jobs cannot be judged. Release a runner image built from this version of motir-core and pin its digest.`,
+      { image: image.image, label: RUNNER_IMAGE_TOOLS_LABEL },
+    );
+  }
 
-  const notInventoried: string[] = [];
-  const stale: Array<{ repository: string; measuredSha: string; headSha: string }> = [];
-  const jobs: Array<{
-    repoRef: string;
-    workflow: string;
-    jobId: string;
-    verdict: string;
-    missing: string[];
-    reason: string | null;
-  }> = [];
+  const jobs: CoverageGapJob[] = [];
   const githubHostedJobs: Array<{ repoRef: string; workflow: string; jobId: string }> = [];
-
+  const heads: Array<{ repository: string; headSha: string | null }> = [];
   for (const repo of privateRepos) {
-    const entry = entryFor(repo);
-    if (!entry) {
-      notInventoried.push(fullName(repo));
-      continue;
+    const coverage = await workflowCoverageService.repositoryCoverage(
+      orgTarget,
+      repo.owner,
+      repo.name,
+      image.tools,
+    );
+    if (coverage.state === 'unreadable') {
+      // ⚠️ FAILS CLOSED: workflows that cannot be read are never "runnable".
+      return failedRead('image_coverage', `the workflows of ${fullName(repo)}`, coverage.error);
     }
-    // A newer workflow commit moves no verdict unless it adds a runner, a reusable
-    // workflow, an action, an executable or a shell, or moves a recorded job to
-    // another runner (MOTIR-8870 · MOTIR-10211) — `entryStaleness` is the rule,
-    // shared with the daily drift probe.
-    const staleness = await entryStaleness(orgTarget, repo.owner, repo.name, entry);
-    if (staleness.state === 'unreadable' && staleness.phase === 'head') {
-      return failedRead(
-        'image_coverage',
-        `whether ${fullName(repo)}'s workflows changed since they were inventoried`,
-        staleness.error,
-      );
-    }
-    if (staleness.state === 'unreadable') {
-      // ⚠️ FAILS CLOSED: files that cannot be read are never "unchanged".
-      console.warn('[fleetReadinessService] the workflow structure read failed', {
-        repository: fullName(repo),
-        status: statusOf(staleness.error),
+    heads.push({ repository: fullName(repo), headSha: coverage.headSha });
+    for (const job of coverage.jobs) {
+      const at = { repoRef: fullName(repo), workflow: job.workflow, jobId: job.jobId };
+      if (job.verdict === 'github-hosted') githubHostedJobs.push(at);
+      if (job.verdict === 'github-hosted' || job.verdict === 'runnable') continue;
+      jobs.push({
+        ...at,
+        verdict: job.verdict,
+        missing: job.verdict === 'unverified' ? [...job.missing, 'unverified'] : job.missing,
+        reason: job.unjudged.length > 0 ? job.unjudged.join('; ') : null,
       });
-    }
-    if (staleness.state !== 'current') {
-      stale.push({
-        repository: fullName(repo),
-        measuredSha: entry.sha,
-        headSha: staleness.headSha,
-      });
-    }
-    for (const workflow of entry.workflows) {
-      for (const job of workflow.jobs) {
-        if (!requestsFleetRunner(job.runsOn)) {
-          githubHostedJobs.push({
-            repoRef: fullName(repo),
-            workflow: workflow.path,
-            jobId: job.jobId,
-          });
-          continue;
-        }
-        if (job.verdict === 'runnable' && !job.missing.includes('unverified')) continue;
-        jobs.push({
-          repoRef: fullName(repo),
-          workflow: workflow.path,
-          jobId: job.jobId,
-          verdict: job.verdict,
-          missing: job.missing,
-          reason: job.reason ?? null,
-        });
-      }
     }
   }
 
-  const scope =
-    'This covers the inventoried image built from main, not the image production boots.';
-  if (notInventoried.length > 0) {
-    return condition(
-      'image_coverage',
-      'unmet',
-      'not_inventoried',
-      `${notInventoried.join(', ')} ${notInventoried.length === 1 ? 'is' : 'are'} not in the fleet job inventory, so nobody has checked the runner image can run ${notInventoried.length === 1 ? 'its' : 'their'} jobs. ${scope}`,
-      { repositories: notInventoried, jobs, stale, githubHostedJobs },
-    );
-  }
-  if (stale.length > 0) {
-    return condition(
-      'image_coverage',
-      'unmet',
-      'inventory_stale',
-      `The workflows of ${stale.map((s) => s.repository).join(', ')} changed after the fleet job inventory measured them; re-run the inventory. ${scope}`,
-      { stale, jobs, githubHostedJobs },
-    );
-  }
+  const scope = `Judged against each repository's workflows at its newest commit and the tool list of the pinned runner image ${image.image}.`;
   if (jobs.length > 0) {
     return condition(
       'image_coverage',
       'unmet',
       'jobs_not_runnable',
       `${jobs.length} job${jobs.length === 1 ? '' : 's'} cannot run on the fleet runner image yet: ${jobs
-        .map(
-          (j) =>
-            `${j.repoRef} ${j.workflow.split('/').pop()} ${j.jobId} (${j.verdict}${j.missing.length ? `: ${j.missing.join(', ')}` : ''})`,
-        )
+        .map(gapWords)
         .join('; ')}. ${scope}`,
-      { jobs, githubHostedJobs },
+      { jobs, githubHostedJobs, heads, image: image.image },
     );
   }
   return condition(
@@ -727,6 +761,6 @@ async function imageCoverageCondition(
     'met',
     'all_runnable',
     `Every job the project's private repositories send to the fleet can run on the fleet runner image. ${scope}`,
-    { repositories: privateRepos.map(fullName), githubHostedJobs },
+    { repositories: privateRepos.map(fullName), githubHostedJobs, heads, image: image.image },
   );
 }

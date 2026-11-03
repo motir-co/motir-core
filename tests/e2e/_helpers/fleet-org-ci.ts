@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
-import inventoryManifest from '@/lib/ciFleet/fleetJobInventory.json';
-import type { FleetJobInventory, FleetInventoryRepo } from '@/lib/ciFleet/fleetJobInventoryTypes';
 import { SEED_SOURCE_ORGANIZATION } from '@/lib/projectRepos/vocabulary';
 import {
   fleetOrgCiStorePath,
@@ -10,6 +8,7 @@ import {
   type FleetOrgCiOrgControl,
   type FleetOrgCiStore,
   type FleetOrgCiStoredVariable,
+  FLEET_E2E_RUNNER_TOOLS,
 } from '@/lib/test-github-fleet-org-ci-mock';
 import { adminDb } from './db-reset';
 
@@ -20,17 +19,36 @@ import { adminDb } from './db-reset';
  * these helpers are the spec's half of it: WRITE the control, READ the journal and the
  * variable store, and seed the ONE target `fleetOrgCiSettingService.listTargets` offers.
  *
- * ⚠️ THE ORG IS WHATEVER THE INVENTORY SAYS. The readiness verdict checks the private
- * repositories against the CHECKED-IN `lib/ciFleet/fleetJobInventory.json`, keyed by
- * `owner/name` — there is no override on the server — so the seeded repository must BE a
- * manifest `repoRef` whose jobs are all `runnable`. {@link pickRunnableRepo} chooses one
- * and throws, naming the manifest, when none qualifies: a walk that cannot reach a ready
- * verdict must fail, never pass vacuously.
+ * ⚠️ THE WORKFLOWS ARE THE SEAM'S. Since MOTIR-10290 the readiness verdict reads the
+ * private repository's workflows at its newest `.github` commit and judges each fleet job
+ * against the pinned runner image's tool list — both answered by the seam. So the seeded
+ * repository carries ONE fleet workflow whose every command is a tool the seam's image
+ * records ({@link FLEET_E2E_RUNNER_TOOLS}), and {@link pickRunnableRepo} throws when that
+ * stops being true: a walk that cannot reach a ready verdict must fail, never pass
+ * vacuously.
  */
 
 const CONTROL = process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL'] ?? '';
 const JOURNAL = process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL'] ?? '';
-const MANIFEST = 'lib/ciFleet/fleetJobInventory.json';
+/** The seeded org — any org but the provisioning one, which the console never offers. */
+const FLEET_E2E_ORG = 'motir-fleet-e2e';
+const FLEET_E2E_SHA = 'f1ee7e2e10290000000000000000000000000000';
+const FLEET_E2E_WORKFLOW = {
+  path: '.github/workflows/ci.yml',
+  text: [
+    'name: CI',
+    'on: [push]',
+    'jobs:',
+    '  test:',
+    "    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+    '    steps:',
+    '      - run: |',
+    '          node --version',
+    '          git --version',
+    '          echo ok',
+    '',
+  ].join('\n'),
+};
 
 /** The App installation on the seeded org — distinct from every other E2E id. */
 export const FLEET_E2E_INSTALLATION_ID = '99087170';
@@ -46,30 +64,30 @@ export interface RunnableRepo {
   owner: string;
   name: string;
   repoRef: string;
-  entry: FleetInventoryRepo;
+  workflowCommit: { sha: string; date: string };
+  workflows: Array<{ path: string; text: string }>;
 }
 
 /**
- * Case 0's precondition: a PRIVATE manifest repository every job of which is
- * `runnable` (and verified). Throws naming the manifest when there is none.
+ * Case 0's precondition: a PRIVATE repository whose one fleet job the seam's runner
+ * image can run. Throws when the fixture names a command the image does not record.
  */
 export function pickRunnableRepo(): RunnableRepo {
-  const inventory = inventoryManifest as FleetJobInventory;
-  for (const [key, entry] of Object.entries(inventory.repos)) {
-    if (entry.visibility !== 'private') continue;
-    const jobs = entry.workflows.flatMap((w) => w.jobs);
-    if (jobs.length === 0) continue;
-    if (!jobs.every((j) => j.verdict === 'runnable' && !j.missing.includes('unverified'))) {
-      continue;
-    }
-    const [owner, name] = key.split('/');
-    if (!owner || !name) continue;
-    return { owner, name, repoRef: entry.repoRef, entry };
+  const needs = ['node', 'git', 'echo', 'bash'];
+  const missing = needs.filter((t) => !FLEET_E2E_RUNNER_TOOLS.includes(t));
+  if (missing.length > 0) {
+    throw new Error(
+      `The fleet E2E runner image records no ${missing.join(', ')} — the fleet settings walk ` +
+        'cannot reach a ready verdict, so it fails here rather than passing vacuously.',
+    );
   }
-  throw new Error(
-    `${MANIFEST} lists no PRIVATE repository whose jobs are all runnable — the fleet settings ` +
-      'walk cannot reach a ready verdict, so it fails here rather than passing vacuously.',
-  );
+  return {
+    owner: FLEET_E2E_ORG,
+    name: 'api',
+    repoRef: `${FLEET_E2E_ORG}/api`,
+    workflowCommit: { sha: FLEET_E2E_SHA, date: '2026-11-01T00:00:00Z' },
+    workflows: [FLEET_E2E_WORKFLOW],
+  };
 }
 
 /** What the fake GitHub says when every readiness condition is met. */
@@ -89,8 +107,9 @@ export function readyOrgControl(repo: RunnableRepo): FleetOrgCiOrgControl {
         id: FLEET_E2E_REPO_ID,
         name: repo.name,
         private: true,
-        // The inventory's own commit, so the staleness rule reads "not stale".
-        workflowCommit: { sha: repo.entry.sha, date: repo.entry.measuredAt },
+        // The workflows the verdict judges, at the commit it reads them at.
+        workflowCommit: repo.workflowCommit,
+        workflows: repo.workflows,
       },
     ],
   };

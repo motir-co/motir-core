@@ -684,6 +684,10 @@ export default defineConfig({
         E2E_TEST_GITHUB_FLEET_ORG_CI: '1',
         E2E_GITHUB_FLEET_ORG_CI_CONTROL: process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL']!,
         E2E_GITHUB_FLEET_ORG_CI_JOURNAL: process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL']!,
+        // The pinned runner image whose tool list the readiness verdict reads
+        // (MOTIR-10290) — `FLEET_E2E_RUNNER_IMAGE` in that seam, which answers its
+        // registry. A mismatch reads image coverage as unknown and fails case 4.
+        MOTIR_RUNNER_IMAGE: `registry.fleet-e2e.motir.test/motir-ci-runner@sha256:${'e2e10290'.repeat(8)}`,
         GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
         GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
         GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,

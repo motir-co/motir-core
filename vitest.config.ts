@@ -1729,6 +1729,15 @@ export default defineConfig({
         'lib/services/fleetOrgCiSettingService.ts',
         'lib/repositories/platformFleetOrgCiRepository.ts',
         'lib/mappers/fleetOrgCiSettingMappers.ts',
+        // MOTIR-10290 — image coverage computed from the workflows at head: the
+        // per-job reader and judge, the image's tool-list label, the coverage and
+        // tool-list reads, and the daily probe. Pinned at the fleet's 90 floor below.
+        'lib/ciFleet/workflowJobs.ts',
+        'lib/ciFleet/jobCoverage.ts',
+        'lib/ciFleet/runnerImageTools.ts',
+        'lib/services/workflowCoverageService.ts',
+        'lib/services/runnerImageToolsService.ts',
+        'lib/services/fleetImageCoverageProbeService.ts',
         // Story MOTIR-9362 · MOTIR-9464 — the pool-growth story's new modules (the
         // growth policy, the spare's add-shard plan, the quota and growth records,
         // the live read, the raise service, the growth and its scheduled pass, the
@@ -6596,6 +6605,17 @@ export default defineConfig({
           lines: 90,
         },
         'lib/mappers/fleetOrgCiSettingMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-10290 (see the include list).
+        'lib/ciFleet/workflowJobs.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/jobCoverage.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/ciFleet/runnerImageTools.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/workflowCoverageService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/runnerImageToolsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/fleetImageCoverageProbeService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/**/admin/fleet-settings/actions.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/admin/fleet-settings/page.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/admin/fleet-settings/_components/FleetOrgCiSetting.tsx': {

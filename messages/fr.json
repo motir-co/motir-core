@@ -12682,9 +12682,10 @@
         "not_attributable": "Un job en file d’attente provenant de {repositories} ne serait pas attribué au projet {project} et resterait donc en attente jusqu’à ce que GitHub l’expire. Reconnectez le dépôt au projet pour que sa ligne miroir soit à jour.",
         "no_runner_group": "Le projet {project} n’a aucun groupe de runners dans {org}. Un opérateur exécute {script} --project {project}.",
         "sync_pending": "Le groupe de runners du projet dans {org} n’est pas synchronisé avec ses dépôts. Un opérateur exécute {script} --project {project}.",
-        "jobs_not_runnable": "{count, plural, one {# job ne peut} other {# jobs ne peuvent}} pas encore s’exécuter sur l’image de runner de la flotte. La personne qui maintient l’image de la flotte ajoute l’outil manquant ; un job qui exige un autre système d’exploitation reste non exécutable tant qu’il ne quitte pas l’ensemble privé.",
-        "not_inventoried": "{repositories} {count, plural, one {n’est pas} other {ne sont pas}} dans l’inventaire des jobs de la flotte, donc personne n’a vérifié que l’image de runner peut exécuter {count, plural, one {ses} other {leurs}} jobs. La personne qui maintient l’inventaire le relance.",
-        "inventory_stale": "Les workflows de {repositories} ont changé après que l’inventaire des jobs de la flotte les a mesurés. La personne qui maintient l’inventaire le relance.",
+        "jobs_not_runnable": "{count, plural, one {# job ne peut} other {# jobs ne peuvent}} pas encore s’exécuter sur l’image de runner de la flotte. La personne qui maintient l’image de la flotte ajoute l’outil manquant ; un job qui ne peut pas être évalué reste non exécutable tant que son workflow n’indique pas ce qu’il exécute ; un job qui exige un autre système d’exploitation reste non exécutable tant qu’il ne quitte pas l’ensemble privé.",
+        "runner_image_unset": "Ce déploiement n’épingle aucune image de runner ({variable} n’est pas défini), donc aucun job ne peut être évalué par rapport à une image. Un opérateur épingle le digest de l’image de runner.",
+        "image_tools_unrecorded": "L’image de runner épinglée {image} n’enregistre aucune liste d’outils (le label {label}), donc ses jobs ne peuvent pas être évalués. La personne qui maintient l’image de la flotte la republie depuis le motir-core actuel et épingle le nouveau digest.",
+        "image_unreadable": "Impossible de lire la liste d’outils de l’image de runner épinglée {image}. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
         "read_failed": "Vérification impossible : GitHub a répondu HTTP {status}. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
         "read_unreachable": "Vérification impossible : GitHub était injoignable. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
         "read_failedNoStatus": "Vérification impossible. Compte comme non remplie jusqu’à ce qu’une vérification réussisse.",
@@ -12693,8 +12694,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} — manque {tools}",
         "cannotHost": "{repo} · {workflow} · {job} — impossible à héberger : {reason}",
+        "unverified": "{repo} · {workflow} · {job} — impossible à évaluer : {reason}",
         "more": "+{count} de plus",
-        "scope": "Ceci couvre l’image inventoriée construite depuis main, pas l’image que la production démarre."
+        "scope": "Évalué d’après les workflows de chaque dépôt à son commit le plus récent, par rapport aux outils qu’enregistre l’image de runner que la production démarre."
       },
       "confirm": {
         "onTitle": "Activer la CI sur la flotte pour {org} ?",

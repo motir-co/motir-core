@@ -447,10 +447,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ checkedAt: string; offenders: Array<{ completedAt: string; families: Array<string>; org: string; repo: string; runAttempt: number; runId: string }>; ownedOrgs: Array<string>; runsChecked: number; verdict: "hosted_runs"; windowStart: string } | { checkedAt: string; ownedOrgs: Array<string>; runsChecked: number; verdict: "not_applicable"; windowStart: string } | { checkedAt: string; ownedOrgs: Array<string>; runsChecked: number; verdict: "ok"; windowStart: string }',
   },
-  'fleet-inventory-drift': {
+  'fleet-image-coverage': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
     shape:
-      '{ checked: Array<string>; checkedAt: string; stale: Array<{ addedJobs: Array<string>; headSha: string; measuredSha: string; movedJobs: Array<string>; reason: "digest_moved" | "invalid_yaml" | "job_moved" | "no_fingerprint"; repository: string }>; unreadable: Array<{ phase: "files" | "head" | "installation"; repository: string; status: null | number }>; verdict: "stale" } | { checked: Array<string>; checkedAt: string; unreadable: Array<{ phase: "files" | "head" | "installation"; repository: string; status: null | number }>; verdict: "indeterminate" } | { checked: Array<string>; checkedAt: string; verdict: "current" } | { checkedAt: string; reason: "app_not_configured" | "no_private_entries"; verdict: "not_applicable" }',
+      '{ checkedAt: string; pairs: Array<{ message: string; org: string; projectKey: string; reasonCode: string; state: "met" | "unknown" | "unmet" }>; targetsUnreadable: null | { status: null | number }; verdict: "indeterminate" } | { checkedAt: string; pairs: Array<{ message: string; org: string; projectKey: string; reasonCode: string; state: "met" | "unknown" | "unmet" }>; verdict: "gap" } | { checkedAt: string; pairs: Array<{ message: string; org: string; projectKey: string; reasonCode: string; state: "met" | "unknown" | "unmet" }>; verdict: "runnable" } | { checkedAt: string; reason: "app_not_configured" | "no_targets" | "runner_image_unset"; verdict: "not_applicable" }',
   },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
@@ -897,6 +897,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'fleet-inventory-drift': {
+    shape:
+      '{ checked: Array<string>; checkedAt: string; stale: Array<{ addedJobs: Array<string>; headSha: string; measuredSha: string; movedJobs: Array<string>; reason: "digest_moved" | "invalid_yaml" | "job_moved" | "no_fingerprint"; repository: string }>; unreadable: Array<{ phase: "files" | "head" | "installation"; repository: string; status: null | number }>; verdict: "stale" } | { checked: Array<string>; checkedAt: string; unreadable: Array<{ phase: "files" | "head" | "installation"; repository: string; status: null | number }>; verdict: "indeterminate" } | { checked: Array<string>; checkedAt: string; verdict: "current" } | { checkedAt: string; reason: "app_not_configured" | "no_private_entries"; verdict: "not_applicable" }',
+    supersededBy: 'fleet-image-coverage',
+    reason:
+      'MOTIR-10290 replaced the fleet-inventory drift probe with the image-coverage probe: readiness condition 9 is computed from the workflows at head against the pinned image, so there is no hand-kept entry to drift. The new step returns a different verdict; a resumed run re-executes it under the new id, which is safe because the probe is a read-only, point-in-time check.',
+  },
   'catch-up-paused-indexes': {
     shape:
       '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
