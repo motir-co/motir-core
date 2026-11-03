@@ -170,9 +170,10 @@ export async function listInstallationRepositoryIds(target: GithubOrgTarget): Pr
 }
 
 /**
- * The newest commit on the default branch that touched `.github/workflows`, or
- * null when there is none — what the readiness verdict compares the inventory's
- * recorded `sha` against.
+ * The newest commit on the default branch that touched `.github` — the workflow
+ * files AND the local actions under `.github/actions`, which a job's verdict
+ * depends on too — or null when there is none. The fleet readiness verdict reads
+ * a repository's workflows at this commit (MOTIR-10290).
  */
 export async function latestWorkflowCommit(
   target: GithubOrgTarget,
@@ -182,7 +183,7 @@ export async function latestWorkflowCommit(
   const { token } = await resolveOrgAuth(target);
   const { res, body } = await getJson(
     `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}` +
-      `/commits?path=.github/workflows&per_page=1`,
+      `/commits?path=.github&per_page=1`,
     token,
   );
   if (!res.ok) throw refusal(res, body);
@@ -204,8 +205,8 @@ export async function latestWorkflowCommit(
 const MAX_WORKFLOW_FILES = 120;
 
 /**
- * Every workflow file and local composite action at `ref`, with its text — what
- * `workflowFingerprint` digests (MOTIR-8870). One tree read, then one read per
+ * Every workflow file and local action at `ref`, with its text — what the fleet
+ * readiness verdict reads each job from (`lib/ciFleet/workflowJobs.ts`). One tree read, then one read per
  * file. Throws `OrgInstallationReadError` on any refusal, a truncated tree or a
  * file that is not text, so the caller can tell "unchanged" from "could not read".
  */
@@ -251,4 +252,40 @@ export async function readWorkflowSources(
     files.push({ path, text: Buffer.from(body['content'], 'base64').toString('utf8') });
   }
   return files;
+}
+
+/**
+ * An action's `action.yml` (or `action.yaml`) at `ref` — `path` is the action's
+ * directory inside the repository, `''` for its root — or null when neither file
+ * exists there. Read with the org's installation token: an action in another
+ * private repository of the org is readable when the installation reaches it,
+ * and a PUBLIC action repository is readable by any installation token. Throws
+ * `OrgInstallationReadError` on any other refusal (MOTIR-10290).
+ */
+export async function readActionMetadata(
+  target: GithubOrgTarget,
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+): Promise<string | null> {
+  const { token } = await resolveOrgAuth(target);
+  const base = `${GITHUB_API}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/`;
+  const dir = path
+    .split('/')
+    .filter((s) => s !== '')
+    .map(encodeURIComponent)
+    .join('/');
+  for (const file of ['action.yml', 'action.yaml']) {
+    const url = `${base}${dir ? `${dir}/` : ''}${file}?ref=${encodeURIComponent(ref)}`;
+    const { res, body } = await getJson(url, token);
+    if (res.status === 404) continue;
+    if (!res.ok) throw refusal(res, body);
+    const record = asRecord(body);
+    if (!record || record['encoding'] !== 'base64' || typeof record['content'] !== 'string') {
+      throw new OrgInstallationReadError(res.status, 'action metadata was not base64 text');
+    }
+    return Buffer.from(record['content'], 'base64').toString('utf8');
+  }
+  return null;
 }

@@ -61,7 +61,7 @@ import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakServ
 import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPreflightService';
 import { credentialExpiryService } from '@/lib/services/credentialExpiryService';
 import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
-import { fleetInventoryDriftService } from '@/lib/services/fleetInventoryDriftService';
+import { fleetImageCoverageProbeService } from '@/lib/services/fleetImageCoverageProbeService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -175,9 +175,9 @@ export const jobServices = {
   // The hosted-run probe (MOTIR-1934) — a metered run in a Motir-owned org that
   // ran on anything but the fleet.
   hostedRunProbe: hostedRunProbeService,
-  // The fleet-inventory drift probe (MOTIR-10211) — a private repository whose
-  // workflows moved past its inventory entry, found without opening the page.
-  fleetInventoryDrift: fleetInventoryDriftService,
+  // The fleet image-coverage probe (MOTIR-10290) — a job a connected org sends to
+  // the fleet that the pinned runner image cannot run, found without opening the page.
+  fleetImageCoverage: fleetImageCoverageProbeService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,

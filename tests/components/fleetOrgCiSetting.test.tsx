@@ -312,6 +312,43 @@ describe('FleetOrgCiSetting', () => {
     expect(screen.queryByRole('button', { name: /more$/ })).toBeNull();
   });
 
+  it('names a job that cannot be judged, and one that cannot be hosted, by their reasons (MOTIR-10290)', () => {
+    render(
+      state(
+        {},
+        {
+          image_coverage: {
+            key: 'image_coverage',
+            state: 'unmet',
+            reasonCode: 'jobs_not_runnable',
+            params: {
+              jobs: [
+                {
+                  ...job(1),
+                  verdict: 'unverified',
+                  missing: ['unverified'],
+                  reason: 'the computed command $CLI',
+                },
+                { ...job(2), verdict: 'cannot-host', missing: [], reason: 'it asks for macos-14' },
+              ],
+            },
+            message: 'x',
+          },
+        },
+      ),
+    );
+    const list = screen.getByTestId('fleet-uncovered-jobs');
+    expect(list.textContent).toContain(
+      "gateway · w1.yml · job1 — can't be judged: the computed command $CLI",
+    );
+    expect(list.textContent).toContain(
+      "gateway · w2.yml · job2 — can't be hosted: it asks for macos-14",
+    );
+    expect(screen.getByTestId('fleet-condition-image_coverage').textContent).toContain(
+      'Judged from each repository',
+    );
+  });
+
   it('unchanged is information, not an error', async () => {
     setFleetOrgCiAction.mockResolvedValueOnce({ ok: true, outcome: 'unchanged', enabled: true });
     render(state());

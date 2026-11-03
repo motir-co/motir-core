@@ -544,3 +544,133 @@ export async function listImageTags(repository: string): Promise<ImageTagListing
     };
   }
 }
+
+/** What {@link readImageLabels} answered: the image config's labels, or why not. */
+export type ImageLabelsRead =
+  | {
+      readonly ok: true;
+      readonly reference: string;
+      /** The digest of the platform manifest the labels were read from. */
+      readonly digest: string | null;
+      readonly labels: Readonly<Record<string, string>>;
+    }
+  | {
+      readonly ok: false;
+      readonly reference: string;
+      /** `unparseable` — not an image reference; `unauthorized` — the registry
+       *  refused an anonymous caller; `absent` — no such repository, digest or
+       *  platform; `refused` — any other registry NO; `malformed` — an answer
+       *  that is not an OCI manifest or config; `unreachable` — transport. */
+      readonly reason:
+        | 'unparseable'
+        | 'unauthorized'
+        | 'absent'
+        | 'refused'
+        | 'malformed'
+        | 'unreachable';
+      readonly detail: string;
+    };
+
+const INDEX_TYPES = new Set([
+  'application/vnd.oci.image.index.v1+json',
+  'application/vnd.docker.distribution.manifest.list.v2+json',
+]);
+
+function recordOf(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * The LABELS of a PUBLIC image's config, read ANONYMOUSLY for one platform
+ * (MOTIR-10290) — how the fleet learns what the runner image it pins says about
+ * itself (`co.motir.ci-runner.tools`), with no second copy of that list anywhere.
+ *
+ * The standard three reads behind the challenge → anonymous-token dance
+ * {@link probeImagePull} makes: the manifest at the reference (an INDEX for a
+ * multi-platform push, resolved to `platform`'s entry), that platform's
+ * manifest, and its config blob. NEVER THROWS: every failure is an answer the
+ * caller shows as "could not read the image", never as an image with no labels.
+ */
+export async function readImageLabels(
+  image: string,
+  platform: { os: string; architecture: string } = { os: 'linux', architecture: 'amd64' },
+): Promise<ImageLabelsRead> {
+  const parsed = parseImageReference(image);
+  if (!parsed) {
+    return {
+      ok: false,
+      reference: image,
+      reason: 'unparseable',
+      detail: 'the image reference could not be parsed as [registry/]repository[:tag|@digest]',
+    };
+  }
+  const fail = (reason: Exclude<ImageLabelsRead, { ok: true }>['reason'], detail: string) =>
+    ({ ok: false, reference: image, reason, detail }) as const;
+  const base = `https://${parsed.registry}/v2/${parsed.repository}`;
+  let authorization: string | null = null;
+  const get = async (url: string, accept: string): Promise<Response> => {
+    const headers: Record<string, string> = { accept };
+    if (authorization) headers['authorization'] = authorization;
+    let res = await registryFetch(url, headers);
+    if (res.status === 401 && !authorization) {
+      const challenge = parseBearerChallenge(res.headers.get('www-authenticate'));
+      const token = challenge ? await anonymousToken(challenge) : null;
+      if (!token) return res;
+      authorization = `Bearer ${token}`;
+      res = await registryFetch(url, { accept, authorization });
+    }
+    return res;
+  };
+  const refusal = (res: Response, what: string) =>
+    res.status === 401 || res.status === 403
+      ? fail(
+          'unauthorized',
+          `the registry refused the ${what} to an anonymous caller (HTTP ${res.status})`,
+        )
+      : res.status === 404
+        ? fail('absent', `the registry has no such ${what} (HTTP 404)`)
+        : fail('refused', `the registry refused the ${what} (HTTP ${res.status})`);
+
+  try {
+    let res = await get(`${base}/manifests/${parsed.reference}`, MANIFEST_ACCEPT);
+    if (!res.ok) return refusal(res, 'manifest');
+    let digest = res.headers.get('docker-content-digest');
+    let manifest = recordOf(await res.json().catch(() => null));
+    if (!manifest) return fail('malformed', 'the manifest was not a JSON object');
+    const mediaType = String(manifest['mediaType'] ?? res.headers.get('content-type') ?? '');
+    if (INDEX_TYPES.has(mediaType.split(';')[0]!.trim()) || Array.isArray(manifest['manifests'])) {
+      const entries = Array.isArray(manifest['manifests']) ? manifest['manifests'] : [];
+      const match = entries.map(recordOf).find((m) => {
+        const p = recordOf(m?.['platform']);
+        return p?.['os'] === platform.os && p?.['architecture'] === platform.architecture;
+      });
+      const entryDigest = match?.['digest'];
+      if (typeof entryDigest !== 'string') {
+        return fail('absent', `the image has no ${platform.os}/${platform.architecture} manifest`);
+      }
+      res = await get(`${base}/manifests/${entryDigest}`, MANIFEST_ACCEPT);
+      if (!res.ok) return refusal(res, 'platform manifest');
+      digest = entryDigest;
+      manifest = recordOf(await res.json().catch(() => null));
+      if (!manifest) return fail('malformed', 'the platform manifest was not a JSON object');
+    }
+    const configDigest = recordOf(manifest['config'])?.['digest'];
+    if (typeof configDigest !== 'string') {
+      return fail('malformed', 'the manifest names no config blob');
+    }
+    res = await get(`${base}/blobs/${configDigest}`, 'application/json, */*');
+    if (!res.ok) return refusal(res, 'config blob');
+    const config = recordOf(await res.json().catch(() => null));
+    if (!config) return fail('malformed', 'the config blob was not a JSON object');
+    const raw = recordOf(recordOf(config['config'])?.['Labels']) ?? {};
+    const labels: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string') labels[key] = value;
+    }
+    return { ok: true, reference: image, digest, labels };
+  } catch (err) {
+    return fail('unreachable', `the registry could not be reached: ${detailOf(err)}`);
+  }
+}

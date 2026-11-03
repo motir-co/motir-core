@@ -31,7 +31,7 @@ import enMessages from '@/messages/en.json';
  * the seam unarmed the shared agent refuses every one of those calls, `listTargets`
  * fails, the page renders its error card, and case 3's populated verdict fails.
  *
- *  0. Precondition: a private, all-runnable repository in the fleet job inventory, the
+ *  0. Precondition: a private repository whose fleet job the pinned image can run, the
  *     seam answering, and the page rendering the setting heading.
  *  1. A tenant owner gets the ordinary 404.
  *  2. A support principal has no rail row, and the route 404s.
@@ -106,7 +106,7 @@ test('a superadmin reads the fleet readiness verdict, turns Motir CI on and off 
   acceptanceStory('MOTIR-8699');
   test.setTimeout(180_000);
 
-  // Case 0's manifest guard runs FIRST: no qualifying repository fails here, by name.
+  // Case 0's fixture guard runs FIRST: a job the seam's image cannot run fails here.
   const repo = pickRunnableRepo();
 
   await resetDatabase();

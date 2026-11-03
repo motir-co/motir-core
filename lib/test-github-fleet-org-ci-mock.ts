@@ -24,9 +24,15 @@
 //   - GET    /repos/{org}/{name}                          → `private` (`repoVisibilityClient.isPrivate`,
 //                                                            which BOTH services call — not in the
 //                                                            card's list, and required by it)
-//   - GET    /repos/{org}/{name}/commits?path=.github/workflows
+//   - GET    /repos/{org}/{name}/commits?path=.github
 //                                                         → one commit, sha + date from the control
 //                                                            (`latestWorkflowCommit`)
+//   - GET    /repos/{org}/{name}/git/trees/{sha}           → the control's workflow files at that
+//                                                            commit (`readWorkflowSources`, MOTIR-10290)
+//   - GET    /repos/{org}/{name}/contents/{path}?ref={sha} → one of those files, base64
+//   - GET    https://{FLEET_E2E_REGISTRY}/v2/…              → the runner image's manifest and config
+//                                                            blob, carrying the tool-list label
+//                                                            (`readImageLabels`, MOTIR-10290)
 //   - GET    /orgs/{org}/actions/variables/{name}         → the variable store
 //   - POST   /orgs/{org}/actions/variables                → create (GitHub's create is on the
 //                                                            COLLECTION, not on the name)
@@ -72,6 +78,24 @@ import type { MockAgent } from 'undici';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
 
+/** The registry the lane's `MOTIR_RUNNER_IMAGE` names — a host nothing real answers. */
+export const FLEET_E2E_REGISTRY = 'registry.fleet-e2e.motir.test';
+const FLEET_E2E_MANIFEST_DIGEST = `sha256:${'e2e10290'.repeat(8)}`;
+const FLEET_E2E_CONFIG_DIGEST = `sha256:${'c0f10290'.repeat(8)}`;
+/** The pinned runner image the acceptance lane sets as `MOTIR_RUNNER_IMAGE`. */
+export const FLEET_E2E_RUNNER_IMAGE = `${FLEET_E2E_REGISTRY}/motir-ci-runner@${FLEET_E2E_MANIFEST_DIGEST}`;
+/** The tools that image's `co.motir.ci-runner.tools` label records. */
+export const FLEET_E2E_RUNNER_TOOLS: readonly string[] = [
+  'bash',
+  'cat',
+  'docker',
+  'echo',
+  'git',
+  'node',
+  'npm',
+  'sh',
+];
+
 /** The env vars the lane sets (see `playwright.acceptance.config.ts`). */
 export const FLEET_ORG_CI_CONTROL_ENV = 'E2E_GITHUB_FLEET_ORG_CI_CONTROL';
 export const FLEET_ORG_CI_JOURNAL_ENV = 'E2E_GITHUB_FLEET_ORG_CI_JOURNAL';
@@ -83,8 +107,11 @@ export interface FleetOrgCiRepository {
   name: string;
   /** Defaults to `true`. */
   private?: boolean;
-  /** The newest commit touching `.github/workflows`; omitted → no such commit. */
+  /** The newest commit touching `.github`; omitted → no such commit. */
   workflowCommit?: { sha: string; date: string };
+  /** The workflow files (and local `action.yml`s) at `workflowCommit` — what the
+   *  readiness verdict judges against the runner image's tools (MOTIR-10290). */
+  workflows?: Array<{ path: string; text: string }>;
   /** Defaults to `true`: whether the installation reaches it. */
   granted?: boolean;
 }
@@ -304,6 +331,8 @@ const ORG_INSTALLATION_PATH = /^\/orgs\/([^/]+)\/installation$/;
 const INSTALLATION_REPOS_PATH = /^\/installation\/repositories$/;
 const REPO_PATH = /^\/repos\/([^/]+)\/([^/]+)$/;
 const COMMITS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits$/;
+const TREE_PATH = /^\/repos\/([^/]+)\/([^/]+)\/git\/trees\/([^/]+)$/;
+const CONTENTS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/contents\/(.+)$/;
 const VARIABLES_PATH = /^\/orgs\/([^/]+)\/actions\/variables$/;
 const VARIABLE_PATH = /^\/orgs\/([^/]+)\/actions\/variables\/([^/]+)$/;
 
@@ -469,6 +498,96 @@ export function installGithubFleetOrgCiMock(agent: MockAgent): void {
           : ([] as object[]),
       );
     })
+    .persist();
+
+  // ── The workflow files at the newest `.github` commit (MOTIR-10290) ─────────
+  const repoAt = (m: RegExpExecArray) => {
+    const { login, entry } = orgControl(readControl(), decode(m[1]!))!;
+    const name = decode(m[2]!);
+    const repo = (entry.repositories ?? []).find(
+      (r) => r.name.toLowerCase() === name.toLowerCase(),
+    );
+    return { org: login.toLowerCase(), repo };
+  };
+  pool
+    .intercept({ path: (p) => scopedOrg(TREE_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const m = TREE_PATH.exec(pathOnly(path))!;
+      const { org, repo } = repoAt(m);
+      if (!repo || !repo.workflowCommit || decode(m[3]!) !== repo.workflowCommit.sha) {
+        journal({ method: 'GET', path, org, body: null, status: 404 });
+        return reply(404, { message: 'Not Found' });
+      }
+      journal({ method: 'GET', path, org, body: null, status: 200 });
+      return reply(200, {
+        sha: repo.workflowCommit.sha,
+        truncated: false,
+        tree: (repo.workflows ?? []).map((f) => ({ path: f.path, type: 'blob' })),
+      });
+    })
+    .persist();
+  pool
+    .intercept({ path: (p) => scopedOrg(CONTENTS_PATH, p) !== null, method: 'GET' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const m = CONTENTS_PATH.exec(pathOnly(path))!;
+      const { org, repo } = repoAt(m);
+      const filePath = m[3]!.split('/').map(decode).join('/');
+      const file =
+        repo && repo.workflowCommit && queryParam(path, 'ref') === repo.workflowCommit.sha
+          ? (repo.workflows ?? []).find((f) => f.path === filePath)
+          : undefined;
+      if (!file) {
+        journal({ method: 'GET', path, org, body: null, status: 404 });
+        return reply(404, { message: 'Not Found' });
+      }
+      journal({ method: 'GET', path, org, body: null, status: 200 });
+      return reply(200, {
+        path: file.path,
+        encoding: 'base64',
+        content: Buffer.from(file.text, 'utf8').toString('base64'),
+      });
+    })
+    .persist();
+
+  // ── The pinned runner image's tool list (MOTIR-10290) ───────────────────────
+  // An anonymous registry: the manifest and the config blob answer without a
+  // challenge, and the config carries the label the release would have written.
+  const registry = agent.get(`https://${FLEET_E2E_REGISTRY}`);
+  registry
+    .intercept({
+      path: `/v2/motir-ci-runner/manifests/${FLEET_E2E_MANIFEST_DIGEST}`,
+      method: 'GET',
+    })
+    .reply(() =>
+      reply(
+        200,
+        {
+          schemaVersion: 2,
+          mediaType: 'application/vnd.oci.image.manifest.v1+json',
+          config: {
+            mediaType: 'application/vnd.oci.image.config.v1+json',
+            digest: FLEET_E2E_CONFIG_DIGEST,
+          },
+          layers: [],
+        },
+        {
+          'content-type': 'application/vnd.oci.image.manifest.v1+json',
+          'docker-content-digest': FLEET_E2E_MANIFEST_DIGEST,
+        },
+      ),
+    )
+    .persist();
+  registry
+    .intercept({ path: `/v2/motir-ci-runner/blobs/${FLEET_E2E_CONFIG_DIGEST}`, method: 'GET' })
+    .reply(() =>
+      reply(200, {
+        architecture: 'amd64',
+        os: 'linux',
+        config: { Labels: { 'co.motir.ci-runner.tools': FLEET_E2E_RUNNER_TOOLS.join(',') } },
+      }),
+    )
     .persist();
 
   // ── The org variable store ─────────────────────────────────────────────────

@@ -1,5 +1,7 @@
 // The SHAPE of `lib/ciFleet/fleetJobInventory.json` (Story MOTIR-8699 ·
-// MOTIR-8701 wrote it; MOTIR-8713 reads it). Declared here so the checker never
+// MOTIR-8701 wrote it). Since MOTIR-10290 it records only PUBLIC repositories,
+// as research; nothing reads it at runtime — readiness computes private
+// repositories' coverage from their workflows at head. Declared here so the checker never
 // gives a 48 KB manifest a literal type (the MOTIR-8405 sidecar pattern —
 // `fleetJobInventory.d.json.ts` points the import at this).
 
@@ -25,9 +27,7 @@ export interface FleetInventoryRepo {
   /** ISO-8601. */
   measuredAt: string;
   imageDockerfileSha: string;
-  /** `workflowFingerprint` of the repository's workflows at `sha` (MOTIR-8870).
-   *  When present, a newer workflow commit makes the entry stale only if the
-   *  fingerprint at the new head differs. Absent: any newer commit does. */
+  /** The MOTIR-8870 structure fingerprint, kept on the record; no longer read. */
   structureFingerprint?: string;
   jobCount: number;
   workflows: Array<{ path: string; jobs: FleetInventoryJob[] }>;
@@ -36,8 +36,6 @@ export interface FleetInventoryRepo {
 export interface FleetJobInventory {
   schemaVersion: number;
   imageDockerfileBlob?: string;
-  /** Keyed by `owner/name`, as GitHub spells it. Readiness falls back to the
-   *  name alone within the org it reads, so an org rename does not orphan an
-   *  entry (MOTIR-9410). */
+  /** Keyed by `owner/name`, as GitHub spells it. */
   repos: Record<string, FleetInventoryRepo>;
 }

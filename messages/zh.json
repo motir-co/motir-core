@@ -12665,9 +12665,10 @@
         "not_attributable": "来自 {repositories} 的排队作业不会归属到项目 {project}，因此会一直排队直到 GitHub 将其过期。请将该仓库重新连接到项目，使其镜像行保持最新。",
         "no_runner_group": "项目 {project} 在 {org} 中没有运行器组。由运维人员运行 {script} --project {project}。",
         "sync_pending": "该项目在 {org} 中的运行器组与其仓库不同步。由运维人员运行 {script} --project {project}。",
-        "jobs_not_runnable": "{count, plural, other {# 个作业}}暂时无法在集群运行器镜像上运行。由集群镜像的维护者补充缺失的工具；需要其他操作系统的作业在离开私有仓库集合之前一直无法运行。",
-        "not_inventoried": "{repositories} 不在集群作业清单中，因此还没有人确认运行器镜像能运行{count, plural, other {这些仓库的}}作业。由清单的维护者重新运行清单。",
-        "inventory_stale": "{repositories} 的工作流在集群作业清单测量之后发生了变化。由清单的维护者重新运行清单。",
+        "jobs_not_runnable": "{count, plural, other {# 个作业}}暂时无法在集群运行器镜像上运行。由集群镜像的维护者补充缺失的工具；无法判定的作业在其工作流写明要运行什么之前一直无法运行；需要其他操作系统的作业在离开私有仓库集合之前一直无法运行。",
+        "runner_image_unset": "此部署未固定运行器镜像（{variable} 未设置），因此无法据此判定任何作业。由运维人员固定运行器镜像的摘要。",
+        "image_tools_unrecorded": "已固定的运行器镜像 {image} 没有记录工具列表（{label} 标签），因此无法判定其作业。由集群镜像的维护者从当前的 motir-core 重新发布镜像并固定新的摘要。",
+        "image_unreadable": "无法读取已固定的运行器镜像 {image} 的工具列表。在检查成功之前按未满足计算。",
         "read_failed": "无法检查此项：GitHub 返回 HTTP {status}。在检查成功之前按未满足计算。",
         "read_unreachable": "无法检查此项：无法连接到 GitHub。在检查成功之前按未满足计算。",
         "read_failedNoStatus": "无法检查此项。在检查成功之前按未满足计算。",
@@ -12676,8 +12677,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} —— 缺少 {tools}",
         "cannotHost": "{repo} · {workflow} · {job} —— 无法托管：{reason}",
+        "unverified": "{repo} · {workflow} · {job} —— 无法判定：{reason}",
         "more": "还有 {count} 个",
-        "scope": "这里覆盖的是从 main 构建并已清点的镜像，而不是生产环境启动的镜像。"
+        "scope": "根据每个仓库最新提交时的工作流，对照生产环境启动的运行器镜像所记录的工具进行判定。"
       },
       "confirm": {
         "onTitle": "为 {org} 开启集群 CI？",

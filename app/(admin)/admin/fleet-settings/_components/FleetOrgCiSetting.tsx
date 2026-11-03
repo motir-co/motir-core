@@ -710,7 +710,9 @@ function JobList({ jobs }: { jobs: UncoveredJob[] }) {
             >
               {job.verdict === 'cannot-host'
                 ? t('jobs.cannotHost', { ...values, reason: job.reason ?? '' })
-                : t('jobs.missing', { ...values, tools: job.missing.join(', ') })}
+                : job.verdict === 'unverified'
+                  ? t('jobs.unverified', { ...values, reason: job.reason ?? '' })
+                  : t('jobs.missing', { ...values, tools: job.missing.join(', ') })}
             </li>
           );
         })}

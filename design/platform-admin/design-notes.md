@@ -3779,3 +3779,51 @@ messages are data and are not translated.
 - **A per-row progress count** for Replay all, a cancel once it has started, or a replay of a run
   that did not dead-letter.
 - **A `.png` export** — retired (AMENDMENT 4).
+
+---
+
+# AMENDMENT 2026-11-03 — Fleet settings · image coverage computed from the workflows (MOTIR-10290)
+
+**Amends:** § _AMENDMENT 2026-10 — Fleet settings · Motir CI on the fleet (MOTIR-8703)_, its
+condition table (row 9, `image_coverage`) and its copy table, drawn in
+[`console--fleet-settings.mock.html`](console--fleet-settings.mock.html).
+
+**No new mock.** This amendment changes COPY only: no element is added, moved or restyled. The
+readiness card, the condition row, its why line and the uncovered-jobs list are the shipped
+components, unchanged; the list gains one more sentence shape for a row, rendered by the same
+`<li>` with the same tokens as the `missing` and `cannotHost` rows.
+
+## What changed
+
+The verdict no longer reads a hand-kept inventory of the private repositories. It judges each
+fleet job from the repository's workflows at its newest `.github` commit against the tool list
+the pinned runner image records about itself (`docs/research/fleet-job-inventory.md` § _Image
+coverage is computed, not recorded_). So the two inventory codes go, and three about the image
+come in.
+
+| Row 9 `image_coverage` codes                                                                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `all_runnable` · `jobs_not_runnable`, `runner_image_unset`, `image_tools_unrecorded`, `no_private_repositories` · `read_failed`, `image_unreadable`, `app_not_readable` |
+
+`not_inventoried` and `inventory_stale` are removed. `runner_image_unset` and
+`image_tools_unrecorded` are **unmet** (a definite fact about the deployment); `image_unreadable`
+is **unknown** (a statement about the read), drawn exactly as the existing unknown rows.
+
+## Copy (en; every locale carries it)
+
+| Key                                        | String                                                                                                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fleetSettings.why.jobs_not_runnable`      | {count, plural, one {# job} other {# jobs}} can't run on the fleet runner image yet. Whoever maintains the fleet image adds the missing tool; a job that can't be judged stays unrunnable until its workflow names what it runs; a job that needs another operating system stays unrunnable until it leaves the private set. |
+| `fleetSettings.why.runner_image_unset`     | This deployment pins no runner image ({variable} is unset), so no job can be judged against one. An operator pins the runner image's digest.                                                                                                                                                                                 |
+| `fleetSettings.why.image_tools_unrecorded` | The pinned runner image {image} records no tool list (the {label} label), so its jobs can't be judged. Whoever maintains the fleet image releases it from current motir-core and pins the new digest.                                                                                                                        |
+| `fleetSettings.why.image_unreadable`       | Couldn't read the tool list of the pinned runner image {image}. Counts as not met until a check succeeds.                                                                                                                                                                                                                    |
+| `fleetSettings.jobs.unverified`            | {repo} · {workflow} · {job} — can't be judged: {reason}                                                                                                                                                                                                                                                                      |
+| `fleetSettings.jobs.scope`                 | Judged from each repository's workflows at its newest commit, against the tools the runner image production boots records.                                                                                                                                                                                                   |
+
+Removed: `fleetSettings.why.not_inventoried`, `fleetSettings.why.inventory_stale`.
+
+## Colour and shape roles
+
+Unchanged. The `unverified` row is the job list's `<li>`: `font-mono text-xs`,
+`--el-text-secondary` (AA on the list's surface in both themes). The why line stays
+`--el-text-secondary`.

@@ -95,19 +95,12 @@ export function whyText(
       return tt('why.jobs_not_runnable', {
         count: Array.isArray(p['jobs']) ? p['jobs'].length : 0,
       });
-    case 'not_inventoried': {
-      const repos = strings(p['repositories']);
-      return tt('why.not_inventoried', { repositories: list(repos), count: repos.length });
-    }
-    case 'inventory_stale': {
-      const stale = Array.isArray(p['stale']) ? p['stale'] : [];
-      const repos = stale
-        .map((s) =>
-          s && typeof s === 'object' ? str((s as { repository?: unknown }).repository) : '',
-        )
-        .filter(Boolean);
-      return tt('why.inventory_stale', { repositories: list(repos) });
-    }
+    case 'runner_image_unset':
+      return tt('why.runner_image_unset', { variable: str(p['variable']) });
+    case 'image_tools_unrecorded':
+      return tt('why.image_tools_unrecorded', { image: str(p['image']), label: str(p['label']) });
+    case 'image_unreadable':
+      return tt('why.image_unreadable', { image: str(p['image']) });
     case 'read_failed': {
       const status = p['status'];
       if (typeof status === 'number') return tt('why.read_failed', { status });
@@ -138,8 +131,9 @@ export const WHY_REASON_CODES = [
   'no_runner_group',
   'sync_pending',
   'jobs_not_runnable',
-  'not_inventoried',
-  'inventory_stale',
+  'runner_image_unset',
+  'image_tools_unrecorded',
+  'image_unreadable',
   'read_failed',
   'app_not_readable',
 ] as const;

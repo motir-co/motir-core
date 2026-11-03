@@ -264,6 +264,26 @@ jobs:
       - name: 'Prove it boots and can run a services: container'
         run: infra/ci-runner/smoke/prove-boot.sh --image motir-ci-runner:smoke
 
+      # ── The image's TOOL LIST, measured, so it can travel with the image ────
+      # (MOTIR-10290). The fleet readiness verdict judges every private
+      # repository's fleet jobs against the commands the PINNED image can run,
+      # and reads them from the `co.motir.ci-runner.tools` label the push below
+      # stamps — so pinning a new digest updates the comparison, and nobody keeps
+      # a second list by hand. Measured on every lane, so a PR that breaks the
+      # measurement is red before a release depends on it.
+      - name: Record the image's tool list
+        id: tools
+        run: |
+          set -euo pipefail
+          tools=$(infra/ci-runner/smoke/list-tools.sh --image motir-ci-runner:smoke)
+          count=$(printf '%s' "$tools" | tr ',' '\n' | grep -c .)
+          if [ "$count" -lt 50 ]; then
+            echo "::error::the tool list holds only ${count} commands — the measurement is broken."
+            exit 1
+          fi
+          echo "tools=${tools}" >> "$GITHUB_OUTPUT"
+          echo "MOTIR_RUNNER_IMAGE_TOOLS count=${count}"
+
       # ── Size, because §6 makes it a term in the boot budget ────────────────
       # Image pull sits inside §6's 10–25 s Machine-create leg, and MOTIR-1928
       # measures the real p50/p95 against that budget. A number recorded here is
@@ -341,6 +361,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ inputs.version }}
             ${{ env.IMAGE }}:sha-${{ github.sha }}
+          labels: |
+            co.motir.ci-runner.tools=${{ steps.tools.outputs.tools }}
           cache-from: type=gha,scope=ci-runner
           cache-to: type=gha,scope=ci-runner,mode=max
 
@@ -361,6 +383,16 @@ jobs:
           docker pull "$ref"
           docker tag "$ref" motir-ci-runner:published
           infra/ci-runner/smoke/assert-image.sh --image motir-ci-runner:published
+          # The label must describe THESE bytes: re-measure the published image
+          # and compare (MOTIR-10290). A mismatch would have readiness judge jobs
+          # against tools the fleet does not boot.
+          recorded=$(docker image inspect motir-ci-runner:published \
+            --format '{{ index .Config.Labels "co.motir.ci-runner.tools" }}')
+          measured=$(infra/ci-runner/smoke/list-tools.sh --image motir-ci-runner:published)
+          if [ -z "$recorded" ] || [ "$recorded" != "$measured" ]; then
+            echo "::error::the co.motir.ci-runner.tools label does not match the published image's tools."
+            exit 1
+          fi
           {
             echo
             echo "### Published"

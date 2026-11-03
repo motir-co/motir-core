@@ -29,7 +29,8 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { MOTIR_RUNNER_LABEL, MOTIR_RUNNER_VARIABLE } from '@/lib/ciFleet/config';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { withSystemContext } from '@/lib/workspaces/context';
-import type { FleetJobInventory } from '@/lib/ciFleet/fleetJobInventoryTypes';
+import { _resetRunnerImageToolsCache } from '@/lib/services/runnerImageToolsService';
+import { _resetWorkflowCoverageCache } from '@/lib/services/workflowCoverageService';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 import {
@@ -64,51 +65,14 @@ import { randomInt } from '../helpers/random';
 // `fetch`) and the orchestrator (the `fake` adapter and its inventory, selected
 // by env exactly as a deployment selects Fly).
 //
-// Two seams are NOT GitHub and are stubbed anyway, each for a stated reason:
+// One seam is NOT GitHub and is stubbed anyway, for a stated reason:
 //   * `getSession()` (`@/lib/auth`) — the one mock `CLAUDE.md` allows: a test has
 //     no cookie, and the platform gate reads the operator from the session.
-//   * the readiness MANIFEST (`lib/ciFleet/fleetJobInventory.json`). The checked-in
-//     manifest is keyed by Motir's real repositories; this fixture's org is
-//     `acme-connected`, never Motir's. `readinessFor` exposes an `inventory`
-//     option, but `fleetOrgCiSettingService.setEnabled` does not thread one, so
-//     the only way to point the SWITCH's verdict at a fixture manifest without
-//     mocking `readinessFor` is at the import. `readinessFor` itself stays real —
-//     spied on (call-through), never replaced.
-
-const { FIXTURE_INVENTORY } = vi.hoisted(() => {
-  const inventory: FleetJobInventory = {
-    schemaVersion: 1,
-    repos: {
-      'acme-connected/acme-core': {
-        repoRef: 'acme-connected/acme-core',
-        ref: 'main',
-        sha: 'f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1',
-        visibility: 'private',
-        measuredAt: '2026-10-01T00:00:00Z',
-        imageDockerfileSha: 'd0d0d0d0',
-        jobCount: 1,
-        workflows: [
-          {
-            path: '.github/workflows/ci.yml',
-            jobs: [
-              {
-                jobId: 'build',
-                runsOn: "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
-                triggers: ['pull_request'],
-                verdict: 'runnable',
-                missing: [],
-                evidence: null,
-              },
-            ],
-          },
-        ],
-      },
-    },
-  };
-  return { FIXTURE_INVENTORY: inventory };
-});
-
-vi.mock('@/lib/ciFleet/fleetJobInventory.json', () => ({ default: FIXTURE_INVENTORY }));
+//
+// The readiness verdict's image coverage (MOTIR-10290) reads the connected
+// repository's workflows at its newest `.github` commit — answered by the same
+// GitHub fake — and the pinned runner image's tool list, answered by a registry
+// fake on its own host.
 
 let currentSession: { user: { id: string } } | null = null;
 vi.mock('@/lib/auth', async (importOriginal) => ({
@@ -130,7 +94,18 @@ const DELIVERY_INSTALLATION = '880011';
 const MIRROR_INSTALLATION = '55501';
 const CONNECTED_REPO = 'acme-core';
 const CONNECTED_REPO_ID = '99001';
-const INVENTORY_SHA = FIXTURE_INVENTORY.repos['acme-connected/acme-core']!.sha;
+const WORKFLOW_SHA = 'f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1f1';
+const RUNNER_REGISTRY = 'registry.story-gate.test';
+const RUNNER_IMAGE = `${RUNNER_REGISTRY}/motir-ci-runner@sha256:${'5a'.repeat(32)}`;
+const CONNECTED_WORKFLOW = [
+  'on: [pull_request]',
+  'jobs:',
+  '  build:',
+  "    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}",
+  '    steps:',
+  '      - run: git status && echo ok',
+  '',
+].join('\n');
 const TENANT_REPO = 'acme-web';
 const TENANT_REPO_ID = '99901';
 const TENANT_INSTALLATION = '55901';
@@ -179,6 +154,17 @@ function installGitHubAndMotirAi(): void {
       const url = String(input);
       const u = new URL(url);
       const method = init?.method ?? 'GET';
+
+      // The pinned runner image's registry: a manifest, then a config whose
+      // label records the tools the connected repository's job needs.
+      if (u.host === RUNNER_REGISTRY) {
+        if (u.pathname.includes('/manifests/')) {
+          return json(200, { schemaVersion: 2, config: { digest: 'sha256:cfg' }, layers: [] });
+        }
+        return json(200, {
+          config: { Labels: { 'co.motir.ci-runner.tools': 'bash,echo,git,sh' } },
+        });
+      }
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
 
       // motir-ai (plan and balance) — the other side of the open-core boundary.
@@ -234,8 +220,22 @@ function installGitHubAndMotirAi(): void {
       }
       if (u.pathname === `/repos/${CONNECTED_ORG}/${CONNECTED_REPO}/commits`) {
         return json(200, [
-          { sha: INVENTORY_SHA, commit: { committer: { date: '2026-09-30T00:00:00Z' } } },
+          { sha: WORKFLOW_SHA, commit: { committer: { date: '2026-09-30T00:00:00Z' } } },
         ]);
+      }
+      if (u.pathname === `/repos/${CONNECTED_ORG}/${CONNECTED_REPO}/git/trees/${WORKFLOW_SHA}`) {
+        return json(200, {
+          truncated: false,
+          tree: [{ type: 'blob', path: '.github/workflows/ci.yml' }],
+        });
+      }
+      if (
+        u.pathname === `/repos/${CONNECTED_ORG}/${CONNECTED_REPO}/contents/.github/workflows/ci.yml`
+      ) {
+        return json(200, {
+          encoding: 'base64',
+          content: Buffer.from(CONNECTED_WORKFLOW).toString('base64'),
+        });
       }
       // The minute meter's workflow-jobs read.
       if (
@@ -568,6 +568,9 @@ beforeEach(async () => {
   vi.stubEnv('MOTIR_AI_URL', 'https://motir-ai.test');
   vi.stubEnv('MOTIR_AI_SERVICE_TOKEN', 'svc-token');
   vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '');
+  vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+  _resetRunnerImageToolsCache();
+  _resetWorkflowCoverageCache();
   _resetInstallationTokenCache();
   _resetProvisioningInstallationCache();
   captured = captureJobEvents();

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import {
@@ -9,9 +9,8 @@ import {
   requestsFleetRunner,
   type FleetReadiness,
 } from '@/lib/services/fleetReadinessService';
-import type { FleetJobInventory, FleetInventoryJob } from '@/lib/ciFleet/fleetJobInventoryTypes';
-import { workflowFingerprint } from '@/lib/ciFleet/workflowFingerprint';
-import checkedInInventory from '@/lib/ciFleet/fleetJobInventory.json';
+import { _resetRunnerImageToolsCache } from '@/lib/services/runnerImageToolsService';
+import { _resetWorkflowCoverageCache } from '@/lib/services/workflowCoverageService';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { projectRunnerGroupService } from '@/lib/services/projectRunnerGroupService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
@@ -22,20 +21,24 @@ import { truncateAuthTables } from '../helpers/db';
 
 // THE FLEET READINESS VERDICT (Story MOTIR-8699 · MOTIR-8713), over real
 // Postgres. The project, its repositories, their mirror rows and the runner-group
-// row are real; GitHub (`fetch`) is the only fake, and the inventory manifest is
-// handed in so each case can shape it.
+// row are real; GitHub and the runner image's registry (`fetch`) are the only
+// fakes.
 //
 // The fixture is an all-met world: a connected org whose provisioning-App
 // installation has NO mirror row (the intake's fallback path), two private
-// repositories and one public one, a synced runner group, and an inventory where
-// every job is runnable. Each case breaks one thing.
+// repositories and one public one, a synced runner group, workflows whose every
+// fleet job the pinned image can run (MOTIR-10290), and that image's tool list.
+// Each case breaks one thing.
 
-// A `let` so one block can read the org the shipped manifest names (MOTIR-9410).
-let ORG = 'acme-connected';
+const ORG = 'acme-connected';
 const STUDIO_INSTALLATION = '880011';
 /** The user-facing App's installation on the org — the one that HAS a mirror row. */
 const MIRROR_INSTALLATION = '55501';
 const MEASURED_AT = '2026-10-01T00:00:00Z';
+const REGISTRY = 'registry.readiness.test';
+const RUNNER_IMAGE = `${REGISTRY}/motir-ci-runner@sha256:${'ab'.repeat(32)}`;
+const CI = '.github/workflows/ci.yml';
+const IMAGE_TOOLS = ['bash', 'sh', 'git', 'echo', 'curl', 'jq', 'docker', 'node', 'npm'];
 const SECRET_TOKEN = 'ghs_readiness_secret';
 
 interface World {
@@ -47,8 +50,12 @@ interface World {
   visibility: Map<string, boolean>;
   reachable: Set<number> | null;
   head: Map<string, { sha: string; date: string } | 'fail'>;
-  /** The workflow files each repository has at its head (MOTIR-8870); absent ⇒ the read is refused. */
+  /** The workflow files each repository has at its head; absent ⇒ the read is refused. */
   files: Map<string, Array<{ path: string; text: string }>>;
+  /** Remote actions' `action.yml` by `owner/repo[/path]`: text, or the status the read answers. */
+  actions: Map<string, string | number>;
+  /** The pinned image's tool label: its tools, no label, or the registry's failure status. */
+  image: string[] | 'unlabelled' | number;
 }
 
 let world: World;
@@ -67,6 +74,15 @@ function installGitHub(): void {
     'fetch',
     vi.fn(async (url: string): Promise<Response> => {
       const u = new URL(String(url));
+      if (u.host === REGISTRY) {
+        if (typeof world.image === 'number') return json(world.image, {});
+        if (u.pathname.includes('/manifests/')) {
+          return json(200, { schemaVersion: 2, config: { digest: 'sha256:cfg' }, layers: [] });
+        }
+        const labels =
+          world.image === 'unlabelled' ? {} : { 'co.motir.ci-runner.tools': world.image.join(',') };
+        return json(200, { config: { Labels: labels } });
+      }
       if (u.pathname === `/orgs/${ORG}/installation`) {
         if (world.install === 'unreachable') throw new TypeError('fetch failed');
         if (world.install !== 'ok') return json(world.install, { message: 'nope' });
@@ -107,6 +123,14 @@ function installGitHub(): void {
         });
       }
       const contents = /^\/repos\/([^/]+)\/([^/]+)\/contents\/(.+)$/.exec(u.pathname);
+      if (contents && contents[1] !== ORG) {
+        const dir = decodeURI(contents[3]!).replace(/\/?action\.ya?ml$/, '');
+        const key = [contents[1], contents[2], dir].filter(Boolean).join('/');
+        const found = u.pathname.endsWith('action.yml') ? world.actions.get(key) : undefined;
+        if (found === undefined) return json(404, { message: 'Not Found' });
+        if (typeof found === 'number') return json(found, { message: 'nope' });
+        return json(200, { encoding: 'base64', content: Buffer.from(found).toString('base64') });
+      }
       if (contents) {
         const found = world.files
           .get(contents[2]!)
@@ -170,33 +194,24 @@ async function connectRepos(names: string[]): Promise<void> {
 // What a job that follows the switch asks for (MOTIR-8813: only such a job counts).
 const SEAM = "${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}";
 
-function job(jobId: string, overrides: Partial<FleetInventoryJob> = {}): FleetInventoryJob {
-  return {
-    jobId,
-    runsOn: SEAM,
-    triggers: ['push'],
-    verdict: 'runnable',
-    missing: [],
-    evidence: '.github/workflows/ci.yml:10',
-    ...overrides,
-  };
+/** A workflow file: each job as `[jobId, runsOn, steps]`, steps as YAML lines. */
+function workflow(jobs: Array<[string, unknown, string[]]>): string {
+  const lines = ['on: [push]', 'jobs:'];
+  for (const [jobId, runsOn, steps] of jobs) {
+    lines.push(`  ${jobId}:`, `    runs-on: ${JSON.stringify(runsOn)}`, '    steps:');
+    for (const step of steps) lines.push(`      - ${step}`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
-function inventory(jobs: Record<string, FleetInventoryJob[]> = {}): FleetJobInventory {
-  const repos: FleetJobInventory['repos'] = {};
-  for (const name of ['api', 'web', 'site']) {
-    repos[`${ORG}/${name}`] = {
-      repoRef: `${ORG}/${name}`,
-      ref: 'main',
-      sha: `sha-${name}`,
-      visibility: name === 'site' ? 'public' : 'private',
-      measuredAt: MEASURED_AT,
-      imageDockerfileSha: 'df',
-      jobCount: 1,
-      workflows: [{ path: '.github/workflows/ci.yml', jobs: jobs[name] ?? [job('build')] }],
-    };
-  }
-  return { schemaVersion: 1, repos };
+/** The all-met workflow: one seam job the image can run. */
+const runnable = () =>
+  workflow([['build', SEAM, ['uses: actions/checkout@v4', 'run: git status && node --version']]]);
+
+/** Set a repository's workflows at a new head, as a push would. */
+function push(repo: string, files: Array<{ path: string; text: string }>, sha = `sha-${repo}-2`) {
+  world.head.set(repo, { sha, date: '2026-10-12T00:00:00Z' });
+  world.files.set(repo, files);
 }
 
 function target() {
@@ -277,8 +292,16 @@ beforeEach(async () => {
       ['api', { sha: 'sha-api', date: MEASURED_AT }],
       ['web', { sha: 'sha-web', date: MEASURED_AT }],
     ]),
-    files: new Map(),
+    files: new Map([
+      ['api', [{ path: CI, text: runnable() }]],
+      ['web', [{ path: CI, text: runnable() }]],
+    ]),
+    actions: new Map([['actions/checkout', "runs:\n  using: 'node24'\n  main: dist/index.js"]]),
+    image: [...IMAGE_TOOLS],
   };
+  vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+  _resetRunnerImageToolsCache();
+  _resetWorkflowCoverageCache();
   installGitHub();
 });
 
@@ -295,7 +318,7 @@ afterAll(async () => {
 
 describe('the all-met world', () => {
   it('is ready, with the nine conditions in order, each carrying a message', async () => {
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
 
     expect(result.ready).toBe(true);
     expect(result.org).toBe(ORG);
@@ -312,9 +335,9 @@ describe('the all-met world', () => {
 
   it('never considers the public repository', async () => {
     world.reachable = new Set([repoIds.get('api')!, repoIds.get('web')!]);
-    const result = await fleetReadinessService.readinessFor(target(), {
-      inventory: inventory({ site: [job('build', { verdict: 'needs-image', missing: ['gh'] })] }),
-    });
+    world.files.set('site', [{ path: CI, text: workflow([['b', SEAM, ['run: gh pr list']]]) }]);
+    world.head.set('site', { sha: 'sha-site', date: MEASURED_AT });
+    const result = await fleetReadinessService.readinessFor(target());
 
     expect(result.ready).toBe(true);
     const text = JSON.stringify(
@@ -327,10 +350,8 @@ describe('the all-met world', () => {
 
   it('leaks no token or JWT into any field', async () => {
     world.install = 500;
-    const failed = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
-    const ok =
-      (world.install = 'ok') &&
-      (await fleetReadinessService.readinessFor(target(), { inventory: inventory() }));
+    const failed = await fleetReadinessService.readinessFor(target());
+    const ok = (world.install = 'ok') && (await fleetReadinessService.readinessFor(target()));
     for (const result of [failed, ok]) {
       const text = JSON.stringify(result);
       expect(text).not.toContain(SECRET_TOKEN);
@@ -342,7 +363,7 @@ describe('the all-met world', () => {
 describe('each condition, broken alone', () => {
   it('kill_switch', async () => {
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '0');
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'kill_switch', 'unmet');
     expect(cond(result, 'kill_switch')).toMatchObject({ reasonCode: 'kill_switch_engaged' });
     expect(cond(result, 'kill_switch').message).toContain('MOTIR_FLEET_MAX_IN_FLIGHT=0');
@@ -350,7 +371,7 @@ describe('each condition, broken alone', () => {
 
   it('app_installed (404) — and its dependants are unknown, never met', async () => {
     world.install = 404;
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expect(result.ready).toBe(false);
     expect(cond(result, 'app_installed')).toMatchObject({
       state: 'unmet',
@@ -364,7 +385,7 @@ describe('each condition, broken alone', () => {
 
   it('app_installed (suspended)', async () => {
     world.suspendedAt = '2026-10-10T00:00:00Z';
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expect(cond(result, 'app_installed')).toMatchObject({
       state: 'unmet',
       reasonCode: 'app_suspended',
@@ -379,7 +400,7 @@ describe('each condition, broken alone', () => {
     'app_installed is unknown on %s, and so are its dependants',
     async (_label, install, status) => {
       world.install = install;
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+      const result = await fleetReadinessService.readinessFor(target());
       expect(result.ready).toBe(false);
       expect(cond(result, 'app_installed')).toMatchObject({
         state: 'unknown',
@@ -417,21 +438,21 @@ describe('each condition, broken alone', () => {
   ])('%s with %s=%s', async (key, permission, value, reasonCode) => {
     if (value === undefined) delete world.permissions[permission];
     else world.permissions[permission] = value;
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, key, 'unmet');
     expect(cond(result, key).reasonCode).toBe(reasonCode);
   });
 
   it('workflow_job_subscription', async () => {
     world.events = ['push'];
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'workflow_job_subscription', 'unmet');
     expect(cond(result, 'workflow_job_subscription').message).toContain('workflow_job');
   });
 
   it('app_repositories names the private repository the installation does not reach', async () => {
     world.reachable = new Set([repoIds.get('api')!]);
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'app_repositories', 'unmet');
     expect(cond(result, 'app_repositories')).toMatchObject({
       reasonCode: 'repositories_not_granted',
@@ -442,7 +463,7 @@ describe('each condition, broken alone', () => {
   it('a project with no private repository in the org is never ready', async () => {
     world.visibility.set('api', false);
     world.visibility.set('web', false);
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expect(result.ready).toBe(false);
     for (const key of ['app_repositories', 'delivery_attributable', 'image_coverage']) {
       expect(cond(result, key)).toMatchObject({
@@ -454,7 +475,7 @@ describe('each condition, broken alone', () => {
 
   it('runner_group — no row', async () => {
     await adminDb.projectRunnerGroup.deleteMany({ where: { projectId: fx.projectId } });
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'runner_group', 'unmet');
     expect(cond(result, 'runner_group').reasonCode).toBe('no_runner_group');
     expect(cond(result, 'runner_group').message).toContain(
@@ -467,7 +488,7 @@ describe('each condition, broken alone', () => {
       where: { projectId: fx.projectId },
       data: { syncPending: true },
     });
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'runner_group', 'unmet');
     expect(cond(result, 'runner_group').reasonCode).toBe('sync_pending');
   });
@@ -478,7 +499,7 @@ describe('delivery_attributable, on both of the intake’s paths', () => {
     world.installationId = MIRROR_INSTALLATION;
     const byPair = vi.spyOn(githubRepoRepository, 'findByInstallationAndRepoId');
     const byRepo = vi.spyOn(githubRepoRepository, 'listByRepoId');
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expect(result.ready).toBe(true);
     expect(cond(result, 'delivery_attributable').params).toMatchObject({ path: 'mirrored' });
     expect(byPair).toHaveBeenCalled();
@@ -497,7 +518,7 @@ describe('delivery_attributable, on both of the intake’s paths', () => {
       },
     });
     world.installationId = '99901';
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'delivery_attributable', 'unmet');
     expect(cond(result, 'delivery_attributable').params).toMatchObject({
       path: 'mirrored',
@@ -532,7 +553,7 @@ describe('delivery_attributable, on both of the intake’s paths', () => {
       },
     });
     const byRepo = vi.spyOn(githubRepoRepository, 'listByRepoId');
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'delivery_attributable', 'unmet');
     expect(byRepo).toHaveBeenCalled();
     expect(cond(result, 'delivery_attributable').params).toMatchObject({
@@ -548,7 +569,7 @@ describe('delivery_attributable, on both of the intake’s paths', () => {
       const rows = await real(repoId, tx);
       return rows.map((r) => ({ ...r, owner: 'someone-else' }));
     });
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'delivery_attributable', 'unmet');
     expect(cond(result, 'delivery_attributable').params).toMatchObject({
       failures: [
@@ -559,261 +580,260 @@ describe('delivery_attributable, on both of the intake’s paths', () => {
   });
 });
 
-describe('image_coverage', () => {
-  it('lists EVERY job that requests the fleet and is not runnable', async () => {
-    const result = await fleetReadinessService.readinessFor(target(), {
-      inventory: inventory({
-        api: [
-          job('build', { verdict: 'needs-image', missing: ['gh'] }),
-          job('arm', { verdict: 'cannot-host', reason: 'arm64 only' }),
-          job('ok'),
-        ],
-      }),
-    });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage')).toMatchObject({
-      reasonCode: 'jobs_not_runnable',
-      params: {
-        jobs: [
-          { repoRef: `${ORG}/api`, jobId: 'build', verdict: 'needs-image', missing: ['gh'] },
-          { repoRef: `${ORG}/api`, jobId: 'arm', verdict: 'cannot-host', reason: 'arm64 only' },
-        ],
-      },
-    });
-  });
-
-  it('a job that never requests the fleet does not count, and is named as GitHub-hosted (MOTIR-8813)', async () => {
-    const result = await fleetReadinessService.readinessFor(target(), {
-      inventory: inventory({
-        api: [
-          job('mac', {
-            runsOn: 'macos-latest',
-            verdict: 'cannot-host',
-            reason: 'runs-on macos-latest',
-          }),
-          job('pinned', {
-            runsOn: 'ubuntu-latest',
-            verdict: 'needs-image',
-            missing: ['binfmt-misc'],
-          }),
-          job('ok'),
-        ],
-      }),
-    });
-    expect(result.ready).toBe(true);
+describe('image_coverage, computed from the workflows at head (MOTIR-10290)', () => {
+  it('is met, naming the repositories, the heads read and the pinned image', async () => {
+    const result = await fleetReadinessService.readinessFor(target());
     expect(cond(result, 'image_coverage')).toMatchObject({
       state: 'met',
       reasonCode: 'all_runnable',
       params: {
-        githubHostedJobs: [
-          { repoRef: `${ORG}/api`, workflow: '.github/workflows/ci.yml', jobId: 'mac' },
-          { repoRef: `${ORG}/api`, workflow: '.github/workflows/ci.yml', jobId: 'pinned' },
+        repositories: [`${ORG}/api`, `${ORG}/web`],
+        githubHostedJobs: [],
+        heads: [
+          { repository: `${ORG}/api`, headSha: 'sha-api' },
+          { repository: `${ORG}/web`, headSha: 'sha-web' },
         ],
+        image: RUNNER_IMAGE,
       },
     });
+    expect(cond(result, 'image_coverage').message).toContain(RUNNER_IMAGE);
   });
 
-  it('the same job asking for the fleet label outright still counts (MOTIR-8813)', async () => {
-    const result = await fleetReadinessService.readinessFor(target(), {
-      inventory: inventory({
-        web: [
-          job('img', {
-            runsOn: ['self-hosted', 'motir-runner'],
+  // AC1 — a workflow change updates the verdict with no manifest edit.
+  it('a NEW JOB the image cannot run is unmet, naming repository, workflow, job and tool', async () => {
+    push('api', [
+      {
+        path: CI,
+        text: workflow([
+          ['build', SEAM, ['run: git status']],
+          ['deploy', SEAM, ['run: aws s3 sync dist s3://bucket']],
+        ]),
+      },
+    ]);
+    const result = await fleetReadinessService.readinessFor(target());
+    expectOnly(result, 'image_coverage', 'unmet');
+    const c = cond(result, 'image_coverage');
+    expect(c).toMatchObject({
+      reasonCode: 'jobs_not_runnable',
+      params: {
+        jobs: [
+          {
+            repoRef: `${ORG}/api`,
+            workflow: CI,
+            jobId: 'deploy',
             verdict: 'needs-image',
-            missing: ['binfmt-misc'],
-          }),
-        ],
-      }),
-    });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage')).toMatchObject({
-      reasonCode: 'jobs_not_runnable',
-      params: { jobs: [{ repoRef: `${ORG}/web`, jobId: 'img' }], githubHostedJobs: [] },
-    });
-  });
-
-  it('an unverified job is unmet, and named', async () => {
-    const result = await fleetReadinessService.readinessFor(target(), {
-      inventory: inventory({
-        web: [job('e2e', { verdict: 'needs-image', missing: ['unverified'] })],
-      }),
-    });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage').message).toContain('e2e');
-  });
-
-  it('a private repository missing from the manifest ⇒ not_inventoried', async () => {
-    const inv = inventory();
-    delete inv.repos[`${ORG}/web`];
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage').reasonCode).toBe('not_inventoried');
-  });
-
-  it('workflows changed after the measurement ⇒ inventory_stale', async () => {
-    world.head.set('api', { sha: 'newer', date: '2026-10-12T00:00:00Z' });
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage')).toMatchObject({
-      reasonCode: 'inventory_stale',
-      params: { stale: [{ repository: `${ORG}/api`, measuredSha: 'sha-api', headSha: 'newer' }] },
-    });
-  });
-
-  it('a failed commits read ⇒ unknown', async () => {
-    world.head.set('web', 'fail');
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
-    expectOnly(result, 'image_coverage', 'unknown');
-  });
-
-  it("an entry measured under the org's former name still matches after a rename (MOTIR-9410)", async () => {
-    const inv = inventory({ api: [job('build', { verdict: 'needs-image', missing: ['gh'] })] });
-    for (const [key, entry] of Object.entries(inv.repos)) {
-      const name = key.slice(key.indexOf('/') + 1);
-      delete inv.repos[key];
-      inv.repos[`former-org/${name}`] = { ...entry, repoRef: `former-org/${name}` };
-    }
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage')).toMatchObject({
-      reasonCode: 'jobs_not_runnable',
-      // The live repository is named, never the manifest's stale `owner/`.
-      params: { jobs: [{ repoRef: `${ORG}/api`, jobId: 'build' }] },
-    });
-  });
-
-  it("an exact owner/name entry wins over another org's entry of the same name", async () => {
-    const inv = inventory();
-    // Listed FIRST, so a name-only lookup would land on it.
-    inv.repos = {
-      'other-org/api': {
-        ...inv.repos[`${ORG}/api`]!,
-        repoRef: 'other-org/api',
-        workflows: [
-          { path: '.github/workflows/ci.yml', jobs: [job('x', { verdict: 'needs-image' })] },
+            missing: ['aws'],
+            reason: null,
+          },
         ],
       },
-      ...inv.repos,
-    };
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
-    expect(cond(result, 'image_coverage').state).toBe('met');
+    });
+    // AC2 — the message names the gap; the old staleness sentence is gone.
+    expect(c.message).toContain(`${ORG}/api ci.yml deploy (needs aws, which the image lacks)`);
+    expect(c.message).not.toContain('changed after');
   });
 
-  describe('the shipped manifest, read for the org it names (MOTIR-9410)', () => {
-    const shipped = checkedInInventory as FleetJobInventory;
-    const entry = shipped.repos['motir-co/motir-ai']!;
+  it('a NEW ACTION is judged by its own steps (a composite action needing a tool)', async () => {
+    push('web', [{ path: CI, text: workflow([['build', SEAM, ['uses: acme/release@v2']]]) }]);
+    world.actions.set(
+      'acme/release',
+      'runs:\n  using: composite\n  steps:\n    - run: gh release create x\n      shell: bash',
+    );
+    const result = await fleetReadinessService.readinessFor(target());
+    expectOnly(result, 'image_coverage', 'unmet');
+    expect(cond(result, 'image_coverage').params['jobs']).toEqual([
+      expect.objectContaining({ repoRef: `${ORG}/web`, jobId: 'build', missing: ['gh'] }),
+    ]);
+  });
 
-    beforeAll(() => {
-      ORG = 'motir-co';
+  it('a NEW EXECUTABLE in an existing job is unmet, and a runnable change stays met', async () => {
+    push('api', [
+      { path: CI, text: workflow([['build', SEAM, ['run: git status', 'run: terraform plan']]]) },
+    ]);
+    const gap = await fleetReadinessService.readinessFor(target());
+    expect(cond(gap, 'image_coverage').params['jobs']).toEqual([
+      expect.objectContaining({ jobId: 'build', missing: ['terraform'] }),
+    ]);
+
+    push(
+      'api',
+      [{ path: CI, text: workflow([['build', SEAM, ['run: curl -sf x | jq .']]]) }],
+      'sha-3',
+    );
+    const fine = await fleetReadinessService.readinessFor(target());
+    expect(fine.ready).toBe(true);
+  });
+
+  // AC4 — pinning a new image changes the comparison with no second list.
+  it('pinning an image that holds the tool turns the same job runnable', async () => {
+    push('api', [
+      { path: CI, text: workflow([['deploy', SEAM, ['run: aws sts get-caller-identity']]]) },
+    ]);
+    expect(cond(await fleetReadinessService.readinessFor(target()), 'image_coverage').state).toBe(
+      'unmet',
+    );
+    world.image = [...IMAGE_TOOLS, 'aws'];
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', `${REGISTRY}/motir-ci-runner@sha256:${'cd'.repeat(32)}`);
+    expect((await fleetReadinessService.readinessFor(target())).ready).toBe(true);
+  });
+
+  // AC3 — anything that cannot be judged is never runnable.
+  it.each([
+    ['a computed command', ['run: $CLI deploy'], 'the computed command $CLI'],
+    [
+      'a computed action',
+      ['uses: ${{ matrix.action }}'],
+      'the computed action ${{ matrix.action }}',
+    ],
+    [
+      'an action with no action.yml',
+      ['uses: acme/gone@v1'],
+      'acme/gone@v1, which has no action.yml',
+    ],
+  ])('%s is unverified, never runnable', async (_label, steps, reason) => {
+    push('web', [{ path: CI, text: workflow([['build', SEAM, steps]]) }]);
+    const result = await fleetReadinessService.readinessFor(target());
+    expectOnly(result, 'image_coverage', 'unmet');
+    expect(cond(result, 'image_coverage').params['jobs']).toEqual([
+      expect.objectContaining({
+        jobId: 'build',
+        verdict: 'unverified',
+        missing: ['unverified'],
+        reason,
+      }),
+    ]);
+    expect(cond(result, 'image_coverage').message).toContain(`can't be judged: ${reason}`);
+  });
+
+  it('a workflow file that is not YAML is unverified', async () => {
+    push('web', [{ path: CI, text: 'jobs: [unclosed' }]);
+    const result = await fleetReadinessService.readinessFor(target());
+    expect(cond(result, 'image_coverage').params['jobs']).toEqual([
+      expect.objectContaining({ workflow: CI, jobId: '*', verdict: 'unverified' }),
+    ]);
+  });
+
+  it('a job asking for another OS is cannot-host, and a hosted job is listed apart', async () => {
+    push('api', [
+      {
+        path: CI,
+        text: workflow([
+          ['mac', ['motir-runner', 'macos-14'], ['run: git status']],
+          ['hosted', 'ubuntu-latest', ['run: gh pr list']],
+        ]),
+      },
+    ]);
+    const result = await fleetReadinessService.readinessFor(target());
+    expect(cond(result, 'image_coverage')).toMatchObject({
+      state: 'unmet',
+      params: {
+        jobs: [{ jobId: 'mac', verdict: 'cannot-host', reason: 'it asks for macos-14' }],
+        githubHostedJobs: [{ repoRef: `${ORG}/api`, workflow: CI, jobId: 'hosted' }],
+      },
     });
-    afterAll(() => {
-      ORG = 'acme-connected';
+    expect(cond(result, 'image_coverage').message).toContain(
+      "can't be hosted: it asks for macos-14",
+    );
+  });
+
+  // AC3 — a GitHub-refused read makes the condition unknown.
+  it.each([
+    ['the newest-commit read', () => world.head.set('web', 'fail')],
+    ['the workflow files read', () => world.files.delete('web')],
+    [
+      'a remote action read',
+      () => {
+        push('web', [{ path: CI, text: workflow([['build', SEAM, ['uses: acme/x@v1']]]) }]);
+        world.actions.set('acme/x', 403);
+      },
+    ],
+  ])('a refused %s ⇒ unknown, never met', async (_label, breakIt) => {
+    breakIt();
+    const result = await fleetReadinessService.readinessFor(target());
+    expectOnly(result, 'image_coverage', 'unknown');
+    expect(cond(result, 'image_coverage').reasonCode).toBe('read_failed');
+  });
+
+  it('a repository with no .github commit has no job to judge', async () => {
+    world.head.delete('web');
+    const result = await fleetReadinessService.readinessFor(target());
+    expect(result.ready).toBe(true);
+  });
+
+  it('the image side: unset, no label, unreadable', async () => {
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
+    expect(
+      cond(await fleetReadinessService.readinessFor(target()), 'image_coverage'),
+    ).toMatchObject({
+      state: 'unmet',
+      reasonCode: 'runner_image_unset',
+      params: { variable: 'MOTIR_RUNNER_IMAGE' },
     });
 
-    beforeEach(async () => {
-      await connectRepos(['motir-ai']);
-      world.visibility = new Map([
-        ['api', false],
-        ['web', false],
-        ['site', false],
-        ['motir-ai', true],
-      ]);
-      world.head.set('motir-ai', { sha: entry.sha, date: entry.measuredAt });
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', RUNNER_IMAGE);
+    world.image = 'unlabelled';
+    expect(
+      cond(await fleetReadinessService.readinessFor(target()), 'image_coverage'),
+    ).toMatchObject({
+      state: 'unmet',
+      reasonCode: 'image_tools_unrecorded',
+      params: { image: RUNNER_IMAGE, label: 'co.motir.ci-runner.tools' },
     });
 
-    it('a motir-co/motir-ai private repository is inventoried, and its image coverage is met', async () => {
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: shipped });
-      expect(cond(result, 'image_coverage')).toMatchObject({
-        state: 'met',
-        reasonCode: 'all_runnable',
-        params: { repositories: ['motir-co/motir-ai'] },
-      });
+    _resetRunnerImageToolsCache();
+    world.image = 503;
+    expect(
+      cond(await fleetReadinessService.readinessFor(target()), 'image_coverage'),
+    ).toMatchObject({
+      state: 'unknown',
+      reasonCode: 'image_unreadable',
+      params: { image: RUNNER_IMAGE, reason: 'refused' },
+    });
+  });
+});
+
+describe('imageCoverageFor — condition 9 alone, for the daily probe (MOTIR-10290)', () => {
+  it('answers what readinessFor answers for condition 9', async () => {
+    push('api', [{ path: CI, text: workflow([['deploy', SEAM, ['run: aws s3 ls']]]) }]);
+    const alone = await fleetReadinessService.imageCoverageFor(target());
+    const full = cond(await fleetReadinessService.readinessFor(target()), 'image_coverage');
+    expect(alone).toEqual(full);
+  });
+
+  it('reads the installation and the private set first', async () => {
+    world.install = 404;
+    expect(await fleetReadinessService.imageCoverageFor(target())).toMatchObject({
+      state: 'unknown',
+      reasonCode: 'app_not_readable',
+    });
+    world.install = 500;
+    expect(await fleetReadinessService.imageCoverageFor(target())).toMatchObject({
+      state: 'unknown',
+      reasonCode: 'read_failed',
+      params: { status: 500 },
+    });
+    world.install = 'ok';
+    world.visibility.delete('web');
+    expect(await fleetReadinessService.imageCoverageFor(target())).toMatchObject({
+      state: 'unknown',
+      reasonCode: 'read_failed',
+    });
+    world.visibility.set('web', false);
+    world.visibility.set('api', false);
+    expect(await fleetReadinessService.imageCoverageFor(target())).toMatchObject({
+      state: 'unmet',
+      reasonCode: 'no_private_repositories',
     });
   });
 
-  describe('a newer workflow commit that leaves the structure alone (MOTIR-8870)', () => {
-    const CI = '.github/workflows/ci.yml';
-    // `build` runs on the seam, as the recorded job does; `lint` keeps
-    // `ubuntu-latest` in use, so a move between the two leaves the digest put.
-    const ci = (steps: string, buildRunsOn = SEAM, extraJobs = '') =>
-      `jobs:\n  build:\n    runs-on: ${buildRunsOn}\n    steps:\n      - uses: actions/checkout@v4\n      - run: pnpm test\n${steps}  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: pnpm lint\n${extraJobs}`;
-    const measured = [{ path: CI, text: ci('') }];
-
-    function recorded(): FleetJobInventory {
-      const inv = inventory();
-      inv.repos[`${ORG}/api`]!.structureFingerprint = workflowFingerprint(measured);
-      return inv;
-    }
-
-    beforeEach(() => {
-      world.head.set('api', { sha: 'newer', date: '2026-10-12T00:00:00Z' });
-    });
-
-    it('a new step with tools the repository already uses ⇒ met', async () => {
-      world.files.set('api', [{ path: CI, text: ci('      - run: pnpm lint\n') }]);
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expect(result.ready).toBe(true);
-      expect(cond(result, 'image_coverage').state).toBe('met');
-    });
-
-    // MOTIR-10211: motir-infra#7's `verify` job, on the seam with known tools.
-    it('a job added on a runner and with tools the repository already uses ⇒ met', async () => {
-      const verify = `  verify:\n    runs-on: ${SEAM}\n    steps:\n      - run: pnpm test\n`;
-      world.files.set('api', [{ path: CI, text: ci('', SEAM, verify) }]);
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expect(result.ready).toBe(true);
-      expect(cond(result, 'image_coverage').state).toBe('met');
-    });
-
-    it('a job added on a runner the repository does not use yet ⇒ inventory_stale', async () => {
-      const mac = `  mac:\n    runs-on: macos-latest\n    steps:\n      - run: pnpm test\n`;
-      world.files.set('api', [{ path: CI, text: ci('', SEAM, mac) }]);
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
-    });
-
-    it('a recorded job moving to another runner the repository already uses ⇒ inventory_stale', async () => {
-      // `seam` keeps the seam in use, so the repository-wide runners are unchanged.
-      const moved = ci(
-        '',
-        'ubuntu-latest',
-        `  seam:\n    runs-on: ${SEAM}\n    steps:\n      - run: pnpm test\n`,
-      );
-      world.files.set('api', [{ path: CI, text: moved }]);
-      // The digest cannot see this move; the per-job runner check does.
-      expect(workflowFingerprint([{ path: CI, text: moved }])).toBe(workflowFingerprint(measured));
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expectOnly(result, 'image_coverage', 'unmet');
-      expect(cond(result, 'image_coverage')).toMatchObject({
-        reasonCode: 'inventory_stale',
-        params: { stale: [{ repository: `${ORG}/api`, measuredSha: 'sha-api', headSha: 'newer' }] },
-      });
-    });
-
-    it('a new executable ⇒ inventory_stale', async () => {
-      world.files.set('api', [{ path: CI, text: ci('      - run: gh pr list\n') }]);
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expectOnly(result, 'image_coverage', 'unmet');
-      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
-    });
-
-    it('a head whose files cannot be read ⇒ inventory_stale, never met', async () => {
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expectOnly(result, 'image_coverage', 'unmet');
-      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
-    });
-
-    it('invalid YAML at the head ⇒ inventory_stale', async () => {
-      world.files.set('api', [{ path: CI, text: 'jobs: [unclosed' }]);
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: recorded() });
-      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
-    });
-
-    it('an entry with no recorded fingerprint is stale on any newer commit, as before', async () => {
-      world.files.set('api', [{ path: CI, text: ci('') }]);
-      const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
-      expect(cond(result, 'image_coverage').reasonCode).toBe('inventory_stale');
-    });
+  it('throws FleetReadinessTargetNotFoundError for a project that does not exist', async () => {
+    await expect(
+      fleetReadinessService.imageCoverageFor({
+        projectId: 'nope',
+        workspaceId: fx.workspaceId,
+        org: ORG,
+      }),
+    ).rejects.toBeInstanceOf(FleetReadinessTargetNotFoundError);
   });
 });
 
@@ -828,7 +848,7 @@ describe('the reads that can fail, and the remaining shapes', () => {
 
   it('a refused visibility read ⇒ the three conditions that need the private set are unknown', async () => {
     world.visibility.delete('web');
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expect(result.ready).toBe(false);
     for (const key of ['app_repositories', 'delivery_attributable', 'image_coverage']) {
       expect(cond(result, key)).toMatchObject({
@@ -851,7 +871,7 @@ describe('the reads that can fail, and the remaining shapes', () => {
         json: async () => ({}),
       } as unknown as Response;
     });
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expect(cond(result, 'app_repositories')).toMatchObject({
       state: 'unknown',
       params: { status: null },
@@ -862,7 +882,7 @@ describe('the reads that can fail, and the remaining shapes', () => {
 
   it('a failed installation-repositories read ⇒ app_repositories unknown, the rest met', async () => {
     overrideFetch('/installation/repositories', () => json(502, { message: 'Bad Gateway' }));
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'app_repositories', 'unknown');
     expect(cond(result, 'app_repositories').params).toEqual({ status: 502 });
   });
@@ -878,7 +898,7 @@ describe('the reads that can fail, and the remaining shapes', () => {
           : row;
       },
     );
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'delivery_attributable', 'unmet');
     expect(cond(result, 'delivery_attributable').params).toMatchObject({
       path: 'mirrored',
@@ -897,7 +917,7 @@ describe('the reads that can fail, and the remaining shapes', () => {
         ? rows.map((r) => ({ ...r, workspaceId: 'another-workspace' }))
         : rows;
     });
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const result = await fleetReadinessService.readinessFor(target());
     expectOnly(result, 'delivery_attributable', 'unmet');
     expect(cond(result, 'delivery_attributable').params).toMatchObject({
       path: 'unmirrored',
@@ -908,51 +928,38 @@ describe('the reads that can fail, and the remaining shapes', () => {
   it('an attribution read that throws ⇒ delivery_attributable unknown, naming only the error class', async () => {
     const spy = vi.spyOn(githubRepoRepository, 'listByRepoId');
     spy.mockRejectedValueOnce(new RangeError('the private detail'));
-    const first = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const first = await fleetReadinessService.readinessFor(target());
     expectOnly(first, 'delivery_attributable', 'unknown');
     expect(cond(first, 'delivery_attributable')).toMatchObject({ reasonCode: 'read_failed' });
     expect(cond(first, 'delivery_attributable').message).toContain(': RangeError.');
     expect(JSON.stringify(first)).not.toContain('the private detail');
 
     spy.mockRejectedValueOnce('not an error');
-    const second = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const second = await fleetReadinessService.readinessFor(target());
     expect(cond(second, 'delivery_attributable').message).toContain(': read failed.');
   });
 
   it('a runner-group read that throws ⇒ runner_group unknown, naming only the error class', async () => {
     const spy = vi.spyOn(projectRunnerGroupService, 'readForOrg');
     spy.mockRejectedValueOnce(new SyntaxError('the private detail'));
-    const first = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const first = await fleetReadinessService.readinessFor(target());
     expectOnly(first, 'runner_group', 'unknown');
     expect(cond(first, 'runner_group')).toMatchObject({ reasonCode: 'read_failed' });
     expect(cond(first, 'runner_group').message).toContain('(SyntaxError)');
     expect(JSON.stringify(first)).not.toContain('the private detail');
 
     spy.mockRejectedValueOnce(42);
-    const second = await fleetReadinessService.readinessFor(target(), { inventory: inventory() });
+    const second = await fleetReadinessService.readinessFor(target());
     expect(cond(second, 'runner_group').message).toContain('(read failed)');
   });
 
-  it('two private repositories missing from the manifest are named in the plural', async () => {
-    const inv = inventory();
-    delete inv.repos[`${ORG}/web`];
-    delete inv.repos[`${ORG}/api`];
-    const result = await fleetReadinessService.readinessFor(target(), { inventory: inv });
-    expectOnly(result, 'image_coverage', 'unmet');
-    expect(cond(result, 'image_coverage')).toMatchObject({
-      reasonCode: 'not_inventoried',
-      params: { repositories: [`${ORG}/api`, `${ORG}/web`] },
-    });
-    expect(cond(result, 'image_coverage').message).toContain('are not in the fleet job inventory');
-    expect(cond(result, 'image_coverage').message).toContain('their jobs');
-  });
-
   it('one job not runnable is named in the singular', async () => {
-    const result = await fleetReadinessService.readinessFor(target(), {
-      inventory: inventory({ web: [job('lint', { verdict: 'needs-image', missing: [] })] }),
-    });
+    push('web', [{ path: CI, text: workflow([['lint', SEAM, ['run: shellcheck x.sh']]]) }]);
+    const result = await fleetReadinessService.readinessFor(target());
     expect(cond(result, 'image_coverage').message).toMatch(/^1 job cannot run/);
-    expect(cond(result, 'image_coverage').message).toContain('lint (needs-image)');
+    expect(cond(result, 'image_coverage').message).toContain(
+      `${ORG}/web ci.yml lint (needs shellcheck, which the image lacks)`,
+    );
   });
 });
 
@@ -978,29 +985,14 @@ describe('requestsFleetRunner (MOTIR-8813)', () => {
   });
 });
 
-describe('the checked-in manifest (MOTIR-8813 · MOTIR-8815)', () => {
-  it("every fleet-bound job in project MOTIR's private repositories is runnable", () => {
-    const gaps = Object.values(checkedInInventory.repos)
-      .filter((r) => r.visibility === 'private')
-      .flatMap((r) =>
-        r.workflows.flatMap((w) =>
-          w.jobs
-            .filter((j) => requestsFleetRunner(j.runsOn))
-            .filter((j) => j.verdict !== 'runnable' || j.missing.includes('unverified'))
-            .map((j) => `${r.repoRef} ${w.path} ${j.jobId} ${j.missing.join(',')}`),
-        ),
-      );
-    expect(gaps).toEqual([]);
-  });
-});
-
 describe('the boundary', () => {
   it('throws FleetReadinessTargetNotFoundError for a project that does not exist', async () => {
     await expect(
-      fleetReadinessService.readinessFor(
-        { projectId: 'nope', workspaceId: fx.workspaceId, org: ORG },
-        { inventory: inventory() },
-      ),
+      fleetReadinessService.readinessFor({
+        projectId: 'nope',
+        workspaceId: fx.workspaceId,
+        org: ORG,
+      }),
     ).rejects.toBeInstanceOf(FleetReadinessTargetNotFoundError);
   });
 

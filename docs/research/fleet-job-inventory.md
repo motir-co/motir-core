@@ -2,7 +2,67 @@
 
 **Story:** MOTIR-8699 · **Card:** MOTIR-8701 · **Measured:** 2026-10-15
 **Manifest:** [`lib/ciFleet/fleetJobInventory.json`](../../lib/ciFleet/fleetJobInventory.json)
-(read by the readiness verdict, MOTIR-8713; flipped tool by tool by the image card, MOTIR-8710)
+(public repositories only since MOTIR-10290, as a research record; nothing reads it at runtime)
+
+## Image coverage is computed, not recorded (MOTIR-10290, 2026-11-03)
+
+The readiness verdict's ninth condition, `image_coverage`, no longer reads this
+file. For each PRIVATE repository of the project in the org, it reads, through the
+provisioning App:
+
+1. the newest commit on the default branch that touched `.github`
+   (`latestWorkflowCommit`, `commits?path=.github`), so a change to a local action
+   counts as much as a change to a workflow;
+2. every workflow file and local `action.yml` at that commit
+   (`readWorkflowSources`);
+3. the `action.yml` of every remote action a fleet job uses, following composite
+   actions four levels deep (`readActionMetadata`).
+
+It then judges every job whose `runs-on` can resolve to the fleet
+(`lib/ciFleet/jobCoverage.ts`) against the **tool list of the runner image this
+deployment pins** (`MOTIR_RUNNER_IMAGE`), read from that image's own
+`co.motir.ci-runner.tools` OCI label through its registry
+(`lib/services/runnerImageToolsService.ts`). The image's release writes that
+label: `runner-image.yml` measures the built image with
+`infra/ci-runner/smoke/list-tools.sh` (`compgen -c` as the `runner` user, with no
+profile), stamps the list on the push, and re-measures the published image by
+digest, failing the release unless the label matches it. So **pinning a new image
+updates the comparison**, and no list of the image's tools is kept by hand.
+
+How a job is judged:
+
+- a `run:` step needs its shell's interpreter and every command word in its body
+  (`lib/ciFleet/workflowJobs.ts`'s shell parser: quotes, pipelines, `$(…)`,
+  heredocs, functions, `sudo`/`env`/`xargs` and friends);
+- a JavaScript action needs nothing; a Docker action, a `docker://` step, a job
+  `container:` or `services:` needs `docker`; a composite action is judged by its
+  own steps;
+- a known setup action (`actions/setup-node`, `pnpm/action-setup`,
+  `superfly/flyctl-actions/setup-flyctl`, …) and an install command
+  (`pipx install`, `npm i -g`, `apt-get install`, …) provide their tools to the
+  steps after them;
+- a job asking for macOS or Windows is `cannot-host`.
+
+**Anything that cannot be judged is never runnable.** A command word built from a
+variable, a `uses:` built from an expression, an action with no `action.yml` at
+its ref, an action of a kind the judge does not know, a reusable workflow in
+another repository, or a workflow file that is not valid YAML makes the job
+`unverified`, which the page lists as "can't be judged" with the reason. A read
+GitHub refuses makes the condition `unknown`, and so does a registry that does
+not answer for the image. An image released before the label existed reads
+`image_tools_unrecorded` (unmet): release the runner image from current
+motir-core and pin its digest.
+
+An unmet verdict names each job: repository, workflow, job and the tools the
+image lacks. The daily probe (`system.daily-health-check`, step
+`fleet-image-coverage`, `lib/services/fleetImageCoverageProbeService.ts`) asks
+the same condition of every pair `/admin/fleet-settings` offers and fails the run
+on a definite gap; a refused read is `indeterminate` and not loud.
+
+The dated paragraphs below are the history of the hand-kept inventory, which
+judged the private repositories until this change. The **Re-measuring an entry**
+steps they refer to are gone: there is no entry of a private repository to
+re-measure.
 
 **Re-measured 2026-10-16 (MOTIR-8813):** motir-ai, motir-gateway and motir-meta at
 their `main` heads, after the seam pull requests (motir-ai#760, motir-gateway#105,
@@ -190,27 +250,15 @@ own file. So every job key in every file appears exactly once.
 | `motir-skills` @ `08d08eb15`                 | 1                        | 2               |
 | `nextjs-prisma-vercel-starter` @ `2856141b9` | 3                        | 8               |
 
-### Re-measuring an entry
+### When the image-coverage probe fails
 
-Whenever the daily probe fails with `FleetInventoryStaleError`, or the readiness
-verdict reads `inventory_stale`, re-measure the named repository:
-
-1. Check out the repository and fetch its default branch; note the head sha.
-2. Read every workflow and composite action at that sha, as above, and update the
-   entry's `workflows`: add each job the probe listed as not yet recorded, move
-   each job it listed as moved, and give every job a verdict against
-   `infra/ci-runner/Dockerfile`. A job not read through to its tools is recorded
-   `needs-image` with `missing: ["unverified"]`, never `runnable`.
-3. Set `sha`, `measuredAt` and `jobCount`, and record the digest:
-
-   ```sh
-   pnpm exec tsx scripts/ci-fleet/fingerprint-workflows.ts <checkout> <sha>
-   ```
-
-4. Add a dated paragraph at the top of this file saying what changed and why
-   each new job has its verdict.
-
-The probe clears on the first daily run after the merge.
+`FleetImageCoverageGapError` names each job the pinned image cannot run, and the
+tools it lacks. Add the tool to `infra/ci-runner/Dockerfile` and release the
+runner image (`runner-v*`), then pin the new digest in `MOTIR_RUNNER_IMAGE`; or
+move the job off the fleet (`runs-on` without the `MOTIR_RUNNER` seam). A job
+listed as "can't be judged" is fixed in its workflow: name the command or the
+action it runs, so the judge can read it. Nothing in this file is edited; the
+verdict clears on the next read.
 
 **What this run could not do:** `docker run` the published image. This session
 has a Docker client but no daemon (`docker info` → _failed to connect to the

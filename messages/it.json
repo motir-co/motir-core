@@ -12674,9 +12674,10 @@
         "not_attributable": "Un job in coda da {repositories} non verrebbe attribuito al progetto {project}, quindi resterebbe in coda finché GitHub non lo fa scadere. Ricollega il repository al progetto in modo che la sua riga speculare sia aggiornata.",
         "no_runner_group": "Il progetto {project} non ha un gruppo di runner in {org}. Un operatore esegue {script} --project {project}.",
         "sync_pending": "Il gruppo di runner del progetto in {org} non è sincronizzato con i suoi repository. Un operatore esegue {script} --project {project}.",
-        "jobs_not_runnable": "{count, plural, one {# job non può} other {# job non possono}} ancora girare sull’immagine runner della flotta. Chi mantiene l’immagine della flotta aggiunge lo strumento mancante; un job che richiede un altro sistema operativo resta non eseguibile finché non esce dall’insieme privato.",
-        "not_inventoried": "{repositories} non {count, plural, one {è} other {sono}} nell’inventario dei job della flotta, quindi nessuno ha verificato che l’immagine runner possa eseguire i {count, plural, one {suoi} other {loro}} job. Chi mantiene l’inventario lo riesegue.",
-        "inventory_stale": "I workflow di {repositories} sono cambiati dopo che l’inventario dei job della flotta li ha misurati. Chi mantiene l’inventario lo riesegue.",
+        "jobs_not_runnable": "{count, plural, one {# job non può} other {# job non possono}} ancora girare sull’immagine runner della flotta. Chi mantiene l’immagine della flotta aggiunge lo strumento mancante; un job che non si può valutare resta non eseguibile finché il suo workflow non indica cosa esegue; un job che richiede un altro sistema operativo resta non eseguibile finché non esce dall’insieme privato.",
+        "runner_image_unset": "Questo deployment non fissa alcuna immagine runner ({variable} non è impostata), quindi nessun job può essere valutato rispetto a un’immagine. Un operatore fissa il digest dell’immagine runner.",
+        "image_tools_unrecorded": "L’immagine runner fissata {image} non registra alcun elenco di strumenti (l’etichetta {label}), quindi i suoi job non si possono valutare. Chi mantiene l’immagine della flotta la ripubblica dall’attuale motir-core e fissa il nuovo digest.",
+        "image_unreadable": "Impossibile leggere l’elenco di strumenti dell’immagine runner fissata {image}. Conta come non soddisfatta finché una verifica non riesce.",
         "read_failed": "Impossibile verificare: GitHub ha risposto HTTP {status}. Conta come non soddisfatta finché una verifica non riesce.",
         "read_unreachable": "Impossibile verificare: GitHub non è raggiungibile. Conta come non soddisfatta finché una verifica non riesce.",
         "read_failedNoStatus": "Impossibile verificare. Conta come non soddisfatta finché una verifica non riesce.",
@@ -12685,8 +12686,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} — manca {tools}",
         "cannotHost": "{repo} · {workflow} · {job} — non ospitabile: {reason}",
+        "unverified": "{repo} · {workflow} · {job} — non valutabile: {reason}",
         "more": "+{count} altri",
-        "scope": "Questo riguarda l’immagine inventariata costruita da main, non l’immagine avviata in produzione."
+        "scope": "Valutato dai workflow di ogni repository al suo commit più recente, rispetto agli strumenti registrati dall’immagine runner avviata in produzione."
       },
       "confirm": {
         "onTitle": "Attivare la CI sulla flotta per {org}?",

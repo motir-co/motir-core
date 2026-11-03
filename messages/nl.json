@@ -12674,9 +12674,10 @@
         "not_attributable": "Een job in de wachtrij uit {repositories} zou niet aan project {project} worden toegerekend en zou dus in de wachtrij blijven tot GitHub hem laat verlopen. Koppel de repository opnieuw aan het project zodat de spiegelrij actueel is.",
         "no_runner_group": "Project {project} heeft geen runnergroep in {org}. Een operator voert {script} --project {project} uit.",
         "sync_pending": "De runnergroep van het project in {org} is niet gesynchroniseerd met de repository's. Een operator voert {script} --project {project} uit.",
-        "jobs_not_runnable": "{count, plural, one {# job kan} other {# jobs kunnen}} nog niet draaien op het runnerimage van de vloot. Wie het vlootimage onderhoudt, voegt de ontbrekende tool toe; een job die een ander besturingssysteem nodig heeft, blijft niet uitvoerbaar tot hij de privéset verlaat.",
-        "not_inventoried": "{repositories} {count, plural, one {staat} other {staan}} niet in de jobinventaris van de vloot, dus niemand heeft gecontroleerd of het runnerimage {count, plural, one {de jobs ervan} other {hun jobs}} kan draaien. Wie de inventaris onderhoudt, voert hem opnieuw uit.",
-        "inventory_stale": "De workflows van {repositories} zijn gewijzigd nadat de jobinventaris van de vloot ze heeft gemeten. Wie de inventaris onderhoudt, voert hem opnieuw uit.",
+        "jobs_not_runnable": "{count, plural, one {# job kan} other {# jobs kunnen}} nog niet draaien op het runnerimage van de vloot. Wie het vlootimage onderhoudt, voegt de ontbrekende tool toe; een job die niet te beoordelen is, blijft niet uitvoerbaar tot zijn workflow noemt wat hij uitvoert; een job die een ander besturingssysteem nodig heeft, blijft niet uitvoerbaar tot hij de privéset verlaat.",
+        "runner_image_unset": "Deze deployment pint geen runnerimage vast ({variable} is niet ingesteld), dus geen enkele job kan ertegen worden beoordeeld. Een operator pint de digest van het runnerimage vast.",
+        "image_tools_unrecorded": "Het vastgepinde runnerimage {image} legt geen toollijst vast (het label {label}), dus de jobs ervan zijn niet te beoordelen. Wie het vlootimage onderhoudt, publiceert het opnieuw vanuit de huidige motir-core en pint de nieuwe digest vast.",
+        "image_unreadable": "Kon de toollijst van het vastgepinde runnerimage {image} niet lezen. Telt als niet voldaan tot een controle slaagt.",
         "read_failed": "Kon dit niet controleren: GitHub antwoordde met HTTP {status}. Telt als niet voldaan tot een controle slaagt.",
         "read_unreachable": "Kon dit niet controleren: GitHub was niet bereikbaar. Telt als niet voldaan tot een controle slaagt.",
         "read_failedNoStatus": "Kon dit niet controleren. Telt als niet voldaan tot een controle slaagt.",
@@ -12685,8 +12686,9 @@
       "jobs": {
         "missing": "{repo} · {workflow} · {job} — ontbreekt: {tools}",
         "cannotHost": "{repo} · {workflow} · {job} — kan niet worden gehost: {reason}",
+        "unverified": "{repo} · {workflow} · {job} — niet te beoordelen: {reason}",
         "more": "+{count} meer",
-        "scope": "Dit betreft het geïnventariseerde image dat uit main is gebouwd, niet het image dat productie start."
+        "scope": "Beoordeeld aan de hand van de workflows van elke repository bij de nieuwste commit, tegen de tools die het runnerimage dat productie start vastlegt."
       },
       "confirm": {
         "onTitle": "Vloot-CI aanzetten voor {org}?",

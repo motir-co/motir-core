@@ -6,7 +6,7 @@ import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak'
 import type { MonitorConfigVerdict } from '@/lib/monitors';
 import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe';
 import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
-import type { FleetInventoryDriftVerdictDTO } from '@/lib/dto/fleetInventoryDrift';
+import type { FleetImageCoverageVerdictDTO } from '@/lib/dto/fleetImageCoverage';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -159,17 +159,18 @@ import type { FleetInventoryDriftVerdictDTO } from '@/lib/dto/fleetInventoryDrif
 // and it says so in the message. It is a fail-loud signal, not a stop — the
 // stop is MOTIR-1907's, and it is not this job's to perform.
 //
-// As of MOTIR-10211 it carries a NINTH probe, FLEET INVENTORY DRIFT: a private
-// repository whose workflows moved past what `lib/ciFleet/fleetJobInventory.json`
-// measured, by the readiness verdict's own rule. Readiness then holds image
-// coverage at Not met and the Motir-CI-on-fleet switch cannot be turned on, and
-// before this probe the only way to learn it was to open /admin/fleet-settings:
-// motir-infra#7's `verify` job sat unnoticed for five days that way.
+// As of MOTIR-10290 it carries a NINTH probe, FLEET IMAGE COVERAGE: readiness
+// condition 9 asked of every pair the fleet console offers — each private
+// repository's jobs at its newest `.github` commit, judged against the tool list
+// the pinned runner image records about itself. A job the image cannot run holds
+// the Motir-CI-on-fleet switch off, and before a probe the only way to learn it
+// was to open /admin/fleet-settings: motir-infra#7's `verify` job sat unnoticed
+// for five days that way (MOTIR-10211, whose snapshot-drift probe this replaces).
 //
-// ⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES: re-measure the named repository at the
-// head sha the message names and record the entry (docs/research/fleet-job-
-// inventory.md § Re-measuring an entry). The probe writes no verdict itself — a
-// job's runnability is a judgement against the runner image it cannot make.
+// ⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES: the message names the repository,
+// workflow, job and tool. Add the tool to the runner image and release it, or
+// move the job off the fleet. A pinned image with no tool list is released again
+// from current motir-core and its digest pinned.
 //
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
@@ -239,11 +240,11 @@ export interface DailyHealthCheckResult {
    *  fleet (MOTIR-1934) — recorded on the healthy tick too, with how many runs it
    *  read, so a green `ok` over zero runs is distinguishable from one over many. */
   hostedRuns: HostedRunProbeVerdictDTO;
-  /** Whether every private repository's fleet inventory entry still describes
-   *  its workflows (MOTIR-10211) — recorded on the healthy tick too, with the
-   *  repositories it read, so `current` over four repositories is
-   *  distinguishable from `indeterminate` or `not_applicable`. */
-  fleetInventory: FleetInventoryDriftVerdictDTO;
+  /** Whether every job a connected org sends to the fleet can run on the pinned
+   *  runner image (MOTIR-10290) — recorded on the healthy tick too, with each
+   *  pair's condition, so `runnable` is distinguishable from `indeterminate` or
+   *  `not_applicable`. */
+  fleetImageCoverage: FleetImageCoverageVerdictDTO;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -540,39 +541,25 @@ export class HostedRunInOwnedOrgError extends Error {
 }
 
 /**
- * Thrown when a private repository's workflows moved past its fleet inventory
- * entry (MOTIR-10211): the readiness verdict reads `inventory_stale`, so the
- * Motir-CI-on-fleet switch cannot be turned on until the entry is re-measured.
- * The message names each repository, both shas, what moved and the jobs a
- * re-measure must add, then the re-measure path.
+ * Thrown when a job a connected org sends to the fleet cannot run on the pinned
+ * runner image, or the image records no tool list (MOTIR-10290): readiness reads
+ * image coverage as unmet, so the Motir-CI-on-fleet switch cannot be turned on.
+ * The message is each pair's own condition message, which names the repository,
+ * workflow, job and tool.
  */
-export class FleetInventoryStaleError extends Error {
-  constructor(readonly verdict: Extract<FleetInventoryDriftVerdictDTO, { verdict: 'stale' }>) {
-    const why: Record<string, string> = {
-      no_fingerprint: 'the entry records no structure fingerprint',
-      digest_moved: 'a new runner, reusable workflow, action, executable or shell',
-      job_moved: 'a recorded job changed its runner or the workflow it calls',
-      invalid_yaml: 'a workflow file at the head is not valid YAML',
-    };
-    const repos = verdict.stale
-      .map(
-        (s) =>
-          `${s.repository} (measured ${s.measuredSha.slice(0, 9)}, head ${s.headSha.slice(0, 9)}: ` +
-          `${why[s.reason]}` +
-          `${s.movedJobs.length ? `; moved: ${s.movedJobs.join(', ')}` : ''}` +
-          `${s.addedJobs.length ? `; not yet recorded: ${s.addedJobs.join(', ')}` : ''})`,
-      )
-      .join('; ');
+export class FleetImageCoverageGapError extends Error {
+  constructor(readonly verdict: Extract<FleetImageCoverageVerdictDTO, { verdict: 'gap' }>) {
+    const gaps = verdict.pairs
+      .filter((p) => p.state === 'unmet')
+      .map((p) => `${p.projectKey} on ${p.org}: ${p.message}`)
+      .join(' | ');
     super(
-      `${verdict.stale.length} private repositor${verdict.stale.length === 1 ? 'y has' : 'ies have'} ` +
-        `workflows the fleet job inventory no longer describes: ${repos}. The readiness verdict ` +
-        `reads image coverage as inventory_stale, so the Motir-CI-on-fleet switch cannot be ` +
-        `turned on. Re-measure each repository at its head and record the entry in ` +
-        `lib/ciFleet/fleetJobInventory.json, its structureFingerprint from ` +
-        `\`pnpm exec tsx scripts/ci-fleet/fingerprint-workflows.ts <checkout> <sha>\` ` +
-        `(docs/research/fleet-job-inventory.md § Re-measuring an entry).`,
+      `The fleet runner image cannot run every job sent to it, so the Motir-CI-on-fleet ` +
+        `switch cannot be turned on. ${gaps} Add the tool to infra/ci-runner/Dockerfile and ` +
+        `release the runner image, or move the job off the fleet ` +
+        `(docs/research/fleet-job-inventory.md).`,
     );
-    this.name = 'FleetInventoryStaleError';
+    this.name = 'FleetImageCoverageGapError';
   }
 }
 
@@ -619,8 +606,8 @@ export const dailyHealthCheck = defineJob(
     const hostedRuns = await ctx.step.run('hosted-run-probe', () =>
       services.hostedRunProbe.check(),
     );
-    const fleetInventory = await ctx.step.run('fleet-inventory-drift', () =>
-      services.fleetInventoryDrift.check(),
+    const fleetImageCoverage = await ctx.step.run('fleet-image-coverage', () =>
+      services.fleetImageCoverage.check(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
@@ -716,10 +703,12 @@ export const dailyHealthCheck = defineJob(
     // treats an unconfigured provider.
     if (hostedRuns.verdict === 'hosted_runs') throw new HostedRunInOwnedOrgError(hostedRuns);
 
-    // The INVENTORY probe (MOTIR-10211). Only `stale` is loud: `indeterminate` is
-    // a GitHub read that failed, and `not_applicable` a deployment with no
-    // provisioning App. Both are on the row either way.
-    if (fleetInventory.verdict === 'stale') throw new FleetInventoryStaleError(fleetInventory);
+    // The IMAGE-COVERAGE probe (MOTIR-10290). Only `gap` is loud: `indeterminate`
+    // is a read GitHub or the registry refused, and `not_applicable` a deployment
+    // that runs no fleet. Both are on the row either way.
+    if (fleetImageCoverage.verdict === 'gap') {
+      throw new FleetImageCoverageGapError(fleetImageCoverage);
+    }
 
     return {
       ...DAILY_HEALTH_CHECK_PAYLOAD,
@@ -732,7 +721,7 @@ export const dailyHealthCheck = defineJob(
       monitorConfig,
       credentialExpiry,
       hostedRuns,
-      fleetInventory,
+      fleetImageCoverage,
     };
   },
 );
