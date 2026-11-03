@@ -348,6 +348,63 @@ describe('dispatchRunRepository', () => {
     expect(page2[0]!.id).not.toBe(page1[1]!.id);
   });
 
+  it('narrows a card’s run history by status in the query, not the page (MOTIR-10286)', async () => {
+    const f = await seedFixture();
+    const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
+    const { dispatchRunCardRepository } =
+      await import('@/lib/repositories/dispatchRunCardRepository');
+
+    // Oldest first: the only failed run is the OLDEST, behind two newer ones.
+    const ids: string[] = [];
+    for (const [i, status] of (['failed', 'succeeded', 'running'] as const).entries()) {
+      await bound(f.workspaceId, async (tx) => {
+        const run = await dispatchRunRepository.create(
+          {
+            workspace: { connect: { id: f.workspaceId } },
+            project: { connect: { id: f.projectId } },
+            command: 'run',
+            status,
+            startedAt: new Date(Date.UTC(2026, 7, 20 + i)),
+          },
+          tx,
+        );
+        ids.push(run.id);
+        await dispatchRunCardRepository.createMany(
+          [
+            {
+              workspaceId: f.workspaceId,
+              dispatchRunId: run.id,
+              workItemId: f.childAId,
+              position: 0,
+            },
+          ],
+          tx,
+        );
+      });
+    }
+    const [failed, succeeded, running] = ids;
+
+    const onlyFailed = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByWorkItem(f.childAId, { take: 1, statuses: ['failed'] }, tx),
+    );
+    expect(onlyFailed.map((r) => r.id)).toEqual([failed]);
+
+    const two = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByWorkItem(
+        f.childAId,
+        { take: 10, statuses: ['running', 'failed'] },
+        tx,
+      ),
+    );
+    expect(two.map((r) => r.id)).toEqual([running, failed]);
+
+    // An empty list narrows nothing — the same as leaving it out.
+    const everything = await bound(f.workspaceId, (tx) =>
+      dispatchRunRepository.listByWorkItem(f.childAId, { take: 10, statuses: [] }, tx),
+    );
+    expect(everything.map((r) => r.id)).toEqual([running, succeeded, failed]);
+  });
+
   it('locks the terminal state FOR UPDATE, and the close is read-derived from it', async () => {
     const f = await seedFixture();
     const { dispatchRunRepository } = await import('@/lib/repositories/dispatchRunRepository');
