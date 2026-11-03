@@ -875,3 +875,139 @@ describe('Stop gives up on the job still running', () => {
     warn.mockRestore();
   });
 });
+
+describe('the shipped-product research rides the session (MOTIR-10284)', () => {
+  const RESEARCH = {
+    version: 1,
+    covered: ['Let people export the issue list, like Linear does.'],
+    unchecked: null,
+    decisions: [
+      {
+        id: 'd1',
+        question: 'Does the export follow the active filters?',
+        ways: [
+          {
+            way: 'It exports the filtered view.',
+            products: [
+              { name: 'Linear', source: 'https://linear.app/docs/exporting-data' },
+              { name: 'Jira', source: 'https://support.atlassian.com/jira/docs/export-issues/' },
+            ],
+          },
+        ],
+        status: 'settled',
+        note: null,
+      },
+    ],
+  };
+  const sharpenOf = (i: number) => jobs.submitted[i]!.context.sharpen as Record<string, unknown>;
+
+  it('a plan session sends none before a turn returns one, then sends the stored record back', async () => {
+    const planId = await plannedPlan();
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    expect('research' in sharpenOf(0)).toBe(false);
+
+    succeed(opened.jobId!, { ...questionTurn(), research: RESEARCH });
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    const row = await adminDb.sharpenSession.findUniqueOrThrow({
+      where: { id: opened.session.id },
+    });
+    expect(row.research).toEqual(RESEARCH);
+
+    const acted = await aiSharpenService.act(opened.session.id, 'answer', { readingId: 'a' }, pctx);
+    expect(sharpenOf(1).research).toEqual(RESEARCH);
+
+    // A turn that returns no record leaves the stored one as it was.
+    succeed(acted.jobId!, questionTurn({ ...QUESTION, id: 'q2', text: 'Which format?' }, SETTLED));
+    await aiSharpenService.settle(opened.session.id, acted.jobId!, pctx);
+    await aiSharpenService.act(opened.session.id, 'skip', {}, pctx);
+    expect(sharpenOf(2).research).toEqual(RESEARCH);
+  });
+
+  it('a turn that failed after the research ran keeps its record, and Try again sends it', async () => {
+    const planId = await plannedPlan();
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    jobs.results.set(opened.jobId!, {
+      status: 'succeeded',
+      result: {
+        sharpenTurn: {
+          kind: 'unavailable',
+          question: null,
+          settled: [],
+          assumptions: [],
+          writeBack: null,
+          unavailableReason: 'turn_failed — gateway down',
+          research: RESEARCH,
+        },
+      },
+    });
+    const r = await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+    expect(r.outcome).toBe('failed');
+    const row = await adminDb.sharpenSession.findUniqueOrThrow({
+      where: { id: opened.session.id },
+    });
+    expect(row.research).toEqual(RESEARCH);
+    expect(row.pendingQuestion).toBeNull();
+
+    await aiSharpenService.resubmit(opened.session.id, opened.turnId!, pctx);
+    expect(sharpenOf(1).research).toEqual(RESEARCH);
+  });
+
+  it('a plan with no conversation behind it sends what it says it is about', async () => {
+    const planId = await plannedPlan();
+    await adminDb.plan.update({
+      where: { id: planId },
+      data: { title: '  Export the issue list  ', summary: 'As a file.' },
+    });
+    await aiSharpenService.open({ planId }, pctx);
+    expect(sharpenOf(0).subject).toBe('Export the issue list\n\nAs a file.');
+  });
+
+  it('a plan that says nothing about itself sends no subject', async () => {
+    const planId = await plannedPlan();
+    await adminDb.plan.update({ where: { id: planId }, data: { title: null, summary: ' ' } });
+    await aiSharpenService.open({ planId }, pctx);
+    expect('subject' in sharpenOf(0)).toBe(false);
+  });
+
+  it('a conversation session keeps it too, and the newest record replaces the last', async () => {
+    const session = await adminDb.planChangeSession.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        createdById: fx.ownerId,
+        scopeKey: '',
+        targetKeys: [],
+        lastActivityAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+    await adminDb.planChangeTurn.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        sessionId: session.id,
+        seq: 0,
+        role: 'user',
+        body: 'Let people export the issue list, like Linear does.',
+      },
+    });
+    const opened = await aiSharpenService.open({ conversationId: session.id }, pctx);
+    succeed(opened.jobId!, { ...questionTurn(), research: RESEARCH });
+    await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
+
+    const acted = await aiSharpenService.act(
+      opened.session.id,
+      'own_words',
+      { text: 'Email it to me too.' },
+      pctx,
+    );
+    expect(sharpenOf(1).research).toEqual(RESEARCH);
+
+    const widened = { ...RESEARCH, covered: [...RESEARCH.covered, 'Email it to me too.'] };
+    succeed(acted.jobId!, {
+      ...questionTurn({ ...QUESTION, id: 'q2', text: 'Which format?' }),
+      research: widened,
+    });
+    await aiSharpenService.settle(opened.session.id, acted.jobId!, pctx);
+    await aiSharpenService.act(opened.session.id, 'skip', {}, pctx);
+    expect(sharpenOf(2).research).toEqual(widened);
+  });
+});

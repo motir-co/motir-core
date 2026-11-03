@@ -198,3 +198,48 @@ describe('parseSharpenTurn — the requirement a grilling wrote (MOTIR-10255)', 
     expect(ended(requirement)).toBeNull();
   });
 });
+
+describe('parseSharpenTurn — the shipped-product research (MOTIR-10284)', () => {
+  const record = {
+    version: 1,
+    covered: ['Export like Linear does.'],
+    unchecked: null,
+    decisions: [{ id: 'd1', question: 'Filters?', ways: [], status: 'settled', note: null }],
+  };
+  const turn = (research: unknown) =>
+    parseSharpenTurn({ kind: 'question', question, ...base, research });
+
+  it('keeps the record as motir-ai sent it, reading nothing inside it', () => {
+    expect(turn(record)?.research).toEqual(record);
+  });
+
+  it.each([
+    ['absent', undefined],
+    ['null', null],
+    ['a list', [record]],
+    ['a string', 'record'],
+  ])('carries no record when it is %s, and the turn still lands', (_label, research) => {
+    const parsed = turn(research);
+    expect(parsed?.kind).toBe('question');
+    expect(parsed).not.toHaveProperty('research');
+  });
+
+  it('drops a record past the cap rather than cutting it or failing the turn', () => {
+    const big = { ...record, covered: ['x'.repeat(SHARPEN_CAPS.research)] };
+    const parsed = turn(big);
+    expect(parsed?.kind).toBe('question');
+    expect(parsed).not.toHaveProperty('research');
+  });
+
+  it('holds a settled decision’s recommendation, which names its sources, to the text cap', () => {
+    const recommendation = `Exports the filtered view — as shipped products do: ${'Linear (https://linear.app/docs); '.repeat(12)}`;
+    const parsed = parseSharpenTurn({
+      kind: 'question',
+      question,
+      settled: [],
+      assumptions: [{ questionId: 'research-d1', question: 'Filters?', recommendation, why: 'W' }],
+      writeBack: null,
+    });
+    expect(parsed?.assumptions[0]?.recommendation).toBe(recommendation);
+  });
+});

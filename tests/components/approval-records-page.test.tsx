@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import type { ReactElement } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import en from '@/messages/en.json';
@@ -93,6 +93,15 @@ const ACCESS_DENIED = [
   en.triage.noAccessDescription,
   en.issueViews.refNoAccessTitle,
 ];
+
+// The page module's first, cold import pulls in most of the app. On a loaded CI shard
+// that alone ran past the suite's 15 s testTimeout, and it was charged to whichever
+// test ran first. Load it once here, under its own budget, so each test measures only
+// its own render.
+const COLD_IMPORT_TIMEOUT_MS = 120_000;
+beforeAll(async () => {
+  await import('@/app/(authed)/approvals/page');
+}, COLD_IMPORT_TIMEOUT_MS);
 
 beforeEach(() => {
   vi.clearAllMocks();

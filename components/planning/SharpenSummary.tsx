@@ -33,6 +33,36 @@ const GROUP_OF: Record<GrillingBranch, 'behaviour' | 'scopeEdge' | 'constraints'
 };
 const GROUPS = ['behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const;
 
+/** A source URL in a recommendation: http(s), up to a space or the `)` / `;` around it. */
+const SOURCE_URL = /(https?:\/\/[^\s);]+)/g;
+
+/**
+ * A planner's recommendation with every source in it a link (MOTIR-10284): a decision
+ * settled from research names where each product was read, and the person can open it.
+ */
+export function WithSourceLinks({ text }: { text: string }) {
+  const parts = text.split(SOURCE_URL);
+  return (
+    <>
+      {parts.map((part, i) =>
+        i % 2 === 1 ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-all text-(--el-link) underline hover:text-(--el-link-pressed)"
+          >
+            {part}
+          </a>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 export interface SharpenSummaryProps {
   session: SharpenSessionDto;
 }
@@ -109,7 +139,9 @@ export function SharpenSummary({ session }: SharpenSummaryProps) {
                     {t('plannersAssumption')}
                   </span>
                   <span className="block text-(--el-text-secondary)">{a.question}</span>
-                  <span className="block text-(--el-text)">{a.recommendation}</span>
+                  <span className="block text-(--el-text)">
+                    <WithSourceLinks text={a.recommendation} />
+                  </span>
                 </li>
               ))}
             </ul>

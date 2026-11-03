@@ -12,6 +12,7 @@ import type {
   SharpenConversationTurn,
   SharpenJobContext,
   SharpenQuestion,
+  SharpenResearchRecord,
   SharpenRunContext,
 } from '@/lib/ai/types';
 import type {
@@ -104,6 +105,14 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // `unavailable`, a failed turn: the session stays open, the offer held, and the
 // person's Try again re-runs the turn. A decided offer is never written.
 //
+// ── THE SHIPPED-PRODUCT RESEARCH (MOTIR-10284) ────────────────────────────────
+// motir-ai researches how shipped products handle what the request leaves open when
+// the interview opens, and again for what the person adds. Its record comes back on
+// every turn's result; the landing keeps it on the session (`research`), and every
+// later job sends it back as `context.sharpen.research`, for a plan scope and a
+// conversation scope alike, so no turn searches it again. Core reads nothing inside
+// it. A turn superseded by a Stop changes no state, its record included.
+//
 // ── A CONVERSATION'S LEASE ────────────────────────────────────────────────────
 // Every person turn and every landed planner turn of a conversation session moves
 // the conversation's `lastActivityAt` and refreshes any target lock it holds, in
@@ -119,10 +128,15 @@ type Target =
   | { kind: 'plan'; planId: string; ref: string; state: string }
   | { kind: 'conversation'; conversationId: string; ref: string; state: string };
 
+/** The longest `context.sharpen.subject`; motir-ai reads a longer one as none. */
+const SHARPEN_SUBJECT_MAX = 2_000;
+
 /** What a job is grounded in: the run a plan stands inside, or the conversation. */
 interface Grounding {
   run?: SharpenRunContext;
   conversation?: SharpenConversationContext;
+  /** What a plan no conversation produced is about (MOTIR-10284), so it can be researched. */
+  subject?: string;
 }
 
 // A plan is open while an answer may still be written to it. A planning run in
@@ -430,12 +444,29 @@ export function conversationTurnsOf(
     .slice(-CONVERSATION_TURNS_WIRE_MAX);
 }
 
+/** A plan's title and summary, held to what motir-ai reads (`SHARPEN_TEXT_MAX`). */
+async function planSubjectFor(
+  target: Extract<Target, { kind: 'plan' }>,
+  ctx: ProjectContext,
+): Promise<string | null> {
+  const plan = await withWorkspaceContext(bindCtx(ctx), (tx) =>
+    planRepository.findById(target.planId, ctx.workspaceId, tx),
+  );
+  const subject = [plan?.title, plan?.summary]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join('\n\n');
+  return subject.length > 0 ? subject.slice(0, SHARPEN_SUBJECT_MAX) : null;
+}
+
 /** What a job on this target is grounded in. A conversation with no person turn
  *  cannot be grilled — refused before anything is written. */
 async function groundingFor(target: Target, ctx: ProjectContext): Promise<Grounding> {
   if (target.kind === 'plan') {
     const run = await runContextFor(target, ctx);
-    return run ? { run } : {};
+    if (run) return { run };
+    const subject = await planSubjectFor(target, ctx);
+    return subject ? { subject } : {};
   }
   const conversation = await conversationContextFor(target.conversationId, ctx);
   if (!conversation) {
@@ -467,7 +498,15 @@ function jobContext(
     ...(action === 'own_words' ? { text: turn.body } : {}),
     ...(grounding.run ? { run: grounding.run } : {}),
     ...(grounding.conversation ? { conversation: grounding.conversation } : {}),
+    ...(grounding.subject ? { subject: grounding.subject } : {}),
+    // The shipped-product research an earlier turn returned (MOTIR-10284), so motir-ai
+    // holds it on every turn without searching again.
+    ...(isResearchRecord(row.research) ? { research: row.research } : {}),
   };
+}
+
+function isResearchRecord(v: unknown): v is SharpenResearchRecord {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 /** Submit ONE `sharpen_turn` job, then bind it to its person turn. */
@@ -666,7 +705,7 @@ function plannerBody(result: SharpenTurnResult): string {
 async function land(
   sessionId: string,
   jobId: string,
-  outcome: { result: SharpenTurnResult } | { failure: string },
+  outcome: { result: SharpenTurnResult } | { failure: string; research?: SharpenResearchRecord },
   ctx: ProjectContext,
 ): Promise<'settled' | 'failed'> {
   return withWorkspaceContext(bindCtx(ctx), async (tx) => {
@@ -694,13 +733,19 @@ async function land(
     // so does a result that arrives after the plan was CLOSED before it was written
     // (MOTIR-10233): that ending is final, and a late turn must not re-open the grilling or
     // overwrite its plan-closed write-back with a failure.
-    if (
-      failed ||
-      !person ||
-      supersededByStop(row, turns, person) ||
-      endedByPlanClose(row.writeBack)
-    ) {
-      await sharpenSessionRepository.updateState(row.id, { lastActivityAt: new Date() }, tx);
+    const transcriptOnly =
+      !person || supersededByStop(row, turns, person) || endedByPlanClose(row.writeBack);
+    if (failed || transcriptOnly) {
+      // A failed turn still keeps the research it carries (MOTIR-10284): motir-ai
+      // returns a turn that failed after checking shipped products as unavailable WITH
+      // the record, so Try again holds it and does not search again.
+      const kept =
+        failed && outcome.research && !transcriptOnly ? { research: outcome.research } : {};
+      await sharpenSessionRepository.updateState(
+        row.id,
+        { ...kept, lastActivityAt: new Date() },
+        tx,
+      );
       return failed ? 'failed' : 'settled';
     }
     const r = outcome.result;
@@ -711,6 +756,9 @@ async function land(
         pendingQuestion: r.question,
         settled: r.settled,
         assumptions: r.assumptions,
+        // The research rides every turn (MOTIR-10284); a turn that returned none
+        // leaves the stored record as it was.
+        ...(r.research ? { research: r.research } : {}),
         lastActivityAt: new Date(),
         ...(ends
           ? {
@@ -749,7 +797,11 @@ export function endedByPlanClose(writeBack: unknown): boolean {
 async function readResult(
   jobId: string,
   ctx: ProjectContext,
-): Promise<{ pending: true } | { result: SharpenTurnResult } | { failure: string }> {
+): Promise<
+  | { pending: true }
+  | { result: SharpenTurnResult }
+  | { failure: string; research?: SharpenResearchRecord }
+> {
   const job = await getJob(jobId, ctx.projectId);
   if (job.status === 'queued' || job.status === 'running') return { pending: true };
   if (job.status !== 'succeeded') {
@@ -761,7 +813,12 @@ async function readResult(
   }
   const result = parseSharpenTurn(job.result?.sharpenTurn);
   if (!result) return { failure: 'unreadable result' };
-  if (result.kind === 'unavailable') return { failure: 'planner unavailable' };
+  if (result.kind === 'unavailable') {
+    return {
+      failure: 'planner unavailable',
+      ...(result.research ? { research: result.research } : {}),
+    };
+  }
   return { result };
 }
 
