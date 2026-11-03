@@ -119,6 +119,13 @@ export const CHANGED_FILES_MAX = 300;
 export const CODE_HISTORY_TIMEOUT_MS = 10_000;
 
 /**
+ * The most bytes of one host answer a history read buffers. A GitLab blame carries the
+ * file's whole text in `lines[]`, so its size is the file's and not the metadata's. An
+ * answer over this is `too_large`.
+ */
+export const CODE_HISTORY_MAX_BODY_BYTES = 16 * 1024 * 1024;
+
+/**
  * The most commits one `kind: 'log'` answer carries — GitHub's and GitLab's own
  * page size cap (`per_page` ≤ 100), so the one page each host returns is the
  * whole bound. A log that has a further page reports `truncated: true`.

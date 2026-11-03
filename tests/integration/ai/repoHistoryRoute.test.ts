@@ -340,12 +340,19 @@ describe('GET /api/internal/ai/repo-history — an in-set repository', () => {
     const auth = { bearer: SERVICE_SECRET, token };
     const get = (q: string) => GET(req(`${URL_BASE}?repoRef=moooon/motir-core&${q}`, auth));
 
-    stubGithub(() => json({ message: 'No commit found' }, 404));
+    // A commits 404 asks the repository: one that answers has no such ref.
+    stubGithub((url) =>
+      url.includes('/commits') ? json({ message: 'Not Found' }, 404) : json({ id: 1 }),
+    );
     let res = await get('path=lib%2Fa.ts&kind=log&ref=nope');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       result: { outcome: 'no_such_ref', kind: 'log', path: 'lib/a.ts', ref: 'nope' },
     });
+
+    stubGithub(() => json({ message: 'Not Found' }, 404));
+    res = await get('path=lib%2Fa.ts&kind=log');
+    expect((await res.json()).result.outcome).toBe('revoked');
 
     stubGithub(() => json([]));
     res = await get('path=lib%2Fgone.ts&kind=log');

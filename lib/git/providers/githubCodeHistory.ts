@@ -3,6 +3,7 @@ import {
   capRanges,
   codeHistoryHostError,
   fetchWithinDeadline,
+  hostCallFailure,
   hexShaOrNull,
   saysTooLarge,
   stringOrNull,
@@ -67,11 +68,33 @@ function hasNextPage(res: Response): boolean {
 }
 
 /**
+ * What a commits-list 404 means. GitHub answers an unknown ref and a repository the
+ * token cannot see with the same "Not Found" body, so the repository itself is asked:
+ * a repository that is gone is `revoked`, as on the blame path, and one that answers
+ * has no such ref.
+ */
+async function github404(
+  token: string,
+  owner: string,
+  name: string,
+  asked: CodeHistoryAsked,
+): Promise<CodeHistoryResult> {
+  const call = await fetchWithinDeadline(`${GITHUB_API}/repos/${owner}/${name}`, {
+    method: 'GET',
+    headers: githubHeaders(token),
+  });
+  if (!call.ok) return hostCallFailure(asked, call);
+  if (call.res.status === 404) return { outcome: 'revoked', ...asked };
+  if (call.res.ok) return { outcome: 'no_such_ref', ...asked };
+  return codeHistoryHostError(asked, `GitHub repository returned ${call.res.status}`);
+}
+
+/**
  * The LOG of `path` reachable from `ref`, newest first — GitHub's own order. One
  * page of {@link CODE_HISTORY_MAX_COMMITS}; a further page is `truncated`.
  *
- * Status → outcome: 404 and 422 ("No commit found for SHA") and 409 (an empty
- * repository) are `no_such_ref`; 401, and a 403 that is not a rate limit, are
+ * Status → outcome: 422 ("No commit found for SHA") and 409 (an empty repository) are
+ * `no_such_ref`; a 404 is read by {@link github404}; 401, and a 403 that is not a rate limit, are
  * `revoked`; a refusal that says the walk was too big is `too_large`; everything
  * else is `host_error`. A 200 with NO commits is `path_not_found`: every path that
  * exists at a ref was put there by a commit reachable from it.
@@ -87,12 +110,11 @@ export async function githubReadCodeLog(
     `?sha=${encodeURIComponent(asked.ref)}&path=${encodeURIComponent(asked.path)}` +
     `&per_page=${CODE_HISTORY_MAX_COMMITS}`;
   const call = await fetchWithinDeadline(url, { method: 'GET', headers: githubHeaders(token) });
-  if (!call.ok) return codeHistoryHostError(asked, call.detail);
+  if (!call.ok) return hostCallFailure(asked, call);
   const { res } = call;
 
-  if (res.status === 404 || res.status === 409 || res.status === 422) {
-    return { outcome: 'no_such_ref', ...asked };
-  }
+  if (res.status === 404) return github404(token, owner, name, asked);
+  if (res.status === 409 || res.status === 422) return { outcome: 'no_such_ref', ...asked };
   if (res.status === 401) return { outcome: 'revoked', ...asked };
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -176,21 +198,26 @@ function blameOf(object: Record<string, unknown>): Record<string, unknown> | nul
 function hasCommit(object: Record<string, unknown> | null): boolean {
   if (!object) return false;
   if (object['__typename'] === 'Commit') return true;
-  return object['__typename'] === 'Tag' && asRecord(object['target']) !== null;
+  // A tag's target answers `blame` only when it is a commit: the query asks no other type.
+  const target = asRecord(object['target']);
+  return object['__typename'] === 'Tag' && target !== null && 'blame' in target;
 }
 
 /**
  * The classification of a GraphQL answer that carries errors and no blame —
- * which of the named absences it is, or null when it is none of them.
+ * which of the named absences it is, or null when it is none of them. GitHub's
+ * message quotes the path, so a size word is looked for only in what is left without
+ * it: `lib/utils/timeout.ts` says nothing about a timeout.
  */
 function blameErrorOutcome(
   errors: Record<string, unknown>[],
+  path: string,
 ): 'path_not_found' | 'revoked' | 'too_large' | null {
   for (const error of errors) {
     const message = typeof error['message'] === 'string' ? error['message'] : '';
-    if (saysTooLarge(message)) return 'too_large';
     if (error['type'] === 'NOT_FOUND' && errorAt(error, 'blame')) return 'path_not_found';
     if (/could not resolve file/i.test(message)) return 'path_not_found';
+    if (saysTooLarge(message.split(path).join(''))) return 'too_large';
     if (error['type'] === 'NOT_FOUND' || error['type'] === 'FORBIDDEN') return 'revoked';
   }
   return null;
@@ -205,7 +232,7 @@ function blameErrorOutcome(
  * an `object` that does not resolve, or resolves to something with no commit
  * behind it, is `no_such_ref`; a blame the host could not resolve the path for is
  * `path_not_found`; a timeout is `too_large`; 401 and a non-rate-limit 403 are
- * `revoked`; anything else is `host_error`.
+ * `revoked`; anything else, an error none of these names included, is `host_error`.
  */
 export async function githubReadCodeBlame(
   token: string,
@@ -221,7 +248,7 @@ export async function githubReadCodeBlame(
       variables: { owner, name, expression: asked.ref, path: asked.path },
     }),
   });
-  if (!call.ok) return codeHistoryHostError(asked, call.detail);
+  if (!call.ok) return hostCallFailure(asked, call);
   const { res } = call;
 
   if (res.status === 401) return { outcome: 'revoked', ...asked };
@@ -240,12 +267,17 @@ export async function githubReadCodeBlame(
   const ranges = blame?.['ranges'];
 
   if (!Array.isArray(ranges)) {
-    const named = blameErrorOutcome(graphqlErrors(body));
+    const errors = graphqlErrors(body);
+    const named = blameErrorOutcome(errors, asked.path);
     if (named === 'too_large' || named === 'path_not_found') return { outcome: named, ...asked };
     if (!repository) {
       return named === 'revoked'
         ? { outcome: 'revoked', ...asked }
         : codeHistoryHostError(asked, 'GitHub GraphQL returned no repository');
+    }
+    // An error nothing above names says the host failed, not that the ref or path is absent.
+    if (errors.length > 0 && named === null) {
+      return codeHistoryHostError(asked, 'GitHub GraphQL returned an unrecognised error');
     }
     // The repository resolved. A COMMIT that answered no blame has no such path;
     // no object, or an object with no commit behind it, is a ref that names

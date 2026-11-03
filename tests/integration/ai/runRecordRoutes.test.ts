@@ -233,6 +233,16 @@ describe('POST /api/internal/ai/search-run-records', () => {
     }
   });
 
+  it('a read that failed is not an absence: a database error is thrown, never nothing_matched', async () => {
+    const failed = new Error('pool timeout');
+    const spy = vi.spyOn(projectsService, 'getByKey').mockRejectedValueOnce(failed);
+    try {
+      await expect(search({ workItemKey: 'ANY-1' })).rejects.toBe(failed);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('never returns a run of another project or workspace, nor follows another project’s key', async () => {
     const sibling = await projectsService.createProject({
       workspaceId: fx.workspaceId,

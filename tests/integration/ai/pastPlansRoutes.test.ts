@@ -228,6 +228,19 @@ describe('GET /api/internal/ai/past-plans — every status, newest first', () =>
     expect(second.nextCursor).toBeNull();
   });
 
+  it('matches a percent sign and an underscore literally', async () => {
+    const literal = await plansService.createPlan(
+      fx.projectId,
+      { title: 'Move user_id over' },
+      fx.ctx,
+    );
+    await plansService.createPlan(fx.projectId, { title: 'Move userXid over' }, fx.ctx);
+    const ids = async (q: string) =>
+      (await (await search({ q })).json()).plans.map((p: { id: string }) => p.id);
+    expect(await ids('user_id')).toEqual([literal.id]);
+    expect(await ids('%')).toEqual([]);
+  });
+
   it('bounds the summary excerpt and says when it is cut', async () => {
     const id = await plannedPlan(fx, 'Long');
     const long = 'w'.repeat(PAST_PLAN_SUMMARY_EXCERPT_MAX + 10);

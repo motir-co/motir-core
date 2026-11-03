@@ -27,6 +27,8 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 // caller decides to fetch — `lib/mcp/tools/listDesigns.ts`'s reason.
 
 const MAX_LIMIT = 100;
+/** The largest card key number: the service compares its cursor against an Int column. */
+const MAX_CURSOR = 2_147_483_647;
 const NOT_FOUND = { result: { outcome: 'not_found' } } as const;
 
 function invalid(error: string): Response {
@@ -49,7 +51,10 @@ async function projectIdOfKey(
 ): Promise<string | null> {
   const dash = key.lastIndexOf('-');
   if (dash <= 0) return null;
-  const project = await projectsService.getByKey(key.slice(0, dash), ctx).catch(() => null);
+  const project = await projectsService.getByKey(key.slice(0, dash), ctx).catch((err: unknown) => {
+    if (isAbsence(err)) return null;
+    throw err;
+  });
   return project?.id ?? null;
 }
 
@@ -69,7 +74,7 @@ export async function GET(req: Request): Promise<Response> {
   if (key !== null && !key.trim()) return invalid('key must not be blank');
   const cursor = params.get('cursor');
   // The service's cursor is the last key NUMBER it read; anything else is the caller's to fix.
-  if (cursor !== null && !/^[0-9]+$/.test(cursor))
+  if (cursor !== null && (!/^[0-9]+$/.test(cursor) || Number(cursor) > MAX_CURSOR))
     return invalid('cursor is not one this route issued');
   let limit: number | undefined;
   if (rawLimit !== null) {

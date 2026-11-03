@@ -1,3 +1,4 @@
+import { escapeLikePattern } from './escapeLikePattern';
 import { Prisma, type Page } from '@/generated/prisma/client';
 import {
   PAGE_RECORD_SELECT,
@@ -955,12 +956,3 @@ export const pageRepository = {
     }
   },
 };
-
-/**
- * Escape LIKE metacharacters so a title search matches `%` and `_` LITERALLY —
- * Prisma's `contains` passes the value into the pattern unescaped. Backslash is
- * Postgres's default LIKE escape (the `workItemRepository` helper's rule).
- */
-function escapeLikePattern(value: string): string {
-  return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
-}
