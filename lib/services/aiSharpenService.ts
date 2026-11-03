@@ -38,7 +38,9 @@ import {
 } from '@/lib/repositories/sharpenSessionRepository';
 import { sharpenTurnRepository } from '@/lib/repositories/sharpenTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { planOfferService, offerTurns } from '@/lib/services/planOfferService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
+import { pendingPlanOfferOf } from '@/lib/planChange/planOffer';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   SharpenActionInvalidError,
@@ -86,8 +88,18 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // Core never writes the requirement itself: motir-ai's handler writes back through
 // `PUT /api/internal/ai/plan-sharpening` at the end, and core stores the
 // `writeBack` outcome it reports. A CONVERSATION session writes nothing back (there
-// is no plan yet): its answers stay on the session row, linked to the conversation,
-// until the plan the person confirms carries them (`getSettledForConversation`).
+// is no plan yet): its answers stay on the session row, linked to the conversation.
+//
+// ── THE GRILLED REQUIREMENT (Bug MOTIR-10255) ─────────────────────────────────
+// A conversation grilling holds a plan offer whose requirement was written BEFORE
+// the first question. So every job names that offer (`conversation.offer`), and the
+// end of a grilling that settled anything returns the requirement motir-ai rewrote
+// from the answers. The landing stores it on the offer IN THE SAME TRANSACTION that
+// ends the session, under the conversation's lock: the offer is held while the
+// session is open, so it is never shown — or confirmable — before its requirement
+// holds the answers. A requirement that could not be written comes back
+// `unavailable`, a failed turn: the session stays open, the offer held, and the
+// person's Try again re-runs the turn. A decided offer is never written.
 //
 // ── A CONVERSATION'S LEASE ────────────────────────────────────────────────────
 // Every person turn and every landed planner turn of a conversation session moves
@@ -369,10 +381,21 @@ async function conversationContextFor(
     const card = cardKey
       ? await workItemRepository.findByIdentifier(ctx.projectId, cardKey, tx)
       : null;
+    // The undecided plan offer the grilling holds, whose requirement its end rewrites.
+    const pending = pendingPlanOfferOf(offerTurns(turns));
+    const offer =
+      pending && pending.offer.kind === 'plan'
+        ? {
+            turnId: pending.turnId,
+            requestMd: pending.offer.requestMd,
+            ...(pending.offer.requirement ? { requirement: pending.offer.requirement } : {}),
+          }
+        : null;
     return {
       requests,
       readAnswer: answer?.body ?? null,
       card: card ? { key: card.identifier, title: card.title } : null,
+      offer,
     };
   });
 }
@@ -652,6 +675,15 @@ async function land(
       },
       tx,
     );
+    // The requirement the grilling wrote lands on its offer as the session ends.
+    if (ends && row.planChangeSessionId && r.requirement) {
+      await planOfferService.storeGrilledRequirementWithin(
+        ctx,
+        { sessionId: row.planChangeSessionId, offerTurnId: r.requirement.offerTurnId },
+        r.requirement.requirement,
+        tx,
+      );
+    }
     return 'settled';
   });
 }

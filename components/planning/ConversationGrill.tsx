@@ -15,10 +15,10 @@ import type { GrillError, OfferHold } from '@/components/planning/useGrillSessio
 //
 // The answer turn is drawn whole without its offer panel; this draws what follows
 // it: the grilling thread (or, before its session exists, the opening marker and
-// the reading line), then either the Held offer notice — no Confirm, no Decline
-// anywhere while the grilling is open — or, once it ended, the offer itself, which
-// the rail builds with the settled list. The offer is revealed where the person is
-// reading, under the thread's closing marker.
+// the reading line), then either the Held offer notice — no Confirm anywhere while the
+// grilling is open, and Decline only once its last turn failed (MOTIR-10255) — or, once
+// it ended, the offer itself, which the rail builds with the settled list. The offer is
+// revealed where the person is reading, under the thread's closing marker.
 
 export interface ConversationGrillProps {
   /** The session grilling this offer, or null before it has opened. */
@@ -35,6 +35,10 @@ export interface ConversationGrillProps {
   onStop: () => void;
   onSomethingElse: () => void;
   onRetry: () => void;
+  /** Decline the held offer: the way out of a grilling whose last turn failed. */
+  onDecline?: () => void;
+  /** The decline is in flight. */
+  declining?: boolean;
 }
 
 /** The Held offer notice — one quiet status line under the thread. */
@@ -49,6 +53,28 @@ function HeldOfferNotice() {
       <Pause className="mt-0.5 size-3.5 flex-none" aria-hidden />
       <span>{t('held')}</span>
     </p>
+  );
+}
+
+/**
+ * The way out of a held offer (Bug MOTIR-10255). A Stop writes the offer's requirement,
+ * so it can fail, and a Stop that failed takes no other answer: without this the offer
+ * stays hidden for as long as Try again keeps failing.
+ */
+function DeclineHeldOffer({ onDecline, disabled }: { onDecline: () => void; disabled: boolean }) {
+  const t = useTranslations('planningWorkspace.planOffer');
+  return (
+    <div className="pl-9">
+      <Button
+        variant="ghost"
+        size="sm"
+        data-testid="plan-offer-held-decline"
+        onClick={onDecline}
+        disabled={disabled}
+      >
+        {t('decline')}
+      </Button>
+    </div>
   );
 }
 
@@ -129,7 +155,13 @@ export function ConversationGrill({
   onStop,
   onSomethingElse,
   onRetry,
+  onDecline,
+  declining = false,
 }: ConversationGrillProps) {
+  const failed =
+    session?.status === 'open' &&
+    !pending &&
+    (error !== null || session.turns.at(-1)?.failed === true);
   return (
     <div className="flex flex-col gap-3" data-testid="conversation-grill" data-hold={hold}>
       {session ? (
@@ -148,6 +180,9 @@ export function ConversationGrill({
         <Opening pending={pending} error={error} onStop={onStop} onRetry={onRetry} />
       ) : null}
       {hold === 'held' ? <HeldOfferNotice /> : <div className="pl-9">{offer}</div>}
+      {hold === 'held' && failed && onDecline ? (
+        <DeclineHeldOffer onDecline={onDecline} disabled={declining} />
+      ) : null}
     </div>
   );
 }

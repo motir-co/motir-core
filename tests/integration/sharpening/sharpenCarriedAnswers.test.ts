@@ -8,9 +8,8 @@ import { truncateAuthTables } from '../../helpers/db';
 import { addressOf, openTestSession } from '../../helpers/planSession';
 
 // Story MOTIR-9221 · Subtask MOTIR-9315 — the conversation's settled answers CARRIED
-// into the planning run: on the planning job's context at plan submit (Confirm and
-// the typed yes both end in `planChangeSessionsService.submit`), and on the in-run
-// grilling's `run` block. Real Postgres; only the motir-ai boundary client is stubbed.
+// into the planning run on the in-run grilling's `run` block. Since Bug MOTIR-10255
+// they no longer ride the planning job's context: the offer's requirement holds them. Real Postgres; only the motir-ai boundary client is stubbed.
 
 const jobs = vi.hoisted(() => ({
   next: 0,
@@ -157,66 +156,65 @@ async function grill(
 
 const planJob = () => jobs.submitted.find((j) => j.kind !== 'sharpen_turn')!;
 
-describe('plan submit carries the conversation’s settled answers', () => {
+/** Open the in-run grilling over the plan and read its `run` block. */
+async function runBlock(planId: string): Promise<Record<string, unknown>> {
+  jobs.submitted = [];
+  await aiSharpenService.open({ planId }, pctx);
+  return (jobs.submitted[0]!.context['sharpen'] as { run: Record<string, unknown> }).run;
+}
+
+// Bug MOTIR-10255: what Grill me settled before planning is written INTO the offer's
+// requirement when the grilling ends, so the planning job carries no carriedAnswers
+// beside it. The answers stay on the grilling, and the in-run grilling still reads them.
+describe('plan submit sends no carriedAnswers (MOTIR-10255)', () => {
   it.each(['finished', 'stopped', 'nothing_to_ask'])(
-    'a grilling that ended %s rides the planning job as carriedAnswers, in the wire shape',
+    'a grilling that ended %s leaves the planning job without carriedAnswers',
     async (kind) => {
       const conversationId = await conversation();
       await grill(conversationId, { kind, settled: SETTLED, assumptions: ASSUMED });
       await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-      expect(planJob().context['carriedAnswers']).toEqual(CARRIED);
+      expect('carriedAnswers' in planJob().context).toBe(false);
     },
   );
 
-  it('a grilling still open (Grill me switched off mid-way) carries what it settled so far', async () => {
+  it('a grilling still open (Grill me switched off mid-way) carries nothing on the job either', async () => {
     const conversationId = await conversation();
     await grill(conversationId, { kind: 'question', settled: SETTLED, assumptions: [] });
-    await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-    expect(planJob().context['carriedAnswers']).toEqual({ ...CARRIED, assumptions: [] });
+    const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
+    expect('carriedAnswers' in planJob().context).toBe(false);
+    expect((await runBlock(planId))['carried']).toEqual({ ...CARRIED, assumptions: [] });
   });
 
-  it('beside a caller-supplied requirement, never merged into it', async () => {
+  it('a caller-supplied requirement rides alone', async () => {
     const conversationId = await conversation();
     await grill(conversationId, { kind: 'finished', settled: SETTLED, assumptions: ASSUMED });
     const requirement = { outcome: 'Presets exist', behaviour: 'Save a preset' };
     await planChangeSessionsService.submit(pctx, { sessionId: conversationId }, requirement);
     expect(planJob().context['requirement']).toEqual(requirement);
-    expect(planJob().context['carriedAnswers']).toEqual(CARRIED);
+    expect('carriedAnswers' in planJob().context).toBe(false);
   });
 
-  it('a request written after the grilling is not among the carried requests', async () => {
+  it('a request written after the grilling is not among the run block’s carried requests', async () => {
     const conversationId = await conversation();
     await grill(conversationId, { kind: 'finished', settled: SETTLED, assumptions: [] });
     await planChangeSessionsService.appendTurn('Also schedule it weekly', pctx, {
       sessionId: conversationId,
     });
-    await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-    expect((planJob().context['carriedAnswers'] as { requests: string[] }).requests).toEqual([
-      REQUEST,
-    ]);
+    const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
+    const run = await runBlock(planId);
+    expect((run['carried'] as { requests: string[] }).requests).toEqual([REQUEST]);
   });
 
-  it('no grilling, or one that settled nothing, sends the context it sends today: no key', async () => {
-    const plain = await conversation();
-    await planChangeSessionsService.submit(pctx, { sessionId: plain });
-    expect('carriedAnswers' in planJob().context).toBe(false);
-
-    jobs.submitted = [];
-    const empty = await conversation();
-    await grill(empty, { kind: 'nothing_to_ask', settled: [], assumptions: [] });
-    await planChangeSessionsService.submit(pctx, { sessionId: empty });
-    expect('carriedAnswers' in planJob().context).toBe(false);
-  });
-
-  it('a failed submit leaves the answers stored, so a retried Confirm carries them again', async () => {
+  it('a failed submit leaves the answers stored on the grilling', async () => {
     const conversationId = await conversation();
     await grill(conversationId, { kind: 'finished', settled: SETTLED, assumptions: ASSUMED });
     jobs.failNext = new MotirAiUnavailableError('down');
     await expect(
       planChangeSessionsService.submit(pctx, { sessionId: conversationId }),
     ).rejects.toBeInstanceOf(MotirAiUnavailableError);
-    await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-    expect(planJob().context['carriedAnswers']).toEqual(CARRIED);
+    const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
+    expect('carriedAnswers' in planJob().context).toBe(false);
+    expect((await runBlock(planId))['carried']).toEqual(CARRIED);
   });
 
   it('an ended conversation is still refused before anything is sent', async () => {
@@ -231,21 +229,6 @@ describe('plan submit carries the conversation’s settled answers', () => {
       planChangeSessionsService.submit(pctx, { sessionId: conversationId }),
     ).rejects.toBeInstanceOf(PlanSessionEndedError);
     expect(jobs.submitted).toHaveLength(before);
-  });
-
-  it('a submit that revises the waiting plan sends no planning job, so carries nothing', async () => {
-    const conversationId = await conversation();
-    await grill(conversationId, { kind: 'finished', settled: SETTLED, assumptions: [] });
-    const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-    await adminDb.plan.update({ where: { id: planId }, data: { status: 'planned' } });
-    const before = jobs.submitted.length;
-    await planChangeSessionsService.appendTurn('Make it two presets', pctx, {
-      sessionId: conversationId,
-    });
-    await planChangeSessionsService.submit(pctx, { sessionId: conversationId }).catch(() => null);
-    for (const j of jobs.submitted.slice(before)) {
-      expect('carriedAnswers' in j.context).toBe(false);
-    }
   });
 });
 
@@ -301,12 +284,8 @@ describe('the turns that start the offer a grilling held (MOTIR-9319)', () => {
     await startWithTypedYes(conversationId, offerTurnId);
     const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
     const requests = [REQUEST, 'yes, plan it', OFFER_REQUEST];
-    expect((planJob().context['carriedAnswers'] as { requests: string[] }).requests).toEqual(
-      requests,
-    );
-    jobs.submitted = [];
-    await aiSharpenService.open({ planId }, pctx);
-    const run = (jobs.submitted[0]!.context['sharpen'] as { run: Record<string, unknown> }).run;
+    expect('carriedAnswers' in planJob().context).toBe(false);
+    const run = await runBlock(planId);
     expect(run['requests']).toEqual(requests);
     expect((run['carried'] as { requests: string[] }).requests).toEqual(requests);
   });
@@ -316,10 +295,9 @@ describe('the turns that start the offer a grilling held (MOTIR-9319)', () => {
     await grill(conversationId, { kind: 'finished', settled: SETTLED, assumptions: [] });
     const offerTurnId = await offered(conversationId);
     await startWithTypedYes(conversationId, offerTurnId);
-    await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
-    expect((planJob().context['carriedAnswers'] as { requests: string[] }).requests).toEqual([
-      REQUEST,
-    ]);
+    const { planId } = await planChangeSessionsService.submit(pctx, { sessionId: conversationId });
+    const run = await runBlock(planId);
+    expect((run['carried'] as { requests: string[] }).requests).toEqual([REQUEST]);
   });
 });
 

@@ -199,6 +199,47 @@ describe('POST /api/internal/ai/search-run-records', () => {
     expect(cardPage.nextCursor).toBe(second);
   });
 
+  it('narrows a card’s runs by status in the query, so an older match is on the first page (MOTIR-10286)', async () => {
+    const a = await card(fx, 'A');
+    const failed = await openRun(fx, [a.key]);
+    await dispatchRunService.close(failed, { stopReason: 'halted' }, fx.ctx);
+    const drained = await openRun(fx, [a.key]);
+    await dispatchRunService.close(drained, { stopReason: 'drained' }, fx.ctx);
+    const live = await openRun(fx, [a.key]);
+
+    // Two newer runs sit ahead of the only failed one; the first page still holds it.
+    const page1 = await resultOf(
+      await search({ workItemKey: a.key, statuses: ['failed'], limit: 1 }),
+    );
+    expect(page1.outcome).toBe('found');
+    expect(page1.runs.map((r: { id: string }) => r.id)).toEqual([failed]);
+    expect(page1.runs[0]).toMatchObject({ status: 'failed', stopReason: 'halted' });
+
+    // Following the cursor past the last match is the end, never an empty page with a cursor.
+    const page2 = await resultOf(
+      await search({
+        workItemKey: a.key,
+        statuses: ['failed'],
+        limit: 1,
+        cursor: page1.nextCursor,
+      }),
+    );
+    expect(page2).toEqual({ outcome: 'nothing_matched', runs: [], nextCursor: null });
+
+    // Two statuses at once, newest first, and a status nothing carries.
+    const two = await resultOf(
+      await search({ workItemKey: a.key, statuses: ['running', 'failed'] }),
+    );
+    expect(two.runs.map((r: { id: string }) => r.id)).toEqual([live, failed]);
+    expect(
+      await resultOf(await search({ workItemKey: a.key, statuses: ['cancelled'], limit: 1 })),
+    ).toEqual({ outcome: 'nothing_matched', runs: [], nextCursor: null });
+
+    // Without a status the card's history is every run, as before.
+    const all = await resultOf(await search({ workItemKey: a.key }));
+    expect(all.runs.map((r: { id: string }) => r.id)).toEqual([live, drained, failed]);
+  });
+
   it('narrows by scope', async () => {
     const story = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'story', title: 'Story' },

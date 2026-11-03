@@ -76,6 +76,9 @@ export interface GrillOffer {
   personTurnsBefore: number;
   /** An undecided `plan` offer that can start: the only kind a grilling holds. */
   grillable: boolean;
+  /** The offer was answered. A decided offer is never held, and its decline ended the
+   *  grilling over it (MOTIR-10255). */
+  decided?: boolean;
 }
 
 export type OfferHold = 'held' | 'shown' | null;
@@ -163,6 +166,7 @@ export function useGrillSession({
   const hasOffer = offer !== null;
   const offerId = offer?.turnId ?? null;
   const offerGrillable = offer?.grillable ?? false;
+  const offerDecided = offer?.decided ?? false;
   const convEnabled = Boolean(conversation?.enabled);
 
   // THE ARM: the person-turn count at the moment the mode was turned on (or the
@@ -339,6 +343,22 @@ export function useGrillSession({
     run,
   ]);
 
+  // A DECLINE ENDS THE GRILLING OVER ITS OFFER, on the server (MOTIR-10255): the session
+  // drawn here is read again, so the thread stops offering the question.
+  const openSessionId = session?.status === 'open' ? session.id : null;
+  useEffect(() => {
+    if (!convId || !covered || !offerDecided || !openSessionId) return;
+    const controller = new AbortController();
+    void getLatestConversationSharpen(convId, controller.signal)
+      .then((latest) => {
+        if (mountedRef.current && !controller.signal.aborted && latest) setSession(latest);
+      })
+      .catch(() => {
+        // The offer is shown as decided either way; only the thread stays as drawn.
+      });
+    return () => controller.abort();
+  }, [convId, covered, offerDecided, openSessionId]);
+
   const act = useCallback<GrillSession['act']>(
     (action, opts = {}) => {
       const open = sessionRef.current;
@@ -383,7 +403,7 @@ export function useGrillSession({
     offer === null
       ? null
       : covered
-        ? session!.status === 'open'
+        ? session!.status === 'open' && !offerDecided
           ? 'held'
           : 'shown'
         : convEnabled && on && offerGrillable && armedForOffer && dismissedOffer !== offerId

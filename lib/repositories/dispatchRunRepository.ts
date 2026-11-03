@@ -799,18 +799,33 @@ export const dispatchRunRepository = {
    * The `some` filter reads through the LEG rather than a column on the run: a
    * run owns a set of cards, so "runs for this card" is a question about the
    * legs and there is no denormalized answer to keep in sync.
+   *
+   * `statuses` narrows the QUERY, as {@link listByProject} and
+   * {@link listByScope} do (MOTIR-10286): a caller that filtered the page it got
+   * back would hand out short pages, and at a boundary an empty one with a
+   * cursor still to follow. Omitted or empty, every status is read.
    */
   async listByWorkItem(
     workItemId: string,
     {
       take,
       cursor,
+      statuses,
       createdById,
-    }: { take: number; cursor?: string | undefined; createdById?: string | undefined },
+    }: {
+      take: number;
+      cursor?: string | undefined;
+      statuses?: DispatchRunStatus[] | undefined;
+      createdById?: string | undefined;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<DispatchRunWithCards[]> {
     return tx.dispatchRun.findMany({
-      where: { cards: { some: { workItemId } }, ...startedBy(createdById) },
+      where: {
+        cards: { some: { workItemId } },
+        ...(statuses && statuses.length > 0 ? { status: { in: statuses } } : {}),
+        ...startedBy(createdById),
+      },
       include: WITH_CARDS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take,

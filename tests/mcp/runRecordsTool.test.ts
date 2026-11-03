@@ -156,17 +156,30 @@ describe('search_run_records', () => {
     });
     expect((structured(next)['runs'] as { id: string }[]).map((r) => r.id)).toEqual([older]);
 
-    const filteredOut = await call(fx.ctx, SEARCH_RUN_RECORDS_TOOL_NAME, {
+    // The status narrows the query, not the page (MOTIR-10286): the only failed
+    // run is older than the first page, and the first page still holds it.
+    await dispatchRunService.close(older, { stopReason: 'halted' }, fx.ctx);
+    const failed = await call(fx.ctx, SEARCH_RUN_RECORDS_TOOL_NAME, {
       projectKey: fx.projectIdentifier,
       workItemKey: a,
       statuses: ['failed'],
       limit: 1,
     });
-    expect(structured(filteredOut)).toMatchObject({
-      outcome: 'nothing_matched',
-      nextCursor: newer,
+    expect(structured(failed)).toMatchObject({ outcome: 'found', nextCursor: older });
+    expect((structured(failed)['runs'] as { id: string }[]).map((r) => r.id)).toEqual([older]);
+
+    const filteredOut = await call(fx.ctx, SEARCH_RUN_RECORDS_TOOL_NAME, {
+      projectKey: fx.projectIdentifier,
+      workItemKey: a,
+      statuses: ['cancelled'],
+      limit: 1,
     });
-    expect(textOf(filteredOut)).toContain('More runs');
+    expect(structured(filteredOut)).toEqual({
+      outcome: 'nothing_matched',
+      runs: [],
+      nextCursor: null,
+    });
+    expect(textOf(filteredOut)).toBe(`No run of ${fx.projectIdentifier} matched.`);
   });
 
   it('a closed run renders its stop reason and end; two filters at once are refused', async () => {

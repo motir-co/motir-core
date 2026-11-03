@@ -1,4 +1,7 @@
-import { gunzipSync } from 'node:zlib';
+import { gunzip } from 'node:zlib';
+import { promisify } from 'node:util';
+
+const gunzipAsync = promisify(gunzip);
 
 // The DEPENDENCY read (MOTIR-10242) — what a package offers at a given version:
 // its published versions, and the text of one file (or one directory's entries)
@@ -19,6 +22,15 @@ import { gunzipSync } from 'node:zlib';
 //     run;
 //   - symlink and hard-link entries are SKIPPED, and so is any entry whose path
 //     escapes the package root.
+//
+// A PUBLISHED VERSION NEVER CHANGES (MOTIR-10285), so an unpacked archive is kept
+// in memory by `name@version`, least recently read evicted first once the cache
+// holds more than `DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES`. A read of a cached exact
+// version asks the registry nothing; a DIST-TAG is resolved through the metadata on
+// every read, because a tag can move. Reads of one version made at the same time
+// share one download. A failure is never cached. The archive is unpacked with the
+// ASYNCHRONOUS gunzip, so the request thread is not held while it inflates, and
+// its files are views of the unpacked buffer rather than copies.
 //
 // Every result names its `outcome`, as `read_file` does — the consumer is a model,
 // and "that version does not exist" is an answer, not a failure. A registry that
@@ -52,6 +64,12 @@ export const DEPENDENCY_SOURCE_FILE_MAX_BYTES = 1_000_000;
 export const DEPENDENCY_VERSIONS_MAX = 500;
 /** The most entries a directory listing returns. */
 export const DEPENDENCY_DIRECTORY_MAX_ENTRIES = 500;
+/**
+ * Bytes of unpacked archives one service keeps in memory — two archives at the
+ * unpacked cap. Past it the least recently read version is evicted; an archive
+ * larger than the whole bound is served and not kept.
+ */
+export const DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES = 128 * 1024 * 1024;
 
 const NAME_MAX = 214;
 const VERSION_MAX = 256;
@@ -299,7 +317,46 @@ function parseMetadata(body: Buffer): PackageMetadata | null {
 
 interface ArchiveFile {
   type: 'file';
+  /** A view of the unpacked archive, not a copy: it keeps the archive's buffer alive. */
   data: Buffer;
+}
+
+/** One version's unpacked archive: its files, and the bytes it holds in memory. */
+interface Archive {
+  files: Map<string, ArchiveFile>;
+  bytes: number;
+}
+
+/**
+ * Unpacked archives by `name@version`, least recently read first. A `Map` keeps
+ * insertion order, so a hit is re-inserted to make it the most recent, and the
+ * first key is the one to evict.
+ */
+function createArchiveCache(maxBytes: number) {
+  const entries = new Map<string, Archive>();
+  let held = 0;
+  return {
+    get(key: string): Archive | undefined {
+      const archive = entries.get(key);
+      if (archive) {
+        entries.delete(key);
+        entries.set(key, archive);
+      }
+      return archive;
+    },
+    set(key: string, archive: Archive): void {
+      // `loadArchive` downloads a key only when it is neither cached nor in flight,
+      // so a key is never set twice.
+      if (archive.bytes > maxBytes) return;
+      entries.set(key, archive);
+      held += archive.bytes;
+      for (const [oldest, evicted] of entries) {
+        if (held <= maxBytes) break;
+        entries.delete(oldest);
+        held -= evicted.bytes;
+      }
+    },
+  };
 }
 
 /**
@@ -341,7 +398,7 @@ export function readTarFiles(tar: Buffer): Map<string, ArchiveFile> | null {
     if (type !== '0' && type !== '\0' && type !== '7') continue;
     const under = underPackageRoot(name);
     if (under === null) continue;
-    files.set(under, { type: 'file', data: Buffer.from(data) });
+    files.set(under, { type: 'file', data });
   }
   return files;
 }
@@ -430,11 +487,76 @@ export interface DependencyReadServiceOptions {
   /** The fetch every registry request goes through — injectable so tests never touch the network. */
   fetch?: DependencyFetch;
   timeoutMs?: number;
+  /** The archive cache's byte bound; `DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES` when omitted. */
+  archiveCacheMaxBytes?: number;
 }
+
+/** Why an archive could not be had: what `readSource` turns into a named outcome. */
+type ArchiveLoad =
+  | { kind: 'archive'; archive: Archive }
+  | { kind: 'too_large'; what: 'tarball' | 'archive'; maxBytes: number }
+  | { kind: 'unreachable'; failure: DependencyUnreachableFailure; status: number | null };
 
 export function createDependencyReadService(options: DependencyReadServiceOptions = {}) {
   const doFetch: DependencyFetch = options.fetch ?? ((url, init) => globalThis.fetch(url, init));
   const timeoutMs = options.timeoutMs ?? DEPENDENCY_FETCH_TIMEOUT_MS;
+  const cacheMaxBytes = options.archiveCacheMaxBytes ?? DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES;
+  if (!Number.isSafeInteger(cacheMaxBytes) || cacheMaxBytes < 1) {
+    throw new RangeError('archiveCacheMaxBytes must be a positive whole number of bytes');
+  }
+  const archives = createArchiveCache(cacheMaxBytes);
+  /** Downloads in flight, by `name@version`, so reads made at the same time share one. */
+  const loading = new Map<string, Promise<ArchiveLoad>>();
+
+  /** Download and unpack one exact version. Never throws: every failure is a named load. */
+  async function downloadArchive(name: string, version: string): Promise<ArchiveLoad> {
+    const got = await fetchCapped(
+      doFetch,
+      tarballUrl(name, version),
+      'application/octet-stream',
+      DEPENDENCY_TARBALL_MAX_BYTES,
+      timeoutMs,
+    );
+    // A version the registry LISTS whose tarball is gone is the registry failing
+    // to serve it, not the version being absent.
+    if (got.kind === 'not_found')
+      return { kind: 'unreachable', failure: 'http_status', status: 404 };
+    if (got.kind === 'failed') {
+      if (got.failure === 'too_large') {
+        return { kind: 'too_large', what: 'tarball', maxBytes: DEPENDENCY_TARBALL_MAX_BYTES };
+      }
+      return { kind: 'unreachable', failure: got.failure, status: got.status };
+    }
+    let tar: Buffer;
+    try {
+      // Asynchronous: the inflate runs on the thread pool, not the request thread.
+      tar = await gunzipAsync(got.body, { maxOutputLength: DEPENDENCY_UNPACKED_MAX_BYTES });
+    } catch (err) {
+      if (err instanceof RangeError) {
+        return { kind: 'too_large', what: 'archive', maxBytes: DEPENDENCY_UNPACKED_MAX_BYTES };
+      }
+      return { kind: 'unreachable', failure: 'invalid_archive', status: null };
+    }
+    const files = readTarFiles(tar);
+    if (files === null) return { kind: 'unreachable', failure: 'invalid_archive', status: null };
+    return { kind: 'archive', archive: { files, bytes: tar.length } };
+  }
+
+  /** One exact version's archive: from the cache, from a download in flight, or downloaded. */
+  function loadArchive(name: string, version: string): Promise<ArchiveLoad> {
+    const key = `${name}@${version}`;
+    const cached = archives.get(key);
+    if (cached) return Promise.resolve({ kind: 'archive', archive: cached });
+    const inFlight = loading.get(key);
+    if (inFlight) return inFlight;
+    const load = downloadArchive(name, version).then((got) => {
+      loading.delete(key);
+      if (got.kind === 'archive') archives.set(key, got.archive);
+      return got;
+    });
+    loading.set(key, load);
+    return load;
+  }
 
   async function readMetadata(
     name: string,
@@ -519,66 +641,44 @@ export function createDependencyReadService(options: DependencyReadServiceOption
         path: what === 'file' ? normalized.path : null,
       });
 
-      const meta = await readMetadata(packageName);
-      if (meta === null) return { ...ref, outcome: 'package_not_found' };
-      if ('failure' in meta) {
-        if (meta.failure === 'too_large')
-          return tooLarge('metadata', DEPENDENCY_METADATA_MAX_BYTES, null);
-        return { ...ref, outcome: 'unreachable', failure: meta.failure, status: meta.status };
-      }
-
       const asked = version.trim().slice(0, VERSION_MAX);
-      let exact: string | null = meta.versions.includes(asked) ? asked : null;
+      // A cached key is an exact version the registry listed, and a published
+      // version never changes: it is served with no request. Anything else — a
+      // dist-tag above all, since a tag can move — is resolved through the metadata.
+      let archive = archives.get(`${packageName}@${asked}`);
+      let exact = asked;
       let resolvedFrom: string | null = null;
-      if (exact === null && Object.hasOwn(meta.distTags, asked)) {
-        const tagged = meta.distTags[asked]!;
-        if (meta.versions.includes(tagged)) {
+
+      if (!archive) {
+        const meta = await readMetadata(packageName);
+        if (meta === null) return { ...ref, outcome: 'package_not_found' };
+        if ('failure' in meta) {
+          if (meta.failure === 'too_large')
+            return tooLarge('metadata', DEPENDENCY_METADATA_MAX_BYTES, null);
+          return { ...ref, outcome: 'unreachable', failure: meta.failure, status: meta.status };
+        }
+        if (!meta.versions.includes(asked)) {
+          const tagged = Object.hasOwn(meta.distTags, asked) ? meta.distTags[asked]! : null;
+          if (tagged === null || !meta.versions.includes(tagged)) {
+            return {
+              ...ref,
+              outcome: 'version_not_found',
+              version: asked,
+              distTags: Object.keys(meta.distTags),
+            };
+          }
           exact = tagged;
           resolvedFrom = asked;
         }
-      }
-      if (exact === null) {
-        return {
-          ...ref,
-          outcome: 'version_not_found',
-          version: asked,
-          distTags: Object.keys(meta.distTags),
-        };
+        const got = await loadArchive(packageName, exact);
+        if (got.kind === 'too_large') return tooLarge(got.what, got.maxBytes, exact);
+        if (got.kind === 'unreachable') {
+          return { ...ref, outcome: 'unreachable', failure: got.failure, status: got.status };
+        }
+        archive = got.archive;
       }
       const at = { ...ref, version: exact, resolvedFrom };
-
-      const got = await fetchCapped(
-        doFetch,
-        tarballUrl(packageName, exact),
-        'application/octet-stream',
-        DEPENDENCY_TARBALL_MAX_BYTES,
-        timeoutMs,
-      );
-      // A version the registry LISTS whose tarball is gone is the registry failing
-      // to serve it, not the version being absent.
-      if (got.kind === 'not_found') {
-        return { ...ref, outcome: 'unreachable', failure: 'http_status', status: 404 };
-      }
-      if (got.kind === 'failed') {
-        if (got.failure === 'too_large') {
-          return tooLarge('tarball', DEPENDENCY_TARBALL_MAX_BYTES, exact);
-        }
-        return { ...ref, outcome: 'unreachable', failure: got.failure, status: got.status };
-      }
-      const gz = got.body;
-
-      let tar: Buffer;
-      try {
-        tar = gunzipSync(gz, { maxOutputLength: DEPENDENCY_UNPACKED_MAX_BYTES });
-      } catch (err) {
-        if (err instanceof RangeError)
-          return tooLarge('archive', DEPENDENCY_UNPACKED_MAX_BYTES, exact);
-        return { ...ref, outcome: 'unreachable', failure: 'invalid_archive', status: null };
-      }
-      const files = readTarFiles(tar);
-      if (files === null) {
-        return { ...ref, outcome: 'unreachable', failure: 'invalid_archive', status: null };
-      }
+      const files = archive.files;
 
       const file = normalized.path === '' ? undefined : files.get(normalized.path);
       if (file) {

@@ -15,6 +15,7 @@ import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
+  DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES,
   DEPENDENCY_DIRECTORY_MAX_ENTRIES,
   DEPENDENCY_SOURCE_FILE_MAX_BYTES,
   DEPENDENCY_TARBALL_MAX_BYTES,
@@ -553,6 +554,182 @@ describe('dependencyReadService.readSource', () => {
   });
 });
 
+// MOTIR-10285 — a published version never changes, so its unpacked archive is
+// kept, by `name@version`, under a byte bound; a dist-tag still resolves through
+// the registry, because a tag can move. Unpacking is asynchronous, and the
+// archive's files are views of it, not copies.
+describe('dependencyReadService: the archive cache', () => {
+  const tarballs = (urls: string[]) => urls.filter((u) => u.endsWith('.tgz'));
+  const ARCHIVE_BYTES = tar(PKG_FILES).length;
+
+  it('serves a second read of the same name@version with NO registry request', async () => {
+    const r = registry({});
+    const svc = createDependencyReadService({ fetch: r.fetch });
+    expect(
+      await svc.readSource('npm', 'left-pad', '1.3.0', 'index.js', { startLine: 1, endLine: 2 }),
+    ).toMatchObject({ outcome: 'source_file', text: 'line1\nline2' });
+    expect(r.urls).toHaveLength(2);
+    // The next page of the same file, another file, and the root listing.
+    expect(
+      await svc.readSource('npm', 'left-pad', '1.3.0', 'index.js', { startLine: 3 }),
+    ).toMatchObject({
+      outcome: 'source_file',
+      version: '1.3.0',
+      resolvedFrom: null,
+      text: 'line3\nline4',
+      lines: { from: 3, to: 4, total: 4 },
+    });
+    expect(await svc.readSource('npm', 'left-pad', ' 1.3.0 ', 'lib/util.js')).toMatchObject({
+      outcome: 'source_file',
+      text: 'export const x = 1;',
+    });
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0')).outcome).toBe('directory');
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0', 'logo.png')).outcome).toBe('binary');
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0', 'nope')).outcome).toBe(
+      'path_not_found',
+    );
+    expect(r.urls).toHaveLength(2);
+    expect(tarballs(r.urls)).toEqual([`${HOST}left-pad/-/left-pad-1.3.0.tgz`]);
+  });
+
+  it('keys the cache by package as well as version', async () => {
+    const r = registry({});
+    const svc = createDependencyReadService({ fetch: r.fetch });
+    await svc.readSource('npm', 'left-pad', '1.3.0', 'index.js');
+    await svc.readSource('npm', 'right-pad', '1.3.0', 'index.js');
+    expect(tarballs(r.urls)).toEqual([
+      `${HOST}left-pad/-/left-pad-1.3.0.tgz`,
+      `${HOST}right-pad/-/right-pad-1.3.0.tgz`,
+    ]);
+  });
+
+  it('resolves a dist-tag through the registry on every read, so a moved tag is followed', async () => {
+    let latest = '1.3.0';
+    const r = registry({ meta: () => new Response(metadata(['1.0.0', '1.3.0'], { latest })) });
+    const svc = createDependencyReadService({ fetch: r.fetch });
+    expect(await svc.readSource('npm', 'left-pad', 'latest', 'index.js')).toMatchObject({
+      outcome: 'source_file',
+      version: '1.3.0',
+      resolvedFrom: 'latest',
+    });
+    // The tag has not moved: the registry is asked, the archive is not fetched again.
+    expect(await svc.readSource('npm', 'left-pad', 'latest', 'index.js')).toMatchObject({
+      version: '1.3.0',
+      resolvedFrom: 'latest',
+    });
+    latest = '1.0.0';
+    expect(await svc.readSource('npm', 'left-pad', 'latest', 'index.js')).toMatchObject({
+      outcome: 'source_file',
+      version: '1.0.0',
+      resolvedFrom: 'latest',
+    });
+    // An exact read of a version a tag already brought in is served from the cache.
+    expect(await svc.readSource('npm', 'left-pad', '1.3.0', 'index.js')).toMatchObject({
+      version: '1.3.0',
+      resolvedFrom: null,
+    });
+    expect(r.urls.filter((u) => !u.endsWith('.tgz'))).toHaveLength(3);
+    expect(tarballs(r.urls)).toEqual([
+      `${HOST}left-pad/-/left-pad-1.3.0.tgz`,
+      `${HOST}left-pad/-/left-pad-1.0.0.tgz`,
+    ]);
+  });
+
+  it('shares one download between reads of the same version made at the same time', async () => {
+    const r = registry({});
+    const svc = createDependencyReadService({ fetch: r.fetch });
+    const results = await Promise.all([
+      svc.readSource('npm', 'left-pad', '1.3.0', 'index.js', { startLine: 1, endLine: 1 }),
+      svc.readSource('npm', 'left-pad', '1.3.0', 'index.js', { startLine: 2, endLine: 2 }),
+      svc.readSource('npm', 'left-pad', 'latest', 'lib/util.js'),
+    ]);
+    expect(results.map((x) => (x as { text?: string }).text)).toEqual([
+      'line1',
+      'line2',
+      'export const x = 1;',
+    ]);
+    expect(tarballs(r.urls)).toHaveLength(1);
+  });
+
+  it('caches no failure: a read after an unreachable or invalid archive asks again', async () => {
+    let answer: () => Response = () => new Response('', { status: 502 });
+    const r = registry({ tarball: () => answer() });
+    const svc = createDependencyReadService({ fetch: r.fetch });
+    expect(await svc.readSource('npm', 'left-pad', '1.3.0')).toMatchObject({
+      outcome: 'unreachable',
+      status: 502,
+    });
+    answer = () => new Response('not gzip');
+    expect(await svc.readSource('npm', 'left-pad', '1.3.0')).toMatchObject({
+      outcome: 'unreachable',
+      failure: 'invalid_archive',
+    });
+    answer = () => new Response(tgz(PKG_FILES));
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0')).outcome).toBe('directory');
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0')).outcome).toBe('directory');
+    expect(tarballs(r.urls)).toHaveLength(3);
+  });
+
+  it('holds at most its byte bound, evicting the least recently read version first', async () => {
+    const r = registry({ meta: () => new Response(metadata(['1.0.0', '1.1.0', '1.2.0'])) });
+    const svc = createDependencyReadService({
+      fetch: r.fetch,
+      archiveCacheMaxBytes: 2 * ARCHIVE_BYTES,
+    });
+    const read = (v: string) => svc.readSource('npm', 'left-pad', v, 'index.js');
+    await read('1.0.0');
+    await read('1.1.0');
+    await read('1.0.0'); // 1.0.0 is now the most recently read
+    expect(tarballs(r.urls)).toHaveLength(2);
+    await read('1.2.0'); // over the bound: 1.1.0 goes
+    await read('1.0.0');
+    await read('1.2.0');
+    expect(tarballs(r.urls)).toHaveLength(3);
+    await read('1.1.0'); // evicted, so fetched again — and 1.0.0 goes in its place
+    await read('1.0.0');
+    expect(tarballs(r.urls).map((u) => u.slice(u.lastIndexOf('-') + 1))).toEqual([
+      '1.0.0.tgz',
+      '1.1.0.tgz',
+      '1.2.0.tgz',
+      '1.1.0.tgz',
+      '1.0.0.tgz',
+    ]);
+  });
+
+  it('keeps no archive larger than the whole bound, and still serves it', async () => {
+    const r = registry({});
+    const svc = createDependencyReadService({
+      fetch: r.fetch,
+      archiveCacheMaxBytes: ARCHIVE_BYTES - 1,
+    });
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0', 'index.js')).outcome).toBe(
+      'source_file',
+    );
+    expect((await svc.readSource('npm', 'left-pad', '1.3.0', 'index.js')).outcome).toBe(
+      'source_file',
+    );
+    expect(tarballs(r.urls)).toHaveLength(2);
+  });
+
+  it('states its default bound, and refuses a bound that is not a positive whole number', () => {
+    expect(DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES).toBe(128 * 1024 * 1024);
+    expect(DEPENDENCY_ARCHIVE_CACHE_MAX_BYTES).toBeGreaterThan(DEPENDENCY_UNPACKED_MAX_BYTES);
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      expect(() => createDependencyReadService({ archiveCacheMaxBytes: bad })).toThrow(RangeError);
+    }
+  });
+
+  it('unpacks asynchronously, and keeps views of the archive rather than copies', () => {
+    const src = readFileSync('lib/services/dependencyReadService.ts', 'utf8');
+    expect(src).not.toMatch(/gunzipSync|inflateSync|unzipSync/);
+    const archive = tar(PKG_FILES);
+    const files = readTarFiles(archive)!;
+    const file = files.get('index.js')!;
+    expect(file.data.toString()).toBe('line1\nline2\nline3\nline4');
+    expect(file.data.buffer).toBe(archive.buffer);
+  });
+});
+
 // ── the routes, with the global fetch stubbed ───────────────────────────────
 
 const authFailure = vi.hoisted(() => ({ next: null as Error | null }));
@@ -696,7 +873,12 @@ describe('the dependency routes', () => {
     vi.stubGlobal('fetch', async () => {
       throw new TypeError('fetch failed');
     });
+    // 1.3.0 was read above and is served from the archive cache with no request
+    // (MOTIR-10285); a version not yet read has to ask the registry.
     expect(await source({ package: 'left-pad', version: '1.3.0' })).toMatchObject({
+      outcome: 'directory',
+    });
+    expect(await source({ package: 'left-pad', version: '1.0.0' })).toMatchObject({
       outcome: 'unreachable',
       failure: 'network',
     });
@@ -837,9 +1019,11 @@ describe('the dependency MCP tools', () => {
         tarball: () => new Response(tgz([{ name: 'package/long.js', data: long }])),
       }).fetch(url, init),
     );
+    // A package no earlier test read: left-pad@1.3.0 is already in the shared
+    // service's archive cache, holding the default archive (MOTIR-10285).
     const res = await callTool(fx.ctx, READ_DEPENDENCY_SOURCE_TOOL_NAME, {
       projectKey: fx.projectIdentifier,
-      package: 'left-pad',
+      package: 'long-pad',
       version: '1.3.0',
       path: 'long.js',
       startLine: 1,

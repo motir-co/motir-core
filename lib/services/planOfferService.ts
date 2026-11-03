@@ -2,10 +2,12 @@ import type { Prisma, PlanChangeTurn } from '@/generated/prisma/client';
 import type { ProjectContext } from '@/lib/projects';
 import type { AnswerOfferInput, PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { AskPlanOffer } from '@/lib/planning/askResult';
+import type { SubmittedRequirement } from '@/lib/ai/types';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { toPlanChangeTurnDto } from '@/lib/mappers/planChangeMappers';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { sharpenSessionRepository } from '@/lib/repositories/sharpenSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -237,6 +239,11 @@ export const planOfferService = {
    *  - not the caller's own conversation, or no offer on that turn ⇒ 404;
    *  - already `declined` ⇒ idempotent: the thread comes back, nothing is written;
    *  - `confirmed` or `superseded` ⇒ `PlanOfferNotOpenError`, writing nothing.
+   *
+   * A Grill me grilling still open over the offer ends with it (Bug MOTIR-10255): a
+   * grilling whose Stop cannot finish holds the offer, and Decline is the way out. Its
+   * answers stay on the session. The grilling is locked BEFORE the conversation, the
+   * order every sharpen landing takes.
    */
   async declinePlanOffer(
     turnId: string,
@@ -247,6 +254,13 @@ export const planOfferService = {
     await withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
+        const latest = await sharpenSessionRepository.findLatestByConversation(
+          address.sessionId,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        );
+        if (latest) await sharpenSessionRepository.lockById(latest.id, tx);
         await lockOwnSession(pctx, address.sessionId, tx);
         const rows = await planChangeTurnRepository.listBySessionId(
           address.sessionId,
@@ -274,9 +288,64 @@ export const planOfferService = {
           } as Prisma.InputJsonValue,
           tx,
         );
+        if (latest && latest.createdAt >= row.createdAt) {
+          const grilling = await sharpenSessionRepository.findByIdInProject(
+            latest.id,
+            pctx.projectId,
+            pctx.workspaceId,
+            tx,
+          );
+          if (grilling?.status === 'open') {
+            await sharpenSessionRepository.updateState(
+              grilling.id,
+              {
+                status: 'ended',
+                endReason: 'stopped',
+                pendingQuestion: null,
+                writeBack: null,
+                lastActivityAt: new Date(),
+              },
+              tx,
+            );
+          }
+        }
       },
     );
     return threadOf(pctx, address.sessionId);
+  },
+
+  /**
+   * Store the requirement a Grill me grilling wrote for the offer on `offerTurnId`
+   * (Bug MOTIR-10255), inside the caller's transaction and under the conversation's
+   * row lock — the lock the Confirm's claim takes, so a start and this write are
+   * ordered. Only an UNDECIDED `plan` offer is written: a confirmed (or claimed),
+   * declined or superseded one keeps the requirement it was decided on, and the call
+   * answers `false` writing nothing. The requirement is REPLACED whole — it was
+   * written from the offer's own requirement — and every other key rides through.
+   */
+  async storeGrilledRequirementWithin(
+    pctx: ProjectContext,
+    address: { sessionId: string; offerTurnId: string },
+    requirement: SubmittedRequirement,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    await lockOwnSession(pctx, address.sessionId, tx);
+    const rows = await planChangeTurnRepository.listBySessionId(
+      address.sessionId,
+      pctx.workspaceId,
+      tx,
+    );
+    if (planOfferStateOf(offerTurns(rows), address.offerTurnId) !== 'undecided') return false;
+    const row = rows.find((t) => t.id === address.offerTurnId)!;
+    const offer = row.answerOffer as Record<string, unknown>;
+    if (offer['kind'] !== 'plan') return false;
+    await planChangeTurnRepository.setAnswerOffer(
+      row.id,
+      pctx.workspaceId,
+      { ...offer, requirement } as unknown as Prisma.InputJsonValue,
+      tx,
+    );
+    return true;
   },
 
   /**

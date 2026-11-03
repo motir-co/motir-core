@@ -134,7 +134,7 @@ export async function runSearchRunRecords(
         : `More runs: call search_run_records again with cursor "${result.nextCursor}".`;
     const text =
       result.outcome === 'nothing_matched'
-        ? `No run of ${project.identifier} matched.${result.nextCursor === null ? '' : ` ${more}`}`
+        ? `No run of ${project.identifier} matched.`
         : [
             `${result.runs.length} run${result.runs.length === 1 ? '' : 's'} of ${project.identifier}, newest first:`,
             ...result.runs.map(rowLine),
