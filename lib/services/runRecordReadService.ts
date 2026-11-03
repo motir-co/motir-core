@@ -94,7 +94,8 @@ export interface RunRecordRow {
 
 export type RunRecordSearchResult =
   | { outcome: 'found'; runs: RunRecordRow[]; nextCursor: string | null }
-  | { outcome: 'nothing_matched'; runs: []; nextCursor: string | null };
+  /** A page that matched nothing is the end of the list: there is never a cursor to follow. */
+  | { outcome: 'nothing_matched'; runs: []; nextCursor: null };
 
 /** What a run recorded as different on one leg — the comment the finding points to. */
 export interface RunRecordDiscrepancy {
@@ -223,7 +224,11 @@ export const runRecordReadService = {
       try {
         runs = await dispatchRunService.listRunsForWorkItemKey(
           key,
-          { take, ...(filters.cursor ? { cursor: filters.cursor } : {}) },
+          {
+            take,
+            ...(filters.cursor ? { cursor: filters.cursor } : {}),
+            ...(statuses ? { statuses } : {}),
+          },
           ctx,
         );
       } catch (err) {
@@ -232,22 +237,20 @@ export const runRecordReadService = {
         }
         throw err;
       }
-      // The card history takes no status narrowing, so it is applied to the page;
-      // the cursor follows the UNFILTERED page, so a short page still says more exist.
+      // The status narrows the QUERY, as on the project and scope paths, so a page
+      // is never shortened after the read and an empty page is the end (MOTIR-10286).
       nextCursor = runs.length === take ? (runs[runs.length - 1]?.id ?? null) : null;
-      rows = runs
-        .filter((run) => statuses === null || statuses.includes(run.status))
-        .map((run) => ({
-          id: run.id,
-          command: run.command,
-          origin: run.origin,
-          status: run.status,
-          stopReason: run.stopReason,
-          startedAt: run.startedAt,
-          endedAt: run.endedAt,
-          cardCount: run.cards.length,
-          legs: legCounts(run.cards.map((c) => c.disposition)),
-        }));
+      rows = runs.map((run) => ({
+        id: run.id,
+        command: run.command,
+        origin: run.origin,
+        status: run.status,
+        stopReason: run.stopReason,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+        cardCount: run.cards.length,
+        legs: legCounts(run.cards.map((c) => c.disposition)),
+      }));
     } else {
       let page;
       try {
@@ -280,7 +283,8 @@ export const runRecordReadService = {
         legs: run.legs,
       }));
     }
-    if (rows.length === 0) return { outcome: 'nothing_matched', runs: [], nextCursor };
+    // Every narrowing is applied by the query, so an empty page is short and has no cursor.
+    if (rows.length === 0) return { outcome: 'nothing_matched', runs: [], nextCursor: null };
     return { outcome: 'found', runs: rows, nextCursor };
   },
 

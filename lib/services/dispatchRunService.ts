@@ -2208,7 +2208,13 @@ export const dispatchRunService = {
    */
   async listRunsForWorkItemKey(
     key: string,
-    page: { take: number; cursor?: string | undefined; view?: DispatchRunView | undefined },
+    page: {
+      take: number;
+      cursor?: string | undefined;
+      view?: DispatchRunView | undefined;
+      /** Narrows the query, never the page (MOTIR-10286). Omitted: every status. */
+      statuses?: DispatchRunStatus[] | undefined;
+    },
     ctx: ServiceContext,
   ): Promise<DispatchRunDto[]> {
     const identifier = key.trim().toUpperCase();
@@ -2224,7 +2230,7 @@ export const dispatchRunService = {
         const { createdById } = await resolveRunScope(project.id, ctx, page.view, tx);
         const runs = await dispatchRunRepository.listByWorkItem(
           item.id,
-          { take: page.take, cursor: page.cursor, createdById },
+          { take: page.take, cursor: page.cursor, statuses: page.statuses, createdById },
           tx,
         );
         // Each manual leg's gate (MOTIR-7477), one read for the page — the Run
