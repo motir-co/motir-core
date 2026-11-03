@@ -85,6 +85,10 @@ const heldNotice = (page: Page) => byId(page, 'plan-offer-held');
 const settledList = (page: Page) => byId(page, 'plan-offer-settled');
 const clearLine = (page: Page) => byId(page, 'plan-offer-clear');
 const conversationGrill = (page: Page) => byId(page, 'conversation-grill');
+/** The requirement the person reads before Confirm — the left pane (MOTIR-10255). */
+const requirementDoc = (page: Page) => page.getByTestId('requirement-document');
+/** The line the grilling's end writes for an answer into its topic's part. */
+const answerLine = (q: { text: string }, label: string) => `${q.text} — ${label}`;
 /** The popover is portalled out of the rail, so it is found by its role and name. */
 const explanation = (page: Page, title = controlCopy.popover.title) =>
   page.getByRole('dialog', { name: title });
@@ -305,11 +309,11 @@ test('Grill me before planning — a vague request is grilled, Stop shows the of
     await expect(heldNotice(page)).toHaveCount(0);
     await expect(conversationGrill(page)).toHaveAttribute('data-hold', 'shown');
     await expect(offers(page)).toHaveCount(1);
-    await expect(settledList(page)).toContainText(offerCopy.settledHeading);
-    const answers = settledList(page).getByTestId('plan-offer-settled-answer');
-    await expect(answers).toHaveCount(2);
-    await expect(answers.nth(0)).toContainText(picked1.label);
-    await expect(answers.nth(1)).toContainText(picked2.label);
+    // The grilling's end wrote the answers INTO the offer's requirement (MOTIR-10255):
+    // the document the person confirms holds them, so the rail does not list them twice.
+    await expect(requirementDoc(page)).toContainText(answerLine(Q1, picked1.label));
+    await expect(requirementDoc(page)).toContainText(answerLine(Q2, picked2.label));
+    await expect(settledList(page)).toHaveCount(0);
     await expect(confirmButton(page)).toBeVisible();
     await expect(declineButton(page)).toBeVisible();
     expect(planEntries()).toHaveLength(0);
@@ -465,7 +469,7 @@ test('reopened within the lease, the grilling is where it was left, and still he
   expect(sharpenSubmits('conversation')).toHaveLength(2);
 });
 
-test('switching Grill me off mid-grilling shows the offer with what was settled so far', async ({
+test('switching Grill me off mid-grilling shows the offer with what was settled so far in its requirement', async ({
   page,
 }) => {
   await page.goto('/dashboard');
@@ -482,13 +486,11 @@ test('switching Grill me off mid-grilling shows the offer with what was settled 
   await expect(grillSwitch(page)).toHaveAttribute('aria-checked', 'false');
   await expect(thread(page)).toContainText(sharpenCopy.conversation.switchedOff);
   await expect(heldNotice(page)).toHaveCount(0);
-  await expect(settledList(page).getByTestId('plan-offer-settled-answer')).toContainText(
-    Q1.readings[0]!.label,
-  );
+  await expect(requirementDoc(page)).toContainText(answerLine(Q1, Q1.readings[0]!.label));
   await expect(confirmButton(page)).toBeVisible();
 });
 
-test('in Chinese, the grilling, the Held notice and the settled list render from the zh catalogue', async ({
+test('in Chinese, the grilling, the Held notice and the written requirement render from the zh catalogue', async ({
   page,
 }) => {
   const zOffer = zh.planningWorkspace.planOffer;
@@ -513,7 +515,11 @@ test('in Chinese, the grilling, the Held notice and the settled list render from
 
   await act(page, readingButton(page, Q1.readings[0]!.id));
   await act(page, question(page).getByTestId('sharpen-stop'));
-  await expect(settledList(page)).toContainText(zOffer.settledHeading);
-  await expect(settledList(page)).not.toContainText(offerCopy.settledHeading);
+  const zPane = zh.planningWorkspace.requirementPane;
+  await expect(requirementDoc(page)).toContainText(answerLine(Q1, Q1.readings[0]!.label));
+  await expect(requirementDoc(page)).toContainText(zPane.headings.behaviour);
+  await expect(requirementDoc(page)).not.toContainText(
+    en.planningWorkspace.requirementPane.headings.behaviour,
+  );
   await expect(confirmButton(page)).toHaveText(zOffer.confirm);
 });
