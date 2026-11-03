@@ -2206,10 +2206,6 @@ model Project {
   createdAt                        DateTime              @default(now())
   updatedAt                        DateTime              @updatedAt
   archivedAt                       DateTime?
-  /// RETIRED by MOTIR-9523 (docs/decisions/delivery-reader-migration.md §6a):
-  /// `@ignore`d so the generated client stops selecting it, keeping the column
-  /// for the image still serving during that rollout. A later release drops it.
-  primaryAddressId                 String?               @map("primary_address_id") @ignore
 
   workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
@@ -13980,10 +13976,6 @@ enum PublicAddressFailureKind {
 model PublicAddress {
   id                   String                    @id @default(cuid())
   workspaceId          String                    @map("workspace_id")
-  /// RETIRED by MOTIR-9523 (docs/decisions/delivery-reader-migration.md §6a):
-  /// `@ignore`d so the generated client stops selecting it, keeping the column
-  /// for the image still serving during that rollout. A later release drops it.
-  projectId            String?                   @map("project_id") @ignore
   /// The application a customer domain serves (ADR MOTIR-9521 §1). NULL for a
   /// subdomain, and for a customer domain not bound to an application yet or
   /// whose application was removed — the domain is unbound, never deleted.
