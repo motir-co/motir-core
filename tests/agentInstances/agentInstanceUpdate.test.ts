@@ -382,7 +382,13 @@ describe('real concurrency — every move is a guarded compare-and-set', () => {
       expect(results.some((r) => r.status === 'fulfilled')).toBe(true);
       for (const r of results) {
         if (r.status === 'rejected') {
-          expect(r.reason).toBeInstanceOf(AgentInstanceStateConflictError);
+          // The update loses a hibernate only at the guarded move. Against a delete it can also
+          // lose before it starts: a delete that commits before the update's first read leaves no
+          // live agent, and an agent that is gone is not found (MOTIR-10291).
+          const refused =
+            r.reason instanceof AgentInstanceStateConflictError ||
+            (other === 'delete' && r.reason instanceof AgentInstanceNotFoundError);
+          expect(refused, `unexpected refusal: ${String(r.reason)}`).toBe(true);
         }
       }
       const final = await row(a.id);
@@ -392,6 +398,16 @@ describe('real concurrency — every move is a guarded compare-and-set', () => {
       expect(final.state).not.toBe('updating');
     },
   );
+
+  it('an Update after the delete has committed is not found, and leaves the agent deleted', async () => {
+    const a = await agent();
+    imageCatalogSeam.setFakeNewest('claude', NEW);
+    await lifecycle.delete(fx.projectIdentifier, a.id, fx.ctx);
+    await expect(update(a.id)).rejects.toThrow(AgentInstanceNotFoundError);
+    const final = await row(a.id);
+    expect(final.deletedAt).not.toBeNull();
+    expect(final.state).not.toBe('updating');
+  });
 });
 
 describe('the sweep resolves an agent left mid-update (Q6)', () => {
