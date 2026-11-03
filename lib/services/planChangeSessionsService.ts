@@ -29,6 +29,7 @@ import {
 } from '@/lib/planning/refusalSeed';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { CLEARED_FAILURE_COLUMNS, sessionWaitingState } from '@/lib/planChange/sessionWaitingState';
+import { conversationNoteService } from '@/lib/services/conversationNoteService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { offerTurns, planOfferService } from '@/lib/services/planOfferService';
 import { pendingPlanOfferOf } from '@/lib/planChange/planOffer';
@@ -332,7 +333,17 @@ async function toDto(
       ? await readAnswerEntry(tx)
       : await withWorkspaceServiceContext(pctx.workspaceId, readAnswerEntry)
     : undefined;
-  const mapped = toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead);
+  // What the thread's answering sessions said while they worked (MOTIR-10235), so a
+  // reloaded rail draws them again beside the answer each one produced.
+  const readNotes = (t: Prisma.TransactionClient) =>
+    conversationNoteService.listFor({ planChangeSessionId: row.id }, t);
+  const notes = tx
+    ? await readNotes(tx)
+    : await withWorkspaceServiceContext(pctx.workspaceId, readNotes);
+  const mapped = {
+    ...toPlanChangeSessionDto(row, turns, workItemRefs, runPause, entryRead),
+    notes,
+  };
   // Every offer's two DERIVED fields (MOTIR-9290), resolved where every turn DTO is
   // built so no reader sees a stored offer without its state.
   const offers = await planOfferService.resolveFor(row.id, turns, pctx, tx);

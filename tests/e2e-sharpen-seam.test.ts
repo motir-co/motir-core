@@ -297,7 +297,13 @@ describe('scripted', () => {
     const conv = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) => ({
       ...next(prev, a, x, 'conv-1'),
       scope: { kind: 'conversation' as const, ref: 'conv-1' },
-      conversation: { requests: ['exports'], readAnswer: null, card: null, offer },
+      conversation: {
+        requests: ['exports'],
+        readAnswer: null,
+        card: null,
+        offer,
+        turns: [{ role: 'person' as const, body: 'exports' }],
+      },
     });
     const t1 = await turn(conv(null, 'start'));
     expect(t1.result?.requirement).toBeUndefined();
@@ -322,7 +328,13 @@ describe('scripted', () => {
     const bare = { ...offer, requirement: undefined };
     const plain = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) => ({
       ...conv(prev, a, x),
-      conversation: { requests: ['exports'], readAnswer: null, card: null, offer: bare },
+      conversation: {
+        requests: ['exports'],
+        readAnswer: null,
+        card: null,
+        offer: bare,
+        turns: [{ role: 'person' as const, body: 'exports' }],
+      },
     });
     const b1 = await turn(plain(null, 'start'));
     const b2 = await turn(plain(b1.result, 'answer', { readingId: 'a' }));

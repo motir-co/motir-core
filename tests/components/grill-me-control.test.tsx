@@ -143,6 +143,7 @@ function sharpen(overrides: Partial<SharpenSessionDto> = {}): SharpenSessionDto 
     writeBack: null,
     inFlight: null,
     turns: [],
+    notes: [],
     createdAt: '2026-10-13T10:00:00.000Z',
     updatedAt: '2026-10-13T10:00:00.000Z',
     lastActivityAt: '2026-10-13T10:00:00.000Z',

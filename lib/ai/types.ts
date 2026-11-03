@@ -346,6 +346,16 @@ export interface SharpenConversationContext {
    * questions and answers and returns it for this offer alone.
    */
   offer: { turnId: string; requestMd: string; requirement?: SubmittedRequirement } | null;
+  /** The whole conversation, both sides, in order, blank bodies left out
+   *  (MOTIR-10235). A person's agreement to a planner reply is part of their
+   *  scope, so the grilling reads the replies too. Older motir-ai ignores it. */
+  turns: SharpenConversationTurn[];
+}
+
+/** One turn of `SharpenConversationContext.turns`. */
+export interface SharpenConversationTurn {
+  role: 'person' | 'planner';
+  body: string;
 }
 
 /** `context.sharpen.run` — what the run is planning and which card it is

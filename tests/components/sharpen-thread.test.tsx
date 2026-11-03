@@ -22,6 +22,7 @@ function turn(role: 'person' | 'planner', body: string, extra: Partial<SharpenTu
     readingId: null,
     jobId: null,
     failed: false,
+    outOfCredits: false,
     createdAt: '2026-10-13T10:00:00.000Z',
     ...extra,
   } as SharpenTurnDto;
@@ -56,6 +57,7 @@ function session(overrides: Partial<SharpenSessionDto> = {}): SharpenSessionDto 
       turn('person', 'Everyone in the project', { action: 'answer', readingId: 'r1' }),
       turn('planner', QUESTION.text),
     ],
+    notes: [],
     createdAt: '2026-10-13T10:00:00.000Z',
     updatedAt: '2026-10-13T10:00:00.000Z',
     lastActivityAt: '2026-10-13T10:00:00.000Z',
@@ -318,5 +320,112 @@ describe('the end and the summary', () => {
     expect(screen.queryByTestId('sharpen-write-failed')).toBeNull();
     expect(screen.queryByTestId('sharpen-written')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Copy answers' })).toBeNull();
+  });
+});
+
+// ── THE NOTES (MOTIR-10235) ──────────────────────────────────────────────────
+describe('what the grilling says while it reads', () => {
+  const reading = (extra: Partial<SharpenSessionDto> = {}) =>
+    session({
+      pendingQuestion: null,
+      inFlight: { turnId: 't-start', jobId: 'job-live' },
+      turns: [turn('person', 'Start.', { action: 'start', jobId: 'job-live' })],
+      ...extra,
+    });
+
+  it('draws the in-flight job’s own notes in place of the fixed reading line, latest on the strong ink', () => {
+    render({
+      pending: true,
+      session: reading({
+        notes: [
+          { jobId: 'job-live', body: 'Reading the export service.' },
+          { jobId: 'job-live', body: 'Checking the decision page on presets.' },
+        ],
+      }),
+    });
+    expect(screen.queryByTestId('sharpen-reading')).toBeNull();
+    const box = screen.getByTestId('conversation-notes');
+    expect(box.getAttribute('data-live')).toBe('true');
+    expect(box.getAttribute('aria-live')).toBe('off');
+    const items = screen.getAllByTestId('conversation-note');
+    expect(items.map((li) => li.textContent)).toEqual([
+      'Reading the export service.',
+      'Checking the decision page on presets.',
+    ]);
+    expect(items[0]!.className).toContain('text-(--el-text-secondary)');
+    expect(items[1]!.className).toContain('text-(--el-text)');
+    expect(items[1]!.getAttribute('dir')).toBe('auto');
+  });
+
+  it('keeps the fixed reading line while the job has said nothing yet', () => {
+    render({ pending: true, session: reading() });
+    expect(screen.getByTestId('sharpen-reading').textContent).toBe('Reading your request…');
+    expect(screen.queryByTestId('conversation-notes')).toBeNull();
+  });
+
+  it('keeps Stop reachable while a read runs with no question on screen', () => {
+    const h = render({ pending: true, session: reading() });
+    fireEvent.click(screen.getByTestId('sharpen-stop'));
+    expect(h.onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('takes Stop away once the person has pressed it: the job running is the stop’s own', () => {
+    render({
+      pending: true,
+      session: reading({
+        turns: [turn('person', '', { action: 'stop', jobId: 'sj-stop' })],
+        inFlight: { turnId: 't-stop', jobId: 'sj-stop' },
+      }),
+    });
+    expect(screen.queryByTestId('sharpen-stop')).toBeNull();
+  });
+
+  it('keeps what a read a Stop superseded said, though no reply will ever carry it', () => {
+    render({
+      pending: true,
+      session: reading({
+        turns: [
+          turn('person', 'Start', { action: 'start', jobId: 'sj-read' }),
+          turn('person', '', { action: 'stop', jobId: 'sj-stop' }),
+        ],
+        inFlight: { turnId: 't-stop', jobId: 'sj-stop' },
+        notes: [{ jobId: 'sj-read', body: 'Reading the export card.' }] as never,
+      }),
+    });
+    const drawn = screen.getAllByTestId('conversation-note').map((n) => n.textContent);
+    expect(drawn).toEqual(['Reading the export card.']);
+  });
+
+  it('offers no extra Stop when nothing is reading', () => {
+    render({ session: reading({ inFlight: null }) });
+    expect(screen.queryByTestId('sharpen-stop')).toBeNull();
+  });
+
+  it('draws a landed job’s notes above the question it produced, finished', () => {
+    render({
+      session: session({
+        turns: [
+          turn('person', 'Start.', { action: 'start', jobId: 'job-1' }),
+          turn('planner', 'Who can use a shared preset?', { jobId: 'job-1' }),
+          turn('person', 'Everyone in the project', { readingId: 'r1', jobId: 'job-2' }),
+          turn('planner', QUESTION.text, { jobId: 'job-2' }),
+        ],
+        notes: [
+          { jobId: 'job-1', body: 'Read the export service.' },
+          { jobId: 'job-2', body: 'Read who owns presets.' },
+        ],
+      }),
+    });
+    const boxes = screen.getAllByTestId('conversation-notes');
+    expect(boxes.map((b) => b.textContent)).toEqual([
+      'Read the export service.',
+      'Read who owns presets.',
+    ]);
+    expect(boxes.every((b) => b.getAttribute('data-live') === 'false')).toBe(true);
+    // Each job's notes sit before what it produced.
+    const thread = screen.getByTestId('sharpen-thread').textContent!;
+    expect(thread.indexOf('Read the export service.')).toBeLessThan(
+      thread.indexOf('Who can use a shared preset?'),
+    );
   });
 });

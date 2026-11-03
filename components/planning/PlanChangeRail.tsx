@@ -44,6 +44,11 @@ import {
 } from '@/components/planning/useGrillSession';
 import { StalePlanNotice } from '@/components/planning/StalePlanNotice';
 import { PlanActRecord, runningBarLine } from '@/components/planning/PlanActRecord';
+import {
+  ConversationNotes,
+  notesOfJob,
+  notesOfUnansweredJob,
+} from '@/components/planning/ConversationNotes';
 import { PlanNarration, narrationHeadLines } from '@/components/planning/PlanNarration';
 import {
   groupNarration,
@@ -580,6 +585,9 @@ export function PlanChangeRail({
     if (restore) setDraft(refusal.text);
   }
   const userTurns = turns.filter((turn) => turn.role === 'user');
+  const answeredJobs = new Set(
+    turns.filter((turn) => turn.role === 'assistant').map((turn) => turn.jobId),
+  );
   // AWAITING IS DERIVED FROM THE THREAD, never from local state — which is what
   // makes a question survive a reload and still be answerable hours later. The
   // rail, the composer and the markers all read this one derivation.
@@ -1223,6 +1231,14 @@ export function PlanChangeRail({
         {pauseAnchor < 0 ? pauseBlock : null}
         {turns.map((turn, i) => (
           <Fragment key={turn.id}>
+            {/* What the answering session said while it worked (MOTIR-10235),
+                stored against the conversation, above the answer it produced. */}
+            {turn.role === 'assistant' ? (
+              <ConversationNotes
+                notes={notesOfJob(state.session?.notes, turn.jobId)}
+                live={false}
+              />
+            ) : null}
             <Turn
               turn={turn}
               targetKeys={
@@ -1255,6 +1271,18 @@ export function PlanChangeRail({
                   : null
               }
             />
+            {/* An answer that settled with no reply keeps what it said (MOTIR-10235). */}
+            {turn.role === 'user' ? (
+              <ConversationNotes
+                notes={notesOfUnansweredJob(
+                  state.session?.notes,
+                  turn.jobId,
+                  answeredJobs,
+                  state.jobId,
+                )}
+                live={false}
+              />
+            ) : null}
             {/* GRILL ME BEFORE PLANNING: the grilling over this answer's offer, and
                 the offer itself — held while it is open, shown once it ended. */}
             {turn.id === heldOfferTurnId && convHold && turn.offer ? (

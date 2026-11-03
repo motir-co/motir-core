@@ -1,7 +1,7 @@
 import type { Prisma, SharpenSession, SharpenTurn } from '@/generated/prisma/client';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
-import { MotirAiConfigError } from '@/lib/ai/errors';
-import { getJob, submitJob } from '@/lib/ai/motirAiClient';
+import { MotirAiConfigError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { cancelJob, getJob, submitJob } from '@/lib/ai/motirAiClient';
 import { parseSharpenTurn, type SharpenTurnResult } from '@/lib/ai/sharpenTurn';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type {
@@ -9,6 +9,7 @@ import type {
   SharpenAction,
   SharpenAssumption,
   SharpenConversationContext,
+  SharpenConversationTurn,
   SharpenJobContext,
   SharpenQuestion,
   SharpenRunContext,
@@ -22,6 +23,7 @@ import type {
 import {
   inFlightTurn,
   isFailedRecord,
+  SHARPEN_OUT_OF_CREDITS_REASON,
   toCarriedAnswers,
   toSharpenSessionDto,
 } from '@/lib/mappers/sharpenMappers';
@@ -38,6 +40,7 @@ import {
 } from '@/lib/repositories/sharpenSessionRepository';
 import { sharpenTurnRepository } from '@/lib/repositories/sharpenTurnRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { conversationNoteService } from '@/lib/services/conversationNoteService';
 import { planOfferService, offerTurns } from '@/lib/services/planOfferService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { pendingPlanOfferOf } from '@/lib/planChange/planOffer';
@@ -251,7 +254,8 @@ async function readDto(
 ): Promise<SharpenSessionDto> {
   const row = await ownSession(sessionId, ctx, tx);
   const turns = await sharpenTurnRepository.listTurns(row.id, tx);
-  return toSharpenSessionDto(row, turns);
+  const notes = await conversationNoteService.listFor({ sharpenSessionId: row.id }, tx);
+  return toSharpenSessionDto(row, turns, notes);
 }
 
 function loadDto(sessionId: string, ctx: ProjectContext): Promise<SharpenSessionDto> {
@@ -395,9 +399,35 @@ async function conversationContextFor(
       requests,
       readAnswer: answer?.body ?? null,
       card: card ? { key: card.identifier, title: card.title } : null,
+      turns: conversationTurnsOf(turns),
       offer,
     };
   });
+}
+
+/** What one job's envelope carries of a conversation: motir-ai reads no more than this
+ *  (`SHARPEN_CONVERSATION_TURNS_MAX`, `SHARPEN_TURN_BODY_MAX`), so more only costs bytes. */
+const CONVERSATION_TURNS_WIRE_MAX = 200;
+const CONVERSATION_TURN_BODY_WIRE_MAX = 4_000;
+
+/**
+ * The conversation, both sides, in order (MOTIR-10235): a person's "yes" agrees to
+ * what the planner said before it, so the grilling must read the planner's replies as
+ * well as the person's turns. Blank bodies are left out — motir-ai refuses a turn with
+ * no body.
+ */
+export function conversationTurnsOf(
+  turns: readonly { role: string; body: string }[],
+): SharpenConversationTurn[] {
+  return turns
+    .flatMap((t): SharpenConversationTurn[] => {
+      if (t.body.trim().length === 0) return [];
+      const body = t.body.slice(0, CONVERSATION_TURN_BODY_WIRE_MAX);
+      if (t.role === 'user') return [{ role: 'person', body }];
+      if (t.role === 'assistant') return [{ role: 'planner', body }];
+      return [];
+    })
+    .slice(-CONVERSATION_TURNS_WIRE_MAX);
 }
 
 /** What a job on this target is grounded in. A conversation with no person turn
@@ -595,6 +625,24 @@ async function actWrite(
   });
 }
 
+/**
+ * A Stop gives up on the job still running (MOTIR-10235): a read has no turn cap, so
+ * left alone it would keep spending the org's credits and holding a worker slot for an
+ * answer nobody will read. motir-ai stops it at its next model turn. A cancel that
+ * could not be made never costs the person their Stop; it is reported, and credits
+ * remain the job's stop.
+ */
+async function cancelSupersededJob(before: readonly SharpenTurn[], ctx: ProjectContext) {
+  const jobId = inFlightTurn(before)?.jobId;
+  if (!jobId) return;
+  try {
+    await cancelJob(jobId, ctx.projectId);
+  } catch (err) {
+    const why = err instanceof Error ? err.message || err.name : String(err);
+    console.warn(`[sharpen] could not cancel the job a Stop superseded (${jobId}) — ${why}`);
+  }
+}
+
 /** True when a later STOP has superseded this job's turn — its result is
  *  transcript only. */
 function supersededByStop(row: SharpenSession, turns: SharpenTurn[], turn: SharpenTurn): boolean {
@@ -704,7 +752,13 @@ async function readResult(
 ): Promise<{ pending: true } | { result: SharpenTurnResult } | { failure: string }> {
   const job = await getJob(jobId, ctx.projectId);
   if (job.status === 'queued' || job.status === 'running') return { pending: true };
-  if (job.status !== 'succeeded') return { failure: `job ${job.status}` };
+  if (job.status !== 'succeeded') {
+    // Credits stop a long read (MOTIR-10235); the person is told that is what ended it.
+    if (job.error instanceof MotirAiOutOfCreditsError) {
+      return { failure: SHARPEN_OUT_OF_CREDITS_REASON };
+    }
+    return { failure: `job ${job.status}` };
+  }
   const result = parseSharpenTurn(job.result?.sharpenTurn);
   if (!result) return { failure: 'unreadable result' };
   if (result.kind === 'unavailable') return { failure: 'planner unavailable' };
@@ -753,6 +807,7 @@ export const aiSharpenService = {
     await assertSharpenable(target, ctx, action === 'stop');
     const grounding = await groundingFor(target, ctx);
     const { row, before, turn } = await actWrite(sessionId, action, opts, ctx);
+    if (action === 'stop') await cancelSupersededJob(before, ctx);
     const jobId = await submitAndBind(
       jobContext(target, row, before, turn, grounding),
       turn.id,

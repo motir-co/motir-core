@@ -1,3 +1,4 @@
+import type { ConversationNoteDto } from '@/lib/dto/conversationNote';
 import type { AuthoredBug } from '@/lib/ai/authoredBug';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import type { LogBugTargetKind } from '@/lib/ai/logBugOffer';
@@ -298,6 +299,9 @@ export interface PlanChangeSessionDto {
   createdAt: string;
   updatedAt: string;
   turns: PlanChangeTurnDto[];
+  /** What the thread's answering sessions said while they worked, oldest first
+   *  (MOTIR-10235). Absent where a session is read without its thread. */
+  notes?: ConversationNoteDto[];
   /**
    * Resolved work-item reference summaries for the `[KEY](motir:<id>)` tokens the
    * thread's `assistant` bodies carry (MOTIR-2226), keyed by id — the SAME map
