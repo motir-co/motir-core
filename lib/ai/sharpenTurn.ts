@@ -5,6 +5,7 @@ import type {
   SharpenQuestion,
   RequirementRecommendation,
   SharpenReading,
+  SharpenResearchRecord,
   SubmittedRequirement,
 } from '@/lib/ai/types';
 import { narrowSharpenedRequirement } from '@/lib/sharpening/requirement';
@@ -42,6 +43,12 @@ export interface SharpenTurnResult {
    * every other turn.
    */
   requirement?: { offerTurnId: string; requirement: SubmittedRequirement };
+  /**
+   * How shipped products handle what the request leaves open (MOTIR-10284): the
+   * research record after this turn. Core stores it on the session and sends it back
+   * on the next turn; it reads nothing inside it. Absent when the turn returned none.
+   */
+  research?: SharpenResearchRecord;
 }
 
 const KINDS: readonly SharpenTurnKind[] = [
@@ -71,6 +78,10 @@ export const SHARPEN_CAPS = {
   /** The ceiling on one part of a written requirement (MOTIR-10255): past it the turn
    *  is unreadable. Never cut: the answers are at the end of a part. */
   requirementPart: 64_000,
+  /** The ceiling on the research record, serialised (MOTIR-10284). Past it the record
+   *  is DROPPED, never cut (a cut record would read as a different one) and never a
+   *  failed turn: the turn lands, and the next one researches again. */
+  research: 256_000,
 } as const;
 
 /** The three requirement parts a planning run refuses when blank (motir-ai's
@@ -150,7 +161,9 @@ function assumption(v: unknown): SharpenAssumption {
   return {
     questionId: str(a.questionId, SHARPEN_CAPS.id),
     question: str(a.question, SHARPEN_CAPS.text),
-    recommendation: str(a.recommendation, SHARPEN_CAPS.label),
+    // A decision settled from shipped products names each product and where it was
+    // read (MOTIR-10284), so the recommendation is held to the text cap, not a label's.
+    recommendation: str(a.recommendation, SHARPEN_CAPS.text),
     why: str(a.why ?? '', SHARPEN_CAPS.detail, { empty: true }),
     source: 'planner',
   };
@@ -196,6 +209,17 @@ function writtenRequirement(v: unknown): SharpenTurnResult['requirement'] {
 }
 
 /**
+ * The research record, held only to being an object of bounded size (MOTIR-10284):
+ * motir-ai owns its shape and validates it when core sends it back. Anything else is
+ * no record — it is advisory, so it never fails the turn it rides.
+ */
+function research(v: unknown): SharpenResearchRecord | undefined {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return undefined;
+  if (JSON.stringify(v).length > SHARPEN_CAPS.research) return undefined;
+  return v as SharpenResearchRecord;
+}
+
+/**
  * Parse a `sharpenTurn` result. Returns `null` for anything that is not a
  * well-formed turn — an unknown `kind`, a `question` turn with no question, a
  * question with fewer than two readings or not exactly one recommended.
@@ -207,6 +231,7 @@ export function parseSharpenTurn(raw: unknown): SharpenTurnResult | null {
     const kind = r.kind as SharpenTurnKind;
     const q = kind === 'question' ? question(r.question) : null;
     const requirement = writtenRequirement(r.requirement);
+    const record = research(r.research);
     return {
       kind,
       question: q,
@@ -214,6 +239,7 @@ export function parseSharpenTurn(raw: unknown): SharpenTurnResult | null {
       assumptions: list(r.assumptions ?? [], assumption),
       writeBack: writeBack(r.writeBack),
       ...(requirement ? { requirement } : {}),
+      ...(record ? { research: record } : {}),
     };
   } catch (err) {
     if (err instanceof Unparseable) return null;

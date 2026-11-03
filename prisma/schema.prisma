@@ -10079,6 +10079,10 @@ model SharpenSession {
   assumptions         Json                 @default("[]")
   /// The write-back outcome motir-ai reported when the session ended, or null.
   writeBack           Json?                @map("write_back")
+  /// How shipped products handle what the request leaves open (MOTIR-10284): the
+  /// record motir-ai's turn returned, sent back on every later turn so it is never
+  /// searched again. motir-ai owns its shape; null until the first turn lands.
+  research            Json?
   lastActivityAt      DateTime             @default(now()) @map("last_activity_at")
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")

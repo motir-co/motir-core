@@ -12,6 +12,7 @@ import type {
   SharpenConversationTurn,
   SharpenJobContext,
   SharpenQuestion,
+  SharpenResearchRecord,
   SharpenRunContext,
 } from '@/lib/ai/types';
 import type {
@@ -103,6 +104,14 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // holds the answers. A requirement that could not be written comes back
 // `unavailable`, a failed turn: the session stays open, the offer held, and the
 // person's Try again re-runs the turn. A decided offer is never written.
+//
+// ── THE SHIPPED-PRODUCT RESEARCH (MOTIR-10284) ────────────────────────────────
+// motir-ai researches how shipped products handle what the request leaves open when
+// the interview opens, and again for what the person adds. Its record comes back on
+// every turn's result; the landing keeps it on the session (`research`), and every
+// later job sends it back as `context.sharpen.research`, for a plan scope and a
+// conversation scope alike, so no turn searches it again. Core reads nothing inside
+// it. A turn superseded by a Stop changes no state, its record included.
 //
 // ── A CONVERSATION'S LEASE ────────────────────────────────────────────────────
 // Every person turn and every landed planner turn of a conversation session moves
@@ -467,7 +476,14 @@ function jobContext(
     ...(action === 'own_words' ? { text: turn.body } : {}),
     ...(grounding.run ? { run: grounding.run } : {}),
     ...(grounding.conversation ? { conversation: grounding.conversation } : {}),
+    // The shipped-product research an earlier turn returned (MOTIR-10284), so motir-ai
+    // holds it on every turn without searching again.
+    ...(isResearchRecord(row.research) ? { research: row.research } : {}),
   };
+}
+
+function isResearchRecord(v: unknown): v is SharpenResearchRecord {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 /** Submit ONE `sharpen_turn` job, then bind it to its person turn. */
@@ -703,6 +719,9 @@ async function land(
         pendingQuestion: r.question,
         settled: r.settled,
         assumptions: r.assumptions,
+        // The research rides every turn (MOTIR-10284); a turn that returned none
+        // leaves the stored record as it was.
+        ...(r.research ? { research: r.research } : {}),
         lastActivityAt: new Date(),
         ...(ends
           ? {

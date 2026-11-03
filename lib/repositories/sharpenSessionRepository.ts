@@ -39,6 +39,8 @@ export interface SharpenSessionStatePatch {
   settled?: unknown;
   assumptions?: unknown;
   writeBack?: unknown;
+  /** motir-ai's shipped-product research record (MOTIR-10284). */
+  research?: unknown;
   lastActivityAt?: Date;
 }
 
@@ -59,6 +61,7 @@ function toUpdate(patch: SharpenSessionStatePatch): Prisma.SharpenSessionUncheck
   if (patch.assumptions !== undefined)
     data.assumptions = patch.assumptions as Prisma.InputJsonValue;
   if (patch.writeBack !== undefined) data.writeBack = nullableJson(patch.writeBack);
+  if (patch.research !== undefined) data.research = nullableJson(patch.research);
   if (patch.lastActivityAt !== undefined) data.lastActivityAt = patch.lastActivityAt;
   return data;
 }

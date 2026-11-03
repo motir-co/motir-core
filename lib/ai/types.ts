@@ -328,7 +328,15 @@ export interface SharpenJobContext {
   /** The CONVERSATION a `conversation`-scope session grills (MOTIR-9314 producer ↔
    *  MOTIR-9312 consumer). Present on a `conversation` scope and only there. */
   conversation?: SharpenConversationContext;
+  /** How shipped products handle what the request leaves open (MOTIR-10284) — the
+   *  record the session's last landed turn returned, sent back so motir-ai never
+   *  searches it again. motir-ai owns the shape; ABSENT until a turn has returned one. */
+  research?: SharpenResearchRecord;
 }
+
+/** motir-ai's shipped-product research record (MOTIR-10284). Core stores and echoes it
+ *  and reads nothing inside it: motir-ai validates it when it comes back. */
+export type SharpenResearchRecord = Record<string, unknown>;
 
 /** `context.sharpen.conversation` — a plan-change conversation with no plan yet,
  *  read from stored state. motir-ai declares the identical shape and refuses one
