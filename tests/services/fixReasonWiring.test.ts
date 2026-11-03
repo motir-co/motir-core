@@ -328,6 +328,13 @@ describe('a gate decision', () => {
 
     // The first check at a NEW head is a new commit: the refusal was about the old one.
     await check(61, 'sha-b', 'vitest', null);
+    // …so it no longer stands, and while CI runs at that head the card reads Fixing
+    // (MOTIR-10307): the CI-start event is what recomputed it.
+    expect(await fixOf(item.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true },
+    });
+    await check(61, 'sha-b', 'vitest', 'success');
     expect((await fixOf(item.id)).fixReason).toBeNull();
     // The repair's push answered the refusal without re-deciding it.
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate!.id } })).state).toBe(

@@ -56,6 +56,8 @@ const EMPTY_DETAIL: Omit<FixDetailDto, 'repair' | 'affected' | 'total'> = {
   pushed: null,
   continueKey: null,
   diedReason: null,
+  fixing: false,
+  raisedHeads: null,
 };
 
 /**
@@ -428,6 +430,15 @@ const FIX_DETAIL_FIELDS = [
   'total',
 ] as const satisfies readonly (keyof FixDetailDto)[];
 
+/** Two recorded head maps are the same — key by key, for {@link sameFixReason}'s reason. */
+function sameRaisedHeads(stored: unknown, next: Readonly<Record<string, string>> | null): boolean {
+  if (next === null) return (stored ?? null) === null;
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) return false;
+  const s = stored as Record<string, unknown>;
+  const keys = Object.keys(next);
+  return Object.keys(s).length === keys.length && keys.every((k) => s[k] === next[k]);
+}
+
 /** Two stored branch lists are the same — compared entry by entry, for the reason
  *  {@link sameFixReason} gives (a `jsonb` object never stringifies as written). */
 function sameBranches(stored: unknown, next: readonly FixBranchDto[] | null): boolean {
@@ -457,6 +468,72 @@ export function sameFixReason(
   const stored = a.fixDetail as Record<string, unknown>;
   return (
     FIX_DETAIL_FIELDS.every((field) => (stored[field] ?? null) === b.fixDetail![field]) &&
-    sameBranches(stored.branches, b.fixDetail.branches)
+    sameBranches(stored.branches, b.fixDetail.branches) &&
+    // A row stored before Fixing existed has no `fixing` key: it reads as off.
+    (stored.fixing === true) === b.fixDetail.fixing &&
+    sameRaisedHeads(stored.raisedHeads, b.fixDetail.raisedHeads)
   );
+}
+
+// ── FIXING (Story MOTIR-10305 · MOTIR-10307) ────────────────────────────────────────
+// A pushed fix used to make the card VANISH from To fix the moment its CI started: the
+// repair predicate refuses `ci_running`, and a refusal is not a reason. Now the stored
+// answer keeps the reason it had before the push and says Fixing, read from three facts
+// and nothing else — the predicate's refusal (nothing red, a member running), the card's
+// OWN previous stored answer, and the heads that answer was raised on.
+
+/** An open member whose CI is running, at its head — the predicate's `running`. */
+export interface RunningHead {
+  pullRequestId: string;
+  headSha: string | null;
+}
+
+/** The heads a reason is raised on: every open member with a known head. */
+export function raisedHeadsOf(
+  members: ReadonlyArray<{ pullRequestId: string; headSha: string | null }>,
+): Record<string, string> {
+  const heads: Record<string, string> = {};
+  for (const m of members) if (m.headSha) heads[m.pullRequestId] = m.headSha;
+  return heads;
+}
+
+/** The same answer with the heads it was raised on. `NOTHING_TO_FIX` stays nothing. */
+export function withRaisedHeads(
+  value: FixReasonValue,
+  heads: Record<string, string>,
+): FixReasonValue {
+  if (value.fixDetail === null) return value;
+  return { ...value, fixDetail: { ...value.fixDetail, fixing: false, raisedHeads: heads } };
+}
+
+/**
+ * THE FIXING RULE — the card's PRIOR stored answer, kept with `fixing: true`, or null when
+ * the card is not Fixing. The caller has already established that the predicate refused it
+ * with nothing red and CI running (`running` non-empty is that refusal's hand-over).
+ *
+ * Fixing needs ALL of:
+ *  · a prior PULL-REQUEST reason (or a changes-requested) — never `run_died`, whose repair
+ *    is a continue and whose CI says nothing about it;
+ *  · recorded heads on that prior answer — a row stored before they existed has nothing
+ *    to prove the head moved, so it is not Fixing;
+ *  · at least ONE running member at a head DIFFERENT from the one recorded for it. A
+ *    running member at its recorded head is a re-run of the same commit, and a member
+ *    with no recorded head (one opened after the reason was raised) proves nothing about
+ *    the push the reason is waiting on.
+ */
+export function fixingReasonOf(
+  prior: { fixReason: WorkItemFixReasonDto | null; fixDetail: FixDetailDto | null },
+  running: readonly RunningHead[],
+): FixReasonValue | null {
+  if (prior.fixReason === null || prior.fixReason === 'run_died' || prior.fixDetail === null) {
+    return null;
+  }
+  const recorded = prior.fixDetail.raisedHeads;
+  if (recorded === null) return null;
+  const moved = running.some((m) => {
+    const was = recorded[m.pullRequestId];
+    return was !== undefined && m.headSha !== null && m.headSha !== was;
+  });
+  if (!moved) return null;
+  return { fixReason: prior.fixReason, fixDetail: { ...prior.fixDetail, fixing: true } };
 }

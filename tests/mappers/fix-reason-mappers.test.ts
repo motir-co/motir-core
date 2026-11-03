@@ -46,7 +46,25 @@ describe('toFixDetailDto', () => {
       diedReason: 'lapsed',
       affected: 0,
       total: 0,
+      // A row stored before Fixing existed (MOTIR-10307) reads as not Fixing, no heads.
+      fixing: false,
+      raisedHeads: null,
     });
+  });
+
+  it('carries Fixing and the recorded heads, dropping a head that is not a string', () => {
+    expect(
+      toFixDetailDto('ci_failed', {
+        fixing: true,
+        raisedHeads: { pr1: 'a'.repeat(40), pr2: 7 },
+      }),
+    ).toMatchObject({ fixing: true, raisedHeads: { pr1: 'a'.repeat(40) } });
+    for (const raisedHeads of [['a'], 'a', null]) {
+      expect(toFixDetailDto('ci_failed', { fixing: 'yes', raisedHeads })).toMatchObject({
+        fixing: false,
+        raisedHeads: null,
+      });
+    }
   });
 
   it.each(['fix', 'run', 'continue', 'none'] as const)('keeps a known repair: %s', (repair) => {

@@ -160,6 +160,8 @@ const DETAIL: FixDetailDto = {
   diedReason: null,
   affected: 2,
   total: 2,
+  fixing: false,
+  raisedHeads: null,
 };
 const AGENT: Partial<FixDetailDto> = {
   gate: 'agent_review',

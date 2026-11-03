@@ -325,7 +325,7 @@ describe('To fix agrees with the claim — `repair: fix` for both review kinds',
 });
 
 describe('the repair’s push clears it', () => {
-  it('a head move after the repair clears To fix and the claim, and leaves the decision as it was', async () => {
+  it('a head move after the repair clears the claim, reads Fixing while CI runs, and leaves the decision as it was', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo, pr } = await cardWith(fx, 'in_review');
     const gate = await sentBack(fx, card.id, versionOf(repo.name, pr.number), 'agent_review');
@@ -343,7 +343,12 @@ describe('the repair’s push clears it', () => {
       },
     });
 
-    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+    // Its CI is running at the new head: the card stays on To fix as Fixing (MOTIR-10307)
+    // until the checks decide — the refusal it was sent back with is still what it names.
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true, gate: 'agent_review' },
+    });
     // The decided refusal is history: nothing re-decided, re-opened or superseded it.
     const after = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate.id } });
     expect(after).toMatchObject({ state: 'changes_requested', noteMd: FINDINGS });

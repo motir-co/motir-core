@@ -74,6 +74,8 @@ function detail(over: Partial<FixDetailDto> = {}): FixDetailDto {
     diedReason: null,
     affected: 1,
     total: 1,
+    fixing: false,
+    raisedHeads: null,
     ...over,
   };
 }

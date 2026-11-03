@@ -80,6 +80,8 @@ function printReport(report: FixReasonBackfillReport): void {
   for (const [reason, count] of Object.entries(report.byReason)) {
     console.log(`${TAG}   ${dryRun ? 'would read' : 'reads'} ${reason}: ${count} card(s)`);
   }
+  // Of those, the ones a pushed fix is running CI on — listed under their reason above.
+  console.log(`${TAG}   ${dryRun ? 'would read' : 'reads'} Fixing: ${report.fixing} card(s)`);
 
   // The per-transition breakdown, which is what an operator reads to decide
   // whether the sweep did what they expected.

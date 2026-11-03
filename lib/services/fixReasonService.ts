@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@/generated/prisma/client';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
+import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -19,11 +22,14 @@ import {
   cardFixGroupKey,
   changesRequestedOf,
   deadRunReasonOf,
+  fixingReasonOf,
   pullRequestReasonOf,
+  raisedHeadsOf,
   reviewerNameOf,
   runFixGroupKey,
   sameFixReason,
   withFixGroupKey,
+  withRaisedHeads,
   type FixReasonValue,
 } from '@/lib/workItems/fixReason';
 
@@ -48,6 +54,17 @@ import {
 // refuse as `run_alive` or `no_dead_run`, and `isRunAlive`, the died set and the
 // refusal ladder are never restated here. A `use_fix` or `not_in_progress` verdict is
 // not this reason, and the pull-request derivation below answers exactly as before.
+//
+// ── FIXING reads the card's OWN previous answer (Story MOTIR-10305 · MOTIR-10307) ──
+// Every pull-request reason and changes-requested stored here records the heads it was
+// raised on (`fixDetail.raisedHeads`). When the predicate later refuses the card with
+// nothing red and CI running — `ci_running`, or at In Review its `not_failing` arm — and
+// a running member is at a head other than the recorded one, a fix was pushed: the
+// derivation returns the PRIOR stored reason unchanged with `fixing: true`, so the card
+// stays on To fix and its count does not move until the CI decides. Green then clears it,
+// red raises a fresh reason on the new heads. The prior is read from the row the caller
+// passes — the recompute's locked row, so it is consistent with the write it decides.
+// Nothing here reads or clears a hosted repair; the surface decides which line wins.
 //
 // ── The shape is `recomputeWorkItemCiState`'s ───────────────────────────────
 // A read-derived write, so the card's row lock is taken FIRST and everything is read
@@ -101,6 +118,9 @@ export async function deriveFixReason(
     status: string;
     archivedAt: Date | null;
     targetRepos: readonly string[];
+    /** The card's PRIOR stored answer — what the Fixing rule keeps (MOTIR-10307). */
+    fixReason: string | null;
+    fixDetail: unknown;
   },
   tx: Prisma.TransactionClient,
   now: Date = new Date(),
@@ -145,6 +165,11 @@ export async function deriveFixReason(
     item.id,
     open.map((d) => d.pullRequest.id),
   );
+  // The heads every reason below is RAISED on — what a later push is measured against.
+  const heads = raisedHeadsOf(
+    open.map((d) => ({ pullRequestId: d.pullRequest.id, headSha: pullRequestHead(d.pullRequest) })),
+  );
+  const raised = (value: FixReasonValue): FixReasonValue => withRaisedHeads(value, heads);
 
   if (verdict.ok) {
     // A claimable card is classed by the members the predicate handed over. On the
@@ -152,7 +177,7 @@ export async function deriveFixReason(
     // `acceptance_rerun` they are every open member, and when none is red the reason
     // is the reviewer's refusal the class exists for.
     const byMembers = pullRequestReasonOf(verdict.pullRequests, total);
-    if (byMembers) return withFixGroupKey(byMembers, setKey);
+    if (byMembers) return raised(withFixGroupKey(byMembers, setKey));
     if (verdict.repairClass === 'acceptance_rerun' && verdict.acceptanceRefusal) {
       // The standing refusal the class was admitted on is the story's latest DECIDED
       // acceptance gate (`readStandingAcceptanceRefusal`) — read for WHO decided it.
@@ -162,41 +187,64 @@ export async function deriveFixReason(
         tx,
       );
       // An acceptance Re-run is the story's own (§ 34.2): a card alone.
-      return withFixGroupKey(
-        changesRequestedOf(
-          {
-            gate: 'acceptance_result',
-            reviewerName: await reviewerName(
-              gate?.decidedById ?? null,
-              verdict.acceptanceRefusal.decidedByLabel,
-              tx,
-            ),
-            noteMd: verdict.acceptanceRefusal.reasonMd,
-          },
-          total,
+      return raised(
+        withFixGroupKey(
+          changesRequestedOf(
+            {
+              gate: 'acceptance_result',
+              reviewerName: await reviewerName(
+                gate?.decidedById ?? null,
+                verdict.acceptanceRefusal.decidedByLabel,
+                tx,
+              ),
+              noteMd: verdict.acceptanceRefusal.reasonMd,
+            },
+            total,
+          ),
+          cardFixGroupKey(item.id),
         ),
-        cardFixGroupKey(item.id),
       );
     }
     if (verdict.repairClass === 'review' && verdict.reviewRefusal) {
       // A card a REVIEW sent back (MOTIR-6822): the predicate read the standing refusal
       // and named its reviewer — the review agent as the agent (§12.3), a person by their
       // live name — so the row names exactly who the claim's prompt names.
-      return withFixGroupKey(
-        changesRequestedOf(
-          {
-            gate: verdict.reviewRefusal.gate,
-            reviewerName: verdict.reviewRefusal.reviewerName,
-            noteMd: verdict.reviewRefusal.findingsMd,
-          },
-          total,
+      return raised(
+        withFixGroupKey(
+          changesRequestedOf(
+            {
+              gate: verdict.reviewRefusal.gate,
+              reviewerName: verdict.reviewRefusal.reviewerName,
+              noteMd: verdict.reviewRefusal.findingsMd,
+            },
+            total,
+          ),
+          setKey,
         ),
-        setKey,
       );
     }
     /* v8 ignore next 2 -- NO PRODUCER: an `ok` evaluation of the `ci` class hands over
        only failing members, and `acceptance_rerun` / `review` always carry their refusal. */
     return NOTHING_TO_FIX;
+  }
+
+  // FIXING (MOTIR-10307). The predicate hands over `running` exactly on the two refusals
+  // that mean nothing is red and CI is running — `ci_running`, and the In Review arm's
+  // `not_failing` (a card sent back at In Review whose push moved its head lands there).
+  // Whether a fix was pushed is the PRIOR stored answer's recorded heads against the heads
+  // CI now runs on: the rule is `fixingReasonOf`'s.
+  if (verdict.running.length > 0) {
+    const fixing = fixingReasonOf(
+      {
+        fixReason: (item.fixReason ?? null) as WorkItemFixReasonDto | null,
+        fixDetail: toFixDetailDto(
+          (item.fixReason ?? null) as WorkItemFixReasonDto | null,
+          item.fixDetail,
+        ),
+      },
+      verdict.running,
+    );
+    if (fixing) return fixing;
   }
 
   // Not claimable. The one reason left is a reviewer's standing Request changes on a card
@@ -207,18 +255,20 @@ export async function deriveFixReason(
     // The review AGENT's refusal names the agent, never the run's attributed user (§12.3):
     // the row must not read as a person having reviewed the code.
     const byAgent = latest.kind === 'agent_review';
-    return withFixGroupKey(
-      changesRequestedOf(
-        {
-          gate: byAgent ? 'agent_review' : 'pull_request_approval',
-          reviewerName: byAgent
-            ? REVIEW_AGENT_REVIEWER_NAME
-            : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
-          noteMd: latest.noteMd,
-        },
-        total,
+    return raised(
+      withFixGroupKey(
+        changesRequestedOf(
+          {
+            gate: byAgent ? 'agent_review' : 'pull_request_approval',
+            reviewerName: byAgent
+              ? REVIEW_AGENT_REVIEWER_NAME
+              : await reviewerName(latest.decidedById, latest.decidedByLabel, tx),
+            noteMd: latest.noteMd,
+          },
+          total,
+        ),
+        setKey,
       ),
-      setKey,
     );
   }
   return NOTHING_TO_FIX;

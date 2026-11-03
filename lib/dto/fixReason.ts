@@ -110,6 +110,23 @@ export interface FixDetailDto {
   affected: number;
   /** How many open pull requests deliver the card — the row says "N of M" when > 1. */
   total: number;
+  /**
+   * FIXING (Story MOTIR-10305 · MOTIR-10307): a fix was pushed and CI is running on it.
+   * The reason and every other field are the ones stored BEFORE the push, kept unchanged
+   * so the row stays on To fix and names what was wrong; the surface draws the Fixing tag
+   * beside it. Set only when nothing is red and at least one open member is running at a
+   * head other than the one {@link FixDetailDto.raisedHeads} recorded for it. Always
+   * `false` on `run_died`. Stored independently of any hosted repair: a row that has both
+   * still carries the hosted line's data, and the surface decides which line wins.
+   */
+  fixing: boolean;
+  /**
+   * The heads the reason was RAISED on — open pull request id (`GithubPullRequest.id`) to
+   * its head sha at the derivation that stored it. What tells a pushed fix from a re-run
+   * of the same commit. `null` on `run_died`, and on a row stored before it existed (which
+   * therefore never reads Fixing: nothing proves the head moved).
+   */
+  raisedHeads: Record<string, string> | null;
 }
 
 /**

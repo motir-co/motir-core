@@ -37,6 +37,8 @@ const BASE: FixDetailDto = {
   diedReason: null,
   affected: 1,
   total: 1,
+  fixing: false,
+  raisedHeads: null,
 };
 
 function renderBanner(
