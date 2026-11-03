@@ -86,7 +86,7 @@ const settledList = (page: Page) => byId(page, 'plan-offer-settled');
 const clearLine = (page: Page) => byId(page, 'plan-offer-clear');
 const conversationGrill = (page: Page) => byId(page, 'conversation-grill');
 /** The requirement the person reads before Confirm — the left pane (MOTIR-10255). */
-const requirementDoc = (page: Page) => page.getByTestId('requirement-document');
+const requirementDoc = (page: Page) => workspace(page).getByTestId('requirement-document');
 /** The line the grilling's end writes for an answer into its topic's part. */
 const answerLine = (q: { text: string }, label: string) => `${q.text} — ${label}`;
 /** The popover is portalled out of the rail, so it is found by its role and name. */
