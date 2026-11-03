@@ -49,7 +49,8 @@
     "vitest.collect.config.ts",
     "vitest.design.config.ts",
     "vitest.docs.config.ts",
-    "vitest.guards.config.ts"
+    "vitest.guards.config.ts",
+    "playwright.smoke.config.ts"
   ],
   // The e2e project owns the Playwright specs (above). Excluded rather than
   // narrowed out of the glob so `tests/**` keeps meaning "every test source",

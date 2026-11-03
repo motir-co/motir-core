@@ -26,7 +26,20 @@ import {
 const ROOT = join(__dirname, '..');
 
 /** Every Playwright config at the repo root — a new lane is covered unasked. */
-const CONFIGS = readdirSync(ROOT).filter((f) => /^playwright(\..+)?\.config\.ts$/.test(f));
+const ALL_CONFIGS = readdirSync(ROOT).filter((f) => /^playwright(\..+)?\.config\.ts$/.test(f));
+
+/**
+ * The lanes that start NO server of their own: they declare no `webServer` and
+ * spread no other lane's config. Only the cutover smoke lane (MOTIR-10076) is
+ * one — it drives a DEPLOYED origin, so it has no `next start` to keep alive.
+ * Pinned by name below, so a server lane that loses its `webServer` still fails.
+ */
+function startsNoServer(config: string): boolean {
+  const source = readFileSync(join(ROOT, config), 'utf8');
+  return !/^\s*webServer:/m.test(source) && !/^import \w+ from '\.\/playwright\./m.test(source);
+}
+
+const CONFIGS = ALL_CONFIGS.filter((f) => !startsNoServer(f));
 
 /**
  * The source that starts `config`'s server. A config that declares no
@@ -51,6 +64,10 @@ describe('every E2E `next start` carries the keep-alive flag', () => {
         'playwright.cloud.config.ts',
       ]),
     );
+  });
+
+  it('exempts only the cutover smoke lane, which starts no server', () => {
+    expect(ALL_CONFIGS.filter(startsNoServer)).toEqual(['playwright.smoke.config.ts']);
   });
 
   it.each(CONFIGS)('%s', (config) => {

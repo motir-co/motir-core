@@ -104,6 +104,7 @@
     "test:e2e:cloud": "playwright test --config playwright.cloud.config.ts",
     "test:e2e:regression": "playwright test --config playwright.regression.config.ts",
     "test:e2e:observability": "playwright test -c playwright.observability.config.ts",
+    "test:smoke:cutover": "playwright test --config playwright.smoke.config.ts",
     "prepare": "husky",
     "postinstall": "prisma generate && pnpm --filter @motir/design-system build && pnpm --filter @motir/brand build && pnpm --filter @motir/orchestrator build && pnpm --filter @motir/pages build",
     "build:worker": "node scripts/build-worker.mjs",
