@@ -191,6 +191,46 @@ describe('the Fly deploy runs after the existing gates (MOTIR-2390)', () => {
   });
 });
 
+describe('the Fly off switch holds on the deploy job (Story MOTIR-9712 · MOTIR-10077)', () => {
+  // The core cutover window turns Fly deploys off by setting the repository
+  // variable `MOTIR_FLY_DEPLOY_ENABLED` to `false` (MOTIR-10074). Two things
+  // must stay true for that to work: the clause sits on the job's ONE
+  // job-level `if:`, so the job skips whole, and its polarity is `!= 'false'`,
+  // so an UNSET variable — every day before the window — still deploys.
+  const SWITCH = "vars.MOTIR_FLY_DEPLOY_ENABLED != 'false'";
+  const jobLevelIf = (): string => {
+    const ifs = [...deployCode.matchAll(/^ {4}if:(.*)$/gm)].map((m) => m[1]!.trim());
+    expect(ifs).toHaveLength(1);
+    return ifs[0]!;
+  };
+
+  it('joins the switch to the main-branch and push conditions on the one job-level `if:`', () => {
+    const clauses = jobLevelIf()
+      .replace(/^\$\{\{\s*|\s*\}\}$/g, '')
+      .split('&&')
+      .map((c) => c.trim());
+    expect(clauses).toEqual(
+      expect.arrayContaining([
+        "github.ref == 'refs/heads/main'",
+        "github.event_name == 'push'",
+        SWITCH,
+      ]),
+    );
+    expect(jobLevelIf()).not.toMatch(/\|\|/);
+  });
+
+  it('deploys while the variable is unset: the opt-OUT polarity, never opt-in', () => {
+    expect(jobLevelIf()).not.toContain("vars.MOTIR_FLY_DEPLOY_ENABLED == 'true'");
+    expect(jobLevelIf()).not.toMatch(/vars\.MOTIR_FLY_DEPLOY_ENABLED\s*==/);
+  });
+
+  it('guards no single step, so the job can never run half-way', () => {
+    const steps = deployCode.split(/^ {4}steps:\s*$/m)[1] ?? '';
+    expect(steps.length).toBeGreaterThan(0);
+    expect(steps).not.toContain('MOTIR_FLY_DEPLOY_ENABLED');
+  });
+});
+
 describe('nothing registers functions with a third party any more (MOTIR-3418)', () => {
   it('the deploy job has no registration step, and the workflow/action are gone', () => {
     // The inverse of the `describe` that stood here, and the only shape this
