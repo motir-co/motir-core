@@ -16109,6 +16109,7 @@
       "plannersAssumption": "Aanname van de planner",
       "writingPlanOnly": "Je antwoorden worden in de vereiste van het plan geschreven…",
       "writtenPlanOnly": "Geschreven in de vereiste van het plan.",
+      "planClosed": "Het plan is gesloten voordat het werd geschreven, dus deze antwoorden waren niet nodig.",
       "failed": "Je antwoorden zijn niet geschreven. Ze staan hier nog.",
       "copy": "Antwoorden kopiëren"
     },

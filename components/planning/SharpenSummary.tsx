@@ -21,7 +21,8 @@ import type { SharpenSessionDto } from '@/lib/dto/sharpen';
 // Beneath it, the write-back's result — automatic, never a button: Writing… while
 // the session's write-back has not reported, Written (to the plan's requirement —
 // never a card: Motir AI does not edit a card as the person, MOTIR-9314) once it
-// has, and Failed with Copy answers when it did not land.
+// has, and Failed with Copy answers when it did not land. A plan that closed before it
+// was written (a run's re-plan the planner could not plan, MOTIR-10233) says so plainly.
 
 const GROUP_OF: Record<GrillingBranch, 'behaviour' | 'scopeEdge' | 'constraints' | 'acceptance'> = {
   workflow: 'behaviour',
@@ -148,7 +149,18 @@ export function SharpenSummary({ session }: SharpenSummaryProps) {
         ) : null}
       </section>
 
-      {writeBack === null ? (
+      {writeBack?.planClosed === true ? (
+        // THE PLAN CLOSED BEFORE IT WAS WRITTEN (MOTIR-10233): a run's re-plan the planner
+        // could not plan. Nothing failed — there is no plan to write to — so this is the
+        // neutral line, never the Failed state.
+        <p
+          role="status"
+          className="text-xs text-(--el-text-secondary)"
+          data-testid="sharpen-plan-closed"
+        >
+          {t('planClosed')}
+        </p>
+      ) : writeBack === null ? (
         <p
           aria-live="polite"
           className="text-xs text-(--el-text-secondary)"

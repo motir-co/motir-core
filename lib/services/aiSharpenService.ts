@@ -729,15 +729,18 @@ async function land(
       },
       tx,
     );
-    // A person turn re-bound to a newer job since leaves this result transcript only.
-    if (failed || !person || supersededByStop(row, turns, person)) {
+    // A person turn re-bound to a newer job since leaves this result transcript only — and
+    // so does a result that arrives after the plan was CLOSED before it was written
+    // (MOTIR-10233): that ending is final, and a late turn must not re-open the grilling or
+    // overwrite its plan-closed write-back with a failure.
+    const transcriptOnly =
+      !person || supersededByStop(row, turns, person) || endedByPlanClose(row.writeBack);
+    if (failed || transcriptOnly) {
       // A failed turn still keeps the research it carries (MOTIR-10284): motir-ai
       // returns a turn that failed after checking shipped products as unavailable WITH
       // the record, so Try again holds it and does not search again.
       const kept =
-        failed && outcome.research && person && !supersededByStop(row, turns, person)
-          ? { research: outcome.research }
-          : {};
+        failed && outcome.research && !transcriptOnly ? { research: outcome.research } : {};
       await sharpenSessionRepository.updateState(
         row.id,
         { ...kept, lastActivityAt: new Date() },
@@ -779,6 +782,15 @@ async function land(
     }
     return 'settled';
   });
+}
+
+/** Whether a session was ended because its plan closed before it was written (MOTIR-10233). */
+export function endedByPlanClose(writeBack: unknown): boolean {
+  return (
+    typeof writeBack === 'object' &&
+    writeBack !== null &&
+    (writeBack as Record<string, unknown>)['planClosed'] === true
+  );
 }
 
 /** The result a settled job carries, or why it is a failed turn. */

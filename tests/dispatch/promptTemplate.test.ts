@@ -1839,7 +1839,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
     expect(exception).toBeGreaterThan(once);
     expect(arm).toMatch(/nothing happened — no job was created and no credits were spent/);
     expect(arm).toMatch(/re-submit once, WITHOUT the requirement/);
-    expect(arm).toContain('That is the only retry there is');
+    expect(arm).toContain('Those are the only retries there are');
   });
 
   it('does NOT ask the agent to diagnose the planning rules — asserted by absence', () => {
@@ -1861,12 +1861,30 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
   });
 
   it('a refusal with NO composed WHAT is still SENT', () => {
-    // Refusing must never become conditional on writing well — the consumer
-    // falls back to opening a conversation (MOTIR-4082), and the tool forwards a
-    // partial or absent requirement unchanged (MOTIR-4172).
+    // Refusing must never become conditional on writing well — the tool forwards a
+    // partial or absent requirement unchanged (MOTIR-4172), and a run's submit is
+    // still marked fromRun, so the planner plans or replies why not (MOTIR-10233).
     const { submit } = toolSteps(replanArm(assembleDispatchPrompt(source()).prompt));
     expect(submit).toMatch(/submit anyway, WITHOUT\s+requirement/);
     expect(submit).toContain('must never wait on writing well');
+    expect(submit).toMatch(/WITHOUT\s+requirement but still with fromRun/);
+    expect(submit).not.toContain('conversation with the operator');
+  });
+
+  it('the submit is marked as a RUN, naming the step-3 comment (MOTIR-10233)', () => {
+    // Nobody is there to answer the planner, so the submit says so: the planner
+    // asks nothing, and a can't-plan reply lands under the run's own comment.
+    const arm = replanArm(assembleDispatchPrompt(source()).prompt);
+    const { submit } = toolSteps(arm);
+    expect(submit).toMatch(/fromRun:\s+true/);
+    expect(submit).toMatch(/runCommentId:\s+the id of your step-3 comment/);
+    expect(submit).toMatch(/replies under your step-3 comment/);
+    expect(arm.slice(0, arm.indexOf('6. Put the finding'))).toContain(
+      "Keep the comment's `id` from the add_comment result",
+    );
+    expect(arm).toContain('(keep fromRun and runCommentId)');
+    // A refusal that names the missing anchor has its own way out, so the finding survives.
+    expect(arm).toMatch(/has nowhere to answer[\s\S]*re-submit once with targetKeys \[/);
   });
 
   it('the comment STAYS, and the turn carries the SAME content', () => {

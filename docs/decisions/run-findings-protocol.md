@@ -680,8 +680,10 @@ Three obligations on the prompt, each asserted on the COMPOSED text:
   agent asked to classify invents. It describes what is wrong with the CARD.
 - **A refusal is never conditional on writing well.** An agent that cannot
   articulate the problem submits anyway, without `requirement`; the tool accepts a
-  partial or absent one and the planner opens a conversation instead (MOTIR-4082's
-  partial-supply arm, MOTIR-4172's pass-through).
+  partial or absent one (MOTIR-4082's partial-supply arm, MOTIR-4172's pass-through).
+  A run's submit carries `fromRun: true`, so the planner asks it nothing: it plans
+  from what it was given, or replies on the run's comment why it cannot
+  (MOTIR-10233).
 - **The comment stays.** The human-readable trail is not traded for the
   machine-readable one — the turn carries the SAME text as the step-3 comment.
   Composed once, delivered twice.

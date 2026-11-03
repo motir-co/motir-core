@@ -16109,6 +16109,7 @@
       "plannersAssumption": "Annahme des Planers",
       "writingPlanOnly": "Ihre Antworten werden in die Anforderung des Plans geschrieben…",
       "writtenPlanOnly": "In die Anforderung des Plans geschrieben.",
+      "planClosed": "Der Plan wurde geschlossen, bevor er geschrieben wurde, daher wurden diese Antworten nicht benötigt.",
       "failed": "Ihre Antworten wurden nicht geschrieben. Sie sind weiterhin hier.",
       "copy": "Antworten kopieren"
     },

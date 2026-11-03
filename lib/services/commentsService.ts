@@ -587,6 +587,29 @@ export const commentsService = {
    * like every read. Default order oldest-first (the Jira default); `desc`
    * walks newest-first.
    */
+  /**
+   * Where a reply to this comment goes, if the comment is on a work item of THIS
+   * project the caller may see (MOTIR-10233): the thread root and the item. A reply
+   * resolves to its root, because a thread is one level deep. Anything else is the
+   * same `CommentNotFoundError`.
+   */
+  async resolveReplyRootInProject(
+    commentId: string,
+    projectId: string,
+    ctx: ServiceContext,
+  ): Promise<{ commentId: string; workItemId: string }> {
+    const row = await resolveComment(commentId, ctx);
+    let gate: CommentGate;
+    try {
+      gate = await resolveGatedWorkItem(row.workItemId, ctx);
+    } catch (err) {
+      if (err instanceof WorkItemNotFoundError) throw new CommentNotFoundError(commentId);
+      throw err;
+    }
+    if (gate.item.projectId !== projectId) throw new CommentNotFoundError(commentId);
+    return { commentId: row.parentCommentId ?? row.id, workItemId: row.workItemId };
+  },
+
   async listComments(
     workItemId: string,
     options: ListCommentsOptions,

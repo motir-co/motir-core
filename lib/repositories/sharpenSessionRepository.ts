@@ -131,6 +131,19 @@ export const sharpenSessionRepository = {
     });
   },
 
+  /** Every OPEN session on one PLAN, whoever opened it (MOTIR-10233) — what a plan
+   *  closed before it was planned ends, so no grilling is left asking about it. */
+  async listOpenByPlan(
+    planId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<SharpenSession[]> {
+    return tx.sharpenSession.findMany({
+      where: { planId, workspaceId, status: 'open' },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   /** Write the session's running state. */
   async updateState(
     id: string,

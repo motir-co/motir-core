@@ -1256,8 +1256,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     descriptionFingerprint: 'f9b55d5e5987',
   },
   add_comment: {
-    summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
-    descriptionFingerprint: '81d096a6d087',
+    // Re-pinned for MOTIR-10233 with the summary REWRITTEN: the tool gained
+    // `parentCommentId`, so it now also replies under a top-level comment.
+    summary:
+      'Post a Markdown comment, or a reply to a top-level one, as the token owner. Mentions notify the member named.',
+    descriptionFingerprint: '62e48d9a5d8b',
   },
   edit_comment: {
     summary: 'Replace the body of a comment you wrote. Only its author can edit it here.',
@@ -1348,9 +1351,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-9878, summary UNCHANGED: the description now says the
     // `requirement` and `targetKeys` are input the planner settles from; the call
     // is still the one that hands the conversation's intent to the planner.
+    // Re-pinned for MOTIR-10233, summary UNCHANGED: the description gains `fromRun`
+    // and `runCommentId`, which say WHO submits (a run that has exited), not what
+    // the call is for.
     summary: "Send the conversation's accumulated intent to the planner as one change set.",
     // Regenerated from a live `tools/list` handshake, never from the source.
-    descriptionFingerprint: '2fe93c5a3739',
+    descriptionFingerprint: 'c311323d621f',
   },
   link_work_items: {
     summary:

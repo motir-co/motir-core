@@ -112,7 +112,7 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
 
 async function truncateAll(): Promise<void> {
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "plan_change_turn", "plan_change_session", "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "comment", "plan_change_turn", "plan_change_session", "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
 }
@@ -813,6 +813,180 @@ describe('submit_plan_session — the requirement reaches context.requirement', 
       await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }),
     );
     expect(JSON.stringify(reopened)).not.toContain(requirement.outcome);
+    await client.close();
+  });
+});
+
+// MOTIR-10233 — THE RUN MARKER. A run that stopped on a card says so with `fromRun`, and
+// names the comment it left with `runCommentId`; motir-ai keys its question-free session
+// on `context.runReplan`. The cases a lazy implementation would pass under a broken one:
+// the marker must be ABSENT (not `false`, not `{}`) on a person's submit, the comment id
+// must be RESOLVED against the anchors rather than passed through, a reply must resolve
+// to its thread's root, and a malformed pair must spend nothing.
+describe('submit_plan_session — a RUN marks its re-plan (MOTIR-10233)', () => {
+  function sentContext(): Record<string, unknown> {
+    expect(vi.mocked(submitJob)).toHaveBeenCalledTimes(1);
+    return vi.mocked(submitJob).mock.calls[0]![2] as unknown as Record<string, unknown>;
+  }
+
+  async function anchoredThread() {
+    const fx = await makeWorkItemFixture();
+    const card = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Stopped on' },
+      fx.ctx,
+    );
+    const client = await connectClient(fx.ctx);
+    await call(client, APPEND_PLAN_TURN_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      body: 'The card names a service that does not exist.',
+    });
+    return { fx, card, client };
+  }
+
+  it('`fromRun: true` puts `runReplan` on the envelope, with a null comment when none is named', async () => {
+    const { card, client } = await anchoredThread();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      fromRun: true,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: null });
+    await client.close();
+  });
+
+  it('a person’s submit carries NO marker — asserted by absence', async () => {
+    const { card, client } = await anchoredThread();
+    await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+    });
+    expect('runReplan' in sentContext()).toBe(false);
+    await client.close();
+  });
+
+  it('`runCommentId` resolves to its root, and a reply resolves to its root', async () => {
+    const { fx, card, client } = await anchoredThread();
+    const root = await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: card.id,
+        authorId: fx.ownerId,
+        bodyMd: 'Stopped: the service does not exist.',
+      },
+    });
+    const reply = await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: card.id,
+        authorId: fx.ownerId,
+        parentCommentId: root.id,
+        bodyMd: 'More evidence.',
+      },
+    });
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      fromRun: true,
+      runCommentId: reply.id,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: root.id });
+    await client.close();
+  });
+
+  it('THE WIDER LANE: a comment on a card outside `targetKeys` is kept, and the re-plan goes', async () => {
+    const { fx, card, client } = await anchoredThread();
+    const other = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'The card the run stopped on' },
+      fx.ctx,
+    );
+    const elsewhere = await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: other.id,
+        authorId: fx.ownerId,
+        bodyMd: 'Stopped here.',
+      },
+    });
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      fromRun: true,
+      runCommentId: elsewhere.id,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: elsewhere.id });
+    expect(text(res)).not.toContain('did not resolve');
+    await client.close();
+  });
+
+  it('A BAD POINTER costs the reply, never the re-plan, and the run is told', async () => {
+    const { card, client } = await anchoredThread();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      fromRun: true,
+      runCommentId: 'cm_no_such_comment',
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: null });
+    expect(text(res)).toContain('`runCommentId` did not resolve');
+    await client.close();
+  });
+
+  it('NO TARGET with a comment: the comment is the anchor, and the re-plan goes', async () => {
+    const { fx, card, client } = await anchoredThread();
+    const comment = await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: card.id,
+        authorId: fx.ownerId,
+        bodyMd: 'A precondition no card names.',
+      },
+    });
+    await call(client, 'append_plan_turn', {
+      projectKey: 'PROD',
+      body: 'A precondition no card names is missing.',
+    });
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      fromRun: true,
+      runCommentId: comment.id,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: comment.id });
+    await client.close();
+  });
+
+  it('NO TARGET and no comment that resolves: refused, nothing submitted, and the run told how', async () => {
+    const { client } = await anchoredThread();
+    for (const args of [{}, { runCommentId: 'cm_no_such_comment' }]) {
+      const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+        projectKey: 'PROD',
+        fromRun: true,
+        ...args,
+      });
+      expect(res.isError).toBe(true);
+      expect(text(res)).toContain('RUN_REPLAN_NO_ANCHOR');
+      expect(text(res)).toContain('`targetKeys`');
+    }
+    expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
+    await client.close();
+  });
+
+  it('`runCommentId` without `fromRun` is refused BEFORE anything is read or spent', async () => {
+    const { card, client } = await anchoredThread();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      runCommentId: 'cm_whatever',
+    });
+    expect(res.isError).toBe(true);
+    expect(text(res)).toContain('RUN_COMMENT_WITHOUT_RUN');
+    expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
+    expect(await adminDb.plan.count()).toBe(0);
     await client.close();
   });
 });
