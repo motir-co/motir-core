@@ -7,6 +7,7 @@ import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspa
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { toPlanChangeTurnDto } from '@/lib/mappers/planChangeMappers';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
+import { sharpenSessionRepository } from '@/lib/repositories/sharpenSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { planTargetLockRepository } from '@/lib/repositories/planTargetLockRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -238,6 +239,11 @@ export const planOfferService = {
    *  - not the caller's own conversation, or no offer on that turn ⇒ 404;
    *  - already `declined` ⇒ idempotent: the thread comes back, nothing is written;
    *  - `confirmed` or `superseded` ⇒ `PlanOfferNotOpenError`, writing nothing.
+   *
+   * A Grill me grilling still open over the offer ends with it (Bug MOTIR-10255): a
+   * grilling whose Stop cannot finish holds the offer, and Decline is the way out. Its
+   * answers stay on the session. The grilling is locked BEFORE the conversation, the
+   * order every sharpen landing takes.
    */
   async declinePlanOffer(
     turnId: string,
@@ -248,6 +254,13 @@ export const planOfferService = {
     await withWorkspaceContext(
       { userId: pctx.userId, workspaceId: pctx.workspaceId, projectId: pctx.projectId },
       async (tx) => {
+        const latest = await sharpenSessionRepository.findLatestByConversation(
+          address.sessionId,
+          pctx.userId,
+          pctx.workspaceId,
+          tx,
+        );
+        if (latest) await sharpenSessionRepository.lockById(latest.id, tx);
         await lockOwnSession(pctx, address.sessionId, tx);
         const rows = await planChangeTurnRepository.listBySessionId(
           address.sessionId,
@@ -275,6 +288,27 @@ export const planOfferService = {
           } as Prisma.InputJsonValue,
           tx,
         );
+        if (latest && latest.createdAt >= row.createdAt) {
+          const grilling = await sharpenSessionRepository.findByIdInProject(
+            latest.id,
+            pctx.projectId,
+            pctx.workspaceId,
+            tx,
+          );
+          if (grilling?.status === 'open') {
+            await sharpenSessionRepository.updateState(
+              grilling.id,
+              {
+                status: 'ended',
+                endReason: 'stopped',
+                pendingQuestion: null,
+                writeBack: null,
+                lastActivityAt: new Date(),
+              },
+              tx,
+            );
+          }
+        }
       },
     );
     return threadOf(pctx, address.sessionId);

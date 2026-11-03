@@ -308,6 +308,37 @@ describe('the offer is held while the grilling is open', () => {
     expect(screen.queryByTestId('plan-offer')).toBeNull();
     expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
     expect(screen.queryByTestId('plan-offer-decline')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-held-decline')).toBeNull();
+  });
+
+  it('offers Decline once a turn failed, and a decline shows the offer and re-reads the grilling (MOTIR-10255)', async () => {
+    client.settleSharpen.mockResolvedValue({ outcome: 'failed', session: grilling() });
+    const view = await offeredWithGrillOn();
+    const decline = await screen.findByTestId('plan-offer-held-decline');
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+    fireEvent.click(decline);
+    const offerTurn = OFFERED.turns.find((t) => t.offer)!;
+    expect(onDeclinePlanOffer).toHaveBeenCalledWith(offerTurn.id);
+
+    client.getLatestConversationSharpen.mockClear();
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    await act(async () => {
+      view.rerender(
+        rail({
+          session: {
+            ...OFFERED,
+            turns: OFFERED.turns.map((t) =>
+              t.offer ? { ...t, offer: { ...t.offer, state: 'declined' as const } } : t,
+            ),
+          },
+        }),
+      );
+    });
+    expect(client.getLatestConversationSharpen).toHaveBeenCalled();
+    expect(screen.queryByTestId('plan-offer-held')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-held-decline')).toBeNull();
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
   });
 
   it('answers the open question with a typed message instead of sending it to the planner', async () => {

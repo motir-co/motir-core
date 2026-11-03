@@ -731,6 +731,7 @@ export function PlanChangeRail({
               canContinue: !ended && !state.readOnly,
               hasActions: Boolean(onConfirmPlanOffer && onDeclinePlanOffer),
             }),
+          decided: (latestOfferTurn.offer.state ?? 'undecided') !== 'undecided',
         }
       : null;
   const convGrill = useGrillSession({
@@ -1274,6 +1275,8 @@ export function PlanChangeRail({
                   railRef.current?.querySelector('textarea')?.focus();
                 }}
                 onRetry={convGrill.retry}
+                {...(onDeclinePlanOffer ? { onDecline: () => onDeclinePlanOffer(turn.id) } : {})}
+                declining={offerAnsweringTurnId === turn.id}
                 offer={
                   <PlanOffer
                     turnId={turn.id}

@@ -165,17 +165,22 @@ describe('parseSharpenTurn — the requirement a grilling wrote (MOTIR-10255)', 
     expect(ended(null)).not.toHaveProperty('requirement');
   });
 
-  it('caps every part', () => {
-    const long = 'x'.repeat(SHARPEN_CAPS.requirementPart + 10);
-    const parsed = ended({
-      offerTurnId: 't1',
-      requirement: { ...written, outcome: long, assumptions: [long, { id: 'a', text: long }] },
-    });
-    expect(parsed?.requirement?.requirement.outcome).toHaveLength(SHARPEN_CAPS.requirementPart);
-    expect(parsed?.requirement?.requirement.assumptions).toEqual([
-      'x'.repeat(SHARPEN_CAPS.requirementPart),
-      { id: 'a', text: 'x'.repeat(SHARPEN_CAPS.requirementPart) },
-    ]);
+  it('keeps a long part whole: the answers at its end are never cut', () => {
+    const behaviour = `${'x'.repeat(20_000)}\n- Who? — The finance team`;
+    const parsed = ended({ offerTurnId: 't1', requirement: { ...written, behaviour } });
+    expect(parsed?.requirement?.requirement.behaviour).toBe(behaviour);
+  });
+
+  it.each([
+    ['a part', { behaviour: 'x'.repeat(SHARPEN_CAPS.requirementPart + 1) }],
+    ['an optional part', { scopeEdge: 'x'.repeat(SHARPEN_CAPS.requirementPart + 1) }],
+    ['an assumption', { assumptions: ['x'.repeat(SHARPEN_CAPS.requirementPart + 1)] }],
+    [
+      'an assumption entry',
+      { assumptions: [{ id: 'a', text: 'x'.repeat(SHARPEN_CAPS.requirementPart + 1) }] },
+    ],
+  ])('%s over the ceiling is an unreadable turn, never a cut one', (_label, over) => {
+    expect(ended({ offerTurnId: 't1', requirement: { ...written, ...over } })).toBeNull();
   });
 
   it.each([

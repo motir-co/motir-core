@@ -171,7 +171,10 @@ async function grillOnce(
             topic: 'alternative',
             because: null,
             quote: null,
-            readings: [{ id: 'a', label: 'CSV only', detail: '', recommended: true }],
+            readings: [
+              { id: 'a', label: 'CSV only', detail: '', recommended: true },
+              { id: 'b', label: 'CSV and PDF', detail: '', recommended: false },
+            ],
           }
         : null,
     settled: SETTLED,
@@ -291,6 +294,50 @@ describe('the grilling’s end stores the requirement on the offer', () => {
     });
     await aiSharpenService.settle(opened.session.id, opened.jobId!, pctx);
     expect((await rawOffer(offerTurnId))['requirement']).toEqual(BEFORE);
+  });
+});
+
+describe('declining an offer a grilling holds', () => {
+  it('ends the open grilling, keeps its answers, and takes no further act', async () => {
+    const { conversationId, offerTurnId } = await offeredConversation();
+    const sessionId = await grillOnce(conversationId, 'question', {});
+    await planOfferService.declinePlanOffer(offerTurnId, pctx, { sessionId: conversationId });
+    expect((await rawOffer(offerTurnId))['declinedAt']).toEqual(expect.any(String));
+    const row = await adminDb.sharpenSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(row.status).toBe('ended');
+    expect(row.endReason).toBe('stopped');
+    expect(row.pendingQuestion).toBeNull();
+    expect(row.settled).toEqual(SETTLED);
+    await expect(aiSharpenService.act(sessionId, 'stop', {}, pctx)).rejects.toThrow();
+  });
+
+  it('a failed Stop still lets the offer be declined, and a late result writes nothing', async () => {
+    const { conversationId, offerTurnId } = await offeredConversation();
+    const sessionId = await grillOnce(conversationId, 'question', {});
+    const stop = await aiSharpenService.act(sessionId, 'stop', {}, pctx);
+    await planOfferService.declinePlanOffer(offerTurnId, pctx, { sessionId: conversationId });
+    jobs.results.set(stop.jobId!, {
+      kind: 'stopped',
+      question: null,
+      settled: SETTLED,
+      assumptions: [],
+      writeBack: null,
+      requirement: { offerTurnId, requirement: WRITTEN },
+    });
+    await aiSharpenService.settle(sessionId, stop.jobId!, pctx);
+    expect((await rawOffer(offerTurnId))['requirement']).toEqual(BEFORE);
+  });
+
+  it('leaves a grilling alone when it began before the offer', async () => {
+    const first = await offeredConversation();
+    const sessionId = await grillOnce(first.conversationId, 'question', {});
+    const later = await adminDb.planChangeTurn.update({
+      where: { id: first.offerTurnId },
+      data: { createdAt: new Date(Date.now() + 60_000) },
+    });
+    await planOfferService.declinePlanOffer(later.id, pctx, { sessionId: first.conversationId });
+    const row = await adminDb.sharpenSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(row.status).toBe('open');
   });
 });
 

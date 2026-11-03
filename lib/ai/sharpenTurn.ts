@@ -68,8 +68,9 @@ export const SHARPEN_CAPS = {
   answer: 4_000,
   error: 500,
   entries: 200,
-  /** One part of a written requirement (MOTIR-10255). */
-  requirementPart: 8_000,
+  /** The ceiling on one part of a written requirement (MOTIR-10255): past it the turn
+   *  is unreadable. Never cut: the answers are at the end of a part. */
+  requirementPart: 64_000,
 } as const;
 
 /** The three requirement parts a planning run refuses when blank (motir-ai's
@@ -166,8 +167,8 @@ function writeBack(v: unknown): SharpenTurnResult['writeBack'] {
 /**
  * The requirement a grilling's end wrote, through the ONE shipped narrowing and then
  * held to what a planning run reads: the three required parts non-blank, every part
- * capped, the assumptions a list. Anything else is unparseable — a failed turn, so the
- * offer is never shown as holding answers it does not hold.
+ * under its ceiling, the assumptions a list. Anything else is unparseable — a failed
+ * turn, so the offer is never shown as holding answers it does not hold.
  */
 function writtenRequirement(v: unknown): SharpenTurnResult['requirement'] {
   if (v === null || v === undefined) return undefined;
@@ -175,16 +176,21 @@ function writtenRequirement(v: unknown): SharpenTurnResult['requirement'] {
   const offerTurnId = str(w.offerTurnId, SHARPEN_CAPS.id);
   const narrowed = narrowSharpenedRequirement(w.requirement);
   if (!narrowed || !Array.isArray(narrowed.assumptions)) throw new Unparseable();
-  for (const part of REQUIRED_PARTS) str(narrowed[part], SHARPEN_CAPS.requirementPart);
+  const whole = (part: unknown, opts: { empty?: boolean } = {}): string => {
+    const text = str(part, Number.POSITIVE_INFINITY, opts);
+    if (text.length > SHARPEN_CAPS.requirementPart) throw new Unparseable();
+    return text;
+  };
+  for (const part of REQUIRED_PARTS) whole(narrowed[part]);
   const requirement: SubmittedRequirement = {
     assumptions: list(narrowed.assumptions, (a: unknown) => {
-      if (typeof a === 'string') return str(a, SHARPEN_CAPS.requirementPart);
+      if (typeof a === 'string') return whole(a);
       const entry = a as RequirementRecommendation;
-      return { ...entry, text: str(entry.text, SHARPEN_CAPS.requirementPart) };
+      return { ...entry, text: whole(entry.text) };
     }),
   };
   for (const part of ['outcome', 'behaviour', 'scopeEdge', 'constraints', 'acceptance'] as const) {
-    requirement[part] = str(narrowed[part] ?? '', SHARPEN_CAPS.requirementPart, { empty: true });
+    requirement[part] = whole(narrowed[part] ?? '', { empty: true });
   }
   return { offerTurnId, requirement };
 }
