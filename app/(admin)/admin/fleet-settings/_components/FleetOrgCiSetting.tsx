@@ -19,7 +19,11 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Pill } from '@/components/ui/Pill';
 import { Switch } from '@/components/ui/Switch';
-import type { FleetOrgCiStateDTO, FleetOrgCiTargetDTO } from '@/lib/dto/fleetOrgCiSetting';
+import type {
+  FleetOrgCiCodeScanningDTO,
+  FleetOrgCiStateDTO,
+  FleetOrgCiTargetDTO,
+} from '@/lib/dto/fleetOrgCiSetting';
 import {
   setFleetOrgCiAction,
   type FleetOrgCiActionResult,
@@ -87,6 +91,14 @@ type Answer =
       status: number | null;
       operation: 'read' | 'set' | 'delete';
     }
+  | {
+      kind: 'codeScanningFailed';
+      enabled: boolean;
+      repo: string;
+      status: number | null;
+      operation: 'read' | 'write';
+      to: 'fleet' | 'github_hosted';
+    }
   | { kind: 'refused'; code: 'NOT_PERMITTED' | 'TARGET_UNKNOWN' | 'FAILED'; enabled: boolean };
 
 type T = ReturnType<typeof useTranslations<'platformAdmin.fleetSettings'>>;
@@ -146,6 +158,16 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
           org: result.org,
           status: result.status,
           operation: result.operation,
+        });
+        return;
+      case 'CODE_SCANNING_FAILED':
+        setAnswer({
+          kind: 'codeScanningFailed',
+          enabled: asked,
+          repo: `${result.org}/${result.repo}`,
+          status: result.status,
+          operation: result.operation,
+          to: result.to,
         });
         return;
       case 'NOT_PERMITTED':
@@ -313,6 +335,15 @@ export function FleetOrgCiSetting({ target, state, constants }: FleetOrgCiSettin
                   : variable.status === null
                     ? t('variable.unreachable', { name, org })
                     : t('variable.unknown', { name, org, status: variable.status })}
+            </dd>
+            <dt className="text-(--el-text-secondary)">{t('meta.codeScanning')}</dt>
+            <dd data-testid="fleet-org-ci-code-scanning">
+              <CodeScanningList
+                entries={state.codeScanning}
+                t={t}
+                org={org}
+                label={constants.runnerLabel}
+              />
             </dd>
             {repositories ? (
               <>
@@ -489,6 +520,32 @@ function AnswerBand({
           <p>{t('refused.nothingChanged')}</p>
         </Band>
       );
+    case 'codeScanningFailed': {
+      const values = {
+        direction: direction(answer.enabled),
+        repo: answer.repo,
+        runner: t(answer.to === 'fleet' ? 'runner.fleet' : 'runner.githubHosted'),
+      };
+      const read = answer.operation === 'read';
+      return (
+        <Band tone="danger" role="alert" testId="fleet-org-ci-answer">
+          <p>
+            {answer.status === null
+              ? t(
+                  read
+                    ? 'refused.codeScanningReadUnreachable'
+                    : 'refused.codeScanningWriteUnreachable',
+                  values,
+                )
+              : t(read ? 'refused.codeScanningReadStatus' : 'refused.codeScanningWriteStatus', {
+                  ...values,
+                  status: answer.status,
+                })}
+          </p>
+          <p>{t('refused.codeScanningNothingChanged')}</p>
+        </Band>
+      );
+    }
     case 'notReady':
       return (
         <Band tone="danger" role="alert" testId="fleet-org-ci-answer">
@@ -511,6 +568,50 @@ function AnswerBand({
         </Band>
       );
   }
+}
+
+/**
+ * Where each private repository's CodeQL default setup runs (MOTIR-10289). Only
+ * a repository with default setup CONFIGURED is listed — one without it has no
+ * CodeQL job to place — plus any whose setting could not be read, which says so
+ * rather than guessing.
+ */
+function CodeScanningList({
+  entries,
+  t,
+  org,
+  label,
+}: {
+  entries: FleetOrgCiCodeScanningDTO[];
+  t: T;
+  org: string;
+  label: string;
+}) {
+  const shown = entries.filter((e) => e.state !== 'not_configured' && e.state !== 'unavailable');
+  if (shown.length === 0) {
+    return <span className="text-(--el-text-secondary)">{t('codeScanning.none', { org })}</span>;
+  }
+  return (
+    <ul className="flex flex-col gap-1">
+      {shown.map((entry) => (
+        <li
+          key={entry.repo}
+          className="text-(--el-text)"
+          data-testid={`fleet-org-ci-code-scanning-${entry.repo}`}
+          data-state={entry.state}
+        >
+          <span className="font-mono text-xs text-(--el-text-strong)">{entry.repo}</span> —{' '}
+          {entry.state === 'fleet'
+            ? t('codeScanning.fleet', { label })
+            : entry.state === 'github_hosted'
+              ? t('codeScanning.githubHosted')
+              : entry.state === 'unknown' && entry.status !== null
+                ? t('codeScanning.unknownStatus', { status: entry.status })
+                : t('codeScanning.unknownUnreachable')}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function ReadinessCard({

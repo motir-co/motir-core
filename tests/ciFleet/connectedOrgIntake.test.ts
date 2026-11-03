@@ -308,6 +308,30 @@ describe('the connected-org fallback', () => {
   });
 });
 
+describe('boot scoping is the label, never the fleet switch (MOTIR-10289)', () => {
+  // The switch moves what jobs REQUEST — the org variable and, since MOTIR-10289,
+  // CodeQL default setup. A job that still requests the label (a default setup
+  // nobody moved, a hand-edited workflow) is served whatever the switch says
+  // (`lib/ciFleet/config.ts`, "AND NOT BY TENANT FLAG").
+  it.each([
+    ['stored off', false],
+    ['stored on', true],
+  ])('a fleet-labelled job is recorded with the switch %s', async (_l, enabled) => {
+    const fx = await seedMirror();
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: CONNECTED_ORG.toLowerCase(), enabled },
+    });
+
+    const result = await ciRunnerProvisioningService.recordQueuedJob(
+      event({ jobName: 'Analyze (javascript-typescript)', workflowName: 'CodeQL' }),
+      STUDIO_INSTALLATION,
+    );
+
+    expect(result).toMatchObject({ outcome: 'recorded', projectId: fx.projectId });
+    expect(await adminDb.ciRunnerProvisioningIntent.count()).toBe(1);
+  });
+});
+
 describe('the paths the fallback must not touch', () => {
   it('a job that is not fleet-labelled reads nothing and calls nothing', async () => {
     const findMany = vi.spyOn(adminDb.githubRepo, 'findMany');

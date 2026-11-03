@@ -12586,7 +12586,8 @@
         "neverChanged": "Nooit gewijzigd",
         "auditLink": "Auditlogboek",
         "variable": "GitHub-variabele",
-        "repositories": "Repository's"
+        "repositories": "Repository's",
+        "codeScanning": "Standaardinstelling van CodeQL"
       },
       "variable": {
         "present": "{name} = {value} op {org} (privérepository's) — nieuwe jobs vragen de vloot aan.",
@@ -12606,6 +12607,13 @@
       },
       "repositories": {
         "count": "{count, plural, one {# privérepository} other {# privérepository's}}, tijdens runtime gelezen uit de privérepository's van project {project} op {org}"
+      },
+      "codeScanning": {
+        "fleet": "op de vloot ({label})",
+        "githubHosted": "op door GitHub gehoste runners",
+        "unknownStatus": "kon niet worden gelezen — GitHub antwoordde met HTTP {status}",
+        "unknownUnreachable": "kon niet worden gelezen — GitHub was niet bereikbaar",
+        "none": "Geen enkele privérepository op {org} heeft de standaardinstelling van CodeQL geconfigureerd."
       },
       "monitoringLine": "De machines van Motir verschijnen onder moooon B.V. in Monitoring › Vloot",
       "onCallout": {
@@ -12710,6 +12718,11 @@
         "githubStatus": "Niet {direction}: GitHub weigerde {name} op {org} te {operation} (HTTP {status}).",
         "githubUnreachable": "Niet {direction}: GitHub was niet bereikbaar om {name} op {org} te {operation}.",
         "nothingChanged": "Er is niets veranderd: de instelling en de GitHub-variabele zijn zoals ze waren.",
+        "codeScanningWriteStatus": "Niet {direction}: GitHub weigerde de standaardinstelling van CodeQL van {repo} naar {runner} te verplaatsen (HTTP {status}).",
+        "codeScanningWriteUnreachable": "Niet {direction}: GitHub was niet bereikbaar om de standaardinstelling van CodeQL van {repo} naar {runner} te verplaatsen.",
+        "codeScanningReadStatus": "Niet {direction}: GitHub weigerde de standaardinstelling van CodeQL van {repo} te lezen (HTTP {status}).",
+        "codeScanningReadUnreachable": "Niet {direction}: GitHub was niet bereikbaar om de standaardinstelling van CodeQL van {repo} te lezen.",
+        "codeScanningNothingChanged": "Er is niets veranderd: de instelling, de GitHub-variabele en de standaardinstelling van CodeQL van elke repository zijn zoals ze waren.",
         "notReady": "Niet aangezet: de vloot was niet meer gereed nadat deze pagina was geladen.",
         "notReadyList": "Nu niet voldaan: {conditions}. Er is niets veranderd. De gereedheid hieronder is opnieuw gecontroleerd.",
         "notPermitted": "Niet gewijzigd: alleen een superadmin kan deze instelling wijzigen.",
@@ -12723,6 +12736,10 @@
       "direction": {
         "on": "aangezet",
         "off": "uitgezet"
+      },
+      "runner": {
+        "fleet": "de vloot",
+        "githubHosted": "door GitHub gehoste runners"
       },
       "operation": {
         "read": "lezen",

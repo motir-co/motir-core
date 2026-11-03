@@ -12586,7 +12586,8 @@
         "neverChanged": "Nunca cambiado",
         "auditLink": "Registro de auditoría",
         "variable": "Variable de GitHub",
-        "repositories": "Repositorios"
+        "repositories": "Repositorios",
+        "codeScanning": "Configuración predeterminada de CodeQL"
       },
       "variable": {
         "present": "{name} = {value} en {org} (repositorios privados): los nuevos jobs solicitan la flota.",
@@ -12606,6 +12607,13 @@
       },
       "repositories": {
         "count": "{count, plural, one {# repositorio privado} other {# repositorios privados}}, leídos en tiempo de ejecución de los repositorios privados del proyecto {project} en {org}"
+      },
+      "codeScanning": {
+        "fleet": "en la flota ({label})",
+        "githubHosted": "en runners alojados en GitHub",
+        "unknownStatus": "no se pudo leer: GitHub respondió HTTP {status}",
+        "unknownUnreachable": "no se pudo leer: no se pudo contactar con GitHub",
+        "none": "Ningún repositorio privado en {org} tiene configurada la configuración predeterminada de CodeQL."
       },
       "monitoringLine": "Las máquinas de Motir aparecen bajo moooon B.V. en Monitorización › Flota",
       "onCallout": {
@@ -12710,6 +12718,11 @@
         "githubStatus": "No se ha {direction}: GitHub se negó a {operation} {name} en {org} (HTTP {status}).",
         "githubUnreachable": "No se ha {direction}: no se pudo contactar con GitHub para {operation} {name} en {org}.",
         "nothingChanged": "No ha cambiado nada: el ajuste y la variable de GitHub siguen como estaban.",
+        "codeScanningWriteStatus": "No se ha {direction}: GitHub se negó a mover la configuración predeterminada de CodeQL de {repo} a {runner} (HTTP {status}).",
+        "codeScanningWriteUnreachable": "No se ha {direction}: no se pudo contactar con GitHub para mover la configuración predeterminada de CodeQL de {repo} a {runner}.",
+        "codeScanningReadStatus": "No se ha {direction}: GitHub se negó a leer la configuración predeterminada de CodeQL de {repo} (HTTP {status}).",
+        "codeScanningReadUnreachable": "No se ha {direction}: no se pudo contactar con GitHub para leer la configuración predeterminada de CodeQL de {repo}.",
+        "codeScanningNothingChanged": "No ha cambiado nada: el ajuste, la variable de GitHub y la configuración predeterminada de CodeQL de cada repositorio siguen como estaban.",
         "notReady": "No se ha activado: la flota dejó de estar lista después de que se cargara esta página.",
         "notReadyList": "No cumplidas ahora: {conditions}. No ha cambiado nada. La disponibilidad de abajo se ha comprobado de nuevo.",
         "notPermitted": "Sin cambios: solo un superadmin puede cambiar este ajuste.",
@@ -12723,6 +12736,10 @@
       "direction": {
         "on": "activado",
         "off": "desactivado"
+      },
+      "runner": {
+        "fleet": "la flota",
+        "githubHosted": "runners alojados en GitHub"
       },
       "operation": {
         "read": "leer",

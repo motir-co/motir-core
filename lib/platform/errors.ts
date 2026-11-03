@@ -625,3 +625,33 @@ export class FleetOrgCiGithubWriteError extends Error {
     this.name = 'FleetOrgCiGithubWriteError';
   }
 }
+
+/**
+ * A fleet flip could not read or move ONE repository's CodeQL default setup
+ * (MOTIR-10289). The same rule as {@link FleetOrgCiGithubWriteError}: nothing is
+ * stored, no audit row is written, and whatever the flip had already moved on
+ * GitHub is put back. `to` names the runner the flip was moving the repository
+ * onto, so the operator reads which way it failed.
+ */
+export class FleetOrgCiCodeScanningError extends Error {
+  readonly code = 'FLEET_ORG_CI_CODE_SCANNING_FAILED';
+
+  constructor(
+    readonly org: string,
+    readonly repo: string,
+    readonly status: number | null,
+    readonly operation: 'read' | 'write',
+    readonly to: 'fleet' | 'github_hosted',
+  ) {
+    const what =
+      operation === 'read'
+        ? `read the CodeQL default setup of ${org}/${repo}`
+        : `move the CodeQL default setup of ${org}/${repo} to ${to === 'fleet' ? 'the fleet' : 'GitHub-hosted runners'}`;
+    super(
+      status === null
+        ? `GitHub could not be reached to ${what}`
+        : `GitHub refused to ${what} (HTTP ${status})`,
+    );
+    this.name = 'FleetOrgCiCodeScanningError';
+  }
+}

@@ -20,6 +20,10 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { repoVisibilityClient } from '@/lib/github/repoVisibility';
 import {
+  CodeScanningDefaultSetupApiError,
+  codeScanningDefaultSetupClient,
+} from '@/lib/github/codeScanningDefaultSetup';
+import {
   fleetOrgCiStorePath,
   installGithubFleetOrgCiMock,
   type FleetOrgCiCall,
@@ -233,6 +237,85 @@ describe('the MOTIR_RUNNER variable store', () => {
       headers: { authorization: 'Bearer somebody-elses-token' },
     });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('CodeQL default setup (MOTIR-10289)', () => {
+  const configured: FleetOrgCiControl = {
+    orgs: {
+      [ORG]: {
+        ...READY.orgs![ORG]!,
+        repositories: [
+          {
+            id: 501,
+            name: 'api',
+            defaultSetup: {
+              state: 'configured',
+              runnerType: 'labeled',
+              runnerLabel: 'motir-runner',
+            },
+          },
+          { id: 503, name: 'tools' },
+        ],
+      },
+    },
+  };
+
+  it('answers the control, else not configured, and a PATCH moves the runner in the store', async () => {
+    control(configured);
+    expect(await codeScanningDefaultSetupClient.get(ORG, 'api', target)).toEqual({
+      state: 'configured',
+      runner: { type: 'labeled', label: 'motir-runner' },
+    });
+    expect(await codeScanningDefaultSetupClient.get(ORG, 'tools', target)).toEqual({
+      state: 'not-configured',
+    });
+    await codeScanningDefaultSetupClient.setRunner(ORG, 'api', { type: 'standard' }, target);
+    expect(await codeScanningDefaultSetupClient.get(ORG, 'api', target)).toEqual({
+      state: 'configured',
+      runner: { type: 'standard' },
+    });
+    expect(store().defaultSetups?.['acme-connected']?.['api']).toEqual({
+      state: 'configured',
+      runnerType: 'standard',
+      runnerLabel: null,
+    });
+    await codeScanningDefaultSetupClient.setRunner(
+      ORG,
+      'api',
+      { type: 'labeled', label: 'motir-runner' },
+      target,
+    );
+    expect(store().defaultSetups?.['acme-connected']?.['api']).toMatchObject({
+      runnerType: 'labeled',
+      runnerLabel: 'motir-runner',
+    });
+  });
+
+  it('a PATCH on a repository not configured is refused 422 and configures nothing', async () => {
+    control(configured);
+    const err = await codeScanningDefaultSetupClient
+      .setRunner(ORG, 'tools', { type: 'standard' }, target)
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CodeScanningDefaultSetupApiError);
+    expect(err).toMatchObject({ status: 422 });
+    expect(store().defaultSetups?.['acme-connected']?.['tools']).toBeUndefined();
+  });
+
+  it('an unknown repository is 404, and a call without the minted token is 401', async () => {
+    control(configured);
+    await expect(codeScanningDefaultSetupClient.get(ORG, 'nope', target)).rejects.toMatchObject({
+      status: 404,
+    });
+    const res = await fetch(`https://api.github.com/repos/${ORG}/api/code-scanning/default-setup`, {
+      headers: { authorization: 'Bearer forged' },
+    });
+    expect(res.status).toBe(401);
+    expect(
+      journal()
+        .filter((c) => c.path.endsWith('/default-setup'))
+        .map((c) => c.status),
+    ).toEqual([404, 401]);
   });
 });
 
