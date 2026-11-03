@@ -619,6 +619,22 @@ export interface JobContextBag {
   // the planner's own and keep it fixed. It replaced `requirementPage`, which the run no
   // longer waits for: the page is saved in the background after the start.
   requirementConfirmed?: RequirementConfirmation;
+  // THE RUN MARKER (MOTIR-10233 producer ↔ motir-ai `readRunReplan` consumer) — this
+  // submit is a RUN's re-plan: the run stopped on a card and exited, so nobody is there
+  // to answer a question. Set ONLY by `submit_plan_session { fromRun: true }`, never by a
+  // surface a person drives. motir-ai keys on it to open its question-free first session,
+  // the only session that may answer "this cannot be planned".
+  runReplan?: RunReplanOrigin;
+}
+
+/**
+ * Where a run's re-plan came from (MOTIR-10233). `commentId` is the comment the run
+ * left on the card when it stopped — checked to sit on one of the submit's targets — so
+ * a can't-plan verdict replies to it instead of guessing which comment it was. `null`
+ * when the run named none.
+ */
+export interface RunReplanOrigin {
+  commentId: string | null;
 }
 
 /** Which plan offer a confirmed requirement came from (MOTIR-10091). */

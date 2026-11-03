@@ -16090,6 +16090,7 @@
       "plannersAssumption": "Założenie planisty",
       "writingPlanOnly": "Zapisywanie odpowiedzi w wymaganiu planu…",
       "writtenPlanOnly": "Zapisano w wymaganiu planu.",
+      "planClosed": "Plan został zamknięty, zanim powstał, więc te odpowiedzi nie były potrzebne.",
       "failed": "Odpowiedzi nie zostały zapisane. Nadal są tutaj.",
       "copy": "Kopiuj odpowiedzi"
     },

@@ -51,7 +51,12 @@ import { readPlanningTurn } from '@/lib/planning/plannerTurn';
 import { readCodeUnreadable } from '@/lib/planning/codeUnreadable';
 import { readCodeUnsearchable, type CodeUnsearchableRepo } from '@/lib/planning/codeUnsearchable';
 import { getJob } from '@/lib/ai/motirAiClient';
-import type { CarriedAnswers, RequirementConfirmation, SubmittedRequirement } from '@/lib/ai/types';
+import type {
+  CarriedAnswers,
+  RequirementConfirmation,
+  RunReplanOrigin,
+  SubmittedRequirement,
+} from '@/lib/ai/types';
 import { turnSubmitKey } from '@/lib/ai/turnSubmitKey';
 import { readGuideTurnRecord, type GuideTurnRecord } from '@/lib/ai/guideWorkItem';
 import type {
@@ -2256,13 +2261,14 @@ export const planChangeSessionsService = {
     scope: PlanChangeScope,
     requirement?: SubmittedRequirement,
     sessionId?: string,
+    runReplan?: RunReplanOrigin,
   ): Promise<PlanChangeSubmitResultDto> {
     // Gated by the SIBLINGS it delegates to (`findResumable` browse, `submit`
     // `ai:plan`) — `tests/permissions/noUngovernedOperation.test.ts` follows this
     // `this.` hop as its real-code control.
     const id = sessionId ?? (await this.findResumable(pctx, scope.scopeKey))?.id;
     if (!id) throw new PlanChangeSessionNotFoundError(pctx.projectId);
-    return this.submit(pctx, { sessionId: id }, requirement);
+    return this.submit(pctx, { sessionId: id }, requirement, runReplan ? { runReplan } : {});
   },
 
   /**
@@ -3167,6 +3173,9 @@ export const planChangeSessionsService = {
       /** Send NO carried answers (MOTIR-9436): a confirmed offer's composed requirement
        *  already holds what Grill me settled, and a second copy would be folded in twice. */
       omitCarriedAnswers?: boolean;
+      /** THE RUN MARKER (MOTIR-10233): this submit is a run's re-plan. Rides the job as
+       *  `context.runReplan`; set only by `submit_plan_session { fromRun: true }`. */
+      runReplan?: RunReplanOrigin;
     } = {},
   ): Promise<PlanChangeSubmitResultDto> {
     const session = await requireSession(pctx, address);
@@ -3288,6 +3297,7 @@ export const planChangeSessionsService = {
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(carriedAnswers ? { carriedAnswers } : {}),
       ...(opts.requirementConfirmed ? { requirementConfirmed: opts.requirementConfirmed } : {}),
+      ...(opts.runReplan ? { runReplan: opts.runReplan } : {}),
     };
     let submitted: { jobId: string; planId: string };
     try {

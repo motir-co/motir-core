@@ -412,6 +412,51 @@ describe('add_comment', () => {
     expect(res.isError).toBe(true);
     expect(JSON.stringify(res.content)).toContain('EMPTY_COMMENT_BODY');
   });
+
+  // MOTIR-10233 — `parentCommentId` makes the comment a REPLY. The planner answers a
+  // run's re-plan it cannot plan as a reply to the run's own comment, so the door has
+  // to land the row UNDER that comment, and refuse what the item page's reply box
+  // refuses: a parent on another item, and a reply to a reply.
+  it('replies to a top-level comment on the same item when `parentCommentId` is given', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Threaded' },
+      fx.ctx,
+    );
+    const root = await runAddComment({ key: item.identifier, body: 'the run said this' }, fx.ctx);
+    expect(root.isError).toBeFalsy();
+    const rootId = (root.structuredContent as { id: string }).id;
+
+    const reply = await runAddComment(
+      { key: item.identifier, body: 'and the planner answers', parentCommentId: rootId },
+      fx.ctx,
+    );
+    expect(reply.isError).toBeFalsy();
+    const replyId = (reply.structuredContent as { id: string }).id;
+    const row = await adminDb.comment.findUniqueOrThrow({ where: { id: replyId } });
+    expect(row.parentCommentId).toBe(rootId);
+    expect(row.workItemId).toBe(item.id);
+
+    // A reply to the reply is one level too deep.
+    const deeper = await runAddComment(
+      { key: item.identifier, body: 'too deep', parentCommentId: replyId },
+      fx.ctx,
+    );
+    expect(deeper.isError).toBe(true);
+    expect(JSON.stringify(deeper.content)).toContain('REPLY_DEPTH_EXCEEDED');
+
+    // A parent on another item is refused, never re-homed.
+    const other = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Elsewhere' },
+      fx.ctx,
+    );
+    const foreign = await runAddComment(
+      { key: other.identifier, body: 'wrong thread', parentCommentId: rootId },
+      fx.ctx,
+    );
+    expect(foreign.isError).toBe(true);
+    expect(await adminDb.comment.count({ where: { workItemId: other.id } })).toBe(0);
+  });
 });
 
 describe('cross-tenant — every write tool is 404-not-403', () => {

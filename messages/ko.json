@@ -16084,6 +16084,7 @@
       "plannersAssumption": "플래너의 가정",
       "writingPlanOnly": "답변을 계획의 요구사항에 기록하는 중…",
       "writtenPlanOnly": "계획의 요구사항에 기록했습니다.",
+      "planClosed": "계획이 작성되기 전에 닫혀서 이 답변은 필요하지 않았습니다.",
       "failed": "답변이 기록되지 않았습니다. 답변은 여기에 그대로 있습니다.",
       "copy": "답변 복사"
     },

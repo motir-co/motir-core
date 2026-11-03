@@ -587,6 +587,27 @@ export const commentsService = {
    * like every read. Default order oldest-first (the Jira default); `desc`
    * walks newest-first.
    */
+  /**
+   * THE THREAD A REPLY TO `commentId` LANDS IN, checked to sit on one of `workItemIds`
+   * (MOTIR-10233) — what `submit_plan_session` resolves a run's comment through, so the
+   * planner's answer replies under the run's own comment and never under a guess.
+   *
+   * Answers the ROOT: a thread is one level deep, so a reply's parent is where an
+   * answer to it goes. View-gated like every read — an item the caller cannot see is
+   * not found — and a comment on none of the items, another tenant's or a missing one
+   * is {@link CommentNotFoundError}, never a silent re-home.
+   */
+  async resolveReplyRootOn(
+    commentId: string,
+    workItemIds: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<{ commentId: string; workItemId: string }> {
+    const row = await resolveComment(commentId, ctx);
+    if (!workItemIds.includes(row.workItemId)) throw new CommentNotFoundError(commentId);
+    await resolveGatedWorkItem(row.workItemId, ctx);
+    return { commentId: row.parentCommentId ?? row.id, workItemId: row.workItemId };
+  },
+
   async listComments(
     workItemId: string,
     options: ListCommentsOptions,

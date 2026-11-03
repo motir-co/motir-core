@@ -40,6 +40,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         minLength: 1,
         description: 'The comment body (Markdown). Mention a member with @[name](userId).',
       },
+      parentCommentId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL. The `id` of a comment on the SAME work item to REPLY to — a top-level comment, since a thread is one level deep. Omit it for a new top-level comment. A comment on another work item, or a reply, is refused.',
+      },
     },
     required: ['key', 'body'],
     additionalProperties: false,
@@ -3709,6 +3715,17 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         additionalProperties: false,
         description:
           'OPTIONAL. WHAT you want built, as six named fields instead of prose. It is INPUT: the planner reads it beside the thread, then settles the targets and writes the requirement it plans against itself. Supply as much as you actually know: nothing here is validated, and a partial requirement submits fine. Three fields (`outcome`, `behaviour`, `acceptance`) must be present and non-empty for the planner to read it; short of that it is ignored, which is the same as omitting this argument.',
+      },
+      fromRun: {
+        type: 'boolean',
+        description:
+          'OPTIONAL. Set `true` when YOU ARE A RUN that stopped on a card and is about to exit, so nobody will be there to answer a question. The planner then asks nothing: it either writes the requirement from what you sent and starts planning, or — when your text makes no sense or contradicts itself — plans nothing, comments on the card why, and leaves it at Planning. Omit it when a person is driving this submit.',
+      },
+      runCommentId: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'OPTIONAL, and only with `fromRun: true`. The `id` of the comment you posted on the card when you stopped (from `add_comment`). It must sit on one of `targetKeys`. A planner that cannot plan your report answers as a REPLY to it; without it, it comments on the card instead.',
       },
     },
     required: ['projectKey'],

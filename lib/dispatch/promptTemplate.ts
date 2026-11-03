@@ -2862,6 +2862,9 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     `     ${permitted}`,
     `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
     '     file you read, the command you ran, what it said.',
+    ...(policy.replan
+      ? ["     Keep the comment's `id` from the add_comment result: step 7 names it."]
+      : []),
     ...agentReportStep(src),
   ];
 
@@ -2903,9 +2906,16 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '',
     `         projectKey:  ${src.projectKey}`,
     `         targetKeys:  [${src.key}]   — the same anchor, again`,
+    '         fromRun:      true — you are a run, and you are about to exit',
+    '         runCommentId: the id of your step-3 comment',
     '         requirement: six named fields, in this order —',
     ...requirementBrief(),
     '',
+    '     fromRun tells the planner nobody is there to answer a question. It asks',
+    '     none: it writes the requirement from what you sent and plans, or — when',
+    '     your text makes no sense or contradicts itself — it plans nothing and',
+    '     replies under your step-3 comment saying why. Either way the card stays',
+    '     at Planning until a person acts.',
     '     Both calls carry targetKeys, because two calls are two chances to drop',
     '     it. This is your ONLY contribution: nothing will come back and ask you',
     '     — you have exited by the time the planner reads it, and these six fields',
@@ -2918,14 +2928,16 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     CARD, not why it was planned that way: you are not asked to classify the',
     '     mistake, and a guess would be filed as a fact.',
     '     If you genuinely cannot articulate the problem, submit anyway, WITHOUT',
-    '     requirement — refusing the card must never wait on writing well. The',
-    '     planner opens a conversation with the operator instead.',
+    '     requirement but still with fromRun — refusing the card',
+    '     must never wait on writing well. The planner reads your planning-thread',
+    '     turn instead and answers the same way: it plans, or it replies why not.',
     "  8. SUBMITTING IS THE ACT THAT SPENDS the token owner's AI credits, and you",
     '     do it exactly ONCE. Never retry it, even on a timeout — a blind retry in',
     '     an unattended run costs them twice for one finding. The one exception:',
     '     if submit_plan_session REJECTS your arguments (a malformed requirement),',
     '     nothing happened — no job was created and no credits were spent — so',
-    '     re-submit once, WITHOUT the requirement. That is the only retry there is.',
+    '     re-submit once, WITHOUT the requirement (keep fromRun and runCommentId).',
+    '     That is the only retry there is.',
     '  9. Stop. Do not pick up other work.',
   ];
 }

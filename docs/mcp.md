@@ -1606,10 +1606,11 @@ Post a Markdown comment on a work item as the token owner. Mention parsing,
 exactly as from the UI — a mention emails the mentioned member with no
 MCP-specific wiring.
 
-| Input  | Type   | Required | Notes                                                    |
-| ------ | ------ | -------- | -------------------------------------------------------- |
-| `key`  | string | yes      | Work item identifier.                                    |
-| `body` | string | yes      | Comment body (Markdown). Mention with `@[name](userId)`. |
+| Input             | Type   | Required | Notes                                                                                                              |
+| ----------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `key`             | string | yes      | Work item identifier.                                                                                              |
+| `body`            | string | yes      | Comment body (Markdown). Mention with `@[name](userId)`.                                                           |
+| `parentCommentId` | string | no       | Reply to this TOP-LEVEL comment on the same item (MOTIR-10233). A comment on another item, or a reply, is refused. |
 
 **Output** — `structuredContent`: the created `CommentDTO`.
 

@@ -18,6 +18,9 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 // auto-watch, and the `work-item/comment.created` job event all fire EXACTLY as
 // from the UI — a mention in an agent's comment emails the mentioned user
 // (5.1.6) with zero MCP-specific wiring. No business logic here.
+//
+// `parentCommentId` (MOTIR-10233) makes it a REPLY — the service's single-level
+// thread rule (a root on the same item) is the only check, exactly as in the UI.
 
 export const ADD_COMMENT_TOOL_NAME = 'add_comment';
 
@@ -27,6 +30,16 @@ const inputSchema = {
     .string()
     .min(1)
     .describe('The comment body (Markdown). Mention a member with @[name](userId).'),
+  parentCommentId: z
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      'OPTIONAL. The `id` of a comment on the SAME work item to REPLY to — a top-level ' +
+        'comment, since a thread is one level deep. Omit it for a new top-level comment. ' +
+        'A comment on another work item, or a reply, is refused.',
+    ),
 };
 
 /** Compact human-readable summary of a newly-created comment. */
@@ -39,14 +52,23 @@ function summarize(identifier: string, comment: CommentDTO): string {
 
 /** The adapter: resolve project + item by key, then add the comment. */
 export async function runAddComment(
-  args: { key: string; body: string },
+  args: { key: string; body: string; parentCommentId?: string },
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
   try {
     const identifier = normalizeIdentifier(args.key);
     const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
     const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
-    const comment = await commentsService.addComment(item.id, { bodyMd: args.body }, ctx);
+    // A REPLY (MOTIR-10233): the service checks the parent sits on THIS item and is a
+    // root, the same rules the item page's reply box meets.
+    const comment = await commentsService.addComment(
+      item.id,
+      {
+        bodyMd: args.body,
+        ...(args.parentCommentId ? { parentCommentId: args.parentCommentId } : {}),
+      },
+      ctx,
+    );
     return toolOk(
       summarize(item.identifier, comment),
       derived(addCommentPayload, presentMcpComment(comment)),
@@ -63,7 +85,8 @@ export function registerAddComment(server: McpServer, resolveContext: McpContext
       title: 'Add comment',
       description:
         'Post a Markdown comment on a work item (by identifier, e.g. "ACME-7") as the token ' +
-        'owner. Mentions notify the mentioned member. Honors the same access checks as the UI.',
+        'owner. Mentions notify the mentioned member. Pass `parentCommentId` to REPLY to a ' +
+        'top-level comment on the same item. Honors the same access checks as the UI.',
       inputSchema,
     },
     async (args, extra) => runAddComment(args, resolveContext(extra)),

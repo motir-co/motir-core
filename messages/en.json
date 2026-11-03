@@ -16087,6 +16087,7 @@
       "plannersAssumption": "Planner's assumption",
       "writingPlanOnly": "Writing your answers to the plan's requirement…",
       "writtenPlanOnly": "Written to the plan's requirement.",
+      "planClosed": "The plan was closed before it was written, so these answers were not needed.",
       "failed": "Your answers weren't written. They are still here.",
       "copy": "Copy answers"
     },

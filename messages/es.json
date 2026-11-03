@@ -16090,6 +16090,7 @@
       "plannersAssumption": "Suposición del planificador",
       "writingPlanOnly": "Escribiendo tus respuestas en el requisito del plan…",
       "writtenPlanOnly": "Escrito en el requisito del plan.",
+      "planClosed": "El plan se cerró antes de redactarse, así que estas respuestas no fueron necesarias.",
       "failed": "Tus respuestas no se escribieron. Siguen aquí.",
       "copy": "Copiar respuestas"
     },

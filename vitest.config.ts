@@ -2340,6 +2340,13 @@ export default defineConfig({
         'app/api/internal/ai/log-bug/route.ts',
         'lib/services/aiWorkItemsService.ts',
 
+        // MOTIR-10233 — the CAN'T-PLAN verdict's door: the job-token route a run's re-plan
+        // refusal comes through, and the service that writes the comment and ends the
+        // plan's grilling. GATED for the reason `log-bug` is: most of it is refusal (the
+        // token's project, a plan already past `generating` or holding a proposal).
+        'app/api/internal/ai/replan-refusal/route.ts',
+        'lib/services/replanRefusalService.ts',
+
         // Story MOTIR-2694 · Subtask MOTIR-2698 — the two files the story CHANGED
         // rather than wrote, which its other subtasks therefore left out of the
         // report entirely. They are added on DIFFERENT terms, and the difference
@@ -6702,6 +6709,9 @@ export default defineConfig({
         // Story MOTIR-4053 · Subtask MOTIR-4076 (see the `include` note above).
         'app/api/internal/ai/log-bug/route.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/aiWorkItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-10233 (see the `include` note above).
+        'app/api/internal/ai/replan-refusal/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/replanRefusalService.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2694 · Subtask MOTIR-2698 — the keys-not-prose enforcement
         // point (see the `include` note above; `aiBoundaryService.ts` is
         // deliberately NOT here, and that note says why).
