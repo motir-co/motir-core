@@ -128,10 +128,10 @@ type Target =
   | { kind: 'plan'; planId: string; ref: string; state: string }
   | { kind: 'conversation'; conversationId: string; ref: string; state: string };
 
-/** What a job is grounded in: the run a plan stands inside, or the conversation. */
 /** The longest `context.sharpen.subject`; motir-ai reads a longer one as none. */
 const SHARPEN_SUBJECT_MAX = 2_000;
 
+/** What a job is grounded in: the run a plan stands inside, or the conversation. */
 interface Grounding {
   run?: SharpenRunContext;
   conversation?: SharpenConversationContext;
@@ -444,8 +444,6 @@ export function conversationTurnsOf(
     .slice(-CONVERSATION_TURNS_WIRE_MAX);
 }
 
-/** What a job on this target is grounded in. A conversation with no person turn
- *  cannot be grilled — refused before anything is written. */
 /** A plan's title and summary, held to what motir-ai reads (`SHARPEN_TEXT_MAX`). */
 async function planSubjectFor(
   target: Extract<Target, { kind: 'plan' }>,
@@ -461,6 +459,8 @@ async function planSubjectFor(
   return subject.length > 0 ? subject.slice(0, SHARPEN_SUBJECT_MAX) : null;
 }
 
+/** What a job on this target is grounded in. A conversation with no person turn
+ *  cannot be grilled — refused before anything is written. */
 async function groundingFor(target: Target, ctx: ProjectContext): Promise<Grounding> {
   if (target.kind === 'plan') {
     const run = await runContextFor(target, ctx);
