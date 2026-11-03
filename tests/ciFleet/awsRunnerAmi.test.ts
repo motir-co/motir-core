@@ -163,6 +163,8 @@ describe('the pins live once, in infra/ci-runner/Dockerfile', () => {
     'NODE_SHA256',
     'DOCKER_VERSION',
     'DOCKER_SHA256',
+    'AWSCLI_VERSION',
+    'AWSCLI_SHA256',
     'PLAYWRIGHT_VERSION',
   ];
 
@@ -204,8 +206,82 @@ describe('the pins live once, in infra/ci-runner/Dockerfile', () => {
   it('provision.sh checksum-verifies every download it makes', () => {
     const body = code(provision);
     const downloads = body.match(/curl -fsSLo/g)?.length ?? 0;
-    expect(downloads).toBe(3);
+    expect(downloads).toBe(4);
     expect(body.match(/sha256sum -c -/g)?.length ?? 0).toBe(downloads);
+  });
+});
+
+describe('the AWS CLI is in both images, from one pin (MOTIR-10293)', () => {
+  const ZIP = '/tmp/awscliv2.zip';
+  const URL = 'https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip';
+
+  /** Whether a source installs the CLI from the AWSCLI_* pins and checks the result. */
+  function installsAwsCli(source: string): boolean {
+    const body = code(source);
+    return [
+      `curl -fsSLo ${ZIP} "${URL}"`,
+      `echo "\${AWSCLI_SHA256}  ${ZIP}" | sha256sum -c -`,
+      '/tmp/awscliv2/aws/install',
+      'aws --version | grep -F "aws-cli/${AWSCLI_VERSION} "',
+    ].every((line) => body.includes(line));
+  }
+
+  /** The functions `provision.sh`'s main() calls, in order. */
+  function provisionSteps(source: string): string[] {
+    const main = /^main\(\) \{\n([\s\S]*?)^\}/m.exec(source);
+    if (!main) throw new Error('no main() in provision.sh');
+    return main[1]!
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => /^[a-z_]+$/.test(l));
+  }
+
+  it('the Fly Dockerfile installs it from its own AWSCLI_VERSION / AWSCLI_SHA256 ARGs', () => {
+    expect(arg('AWSCLI_VERSION')).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(arg('AWSCLI_SHA256')).toMatch(/^[0-9a-f]{64}$/);
+    expect(installsAwsCli(dockerfile)).toBe(true);
+  });
+
+  it('provision.sh installs it the same way, after Docker, from the pins it is passed', () => {
+    expect(installsAwsCli(provision)).toBe(true);
+    const steps = provisionSteps(provision);
+    expect(steps).toContain('install_aws_cli');
+    expect(steps.indexOf('install_aws_cli')).toBe(steps.indexOf('install_docker') + 1);
+    // A missing pin stops the build before anything is downloaded.
+    expect(provision).toMatch(/^for pin in .*\bAWSCLI_VERSION AWSCLI_SHA256\b.*; do$/m);
+  });
+
+  it('provision.sh fails the AMI build when aws is absent after the install', () => {
+    expect(code(provision)).toMatch(
+      /aws --version \| grep -F "aws-cli\/\$\{AWSCLI_VERSION\} " \\\n\s+\|\| die /,
+    );
+    expect(provision).toMatch(/^set -euo pipefail$/m);
+  });
+
+  it('fails when either image stops installing it', () => {
+    const dropInstall = (source: string) =>
+      source.replace(/^.*\/tmp\/awscliv2\/aws\/install.*\n/m, '');
+    expect(installsAwsCli(dropInstall(dockerfile))).toBe(false);
+    expect(installsAwsCli(dropInstall(provision))).toBe(false);
+    // …and when provision.sh still defines the step but main() never calls it.
+    const uncalled = provision.replace(/^ {2}install_aws_cli\n/m, '');
+    expect(uncalled).not.toBe(provision);
+    expect(provisionSteps(uncalled)).not.toContain('install_aws_cli');
+  });
+
+  it('fails when the AMI’s version differs from the Dockerfile’s', () => {
+    // There is ONE pin: provision.sh downloads by the variable, and build-ami.sh
+    // reads that variable from the Dockerfile. A version typed into provision.sh
+    // is a second pin, and the check refuses it.
+    const pinnedTwice = provision.replace(
+      URL,
+      'https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.0.0.zip',
+    );
+    expect(pinnedTwice).not.toBe(provision);
+    expect(installsAwsCli(pinnedTwice)).toBe(false);
+    expect(code(provision)).not.toMatch(/awscli-exe-linux-x86_64-\d/);
+    expect(buildAmi).toContain('-var "awscli_version=$(pin AWSCLI_VERSION)"');
+    expect(template).toContain('"AWSCLI_VERSION=${var.awscli_version}"');
   });
 });
 

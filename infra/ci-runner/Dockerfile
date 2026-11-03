@@ -86,6 +86,23 @@
 #   |                    | `ubuntu-latest` preinstalls pipx (MOTIR-8884). Its      |
 #   |                    | installs land in ~/.local/bin, put on PATH below.       |
 #
+# The AWS deploy jobs, read 2026-11-03 against each repository's `origin/main`
+# (MOTIR-10293). Both jobs run on `vars.MOTIR_RUNNER` and call the CLI with no
+# setup step before it; `ubuntu-latest` preinstalls it.
+#
+#   A' = motir-co/motir-ai      @ 1e4f5f4 .github/workflows/
+#   G' = motir-co/motir-gateway @ 2589312 .github/workflows/
+#
+#   | Toolchain          | Evidence                                              |
+#   | ------------------ | ----------------------------------------------------- |
+#   | AWS CLI v2         | A' ci.yml:898 `aws ssm get-parameter` ·                |
+#   |                    | A' ci.yml:925 `aws ecr describe-images` ·              |
+#   |                    | G' aws-deploy.yml:109 `aws ssm get-parameter` ·        |
+#   |                    | G' aws-deploy.yml:142,182 `aws ecr describe-images`.   |
+#   |                    | v2 is not an Ubuntu package (apt's `awscli` is the     |
+#   |                    | unmaintained v1), so it is AWS's own installer zip,    |
+#   |                    | pinned by version + checksum like the runner below.    |
+#
 # NOT installed, and the reason stated rather than left silent:
 #   - The chromium BINARY. `playwright install --with-deps` downloads a build
 #     keyed to the REPO's own Playwright version, which this image cannot know.
@@ -172,6 +189,15 @@ ARG DOCKER_SHA256=0fcea2a8b4d1b54ccc9010e3451b78504a369d414f37eb3bb79300e1b5c22c
 # that publishes its own answer. `^1.60.0` (both starters' package.json) resolves
 # here today.
 ARG PLAYWRIGHT_VERSION=1.62.1
+
+# The AWS CLI v2, from AWS's VERSIONED installer zip (the unversioned URL floats).
+# AWS publishes a PGP signature, not a checksum, so the SHA256 below was taken
+# from the zip after its `.sig` verified against the AWS CLI Team key in AWS's
+# install guide (fingerprint FB5D B77F D5C1 18B8 0511 ADA8 A631 0ACC 4672 475C).
+# To move it: download the new zip and its `.sig`, `gpg --verify`, then
+# `sha256sum` the zip.
+ARG AWSCLI_VERSION=2.38.6
+ARG AWSCLI_SHA256=66974301c11f8116a6cb96bf72acae57453734b61fa8dd3f56422de9eaab0e42
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -261,6 +287,20 @@ RUN set -eux; \
     docker --version; \
     containerd --version; \
     runc --version
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The AWS CLI v2 — for the deploy jobs that look up images and manifests
+# ─────────────────────────────────────────────────────────────────────────────
+# Installed where `ubuntu-latest` has it: `/usr/local/aws-cli`, with `aws` in
+# `/usr/local/bin`. `aws --version` runs at build time, so a broken install
+# fails the BUILD; `smoke/assert-image.sh` checks it again on the built image.
+RUN set -eux; \
+    curl -fsSLo /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"; \
+    echo "${AWSCLI_SHA256}  /tmp/awscliv2.zip" | sha256sum -c -; \
+    unzip -q /tmp/awscliv2.zip -d /tmp/awscliv2; \
+    /tmp/awscliv2/aws/install; \
+    rm -rf /tmp/awscliv2.zip /tmp/awscliv2; \
+    aws --version | grep -F "aws-cli/${AWSCLI_VERSION} "
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Playwright's chromium system libraries

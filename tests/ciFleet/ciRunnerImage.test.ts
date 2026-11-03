@@ -63,8 +63,8 @@ describe('§7.2 — the image is digest-pinned and nothing in it floats', () => 
     const args = [...dockerfile.matchAll(/^ARG\s+([A-Z0-9_]+)=(\S+)$/gm)].map(
       (m) => [m[1]!, m[2]!] as const,
     );
-    expect(args.length).toBeGreaterThanOrEqual(8);
-    expect(args.filter(([n]) => /_SHA256$/.test(n)).length).toBeGreaterThanOrEqual(3);
+    expect(args.length).toBeGreaterThanOrEqual(10);
+    expect(args.filter(([n]) => /_SHA256$/.test(n)).length).toBeGreaterThanOrEqual(4);
     for (const [name, value] of args) {
       if (/_SHA256$|^UBUNTU_DIGEST$/.test(name)) {
         expect(`${name}=${value}`).toMatch(/=(sha256:)?[0-9a-f]{64}$/);
@@ -253,6 +253,40 @@ describe('the derived toolchain — every entry traces to a starter workflow', (
     expect(readFileSync(join(IMAGE_DIR, 'smoke/assert-image.sh'), 'utf8')).toContain(
       "'pipx --version'",
     );
+  });
+
+  it('bakes the pinned AWS CLI v2 and checks it on the built image (MOTIR-10293)', () => {
+    // motir-ai's and motir-gateway's AWS deploy jobs run on the fleet seam and
+    // call `aws ecr describe-images` / `aws ssm get-parameter` with no setup step.
+    const run = code(dockerfile);
+    expect(dockerfile).toMatch(/^ARG AWSCLI_VERSION=\d+\.\d+\.\d+$/m);
+    expect(dockerfile).toMatch(/^ARG AWSCLI_SHA256=[0-9a-f]{64}$/m);
+    expect(run).toContain(
+      'curl -fsSLo /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip"',
+    );
+    expect(run).toContain('echo "${AWSCLI_SHA256}  /tmp/awscliv2.zip" | sha256sum -c -');
+    expect(run).toContain('/tmp/awscliv2/aws/install');
+    // The build itself fails when the installed CLI is not the pinned one.
+    expect(run).toContain('aws --version | grep -F "aws-cli/${AWSCLI_VERSION} "');
+
+    const smoke = readFileSync(join(IMAGE_DIR, 'smoke/assert-image.sh'), 'utf8');
+    expect(smoke).toMatch(/^for bin in .* aws; do$/m);
+    expect(smoke).toContain("'aws --version'");
+    expect(smoke).toContain('grep -E \'^ARG AWSCLI_VERSION=\' "${DOCKERFILE}"');
+
+    // Its evidence: the two jobs that need it, named in the Dockerfile's table.
+    expect(dockerfile).toContain('ci.yml:925 `aws ecr describe-images`');
+    expect(dockerfile).toContain('aws-deploy.yml:142,182 `aws ecr describe-images`');
+  });
+
+  it('the AWS CLI check fails when the Dockerfile stops installing it', () => {
+    // The control: the same assertions over a Dockerfile with the layer gone.
+    const start = dockerfile.indexOf('curl -fsSLo /tmp/awscliv2.zip');
+    const end = dockerfile.indexOf('\n', dockerfile.indexOf('aws --version | grep -F'));
+    expect(start).toBeGreaterThan(0);
+    const without = dockerfile.slice(0, start) + dockerfile.slice(end);
+    expect(code(without)).not.toContain('/tmp/awscliv2/aws/install');
+    expect(code(without)).not.toContain('awscli-exe-linux-x86_64-${AWSCLI_VERSION}.zip');
   });
 
   it('does NOT bake a chromium binary — it is version-coupled to the repo', () => {
