@@ -388,6 +388,7 @@ describe('add_comment', () => {
     });
     expect(res.isError).toBeFalsy();
     const dto = res.structuredContent as {
+      id: string;
       author: { id: string };
       mentionedUserIds: string[];
     };
