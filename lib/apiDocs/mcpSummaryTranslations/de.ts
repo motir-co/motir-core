@@ -11,8 +11,9 @@ import type { McpSummaryTranslations } from './types';
 export const de: McpSummaryTranslations = {
   add_comment: {
     summary:
-      'Einen Markdown-Kommentar als Token-Eigentümer posten. Erwähnungen benachrichtigen das genannte Mitglied.',
-    source: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
+      'Einen Markdown-Kommentar oder eine Antwort auf einen Kommentar der obersten Ebene als Token-Eigentümer posten. Erwähnungen benachrichtigen das genannte Mitglied.',
+    source:
+      'Post a Markdown comment, or a reply to a top-level one, as the token owner. Mentions notify the member named.',
   },
   add_lesson: {
     summary:

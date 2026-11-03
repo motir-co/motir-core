@@ -10,8 +10,10 @@ import type { McpSummaryTranslations } from './types';
 // they come from the app catalogue's `permissions.*`.
 export const zh: McpSummaryTranslations = {
   add_comment: {
-    summary: '以令牌所有者的身份发表一条 Markdown 评论。提及（Mention）会通知被点名的成员。',
-    source: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
+    summary:
+      '以令牌所有者的身份发表一条 Markdown 评论，或回复一条顶层评论。提及（Mention）会通知被点名的成员。',
+    source:
+      'Post a Markdown comment, or a reply to a top-level one, as the token owner. Mentions notify the member named.',
   },
   add_lesson: {
     summary: '为本项目记录一条经验，使之后为它生成的计划都能参考这条经验。仅限本项目。',

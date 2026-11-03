@@ -11,8 +11,9 @@ import type { McpSummaryTranslations } from './types';
 export const ko: McpSummaryTranslations = {
   add_comment: {
     summary:
-      '토큰 소유자 명의로 Markdown 댓글을 게시합니다. 멘션하면 지정된 멤버에게 알림이 갑니다.',
-    source: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
+      '토큰 소유자 명의로 Markdown 댓글 또는 최상위 댓글에 대한 답글을 게시합니다. 멘션하면 지정된 멤버에게 알림이 갑니다.',
+    source:
+      'Post a Markdown comment, or a reply to a top-level one, as the token owner. Mentions notify the member named.',
   },
   add_lesson: {
     summary:

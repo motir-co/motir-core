@@ -11,8 +11,9 @@ import type { McpSummaryTranslations } from './types';
 export const ja: McpSummaryTranslations = {
   add_comment: {
     summary:
-      'トークンの所有者として Markdown のコメントを投稿します。メンションすると、指名されたメンバーに通知されます。',
-    source: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
+      'トークンの所有者として Markdown のコメント、またはトップレベルのコメントへの返信を投稿します。メンションすると、指名されたメンバーに通知されます。',
+    source:
+      'Post a Markdown comment, or a reply to a top-level one, as the token owner. Mentions notify the member named.',
   },
   add_lesson: {
     summary:

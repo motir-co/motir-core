@@ -12375,6 +12375,7 @@
   "sharpen.summary.writtenPlanOnly": "Written to the plan's requirement.",
   "sharpen.summary.failed": "Your answers weren't written. They are still here.",
   "sharpen.summary.copy": "Copy answers",
+  "sharpen.summary.planClosed": "The plan was closed before it was written, so these answers were not needed.",
   "sharpen.error": "That question didn't arrive. Your answers so far are kept — try again.",
   "sharpen.retry": "Try again",
   "sharpen.conversation.nothingToAsk": "I have nothing to ask — this is clear enough to plan as stated.",
