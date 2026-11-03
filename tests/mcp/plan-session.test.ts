@@ -866,7 +866,7 @@ describe('submit_plan_session — a RUN marks its re-plan (MOTIR-10233)', () => 
     await client.close();
   });
 
-  it('`runCommentId` is resolved on the anchor, and a reply resolves to its root', async () => {
+  it('`runCommentId` resolves to its root, and a reply resolves to its root', async () => {
     const { fx, card, client } = await anchoredThread();
     const root = await adminDb.comment.create({
       data: {
@@ -896,10 +896,10 @@ describe('submit_plan_session — a RUN marks its re-plan (MOTIR-10233)', () => 
     await client.close();
   });
 
-  it('a comment on a card OUTSIDE the anchors is refused, and nothing is submitted', async () => {
+  it('THE WIDER LANE: a comment on a card outside `targetKeys` is kept, and the re-plan goes', async () => {
     const { fx, card, client } = await anchoredThread();
     const other = await workItemsService.createWorkItem(
-      { projectId: fx.projectId, kind: 'task', title: 'Not an anchor' },
+      { projectId: fx.projectId, kind: 'task', title: 'The card the run stopped on' },
       fx.ctx,
     );
     const elsewhere = await adminDb.comment.create({
@@ -907,7 +907,7 @@ describe('submit_plan_session — a RUN marks its re-plan (MOTIR-10233)', () => 
         workspaceId: fx.workspaceId,
         workItemId: other.id,
         authorId: fx.ownerId,
-        bodyMd: 'Unrelated.',
+        bodyMd: 'Stopped here.',
       },
     });
     const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
@@ -916,8 +916,62 @@ describe('submit_plan_session — a RUN marks its re-plan (MOTIR-10233)', () => 
       fromRun: true,
       runCommentId: elsewhere.id,
     });
-    expect(res.isError).toBe(true);
-    expect(text(res)).toContain('COMMENT_NOT_FOUND');
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: elsewhere.id });
+    expect(text(res)).not.toContain('did not resolve');
+    await client.close();
+  });
+
+  it('A BAD POINTER costs the reply, never the re-plan, and the run is told', async () => {
+    const { card, client } = await anchoredThread();
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      targetKeys: [card.identifier],
+      fromRun: true,
+      runCommentId: 'cm_no_such_comment',
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: null });
+    expect(text(res)).toContain('`runCommentId` did not resolve');
+    await client.close();
+  });
+
+  it('NO TARGET with a comment: the comment is the anchor, and the re-plan goes', async () => {
+    const { fx, card, client } = await anchoredThread();
+    const comment = await adminDb.comment.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        workItemId: card.id,
+        authorId: fx.ownerId,
+        bodyMd: 'A precondition no card names.',
+      },
+    });
+    await call(client, 'append_plan_turn', {
+      projectKey: 'PROD',
+      body: 'A precondition no card names is missing.',
+    });
+    const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+      projectKey: 'PROD',
+      fromRun: true,
+      runCommentId: comment.id,
+    });
+    expect(res.isError).toBeFalsy();
+    expect(sentContext().runReplan).toEqual({ commentId: comment.id });
+    await client.close();
+  });
+
+  it('NO TARGET and no comment that resolves: refused, nothing submitted, and the run told how', async () => {
+    const { client } = await anchoredThread();
+    for (const args of [{}, { runCommentId: 'cm_no_such_comment' }]) {
+      const res = await call(client, SUBMIT_PLAN_SESSION_TOOL_NAME, {
+        projectKey: 'PROD',
+        fromRun: true,
+        ...args,
+      });
+      expect(res.isError).toBe(true);
+      expect(text(res)).toContain('RUN_REPLAN_NO_ANCHOR');
+      expect(text(res)).toContain('`targetKeys`');
+    }
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
     await client.close();
   });

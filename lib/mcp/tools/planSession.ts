@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { commentsService } from '@/lib/services/commentsService';
+import { CommentNotFoundError } from '@/lib/comments/errors';
 import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
@@ -235,9 +236,11 @@ const runCommentIdField = z
   .optional()
   .describe(
     'OPTIONAL, and only with `fromRun: true`. The `id` of the comment you posted on the ' +
-      'card when you stopped (from `add_comment`). It must sit on one of `targetKeys`. ' +
-      'A planner that cannot plan your report answers as a REPLY to it; without it, it ' +
-      'comments on the card instead.',
+      'card when you stopped (from `add_comment`), on any card in this project, whichever ' +
+      '`targetKeys` you chose. A planner that cannot plan your report answers as a REPLY ' +
+      'to it. An id that does not resolve does not refuse the submit: the planner comments ' +
+      'on the card instead. With no `targetKeys` this comment is the only place to answer, ' +
+      'so one of the two must resolve.',
   );
 
 const submitInputSchema = {
@@ -282,6 +285,23 @@ interface ResolvedTarget {
   scope: PlanChangeScope;
   /** The anchors' work-item ids, in the order they were named. */
   workItemIds: string[];
+}
+
+/**
+ * A run's submit with nowhere to answer (MOTIR-10233): no `targetKeys`, and no
+ * `runCommentId` that resolves. A can't-plan verdict could reach nobody, so it is
+ * refused while the run can still fix it.
+ */
+export class RunReplanNoAnchorError extends Error {
+  readonly code = 'RUN_REPLAN_NO_ANCHOR' as const;
+  constructor() {
+    super(
+      'A run that sends no `targetKeys` must name its comment in `runCommentId`, and this ' +
+        'one did not resolve, so a planner that cannot plan your report could tell nobody. ' +
+        'Nothing was submitted. Submit again with the card you stopped on in `targetKeys`.',
+    );
+    this.name = 'RunReplanNoAnchorError';
+  }
 }
 
 /** A `runCommentId` with no `fromRun: true` (MOTIR-10233) — refused before anything runs. */
@@ -397,6 +417,24 @@ function summarizeSubmit(result: PlanChangeSubmitResultDto): string {
   ].join('\n');
 }
 
+/**
+ * The run's comment as a reply root, or null when it does not resolve (MOTIR-10233). A
+ * wrong pointer costs the reply, never the re-plan: the run has one retry, and repeating
+ * the same id would lose its finding.
+ */
+async function resolveRunComment(
+  commentId: string,
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<string | null> {
+  try {
+    return (await commentsService.resolveReplyRootInProject(commentId, projectId, ctx)).commentId;
+  } catch (err) {
+    if (err instanceof CommentNotFoundError) return null;
+    throw err;
+  }
+}
+
 /** The adapter: resolve the scope, then the named session — else the caller's
  *  resumable one, else a new one (MOTIR-6028). */
 export async function runOpenPlanSession(
@@ -460,18 +498,18 @@ export async function runSubmitPlanSession(
     return toolError(refusal.code, refusal.message);
   }
   const { pctx, scope, workItemIds } = await resolveTarget(args, ctx);
-  // THE RUN'S COMMENT IS RESOLVED, NOT TRUSTED (MOTIR-10233): it must sit on one of the
-  // anchors, and a reply's root is where an answer to it goes.
-  const runReplan =
-    args.fromRun === true
-      ? {
-          commentId:
-            args.runCommentId !== undefined
-              ? (await commentsService.resolveReplyRootOn(args.runCommentId, workItemIds, ctx))
-                  .commentId
-              : null,
-        }
-      : undefined;
+  // THE RUN'S COMMENT IS RESOLVED, NOT TRUSTED (MOTIR-10233): it must sit in this project,
+  // and a reply's root is where an answer to it goes. It need not sit on an anchor: a run
+  // may anchor on the container, or on nothing, and its comment stays on its own card.
+  const runCommentId =
+    args.fromRun === true && args.runCommentId !== undefined
+      ? await resolveRunComment(args.runCommentId, pctx.projectId, ctx)
+      : null;
+  if (args.fromRun === true && workItemIds.length === 0 && runCommentId === null) {
+    const refusal = new RunReplanNoAnchorError();
+    return toolError(refusal.code, refusal.message);
+  }
+  const runReplan = args.fromRun === true ? { commentId: runCommentId } : undefined;
   const result = await planChangeSessionsService.submitPublic(
     pctx,
     scope,
@@ -479,7 +517,14 @@ export async function runSubmitPlanSession(
     args.sessionId,
     runReplan,
   );
-  return toolOk(summarizeSubmit(result), derived(planSubmitPayload, presentMcpPlanSubmit(result)));
+  const lostComment = args.runCommentId !== undefined && runCommentId === null;
+  return toolOk(
+    lostComment
+      ? `${summarizeSubmit(result)}\n\n\`runCommentId\` did not resolve, so a planner that cannot ` +
+          'plan this report comments on the card instead of replying to you.'
+      : summarizeSubmit(result),
+    derived(planSubmitPayload, presentMcpPlanSubmit(result)),
+  );
 }
 
 export function registerPlanSession(server: McpServer, resolveContext: McpContextResolver): void {

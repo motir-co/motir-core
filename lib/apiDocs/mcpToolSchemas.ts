@@ -3725,7 +3725,7 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'OPTIONAL, and only with `fromRun: true`. The `id` of the comment you posted on the card when you stopped (from `add_comment`). It must sit on one of `targetKeys`. A planner that cannot plan your report answers as a REPLY to it; without it, it comments on the card instead.',
+          'OPTIONAL, and only with `fromRun: true`. The `id` of the comment you posted on the card when you stopped (from `add_comment`), on any card in this project, whichever `targetKeys` you chose. A planner that cannot plan your report answers as a REPLY to it. An id that does not resolve does not refuse the submit: the planner comments on the card instead. With no `targetKeys` this comment is the only place to answer, so one of the two must resolve.',
       },
     },
     required: ['projectKey'],

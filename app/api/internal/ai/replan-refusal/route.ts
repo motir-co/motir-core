@@ -6,14 +6,15 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { CommentForbiddenError, EmptyCommentBodyError } from '@/lib/comments/errors';
 import {
+  ReplanRefusalNoAnchorError,
   ReplanRefusalTooLateError,
   replanRefusalService,
 } from '@/lib/services/replanRefusalService';
 
 // POST /api/internal/ai/replan-refusal (MOTIR-10233) — the CAN'T-PLAN verdict of a
 // run's re-plan. The question-free first session found the run's report cannot be
-// planned; this comments on the run's card why (a reply under the run's own comment
-// when it named one) and ends any grilling open on the plan. motir-ai then closes the
+// planned; this comments on the run's card why, as the Motir system account (a reply
+// under the run's own comment when it named one) and ends any grilling open on the plan. motir-ai then closes the
 // plan with the ordinary final append, and an empty plan is discarded there.
 //
 // Auth: §4a service bearer + §4b job token, exactly as `log-bug`. The project is the
@@ -24,6 +25,7 @@ import {
 //   REPLAN_REFUSAL_INVALID             → 400 (body shape)
 //   NoPlanForJobError / not found      → 404 (no plan for this job in the token's project,
 //                                             or a key outside it — 404-not-403)
+//   ReplanRefusalNoAnchorError         → 404 (no card, and the run's comment is gone)
 //   ProjectAccessDeniedError           → 404 browse / 403 edit
 //   CommentForbiddenError              → 403 (the token's user may not comment)
 //   EmptyCommentBodyError              → 400
@@ -54,8 +56,8 @@ export async function POST(req: Request): Promise<Response> {
   if (typeof jobId !== 'string' || jobId.trim() === '') {
     return fail('REPLAN_REFUSAL_INVALID', '`jobId` is required.', 400);
   }
-  if (typeof workItemKey !== 'string' || workItemKey.trim() === '') {
-    return fail('REPLAN_REFUSAL_INVALID', '`workItemKey` is required.', 400);
+  if (workItemKey != null && typeof workItemKey !== 'string') {
+    return fail('REPLAN_REFUSAL_INVALID', '`workItemKey` must be a string.', 400);
   }
   if (typeof bodyMd !== 'string' || bodyMd.trim() === '') {
     return fail('REPLAN_REFUSAL_INVALID', '`bodyMd` is required.', 400);
@@ -63,17 +65,22 @@ export async function POST(req: Request): Promise<Response> {
   if (replyToCommentId != null && typeof replyToCommentId !== 'string') {
     return fail('REPLAN_REFUSAL_INVALID', '`replyToCommentId` must be a string.', 400);
   }
+  const key = typeof workItemKey === 'string' && workItemKey.trim() !== '' ? workItemKey : null;
+  const reply =
+    typeof replyToCommentId === 'string' && replyToCommentId.trim() !== ''
+      ? replyToCommentId.trim()
+      : null;
+  if (key === null && reply === null) {
+    return fail('REPLAN_REFUSAL_INVALID', '`workItemKey` or `replyToCommentId` is required.', 400);
+  }
 
   try {
     const result = await replanRefusalService.recordRefusal(
       {
         jobId,
-        workItemKey,
+        workItemKey: key,
         bodyMd,
-        replyToCommentId:
-          typeof replyToCommentId === 'string' && replyToCommentId.trim() !== ''
-            ? replyToCommentId.trim()
-            : null,
+        replyToCommentId: reply,
       },
       auth,
     );
@@ -81,6 +88,7 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     if (
       err instanceof NoPlanForJobError ||
+      err instanceof ReplanRefusalNoAnchorError ||
       err instanceof WorkItemNotFoundError ||
       err instanceof ProjectNotFoundError
     ) {

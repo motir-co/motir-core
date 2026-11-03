@@ -47,7 +47,10 @@ function summarize(identifier: string, comment: CommentDTO): string {
   const excerpt = comment.bodyMd.length > 280 ? comment.bodyMd.slice(0, 280) + '…' : comment.bodyMd;
   const mentions =
     comment.mentionedUserIds.length > 0 ? ` · mentioned ${comment.mentionedUserIds.length}` : '';
-  return [`Commented on ${identifier} as ${comment.author.name}${mentions}`, excerpt].join('\n');
+  return [
+    `Commented on ${identifier} as ${comment.author.name}${mentions} · comment id: ${comment.id}`,
+    excerpt,
+  ].join('\n');
 }
 
 /** The adapter: resolve project + item by key, then add the comment. */

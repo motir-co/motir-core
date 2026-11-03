@@ -1839,7 +1839,7 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
     expect(exception).toBeGreaterThan(once);
     expect(arm).toMatch(/nothing happened — no job was created and no credits were spent/);
     expect(arm).toMatch(/re-submit once, WITHOUT the requirement/);
-    expect(arm).toContain('That is the only retry there is');
+    expect(arm).toContain('Those are the only retries there are');
   });
 
   it('does NOT ask the agent to diagnose the planning rules — asserted by absence', () => {
@@ -1883,6 +1883,8 @@ describe('THE CARD IS WRONG — the agent COMPOSES the WHAT, through the plan-se
       "Keep the comment's `id` from the add_comment result",
     );
     expect(arm).toContain('(keep fromRun and runCommentId)');
+    // A refusal that names the missing anchor has its own way out, so the finding survives.
+    expect(arm).toMatch(/has nowhere to answer[\s\S]*re-submit once with targetKeys \[/);
   });
 
   it('the comment STAYS, and the turn carries the SAME content', () => {

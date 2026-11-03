@@ -2937,7 +2937,9 @@ function cardIsWrongSteps(src: DispatchPromptSource, policy: FindingsPolicy): st
     '     if submit_plan_session REJECTS your arguments (a malformed requirement),',
     '     nothing happened — no job was created and no credits were spent — so',
     '     re-submit once, WITHOUT the requirement (keep fromRun and runCommentId).',
-    '     That is the only retry there is.',
+    '     If it says the re-plan has nowhere to answer (no targetKeys, and a',
+    `     runCommentId that did not resolve), re-submit once with targetKeys [${src.key}].`,
+    '     Those are the only retries there are.',
     '  9. Stop. Do not pick up other work.',
   ];
 }
@@ -3098,6 +3100,8 @@ function twoLanes(src: DispatchPromptSource, policy: FindingsPolicy): string[] {
       : '    steps 6 and 7 — when the mis-planning is bigger than',
     '    this one card; or omit targetKeys entirely when what is missing is a',
     '    precondition no card names yet, and the planner will settle a new one.',
+    '    Send fromRun and runCommentId in every lane: your comment stays where you',
+    '    posted it, and a reply to it reaches you whichever targetKeys you chose.',
     '    A person reviews the plan, and this run stops.',
     '',
     '  CHOOSE THE LANE THAT IS TRUE. If the whole story is mis-planned, say so and',

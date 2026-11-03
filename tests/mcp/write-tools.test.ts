@@ -393,6 +393,8 @@ describe('add_comment', () => {
     };
     expect(dto.author.id).toBe(fx.ownerId);
     expect(dto.mentionedUserIds).toContain(mentionee.id);
+    // A run needs the id for its submit, and may only read the text (MOTIR-10233).
+    expect(JSON.stringify(res.content)).toContain(`comment id: ${dto.id}`);
 
     // The post-commit comment.created event fired with the parsed mention.
     const created = events.find((e) => e.name === 'work-item/comment.created');

@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { mintJobToken } from '@/lib/ai/jobToken';
+import { MOTIR_SYSTEM_USER_EMAIL } from '@/lib/ai/systemPrincipal';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
@@ -20,8 +21,8 @@ import { truncateAuthTables } from '../../helpers/db';
 // Postgres. What it must hold, each case chosen so a lazy implementation fails it:
 //
 //   1. THE ANSWER LANDS UNDER THE RUN'S COMMENT — a reply, `parentCommentId` the
-//      run's comment, authored as the token's user — and on the card when the run
-//      named none, or its comment is gone.
+//      run's comment, authored as the Motir system account — and on the card when the
+//      run named none, or its comment is gone. A retry finds the comment and adds none.
 //   2. THE GRILLING ENDS, as finished and saying the plan closed, never as a failure
 //      — for every open session on the plan, and only on that plan.
 //   3. NOTHING ELSE MOVES: the card's status is the one the run parked it at.
@@ -76,6 +77,12 @@ function refuse(fx: Fx, body: Record<string, unknown>) {
 
 async function scenario(jobId: string) {
   const fx = await makeFixture();
+  // The account the comment is written by. It has no membership: it enters by identity.
+  await adminDb.user.upsert({
+    where: { email: MOTIR_SYSTEM_USER_EMAIL },
+    update: {},
+    create: { email: MOTIR_SYSTEM_USER_EMAIL, name: 'Motir' },
+  });
   const card = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'task', title: 'Stopped on' },
     fx.ctx,
@@ -107,7 +114,7 @@ async function openGrilling(fx: Fx, planId: string): Promise<string> {
 }
 
 describe('POST /api/internal/ai/replan-refusal — the verdict, where a person reads it', () => {
-  it('replies UNDER the run’s comment, as the token’s user, and moves nothing', async () => {
+  it('replies UNDER the run’s comment, as the Motir system account, and moves nothing', async () => {
     const { fx, card, runComment } = await scenario('job_refuse_reply');
     const res = await refuse(fx, {
       jobId: 'job_refuse_reply',
@@ -122,7 +129,8 @@ describe('POST /api/internal/ai/replan-refusal — the verdict, where a person r
     const row = await adminDb.comment.findUniqueOrThrow({ where: { id: json.commentId } });
     expect(row.parentCommentId).toBe(runComment.id);
     expect(row.workItemId).toBe(card.id);
-    expect(row.authorId).toBe(fx.ownerId);
+    const author = await adminDb.user.findUniqueOrThrow({ where: { id: row.authorId } });
+    expect(author.email).toBe(MOTIR_SYSTEM_USER_EMAIL);
     expect(row.bodyMd).toContain('cannot be planned');
 
     const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
@@ -158,6 +166,94 @@ describe('POST /api/internal/ai/replan-refusal — the verdict, where a person r
     expect(
       (await adminDb.comment.findUniqueOrThrow({ where: { id: json.commentId } })).parentCommentId,
     ).toBeNull();
+  });
+
+  it('a comment on ANOTHER card of the project: the reply goes there, under it', async () => {
+    const { fx, card, runComment } = await scenario('job_refuse_wider');
+    const container = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The wider lane’s anchor' },
+      fx.ctx,
+    );
+    const res = await refuse(fx, {
+      jobId: 'job_refuse_wider',
+      workItemKey: container.identifier,
+      bodyMd: 'Cannot be planned.',
+      replyToCommentId: runComment.id,
+    });
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { commentId: string; replied: boolean };
+    expect(json.replied).toBe(true);
+    const row = await adminDb.comment.findUniqueOrThrow({ where: { id: json.commentId } });
+    expect(row.workItemId).toBe(card.id);
+    expect(row.parentCommentId).toBe(runComment.id);
+  });
+
+  it('NO CARD: the run’s comment is the anchor; with that gone too there is nowhere to go', async () => {
+    const { fx, card, runComment } = await scenario('job_refuse_nocard');
+    const res = await refuse(fx, {
+      jobId: 'job_refuse_nocard',
+      workItemKey: null,
+      bodyMd: 'Cannot be planned.',
+      replyToCommentId: runComment.id,
+    });
+    expect(res.status).toBe(201);
+    const row = await adminDb.comment.findUniqueOrThrow({
+      where: { id: ((await res.json()) as { commentId: string }).commentId },
+    });
+    expect(row.workItemId).toBe(card.id);
+
+    const gone = await refuse(fx, {
+      jobId: 'job_refuse_nocard',
+      bodyMd: 'A different verdict.',
+      replyToCommentId: 'cm_no_such_comment',
+    });
+    expect(gone.status).toBe(404);
+    expect(((await gone.json()) as { code: string }).code).toBe('REPLAN_REFUSAL_NO_ANCHOR');
+  });
+
+  it('A RETRY adds no second comment, and a closed plan is reported rather than refused', async () => {
+    const { fx, card, planId, runComment } = await scenario('job_refuse_retry');
+    const body = {
+      jobId: 'job_refuse_retry',
+      workItemKey: card.identifier,
+      bodyMd: 'The same verdict.',
+      replyToCommentId: runComment.id,
+    };
+    const first = (await (await refuse(fx, body)).json()) as {
+      commentId: string;
+      planAlreadyClosed: boolean;
+    };
+    expect(first.planAlreadyClosed).toBe(false);
+
+    const again = (await (await refuse(fx, body)).json()) as {
+      commentId: string;
+      replied: boolean;
+      planAlreadyClosed: boolean;
+    };
+    expect(again.commentId).toBe(first.commentId);
+    expect(again.replied).toBe(true);
+    expect(again.planAlreadyClosed).toBe(false);
+
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'declined' } });
+    const afterClose = await refuse(fx, body);
+    expect(afterClose.status).toBe(201);
+    const closed = (await afterClose.json()) as { commentId: string; planAlreadyClosed: boolean };
+    expect(closed.commentId).toBe(first.commentId);
+    expect(closed.planAlreadyClosed).toBe(true);
+    expect(await adminDb.comment.count({ where: { bodyMd: 'The same verdict.' } })).toBe(1);
+  });
+
+  it('a person who dispatched the run still hears of it: the token’s user is not the actor', async () => {
+    const { fx, card } = await scenario('job_refuse_actor');
+    const res = await refuse(fx, {
+      jobId: 'job_refuse_actor',
+      workItemKey: card.identifier,
+      bodyMd: 'Cannot be planned.',
+    });
+    const row = await adminDb.comment.findUniqueOrThrow({
+      where: { id: ((await res.json()) as { commentId: string }).commentId },
+    });
+    expect(row.authorId).not.toBe(fx.ownerId);
   });
 
   it('ENDS every open grilling on the plan as finished with a plan-closed write-back — and no other', async () => {
@@ -238,6 +334,8 @@ describe('POST /api/internal/ai/replan-refusal — the job-token posture', () =>
     for (const body of [
       { workItemKey: card.identifier, bodyMd: 'x' },
       { jobId: 'job_refuse_shape', bodyMd: 'x' },
+      { jobId: 'job_refuse_shape', workItemKey: 7, bodyMd: 'x' },
+      { jobId: 'job_refuse_shape', workItemKey: ' ', replyToCommentId: ' ', bodyMd: 'x' },
       { jobId: 'job_refuse_shape', workItemKey: card.identifier, bodyMd: '  ' },
       { jobId: 'job_refuse_shape', workItemKey: card.identifier, bodyMd: 'x', replyToCommentId: 7 },
     ]) {

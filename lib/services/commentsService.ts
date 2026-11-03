@@ -588,23 +588,25 @@ export const commentsService = {
    * walks newest-first.
    */
   /**
-   * THE THREAD A REPLY TO `commentId` LANDS IN, checked to sit on one of `workItemIds`
-   * (MOTIR-10233) — what `submit_plan_session` resolves a run's comment through, so the
-   * planner's answer replies under the run's own comment and never under a guess.
-   *
-   * Answers the ROOT: a thread is one level deep, so a reply's parent is where an
-   * answer to it goes. View-gated like every read — an item the caller cannot see is
-   * not found — and a comment on none of the items, another tenant's or a missing one
-   * is {@link CommentNotFoundError}, never a silent re-home.
+   * Where a reply to this comment goes, if the comment is on a work item of THIS
+   * project the caller may see (MOTIR-10233): the thread root and the item. A reply
+   * resolves to its root, because a thread is one level deep. Anything else is the
+   * same `CommentNotFoundError`.
    */
-  async resolveReplyRootOn(
+  async resolveReplyRootInProject(
     commentId: string,
-    workItemIds: readonly string[],
+    projectId: string,
     ctx: ServiceContext,
   ): Promise<{ commentId: string; workItemId: string }> {
     const row = await resolveComment(commentId, ctx);
-    if (!workItemIds.includes(row.workItemId)) throw new CommentNotFoundError(commentId);
-    await resolveGatedWorkItem(row.workItemId, ctx);
+    let gate: CommentGate;
+    try {
+      gate = await resolveGatedWorkItem(row.workItemId, ctx);
+    } catch (err) {
+      if (err instanceof WorkItemNotFoundError) throw new CommentNotFoundError(commentId);
+      throw err;
+    }
+    if (gate.item.projectId !== projectId) throw new CommentNotFoundError(commentId);
     return { commentId: row.parentCommentId ?? row.id, workItemId: row.workItemId };
   },
 
