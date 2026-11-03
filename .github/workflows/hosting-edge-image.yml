@@ -11,11 +11,12 @@
 #     stand-in TLS upstream it forwards, answers the Unavailable page at 503 and
 #     the Not-found page at 404. No push.
 #   - on a PUSH TO `main` touching it: the same build and proofs, then a push to
-#     Fly's registry as `registry.fly.io/motir-hosting-edge:<sha>`, printing the
+#     Fly's registry as `registry.fly.io/motir-edge:<sha>`, printing the
 #     DIGEST, because the deploy runs the image by digest, never by tag.
 #
 # ── Where the image lives ───────────────────────────────────────────────────
-# The Fly app `motir-edge` in org `motir-hosting` (MOTIR-10126). The push
+# The Fly app `motir-edge` in org `motir-hosting` (MOTIR-10126). Fly's registry
+# keys a repository by app name, so the path is the app's, not the package's. The push
 # authenticates with the repository secret `FLY_EDGE_TOKEN`, mapped to
 # `FLY_API_TOKEN` — the same secret the deploy lane reads. Until a person has set
 # it the publish steps are SKIPPED with a notice, never failed: the build and the
@@ -43,7 +44,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  IMAGE: registry.fly.io/motir-hosting-edge
+  IMAGE: registry.fly.io/motir-edge
   LOCAL_TAG: motir-hosting-edge:ci
 
 jobs:

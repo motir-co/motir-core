@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 #
-# The EDGE FORWARDER image, `registry.fly.io/motir-hosting-edge` (MOTIR-10127),
+# The EDGE FORWARDER image, `registry.fly.io/motir-edge` (MOTIR-10127),
 # run as the `motir-edge` Fly app: the home of every customer domain's
 # certificate. For each request it asks Motir's host contract what the domain
 # serves and either forwards the request to that application or answers one of
