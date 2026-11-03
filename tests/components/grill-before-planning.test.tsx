@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { ReactElement } from 'react';
 
 vi.mock('next/navigation', () => ({
@@ -197,7 +197,10 @@ const onSend = vi.fn();
 const onConfirmPlanOffer = vi.fn();
 const onDeclinePlanOffer = vi.fn();
 
-function rail(state: Partial<PlanChangeConversationState> = {}): ReactElement {
+function rail(
+  state: Partial<PlanChangeConversationState> = {},
+  onConversationGrillEnded?: () => Promise<void>,
+): ReactElement {
   const merged = { ...BASE, ...state };
   return (
     <PlanChangeRail
@@ -217,6 +220,7 @@ function rail(state: Partial<PlanChangeConversationState> = {}): ReactElement {
       onDeclinePlanOffer={onDeclinePlanOffer}
       offerAnsweringTurnId={null}
       offerRefusal={null}
+      {...(onConversationGrillEnded ? { onConversationGrillEnded } : {})}
     />
   );
 }
@@ -304,6 +308,37 @@ describe('the offer is held while the grilling is open', () => {
     expect(screen.queryByTestId('plan-offer')).toBeNull();
     expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
     expect(screen.queryByTestId('plan-offer-decline')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-held-decline')).toBeNull();
+  });
+
+  it('offers Decline once a turn failed, and a decline shows the offer and re-reads the grilling (MOTIR-10255)', async () => {
+    client.settleSharpen.mockResolvedValue({ outcome: 'failed', session: grilling() });
+    const view = await offeredWithGrillOn();
+    const decline = await screen.findByTestId('plan-offer-held-decline');
+    expect(screen.getByTestId('plan-offer-held')).toBeTruthy();
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+    fireEvent.click(decline);
+    const offerTurn = OFFERED.turns.find((t) => t.offer)!;
+    expect(onDeclinePlanOffer).toHaveBeenCalledWith(offerTurn.id);
+
+    client.getLatestConversationSharpen.mockClear();
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    await act(async () => {
+      view.rerender(
+        rail({
+          session: {
+            ...OFFERED,
+            turns: OFFERED.turns.map((t) =>
+              t.offer ? { ...t, offer: { ...t.offer, state: 'declined' as const } } : t,
+            ),
+          },
+        }),
+      );
+    });
+    expect(client.getLatestConversationSharpen).toHaveBeenCalled();
+    expect(screen.queryByTestId('plan-offer-held')).toBeNull();
+    expect(screen.queryByTestId('plan-offer-held-decline')).toBeNull();
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
   });
 
   it('answers the open question with a typed message instead of sending it to the planner', async () => {
@@ -422,6 +457,67 @@ describe('the offer is shown once the grilling ended', () => {
     expect(screen.getByTestId('sharpen-thread').textContent).toContain(
       enSharpen.conversation.stoppedNoAnswer,
     );
+  });
+});
+
+describe('the offer waits for the requirement the grilling wrote (MOTIR-10255)', () => {
+  it('keeps the offer held until the thread is re-read, then shows it, asking once', async () => {
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    let resolveRead: () => void = () => {};
+    const reread = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    const view = renderWithIntl(rail({ session: OFFERED }, reread));
+    await waitFor(() => expect(reread).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('conversation-grill').getAttribute('data-hold')).toBe('held');
+    expect(screen.queryByTestId('plan-offer-confirm')).toBeNull();
+
+    await act(async () => {
+      resolveRead();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('conversation-grill').getAttribute('data-hold')).toBe('shown'),
+    );
+    expect(screen.getByTestId('plan-offer-confirm')).toBeTruthy();
+    const again = vi.fn(() => Promise.resolve());
+    await act(async () => {
+      view.rerender(rail({ session: OFFERED }, again));
+    });
+    expect(reread).toHaveBeenCalledTimes(1);
+    expect(again).not.toHaveBeenCalled();
+  });
+
+  it('a message typed while the re-read is in flight reaches nobody', async () => {
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    const reread = vi.fn(() => new Promise<void>(() => {}));
+    renderWithIntl(rail({ session: OFFERED }, reread));
+    await waitFor(() => expect(reread).toHaveBeenCalled());
+    const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: 'yes, plan it' } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: 'Enter' });
+    });
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('shows the offer even when the re-read fails', async () => {
+    client.getLatestConversationSharpen.mockResolvedValue(grilling(ENDED));
+    const reread = vi.fn(() => Promise.reject(new Error('offline')));
+    renderWithIntl(rail({ session: OFFERED }, reread));
+    await waitFor(() =>
+      expect(screen.getByTestId('conversation-grill').getAttribute('data-hold')).toBe('shown'),
+    );
+  });
+
+  it('asks for no re-read while the grilling is open', async () => {
+    client.getLatestConversationSharpen.mockResolvedValue(grilling());
+    const reread = vi.fn(() => Promise.resolve());
+    renderWithIntl(rail({ session: OFFERED }, reread));
+    await screen.findByTestId('conversation-grill');
+    expect(reread).not.toHaveBeenCalled();
   });
 });
 

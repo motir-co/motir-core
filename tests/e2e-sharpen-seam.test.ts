@@ -280,6 +280,63 @@ describe('scripted', () => {
     expect(core.calls).toEqual([]);
   });
 
+  it('a conversation grilling holding an offer writes its requirement at the end (MOTIR-10255)', async () => {
+    seed({ targets: { 'conv-1': { mode: 'scripted', questions: SCRIPT } } });
+    const offer = {
+      turnId: 'offer-1',
+      requestMd: 'Plan board exports.',
+      requirement: {
+        outcome: 'Exports exist.',
+        behaviour: 'Export a board.',
+        scopeEdge: '',
+        constraints: '',
+        acceptance: 'A board exports.',
+        assumptions: [{ id: 'q2', text: 'stale' }, 'kept as written'],
+      },
+    };
+    const conv = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) => ({
+      ...next(prev, a, x, 'conv-1'),
+      scope: { kind: 'conversation' as const, ref: 'conv-1' },
+      conversation: { requests: ['exports'], readAnswer: null, card: null, offer },
+    });
+    const t1 = await turn(conv(null, 'start'));
+    expect(t1.result?.requirement).toBeUndefined();
+    const t2 = await turn(conv(t1.result, 'answer', { readingId: 'a' }));
+    const t3 = await turn(conv(t2.result, 'skip'));
+    const stop = await turn(conv(t3.result, 'stop'));
+    expect(stop.result?.requirement?.offerTurnId).toBe('offer-1');
+    const written = stop.result!.requirement!.requirement;
+    expect(written.behaviour).toBe(
+      `Export a board.\n- ${SCRIPT[0]!.text} — ${SCRIPT[0]!.readings[0]!.label}`,
+    );
+    expect(written.outcome).toBe('Exports exist.');
+    expect(written.assumptions).toEqual([
+      'kept as written',
+      {
+        id: 'q2',
+        text: `${SCRIPT[1]!.text} — ${SCRIPT[1]!.readings.find((r) => r.recommended)!.label}`,
+      },
+    ]);
+
+    // An offer with no requirement starts from its request; nothing settled writes none.
+    const bare = { ...offer, requirement: undefined };
+    const plain = (prev: SharpenTurnResult | null, a: SharpenAction, x = {}) => ({
+      ...conv(prev, a, x),
+      conversation: { requests: ['exports'], readAnswer: null, card: null, offer: bare },
+    });
+    const b1 = await turn(plain(null, 'start'));
+    const b2 = await turn(plain(b1.result, 'answer', { readingId: 'a' }));
+    const bStop = await turn(plain(b2.result, 'stop'));
+    expect(bStop.result?.requirement?.requirement).toMatchObject({
+      outcome: 'Plan board exports.',
+      acceptance: 'Plan board exports.',
+      scopeEdge: '',
+      assumptions: [],
+    });
+    const empty = await turn(plain(null, 'stop'));
+    expect(empty.result?.requirement).toBeUndefined();
+  });
+
   it('an in-run turn never asks a carried question, and ends at once when the carried answers cover its requests (MOTIR-9319)', async () => {
     seed({ default: { mode: 'scripted', questions: SCRIPT } });
     const q1 = SCRIPT[0]!;

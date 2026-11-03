@@ -340,6 +340,12 @@ export interface SharpenConversationContext {
   readAnswer: string | null;
   /** The conversation's anchor card (its `targetKeys[0]`), or null. */
   card: { key: string; title: string } | null;
+  /**
+   * The conversation's UNDECIDED plan offer — the one a grilling holds — or null
+   * (Bug MOTIR-10255). The grilling's end writes this offer's requirement from the
+   * questions and answers and returns it for this offer alone.
+   */
+  offer: { turnId: string; requestMd: string; requirement?: SubmittedRequirement } | null;
 }
 
 /** `context.sharpen.run` — what the run is planning and which card it is
@@ -603,9 +609,11 @@ export interface JobContextBag {
   requirement?: SubmittedRequirement;
   // The CONVERSATION'S CARRIED ANSWERS (Story MOTIR-9221 · MOTIR-9315 producer ↔
   // MOTIR-9313 consumer) — what the person settled when the conversation was
-  // grilled before planning. BESIDE `requirement`, never merged into its six
-  // fields, and spread conditionally for the same reason: absent means there is
-  // nothing to carry.
+  // grilled before planning. Sent on an `ask_project` turn with no run ONLY, so a
+  // later offer's requirement does not ask the same request again. A PLANNING job
+  // never carries it (MOTIR-10255): the grilling writes its answers into the offer's
+  // requirement, which is what the run is handed. Spread conditionally: absent means
+  // there is nothing to carry.
   carriedAnswers?: CarriedAnswers;
   // THE CONVERSATION'S EARLIER TURNS on an `ask_project` submit (MOTIR-9442 producer ↔
   // MOTIR-9435 consumer): oldest first, the turn being answered excluded, the last 20,

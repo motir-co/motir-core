@@ -133,3 +133,68 @@ describe('parseSharpenTurn', () => {
     expect(parsed?.question?.text).toHaveLength(SHARPEN_CAPS.text);
   });
 });
+
+describe('parseSharpenTurn — the requirement a grilling wrote (MOTIR-10255)', () => {
+  const written = {
+    outcome: 'Finance shares presets.',
+    behaviour: 'Save a preset.',
+    scopeEdge: '',
+    constraints: '',
+    acceptance: 'A shared preset applies.',
+    assumptions: [{ id: 'q2', text: 'Which formats? — CSV only' }, 'an older line'],
+  };
+  const ended = (requirement: unknown) =>
+    parseSharpenTurn({ kind: 'finished', question: null, ...base, requirement });
+
+  it('reads it with its offer turn, every part present', () => {
+    expect(ended({ offerTurnId: 't1', requirement: written })?.requirement).toEqual({
+      offerTurnId: 't1',
+      requirement: written,
+    });
+  });
+
+  it('fills an absent optional part as blank', () => {
+    const { scopeEdge: _s, constraints: _c, ...rest } = written;
+    expect(ended({ offerTurnId: 't1', requirement: rest })?.requirement?.requirement).toEqual(
+      written,
+    );
+  });
+
+  it('leaves the key off a turn with none, or with null', () => {
+    expect(ended(undefined)).not.toHaveProperty('requirement');
+    expect(ended(null)).not.toHaveProperty('requirement');
+  });
+
+  it('keeps a long part whole: the answers at its end are never cut', () => {
+    const behaviour = `${'x'.repeat(20_000)}\n- Who? — The finance team`;
+    const parsed = ended({ offerTurnId: 't1', requirement: { ...written, behaviour } });
+    expect(parsed?.requirement?.requirement.behaviour).toBe(behaviour);
+  });
+
+  it.each([
+    ['a part', { behaviour: 'x'.repeat(SHARPEN_CAPS.requirementPart + 1) }],
+    ['an optional part', { scopeEdge: 'x'.repeat(SHARPEN_CAPS.requirementPart + 1) }],
+    ['an assumption', { assumptions: ['x'.repeat(SHARPEN_CAPS.requirementPart + 1)] }],
+    [
+      'an assumption entry',
+      { assumptions: [{ id: 'a', text: 'x'.repeat(SHARPEN_CAPS.requirementPart + 1) }] },
+    ],
+  ])('%s over the ceiling is an unreadable turn, never a cut one', (_label, over) => {
+    expect(ended({ offerTurnId: 't1', requirement: { ...written, ...over } })).toBeNull();
+  });
+
+  it.each([
+    ['a blank outcome', { offerTurnId: 't1', requirement: { ...written, outcome: ' ' } }],
+    ['no acceptance', { offerTurnId: 't1', requirement: { ...written, acceptance: undefined } }],
+    [
+      'assumptions as one string',
+      { offerTurnId: 't1', requirement: { ...written, assumptions: 'x' } },
+    ],
+    ['no assumptions', { offerTurnId: 't1', requirement: { ...written, assumptions: undefined } }],
+    ['no offer turn', { requirement: written }],
+    ['no requirement', { offerTurnId: 't1' }],
+    ['not an object', 'requirement'],
+  ])('refuses the whole turn on %s', (_label, requirement) => {
+    expect(ended(requirement)).toBeNull();
+  });
+});

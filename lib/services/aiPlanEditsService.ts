@@ -10,7 +10,6 @@ import { ONBOARDING_CONTEXT_FIELD, onboardingContextFor } from '@/lib/ai/onboard
 import { resolveProjectRepoContext } from '@/lib/ai/projectRepoContext';
 import { MotirAiError } from '@/lib/ai/errors';
 import type {
-  CarriedAnswers,
   JobContextBag,
   JobStreamEvent,
   RequirementConfirmation,
@@ -137,13 +136,6 @@ export interface PlanEditSubmitOptions {
    * Absent ⇒ one attempt, as every other planning door still sends.
    */
   idempotencyKey?: string;
-  /**
-   * The conversation's CARRIED ANSWERS (Story MOTIR-9221 · MOTIR-9315) — what its
-   * grilling settled before this run. `submitAugment` / `submitContextual` put it on
-   * `context.carriedAnswers`, beside `requirement` and never merged into it, and
-   * only when present.
-   */
-  carriedAnswers?: CarriedAnswers;
   /**
    * The plan offer whose requirement the person confirmed (MOTIR-10091):
    * `context.requirementConfirmed`, beside `requirement`, only when present.
@@ -474,13 +466,12 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { carriedAnswers, requirementConfirmed, ...rest } = opts;
+    const { requirementConfirmed, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         ...(requirement ? { requirement } : {}),
         ...(requirementConfirmed ? { requirementConfirmed } : {}),
-        ...(carriedAnswers ? { carriedAnswers } : {}),
       },
       ctx,
       rest,
@@ -524,14 +515,13 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { carriedAnswers, requirementConfirmed, ...rest } = opts;
+    const { requirementConfirmed, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         targetKeys: [...targetKeys],
         ...(requirement ? { requirement } : {}),
         ...(requirementConfirmed ? { requirementConfirmed } : {}),
-        ...(carriedAnswers ? { carriedAnswers } : {}),
       },
       ctx,
       rest,

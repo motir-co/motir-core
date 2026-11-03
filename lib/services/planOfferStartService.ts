@@ -216,8 +216,7 @@ async function landTargeted(
     target: { id: string; identifier: string };
     prompt: string;
     /** A confirmed targeted offer's requirement (MOTIR-9878), submitted with the run
-     *  exactly as a no-target one's is: the requirement and its confirmation, no carried
-     *  answers. */
+     *  exactly as a no-target one's is: the requirement and its confirmation. */
     composed?: ComposedStart;
   },
 ): Promise<PlanOfferStartResult> {
@@ -381,20 +380,20 @@ interface ComposedStart {
   confirmed: RequirementConfirmation;
 }
 
-/** What a composed start adds to the shipped submit: the requirement, its confirmation,
- *  and NO carried answers — Grill me's answers are already inside the requirement
- *  (MOTIR-9436). */
+/** What a composed start adds to the shipped submit: the requirement and its
+ *  confirmation. Grill me's answers are inside the requirement — the grilling's end
+ *  wrote them there (MOTIR-10255) — and no planning job carries them beside it. */
 function composedSubmit(composed: ComposedStart): ComposedSubmit {
   return {
     requirement: composed.requirement,
-    opts: { requirementConfirmed: composed.confirmed, omitCarriedAnswers: true },
+    opts: { requirementConfirmed: composed.confirmed },
   };
 }
 
 /** THE one call site of the shipped submit this seam adds (MOTIR-9291): every start
  *  that is not a targeted landing runs it, on the conversation the plan belongs to.
- *  With a composed requirement the run gets it and its confirmation, and NO carried
- *  answers: Grill me's answers are already inside the requirement (MOTIR-9436). */
+ *  With a composed requirement the run gets it and its confirmation; Grill me's
+ *  answers are already inside it (MOTIR-10255). */
 async function submitOn(
   pctx: ProjectContext,
   sessionId: string,
