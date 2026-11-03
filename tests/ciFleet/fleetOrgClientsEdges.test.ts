@@ -280,7 +280,7 @@ describe('listInstallationRepositoryIds', () => {
 });
 
 describe('latestWorkflowCommit', () => {
-  const PATH = 'GET /repos/acme-connected/acme-core/commits?path=.github/workflows&per_page=1';
+  const PATH = 'GET /repos/acme-connected/acme-core/commits?path=.github&per_page=1';
 
   it('answers the newest commit', async () => {
     route(PATH, {
