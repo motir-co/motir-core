@@ -25,4 +25,16 @@ describe('conversationTurnsOf', () => {
   it('is empty for a conversation with nothing said', () => {
     expect(conversationTurnsOf([])).toEqual([]);
   });
+
+  it('carries no more than motir-ai reads: the latest turns, each body’s head', () => {
+    const turns = Array.from({ length: 205 }, (_, i) => ({
+      role: 'user',
+      body: `${i} `.padEnd(5_000, 'x'),
+    }));
+    const wire = conversationTurnsOf(turns);
+    expect(wire).toHaveLength(200);
+    expect(wire[0]!.body.startsWith('5 ')).toBe(true);
+    expect(wire.at(-1)!.body.startsWith('204 ')).toBe(true);
+    expect(wire.every((t) => t.body.length === 4_000)).toBe(true);
+  });
 });

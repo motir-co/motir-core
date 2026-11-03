@@ -16,7 +16,8 @@ import { conversationNoteService } from '@/lib/services/conversationNoteService'
 //
 // Body: `{ jobId: string, notes: string[] }` (1..20 sentences). Answers
 // `{ stored }`. The conversation is resolved FROM THE JOB, within the token's
-// project and workspace, never named by the caller.
+// project and workspace and among the token's own user's turns, never named by the
+// caller.
 //
 // Auth: §4a service bearer + §4b job token (`authenticateAndLimitJobRequest`),
 // exactly as `plan-step`.

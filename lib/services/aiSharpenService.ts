@@ -1,7 +1,7 @@
 import type { Prisma, SharpenSession, SharpenTurn } from '@/generated/prisma/client';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { MotirAiConfigError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
-import { getJob, submitJob } from '@/lib/ai/motirAiClient';
+import { cancelJob, getJob, submitJob } from '@/lib/ai/motirAiClient';
 import { parseSharpenTurn, type SharpenTurnResult } from '@/lib/ai/sharpenTurn';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type {
@@ -405,21 +405,29 @@ async function conversationContextFor(
   });
 }
 
+/** What one job's envelope carries of a conversation: motir-ai reads no more than this
+ *  (`SHARPEN_CONVERSATION_TURNS_MAX`, `SHARPEN_TURN_BODY_MAX`), so more only costs bytes. */
+const CONVERSATION_TURNS_WIRE_MAX = 200;
+const CONVERSATION_TURN_BODY_WIRE_MAX = 4_000;
+
 /**
- * The WHOLE conversation, both sides, in order (MOTIR-10235): a person's "yes"
- * agrees to what the planner said before it, so the grilling must read the
- * planner's replies as well as the person's turns. Blank bodies are left out —
- * motir-ai refuses a turn with no body.
+ * The conversation, both sides, in order (MOTIR-10235): a person's "yes" agrees to
+ * what the planner said before it, so the grilling must read the planner's replies as
+ * well as the person's turns. Blank bodies are left out — motir-ai refuses a turn with
+ * no body.
  */
 export function conversationTurnsOf(
   turns: readonly { role: string; body: string }[],
 ): SharpenConversationTurn[] {
-  return turns.flatMap((t): SharpenConversationTurn[] => {
-    if (t.body.trim().length === 0) return [];
-    if (t.role === 'user') return [{ role: 'person', body: t.body }];
-    if (t.role === 'assistant') return [{ role: 'planner', body: t.body }];
-    return [];
-  });
+  return turns
+    .flatMap((t): SharpenConversationTurn[] => {
+      if (t.body.trim().length === 0) return [];
+      const body = t.body.slice(0, CONVERSATION_TURN_BODY_WIRE_MAX);
+      if (t.role === 'user') return [{ role: 'person', body }];
+      if (t.role === 'assistant') return [{ role: 'planner', body }];
+      return [];
+    })
+    .slice(-CONVERSATION_TURNS_WIRE_MAX);
 }
 
 /** What a job on this target is grounded in. A conversation with no person turn
@@ -617,6 +625,24 @@ async function actWrite(
   });
 }
 
+/**
+ * A Stop gives up on the job still running (MOTIR-10235): a read has no turn cap, so
+ * left alone it would keep spending the org's credits and holding a worker slot for an
+ * answer nobody will read. motir-ai stops it at its next model turn. A cancel that
+ * could not be made never costs the person their Stop; it is reported, and credits
+ * remain the job's stop.
+ */
+async function cancelSupersededJob(before: readonly SharpenTurn[], ctx: ProjectContext) {
+  const jobId = inFlightTurn(before)?.jobId;
+  if (!jobId) return;
+  try {
+    await cancelJob(jobId, ctx.projectId);
+  } catch (err) {
+    const why = err instanceof Error ? err.message || err.name : String(err);
+    console.warn(`[sharpen] could not cancel the job a Stop superseded (${jobId}) — ${why}`);
+  }
+}
+
 /** True when a later STOP has superseded this job's turn — its result is
  *  transcript only. */
 function supersededByStop(row: SharpenSession, turns: SharpenTurn[], turn: SharpenTurn): boolean {
@@ -764,6 +790,7 @@ export const aiSharpenService = {
     await assertSharpenable(target, ctx, action === 'stop');
     const grounding = await groundingFor(target, ctx);
     const { row, before, turn } = await actWrite(sessionId, action, opts, ctx);
+    if (action === 'stop') await cancelSupersededJob(before, ctx);
     const jobId = await submitAndBind(
       jobContext(target, row, before, turn, grounding),
       turn.id,

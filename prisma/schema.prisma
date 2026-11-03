@@ -9994,6 +9994,7 @@ model PlanChangeTurn {
   @@unique([sessionId, seq])
   @@index([sessionId, seq])
   @@index([workspaceId])
+  @@index([workspaceId, jobId])
   @@map("plan_change_turn")
 }
 
@@ -10129,6 +10130,7 @@ model SharpenTurn {
 
   @@unique([sessionId, seq])
   @@index([workspaceId])
+  @@index([workspaceId, jobId])
   @@map("sharpen_turn")
 }
 

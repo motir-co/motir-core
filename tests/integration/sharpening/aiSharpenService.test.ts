@@ -23,6 +23,7 @@ const jobs = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/ai/motirAiClient', () => ({
+  cancelJob: vi.fn(async (jobId: string) => ({ jobId, status: 'canceled' })),
   submitJob: vi.fn(async (kind: string, _tenant: unknown, context: Record<string, unknown>) => {
     if (jobs.failNext) {
       const err = jobs.failNext;
@@ -40,6 +41,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   streamJob: vi.fn(),
 }));
 
+const { cancelJob } = await import('@/lib/ai/motirAiClient');
 const { aiSharpenService } = await import('@/lib/services/aiSharpenService');
 const { plansService } = await import('@/lib/services/plansService');
 const { conversationNoteService } = await import('@/lib/services/conversationNoteService');
@@ -838,5 +840,38 @@ describe('a conversation target', () => {
       endReason: 'stopped',
       settled: SETTLED,
     });
+  });
+});
+
+// MOTIR-10235 — a read has no turn cap, so a Stop must end the job it supersedes.
+describe('Stop gives up on the job still running', () => {
+  it('cancels the in-flight job, and submits the stop’s own', async () => {
+    const cancel = vi.mocked(cancelJob);
+    cancel.mockClear();
+    const planId = await plannedPlan();
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    const stop = await aiSharpenService.act(opened.session.id, 'stop', {}, pctx);
+    expect(cancel).toHaveBeenCalledWith(opened.jobId, pctx.projectId);
+    expect(stop.jobId).not.toBe(opened.jobId);
+  });
+
+  it('cancels nothing when no job is running', async () => {
+    const cancel = vi.mocked(cancelJob);
+    const { sessionId } = await openWithQuestion();
+    cancel.mockClear();
+    await aiSharpenService.act(sessionId, 'stop', {}, pctx);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('a cancel that could not be made is said, and never costs the person their Stop', async () => {
+    const cancel = vi.mocked(cancelJob);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const planId = await plannedPlan();
+    const opened = await aiSharpenService.open({ planId }, pctx);
+    cancel.mockRejectedValueOnce(new Error('motir-ai is down'));
+    const stop = await aiSharpenService.act(opened.session.id, 'stop', {}, pctx);
+    expect(stop.jobId).toBeTruthy();
+    expect(warn.mock.calls.flat().join(' ')).toContain('motir-ai is down');
+    warn.mockRestore();
   });
 });

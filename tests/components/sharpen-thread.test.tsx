@@ -349,6 +349,33 @@ describe('what the grilling says while it reads', () => {
     expect(h.onStop).toHaveBeenCalledTimes(1);
   });
 
+  it('takes Stop away once the person has pressed it: the job running is the stop’s own', () => {
+    render({
+      pending: true,
+      session: reading({
+        turns: [turn('person', '', { action: 'stop', jobId: 'sj-stop' })],
+        inFlight: { turnId: 't-stop', jobId: 'sj-stop' },
+      }),
+    });
+    expect(screen.queryByTestId('sharpen-stop')).toBeNull();
+  });
+
+  it('keeps what a read a Stop superseded said, though no reply will ever carry it', () => {
+    render({
+      pending: true,
+      session: reading({
+        turns: [
+          turn('person', 'Start', { action: 'start', jobId: 'sj-read' }),
+          turn('person', '', { action: 'stop', jobId: 'sj-stop' }),
+        ],
+        inFlight: { turnId: 't-stop', jobId: 'sj-stop' },
+        notes: [{ jobId: 'sj-read', body: 'Reading the export card.' }] as never,
+      }),
+    });
+    const drawn = screen.getAllByTestId('conversation-note').map((n) => n.textContent);
+    expect(drawn).toEqual(['Reading the export card.']);
+  });
+
   it('offers no extra Stop when nothing is reading', () => {
     render({ session: reading({ inFlight: null }) });
     expect(screen.queryByTestId('sharpen-stop')).toBeNull();

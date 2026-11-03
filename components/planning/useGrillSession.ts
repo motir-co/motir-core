@@ -123,6 +123,11 @@ export function endedOutOfCredits(session: SharpenSessionDto): boolean {
   return last?.outOfCredits === true;
 }
 
+/** The person already asked to stop this session: its stop turn is stored. */
+export function stopAsked(session: SharpenSessionDto): boolean {
+  return session.turns.some((t) => t.role === 'person' && t.action === 'stop');
+}
+
 /** The person turn a failed planner turn answers — the one Try again re-runs. */
 function failedPersonTurnId(session: SharpenSessionDto): string | null {
   const turns = session.turns;
@@ -183,6 +188,10 @@ export function useGrillSession({
   // The person-turn count a round was opened at — a later round needs a later turn.
   const roundAtRef = useRef<number | null>(null);
   const busyRef = useRef(false);
+  // Which run owns `pending`. A Stop aborts the run it supersedes, and that run's end
+  // must not clear the pending of the Stop's own run.
+  const runSeqRef = useRef(0);
+  const stoppingRef = useRef(false);
   const abortRef = useRef<AbortController | null>(null);
   const mountedRef = useRef(true);
   const resumeTriedRef = useRef<string | null>(null);
@@ -231,11 +240,37 @@ export function useGrillSession({
     }
   }, []);
 
+  const beginRun = useCallback(() => {
+    runSeqRef.current += 1;
+    busyRef.current = true;
+    setPending(true);
+    return runSeqRef.current;
+  }, []);
+
+  const endRun = useCallback((seq: number) => {
+    if (!mountedRef.current || seq !== runSeqRef.current) return;
+    busyRef.current = false;
+    setPending(false);
+  }, []);
+
+  /** Pick up a job already in flight (a reload, a phase entered again): the session is
+   *  as busy as if this tab had sent it, so its notes and its Stop are drawn. */
+  const resume = useCallback(
+    async (sessionId: string, jobId: string) => {
+      const seq = beginRun();
+      try {
+        await follow(sessionId, jobId);
+      } finally {
+        endRun(seq);
+      }
+    },
+    [beginRun, endRun, follow],
+  );
+
   /** Run one door call: draw its session, then follow its job. */
   const run = useCallback(
     async (call: () => Promise<SharpenDoorResult>) => {
-      busyRef.current = true;
-      setPending(true);
+      const seq = beginRun();
       setError(null);
       try {
         const result = await call();
@@ -254,13 +289,24 @@ export function useGrillSession({
               : 'failed',
         );
       } finally {
-        if (mountedRef.current) {
-          busyRef.current = false;
-          setPending(false);
-        }
+        endRun(seq);
       }
     },
-    [follow],
+    [beginRun, endRun, follow],
+  );
+
+  /** One Stop per session: a second one would abort the first's follow and be refused,
+   *  leaving nothing to land the stop's job. */
+  const stopSession = useCallback(
+    (open: SharpenSessionDto) => {
+      if (stoppingRef.current || stopAsked(open)) return;
+      stoppingRef.current = true;
+      abortRef.current?.abort();
+      void run(() => sharpenAct(open.id, 'stop')).finally(() => {
+        stoppingRef.current = false;
+      });
+    },
+    [run],
   );
 
   // THE SWITCH. On → arm at today's count. Off while a session is open → Stop
@@ -274,10 +320,8 @@ export function useGrillSession({
     }
     armedAtRef.current = null;
     const open = sessionRef.current;
-    if (open && open.status === 'open') {
-      void run(() => sharpenAct(open.id, 'stop'));
-    }
-  }, [on, personTurns, run]);
+    if (open && open.status === 'open') stopSession(open);
+  }, [on, personTurns, stopSession]);
 
   // RESUME, sending nothing: an open session already on this plan is drawn as it
   // stands (a reload, or the conversation phase entered again).
@@ -291,13 +335,13 @@ export function useGrillSession({
         if (!mountedRef.current || !open) return;
         setSession((cur) => cur ?? open);
         roundAtRef.current = armedAtRef.current;
-        if (open.inFlight?.jobId) void follow(open.id, open.inFlight.jobId);
+        if (open.inFlight?.jobId) void resume(open.id, open.inFlight.jobId);
       })
       .catch(() => {
         // Nothing to resume is not an error the person needs to see.
       });
     return () => controller.abort();
-  }, [on, active, planId, session, follow]);
+  }, [on, active, planId, session, resume]);
 
   // OPEN A ROUND: on, in the conversation phase, over the run's plan, for a person
   // turn sent after the switch (and after the last round).
@@ -324,7 +368,7 @@ export function useGrillSession({
         if (latest) {
           setSession((cur) => cur ?? latest);
           if (latest.status === 'open' && latest.inFlight?.jobId) {
-            void follow(latest.id, latest.inFlight.jobId);
+            void resume(latest.id, latest.inFlight.jobId);
           }
         }
         setReadFor(convId);
@@ -334,7 +378,7 @@ export function useGrillSession({
         if (mountedRef.current && !controller.signal.aborted) setReadFor(convId);
       });
     return () => controller.abort();
-  }, [convId, hasOffer, readFor, follow]);
+  }, [convId, hasOffer, readFor, resume]);
 
   // BEFORE PLANNING — OPEN A ROUND: on, over a grillable offer that arrived after the
   // switch, once the latest session is read and none covers it yet.
@@ -394,9 +438,8 @@ export function useGrillSession({
     }
     if (!open || open.status !== 'open') return;
     // Stop is reachable while an act is in flight: the walk ends at its boundary.
-    abortRef.current?.abort();
-    void run(() => sharpenAct(open.id, 'stop'));
-  }, [run, offerId, covered]);
+    stopSession(open);
+  }, [stopSession, offerId, covered]);
 
   const retry = useCallback(() => {
     const open = sessionRef.current;
@@ -425,10 +468,19 @@ export function useGrillSession({
           ? 'held'
           : null;
 
+  // Credits ending a read is told from the stored turn, not only from a poll that saw
+  // it happen: the person may have been away, or reloaded, when it did (MOTIR-10235).
+  const outOfCredits =
+    session !== null &&
+    session.status === 'open' &&
+    !pending &&
+    session.inFlight === null &&
+    endedOutOfCredits(session);
+
   return {
     session,
     pending,
-    error,
+    error: error ?? (outOfCredits ? 'outOfCredits' : null),
     act,
     stop,
     retry,

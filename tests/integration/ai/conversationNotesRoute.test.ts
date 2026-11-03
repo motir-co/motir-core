@@ -121,6 +121,7 @@ async function askedConversation(jobId: string): Promise<string> {
       role: 'user',
       body: 'How do exports work?',
       intent: 'ask',
+      authorId: fx.ownerId,
       jobId,
     },
   });
@@ -220,6 +221,28 @@ describe('POST /api/internal/ai/conversation-notes — where the notes go', () =
     expect(res.status).toBe(404);
     expect(await bodyOf(res)).toMatchObject({ code: 'CONVERSATION_NOTES_NOT_FOUND' });
     expect(await adminDb.conversationNote.count()).toBe(0);
+  });
+
+  it('never writes into another person’s conversation, even with the job’s id', async () => {
+    const { sessionId, jobId } = await grilling();
+    await askedConversation('job-asked');
+    const other = await adminDb.user.create({
+      data: { id: 'someone-else', email: 'someone-else@example.test', name: 'Someone Else' },
+    });
+    const token = mintJobToken({
+      userId: other.id,
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+    });
+    for (const id of [jobId, 'job-asked']) {
+      const res = await POST(
+        req({ bearer: SERVICE_SECRET, token, body: { jobId: id, notes: ['Written elsewhere.'] } }),
+      );
+      expect(res.status).toBe(404);
+    }
+    expect(await adminDb.conversationNote.count({ where: { sharpenSessionId: sessionId } })).toBe(
+      0,
+    );
   });
 
   it('never writes into another project’s conversation, even with the job’s id', async () => {

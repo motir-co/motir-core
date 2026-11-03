@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { withoutStoredNotes } from '@/lib/hooks/usePlanChangeConversation';
-import { notesOfJob } from '@/components/planning/ConversationNotes';
+import { notesOfJob, notesOfUnansweredJob } from '@/components/planning/ConversationNotes';
 
 // MOTIR-10235 — an answering session's notes stream live as `note` acts AND are
 // stored against the conversation; once the answer lands the rail draws the
@@ -43,5 +43,26 @@ describe('notesOfJob', () => {
     expect(notesOfJob(undefined, 'a')).toEqual([]);
     expect(notesOfJob(notes, null)).toEqual([]);
     expect(notesOfJob(notes, undefined)).toEqual([]);
+  });
+});
+
+describe('notesOfUnansweredJob', () => {
+  const notes = [
+    { jobId: 'silent', body: 'one' },
+    { jobId: 'answered', body: 'two' },
+    { jobId: 'live', body: 'three' },
+  ];
+  const answered = new Set<string | null>(['answered']);
+
+  it('draws what a job with no reply said, so a silent settle or a Stop loses nothing', () => {
+    expect(notesOfUnansweredJob(notes, 'silent', answered, 'live').map((n) => n.body)).toEqual([
+      'one',
+    ]);
+  });
+
+  it('leaves a job with a reply to that reply, and a running job to the live row', () => {
+    expect(notesOfUnansweredJob(notes, 'answered', answered, 'live')).toEqual([]);
+    expect(notesOfUnansweredJob(notes, 'live', answered, 'live')).toEqual([]);
+    expect(notesOfUnansweredJob(notes, null, answered, 'live')).toEqual([]);
   });
 });

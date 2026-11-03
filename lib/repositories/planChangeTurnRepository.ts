@@ -35,18 +35,22 @@ export const planChangeTurnRepository = {
     return tx.planChangeTurn.findFirst({ where: { sessionId, workspaceId, jobId, role } });
   },
 
-  /** The conversation a job was submitted for, found by the job alone, within
-   *  one project of the bound workspace (MOTIR-10235) — the `user` turn the ASK
-   *  door bound it to, or the `assistant` turn it landed as. Null when no turn
-   *  carries the job yet. */
-  async findSessionIdByJobInProject(
+  /** The conversation a job was submitted for, found by the job, within one project
+   *  of the bound workspace (MOTIR-10235): the `user` turn ONE person sent, which the
+   *  ASK door bound the job to. Null when no such turn carries the job yet. */
+  async findSessionIdByJobForUser(
     jobId: string,
-    projectId: string,
-    workspaceId: string,
+    scope: { projectId: string; workspaceId: string; userId: string },
     tx: Prisma.TransactionClient,
   ): Promise<{ sessionId: string } | null> {
     return tx.planChangeTurn.findFirst({
-      where: { jobId, workspaceId, session: { projectId } },
+      where: {
+        jobId,
+        workspaceId: scope.workspaceId,
+        role: 'user',
+        authorId: scope.userId,
+        session: { projectId: scope.projectId },
+      },
       select: { sessionId: true },
     });
   },

@@ -609,8 +609,9 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
 /**
  * The act record with the `note` acts the settled thread now STORES taken out
  * (MOTIR-10235). An answering session's notes stream live as `note` frames and are
- * also kept against the conversation; once the answer lands the rail draws the
- * stored copy above it, so the live copy in the record would say each one twice.
+ * also kept against the conversation; once the job settles the rail draws the
+ * stored copy, above its answer or under the turn that asked when there is no answer,
+ * so the live copy in the record would say each one twice.
  * A note core did not store (a refused write) stays in the record.
  */
 export function withoutStoredNotes(

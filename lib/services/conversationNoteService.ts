@@ -25,8 +25,11 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //
 // ⚠️ THE OWNER IS RESOLVED FROM THE JOB, never named by the caller. A job's person
 // turn (Grill me) or its conversation turn (the ASK door) says which conversation
-// it was submitted for, within the job token's project and workspace — so a token
-// cannot write a note into another project's conversation by naming it.
+// it was submitted for, within the job token's project and workspace and among the
+// turns of the token's OWN USER — so a token cannot write a note into another
+// project's conversation, or another person's, by naming its job. The token does not
+// identify one job (`jobKey` is an opaque rate-limit key, minted before the job has an
+// id), so the `jobId` itself is the caller's word, among that person's own jobs.
 
 /** The newest notes a conversation's read carries. */
 export const CONVERSATION_NOTES_READ_MAX = 400;
@@ -63,20 +66,10 @@ async function ownerOf(
   auth: RecordConversationNotesAuth,
   tx: Prisma.TransactionClient,
 ): Promise<ConversationNoteOwner> {
-  const { workspaceId } = auth.ctx;
-  const grill = await sharpenTurnRepository.findPersonTurnByJobInProject(
-    jobId,
-    auth.projectId,
-    workspaceId,
-    tx,
-  );
+  const scope = { ...auth.ctx, projectId: auth.projectId };
+  const grill = await sharpenTurnRepository.findPersonTurnByJobForUser(jobId, scope, tx);
   if (grill) return { sharpenSessionId: grill.sessionId };
-  const asked = await planChangeTurnRepository.findSessionIdByJobInProject(
-    jobId,
-    auth.projectId,
-    workspaceId,
-    tx,
-  );
+  const asked = await planChangeTurnRepository.findSessionIdByJobForUser(jobId, scope, tx);
   if (asked) return { planChangeSessionId: asked.sessionId };
   throw new ConversationNotesOwnerNotFoundError(jobId);
 }

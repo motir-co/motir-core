@@ -83,17 +83,22 @@ export const sharpenTurnRepository = {
     return tx.sharpenTurn.findFirst({ where: { sessionId, jobId, role } });
   },
 
-  /** The PERSON turn that submitted a job, found by the job alone, within one
-   *  project of the bound workspace (MOTIR-10235) — the owner a conversation
-   *  note reported by the job hangs on. Null when no turn carries the job yet. */
-  async findPersonTurnByJobInProject(
+  /** The PERSON turn that submitted a job, found by the job, within one project of the
+   *  bound workspace and among ONE person's sessions (MOTIR-10235) — the owner a
+   *  conversation note reported by the job hangs on. Null when no such turn carries the
+   *  job yet. */
+  async findPersonTurnByJobForUser(
     jobId: string,
-    projectId: string,
-    workspaceId: string,
+    scope: { projectId: string; workspaceId: string; userId: string },
     tx: Prisma.TransactionClient,
   ): Promise<{ sessionId: string } | null> {
     return tx.sharpenTurn.findFirst({
-      where: { jobId, workspaceId, role: 'person', session: { projectId } },
+      where: {
+        jobId,
+        workspaceId: scope.workspaceId,
+        role: 'person',
+        session: { projectId: scope.projectId, createdById: scope.userId },
+      },
       select: { sessionId: true },
     });
   },

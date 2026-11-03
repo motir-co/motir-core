@@ -67,3 +67,18 @@ export function notesOfJob(
   if (!notes || !jobId) return [];
   return notes.filter((n) => n.jobId === jobId);
 }
+
+/**
+ * The notes of a job that produced no reply and is no longer running: a read a Stop
+ * superseded, or an answer that settled silent. No reply turn will ever draw them, so
+ * the turn that submitted the job does, and they are not lost.
+ */
+export function notesOfUnansweredJob(
+  notes: readonly ConversationNoteDto[] | undefined,
+  jobId: string | null | undefined,
+  answeredJobs: ReadonlySet<string | null>,
+  liveJobId: string | null | undefined,
+): ConversationNoteDto[] {
+  if (!jobId || answeredJobs.has(jobId) || jobId === liveJobId) return [];
+  return notesOfJob(notes, jobId);
+}
