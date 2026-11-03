@@ -265,6 +265,56 @@ export const userRepository = {
    */
   /** The saved account language (Story MOTIR-7730 · MOTIR-7747) — one column,
    *  last writer wins. */
+  /**
+   * Every user whose stored `image` starts with `prefix` (MOTIR-10075), oldest id
+   * first — the cutover's stored-reference rewrite counts and rewrites exactly
+   * these. `User` carries no RLS, so this reads across tenants under any context.
+   */
+  async listImagesWithPrefix(
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; image: string }>> {
+    const rows = await tx.user.findMany({
+      where: { image: { startsWith: prefix } },
+      select: { id: true, image: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => ({ id: r.id, image: r.image! }));
+  },
+
+  /**
+   * How many users store an ABSOLUTE `image` (a value with a URI scheme) that
+   * does NOT start with `prefix` — a Google-provider avatar is the expected case
+   * (MOTIR-10075). The rewrite leaves these alone and reports the count, so an
+   * operator sees an own-asset URL on an older host rather than it vanishing
+   * silently. Raw SQL for the scheme test, which Prisma's filters cannot express.
+   */
+  async countAbsoluteImagesNotWithPrefix(
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*) AS n FROM "user"
+      WHERE "image" ~ '^[A-Za-z][A-Za-z0-9+.-]*:'
+        AND left("image", length(${prefix})) <> ${prefix}`;
+    return Number(rows[0]?.n ?? 0);
+  },
+
+  /**
+   * Compare-and-set one user's `image` (MOTIR-10075): written only while it still
+   * holds `from`. Answers how many rows changed — 0 means the row moved since it
+   * was read, which the rewrite treats as a refusal rather than an overwrite.
+   */
+  async compareAndSetImage(
+    id: string,
+    from: string,
+    to: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.user.updateMany({ where: { id, image: from }, data: { image: to } });
+    return count;
+  },
+
   async setLocale(id: string, locale: string, tx: Prisma.TransactionClient): Promise<void> {
     await tx.user.update({ where: { id }, data: { locale } });
   },
