@@ -301,6 +301,26 @@ describe('the end and the summary', () => {
     );
     expect(screen.getByRole('button', { name: 'Copy answers' })).toBeTruthy();
   });
+
+  // MOTIR-10233 — a run's re-plan the planner could not plan closes its plan before it
+  // is written, and any grilling on it ends there. Nothing failed, so the person is
+  // never shown the Failed state or its Copy answers button — even though the stored
+  // write-back says `ok: false`, because nothing WAS written.
+  it('says plainly the plan closed before it was written — never the Failed state', () => {
+    render({
+      session: session({
+        ...ENDED,
+        endReason: 'finished',
+        writeBack: { ok: false, planClosed: true, error: 'closed' },
+      }),
+    });
+    expect(screen.getByTestId('sharpen-plan-closed').textContent).toBe(
+      'The plan was closed before it was written, so these answers were not needed.',
+    );
+    expect(screen.queryByTestId('sharpen-write-failed')).toBeNull();
+    expect(screen.queryByTestId('sharpen-written')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Copy answers' })).toBeNull();
+  });
 });
 
 // ── THE NOTES (MOTIR-10235) ──────────────────────────────────────────────────

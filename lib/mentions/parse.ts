@@ -7,6 +7,8 @@
 // a body before validating them against the viewable-member set. Pure string
 // work — no Prisma, no IO — so it is unit-testable and importable anywhere.
 
+import { withoutCode } from '@/lib/markdown/proseRanges';
+
 /**
  * One mention token: `[@Display Name](mention:<userId>)`. The display name is
  * anything up to the closing bracket (names contain spaces/diacritics); the id
@@ -29,11 +31,16 @@ export const MENTION_TOKEN_RE = /\[@([^\]\[]*)\]\(mention:([A-Za-z0-9_-]+)\)/g;
  * repeats (the `@@unique([commentId, mentionedUserId])` substrate stores one
  * row per user). Malformed near-tokens (no `mention:` scheme, unclosed
  * bracket) simply don't match — they are body text, never an error.
+ *
+ * ⚠️ A TOKEN INSIDE CODE IS NOT A MENTION (MOTIR-10233). It renders as literal text,
+ * so it must not notify anyone, the rule work-item references already follow.
  */
 export function parseMentionIds(bodyMd: string): string[] {
   const ids: string[] = [];
   const seen = new Set<string>();
-  for (const match of bodyMd.matchAll(MENTION_TOKEN_RE)) {
+  // No token anywhere ⇒ nothing to find, and no parse to pay for.
+  if (!bodyMd.includes('mention:')) return ids;
+  for (const match of withoutCode(bodyMd).matchAll(MENTION_TOKEN_RE)) {
     // The id group is `+`-quantified, so a match always captures it; the cast
     // only papers over noUncheckedIndexedAccess (no runtime branch).
     const id = match[2] as string;

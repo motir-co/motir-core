@@ -4,6 +4,8 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import { commentsService } from '@/lib/services/commentsService';
+import { CommentNotFoundError } from '@/lib/comments/errors';
 import type { PlanChangeSessionDto, PlanChangeSubmitResultDto } from '@/lib/dto/planChange';
 import type { SubmittedRequirement } from '@/lib/ai/types';
 import { TooManyPlanChangeTargetsError } from '@/lib/planChange/errors';
@@ -12,7 +14,7 @@ import type { PlanChangeScope } from '@/lib/planChange/scope';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
-import { toToolError, toolOk } from '../toolResult';
+import { toToolError, toolError, toolOk } from '../toolResult';
 import { derived } from '../payloads/define';
 import {
   planSessionPayload,
@@ -207,11 +209,47 @@ const requirementField = z
       'the same as omitting this argument.',
   );
 
+/**
+ * THE RUN MARKER (MOTIR-10233). A run that stopped on a card hands the planner its
+ * finding and EXITS — nobody is left to answer a question. Saying so is what makes
+ * the planner open its question-free first session instead of a conversation, and
+ * that session is the only one allowed to answer "this cannot be planned". No other
+ * field could carry it: a requirement or a target says nothing about whether anyone
+ * is there to reply.
+ */
+const fromRunField = z
+  .boolean()
+  .optional()
+  .describe(
+    'OPTIONAL. Set `true` when YOU ARE A RUN that stopped on a card and is about to exit, ' +
+      'so nobody will be there to answer a question. The planner then asks nothing: it ' +
+      'either writes the requirement from what you sent and starts planning, or — when ' +
+      'your text makes no sense or contradicts itself — plans nothing, comments on the ' +
+      'card why, and leaves it at Planning. Omit it when a person is driving this submit.',
+  );
+
+/** The comment the run left on its card (MOTIR-10233) — so the planner replies to it. */
+const runCommentIdField = z
+  .string()
+  .trim()
+  .min(1)
+  .optional()
+  .describe(
+    'OPTIONAL, and only with `fromRun: true`. The `id` of the comment you posted on the ' +
+      'card when you stopped (from `add_comment`), on any card in this project, whichever ' +
+      '`targetKeys` you chose. A planner that cannot plan your report answers as a REPLY ' +
+      'to it. An id that does not resolve does not refuse the submit: the planner comments ' +
+      'on the card instead. With no `targetKeys` this comment is the only place to answer, ' +
+      'so one of the two must resolve.',
+  );
+
 const submitInputSchema = {
   projectKey: projectKeyField,
   targetKeys: targetKeysField,
   sessionId: sessionIdField,
   requirement: requirementField,
+  fromRun: fromRunField,
+  runCommentId: runCommentIdField,
 };
 
 const appendInputSchema = {
@@ -237,12 +275,45 @@ interface AppendArgs extends ScopeArgs {
 
 interface SubmitArgs extends ScopeArgs {
   requirement?: SubmittedRequirement;
+  fromRun?: boolean;
+  runCommentId?: string;
 }
 
 /** A project + the thread's scope, both resolved from the caller's arguments. */
 interface ResolvedTarget {
   pctx: ProjectContext;
   scope: PlanChangeScope;
+  /** The anchors' work-item ids, in the order they were named. */
+  workItemIds: string[];
+}
+
+/**
+ * A run's submit with nowhere to answer (MOTIR-10233): no `targetKeys`, and no
+ * `runCommentId` that resolves. A can't-plan verdict could reach nobody, so it is
+ * refused while the run can still fix it.
+ */
+export class RunReplanNoAnchorError extends Error {
+  readonly code = 'RUN_REPLAN_NO_ANCHOR' as const;
+  constructor() {
+    super(
+      'A run that sends no `targetKeys` must name its comment in `runCommentId`, and this ' +
+        'one did not resolve, so a planner that cannot plan your report could tell nobody. ' +
+        'Nothing was submitted. Submit again with the card you stopped on in `targetKeys`.',
+    );
+    this.name = 'RunReplanNoAnchorError';
+  }
+}
+
+/** A `runCommentId` with no `fromRun: true` (MOTIR-10233) — refused before anything runs. */
+export class RunCommentWithoutRunError extends Error {
+  readonly code = 'RUN_COMMENT_WITHOUT_RUN' as const;
+  constructor() {
+    super(
+      '`runCommentId` names the comment a RUN left when it stopped, so it is accepted only ' +
+        'with `fromRun: true`. Nothing was submitted.',
+    );
+    this.name = 'RunCommentWithoutRunError';
+  }
 }
 
 /**
@@ -280,7 +351,7 @@ async function resolveTarget(args: ScopeArgs, ctx: ServiceContext): Promise<Reso
   // behind `getWorkItemByIdentifier` is an EXACT unique match — so "prod-7" must
   // become "ACME-7" here or it reads as a not-found item.
   const requested = (args.targetKeys ?? []).map(normalizeIdentifier).filter(Boolean);
-  if (requested.length === 0) return { pctx, scope: PROJECT_SCOPE };
+  if (requested.length === 0) return { pctx, scope: PROJECT_SCOPE, workItemIds: [] };
   // Bound BEFORE the round-trips: the cost of a huge set is the resolution
   // fan-out itself, so rejecting after resolving them would be too late.
   if (requested.length > MAX_SCOPE_TARGETS) {
@@ -288,11 +359,13 @@ async function resolveTarget(args: ScopeArgs, ctx: ServiceContext): Promise<Reso
   }
 
   const identifiers: string[] = [];
+  const workItemIds: string[] = [];
   for (const key of requested) {
     const item = await workItemsService.getWorkItemByIdentifier(project.id, key, ctx);
     identifiers.push(item.identifier);
+    workItemIds.push(item.id);
   }
-  return { pctx, scope: buildScope(identifiers) };
+  return { pctx, scope: buildScope(identifiers), workItemIds };
 }
 
 /** How a thread is named in the summary — the project, or its anchor set. */
@@ -342,6 +415,24 @@ function summarizeSubmit(result: PlanChangeSubmitResultDto): string {
       '`get_plan_status` with this plan id to see what became of it. The thread is ' +
       'intact and can be refined further with another turn.',
   ].join('\n');
+}
+
+/**
+ * The run's comment as a reply root, or null when it does not resolve (MOTIR-10233). A
+ * wrong pointer costs the reply, never the re-plan: the run has one retry, and repeating
+ * the same id would lose its finding.
+ */
+async function resolveRunComment(
+  commentId: string,
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<string | null> {
+  try {
+    return (await commentsService.resolveReplyRootInProject(commentId, projectId, ctx)).commentId;
+  } catch (err) {
+    if (err instanceof CommentNotFoundError) return null;
+    throw err;
+  }
 }
 
 /** The adapter: resolve the scope, then the named session — else the caller's
@@ -400,14 +491,40 @@ export async function runSubmitPlanSession(
   args: SubmitArgs,
   ctx: ServiceContext,
 ): Promise<CallToolResult> {
-  const { pctx, scope } = await resolveTarget(args, ctx);
+  // Refused FIRST, before any read: a malformed submit spends nothing, which is what
+  // makes "a rejected submit is safe to retry once" true of this field too.
+  if (args.runCommentId !== undefined && args.fromRun !== true) {
+    const refusal = new RunCommentWithoutRunError();
+    return toolError(refusal.code, refusal.message);
+  }
+  const { pctx, scope, workItemIds } = await resolveTarget(args, ctx);
+  // THE RUN'S COMMENT IS RESOLVED, NOT TRUSTED (MOTIR-10233): it must sit in this project,
+  // and a reply's root is where an answer to it goes. It need not sit on an anchor: a run
+  // may anchor on the container, or on nothing, and its comment stays on its own card.
+  const runCommentId =
+    args.fromRun === true && args.runCommentId !== undefined
+      ? await resolveRunComment(args.runCommentId, pctx.projectId, ctx)
+      : null;
+  if (args.fromRun === true && workItemIds.length === 0 && runCommentId === null) {
+    const refusal = new RunReplanNoAnchorError();
+    return toolError(refusal.code, refusal.message);
+  }
+  const runReplan = args.fromRun === true ? { commentId: runCommentId } : undefined;
   const result = await planChangeSessionsService.submitPublic(
     pctx,
     scope,
     args.requirement,
     args.sessionId,
+    runReplan,
   );
-  return toolOk(summarizeSubmit(result), derived(planSubmitPayload, presentMcpPlanSubmit(result)));
+  const lostComment = args.runCommentId !== undefined && runCommentId === null;
+  return toolOk(
+    lostComment
+      ? `${summarizeSubmit(result)}\n\n\`runCommentId\` did not resolve, so a planner that cannot ` +
+          'plan this report comments on the card instead of replying to you.'
+      : summarizeSubmit(result),
+    derived(planSubmitPayload, presentMcpPlanSubmit(result)),
+  );
 }
 
 export function registerPlanSession(server: McpServer, resolveContext: McpContextResolver): void {
@@ -486,6 +603,9 @@ export function registerPlanSession(server: McpServer, resolveContext: McpContex
         '`acceptance`) must be present and non-empty for it to be read; the other three may ' +
         'be `""`, which says you considered the question and there is none. Nothing is ' +
         'validated here: a partial requirement, or none at all, submits fine. ' +
+        'A RUN that stopped on a card and is about to exit passes `fromRun: true` (and ' +
+        '`runCommentId`, the comment it left): the planner then asks no question — it plans, ' +
+        'or it comments on the card why it cannot and plans nothing. ' +
         'IF THIS TOOL REJECTS YOUR ARGUMENTS, NOTHING HAPPENED — no job was created and no ' +
         'credits were spent — so that ONE case is safe to retry, without the `requirement`. ' +
         'It is the only exception to submitting exactly once.',

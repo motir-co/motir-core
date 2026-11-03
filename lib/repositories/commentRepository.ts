@@ -141,6 +141,25 @@ export const commentRepository = {
   },
 
   /**
+   * The comment this author already wrote on this item with exactly this body, since
+   * `since`, or null: how a retried write recognises its own earlier attempt.
+   */
+  async findIdenticalSince(
+    where: { workItemId: string; authorId: string; bodyMd: string; since: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<Comment | null> {
+    return tx.comment.findFirst({
+      where: {
+        workItemId: where.workItemId,
+        authorId: where.authorId,
+        bodyMd: where.bodyMd,
+        createdAt: { gte: where.since },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * The PUBLIC-request comment thread for a work item (Subtask 6.12.12) — ONLY
    * `isPublic` comments, the public feedback thread distinct from the work
    * item's internal Story-5.1 discussion (`isPublic = false`, which never

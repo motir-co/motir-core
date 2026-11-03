@@ -13,6 +13,7 @@ import type {
   JobContextBag,
   JobStreamEvent,
   RequirementConfirmation,
+  RunReplanOrigin,
   SubmittedRequirement,
 } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
@@ -141,6 +142,11 @@ export interface PlanEditSubmitOptions {
    * `context.requirementConfirmed`, beside `requirement`, only when present.
    */
   requirementConfirmed?: RequirementConfirmation;
+  /**
+   * THE RUN MARKER (MOTIR-10233): `context.runReplan`, only when present — a run's
+   * re-plan, which motir-ai plans with no question and may refuse.
+   */
+  runReplan?: RunReplanOrigin;
 }
 
 /**
@@ -466,12 +472,13 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { requirementConfirmed, ...rest } = opts;
+    const { requirementConfirmed, runReplan, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         ...(requirement ? { requirement } : {}),
         ...(requirementConfirmed ? { requirementConfirmed } : {}),
+        ...(runReplan ? { runReplan } : {}),
       },
       ctx,
       rest,
@@ -515,13 +522,14 @@ export const aiPlanEditsService = {
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
     await assertCanPlan(ctx);
-    const { requirementConfirmed, ...rest } = opts;
+    const { requirementConfirmed, runReplan, ...rest } = opts;
     return submitPlanEditJob(
       {
         prompt,
         targetKeys: [...targetKeys],
         ...(requirement ? { requirement } : {}),
         ...(requirementConfirmed ? { requirementConfirmed } : {}),
+        ...(runReplan ? { runReplan } : {}),
       },
       ctx,
       rest,

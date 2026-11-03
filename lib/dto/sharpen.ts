@@ -45,7 +45,7 @@ export interface SharpenSessionDto {
   settled: SettledAnswer[];
   assumptions: SharpenAssumption[];
   /** What motir-ai reported about writing the answers back; null before an end. */
-  writeBack: { ok: boolean; error?: string } | null;
+  writeBack: { ok: boolean; error?: string; planClosed?: boolean } | null;
   /** The person turn whose job has not settled yet, or null. */
   inFlight: { turnId: string; jobId: string | null } | null;
   turns: SharpenTurnDto[];

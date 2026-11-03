@@ -16100,6 +16100,7 @@
       "plannersAssumption": "规划者的假设",
       "writingPlanOnly": "正在把你的回答写入计划的需求…",
       "writtenPlanOnly": "已写入计划的需求。",
+      "planClosed": "该计划在撰写前已关闭，因此不需要这些回答。",
       "failed": "你的回答没有写入。它们仍保留在这里。",
       "copy": "复制回答"
     },

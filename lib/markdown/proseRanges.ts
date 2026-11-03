@@ -128,6 +128,33 @@ function textContent(node: MarkdownNode): string {
 }
 
 /**
+ * The text with its code spans and code blocks cut out (MOTIR-10233): what a body says
+ * as opposed to what it quotes. A token inside code renders as literal text, so it must
+ * not act like one.
+ */
+export function withoutCode(text: string): string {
+  const tree = parser.parse(text) as unknown as MarkdownNode;
+  const ranges: Array<[number, number]> = [];
+  const visit = (node: MarkdownNode): void => {
+    const start = node.position?.start.offset;
+    const end = node.position?.end.offset;
+    if ((node.type === 'code' || node.type === 'inlineCode') && start != null && end != null) {
+      ranges.push([start, end]);
+      return;
+    }
+    for (const child of node.children ?? []) visit(child);
+  };
+  visit(tree);
+  let out = '';
+  let at = 0;
+  for (const [start, end] of ranges) {
+    out += text.slice(at, start);
+    at = end;
+  }
+  return out + text.slice(at);
+}
+
+/**
  * Every inline `link` node in `text`, in source order (bug MOTIR-9825). The read
  * side of the rule {@link replaceInProse} applies to writes: a scan that judges
  * links must judge exactly what renders as one, and a regex over the raw body
