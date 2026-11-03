@@ -3,6 +3,7 @@ import {
   capRanges,
   codeHistoryHostError,
   fetchWithinDeadline,
+  hostCallFailure,
   hexShaOrNull,
   saysTooLarge,
   stringOrNull,
@@ -89,7 +90,7 @@ export async function gitlabReadCodeLog(
     method: 'GET',
     headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
   });
-  if (!call.ok) return codeHistoryHostError(asked, call.detail);
+  if (!call.ok) return hostCallFailure(asked, call);
   const { res } = call;
   if (!res.ok) return gitlabRefusal(res, asked, 'commits');
 
@@ -158,7 +159,7 @@ export async function gitlabReadCodeBlame(
     method: 'GET',
     headers: { authorization: `Bearer ${token}`, 'user-agent': 'motir' },
   });
-  if (!call.ok) return codeHistoryHostError(asked, call.detail);
+  if (!call.ok) return hostCallFailure(asked, call);
   const { res } = call;
   if (!res.ok) return gitlabRefusal(res, asked, 'blame');
 

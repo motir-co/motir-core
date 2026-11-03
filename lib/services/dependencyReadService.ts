@@ -587,7 +587,9 @@ export function createDependencyReadService(options: DependencyReadServiceOption
         }
         const text = file.data.toString('utf8');
         const sliced = sliceRange(text, range);
-        if (!sliced && file.data.length > DEPENDENCY_SOURCE_FILE_MAX_BYTES) {
+        // The limit bounds what goes back, so a range wide enough to hold the file is over it too.
+        const returned = sliced ? Buffer.byteLength(sliced.text) : file.data.length;
+        if (returned > DEPENDENCY_SOURCE_FILE_MAX_BYTES) {
           return tooLarge('file', DEPENDENCY_SOURCE_FILE_MAX_BYTES, exact);
         }
         return {

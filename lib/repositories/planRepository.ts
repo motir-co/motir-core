@@ -1,3 +1,4 @@
+import { escapeLikePattern } from './escapeLikePattern';
 import { Prisma, type Plan, type PlanStatus } from '@/generated/prisma/client';
 import { dbRead } from '@/lib/db';
 import {
@@ -897,8 +898,8 @@ export const planRepository = {
         ? {}
         : {
             OR: [
-              { title: { contains: opts.q, mode: 'insensitive' as const } },
-              { summary: { contains: opts.q, mode: 'insensitive' as const } },
+              { title: { contains: escapeLikePattern(opts.q), mode: 'insensitive' as const } },
+              { summary: { contains: escapeLikePattern(opts.q), mode: 'insensitive' as const } },
             ],
           };
     return client.plan.findMany({

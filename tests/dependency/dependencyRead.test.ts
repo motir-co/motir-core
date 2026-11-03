@@ -333,6 +333,10 @@ describe('dependencyReadService.readSource', () => {
     expect(
       await svc.readSource('npm', 'left-pad', '1.3.0', 'dist/big.js', { startLine: 2 }),
     ).toMatchObject({ outcome: 'source_file', text: 'last', lines: { from: 2, to: 2, total: 2 } });
+    // A range wide enough to hold the file is over the limit too.
+    expect(
+      await svc.readSource('npm', 'left-pad', '1.3.0', 'dist/big.js', { startLine: 1 }),
+    ).toMatchObject({ outcome: 'too_large', what: 'file', path: 'dist/big.js' });
   });
 
   it('lists the root and a subdirectory, directories first; names path_not_found and binary', async () => {

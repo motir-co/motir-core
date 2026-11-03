@@ -1,6 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  CODE_HISTORY_MAX_BODY_BYTES,
   CODE_HISTORY_MAX_COMMITS,
   CODE_HISTORY_MAX_RANGES,
   CODE_HISTORY_TIMEOUT_MS,
@@ -202,11 +203,40 @@ describe('github.readCodeHistory — log', () => {
     });
   });
 
-  it('an unknown ref is no_such_ref (404, 422 and an empty repository’s 409)', async () => {
-    for (const status of [404, 422, 409]) {
+  it('an unknown ref is no_such_ref (422 and an empty repository’s 409)', async () => {
+    for (const status of [422, 409]) {
       reply = () => json({ message: 'No commit found for SHA: nope' }, status);
       expect((await read('lib/a.ts', 'nope')).outcome).toBe('no_such_ref');
     }
+  });
+
+  it('a commits 404 asks the repository: it answers, so no such ref; it is gone, so revoked', async () => {
+    const answers =
+      (repoStatus: number): Reply =>
+      (url) =>
+        url.includes('/commits')
+          ? json({ message: 'Not Found' }, 404)
+          : json({ message: 'repository' }, repoStatus);
+    reply = answers(200);
+    expect((await read('lib/a.ts', 'nope')).outcome).toBe('no_such_ref');
+    reply = answers(404);
+    expect((await read('lib/a.ts', 'nope')).outcome).toBe('revoked');
+    reply = answers(502);
+    expect(await read('lib/a.ts', 'nope')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'GitHub repository returned 502',
+    });
+  });
+
+  it('a commits 404 whose repository check fails is a host error, not an answer', async () => {
+    reply = (url) => {
+      if (url.includes('/commits')) return json({ message: 'Not Found' }, 404);
+      throw new Error('network down');
+    };
+    expect(await read('lib/a.ts', 'nope')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'network down',
+    });
   });
 
   it('401 and a non-rate-limit 403 are revoked; a rate-limit 403 is host_error', async () => {
@@ -631,6 +661,101 @@ describe('readCodeHistory — bodies the host could not deliver', () => {
       (await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'main')).outcome,
     ).toBe('host_error');
     reply = () => new Response('not json', { status: 200 });
+    expect(await github.readCodeHistory('i', 'acme', 'web', 'log', 'a.ts', 'main')).toMatchObject({
+      outcome: 'host_error',
+      detail: 'GitHub commits returned no commit list',
+    });
+  });
+
+  it('github blame: a path holding a size word is still path_not_found', async () => {
+    reply = () =>
+      json({
+        data: { repository: { object: { __typename: 'Commit', blame: null } } },
+        errors: [{ message: "Could not resolve file for path 'lib/utils/timeout.ts'." }],
+      });
+    expect(
+      (await github.readCodeHistory('i', 'acme', 'web', 'blame', 'lib/utils/timeout.ts', 'main'))
+        .outcome,
+    ).toBe('path_not_found');
+    reply = () =>
+      json({
+        data: { repository: { object: { __typename: 'Commit', blame: null } } },
+        errors: [{ message: 'While blaming lib/utils/timeout.ts we failed' }],
+      });
+    expect(
+      (await github.readCodeHistory('i', 'acme', 'web', 'blame', 'lib/utils/timeout.ts', 'main'))
+        .outcome,
+    ).toBe('host_error');
+    reply = () =>
+      json({
+        data: { repository: { object: null } },
+        errors: [{ message: 'Your query timed out' }],
+      });
+    expect(
+      (await github.readCodeHistory('i', 'acme', 'web', 'blame', 'lib/a.ts', 'main')).outcome,
+    ).toBe('too_large');
+  });
+
+  it('github blame: an unrecognised error on a resolved repository is host_error, never a bad ref', async () => {
+    reply = () =>
+      json({
+        data: { repository: { object: null } },
+        errors: [{ type: 'SERVICE_UNAVAILABLE', message: 'Something went wrong' }],
+      });
+    expect(await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'main')).toMatchObject(
+      { outcome: 'host_error', detail: 'GitHub GraphQL returned an unrecognised error' },
+    );
+  });
+
+  it('github blame: a tag pointing at no commit is no_such_ref, not a missing path', async () => {
+    reply = () => json({ data: { repository: { object: { __typename: 'Tag', target: {} } } } });
+    expect((await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'v1')).outcome).toBe(
+      'no_such_ref',
+    );
+    reply = () =>
+      json({ data: { repository: { object: { __typename: 'Tag', target: { blame: null } } } } });
+    expect((await github.readCodeHistory('i', 'acme', 'web', 'blame', 'a.ts', 'v1')).outcome).toBe(
+      'path_not_found',
+    );
+  });
+
+  it('the deadline covers the body: a host that stalls after its headers is host_error', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input instanceof Request ? input.url : String(input);
+        if (url.includes('/access_tokens')) {
+          return json({
+            token: GH_TOKEN,
+            expires_at: new Date(Date.now() + 3_600_000).toISOString(),
+          });
+        }
+        const stalled = new ReadableStream<Uint8Array>({
+          start(controller) {
+            init?.signal?.addEventListener('abort', () => controller.error(new Error('aborted')));
+          },
+        });
+        return new Response(stalled, { status: 200 });
+      });
+      const pending = github.readCodeHistory('i', 'acme', 'web', 'log', 'a.ts', 'main');
+      await vi.advanceTimersByTimeAsync(CODE_HISTORY_TIMEOUT_MS + 1);
+      expect(await pending).toMatchObject({
+        outcome: 'host_error',
+        detail: `no response within ${CODE_HISTORY_TIMEOUT_MS}ms`,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('an answer over the byte cap is too_large, and an empty answer still reads as one', async () => {
+    const huge = () =>
+      new Response(new Uint8Array(CODE_HISTORY_MAX_BODY_BYTES + 1), { status: 200 });
+    reply = huge;
+    expect((await github.readCodeHistory('i', 'acme', 'web', 'log', 'a.ts', 'main')).outcome).toBe(
+      'too_large',
+    );
+    reply = () => new Response(null, { status: 204 });
     expect(await github.readCodeHistory('i', 'acme', 'web', 'log', 'a.ts', 'main')).toMatchObject({
       outcome: 'host_error',
       detail: 'GitHub commits returned no commit list',

@@ -183,6 +183,7 @@ describe('GET /api/internal/ai/designs — auth and validation', () => {
       '?limit=abc',
       '?limit=1.5',
       '?cursor=garbage',
+      '?cursor=99999999999',
     ]) {
       const res = await get(q);
       expect(res.status, q).toBe(400);
@@ -282,6 +283,16 @@ describe('GET /api/internal/ai/designs — the list', () => {
 });
 
 describe('GET /api/internal/ai/designs?key= — one design card', () => {
+  it('a read that failed is not an absence: a database error is thrown, never not_found', async () => {
+    const failed = new Error('pool timeout');
+    const spy = vi.spyOn(projectsService, 'getByKey').mockRejectedValueOnce(failed);
+    try {
+      await expect(get('?key=DSGN-1')).rejects.toBe(failed);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it('an approved design carries its assets, each with a short-lived link', async () => {
     const { card, evidenceId } = await approvedDesign(fx, 'v1');
     const result = await resultOf(await get(`?key=${card.identifier.toLowerCase()}`));

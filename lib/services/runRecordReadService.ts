@@ -211,7 +211,12 @@ export const runRecordReadService = {
       const dash = key.lastIndexOf('-');
       // A card of ANOTHER project is not this project's history.
       const owner =
-        dash > 0 ? await projectsService.getByKey(key.slice(0, dash), ctx).catch(() => null) : null;
+        dash > 0
+          ? await projectsService.getByKey(key.slice(0, dash), ctx).catch((err: unknown) => {
+              if (isAbsence(err)) return null;
+              throw err;
+            })
+          : null;
       if (owner?.id !== projectId)
         return { outcome: 'nothing_matched', runs: [], nextCursor: null };
       let runs;
