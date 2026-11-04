@@ -519,6 +519,12 @@ export const ja: McpSummaryTranslations = {
     summary: 'アーカイブした項目を復元します。archive の逆の操作です。',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'GitHub のプルリクエストが納品する作業項目を、そのリンクから読み取ります。ない場合はその理由を返します。`link_pull_request` の逆です。',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
   unlink_pull_request: {
     summary:
       '`link_pull_request` を1件だけ取り消します。作業項目とプルリクエストの間に記録された納品を削除します。納品は1行のレコードなので、正しい作業項目を再リンクしても訂正にはならず追加になります。これは指定した1組だけを削除し、ほかの納品には手を付けません。',

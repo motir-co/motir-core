@@ -7,6 +7,10 @@ import { annotatedServer } from './toolAnnotations';
 import { referencedServer } from './toolReference';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import { GET_DESIGN_TOOL_NAME, registerGetDesign } from './tools/getDesign';
+import {
+  FIND_WORK_ITEMS_FOR_PULL_REQUEST_TOOL_NAME,
+  registerFindWorkItemsForPullRequest,
+} from './tools/findWorkItemsForPullRequest';
 import { LIST_DESIGNS_TOOL_NAME, registerListDesigns } from './tools/listDesigns';
 import { GET_APPROVAL_GATE_TOOL_NAME, registerGetApprovalGate } from './tools/getApprovalGate';
 import {
@@ -284,6 +288,7 @@ export const MCP_TOOL_NAMES = [
   PUBLISH_TEST_INSTRUCTIONS_TOOL_NAME,
   LINK_PULL_REQUEST_TOOL_NAME,
   UNLINK_PULL_REQUEST_TOOL_NAME,
+  FIND_WORK_ITEMS_FOR_PULL_REQUEST_TOOL_NAME,
   SEARCH_WORK_ITEMS_TOOL_NAME,
   SEARCH_WORK_ITEMS_SEMANTIC_TOOL_NAME,
   WHOAMI_TOOL_NAME,
@@ -527,6 +532,7 @@ export function registerMcpTools(
   // is a ROW now: a re-link ADDS and the mistaken row stays, so removal is its own
   // operation and not a side effect of the fix.
   registerUnlinkPullRequest(target, resolveContext);
+  registerFindWorkItemsForPullRequest(target, resolveContext);
   // Query tool (7.8.6).
   registerSearchWorkItems(target, resolveContext);
   // The SEMANTIC query (MOTIR-3101) — a second tool BESIDE the substring search,

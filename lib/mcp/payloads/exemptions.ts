@@ -343,6 +343,13 @@ export const EXEMPT_TOOLS = {
     'already made), which a caller must be able to tell from a real removal without parsing the ' +
     'prose. An unknown repository or number does not reach this payload at all; it raises ' +
     '(MOTIR-3756).',
+  find_work_items_for_pull_request:
+    'Returns the DELIVERY SET of one pull request, read backwards — `{ outcome: "linked", ' +
+    'pullRequest, workItems: [{ key, title, kind, status, projectKey }] }`, or `{ outcome: ' +
+    '"not_linked", pullRequest, reason }` naming why no card came back. No `/api/v1` operation ' +
+    'returns the cards a pull request delivers, so there is no shared shape to derive from; ' +
+    '`reason` is load-bearing — it tells a pull request that delivers nothing from one Motir ' +
+    'does not know (MOTIR-10331).',
   delete_sprint:
     'Returns `{ sprintId, deleted }` — a deletion acknowledgement. v1’s sprint delete answers ' +
     '204 with no body (the post-condition is the whole contract), so there is no shared shape ' +

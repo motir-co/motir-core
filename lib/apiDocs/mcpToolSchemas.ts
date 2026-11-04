@@ -1551,6 +1551,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  find_work_items_for_pull_request: {
+    type: 'object',
+    properties: {
+      url: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The pull request as its GitHub URL, e.g. "https://github.com/acme/web/pull/2291" — the line `gh pr create` prints, or the address in a browser.',
+      },
+    },
+    required: ['url'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_approval_gate: {
     type: 'object',
     properties: {
@@ -4917,6 +4931,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   dispatch_prompt: 'Dispatch prompt',
   edit_comment: 'Edit comment',
   expand_item: 'Expand work item',
+  find_work_items_for_pull_request: 'Find work items for pull request',
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_code_health: 'Get code health',
@@ -5220,6 +5235,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
+    openWorldHint: false,
+  },
+  find_work_items_for_pull_request: {
+    title: 'Find work items for pull request',
+    readOnlyHint: true,
     openWorldHint: false,
   },
   get_approval_gate: { title: 'Get approval gate', readOnlyHint: true, openWorldHint: false },

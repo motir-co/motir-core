@@ -527,6 +527,12 @@ export const es: McpSummaryTranslations = {
     summary: 'Restaura un elemento archivado: la inversa de archive.',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'Los elementos de trabajo que entrega un pull request de GitHub, leídos de sus vínculos, o por qué no hay ninguno. Lo inverso de `link_pull_request`.',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
   unlink_pull_request: {
     summary:
       'Deshace UN `link_pull_request`: elimina la entrega registrada entre un elemento de trabajo y una pull request. Una entrega es una fila, así que volver a vincular el elemento de trabajo correcto AÑADE en lugar de corregir; esto elimina exactamente el par que nombras y deja intacta cualquier otra entrega.',

@@ -529,6 +529,12 @@ export const de: McpSummaryTranslations = {
     summary: 'Ein archiviertes Element wiederherstellen – die Umkehrung von archive.',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'Die Arbeitselemente, die ein GitHub-Pull-Request liefert, gelesen aus seinen Verknüpfungen – oder warum es keine gibt. Das Gegenstück zu `link_pull_request`.',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
   unlink_pull_request: {
     summary:
       'EINEN `link_pull_request` rückgängig machen – die zwischen einem Arbeitselement und einem Pull Request erfasste Lieferung entfernen. Eine Lieferung ist eine Zeile, erneutes Verknüpfen des richtigen Arbeitselements ERGÄNZT also, statt zu korrigieren; dies entfernt genau das eine Paar, das Sie nennen, und lässt jede andere Lieferung unberührt.',

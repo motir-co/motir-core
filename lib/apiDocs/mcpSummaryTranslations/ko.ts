@@ -517,6 +517,12 @@ export const ko: McpSummaryTranslations = {
     summary: '보관된 항목을 복원합니다 — archive의 반대입니다.',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'GitHub 풀 리퀘스트가 전달하는 작업 항목을 링크에서 읽어 옵니다. 없으면 그 이유를 알려 줍니다. `link_pull_request`의 반대입니다.',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
   unlink_pull_request: {
     summary:
       '`link_pull_request` 하나를 되돌립니다 — 작업 항목과 풀 리퀘스트 사이에 기록된 전달을 제거합니다. 전달은 하나의 행이므로 올바른 작업 항목을 다시 연결하면 수정되는 것이 아니라 추가됩니다. 이 호출은 지정한 정확히 그 한 쌍만 제거하고 다른 전달은 그대로 둡니다.',

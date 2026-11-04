@@ -503,6 +503,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // The summary names no tier, so it stands.
     descriptionFingerprint: '120f83a21d3e',
   },
+  find_work_items_for_pull_request: {
+    // MOTIR-10331 (Story MOTIR-10327 R5b).
+    summary:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: '8c0749c2848a',
+  },
   unlink_pull_request: {
     summary:
       'Undo ONE `link_pull_request` — remove the delivery recorded between a work item and a ' +

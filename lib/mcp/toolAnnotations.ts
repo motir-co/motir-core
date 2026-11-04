@@ -511,6 +511,8 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: true,
   },
+  // R: findWorkItemsForPullRequest.ts → githubPullRequestService.findWorkItemsForPullRequest (delivery rows read in one workspace-bound transaction)
+  find_work_items_for_pull_request: { readOnlyHint: true, openWorldHint: false },
   // R: searchWorkItems.ts → workItemsService.getProjectIssuesList, commentsService.getCommentCountsForItems
   search_work_items: { readOnlyHint: true, openWorldHint: false },
   // W: searchWorkItemsSemantic.ts → enforceAiRateLimit (rateLimitCounterRepository.increment), then aiBoundaryService.searchSimilarWorkItemsByText

@@ -527,6 +527,12 @@ export const it: McpSummaryTranslations = {
     summary: 'Ripristina un elemento archiviato: l’inverso di archive.',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'Gli elementi di lavoro che una pull request GitHub consegna, letti dai suoi collegamenti, oppure perché non ce ne sono. L’inverso di `link_pull_request`.',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
   unlink_pull_request: {
     summary:
       'Annulla UN solo `link_pull_request`: rimuovi la consegna registrata tra un elemento di lavoro e una pull request. Una consegna è una riga, quindi ricollegare l’elemento di lavoro giusto AGGIUNGE anziché correggere; questo rimuove esattamente la coppia che indichi e lascia intatte tutte le altre consegne.',

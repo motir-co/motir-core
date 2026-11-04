@@ -21,7 +21,14 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { QUICK_SEARCH_MIN_QUERY_LENGTH } from '@/lib/workItems/quickSearch';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import type { LinkedPullRequestDto, PullRequestLinkCandidateDto } from '@/lib/dto/github';
+import type {
+  DeliveredWorkItemDto,
+  LinkedPullRequestDto,
+  PullRequestDeliveriesDto,
+  PullRequestLinkCandidateDto,
+  PullRequestNotLinkedReason,
+} from '@/lib/dto/github';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { captureDecisionDocument } from './decisionDocumentCaptureService';
 
@@ -687,7 +694,111 @@ export const githubPullRequestService = {
       return result;
     });
   },
+
+  /**
+   * The cards ONE pull request delivers — the reverse of `link_pull_request`
+   * (MOTIR-10331), read for `find_work_items_for_pull_request`.
+   *
+   * ⚠️ THE DELIVERY ROWS ARE THE ONLY LINK. A key in the pull request's title,
+   * branch or body is a label nobody parses; a card is delivered by a pull request
+   * exactly when a `work_item_delivery` row says so, so that is the one thing read.
+   * An INHERITED delivery (a child whose parent's pull request delivers it) is not
+   * a row of its own: the caller reaches it by walking the tree from the card
+   * this returns.
+   *
+   * ⚠️ TENANCY. Every read runs in ONE workspace-bound transaction. Repositories
+   * are organisation-tier, so the repository and the pull request resolve across
+   * the organisation (as `unlinkPullRequestByCoordinates` resolves them), but the
+   * delivery rows and the cards are gated by RLS on `app.workspace_id`: a pull
+   * request that delivers only a sibling workspace's cards answers `no_deliveries`,
+   * and no card of that workspace can reach the answer.
+   *
+   * The three `not_linked` reasons are answers, not errors. After the lookup, the
+   * caller's `work_item:edit` is asserted on the project of every card returned —
+   * the answer exists to submit a review verdict for those cards.
+   */
+  async findWorkItemsForPullRequest(
+    input: { owner: string; name: string; number: number },
+    ctx: ServiceContext,
+  ): Promise<PullRequestDeliveriesDto> {
+    const pullRequest = `${input.owner}/${input.name}#${input.number}`;
+    const found = await withWorkspaceContext(ctx, (tx) => readDeliveredWorkItems(input, ctx, tx));
+    if (found.outcome === 'not_linked')
+      return { outcome: 'not_linked', pullRequest, reason: found.reason };
+
+    for (const projectId of new Set(found.items.map((item) => item.projectId))) {
+      await projectAccessService.assertPermission(projectId, ctx, PULL_REQUEST_LINK_PERMISSION);
+    }
+    return {
+      outcome: 'linked',
+      pullRequest,
+      workItems: found.items.map(({ projectId: _projectId, ...item }) => item),
+    };
+  },
 };
+
+type DeliveredRead =
+  | { outcome: 'linked'; items: (DeliveredWorkItemDto & { projectId: string })[] }
+  | { outcome: 'not_linked'; reason: PullRequestNotLinkedReason };
+
+/** The reads behind {@link githubPullRequestService.findWorkItemsForPullRequest},
+ *  inside its one workspace-bound transaction. */
+async function readDeliveredWorkItems(
+  input: { owner: string; name: string; number: number },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<DeliveredRead> {
+  const organizationId = await resolveOrganizationId(ctx.workspaceId, tx);
+  const repo = await githubRepoRepository.findConnectedByOrganizationAndName(
+    organizationId,
+    input.owner,
+    input.name,
+    tx,
+  );
+  if (!repo) return { outcome: 'not_linked', reason: 'repository_not_connected' };
+
+  const pr = await githubPullRequestRepository.findByRepoAndNumber(repo.id, input.number, tx);
+  if (!pr) return { outcome: 'not_linked', reason: 'pull_request_unknown' };
+
+  const deliveries = await workItemDeliveryRepository.listByPullRequest(pr.id, tx);
+  // Resolved TOLERANTLY, as `resolveDeliveredWorkItems` does: a delivery whose
+  // card this workspace cannot see shortens the answer and never fabricates one.
+  // The explicit workspace filter is the tenant gate as well as RLS, because the
+  // dev and CI superuser bypasses RLS (finding #26).
+  const cards = await workItemRepository.findByIdsInWorkspace(
+    [...new Set(deliveries.map((d) => d.workItemId))],
+    ctx.workspaceId,
+    tx,
+  );
+  // An archived card is still delivered by the pull request, so it is answered;
+  // the caller decides what an archived card means for its work.
+  const projects = await projectRepository.findManyByIds(
+    [...new Set(cards.map((card) => card.projectId))],
+    tx,
+  );
+  const projectKeyById = new Map(projects.map((p) => [p.id, p.identifier]));
+  const byId = new Map(cards.map((card) => [card.id, card]));
+  // The delivery read's (link age) order, which is the order the cards were linked.
+  // A card this workspace cannot see never reaches this map, so it drops out here.
+  const ordered = [...new Set(deliveries.map((d) => d.workItemId))].flatMap((id) => {
+    const card = byId.get(id);
+    const projectKey = card ? projectKeyById.get(card.projectId) : undefined;
+    if (!card || !projectKey) return [];
+    return [
+      {
+        key: card.identifier,
+        title: card.title,
+        kind: card.kind,
+        status: card.status,
+        projectKey,
+        projectId: card.projectId,
+      },
+    ];
+  });
+  return ordered.length > 0
+    ? { outcome: 'linked', items: ordered }
+    : { outcome: 'not_linked', reason: 'no_deliveries' };
+}
 
 /** A lost unique-constraint race, spelled the same way `changeRequestStatusSync`
  *  spells it — the two converge on the same `(repo_id, number)` pair. */

@@ -522,6 +522,12 @@ export const pl: McpSummaryTranslations = {
     summary: 'Przywróć zarchiwizowany element — odwrotność archive.',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'Elementy pracy, które dostarcza pull request GitHub, odczytane z jego powiązań — albo powód, dla którego ich nie ma. Odwrotność `link_pull_request`.',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
   unlink_pull_request: {
     summary:
       'Cofnij JEDNO `link_pull_request` — usuń dostawę zapisaną między elementem roboczym a pull requestem. Dostawa to wiersz, więc ponowne powiązanie właściwego elementu roboczego DODAJE, a nie poprawia; to usuwa dokładnie tę jedną wskazaną parę i nie rusza żadnej innej dostawy.',
