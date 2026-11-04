@@ -10141,6 +10141,9 @@
         "membersLabel": "Arbeitselemente, die mit {key} feststecken",
         "showMore": "{count, plural, one {# weiteres Arbeitselement anzeigen} other {# weitere Arbeitselemente anzeigen}}",
         "showFewer": "Weniger anzeigen"
+      },
+      "fixing": {
+        "checksRunning": "Checks laufen für den neuen Push"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {# weiteres Arbeitselement hängt damit fest} other {# weitere Arbeitselemente hängen damit fest}}: <keys></keys>",
       "carriesMore": "und {count} weitere",
       "repairedWithHead": "Reparieren Sie es mit <b>{head}</b> — sie teilen sich einen Pull Request.",
-      "toHead": "{head} öffnen"
+      "toHead": "{head} öffnen",
+      "fixing": "Ein Fix wurde gepusht und seine Checks laufen. Dieser Hinweis verschwindet, sobald sie bestehen.",
+      "fixingWas": "Vor diesem Push: <reason></reason>"
+    },
+    "fixing": {
+      "label": "Wird repariert",
+      "name": "Wird repariert · Checks laufen für einen neuen Push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

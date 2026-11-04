@@ -10141,6 +10141,9 @@
         "membersLabel": "Éléments de travail bloqués avec {key}",
         "showMore": "Afficher {count, plural, one {# autre élément de travail} other {# autres éléments de travail}}",
         "showFewer": "Afficher moins"
+      },
+      "fixing": {
+        "checksRunning": "Les vérifications sont en cours sur le nouveau push"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {# autre élément de travail est bloqué avec lui} other {# autres éléments de travail sont bloqués avec lui}} : <keys></keys>",
       "carriesMore": "et {count} de plus",
       "repairedWithHead": "Réparez-le avec <b>{head}</b> — ils partagent une même pull request.",
-      "toHead": "Ouvrir {head}"
+      "toHead": "Ouvrir {head}",
+      "fixing": "Un correctif a été poussé et ses vérifications sont en cours. Ce message disparaît quand elles réussissent.",
+      "fixingWas": "Avant ce push : <reason></reason>"
+    },
+    "fixing": {
+      "label": "Correction",
+      "name": "Correction · vérifications en cours sur un nouveau push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

@@ -188,6 +188,7 @@ export function BoardCardView({
           statusCategory={card.statusCategory}
           id={markerId ? toFixTagId(card.id) : undefined}
           headKey={card.fixHeadKey ?? null}
+          fixing={card.fixing === true}
         />
         {/* THE OBSOLESCENCE BADGE (MOTIR-6677, `board-card--obsolescence.mock.html`):
             an ADDITIONAL pill after the exclusive slot and before the CI badge —

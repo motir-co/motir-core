@@ -6,6 +6,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToFixBanner } from '@/app/(authed)/items/[key]/_components/ToFixBanner';
 import { LATE_FALLBACK_ATTR } from '@/app/(authed)/items/[key]/_components/decisionAnchor';
 import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
+import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import zhMessages from '@/messages/zh.json';
 
 // THE TO FIX BANNER (Story MOTIR-6589 · MOTIR-6611; design MOTIR-6608 panels 5
@@ -429,5 +430,72 @@ describe('one entry per run (MOTIR-7589) — the head carries, every other card 
     );
     expect(screen.getByTestId('to-fix-banner-repaired-with-head').textContent).toContain('PROD-12');
     expect(screen.getByTestId('to-fix-banner-to-head').textContent).toContain('PROD-12');
+  });
+});
+
+// FIXING (Story MOTIR-10305 · MOTIR-10309; design `design/workbench/design-notes.md` § 40.3):
+// a fix was pushed and its checks are running. The banner turns calm — no danger fill, no
+// command (`motir fix` refuses a card whose checks run) — and keeps what was wrong before
+// the push in a second, secondary line.
+describe('Fixing (MOTIR-10309) — the calm banner while the pushed fix is checked', () => {
+  it('says the fix is being checked, keeps the old reason, and prints no command', () => {
+    renderBanner('ci_failed', { check: 'typecheck', fixing: true });
+    const el = banner();
+    expect(el.getAttribute('data-fixing')).toBe('true');
+    expect(el.getAttribute('data-to-fix')).toBe('ci_failed');
+    expect(el.className).toContain('bg-(--el-surface-soft)');
+    expect(el.className).not.toContain('--el-danger');
+    expect(el.textContent).toContain(
+      'A fix was pushed and its checks are running. This clears when they pass.',
+    );
+    expect(el.textContent).toContain('Before this push:');
+    expect(el.textContent).toContain('typecheck');
+    expect(el.querySelector('pre')).toBeNull();
+    expect(el.textContent).not.toContain('Repair it with this command:');
+    expect(el.querySelector('[data-to-fix-fixing]')).toBeTruthy();
+    const link = screen.getByRole('link', { name: /See its pull requests/ });
+    expect(link.getAttribute('href')).toBe('#development');
+  });
+
+  it('a dead run is never Fixing — its banner stays the dead-run one', () => {
+    renderBanner('run_died', {
+      fixing: true,
+      lastHeardAt: new Date().toISOString(),
+      pushed: true,
+    });
+    expect(banner().getAttribute('data-fixing')).toBeNull();
+  });
+
+  it('a running HOSTED repair wins over Fixing, as its line does on the Workbench', () => {
+    const run: OpenRepairRunDto = {
+      id: 'run_fix_1',
+      label: 'motir fix · 2026-11-04 10:02 UTC',
+      hosted: true,
+      holder: { id: 'usr_mara', name: 'Mara S.' },
+      byViewer: false,
+      startedAt: new Date().toISOString(),
+    };
+    render(
+      <ToFixBanner
+        identifier="PROD-42"
+        fixReason="changes_requested"
+        fixDetail={{ ...BASE, gate: 'agent_review', fixing: true }}
+        statusCategory="in_progress"
+        repairRun={run}
+      />,
+    );
+    expect(banner().getAttribute('data-fixing')).toBeNull();
+    expect(screen.getByTestId('to-fix-banner-hosted-fixing')).toBeTruthy();
+  });
+
+  it('draws nothing on a done card, Fixing or not', () => {
+    renderBanner('ci_failed', { fixing: true }, { statusCategory: 'done' });
+    expect(screen.queryByTestId('to-fix-banner')).toBeNull();
+  });
+
+  it('reads in Chinese', () => {
+    renderBanner('ci_failed', { fixing: true }, { locale: 'zh' });
+    expect(banner().textContent).toContain('修复已推送，检查正在运行。检查通过后此提示将消失。');
+    expect(banner().textContent).toContain('此次推送前：');
   });
 });

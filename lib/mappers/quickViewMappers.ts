@@ -74,6 +74,10 @@ export function toQuickViewData(
     fixReason: detail.fixReason,
     fixGate: detail.fixDetail?.gate ?? null,
     ...(detail.fixGroup && !detail.fixGroup.isHead ? { fixHeadKey: detail.fixGroup.headKey } : {}),
+    // A dead run is never Fixing (MOTIR-10309) — the tag's own rule, kept on the wire too.
+    ...(detail.fixDetail?.fixing && detail.fixReason !== 'run_died'
+      ? { fixing: true as const }
+      : {}),
     descriptionMd: item.descriptionMd,
     // The WHY — carried so PROPOSAL mode can render it inline (MOTIR-4183).
     // `/items` still defers it to the full page; this only makes it AVAILABLE.

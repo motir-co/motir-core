@@ -10138,6 +10138,9 @@
         "membersLabel": "{key} と一緒に止まっている作業項目",
         "showMore": "{count, plural, other {ほかの作業項目 # 件を表示}}",
         "showFewer": "表示を減らす"
+      },
+      "fixing": {
+        "checksRunning": "新しいプッシュでチェックを実行中"
       }
     },
     "toResume": {
@@ -15600,7 +15603,14 @@
       "carries": "{count, plural, other {さらに # 件の作業項目が一緒に止まっています}}：<keys></keys>",
       "carriesMore": "他 {count} 件",
       "repairedWithHead": "<b>{head}</b> と一緒に修正してください — 同じプルリクエストを共有しています。",
-      "toHead": "{head} を開く"
+      "toHead": "{head} を開く",
+      "fixing": "修正がプッシュされ、チェックを実行中です。チェックに合格すると、この表示は消えます。",
+      "fixingWas": "このプッシュの前：<reason></reason>"
+    },
+    "fixing": {
+      "label": "修正中",
+      "name": "修正中 · 新しいプッシュでチェックを実行中",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

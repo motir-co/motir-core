@@ -24,7 +24,10 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { WorkbenchList } from '@/app/(authed)/workbench/_components/WorkbenchList';
-import { fixCommandOf } from '@/app/(authed)/workbench/_components/WorkbenchFixLine';
+import {
+  fixCommandOf,
+  WorkbenchFixLine,
+} from '@/app/(authed)/workbench/_components/WorkbenchFixLine';
 import { toWorkbenchRowViews } from '@/app/(authed)/workbench/_components/workbenchRows';
 import type { WorkbenchTab } from '@/lib/workbench/tab';
 
@@ -791,6 +794,100 @@ describe('To fix — ONE ENTRY per run or pull-request set (§ 34, MOTIR-7589)',
     expect(screen.getByTestId('workbench-fix-carries-S-1').textContent).not.toContain('more');
     expect(screen.getByTestId('workbench-fix-members-toggle-S-1').textContent).not.toContain(
       'Show',
+    );
+  });
+});
+
+// FIXING (Story MOTIR-10305 · MOTIR-10309; design `design/workbench/design-notes.md` § 40.1):
+// a row whose pushed fix is being checked stays on To fix, in the same place, but reads
+// calm — the Fixing tag in the reason glyph's place, the line in secondary ink, and one
+// sentence in the command's slot.
+describe('To fix — Fixing (§ 40.1, MOTIR-10309)', () => {
+  it('draws the Fixing tag and the checks-running sentence instead of the command', () => {
+    render(
+      list([
+        stuck('M-20', 'ci_failed', detail({ check: 'typecheck', fixing: true })),
+        stuck('M-21', 'ci_failed', detail({ check: 'lint' })),
+      ]),
+    );
+    const line = fixLine('M-20');
+    expect(line.getAttribute('data-fixing')).toBe('true');
+    expect(line.textContent).toContain('CI failed · typecheck');
+    expect(screen.getByTestId('workbench-fix-checks-running-M-20').textContent).toBe(
+      'Checks are running on the new push',
+    );
+    expect(within(line).queryByText('motir fix M-20')).toBeNull();
+    expect(line.querySelector('[data-to-fix-fixing]')).toBeTruthy();
+    expect(line.querySelector('.lucide-hammer')).toBeTruthy();
+    expect(line.querySelector('p')?.className).toContain('text-(--el-text-secondary)');
+    // The row beside it is untouched.
+    expect(fixLine('M-21').getAttribute('data-fixing')).toBeNull();
+    expect(within(fixLine('M-21')).getByText('motir fix M-21')).toBeTruthy();
+  });
+
+  it('a running hosted repair keeps its own line over Fixing', () => {
+    const row = stuck(
+      'M-22',
+      'changes_requested',
+      detail({ gate: 'agent_review', fixing: true, notePreview: 'Fix the count' }),
+    );
+    render(
+      list([
+        {
+          ...row,
+          repairRun: {
+            id: 'run_fix_22',
+            label: 'motir fix · 2026-11-04 10:02 UTC',
+            hosted: true,
+            holder: { id: 'u1', name: 'Zhu Yue' },
+            byViewer: true,
+            startedAt: new Date().toISOString(),
+          },
+        },
+      ]),
+    );
+    expect(fixLine('M-22').getAttribute('data-fixing')).toBeNull();
+    expect(screen.getByTestId('workbench-fix-hosted-fixing-M-22')).toBeTruthy();
+    expect(screen.queryByTestId('workbench-fix-checks-running-M-22')).toBeNull();
+  });
+
+  it('a dead run is never Fixing', () => {
+    render(
+      list([
+        stuck(
+          'M-23',
+          'run_died',
+          detail({
+            repair: 'continue',
+            fixing: true,
+            lastHeardAt: new Date().toISOString(),
+            branch: 'subtask/M-23',
+            pushed: true,
+          }),
+        ),
+      ]),
+    );
+    expect(fixLine('M-23').getAttribute('data-fixing')).toBeNull();
+    expect(screen.queryByTestId('workbench-fix-checks-running-M-23')).toBeNull();
+  });
+
+  it('a HELD row stays a receipt, Fixing or not', () => {
+    render(
+      <WorkbenchFixLine itemKey="M-24" reason="ci_failed" detail={detail({ fixing: true })} held />,
+    );
+    const line = fixLine('M-24');
+    expect(line.getAttribute('data-fixing')).toBeNull();
+    expect(line.querySelector('[data-to-fix-fixing]')).toBeNull();
+    expect(line.textContent).toContain('Cleared');
+  });
+
+  it('reads in zh', () => {
+    render(list([stuck('M-25', 'ci_failed', detail({ fixing: true }))]), {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+    expect(screen.getByTestId('workbench-fix-checks-running-M-25').textContent).toBe(
+      '新推送的检查正在运行',
     );
   });
 });

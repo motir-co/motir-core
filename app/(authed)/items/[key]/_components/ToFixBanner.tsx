@@ -5,7 +5,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { ArrowDown, ArrowRight, LoaderCircle, Wrench } from 'lucide-react';
 import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart';
 import { CopyableCodeBlock } from '@/components/markdown/CopyableCodeBlock';
-import { toFixTagState } from '@/components/workItems/ToFixTag';
+import { FixingTag, toFixTagState } from '@/components/workItems/ToFixTag';
+import { FixReasonSentence } from '@/app/(authed)/workbench/_components/WorkbenchFixLine';
 import Link from 'next/link';
 import type { FixDetailDto, FixGroupPointerDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -134,6 +135,54 @@ export function ToFixBanner({
   const reviewSentBack = isReviewSentBack(fixReason, fixDetail);
   const hostedRepair = reviewSentBack && repairRun?.hosted ? repairRun : null;
   const door = reviewSentBack && !repairRun ? hostedDoor : null;
+
+  // FIXING (MOTIR-10309; design § 40.3): a fix was pushed and its checks are running. A
+  // dead run's banner and a running hosted repair's line win, as on the Workbench row.
+  if (fixDetail.fixing && !isDeadRun && !hostedRepair) {
+    return (
+      <div
+        role="status"
+        data-testid="to-fix-banner"
+        data-to-fix={reason}
+        data-fixing="true"
+        className="flex items-start gap-3 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-12)"
+      >
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <p className="m-0 flex flex-wrap items-center gap-2 font-sans text-sm font-semibold text-(--el-text-strong)">
+            <FixingTag />
+            {t('fixing')}
+          </p>
+          <p className="m-0 font-sans text-[13px] text-(--el-text-secondary)">
+            {t.rich('fixingWas', {
+              reason: () => (
+                <FixReasonSentence reason={reason} detail={fixDetail} itemKey={identifier} />
+              ),
+            })}
+          </p>
+          {/* No command (§ 40.3): `motir fix` refuses a card whose checks are running. */}
+          <a
+            href={`#${DEVELOPMENT_SECTION_ID}`}
+            onClick={(event) => {
+              event.preventDefault();
+              press();
+            }}
+            aria-busy={pending || undefined}
+            className="inline-flex w-fit items-center gap-1 font-sans text-[13px] font-medium text-(--el-text-strong) underline decoration-(--el-border-strong) underline-offset-2 hover:decoration-(--el-text-strong) focus-visible:rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            {t('toDevelopment')}
+            {pending ? (
+              <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </a>
+          <span className="sr-only" role="status" aria-live="polite">
+            {pending ? t('opening') : ''}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   const sentence = ((): ReactNode => {
     switch (reason) {

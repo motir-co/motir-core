@@ -10138,6 +10138,9 @@
         "membersLabel": "Work items stuck with {key}",
         "showMore": "Show {count, plural, one {# more work item} other {# more work items}}",
         "showFewer": "Show fewer"
+      },
+      "fixing": {
+        "checksRunning": "Checks are running on the new push"
       }
     },
     "toResume": {
@@ -15600,7 +15603,14 @@
       "carries": "{count, plural, one {# more work item is stuck with it} other {# more work items are stuck with it}}: <keys></keys>",
       "carriesMore": "and {count} more",
       "repairedWithHead": "Repair it with <b>{head}</b> — they share one pull request.",
-      "toHead": "Open {head}"
+      "toHead": "Open {head}",
+      "fixing": "A fix was pushed and its checks are running. This clears when they pass.",
+      "fixingWas": "Before this push: <reason></reason>"
+    },
+    "fixing": {
+      "label": "Fixing",
+      "name": "Fixing · checks are running on a new push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

@@ -10141,6 +10141,9 @@
         "membersLabel": "Elementi di lavoro bloccati con {key}",
         "showMore": "Mostra {count, plural, one {# altro elemento di lavoro} other {altri # elementi di lavoro}}",
         "showFewer": "Mostra meno"
+      },
+      "fixing": {
+        "checksRunning": "I controlli sono in esecuzione sul nuovo push"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {Un altro elemento di lavoro è bloccato insieme a questo} other {Altri # elementi di lavoro sono bloccati insieme a questo}}: <keys></keys>",
       "carriesMore": "e altri {count}",
       "repairedWithHead": "Riparalo con <b>{head}</b> — condividono un’unica pull request.",
-      "toHead": "Apri {head}"
+      "toHead": "Apri {head}",
+      "fixing": "È stata pubblicata una correzione e i suoi controlli sono in esecuzione. Questo avviso scompare quando vengono superati.",
+      "fixingWas": "Prima di questo push: <reason></reason>"
+    },
+    "fixing": {
+      "label": "In correzione",
+      "name": "In correzione · controlli in esecuzione su un nuovo push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

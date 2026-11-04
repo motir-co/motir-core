@@ -1,4 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
+import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository, type HomeWorkItemRow } from '@/lib/repositories/workItemRepository';
@@ -187,12 +188,55 @@ export async function fixHeadKeysFor(
   ids: readonly string[],
   tx: Prisma.TransactionClient,
 ): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  if (ids.length === 0) return out;
+  return (await fixTagFactsFor(workspaceId, ids, tx)).headKeys;
+}
+
+/** What a list, tree or board row's To fix TAG reads beyond `fixReason`, by card id. */
+export interface FixTagFacts {
+  /** The head each carried card names (`fixHeadKeysFor`). */
+  headKeys: Map<string, string>;
+  /** The cards whose stored detail says FIXING (MOTIR-10309) — a fix pushed, its checks
+   *  running. Read from the stored `fixDetail.fixing` only, never re-derived. */
+  fixingIds: Set<string>;
+}
+
+/**
+ * The tag's facts for these cards, over ONE read of their stored to-fix answers: the head
+ * a carried card names, and whether the card is Fixing. Rows carry only `fixReason`, so the
+ * detail is read here, for the ids already showing a reason, and never shipped whole.
+ */
+export async function fixTagFactsFor(
+  workspaceId: string,
+  ids: readonly string[],
+  tx: Prisma.TransactionClient,
+): Promise<FixTagFacts> {
+  const headKeys = new Map<string, string>();
+  const fixingIds = new Set<string>();
+  if (ids.length === 0) return { headKeys, fixingIds };
   const states = await workItemRepository.findFixStateByIds(workspaceId, ids, tx);
+  for (const state of states) {
+    // A dead run is never Fixing: its repair is a continue, and no CI speaks for it.
+    if (state.fixReason === 'run_died') continue;
+    if (toFixDetailDto(state.fixReason, state.fixDetail)?.fixing) fixingIds.add(state.id);
+  }
   const pointers = await fixGroupPointersFor(workspaceId, states, tx);
   for (const [id, pointer] of pointers) {
-    if (pointer && pointer.headId !== id) out.set(id, pointer.headKey);
+    if (pointer && pointer.headId !== id) headKeys.set(id, pointer.headKey);
   }
-  return out;
+  return { headKeys, fixingIds };
+}
+
+/** No tag facts — a Visitor's read, or no row showing a reason. */
+export const NO_FIX_TAG_FACTS: FixTagFacts = { headKeys: new Map(), fixingIds: new Set() };
+
+/** The optional DTO fields one row's tag reads — each ABSENT when it does not apply. */
+export function fixTagFieldsOf(
+  id: string,
+  facts: FixTagFacts,
+): { fixHeadKey?: string; fixing?: true } {
+  const head = facts.headKeys.get(id);
+  return {
+    ...(head ? { fixHeadKey: head } : {}),
+    ...(facts.fixingIds.has(id) ? { fixing: true as const } : {}),
+  };
 }

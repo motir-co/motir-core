@@ -10141,6 +10141,9 @@
         "membersLabel": "Elementos de trabajo atascados con {key}",
         "showMore": "Mostrar {count, plural, one {# elemento de trabajo más} other {# elementos de trabajo más}}",
         "showFewer": "Mostrar menos"
+      },
+      "fixing": {
+        "checksRunning": "Las comprobaciones se están ejecutando en el nuevo push"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {# elemento de trabajo más está atascado con él} other {# elementos de trabajo más están atascados con él}}: <keys></keys>",
       "carriesMore": "y {count} más",
       "repairedWithHead": "Repáralo con <b>{head}</b>: comparten un pull request.",
-      "toHead": "Abrir {head}"
+      "toHead": "Abrir {head}",
+      "fixing": "Se hizo push de una corrección y sus comprobaciones se están ejecutando. Esto desaparece cuando pasen.",
+      "fixingWas": "Antes de este push: <reason></reason>"
+    },
+    "fixing": {
+      "label": "Corrigiendo",
+      "name": "Corrigiendo · las comprobaciones se están ejecutando en un nuevo push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

@@ -120,6 +120,11 @@ export interface QuickViewData {
    * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
    */
   fixHeadKey?: string;
+  /**
+   * FIXING (MOTIR-10309): a fix was pushed and its checks are running, so the tag reads
+   * *Fixing* instead of the reason. `true` only — absent otherwise.
+   */
+  fixing?: true;
   descriptionMd: string | null;
   /**
    * The WHY (MOTIR-4183, story MOTIR-4181, design Part XIV §6).

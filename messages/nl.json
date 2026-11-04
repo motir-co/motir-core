@@ -10141,6 +10141,9 @@
         "membersLabel": "Werkitems die samen met {key} vastzitten",
         "showMore": "{count, plural, one {Nog # werkitem tonen} other {Nog # werkitems tonen}}",
         "showFewer": "Minder tonen"
+      },
+      "fixing": {
+        "checksRunning": "Checks lopen op de nieuwe push"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {Nog # werkitem zit er samen mee vast} other {Nog # werkitems zitten er samen mee vast}}: <keys></keys>",
       "carriesMore": "en nog {count}",
       "repairedWithHead": "Repareer het met <b>{head}</b> — ze delen één pull request.",
-      "toHead": "{head} openen"
+      "toHead": "{head} openen",
+      "fixing": "Er is een fix gepusht en de checks lopen. Dit verdwijnt zodra ze slagen.",
+      "fixingWas": "Vóór deze push: <reason></reason>"
+    },
+    "fixing": {
+      "label": "Wordt gerepareerd",
+      "name": "Wordt gerepareerd · checks lopen op een nieuwe push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {
