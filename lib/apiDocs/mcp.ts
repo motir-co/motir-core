@@ -510,6 +510,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Pinned from the LIVE handshake, never hand-computed.
     descriptionFingerprint: '8c0749c2848a',
   },
+  submit_review_verdict: {
+    // MOTIR-10333 (Story MOTIR-10327; `approval-gates.md` §12.11).
+    summary:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+    // Pinned from the LIVE handshake, never hand-computed.
+    descriptionFingerprint: 'caf7cbde9fa9',
+  },
   unlink_pull_request: {
     summary:
       'Undo ONE `link_pull_request` — remove the delivery recorded between a work item and a ' +

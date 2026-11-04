@@ -2,6 +2,7 @@ import type { ApprovalGate, Prisma } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { standingMergeRefusalOf } from '@/lib/workItems/fixReason';
 
 // A CODE REVIEW SENT BACK, STILL STANDING (Story MOTIR-1626 · MOTIR-6822;
@@ -22,24 +23,76 @@ import { standingMergeRefusalOf } from '@/lib/workItems/fixReason';
 // the answer to a refusal: it moves a head, the version no longer matches, and from that
 // commit on the card waits on CI (and, with the switch on, on a fresh review).
 
-/** A standing review refusal — the gate the reviewer decided, and the version it is about. */
-export type StandingReviewRefusal = ApprovalGate & {
+/**
+ * A standing review refusal — the review that sent the card back, and the version it is
+ * about. Either a DECIDED GATE (`gateId` set) or, since MOTIR-10333, a GATE-OFF agent
+ * send-back stored as a review verdict record (`recordId` set; `approval-gates.md` §12.14).
+ */
+export interface StandingReviewRefusal {
   kind: 'agent_review' | 'pull_request_approval';
-};
+  /** The decided gate, or null for a gate-off record. */
+  id: string | null;
+  /** The review verdict record, or null for a decided gate. */
+  recordId: string | null;
+  subjectVersion: string | null;
+  /** The findings — the gate's note, or the record's findings. */
+  noteMd: string | null;
+  decidedById: string | null;
+  decidedByLabel: string | null;
+  decidedUnderAuthority: ApprovalGate['decidedUnderAuthority'];
+  decidedAt: Date;
+}
 
 /**
  * The card's standing review refusal, or null. `deliveries` is the card's WHOLE delivery
  * set (merged and closed rows included) as `listByWorkItemWithChecks` reads it — the set
  * whose version the refusal was stamped with.
+ *
+ * ⚠️ TWO SOURCES, THE NEWER WINS (MOTIR-10333; §12.14). The decided gate is read as
+ * before; a gate-off send-back record at the CURRENT version is the second source — the
+ * review agent sent the card back with the switch off, so no gate holds the refusal. When
+ * both stand at the current version the later one is the card's latest word.
  */
 export async function readStandingReviewRefusal(
   workItemId: string,
   deliveries: readonly WorkItemDeliveryWithChecks[],
   tx: Prisma.TransactionClient,
 ): Promise<StandingReviewRefusal | null> {
-  const latest = await approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx);
   const currentVersion = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
-  return latest && standingMergeRefusalOf(latest, currentVersion)
-    ? (latest as StandingReviewRefusal)
+  const [latest, record] = await Promise.all([
+    approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx),
+    currentVersion === null
+      ? Promise.resolve(null)
+      : reviewVerdictRecordRepository.findRecordedSendBackAt(workItemId, currentVersion, tx),
+  ]);
+  const gate =
+    latest && standingMergeRefusalOf(latest, currentVersion)
+      ? {
+          kind: latest.kind as StandingReviewRefusal['kind'],
+          id: latest.id,
+          recordId: null,
+          subjectVersion: latest.subjectVersion,
+          noteMd: latest.noteMd,
+          decidedById: latest.decidedById,
+          decidedByLabel: latest.decidedByLabel,
+          decidedUnderAuthority: latest.decidedUnderAuthority,
+          // `findLatestDecidedByWorkItem` reads only rows whose `decidedAt` is set.
+          decidedAt: latest.decidedAt as Date,
+        }
+      : null;
+  const sentBack: StandingReviewRefusal | null = record
+    ? {
+        kind: 'agent_review',
+        id: null,
+        recordId: record.id,
+        subjectVersion: record.subjectVersion,
+        noteMd: record.findingsMd,
+        decidedById: record.submittedById,
+        decidedByLabel: null,
+        decidedUnderAuthority: 'review_agent',
+        decidedAt: record.createdAt,
+      }
     : null;
+  if (gate && sentBack) return gate.decidedAt > sentBack.decidedAt ? gate : sentBack;
+  return gate ?? sentBack;
 }

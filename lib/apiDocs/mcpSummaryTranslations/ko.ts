@@ -523,6 +523,12 @@ export const ko: McpSummaryTranslations = {
     source:
       'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
   },
+  submit_review_verdict: {
+    summary:
+      '작업 항목에 대한 자체 리뷰 에이전트의 판정 하나를 제출합니다. 대기 중인 에이전트 리뷰를 결정하거나 리뷰 기록으로 보관됩니다. 병합을 승인하지는 않습니다.',
+    source:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       '`link_pull_request` 하나를 되돌립니다 — 작업 항목과 풀 리퀘스트 사이에 기록된 전달을 제거합니다. 전달은 하나의 행이므로 올바른 작업 항목을 다시 연결하면 수정되는 것이 아니라 추가됩니다. 이 호출은 지정한 정확히 그 한 쌍만 제거하고 다른 전달은 그대로 둡니다.',

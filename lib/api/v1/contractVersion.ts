@@ -1142,5 +1142,21 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.77.0` after MOTIR-9552's
  *   `1.76.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.78.0` — MOTIR-10333 (Story MOTIR-10327, the agent review path) adds
+ *   `submitWorkItemReviewVerdict` (`POST /api/v1/work-items/{key}/review-verdict`,
+ *   `work_item:edit`, `200` with `ReviewVerdictResult`) — a person's OWN review agent's
+ *   one verdict, with the person's own token, over the same `reviewVerdictService.submit`
+ *   door as the MCP `submit_review_verdict` tool (`docs/decisions/approval-gates.md`
+ *   §12.11–§12.14). The approval-gate record gains the supersede cause
+ *   `agent_changes_requested`. New codes `REVIEW_VERDICT_LATE`, `REVIEW_VERDICT_SECOND`
+ *   (409), `REVIEW_NOTHING_TO_REVIEW` (404), `REVIEW_TARGET_NOT_RUN_TARGET` and
+ *   `INVALID_REVIEW_VERDICT` (422).
+ *
+ *   Additive: one new operation, one new component, a new member of an enum every client
+ *   must tolerate unknown members of, and new codes for new conditions (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.78.0` after MOTIR-9566's
+ *   `1.77.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.77.0';
+export const V1_CONTRACT_VERSION = '1.78.0';

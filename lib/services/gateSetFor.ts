@@ -15,6 +15,7 @@ import {
 } from '@/lib/approvalGates/decisionApprovalHandler';
 import { decisionIdentityOf } from '@/lib/approvalGates/decisionSubject';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -122,6 +123,7 @@ export async function gateSetFor(
     mode,
     terminalByProject,
     pageDecision,
+    latestAgentSendBack,
   ] = await Promise.all([
     designEvidenceRepository.findCurrentByWorkItem(item.id, tx),
     approvalGateRepository.findLatestByWorkItem(item.id, 'design_result', tx),
@@ -146,6 +148,9 @@ export async function gateSetFor(
     // A PUBLISHED PAGE (MOTIR-7433) — read only when the card asks the question, like
     // its gate above, and preferred over the capture below.
     asksDecision ? loadPageDecisionIdentity(item.id, tx) : Promise.resolve(null),
+    // A GATE-OFF agent send-back (MOTIR-10333; `approval-gates.md` §12.14) — a record, not a
+    // gate, so the predicate is handed its version to tell whether it still stands.
+    reviewVerdictRecordRepository.findLatestRecordedSendBack(item.id, tx),
   ]);
 
   const members: GateSetMember[] = [];
@@ -268,6 +273,7 @@ export async function gateSetFor(
     prMergeMode: mode?.prMergeMode ?? null,
     reviewAgentEnabled: mode?.reviewAgentEnabled ?? false,
     latestAgentReviewGate,
+    agentSendBackVersion: latestAgentSendBack?.subjectVersion ?? null,
     cardIsTerminal: isTerminalStatus(item, terminalByProject),
     // By the literal KEY, as the status ladder compares it (MOTIR-6971): the merge
     // question is asked only of a card the run has settled into review.

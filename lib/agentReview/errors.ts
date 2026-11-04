@@ -147,3 +147,105 @@ export class ReviewAgainNotOfferedError extends Error {
     this.name = 'ReviewAgainNotOfferedError';
   }
 }
+
+// ── THE USER-TOKEN VERDICT DOOR (Story MOTIR-10327 · MOTIR-10333; `approval-gates.md`
+// §12.11–§12.13) ───────────────────────────────────────────────────────────────────────
+//
+// Raised by `reviewVerdictService.submit`, the one service behind the MCP tool
+// `submit_review_verdict` and `POST /api/v1/work-items/{key}/review-verdict`. Mapped by
+// code (`lib/api/v1/errors.ts`, `lib/mcp/toolResult.ts`). `ReviewStaleError` above is not
+// reused: it speaks of a RUN, and this door's caller is a person's own agent.
+
+/**
+ * 422 — the card is not a RUN TARGET (§12.11): its tests are its ancestor's, so the
+ * review is that ancestor's to receive. The refusal names it. Nothing was stored.
+ */
+export class ReviewTargetNotRunTargetError extends Error {
+  readonly code = 'REVIEW_TARGET_NOT_RUN_TARGET';
+  constructor(
+    readonly workItemKey: string,
+    readonly runTargetKey: string,
+  ) {
+    super(
+      `${workItemKey} is reviewed as part of ${runTargetKey}, its run target. Submit the verdict for ${runTargetKey}.`,
+    );
+    this.name = 'ReviewTargetNotRunTargetError';
+  }
+}
+
+/**
+ * 422 — the verdict is malformed in a way only the service can see, or that a transport
+ * did not check first: no findings on a send-back, a `met` row without evidence, an
+ * empty harness or model. `field` names it. Nothing was stored.
+ */
+export class ReviewVerdictInvalidError extends Error {
+  readonly code = 'INVALID_REVIEW_VERDICT';
+  constructor(
+    readonly field: string,
+    readonly problem: string,
+  ) {
+    super(`\`${field}\` ${problem}.`);
+    this.name = 'ReviewVerdictInvalidError';
+  }
+}
+
+/**
+ * 404 — the card delivers no pull request, so it has no delivery-set version a review
+ * could be about. Nothing was stored.
+ */
+export class ReviewNothingToReviewError extends Error {
+  readonly code = 'REVIEW_NOTHING_TO_REVIEW';
+  constructor(readonly workItemKey: string) {
+    super(`${workItemKey} delivers no pull request, so there is nothing to review.`);
+    this.name = 'ReviewNothingToReviewError';
+  }
+}
+
+/**
+ * 409 — a LATE verdict (§12.13): it names a version that is not the card's current
+ * delivery-set version. It was STORED as `late` and decided nothing.
+ */
+export class ReviewVerdictLateError extends Error {
+  readonly code = 'REVIEW_VERDICT_LATE';
+  constructor(
+    readonly subjectVersion: string,
+    /** The card's current version, when the door read it; null when the set moved under
+     *  the decide itself. */
+    readonly currentVersion: string | null,
+  ) {
+    super(
+      'This verdict is about a version the card no longer has: a push moved it. It was recorded as late and decided nothing. Review the current version.',
+    );
+    this.name = 'ReviewVerdictLateError';
+  }
+}
+
+/**
+ * 409 — a SECOND verdict (§12.13): the version already has a decided review or a stored
+ * verdict. It was STORED as `second` and decided nothing.
+ */
+export class ReviewVerdictSecondError extends Error {
+  readonly code = 'REVIEW_VERDICT_SECOND';
+  constructor(readonly subjectVersion: string) {
+    super(
+      'This version has already been reviewed. The verdict was recorded as a second review and decided nothing.',
+    );
+    this.name = 'ReviewVerdictSecondError';
+  }
+}
+
+/**
+ * INTERNAL — an answering verdict (`decided` / `recorded`) already exists for the
+ * (card, version): the partial unique index's refusal, translated by the repository. The
+ * services catch it and store the verdict as `second`; it never reaches a caller.
+ */
+export class ReviewVerdictAnswerExistsError extends Error {
+  readonly code = 'REVIEW_VERDICT_ANSWER_EXISTS';
+  constructor(
+    readonly workItemId: string,
+    readonly subjectVersion: string,
+  ) {
+    super('This version already has an answering review verdict.');
+    this.name = 'ReviewVerdictAnswerExistsError';
+  }
+}

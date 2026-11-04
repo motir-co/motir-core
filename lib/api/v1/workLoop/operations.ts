@@ -50,6 +50,10 @@ import {
   agentReviewResultSchema,
   reviewPromptSchema,
 } from '@/lib/api/v1/workLoop/agentReview';
+import {
+  reviewVerdictBodySchema,
+  reviewVerdictResultSchema,
+} from '@/lib/api/v1/workLoop/reviewVerdict';
 
 // The WORK-LOOP operation declarations (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237). Paths, verbs and scopes come from ADR Amendment 6 Q1/Q2; the
@@ -1318,6 +1322,52 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // card with no review; 409 for a second or late verdict; 422 for a malformed body.
     errorStatuses: [403, 404, 409, 422],
   }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/review-verdict',
+    operationId: 'submitWorkItemReviewVerdict',
+    summary: 'Submit your own review agent’s verdict on a card',
+    description:
+      'Submit ONE agent review verdict for a RUN-TARGET card with your own token (not a run ' +
+      'token — a hosted review run uses `submitWorkItemAgentReview`). Any teammate holding ' +
+      '`work_item:edit` on the card may submit. `verdict` is `approved` or ' +
+      '`changes_requested` (`findingsMd` required, non-empty); `subjectVersion` is the ' +
+      'delivery-set version reviewed; `checklist` rows judge each acceptance criterion ' +
+      '(`evidence` required on `met`); `harness` and `model` say what reviewed. With the ' +
+      'project’s review gate ON the verdict decides the awaiting `agent_review` gate ' +
+      '(`outcome: decided`); OFF, it is stored as the review record (`outcome: recorded`). ' +
+      'It is recorded under the authority `review_agent` and NEVER decides the ' +
+      'approve-and-merge gate. A `changes_requested` withdraws an awaiting approve-and-merge ' +
+      'gate (cause `agent_changes_requested`) and puts the card in To fix; no status moves. A ' +
+      'verdict about a version the card no longer has is stored as late ' +
+      '(`REVIEW_VERDICT_LATE`, 409); one about a version already reviewed is stored as second ' +
+      '(`REVIEW_VERDICT_SECOND`, 409); neither decides anything. A card that is not its own ' +
+      'run target is refused naming the run target (`REVIEW_TARGET_NOT_RUN_TARGET`, 422).',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The run-target work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: reviewVerdictBodySchema,
+      description:
+        'The verdict, the reviewed version, the findings, the criteria checklist, and the ' +
+        'harness and model.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: reviewVerdictResultSchema },
+      description: 'What the verdict did — decided the review gate, or was recorded.',
+    },
+    // 403 without `work_item:edit` or with a run token; 404 for an unknown card or one that
+    // delivers no pull request; 409 late or second; 422 a malformed body or not a run target.
+    errorStatuses: [403, 404, 409, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -1345,4 +1395,5 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   CurrentTestInstructions: currentTestInstructionsSchema,
   ReviewPrompt: reviewPromptSchema,
   AgentReviewResult: agentReviewResultSchema,
+  ReviewVerdictResult: reviewVerdictResultSchema,
 };

@@ -535,6 +535,12 @@ export const de: McpSummaryTranslations = {
     source:
       'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
   },
+  submit_review_verdict: {
+    summary:
+      'Das eine Urteil Ihres eigenen Review-Agenten zu einem Arbeitselement einreichen: Es entscheidet das wartende Agenten-Review oder wird als Review-Eintrag gespeichert. Es genehmigt nie den Merge.',
+    source:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'EINEN `link_pull_request` rückgängig machen – die zwischen einem Arbeitselement und einem Pull Request erfasste Lieferung entfernen. Eine Lieferung ist eine Zeile, erneutes Verknüpfen des richtigen Arbeitselements ERGÄNZT also, statt zu korrigieren; dies entfernt genau das eine Paar, das Sie nennen, und lässt jede andere Lieferung unberührt.',

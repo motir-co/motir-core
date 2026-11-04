@@ -190,6 +190,9 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'queue_failed'
   /** The project turned its review agent OFF while the review was awaiting (ADR §12.5). */
   | 'review_agent_disabled'
+  /** The review agent requested changes at the version an awaiting approve-and-merge gate
+   *  asked about, so the card was sent back (MOTIR-10333; ADR §12.14). */
+  | 'agent_changes_requested'
   /** The gate's subject no longer resolves through its kind's handler, so a read that
    *  observed it withdrew the question (MOTIR-7146). */
   | 'subject_gone'

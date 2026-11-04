@@ -1730,6 +1730,7 @@ const APPROVAL_GATE_SUPERSEDE_CAUSE_VALUES = [
   'plan_discarded',
   'queue_failed',
   'review_agent_disabled',
+  'agent_changes_requested',
   'subject_gone',
   'no_longer_manual',
   'closed_without_decision',

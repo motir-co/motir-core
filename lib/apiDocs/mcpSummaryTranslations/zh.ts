@@ -488,6 +488,12 @@ export const zh: McpSummaryTranslations = {
     source:
       'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
   },
+  submit_review_verdict: {
+    summary:
+      '提交你自己的评审代理对一个工作项的唯一结论：它决定待处理的代理评审，或作为评审记录保存。它从不批准合并。',
+    source:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       '撤销一次 `link_pull_request`：移除工作项与拉取请求之间记录的交付关系。交付关系是一行记录，所以重新关联正确的工作项是添加（ADDS）而不是纠正；此操作只移除你指明的那一对，其他所有交付关系保持不变。',

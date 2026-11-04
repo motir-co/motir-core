@@ -214,6 +214,14 @@ export interface GateSetInput {
   reviewAgentEnabled?: boolean;
   /** The card's most recent `agent_review` gate, whatever its state, or null. */
   latestAgentReviewGate?: ExistingGate | null;
+  /**
+   * The version of the card's newest GATE-OFF agent send-back — a review verdict record the
+   * review agent stored as `changes_requested` with the review gate off (Story MOTIR-10327 ·
+   * MOTIR-10333; `approval-gates.md` §12.14) — or null. When it is the set's CURRENT version
+   * the send-back stands, and neither the merge question nor a review is asked at it.
+   * Optional; absent reads as none.
+   */
+  agentSendBackVersion?: string | null;
 }
 
 /** One question the card should be asking. */
@@ -722,13 +730,18 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     latestAgentReviewGate: input.latestAgentReviewGate ?? null,
     latestMergeGate: input.latestMergeGate,
   });
-  if (mergeAskable && review === 'owed') {
+  // ⚠️ A STANDING AGENT SEND-BACK ASKS NOTHING AT ITS VERSION (MOTIR-10333; §12.14). With
+  // the review gate off the send-back is a record, not a gate, so `review` cannot see it:
+  // the merge question stays withdrawn (`agent_changes_requested`) until a push moves the
+  // version, and a review switched on since is not asked of commits already reviewed.
+  const sentBack = version !== null && (input.agentSendBackVersion ?? null) === version;
+  if (mergeAskable && !sentBack && review === 'owed') {
     awaited.push({
       kind: 'agent_review',
       subjectId: input.workItemId,
       subjectVersion: version,
     });
-  } else if (mergeAskable && review !== 'refused' && !answered) {
+  } else if (mergeAskable && !sentBack && review !== 'refused' && !answered) {
     awaited.push({
       kind: 'pull_request_approval',
       subjectId: input.workItemId,

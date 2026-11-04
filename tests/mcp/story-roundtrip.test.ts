@@ -239,11 +239,16 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // 404-not-403 denial applies to every RESOURCE-TARGETING tool.
       // `get_section_sets` (MOTIR-9029) is a product contract, the same for every tenant: it
       // reads no tenant data at all, so there is nothing for it to deny.
+      // `find_work_items_for_pull_request` (MOTIR-10331) takes a pull-request URL, not a
+      // tenant's key, and reads deliveries in the CALLER's workspace only: for A's pull
+      // request a non-member gets the well-formed `not_linked` answer, which says nothing
+      // about A (the no-leak proof is the same A-untouched check below).
       const SELF_SCOPED = new Set<McpToolName>([
         'whoami',
         'list_projects',
         'complete_session',
         'get_section_sets',
+        'find_work_items_for_pull_request',
       ]);
 
       const client = await connect(nonMemberToken);
@@ -816,6 +821,14 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         // gate; the default-token loop asserts only that the GATE passes it,
         // which it does before the (unconnected) repository is ever resolved.
         unlink_pull_request: { key: item1, repository: 'acme/web', number: 7 },
+        find_work_items_for_pull_request: { url: 'https://github.com/acme/web/pull/7' },
+        submit_review_verdict: {
+          key: item1,
+          verdict: 'approved',
+          subjectVersion: 'acme/web#7@0000000',
+          harness: 'Claude Code',
+          model: 'test-model',
+        },
         link_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         unlink_work_items: { fromKey: item1, toKey: item2, relationship: 'relates_to' },
         move_to_parent: { key: item1, parentKey: item2 },

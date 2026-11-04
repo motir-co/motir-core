@@ -532,6 +532,12 @@ export const fr: McpSummaryTranslations = {
     source:
       'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
   },
+  submit_review_verdict: {
+    summary:
+      'Soumettre l’unique verdict de votre propre agent de revue sur un élément : il tranche la revue d’agent en attente ou est conservé comme enregistrement de revue. Il n’approuve jamais la fusion.',
+    source:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'Annuler UN SEUL `link_pull_request` — supprimer la livraison enregistrée entre un élément de travail et une pull request. Une livraison est une ligne : relier le bon élément de travail AJOUTE au lieu de corriger ; ceci supprime exactement la paire que vous nommez et laisse toute autre livraison intacte.',

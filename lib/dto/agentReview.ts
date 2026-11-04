@@ -78,3 +78,61 @@ export interface AgentReviewViewDto {
    *  for the reader (bug MOTIR-10023); `{}` when they link nothing. */
   findingsRefs: WorkItemRefMap;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE USER-TOKEN VERDICT DOOR (Story MOTIR-10327 · MOTIR-10333; `approval-gates.md`
+// §12.11–§12.13) — `submit_review_verdict` and `POST …/work-items/{key}/review-verdict`.
+
+/** The verdict words on the door's wire (§12.11) — the gate's own words are `pass` /
+ *  `changes_requested`, and the service maps between them. */
+export const REVIEW_DOOR_VERDICTS = ['approved', 'changes_requested'] as const;
+export type ReviewDoorVerdict = (typeof REVIEW_DOOR_VERDICTS)[number];
+
+/** One acceptance criterion's result, as the review judged it. */
+export const REVIEW_CHECKLIST_STATUSES = ['met', 'not_met', 'cannot_tell'] as const;
+export type ReviewChecklistStatus = (typeof REVIEW_CHECKLIST_STATUSES)[number];
+
+/** The longest harness or model name kept, after trimming. */
+export const REVIEW_SUBMITTER_FIELD_MAX_LENGTH = 200;
+/** The most checklist rows one verdict carries. */
+export const REVIEW_CHECKLIST_MAX_ROWS = 200;
+
+/** One row of the criteria checklist. `evidence` is required on `met`. */
+export interface ReviewChecklistRowDto {
+  /** The card the criterion belongs to — the run target or one of its descendants. */
+  key: string | null;
+  criterion: string;
+  status: ReviewChecklistStatus;
+  evidence: string | null;
+}
+
+/** What the door is handed. */
+export interface SubmitReviewVerdictInput {
+  verdict: ReviewDoorVerdict;
+  /** The delivery-set version reviewed, in `deliverySetVersion`'s form. */
+  subjectVersion: string;
+  summaryMd: string | null;
+  /** Required and non-empty on `changes_requested`. */
+  findingsMd: string | null;
+  checklist: ReviewChecklistRowDto[];
+  harness: string;
+  model: string;
+}
+
+/**
+ * What became of an ACCEPTED verdict. `decided` — it decided the awaiting `agent_review`
+ * gate (`gateId`); `recorded` — the review gate was off, and the verdict is the record.
+ * A late or second verdict is a typed refusal, not a result.
+ */
+export interface ReviewVerdictResultDto {
+  key: string;
+  recordId: string;
+  outcome: 'decided' | 'recorded';
+  verdict: ReviewDoorVerdict;
+  subjectVersion: string;
+  /** The gate it decided — null when `recorded`. */
+  gateId: string | null;
+  /** The approve-and-merge gates the send-back withdrew (`agent_changes_requested`). */
+  withdrewApprovalGateIds: string[];
+  submittedAt: string;
+}

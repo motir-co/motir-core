@@ -968,6 +968,52 @@ describe('every operation’s REAL response validates against its declared schem
       { key: reviewCard },
     );
 
+    // ── The user-token verdict door (MOTIR-10333) ───────────────────────────
+    // On its OWN card with the review gate off, so the verdict is stored as the review
+    // record (`outcome: recorded`) and decides nothing the review run's drive asserted.
+    const verdictCard = await createItem('An item a person’s own review agent reviews');
+    {
+      const res = await handlerFor(
+        () => import('@/app/api/v1/work-items/[key]/pull-requests/route'),
+        'POST',
+        send(`/api/v1/work-items/${verdictCard}/pull-requests`, 'POST', {
+          repository: repoRef,
+          number: 4344,
+          headRef: 'subtask/drift-guard-verdict',
+          baseRef: 'main',
+        }),
+        { key: verdictCard },
+      );
+      expect(res.status, 'seeding the reviewed pull request').toBe(200);
+    }
+    const verdictItem = await adminDb.workItem.findFirstOrThrow({
+      where: { identifier: verdictCard, projectId: caller.fixture.projectId },
+    });
+    const verdictPr = await adminDb.githubPullRequest.findFirstOrThrow({
+      where: { number: 4344, deliveries: { some: { workItemId: verdictItem.id } } },
+    });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: verdictPr.id,
+        commitSha: 'drift-verdict-head',
+        checkName: 'ci',
+        conclusion: 'success',
+      },
+    });
+    await drive(
+      'submitWorkItemReviewVerdict',
+      () => import('@/app/api/v1/work-items/[key]/review-verdict/route'),
+      send(`/api/v1/work-items/${verdictCard}/review-verdict`, 'POST', {
+        verdict: 'approved',
+        subjectVersion: `${repoRef}#4344@drift-verdict-head`,
+        summaryMd: 'Every criterion is met.',
+        checklist: [{ criterion: 'It works', status: 'met', evidence: '`a.test.ts` passes' }],
+        harness: 'Claude Code',
+        model: 'drift-model',
+      }),
+      { key: verdictCard },
+    );
+
     // ── Session close-out (Story 11.7) ──────────────────────────────────────
     // On a DEDICATED item, and last: `recordWorkItemIntegration` moves it to
     // `in_review` and `completeSession` then closes it, so driving them on the

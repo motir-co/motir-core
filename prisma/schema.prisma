@@ -475,6 +475,9 @@ model User {
   /// Production releases of a ref this user asked for (MOTIR-10103). SetNull on delete.
   hostedReleasesRequested          HostedRelease[]                     @relation("HostedReleaseRequestedBy")
 
+  /// Agent review verdicts this user submitted (MOTIR-10333).
+  reviewVerdictRecords ReviewVerdictRecord[]
+
   @@index([lastActiveProjectId])
   @@map("user")
 }
@@ -1869,6 +1872,8 @@ model Workspace {
   agentTerminalTickets        AgentTerminalTicket[]
   agentTerminalConnections    AgentTerminalConnection[]
 
+  reviewVerdictRecords ReviewVerdictRecord[]
+
   @@index([organizationId])
   @@map("workspace")
 }
@@ -2389,6 +2394,8 @@ model Project {
   /// is enforced by `trg_project_planner_bug_destination_folder_tenancy`.
   plannerBugDestinationFolderId String?                      @map("planner_bug_destination_folder_id")
   plannerBugDestinationFolder   Folder?                      @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
+
+  reviewVerdictRecords ReviewVerdictRecord[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3432,6 +3439,8 @@ model WorkItem {
   // most one. SetNull on the child: a deleted bug leaves the issue row with a
   // null pointer, which is how the reconciler tells "deleted" from "never filed".
   monitorIssues MonitorIssue[]
+
+  reviewVerdictRecords ReviewVerdictRecord[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -5623,6 +5632,10 @@ enum ApprovalGateSupersedeCause {
   /// parent cascade, the rollup — so the question closes without being recorded as
   /// approved (MOTIR-7474; `docs/decisions/manual-work-gate.md` §6).
   closed_without_decision
+  /// The review agent requested changes at the version an awaiting approve-and-merge gate
+  /// asked about (Story MOTIR-10327 · MOTIR-10333; `approval-gates.md` §12.14): the card is
+  /// sent back, so the merge question leaves To approve until a push or a Dismiss.
+  agent_changes_requested
   /// A `manual_work` gate's card stopped being ready for a person — it was moved to
   /// Blocked, or gained a `blocked_by` on unfinished work — so nobody can do the work
   /// it asks for (MOTIR-8670; `docs/decisions/manual-work-gate.md` §6, amended).
@@ -5908,6 +5921,8 @@ model ApprovalGate {
   /// The page versions this gate FROZE at its approval (Story MOTIR-5761 ·
   /// MOTIR-7428). SetNull on the version side: the freeze outlives the row.
   frozenPageVersions PageVersion[]         @relation("PageVersionFrozenByGate")
+
+  reviewVerdictRecords ReviewVerdictRecord[]
 
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
@@ -15920,4 +15935,69 @@ model EnvironmentConfigChange {
   @@index([workspaceId])
   @@index([actorId])
   @@map("environment_config_change")
+}
+
+/// What became of one agent review VERDICT (Story MOTIR-10327 · MOTIR-10333;
+/// `approval-gates.md` §12.11–§12.13).
+enum ReviewVerdictOutcome {
+  /// It decided the card's awaiting `agent_review` gate.
+  decided
+  /// The review gate was off: the verdict is the record itself, at its version.
+  recorded
+  /// It named a version that is not the card's current delivery-set version.
+  late
+  /// Its version already had a decided review or a stored verdict.
+  second
+
+  @@map("review_verdict_outcome")
+}
+
+/// ONE AGENT REVIEW VERDICT, as submitted (Story MOTIR-10327 · MOTIR-10333;
+/// `approval-gates.md` §12.11–§12.13) — from the hosted review run or from a person's own
+/// review agent through the user-token door. A gate-off verdict has no gate to live on and
+/// a late or second one must be kept as history, so every verdict is a row here. Append
+/// only: nothing updates a row but a later card's Dismiss.
+///
+/// ⚠️ AT MOST ONE `decided` OR `recorded` ROW PER (card, version) — a partial unique index
+/// in the creating migration, the backstop that keeps two concurrent submissions from both
+/// answering one version. Its column list matches no `@@index` here, so Prisma's differ
+/// never pairs it.
+model ReviewVerdictRecord {
+  id             String                @id @default(cuid())
+  workspaceId    String                @map("workspace_id")
+  projectId      String                @map("project_id")
+  workItemId     String                @map("work_item_id")
+  /// The `agent_review` gate it decided, or the one its version was asked under; null
+  /// when the review gate was off.
+  gateId         String?               @map("gate_id")
+  /// The delivery-set version the verdict says it reviewed.
+  subjectVersion String                @map("subject_version")
+  /// `pass` or `changes_requested` — the gate's own verdict words.
+  verdict        String
+  outcome        ReviewVerdictOutcome
+  summaryMd      String?               @map("summary_md")
+  findingsMd     String?               @map("findings_md")
+  /// The criteria checklist — `{ criterion, status, evidence }` rows.
+  checklist      Json                  @default("[]")
+  /// The token's user; null once that user is deleted.
+  submittedById  String?               @map("submitted_by_id")
+  /// Always `review_agent`: a verdict is never a person's approval.
+  authority      ApprovalGateAuthority @default(review_agent)
+  /// The harness and model the submitter named, free text.
+  harness        String
+  model          String
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  gate        ApprovalGate? @relation(fields: [gateId], references: [id], onDelete: SetNull)
+  submittedBy User?         @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([workItemId, createdAt])
+  @@index([gateId])
+  @@index([submittedById])
+  @@map("review_verdict_record")
 }

@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import {
   ReviewGateNotFoundError,
+  ReviewVerdictAnswerExistsError,
   ReviewRunTokenRequiredError,
   ReviewStaleError,
   ReviewVerdictAlreadySubmittedError,
@@ -28,6 +29,7 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
@@ -64,6 +66,8 @@ type VerdictOutcome = 'decided' | ReviewStaleCause;
 
 interface ReviewRunRef {
   id: string;
+  /** The model the run reviewed on — the verdict record's model. */
+  model: string | null;
 }
 
 /** The token's run, when it is a REVIEW run — else the refusal. Nothing is read for a PAT. */
@@ -75,7 +79,7 @@ async function requireReviewRun(ctx: ServiceContext): Promise<ReviewRunRef> {
     (tx) => dispatchRunRepository.findById(runId, tx),
   );
   if (!run || run.command !== 'review') throw new ReviewRunTokenRequiredError();
-  return { id: run.id };
+  return { id: run.id, model: run.model };
 }
 
 function pullRequestUrl(repository: string, number: number): string {
@@ -124,6 +128,65 @@ async function recordVerdict(
     );
   });
 }
+
+/**
+ * The hosted verdict's REVIEW VERDICT RECORD (Story MOTIR-10327 · MOTIR-10333;
+ * `approval-gates.md` §12.12–§12.13) — written after the decide commits, beside the run's
+ * own event, so every agent verdict, hosted or from a person's own agent, has one record
+ * the bot, the activity and the read model consume. A run's verdict is `decided`, or LATE
+ * (a moved version, a withdrawn review) or SECOND (a review already decided). An
+ * answering record already at the version (a gate-off verdict before the switch went on)
+ * makes a `decided` one `second` instead, so the index's one-answer rule holds.
+ */
+async function recordVerdictRow(
+  run: ReviewRunRef,
+  item: { id: string; projectId: string },
+  data: {
+    verdict: ReviewVerdict;
+    subjectVersion: string;
+    outcome: 'decided' | 'late' | 'second';
+    gateId: string | null;
+    summaryMd: string | null;
+    findingsMd: string | null;
+  },
+  ctx: ServiceContext,
+): Promise<void> {
+  const write = (outcome: 'decided' | 'late' | 'second') =>
+    withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
+      reviewVerdictRecordRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId: item.projectId,
+          workItemId: item.id,
+          gateId: data.gateId,
+          subjectVersion: data.subjectVersion,
+          verdict: data.verdict,
+          outcome,
+          summaryMd: data.summaryMd,
+          findingsMd: data.findingsMd,
+          checklist: [],
+          submittedById: ctx.userId,
+          harness: HOSTED_REVIEW_HARNESS,
+          model: run.model ?? 'unknown',
+        },
+        tx,
+      ),
+    );
+  try {
+    await write(data.outcome);
+  } catch (err) {
+    /* v8 ignore next 2 -- needs a gate-off record at the very version a review was then
+       raised over and decided by this run. */
+    if (data.outcome === 'decided' && err instanceof ReviewVerdictAnswerExistsError) {
+      await write('second');
+      return;
+    }
+    throw err;
+  }
+}
+
+/** The harness a hosted review run's verdict record names — the hosted agent itself. */
+const HOSTED_REVIEW_HARNESS = 'Motir hosted review';
 
 async function hasVerdict(run: ReviewRunRef, ctx: ServiceContext): Promise<boolean> {
   const prior = await withWorkspaceContext(
@@ -316,6 +379,19 @@ export const agentReviewRunService = {
           (tx) => approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
         );
         await record(cause, gate?.id ?? null);
+        await recordVerdictRow(
+          run,
+          item,
+          {
+            verdict: input.verdict,
+            subjectVersion: input.subjectVersion,
+            outcome: cause === 'already_decided' ? 'second' : 'late',
+            gateId: gate?.id ?? null,
+            summaryMd,
+            findingsMd,
+          },
+          ctx,
+        );
         throw new ReviewStaleError(cause, input.subjectVersion);
       }
       if (err instanceof ApprovalGateNotFoundError) {
@@ -325,6 +401,19 @@ export const agentReviewRunService = {
     }
 
     await record('decided', decided.gate.id);
+    await recordVerdictRow(
+      run,
+      item,
+      {
+        verdict: input.verdict,
+        subjectVersion: input.subjectVersion,
+        outcome: 'decided',
+        gateId: decided.gate.id,
+        summaryMd,
+        findingsMd,
+      },
+      ctx,
+    );
     return {
       key: item.identifier,
       gateId: decided.gate.id,

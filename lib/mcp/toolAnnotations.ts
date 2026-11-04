@@ -513,6 +513,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
   },
   // R: findWorkItemsForPullRequest.ts → githubPullRequestService.findWorkItemsForPullRequest (delivery rows read in one workspace-bound transaction)
   find_work_items_for_pull_request: { readOnlyHint: true, openWorldHint: false },
+  // W: submitReviewVerdict.ts → reviewVerdictService.submit — appends a review verdict record, decides the awaiting agent_review gate, withdraws an approve-and-merge gate and cancels a hosted run on a send-back; a repeat is recorded as second
+  submit_review_verdict: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // R: searchWorkItems.ts → workItemsService.getProjectIssuesList, commentsService.getCommentCountsForItems
   search_work_items: { readOnlyHint: true, openWorldHint: false },
   // W: searchWorkItemsSemantic.ts → enforceAiRateLimit (rateLimitCounterRepository.increment), then aiBoundaryService.searchSimilarWorkItemsByText

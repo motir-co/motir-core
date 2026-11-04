@@ -372,6 +372,10 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // returns, which needs `work_item:edit`. The service asserts it on every
   // returned card's project; `CLI_TOKEN_GRANT` already carries it.
   find_work_items_for_pull_request: 'work_item:edit',
+  // `submit_review_verdict` (MOTIR-10333; `approval-gates.md` §12.11) — any teammate
+  // holding the edit key on the card may submit their review agent's verdict; the service
+  // asserts it on the card's project. `CLI_TOKEN_GRANT` already carries it.
+  submit_review_verdict: 'work_item:edit',
 
   // ── sprint:manage — the sprint lifecycle + membership ────────────────────
   // `sprintsService.assertCanManageSprints` and `backlogService.assertCanGroom`

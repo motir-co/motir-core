@@ -525,6 +525,12 @@ export const ja: McpSummaryTranslations = {
     source:
       'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
   },
+  submit_review_verdict: {
+    summary:
+      '自分のレビューエージェントによる作業項目への判定を 1 件送信します。待機中のエージェントレビューを決定するか、レビュー記録として保存されます。マージを承認することはありません。',
+    source:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       '`link_pull_request` を1件だけ取り消します。作業項目とプルリクエストの間に記録された納品を削除します。納品は1行のレコードなので、正しい作業項目を再リンクしても訂正にはならず追加になります。これは指定した1組だけを削除し、ほかの納品には手を付けません。',

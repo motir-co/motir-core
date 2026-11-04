@@ -382,6 +382,9 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // edit key (`work_item:edit`, in `toolPermissions.ts`): a legacy `read` row
   // never carried that key, so `read` would be a loss for no reason.
   find_work_items_for_pull_request: 'work_items:write',
+  // `submit_review_verdict` (MOTIR-10333) — a WRITE: it decides a review gate or stores a
+  // review record, gated on `work_item:edit`, so it sits with the item writes.
+  submit_review_verdict: 'work_items:write',
   expand_item: 'work_items:write',
   append_plan_turn: 'work_items:write',
   submit_plan_session: 'work_items:write',

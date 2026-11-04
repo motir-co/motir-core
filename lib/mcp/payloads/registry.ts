@@ -40,6 +40,7 @@ import {
   planPayload,
   planSessionPayload,
   planSubmitPayload,
+  reviewVerdictPayload,
   sessionCloseOutPayload,
 } from './workLoop';
 import { folderDeletionPayload, folderWritePayload, listFoldersPayload } from './folders';
@@ -81,6 +82,9 @@ export const TOOL_PAYLOADS: Partial<Record<McpToolName, PayloadDefinition<never>
   // its v1 twin returns, so an agent's ability to read a reviewer's note does not
   // depend on which surface it reaches for.
   get_approval_gate: getApprovalGatePayload as unknown as PayloadDefinition<never>,
+  // MOTIR-10333 — the user-token verdict door: v1's `ReviewVerdictResult` whole, through
+  // the REST door's own presenter, and it PROBES it.
+  submit_review_verdict: reviewVerdictPayload as unknown as PayloadDefinition<never>,
   // 11.6.3 — the work-item family
   search_work_items: searchWorkItemsPayload as unknown as PayloadDefinition<never>,
   list_ready: listReadyPayload as unknown as PayloadDefinition<never>,

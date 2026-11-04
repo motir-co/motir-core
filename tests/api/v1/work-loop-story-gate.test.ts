@@ -127,6 +127,10 @@ const WORK_LOOP_MIRRORS = {
   // touch and close are the same `heartbeat` / `close` operations already paired
   // above, so they add no row: one operation, one mirror.
   claimWorkItemContinue: 'claim_work_item_continue',
+  // MOTIR-10333 — the USER-TOKEN verdict door. Unlike the hosted run's verdict below, its
+  // caller is a person's own agent, which speaks MCP; `reviewVerdictService.submit` is the
+  // one method the route and the tool both call, under the same `work_item:edit`.
+  submitWorkItemReviewVerdict: 'submit_review_verdict',
 } as const;
 
 /**
@@ -302,8 +306,9 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // case in `WORK_LOOP_UNMIRRORED` and each still mirrors a real permission.
     // 14 since MOTIR-6807 paired the repair claim, the heartbeat and the close
     // with the agent-facing repair tools. 15 since MOTIR-7262 paired the
-    // continue claim with `claim_work_item_continue`.
-    expect(Object.keys(MIRRORS)).toHaveLength(15);
+    // continue claim with `claim_work_item_continue`. 16 since MOTIR-10333 paired the
+    // user-token verdict door with `submit_review_verdict`.
+    expect(Object.keys(MIRRORS)).toHaveLength(16);
     // 18 since MOTIR-4085 added the plan READ beside the approval — the SEVENTH
     // operation with no MCP counterpart, and the first whose reason is that an
     // agent has no USE for it rather than that it must be kept away from one.
@@ -316,7 +321,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 27 since MOTIR-6821: the hosted REVIEW run's prompt read and its verdict.
     // 28 since MOTIR-8698: the run's unbuildable report the CLI posts.
     // 30 since MOTIR-8722: the run's discrepancy record and its STOP report.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(30);
+    // 31 since MOTIR-10333: the user-token verdict door.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(31);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {
