@@ -2336,6 +2336,16 @@ export interface components {
                 severity: string;
                 /** @constant */
                 runnerStop: true;
+                path: string;
+                repo: string;
+                criterionIndex: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                /** @constant */
+                runnerStop: true;
                 criteria?: string;
             } | {
                 /** @constant */

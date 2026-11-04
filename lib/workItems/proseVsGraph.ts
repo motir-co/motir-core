@@ -798,6 +798,41 @@ export function firstRepoStraddleCriterion(
   return second ? { ...second, reason: 'unpinnable' } : null;
 }
 
+/**
+ * THE MULTI-REPO RUNNER STOP (MOTIR-10381): the first acceptance criterion that
+ * names a path in a SECOND repository, or `null` — WHATEVER the card's repository
+ * set carries.
+ *
+ * The runner stops on a card whose criteria name paths in two repositories,
+ * because one card is one pull request. {@link firstRepoStraddleCriterion} cannot
+ * say so once the card carries both repositories: its contradiction arm only
+ * reports a repo the set does NOT hold. This reads the criteria alone — the
+ * unpinnable arm's rule (the first resolvable path's repo, then the first path
+ * whose repo differs) applied to every card — so its path and numbering match the
+ * straddle advisory's ({@link criterionRepoPaths}).
+ *
+ * The one thing it takes from the set is the namespace decline
+ * ({@link isCarriedNamespaceDirectory}, MOTIR-6288): a bare-name path whose first
+ * segment is the name-namespace of a carried repo is more plausibly that repo's
+ * own top-level directory, so it is dropped before the comparison. A card carrying
+ * `motir-gateway` is not reported for `motir/catalog/x.go`; an `owner/name/…` path
+ * is never declined.
+ */
+export function firstMultiRepoCriterion(
+  md: string | null | undefined,
+  targetRepos: readonly string[],
+  candidates: readonly RepoCandidate[],
+): CriterionRepoPath | null {
+  const carried = new Set(targetRepos.map((r) => r.toLowerCase()));
+  const paths = criterionRepoPaths(md, candidates).filter(
+    (p) => !isCarriedNamespaceDirectory(p.path, carried, candidates),
+  );
+  const firstPath = paths[0];
+  if (!firstPath) return null;
+  const first = firstPath.repo.toLowerCase();
+  return paths.find((p) => p.repo.toLowerCase() !== first) ?? null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE SUBSUMPTION CHECK (MOTIR-2903) — "is this card's deliverable already in
 // the repository?", asked of the one artifact where the overlap is a FACT.

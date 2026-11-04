@@ -13,8 +13,10 @@ import {
   firstBlockerCountClaim,
   firstPostMergeChildTell,
   firstPostMergeCriterion,
+  firstMultiRepoCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
+  isLeafBodyCheckExempt,
   isOrderingCheckExempt,
   isPostMergeChildCandidate,
   isPostMergeChildCheckExemptContainer,
@@ -384,6 +386,8 @@ export async function buildProseVsGraphAdvisories(
     if (runnerStops) {
       const leafBody = leafBodyRunnerStopAdvisory(s.subject);
       if (leafBody) advisories.push(leafBody);
+      const multiRepo = multiRepoRunnerStopAdvisory(s.subject, repoCandidates);
+      if (multiRepo) advisories.push(multiRepo);
     }
     const selfBlocking = selfBlockingDesignAdvisory(s.subject);
     if (selfBlocking) advisories.push(selfBlocking);
@@ -650,6 +654,41 @@ function leafBodyRunnerStopAdvisory(
     severity: 'leaf-no-criteria',
     runnerStop: true,
     criteria,
+  };
+}
+
+/**
+ * THE MULTI-REPO RUNNER-STOP advisory for ONE subject (MOTIR-10381) — one
+ * `leaf-multi-repo` when the criteria name paths in two or more repositories,
+ * whatever the card's repository set carries. Pure once `candidates` is in hand:
+ * the SAME candidates the straddle advisory resolves, read only when some body
+ * names a criterion path. Not emitted for a card {@link isLeafBodyCheckExempt}
+ * exempts. A card that also trips `likely-repo-straddle` reports both.
+ */
+function multiRepoRunnerStopAdvisory(
+  subject: ProseAdvisorySubject,
+  candidates: readonly RepoCandidate[],
+): WorkItemProseAdvisoryDto | null {
+  if (
+    isLeafBodyCheckExempt({
+      kind: subject.kind,
+      type: subject.type,
+      executor: subject.executor,
+      hasChildren: subject.hasChildren,
+    })
+  ) {
+    return null;
+  }
+  const found = firstMultiRepoCriterion(subject.descriptionMd, subject.targetRepos, candidates);
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'leaf-multi-repo',
+    runnerStop: true,
+    path: found.path,
+    repo: found.repo,
+    criterionIndex: found.criterionIndex,
   };
 }
 

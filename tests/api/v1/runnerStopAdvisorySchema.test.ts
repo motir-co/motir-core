@@ -26,7 +26,34 @@ const noCriteria = {
   criteria: 'no-heading',
 } as const;
 
+const multiRepo = {
+  kind: 'shape',
+  item: 'ACME-10',
+  severity: 'leaf-multi-repo',
+  runnerStop: true,
+  path: 'motir-ai/src/b.ts',
+  repo: 'motir-ai',
+  criterionIndex: 2,
+} as const;
+
 describe('dispatchAdvisorySchema — the runner-stop member', () => {
+  it('parses the multi-repo member whole, ahead of the criterion-shaped member (MOTIR-10381)', () => {
+    expect(dispatchAdvisorySchema.parse(multiRepo)).toEqual(multiRepo);
+  });
+
+  it('still parses a `likely-repo-straddle` payload unchanged, with no `runnerStop`', () => {
+    const straddle = {
+      kind: 'shape',
+      item: 'ACME-11',
+      severity: 'likely-repo-straddle',
+      criterionIndex: 2,
+      path: 'motir-ai/src/b.ts',
+      repo: 'motir-ai',
+      reason: 'contradiction',
+    };
+    expect(dispatchAdvisorySchema.parse(straddle)).toEqual(straddle);
+  });
+
   it('parses each body member and keeps `runnerStop` (the member is tried first)', () => {
     expect(dispatchAdvisorySchema.parse(noDescription)).toEqual(noDescription);
     expect(dispatchAdvisorySchema.parse(noCriteria)).toEqual(noCriteria);
@@ -42,16 +69,20 @@ describe('dispatchAdvisorySchema — the runner-stop member', () => {
     expect(dispatchAdvisorySchema.parse(under)).toEqual(under);
   });
 
-  it('the contract version moved past 1.77.0', () => {
+  it('the contract version moved past 1.78.0', () => {
     const [major, minor] = V1_CONTRACT_VERSION.split('.').map(Number);
     expect(major).toBe(1);
-    expect(minor).toBeGreaterThanOrEqual(78);
+    expect(minor).toBeGreaterThanOrEqual(79);
   });
 });
 
 describe('presentDispatchPrompt — maps a runner stop field by field', () => {
   it('passes both members through, and the result validates', () => {
-    const advisories = [noDescription, noCriteria] as unknown as WorkItemProseAdvisoryDto[];
+    const advisories = [
+      noDescription,
+      noCriteria,
+      multiRepo,
+    ] as unknown as WorkItemProseAdvisoryDto[];
     expect(advisories.every(isRunnerStopAdvisory)).toBe(true);
     const dto = {
       key: 'ACME-7',
@@ -68,7 +99,11 @@ describe('presentDispatchPrompt — maps a runner stop field by field', () => {
       advisories,
     } as unknown as DispatchPromptDto;
     const wire = presentDispatchPrompt(dto);
-    expect(wire.advisories).toEqual([noDescription, noCriteria]);
-    expect(dispatchPromptSchema.parse(wire).advisories).toEqual([noDescription, noCriteria]);
+    expect(wire.advisories).toEqual([noDescription, noCriteria, multiRepo]);
+    expect(dispatchPromptSchema.parse(wire).advisories).toEqual([
+      noDescription,
+      noCriteria,
+      multiRepo,
+    ]);
   });
 });

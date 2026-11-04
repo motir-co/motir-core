@@ -1,6 +1,6 @@
 # The runner's mechanical stops on a leaf's body are plan-time advisories, never gates
 
-**Status:** accepted · **MOTIR-10380** (Story MOTIR-10350, Epic MOTIR-10347)
+**Status:** accepted · **MOTIR-10380**, **MOTIR-10381** (Story MOTIR-10350, Epic MOTIR-10347)
 
 ## Context
 
@@ -75,18 +75,58 @@ accepted rather than suppressed: `under-authored`'s payload and firing condition
 are fixed for the clients that read it today, and the runner-stop member is the
 one a repair pass keys on.
 
+## The two-repository runner stop (MOTIR-10381)
+
+**7. `leaf-multi-repo`, and why it ignores the repository set.** The runner's
+guard #5 stops on a card whose acceptance criteria name file paths in two
+repositories, because one card is one pull request. `likely-repo-straddle`
+cannot say so once the card carries both repositories: its contradiction arm
+reports only a repository the set does NOT hold, which is the right question
+for that advisory (a card naming a repository it does not carry) and the wrong
+one for the runner's. So `firstMultiRepoCriterion` reads the criteria alone: the
+first resolvable path's repository, then the first path whose repository
+differs. That is the straddle advisory's unpinnable arm applied to every card,
+and it reuses `criterionRepoPaths`, so `path`, `repo` (the second repository)
+and `criterionIndex` number the criteria exactly as the straddle advisory does.
+Paths must be repo-qualified (`motir-core/lib/…` or `owner/name/…`) to resolve,
+as for the existing advisory.
+
+**8. The same four exemptions.** It is emitted only for a card
+`isLeafBodyCheckExempt` does not exempt (decision 4): a card with children, an
+epic or story, a `type: design` leaf and an `executor: human` leaf. The reasons
+are the same: the runner never builds those cards as one pull request of code.
+
+**9. The namespace decline.** The one thing it takes from the set is
+`isCarriedNamespaceDirectory` (MOTIR-6288): a bare-name path whose first segment
+is the name-namespace of a carried repository is more plausibly that
+repository's own top-level directory, so it is dropped before the comparison. A
+card carrying `motir-gateway` is not reported for `motir/catalog/x.go`, so this
+advisory is never noisier than the straddle advisory on that shape. An
+`owner/name/…` path is never declined.
+
+**10. The accepted overlap with `likely-repo-straddle`.** A card whose criteria
+name two repositories and that carries only one of them (or, as a proposed
+`add`, none) trips both advisories, and reports both. That is accepted: the
+straddle advisory's payload and firing conditions are fixed for the clients that
+read it today, and `leaf-multi-repo` is the member a repair pass keys on. The new
+information is on a committed card whose set already carries both repositories,
+which the straddle advisory is silent on.
+
 ## Consequences
 
 - A typed and sized leaf with an empty body or no criteria is reported at plan
   time, with no model call.
-- The v1 dispatch advisory union gains one member (contract `1.78.0`); the
-  dispatch path does not emit it today.
+- The v1 dispatch advisory union gains two members (contract `1.78.0` for the
+  body members, `1.79.0` for `leaf-multi-repo`); the dispatch path does not emit
+  them today.
+- A card whose criteria name two repositories is reported whatever its
+  repository set carries.
 - The hosted planner reads `runnerStop` to hand these to its repair pass
   (MOTIR-10382, in motir-ai).
 
 ## What this does NOT decide
 
 - Whether a description or a criterion is good. It reads presence only.
-- Whether a card should be split or sized differently.
+- Whether a card should be split or sized differently: `leaf-multi-repo` says
+  the criteria span two repositories, not where to cut them.
 - Anything about readiness, dispatch or a save: none of them refuses on these.
-- The two-repository runner stop, which is its own member of the family.

@@ -23,6 +23,7 @@ import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { seedBlockedBy } from '../../helpers/seedBlockedBy';
+import { connectRepairRepo } from '../../helpers/repairFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { renderSections } from '@/lib/workItems/sections/render';
 import { fixture as sectionsFixture } from '../../unit/workItems/sections/helpers/sectionFixture';
@@ -3053,5 +3054,105 @@ describe('planValidityService — the RUNNER-STOP body advisories, projected (MO
     expect(projected.advisories.filter(isRunnerStopAdvisory)).toEqual([
       { kind: 'shape', item: leaf.identifier, severity: 'leaf-no-description', runnerStop: true },
     ]);
+  });
+});
+
+describe('planValidityService — the MULTI-REPO runner stop, projected (MOTIR-10381)', () => {
+  const TWO_REPO_BODY = [
+    'Moves the reader across the boundary.',
+    '',
+    '## Acceptance criteria',
+    '',
+    '- `motir-core/lib/services/x.ts` emits the advisory',
+    '- `motir-ai/src/core/y.ts` reads it',
+  ].join('\n');
+
+  it('reports a committed task whose set carries BOTH repositories; the straddle advisory stays silent', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepairRepo(fx, 'motir-core');
+    await connectRepairRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const make = (title: string, type: 'code' | 'design') =>
+      workItemsService.createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'task',
+          type,
+          title,
+          descriptionMd: TWO_REPO_BODY,
+          targetRepos: ['motir-core', 'motir-ai'],
+          parentId: story.id,
+        },
+        fx.ctx,
+      );
+    const both = await make('Both repos', 'code');
+    const drawn = await make('Drawn', 'design');
+
+    const planId = await freshPlan(fx);
+    for (const card of [both, drawn]) {
+      await addProposal(fx, planId, {
+        op: 'modify',
+        workItemId: card.id,
+        patch: { storyPoints: 3 },
+      });
+    }
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    const expected = {
+      kind: 'shape',
+      item: both.identifier,
+      severity: 'leaf-multi-repo',
+      runnerStop: true,
+      path: 'motir-ai/src/core/y.ts',
+      repo: 'motir-ai',
+      criterionIndex: 2,
+    };
+    expect(res.advisories.filter(isRunnerStopAdvisory)).toEqual([expected]);
+    expect(
+      res.advisories.some((a) => a.kind === 'shape' && a.severity === 'likely-repo-straddle'),
+    ).toBe(false);
+    expect(
+      (await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).filter(
+        isRunnerStopAdvisory,
+      ),
+    ).toEqual([expected]);
+  });
+
+  it('a card carrying ONE of the repositories reports both advisories', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepairRepo(fx, 'motir-core');
+    await connectRepairRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const one = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        type: 'code',
+        title: 'One repo',
+        descriptionMd: TWO_REPO_BODY,
+        targetRepos: ['motir-core'],
+        parentId: story.id,
+      },
+      fx.ctx,
+    );
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, { op: 'modify', workItemId: one.id, patch: { storyPoints: 3 } });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    const severities = res.advisories
+      .filter((a) => a.kind === 'shape' && a.item === one.identifier)
+      .map((a) => (a as { severity: string }).severity);
+    expect(severities).toEqual(expect.arrayContaining(['likely-repo-straddle', 'leaf-multi-repo']));
   });
 });

@@ -975,7 +975,8 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // approve will send back from built work) rides beside the verdict, never in it.
     // Re-pinned for MOTIR-10380, summary UNCHANGED: the RUNNER-STOP body advisories
     // (`leaf-no-description`, `leaf-no-criteria`) are more shape entries, never in it.
-    descriptionFingerprint: 'f0c8f5db88e1',
+    // Re-pinned for MOTIR-10381, summary UNCHANGED: `leaf-multi-repo` joins them.
+    descriptionFingerprint: 'de062c69eb5a',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

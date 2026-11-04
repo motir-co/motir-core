@@ -1993,7 +1993,11 @@ export type WorkItemProseShapeSeverityDto =
  * criterion index — the body members have none. A severity added to the family
  * is added here, and every reader picks it up.
  */
-export const RUNNER_STOP_SEVERITIES = ['leaf-no-description', 'leaf-no-criteria'] as const;
+export const RUNNER_STOP_SEVERITIES = [
+  'leaf-no-description',
+  'leaf-no-criteria',
+  'leaf-multi-repo',
+] as const;
 
 /** One member of {@link RUNNER_STOP_SEVERITIES}. */
 export type RunnerStopSeverityDto = (typeof RUNNER_STOP_SEVERITIES)[number];
@@ -2385,7 +2389,28 @@ export type WorkItemProseRunnerStopAdvisoryDto =
       runnerStop: true;
       /** Whether the `## Acceptance criteria` heading is missing or just empty. */
       criteria: 'no-heading' | 'no-criterion';
-    });
+    })
+  | WorkItemProseMultiRepoRunnerStopAdvisoryDto;
+
+/**
+ * The MULTI-REPO runner stop (MOTIR-10381): a childless, non-exempt leaf whose
+ * acceptance criteria name file paths in two or more repositories — INCLUDING when
+ * its repository set already carries both, which `likely-repo-straddle` does not
+ * report. One card is one pull request, so the runner stops on it. `repo` is the
+ * SECOND repository, `path` its first path and `criterionIndex` the criterion that
+ * names it, numbered as the straddle advisory numbers them. Plan reads only; never
+ * a gate. `docs/decisions/leaf-body-runner-stop-advisories.md`.
+ */
+export interface WorkItemProseMultiRepoRunnerStopAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'leaf-multi-repo';
+  runnerStop: true;
+  /** The repo-qualified path the criterion names, markup stripped. */
+  path: string;
+  /** The second repository, in the connected repository's own casing. */
+  repo: string;
+  /** 1-based index of the criterion naming it. */
+  criterionIndex: number;
+}
 
 /**
  * A `[label](motir:<id>)` link in the card's body whose label names one work-item
