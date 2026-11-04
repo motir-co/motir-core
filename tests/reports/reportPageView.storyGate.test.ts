@@ -29,14 +29,13 @@ function parse(href: string) {
   return sp;
 }
 
+/** Workload reads no `period` (MOTIR-10346): its bars have no time buckets. */
 function readWorkload(href: string): ReportPageParams {
   const sp = parse(href);
-  const period = coercePeriod(sp.get('period'));
   return {
     savedFilterId: sp.get('savedFilterId'),
     measure: coerceMeasure(sp.get('measure')),
-    period,
-    daysBack: coerceDaysBack(period, sp.get('daysBack')),
+    daysBack: coerceDaysBack(null, sp.get('daysBack')),
   };
 }
 
@@ -63,10 +62,10 @@ function readVelocity(href: string): ReportPageParams {
 
 describe('story gate B8 — every page parameter round-trips through buildReportHref', () => {
   const workload: ReportPageParams[] = [
-    { savedFilterId: null, measure: 'story_points', period: 'day', daysBack: 30 },
-    { savedFilterId: 'flt_1', measure: 'issue_count', period: 'week', daysBack: 90 },
-    { savedFilterId: null, measure: 'story_points', period: 'month', daysBack: 365 },
-    { savedFilterId: 'flt_2', measure: 'issue_count', period: 'day', daysBack: 7 },
+    { savedFilterId: null, measure: 'story_points', daysBack: 30 },
+    { savedFilterId: 'flt_1', measure: 'issue_count', daysBack: 90 },
+    { savedFilterId: null, measure: 'story_points', daysBack: 365 },
+    { savedFilterId: 'flt_2', measure: 'issue_count', daysBack: 180 },
   ];
   it.each(workload)('Workload %j', (p) => {
     const href = buildReportHref(WORKLOAD, p);
@@ -125,9 +124,7 @@ describe('story gate B8 — every page parameter round-trips through buildReport
   });
 
   it('writes the bare path at every default', () => {
-    expect(
-      buildReportHref(WORKLOAD, { measure: 'story_points', period: 'day', daysBack: 30 }),
-    ).toBe(WORKLOAD);
+    expect(buildReportHref(WORKLOAD, { measure: 'story_points', daysBack: 30 })).toBe(WORKLOAD);
     expect(
       buildReportHref(CVR, {
         period: 'day',
@@ -157,13 +154,26 @@ describe('story gate B9 — junk decodes to something the page can render', () =
     expect(n).toBeLessThanOrEqual(52);
   });
 
-  it.each(junk)('Workload days back lands on its period ladder (%j)', (raw) => {
+  it.each(junk)('Workload days back lands on its bucket-free ladder (%j)', (raw) => {
+    expect(daysBackLadder(null)).toContain(coerceDaysBack(null, raw));
+    expect(clampDaysBack(null, coerceDaysBack(null, raw))).toBe(coerceDaysBack(null, raw));
+    expect(['story_points', 'issue_count']).toContain(coerceMeasure(raw));
+  });
+
+  it.each(junk)('a bucketed report’s days back lands on its period ladder (%j)', (raw) => {
     for (const period of ['day', 'week', 'month'] as const) {
       expect(daysBackLadder(period)).toContain(coerceDaysBack(period, raw));
       expect(clampDaysBack(period, coerceDaysBack(period, raw))).toBe(coerceDaysBack(period, raw));
     }
     expect(['day', 'week', 'month']).toContain(coercePeriod(raw));
-    expect(['story_points', 'issue_count']).toContain(coerceMeasure(raw));
+  });
+
+  it('an old Workload link that carries ?period= reads exactly as the link without it', () => {
+    const withPeriod = `${WORKLOAD}?period=week&daysBack=365&measure=issue_count`;
+    expect(readWorkload(withPeriod)).toEqual(
+      readWorkload(`${WORKLOAD}?daysBack=365&measure=issue_count`),
+    );
+    expect(readWorkload(`${WORKLOAD}?period=day&daysBack=365`).daysBack).toBe(365);
   });
 
   it('a repeated key reads as the first value, never as zero series', () => {
@@ -180,12 +190,13 @@ describe('story gate B10 — the parameter names equal the design notes’', () 
   const notes = readFileSync(join(__dirname, '../../design/reports/design-notes.md'), 'utf8');
 
   it('names period/daysBack, form/series and endingAt/count, and the code writes exactly those', () => {
-    expect(notes).toContain('`period`, `daysBack` (Workload)');
+    // The MOTIR-10346 amendment: Workload's URL carries `daysBack` only.
+    expect(notes).toContain('`daysBack` (Workload) beside `?savedFilterId=&measure=`');
     expect(notes).toContain('`form`, `series` (Created vs Resolved)');
     expect(notes).toContain('`endingAt`, `count` (Velocity)');
 
-    const w = buildReportHref(WORKLOAD, { period: 'week', daysBack: 90, measure: 'issue_count' });
-    expect([...parse(w).keys()].sort()).toEqual(['daysBack', 'measure', 'period']);
+    const w = buildReportHref(WORKLOAD, { daysBack: 90, measure: 'issue_count' });
+    expect([...parse(w).keys()].sort()).toEqual(['daysBack', 'measure']);
     const c = buildReportHref(CVR, { form: 'bars', series: 'resolved' });
     expect([...parse(c).keys()].sort()).toEqual(['form', 'series']);
     expect(parse(c).get('form')).toBe('bars');

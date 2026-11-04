@@ -6,8 +6,9 @@ import type { WorkloadAssigneeDto, WorkloadDto } from '@/lib/dto/reports';
 
 // The Workload page body over a period (Story MOTIR-8919 · MOTIR-8925): two
 // segments per person bar, the neutral person-less bar last, the legend, the
-// four-column data table, and the Period / Days-back controls navigating through
-// `buildReportHref` with the days back clamped to the new period's ladder.
+// four-column data table, and the Days-back control navigating through
+// `buildReportHref`. There is no Period control (MOTIR-10346): the bars have no
+// time buckets, so Days back reaches 180 and 365 without one.
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -37,7 +38,7 @@ const data = (assignees: WorkloadAssigneeDto[]): WorkloadDto => ({
   assignees,
   totalPoints: assignees.reduce((n, a) => n + a.points, 0),
   totalCount: assignees.reduce((n, a) => n + a.count, 0),
-  window: { period: 'day', daysBack: 30, windowStart: '2026-09-18', windowEnd: '2026-10-18' },
+  window: { daysBack: 30, windowStart: '2026-09-18', windowEnd: '2026-10-18' },
 });
 
 const NOBODY = row({
@@ -63,7 +64,6 @@ const renderIt = (
     <WorkloadReport
       result={{ state: 'ok', data: data(assignees) }}
       measure="story_points"
-      period="day"
       daysBack={30}
       savedFilterId={null}
       projectName="Prodect"
@@ -117,15 +117,51 @@ describe('WorkloadReport over a period', () => {
     expect(screen.getByText('No data in this window')).toBeTruthy();
   });
 
-  it('a Period change navigates with days back clamped to the new ladder', () => {
-    renderIt({ daysBack: 365, period: 'month' });
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }));
-    // 365 is over the daily cap, so it snaps to the largest valid rung.
-    const href = push.mock.calls[0]![0] as string;
-    expect(href).toMatch(/^\/reports\/workload\?/);
-    expect(href).toContain('daysBack=');
-    expect(href).not.toContain('daysBack=365');
-    expect(href).not.toContain('period=');
+  it('renders no Period control — Workload has no time buckets (MOTIR-10346)', () => {
+    renderIt();
+    expect(screen.queryByText('Period')).toBeNull();
+    for (const name of ['Daily', 'Weekly', 'Monthly']) {
+      expect(screen.queryByRole('button', { name })).toBeNull();
+    }
+    expect(screen.getByText('Days back')).toBeTruthy();
+  });
+
+  it('Days back reaches 180 and then 365 by default, and stops there', () => {
+    const { rerender } = renderIt({ daysBack: 90 });
+    fireEvent.click(screen.getByRole('button', { name: 'Longer window' }));
+    expect(push).toHaveBeenLastCalledWith('/reports/workload?daysBack=180');
+    rerender(
+      <WorkloadReport
+        result={{ state: 'ok', data: data([row({})]) }}
+        measure="story_points"
+        daysBack={180}
+        savedFilterId={null}
+        projectName="Prodect"
+        savedFilters={[]}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Longer window' }));
+    expect(push).toHaveBeenLastCalledWith('/reports/workload?daysBack=365');
+    rerender(
+      <WorkloadReport
+        result={{ state: 'ok', data: data([row({})]) }}
+        measure="story_points"
+        daysBack={365}
+        savedFilterId={null}
+        projectName="Prodect"
+        savedFilters={[]}
+      />,
+    );
+    const longer = screen.getByRole('button', { name: 'Longer window' }) as HTMLButtonElement;
+    expect(longer.disabled).toBe(true);
+    // No navigation ever writes a period.
+    for (const [href] of push.mock.calls) expect(href).not.toContain('period=');
+  });
+
+  it('a Measure change keeps a long window and writes no period', () => {
+    renderIt({ daysBack: 365 });
+    fireEvent.click(screen.getByRole('button', { name: 'Work item count' }));
+    expect(push).toHaveBeenLastCalledWith('/reports/workload?daysBack=365&measure=issue_count');
   });
 
   it('Days back steps along the ladder and keeps the measure', () => {

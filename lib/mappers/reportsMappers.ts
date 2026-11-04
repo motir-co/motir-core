@@ -396,13 +396,14 @@ export interface WorkloadRow {
  * totals are the sums. A snapshot row (no segment fields) is all-assigned:
  * `assigned* = total`, `unassigned* = 0`; the person-less bar's segments are 0
  * when the read left them out. `window` is the ISO-stringified span of a windowed
- * read, else `null`. An empty scope yields `{ assignees: [], totals 0 }` — never
+ * read — days back only, no period: the bars have no time buckets (MOTIR-10346)
+ * — else `null`. An empty scope yields `{ assignees: [], totals 0 }` — never
  * `NaN`. PURE — no I/O.
  */
 export function toWorkloadDto(
   measure: WorkloadMeasureDto,
   rows: WorkloadRow[],
-  window?: { period: ReportPeriodDto; daysBack: number; windowStart: Date; windowEnd: Date },
+  window?: { daysBack: number; windowStart: Date; windowEnd: Date },
 ): WorkloadDto {
   const round1 = (n: number) => Math.round(n * 10) / 10;
   const assignees: WorkloadAssigneeDto[] = rows.map((r) => {
@@ -435,7 +436,6 @@ export function toWorkloadDto(
     totalCount: assignees.reduce((sum, a) => sum + a.count, 0),
     window: window
       ? {
-          period: window.period,
           daysBack: window.daysBack,
           windowStart: window.windowStart.toISOString(),
           windowEnd: window.windowEnd.toISOString(),

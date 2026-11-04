@@ -18,7 +18,7 @@ import {
   PERIOD_AXIS_KEY,
 } from '@/lib/reports/reportPageView';
 import { cvrBarGroups, differenceSeries, pickTickIndices } from '@/lib/reports/reportChartData';
-import { MAX_REPORT_BUCKETS } from '@/lib/reports/buckets';
+import { MAX_REPORT_BUCKETS, MAX_REPORT_WINDOW_DAYS } from '@/lib/reports/buckets';
 import type { CreatedVsResolvedDto } from '@/lib/dto/reports';
 
 // Story 6.3 · Subtask 6.3.6 — the PURE halves of the report PAGES: the URL/
@@ -42,6 +42,19 @@ describe('days-back ladder', () => {
     expect(clampDaysBack('week', 100)).toBe(90); // nearest rung
     expect(clampDaysBack('day', 365)).toBe(90); // daily max rung ≤ 120
     expect(clampDaysBack('week', Number.NaN)).toBe(7); // non-finite → min
+  });
+
+  it('a window with no bucket axis (`null`, Workload — MOTIR-10346) gets the full ladder', () => {
+    expect(maxDaysBackForPeriod(null)).toBe(MAX_REPORT_WINDOW_DAYS);
+    expect(daysBackLadder(null)).toEqual([...DAYS_BACK_LADDER]);
+    expect(clampDaysBack(null, 365)).toBe(365); // no daily cap to snap it under
+    expect(clampDaysBack(null, 150)).toBe(180); // nearest rung (ties → the larger)
+    expect(stepDaysBack(null, 90, 1)).toBe(180);
+    expect(stepDaysBack(null, 180, 1)).toBe(365);
+    expect(stepDaysBack(null, 365, 1)).toBe(365);
+    expect(coerceDaysBack(null, '365')).toBe(365);
+    expect(coerceDaysBack(null, null)).toBe(REPORT_DEFAULTS.daysBack);
+    expect(coerceDaysBack(null, 'garbage')).toBe(REPORT_DEFAULTS.daysBack);
   });
 
   it('steps one rung at a time and stops at the ends', () => {

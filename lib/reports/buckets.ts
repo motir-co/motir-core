@@ -114,16 +114,26 @@ export function bucketEnds(period: ReportPeriod, axis: string[], end: Date): Dat
  * reach the full year).
  */
 export function validateReportWindow(period: ReportPeriod, daysBack: number): void {
-  if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > MAX_REPORT_WINDOW_DAYS) {
-    throw new InvalidReportWindowError(
-      `daysBack must be an integer between 1 and ${MAX_REPORT_WINDOW_DAYS}.`,
-    );
-  }
+  validateWindowDays(daysBack);
   // The day-period axis has exactly daysBack buckets; week/month strictly
   // fewer — checking the worst case (day) keeps the rule simple and total.
   if (period === 'day' && daysBack > MAX_REPORT_BUCKETS) {
     throw new InvalidReportWindowError(
       `a daily window is capped at ${MAX_REPORT_BUCKETS} days (got ${daysBack}); use a weekly or monthly period for longer windows.`,
+    );
+  }
+}
+
+/**
+ * Validate the days back of a window that has NO bucket axis (Workload's ranked
+ * bars, MOTIR-10346) — the typed 422 gate when `daysBack` is not an integer in
+ * `[1, MAX_REPORT_WINDOW_DAYS]`. No bucket cap applies: there are no buckets.
+ * {@link validateReportWindow} runs this same check before its bucket cap.
+ */
+export function validateWindowDays(daysBack: number): void {
+  if (!Number.isInteger(daysBack) || daysBack < 1 || daysBack > MAX_REPORT_WINDOW_DAYS) {
+    throw new InvalidReportWindowError(
+      `daysBack must be an integer between 1 and ${MAX_REPORT_WINDOW_DAYS}.`,
     );
   }
 }

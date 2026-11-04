@@ -3,12 +3,7 @@
 import { useRouter, usePathname } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { HBarChart, chartColor, type ChartLegendItem } from '@/components/ui/charts';
-import type {
-  WorkloadDto,
-  WorkloadMeasureDto,
-  ReportPeriodDto,
-  ReportStaleReasonDto,
-} from '@/lib/dto/reports';
+import type { WorkloadDto, WorkloadMeasureDto, ReportStaleReasonDto } from '@/lib/dto/reports';
 import { buildReportHref } from '@/lib/reports/reportPageView';
 import { Segmented } from '@/components/ui/Segmented';
 import { ReportScopeCombobox, type ReportScopeOption } from './ReportScopeCombobox';
@@ -16,8 +11,9 @@ import { ReportStateMessage } from './ReportStateMessage';
 import { ReportWindowControls } from './ReportWindowControls';
 
 // The Workload report page body (Story 8.8 · Subtask 8.8.13), per
-// design/reports/more-reports.mock.html panel 4. Owns the URL-driven scope +
-// MEASURE controls (story points vs work-item count); each change navigates so
+// design/reports/more-reports.mock.html panel 4. Owns the URL-driven scope,
+// Days back and MEASURE controls (story points vs work-item count) — no Period:
+// a ranked bar chart has no time buckets (MOTIR-10346); each change navigates so
 // the report is shareable. The chart is the 8.8.13 horizontal ranked HBarChart —
 // open work per assignee, the unassigned bucket last (the justified deviation
 // from Jira's pie: a magnitude ranking reads directly as bar length, no
@@ -33,7 +29,6 @@ export type WorkloadResult =
 export function WorkloadReport({
   result,
   measure,
-  period,
   daysBack,
   savedFilterId,
   projectName,
@@ -41,7 +36,6 @@ export function WorkloadReport({
 }: {
   result: WorkloadResult;
   measure: WorkloadMeasureDto;
-  period: ReportPeriodDto;
   daysBack: number;
   savedFilterId: string | null;
   projectName: string;
@@ -54,10 +48,10 @@ export function WorkloadReport({
   function go(next: {
     savedFilterId?: string | null;
     measure?: WorkloadMeasureDto;
-    period?: ReportPeriodDto;
     daysBack?: number;
   }) {
-    router.push(buildReportHref(pathname, { savedFilterId, measure, period, daysBack, ...next }));
+    // No `period`: Workload has no time buckets, so the URL never carries one.
+    router.push(buildReportHref(pathname, { savedFilterId, measure, daysBack, ...next }));
   }
 
   return (
@@ -71,7 +65,7 @@ export function WorkloadReport({
             onChange={(id) => go({ savedFilterId: id })}
           />
         </Field>
-        <ReportWindowControls period={period} daysBack={daysBack} onChange={(next) => go(next)} />
+        <ReportWindowControls daysBack={daysBack} onChange={(next) => go(next)} />
         <Field label={t('controls.measureLabel')}>
           <Segmented
             label={t('controls.measureLabel')}

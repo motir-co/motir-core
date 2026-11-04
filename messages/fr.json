@@ -5468,7 +5468,7 @@
       "xPoints": "Story points (ouverts)",
       "xCount": "Éléments de travail (ouverts)",
       "unassigned": "Non attribué",
-      "chartDesc": "{measure} ouverts, classés par personne sur la période choisie : {breakdown}. Total de {total} sur {count} éléments de travail.",
+      "chartDesc": "{measure} ouverts, classés par personne sur la période choisie : {breakdown}. Total de {total} sur {count} éléments de travail.",
       "tableCaption": "Travail ouvert par personne sur la période choisie — attribué, non attribué et créé par la personne, puis le total, pour la mesure active.",
       "tableAssignee": "Responsable",
       "tablePoints": "Story points",
@@ -5528,7 +5528,7 @@
         "how": "Une courbe qui descend signifie que le travail est terminé plus vite. Les périodes sont comptées selon la date de résolution : un ancien élément résolu aujourd’hui fait monter la période d’aujourd’hui."
       },
       "workload": {
-        "what": "Le travail ouvert détenu par chaque personne sur une période choisie, compté en story points ou en éléments de travail. Le travail sans responsable est compté chez son créateur.",
+        "what": "Le travail ouvert détenu par chaque personne à un moment quelconque de la période choisie, compté en story points ou en éléments de travail. Le travail sans responsable est compté chez son créateur.",
         "how": "Les barres les plus longues désignent les personnes qui portent le plus de travail ouvert. Repérez une répartition très inégale avant d’attribuer davantage de travail."
       }
     }
