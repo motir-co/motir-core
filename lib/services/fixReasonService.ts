@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Prisma } from '@/generated/prisma/client';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
-import { pullRequestHead } from '@/lib/github/pullRequestHead';
+import { isCiUndecidedAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
 import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -58,8 +58,9 @@ import {
 // ── FIXING reads the card's OWN previous answer (Story MOTIR-10305 · MOTIR-10307) ──
 // Every pull-request reason and changes-requested stored here records the heads it was
 // raised on (`fixDetail.raisedHeads`). When the predicate later refuses the card with
-// nothing red and CI running — `ci_running`, or at In Review its `not_failing` arm — and
-// a running member is at a head other than the recorded one, a fix was pushed: the
+// nothing red — `ci_running` or `not_failing` — and a member whose CI has not decided
+// (running, or no check yet at a head the host has announced; MOTIR-10310) is at a head
+// other than the recorded one, a fix was pushed: the
 // derivation returns the PRIOR stored reason unchanged with `fixing: true`, so the card
 // stays on To fix and its count does not move until the CI decides. Green then clears it,
 // red raises a fresh reason on the new heads. The prior is read from the row the caller
@@ -166,8 +167,22 @@ export async function deriveFixReason(
     open.map((d) => d.pullRequest.id),
   );
   // The heads every reason below is RAISED on — what a later push is measured against.
+  // ⚠️ A member whose CI has NOT DECIDED (running, or no row at its head yet) keeps the
+  // head the standing reason recorded for it
+  // (MOTIR-10310): with two pull requests red, a push to one leaves the card red on the
+  // other, and re-stamping the pushed one's new head here would make that push read as
+  // "no push" once its sibling turns green. Only a member that has reported raises its
+  // own current head; a running one was not part of what went wrong at its new commit.
+  const priorDetail = toFixDetailDto(
+    (item.fixReason ?? null) as WorkItemFixReasonDto | null,
+    item.fixDetail,
+  );
+  const priorHeads = item.fixReason === 'run_died' ? null : (priorDetail?.raisedHeads ?? null);
   const heads = raisedHeadsOf(
-    open.map((d) => ({ pullRequestId: d.pullRequest.id, headSha: pullRequestHead(d.pullRequest) })),
+    open.map((d) => {
+      const kept = isCiUndecidedAtHead(d.pullRequest) ? priorHeads?.[d.pullRequest.id] : undefined;
+      return { pullRequestId: d.pullRequest.id, headSha: kept ?? pullRequestHead(d.pullRequest) };
+    }),
   );
   const raised = (value: FixReasonValue): FixReasonValue => withRaisedHeads(value, heads);
 
@@ -228,19 +243,17 @@ export async function deriveFixReason(
     return NOTHING_TO_FIX;
   }
 
-  // FIXING (MOTIR-10307). The predicate hands over `running` exactly on the two refusals
-  // that mean nothing is red and CI is running — `ci_running`, and the In Review arm's
-  // `not_failing` (a card sent back at In Review whose push moved its head lands there).
+  // FIXING (MOTIR-10307). The predicate hands over `running` — the members CI has not
+  // decided on — exactly on the refusals that mean nothing is red: `ci_running` and
+  // `not_failing` (a card sent back at In Review whose push moved its head lands on the
+  // latter, and so does a push announced before its first check reports, MOTIR-10310).
   // Whether a fix was pushed is the PRIOR stored answer's recorded heads against the heads
   // CI now runs on: the rule is `fixingReasonOf`'s.
   if (verdict.running.length > 0) {
     const fixing = fixingReasonOf(
       {
         fixReason: (item.fixReason ?? null) as WorkItemFixReasonDto | null,
-        fixDetail: toFixDetailDto(
-          (item.fixReason ?? null) as WorkItemFixReasonDto | null,
-          item.fixDetail,
-        ),
+        fixDetail: priorDetail,
       },
       verdict.running,
     );

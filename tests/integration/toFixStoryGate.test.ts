@@ -350,7 +350,9 @@ describe('per clearing path — the repair takes the card back off To fix', () =
     expect((await whereIs(s, item.id)).tabs).toEqual(['in-progress']);
   });
 
-  it('a new commit after changes requested clears it → back on In progress, waiting on CI', async () => {
+  // Since Story MOTIR-10305 the push keeps the card on To fix as FIXING while its CI runs,
+  // and the green that follows is what takes it back to In progress.
+  it('a new commit after changes requested reads Fixing while CI runs, and its green clears it', async () => {
     const s = await makeScenario('gate-newcommit@example.com');
     const { item, headRef } = await card(s, 'reviewed card', 113);
     await check(s, 113, 'sha-a', 'vitest', 'success');
@@ -360,7 +362,16 @@ describe('per clearing path — the repair takes the card back off To fix', () =
     await pullRequestEvent(s, 'synchronize', 113, headRef, 'sha-b');
     await check(s, 113, 'sha-b', 'vitest', null);
 
-    expect((await whereIs(s, item.id)).tabs).toEqual(['in-progress']);
+    const fixing = await whereIs(s, item.id);
+    expect(fixing.tabs).toEqual(['to-fix']);
+    expect(fixing.row).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true },
+    });
+
+    await check(s, 113, 'sha-b', 'vitest', 'success');
+
+    expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
   });
 
   it('a move to a done-category status clears it → on Recently finished', async () => {

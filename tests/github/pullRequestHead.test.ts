@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { checkRowsAtHead, prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
+import {
+  checkRowsAtHead,
+  isCiUndecidedAtHead,
+  prCiStateAtHead,
+  pullRequestHead,
+} from '@/lib/github/pullRequestHead';
 import {
   isConflictedAtCurrentHead,
   isMergeabilityOwedAt,
@@ -43,6 +48,22 @@ describe('pullRequestHead', () => {
 
   it('is null when neither names one', () => {
     expect(pullRequestHead({ headSha: null, checkRuns: [] })).toBeNull();
+  });
+});
+
+// FIXING's reading of a member (Story MOTIR-10305 · MOTIR-10310): CI has not decided at the
+// head when a check runs there OR when none has reported there yet — the window between a
+// push the host announced and its first check row.
+describe('isCiUndecidedAtHead', () => {
+  it('is true while a check runs at the head, and for a head with no rows yet', () => {
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(B, 'pending')] })).toBe(true);
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(A, 'failure')] })).toBe(true);
+    expect(isCiUndecidedAtHead({ headSha: null, checkRuns: [] })).toBe(true);
+  });
+
+  it('is false once the head has a verdict, red or green', () => {
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(B, 'success')] })).toBe(false);
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(B, 'failure')] })).toBe(false);
   });
 });
 

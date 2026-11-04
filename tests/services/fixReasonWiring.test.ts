@@ -236,7 +236,7 @@ describe('a merge-queue exit', () => {
 });
 
 describe('a mergeability reading', () => {
-  it('a conflicted reading sets conflicted; a push clears the reading and a clean one keeps it clear', async () => {
+  it('a conflicted reading sets conflicted; a push reads Fixing until its CI decides (MOTIR-10310)', async () => {
     const s = await makeScenario('conflict@example.com');
     const { item, headRef } = await card(s, 'conflicted card', 51);
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
@@ -255,14 +255,24 @@ describe('a mergeability reading', () => {
       fixDetail: { base: 'main' },
     });
 
+    // The push is announced before any check reports at its head: a fix being checked, so
+    // the card stays on To fix as Fixing (Story MOTIR-10305), the conflict reading behind it.
     await pullRequestEvent('synchronize', 51, headRef, 'sha-b');
-    expect((await fixOf(item.id)).fixReason).toBeNull();
+    expect(await fixOf(item.id)).toMatchObject({
+      fixReason: 'conflicted',
+      fixDetail: { fixing: true },
+    });
 
+    // The host reads the new head clean: the conflict is gone, but CI has not decided yet.
     await pullRequestMergeabilityService.settleReading(s.workspace.id, pr.id, {
       mergeable: true,
       mergeableState: 'clean',
-      headSha: 'sha-a',
+      headSha: 'sha-b',
     });
+    expect((await fixOf(item.id)).fixDetail).toMatchObject({ fixing: true });
+
+    // Its CI goes green at the new head: nothing is wrong any more.
+    await check(51, 'sha-b', 'vitest', 'success');
     expect((await fixOf(item.id)).fixReason).toBeNull();
   });
 

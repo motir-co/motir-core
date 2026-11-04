@@ -11,7 +11,12 @@ import type {
 } from '@/lib/dto/workItemRepair';
 import { isConflictedAtCurrentHead, isOutOfDateAtCurrentHead } from '@/lib/github/mergeability';
 import { derivePrCiState } from '@/lib/github/prCiState';
-import { pullRequestHead, prCiStateAtHead, checkRowsAtHead } from '@/lib/github/pullRequestHead';
+import {
+  checkRowsAtHead,
+  isCiUndecidedAtHead,
+  prCiStateAtHead,
+  pullRequestHead,
+} from '@/lib/github/pullRequestHead';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -61,22 +66,24 @@ export type RepairEvaluation =
       /** The card's own failing open pull requests — what a child's pointer names. */
       failing: RepairPullRequestDto[];
       /**
-       * The open members CI is RUNNING on, each at the head it runs at (MOTIR-10307) — set
-       * on the two refusals that mean *nothing to repair while CI runs*: `ci_running`, and
-       * the In Review arm's `not_failing`. Empty on every other refusal. The claim never
-       * reads it; the stored To fix answer does, to tell a pushed fix (Fixing) from a
-       * card with nothing wrong.
+       * The open members whose CI has NOT DECIDED at their head, each at that head
+       * (MOTIR-10307) — running, or awaiting its first check row (a push the host has
+       * announced before any check reported; MOTIR-10310). Set on the two refusals that
+       * mean *nothing red*: `ci_running` and `not_failing`. Empty on every other refusal.
+       * The claim never reads it; the stored To fix answer does, to tell a pushed fix
+       * (Fixing) from a card with nothing wrong.
        */
       running: RunningHead[];
     };
 
-/** The open members whose verdict at their head is `running` — `prCiStateAtHead`'s own
- *  answer, the one the `ci_running` refusal is decided by. */
+/** The open members whose CI has not decided at their head — `prCiStateAtHead` says
+ *  `running`, or no row has reported at that head yet (`null`: the push is announced,
+ *  its checks not yet). `isCiUndecidedAtHead` is the one rule. */
 function runningMembersOf(
   openRows: ReadonlyArray<{ pullRequest: DeliveryWithChecks['pullRequest'] }>,
 ): RunningHead[] {
   return openRows
-    .filter((d) => prCiStateAtHead(d.pullRequest) === 'running')
+    .filter((d) => isCiUndecidedAtHead(d.pullRequest))
     .map((d) => ({ pullRequestId: d.pullRequest.id, headSha: pullRequestHead(d.pullRequest) }));
 }
 
@@ -399,12 +406,15 @@ export async function evaluateRepair(
   }
   if (failing.length === 0) {
     const running = open.some((m) => m.ci === 'running');
+    // The REFUSAL is decided by `running` alone, exactly as before — a member with no row
+    // at its head is still `not_failing` to the claim. The undecided members ride along
+    // on both refusals for the stored To fix answer only (MOTIR-10310).
     return {
       ok: false,
       reason: running ? 'ci_running' : 'not_failing',
       runTargetKey: null,
       failing,
-      running: running ? runningMembersOf(openRows) : [],
+      running: runningMembersOf(openRows),
     };
   }
   return {

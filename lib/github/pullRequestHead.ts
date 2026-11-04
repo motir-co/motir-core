@@ -71,3 +71,15 @@ export function checkRowsAtHead<T extends PrCheckRunSlice>(pr: PullRequestHeadSl
 export function prCiStateAtHead(pr: PullRequestHeadSlice): PrCiState {
   return foldHeadCheckRows(checkRowsAtHead(pr));
 }
+
+/**
+ * Whether CI has NOT DECIDED at the pull request's head (MOTIR-10307 · MOTIR-10310): a check
+ * is running there, or none has reported there yet. The second is the window between a push
+ * the host announces (`synchronize`) and the first check row at the new commit — on that
+ * push the head has moved and nothing has decided, which is a pushed fix being checked, not
+ * a card with nothing wrong.
+ */
+export function isCiUndecidedAtHead(pr: PullRequestHeadSlice): boolean {
+  const state = prCiStateAtHead(pr);
+  return state === 'running' || state === null;
+}
