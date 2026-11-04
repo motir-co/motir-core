@@ -5480,9 +5480,9 @@ export const workItemRepository = {
       data: {
         resumeState: value.resumeState,
         resumeRunId: value.resumeRunId,
-        ...(value.resumeDetail === undefined
-          ? {}
-          : { resumeDetail: value.resumeDetail ?? Prisma.DbNull }),
+        // `undefined` leaves the stored snapshot as it is; `null` clears it to SQL NULL.
+        resumeDetail:
+          value.resumeDetail === undefined ? undefined : (value.resumeDetail ?? Prisma.DbNull),
       },
     });
   },
