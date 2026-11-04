@@ -36,12 +36,8 @@ const { designEvidenceService, designPrefix } =
   await import('@/lib/services/designEvidenceService');
 const { homeService } = await import('@/lib/services/homeService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
-const {
-  deliverySetHasCiStartedAfter,
-  readHeldGateVerdict,
-  recomputeWorkItemResumeState,
-  resumeStateService,
-} = await import('@/lib/services/resumeStateService');
+const { readHeldGateVerdict, recomputeWorkItemResumeState, resumeStateService } =
+  await import('@/lib/services/resumeStateService');
 const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 
 let fx: WorkItemFixture;
@@ -857,36 +853,6 @@ async function gatedLeaf() {
 }
 
 describe('moving again — CI started after the gated run ended (MOTIR-10308)', () => {
-  it('the pure rule: a row created after, or pending again after; nothing earlier', () => {
-    const at = new Date('2026-11-01T10:00:00Z');
-    const before = new Date('2026-11-01T09:00:00Z');
-    const later = new Date('2026-11-01T11:00:00Z');
-    const row = (createdAt: Date, updatedAt: Date, conclusion: string) => ({
-      createdAt,
-      updatedAt,
-      conclusion,
-    });
-    expect(deliverySetHasCiStartedAfter([], at)).toBe(false);
-    expect(
-      deliverySetHasCiStartedAfter([{ checkRuns: [row(before, before, 'success')] }], at),
-    ).toBe(false);
-    // Finished after the stop, but started before it: not a new start.
-    expect(deliverySetHasCiStartedAfter([{ checkRuns: [row(before, later, 'failure')] }], at)).toBe(
-      false,
-    );
-    // Exactly at the stop is not after it.
-    expect(deliverySetHasCiStartedAfter([{ checkRuns: [row(at, at, 'pending')] }], at)).toBe(false);
-    expect(
-      deliverySetHasCiStartedAfter(
-        [{ checkRuns: [] }, { checkRuns: [row(later, later, 'success')] }],
-        at,
-      ),
-    ).toBe(true);
-    expect(deliverySetHasCiStartedAfter([{ checkRuns: [row(before, later, 'pending')] }], at)).toBe(
-      true,
-    );
-  });
-
   it('a check row created after the stop clears it: listed under In progress, To resume one lower', async () => {
     const { leaf } = await gatedLeaf();
     const before = await homeService.tabCounts(hctx());
@@ -937,6 +903,94 @@ describe('moving again — CI started after the gated run ended (MOTIR-10308)', 
     await adminDb.githubCheckRun.update({
       where: { id: row!.id },
       data: { conclusion: 'pending' },
+    });
+    expect(await recompute(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
+  });
+
+  it("the run's OWN last push, still being checked at the stop, does not clear it — a later re-run does", async () => {
+    // The run pushed, then stopped at its gate while that push's CI was still running.
+    const leaf = await card('own push still checking', { kind: 'task' });
+    const pr = await deliveredPr(fx, leaf.id, await connectRepairRepo(fx, 'motir-core'), {
+      headRef: `subtask/${leaf.identifier}`,
+      checks: { Build: 'pending' },
+    });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        cards: [{ key: leaf.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await gate(leaf);
+    await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+    const waiting = { resumeState: 'waiting_on_gate', resumeRunId: run.id };
+    expect(await stateOf(leaf.id)).toEqual(waiting);
+
+    // That CI goes on after the stop: its pending row is written again (in progress), and
+    // a job that waited on the build gets its first row — both AFTER `endedAt`.
+    const [build] = await adminDb.githubCheckRun.findMany({ where: { pullRequestId: pr.id } });
+    await adminDb.githubCheckRun.update({
+      where: { id: build!.id },
+      data: { conclusion: 'pending' },
+    });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: pr.id,
+        commitSha: build!.commitSha,
+        checkName: 'Vitest',
+        conclusion: 'pending',
+      },
+    });
+    expect(await recompute(leaf.id)).toEqual(waiting);
+
+    // It finishes: still the run's own CI, still waiting.
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id },
+      data: { conclusion: 'success' },
+    });
+    expect(await recompute(leaf.id)).toEqual(waiting);
+
+    // A re-run of that settled CI is a start: the card is moving again.
+    await adminDb.githubCheckRun.update({
+      where: { id: build!.id },
+      data: { conclusion: 'pending' },
+    });
+    expect(await recompute(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
+
+    // …and it stays off through a status move and back: the snapshot latched.
+    await workItemsService.updateStatus(leaf.id, 'todo', fx.ctx);
+    await workItemsService.updateStatus(leaf.id, 'in_progress', fx.ctx);
+    expect(await stateOf(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
+  });
+
+  it('a push after the stop, with CI reported at the new head, clears it', async () => {
+    const leaf = await card('pushed after the stop', { kind: 'task' });
+    const pr = await deliveredPr(fx, leaf.id, await connectRepairRepo(fx, 'motir-core'), {
+      headRef: `subtask/${leaf.identifier}`,
+      checks: { Build: 'success' },
+    });
+    const { run } = await dispatchRunService.open(
+      {
+        projectKey: fx.projectIdentifier,
+        command: 'run',
+        reportedBy: 'cli',
+        cards: [{ key: leaf.identifier, disposition: 'queued' }],
+      },
+      fx.ctx,
+    );
+    await gate(leaf);
+    await dispatchRunService.close(run.id, { stopReason: 'gated' }, fx.ctx);
+    const waiting = { resumeState: 'waiting_on_gate', resumeRunId: run.id };
+
+    // The host announces the push; no check has reported at the new head yet.
+    const pushed = 'd'.repeat(40);
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: pushed } });
+    expect(await recompute(leaf.id)).toEqual(waiting);
+
+    await adminDb.githubCheckRun.create({
+      data: { pullRequestId: pr.id, commitSha: pushed, checkName: 'Build', conclusion: 'pending' },
     });
     expect(await recompute(leaf.id)).toEqual({ resumeState: null, resumeRunId: null });
   });

@@ -486,11 +486,17 @@ describe('Fixing — a dead run', () => {
 describe('Moving again — a gated card leaves To resume once CI starts after its run', () => {
   it('a check row created after the run ended clears it: off To resume, onto In progress', async () => {
     const s = await makeScenario('moving-start@example.com');
-    const { item } = await gatedCard(s, 'gated', 241);
+    const { item, headRef } = await gatedCard(s, 'gated', 241);
     const before = await whereIs(s, item.id);
     expect(before.tabs).toEqual(['to-resume']);
 
+    // CI at the head the run LEFT is the run's own push being checked (review of
+    // MOTIR-10305): not a start, the card still waits.
     await check(s, 241, 'sha-a', 'e2e', null);
+    expect((await stored(item.id)).resumeState).toBe('waiting_on_gate');
+
+    // A push after the stop, and its CI starting: the card is moving again.
+    await push(s, 241, headRef, 'sha-b');
 
     const after = await whereIs(s, item.id);
     expect((await stored(item.id)).resumeState).toBeNull();
@@ -535,7 +541,7 @@ describe('Moving again — a gated card leaves To resume once CI starts after it
 
   it('the continue claim answers exactly as it did: the gate still holds the run', async () => {
     const s = await makeScenario('moving-claim@example.com');
-    const { item } = await gatedCard(s, 'gated claim', 243);
+    const { item, headRef } = await gatedCard(s, 'gated claim', 243);
     const before = await workItemContinueService.claimContinue(
       s.project.id,
       item.identifier,
@@ -543,7 +549,7 @@ describe('Moving again — a gated card leaves To resume once CI starts after it
     );
     expect(before).toMatchObject({ outcome: 'not_continuable', reason: 'gate_awaiting' });
 
-    await check(s, 243, 'sha-a', 'e2e', null);
+    await push(s, 243, headRef, 'sha-b');
     expect((await stored(item.id)).resumeState).toBeNull();
 
     const after = await workItemContinueService.claimContinue(s.project.id, item.identifier, s.ctx);
@@ -659,12 +665,15 @@ describe('the backfills converge cards stored before the change', () => {
       where: { id: legacy.item.id },
       data: { fixDetail: legacyDetail },
     });
-    // (3) A gated card whose CI started after the run ended, stored before the exit existed.
+    // (3) A gated card pushed and checked after the run ended, whose CI event was never
+    //     processed: the PR moved and a pending row exists at the new head.
     const gated = await gatedCard(s, 'gated before', 273);
+    const gatedPr = await prId(s, 273);
+    await adminDb.githubPullRequest.update({ where: { id: gatedPr }, data: { headSha: 'sha-b' } });
     await adminDb.githubCheckRun.create({
       data: {
-        pullRequestId: await prId(s, 273),
-        commitSha: 'sha-a',
+        pullRequestId: gatedPr,
+        commitSha: 'sha-b',
         checkName: 'e2e',
         conclusion: 'pending',
       },

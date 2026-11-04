@@ -521,9 +521,10 @@ test.describe('Fixing on To fix, and a card that moves again leaves To resume', 
     await beat();
 
     await chapter(
-      'CI starts on its pull request — it leaves To resume, count one lower',
+      'A push starts CI on its pull request — it leaves To resume, count one lower',
       async () => {
-        await checks(page, gated, 'gated', 1, null);
+        // A push AFTER the stop: CI at the head the run left would be the run's own push.
+        await pushFix(page, gated, 'gated', 1);
         expect((await storedOf(gated)).resumeState).toBeNull();
         await expect
           .poll(() => badgeCount(page, en, toResume), { timeout: FIRST_PAINT_MS })
@@ -631,7 +632,7 @@ test.describe('Fixing on To fix, and a card that moves again leaves To resume', 
         timeout: FIRST_PAINT_MS,
       });
       const before = await badgeCount(page, zh, zhToResume);
-      await checks(page, gatedZh, 'gatedZh', 1, null);
+      await pushFix(page, gatedZh, 'gatedZh', 1);
       expect((await storedOf(gatedZh)).resumeState).toBeNull();
       await expect
         .poll(() => badgeCount(page, zh, zhToResume), { timeout: FIRST_PAINT_MS })
