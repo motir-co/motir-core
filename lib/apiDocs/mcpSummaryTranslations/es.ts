@@ -258,9 +258,9 @@ export const es: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Un elemento completo: descripción, estado, padre o Carpeta, hijos, aristas de dependencia, un veredicto de disponibilidad, los Errores vinculados a él, la última denegación que se le devolvió y dónde está su código aún sin fusionar.',
+      'Un elemento completo: descripción, estado, padre o Carpeta, hijos, aristas de dependencia, un veredicto de disponibilidad, los Errores vinculados a él, la última denegación que se le devolvió, dónde está su código aún sin fusionar y las páginas vinculadas a él con su decisión publicada.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

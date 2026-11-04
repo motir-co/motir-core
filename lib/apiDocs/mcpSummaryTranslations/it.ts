@@ -259,9 +259,9 @@ export const it: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Un elemento per intero: descrizione, stato, genitore o Cartella, figli, archi di dipendenza, un verdetto di prontezza, gli errori collegati, l’ultimo rifiuto rimandato indietro su di esso e dove si trova il suo codice non ancora unito.',
+      'Un elemento per intero: descrizione, stato, genitore o Cartella, figli, archi di dipendenza, un verdetto di prontezza, gli errori collegati, l’ultimo rifiuto rimandato indietro su di esso, dove si trova il suo codice non ancora unito e le pagine collegate con la sua decisione pubblicata.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

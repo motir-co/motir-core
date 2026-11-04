@@ -256,9 +256,9 @@ export const nl: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Eén item in zijn geheel — beschrijving, status, bovenliggend item of Map, onderliggende items, afhankelijkheidsrelaties, een gereedheidsoordeel, de gekoppelde fouten, de laatste weigering die erop is teruggestuurd en waar zijn nog niet gemergede code staat.',
+      'Eén item in zijn geheel — beschrijving, status, bovenliggend item of Map, onderliggende items, afhankelijkheidsrelaties, een gereedheidsoordeel, de gekoppelde fouten, de laatste weigering die erop is teruggestuurd, waar zijn nog niet gemergede code staat, en de gekoppelde pagina’s met zijn gepubliceerde besluit.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

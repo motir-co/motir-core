@@ -526,7 +526,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // the reason the last attempt was sent back (with its verdict) — the refusal the
     // next run is told to address, so the line names it.
     summary:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
     // Re-pinned for MOTIR-6580, summary UNCHANGED: the text block gains the
     // Supersedes / Superseded by link groups — two more edge groups, which the
     // summary's "dependency edges" already covers without enumerating groups.
@@ -544,7 +544,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-10069, summary WIDENED: the payload declares `inFlightCode`
     // and `mergedRepos`, where the item's unmerged code is (its own pull request or a
     // parent's) — a new question the tool answers, so the line names it.
-    descriptionFingerprint: '5e2545bb6213',
+    // Re-pinned for MOTIR-10315, summary WIDENED: the payload declares `pages`, the
+    // pages linked to the item with its latest decision publication marked — a new
+    // question the tool answers (is this decision already settled?), so the line names it.
+    descriptionFingerprint: 'b776ef683889',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.

@@ -257,9 +257,9 @@ export const pl: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Jeden element w całości — opis, status, element nadrzędny lub folder, elementy podrzędne, krawędzie zależności, werdykt gotowości, powiązane z nim błędy, ostatnie odrzucenie odesłane w jego sprawie i miejsce, w którym leży jego jeszcze niescalony kod.',
+      'Jeden element w całości — opis, status, element nadrzędny lub folder, elementy podrzędne, krawędzie zależności, werdykt gotowości, powiązane z nim błędy, ostatnie odrzucenie odesłane w jego sprawie, miejsce, w którym leży jego jeszcze niescalony kod, oraz powiązane z nim strony wraz z opublikowaną decyzją.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:
