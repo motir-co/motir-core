@@ -200,6 +200,21 @@
   Additive, nothing struck. `agent-authored-plans.md` AMENDMENT 23's 2026-10-10
   sub-amendment is its other half.
 
+- **AMENDED 2026-11-04 (MOTIR-10329, for Story MOTIR-10327), at §8's FOURTH
+  AMENDMENT points 2 and 9, and at §12 — the REVIEW PATH.** The review agent
+  gains a SOURCE (Motir's hosted agent, or the person's own agent through a
+  user-token verdict door), an agent's send-back makes the card To fix whether
+  or not the review gate is on, a person may Dismiss it, and Motir's own GitHub
+  App bot posts every agent verdict on the pull requests — never Approve, never
+  in a person's name. Three sentences are reversed and struck with this date:
+  point 9's _"Motir posts no review, comment or status to GitHub"_, §12.1 / §12.3's
+  _never listed_ and _never through the MCP_, and §12.9's _"Motir still posts
+  nothing to GitHub"_. The rules are §12.10–§12.16. **Who decided what:** the
+  requester's decisions D1–D10 (Yue, 2026-11-04, on the requirement page
+  _Review from In review to Done_) are marked **DECIDED BY THE REQUESTER**; the
+  mechanics this record fixes so the sibling cards agree are marked **DECIDED
+  BY THE PLANNER**.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -4265,6 +4280,17 @@ record holds then, and why a null FK would be the wrong answer.
 > decision is safe in that direction: nothing is decided on an unverified
 > permission, and the person can still approve in Motir.
 >
+> **AMENDED 2026-11-04 (MOTIR-10329) — MOTIR'S OWN BOTS NEVER COUNT** (DECIDED BY
+> THE REQUESTER, D2). A fifth condition joins the list above: **its author is not
+> one of Motir's own GitHub App bots** — neither the Studio identity
+> (`motir-studio[bot]`) nor the Integration identity (`motir-integration[bot]`).
+> Since §12.16 those bots post every agent verdict on the pull requests; counted,
+> one agent would decide both the review gate and the approve-and-merge gate. A
+> bot review is never counted, never decides a gate, and **a bot's dismissal of
+> its own review is ignored** by the sync. Every other rule here — approved at
+> the head, latest countable review per reviewer, the write-permission floor — is
+> unchanged.
+>
 > **3. THE ACTOR** (rung 3: §6b's amendment, and §8's `decisionSource` line
 > above). Resolve the reviewer's GitHub user id through `GithubIdentity`
 > (`githubUserId @unique → userId`, `prisma/schema.prisma:6191-6192`), and accept
@@ -4336,11 +4362,29 @@ ApprovalGateAuthority` is `assignee | reporter | admin`,
 > running is therefore not lost**, and the reviewer is not asked a second time —
 > which is the whole promise of row 4b.
 >
-> **9. ONE-DIRECTIONAL.** Motir posts **no review, comment or status to GitHub**
-> from any approval path. Approving in Motir must not write into a customer's
+> **9. ONE-DIRECTIONAL.** ~~Motir posts **no review, comment or status to GitHub**
+> from any approval path.~~ **Struck 2026-11-04 (MOTIR-10329) by the requester's
+> D2 — restated below.** Approving in Motir must not write into a customer's
 > review history: their GitHub record is theirs, and a Motir press is not a review
 > by the person whose token Motir holds. Asserted by the ABSENCE of the call, not
 > by a comment.
+>
+> **AMENDED 2026-11-04 (MOTIR-10329) — what point 9 now says** (DECIDED BY THE
+> REQUESTER, D2; the mechanics by the planner, §12.16):
+>
+> - **No APPROVAL path posts anything.** A press in Motir — Approve and merge,
+>   Request changes, Continue without the review, Dismiss the review — and a
+>   synced GitHub approval post no review, comment or status. The reason above
+>   still holds, and is still asserted by the absence of the call.
+> - **Nothing is ever written in a person's name.** No post goes out from a
+>   person's GitHub account or with a token Motir holds for a person.
+> - **The ONE exception is the agent-verdict post.** After an agent's verdict is
+>   recorded (§12.11 — any source, review gate on or off), Motir's own GitHub
+>   App bot posts it on each open pull request of the set: _Request changes_ on a
+>   send-back where GitHub allows it, otherwise a comment; a comment on a pass;
+>   **never Approve**. Its rules — the body, one review per pull request per
+>   version, the bot dismissing its own earlier Request changes, retries, and the
+>   per-project switch — are §12.16, and only there.
 >
 > **10. `auto` MODE.** No gate is raised (§7a), so a review is **recorded and
 > decides nothing**; the merge there is the automatic one, unchanged
@@ -6100,12 +6144,19 @@ MOTIR-6816 / MOTIR-6817 with their builds MOTIR-6823 / MOTIR-6825.
   it, with no new index.
 - **It is CARDLESS FOR ROUTING.** `routedToId` is written by §2's rule
   (`assigneeId ?? reporterId`) as for every card gate, because 12.3's override
-  is that person's. But the gate asks the AGENT, not the person, so it **never
-  appears on a person's To approve list and raises no notification**: the
+  is that person's. But the gate asks the AGENT, not the person, so it ~~**never
+  appears on a person's To approve list and raises no notification**~~: the
   awaiting-routed read (`awaitingRoutedToWhere`,
   `lib/repositories/approvalGateRepository.ts`) excludes the kind, as it already
   excludes a carried merge gate. The person meets it on the card, in the
   Development frame, and only there.
+  - **AMENDED 2026-11-04 (MOTIR-10329) — the rule above holds for the source
+    `hosted` ONLY** (DECIDED BY THE REQUESTER, R4). With the source `own`
+    (§12.10) nothing starts a review by itself, so a person has to act: the
+    awaiting `agent_review` gate **is listed on the routed person's To approve
+    as a review to run — not as an approval — and notifies them ONCE**, when it
+    is raised. With the source `hosted` it is still never listed and never
+    notified.
 
 **The KIND table's row** (§1's MOTIR-4911 amendment):
 
@@ -6115,15 +6166,15 @@ MOTIR-6816 / MOTIR-6817 with their builds MOTIR-6823 / MOTIR-6825.
 
 **The REGISTRY row** (§1's handler table):
 
-| a handler supplies              | for `agent_review`                                                                                                                |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| how to resolve the SUBJECT      | the run target's delivery set at `subjectVersion`, the same members the approve-and-merge gate resolves                           |
-| who it ROUTES to                | §2's rule, written for 12.3's override only — never listed or notified (above)                                                    |
-| which PERMISSION authorises it  | the agent: the review run's token on the verdict route (12.3). A person: `work_item:edit`, the approve-and-merge gate's own floor |
-| which STATUS TRANSITION it owns | **none.** A pass raises the ordinary flow, which owns its own writes; a refusal writes nothing (12.4)                             |
-| what `approve` DOES             | raises the ordinary flow for the SAME version (12.4)                                                                              |
-| what `request_changes` DOES     | records the findings; the card is To fix `changes_requested`; nothing moves and nothing re-runs (12.4)                            |
-| what to RETAIN on approval      | nothing — the findings are text on the row, and the commits are durable on the host                                               |
+| a handler supplies              | for `agent_review`                                                                                                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| how to resolve the SUBJECT      | the run target's delivery set at `subjectVersion`, the same members the approve-and-merge gate resolves                                                                                                                   |
+| who it ROUTES to                | §2's rule, written for 12.3's override only — never listed or notified (above) ~~with no exception~~; **since 2026-11-04 listed as a review to run and notified once when the source is `own` (12.1, 12.10)**             |
+| which PERMISSION authorises it  | the agent: the review run's token on the verdict route (12.3), **or, since 2026-11-04, a user token at `work_item:edit` on the verdict door (12.11)**. A person: `work_item:edit`, the approve-and-merge gate's own floor |
+| which STATUS TRANSITION it owns | **none.** A pass raises the ordinary flow, which owns its own writes; a refusal writes nothing (12.4)                                                                                                                     |
+| what `approve` DOES             | raises the ordinary flow for the SAME version (12.4)                                                                                                                                                                      |
+| what `request_changes` DOES     | records the findings; the card is To fix `changes_requested`; nothing moves and nothing re-runs (12.4)                                                                                                                    |
+| what to RETAIN on approval      | nothing — the findings are text on the row, and the commits are durable on the host                                                                                                                                       |
 
 #### 12.2 WHEN it is raised — the green verdict, INSTEAD of the ordinary flow
 
@@ -6213,9 +6264,13 @@ without it, on the record.
 
 - **The review agent**, under a new authority member
   **`ApprovalGateAuthority.review_agent`**. It decides through the run-token
-  verdict route `POST /api/v1/work-items/{key}/agent-review`, never through the
-  MCP, because a run token is refused by the MCP (`lib/mcp/auth.ts`, the
-  `dispatchRunId` arm). The route accepts a verdict only from the token of a
+  verdict route `POST /api/v1/work-items/{key}/agent-review`~~, never through the
+  MCP~~, because a run token is refused by the MCP (`lib/mcp/auth.ts`, the
+  `dispatchRunId` arm). **Struck 2026-11-04 (MOTIR-10329), by the requester's R1:**
+  an agent that is NOT Motir's hosted run decides it through the user-token
+  verdict door, `submit_review_verdict` on the MCP and
+  `POST /api/v1/work-items/{key}/review-verdict` (§12.11). The run-token route
+  stays the hosted run's only door, and a run token is still refused by the MCP. The route accepts a verdict only from the token of a
   `review` run opened for THIS gate (`hosted-agent-run.md` §8). `decidedById` is
   the run's attributed user (§8 there), and the authority column is what says a
   machine decided — the same honesty §7a asks of `auto`: the row does not claim
@@ -6229,7 +6284,9 @@ without it, on the record.
   needs its reason). The row then says _a person continued without the review,
   and why_ — never that the agent passed it.
 - **Nobody else.** No other door decides the kind; a GitHub review does not
-  (12.2).
+  (12.2) — and since 2026-11-04 neither does a review Motir's own bot posted
+  (§8's FOURTH AMENDMENT point 2, amended). The verdict door of §12.11 is the
+  agent's second door, not a third decider.
 
 #### 12.4 WHAT each decision does
 
@@ -6290,6 +6347,12 @@ in 12.9 (_"a hosted `motir fix` … is its own ask"_) for exactly this populatio
   `ApprovalGateSupersedeCause` it already writes, and no decision field is
   touched (§6b). The next all-green verdict raises a fresh review at the new
   version (12.2).
+- **AMENDED 2026-11-04 (MOTIR-10329) — a new supersede cause,
+  `agent_changes_requested`** (DECIDED BY THE REQUESTER, D8; the name by the
+  planner). It sits beside `review_agent_disabled` in
+  `ApprovalGateSupersedeCause` and is written on an awaiting
+  `pull_request_approval` gate when an agent's send-back stands at that gate's
+  version — gate on or off. §12.14 owns when it is written.
 - **Switching the review agent OFF** supersedes every awaiting `agent_review`
   in the project, under a cause of its own (`review_agent_disabled`), and, for
   each run target whose current set is green, raises the ordinary flow for the
@@ -6312,8 +6375,20 @@ in 12.9 (_"a hosted `motir fix` … is its own ask"_) for exactly this populatio
   rule above), its credential is revoked with it, so the late verdict is
   refused at authentication and nothing is recorded — the run's own cancelled
   close is the record (MOTIR-6826 found this; amended 2026-09-29).
+- **AMENDED 2026-11-04 (MOTIR-10329):** the late-verdict rule above extends to
+  the user-token verdict door. A verdict through that door about a version that
+  is no longer current is LATE, and a verdict at a version already decided is
+  SECOND; neither decides anything, and both are written to the card's activity
+  (§12.13).
 
 #### 12.6 A review that CANNOT RUN
+
+**AMENDED 2026-11-04 (MOTIR-10329) — a HOSTED-only state** (DECIDED BY THE
+PLANNER). Everything below is about the hosted review run. With the source `own`
+(§12.10) no run is started, so nothing can fail to run: the gate waits for a
+verdict through the door (§12.11), listed as a review to run (§12.1), and
+_Continue without the review_ (§12.3) stays its escape. _Review again_ is not
+offered for the source `own`.
 
 A review cannot run when the start is **refused before anything boots** — the
 organisation has no agent credits, no model is offered (`hosted-agent-run.md`
@@ -6352,6 +6427,195 @@ acceptance Re-run keeps its own repair.
 **§10h's `pull_request_approval` row** keeps _status written: none_; its repair
 is `motir fix`, not a run (12.7).
 
+**AMENDED 2026-11-04 (MOTIR-10329) — §10h gains a second `agent_review` row**, for
+the agent's send-back through the user-token door (§12.11):
+
+| kind · case                                  | refusal verb(s), reason REQUIRED (10a)                                                                                   | verdict at the press (10d) | status written by the refusal                                                                       | planner opens (10f)                   |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `agent_review` · the user-token verdict door | the agent's `changes_requested` through `submit_review_verdict`, findings REQUIRED and non-empty; gate on or off (12.14) | none                       | **none** — To fix `changes_requested`, repaired by `motir fix` or _Fix on the hosted agent_ (12.4b) | **none** — the findings are the brief |
+
+> **§12.10–§12.16 are the REVIEW PATH (MOTIR-10329, 2026-11-04, for Story
+> MOTIR-10327).** They follow §12.8 and precede §12.9, which stays the section's
+> boundary. Each rule is written once, here; the amended sentences above point
+> to them. The cards of Story MOTIR-10327 build against these numbers.
+
+#### 12.10 The review SOURCE — Motir's hosted agent, or your own — DECIDED BY THE REQUESTER (Yue, 2026-11-04, R1), mechanics by the planner
+
+- **`Project.reviewAgentEnabled` stays THE switch.** Whether a review is
+  required before the approval is asked is still that boolean, and §12.2's
+  trigger still reads it.
+- **When it is on, a second setting, `Project.reviewAgentSource`, says who
+  answers the gate**: **`hosted`** — the default, and today's behaviour: the
+  green verdict raises `agent_review` and a hosted review run starts
+  (`hosted-agent-run.md` §8) — or **`own`**: the green verdict raises the same
+  `agent_review` gate, **no hosted run starts and nothing is billed**, and the
+  gate waits for a verdict through the user-token door (§12.11). The value is
+  kept while the switch is off, so turning the switch back on restores the
+  source the project chose. (The requirement's open question 2 assumed hosted
+  as the default; the planner takes that.)
+- **§12.2a holds for BOTH values.** The review agent on, from either source,
+  excludes `auto` merging, with the same two typed refusals; changing the
+  source never touches the merge mode.
+- **Switching the source with a review AWAITING** (DECIDED BY THE PLANNER):
+  - **`hosted` → `own`** cancels the in-flight hosted review run of every
+    awaiting `agent_review` in the project (`DispatchRunStatus.cancelled`, as
+    12.5 cancels a superseded review's run) and **leaves each gate awaiting**,
+    clearing any _could not run_ reason (12.6 no longer applies). The gate is
+    now a review to run (12.1), and its routed person is notified once.
+  - **`own` → `hosted`** starts ONE hosted review run per awaiting
+    `agent_review` gate, for that gate and version, exactly as a fresh raise
+    would. A gate whose version an own-agent verdict already decided is not
+    awaiting, and starts nothing.
+  - The gate itself is never superseded or re-raised by a source change: its
+    question — _review this version_ — has not changed, only who answers it.
+- **The posting switch, `Project.reviewBotPostsEnabled`**, default **on**, is a
+  separate per-project setting, read whatever the review switch and source say
+  (§12.16).
+
+#### 12.11 The USER-TOKEN VERDICT DOOR — DECIDED BY THE REQUESTER (Yue, 2026-11-04, R1, D2), mechanics by the planner
+
+- **One MCP tool, `submit_review_verdict`, and one API route,
+  `POST /api/v1/work-items/{key}/review-verdict`**, take ONE verdict for one
+  run target, from a person's own token (a PAT, the MCP connector's OAuth, or a
+  session) — never a run token.
+- **The body:** the verdict, **`approved`** or **`changes_requested`**; the
+  **findings** (Markdown — required and non-empty for `changes_requested`,
+  optional for a pass); the **checklist** rows (each criterion with its card,
+  its result — met, not met or cannot tell — and its evidence); the
+  **delivery-set version** reviewed, in `deliverySetVersion`'s own form
+  (`owner/name#number@headSha`, sorted, comma-joined); and the **harness** and
+  **model** the review ran on.
+- **Who may call:** anyone holding **`work_item:edit`** on the card — not only
+  its assignee (R1: a teammate's agent may review). The row records who
+  submitted.
+- **The key must be a RUN TARGET** (`resolveRunTarget`, 12.1). Any other card is
+  refused, and the refusal names the run target to review instead.
+- **The row it writes** carries authority **`review_agent`**, with
+  `decidedById` the submitting user and the harness and model on the row, so it
+  never reads as a person's approval. **It never decides `pull_request_approval`**:
+  the approve-and-merge gate is still decided only by a person's press or by
+  §8's review sync.
+- **The run-token route `POST /api/v1/work-items/{key}/agent-review` stays
+  HOSTED-only**, and a run token stays refused by the MCP. The two doors share
+  every rule from §12.12 on; they differ only in who may call them.
+- **What the verdict does** is §12.12; when it is late or second, §12.13.
+
+#### 12.12 GATE ON and GATE OFF — what a verdict DECIDES — DECIDED BY THE REQUESTER (Yue, 2026-11-04, R1, D7)
+
+- **Gate ON** (`reviewAgentEnabled`, either source). The verdict **decides the
+  awaiting `agent_review` gate** at its version, exactly as 12.4 says, whichever
+  door it came through. A hosted review run still in flight for that gate is
+  **cancelled** when the door decides it, because its answer can no longer
+  decide anything. A pass raises the ordinary flow at the same version (12.4); a
+  send-back follows 12.4 and §12.14.
+- **Gate OFF.** The switch decides whether a review is **required before** the
+  approval is asked, not whether anyone may review (D7). A verdict is stored as
+  a **REVIEW RECORD** on the run target at that version. A pass decides and
+  moves nothing — it is shown on the approval and as the Reviewed badge; a
+  send-back applies §12.14.
+- **The review record** (its storage shape is the door card's, DECIDED BY THE
+  PLANNER only as to what it must carry): the **verdict**, the **findings**, the
+  **checklist**, the **delivery-set version**, the **submitter**, the
+  **authority** (`review_agent`), the **harness** and the **model**, and the
+  time. It is readable by the card's activity and by the approval record
+  (`ApprovalRecordsList`), so a Done card answers _was this reviewed, and by
+  whom_. A decided `agent_review` gate row is the gate-on twin of the same
+  record, and both surfaces read the two alike.
+
+#### 12.13 LATE and SECOND verdicts — DECIDED BY THE REQUESTER (Yue, 2026-11-04, R1), extending §12.5 and §8 point 7
+
+- **LATE:** a verdict whose version is not the run target's CURRENT
+  delivery-set version.
+- **SECOND:** a verdict at a version that already has a decided review — an
+  `agent_review` gate decided by anyone, or a review record.
+- **Neither decides anything, moves nothing and raises nothing** — and neither
+  is discarded. Each is **written to the card's activity**, marked late or
+  second, so the history shows every verdict at every version. The answer to
+  the caller names the reason (`late` or `second`). §12.5's rule for the hosted
+  route is unchanged; this is the same rule for the user-token door.
+
+#### 12.14 A SEND-BACK, gate ON or OFF — To fix, never an approval row — DECIDED BY THE REQUESTER (Yue, 2026-11-04, D8)
+
+An agent's `changes_requested` at the current version, from either door and
+either source, with the gate on or off:
+
+- **The card is To fix `changes_requested`**, with the findings as the reason.
+  `lib/workItems/fixReason.ts` reads a **standing agent send-back at the current
+  version** — the decided `agent_review` row, or the review record — as it reads
+  the gate's refusal in 12.4. The repair is `motir fix <KEY>` or _Fix on the
+  hosted agent_ (12.4b).
+- **No status moves.**
+- **Any awaiting `pull_request_approval` gate at that version is superseded**
+  under the cause **`agent_changes_requested`** (12.5), so the card leaves To
+  approve.
+- **While the send-back stands, the approve-and-merge gate is not re-raised at
+  that version** — `resolveGateSet` (`lib/approvalGates/gateSet.ts`) answers
+  _no merge question_ for a version with a standing agent send-back, so no
+  reconcile path, tick or withdrawal re-raise puts it back (12.2a's one-place
+  rule).
+- **A head move ends it**, as it ends every other refusal (12.5). The next green
+  version is reviewed (gate on) or asked for approval (gate off) as usual.
+- **The assignee is notified once** of the send-back, as a To fix arrival is.
+
+#### 12.15 DISMISS THE REVIEW — DECIDED BY THE REQUESTER (Yue, 2026-11-04, R1), mechanics by the planner
+
+- **Who:** the routed person — the 12.3 authority set (`resolveGateAuthority`:
+  the assignee, the reporter when there is no assignee, or
+  `approval:decide_any`) — at the `work_item:edit` floor.
+- **What:** a standing agent send-back at the CURRENT version, for **either gate
+  state** and **either source**, with a **REQUIRED reason** (10a's rule).
+- **The decided review row is NOT edited** (`trg_approval_gate_decided_immutable`
+  would refuse it anyway). The dismissal is **its own record**, naming the
+  person, the time, the reason and the version it dismissed.
+- **What it does:** it **clears To fix** (the send-back no longer stands), and
+  **raises the approve-and-merge gate at the same version** through the one
+  reconcile path (`reconcileGatesFor`), so the card is back on To approve. The
+  review line reads _Review dismissed by <name>_ with the reason.
+- **Its counterpart is 12.3's _Continue without the review_**, which acts on an
+  AWAITING `agent_review` gate. Dismiss acts on a DECIDED send-back. Neither is
+  offered where the other applies.
+- **With posting on**, the bot dismisses its own Request changes on each pull
+  request (§12.16).
+
+#### 12.16 BOT-POSTED VERDICTS on the pull requests — DECIDED BY THE REQUESTER (Yue, 2026-11-04, D2, R2), mechanics by the planner
+
+This is the one exception §8's FOURTH AMENDMENT point 9 (amended) names, and the
+only place its rules live.
+
+- **When:** after an agent's verdict is RECORDED and its transaction has
+  committed — any source, gate on or off, from either door. A late or second
+  verdict (12.13) posts nothing.
+- **Who posts:** Motir's own GitHub App bot, through the App installation token
+  — `motir-studio[bot]` on a Motir-created repository, `motir-integration[bot]`
+  on an imported one. **Never from a person's account**, and never with a token
+  Motir holds for a person.
+- **What, on each OPEN pull request of the set:**
+  - a send-back posts **Request changes** where GitHub allows it. GitHub refuses
+    an App's Request changes on a pull request the same App authored; there it
+    posts a **comment**;
+  - a pass posts a **comment**;
+  - **never Approve** — an App's approval may satisfy a customer's branch
+    protection and let the pull request merge with no person having approved.
+- **The body** carries the verdict, the checklist summary, the findings and a
+  link to the card.
+- **One review per pull request per version.** A repeated verdict at the same
+  head posts nothing.
+- **The bot dismisses its own earlier Request changes** on each pull request,
+  with a one-line reason linking the card, **when a later version passes**, **when
+  a person Dismisses the review** (12.15), and **when the posting switch is
+  turned off**. A Request changes from an account with write access blocks a
+  merge under branch protection, and GitHub does not make it stale on a push, so
+  otherwise Motir's own merge would be refused by a review only its bot can clear.
+- **Retried, and never load-bearing.** Posting runs after the verdict commits and
+  is retried; a failure never changes, delays or reverses the verdict, the gate
+  or the To fix state.
+- **The switch: `Project.reviewBotPostsEnabled`, default ON.** Off, nothing is
+  posted (and the dismissals above run once). The verdict is recorded either
+  way.
+- **The sync ignores these reviews** (§8's FOURTH AMENDMENT point 2, amended), so
+  one agent never decides both gates.
+- **GitHub only.** GitLab's half is MOTIR-5593's.
+
 #### 12.9 What this section does NOT decide
 
 - **The review RUN** — its command, mode, attribution, billing, credential,
@@ -6361,8 +6625,17 @@ is `motir fix`, not a run (12.7).
   row. MOTIR-6816 and MOTIR-6817 draw them.
 - **Merge mode, the approve-and-merge gate, its press and the merge** (§4, §7,
   §8; MOTIR-4909, MOTIR-4882). Consumed, not re-decided.
-- **GitHub review sync** (§8's FOURTH AMENDMENT; MOTIR-4910). Motir still posts
-  nothing to GitHub, and the agent's review lives in Motir only.
+- **GitHub review sync** (§8's FOURTH AMENDMENT; MOTIR-4910). ~~Motir still posts
+  nothing to GitHub, and the agent's review lives in Motir only.~~ **Struck
+  2026-11-04 (MOTIR-10329) by the requester's D2:** the agent's verdict is
+  recorded in Motir first and Motir's own App bot posts it on the pull requests
+  (§12.16, and §8's FOURTH AMENDMENT point 9 as amended); no approval path posts
+  anything, and nothing is posted in a person's name. The sync's own rules are
+  unchanged apart from ignoring Motir's bots (point 2, amended).
+- **The review SKILL's method, the reverse pull-request lookup, the hosted
+  prompt's checklist and the words and layout of the review path** (added
+  2026-11-04). The skill is motir-skills' `motir-review`; the hosted prompt is
+  `hosted-agent-run.md` §8.2; the surfaces are the review-path delta mocks.
 - **Automatic re-runs after any review.** Deliberately none. The design-only
   automatic re-run is Story 9.2's (§10g).
 - ~~**A hosted `motir fix`.** The hosted launcher runs `run`, `continue` and, after
