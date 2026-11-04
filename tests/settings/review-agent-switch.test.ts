@@ -146,6 +146,8 @@ describe('the review agent switch — read and write (MOTIR-6818)', () => {
       acceptanceVideoEnabled: false,
       reviewAgentEnabled: true,
       designApprovalGate: true,
+      reviewAgentSource: 'hosted',
+      reviewBotPostsEnabled: true,
     });
     expect(await stored(s.project.id)).toMatchObject({
       reviewAgentEnabled: true,

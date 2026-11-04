@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 //
 //   agent-review:<gateId>:raise              the gate's raise (MOTIR-6819's emit)
 //   agent-review:<gateId>:again:<uuid>       one *Review again* press
+//   agent-review:<gateId>:source:<uuid>      a switch of the source to `hosted` (§12.10)
 //
 // So a redelivered event opens nothing twice (`dispatch_run`'s
 // `(workspace_id, idempotency_key)` unique), a *Review again* is a NEW attempt with a key
@@ -31,6 +32,16 @@ export function reviewRaiseKey(gateId: string): string {
 /** A fresh request key for ONE *Review again* press. */
 export function reviewAgainKey(gateId: string): string {
   return `${reviewRunKeyPrefix(gateId)}again:${randomUUID()}`;
+}
+
+/**
+ * A fresh request key for the start a SOURCE SWITCH (`own` → `hosted`, `approval-gates.md`
+ * §12.10) asks for. Fresh rather than {@link reviewRaiseKey}, because a gate whose raise
+ * run was cancelled by an earlier `hosted` → `own` switch already holds the raise key, and
+ * reusing it would read as *already started*.
+ */
+export function reviewSourceKey(gateId: string): string {
+  return `${reviewRunKeyPrefix(gateId)}source:${randomUUID()}`;
 }
 
 /** The gate a review run's idempotency key names, or null for any other key. */

@@ -1993,6 +1993,18 @@ model Project {
   /// a review is a hosted run paid from the organisation's AI credits, so no
   /// existing project starts paying for one. Nothing is backfilled.
   reviewAgentEnabled               Boolean               @default(false) @map("review_agent_enabled")
+  /// WHO answers the review while `reviewAgentEnabled` is on (Story MOTIR-10327 ·
+  /// MOTIR-10332; `approval-gates.md` §12.10): `hosted` starts a hosted review run
+  /// for every raised `agent_review` gate, as before; `own` raises the same gate,
+  /// starts NO run and bills nothing, and the gate waits for a verdict through the
+  /// user-token door. Kept while the switch is off, so turning it back on restores
+  /// the project's choice. The §12.2a exclusion with `auto` merging reads the
+  /// switch, so it holds for both values.
+  reviewAgentSource                ReviewAgentSource     @default(hosted) @map("review_agent_source")
+  /// Whether Motir's own GitHub App bot posts every agent verdict on the pull
+  /// requests (Story MOTIR-10327 · MOTIR-10332; `approval-gates.md` §12.16). ON by
+  /// default; the verdict is recorded in Motir either way.
+  reviewBotPostsEnabled            Boolean               @default(true) @map("review_bot_posts_enabled")
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
@@ -2725,6 +2737,16 @@ enum PrMergeMode {
   manual
 
   @@map("pr_merge_mode")
+}
+
+/// Who answers a project's `agent_review` gate (Story MOTIR-10327 · MOTIR-10332;
+/// `approval-gates.md` §12.10). `hosted`: Motir's hosted review run. `own`: the
+/// person's own agent through `submit_review_verdict`; nothing starts by itself.
+enum ReviewAgentSource {
+  hosted
+  own
+
+  @@map("review_agent_source")
 }
 
 /// WHAT AUTHORISED a merge Motir performed (Story MOTIR-4882 · MOTIR-5520;

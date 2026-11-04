@@ -1,3 +1,4 @@
+import type { Prisma, ReviewAgentSource } from '@/generated/prisma/client';
 import { FLEET_CONTAINER_SIZE, type TeardownReason } from '@motir/orchestrator';
 import { assertWorkspaceFeatureEnabled } from '@/lib/featureFlags/evaluate';
 import { checkAgentRunCredits, type AgentModel } from '@/lib/ai/motirAiClient';
@@ -1123,6 +1124,17 @@ async function startReview(
  * only over no reason (a refusal its start recorded is the more specific one). Never a
  * throw: the end path must finish.
  */
+/** The review source of the project a gate belongs to, or null when the gate is gone. */
+async function reviewSourceOfGate(
+  gateId: string,
+  tx: Prisma.TransactionClient,
+): Promise<ReviewAgentSource | null> {
+  const gate = await approvalGateRepository.findById(gateId, tx);
+  if (!gate) return null;
+  const settings = await projectRepository.findMergeSettings(gate.projectId, tx);
+  return settings?.reviewAgentSource ?? null;
+}
+
 async function recordReviewEnd(run: {
   id: string;
   workspaceId: string;
@@ -1133,11 +1145,21 @@ async function recordReviewEnd(run: {
   const gateId = gateIdOfReviewRunKey(run.idempotencyKey);
   if (!gateId) return;
   try {
-    await withWorkspaceServiceContext(run.workspaceId, (tx) =>
-      approvalGateRepository.setReviewUnavailableReason(gateId, REVIEW_NO_VERDICT_REASON, tx, {
-        onlyWhenUnset: true,
-      }),
-    );
+    await withWorkspaceServiceContext(run.workspaceId, async (tx) => {
+      // A run cancelled by a switch of the source to `own` ends here too, after the
+      // switch cleared the gate's reason: could-not-run is a HOSTED-only state
+      // (`approval-gates.md` §12.6), so it is not written back onto a gate whose
+      // project now reviews with its own agent.
+      if ((await reviewSourceOfGate(gateId, tx)) === 'own') return;
+      await approvalGateRepository.setReviewUnavailableReason(
+        gateId,
+        REVIEW_NO_VERDICT_REASON,
+        tx,
+        {
+          onlyWhenUnset: true,
+        },
+      );
+    });
   } catch (err) {
     /* v8 ignore next 4 -- a database fault mid end-path; the run's own close stands */
     console.error('[hostedRunService] could not record the review run’s end on its gate', {

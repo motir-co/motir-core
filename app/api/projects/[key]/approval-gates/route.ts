@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server';
 import { projectsService } from '@/lib/services/projectsService';
 import { approvalGateSettingsService } from '@/lib/services/approvalGateSettingsService';
 import {
+  InvalidReviewAgentSourceError,
   PermissionDeniedError,
   ProjectNotFoundError,
   ReviewAgentNeedsManualMergeError,
 } from '@/lib/projects/errors';
-import type { UpdateApprovalGateSettingsInput } from '@/lib/dto/approvalGateSettings';
+import {
+  REVIEW_AGENT_SOURCES,
+  type ReviewAgentSourceValue,
+  type UpdateApprovalGateSettingsInput,
+} from '@/lib/dto/approvalGateSettings';
 import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSession';
 
 // GET / PATCH /api/projects/[key]/approval-gates (Story MOTIR-4925 · Subtask
@@ -106,6 +111,28 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
     }
     patch.designApprovalGate = raw.designApprovalGate;
   }
+  if ('reviewAgentSource' in raw) {
+    const source = raw.reviewAgentSource;
+    if (
+      typeof source !== 'string' ||
+      !(REVIEW_AGENT_SOURCES as readonly string[]).includes(source)
+    ) {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`reviewAgentSource` must be "hosted" or "own".' },
+        { status: 400 },
+      );
+    }
+    patch.reviewAgentSource = source as ReviewAgentSourceValue;
+  }
+  if ('reviewBotPostsEnabled' in raw) {
+    if (typeof raw.reviewBotPostsEnabled !== 'boolean') {
+      return NextResponse.json(
+        { code: 'BAD_REQUEST', error: '`reviewBotPostsEnabled` must be a boolean.' },
+        { status: 400 },
+      );
+    }
+    patch.reviewBotPostsEnabled = raw.reviewBotPostsEnabled;
+  }
 
   try {
     const project = await projectsService.getByKey(key, ctx);
@@ -117,6 +144,10 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
     }
     if (err instanceof ReviewAgentNeedsManualMergeError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });
+    }
+    /* v8 ignore next 3 -- the transport refuses a bad source first; this is the service's own guard */
+    if (err instanceof InvalidReviewAgentSourceError) {
+      return NextResponse.json({ code: 'BAD_REQUEST', error: err.message }, { status: 400 });
     }
     if (err instanceof PermissionDeniedError) {
       return NextResponse.json(
