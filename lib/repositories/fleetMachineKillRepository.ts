@@ -51,6 +51,22 @@ export const fleetMachineKillRepository = {
     });
   },
 
+  /**
+   * ONE organisation's kill record since `since`, NEWEST FIRST — the org Fleet
+   * page's "Stopped by Motir" list. Unpaged: the window is seven days of one
+   * org's machines. Rides `[organization_id, decided_at]`.
+   */
+  async listSinceForOrganization(
+    organizationId: string,
+    since: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<FleetMachineKill[]> {
+    return tx.fleetMachineKill.findMany({
+      where: { organizationId, decidedAt: { gte: since } },
+      orderBy: [{ decidedAt: 'desc' }, { id: 'desc' }],
+    });
+  },
+
   /** How many kills were decided since `since` — the list's total. */
   async countSince(since: Date, tx: Prisma.TransactionClient): Promise<number> {
     return tx.fleetMachineKill.count({ where: { decidedAt: { gte: since } } });

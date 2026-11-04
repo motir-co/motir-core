@@ -577,6 +577,26 @@ export const ciRunnerProvisioningIntentRepository = {
   },
 
   /**
+   * Every intent ONE ORGANISATION has open — waiting for a container or in
+   * flight — OLDEST QUEUED FIRST: the org Fleet page's CI jobs, one row each.
+   * Unbounded for the same reason as {@link listInFlightForOrganization}: the
+   * org's pool bounds what is in flight, and its plan figure what waits. Rides
+   * `[organization_id, status]`.
+   */
+  async listOpenForOrganization(
+    organizationId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<CiRunnerProvisioningIntent[]> {
+    return tx.ciRunnerProvisioningIntent.findMany({
+      where: {
+        organizationId,
+        status: { in: [CI_RUNNER_INTENT_PENDING, ...CI_RUNNER_INTENT_IN_FLIGHT] },
+      },
+      orderBy: [{ queuedAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * Every intent ONE ORGANISATION has in flight — the input of an org STOP
    * (MOTIR-6908, `fleetStopService.stopOrganization`). Unbounded on purpose: the
    * org's pool bounds it (500 by default), and a stop that tore down only the

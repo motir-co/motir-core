@@ -66,7 +66,8 @@ export const WAITING_BUCKET_BY_REASON: Record<AdmissionDeferralReason, WaitingBu
   gate_unavailable: 'other',
 };
 
-function bucketOf(reason: string | null): WaitingBucket {
+/** One waiting reason's bucket — the per-row form of {@link bucketWaitingReasons}. */
+export function waitingBucketOf(reason: string | null): WaitingBucket {
   if (reason === null || !Object.hasOwn(WAITING_BUCKET_BY_REASON, reason)) return 'other';
   return WAITING_BUCKET_BY_REASON[reason as AdmissionDeferralReason];
 }
@@ -77,7 +78,7 @@ export function bucketWaitingReasons(
   rows: ReadonlyArray<{ reason: string | null; count: number }>,
 ): FleetWaitingCounts {
   const out: FleetWaitingCounts = { planLimit: 0, poolFull: 0, other: 0 };
-  for (const row of rows) out[bucketOf(row.reason)] += row.count;
+  for (const row of rows) out[waitingBucketOf(row.reason)] += row.count;
   return out;
 }
 
