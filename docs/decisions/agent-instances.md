@@ -291,6 +291,41 @@ credits`). An instance's agent is signed in on the user's own credential, so no 
 - **Rejected:** reusing `ai:plan` or `work_item:edit`. Neither says _may run a billed machine on this
   project_, and a workspace could not grant one without the other.
 
+#### §8 AMENDMENT 8 — an organisation owner or admin may hibernate another member's instance (MOTIR-10364, 2026-11-04)
+
+Recorded on decision page MOTIR-10364, for Story MOTIR-10363 (_Org admins see what their organisation
+runs on the fleet, and can stop it_). **It changes one sentence of this section**, the fourth bullet's
+_no key, including a manager's, opens, wakes, hibernates or deletes someone else's instance_ — and only
+its _hibernates_ part. That sentence now reads: _no key, including a manager's, opens, wakes or deletes
+someone else's instance; hibernating one is allowed only to an owner or admin of the instance's own
+organisation, by role._
+
+- **Who.** The organisation's `owner` or `admin` role, and only them. The authority is the
+  ORGANISATION role, checked in the service (the owner/admin gate Billing & plans and Fleet use
+  already use, `billingService.assertCanViewBilling`), never in a route or page. It does not come from
+  `instance:use`, from a project role or from any other permission key.
+- **Which instances.** Only a live instance whose organisation id equals the caller's organisation —
+  the service reads the instance by id and refuses before any effect when it differs, and every list
+  it reads is filtered by the organisation id. Only a `running` instance is moved; one already resting
+  or in motion is reported, not touched.
+- **What.** Hibernate only, the `stop` of §2. As with the platform's stop, a card running in the agent
+  is closed `cancelled` first, then the machine stops. The running interval closes with the new end
+  reason **`org_admin_stop`**, distinct from the platform's `admin_stop`.
+- **The owner is told.** When an org owner or admin hibernates an instance they do not own, its owner
+  gets an in-app notification naming who did it and when.
+- **What is NOT dropped.** Opening, waking, deleting and reading inside another member's instance (its
+  terminal, its files, its credential) stay owner-only, for every role. `instance:use` still never
+  grants another user's instance. The platform superadmin's stop (`admin_stop`) is unchanged.
+- **Consumed by:** MOTIR-10367 (the org fleet stop service, its hibernate path, role check and
+  `org_admin_stop`), MOTIR-10368 (the owner's in-app notification), MOTIR-10369 (the Settings ›
+  Organization › Fleet page, which offers Hibernate and no other action on someone else's agent) and
+  MOTIR-10370 (the platform tenant page telling an `org_admin_stop` apart).
+- **Rejected:** keeping the sentence, so only a platform superadmin can stop the spend (the situation
+  the Fleet page exists to end); a new permission key or a wider `instance:use` (a key would let a
+  workspace hand the power out per project, and it belongs to the organisation role); letting the
+  admin also wake, delete or open the instance (only stopping spend is needed, and opening it would
+  expose the member's credential and files).
+
 ### §9 · Which sandbox profiles are offered
 
 **The rule for every offered profile:**
@@ -834,3 +869,7 @@ agent, running and hibernating together.**
   figure, which no longer bounds it.
 
 Motir's own organisations still have no agent limits (AMENDMENT 3 §2).
+
+## AMENDMENT 8 — an organisation owner or admin may hibernate another member's instance (MOTIR-10364, 2026-11-04)
+
+Recorded inside §8, the section it amends: see _§8 AMENDMENT 8_ above.
