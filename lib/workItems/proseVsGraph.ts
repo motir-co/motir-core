@@ -1209,6 +1209,97 @@ export function underAuthored(card: {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// THE RUNNER-STOP BODY CHECKS (MOTIR-10380) — a childless leaf with an empty
+// body, or with a body and no enumerated acceptance criterion.
+//
+// The runner stops on both: a card with no description gives an agent nothing to
+// build, and a card with no criterion gives it no way to know it is done. The
+// under-authored check above cannot see either on a card that is TYPED or SIZED,
+// because its conjunction over the null columns is what keeps it a defect about
+// an untouched leaf. These two read only the BODY, so a `code` leaf at 3 points
+// with an empty description is reported.
+//
+// Same argument as the under-authored family for why they are null checks and
+// advisories, never gates: every input is an absent body or an absent list item,
+// and a card is saved mid-authoring. They are emitted only on the `validate_plan`
+// path (the service's `runnerStops` option), so no payload of `validate_work_item`,
+// the dispatch prompt or `claim_next_ready` changes.
+// `docs/decisions/leaf-body-runner-stop-advisories.md`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Whether a card is EXEMPT from the runner-stop body checks — the cards the
+ * runner does not stop on for an empty body or missing criteria.
+ *
+ * - **A card with children** — its body is its subtree's; the runner runs the
+ *   children, never the container's own body.
+ * - **A container KIND (epic, story)** — the same reason, before the children are
+ *   laid: a childless story awaiting its children is not a leaf.
+ * - **`type: design`** — its deliverable is a mock and a note file judged at the
+ *   design gate, not code criteria a pull request discharges.
+ * - **`executor: human`** — a person does the work and confirms it on its gate;
+ *   no runner reads the body.
+ *
+ * Also the exemption the two-repository check reuses, so the family has ONE
+ * answer to "which cards does the runner stop on".
+ */
+export function isLeafBodyCheckExempt(card: {
+  kind: string | null | undefined;
+  type: string | null | undefined;
+  executor: string | null | undefined;
+  hasChildren: boolean;
+}): boolean {
+  if (card.hasChildren) return true;
+  if (card.kind != null && !isTypeableKind(card.kind as WorkItemKindDto)) return true;
+  return card.type === 'design' || card.executor === 'human';
+}
+
+/** The card shape the two body checks read. */
+export interface LeafBodyCard {
+  /** Absent reads as a task, the cell every childless leaf shares. */
+  kind?: string | null | undefined;
+  descriptionMd: string | null | undefined;
+  hasChildren: boolean;
+  type: string | null | undefined;
+  executor: string | null | undefined;
+}
+
+const isLeafBodyExempt = (card: LeafBodyCard): boolean =>
+  isLeafBodyCheckExempt({
+    kind: card.kind,
+    type: card.type,
+    executor: card.executor,
+    hasChildren: card.hasChildren,
+  });
+
+/**
+ * Whether a non-exempt leaf's description is null or blank — whatever its
+ * points, estimate, type and executor are.
+ */
+export function leafNoDescription(card: LeafBodyCard): boolean {
+  if (isLeafBodyExempt(card)) return false;
+  return card.descriptionMd == null || card.descriptionMd.trim() === '';
+}
+
+/**
+ * WHY a non-exempt leaf with a body has no criteria — `no-heading` or
+ * `no-criterion`, exactly as {@link underAuthored} reads them — or `null` when a
+ * criterion is enumerated, the card is exempt, or the body is blank (a blank body
+ * is {@link leafNoDescription}'s finding, reported once).
+ */
+export function leafNoCriteria(card: LeafBodyCard): UnderAuthoredCriteria | null {
+  if (isLeafBodyExempt(card)) return null;
+  if (card.descriptionMd == null || card.descriptionMd.trim() === '') return null;
+  const parsed = parseSections(
+    card.descriptionMd,
+    (card.kind ?? 'task') as IssueType,
+    (card.type ?? null) as SectionType,
+  );
+  if (parsed.found.includes('acceptanceCriteria')) return null;
+  return parsed.headed.includes('acceptanceCriteria') ? 'no-criterion' : 'no-heading';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // THE SELF-BLOCKING-DESIGN CHECK (MOTIR-3178) — the fourth member of the SHAPE
 // family, and the planning-time design gate read for its PURPOSE rather than its
 // letter.

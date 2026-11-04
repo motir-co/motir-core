@@ -391,7 +391,10 @@ async function projectedProseAdvisories(
     });
   }
 
-  return buildProseVsGraphAdvisories(subjects, ctx, localRefs);
+  // `runnerStops`: the runner's body stops (MOTIR-10380) are a PLAN-time finding,
+  // so only this path asks for them. One call feeds both projected reads — the
+  // subtree read and the plan's own proposed cards.
+  return buildProseVsGraphAdvisories(subjects, ctx, localRefs, { runnerStops: true });
 }
 
 /**

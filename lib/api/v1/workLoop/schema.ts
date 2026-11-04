@@ -17,6 +17,7 @@ import {
   isPostMergeChildAdvisory,
   isBlockerCountAdvisory,
   isSelfBlockingDesignAdvisory,
+  isRunnerStopAdvisory,
   isSizingAdvisory,
   isUnderAuthoredAdvisory,
 } from '@/lib/dto/workItems';
@@ -263,6 +264,30 @@ const underAuthoredShapeAdvisorySchema = z.object({
 });
 
 /**
+ * A RUNNER-STOP body member (MOTIR-10380): `leaf-no-description` (a childless,
+ * non-exempt leaf whose description is blank) or `leaf-no-criteria` (a body with no
+ * enumerated acceptance criterion; `criteria` is `no-heading` or `no-criterion`).
+ * Both carry the literal `runnerStop: true`, which is what a reader keys on.
+ * `validate_plan` emits them; the dispatch path does not today, and the variant is
+ * here so the published contract parses a payload that carries one.
+ *
+ * ⚠️ LISTED FIRST in the union below, and that is load-bearing: the union's object
+ * members strip unknown keys, so a `leaf-no-criteria` payload tried against the
+ * under-authored member first would parse there and lose `runnerStop`. Its required
+ * `runnerStop` literal is what makes this member match only a runner stop.
+ *
+ * Additive under §8: a new member of a union whose `severity` is open-ended.
+ */
+const leafBodyRunnerStopShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  runnerStop: z.literal(true),
+  /** `leaf-no-criteria` only: `no-heading` or `no-criterion`. */
+  criteria: z.string().optional(),
+});
+
+/**
  * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
  * pull request that is not this card's own and that merged after the card was
  * filed, so its deliverable may already be in the repository (MOTIR-2903).
@@ -330,6 +355,7 @@ const subsumptionAdvisorySchema = z.union([
  * untagged object, and only an untagged one, is a reference.
  */
 export const dispatchAdvisorySchema = z.union([
+  leafBodyRunnerStopShapeAdvisorySchema,
   criterionShapeAdvisorySchema,
   sizingShapeAdvisorySchema,
   selfBlockingDesignShapeAdvisorySchema,
@@ -472,6 +498,24 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
         > => !isPostMergeChildAdvisory(advisory) && !isMislabelledLinkAdvisory(advisory),
       )
       .map((advisory) => {
+        // The RUNNER-STOP members (MOTIR-10380) first: they carry no
+        // `criterionIndex`, so the generic `shape` branch below must never see one.
+        if (isRunnerStopAdvisory(advisory)) {
+          return advisory.severity === 'leaf-no-criteria'
+            ? {
+                kind: 'shape' as const,
+                item: advisory.item,
+                severity: advisory.severity,
+                runnerStop: true as const,
+                criteria: advisory.criteria,
+              }
+            : {
+                kind: 'shape' as const,
+                item: advisory.item,
+                severity: advisory.severity,
+                runnerStop: true as const,
+              };
+        }
         if (isUnderAuthoredAdvisory(advisory)) {
           return {
             kind: 'shape' as const,

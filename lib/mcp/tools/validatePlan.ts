@@ -213,7 +213,13 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         '`under-authored`, `likely-blocker-count-mismatch`, `body-edit-above-field-move`, and ' +
         '`likely-mislabelled-link` in a body the plan writes (a `[label](motir:<id>)` link ' +
         'whose label names a different key than the card the id opens, or whose id opens no ' +
-        'card — `targetKey: null` — with the `field` it sits in). A runner STOPS on a ' +
+        'card — `targetKey: null` — with the `field` it sits in). A plan read also reports the ' +
+        'RUNNER-STOP members, each carrying `runnerStop: true`: ' +
+        '`leaf-no-description` (a childless task, bug or subtask whose description is blank) and ' +
+        '`leaf-no-criteria` (a body with no enumerated acceptance criterion; `criteria`: ' +
+        '`no-heading` or `no-criterion`), whatever the card’s points, estimate, type and ' +
+        'executor; a container, a card with children, a `type: design` and a human leaf are ' +
+        'exempt. A runner STOPS on a ' +
         'two-index entry, so dispose of each before sealing: re-word the criterion, lift it, or ' +
         'record on the card why it is a false positive. Also beside the verdict, ' +
         '`rescopeWarnings` lists every `modify` approve will send back from built work — a ' +
