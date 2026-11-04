@@ -4,6 +4,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageWorkItemLinkRepository } from '@/lib/repositories/pageWorkItemLinkRepository';
+import { decisionPagePublicationRepository } from '@/lib/repositories/decisionPagePublicationRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { PageArchivedError, PageNotFoundError } from '@/lib/pages';
 import { PageLinkAlreadyExistsError, PageLinkNotFoundError } from '@/lib/pages/linkErrors';
@@ -19,7 +20,13 @@ import {
   encodeWorkItemPagesCursor,
   workItemPagesLimit,
 } from '@/lib/pages/workItemPagesCursor';
-import type { PageLinkPairDto, PageWorkItemsDto, WorkItemPagesDto } from '@/lib/dto/pageLinks';
+import type {
+  PageLinkPairDto,
+  PageWorkItemsDto,
+  WorkItemLinkedPagesDto,
+  WorkItemPagesDto,
+} from '@/lib/dto/pageLinks';
+import type { WorkItemPagesSeek } from '@/lib/repositories/pageWorkItemLinkRepository';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -113,6 +120,86 @@ async function findPageInProject(pageId: string, projectId: string, tx: Tx) {
   return page;
 }
 
+/**
+ * One window of the pages linking to `workItemId`, in the Pages section's order,
+ * with each place's folder chain resolved in ONE batched read. `hasMore` is the
+ * look-ahead row; `last` is the seek key of the last row served.
+ */
+async function readPagesWindow(
+  workItemId: string,
+  workspaceId: string,
+  after: WorkItemPagesSeek | null,
+  limit: number,
+  tx: Tx,
+) {
+  const window = await pageWorkItemLinkRepository.listPagesForWorkItem(
+    workItemId,
+    after,
+    limit + 1,
+    tx,
+  );
+  const served = window.slice(0, limit);
+  const folderIds = [
+    ...new Set(served.flatMap((r) => (r.placeFolderId === null ? [] : [r.placeFolderId]))),
+  ];
+  const trails = await folderRepository.findTrailsByIds(folderIds, workspaceId, tx);
+  const pathByFolder = new Map(trails.map((t) => [t.id, t.trail.map((step) => step.name)]));
+  const rows = served.map((r) =>
+    toWorkItemPageLinkRowDto(
+      r,
+      r.placeFolderId === null ? [] : (pathByFolder.get(r.placeFolderId) ?? []),
+    ),
+  );
+  const lastServed = served[served.length - 1];
+  const last: WorkItemPagesSeek | null =
+    window.length > limit && lastServed
+      ? { updatedAt: lastServed.updatedAt, id: lastServed.pageId }
+      : null;
+  return { rows, hasMore: window.length > limit, last };
+}
+
+/**
+ * Write the HAND link of a pair on the caller's transaction, and the work item's
+ * revision when it was new (MOTIR-9197, and the decision publish of MOTIR-10315).
+ * Answers whether a row was written: `false` is "already linked by hand", which
+ * `skipDuplicates` turns into a count rather than an aborting unique violation.
+ */
+export async function writeHandLink(
+  input: {
+    workspaceId: string;
+    projectId: string;
+    workItemId: string;
+    page: { id: string; title: string };
+    userId: string;
+  },
+  tx: Tx,
+): Promise<boolean> {
+  const written = await pageWorkItemLinkRepository.createManual(
+    {
+      workspaceId: input.workspaceId,
+      projectId: input.projectId,
+      pageId: input.page.id,
+      workItemId: input.workItemId,
+      createdById: input.userId,
+    },
+    tx,
+  );
+  if (written === 0) return false;
+  await workItemRevisionsService.recordRevision(
+    {
+      workItemId: input.workItemId,
+      changedById: input.userId,
+      changeKind: 'updated',
+      diff: { pageLinks: { added: [{ pageId: input.page.id, title: input.page.title }] } },
+    },
+    tx,
+  );
+  return true;
+}
+
+/** How many linked pages `get_work_item` serves: the Pages section's page size. */
+export const AGENT_LINKED_PAGES_LIMIT = 50;
+
 export const pageLinksService = {
   async listPagesForWorkItem(
     ctx: ServiceContext | VisitorReadContext,
@@ -138,33 +225,64 @@ export const pageLinksService = {
         throw err;
       }
 
-      const window = await pageWorkItemLinkRepository.listPagesForWorkItem(
-        item.id,
-        after,
-        limit + 1,
+      const read = await readPagesWindow(item.id, ctx.workspaceId, after, limit, tx);
+      return {
+        rows: read.rows,
+        nextCursor: read.last ? encodeWorkItemPagesCursor(read.last) : null,
+      };
+    });
+  },
+
+  /**
+   * The work item's linked pages for `get_work_item` (MOTIR-10315): the Pages
+   * section's set, first window only, each row marked with the card's LATEST
+   * decision publication when it names that page. `null` — no page data at all —
+   * for a reader without `page:view` on the project, so the rest of the read is
+   * unaffected. The caller has already resolved the work item under the reader's
+   * access (the detail aggregate's browse gate).
+   */
+  async listLinkedPagesForAgent(
+    ctx: ServiceContext,
+    input: { workItemId: string; projectId: string },
+  ): Promise<WorkItemLinkedPagesDto | null> {
+    const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: input.projectId };
+    return withWorkspaceContext(scope, async (tx) => {
+      try {
+        await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
+      } catch (err) {
+        if (err instanceof ProjectAccessDeniedError) return null;
+        /* v8 ignore next -- the access read throws only the denial; anything else is a fault */
+        throw err;
+      }
+      const read = await readPagesWindow(
+        input.workItemId,
+        ctx.workspaceId,
+        null,
+        AGENT_LINKED_PAGES_LIMIT,
         tx,
       );
-      const served = window.slice(0, limit);
-
-      // The places' folder chains in ONE batched read, however many pages.
-      const folderIds = [
-        ...new Set(served.flatMap((r) => (r.placeFolderId === null ? [] : [r.placeFolderId]))),
-      ];
-      const trails = await folderRepository.findTrailsByIds(folderIds, ctx.workspaceId, tx);
-      const pathByFolder = new Map(trails.map((t) => [t.id, t.trail.map((step) => step.name)]));
-
-      const last = served[served.length - 1];
+      const [latest] = await decisionPagePublicationRepository.latestForWorkItems(
+        [input.workItemId],
+        tx,
+      );
+      const decisionPage = latest
+        ? {
+            pageId: latest.pageId,
+            title: latest.pageTitle,
+            versionNumber: latest.versionNumber,
+            publishedAt: latest.publishedAt.toISOString(),
+          }
+        : null;
       return {
-        rows: served.map((r) =>
-          toWorkItemPageLinkRowDto(
-            r,
-            r.placeFolderId === null ? [] : (pathByFolder.get(r.placeFolderId) ?? []),
-          ),
-        ),
-        nextCursor:
-          window.length > limit && last
-            ? encodeWorkItemPagesCursor({ updatedAt: last.updatedAt, id: last.pageId })
-            : null,
+        rows: read.rows.map((row) => ({
+          ...row,
+          decision:
+            decisionPage && row.pageId === decisionPage.pageId
+              ? { versionNumber: decisionPage.versionNumber, publishedAt: decisionPage.publishedAt }
+              : null,
+        })),
+        hasMore: read.hasMore,
+        decisionPage,
       };
     });
   },
@@ -229,27 +347,17 @@ export const pageLinksService = {
       // Creation only — the row would land in a page no surface lists.
       if (page.archivedAt !== null) throw new PageArchivedError(page.id);
 
-      const written = await pageWorkItemLinkRepository.createManual(
+      const written = await writeHandLink(
         {
           workspaceId: item.workspaceId,
           projectId: item.projectId,
-          pageId: page.id,
           workItemId: item.id,
-          createdById: ctx.userId,
+          page,
+          userId: ctx.userId,
         },
         tx,
       );
-      if (written === 0) throw new PageLinkAlreadyExistsError(page.id, item.id);
-
-      await workItemRevisionsService.recordRevision(
-        {
-          workItemId: item.id,
-          changedById: ctx.userId,
-          changeKind: 'updated',
-          diff: { pageLinks: { added: [{ pageId: page.id, title: page.title }] } },
-        },
-        tx,
-      );
+      if (!written) throw new PageLinkAlreadyExistsError(page.id, item.id);
       return { pageId: page.id, workItemId: item.id, source: 'manual' as const };
     });
   },

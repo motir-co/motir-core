@@ -7,6 +7,8 @@ import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { inFlightCodeService } from '@/lib/services/inFlightCodeService';
+import { pageLinksService } from '@/lib/services/pageLinksService';
+import type { WorkItemLinkedPagesDto } from '@/lib/dto/pageLinks';
 import { projectedBodyOf, projectedWorkItem } from '@/lib/services/planProjectionService';
 import type { ProjectedDetailDto, ProjectedRowDto } from '@/lib/services/planProjectionService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -107,6 +109,7 @@ function summarize(
   commentCount: number,
   folderPath: string[] | null,
   inFlight: AiInFlightCodeFields,
+  pages: WorkItemLinkedPagesDto | null,
   parsed?: ParsedBody,
 ): string {
   const it = detail.item;
@@ -148,10 +151,39 @@ function summarize(
   // Where the item's UNMERGED code lives (MOTIR-10069) — before the body, so a
   // long description cannot push it out of a reader's view.
   lines.push(...renderInFlightCode(inFlight));
+  // The linked pages and the published decision (MOTIR-10315) — before the body,
+  // like the in-flight code, and only when there is something to print.
+  lines.push(...renderLinkedPages(pages));
   if (it.descriptionMd) {
     lines.push('', it.descriptionMd);
   }
   return lines.join('\n');
+}
+
+/**
+ * The card's published decision and linked pages as text lines (MOTIR-10315):
+ * nothing for a reader without `page:view` (`null`) or a card with no page.
+ */
+export function renderLinkedPages(pages: WorkItemLinkedPagesDto | null): string[] {
+  if (pages === null) return [];
+  const lines: string[] = [];
+  const decision = pages.decisionPage;
+  if (decision) {
+    lines.push(
+      `Decision page: ${decision.title} (${decision.pageId}) — published version ${decision.versionNumber}`,
+    );
+  }
+  if (pages.rows.length > 0) {
+    const listed = pages.rows.map((row) => {
+      const marks = [
+        ...(row.decision ? [`decision v${row.decision.versionNumber}`] : []),
+        ...(row.state === 'unavailable' ? ['archived'] : []),
+      ];
+      return `${row.title} (${row.pageId})${marks.length > 0 ? ` [${marks.join(', ')}]` : ''}`;
+    });
+    lines.push(`Pages: ${listed.join(' · ')}${pages.hasMore ? ' · …and more' : ''}`);
+  }
+  return lines;
 }
 
 /** One projected row as a compact line for the human-readable text block. The
@@ -304,6 +336,14 @@ export async function runGetWorkItem(
   // a dispatched agent are handed the same reason for the same card. `null` unless
   // the card's most recently decided gate, of any kind, is `changes_requested`.
   const latestRefusal = await approvalGatesService.latestRefusalFor(detail.item.id, ctx);
+  // The LINKED PAGES (Bug MOTIR-10315) — the set the card's Pages section shows,
+  // bounded, with the card's latest decision publication marked. `null` for a
+  // reader without `page:view`: the rest of this read is unaffected and carries no
+  // page data. A follow-up on a decision card reads the settled decision HERE.
+  const pages = await pageLinksService.listLinkedPagesForAgent(ctx, {
+    workItemId: detail.item.id,
+    projectId: project.id,
+  });
   // The parsed sections view (MOTIR-9033): one pure call on the body this read
   // already holds, attached at the transport like the comment counts, so
   // `IssueDetailDto` and the web page do not change. Absent unless asked for.
@@ -327,10 +367,11 @@ export async function runGetWorkItem(
     mergedRepos: inFlight.mergedRepos,
     errors,
     latestRefusal,
+    pages,
     ...(parsed ? { parsedSections: parsed } : {}),
   };
   return toolOk(
-    summarize(detail, item.commentCount, folderPath, inFlight, parsed),
+    summarize(detail, item.commentCount, folderPath, inFlight, pages, parsed),
     derived(getWorkItemPayload, structured),
   );
 }
@@ -381,6 +422,16 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'to the default branch. Both are `[]` when nothing was delivered on the item or a parent; ' +
         '`deliveries` stays the item’s OWN pull requests only, and is not a statement about its ' +
         'code. The text block prints one `In-flight code:` line per entry.' +
+        ' A committed item also carries `pages`: the pages linked to it — the set its Pages ' +
+        'section shows, newest edit first — as `{ rows, hasMore, decisionPage }`. Each row is ' +
+        '`{ pageId, title, state, sources, updatedAt, place, decision }`; read a page with ' +
+        '`get_page`. At most 50 rows are served and `hasMore` says there are more. ' +
+        '`decisionPage` is `{ pageId, title, versionNumber, publishedAt }` of the card’s LATEST ' +
+        'decision publication (`publish_decision_page`), or `null`, and the row of that page ' +
+        'carries the same `decision: { versionNumber, publishedAt }` — `null` on every other row. ' +
+        'A decision card whose `decisionPage` is set has a published decision: read it before ' +
+        're-asking the question. `pages` is `null` when you cannot view the project’s pages. The ' +
+        'text block prints `Decision page:` and `Pages:` lines.' +
         ' Each of the title, description and explanation has a recorded language in ' +
         '`item.languages` (`{ title, description, explanation }`); `null` means none was ' +
         'recorded — text written before content languages, and imported text.' +

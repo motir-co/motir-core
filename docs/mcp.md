@@ -1138,6 +1138,36 @@ to [`read_file`](#read_file) as `repo` and `ref`.
 "mergedRepos": []
 ```
 
+The aggregate carries **`pages`** (Bug MOTIR-10315) — the pages linked to the
+item, the same set its **Pages** section shows (`pageLinksService`, newest edit
+first): `{ rows, hasMore, decisionPage }`. At most 50 rows are served and
+`hasMore` says the set holds more. Each row is the Pages row — `pageId`, `title`,
+`state` (`live` · `unavailable` for an archived page), `sources`, `updatedAt`,
+`place` — plus `decision`: `{ versionNumber, publishedAt }` on the page the
+item's LATEST decision publication names, `null` on every other row.
+`decisionPage` names that publication wherever its page sits, or is `null` when
+the item has none. A follow-up on a decision card reads the settled decision
+here, and reads the page itself with [`get_page`](#get_page). A reader without
+`page:view` on the project gets `pages: null` and the rest of the read unchanged.
+The text block prints a `Decision page: …` line and one `Pages: …` line, only
+when there is something to print.
+
+```jsonc
+"pages": {
+  "rows": [{
+    "pageId": "cm…", "title": "Nightly acceptance lane", "state": "live",
+    "sources": ["manual"], "updatedAt": "2026-11-02T11:35:00.000Z",
+    "place": { "folderPath": ["Decisions"], "parentPageTitle": null },
+    "decision": { "versionNumber": 2, "publishedAt": "2026-11-02T11:35:00.000Z" }
+  }],
+  "hasMore": false,
+  "decisionPage": {
+    "pageId": "cm…", "title": "Nightly acceptance lane",
+    "versionNumber": 2, "publishedAt": "2026-11-02T11:35:00.000Z"
+  }
+}
+```
+
 The item carries its **`difficulty`** (Story MOTIR-6016) — `trivial` / `low` /
 `medium` / `high`, how hard the work is to reason about, or `null` when unset
 and always `null` on an epic or story. Every tool returning a `WorkItemDto`, and
@@ -3406,6 +3436,12 @@ Publishing the version that is already the card's decision writes nothing and
 returns the same publication with `replayed: true`, so retrying an unclear result
 is safe. Publishing after an edit seals the new version and **supersedes** the
 awaiting question with one about it.
+
+The publish also **links the page to the card** by hand (`source: "manual"`, the
+publisher as who linked it), in the same transaction (Bug MOTIR-10315), so the
+card's Pages section and [`get_work_item`](#get_work_item)'s `pages` show it,
+with `decisionPage` naming the latest publication. A page already linked to the
+card keeps its one link, and a republish adds none.
 
 | Input    | Type   | Required | Notes                                                    |
 | -------- | ------ | -------- | -------------------------------------------------------- |

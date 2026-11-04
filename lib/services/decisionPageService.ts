@@ -11,6 +11,7 @@ import { emitAppliedGateTransitions } from '@/lib/approvalGates/gateTransition';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { writeHandLink } from '@/lib/services/pageLinksService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { isTerminalStatus } from '@/lib/workItems/blockerReadiness';
 import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
@@ -47,6 +48,17 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // save takes (`lockPage`), so a racing save lands INSIDE the version before it
 // is sealed, or starts N+1 after it — never extends a sealed one (the version
 // policy refuses to, MOTIR-7431).
+//
+// ⚠️ THE PUBLISHED PAGE IS LINKED TO THE CARD, IN THE SAME TRANSACTION (Bug
+// MOTIR-10315). A publication alone left the card's Pages section — and
+// `get_work_item`, which reads the same set — empty, so a follow-up on a settled
+// decision could not see it. The link is the pair's HAND row (`manual`), written
+// by the publisher: the act of choosing a page as the card's decision is an
+// explicit link, the row sits under the key `(page, item, source)` a hand link
+// already holds, so a page linked by hand before stays ONE row, and a page
+// linked by mention or embed stays ONE entry in the section (it groups by page).
+// A republish of a new version writes nothing more (`skipDuplicates`), and a
+// replay writes nothing at all.
 
 /** `page:view` on `projectId`, as a boolean — a denial is not an error here. */
 async function canViewPages(
@@ -198,6 +210,17 @@ export const decisionPageService = {
             pageVersionId: latest.id,
             publishedById: ctx.userId,
             publishedAt: now,
+          },
+          tx,
+        );
+
+        await writeHandLink(
+          {
+            workspaceId: ctx.workspaceId,
+            projectId: item.projectId,
+            workItemId: item.id,
+            page,
+            userId: ctx.userId,
           },
           tx,
         );
