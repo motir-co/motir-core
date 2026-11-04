@@ -3213,6 +3213,11 @@ model WorkItem {
   // is; `SetNull` so a pruned run can never leave a dangling pointer.
   resumeRunId             String?                       @map("resume_run_id")
   resumeRun               DispatchRun?                  @relation("WorkItemResumeRun", fields: [resumeRunId], references: [id], onDelete: SetNull)
+  // The gated run's SNAPSHOT of the card's delivery set (Story MOTIR-10305 · MOTIR-10308):
+  // `{ runId, moved, heads: { <pull request id>: { head, settled } } }`, written by the same
+  // recompute. Moving again is measured against it, so the CI of the run's own last push —
+  // checked after the run stops — never reads as a new start. Kept through a status move.
+  resumeDetail            Json?                         @map("resume_detail")
   // The EMBEDDING SWEEP's poison-item bookkeeping (Story MOTIR-8226 · MOTIR-8227):
   // the content hash of the document the provider REJECTED, and how many runs have
   // rejected it. Both NULL until a rejection is recorded. A work item with no

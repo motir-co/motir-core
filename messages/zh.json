@@ -10132,6 +10132,9 @@
         "membersLabel": "与 {key} 一起受阻的工作项",
         "showMore": "再显示 {count, plural, other {#}} 个工作项",
         "showFewer": "收起"
+      },
+      "fixing": {
+        "checksRunning": "新推送的检查正在运行"
       }
     },
     "toResume": {
@@ -15594,7 +15597,14 @@
       "carries": "另有 {count, plural, other {#}} 个工作项随它受阻：<keys></keys>",
       "carriesMore": "等另外 {count} 个",
       "repairedWithHead": "随 <b>{head}</b> 一起修复——它们共用同一个拉取请求。",
-      "toHead": "打开 {head}"
+      "toHead": "打开 {head}",
+      "fixing": "修复已推送，检查正在运行。检查通过后此提示将消失。",
+      "fixingWas": "此次推送前：<reason></reason>"
+    },
+    "fixing": {
+      "label": "修复中",
+      "name": "修复中 · 新推送的检查正在运行",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

@@ -202,6 +202,11 @@ export interface BoardCardDto {
    */
   fixHeadKey?: string;
   /**
+   * FIXING (MOTIR-10309): a fix was pushed and its checks are running, so the tag reads
+   * *Fixing* instead of the reason. `true` only — absent otherwise.
+   */
+  fixing?: true;
+  /**
    * The card's OBSOLESCENCE mark (Story MOTIR-6575 · MOTIR-6677) — `outdated` /
    * `deprecated`, or `null` while it is still true of the code. The card wears the
    * shared `ObsolescenceBadge`; nothing on the board hides, dims or re-sorts a

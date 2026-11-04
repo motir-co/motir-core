@@ -812,6 +812,11 @@ export interface WorkItemTreeNodeDto {
    * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
    */
   fixHeadKey?: string;
+  /**
+   * FIXING (MOTIR-10309): a fix was pushed and its checks are running, so the tag reads
+   * *Fixing* instead of the reason. `true` only — absent otherwise.
+   */
+  fixing?: true;
   // The remaining core properties the list row shows alongside status/assignee
   // (the same fields the detail page's core-fields panel carries): priority,
   // reporter, due date, estimate. `reporterId` is always set; `dueDate` is a
@@ -1128,6 +1133,11 @@ export interface WorkItemListItemDto {
    * the head itself — the tag's name gains *· with {head}*. Absent otherwise.
    */
   fixHeadKey?: string;
+  /**
+   * FIXING (MOTIR-10309): a fix was pushed and its checks are running, so the tag reads
+   * *Fixing* instead of the reason. `true` only — absent otherwise.
+   */
+  fixing?: true;
   priority: WorkItemPriorityDto;
   assigneeId: string | null;
   reporterId: string;

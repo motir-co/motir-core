@@ -778,6 +778,8 @@ describe('6 · the reader keeps their place through a burst (criterion 4)', () =
       diedReason: null,
       affected: 1,
       total: 1,
+      fixing: false,
+      raisedHeads: null,
     } as HomeWorkItemRowDto['fixDetail'];
     const stuck = (k: string, over: Partial<HomeWorkItemRowDto> = {}) =>
       row(k, `Title of ${k}`, {

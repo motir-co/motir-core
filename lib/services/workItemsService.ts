@@ -378,7 +378,13 @@ import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { writeDerivedRepoSet, writeRepoRefs } from '@/lib/workItems/repoSetWrites';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 import { recomputeWorkItemResumeState } from './resumeStateService';
-import { fixGroupPointersFor, fixHeadKeysFor } from './fixGroupService';
+import {
+  fixGroupPointersFor,
+  fixTagFactsFor,
+  fixTagFieldsOf,
+  NO_FIX_TAG_FACTS,
+  type FixTagFacts,
+} from './fixGroupService';
 
 // ⚠️ `assertSingleTargetRepoInput` MOVED to `lib/workItems/targetRepo.ts`
 // (MOTIR-4904) and is imported above. It was private here while this was the only
@@ -1206,8 +1212,8 @@ function assembleProjectForest(
   // A Visitor's forest (MOTIR-6644): a private epic's node is marked and its
   // sizing nulled; its withheld children never reached `rows`.
   visitor = false,
-  // The To fix HEAD each carried card's tag names (MOTIR-7589) — empty for a Visitor.
-  fixHeads: ReadonlyMap<string, string> = new Map(),
+  // The To fix tag's facts (MOTIR-7589 head, MOTIR-10309 Fixing) — empty for a Visitor.
+  fixTags: FixTagFacts = NO_FIX_TAG_FACTS,
 ): WorkItemTreeNodeDto[] {
   const childrenByParent = new Map<string, WorkItemForestRow[]>();
   const roots: WorkItemForestRow[] = [];
@@ -1232,10 +1238,7 @@ function assembleProjectForest(
     }
     // Ancestor retention: drop only an unmatched node with no surviving child.
     if (prune && !row.matched && children.length === 0) return null;
-    const head = fixHeads.get(row.id);
-    const node = head
-      ? { ...toWorkItemTreeNodeDto(row, children), fixHeadKey: head }
-      : toWorkItemTreeNodeDto(row, children);
+    const node = { ...toWorkItemTreeNodeDto(row, children), ...fixTagFieldsOf(row.id, fixTags) };
     return visitor ? stripPrivateEpicTells(node, row.publicChildrenHidden) : node;
   };
 
@@ -5297,18 +5300,18 @@ export const workItemsService = {
       ),
     );
 
-    // The To fix tag's *· with {head}* (MOTIR-7589): read only for the rows showing a
-    // reason, and never for a Visitor — a head key names another card.
-    const fixHeads = visitor
-      ? new Map<string, string>()
+    // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309): read only for
+    // the rows showing a reason, and never for a Visitor — a head key names another card.
+    const fixTags = visitor
+      ? NO_FIX_TAG_FACTS
       : await withWorkspaceServiceContext(workspaceId, (tx) =>
-          fixHeadKeysFor(
+          fixTagFactsFor(
             workspaceId,
             rows.filter((r) => r.fixReason !== null).map((r) => r.id),
             tx,
           ),
         );
-    return assembleProjectForest(rows, repoFilterIsActive(repoFilter), visitor, fixHeads);
+    return assembleProjectForest(rows, repoFilterIsActive(repoFilter), visitor, fixTags);
   },
 
   /**
@@ -5799,11 +5802,12 @@ export const workItemsService = {
       ),
     );
 
-    // The To fix tag's *· with {head}* (MOTIR-7589) — never for a Visitor.
-    const fixHeads = opened.visitor
-      ? new Map<string, string>()
+    // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309) — never for a
+    // Visitor.
+    const fixTags = opened.visitor
+      ? NO_FIX_TAG_FACTS
       : await withWorkspaceServiceContext(project.workspaceId, (tx) =>
-          fixHeadKeysFor(
+          fixTagFactsFor(
             project.workspaceId,
             rows.filter((r) => r.fixReason !== null).map((r) => r.id),
             tx,
@@ -5813,10 +5817,7 @@ export const workItemsService = {
       if (opened.visitor) {
         return stripPrivateEpicTells(toWorkItemListItemDto(row), row.publicChildrenHidden);
       }
-      const head = fixHeads.get(row.id);
-      return head
-        ? { ...toWorkItemListItemDto(row), fixHeadKey: head }
-        : toWorkItemListItemDto(row);
+      return { ...toWorkItemListItemDto(row), ...fixTagFieldsOf(row.id, fixTags) };
     });
     return { items, total, page, pageSize };
   },

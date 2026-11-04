@@ -16,6 +16,7 @@ import {
 } from '@/components/hosted/FixHostedControl';
 import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
+import { FixingTag } from '@/components/workItems/ToFixTag';
 import { Pill } from '@/components/ui/Pill';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
@@ -161,6 +162,43 @@ const REASON_SENTENCE: Readonly<
       : t.rich('toFix.reason.changesRequestedNoNote', { name: d.reviewerName, b: plainBold });
   },
 };
+
+/**
+ * The row's reason SENTENCE, alone — what the item-page banner's Fixing state names after
+ * *Before this push:* (MOTIR-10309; design § 40.3), so the two surfaces say one thing.
+ */
+export function FixReasonSentence({
+  reason,
+  detail,
+  itemKey,
+}: {
+  reason: WorkItemFixReasonDto;
+  detail: FixDetailDto;
+  itemKey: string;
+}) {
+  const t = useTranslations('workbench');
+  const locale = useLocale();
+  const [clock] = useState(() => Date.now());
+  return (
+    <>
+      {REASON_SENTENCE[reason](t, detail, {
+        itemKey,
+        when: (iso) =>
+          function FixWhen() {
+            return (
+              <time
+                className="whitespace-nowrap"
+                dateTime={iso}
+                title={formatRunInstant(iso, locale)}
+              >
+                {relativeLabel(iso, locale, clock)}
+              </time>
+            );
+          },
+      })}
+    </>
+  );
+}
 
 /** The glyph each reason wears — `RepairFixPart`'s pairing: a failure is `CircleX` in
  *  danger-on-surface, a refusal is `Undo2`, muted, because a refusal is not a failure.
@@ -320,7 +358,13 @@ export function WorkbenchFixLine({
   // a repair is open. Its press lives on the row too, so its answer survives a re-read.
   const reviewSentBack = isReviewSentBack(reason, detail);
   const hostedRepair = reviewSentBack && repairRun?.hosted ? repairRun : null;
-  const fixTarget = reviewSentBack && canFixHosted && !repairRun ? itemKey : null;
+  // FIXING (MOTIR-10309; design § 40.1): a fix was pushed and its checks are running. The
+  // precedence is the design's — a held row is a receipt, the hosted repair's line says who
+  // is fixing it, and a dead run is never Fixing — so the tag draws only past all three.
+  const fixing = detail.fixing && !held && !dead && !hostedRepair;
+  // While its checks run `motir fix` refuses the card (`ci_running`), so no repair is
+  // offered: neither the command nor the hosted door.
+  const fixTarget = reviewSentBack && canFixHosted && !repairRun && !fixing ? itemKey : null;
   const fixPress = useFixHosted(fixTarget, { onStarted, onStateMoved });
 
   let repairs: ReactNode = null;
@@ -366,6 +410,16 @@ export function WorkbenchFixLine({
         })}
       </p>
     );
+  } else if (fixing) {
+    // § 40.1 point 3: the command's slot holds one sentence while the checks run.
+    repairs = (
+      <p
+        data-testid={`workbench-fix-checks-running-${itemKey}`}
+        className="text-xs text-(--el-text-secondary)"
+      >
+        {t('toFix.fixing.checksRunning')}
+      </p>
+    );
   } else if (command !== null) {
     repairs = (
       <span className="relative z-10 flex flex-wrap items-center justify-end gap-2">
@@ -396,16 +450,18 @@ export function WorkbenchFixLine({
     <div
       data-testid={`workbench-fix-${itemKey}`}
       data-fix-reason={reason}
+      data-fixing={fixing ? 'true' : undefined}
       className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pl-6 text-xs"
     >
       <p
         className={cn(
           'flex min-w-0 items-center gap-1.5',
-          held ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
+          held || fixing ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
         )}
       >
-        {/* A held row drops its glyph (§ 30 Panel 3): it is a receipt, not a failure. */}
-        {held ? null : <ReasonGlyph reason={reason} />}
+        {/* A held row drops its glyph (§ 30 Panel 3): it is a receipt, not a failure. A
+            Fixing row wears the Fixing tag in its place, and its reason goes quiet (§ 40.1). */}
+        {held ? null : fixing ? <FixingTag /> : <ReasonGlyph reason={reason} />}
         <span className="min-w-0 truncate">{REASON_SENTENCE[reason](t, detail, context)}</span>
         {/* THE ENTRY CLAUSE (§ 34.3) — how many other cards this one repair clears. */}
         {carried && carried.count > 0 ? (

@@ -12,10 +12,12 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { projectsService } from '@/lib/services/projectsService';
 import { pullRequestMergeabilityService } from '@/lib/services/pullRequestMergeabilityService';
+import { recomputeWorkItemResumeState } from '@/lib/services/resumeStateService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
@@ -234,7 +236,7 @@ describe('a merge-queue exit', () => {
 });
 
 describe('a mergeability reading', () => {
-  it('a conflicted reading sets conflicted; a push clears the reading and a clean one keeps it clear', async () => {
+  it('a conflicted reading sets conflicted; a push reads Fixing until its CI decides (MOTIR-10310)', async () => {
     const s = await makeScenario('conflict@example.com');
     const { item, headRef } = await card(s, 'conflicted card', 51);
     await workItemsService.updateStatus(item.id, 'implemented', s.ctx);
@@ -253,14 +255,24 @@ describe('a mergeability reading', () => {
       fixDetail: { base: 'main' },
     });
 
+    // The push is announced before any check reports at its head: a fix being checked, so
+    // the card stays on To fix as Fixing (Story MOTIR-10305), the conflict reading behind it.
     await pullRequestEvent('synchronize', 51, headRef, 'sha-b');
-    expect((await fixOf(item.id)).fixReason).toBeNull();
+    expect(await fixOf(item.id)).toMatchObject({
+      fixReason: 'conflicted',
+      fixDetail: { fixing: true },
+    });
 
+    // The host reads the new head clean: the conflict is gone, but CI has not decided yet.
     await pullRequestMergeabilityService.settleReading(s.workspace.id, pr.id, {
       mergeable: true,
       mergeableState: 'clean',
-      headSha: 'sha-a',
+      headSha: 'sha-b',
     });
+    expect((await fixOf(item.id)).fixDetail).toMatchObject({ fixing: true });
+
+    // Its CI goes green at the new head: nothing is wrong any more.
+    await check(51, 'sha-b', 'vitest', 'success');
     expect((await fixOf(item.id)).fixReason).toBeNull();
   });
 
@@ -328,6 +340,13 @@ describe('a gate decision', () => {
 
     // The first check at a NEW head is a new commit: the refusal was about the old one.
     await check(61, 'sha-b', 'vitest', null);
+    // …so it no longer stands, and while CI runs at that head the card reads Fixing
+    // (MOTIR-10307): the CI-start event is what recomputed it.
+    expect(await fixOf(item.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true },
+    });
+    await check(61, 'sha-b', 'vitest', 'success');
     expect((await fixOf(item.id)).fixReason).toBeNull();
     // The repair's push answered the refusal without re-deciding it.
     expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate!.id } })).state).toBe(
@@ -359,5 +378,61 @@ describe('a status move', () => {
     expect((await fixOf(item.id)).fixReason).toBeNull();
     await workItemsService.unarchiveWorkItem(item.id, s.ctx);
     expect((await fixOf(item.id)).fixReason).toBe('ci_failed');
+  });
+});
+
+// THE RESUME STATE RIDES THE SAME CI EVENTS (Story MOTIR-10305 · MOTIR-10308): a CI
+// start after a gated run ended takes the card off To resume in the check row's own
+// transaction — the pending arm and the terminal verdict arm both recompute it.
+describe('a gated card whose CI starts again', () => {
+  async function gatedCard(s: Scenario, number: number) {
+    const { item } = await card(s, `gated ${number}`, number);
+    // Linking the pull request delivered it to Implemented; an open delivery there is
+    // MOTIR-8611's exit, so put the card back where a run that stopped at a gate leaves it.
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'in_progress' } });
+    const run = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: s.workspace.id,
+        projectId: s.project.id,
+        command: 'run',
+        status: 'succeeded',
+        stopReason: 'gated',
+        endedAt: new Date(Date.now() - 60_000),
+      },
+    });
+    await adminDb.dispatchRunCard.create({
+      data: {
+        workspaceId: s.workspace.id,
+        dispatchRunId: run.id,
+        workItemId: item.id,
+        workItemKey: item.identifier,
+        position: 0,
+      },
+    });
+    // No held gate recorded: the run is released at once.
+    expect(
+      await withWorkspaceContext(s.ctx, (tx) => recomputeWorkItemResumeState(item.id, tx)),
+    ).toEqual({ resumeState: 'ready_to_resume', resumeRunId: run.id });
+    return item;
+  }
+  const resumeOf = async (id: string) =>
+    (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).resumeState;
+
+  it('a check STARTING clears the stored resume state (the pending arm)', async () => {
+    const s = await makeScenario('resume-pending@example.com');
+    const item = await gatedCard(s, 91);
+
+    await check(91, 'sha-a', 'vitest', null);
+
+    expect(await resumeOf(item.id)).toBeNull();
+  });
+
+  it('a check reported only when it finishes clears it too (the verdict arm)', async () => {
+    const s = await makeScenario('resume-verdict@example.com');
+    const item = await gatedCard(s, 92);
+
+    await check(92, 'sha-a', 'vitest', 'success');
+
+    expect(await resumeOf(item.id)).toBeNull();
   });
 });

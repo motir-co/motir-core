@@ -58,6 +58,16 @@ function branches(v: unknown): FixBranchDto[] | null {
   });
 }
 
+/** Recorded heads — an entry whose sha is not a string is dropped, not guessed. */
+function raisedHeads(v: unknown): Record<string, string> | null {
+  if (v === null || typeof v !== 'object' || Array.isArray(v)) return null;
+  const heads: Record<string, string> = {};
+  for (const [id, sha] of Object.entries(v as Record<string, unknown>)) {
+    if (typeof sha === 'string') heads[id] = sha;
+  }
+  return heads;
+}
+
 function count(v: unknown): number {
   return typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0;
 }
@@ -93,5 +103,7 @@ export function toFixDetailDto(
     diedReason: diedReason(d.diedReason),
     affected: count(d.affected),
     total: count(d.total),
+    fixing: d.fixing === true,
+    raisedHeads: raisedHeads(d.raisedHeads),
   };
 }

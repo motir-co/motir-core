@@ -62,6 +62,9 @@ export interface IssueRowData {
   /** The head of the To fix entry this card is carried by (MOTIR-7589) — the tag's
    *  name gains *· with {head}*; null otherwise. */
   fixHeadKey?: string | null;
+  /** FIXING (MOTIR-10309): a fix was pushed and its checks are running — the status cell's
+   *  tag draws the Fixing state. */
+  fixing?: boolean;
   /** The OBSOLESCENCE mark (MOTIR-6677) — the status cell draws its GLYPH after the
    *  status pill. Nothing hides, dims or re-sorts a marked row. */
   obsolescence: WorkItemObsolescenceDto | null;
@@ -187,6 +190,7 @@ function shapeRowData(
     ciState: item.ciState,
     fixReason: item.fixReason,
     fixHeadKey: item.fixHeadKey ?? null,
+    fixing: item.fixing === true,
     obsolescence: item.obsolescence,
     assigneeId: item.assigneeId,
     assigneeName: item.assigneeId ? (nameById.get(item.assigneeId) ?? null) : null,

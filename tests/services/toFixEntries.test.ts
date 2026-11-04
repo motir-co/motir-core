@@ -1,7 +1,14 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { homeService } from '@/lib/services/homeService';
-import { fixGroupPointersFor, fixHeadKeysFor } from '@/lib/services/fixGroupService';
+import { boardsService } from '@/lib/services/boardsService';
+import {
+  fixGroupPointersFor,
+  fixHeadKeysFor,
+  fixTagFactsFor,
+  fixTagFieldsOf,
+  NO_FIX_TAG_FACTS,
+} from '@/lib/services/fixGroupService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
@@ -361,5 +368,97 @@ describe('the pointers the tag and the banner draw from', () => {
     const storyNode = tree.find((n) => n.id === story.id);
     expect(storyNode?.fixHeadKey).toBeUndefined();
     expect(storyNode?.children.find((n) => n.id === leg.id)?.fixHeadKey).toBe(story.identifier);
+  });
+});
+
+// FIXING on the tag (Story MOTIR-10305 · MOTIR-10309): the rows carry only `fixReason`, so
+// the stored `fixDetail.fixing` reaches the List, the Tree, the board and the quick view
+// through the same one post-read lookup the head key uses — and only as `fixing: true`.
+describe('the Fixing flag the tag draws from (MOTIR-10309)', () => {
+  async function fixing(fx: WorkItemFixture, title: string, groupKey: string | null = null) {
+    const item = await stuck(fx, { title, groupKey });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { fixDetail: { ...(row.fixDetail as object), fixing: true } },
+    });
+    return item;
+  }
+
+  it('reads Fixing from the stored detail, beside the head key, in one lookup', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FXG' });
+    const story = await stuck(fx, { title: 'story', kind: 'story', groupKey: 'prs:ggg' });
+    const leg = await stuck(fx, { title: 'leg', groupKey: 'prs:ggg', parentId: story.id });
+    const pushed = await fixing(fx, 'pushed');
+    const plain = await stuck(fx, { title: 'plain', groupKey: null });
+
+    const facts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      fixTagFactsFor(fx.workspaceId, [story.id, leg.id, pushed.id, plain.id], tx),
+    );
+    expect([...facts.headKeys]).toEqual([[leg.id, story.identifier]]);
+    expect([...facts.fixingIds]).toEqual([pushed.id]);
+    expect(fixTagFieldsOf(pushed.id, facts)).toEqual({ fixing: true });
+    expect(fixTagFieldsOf(leg.id, facts)).toEqual({ fixHeadKey: story.identifier });
+    expect(fixTagFieldsOf(plain.id, facts)).toEqual({});
+    expect(fixTagFieldsOf(plain.id, NO_FIX_TAG_FACTS)).toEqual({});
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        fixTagFactsFor(fx.workspaceId, [], tx),
+      ),
+    ).toEqual(NO_FIX_TAG_FACTS);
+  });
+
+  it('a dead run is never Fixing, whatever its detail says', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FXD' });
+    const dead = await stuck(fx, { title: 'dead', groupKey: null, reason: 'run_died' });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: dead.id } });
+    await adminDb.workItem.update({
+      where: { id: dead.id },
+      data: { fixDetail: { ...(row.fixDetail as object), fixing: true } },
+    });
+    const facts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      fixTagFactsFor(fx.workspaceId, [dead.id], tx),
+    );
+    expect(facts.fixingIds.size).toBe(0);
+  });
+
+  it('the /items list, the tree, the board and the quick view carry it on the Fixing card only', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'FXS' });
+    const pushed = await fixing(fx, 'pushed');
+    const plain = await stuck(fx, { title: 'plain', groupKey: null });
+
+    const list = await workItemsService.getProjectIssuesList(
+      fx.projectId,
+      { sort: { column: 'key', direction: 'asc' } },
+      fx.ctx,
+    );
+    expect(list.items.find((r) => r.id === pushed.id)?.fixing).toBe(true);
+    expect(list.items.find((r) => r.id === plain.id)).not.toHaveProperty('fixing');
+
+    const tree = await workItemsService.getProjectTree(fx.projectId, {}, fx.ctx);
+    expect(tree.find((n) => n.id === pushed.id)?.fixing).toBe(true);
+    expect(tree.find((n) => n.id === plain.id)).not.toHaveProperty('fixing');
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const cards = board.columns.flatMap((c) => c.cards);
+    expect(cards.find((c) => c.id === pushed.id)?.fixing).toBe(true);
+    expect(cards.find((c) => c.id === plain.id)).not.toHaveProperty('fixing');
+
+    const peek = await workItemsService.getQuickView(
+      fx.projectId,
+      pushed.identifier,
+      'workspace',
+      fx.ctx,
+      'en',
+    );
+    expect(peek.fixing).toBe(true);
+    const plainPeek = await workItemsService.getQuickView(
+      fx.projectId,
+      plain.identifier,
+      'workspace',
+      fx.ctx,
+      'en',
+    );
+    expect(plainPeek).not.toHaveProperty('fixing');
   });
 });

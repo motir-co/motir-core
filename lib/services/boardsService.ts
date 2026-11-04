@@ -87,7 +87,7 @@ import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { readProject } from '@/lib/workspaces/tenantRead';
-import { fixHeadKeysFor } from '@/lib/services/fixGroupService';
+import { fixTagFactsFor, fixTagFieldsOf, NO_FIX_TAG_FACTS } from '@/lib/services/fixGroupService';
 
 // Boards service (Story 3.1) — business logic for the board entity. It hosts
 // two surfaces:
@@ -512,17 +512,17 @@ export const boardsService = {
       sprint = toSprintSummaryDto(activeSprint, points, columnPoints, new Date());
     }
 
-    // The To fix tag's *· with {head}* (MOTIR-7589): read only for the cards showing a
-    // reason, and never for a Visitor — a head key names another card.
-    const fixHeads = member
+    // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309): read only for
+    // the cards showing a reason, and never for a Visitor — a head key names another card.
+    const fixTags = member
       ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-          fixHeadKeysFor(
+          fixTagFactsFor(
             readCtx.workspaceId,
             built.flatMap((b) => b.rows.filter((r) => r.fixReason !== null).map((r) => r.id)),
             tx,
           ),
         )
-      : new Map<string, string>();
+      : NO_FIX_TAG_FACTS;
 
     const columnsDto: BoardColumnDto[] = built.map((b) => ({
       id: b.col.id,
@@ -538,8 +538,7 @@ export const boardsService = {
           swimlaneKey: swimlaneKeyByCard.get(r.id),
           statusCategory: categoryByStatusKey.get(r.status) ?? null,
         });
-        const head = fixHeads.get(r.id);
-        if (head) card.fixHeadKey = head;
+        Object.assign(card, fixTagFieldsOf(r.id, fixTags));
         // A Visitor's PRIVATE epic card wears "Not public" (MOTIR-6648;
         // `epic-privacy.md` §4) — a member's card is unchanged.
         return !member && r.kind === 'epic' && r.publicChildrenHidden

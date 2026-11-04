@@ -10141,6 +10141,9 @@
         "membersLabel": "Elementy robocze zablokowane razem z {key}",
         "showMore": "Pokaż {count, plural, one {# kolejny element roboczy} few {# kolejne elementy robocze} many {# kolejnych elementów roboczych} other {# kolejnego elementu roboczego}}",
         "showFewer": "Pokaż mniej"
+      },
+      "fixing": {
+        "checksRunning": "Testy działają na nowym wypchnięciu"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {Utknął z nim jeszcze # element roboczy} few {Utknęły z nim jeszcze # elementy robocze} many {Utknęło z nim jeszcze # elementów roboczych} other {Utknęło z nim jeszcze # elementu roboczego}}: <keys></keys>",
       "carriesMore": "i jeszcze {count}",
       "repairedWithHead": "Napraw to razem z <b>{head}</b> — dzielą jeden pull request.",
-      "toHead": "Otwórz {head}"
+      "toHead": "Otwórz {head}",
+      "fixing": "Poprawka została wypchnięta, a jej testy są w toku. Ten komunikat zniknie, gdy przejdą.",
+      "fixingWas": "Przed tym wypchnięciem: <reason></reason>"
+    },
+    "fixing": {
+      "label": "Naprawianie",
+      "name": "Naprawianie · testy działają na nowym wypchnięciu",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

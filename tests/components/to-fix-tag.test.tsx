@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import {
+  FixingTag,
   ToFixTag,
   toFixTagId,
   toFixTagNameKey,
@@ -183,5 +184,104 @@ describe("ToFixTag — a card carried by another card's entry (MOTIR-7589)", () 
       <ToFixTag fixReason="ci_failed" statusCategory="in_progress" form="glyph" headKey={null} />,
     );
     expect(screen.getByRole('img', { name: NAMES.ci_failed })).toBeTruthy();
+  });
+});
+
+// FIXING (Story MOTIR-10305 · MOTIR-10309; design `design/workbench/design-notes.md` § 40.2):
+// the SAME slot in another state — sky tint, `--el-text-strong` ink, a hammer — and never the
+// danger fill, because a card whose fix is being checked is not stuck.
+describe('ToFixTag — Fixing (MOTIR-10309)', () => {
+  const FIXING = 'Fixing · checks are running on a new push';
+
+  it('glyph: a hammer on a sky disc, named Fixing and then the reason', () => {
+    render(<ToFixTag fixReason="ci_failed" statusCategory="in_progress" form="glyph" fixing />);
+    const el = screen.getByRole('img', { name: `${FIXING} — ${NAMES.ci_failed}` });
+    expect(el.getAttribute('title')).toBe(`${FIXING} — ${NAMES.ci_failed}`);
+    expect(el.getAttribute('data-to-fix-fixing')).toBe('true');
+    expect(el.getAttribute('data-to-fix')).toBeNull();
+    expect(el.className).toContain('bg-(--el-tint-sky)');
+    expect(el.className).toContain('text-(--el-text-strong)');
+    expect(el.className).not.toContain('--el-danger');
+    expect(el.className).toContain('shrink-0');
+    expect(el.querySelector('.lucide-hammer')).toBeTruthy();
+    expect(el.querySelector('.lucide-wrench')).toBeNull();
+  });
+
+  it('label: the word Fixing, the rest of the name for a screen reader', () => {
+    render(<ToFixTag fixReason="changes_requested" statusCategory="in_progress" id="f-1" fixing />);
+    const el = document.getElementById('f-1')!;
+    expect(el.textContent).toBe(`${FIXING} — ${NAMES.changes_requested}`);
+    expect(el.getAttribute('title')).toBe(`${FIXING} — ${NAMES.changes_requested}`);
+    expect(el.querySelector('.sr-only')!.textContent).toBe(
+      ` · checks are running on a new push — ${NAMES.changes_requested}`,
+    );
+    expect(el.className).not.toContain('--el-danger');
+    expect(el.querySelector('.lucide-hammer')).toBeTruthy();
+  });
+
+  it('keeps the head and the review agent in the name', () => {
+    render(
+      <ToFixTag
+        fixReason="changes_requested"
+        statusCategory="in_progress"
+        form="glyph"
+        fixGate="agent_review"
+        headKey="PROD-12"
+        fixing
+      />,
+    );
+    expect(
+      screen.getByRole('img', {
+        name: `${FIXING} — To fix · sent back by the review agent · with PROD-12`,
+      }),
+    ).toBeTruthy();
+  });
+
+  it('a dead run is NEVER Fixing — it keeps the To fix tag', () => {
+    render(<ToFixTag fixReason="run_died" statusCategory="in_progress" form="glyph" fixing />);
+    const el = screen.getByRole('img', { name: NAMES.run_died });
+    expect(el.getAttribute('data-to-fix')).toBe('run_died');
+    expect(el.className).toContain('bg-(--el-danger)');
+  });
+
+  it('draws nothing for a done card or no reason, Fixing or not', () => {
+    const { container } = render(
+      <>
+        <ToFixTag fixReason="ci_failed" statusCategory="done" fixing />
+        <ToFixTag fixReason={null} statusCategory="in_progress" fixing />
+      </>,
+    );
+    expect(container.textContent).toBe('');
+  });
+
+  it('without the flag it is the To fix tag it always was', () => {
+    render(<ToFixTag fixReason="ci_failed" statusCategory="in_progress" form="glyph" />);
+    expect(screen.getByRole('img', { name: NAMES.ci_failed }).getAttribute('data-to-fix')).toBe(
+      'ci_failed',
+    );
+  });
+
+  it('reads in zh', () => {
+    render(<ToFixTag fixReason="ci_failed" statusCategory="in_progress" id="f-zh" fixing />, {
+      locale: 'zh',
+      messages: zhMessages,
+    });
+    const el = document.getElementById('f-zh')!;
+    expect(el.textContent).toBe('修复中 · 新推送的检查正在运行 — 待修复 · CI 未通过');
+  });
+
+  it('FixingTag alone is named Fixing, with no reason', () => {
+    render(<FixingTag form="glyph" />);
+    expect(screen.getByRole('img', { name: FIXING })).toBeTruthy();
+    cleanup();
+    render(<FixingTag id="f-alone" />);
+    expect(document.getElementById('f-alone')!.textContent).toBe(FIXING);
+  });
+
+  it('the catalogues carry the Fixing words in both locales', () => {
+    expect(enMessages.toFix.fixing.label).toBe('Fixing');
+    expect(zhMessages.toFix.fixing.label).toBe('修复中');
+    expect(enMessages.toFix.fixing.name.startsWith(enMessages.toFix.fixing.label)).toBe(true);
+    expect(zhMessages.toFix.fixing.name.startsWith(zhMessages.toFix.fixing.label)).toBe(true);
   });
 });

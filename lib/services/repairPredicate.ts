@@ -11,7 +11,12 @@ import type {
 } from '@/lib/dto/workItemRepair';
 import { isConflictedAtCurrentHead, isOutOfDateAtCurrentHead } from '@/lib/github/mergeability';
 import { derivePrCiState } from '@/lib/github/prCiState';
-import { pullRequestHead, prCiStateAtHead, checkRowsAtHead } from '@/lib/github/pullRequestHead';
+import {
+  checkRowsAtHead,
+  isCiUndecidedAtHead,
+  prCiStateAtHead,
+  pullRequestHead,
+} from '@/lib/github/pullRequestHead';
 import { classOfQueueExit } from '@/lib/mergeQueue/queueExit';
 import { githubPullRequestQueueExitRepository } from '@/lib/repositories/githubPullRequestQueueExitRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -19,7 +24,11 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { standingQueueFailures } from '@/lib/services/deliveryVerdict';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { queueExitStandsAtHead } from '@/lib/workItems/deliverySet';
-import { REVIEW_AGENT_REVIEWER_NAME, reviewerNameOf } from '@/lib/workItems/fixReason';
+import {
+  REVIEW_AGENT_REVIEWER_NAME,
+  reviewerNameOf,
+  type RunningHead,
+} from '@/lib/workItems/fixReason';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
 
@@ -56,7 +65,27 @@ export type RepairEvaluation =
       runTargetKey: string | null;
       /** The card's own failing open pull requests — what a child's pointer names. */
       failing: RepairPullRequestDto[];
+      /**
+       * The open members whose CI has NOT DECIDED at their head, each at that head
+       * (MOTIR-10307) — running, or awaiting its first check row (a push the host has
+       * announced before any check reported; MOTIR-10310). Set on the two refusals that
+       * mean *nothing red*: `ci_running` and `not_failing`. Empty on every other refusal.
+       * The claim never reads it; the stored To fix answer does, to tell a pushed fix
+       * (Fixing) from a card with nothing wrong.
+       */
+      running: RunningHead[];
     };
+
+/** The open members whose CI has not decided at their head — `prCiStateAtHead` says
+ *  `running`, or no row has reported at that head yet (`null`: the push is announced,
+ *  its checks not yet). `isCiUndecidedAtHead` is the one rule. */
+function runningMembersOf(
+  openRows: ReadonlyArray<{ pullRequest: DeliveryWithChecks['pullRequest'] }>,
+): RunningHead[] {
+  return openRows
+    .filter((d) => isCiUndecidedAtHead(d.pullRequest))
+    .map((d) => ({ pullRequestId: d.pullRequest.id, headSha: pullRequestHead(d.pullRequest) }));
+}
 
 /** The Implemented rung's key set, resolved by KEY PRESENCE (see `claimRepair`). */
 function ladderKeysOf(statuses: readonly WorkflowStatusDto[]) {
@@ -204,7 +233,7 @@ export async function evaluateRepair(
   // Review*), so the card is repaired from where it stands.
   const inReview = rank === RUNG_RANK.in_review;
   if (item.archivedAt !== null || (rank !== RUNG_RANK.implemented && !inReview)) {
-    return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [] };
+    return { ok: false, reason: 'not_implemented', runTargetKey: null, failing: [], running: [] };
   }
 
   // The verdict is `derivePrCiState` — the one the Development pill and
@@ -316,7 +345,17 @@ export async function evaluateRepair(
   if (inReview && !redAtHead) {
     const standing = await standingExitsAtHead(openRows, tx);
     if (standing.length === 0) {
-      return { ok: false, reason: 'not_failing', runTargetKey: null, failing: [] };
+      // ⚠️ IT HANDS OVER THE RUNNING MEMBERS TOO (MOTIR-10307). A card sent back for changes
+      // at In Review whose push moved its head lands HERE, not at `ci_running` below — the
+      // review arm above stopped matching at the new head — so the To fix answer reads the
+      // running members from this refusal to call it Fixing. The reason is unchanged.
+      return {
+        ok: false,
+        reason: 'not_failing',
+        runTargetKey: null,
+        failing: [],
+        running: runningMembersOf(openRows),
+      };
     }
     // ⚠️ A REASON NO CODE CHANGE FIXES IS REFUSED BY NAME (point 6). `motir fix` sends an
     // agent to change code: against branch protection, a missing app permission or a hand
@@ -324,7 +363,7 @@ export async function evaluateRepair(
     // nothing. What helps there is a person — approving again, or changing the setting —
     // and the refusal says so.
     if (!standing.some(repairableOutcome)) {
-      return { ok: false, reason: 'repair_not_code', runTargetKey: null, failing: [] };
+      return { ok: false, reason: 'repair_not_code', runTargetKey: null, failing: [], running: [] };
     }
   }
   // ⚠️ AND SO IS A MEMBER THE HOST REPORTS CONFLICTED AT ITS HEAD (MOTIR-5913, for bug
@@ -359,17 +398,23 @@ export async function evaluateRepair(
       reason: 'repair_on_run_target',
       runTargetKey: target.holder.identifier,
       failing,
+      running: [],
     };
   }
   if (deliveries.length === 0) {
-    return { ok: false, reason: 'no_pull_requests', runTargetKey: null, failing };
+    return { ok: false, reason: 'no_pull_requests', runTargetKey: null, failing, running: [] };
   }
   if (failing.length === 0) {
+    const running = open.some((m) => m.ci === 'running');
+    // The REFUSAL is decided by `running` alone, exactly as before — a member with no row
+    // at its head is still `not_failing` to the claim. The undecided members ride along
+    // on both refusals for the stored To fix answer only (MOTIR-10310).
     return {
       ok: false,
-      reason: open.some((m) => m.ci === 'running') ? 'ci_running' : 'not_failing',
+      reason: running ? 'ci_running' : 'not_failing',
       runTargetKey: null,
       failing,
+      running: runningMembersOf(openRows),
     };
   }
   return {

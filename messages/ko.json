@@ -10135,6 +10135,9 @@
         "membersLabel": "{key}와(과) 함께 멈춘 작업 항목",
         "showMore": "{count, plural, other {작업 항목 #개 더}} 표시",
         "showFewer": "간단히 보기"
+      },
+      "fixing": {
+        "checksRunning": "새 푸시에서 검사 실행 중"
       }
     },
     "toResume": {
@@ -15597,7 +15600,14 @@
       "carries": "{count, plural, other {작업 항목 #개가 더 함께 멈춰 있습니다}}: <keys></keys>",
       "carriesMore": "외 {count}개",
       "repairedWithHead": "<b>{head}</b>와(과) 함께 수정하세요 — 하나의 풀 리퀘스트를 공유합니다.",
-      "toHead": "{head} 열기"
+      "toHead": "{head} 열기",
+      "fixing": "수정이 푸시되어 검사가 실행 중입니다. 검사를 통과하면 이 표시가 사라집니다.",
+      "fixingWas": "이번 푸시 이전: <reason></reason>"
+    },
+    "fixing": {
+      "label": "수정 중",
+      "name": "수정 중 · 새 푸시에서 검사 실행 중",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

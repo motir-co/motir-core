@@ -2,7 +2,9 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { WorkItemFixReason } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
-import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
+import { deriveFixReason, recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
+import { homeService } from '@/lib/services/homeService';
+import { workItemFixReasonBackfillService } from '@/lib/services/workItemFixReasonBackfillService';
 import { workItemContinueService } from '@/lib/services/workItemContinueService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemRepairService } from '@/lib/services/workItemRepairService';
@@ -10,7 +12,9 @@ import {
   FIX_NOTE_PREVIEW_MAX,
   FIX_REASON_PRIORITY,
   deadRunReasonOf,
+  fixingReasonOf,
   notePreviewOf,
+  raisedHeadsOf,
   REVIEW_AGENT_REVIEWER_NAME,
   reviewerNameOf,
   sameFixReason,
@@ -187,6 +191,8 @@ describe('the pure half', () => {
       ...NO_DEAD_RUN,
       affected: 1,
       total: 1,
+      fixing: false,
+      raisedHeads: { pr1: 'a'.repeat(40), pr2: 'b'.repeat(40) },
     };
     expect(
       sameFixReason({ fixReason: null, fixDetail: null }, { fixReason: null, fixDetail: null }),
@@ -210,6 +216,47 @@ describe('the pure half', () => {
         { fixReason: 'ci_failed', fixDetail: { ...detail, groupKey: 'prs:def' } },
       ),
     ).toBe(false);
+    // FIXING (MOTIR-10307): a change of `fixing` or of any recorded head is a change…
+    expect(
+      sameFixReason(
+        { fixReason: 'ci_failed', fixDetail: detail },
+        { fixReason: 'ci_failed', fixDetail: { ...detail, fixing: true } },
+      ),
+    ).toBe(false);
+    for (const raisedHeads of [
+      { pr1: 'a'.repeat(40), pr2: 'd'.repeat(40) },
+      { pr1: 'a'.repeat(40) },
+      { pr1: 'a'.repeat(40), pr2: 'b'.repeat(40), pr3: 'e'.repeat(40) },
+      null,
+    ] as Array<Record<string, string> | null>) {
+      expect(
+        sameFixReason(
+          { fixReason: 'ci_failed', fixDetail: detail },
+          { fixReason: 'ci_failed', fixDetail: { ...detail, raisedHeads } },
+        ),
+      ).toBe(false);
+    }
+    // …a row stored before Fixing existed (no `fixing`, no heads) is rewritten once…
+    const { fixing: _f, raisedHeads: _h, ...legacy } = detail;
+    expect(
+      sameFixReason(
+        { fixReason: 'ci_failed', fixDetail: legacy },
+        { fixReason: 'ci_failed', fixDetail: detail },
+      ),
+    ).toBe(false);
+    expect(
+      sameFixReason(
+        { fixReason: 'ci_failed', fixDetail: { ...detail, raisedHeads: ['a'] } },
+        { fixReason: 'ci_failed', fixDetail: detail },
+      ),
+    ).toBe(false);
+    // …and a stored detail with no heads equals an answer with none.
+    expect(
+      sameFixReason(
+        { fixReason: 'run_died', fixDetail: legacy },
+        { fixReason: 'run_died', fixDetail: { ...detail, raisedHeads: null } },
+      ),
+    ).toBe(true);
     // jsonb hands the keys back in its own order — still the same answer.
     const reordered = Object.fromEntries(Object.entries(detail).reverse());
     expect(
@@ -230,7 +277,7 @@ describe('the pure half', () => {
 describe('each reason alone', () => {
   it('a red build is ci_failed, naming the first failing check', async () => {
     const fx = await makeWorkItemFixture();
-    const { card } = await cardWith(fx, 'implemented', {
+    const { card, pr } = await cardWith(fx, 'implemented', {
       Vitest: 'failure',
       Lint: 'failure',
       Build: 'success',
@@ -252,6 +299,9 @@ describe('each reason alone', () => {
         ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
+        // The head the reason was raised on (MOTIR-10307).
+        fixing: false,
+        raisedHeads: { [pr.id]: HEAD },
       },
     });
     expect(await stored(card.id)).toEqual(value);
@@ -304,6 +354,8 @@ describe('each reason alone', () => {
         ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
+        fixing: false,
+        raisedHeads: { [pr.id]: HEAD },
       },
     });
   });
@@ -364,19 +416,22 @@ describe('In Review with a red member (MOTIR-7491)', () => {
     await setStatus(card.id, status);
     const core = await connectRepairRepo(fx, `core-${randomToken(4)}`);
     const ai = await connectRepairRepo(fx, `ai-${randomToken(4)}`);
-    await deliveredPr(fx, card.id, core, { headRef: 'parent/x', checks: { Vitest: 'success' } });
+    const green = await deliveredPr(fx, card.id, core, {
+      headRef: 'parent/x',
+      checks: { Vitest: 'success' },
+    });
     const red = await deliveredPr(fx, card.id, ai, {
       headRef: 'parent/x',
       checks: { 'Guard against the gateway artifact': 'failure', Vitest: 'success' },
     });
-    return { card, red };
+    return { card, red, green };
   }
 
   it.each(['in_review', 'implemented'])(
     'at %s, one green member and one red is ci_failed naming the red check, 1 of 2',
     async (status) => {
       const fx = await makeWorkItemFixture();
-      const { card } = await oneGreenOneRed(fx, status);
+      const { card, red, green } = await oneGreenOneRed(fx, status);
 
       const value = await recompute(fx, card.id);
 
@@ -394,6 +449,9 @@ describe('In Review with a red member (MOTIR-7491)', () => {
           ...NO_DEAD_RUN,
           affected: 1,
           total: 2,
+          // Every open member's head, the green one's too: either may be the one pushed.
+          fixing: false,
+          raisedHeads: { [red.id]: HEAD, [green.id]: HEAD },
         },
       });
       expect(await stored(card.id)).toEqual(value);
@@ -662,13 +720,13 @@ describe('each clearing condition', () => {
     expect((await recompute(fx, card.id)).fixReason).toBeNull();
   });
 
-  it('a new commit after changes were requested clears it — and the card then waits on CI', async () => {
+  it('a new commit after changes were requested reads Fixing while its CI runs, and clears when it passes', async () => {
     const fx = await makeWorkItemFixture();
     const { card, repo, pr } = await cardWith(fx, 'in_review');
     await requestChanges(fx, card.id, versionOf(repo.name, pr.number));
     expect((await recompute(fx, card.id)).fixReason).toBe('changes_requested');
 
-    await adminDb.githubCheckRun.create({
+    const check = await adminDb.githubCheckRun.create({
       data: {
         pullRequestId: pr.id,
         commitSha: 'e'.repeat(40),
@@ -677,6 +735,17 @@ describe('each clearing condition', () => {
       },
     });
 
+    // The refusal no longer stands at the new head, and the push is being checked: the
+    // card stays on To fix as Fixing (MOTIR-10307) rather than leaving while CI runs.
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true, raisedHeads: { [pr.id]: HEAD } },
+    });
+
+    await adminDb.githubCheckRun.update({
+      where: { id: check.id },
+      data: { conclusion: 'success' },
+    });
     expect((await recompute(fx, card.id)).fixReason).toBeNull();
   });
 
@@ -752,6 +821,8 @@ describe('a standing review refusal the repair claim does not admit', () => {
         ...NO_DEAD_RUN,
         affected: 1,
         total: 1,
+        fixing: false,
+        raisedHeads: { [pr.id]: HEAD },
       },
     });
   });
@@ -968,6 +1039,9 @@ describe('run_died — read through the continue claim’s own evaluation', () =
         diedReason: view.reason,
         affected: 0,
         total: 0,
+        // A dead run records no heads and is never Fixing (MOTIR-10307).
+        fixing: false,
+        raisedHeads: null,
       },
     });
     expect(value.fixDetail).toMatchObject({
@@ -1095,5 +1169,323 @@ describe('run_died — read through the continue claim’s own evaluation', () =
     );
     expect(claimed.outcome).toBe('claimed');
     expect((await recompute(fx, taken.id)).fixReason).toBeNull();
+  });
+});
+
+// ── FIXING (Story MOTIR-10305 · MOTIR-10307) ─────────────────────────────────────────
+// A pushed fix keeps the card on To fix with its earlier reason and `fixing: true` while
+// CI runs at the new head; green clears it, red raises a fresh reason on the new heads.
+
+const PUSHED = 'd'.repeat(40);
+
+/** CI starting on a push: a pending check row at `sha`. */
+const ciStarts = (pullRequestId: string, sha = PUSHED, checkName = 'Vitest') =>
+  adminDb.githubCheckRun.create({
+    data: { pullRequestId, commitSha: sha, checkName, conclusion: 'pending' },
+  });
+
+const finishes = (checkRunId: string, conclusion: 'success' | 'failure') =>
+  adminDb.githubCheckRun.update({ where: { id: checkRunId }, data: { conclusion } });
+
+const hctx = (fx: WorkItemFixture) => ({ ...fx.ctx, projectId: fx.projectId });
+
+describe('Fixing — the pure half', () => {
+  const prior = {
+    fixReason: 'ci_failed' as const,
+    fixDetail: {
+      groupKey: 'prs:abc',
+      repair: 'fix' as const,
+      check: 'Vitest',
+      queueReason: null,
+      base: null,
+      reviewerName: null,
+      notePreview: null,
+      gate: null,
+      ...NO_DEAD_RUN,
+      affected: 1,
+      total: 2,
+      fixing: false,
+      raisedHeads: { pr1: HEAD, pr2: HEAD },
+    },
+  };
+
+  it('a running member at a head other than its recorded one keeps the prior answer, Fixing', () => {
+    expect(fixingReasonOf(prior, [{ pullRequestId: 'pr2', headSha: PUSHED }])).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...prior.fixDetail, fixing: true },
+    });
+  });
+
+  it('is not Fixing without a moved head, recorded heads or a pull-request reason', () => {
+    // A re-run of the same commit.
+    expect(fixingReasonOf(prior, [{ pullRequestId: 'pr1', headSha: HEAD }])).toBeNull();
+    // A member opened after the reason was raised proves nothing about the push.
+    expect(fixingReasonOf(prior, [{ pullRequestId: 'pr9', headSha: PUSHED }])).toBeNull();
+    // A member whose head is not known.
+    expect(fixingReasonOf(prior, [{ pullRequestId: 'pr1', headSha: null }])).toBeNull();
+    // A row stored before heads were recorded.
+    expect(
+      fixingReasonOf({ ...prior, fixDetail: { ...prior.fixDetail, raisedHeads: null } }, [
+        { pullRequestId: 'pr1', headSha: PUSHED },
+      ]),
+    ).toBeNull();
+    // run_died, nothing stored, or a reason with no detail.
+    for (const p of [
+      { ...prior, fixReason: 'run_died' as const },
+      { fixReason: null, fixDetail: null },
+      { fixReason: 'ci_failed' as const, fixDetail: null },
+    ]) {
+      expect(fixingReasonOf(p, [{ pullRequestId: 'pr1', headSha: PUSHED }])).toBeNull();
+    }
+  });
+
+  it('records every member with a known head', () => {
+    expect(
+      raisedHeadsOf([
+        { pullRequestId: 'a', headSha: HEAD },
+        { pullRequestId: 'b', headSha: null },
+      ]),
+    ).toEqual({ a: HEAD });
+  });
+});
+
+describe('Fixing — a pushed fix while its CI runs', () => {
+  async function redCard(fx: WorkItemFixture) {
+    const made = await cardWith(fx, 'implemented', { Vitest: 'failure' });
+    await adminDb.workItem.update({
+      where: { id: made.card.id },
+      data: { assigneeId: fx.ownerId },
+    });
+    const before = await recompute(fx, made.card.id);
+    expect(before).toMatchObject({
+      fixReason: 'ci_failed',
+      fixDetail: { fixing: false, raisedHeads: { [made.pr.id]: HEAD } },
+    });
+    return { ...made, before };
+  }
+
+  it('CI starting at a new head keeps ci_failed with fixing on — still listed, count unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr, before } = await redCard(fx);
+    const countBefore = (await homeService.tabCounts(hctx(fx))).toFix;
+
+    await ciStarts(pr.id);
+    const value = await recompute(fx, card.id);
+
+    expect(value).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...before.fixDetail, fixing: true },
+    });
+    expect(await stored(card.id)).toEqual(value);
+    const [page, counts] = await Promise.all([
+      homeService.listToFix(hctx(fx)),
+      homeService.tabCounts(hctx(fx)),
+    ]);
+    expect(page.items.map((i) => i.id)).toEqual([card.id]);
+    expect(counts.toFix).toBe(countBefore);
+    // The claim is untouched: a card with CI running and nothing red is refused as before.
+    expect(
+      await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx),
+    ).toMatchObject({ outcome: 'not_repairable', reason: 'ci_running' });
+    // While CI keeps running, the answer holds and nothing is rewritten.
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(await recompute(fx, card.id)).toEqual(value);
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).updatedAt,
+    ).toEqual(row.updatedAt);
+  });
+
+  it('green clears it — the card leaves To fix', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    const check = await ciStarts(pr.id);
+    expect((await recompute(fx, card.id)).fixDetail?.fixing).toBe(true);
+
+    await finishes(check.id, 'success');
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+    expect((await homeService.listToFix(hctx(fx))).items).toEqual([]);
+  });
+
+  it('red restores the failure reason, fixing off, raised on the NEW head', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    const check = await ciStarts(pr.id);
+    expect((await recompute(fx, card.id)).fixDetail?.fixing).toBe(true);
+
+    await finishes(check.id, 'failure');
+
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'ci_failed',
+      fixDetail: { check: 'Vitest', fixing: false, raisedHeads: { [pr.id]: PUSHED } },
+    });
+  });
+
+  it('CI re-running at the RECORDED head is not Fixing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id },
+      data: { conclusion: 'pending' },
+    });
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('a row stored with no recorded heads is not Fixing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    const {
+      raisedHeads: _h,
+      fixing: _f,
+      ...legacy
+    } = (await stored(card.id)).fixDetail as Record<string, string | number | boolean | null>;
+    await adminDb.workItem.update({ where: { id: card.id }, data: { fixDetail: legacy } });
+    await ciStarts(pr.id);
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('a prior run_died never reads Fixing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    const detail = (await stored(card.id)).fixDetail as Record<string, unknown>;
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { fixReason: 'run_died', fixDetail: { ...detail, repair: 'continue' } },
+    });
+    await ciStarts(pr.id);
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  describe('several open pull requests', () => {
+    async function twoMembers(fx: WorkItemFixture) {
+      const card = await createTestWorkItem(fx, { kind: 'story', title: 'two repos' });
+      await setStatus(card.id, 'implemented');
+      const core = await connectRepairRepo(fx, `core-${randomToken(4)}`);
+      const ai = await connectRepairRepo(fx, `ai-${randomToken(4)}`);
+      const red = await deliveredPr(fx, card.id, core, {
+        headRef: 'parent/x',
+        checks: { Vitest: 'failure' },
+      });
+      const other = await deliveredPr(fx, card.id, ai, {
+        headRef: 'parent/x',
+        checks: { Vitest: 'success' },
+      });
+      expect((await recompute(fx, card.id)).fixReason).toBe('ci_failed');
+      await ciStarts(red.id);
+      return { card, red, other };
+    }
+
+    it('one pushed and running, the other green, is Fixing', async () => {
+      const fx = await makeWorkItemFixture();
+      const { card } = await twoMembers(fx);
+
+      expect(await recompute(fx, card.id)).toMatchObject({
+        fixReason: 'ci_failed',
+        fixDetail: { fixing: true, affected: 1, total: 2 },
+      });
+    });
+
+    it.each([
+      [
+        'red',
+        'ci_failed',
+        async (id: string) => {
+          await adminDb.githubCheckRun.updateMany({
+            where: { pullRequestId: id },
+            data: { conclusion: 'failure' },
+          });
+        },
+      ],
+      ['conflicted', 'conflicted', (id: string) => conflict(id)],
+      ['queue-held', 'queue_failed', (id: string) => exitOn(id).then(() => undefined)],
+    ] as const)(
+      'one running and the other %s reads the failure reason, not Fixing',
+      async (_label, reason, makeStuck) => {
+        const fx = await makeWorkItemFixture();
+        const { card, other } = await twoMembers(fx);
+        await makeStuck(other.id);
+
+        expect(await recompute(fx, card.id)).toMatchObject({
+          fixReason: reason,
+          fixDetail: { fixing: false },
+        });
+      },
+    );
+  });
+
+  describe('changes requested', () => {
+    it('at Implemented: a standing refusal at the unchanged head is not Fixing; a push makes it Fixing', async () => {
+      const fx = await makeWorkItemFixture();
+      const { card, repo, pr } = await cardWith(fx, 'implemented');
+      await requestChanges(fx, card.id, versionOf(repo.name, pr.number));
+      expect(await recompute(fx, card.id)).toMatchObject({
+        fixReason: 'changes_requested',
+        fixDetail: { fixing: false, raisedHeads: { [pr.id]: HEAD } },
+      });
+
+      // A re-run of the same commit: the refusal still stands — the review class, not Fixing.
+      await adminDb.githubCheckRun.updateMany({
+        where: { pullRequestId: pr.id },
+        data: { conclusion: 'pending' },
+      });
+      expect(await recompute(fx, card.id)).toMatchObject({
+        fixReason: 'changes_requested',
+        fixDetail: { fixing: false },
+      });
+
+      await ciStarts(pr.id);
+      expect(await recompute(fx, card.id)).toMatchObject({
+        fixReason: 'changes_requested',
+        fixDetail: { fixing: true, gate: 'pull_request_approval', raisedHeads: { [pr.id]: HEAD } },
+      });
+    });
+
+    it('at In Review: Fixing although the predicate refuses it not_failing — the claim’s refusal is unchanged', async () => {
+      const fx = await makeWorkItemFixture();
+      const { card, repo, pr } = await cardWith(fx, 'in_review');
+      await requestChanges(fx, card.id, versionOf(repo.name, pr.number), { kind: 'agent_review' });
+      expect((await recompute(fx, card.id)).fixReason).toBe('changes_requested');
+
+      await ciStarts(pr.id);
+
+      expect(await recompute(fx, card.id)).toMatchObject({
+        fixReason: 'changes_requested',
+        fixDetail: { fixing: true, gate: 'agent_review' },
+      });
+      expect(
+        await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx),
+      ).toMatchObject({ outcome: 'not_repairable', reason: 'not_failing' });
+    });
+  });
+
+  it('the backfill leaves a Fixing card Fixing, its dry run predicts it, and a second run changes nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr, before } = await redCard(fx);
+    await ciStarts(pr.id);
+
+    const dry = await workItemFixReasonBackfillService.backfillFixReason({ dryRun: true });
+    expect(dry).toMatchObject({ fixing: 1, changed: [], failed: [] });
+    expect(dry.byReason.ci_failed).toBe(1);
+    // The rehearsal wrote nothing: the stored answer is still the one before the push.
+    expect(await stored(card.id)).toEqual(before);
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect(
+      await withWorkspaceContext({ userId: fx.ownerId, workspaceId: fx.workspaceId }, (tx) =>
+        deriveFixReason(row, tx),
+      ),
+    ).toEqual({ fixReason: 'ci_failed', fixDetail: { ...before.fixDetail, fixing: true } });
+
+    const run = await workItemFixReasonBackfillService.backfillFixReason({ dryRun: false });
+    expect(run).toMatchObject({ fixing: 1, changed: [], unchanged: 1, failed: [] });
+    expect(await stored(card.id)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...before.fixDetail, fixing: true },
+    });
+
+    const again = await workItemFixReasonBackfillService.backfillFixReason({ dryRun: false });
+    expect(again).toMatchObject({ fixing: 1, changed: [], unchanged: 1 });
   });
 });

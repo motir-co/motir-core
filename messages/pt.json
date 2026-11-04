@@ -10141,6 +10141,9 @@
         "membersLabel": "Itens de trabalho travados com {key}",
         "showMore": "Mostrar {count, plural, one {mais # item de trabalho} other {mais # itens de trabalho}}",
         "showFewer": "Mostrar menos"
+      },
+      "fixing": {
+        "checksRunning": "As verificações estão em execução no novo push"
       }
     },
     "toResume": {
@@ -15603,7 +15606,14 @@
       "carries": "{count, plural, one {Mais # item de trabalho está travado junto} other {Mais # itens de trabalho estão travados junto}}: <keys></keys>",
       "carriesMore": "e mais {count}",
       "repairedWithHead": "Repare junto com <b>{head}</b> — eles compartilham um pull request.",
-      "toHead": "Abrir {head}"
+      "toHead": "Abrir {head}",
+      "fixing": "Uma correção foi enviada e as verificações estão em execução. Isto desaparece quando elas passarem.",
+      "fixingWas": "Antes deste push: <reason></reason>"
+    },
+    "fixing": {
+      "label": "Corrigindo",
+      "name": "Corrigindo · verificações em execução em um novo push",
+      "withReason": "{fixing} — {reason}"
     }
   },
   "workItems": {

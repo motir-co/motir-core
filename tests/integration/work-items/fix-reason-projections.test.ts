@@ -136,6 +136,9 @@ describe('fixReason + fixDetail on the item page read (MOTIR-6611)', () => {
       pushed: null,
       continueKey: null,
       diedReason: null,
+      // …and one stored before Fixing (MOTIR-10307) reads as not Fixing, with no heads.
+      fixing: false,
+      raisedHeads: null,
     });
 
     const none = await workItemsService.getIssueDetail(fx.projectId, healthy.identifier, fx.ctx);

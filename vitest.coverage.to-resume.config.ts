@@ -26,6 +26,8 @@ export const MEASURED = [
   // MOTIR-7707 — the stored column, its derivation and its backfill.
   'lib/services/resumeStateService.ts',
   'lib/services/workItemResumeStateBackfillService.ts',
+  // MOTIR-10308 — moving again, measured against the gated run's snapshot.
+  'lib/workItems/resumeCi.ts',
   // MOTIR-7710 — the hosted auto-resume: the ask, the job and its record.
   'lib/services/gateResumeRequest.ts',
   'lib/services/gateResumeService.ts',
@@ -85,6 +87,7 @@ export default defineConfig({
       'tests/dispatchRuns/gateResume.test.ts',
       'tests/dispatchRuns/heldGates.test.ts',
       'tests/workbench/resumeState.test.ts',
+      'tests/workItems/resumeCi.test.ts',
       'tests/ready/claimContinueResume.test.ts',
       'tests/components/workbench-to-resume.test.tsx',
       'tests/components/workbench-to-resume-reshaped.test.tsx',

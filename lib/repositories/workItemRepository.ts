@@ -5467,12 +5467,23 @@ export const workItemRepository = {
    */
   async updateResumeState(
     id: string,
-    value: { resumeState: WorkItemResumeState | null; resumeRunId: string | null },
+    value: {
+      resumeState: WorkItemResumeState | null;
+      resumeRunId: string | null;
+      /** The gated run's snapshot of the delivery set (MOTIR-10308); omit to leave it. */
+      resumeDetail?: object | null;
+    },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
     await tx.workItem.update({
       where: { id },
-      data: { resumeState: value.resumeState, resumeRunId: value.resumeRunId },
+      data: {
+        resumeState: value.resumeState,
+        resumeRunId: value.resumeRunId,
+        // `undefined` leaves the stored snapshot as it is; `null` clears it to SQL NULL.
+        resumeDetail:
+          value.resumeDetail === undefined ? undefined : (value.resumeDetail ?? Prisma.DbNull),
+      },
     });
   },
 

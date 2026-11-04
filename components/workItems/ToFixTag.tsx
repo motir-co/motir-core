@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { Wrench } from 'lucide-react';
+import { Hammer, Wrench } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
@@ -19,6 +19,12 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 // fill is `--el-danger` and the ink `--el-danger-text` — the ONE legal use of that
 // ink is on an element that also carries `bg-(--el-danger)` (CLAUDE.md,
 // MOTIR-3663), which both forms below do.
+//
+// ⚠️ FIXING IS THIS TAG IN ANOTHER STATE, NOT A SECOND TAG (Story MOTIR-10305 · MOTIR-10309;
+// `design/workbench/design-notes.md` § 40.2). A card whose pushed fix is being checked
+// (`fixDetail.fixing`) is no longer stuck, so the state drops the danger fill for the sky
+// tint (`Pill` severity `info`) with `--el-text-strong` ink, and `Hammer` replaces `Wrench`.
+// Same slot, same two forms, so a card wears one tag at a time.
 //
 // ⚠️ ALL FOUR REASONS DRAW THE SAME TAG. The reason is in the accessible name and
 // the `title`, never in colour or shape; the detail (the check, the base, the
@@ -89,6 +95,11 @@ interface ToFixTagProps {
    * itself: the name and `title` gain *· with {head}*. Nothing visible changes.
    */
   headKey?: string | null;
+  /**
+   * FIXING (MOTIR-10309): a fix was pushed and its checks are running
+   * (`fixDetail.fixing`). Draws the Fixing state; the name still says the reason.
+   */
+  fixing?: boolean;
 }
 
 export function ToFixTag({
@@ -98,6 +109,7 @@ export function ToFixTag({
   id,
   fixGate = null,
   headKey = null,
+  fixing = false,
 }: ToFixTagProps) {
   const t = useTranslations();
   const reason = toFixTagState(fixReason, statusCategory);
@@ -105,6 +117,11 @@ export function ToFixTag({
 
   const own = t(`toFix.tagName.${toFixTagNameKey(reason, fixGate)}`);
   const name = headKey ? t('toFix.tagName.withHead', { name: own, head: headKey }) : own;
+
+  // A dead run is never Fixing (its repair is a continue, and its CI says nothing of it).
+  if (fixing && reason !== 'run_died') {
+    return <FixingTag form={form} id={id} reasonName={name} />;
+  }
 
   if (form === 'glyph') {
     // ⚠️ `shrink-0` is load-bearing, as on the CI and decision glyphs: the status
@@ -135,6 +152,61 @@ export function ToFixTag({
       data-to-fix={reason}
     >
       <Wrench className="h-3 w-3 shrink-0" aria-hidden />
+      {words}
+      <span className="sr-only">{tail}</span>
+    </Pill>
+  );
+}
+
+/**
+ * THE FIXING STATE (MOTIR-10309; design § 40.2) — the To fix tag's slot, size and two forms
+ * in the sky tint with `Hammer`. Its accessible name and `title` say the card is being
+ * fixed and, after it, the To fix name it would otherwise wear (`reasonName`), so a reader
+ * of the compact tag still learns why the card was on To fix. Exported for the Workbench
+ * row and the page banner, which draw it beside their own reason sentence.
+ */
+export function FixingTag({
+  form = 'label',
+  id,
+  reasonName = null,
+}: {
+  form?: 'label' | 'glyph';
+  id?: string;
+  /** The To fix tag's own name for the reason; null where the sentence beside it says it. */
+  reasonName?: string | null;
+}) {
+  const t = useTranslations('toFix.fixing');
+  const fixingName = t('name');
+  const name = reasonName
+    ? t('withReason', { fixing: fixingName, reason: reasonName })
+    : fixingName;
+
+  if (form === 'glyph') {
+    // `shrink-0` is load-bearing, as on the To fix glyph: the status cell is a flex row.
+    return (
+      <span
+        className="inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-(--el-tint-sky) text-(--el-text-strong)"
+        role="img"
+        aria-label={name}
+        title={name}
+        data-to-fix-fixing="true"
+      >
+        <Hammer className="h-3 w-3 shrink-0" aria-hidden />
+      </span>
+    );
+  }
+
+  const words = t('label');
+  const tail = name.startsWith(words) ? name.slice(words.length) : ` · ${name}`;
+  return (
+    <Pill
+      id={id}
+      severity="info"
+      className="shrink-0 whitespace-nowrap"
+      title={name}
+      data-to-fix-fixing="true"
+    >
+      <Hammer className="h-3 w-3 shrink-0" aria-hidden />
       {words}
       <span className="sr-only">{tail}</span>
     </Pill>

@@ -6,12 +6,20 @@ import type {
 } from '@/generated/prisma/client';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { collectDeliveries } from '@/lib/services/deliveryVerdict';
 import { dispatchRunHeldGateRepository } from '@/lib/repositories/dispatchRunHeldGateRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ladderKeysFrom, RUNG_RANK, rankOfStatus } from '@/lib/workItems/statusLadder';
+import {
+  advanceResumeCiSnapshot,
+  sameResumeCiSnapshot,
+  takeResumeCiSnapshot,
+  toResumeCiSnapshot,
+  type ResumeCiSnapshot,
+} from '@/lib/workItems/resumeCi';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // WHETHER A CARD WAITS TO RESUME, STORED (Story MOTIR-7701 · MOTIR-7707) —
@@ -24,7 +32,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // it: the approval releases it. So it is its own column, carved out of In progress
 // the way `fixReason` is, and To fix wins on the rare card where both hold.
 //
-// ── A pure function of runs and gates ──────────────────────────────────────
+// ── A function of runs, gates and the delivery set's CI ─────────────────────
 // The card's LATEST run (the continue claim's own read, `findLatestForWorkItem`)
 // decides it: a run that closed `gated` makes the card wait; anything newer — a
 // continue, a fresh run, a run that died — takes it off, and a died run is To fix's
@@ -33,6 +41,12 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // `waiting_on_gate`. Each held gate is read as the LATEST gate of its kind on its
 // card, so a design republished after the run stopped (its first gate superseded)
 // is answered by the version a person actually decided.
+//
+// Two facts outside the run take a card off as well: an open delivery at Implemented /
+// In Review / Approved (MOTIR-8611, below), and CI that STARTED on the card's delivery set
+// after the gated run ended (Story MOTIR-10305 · MOTIR-10308) — somebody pushed, so the
+// card is moving again and belongs to In progress, not to a resume nobody needs. That
+// second fact is why the CI handlers (`changeRequestCiFeedback`) recompute this column.
 //
 // ── The shape is `recomputeWorkItemFixReason`'s ─────────────────────────────
 // A read-derived write under the card's row lock, idempotent (an unchanged answer
@@ -52,21 +66,47 @@ export const NOTHING_TO_RESUME: ResumeStateValue = { resumeState: null, resumeRu
  * delivered (Implemented / In Review / Approved with an open pull request).
  */
 export async function deriveResumeState(
-  item: {
-    id: string;
-    projectId: string;
-    workspaceId: string;
-    status: string;
-    archivedAt: Date | null;
-  },
+  item: ResumeStateItem,
   tx: Prisma.TransactionClient,
 ): Promise<ResumeStateValue> {
-  if (item.archivedAt !== null) return NOTHING_TO_RESUME;
+  return (await deriveResumeAnswer(item, tx)).value;
+}
+
+/** What the To resume derivation reads of a card. */
+export interface ResumeStateItem {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  status: string;
+  archivedAt: Date | null;
+  /** For the delivery set's session-branch arm (`collectDeliveries`). */
+  sessionBranch: string | null;
+  /** The gated run's stored snapshot of the delivery set (MOTIR-10308). */
+  resumeDetail?: unknown;
+}
+
+/**
+ * The answer and the snapshot it was read against — what the recompute stores. `snapshot`
+ * is `undefined` on every exit before the gated run is read: the stored one is LEFT as it
+ * is, so a card that moved again stays off To resume through a status move and back.
+ */
+interface ResumeAnswer {
+  value: ResumeStateValue;
+  snapshot?: ResumeCiSnapshot | null;
+}
+
+const NO_ANSWER: ResumeAnswer = { value: NOTHING_TO_RESUME };
+
+async function deriveResumeAnswer(
+  item: ResumeStateItem,
+  tx: Prisma.TransactionClient,
+): Promise<ResumeAnswer> {
+  if (item.archivedAt !== null) return NO_ANSWER;
   const statuses = (
     await workflowsRepository.findStatuses(item.projectId, item.workspaceId, tx)
   ).map(toWorkflowStatusDto);
   if (statuses.find((s) => s.key === item.status)?.category !== 'in_progress') {
-    return NOTHING_TO_RESUME;
+    return NO_ANSWER;
   }
   // ⚠️ DELIVERED IS NOT PARKED (MOTIR-8611). Implemented / In Review / Approved share the
   // `in_progress` CATEGORY, but a card there WITH AN OPEN PULL REQUEST is CI's to move from
@@ -83,19 +123,54 @@ export async function deriveResumeState(
       rank === RUNG_RANK.approved) &&
     (await workItemDeliveryRepository.countOpenByWorkItem(item.id, tx)) > 0
   ) {
-    return NOTHING_TO_RESUME;
+    return NO_ANSWER;
   }
 
   const run = await dispatchRunRepository.findLatestForWorkItem(item.id, tx);
-  if (!run || run.status !== 'succeeded' || run.stopReason !== 'gated') return NOTHING_TO_RESUME;
+  if (!run || run.status !== 'succeeded' || run.stopReason !== 'gated') return NO_ANSWER;
+
+  // ⚠️ MOVING AGAIN IS NOT PARKED (MOTIR-10308). CI that started on the delivery set
+  // since the run stopped means the card's work went on without a resume, so offering one
+  // would resume a run the card has moved past. "Since" is measured against the snapshot
+  // the gated run's own recompute took of the set (`lib/workItems/resumeCi.ts`), never by
+  // timestamp alone: the run's OWN last push is checked after it stops, and that CI is not
+  // a new start. The set is `collectDeliveries`', the one answer to which pull requests
+  // deliver a card.
+  const snapshot = await resumeCiSnapshotFor(item, run, tx);
+  if (snapshot?.moved) return { value: NOTHING_TO_RESUME, snapshot };
 
   const { verdict } = await readHeldGateVerdict(run.id, tx);
   // Declined / overturned stay waiting; a gate answered "changes requested" is
   // decided and releases the run to redo the work (MOTIR-9185).
   return {
-    resumeState: verdict === 'released' ? 'ready_to_resume' : 'waiting_on_gate',
-    resumeRunId: run.id,
+    value: {
+      resumeState: verdict === 'released' ? 'ready_to_resume' : 'waiting_on_gate',
+      resumeRunId: run.id,
+    },
+    snapshot,
   };
+}
+
+/**
+ * The gated run's snapshot of the delivery set, read NOW: the stored one advanced over the
+ * set when it is this run's, else a fresh one (the run's first recompute — its close — or a
+ * card stored before snapshots existed, which therefore has nothing to compare yet).
+ */
+async function resumeCiSnapshotFor(
+  item: { id: string; sessionBranch: string | null; resumeDetail?: unknown },
+  run: { id: string; endedAt: Date | null },
+  tx: Prisma.TransactionClient,
+): Promise<ResumeCiSnapshot | null> {
+  if (run.endedAt === null) return null;
+  const members = [...(await collectDeliveries(item, tx))].map(([id, pr]) => ({
+    id,
+    headSha: pr.headSha,
+    checkRuns: pr.checkRuns,
+  }));
+  const stored = toResumeCiSnapshot(item.resumeDetail ?? null);
+  return stored?.runId === run.id
+    ? advanceResumeCiSnapshot(stored, members, run.endedAt)
+    : takeResumeCiSnapshot(run.id, members);
 }
 
 /** One gate a `gated` run stopped on, as it stands NOW. */
@@ -195,9 +270,20 @@ export async function recomputeWorkItemResumeState(
   /* v8 ignore next -- a granted lock on an immutable id implies a readable row */
   if (!item) return NOTHING_TO_RESUME;
 
-  const next = await deriveResumeState(item, tx);
-  if (item.resumeState !== next.resumeState || item.resumeRunId !== next.resumeRunId) {
-    await workItemRepository.updateResumeState(workItemId, next, tx);
+  const { value: next, snapshot } = await deriveResumeAnswer(item, tx);
+  const snapshotChanged =
+    snapshot !== undefined &&
+    !sameResumeCiSnapshot(toResumeCiSnapshot(item.resumeDetail ?? null), snapshot);
+  if (
+    item.resumeState !== next.resumeState ||
+    item.resumeRunId !== next.resumeRunId ||
+    snapshotChanged
+  ) {
+    await workItemRepository.updateResumeState(
+      workItemId,
+      snapshotChanged ? { ...next, resumeDetail: snapshot } : next,
+      tx,
+    );
   }
   return next;
 }

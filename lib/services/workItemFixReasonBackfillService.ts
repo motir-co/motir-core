@@ -56,6 +56,9 @@ export interface FixReasonBackfillReport {
   /** How many examined cards read each reason AFTER the sweep (`none` for null) —
    *  the To fix tab's population, by reason, as the sweep left it. */
   byReason: Record<WorkItemFixReasonDto | 'none', number>;
+  /** How many examined cards read FIXING after the sweep (MOTIR-10307) — a fix pushed
+   *  and its CI running. They are counted under their reason in `byReason` as well. */
+  fixing: number;
   /** How many candidates the sweep set out to examine. */
   total: number;
   /** `true` when `signal` stopped the sweep before it reached every candidate. */
@@ -138,6 +141,7 @@ export const workItemFixReasonBackfillService = {
       skippedArchived: 0,
       failed: [],
       byReason: emptyByReason(),
+      fixing: 0,
       total: candidates.length,
       interrupted: false,
     };
@@ -161,10 +165,16 @@ export const workItemFixReasonBackfillService = {
           // The dry run derives without the lock: nothing is written, so there is
           // nothing to serialise against, and a row lock per card on a rehearsal would
           // block live traffic for the length of the sweep.
-          const to = opts.dryRun
-            ? (await deriveFixReason(item, tx)).fixReason
-            : (await recomputeWorkItemFixReason(workItemId, tx)).fixReason;
-          return { kind: 'decided' as const, identifier: item.identifier, from, to };
+          const next = opts.dryRun
+            ? await deriveFixReason(item, tx)
+            : await recomputeWorkItemFixReason(workItemId, tx);
+          return {
+            kind: 'decided' as const,
+            identifier: item.identifier,
+            from,
+            to: next.fixReason,
+            fixing: next.fixDetail?.fixing === true,
+          };
         });
 
         /* v8 ignore next -- the other half of the race arm above. */
@@ -175,6 +185,7 @@ export const workItemFixReasonBackfillService = {
           continue;
         }
         report.byReason[outcome.to ?? 'none'] += 1;
+        if (outcome.fixing) report.fixing += 1;
         if (outcome.from === outcome.to) report.unchanged += 1;
         else
           report.changed.push({

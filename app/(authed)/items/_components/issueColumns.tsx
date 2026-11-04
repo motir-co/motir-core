@@ -256,6 +256,7 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
             statusCategory={r.statusCategory}
             form="glyph"
             headKey={r.fixHeadKey}
+            fixing={r.fixing === true}
           />
         </span>
       ),

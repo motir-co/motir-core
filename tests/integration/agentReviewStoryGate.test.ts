@@ -811,17 +811,23 @@ describe('3 · sent back — changes_requested → To fix → `motir fix` claims
     });
     expect((await cardRow(d.item.id)).status).toBe(statusBefore);
 
-    // The repair pushes: the head moves, the refusal is about an older version — To fix clears.
+    // The repair pushes: the head moves, the refusal is about an older version — the card
+    // stays on To fix as FIXING while the new version's CI runs (Story MOTIR-10305).
     await push(w, d.prs[0]!.repo, d.prs[0]!.number, d.prs[0]!.headRef, 'sha-b');
-    expect((await cardRow(d.item.id)).fixReason).toBeNull();
+    expect(await cardRow(d.item.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: expect.objectContaining({ fixing: true }),
+    });
     // The decided refusal is history — nothing re-decided it.
     expect(await gateRow(review.id)).toMatchObject({
       state: 'changes_requested',
       noteMd: FINDINGS,
     });
 
-    // The next green is reviewed again — a NEW review at the NEW version, one new request.
+    // The next green is reviewed again — a NEW review at the NEW version, one new request —
+    // and the green is what takes it off To fix.
     await allGreen(w, d, 'sha-b');
+    expect((await cardRow(d.item.id)).fixReason).toBeNull();
     const next = await awaitingOf(d.item.id, REVIEW);
     expect(next).toHaveLength(1);
     expect(next[0]!.id).not.toBe(review.id);
@@ -1166,7 +1172,7 @@ describe('9 · conventions are optional — a two-repository card with motir-ai 
 // ── 10. Fix on the hosted agent (§12.4b · §8.6) — the server half ──────────────────
 
 describe('10 · Fix on the hosted agent — the press → the fix run → its push → the next review', () => {
-  it('a sent-back card is repaired on the hosted agent; the push clears To fix and the next green is reviewed', async () => {
+  it('a sent-back card is repaired on the hosted agent; the push reads Fixing and the next green clears it and is reviewed', async () => {
     const w = await makeWorld();
     const { d, review, run: reviewRun, runToken } = await greenToReviewRun(w, 211);
     await submitVerdict(runToken, d.item.identifier, {
@@ -1228,16 +1234,21 @@ describe('10 · Fix on the hosted agent — the press → the fix run → its pu
       permissions: { contents: 'write', pull_requests: 'write' },
     });
 
-    // Its push lands: the head moves, To fix clears, the card never moved status.
+    // Its push lands: the head moves and the card reads FIXING while the new version's CI
+    // runs (Story MOTIR-10305); the card never moved status.
     await push(w, d.prs[0]!.repo, 211, d.prs[0]!.headRef, 'sha-fixed');
-    expect((await cardRow(d.item.id)).fixReason).toBeNull();
+    expect(await cardRow(d.item.id)).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: expect.objectContaining({ fixing: true }),
+    });
     await hostedRunService.endHostedRun(dispatchRunId, 'exited', 'the container exited 0');
     const after = await cardRow(d.item.id);
     expect(after.status).toBe(before.status);
-    expect(after.fixReason).toBeNull();
+    expect(after.fixReason).toBe('changes_requested');
 
-    // The next green is reviewed — a new review at the repaired version.
+    // The next green clears To fix and is reviewed — a new review at the repaired version.
     await allGreen(w, d, 'sha-fixed');
+    expect((await cardRow(d.item.id)).fixReason).toBeNull();
     const next = await awaitingOf(d.item.id, REVIEW);
     expect(next).toHaveLength(1);
     expect(next[0]!.subjectVersion).toBe(versionOf(w, d, 'sha-fixed'));

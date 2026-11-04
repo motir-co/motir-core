@@ -338,3 +338,41 @@ describe('the quick-view header — the label after the status pill', () => {
     expect(document.querySelector('[data-to-fix]')).toBeNull();
   });
 });
+
+// FIXING ON ITS THREE HOSTS (Story MOTIR-10305 · MOTIR-10309; design § 40.2): the same slot
+// in the sky tint with a hammer, read from each DTO's `fixing` — absent, the To fix tag.
+describe('Fixing (MOTIR-10309) — the same slot on every host', () => {
+  const FIXING = 'Fixing · checks are running on a new push';
+
+  it('the List row draws the Fixing glyph in the status cell', () => {
+    renderList([
+      node({ id: 'f1', key: 31, fixReason: 'ci_failed', fixing: true }),
+      node({ id: 'f2', key: 32, fixReason: 'ci_failed' }),
+    ]);
+    const fixing = screen.getByRole('img', { name: `${FIXING} — To fix · CI failed` });
+    expect(fixing.getAttribute('data-to-fix-fixing')).toBe('true');
+    expect(document.querySelectorAll('[data-to-fix-fixing]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-to-fix="ci_failed"]')).toHaveLength(1);
+  });
+
+  it('the board card draws the Fixing label, still named by aria-describedby', () => {
+    render(
+      <BoardCard
+        card={card({ id: 'w31', key: 31, fixReason: 'ci_failed', fixing: true })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    const tag = document.getElementById('to-fix-w31')!;
+    expect(tag.getAttribute('data-to-fix-fixing')).toBe('true');
+    expect(tag.textContent).toBe(`${FIXING} — To fix · CI failed`);
+    expect(document.querySelector('[data-to-fix]')).toBeNull();
+  });
+
+  it('the quick-view header draws the Fixing label after the status pill', () => {
+    render(<IssueQuickViewPanel state="ready" data={{ ...QV, fixing: true }} />);
+    const tag = document.querySelector('[data-to-fix-fixing]') as HTMLElement;
+    expect(tag.textContent).toBe(`${FIXING} — To fix · conflicts with its base branch`);
+    expect(tag.previousElementSibling?.textContent).toBe('In Review');
+  });
+});
