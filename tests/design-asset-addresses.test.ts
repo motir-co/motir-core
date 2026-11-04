@@ -668,6 +668,20 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/runs/[id]',
     why: 'Forward-looking: the run view MOTIR-3895 builds. Named in the surface table as the third surface of this area, whose asset is MOTIR-3893’s.',
   },
+  // ── Forward-looking: Settings › Organisation › Fleet (Story MOTIR-10363) ──
+  //    The delta (MOTIR-10365) draws a pane that does not exist yet. MOTIR-10369
+  //    builds `/settings/organization/fleet` and its rail row, and deletes these
+  //    two rows in the commit that adds the route.
+  {
+    file: 'design/org-admin/design-notes.md',
+    address: '/settings/organization/fleet',
+    why: 'Forward-looking: the org Fleet pane MOTIR-10369 builds. Delete this row in the commit that adds the route.',
+  },
+  {
+    file: 'design/org-admin/org-admin--fleet.mock.html',
+    address: '/settings/organization/fleet',
+    why: 'Forward-looking: the org Fleet pane MOTIR-10369 builds, drawn as the rail row href. Delete this row in the commit that adds the route.',
+  },
   // ── Forward-looking: the two run PAGES (MOTIR-3893's asset) ──────────────
   //    The design draws the surfaces; MOTIR-3895 builds `/runs/[id]` and
   //    MOTIR-3923 builds `/runs` and its rail row. Each of these four rows

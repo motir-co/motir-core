@@ -1265,3 +1265,134 @@ MOTIR-8094 (the change service/route: owner/admin only, members refused, the
 who/from/to/when record) and MOTIR-8095 (the control, which builds every state
 above). The story's acceptance criteria and its Verification steps 5–6 are what
 panels 4–7 draw.
+
+## Settings › Organisation › Fleet — what the organisation runs on Motir's fleet, and how an owner or admin stops it (delta, 2026-11-04)
+
+**Design system — verdict: ON MOTIR DESIGN, branch (a).** Read: `package.json`
+(`"@motir/design-system": "workspace:*"`), `app/globals.css`
+(`@import '@motir/design-system/theme.css'`) and
+`packages/design-system/package.json` (**0.19.0**, which exports `./mock`). The
+axes are each person's own (`app/layout.tsx` stamps their applied `data-style` /
+`data-palette` / `data-type`), so the mock is drawn at the package defaults
+(`DEFAULT_STYLE_ID` · `DEFAULT_PALETTE_ID` · `DEFAULT_TYPE_ID`) on a full-width
+board. It is built with the package's `renderMock` from the real parts — `Card`,
+`Button`, `Pill`, `EmptyState` — and the app's own `components/ui/Sidebar.tsx`
+rail, driven by the real `lib/settings/organizationSettingsNav.ts` registry with
+the proposed row inserted, plus `Meter` from the billing pane. Two surfaces
+`renderMock` cannot open statically are drawn with the exact class lists their
+parts carry: the `Modal` panel (Radix portals) and the notification drawer row
+(`app/(authed)/_components/NotificationRow.tsx`). **Nothing new is proposed for
+the package**, and no product-local component beyond the page's own sections.
+
+**Asset:** [`org-admin--fleet.mock.html`](./org-admin--fleet.mock.html), a NEW
+delta. It amends § _Where it lives_ (the organisation settings rail, panels
+7a–7d of [`org-admin.mock.html`](./org-admin.mock.html)) by one row, and adds
+one pane to the area. No existing mock is edited.
+
+**Composed from shipped grammar, not redrawn.** The tiles are the platform
+tenant page's Fleet card tiles (`OrgFleetCard`: the four-up grid, the index tile
+on `--el-surface-soft`) carrying the organisation's own Fleet use figures, with
+the Billing & plans `Meter` under each figure that has one. The section cards
+use `OrgFleetCard`'s header grammar (tinted icon chip, `text-sm` title, a
+secondary lead). The Stop everything confirmation, its effect list, its
+unreadable-counts state and the result banner are the platform's
+`StopContainersDialog` grammar, minus the operator's reason field. The member's
+forbidden panel is the area's existing `EmptyState` + `Lock` state
+(`orgAdmin.states.forbiddenTitle`).
+
+### Where it lives — the door
+
+The organisation settings rail gains **Fleet** in the **Billing** group,
+**after Usage & cost and before Billing & plans**, at
+`/settings/organization/fleet`, icon `Server` (the Fleet card's own glyph). The
+row is **owner/admin only** and **present only where the fleet meter is**
+(the registry's `orgAdminOnly` + `cloudOnly`, the same flags Billing & plans
+carries). So a plain member's rail has no Fleet row, and on a build without the
+fleet meter the row is absent for everyone and the route answers 404. Panel 1
+draws all three rails side by side.
+
+### The page (top to bottom)
+
+| element                        | what it is                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| page header                    | breadcrumb **"{org} · Settings"**, `h1` **"Fleet"** (`font-serif text-3xl`), lead _"What {org} is running on Motir's fleet right now, and the controls to stop it. Capacity requests stay on Billing & plans › Fleet use."_ — the last four words a `--el-link` to `/settings/organization/billing#fleet-use`. Column `mx-auto max-w-[64rem]`, the Usage pane's width.                                                                                                                                                                                        |
+| refresh bar                    | between two `--el-border` hairlines. Left: the cue _"Updated {time} · refreshes every 30 seconds while this tab is open"_ (`RotateCw`, `--el-text-secondary`, an `aria-live="polite"` region) and under it the **last-stop line**. Right: **Refresh** (`Button` secondary, `RotateCw`) and **Stop everything** (`Button` secondary, `Ban` — the platform's trigger grammar; the danger fill is the confirm's).                                                                                                                                                |
+| last-stop line                 | _"Last stopped by {name}, {when}"_; before any stop _"No one in {org} has stopped fleet work yet."_ After this person's own stop it reads _"Last stopped by you, {when}"_.                                                                                                                                                                                                                                                                                                                                                                                    |
+| tiles                          | four tiles: **Hosted agent runs in parallel** (`Sparkles`, _n of figure_, meter), **Agents** (`Server`, live agents of the org figure, meter, _"Running and hibernating"_), **CI jobs in flight** (`Layers`, _n of figure_, meter, _"{n} waiting"_), **Index jobs** (`Folder`, a bare count, _"Not charged"_, on `--el-surface-soft`). The figures are the Fleet use figures; the page derives none.                                                                                                                                                          |
+| Hosted agent runs              | chip `--el-tint-lavender` / `--el-accent-on-surface`. One row per live run: the card key (mono, `--el-text-secondary`) and title, then _"{project} · started by {name} · {time} · Open run"_ (`--el-link` to the run page). Status `Pill severity="info"` **Running**. Action **Cancel** (`Button` secondary `sm`), labelled _"Cancel the run of {key}"_. Count chip `Pill tone="neutral"` _"{n} live"_.                                                                                                                                                      |
+| Agent instances                | chip `--el-tint-sky` / `--el-info`. Lead _"Every member's agents, running or hibernating. Only Hibernate is offered here."_ Row: _"{owner}'s agent · {profile}"_, then _"{project} · running since {time}"_ / _"hibernating since {when}"_. Status `Pill severity="success"` **Running** or `Pill tone="archived"` **Hibernating**. A running row has **Hibernate** (`Button` secondary `sm`, `Moon`), labelled _"Hibernate {owner}'s agent"_; a hibernating row has **no action**. **No row links anywhere**: not to the agent's panel, not to its terminal. |
+| CI jobs                        | chip `--el-tint-mint` / `--el-success`. Row: the repository `owner/name` (mono) · workflow · job, then _"{project} · queued {time} · View on GitHub"_ (`--el-link` + `ExternalLink`, to the Actions run). Status `Pill severity="success"` **Running**, or `Pill tone="awaiting"` **"Waiting · {cause}"** with the cause in Fleet use's three words: _plan limit_, _pool full_, _other_. No stop control per job.                                                                                                                                             |
+| Index jobs                     | chip `--el-surface-soft` / `--el-text-secondary` (inactive: nothing to do here). A count _"{n} running"_ and the line _"Indexing keeps code search current. It is not charged and is not stopped here."_ **No control.**                                                                                                                                                                                                                                                                                                                                      |
+| Stopped by Motir · last 7 days | chip `--el-tint-peach` / `--el-warning`. Lead _"Machines Motir itself stopped for this organisation, and why."_ Row: the kind of work (_CI job container_, _Hosted agent run_, _Agent instance_), then _"{when} · {reason}"_ with the reason in plain words: _"its job had already ended"_, _"no record of it was found"_, _"the organisation's work was stopped"_. Status `Pill tone="neutral"` **Done**, or `Pill severity="warning"` **Did not complete**.                                                                                                 |
+
+Index jobs and Stopped by Motir sit side by side (`md:grid-cols-2`) under the
+three live sections.
+
+### States (panel by panel)
+
+| panel | state                               | what is drawn                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | the door                            | owner/admin rail with Fleet after Usage & cost (active); a plain member's rail (Organisation only); an owner/admin rail on a build without the fleet meter (no Fleet, no Billing & plans)                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2     | populated                           | a live hosted run, another member's running agent, a second running agent, a hibernating one, a CI job in flight and one waiting on the plan limit, one index job, three Motir stops                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 3     | empty                               | every section in its own words (_"No hosted agent run is live."_, _"No agent is running or hibernating."_, _"No CI job is in flight or waiting."_, _"0 running"_, _"Motir stopped nothing for this organisation in the last 7 days."_); tiles at 0; **Stop everything disabled**; the never-stopped line                                                                                                                                                                                                                                                                                                                                  |
+| 4a    | first load                          | the page header is real (it needs no read); tiles and sections show `--el-muted` pulse lines with `aria-busy`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| 4b    | the 30-second refresh               | the LAST data stays on screen; Refresh shows its `loading` spinner and the cue reads _"Refreshing…"_. A refresh never blanks a section                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 5     | one section fails                   | Agent instances shows the error callout (`--el-tint-rose`, `TriangleAlert` in `--el-danger`, `role="alert"`): **"Couldn't read the agent instances"** / _"Nothing here is shown as zero. The other sections are unaffected."_ with **Retry**. Every other section still shows data, and its count chip is not drawn — never a 0                                                                                                                                                                                                                                                                                                           |
+| 6a/6b | Cancel run                          | `Modal` (`alertdialog`, size `md`): **"Cancel this run?"**, description _"{key} · {title}"_, body _"{name} started this run at {time}. Cancelling closes it as **cancelled** and stops its machine now. Work the agent pushed stays on its branch."_ Footer **Keep it running** (ghost) · **Cancel run** (danger, `Ban`). In flight: **Cancelling…** `loading`, Keep it running and × inert                                                                                                                                                                                                                                               |
+| 7a/7b | Hibernate another member's agent    | **"Hibernate {owner}'s agent?"**, description _"{profile} · {project} · running since {time}"_, body _"The machine stops and its files are kept. A card running in it is cancelled first."_ and the sky callout _"**{owner} will be told** that you hibernated it, and when. Only they can wake, open or delete it."_ Footer **Keep it running** · **Hibernate agent** (danger, `Moon`). In flight: **Hibernating…** in the dialog and on the row's button                                                                                                                                                                                |
+| 7c    | after Hibernate                     | the row reads **"Hibernating · since {time}"** (`tone="archived"`) and offers no action                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 8a    | Stop everything — counting          | pulse lines + _"Counting what is running…"_ (`aria-live`); the confirm is disabled                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| 8b    | Stop everything — counts read       | **"Stop everything {org} runs?"**, _"This stops the charged work below, now."_ The effect list, count first: _"{n} CI job cancelled and **{n} container** stopped"_, _"{n} hosted agent run ended"_, _"{n} running agents hibernated"_, and the kept line on `--el-surface-soft`: _"{n} index job keeps running — indexing is not stopped here"_. Sky callout _"Nothing is blocked afterwards: members can start new work straight away. The owners of hibernated agents are told."_ and _"Counted at {time}."_ Footer **Cancel** · **Stop everything** (danger). No reason field: that is the platform operator's audit, not this page's |
+| 8c    | Stop everything — counts unreadable | the rose callout **"Couldn't count what is running"** / _"Nothing has been stopped. Try again to read the counts before you confirm."_ and **Try again** (secondary, `RotateCw`) **replaces** the confirm. Nobody confirms against counts nobody read                                                                                                                                                                                                                                                                                                                                                                                     |
+| 9a    | result — everything stopped         | a banner under the refresh bar (`--el-tint-mint`, `CircleCheck` in `--el-success`, `role="status"`): **"Everything was stopped"**, one line per path, _"Index jobs were left running."_, _"Stopped by you, {when}."_ and **Dismiss** (ghost `sm`). The page under it shows the after-state; the last-stop line reads _"Last stopped by you, {when}"_                                                                                                                                                                                                                                                                                      |
+| 9b    | result — partial failure            | `--el-tint-yellow`, `TriangleAlert` in `--el-warning`: **"Some work did not stop"**, each path as _"{done} of {total} …"_ and, under a path that failed, which one and what to do (_"{owner}'s agent did not stop: the stop did not confirm. Try Hibernate on its row."_)                                                                                                                                                                                                                                                                                                                                                                 |
+| 10    | Index jobs and Motir's stops        | each with entries and empty                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| 11    | plain member on the URL             | the area's forbidden `EmptyState` (`Lock`): **"You don't have access to this"** / _"Only an owner or admin of {org} can see this page. Ask one of them if you need it."_, beside the member's rail with no Fleet row                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| 12    | the agent's owner                   | the drawer's notification row: the actor's initial avatar with a `Moon` badge on **`--el-notif-agent-hibernated`**, summary _"**{actor}** hibernated your agent **{agent}**"_, the relative time right (absolute on hover), excerpt _"An organisation admin stopped it at {time}. Its files are kept; wake it from Agents."_ It has an actor, so it is NOT an actorless row. It deep-links nowhere                                                                                                                                                                                                                                        |
+| 13    | longest strings                     | en and zh: the rail row (_Fleet_ / _集群_), Refresh / Stop everything / Hibernate agent / Cancel run / Try again (_刷新_ / _全部停止_ / _让智能体休眠_ / _取消运行_ / _重试_) and the three confirmation titles; none clips, the titles wrap inside the `28rem` panel                                                                                                                                                                                                                                                                                                                                                                     |
+
+### The result stays until dismissed
+
+The banner is the page's own state and survives the 30-second re-read and a
+press of Refresh: it goes only when **Dismiss** is pressed or the page is left.
+It is never a toast, because a partial failure must stay readable until it has
+been read (the platform's `StopContainersDialog` rule). A Cancel or a Hibernate
+on one row writes no banner: its row changes, and a failure there is an error
+toast naming the run or the agent.
+
+### The one token this delta proposes
+
+**`--el-notif-agent-hibernated` → `var(--color-info)`**, beside
+`--el-notif-access-refused`, for the owner's notification badge. Info, not
+warning or danger: nothing was lost (the files are kept and the owner can wake
+it), but somebody else acted on their agent and they should know. It is declared
+in the mock's own token block until the build adds it to `theme.css`.
+
+### Accessibility contract
+
+- **Each confirmation** is a `Modal` with `role="alertdialog"`. Opening it moves
+  focus to the **safe** button (_Keep it running_ / _Cancel_), never to the
+  destructive one. Escape, × and the safe button close it and return focus to
+  the control that opened it (the row's Cancel or Hibernate, or the header's Stop
+  everything). While a stop is in flight, ×, Escape and the safe button are
+  inert, so the dialog cannot be closed mid-request.
+- **Every row action is labelled with its subject** — _"Cancel the run of
+  {key}"_, _"Hibernate {owner}'s agent"_ — so a list of identical buttons reads
+  apart. The Dismiss button is _"Dismiss the stop result"_.
+- **Live regions.** The refresh cue is `aria-live="polite"` and announces
+  _"Refreshing…"_ / _"Updated {time}"_. A section's read error is `role="alert"`.
+  The stop result is `role="status"`. The counting line in Stop everything is
+  `aria-live="polite"`.
+- **Busy sections** carry `aria-busy` while their first read runs.
+- **The auto-refresh pauses while the tab is hidden**, and is said in words on
+  the page ("while this tab is open") rather than conveyed by motion.
+- **Ink.** Every caption, meta line and lead is `--el-text-secondary`, which
+  clears AA on every surface here; chips carry the hue in the tint background
+  with `--el-text-strong` ink.
+
+### Out of scope here
+
+Spend by category, org-owned switches for hosted runs, AI planning and web
+search, an organisation audit log, any platform-only view, and opening, waking,
+deleting or reading inside another member's agent. Capacity requests stay on
+Billing & plans › Fleet use, which the lead links to.
