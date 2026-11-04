@@ -47,27 +47,38 @@ and no profile.
   and `MOTIR_HOSTING_AWS_FORWARDER_PRINCIPAL_ARN` and `MOTIR_HOSTING_AWS_APP_DOMAIN`.
   The two plain values are given on each command below. The key is a secret, and
   an ECS Exec command line is recorded in CloudTrail, so it must reach the task
-  from Secrets Manager, never from the command.
+  from Secrets Manager, never from the command. motir-infra creates that entry
+  (`<prefix>/core/motir-hosting-origin-secret-key`) with a random placeholder.
+  The check runs on the placeholder, but every app it deploys derives its origin
+  secret from it, so a container release deployed now rejects the forwarder once a
+  person sets the real key. Set the key before the check, or deploy the fixture
+  again after the key changes.
 - **The worker task role may call a function URL.** `page` on the `function`
   shape signs its request (SigV4, service `lambda`) with the task's own
   credentials, and a function URL in another account admits a caller only when the
-  URL's resource policy names it AND the caller's own policy allows
-  `lambda:InvokeFunctionUrl`. The check names the worker's task role as the
-  forwarder principal, so the resource policy is the adapter's; the identity
-  policy is not there yet.
+  URL's resource policy names it AND the caller's own policy allows it. Since
+  October 2025 a new function URL needs BOTH `lambda:InvokeFunctionUrl` and
+  `lambda:InvokeFunction` on each side (AWS, "Control access to Lambda function
+  URLs"); `InvokeFunction` is held only through the URL
+  (`lambda:InvokedViaFunctionUrl`). The check names the worker's task role as the
+  forwarder principal, so the resource policy is the release template's
+  (`ForwarderInvoke` and `ForwarderInvokeFunction` in `function-release.yaml`);
+  the identity policy is motir-infra's.
 
-### What core's task roles do not hold yet
+### What core's task roles needed
 
-As of this change, motir-infra gives the worker task neither of the last two
-items. Both are one motir-infra change, filed as MOTIR-10304:
+Before MOTIR-10304, motir-infra gave the worker task neither of the last two
+items. Both are one motir-infra change (motir-infra#51):
 
-| the step needs                                                                     | what is missing in motir-infra                                                                                                                                          |
-| ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| every step: `MOTIR_HOSTING_ORIGIN_SECRET_KEY` on the worker task                   | a Secrets Manager secret injected into the worker's task definition (`coreEnvironment` / the services stack's secrets)                                                  |
-| `page`, `release2`, `rollback` on the `function` shape: `lambda:InvokeFunctionUrl` | a grant on `motir-core-worker-task` for `lambda:InvokeFunctionUrl` on `arn:aws:lambda:us-east-1:*:function:mh-*`, conditioned on `lambda:FunctionUrlAuthType` `AWS_IAM` |
+| the step needs                                                                                                 | what motir-infra adds                                                                                                                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| every step: `MOTIR_HOSTING_ORIGIN_SECRET_KEY` on the worker task                                               | a Secrets Manager secret injected into the worker's (and the web's) task definition                                                                                                                                                                  |
+| `page`, `release2`, `rollback` on the `function` shape: `lambda:InvokeFunctionUrl` and `lambda:InvokeFunction` | two statements on `motir-core-worker-task` on `arn:aws:lambda:<region>:*:function:mh-*`: `lambda:InvokeFunctionUrl` conditioned on `lambda:FunctionUrlAuthType` `AWS_IAM`, and `lambda:InvokeFunction` conditioned on `lambda:InvokedViaFunctionUrl` |
 
 Until that lands, every step refuses with `set MOTIR_HOSTING_ORIGIN_SECRET_KEY`,
-and the function `page` answers 403. Nothing else is missing: the management-role
+and the function `page` answers 403. A function release deployed from a template
+older than this change has no `ForwarderInvokeFunction` permission, so it
+answers 403 too until it is deployed again. Nothing else is missing: the management-role
 grant, the database login, the RDS CA bundle, ECS Exec and outbound HTTPS (the
 container `page` reaches the tenant load balancer through the services account's
 NAT gateways) are already on the task.

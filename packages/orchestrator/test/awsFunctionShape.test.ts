@@ -387,11 +387,22 @@ describe('describeFunctionRelease', () => {
     expect(url).toContain('Qualifier: live');
     const invoke = template.slice(
       template.indexOf('  ForwarderInvoke:'),
-      template.indexOf('Outputs:'),
+      template.indexOf('  ForwarderInvokeFunction:'),
     );
     expect(invoke).toContain('Action: lambda:InvokeFunctionUrl');
     expect(invoke).toContain('FunctionUrlAuthType: AWS_IAM');
     expect(invoke).toContain('Principal: !Ref InvokePrincipalArn');
+    // A URL created since October 2025 also needs lambda:InvokeFunction, held
+    // only through the URL (MOTIR-10304).
+    const invokeFunction = template.slice(
+      template.indexOf('  ForwarderInvokeFunction:'),
+      template.indexOf('Outputs:'),
+    );
+    expect(invokeFunction).toContain('Condition: Published');
+    expect(invokeFunction).toContain('Action: lambda:InvokeFunction\n');
+    expect(invokeFunction).toContain('FunctionName: !Ref LiveAlias');
+    expect(invokeFunction).toContain('InvokedViaFunctionUrl: true');
+    expect(invokeFunction).toContain('Principal: !Ref InvokePrincipalArn');
     expect(a.cloudformation.stacks.get(STACK)!.parameters['InvokePrincipalArn']).toBe(FORWARDER);
   });
 

@@ -393,11 +393,29 @@ describe('function-release.yaml', () => {
       AuthType: 'AWS_IAM',
       Qualifier: 'live',
     });
-    expect(one(t, 'AWS::Lambda::Permission').Properties).toMatchObject({
-      Action: 'lambda:InvokeFunctionUrl',
-      FunctionUrlAuthType: 'AWS_IAM',
-      Principal: { Ref: 'InvokePrincipalArn' },
+    // A URL created since October 2025 admits the forwarder only when it holds
+    // both actions; InvokeFunction only through the URL (MOTIR-10304).
+    expect(t.Resources['ForwarderInvoke']).toMatchObject({
+      Type: 'AWS::Lambda::Permission',
+      Condition: 'Published',
+      Properties: {
+        Action: 'lambda:InvokeFunctionUrl',
+        FunctionName: { Ref: 'LiveAlias' },
+        FunctionUrlAuthType: 'AWS_IAM',
+        Principal: { Ref: 'InvokePrincipalArn' },
+      },
     });
+    expect(t.Resources['ForwarderInvokeFunction']).toMatchObject({
+      Type: 'AWS::Lambda::Permission',
+      Condition: 'Published',
+      Properties: {
+        Action: 'lambda:InvokeFunction',
+        FunctionName: { Ref: 'LiveAlias' },
+        InvokedViaFunctionUrl: true,
+        Principal: { Ref: 'InvokePrincipalArn' },
+      },
+    });
+    expect(resourcesOf(t, 'AWS::Lambda::Permission')).toHaveLength(2);
     expect(t.Outputs!['FunctionUrl']).toBeDefined();
   });
 

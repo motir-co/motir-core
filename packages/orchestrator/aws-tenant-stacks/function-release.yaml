@@ -197,6 +197,13 @@ Resources:
       Qualifier: live
       AuthType: AWS_IAM
 
+  # A function URL created since October 2025 admits a caller only when the
+  # resource policy grants BOTH lambda:InvokeFunctionUrl and
+  # lambda:InvokeFunction (AWS, "Control access to Lambda function URLs"); a
+  # cross-account caller needs both on its identity policy too (motir-infra's
+  # worker grant, MOTIR-10304). One permission per action, as AddPermission
+  # takes one. The InvokeFunction half holds only through the URL, so the
+  # forwarder cannot Invoke the function directly.
   ForwarderInvoke:
     Type: AWS::Lambda::Permission
     Condition: Published
@@ -204,6 +211,15 @@ Resources:
       Action: lambda:InvokeFunctionUrl
       FunctionName: !Ref LiveAlias
       FunctionUrlAuthType: AWS_IAM
+      Principal: !Ref InvokePrincipalArn
+
+  ForwarderInvokeFunction:
+    Type: AWS::Lambda::Permission
+    Condition: Published
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref LiveAlias
+      InvokedViaFunctionUrl: true
       Principal: !Ref InvokePrincipalArn
 
 Outputs:
