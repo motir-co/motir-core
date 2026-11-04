@@ -4499,3 +4499,13 @@ and open, the project's own public page (`motir.co/p/<KEY>`), and
 `Change in workspace settings →`; or, with no name claimed, the project's
 `motir.co/p/<KEY>` and `Claim a name for the workspace →`. No field, Rename or
 Release, for any role. Strings: `settings.workspaceAddress.echo.*`.
+
+## ⭐ The REVIEW AGENT's source and bot posting — Settings → Approvals (`approvals--review-path.mock.html`, DATED 2026-11-04)
+
+**AMENDS** `design/projects/approvals--review-agent.mock.html` (the review-agent card) **without editing it**. The delta mock `design/projects/approvals--review-path.mock.html` holds only the changed panels, English then Chinese: S1 the shipped card, S2 off, S3 on with _Motir's hosted agent_, S4 on with _Your own agent_, S5 posting off, S6 Merge automatically still disabled under either source, S7 saving and the save error.
+
+- **Who reviews** — a two-card radiogroup, shown only while the review agent is on; hosted is the default and the only one whose billing note shows.
+- **Post agent reviews on pull requests** — always shown, default on.
+- **Merge automatically** reads the review-agent switch, not the source.
+
+The element spec, tokens and copy keys are in **`design/github/design-notes.md` § 32.7**; this section only indexes the surface.
