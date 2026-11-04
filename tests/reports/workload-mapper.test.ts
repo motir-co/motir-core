@@ -43,7 +43,6 @@ describe('toWorkloadDto', () => {
         { assigneeId: 'b', name: 'Ben', points: 12, count: 3, ...seg(4, 1, 8, 2) },
       ],
       {
-        period: 'week',
         daysBack: 30,
         windowStart: new Date('2026-09-18T00:00:00Z'),
         windowEnd: new Date('2026-10-18T00:00:00Z'),
@@ -57,7 +56,6 @@ describe('toWorkloadDto', () => {
       unassignedCount: 2,
     });
     expect(dto.window).toEqual({
-      period: 'week',
       daysBack: 30,
       windowStart: '2026-09-18T00:00:00.000Z',
       windowEnd: '2026-10-18T00:00:00.000Z',

@@ -5,20 +5,22 @@ import { getActiveProject } from '@/lib/projects';
 import { reportsService } from '@/lib/services/reportsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import type { ReportScopeDto } from '@/lib/dto/reports';
-import { coerceDaysBack, coerceMeasure, coercePeriod } from '@/lib/reports/reportPageView';
+import { coerceDaysBack, coerceMeasure } from '@/lib/reports/reportPageView';
 import { ReportPageChrome } from '../_components/ReportPageChrome';
 import { WorkloadReport, type WorkloadResult } from '../_components/WorkloadReport';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 
 // The Workload report page (Story 8.8 · Subtask 8.8.13) — per
 // design/reports/more-reports.mock.html panel 4. Server Component: it resolves
-// the active project, coerces the URL measure, period and days back (forgiving —
-// a hand-edited/shared URL degrades to the defaults, never a 422), calls the
+// the active project, coerces the URL measure and days back (forgiving — a
+// hand-edited/shared URL degrades to the defaults, never a 422), calls the
 // WINDOWED read (work open at any point in the last Days back, an unassigned item
-// counted on its reporter — Story MOTIR-8919; the bare path is day / 30), and
+// counted on its reporter — Story MOTIR-8919; the bare path is 30 days), and
 // hands the envelope to the client body that renders the horizontal ranked bar
 // chart + the URL-driven Measure toggle. The config round-trips through the URL,
-// so a configured report is shareable and reloads/restores.
+// so a configured report is shareable and reloads/restores. A `?period=` is
+// IGNORED (MOTIR-10346): Workload has no time buckets, so an old shared link
+// that still carries one renders the same bars as the link without it.
 
 export default async function WorkloadPage({
   searchParams,
@@ -26,7 +28,6 @@ export default async function WorkloadPage({
   searchParams: Promise<{
     savedFilterId?: string;
     measure?: string;
-    period?: string;
     daysBack?: string;
   }>;
 }) {
@@ -43,14 +44,13 @@ export default async function WorkloadPage({
   const sp = await searchParams;
   const savedFilterId = sp.savedFilterId ?? null;
   const measure = coerceMeasure(sp.measure ?? null);
-  const period = coercePeriod(sp.period ?? null);
-  const daysBack = coerceDaysBack(period, sp.daysBack ?? null);
+  const daysBack = coerceDaysBack(null, sp.daysBack ?? null);
 
   const accessCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const scope: ReportScopeDto = savedFilterId ? { savedFilterId } : { projectId: ctx.projectId };
 
   const [result, filtersPage] = await Promise.all([
-    reportsService.getWorkload(scope, { measure, window: { period, daysBack } }, accessCtx),
+    reportsService.getWorkload(scope, { measure, window: { daysBack } }, accessCtx),
     savedFiltersService.list(ctx.project.identifier, { view: 'all' }, accessCtx),
   ]);
 
@@ -86,7 +86,6 @@ export default async function WorkloadPage({
       <WorkloadReport
         result={clientResult}
         measure={measure}
-        period={period}
         daysBack={daysBack}
         savedFilterId={savedFilterId}
         projectName={ctx.project.name}

@@ -7,6 +7,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { InvalidReportWindowError } from '@/lib/reports/errors';
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 
 const HIGH_AST: FilterAst = {
@@ -207,7 +208,7 @@ describe('getWorkload — the ranked open-work matrix', () => {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
-const WINDOW = { period: 'day' as const, daysBack: 30 };
+const WINDOW = { daysBack: 30 };
 
 async function addRevision(
   workItemId: string,
@@ -259,8 +260,9 @@ describe('getWorkload — over a window', () => {
         fx.ctx,
       ),
     );
-    expect(data.window?.period).toBe('day');
     expect(data.window?.daysBack).toBe(30);
+    // No period on the window: the bars have no time buckets (MOTIR-10346).
+    expect(data.window).not.toHaveProperty('period');
     expect(data.assignees).toEqual([
       {
         assigneeId: bo.id,
@@ -468,9 +470,39 @@ describe('getWorkload — over a window', () => {
     await expect(
       reportsService.getWorkload(
         { savedFilterId: 'nonexistent' },
-        { measure: 'story_points', window: { period: 'day', daysBack: 9999 } },
+        { measure: 'story_points', window: { daysBack: 9999 } },
         fx.ctx,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(InvalidReportWindowError);
+  });
+
+  it('(j) reaches past the daily bucket cap: 180 and 365 days back are windows, not a 422 (MOTIR-10346)', async () => {
+    // Workload has no bucket axis, so the 120-day cap that bounds a DAILY axis
+    // does not apply: an item resolved 150 days ago is out of a 120-day window
+    // and inside a 180-day one.
+    const fx = await makeWorkItemFixture();
+    const bo = await createTestUser({ name: 'Bo' });
+    const old = await seed(fx, {
+      assigneeId: bo.id,
+      reporterId: fx.ownerId,
+      points: 6,
+      status: 'done',
+      createdDaysAgo: 200,
+    });
+    await addRevision(old.id, fx.ownerId, daysAgo(150), toDone);
+    const read = (daysBack: number) =>
+      expectOk(
+        reportsService.getWorkload(
+          { projectId: fx.projectId },
+          { measure: 'story_points', window: { daysBack } },
+          fx.ctx,
+        ),
+      );
+
+    expect((await read(120)).totalPoints).toBe(0);
+    const half = await read(180);
+    expect(half.totalPoints).toBe(6);
+    expect(half.window?.daysBack).toBe(180);
+    expect((await read(365)).totalPoints).toBe(6);
   });
 });

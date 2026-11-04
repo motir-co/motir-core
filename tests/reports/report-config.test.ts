@@ -9,6 +9,7 @@ import {
   isReportPeriod,
   reportWindow,
   validateReportWindow,
+  validateWindowDays,
 } from '@/lib/reports/buckets';
 import {
   BUILTIN_STATISTIC_TYPES,
@@ -121,6 +122,27 @@ describe('validateReportWindow — the typed 422 gate', () => {
     expect(() => validateReportWindow('day', MAX_REPORT_BUCKETS + 1)).toThrow(
       InvalidReportWindowError,
     );
+  });
+});
+
+describe('validateWindowDays — a window with no bucket axis (Workload, MOTIR-10346)', () => {
+  it('accepts every whole day count up to a year — no daily bucket cap', () => {
+    for (const ok of [
+      1,
+      MAX_REPORT_BUCKETS,
+      MAX_REPORT_BUCKETS + 1,
+      180,
+      365,
+      MAX_REPORT_WINDOW_DAYS,
+    ]) {
+      expect(() => validateWindowDays(ok)).not.toThrow();
+    }
+  });
+
+  it('rejects out-of-range / non-integer windows with the typed 422', () => {
+    for (const bad of [0, -1, 1.5, NaN, MAX_REPORT_WINDOW_DAYS + 1]) {
+      expect(() => validateWindowDays(bad)).toThrow(InvalidReportWindowError);
+    }
   });
 });
 
