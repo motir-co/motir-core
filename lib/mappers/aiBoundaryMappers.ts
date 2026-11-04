@@ -5,8 +5,10 @@ import type {
   WorkItemSummaryDto,
 } from '@/lib/dto/workItems';
 import type { FolderPickerNodeDto } from '@/lib/dto/folders';
+import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import type {
   AiDecisionBlock,
+  AiTodoDto,
   PlanTreeFolder,
   PlanTreeSkeletonItem,
   BlockingEdge,
@@ -221,4 +223,19 @@ export function toInFlightDeliveryFact(row: WorkItemDeliveryWithChecks): InFligh
     open: pr.state === 'open',
     merged: row.pullRequest.merged,
   };
+}
+
+// A card's to-do steps → the get-item `todos` array (MOTIR-10316). The rows come
+// from `workItemTodosService.listTodos` already in list order, so this keeps the
+// order and only narrows each step to the fields the planner reads — `done` is
+// the service's own derived boolean, never re-derived here.
+export function toAiTodos(todos: readonly WorkItemTodoDto[]): AiTodoDto[] {
+  return todos.map((todo) => ({
+    id: todo.id,
+    text: todo.text,
+    notesMd: todo.notesMd,
+    commandText: todo.commandText,
+    executor: todo.executor,
+    done: todo.done,
+  }));
 }

@@ -35,6 +35,17 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 //     there (no longer in flight); `[]` with `mergedRepos: []` means nothing was
 //     ever delivered on the card or any ancestor.
 //
+// `item.todos` (MOTIR-10316) — the card's to-do steps, so a planner re-authoring
+// a committed card sees what its steps are and which are already ticked. One
+// entry per step: `{ id, text, notesMd, commandText, executor, done }`.
+//   - ORDER is the card's list order — the order the item page and the MCP's
+//     `list_work_item_todos` show — because the rows come from the SAME
+//     `workItemTodosService.listTodos` read that tool makes.
+//   - `done` is the ticked state, the same derived boolean that tool returns;
+//     `notesMd` / `commandText` / `executor` are null when the step has none.
+//   - EMPTY IS THE ORDINARY ANSWER: an array on every item, never null or absent.
+//     `[]` means the card has no steps.
+//
 // Typed errors → status:
 //   JobAuthError                       → 401
 //   WorkItemNotFoundError              → 404 (absent / cross-tenant — no leak)

@@ -10,6 +10,7 @@ import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsServ
 import { foldersService } from '@/lib/services/foldersService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { inFlightCodeService } from '@/lib/services/inFlightCodeService';
+import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { aiDecisionBlockOf } from '@/lib/approvalGates/decisionRecord';
 import {
@@ -21,6 +22,7 @@ import {
   toOrgContextResponse,
   toPendingPlanRows,
   toSimilarWorkItemRows,
+  toAiTodos,
 } from '@/lib/mappers/aiBoundaryMappers';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
@@ -349,8 +351,20 @@ export const aiBoundaryService = {
     // provider call on this path. The MCP's `get_work_item` makes the same read
     // (`inFlightCodeService`, MOTIR-10069), so the two planners cannot disagree.
     const inFlight = await inFlightCodeService.readForItem(item.id, projectId, ctx);
+    // The card's to-do steps (MOTIR-10316), through the SAME service read the MCP's
+    // `list_work_item_todos` makes — so the two agree on the order and on `done`. A
+    // planner re-authoring a committed card reads what its steps are and which are
+    // already ticked. `getWorkItemByRef` above is still the gate: a key outside the
+    // token's project 404s before this read runs.
+    const todoList = await workItemTodosService.listTodos(item.id, ctx);
     const response: GetItemResponse = {
-      item: { ...item, ...links, decision: decisions.get(item.id) ?? null, ...inFlight },
+      item: {
+        ...item,
+        ...links,
+        decision: decisions.get(item.id) ?? null,
+        ...inFlight,
+        todos: toAiTodos(todoList.items),
+      },
     };
     if (opts.withComments) {
       response.comments = await commentsService.listComments(
