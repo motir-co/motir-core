@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { foldersService } from '@/lib/services/foldersService';
+import { workItemTodosService } from '@/lib/services/workItemTodosService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { GET as getItemGET } from '@/app/api/internal/ai/get-item/route';
 import { GET as getSubtreeGET } from '@/app/api/internal/ai/get-subtree/route';
@@ -179,6 +180,125 @@ describe('GET /api/internal/ai/get-item', () => {
     // not appear in the payload at all.
     expect(text).not.toContain(foreign.identifier);
     expect(text).not.toContain('secret');
+  });
+
+  // MOTIR-10316 — the card's to-do steps ride the item, so a planner re-authoring
+  // a committed card reads what its steps are and which are already ticked.
+  it('carries the card’s to-do steps in list order, with the ticked state in `done`', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'With steps' },
+      fx.ctx,
+    );
+    const first = await workItemTodosService.addTodo(
+      item.id,
+      { text: 'Create the API key', notesMd: 'Open **Settings › Keys**.', executor: 'human' },
+      fx.ctx,
+    );
+    const second = await workItemTodosService.addTodo(
+      item.id,
+      { text: 'Store it as a secret', commandText: 'fly secrets set KEY=…' },
+      fx.ctx,
+    );
+    const third = await workItemTodosService.addTodo(
+      item.id,
+      { text: 'Verify the deploy', executor: 'coding_agent' },
+      fx.ctx,
+    );
+    // Tick the MIDDLE step, so `done` is read per row rather than inferred from
+    // a prefix of the list.
+    await workItemTodosService.setTodoDone(second.todo.id, true, fx.ctx);
+    // Move the last step to the front: the payload follows the LIST order (as
+    // `list_work_item_todos` does), not creation order.
+    await workItemTodosService.moveTodo(third.todo.id, 0, fx.ctx);
+
+    const res = await getItemGET(
+      req('get-item', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        query: { key: item.identifier },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.item.todos).toEqual([
+      {
+        id: third.todo.id,
+        text: 'Verify the deploy',
+        notesMd: null,
+        commandText: null,
+        executor: 'coding_agent',
+        done: false,
+      },
+      {
+        id: first.todo.id,
+        text: 'Create the API key',
+        notesMd: 'Open **Settings › Keys**.',
+        commandText: null,
+        executor: 'human',
+        done: false,
+      },
+      {
+        id: second.todo.id,
+        text: 'Store it as a secret',
+        notesMd: null,
+        commandText: 'fly secrets set KEY=…',
+        // Omitted on the add ⇒ the service resolves it (the card's executor, else
+        // human); the boundary reports whatever the service stored.
+        executor: second.todo.executor,
+        done: true,
+      },
+    ]);
+    // The boundary and the MCP tool's read agree, row for row, on order and `done`.
+    const list = await workItemTodosService.listTodos(item.id, fx.ctx);
+    expect(body.item.todos.map((t: { id: string; done: boolean }) => [t.id, t.done])).toEqual(
+      list.items.map((t) => [t.id, t.done]),
+    );
+  });
+
+  it('carries `todos: []` — present, not absent — for a card with no steps', async () => {
+    const fx = await makeFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'No steps' },
+      fx.ctx,
+    );
+    const res = await getItemGET(
+      req('get-item', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        query: { key: item.identifier },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.item).toHaveProperty('todos');
+    expect(body.item.todos).toEqual([]);
+  });
+
+  it('404s a key in another project of the same workspace, and returns none of its steps', async () => {
+    const fx = await makeFixture();
+    const other = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'OTHR',
+    });
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: other.id, kind: 'task', title: 'Elsewhere' },
+      fx.ctx,
+    );
+    await workItemTodosService.addTodo(foreign.id, { text: 'A step nobody here may read' }, fx.ctx);
+
+    const res = await getItemGET(
+      req('get-item', {
+        bearer: SERVICE_SECRET,
+        token: tokenFor(fx),
+        query: { key: foreign.identifier },
+      }),
+    );
+    expect(res.status).toBe(404);
+    const text = await res.text();
+    expect(text).not.toContain('A step nobody here may read');
+    expect(JSON.parse(text)).not.toHaveProperty('item');
   });
 
   it('400s a missing key', async () => {

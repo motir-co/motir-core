@@ -12,6 +12,7 @@ import type {
   WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { CommentsPageDTO } from '@/lib/dto/comments';
+import type { WorkItemTodoDto } from '@/lib/dto/workItemTodos';
 import type { PlanStatusDto } from '@/lib/dto/plans';
 
 /**
@@ -179,10 +180,40 @@ export interface AiInFlightCodeFields {
   mergedRepos: string[];
 }
 
+/**
+ * One step of a committed card's to-do list, as the planner reads it on
+ * `get-item` (MOTIR-10316) — the service DTO (`WorkItemTodoDto`) narrowed to the
+ * fields a planning session re-authoring the card needs: what the step is, its
+ * instructions and command, who it is for, and whether it is ticked.
+ *
+ * - `notesMd` / `commandText` / `executor` are `null` when the step carries none,
+ *   exactly as the service DTO maps them (never `''`).
+ * - `done` is the SAME derived boolean `list_work_item_todos` returns (from
+ *   `doneAt`), so the boundary and the MCP tool cannot disagree on what is ticked.
+ */
+export type AiTodoDto = Pick<
+  WorkItemTodoDto,
+  'id' | 'text' | 'notesMd' | 'commandText' | 'executor' | 'done'
+>;
+
+/**
+ * The to-do half of the get-item read (MOTIR-10316). `todos` is an ARRAY on
+ * every item, never null or absent: one entry per step in the card's list order
+ * (the order `list_work_item_todos` and the item page show — position, then id),
+ * and `[]` for a card with no steps.
+ */
+export interface AiTodoFields {
+  todos: AiTodoDto[];
+}
+
 export interface GetItemResponse {
   // `decision` — a decision's deciding gate (MOTIR-5958, MOTIR-10146), null otherwise.
   // `inFlightCode` / `mergedRepos` — the card's unmerged code (MOTIR-6618).
-  item: AiWorkItemDto & { decision: AiDecisionBlock | null } & AiInFlightCodeFields;
+  // `todos` — the card's to-do steps in list order, `[]` when none (MOTIR-10316).
+  item: AiWorkItemDto & {
+    decision: AiDecisionBlock | null;
+  } & AiInFlightCodeFields &
+    AiTodoFields;
   comments?: CommentsPageDTO;
   history?: WorkItemHistoryPage;
 }
