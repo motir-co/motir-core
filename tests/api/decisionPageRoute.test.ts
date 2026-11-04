@@ -81,6 +81,17 @@ describe('POST /api/work-items/[id]/decision-page', () => {
     expect((await again.json()).publication).toMatchObject({ id: publication.id, replayed: true });
   });
 
+  it('leaves the published page linked to the card — the Choose page door (MOTIR-10315)', async () => {
+    const item = await card();
+    const p = await page();
+
+    expect((await post(item.identifier, { pageId: p.id })).status).toBe(201);
+    const links = await adminDb.pageWorkItemLink.findMany({ where: { workItemId: item.id } });
+    expect(links).toEqual([
+      expect.objectContaining({ pageId: p.id, source: 'manual', createdById: fx.ctx.userId }),
+    ]);
+  });
+
   it('401s without a session and 400s without a pageId', async () => {
     const item = await card();
     workspaceCtx.current = null;

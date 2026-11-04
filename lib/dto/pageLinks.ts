@@ -70,3 +70,39 @@ export interface PageWorkItemsDto {
   /** Whether this reader may add a hand link (`work_item:edit`); never the authority. */
   canLink: boolean;
 }
+
+/**
+ * The published decision on one linked page (MOTIR-10315): the version the card's
+ * LATEST publication sealed, and when it was published.
+ */
+export interface WorkItemDecisionMarkDto {
+  versionNumber: number;
+  /** ISO-8601. */
+  publishedAt: string;
+}
+
+/** One linked page as `get_work_item` serves it: the Pages row plus its decision mark. */
+export interface WorkItemLinkedPageDto extends WorkItemPageLinkRowDto {
+  /** Set on the page the card's LATEST publication names; `null` on every other row. */
+  decision: WorkItemDecisionMarkDto | null;
+}
+
+/** The card's published decision page — its latest publication — wherever it sits in the list. */
+export interface WorkItemDecisionPageDto extends WorkItemDecisionMarkDto {
+  pageId: string;
+  title: string;
+  /** `unavailable` when the page has been archived since it was published, as on the Pages row. */
+  state: WorkItemPageLinkStateDto;
+}
+
+/**
+ * A work item's linked pages for an AGENT read (MOTIR-10315): the first window of
+ * the set the card's Pages section shows, in its order, bounded. `hasMore` says
+ * the set holds more than `rows`. `decisionPage` names the latest publication
+ * even when its page falls outside the window.
+ */
+export interface WorkItemLinkedPagesDto {
+  rows: WorkItemLinkedPageDto[];
+  hasMore: boolean;
+  decisionPage: WorkItemDecisionPageDto | null;
+}

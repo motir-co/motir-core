@@ -254,9 +254,9 @@ export const ja: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      '1つの項目の全体像。説明、ステータス、親またはフォルダー、子、依存エッジ、準備完了の判定、紐づくエラー、最新の差し戻し内容、そして未マージのコードがどこにあるかを返します。',
+      '1つの項目の全体像。説明、ステータス、親またはフォルダー、子、依存エッジ、準備完了の判定、紐づくエラー、最新の差し戻し内容、未マージのコードがどこにあるか、そして紐づくページと公開済みの決定を返します。',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

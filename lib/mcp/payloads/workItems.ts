@@ -31,6 +31,7 @@ import type { AttachmentDTO } from '@/lib/dto/attachments';
 import type { CommentDTO } from '@/lib/dto/comments';
 import type { MonitorIssueLinkDto } from '@/lib/dto/monitorIssueLink';
 import type { LatestRefusalDTO } from '@/lib/dto/approvalGate';
+import type { WorkItemLinkedPagesDto } from '@/lib/dto/pageLinks';
 import { definePayload } from './define';
 import { parsedSectionsSchema } from './parsedSectionsSchema';
 
@@ -201,6 +202,37 @@ const mcpInFlightCodeSchema = z.union([
   }),
 ]);
 
+/** The published decision on a page (MOTIR-10315). */
+const mcpDecisionMarkSchema = z.object({
+  versionNumber: z.number().int(),
+  publishedAt: z.string(),
+});
+
+/**
+ * `pages` on `get_work_item` (Bug MOTIR-10315) — the `WorkItemLinkedPagesDto`
+ * `pageLinksService.listLinkedPagesForAgent` serves.
+ */
+const mcpWorkItemLinkedPagesSchema = z.object({
+  rows: z.array(
+    z.object({
+      pageId: z.string(),
+      title: z.string(),
+      state: z.enum(['live', 'unavailable']),
+      sources: z.array(z.enum(['mention', 'embed', 'manual', 'description', 'explanation'])),
+      updatedAt: z.string(),
+      place: z.object({
+        folderPath: z.array(z.string()),
+        parentPageTitle: z.string().nullable(),
+      }),
+      decision: mcpDecisionMarkSchema.nullable(),
+    }),
+  ),
+  hasMore: z.boolean(),
+  decisionPage: mcpDecisionMarkSchema
+    .extend({ pageId: z.string(), title: z.string(), state: z.enum(['live', 'unavailable']) })
+    .nullable(),
+});
+
 export const getWorkItemPayload = definePayload({
   schema: z
     .object({
@@ -238,6 +270,14 @@ export const getWorkItemPayload = definePayload({
       /** The repositories where the item's own delivery has merged (MOTIR-10069). */
       mergedRepos: z.array(z.string()).optional(),
       /**
+       * The LINKED PAGES (Bug MOTIR-10315): the set the card's Pages section shows,
+       * bounded, with the card's latest decision publication marked. No `/api/v1`
+       * operation lists a card's pages, so the shape is this envelope's own.
+       * `null` for a reader without `page:view`; absent on the projected answer,
+       * where a proposal has no page.
+       */
+      pages: mcpWorkItemLinkedPagesSchema.nullable().optional(),
+      /**
        * The item itself — its columns ride through unchanged; DECLARED here is
        * `languages` (Story MOTIR-7731 · MOTIR-8098): each text field's recorded
        * language, `null` when none was recorded. Optional only for the
@@ -263,6 +303,7 @@ export const getWorkItemPayload = definePayload({
       latestRefusal?: LatestRefusalDTO | null;
       inFlightCode?: InFlightCodeDto[];
       mergedRepos?: string[];
+      pages?: WorkItemLinkedPagesDto | null;
       parsedSections?: z.infer<typeof parsedSectionsSchema>;
     } & Record<string, unknown>
   >,

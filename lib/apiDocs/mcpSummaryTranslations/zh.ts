@@ -234,9 +234,9 @@ export const zh: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      '完整读取一个工作项：描述、状态、父级或文件夹、子项、依赖边、就绪判定、与之关联的错误、最近一次针对它退回的拒绝，以及它尚未合并的代码所在的位置。',
+      '完整读取一个工作项：描述、状态、父级或文件夹、子项、依赖边、就绪判定、与之关联的错误、最近一次针对它退回的拒绝、它尚未合并的代码所在的位置，以及与之关联的页面及其已发布的决策。',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary: '一个工作项的讨论与变更轨迹的一页：评论线程与历史记录交错排列。',

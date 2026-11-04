@@ -257,9 +257,9 @@ export const fr: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      "Un élément en détail — description, statut, parent ou Dossier, enfants, liens de dépendance, un verdict de disponibilité, les erreurs qui lui sont liées, le dernier refus renvoyé à son sujet et l'emplacement de son code pas encore fusionné.",
+      "Un élément en détail — description, statut, parent ou Dossier, enfants, liens de dépendance, un verdict de disponibilité, les erreurs qui lui sont liées, le dernier refus renvoyé à son sujet, l'emplacement de son code pas encore fusionné, et les pages qui lui sont liées avec sa décision publiée.",
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

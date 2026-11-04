@@ -616,6 +616,9 @@ describe('the `dependencies` block on get_work_item’s CHILDREN (MOTIR-1848)', 
       // the hosted get_item, which the aggregate DTO does not carry.
       inFlightCode: _inFlightCode,
       mergedRepos: _mergedRepos,
+      // The item's linked pages and published decision (MOTIR-10315): a tool-only
+      // read of the Pages section's set, which the aggregate DTO does not carry.
+      pages: _pages,
       ...restOfTool
     } = structured;
     const {

@@ -252,9 +252,9 @@ export const ko: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      '항목 하나의 전체 정보 — 설명, 상태, 부모 또는 폴더, 하위 항목, 의존 엣지, 준비 상태 판정, 연결된 오류, 마지막으로 반환된 거부 내용, 그리고 아직 병합되지 않은 코드의 위치입니다.',
+      '항목 하나의 전체 정보 — 설명, 상태, 부모 또는 폴더, 하위 항목, 의존 엣지, 준비 상태 판정, 연결된 오류, 마지막으로 반환된 거부 내용, 아직 병합되지 않은 코드의 위치, 그리고 연결된 페이지와 게시된 결정입니다.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

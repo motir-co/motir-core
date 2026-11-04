@@ -260,9 +260,9 @@ export const de: McpSummaryTranslations = {
   },
   get_work_item: {
     summary:
-      'Ein Element vollständig – Beschreibung, Status, übergeordnetes Element oder Ordner, untergeordnete Elemente, Abhängigkeitskanten, ein Bereitschaftsurteil, die damit verknüpften Fehler, die letzte dazu zurückgesendete Ablehnung und wo sein noch nicht gemergter Code liegt.',
+      'Ein Element vollständig – Beschreibung, Status, übergeordnetes Element oder Ordner, untergeordnete Elemente, Abhängigkeitskanten, ein Bereitschaftsurteil, die damit verknüpften Fehler, die letzte dazu zurückgesendete Ablehnung, wo sein noch nicht gemergter Code liegt, und die damit verknüpften Seiten samt veröffentlichter Entscheidung.',
     source:
-      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, and where its unmerged code is.',
+      'One item in full — description, status, parent or folder, children, dependency edges, a readiness verdict, the errors linked to it, the latest refusal sent back on it, where its unmerged code is, and the pages linked to it with its published decision.',
   },
   get_work_item_activity: {
     summary:

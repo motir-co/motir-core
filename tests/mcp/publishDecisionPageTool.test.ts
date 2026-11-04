@@ -115,6 +115,34 @@ describe('publish_decision_page', () => {
     expect(publicationOf(again)).toMatchObject({ id: dto.id, replayed: true });
   });
 
+  it('links the published page to the card, and get_work_item then names it as the decision (MOTIR-10315)', async () => {
+    const item = await card();
+    const p = await page();
+    const client = await connectClient(fx.ctx, CLI_TOKEN_GRANT);
+
+    const res = await client.callTool({
+      name: 'publish_decision_page',
+      arguments: { key: item.identifier, pageId: p.id },
+    });
+    expect(res.isError, textOf(res)).toBeFalsy();
+
+    const links = await adminDb.pageWorkItemLink.findMany({ where: { workItemId: item.id } });
+    expect(links).toEqual([expect.objectContaining({ pageId: p.id, source: 'manual' })]);
+
+    const read = await client.callTool({
+      name: 'get_work_item',
+      arguments: { key: item.identifier },
+    });
+    expect(read.isError, textOf(read)).toBeFalsy();
+    const pages = ((read as CallToolResult).structuredContent as { pages: unknown }).pages;
+    expect(pages).toMatchObject({
+      rows: [{ pageId: p.id, title: 'Choice', decision: { versionNumber: 1 } }],
+      hasMore: false,
+      decisionPage: { pageId: p.id, title: 'Choice', versionNumber: 1 },
+    });
+    expect(textOf(read)).toContain(`Decision page: Choice (${p.id}) — published version 1`);
+  });
+
   it('is refused without `work_item:edit`, with nothing written', async () => {
     const item = await card();
     const p = await page();
