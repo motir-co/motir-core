@@ -310,4 +310,12 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
       );
     }
   });
+
+  it('gives the lane a timeout sized for whole-tree scans', () => {
+    // Vitest's 5 s default measured 3.1 to 5.2 s against one sweep on CI, so main
+    // went red on a loaded runner with no defect in it. Dropping this line would
+    // restore that, and only a slow runner would show it.
+    const budget = /\btestTimeout:\s*([\d_]+)/.exec(readFileSync(DESIGN_CONFIG_PATH, 'utf8'));
+    expect(Number(budget?.[1]?.replaceAll('_', ''))).toBeGreaterThanOrEqual(30_000);
+  });
 });
