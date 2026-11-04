@@ -547,7 +547,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-10315, summary WIDENED: the payload declares `pages`, the
     // pages linked to the item with its latest decision publication marked — a new
     // question the tool answers (is this decision already settled?), so the line names it.
-    descriptionFingerprint: 'b776ef683889',
+    // Re-pinned for MOTIR-10315's review, summary UNCHANGED: the description adds the
+    // decision page's `state` and that a token without `page:view` gets `pages: null`.
+    descriptionFingerprint: '6529412bc202',
   },
   get_design: {
     // Story MOTIR-5553 · MOTIR-5561.

@@ -91,6 +91,8 @@ export interface WorkItemLinkedPageDto extends WorkItemPageLinkRowDto {
 export interface WorkItemDecisionPageDto extends WorkItemDecisionMarkDto {
   pageId: string;
   title: string;
+  /** `unavailable` when the page has been archived since it was published, as on the Pages row. */
+  state: WorkItemPageLinkStateDto;
 }
 
 /**

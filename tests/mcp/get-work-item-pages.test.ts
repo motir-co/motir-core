@@ -109,6 +109,7 @@ describe('get_work_item — the linked pages (MOTIR-10315)', () => {
       title: 'Choice',
       versionNumber: 1,
       publishedAt: pages!.rows[0]!.decision!.publishedAt,
+      state: 'live',
     });
     expect(text).toContain(`Decision page: Choice (${choice.id}) — published version 1`);
     expect(text).toContain(`Pages: Choice (${choice.id}) [decision v1] · Notes (${notes.id})`);
@@ -179,6 +180,46 @@ describe('get_work_item — the linked pages (MOTIR-10315)', () => {
     expect(res.pages).toBeNull();
     expect(res.text).not.toContain('Secret decision title');
     expect(res.text).not.toContain(secret.id);
+  });
+});
+
+describe('get_work_item — the linked pages under a token grant and an archive (MOTIR-10315)', () => {
+  it('gives a TOKEN whose grant leaves out page:view pages: null, though its owner may view pages', async () => {
+    const item = await card();
+    const secret = await page('Secret decision title');
+    await decisionPageService.publish({ workItemId: item.id, pageId: secret.id }, fx.ctx);
+
+    // The owner's role holds page:view; the token minted for them does not.
+    const tokenCtx: ServiceContext = {
+      ...fx.ctx,
+      tokenGrant: ['project:browse', 'work_item:edit'],
+    };
+    const res = await read(tokenCtx, item.identifier);
+
+    expect(res.item.identifier).toBe(item.identifier);
+    expect(res.pages).toBeNull();
+    expect(res.text).not.toContain('Secret decision title');
+    expect(res.text).not.toContain(secret.id);
+
+    // The same owner with a grant that holds page:view reads them.
+    const granted = await read(
+      { ...tokenCtx, tokenGrant: ['project:browse', 'page:view'] },
+      item.identifier,
+    );
+    expect(granted.pages!.decisionPage).toMatchObject({ pageId: secret.id });
+  });
+
+  it('marks the decision page unavailable once it is archived, in the payload and the text', async () => {
+    const item = await card();
+    const choice = await page('Choice');
+    await decisionPageService.publish({ workItemId: item.id, pageId: choice.id }, fx.ctx);
+    await pagesService.archivePage(fx.ctx, { projectId: fx.projectId, pageId: choice.id });
+
+    const { pages, text } = await read(fx.ctx, item.identifier);
+
+    expect(pages!.decisionPage).toMatchObject({ pageId: choice.id, state: 'unavailable' });
+    expect(pages!.rows[0]).toMatchObject({ pageId: choice.id, state: 'unavailable' });
+    expect(text).toContain(`Decision page: Choice (${choice.id}) — published version 1 [archived]`);
   });
 });
 

@@ -245,6 +245,12 @@ export const pageLinksService = {
     ctx: ServiceContext,
     input: { workItemId: string; projectId: string },
   ): Promise<WorkItemLinkedPagesDto | null> {
+    // A BEARER TOKEN must hold `page:view` in its own GRANT too. `get_work_item` is
+    // keyed `project:browse` at the dispatch door, and `assertCanViewPages` reads the
+    // owner's ROLE only, so without this a token minted without the page keys
+    // (`CLI_TOKEN_GRANT`: no read-forward for them) would read page titles here
+    // that `get_page` and `search_pages` refuse it.
+    if (ctx.tokenGrant !== undefined && !ctx.tokenGrant.includes('page:view')) return null;
     const scope = { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: input.projectId };
     return withWorkspaceContext(scope, async (tx) => {
       try {
@@ -271,6 +277,7 @@ export const pageLinksService = {
             title: latest.pageTitle,
             versionNumber: latest.versionNumber,
             publishedAt: latest.publishedAt.toISOString(),
+            state: latest.pageArchivedAt === null ? ('live' as const) : ('unavailable' as const),
           }
         : null;
       return {

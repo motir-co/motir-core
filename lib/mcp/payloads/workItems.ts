@@ -228,7 +228,9 @@ const mcpWorkItemLinkedPagesSchema = z.object({
     }),
   ),
   hasMore: z.boolean(),
-  decisionPage: mcpDecisionMarkSchema.extend({ pageId: z.string(), title: z.string() }).nullable(),
+  decisionPage: mcpDecisionMarkSchema
+    .extend({ pageId: z.string(), title: z.string(), state: z.enum(['live', 'unavailable']) })
+    .nullable(),
 });
 
 export const getWorkItemPayload = definePayload({

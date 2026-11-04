@@ -170,7 +170,8 @@ export function renderLinkedPages(pages: WorkItemLinkedPagesDto | null): string[
   const decision = pages.decisionPage;
   if (decision) {
     lines.push(
-      `Decision page: ${decision.title} (${decision.pageId}) — published version ${decision.versionNumber}`,
+      `Decision page: ${decision.title} (${decision.pageId}) — published version ${decision.versionNumber}` +
+        (decision.state === 'unavailable' ? ' [archived]' : ''),
     );
   }
   if (pages.rows.length > 0) {
@@ -426,11 +427,12 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
         'section shows, newest edit first — as `{ rows, hasMore, decisionPage }`. Each row is ' +
         '`{ pageId, title, state, sources, updatedAt, place, decision }`; read a page with ' +
         '`get_page`. At most 50 rows are served and `hasMore` says there are more. ' +
-        '`decisionPage` is `{ pageId, title, versionNumber, publishedAt }` of the card’s LATEST ' +
+        '`decisionPage` is `{ pageId, title, versionNumber, publishedAt, state }` of the card’s LATEST ' +
         'decision publication (`publish_decision_page`), or `null`, and the row of that page ' +
         'carries the same `decision: { versionNumber, publishedAt }` — `null` on every other row. ' +
         'A decision card whose `decisionPage` is set has a published decision: read it before ' +
-        're-asking the question. `pages` is `null` when you cannot view the project’s pages. The ' +
+        're-asking the question (its `state` is `unavailable` once the page is archived). `pages` is ' +
+        '`null` when you cannot view the project’s pages, or your token lacks `page:view`. The ' +
         'text block prints `Decision page:` and `Pages:` lines.' +
         ' Each of the title, description and explanation has a recorded language in ' +
         '`item.languages` (`{ title, description, explanation }`); `null` means none was ' +

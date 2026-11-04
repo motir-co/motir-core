@@ -67,7 +67,15 @@ export const decisionPagePublicationRepository = {
   async latestForWorkItems(
     workItemIds: readonly string[],
     tx: Prisma.TransactionClient,
-  ): Promise<Array<DecisionPagePublicationRecord & { pageTitle: string; versionNumber: number }>> {
+  ): Promise<
+    Array<
+      DecisionPagePublicationRecord & {
+        pageTitle: string;
+        pageArchivedAt: Date | null;
+        versionNumber: number;
+      }
+    >
+  > {
     if (workItemIds.length === 0) return [];
     const rows = await tx.decisionPagePublication.findMany({
       where: { workItemId: { in: [...workItemIds] } },
@@ -75,13 +83,14 @@ export const decisionPagePublicationRepository = {
       orderBy: [{ workItemId: 'asc' }, { publishedAt: 'desc' }, { id: 'desc' }],
       select: {
         ...PUBLICATION_SELECT,
-        page: { select: { title: true } },
+        page: { select: { title: true, archivedAt: true } },
         pageVersion: { select: { number: true } },
       },
     });
     return rows.map(({ page, pageVersion, ...row }) => ({
       ...row,
       pageTitle: page.title,
+      pageArchivedAt: page.archivedAt,
       versionNumber: pageVersion.number,
     }));
   },
