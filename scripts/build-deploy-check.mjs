@@ -10,12 +10,30 @@
 // command brings its own bundle, with the worker's external set. The image has no
 // `tests/` either, so the committed fixture manifests are inlined as text
 // (`define`), keyed by the paths the check defaults to.
+//
+// ON AWS (MOTIR-10301) the same bundle runs in a task of the core worker service
+// over ECS Exec (`node /app/hosting/deploy-check.mjs <step> --target aws …`,
+// docs/hosting/aws-deploy-check.md), so the AWS target's manifest is inlined too,
+// and the entry is `scripts/hosting-deploy-check-main.ts`, not the check itself:
+// it composes `DATABASE_URL` from the task's login parts BEFORE the check's
+// imports can evaluate the database client, then loads the check with a dynamic
+// import that esbuild keeps lazy in this one-file bundle — `fleet-admin`'s route
+// (MOTIR-10264, `scripts/build-fleet-admin.mjs`).
+//
+// `--outfile <path>` writes the bundle elsewhere — the entry's test builds its own
+// copy (`tests/hosting/deployCheckFargateEntry.test.ts`). The default is the path
+// the Dockerfile copies from.
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const { values } = parseArgs({ options: { outfile: { type: 'string' } } });
+const outfile = values.outfile
+  ? path.resolve(values.outfile)
+  : path.join(root, '.deploy-check/deploy-check.mjs');
 
 /** The worker's external set (`scripts/build-worker.mjs`): native and present in the image. */
 const WORKER_EXTERNALS = ['pg', 'pg-native', 'argon2', 'sharp'];
@@ -24,14 +42,15 @@ const WORKER_EXTERNALS = ['pg', 'pg-native', 'argon2', 'sharp'];
 const MANIFESTS = [
   'tests/fixtures/hosting/motir.hosting.json',
   'tests/fixtures/hosting/motir.hosting.env-report.json',
+  'tests/fixtures/hosting/motir.hosting.aws.json',
 ];
 const embedded = Object.fromEntries(
   MANIFESTS.map((p) => [p, readFileSync(path.join(root, p), 'utf8')]),
 );
 
 const result = await esbuild.build({
-  entryPoints: [path.join(root, 'scripts/hosting-deploy-check.ts')],
-  outfile: path.join(root, '.deploy-check/deploy-check.mjs'),
+  entryPoints: [path.join(root, 'scripts/hosting-deploy-check-main.ts')],
+  outfile,
   bundle: true,
   platform: 'node',
   target: 'node22',

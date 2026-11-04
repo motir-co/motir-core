@@ -1794,6 +1794,11 @@ export default defineConfig({
         // as the real bundle, which coverage does not follow). Pinned at the floor.
         'scripts/fleet/fleetAdminMain.ts',
         'scripts/fleet/fleetAdminDatabaseUrl.ts',
+        // MOTIR-10301 — the deploy-check bundle's entry (the Fargate path over ECS Exec).
+        // MEASURED against `tests/hosting/deployCheckFargateEntry.test.ts`: 100 on all
+        // four (the process-entry block is v8-ignored, as fleet-admin's is). Pinned at
+        // the floor.
+        'scripts/hosting-deploy-check-main.ts',
         // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
         // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
         // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
@@ -4002,6 +4007,13 @@ export default defineConfig({
           statements: 90,
         },
         'scripts/fleet/fleetAdminDatabaseUrl.ts': {
+          lines: 90,
+          functions: 90,
+          branches: 90,
+          statements: 90,
+        },
+        // MOTIR-10301 — measured above, pinned at the floor.
+        'scripts/hosting-deploy-check-main.ts': {
           lines: 90,
           functions: 90,
           branches: 90,

@@ -22,6 +22,9 @@
  * tenant app `mh-<id>` instead, with `--shape <function|container>` and these
  * steps besides (docs/hosting/aws-deploy-check.md is the operator's run order):
  *   converge  bring `--organization`'s tenant deploy role onto today's policy
+ *   app       ensure the tenant app and print the release-1 and release-2 tags,
+ *             building nothing — `push`'s first half, for the run inside AWS
+ *             whose images are pushed from CloudShell (MOTIR-10301)
  *   push      build the fixture app as release 1 and 2 and push both to
  *             mh/<id>/production under `--aws-profile`
  *   page      GET the serving release's /health and /row with its origin
@@ -46,6 +49,11 @@
  * `pnpm build:deploy-check`), over `fly ssh console -a motir-core`. It prints entry
  * names and whether each is secret, never a value. Without the three flags it
  * loads no database module at all.
+ *
+ * ON AWS (MOTIR-10301) the bundle runs in a task of the core worker service over
+ * ECS Exec, under the task's own role — no management key — with its entry
+ * (`hosting-deploy-check-main.ts`) composing `DATABASE_URL` from the task's
+ * login parts first. docs/hosting/aws-deploy-check.md gives every command.
  *
  * Every deploying step parses the manifest FIRST: an invalid or missing one is
  * printed with its field and reason and exits 1 with no port call. The target is
@@ -232,8 +240,12 @@ async function converge(organizationId: string): Promise<string> {
 
 const signedFetch = createSigV4Fetch({ region: DEPLOY_CHECK_AWS_REGION });
 
-async function main(): Promise<number> {
-  return runDeployCheck(process.argv.slice(2), {
+/** Runs one deploy-check command line and answers the process exit code. The
+ *  process entry is `hosting-deploy-check-main.ts`, which `pnpm
+ *  hosting:deploy-check` and the bundle both start from: this module runs
+ *  nothing when it is loaded. */
+export async function runHostingDeployCheck(argv: readonly string[]): Promise<number> {
+  return runDeployCheck(argv, {
     port: (target) =>
       target === 'aws'
         ? getHostingDeployPort('aws')
@@ -260,11 +272,3 @@ async function main(): Promise<number> {
     },
   });
 }
-
-main().then(
-  (code) => process.exit(code),
-  (err: unknown) => {
-    console.error(TAG, err);
-    process.exit(1);
-  },
-);

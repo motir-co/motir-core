@@ -20,8 +20,16 @@
  * (`fleetAdminMain.ts`) ahead of a dynamic import of everything else.
  *
  * ⚠️ NOTHING HERE PRINTS. The composed URL and the password are handed back as
- * `secrets`, for the entry to redact from every line the command writes.
+ * `secrets`, for the entry to redact from every line the command writes with
+ * `redactor`.
+ *
+ * The operator deploy check's entry (`scripts/hosting-deploy-check-main.ts`,
+ * MOTIR-10301) composes its URL here too, so the two commands a person runs in a
+ * core task cannot disagree with each other or with the services.
  */
+import { scrubSecrets } from '@/lib/fleetShards/scrubSecrets';
+
+const REDACTED = '[redacted]';
 
 /** The variables a core task is given its database login parts in (motir-infra `DATABASE_PART_ENV`). */
 export const DATABASE_PART_ENV = {
@@ -81,4 +89,10 @@ export function composeDatabaseUrl(env: DatabaseEnv): DatabaseUrlSource {
   env['DATABASE_URL'] = url;
   for (const name of names) delete env[name];
   return { source: 'parts', secrets: [url, password, enc(password)] };
+}
+
+/** `text` with each of `secrets` (longest first) and every credential shape removed. */
+export function redactor(secrets: readonly string[]): (text: string) => string {
+  const ordered = [...new Set(secrets)].filter(Boolean).sort((a, b) => b.length - a.length);
+  return (text) => scrubSecrets(ordered.reduce((out, s) => out.split(s).join(REDACTED), text));
 }

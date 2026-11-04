@@ -20,6 +20,8 @@ pin it harder.
 The check's `push` step builds it for `linux/amd64` (both shapes run x86_64) with
 `--provenance=false` (Lambda refuses an image index with attestations), tags it
 `<registry>/mh/<repository id>/production:release-1` and `:release-2`, and pushes
-both under the operator's own AWS profile. See `docs/hosting/aws-deploy-check.md`.
+both under the operator's own AWS profile. Run inside AWS (MOTIR-10301), the same
+build and push happen in CloudShell in the tenant account, to the tags the check's
+`app` step prints. See `docs/hosting/aws-deploy-check.md`.
 
 `../motir.hosting.aws.json` is its hosting manifest.
