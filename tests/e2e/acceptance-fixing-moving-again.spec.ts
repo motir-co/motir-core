@@ -473,7 +473,7 @@ test.describe('Fixing on To fix, and a card that moves again leaves To resume', 
         await expect(fixingTag(banner(page))).toContainText(en.toFix.fixing.label);
         await expect(banner(page)).toContainText(en.toFix.banner.fixing);
         await expect(banner(page)).toContainText(
-          en.toFix.banner.fixingWas.replace(/<[^>]+>/g, '').trim(),
+          en.toFix.banner.fixingWas.replace('<reason></reason>', '').trim(),
         );
         await expect(banner(page)).toContainText('CI failed');
         // `motir fix` refuses a card whose checks run, so the banner offers no command.
@@ -617,7 +617,7 @@ test.describe('Fixing on To fix, and a card that moves again leaves To resume', 
       });
       await expect(banner(page)).toContainText(zh.toFix.banner.fixing);
       await expect(banner(page)).toContainText(
-        zh.toFix.banner.fixingWas.replace(/<[^>]+>/g, '').trim(),
+        zh.toFix.banner.fixingWas.replace('<reason></reason>', '').trim(),
       );
       await expectNotTruncated(fixingTag(banner(page)));
     });
