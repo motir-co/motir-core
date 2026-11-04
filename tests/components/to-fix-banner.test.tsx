@@ -457,6 +457,25 @@ describe('Fixing (MOTIR-10309) — the calm banner while the pushed fix is check
     expect(link.getAttribute('href')).toBe('#development');
   });
 
+  it('keeps the group lines: a head names what it also clears, a carried card its head', () => {
+    renderBanner(
+      'ci_failed',
+      { fixing: true },
+      { fixGroup: { kind: 'prs', headKey: 'PROD-42', isHead: true, carriedKeys: ['PROD-43'] } },
+    );
+    expect(banner().getAttribute('data-fixing')).toBe('true');
+    expect(screen.getByTestId('to-fix-banner-carries').textContent).toContain('PROD-43');
+    cleanup();
+
+    renderBanner(
+      'ci_failed',
+      { fixing: true },
+      { fixGroup: { kind: 'prs', headKey: 'PROD-12', isHead: false, carriedKeys: ['PROD-42'] } },
+    );
+    expect(banner().getAttribute('data-fixing')).toBe('true');
+    expect(screen.getByTestId('to-fix-banner-repaired-with-head').textContent).toContain('PROD-12');
+  });
+
   it('a dead run is never Fixing — its banner stays the dead-run one', () => {
     renderBanner('run_died', {
       fixing: true,
