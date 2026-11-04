@@ -21,16 +21,15 @@
  * percent-encoded) before `scrubSecrets` removes any other credential shape.
  */
 import { pathToFileURL } from 'node:url';
-import { scrubSecrets } from '@/lib/fleetShards/scrubSecrets';
 import {
   composeDatabaseUrl,
   DatabasePartsIncompleteError,
+  redactor,
   type DatabaseEnv,
 } from './fleetAdminDatabaseUrl';
 import type { FleetAdminIo } from './fleetAdmin';
 
 const EXIT_ERROR = 1;
-const REDACTED = '[redacted]';
 
 /** The last line on the Fargate path; the code is what the command answered. */
 export const exitLine = (code: number): string => `fleet-admin exit ${code}`;
@@ -55,11 +54,10 @@ export async function loadFleetAdmin(): Promise<FleetAdminCommands> {
   };
 }
 
-/** `text` with each of `secrets` (longest first) and every credential shape removed. */
-export function redactor(secrets: readonly string[]): (text: string) => string {
-  const ordered = [...new Set(secrets)].filter(Boolean).sort((a, b) => b.length - a.length);
-  return (text) => scrubSecrets(ordered.reduce((out, s) => out.split(s).join(REDACTED), text));
-}
+// `redactor` lives beside the composition it redacts, so the deploy check's entry
+// (MOTIR-10301) shares it without importing this module — whose entry guard would
+// run fleet-admin inside that one-file bundle.
+export { redactor };
 
 /**
  * Runs one `fleet-admin` command as the bundle's entry: composes `DATABASE_URL`

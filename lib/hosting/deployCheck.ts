@@ -133,6 +133,7 @@ export const DEPLOY_CHECK_STEPS = [
   'destroy',
   'all',
   'converge',
+  'app',
   'push',
   'page',
   'no-shape',
@@ -145,7 +146,13 @@ export type DeployCheckStep =
   | (typeof SERVERLESS_ONLY_DEPLOY_CHECK_STEPS)[number];
 
 /** The steps only the AWS target has. */
-export const AWS_ONLY_STEPS: readonly DeployCheckStep[] = ['converge', 'push', 'page', 'no-shape'];
+export const AWS_ONLY_STEPS: readonly DeployCheckStep[] = [
+  'converge',
+  'app',
+  'push',
+  'page',
+  'no-shape',
+];
 
 /** `page` tries a cold release this many times, this far apart, before it
  *  fails: a function's first invocation and a scale-from-zero database both
@@ -675,6 +682,39 @@ async function converge(deps: DeployCheckDeps, options: DeployCheckOptions): Pro
   }
 }
 
+/** The check's tenant app, ensured (its network and its registry), with the
+ *  name of the role CI pushes it as — what `app` and `push` both start from. */
+async function ensureAwsApp(
+  deps: DeployCheckDeps,
+  aws: DeployCheckAwsOptions,
+): Promise<{ repositoryId: string; appRef: string; pushNamespace: string; pushesInCiAs: string }> {
+  const { repositoryId, appRef } = deployCheckAwsApp(aws.repositoryId);
+  const port = deps.port('aws');
+  const app = await port.ensureApp({ repositoryId, environment: ENVIRONMENT });
+  const credential = await port.mintDeployCredential({ pushNamespace: app.pushNamespace });
+  const pushesInCiAs =
+    credential.kind === 'federated' ? credential.subject : `${credential.kind} credential`;
+  return { repositoryId, appRef, pushNamespace: app.pushNamespace, pushesInCiAs };
+}
+
+/** `app` (MOTIR-10301): ensure the check's tenant app and print where each
+ *  release's image goes, building and pushing nothing. It is the half of `push`
+ *  that needs Motir's hosting identity and the database, for a run inside AWS,
+ *  where the task that holds both has no Docker: the images are then built and
+ *  pushed from CloudShell in the tenant account, to the tags printed here
+ *  (docs/hosting/aws-deploy-check.md). */
+async function app(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
+  const aws = awsOptions('app', options);
+  const { repositoryId, appRef, pushNamespace, pushesInCiAs } = await ensureAwsApp(deps, aws);
+  deps.print('app', {
+    app: appRef,
+    pushNamespace,
+    pushesInCiAs,
+    release1: awsReleaseImage(repositoryId, 1),
+    release2: awsReleaseImage(repositoryId, 2),
+  });
+}
+
 /** `push`: build the fixture as release 1 and release 2 and push both to the
  *  app's push namespace, under the operator's own profile. It prints the push
  *  credential the port mints — what CI will push as — but cannot use it: that
@@ -685,10 +725,7 @@ async function push(deps: DeployCheckDeps, options: DeployCheckOptions): Promise
   const aws = awsOptions('push', options);
   const profile = requireFlag(aws.awsProfile, 'push', 'aws-profile');
   const exec = wired(deps, 'exec');
-  const { repositoryId, appRef } = deployCheckAwsApp(aws.repositoryId);
-  const port = deps.port('aws');
-  const app = await port.ensureApp({ repositoryId, environment: ENVIRONMENT });
-  const credential = await port.mintDeployCredential({ pushNamespace: app.pushNamespace });
+  const { repositoryId, appRef, pushNamespace, pushesInCiAs } = await ensureAwsApp(deps, aws);
 
   const profileArgs = ['--region', DEPLOY_CHECK_AWS_REGION, '--profile', profile];
   const identity = await exec('aws', [
@@ -732,9 +769,8 @@ async function push(deps: DeployCheckDeps, options: DeployCheckOptions): Promise
   }
   deps.print('push', {
     app: appRef,
-    pushNamespace: app.pushNamespace,
-    pushesInCiAs:
-      credential.kind === 'federated' ? credential.subject : `${credential.kind} credential`,
+    pushNamespace,
+    pushesInCiAs,
     registry,
     release1: digests[0],
     release2: digests[1],
@@ -860,6 +896,8 @@ export async function runDeployCheckStep(
   switch (step) {
     case 'converge':
       return converge(deps, options);
+    case 'app':
+      return app(deps, options);
     case 'push':
       return push(deps, options);
     case 'page':

@@ -227,7 +227,9 @@ RUN pnpm build:fleet-admin
 # `node hosting/deploy-check.mjs <step> --workspace … --repository … --environment …`
 # resolves a repository's stored environment, which needs the database and
 # ENVIRONMENT_CONFIG_ENCRYPTION_KEY — so it runs on this machine, bundled the
-# fleet-admin way (`scripts/build-deploy-check.mjs`).
+# fleet-admin way (`scripts/build-deploy-check.mjs`). On AWS (MOTIR-10301) the
+# `--target aws` steps run from the same file in a core worker task over ECS Exec
+# (`node /app/hosting/deploy-check.mjs …`, docs/hosting/aws-deploy-check.md).
 RUN pnpm build:deploy-check
 
 # ── the rehearsal breach bundle (MOTIR-9884) ────────────────────────────────

@@ -443,6 +443,59 @@ describe('push', () => {
   });
 });
 
+describe('app — the run inside AWS (MOTIR-10301)', () => {
+  it('ensures the tenant app and prints the two release tags, building and pushing nothing', async () => {
+    const h = harness();
+    expect(await h.run('app', ...base())).toBe(0);
+    expect(h.block('app')).toEqual({
+      app: APP,
+      pushNamespace: NAMESPACE,
+      pushesInCiAs: PUSH_ROLE,
+      release1: `${NAMESPACE}:release-1`,
+      release2: `${NAMESPACE}:release-2`,
+    });
+    // No Docker, no AWS CLI, no operator profile: the task that runs it has none.
+    expect(h.calls).toEqual(['ensureApp', 'mintDeployCredential']);
+    expect(h.execs).toEqual([]);
+  });
+
+  it('never prints a secret push credential’s value', async () => {
+    const h = harness({ secretCredential: true });
+    expect(await h.run('app', ...base('container'))).toBe(0);
+    expect(h.block('app')).toMatchObject({ pushesInCiAs: 'secret credential' });
+    expect(collected(h)).not.toContain('fake-deploy-token');
+  });
+
+  it.each(['function', 'container'] as const)(
+    'with the images pushed elsewhere, the %s release goes up, pages, rolls back and is destroyed with no command run',
+    async (shape) => {
+      const h = harness();
+      const flags = base(shape);
+      expect(await h.run('converge', ...flags, '--organization', ORG)).toBe(0);
+      expect(await h.run('app', ...flags)).toBe(0);
+      // Here CloudShell builds and pushes h.block('app')'s two tags.
+      expect(await h.run('deploy', ...flags)).toBe(0);
+      expect(await h.run('page', ...flags)).toBe(0);
+      expect(await h.run('release2', ...flags)).toBe(0);
+      expect(await h.run('rollback', ...flags)).toBe(0);
+      expect(h.blocks('page').map((p) => p['release'])).toEqual([1, 2, 1]);
+      expect(h.fake.app(APP)?.live?.image).toBe(h.block('app')!['release1']);
+      expect(await h.run('destroy', ...flags)).toBe(0);
+      expect(h.fake.app(APP)).toBeUndefined();
+      expect(h.execs).toEqual([]);
+    },
+  );
+
+  it('runs with --target aws only', async () => {
+    const h = harness();
+    expect(await h.run('app')).toBe(1);
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/app runs with --target aws only/),
+    });
+    expect(h.calls).toEqual([]);
+  });
+});
+
 describe('converge', () => {
   it('prints the outcome name only', async () => {
     const h = harness({ outcome: 'unchanged' });
