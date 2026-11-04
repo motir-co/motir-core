@@ -240,7 +240,7 @@ function ownStoredAssetKey(stored: string): string | null {
     // https only — a `javascript:`/`data:` value parses perfectly well, and this
     // is the line that stops one being stored and later rendered.
     if (parsed.protocol !== 'https:') return null;
-    return ownPublicAssetKey(stored, parsed);
+    return ownPublicAssetKey(stored);
   }
   // A bare key. Reject anything that could escape its own prefix before the
   // owning-user check reads it: a leading slash or a `..` segment would make
@@ -254,7 +254,7 @@ function ownStoredAssetKey(stored: string): string | null {
  * An ABSOLUTE public-asset URL → its object KEY, or null when it is not one of
  * ours. The shared derivation behind the avatar GATE, the avatar GC and the
  * display resolver above, so none of the three can disagree about what a stored
- * value means.
+ * value means. It is {@link publicUrlToKey} with the CONFIGURED base.
  *
  * It lives HERE rather than beside the S3 client so this module stays
  * dependency-free — it is the pure string half of the blob seam, safe to pull
@@ -262,30 +262,58 @@ function ownStoredAssetKey(stored: string): string | null {
  * `MOTIR_S3_PUBLIC_BASE_URL` from the environment directly rather than calling
  * `publicBaseUrl()`: importing `lib/blob/s3.ts` would drag the AWS SDK into
  * every bundle that maps a user DTO.)
- *
- * A path-style endpoint puts the BUCKET in the path
- * (`https://host/motir-public/avatars/…`), so the configured base URL's own
- * path is stripped before the key is returned; otherwise the bucket segment
- * would defeat the prefix check above.
  */
-function ownPublicAssetKey(url: string, parsed: URL): string | null {
-  const key = decodeURIComponent(parsed.pathname).replace(/^\/+/, '');
-  if (!key) return null;
-
+function ownPublicAssetKey(url: string): string | null {
   const configured = process.env['MOTIR_S3_PUBLIC_BASE_URL'];
-  if (configured) {
-    const base = configured.replace(/\/+$/, '');
-    if (url.startsWith(`${base}/`)) {
-      let basePath: string;
-      try {
-        basePath = decodeURIComponent(new URL(base).pathname).replace(/^\/+|\/+$/g, '');
-      } catch {
-        return null;
-      }
-      if (!basePath) return key;
-      return key.startsWith(`${basePath}/`) ? key.slice(basePath.length + 1) : null;
-    }
+  if (!configured) return null;
+  return publicUrlToKey(url, configured);
+}
+
+/**
+ * An ABSOLUTE URL on `base` → the object KEY it names, or null when it is not
+ * one (MOTIR-10075). Pure: the base is an ARGUMENT, so a caller that must reduce
+ * against a base other than the configured one — the cutover's stored-reference
+ * rewrite, run while `MOTIR_S3_PUBLIC_BASE_URL` may already name S3, reducing
+ * Tigris URLs — uses exactly the reduction the product does, and the two can
+ * never disagree about which key a URL names.
+ *
+ * - **https only** — a `javascript:`/`data:` value parses perfectly well.
+ * - **On `base` only** — the URL must start with `<base>/`.
+ * - **Path-style aware** — a path-style endpoint puts the BUCKET in the path
+ *   (`https://host/motir-public/avatars/…`), so the base's own path is stripped
+ *   before the key is returned; otherwise the bucket segment would defeat the
+ *   prefix checks above.
+ * - **No escape** — a decoded key with a `..` segment or a leading slash is
+ *   refused, the same rule the bare-key branch applies. `new URL` normalises a
+ *   literal `..` away, but a percent-encoded one (`%2e%2e`) survives into the
+ *   decoded path.
+ */
+export function publicUrlToKey(url: string, base: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'https:') return null;
+
+  const trimmedBase = base.replace(/\/+$/, '');
+  if (!url.startsWith(`${trimmedBase}/`)) return null;
+
+  let path: string;
+  let basePath: string;
+  try {
+    path = decodeURIComponent(parsed.pathname).replace(/^\/+/, '');
+    basePath = decodeURIComponent(new URL(trimmedBase).pathname).replace(/^\/+|\/+$/g, '');
+  } catch {
+    return null;
   }
 
-  return null;
+  let key = path;
+  if (basePath) {
+    if (!path.startsWith(`${basePath}/`)) return null;
+    key = path.slice(basePath.length + 1);
+  }
+  if (!key || key.startsWith('/') || key.split('/').includes('..')) return null;
+  return key;
 }

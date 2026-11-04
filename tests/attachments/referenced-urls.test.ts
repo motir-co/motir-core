@@ -7,6 +7,7 @@ import {
   isOwnAvatarRef,
   isOwnProjectImageRef,
   projectImagePrefix,
+  publicUrlToKey,
   storedAssetKey,
   storedAssetUrl,
 } from '@/lib/blob/referencedUrls';
@@ -239,5 +240,72 @@ describe('isOwnProjectImageRef — the project-mark gate, in both storage forms'
     expect(projectImagePrefix('cmsn5vkyf01qoi2phmjopsmyu')).toBe(
       'projects/cmsn5vkyf01qoi2phmjopsmyu/',
     );
+  });
+});
+
+// MOTIR-10075: the reduction lifted out of `ownPublicAssetKey`, with the base as an
+// argument, so the cutover's stored-reference rewrite reduces Tigris URLs exactly
+// as the product does even after `MOTIR_S3_PUBLIC_BASE_URL` names S3.
+describe('publicUrlToKey — an absolute URL on a given base becomes its key', () => {
+  const VIRTUAL_HOST = 'https://motir-core-public.fly.storage.tigris.dev';
+
+  it('reduces a URL on a virtual-host base to its path', () => {
+    expect(publicUrlToKey(`${VIRTUAL_HOST}/avatars/u1/me.png`, VIRTUAL_HOST)).toBe(
+      'avatars/u1/me.png',
+    );
+    // A trailing slash on the base is the same base.
+    expect(publicUrlToKey(`${VIRTUAL_HOST}/projects/p1/mark.png`, `${VIRTUAL_HOST}/`)).toBe(
+      'projects/p1/mark.png',
+    );
+  });
+
+  it("strips a path-style base's bucket segment", () => {
+    expect(publicUrlToKey(`${PUBLIC_BASE}/avatars/u1/me.png`, PUBLIC_BASE)).toBe(
+      'avatars/u1/me.png',
+    );
+  });
+
+  it('agrees with storedAssetKey under the configured base', () => {
+    for (const base of [PUBLIC_BASE, VIRTUAL_HOST]) {
+      vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', base);
+      const url = `${base}/avatars/u1/a%20b.png`;
+      expect(publicUrlToKey(url, base)).toBe(storedAssetKey(url));
+      expect(publicUrlToKey(url, base)).toBe('avatars/u1/a b.png');
+    }
+  });
+
+  it("refuses a URL on another host, or outside the base's path", () => {
+    expect(publicUrlToKey(GOOGLE, VIRTUAL_HOST)).toBeNull();
+    expect(
+      publicUrlToKey('https://s3.test.invalid/other-bucket/avatars/u1/me.png', PUBLIC_BASE),
+    ).toBeNull();
+    // A host that merely STARTS with the base's host is not the base.
+    expect(publicUrlToKey(`${VIRTUAL_HOST}.evil.test/avatars/u1/me.png`, VIRTUAL_HOST)).toBeNull();
+  });
+
+  it('refuses a `..` segment that survives decoding, and an empty or slash-led key', () => {
+    // `new URL` normalises a literal or `%2e%2e` segment away; one between ENCODED
+    // slashes is not a segment to the parser and survives into the decoded key.
+    expect(publicUrlToKey(`${VIRTUAL_HOST}/avatars/u1%2F..%2Fu2/me.png`, VIRTUAL_HOST)).toBeNull();
+    // On a path-style base an encoded slash after the bucket leaves a slash-led key.
+    expect(publicUrlToKey(`${PUBLIC_BASE}/%2Favatars/u1/me.png`, PUBLIC_BASE)).toBeNull();
+    expect(publicUrlToKey(`${VIRTUAL_HOST}/`, VIRTUAL_HOST)).toBeNull();
+    expect(publicUrlToKey(`${PUBLIC_BASE}/`, PUBLIC_BASE)).toBeNull();
+  });
+
+  it('refuses a non-https URL, a malformed one, and a malformed base', () => {
+    expect(
+      publicUrlToKey(
+        'http://motir-core-public.fly.storage.tigris.dev/avatars/u1/me.png',
+        'http://motir-core-public.fly.storage.tigris.dev',
+      ),
+    ).toBeNull();
+    expect(publicUrlToKey('javascript:alert(1)//avatars/u1', 'javascript:alert(1)/')).toBeNull();
+    expect(publicUrlToKey('avatars/u1/me.png', VIRTUAL_HOST)).toBeNull();
+    expect(publicUrlToKey(`${VIRTUAL_HOST}/avatars/%E0%A4%A.png`, VIRTUAL_HOST)).toBeNull();
+    expect(publicUrlToKey('https://x.test/avatars/u1/me.png', 'https://x.test')).toBe(
+      'avatars/u1/me.png',
+    );
+    expect(publicUrlToKey('https://x.test/avatars/u1/me.png', 'not a url')).toBeNull();
   });
 });

@@ -101,3 +101,32 @@ export class AttachmentNotOnWorkItemError extends AttachmentError {
     this.name = 'AttachmentNotOnWorkItemError';
   }
 }
+
+/**
+ * The cutover's stored-reference rewrite (MOTIR-10075) refused to finish. Thrown
+ * INSIDE its one transaction, so the throw is what rolls every row back: the
+ * rewrite is all or nothing, and an operator re-runs it after reading `message`.
+ * Not an `AttachmentError` — no route serves it; the operator script prints it
+ * and exits non-zero.
+ */
+export class StoredAssetRewriteError extends Error {
+  readonly code:
+    | 'STORED_ASSET_BAD_BASE'
+    | 'STORED_ASSET_NOT_REDUCIBLE'
+    | 'STORED_ASSET_CHANGED'
+    | 'STORED_ASSET_REWRITE_INCOMPLETE';
+  /** The table and row the refusal names, when it names one. */
+  readonly table: 'user' | 'project' | null;
+  readonly rowId: string | null;
+  constructor(
+    code: StoredAssetRewriteError['code'],
+    message: string,
+    where: { table: 'user' | 'project'; rowId: string } | null = null,
+  ) {
+    super(message);
+    this.name = 'StoredAssetRewriteError';
+    this.code = code;
+    this.table = where?.table ?? null;
+    this.rowId = where?.rowId ?? null;
+  }
+}

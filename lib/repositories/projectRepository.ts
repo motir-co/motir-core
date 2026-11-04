@@ -1359,6 +1359,59 @@ export const projectRepository = {
   },
 
   /**
+   * Every project whose stored `image` starts with `prefix`, with its workspace
+   * (MOTIR-10075) — the cutover's stored-reference rewrite counts and rewrites
+   * exactly these. Cross-tenant: read inside `withSystemContext`, which
+   * `project_workspace_or_system_read` admits on USING. The workspace rides along
+   * because that policy's WITH CHECK has no system arm, so the writer must bind
+   * it before writing the row.
+   */
+  async listImagesWithPrefix(
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string; image: string }>> {
+    const rows = await tx.project.findMany({
+      where: { image: { startsWith: prefix } },
+      select: { id: true, workspaceId: true, image: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => ({ id: r.id, workspaceId: r.workspaceId, image: r.image! }));
+  },
+
+  /**
+   * How many projects store an ABSOLUTE `image` that does NOT start with
+   * `prefix` (MOTIR-10075) — the rewrite leaves them alone and reports them.
+   */
+  async countAbsoluteImagesNotWithPrefix(
+    prefix: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ n: bigint }>>`
+      SELECT count(*) AS n FROM "project"
+      WHERE "image" ~ '^[A-Za-z][A-Za-z0-9+.-]*:'
+        AND left("image", length(${prefix})) <> ${prefix}`;
+    return Number(rows[0]?.n ?? 0);
+  },
+
+  /**
+   * Compare-and-set one project's `image` (MOTIR-10075): written only while it
+   * still holds `from`. Answers how many rows changed; 0 means the row moved.
+   * The caller binds the project's workspace first.
+   */
+  async compareAndSetImage(
+    id: string,
+    from: string,
+    to: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.project.updateMany({
+      where: { id, image: from },
+      data: { image: to },
+    });
+    return count;
+  },
+
+  /**
    * Atomically bump the per-project work-item counter and return the new
    * value. Uses UPDATE … RETURNING (NOT a read-then-write) so allocation is
    * gap-free under concurrency: each concurrent caller's UPDATE serializes

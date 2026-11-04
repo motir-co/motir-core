@@ -2100,6 +2100,20 @@ jobs:
   #   • `if:` — the default branch, on a real push. A pull request's `github.ref`
   #     is `refs/pull/<n>/merge`, so a PR cannot deploy even by targeting main.
   #
+  #     It also carries the cutover's Fly off switch (MOTIR-10074): the job runs
+  #     unless the repository variable `MOTIR_FLY_DEPLOY_ENABLED` is `'false'`.
+  #     Unset means deploy, so the clause changes nothing until someone sets it.
+  #     The AWS cutover window sets it with
+  #     `gh variable set MOTIR_FLY_DEPLOY_ENABLED --body false -R motir-co/motir-core`,
+  #     and from then on a merge to `main` neither restarts the Fly web or relay
+  #     machines nor runs the `release_command` migration against Neon — the
+  #     whole job skips, relay step included. The way back before go sets it to
+  #     `true` (or deletes it) and the next push deploys to Fly again. A skipped
+  #     deploy is a `skipped` need, which `ci-complete` accepts. While it is off
+  #     and `main` moves, `deploy-freshness.yml` reads red against the Fly
+  #     production — a true reading, and why the runbook freezes merges in the
+  #     window. `aws-deploy.yml` shares no job with this one and ignores it.
+  #
   # `flyctl deploy` runs fly.toml's `release_command` (`prisma migrate deploy`
   # via /app/migrate) as part of the release, in a temporary machine built from
   # the same image, BEFORE any new machine takes traffic — so a migration cannot
@@ -2114,7 +2128,7 @@ jobs:
     name: Deploy to Fly
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     needs: [lint, typecheck, build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.MOTIR_FLY_DEPLOY_ENABLED != 'false'
     # A release must NOT be cancelled mid-flight by a newer push — the
     # workflow-level `cancel-in-progress` is right for a test run and wrong for
     # a deploy, so this group overrides it.
