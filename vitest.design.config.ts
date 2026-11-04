@@ -37,6 +37,12 @@ import { resolve } from 'node:path';
 // as the one the lane exists to remove.
 export default defineConfig({
   test: {
+    // These specs read the whole design tree (385 HTML assets, several near 2 MB),
+    // not a database. Vitest's 5 s default never described them: one sweep measured
+    // 1.9 s on a quiet box and 3.1 to 5.2 s on CI, which turned main red with no
+    // defect in it. Same budget as `vitest.guards.config.ts`, for the same reason:
+    // it covers a loaded shared runner without hiding a real hang.
+    testTimeout: 60_000,
     environment: 'node',
     // Every spec that reads the `design/**` asset tree. Nothing else: this lane
     // runs on branches where the rest of the suite is deliberately skipped, so
