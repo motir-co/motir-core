@@ -477,6 +477,7 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
     // `supersedes` / `supersededBy` (MOTIR-6580) are two more additive link keys.
     // `inFlightCode` / `mergedRepos` (MOTIR-6618) are the next: EMPTY arrays on an
     // item with no delivery anywhere in its chain.
+    // `todos` (MOTIR-10316) is the next: an EMPTY array on an item with no steps.
     const {
       blockedBy,
       blocks,
@@ -488,11 +489,13 @@ describe('aiBoundaryService — the graph-traversal boundary', () => {
       decision,
       inFlightCode,
       mergedRepos,
+      todos,
       ...before
     } = res.item;
     expect(decision).toBeNull();
     expect(inFlightCode).toEqual([]);
     expect(mergedRepos).toEqual([]);
+    expect(todos).toEqual([]);
     expect(before).toEqual(
       await workItemsService.getWorkItemByIdentifier(fx.projectId, item.identifier, fx.ctx),
     );
