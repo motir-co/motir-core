@@ -74,12 +74,20 @@ export function prCiStateAtHead(pr: PullRequestHeadSlice): PrCiState {
 
 /**
  * Whether CI has NOT DECIDED at the pull request's head (MOTIR-10307 · MOTIR-10310): a check
- * is running there, or none has reported there yet. The second is the window between a push
+ * is running there, or none has reported there YET. The second is the window between a push
  * the host announces (`synchronize`) and the first check row at the new commit — on that
  * push the head has moved and nothing has decided, which is a pushed fix being checked, not
  * a card with nothing wrong.
+ *
+ * ⚠️ "YET" NEEDS A REASON TO EXPECT CI. A head with no rows counts only on a pull request CI
+ * has reported on before, at another commit: a repository with no pull-request workflows
+ * never writes a row, and reading its every push as "checks running" would hold a card on
+ * To fix, tagged Fixing, with nothing ever coming to clear it. And rows at the head that
+ * are all of a conclusion the fold does not rank (`skipped`, `neutral`) HAVE reported:
+ * that head is decided, though it has no pill.
  */
 export function isCiUndecidedAtHead(pr: PullRequestHeadSlice): boolean {
-  const state = prCiStateAtHead(pr);
-  return state === 'running' || state === null;
+  const atHead = checkRowsAtHead(pr);
+  if (atHead.length > 0) return foldHeadCheckRows(atHead) === 'running';
+  return pr.checkRuns.length > 0;
 }

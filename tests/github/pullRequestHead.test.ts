@@ -53,12 +53,21 @@ describe('pullRequestHead', () => {
 
 // FIXING's reading of a member (Story MOTIR-10305 · MOTIR-10310): CI has not decided at the
 // head when a check runs there OR when none has reported there yet — the window between a
-// push the host announced and its first check row.
+// push the host announced and its first check row — on a pull request CI has reported on.
 describe('isCiUndecidedAtHead', () => {
-  it('is true while a check runs at the head, and for a head with no rows yet', () => {
+  it('is true while a check runs at the head, and for a new head with no rows yet', () => {
     expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(B, 'pending')] })).toBe(true);
     expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(A, 'failure')] })).toBe(true);
-    expect(isCiUndecidedAtHead({ headSha: null, checkRuns: [] })).toBe(true);
+  });
+
+  it('is false on a pull request CI has never reported on: nothing is coming', () => {
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [] })).toBe(false);
+    expect(isCiUndecidedAtHead({ headSha: null, checkRuns: [] })).toBe(false);
+  });
+
+  it('is false when every row at the head reported a conclusion the fold does not rank', () => {
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(B, 'skipped')] })).toBe(false);
+    expect(isCiUndecidedAtHead({ headSha: B, checkRuns: [run(B, 'neutral')] })).toBe(false);
   });
 
   it('is false once the head has a verdict, red or green', () => {
