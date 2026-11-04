@@ -207,6 +207,11 @@ export default defineConfig({
       'tests/services/decisionPageService.integration.test.ts',
       'tests/mcp/publishDecisionPageTool.test.ts',
       'tests/api/decisionPageRoute.test.ts',
+      // A published decision page is linked to its card, and the card's pages ride
+      // get_work_item (Bug MOTIR-10315): the link on publish, the agent read, the backfill.
+      'tests/services/decisionPageService.link.integration.test.ts',
+      'tests/mcp/get-work-item-pages.test.ts',
+      'tests/decisionPageLinkBackfill.test.ts',
       'tests/approvalGates/decisionPageGate.test.ts',
       'tests/approvalGates/decisionConfirmationPageRecord.test.ts',
       'tests/components/decision-port-page.test.tsx',
