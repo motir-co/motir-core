@@ -431,6 +431,12 @@ export const it: McpSummaryTranslations = {
     source:
       'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
   },
+  record_planner_finding: {
+    summary:
+      'Registra un difetto del planner trovato durante il controllo di un piano come un unico rilievo, leggibile solo dagli amministratori della piattaforma.',
+    source:
+      'Record one planner defect found while checking a plan as one finding, readable only by platform admins.',
+  },
   reinforce_lesson: {
     summary:
       'Registra che una lezione che hai trovato descrive qualcosa che è appena andato storto, indipendentemente dal fatto che tu lo modifichi o no.',

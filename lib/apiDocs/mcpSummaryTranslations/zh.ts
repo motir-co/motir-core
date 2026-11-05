@@ -395,6 +395,11 @@ export const zh: McpSummaryTranslations = {
     source:
       'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
   },
+  record_planner_finding: {
+    summary: '将检查计划时发现的一个规划器缺陷记录为一条发现，仅平台管理员可读。',
+    source:
+      'Record one planner defect found while checking a plan as one finding, readable only by platform admins.',
+  },
   reinforce_lesson: {
     summary: '记录你找到的某条经验描述了刚刚出错的情况，无论你是否同时修改了它。',
     source:
