@@ -37,6 +37,7 @@ import {
 } from './FleetSections';
 import { FleetTiles } from './FleetTiles';
 import { useFleetRead } from './useFleetRead';
+import { useStoredStopResult } from './useStoredStopResult';
 import { useFleetTime } from './fleetTime';
 
 /**
@@ -50,7 +51,8 @@ import { useFleetTime } from './fleetTime';
  *
  * ⚠️ THE STOP RESULT IS THIS ISLAND'S OWN STATE. It survives the 30-second
  * re-read and a press of Refresh, and goes only on Dismiss or when the page is
- * left (design § The result stays until dismissed) — never a toast.
+ * left (design § The result stays until dismissed) — never a toast. It is
+ * mirrored into sessionStorage, so a reload keeps it too (the card's criterion).
  */
 export interface FleetClientProps {
   orgId: string;
@@ -74,7 +76,7 @@ export function FleetClient({ orgId, orgName, initialFleet, initialReadAt }: Fle
   const [myStops, setMyStops] = useState<ReadonlySet<string>>(() => new Set());
   const remember = (at: string) => setMyStops((s) => new Set(s).add(at));
 
-  const [result, setResult] = useState<OrgFleetStopResultDTO | null>(null);
+  const [result, setResult] = useStoredStopResult(orgId);
 
   // Row-local state: a Cancel / Hibernate in flight, or a hibernate confirmed
   // here that the next read has not caught up with yet (panel 7c).

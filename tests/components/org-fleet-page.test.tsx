@@ -166,6 +166,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  window.sessionStorage.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
   for (const fn of [
@@ -899,5 +900,99 @@ describe('the read’s ordering', () => {
       vi.advanceTimersByTime(FLEET_POLL_MS * 2);
     });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('the stop result survives a reload (criterion 4)', () => {
+  it('the server render shows no stored result (no hydration mismatch)', async () => {
+    window.sessionStorage.setItem('motir.orgFleet.stopResult.org_1', JSON.stringify(done()));
+    const { renderToString } = await import('react-dom/server');
+    const { NextIntlClientProvider } = await import('next-intl');
+    const { enMessages } = await import('../helpers/renderWithIntl');
+    const html = renderToString(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <ToastProvider>
+          <FleetClient
+            orgId="org_1"
+            orgName="Acme"
+            initialFleet={fleet()}
+            initialReadAt={new Date(NOW).toISOString()}
+          />
+        </ToastProvider>
+      </NextIntlClientProvider>,
+    );
+    expect(html).toContain('fleet-tiles');
+    expect(html).not.toContain('fleet-stop-result');
+  });
+
+  it('a remount shows the stored result until Dismiss, and only for its own org', async () => {
+    previewStopEverythingAction.mockResolvedValue({
+      ok: true,
+      preview: { ciRuns: 1, ciContainers: 1, hostedRuns: 0, runningAgents: 0, indexContainers: 0 },
+      countedAt: new Date(NOW).toISOString(),
+    });
+    stopEverythingAction.mockResolvedValue({ ok: true, result: done() });
+    fetchMock.mockResolvedValue(answer(fleet()));
+    renderPage();
+    fireEvent.click(screen.getByTestId('fleet-stop-all'));
+    const dialog = await screen.findByRole('alertdialog');
+    await within(dialog).findByTestId('stop-all-effects');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop everything' }));
+    await screen.findByTestId('fleet-stop-result');
+
+    cleanup();
+    renderPage();
+    expect(await screen.findByTestId('fleet-stop-result')).toBeTruthy();
+
+    cleanup();
+    render(
+      <ToastProvider>
+        <FleetClient
+          orgId="org_2"
+          orgName="Other"
+          initialFleet={fleet()}
+          initialReadAt={new Date(NOW).toISOString()}
+        />
+      </ToastProvider>,
+    );
+    expect(screen.queryByTestId('fleet-stop-result')).toBeNull();
+
+    cleanup();
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Dismiss the stop result' }));
+    cleanup();
+    renderPage();
+    expect(screen.queryByTestId('fleet-stop-result')).toBeNull();
+  });
+
+  it('ignores a malformed stored value, and keeps working when storage throws', async () => {
+    window.sessionStorage.setItem('motir.orgFleet.stopResult.org_1', '{not json');
+    renderPage();
+    expect(screen.queryByTestId('fleet-stop-result')).toBeNull();
+    cleanup();
+    window.sessionStorage.setItem('motir.orgFleet.stopResult.org_1', '{"x":1}');
+    renderPage();
+    expect(screen.queryByTestId('fleet-stop-result')).toBeNull();
+    cleanup();
+
+    const blocked = vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
+      throw new Error('blocked');
+    });
+    previewStopEverythingAction.mockResolvedValue({
+      ok: true,
+      preview: { ciRuns: 1, ciContainers: 1, hostedRuns: 0, runningAgents: 0, indexContainers: 0 },
+      countedAt: new Date(NOW).toISOString(),
+    });
+    stopEverythingAction.mockResolvedValue({ ok: true, result: done() });
+    fetchMock.mockResolvedValue(answer(fleet()));
+    renderPage();
+    fireEvent.click(screen.getByTestId('fleet-stop-all'));
+    const dialog = await screen.findByRole('alertdialog');
+    await within(dialog).findByTestId('stop-all-effects');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Stop everything' }));
+    await screen.findByTestId('fleet-stop-result');
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss the stop result' }));
+    expect(screen.queryByTestId('fleet-stop-result')).toBeNull();
+    blocked.mockRestore();
   });
 });
