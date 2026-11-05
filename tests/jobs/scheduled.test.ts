@@ -19,6 +19,7 @@ import { classifyRunner, MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runn
 import { generateKeyPairSync } from 'node:crypto';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
 import { fleetReadinessService } from '@/lib/services/fleetReadinessService';
+import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
 
 // Scheduled-job primitive (Story 1.6 · Subtask 1.6.4) — the replacement for the
 // 1.6.2 system.ping smoke test. Drives the `system.daily-health-check` cron job
@@ -1057,6 +1058,95 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       const { result } = await engine.execute();
 
       expect(result).toMatchObject({ ok: true, fleetImageCoverage: { verdict: 'indeterminate' } });
+    });
+  });
+
+  // ── The TENTH probe: runner-image freshness (MOTIR-10393) ─────────────────
+  //
+  // The registry and GitHub reads are pinned in
+  // `tests/ciFleet/runnerImageFreshnessProbeService.test.ts`; these assert the
+  // job surface: the verdict on the row, a merged image change that was never
+  // released failing the run with the release step in its message, and a read
+  // that did not answer staying green but never `current`.
+
+  describe('runner image freshness', () => {
+    const BUILT = '4a9cb14b54e2366d2a30ad19ac4b924dddca6d31';
+    const CHANGE = 'a4e83f13c8a344fd306993b997c9c361c29aa3e4';
+    const build = { image: RUNNER_IMAGE, commit: BUILT, source: 'sha_tag' as const };
+
+    it('PASSES and records current when the pinned image contains every image change', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerImageFreshnessProbeService, 'check').mockResolvedValue({
+        verdict: 'current',
+        checkedAt: '2026-11-05T09:00:00.000Z',
+        build,
+        ami: { state: 'unset' },
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        runnerImageFreshness: { verdict: 'current', build: { commit: BUILT } },
+      });
+    });
+
+    it('FAILS on a merged image change the pinned image lacks, naming both commits and the release step', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerImageFreshnessProbeService, 'check').mockResolvedValue({
+        verdict: 'stale',
+        checkedAt: '2026-11-05T09:00:00.000Z',
+        build,
+        unreleased: [
+          {
+            commit: CHANGE,
+            committedAt: '2026-11-03T12:00:00Z',
+            subject: 'MOTIR-10293 Add the AWS CLI to the runner images',
+            paths: ['infra/ci-runner/Dockerfile'],
+            relation: 'ahead',
+          },
+        ],
+        ami: { state: 'unset' },
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error, ctx } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('RunnerImageStaleError');
+      expect(error?.message).toContain(
+        `The pinned runner image ${RUNNER_IMAGE} was built from 4a9cb14b54e2`,
+      );
+      expect(error?.message).toContain('a4e83f13c8a3 (2026-11-03T12:00:00Z');
+      expect(error?.message).toContain(`git tag runner-v<next> ${CHANGE}`);
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      expect(stepIds).toEqual(
+        expect.arrayContaining(['fleet-image-coverage', 'runner-image-freshness']),
+      );
+    });
+
+    it('PASSES and records indeterminate when the registry entry cannot be read', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerImageFreshnessProbeService, 'check').mockResolvedValue({
+        verdict: 'indeterminate',
+        checkedAt: '2026-11-05T09:00:00.000Z',
+        image: RUNNER_IMAGE,
+        phase: 'registry',
+        detail: "the pinned image's registry entry could not be read",
+        ami: { state: 'unset' },
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        runnerImageFreshness: { verdict: 'indeterminate', phase: 'registry' },
+      });
     });
   });
 });

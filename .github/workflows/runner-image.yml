@@ -361,8 +361,14 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ inputs.version }}
             ${{ env.IMAGE }}:sha-${{ github.sha }}
+          # The two OCI labels say which commit and repository these bytes were
+          # built from; the daily health check's runner-image-freshness step reads
+          # the revision to report a merged image change that was never released
+          # and pinned (MOTIR-10393).
           labels: |
             co.motir.ci-runner.tools=${{ steps.tools.outputs.tools }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
           cache-from: type=gha,scope=ci-runner
           cache-to: type=gha,scope=ci-runner,mode=max
 
@@ -391,6 +397,12 @@ jobs:
           measured=$(infra/ci-runner/smoke/list-tools.sh --image motir-ci-runner:published)
           if [ -z "$recorded" ] || [ "$recorded" != "$measured" ]; then
             echo "::error::the co.motir.ci-runner.tools label does not match the published image's tools."
+            exit 1
+          fi
+          revision=$(docker image inspect motir-ci-runner:published \
+            --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+          if [ "$revision" != "${GITHUB_SHA}" ]; then
+            echo "::error::the org.opencontainers.image.revision label is '${revision}', not the commit built (${GITHUB_SHA})."
             exit 1
           fi
           {
