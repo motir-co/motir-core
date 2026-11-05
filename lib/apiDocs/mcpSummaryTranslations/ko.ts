@@ -422,6 +422,12 @@ export const ko: McpSummaryTranslations = {
     source:
       'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
   },
+  record_planner_finding: {
+    summary:
+      '계획을 점검하다 찾은 계획자의 결함 하나를 하나의 발견 사항으로 기록합니다 — 플랫폼 관리자만 읽을 수 있습니다.',
+    source:
+      'Record one planner defect found while checking a plan as one finding, readable only by platform admins.',
+  },
   reinforce_lesson: {
     summary:
       '찾은 lesson이 방금 잘못된 일을 설명한다고 기록합니다 — 그 lesson을 함께 바꾸는지 여부와 관계없이 기록합니다.',
