@@ -62,6 +62,7 @@ export async function ApprovalsTab({ ctx }: { ctx: HomeActorContext }) {
   return (
     <ApprovalsList
       rows={queue.items}
+      reviewsToRun={queue.reviewsToRun ?? []}
       label={t('tabs.toApprove')}
       ceiling={queue.truncated ? { shown: queue.items.length, total: queue.total } : null}
       empty={<NothingWaiting />}

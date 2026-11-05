@@ -15195,6 +15195,45 @@
           "commits": "审查的提交",
           "link": "发现和检查清单"
         }
+      },
+      "line": {
+        "label": "智能体审查",
+        "reviewed": "<b>已由智能体审查</b> · {who} · {when}",
+        "whoHosted": "Motir 托管智能体",
+        "whoOwn": "{name} 的智能体 · {harness}",
+        "findings": "发现和检查清单",
+        "skipped": "<b>{name} 跳过了审查</b> — “{reason}”",
+        "dismissed": "<b>{name} 驳回了审查</b> — “{reason}”",
+        "notReviewed": "<b>未经智能体审查</b>",
+        "earlier": "上次审查于较早的提交",
+        "github": "<b>已在 GitHub 上批准</b>：{logins}"
+      },
+      "toRun": {
+        "sentence": "用你的智能体审查<title>{name}</title>",
+        "tag": "待运行审查",
+        "details": "尚不是审批。审查通过后才会请求你的审批。",
+        "open": "打开 {key}：{sentence}"
+      },
+      "dismiss": {
+        "button": "驳回审查",
+        "title": "驳回智能体的审查？",
+        "body": "智能体要求在这些提交上进行修改。驳回后，工作项将离开“待修复”，并在相同的提交上请求你的审批。审查和你的理由会保留在工作项上。",
+        "reasonLabel": "你为什么要驳回它？",
+        "reasonHint": "必填。你的理由会显示在审批和工作项历史中。",
+        "reasonPlaceholder": "该发现涉及此工作项未修改的代码。",
+        "confirm": "驳回审查",
+        "cancel": "取消",
+        "submitting": "正在驳回…",
+        "error": "无法驳回审查。没有任何更改。请重试。",
+        "stale": "你阅读此审查后有新的提交，因此没有驳回任何内容。请显示当前版本并重新阅读。",
+        "already": "此审查已被驳回。显示当前版本即可查看。",
+        "notStanding": "此审查已不再有效，因此无需驳回。请显示当前版本。",
+        "reread": "显示当前版本",
+        "toFixNote": "你请求的智能体审查将此退回。请修复，或附上理由驳回审查。"
+      },
+      "authorNote": {
+        "title": "GitHub 不允许你批准自己的拉取请求",
+        "body": "这里的每个拉取请求都是你创建的。请在 Motir 中批准，或请队友在 GitHub 上审查。"
       }
     }
   },

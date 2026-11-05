@@ -475,6 +475,7 @@ export async function GET(req: Request): Promise<Response> {
       movedSince: read.movedSince,
       earlierApproval: read.earlierApproval,
       approvedReview: read.approvedReview ?? null,
+      reviewPath: read.reviewPath ?? null,
       subject,
     };
     return NextResponse.json(body, {

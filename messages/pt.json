@@ -15204,6 +15204,45 @@
           "commits": "Nestes commits",
           "link": "Constatações e checklist"
         }
+      },
+      "line": {
+        "label": "Revisão do agente",
+        "reviewed": "<b>Revisado por um agente</b> · {who} · {when}",
+        "whoHosted": "O agente hospedado do Motir",
+        "whoOwn": "O agente de {name} · {harness}",
+        "findings": "Constatações e checklist",
+        "skipped": "<b>Revisão ignorada por {name}</b> — “{reason}”",
+        "dismissed": "<b>Revisão descartada por {name}</b> — “{reason}”",
+        "notReviewed": "<b>Sem revisão de agente</b>",
+        "earlier": "Revisado pela última vez em um commit anterior",
+        "github": "<b>Aprovado no GitHub</b> por {logins}"
+      },
+      "toRun": {
+        "sentence": "Revise <title>{name}</title> com seu agente",
+        "tag": "Revisão a executar",
+        "details": "Ainda não é uma aprovação. Sua aprovação é pedida quando a revisão passar.",
+        "open": "Abrir {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Descartar a revisão",
+        "title": "Descartar a revisão do agente?",
+        "body": "O agente pediu alterações nestes commits. Ao descartá-la, o item de trabalho sai de A corrigir e sua aprovação é pedida nos mesmos commits. A revisão e seu motivo ficam no item de trabalho.",
+        "reasonLabel": "Por que você está descartando?",
+        "reasonHint": "Obrigatório. Seu motivo aparece na aprovação e no histórico do item de trabalho.",
+        "reasonPlaceholder": "A constatação é sobre código que este item de trabalho não altera.",
+        "confirm": "Descartar a revisão",
+        "cancel": "Cancelar",
+        "submitting": "Descartando…",
+        "error": "Não foi possível descartar a revisão. Nada mudou. Tente novamente.",
+        "stale": "Novos commits chegaram desde que você leu esta revisão, então nada foi descartado. Mostre a versão atual e leia de novo.",
+        "already": "Esta revisão já foi descartada. Mostre a versão atual para vê-la.",
+        "notStanding": "Esta revisão não vale mais, então não há nada a descartar. Mostre a versão atual.",
+        "reread": "Mostrar a versão atual",
+        "toFixNote": "Uma revisão de agente que você pediu devolveu isto. Corrija ou descarte a revisão com um motivo."
+      },
+      "authorNote": {
+        "title": "O GitHub não deixa você aprovar suas próprias pull requests",
+        "body": "Você abriu todas as pull requests daqui. Aprove no Motir ou peça a um colega para revisá-las no GitHub."
       }
     }
   },

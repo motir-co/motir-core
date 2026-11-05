@@ -1240,10 +1240,7 @@ export const approvalGateRepository = {
         kind: 'agent_review',
         state: 'awaiting',
         project: { reviewAgentEnabled: true, reviewAgentSource: 'own' },
-        workItem: {
-          archivedAt: null,
-          OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
-        },
+        workItem: { archivedAt: null, ...routedCardWhere(scope.userId) },
       },
       select: {
         id: true,
@@ -1494,6 +1491,14 @@ function planningSessionLiveWhere(scope: AwaitingRoutingScope): Prisma.ApprovalG
 }
 
 /**
+ * §2's routed-card clause, `assigneeId ?? reporterId`, written ONCE — the approvals
+ * predicate below and the reviews-to-run read (MOTIR-10327) both route by it.
+ */
+function routedCardWhere(userId: string): Prisma.WorkItemWhereInput {
+  return { OR: [{ assigneeId: userId }, { assigneeId: null, reporterId: userId }] };
+}
+
+/**
  * §2's routing predicate, written ONCE — the list and the count both call it.
  *
  * The `OR` is the SQL spelling of `assigneeId ?? reporterId`: the second arm is
@@ -1508,9 +1513,7 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     state: 'awaiting',
     OR: [
       {
-        workItem: {
-          OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
-        },
+        workItem: routedCardWhere(scope.userId),
       },
       // ⚠️ THE CARD-LESS ARM (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md`
       // §11.6). A gate with no work item has no assignee to re-derive routing from, so

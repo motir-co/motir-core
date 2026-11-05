@@ -69,6 +69,8 @@ export interface ReviewLineDTO {
   githubApprovals: { login: string; repo: string; number: number }[];
   /** For `not_reviewed`: the version an EARLIER pass was at, or null. */
   lastReviewedVersion: string | null;
+  /** For `not_reviewed`: that earlier pass — the *Last reviewed at an earlier commit* link. */
+  lastReviewedRef: ReviewRecordRefDTO | null;
   /** For `not_reviewed`: `motir review <KEY>`. */
   command: string | null;
 }
@@ -99,6 +101,8 @@ export interface ReviewStateDTO {
   recordRef: ReviewRecordRefDTO | null;
   /** An agent send-back stands at the current version (the card is To fix). */
   sentBack: boolean;
+  /** That send-back when it is a gate-off review record — the frame's Sent back band. */
+  sentBackRecord: { recordId: string; findingsMd: string | null; at: string } | null;
   /** For a card with children: the count over its open run targets; null for a leaf. */
   container: ReviewContainerDTO | null;
   /** A review waiting to be run by the routed person's own agent, or null. */
@@ -157,6 +161,7 @@ function lineDto(line: ReviewLine | null): ReviewLineDTO | null {
     at: line.at?.toISOString() ?? null,
     githubApprovals: line.githubApprovals.map((a) => ({ ...a })),
     lastReviewedVersion: line.lastReviewedVersion,
+    lastReviewedRef: refDto(line.lastReviewedRef),
     command: line.command,
   };
 }
@@ -186,6 +191,9 @@ export function toReviewStateDto(
     reviewLine: lineDto(state.reviewLine),
     recordRef: refDto(state.recordRef),
     sentBack: state.sentBack,
+    sentBackRecord: state.sentBackRecord
+      ? { ...state.sentBackRecord, at: state.sentBackRecord.at.toISOString() }
+      : null,
     container,
     reviewToRun: state.reviewToRun ? { ...state.reviewToRun } : null,
     authorOfEveryPr: state.authorOfEveryPr,
@@ -253,5 +261,52 @@ export function toCardReviewDto(state: ReviewStateDTO): CardReviewDTO | null {
     reviewed: state.reviewed,
     container,
     recordRef: state.recordRef,
+  };
+}
+
+/**
+ * WHAT THE GATE FRAME DRAWS OF THE REVIEW (MOTIR-10342; design notes § 32.4, § 32.6, § 32.8)
+ * — the review line at the card's current version, the gate-off send-back record and who may
+ * dismiss it, and whether the routed person opened every pull request.
+ */
+export interface GateReviewPathDTO {
+  identifier: string;
+  currentVersion: string | null;
+  line: ReviewLineDTO | null;
+  recordRef: ReviewRecordRefDTO | null;
+  viewerIsRouted: boolean;
+  authorOfEveryPr: boolean;
+  sentBackRecord: ReviewStateDTO['sentBackRecord'];
+}
+
+export function toGateReviewPathDto(state: ReviewStateDTO): GateReviewPathDTO {
+  return {
+    identifier: state.identifier,
+    currentVersion: state.currentVersion,
+    line: state.reviewLine,
+    recordRef: state.recordRef,
+    viewerIsRouted: state.viewerIsRouted,
+    authorOfEveryPr: state.authorOfEveryPr,
+    sentBackRecord: state.sentBackRecord,
+  };
+}
+
+/**
+ * WHAT AN APPROVE-AND-MERGE ROW ON TO APPROVE DRAWS OF THE REVIEW (MOTIR-10342; § 32.3,
+ * § 32.4) — the review line, and the Reviewed badge when an agent pass stands.
+ */
+export interface ApprovalRowReviewDTO {
+  line: ReviewLineDTO;
+  recordRef: ReviewRecordRefDTO | null;
+  badge: CardReviewDTO | null;
+}
+
+export function toApprovalRowReviewDto(state: ReviewStateDTO): ApprovalRowReviewDTO | null {
+  if (!state.reviewLine) return null;
+  const card = toCardReviewDto(state);
+  return {
+    line: state.reviewLine,
+    recordRef: state.recordRef,
+    badge: card && (card.reviewed || card.container) ? { ...card, marker: null } : null,
   };
 }

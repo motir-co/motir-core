@@ -1,5 +1,10 @@
 import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
-import { approvedReviewKey, readApprovedReviews } from '@/lib/services/reviewStateService';
+import {
+  approvedReviewKey,
+  readApprovedReviews,
+  readReviewStates,
+  reviewStateService,
+} from '@/lib/services/reviewStateService';
 import type { ApprovedReviewDTO } from '@/lib/dto/reviewState';
 import type {
   ApprovalGate,
@@ -25,7 +30,13 @@ import type {
   PendingDecisionDTO,
 } from '@/lib/dto/approvalGate';
 import { APPROVAL_GATE_REFUSAL_VERDICTS } from '@/lib/dto/approvalGate';
-import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
+import {
+  toApprovalRowReviewDto,
+  toGateReviewPathDto,
+  type GateReviewPathDTO,
+  type ReviewStateDTO,
+  type ReviewToRunRowDTO,
+} from '@/lib/dto/reviewState';
 import { reviewCommand } from '@/lib/agentReview/reviewState';
 import type { AppliedGateTransition, GateEffect } from '@/lib/approvalGates/registry';
 import { emitAppliedGateTransitions } from '@/lib/approvalGates/gateTransition';
@@ -403,6 +414,12 @@ export interface WorkItemGateRead {
    * the gate's own version; absent on every other read.
    */
   approvedReview?: ApprovedReviewDTO | null;
+  /**
+   * THE REVIEW PATH (MOTIR-10342) — what the approve-and-merge frame draws of the agent
+   * review at the card's current version. Read ONLY for a `pull_request_approval` read by a
+   * member; absent on every other read.
+   */
+  reviewPath?: GateReviewPathDTO | null;
   /**
    * The SETTINGS DOOR this viewer is handed for the gate's kind (MOTIR-5513) —
    * the kind's own door when they hold `workflow:manage`, the key its destination
@@ -1111,6 +1128,17 @@ export const approvalGatesService = {
             approvedReviewKey(approvedPair.workItemId, approvedPair.subjectVersion),
           ) ?? null)
         : null;
+      // THE REVIEW PATH ON THE GATE FRAME (MOTIR-10342; design § 32.4, § 32.6, § 32.8) — the
+      // review line, a gate-off send-back to dismiss and the author fact, at the card's
+      // CURRENT version. Only the approve-and-merge read pays for it, and never a Visitor's
+      // (who the answers are for is a member's question).
+      const reviewState =
+        input.kind === 'pull_request_approval' && !isVisitorActor(ctx)
+          ? ((await readReviewStates(item.projectId, [input.workItemId], ctx, tx)).get(
+              input.workItemId,
+            ) ?? null)
+          : null;
+      const reviewPath = reviewState ? toGateReviewPathDto(reviewState) : null;
       // A Visitor reads every person by name only (MOTIR-6646).
       const decider = isVisitorActor(ctx)
         ? await visitorDeciderNames([row.decidedById, earlier?.decidedById ?? null], tx)
@@ -1126,6 +1154,7 @@ export const approvalGatesService = {
             ? { ...earlierDto, decidedByLabel: decider(earlier.decidedById) }
             : earlierDto,
         approvedReview,
+        reviewPath,
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
@@ -1582,10 +1611,15 @@ export const approvalGatesService = {
     // than sitting on it as a *Gone* row for ever. A gate the withdrawal could not
     // retire — its subject came back, or the write failed — stays exactly as read.
     const withdrawn = await withdrawObservedGone(read.gone, ctx);
-    if (withdrawn.size === 0) return read.queue;
-    const items = read.queue.items.filter((row) => !withdrawn.has(row.gateId));
-    const total = read.queue.total - withdrawn.size;
-    return { items, total, truncated: total > items.length };
+    const queue: ApprovalQueueDto =
+      withdrawn.size === 0
+        ? read.queue
+        : (() => {
+            const items = read.queue.items.filter((row) => !withdrawn.has(row.gateId));
+            const total = read.queue.total - withdrawn.size;
+            return { items, total, truncated: total > items.length };
+          })();
+    return withRowReviews(queue, ctx, options);
   },
 
   /**
@@ -1992,12 +2026,36 @@ export const approvalGatesService = {
         ),
       );
 
+      // THE AGENT REVIEW of each pending approve-and-merge record (MOTIR-10342; § 32.4) — the
+      // read model's ONE batch over the page, in this transaction. A Visitor reads none.
+      const mergeCardIds = visitor
+        ? []
+        : [
+            ...new Set(
+              awaitingItems.flatMap((row) =>
+                row.kind === 'pull_request_approval' && row.workItem ? [row.workItem.id] : [],
+              ),
+            ),
+          ];
+      const reviewStates =
+        mergeCardIds.length > 0
+          ? await readReviewStates(ctx.projectId, mergeCardIds, ctx, tx)
+          : new Map<string, ReviewStateDTO>();
+      const awaitingWithReview = awaitingItems.map((row) => {
+        const state =
+          row.kind === 'pull_request_approval' && row.workItem
+            ? reviewStates.get(row.workItem.id)
+            : undefined;
+        const review = state ? toApprovalRowReviewDto(state) : null;
+        return review ? { ...row, review } : row;
+      });
+
       const records: ApprovalRecordsPageDto = {
         fullView: scope.fullView,
         scope: served,
         views,
         sections: {
-          awaiting: { items: awaitingItems, total: awaitingTotal },
+          awaiting: { items: awaitingWithReview, total: awaitingTotal },
           decided: {
             items: decidedRows.map((row) => {
               const dto = toApprovalRecordDecidedRowDto(
@@ -2982,4 +3040,40 @@ function approvedReviewOf(
   return pair
     ? (reviews.get(approvedReviewKey(pair.workItemId, pair.subjectVersion)) ?? null)
     : null;
+}
+
+/**
+ * THE AGENT REVIEW ON TO APPROVE (Story MOTIR-10327 · MOTIR-10342; design notes § 32.3–32.5)
+ * — every approve-and-merge row's review line and Reviewed badge, from the review state read
+ * model's ONE batch over the page, and the reviews to run routed to the reader as their own
+ * rows. Neither changes the set, its count or any row's question.
+ */
+async function withRowReviews(
+  queue: ApprovalQueueDto,
+  ctx: HomeActorContext,
+  options: ApprovalQueueReadOptions,
+): Promise<ApprovalQueueDto> {
+  const mergeCards = [
+    ...new Set(
+      queue.items.flatMap((row) =>
+        row.kind === 'pull_request_approval' && row.workItem ? [row.workItem.id] : [],
+      ),
+    ),
+  ];
+  const [states, reviewsToRun] = await Promise.all([
+    mergeCards.length > 0
+      ? reviewStateService.forCards(ctx.projectId, mergeCards, ctx)
+      : Promise.resolve(new Map<string, ReviewStateDTO>()),
+    approvalGatesService.listReviewsToRun(ctx, options),
+  ]);
+  return {
+    ...queue,
+    items: queue.items.map((row) => {
+      if (row.kind !== 'pull_request_approval' || !row.workItem) return row;
+      const state = states.get(row.workItem.id);
+      const review = state ? toApprovalRowReviewDto(state) : null;
+      return review ? { ...row, review } : row;
+    }),
+    reviewsToRun,
+  };
 }

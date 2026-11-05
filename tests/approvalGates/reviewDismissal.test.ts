@@ -23,6 +23,20 @@ vi.mock('@/lib/jobs/sendEvent', async (importOriginal) => ({
   },
 }));
 
+// The SESSION door (MOTIR-10342) reads the caller from the cookie; a Vitest process has none,
+// so its one gate answers the scenario's context — or a 401 — and everything behind it is real.
+const sessionGate = { current: null as { userId: string; workspaceId: string } | null };
+vi.mock('@/lib/auth/requireCompliantSession', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/requireCompliantSession')>()),
+  requireCompliantWorkspaceContext: async () =>
+    sessionGate.current
+      ? { ok: true, ctx: sessionGate.current }
+      : {
+          ok: false,
+          response: new Response(JSON.stringify({ code: 'UNAUTHENTICATED' }), { status: 401 }),
+        },
+}));
+
 import { fakeOrchestrator } from '@motir/orchestrator';
 import type { ApprovalGateKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -61,6 +75,7 @@ const {
   ReviewSendBackNotStandingError,
 } = await import('@/lib/agentReview/errors');
 const dismissalRoute = await import('@/app/api/v1/work-items/[key]/review-dismissal/route');
+const sessionDismissalRoute = await import('@/app/api/work-items/[id]/review-dismissal/route');
 
 const MODEL = 'claude-opus-5-5';
 const AI = 'https://ai.test';
@@ -895,6 +910,106 @@ describe('POST /api/v1/work-items/{key}/review-dismissal', () => {
     expect(res.status).toBe(status);
     expect(((await res.json()) as Record<string, unknown>)['code']).toBe(code);
     expect(await dismissalsOf(item.id)).toEqual([]);
+  });
+});
+
+describe('POST /api/work-items/{key}/review-dismissal — the session door', () => {
+  const postAs = (key: string, body: unknown) =>
+    sessionDismissalRoute.POST(
+      new Request(`https://app.test/api/work-items/${key}/review-dismissal`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: typeof body === 'string' ? body : JSON.stringify(body),
+      }),
+      { params: Promise.resolve({ id: key }) },
+    );
+  afterEach(() => {
+    sessionGate.current = null;
+  });
+
+  it('dismisses through the same service, for a lower-case key, and answers no-store', async () => {
+    const { s, item, recordId } = await sentBackGateOff('session-ok', 95);
+    sessionGate.current = s.ctx;
+    const res = await postAs(item.identifier.toLowerCase(), {
+      subjectVersion: ` ${versionOf(95)} `,
+      reason: 'Out of scope.',
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(await res.json()).toMatchObject({
+      key: item.identifier,
+      dismissed: { kind: 'record', id: recordId },
+      reason: 'Out of scope.',
+    });
+    expect(await dismissalsOf(item.id)).toHaveLength(1);
+  });
+
+  it('answers the gate’s own refusal with no session', async () => {
+    const res = await postAs('ACME-1', { subjectVersion: 'v', reason: 'r' });
+    expect(res.status).toBe(401);
+  });
+
+  it.each([
+    ['no body', 'not json'],
+    ['a blank version', { subjectVersion: ' ', reason: 'r' }],
+    ['a missing reason', { subjectVersion: 'v' }],
+  ])('refuses %s as INVALID_BODY', async (_label, body) => {
+    const { s } = await sentBackGateOff(`session-bad-${_label.length}`, 96);
+    sessionGate.current = s.ctx;
+    const res = await postAs('ACME-1', body);
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as Record<string, unknown>)['code']).toBe('INVALID_BODY');
+  });
+
+  it('maps the service’s refusals: reason, stale, already, not standing, forbidden, not found', async () => {
+    const { s, item } = await sentBackGateOff('session-refusals', 97);
+    sessionGate.current = s.ctx;
+    const codeOf = async (res: Response) =>
+      [res.status, ((await res.json()) as Record<string, unknown>)['code']] as const;
+
+    expect(
+      await codeOf(await postAs(item.identifier, { subjectVersion: versionOf(97), reason: ' ' })),
+    ).toEqual([422, 'REASON_REQUIRED']);
+    expect(
+      await codeOf(
+        await postAs(item.identifier, { subjectVersion: 'moooon/acme#97@old', reason: 'r' }),
+      ),
+    ).toEqual([409, 'REVIEW_DISMISSAL_STALE']);
+
+    const mate = await teammate(s, 'mate', 'member');
+    sessionGate.current = mate;
+    expect(
+      await codeOf(await postAs(item.identifier, { subjectVersion: versionOf(97), reason: 'r' })),
+    ).toEqual([403, 'REVIEW_DISMISSAL_FORBIDDEN']);
+    const viewer = await teammate(s, 'viewer', 'viewer');
+    sessionGate.current = viewer;
+    expect(
+      await codeOf(await postAs(item.identifier, { subjectVersion: versionOf(97), reason: 'r' })),
+    ).toEqual([403, 'PERMISSION_DENIED']);
+
+    sessionGate.current = s.ctx;
+    expect(
+      (await postAs(item.identifier, { subjectVersion: versionOf(97), reason: 'r' })).status,
+    ).toBe(200);
+    expect(
+      await codeOf(await postAs(item.identifier, { subjectVersion: versionOf(97), reason: 'r' })),
+    ).toEqual([409, 'REVIEW_SENDBACK_ALREADY_DISMISSED']);
+    expect(
+      await codeOf(await postAs('ACME-99999', { subjectVersion: versionOf(97), reason: 'r' })),
+    ).toEqual([404, 'WORK_ITEM_NOT_FOUND']);
+    expect(
+      await codeOf(await postAs('NOPE-1', { subjectVersion: versionOf(97), reason: 'r' })),
+    ).toEqual([404, 'WORK_ITEM_NOT_FOUND']);
+  });
+
+  it('a card with no standing send-back is NO_STANDING_REVIEW_SENDBACK', async () => {
+    const { s, item } = await deliveredGateOff('session-none', 98);
+    sessionGate.current = s.ctx;
+    const res = await postAs(item.identifier, { subjectVersion: versionOf(98), reason: 'r' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as Record<string, unknown>)['code']).toBe(
+      'NO_STANDING_REVIEW_SENDBACK',
+    );
   });
 });
 

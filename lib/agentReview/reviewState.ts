@@ -167,6 +167,8 @@ export interface ReviewLine {
   githubApprovals: { login: string; repo: string; number: number }[];
   /** For `not_reviewed`: the version an earlier pass was at, or null. */
   lastReviewedVersion: string | null;
+  /** For `not_reviewed`: that earlier pass, for the line's *Last reviewed* link. */
+  lastReviewedRef: ReviewRecordRef | null;
   /** For `not_reviewed`: the command a person runs in their own agent. */
   command: string | null;
 }
@@ -181,6 +183,12 @@ export interface ReviewState {
   recordRef: ReviewRecordRef | null;
   /** An agent send-back stands at the current version (the To fix rule's own answer). */
   sentBack: boolean;
+  /**
+   * That send-back, when it is a gate-off review RECORD (MOTIR-10342; design § 32.6) — the
+   * one the Development frame draws as its Sent back band, with Dismiss the review under it.
+   * Null for a decided `agent_review` gate (the frame draws that from the gate).
+   */
+  sentBackRecord: { recordId: string; findingsMd: string | null; at: Date } | null;
   reviewToRun: { gateId: string; command: string } | null;
   /** The routed person is the GitHub author of EVERY pull request of the set. */
   authorOfEveryPr: boolean;
@@ -369,6 +377,7 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
       at: null,
       githubApprovals: githubApprovalsOf(facts.members),
       lastReviewedVersion: null,
+      lastReviewedRef: null,
       command: null,
     };
     if (pass) {
@@ -392,11 +401,12 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
         reason: skipped.noteMd,
       };
     } else {
+      const earlierPass = passes.find((p) => p.subjectVersion !== version);
       reviewLine = {
         ...base,
         value: 'not_reviewed',
-        lastReviewedVersion:
-          passes.find((p) => p.subjectVersion !== version)?.subjectVersion ?? null,
+        lastReviewedVersion: earlierPass?.subjectVersion ?? null,
+        lastReviewedRef: earlierPass?.ref ?? null,
         command: reviewCommand(facts.identifier),
       };
     }
@@ -415,6 +425,10 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
     reviewLine,
     recordRef: pass?.ref ?? null,
     sentBack: standing !== null && standing.kind === 'agent_review',
+    sentBackRecord:
+      standing !== null && standing.kind === 'agent_review' && standing.recordId !== null
+        ? { recordId: standing.recordId, findingsMd: standing.noteMd, at: standing.decidedAt }
+        : null,
     reviewToRun:
       facts.reviewAgentEnabled && facts.reviewAgentSource === 'own' && awaiting
         ? { gateId: awaiting.id, command: reviewCommand(facts.identifier) }

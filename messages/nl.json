@@ -15204,6 +15204,45 @@
           "commits": "Bij deze commits",
           "link": "Bevindingen en checklist"
         }
+      },
+      "line": {
+        "label": "Agent-review",
+        "reviewed": "<b>Beoordeeld door een agent</b> · {who} · {when}",
+        "whoHosted": "De gehoste agent van Motir",
+        "whoOwn": "Agent van {name} · {harness}",
+        "findings": "Bevindingen en checklist",
+        "skipped": "<b>Review overgeslagen door {name}</b> — ‘{reason}’",
+        "dismissed": "<b>Review afgewezen door {name}</b> — ‘{reason}’",
+        "notReviewed": "<b>Niet beoordeeld door een agent</b>",
+        "earlier": "Laatst beoordeeld bij een eerdere commit",
+        "github": "<b>Goedgekeurd op GitHub</b> door {logins}"
+      },
+      "toRun": {
+        "sentence": "Beoordeel <title>{name}</title> met je agent",
+        "tag": "Review uit te voeren",
+        "details": "Nog geen goedkeuring. Je goedkeuring wordt gevraagd zodra de review slaagt.",
+        "open": "{key} openen: {sentence}"
+      },
+      "dismiss": {
+        "button": "Review afwijzen",
+        "title": "De review van de agent afwijzen?",
+        "body": "De agent vroeg om wijzigingen bij deze commits. Door af te wijzen verdwijnt het werkitem uit Te herstellen en wordt je goedkeuring gevraagd bij dezelfde commits. De review en je reden blijven op het werkitem staan.",
+        "reasonLabel": "Waarom wijs je het af?",
+        "reasonHint": "Verplicht. Je reden wordt getoond bij de goedkeuring en in de geschiedenis van het werkitem.",
+        "reasonPlaceholder": "De bevinding gaat over code die dit werkitem niet wijzigt.",
+        "confirm": "Review afwijzen",
+        "cancel": "Annuleren",
+        "submitting": "Bezig met afwijzen…",
+        "error": "De review kon niet worden afgewezen. Er is niets gewijzigd. Probeer het opnieuw.",
+        "stale": "Er zijn nieuwe commits binnengekomen sinds je deze review las, dus er is niets afgewezen. Toon de huidige versie en lees hem opnieuw.",
+        "already": "Deze review is al afgewezen. Toon de huidige versie om hem te zien.",
+        "notStanding": "Deze review geldt niet meer, dus er valt niets af te wijzen. Toon de huidige versie.",
+        "reread": "Huidige versie tonen",
+        "toFixNote": "Een agent-review waar je om vroeg heeft dit teruggestuurd. Herstel het, of wijs de review af met een reden."
+      },
+      "authorNote": {
+        "title": "GitHub laat je je eigen pull requests niet goedkeuren",
+        "body": "Je hebt elke pull request hier geopend. Keur goed in Motir, of vraag een teamgenoot ze op GitHub te beoordelen."
       }
     }
   },

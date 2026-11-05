@@ -1119,3 +1119,100 @@ describe('the surfaces’ read — cardReviewsFor and the board', () => {
     ).toEqual({});
   });
 });
+
+// ── To approve and the gate frame (MOTIR-10342) ───────────────────────────────
+
+describe('the review path on To approve and the gate frame', () => {
+  it('the approvals queue carries each merge row its review line, and the badge once a pass stands', async () => {
+    const { s, item, approval } = await deliveredGateOff('rows-line', 120);
+    const before = await approvalGatesService.listAwaitingMe(homeCtx(s));
+    const row = before.items.find((r) => r.gateId === approval.id);
+    expect(row?.review).toMatchObject({
+      line: { value: 'not_reviewed', command: `motir review ${item.identifier}` },
+      recordRef: null,
+      badge: null,
+    });
+    expect(before.reviewsToRun).toEqual([]);
+
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      input(versionOf(120)),
+      s.ctx,
+    );
+    const after = await approvalGatesService.listAwaitingMe(homeCtx(s));
+    const passed = after.items.find((r) => r.kind === 'pull_request_approval');
+    expect(passed?.review?.line.value).toBe('reviewed_by_agent');
+    expect(passed?.review?.recordRef).toEqual({ kind: 'record', id: dto.recordId });
+    expect(passed?.review?.badge).toMatchObject({ identifier: item.identifier, marker: null });
+    expect(passed?.review?.badge?.reviewed).not.toBeNull();
+
+    // The room's awaiting list reads the same line.
+    const room = await approvalGatesService.listRecords(homeCtx(s), { limit: 50 });
+    const roomRow = room.sections.awaiting.items.find((r) => r.kind === 'pull_request_approval');
+    expect(roomRow?.review?.line.value).toBe('reviewed_by_agent');
+  });
+
+  it('a review to run rides the queue beside the approvals, never as one', async () => {
+    const { s, review } = await reviewingUnder('own', 'rows-run', 121);
+    const queue = await approvalGatesService.listAwaitingMe(homeCtx(s));
+    expect(queue.reviewsToRun?.map((r) => r.gateId)).toEqual([review.id]);
+    expect(queue.items.map((r) => r.gateId)).not.toContain(review.id);
+  });
+
+  it('the frame reads the gate-off send-back record, the routed reader and the author fact', async () => {
+    const { s, item } = await deliveredGateOff('frame-sent', 122);
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      sendBack(versionOf(122)),
+      s.ctx,
+    );
+    const read = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_approval' },
+      s.ctx,
+    );
+    expect(read.reviewPath).toMatchObject({
+      identifier: item.identifier,
+      currentVersion: versionOf(122),
+      viewerIsRouted: true,
+      sentBackRecord: {
+        recordId: dto.recordId,
+        findingsMd: '- `lib/export.ts:12` drops the header row — keep it.',
+      },
+    });
+    expect(typeof read.reviewPath?.authorOfEveryPr).toBe('boolean');
+
+    // Another kind of gate pays nothing for it.
+    const merge = await approvalGatesService.getForWorkItem(
+      { workItemId: item.id, kind: 'pull_request_merge' },
+      s.ctx,
+    );
+    expect(merge.reviewPath ?? null).toBeNull();
+
+    // Once dismissed the send-back no longer stands, so there is no record to dismiss.
+    await reviewDismissalService.dismiss(
+      s.project.id,
+      item.identifier,
+      { subjectVersion: versionOf(122), reasonMd: 'Out of scope.' },
+      s.ctx,
+    );
+    expect((await stateOf(s, item.id))?.sentBackRecord).toBeNull();
+  });
+
+  it('not reviewed after a push names the earlier pass it can open', async () => {
+    const { s, item } = await deliveredGateOff('earlier', 123);
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      input(versionOf(123)),
+      s.ctx,
+    );
+    await pushTo(item.identifier, 123, 'sha-b');
+    expect((await stateOf(s, item.id))?.reviewLine).toMatchObject({
+      value: 'not_reviewed',
+      lastReviewedVersion: versionOf(123),
+      lastReviewedRef: { kind: 'record', id: dto.recordId },
+    });
+  });
+});

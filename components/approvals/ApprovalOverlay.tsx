@@ -1017,6 +1017,8 @@ export function ApprovalOverlay() {
               earlierApproval: read.earlierApproval,
               // The review the approved merge stood on (MOTIR-10338) — the record line.
               approvedReview: read.approvedReview ?? null,
+              // The review path at the current version (MOTIR-10342).
+              reviewPath: read.reviewPath ?? null,
             }}
             // A design that leads this frame (Workflow B) is sent back with a verdict too
             // (MOTIR-6427): the parent its Re-plan opens on, and the status it returns to.

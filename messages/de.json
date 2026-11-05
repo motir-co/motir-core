@@ -15204,6 +15204,45 @@
           "commits": "Bei diesen Commits",
           "link": "Befunde und Checkliste"
         }
+      },
+      "line": {
+        "label": "Agenten-Review",
+        "reviewed": "<b>Von einem Agenten geprüft</b> · {who} · {when}",
+        "whoHosted": "Der gehostete Agent von Motir",
+        "whoOwn": "Agent von {name} · {harness}",
+        "findings": "Befunde und Checkliste",
+        "skipped": "<b>Review übersprungen von {name}</b> — „{reason}“",
+        "dismissed": "<b>Review verworfen von {name}</b> — „{reason}“",
+        "notReviewed": "<b>Nicht von einem Agenten geprüft</b>",
+        "earlier": "Zuletzt bei einem früheren Commit geprüft",
+        "github": "<b>Auf GitHub genehmigt</b> von {logins}"
+      },
+      "toRun": {
+        "sentence": "<title>{name}</title> mit Ihrem Agenten prüfen",
+        "tag": "Review auszuführen",
+        "details": "Noch keine Genehmigung. Ihre Genehmigung wird angefragt, sobald das Review bestanden ist.",
+        "open": "{key} öffnen: {sentence}"
+      },
+      "dismiss": {
+        "button": "Review verwerfen",
+        "title": "Das Review des Agenten verwerfen?",
+        "body": "Der Agent hat bei diesen Commits Änderungen angefordert. Wenn Sie es verwerfen, verlässt das Arbeitselement „Zu beheben“, und Ihre Genehmigung wird bei denselben Commits angefragt. Das Review und Ihr Grund bleiben am Arbeitselement.",
+        "reasonLabel": "Warum verwerfen Sie es?",
+        "reasonHint": "Erforderlich. Ihr Grund wird bei der Genehmigung und im Verlauf des Arbeitselements angezeigt.",
+        "reasonPlaceholder": "Der Befund betrifft Code, den dieses Arbeitselement nicht ändert.",
+        "confirm": "Review verwerfen",
+        "cancel": "Abbrechen",
+        "submitting": "Wird verworfen…",
+        "error": "Das Review konnte nicht verworfen werden. Nichts wurde geändert. Versuchen Sie es erneut.",
+        "stale": "Seit Sie dieses Review gelesen haben, sind neue Commits eingetroffen, daher wurde nichts verworfen. Zeigen Sie die aktuelle Version an und lesen Sie es erneut.",
+        "already": "Dieses Review wurde bereits verworfen. Zeigen Sie die aktuelle Version an, um es zu sehen.",
+        "notStanding": "Dieses Review gilt nicht mehr, daher gibt es nichts zu verwerfen. Zeigen Sie die aktuelle Version an.",
+        "reread": "Aktuelle Version anzeigen",
+        "toFixNote": "Ein von Ihnen angefordertes Agenten-Review hat dies zurückgeschickt. Beheben Sie es oder verwerfen Sie das Review mit einem Grund."
+      },
+      "authorNote": {
+        "title": "GitHub lässt Sie Ihre eigenen Pull Requests nicht genehmigen",
+        "body": "Sie haben jeden Pull Request hier geöffnet. Genehmigen Sie in Motir oder bitten Sie eine Teamkollegin oder einen Teamkollegen, sie auf GitHub zu prüfen."
       }
     }
   },

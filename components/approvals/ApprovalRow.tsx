@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
+import { ReviewLine } from '@/components/approvals/ReviewLine';
+import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
 import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
@@ -776,6 +778,13 @@ export function ApprovalRow({
   // THE APPROVAL-RECORD LINE (MOTIR-10338; mock A3) — an approved merge's record says which
   // agent review it stood on, on a line of its own under the sentence.
   const reviewLine = record.section === 'decided' ? (record.row.review ?? null) : null;
+  // THE AGENT REVIEW OF A LIVE MERGE QUESTION (MOTIR-10342; mock A1) — its review line as the
+  // row's second grid row, and the Reviewed badge after the key.
+  const liveReview =
+    record.section !== 'decided' && row.kind === 'pull_request_approval'
+      ? (record.row.review ?? null)
+      : null;
+  const twoLines = reviewLine !== null || liveReview !== null;
 
   return (
     <div
@@ -784,7 +793,7 @@ export function ApprovalRow({
       className={cn(
         'group relative flex flex-col gap-1 border-b border-(--el-border) px-4 py-2.5 last:border-b-0',
         'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
-        reviewLine
+        twoLines
           ? 'md:grid md:items-center md:gap-x-4 md:gap-y-1 md:py-2 md:pr-4 md:pl-4'
           : 'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-4 md:pl-4',
       )}
@@ -821,6 +830,13 @@ export function ApprovalRow({
         {/* It ARRIVED while the reader was looking (§ 26, Panel 1) — at the END
             of the sentence cell, which at `< md` is the end of the row's first
             line and so is already reading order. */}
+        {/* THE REVIEWED BADGE (§ 32.3) — after the key, with its hover / focus card, above
+            the row's stretched door. */}
+        {liveReview?.badge ? (
+          <span className="relative z-10 inline-flex shrink-0">
+            <ReviewedBadge review={liveReview.badge} />
+          </span>
+        ) : null}
         {arrived ? <Pill tone="neutral">{t('live.new')}</Pill> : null}
       </div>
 
@@ -943,6 +959,15 @@ export function ApprovalRow({
           )}
         </div>
       </div>
+      {liveReview ? (
+        <div role="cell" className="min-w-0 pl-6 md:col-span-full md:col-start-1">
+          <ReviewLine
+            line={liveReview.line}
+            identifier={card.identifier}
+            recordRef={liveReview.recordRef}
+          />
+        </div>
+      ) : null}
       {reviewLine && record.section === 'decided' ? (
         <div role="cell" className="min-w-0 pl-6 md:col-span-full md:col-start-1">
           <ApprovalReviewLine review={reviewLine} deciderLabel={record.row.decidedByLabel} />

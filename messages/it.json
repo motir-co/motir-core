@@ -15204,6 +15204,45 @@
           "commits": "A questi commit",
           "link": "Rilievi e checklist"
         }
+      },
+      "line": {
+        "label": "Revisione dell'agente",
+        "reviewed": "<b>Revisionato da un agente</b> · {who} · {when}",
+        "whoHosted": "L'agente ospitato di Motir",
+        "whoOwn": "L'agente di {name} · {harness}",
+        "findings": "Rilievi e checklist",
+        "skipped": "<b>Revisione saltata da {name}</b> — «{reason}»",
+        "dismissed": "<b>Revisione respinta da {name}</b> — «{reason}»",
+        "notReviewed": "<b>Non revisionato da un agente</b>",
+        "earlier": "Ultima revisione a un commit precedente",
+        "github": "<b>Approvato su GitHub</b> da {logins}"
+      },
+      "toRun": {
+        "sentence": "Revisiona <title>{name}</title> con il tuo agente",
+        "tag": "Revisione da eseguire",
+        "details": "Non è ancora un'approvazione. La tua approvazione viene chiesta quando la revisione passa.",
+        "open": "Apri {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Respingi la revisione",
+        "title": "Respingere la revisione dell'agente?",
+        "body": "L'agente ha chiesto modifiche a questi commit. Respingendola, l'elemento di lavoro esce da Da correggere e viene chiesta la tua approvazione agli stessi commit. La revisione e il tuo motivo restano sull'elemento di lavoro.",
+        "reasonLabel": "Perché la respingi?",
+        "reasonHint": "Obbligatorio. Il motivo è mostrato sull'approvazione e nella cronologia dell'elemento di lavoro.",
+        "reasonPlaceholder": "Il rilievo riguarda codice che questo elemento di lavoro non modifica.",
+        "confirm": "Respingi la revisione",
+        "cancel": "Annulla",
+        "submitting": "Respingimento in corso…",
+        "error": "Impossibile respingere la revisione. Non è cambiato nulla. Riprova.",
+        "stale": "Sono arrivati nuovi commit da quando hai letto questa revisione, quindi non è stato respinto nulla. Mostra la versione attuale e rileggila.",
+        "already": "Questa revisione è già stata respinta. Mostra la versione attuale per vederla.",
+        "notStanding": "Questa revisione non è più valida, quindi non c'è niente da respingere. Mostra la versione attuale.",
+        "reread": "Mostra la versione attuale",
+        "toFixNote": "Una revisione dell'agente che hai richiesto ha rimandato indietro questo lavoro. Correggilo o respingi la revisione con un motivo."
+      },
+      "authorNote": {
+        "title": "GitHub non ti permette di approvare le tue pull request",
+        "body": "Hai aperto tu ogni pull request qui. Approva in Motir oppure chiedi a un collega di revisionarle su GitHub."
       }
     }
   },

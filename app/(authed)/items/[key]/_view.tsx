@@ -466,8 +466,11 @@ export default async function ItemView({
     todoRefsRead,
     // THE HEADER'S REVIEW MARKER AND REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341), in
     // THIS group for the decision marker's reason: the eyebrow is what the reader lands on.
-    // Per-reader (who a marker is loud for), so a Visitor reads none.
-    isVisitor ? null : reviewStateService.cardReviewsFor(item.projectId, [item.id], svc),
+    // Per-reader (who a marker is loud for), so a Visitor reads none. Evidence, never the
+    // card: a failing read draws no marker rather than failing the page.
+    isVisitor
+      ? null
+      : reviewStateService.cardReviewsFor(item.projectId, [item.id], svc).catch(() => null),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;

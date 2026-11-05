@@ -15204,6 +15204,45 @@
           "commits": "Przy tych commitach",
           "link": "Uwagi i lista kontrolna"
         }
+      },
+      "line": {
+        "label": "Przegląd agenta",
+        "reviewed": "<b>Przejrzane przez agenta</b> · {who} · {when}",
+        "whoHosted": "Hostowany agent Motir",
+        "whoOwn": "Agent użytkownika {name} · {harness}",
+        "findings": "Uwagi i lista kontrolna",
+        "skipped": "<b>Przegląd pominięty przez: {name}</b> — „{reason}”",
+        "dismissed": "<b>Przegląd odrzucony przez: {name}</b> — „{reason}”",
+        "notReviewed": "<b>Bez przeglądu agenta</b>",
+        "earlier": "Ostatnio przejrzane przy wcześniejszym commicie",
+        "github": "<b>Zatwierdzone na GitHubie</b> przez {logins}"
+      },
+      "toRun": {
+        "sentence": "Przejrzyj <title>{name}</title> swoim agentem",
+        "tag": "Przegląd do uruchomienia",
+        "details": "To jeszcze nie zatwierdzenie. Poprosimy o twoje zatwierdzenie, gdy przegląd przejdzie.",
+        "open": "Otwórz {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Odrzuć przegląd",
+        "title": "Odrzucić przegląd agenta?",
+        "body": "Agent poprosił o zmiany przy tych commitach. Odrzucenie zdejmuje element roboczy z Do naprawy i prosi o twoje zatwierdzenie przy tych samych commitach. Przegląd i twój powód pozostają w elemencie roboczym.",
+        "reasonLabel": "Dlaczego go odrzucasz?",
+        "reasonHint": "Wymagane. Twój powód jest widoczny przy zatwierdzeniu i w historii elementu roboczego.",
+        "reasonPlaceholder": "Uwaga dotyczy kodu, którego ten element roboczy nie zmienia.",
+        "confirm": "Odrzuć przegląd",
+        "cancel": "Anuluj",
+        "submitting": "Odrzucanie…",
+        "error": "Nie udało się odrzucić przeglądu. Nic się nie zmieniło. Spróbuj ponownie.",
+        "stale": "Od przeczytania tego przeglądu pojawiły się nowe commity, więc niczego nie odrzucono. Pokaż bieżącą wersję i przeczytaj go ponownie.",
+        "already": "Ten przegląd został już odrzucony. Pokaż bieżącą wersję, aby go zobaczyć.",
+        "notStanding": "Ten przegląd już nie obowiązuje, więc nie ma czego odrzucać. Pokaż bieżącą wersję.",
+        "reread": "Pokaż bieżącą wersję",
+        "toFixNote": "Przegląd agenta, o który prosiłeś(-aś), odesłał to. Napraw to albo odrzuć przegląd, podając powód."
+      },
+      "authorNote": {
+        "title": "GitHub nie pozwala zatwierdzać własnych pull requestów",
+        "body": "Wszystkie pull requesty tutaj otworzyłeś(-aś) ty. Zatwierdź w Motir albo poproś kogoś z zespołu o przegląd na GitHubie."
       }
     }
   },

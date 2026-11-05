@@ -15201,6 +15201,45 @@
           "commits": "At these commits",
           "link": "Findings and checklist"
         }
+      },
+      "line": {
+        "label": "Agent review",
+        "reviewed": "<b>Reviewed by agent</b> · {who} · {when}",
+        "whoHosted": "Motir's hosted agent",
+        "whoOwn": "{name}'s agent · {harness}",
+        "findings": "Findings and checklist",
+        "skipped": "<b>Review skipped by {name}</b> — “{reason}”",
+        "dismissed": "<b>Review dismissed by {name}</b> — “{reason}”",
+        "notReviewed": "<b>Not reviewed by an agent</b>",
+        "earlier": "Last reviewed at an earlier commit",
+        "github": "<b>Approved on GitHub</b> by {logins}"
+      },
+      "toRun": {
+        "sentence": "Review <title>{name}</title> with your agent",
+        "tag": "Review to run",
+        "details": "Not an approval yet. Your approval is asked once the review passes.",
+        "open": "Open {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Dismiss the review",
+        "title": "Dismiss the agent's review?",
+        "body": "The agent asked for changes at these commits. Dismissing it takes the work item off To fix and asks for your approval at the same commits. The review and your reason stay on the work item.",
+        "reasonLabel": "Why are you dismissing it?",
+        "reasonHint": "Required. Your reason is shown on the approval and in the work item's history.",
+        "reasonPlaceholder": "The finding is about code this work item does not change.",
+        "confirm": "Dismiss the review",
+        "cancel": "Cancel",
+        "submitting": "Dismissing…",
+        "error": "The review could not be dismissed. Nothing changed. Try again.",
+        "stale": "New commits arrived since you read this review, so nothing was dismissed. Show the current version and read it again.",
+        "already": "This review was already dismissed. Show the current version to see it.",
+        "notStanding": "This review no longer stands, so there is nothing to dismiss. Show the current version.",
+        "reread": "Show the current version",
+        "toFixNote": "An agent review you asked for sent this back. Fix it, or dismiss the review with a reason."
+      },
+      "authorNote": {
+        "title": "GitHub will not let you approve your own pull requests",
+        "body": "You opened every pull request here. Approve in Motir, or ask a teammate to review them on GitHub."
       }
     }
   },

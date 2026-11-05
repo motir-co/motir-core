@@ -15204,6 +15204,45 @@
           "commits": "En estos commits",
           "link": "Hallazgos y lista de comprobación"
         }
+      },
+      "line": {
+        "label": "Revisión del agente",
+        "reviewed": "<b>Revisado por un agente</b> · {who} · {when}",
+        "whoHosted": "El agente alojado de Motir",
+        "whoOwn": "El agente de {name} · {harness}",
+        "findings": "Hallazgos y lista de comprobación",
+        "skipped": "<b>Revisión omitida por {name}</b> — «{reason}»",
+        "dismissed": "<b>Revisión descartada por {name}</b> — «{reason}»",
+        "notReviewed": "<b>Sin revisión de un agente</b>",
+        "earlier": "Revisado por última vez en un commit anterior",
+        "github": "<b>Aprobado en GitHub</b> por {logins}"
+      },
+      "toRun": {
+        "sentence": "Revisa <title>{name}</title> con tu agente",
+        "tag": "Revisión por ejecutar",
+        "details": "Aún no es una aprobación. Se te pedirá tu aprobación cuando pase la revisión.",
+        "open": "Abrir {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Descartar la revisión",
+        "title": "¿Descartar la revisión del agente?",
+        "body": "El agente pidió cambios en estos commits. Al descartarla, el elemento de trabajo sale de Por corregir y se pide tu aprobación en los mismos commits. La revisión y tu motivo quedan en el elemento de trabajo.",
+        "reasonLabel": "¿Por qué la descartas?",
+        "reasonHint": "Obligatorio. Tu motivo se muestra en la aprobación y en el historial del elemento de trabajo.",
+        "reasonPlaceholder": "El hallazgo trata de código que este elemento de trabajo no cambia.",
+        "confirm": "Descartar la revisión",
+        "cancel": "Cancelar",
+        "submitting": "Descartando…",
+        "error": "No se pudo descartar la revisión. No cambió nada. Inténtalo de nuevo.",
+        "stale": "Llegaron commits nuevos desde que leíste esta revisión, así que no se descartó nada. Muestra la versión actual y vuelve a leerla.",
+        "already": "Esta revisión ya se descartó. Muestra la versión actual para verla.",
+        "notStanding": "Esta revisión ya no está vigente, así que no hay nada que descartar. Muestra la versión actual.",
+        "reread": "Mostrar la versión actual",
+        "toFixNote": "Una revisión de agente que pediste devolvió esto. Corrígelo o descarta la revisión con un motivo."
+      },
+      "authorNote": {
+        "title": "GitHub no te deja aprobar tus propias pull requests",
+        "body": "Abriste todas las pull requests de aquí. Aprueba en Motir o pide a un compañero que las revise en GitHub."
       }
     }
   },

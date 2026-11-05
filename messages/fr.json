@@ -15204,6 +15204,45 @@
           "commits": "À ces commits",
           "link": "Constats et liste de contrôle"
         }
+      },
+      "line": {
+        "label": "Revue par agent",
+        "reviewed": "<b>Examiné par un agent</b> · {who} · {when}",
+        "whoHosted": "L’agent hébergé de Motir",
+        "whoOwn": "L’agent de {name} · {harness}",
+        "findings": "Constats et liste de contrôle",
+        "skipped": "<b>Revue ignorée par {name}</b> — « {reason} »",
+        "dismissed": "<b>Revue écartée par {name}</b> — « {reason} »",
+        "notReviewed": "<b>Non examiné par un agent</b>",
+        "earlier": "Dernière revue à un commit antérieur",
+        "github": "<b>Approuvé sur GitHub</b> par {logins}"
+      },
+      "toRun": {
+        "sentence": "Examinez <title>{name}</title> avec votre agent",
+        "tag": "Revue à lancer",
+        "details": "Ce n’est pas encore une approbation. Votre approbation sera sollicitée une fois la revue validée.",
+        "open": "Ouvrir {key} : {sentence}"
+      },
+      "dismiss": {
+        "button": "Écarter la revue",
+        "title": "Écarter la revue de l’agent ?",
+        "body": "L’agent a réclamé des modifications à ces commits. L’écarter retire l’élément de travail de À corriger et sollicite votre approbation aux mêmes commits. La revue et votre motif restent sur l’élément de travail.",
+        "reasonLabel": "Pourquoi l’écartez-vous ?",
+        "reasonHint": "Obligatoire. Votre motif apparaît sur l’approbation et dans l’historique de l’élément de travail.",
+        "reasonPlaceholder": "Le constat porte sur du code que cet élément de travail ne modifie pas.",
+        "confirm": "Écarter la revue",
+        "cancel": "Annuler",
+        "submitting": "Écart en cours…",
+        "error": "La revue n’a pas pu être écartée. Rien n’a changé. Réessayez.",
+        "stale": "De nouveaux commits sont arrivés depuis que vous avez lu cette revue, donc rien n’a été écarté. Affichez la version actuelle et relisez-la.",
+        "already": "Cette revue a déjà été écartée. Affichez la version actuelle pour la voir.",
+        "notStanding": "Cette revue ne tient plus, il n’y a donc rien à écarter. Affichez la version actuelle.",
+        "reread": "Afficher la version actuelle",
+        "toFixNote": "Une revue par agent que vous avez sollicitée a renvoyé ceci. Corrigez-le, ou écartez la revue avec un motif."
+      },
+      "authorNote": {
+        "title": "GitHub ne vous laisse pas approuver vos propres pull requests",
+        "body": "Vous avez ouvert chaque pull request ici. Approuvez dans Motir, ou proposez à un coéquipier de les examiner sur GitHub."
       }
     }
   },
