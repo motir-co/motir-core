@@ -1124,8 +1124,69 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       expect(error?.message).toContain(`git tag runner-v<next> ${CHANGE}`);
       const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
       expect(stepIds).toEqual(
-        expect.arrayContaining(['fleet-image-coverage', 'runner-image-freshness']),
+        expect.arrayContaining(['fleet-image-coverage', 'runner-image-freshness-v2']),
       );
+    });
+
+    it('FAILS on a stale runner AMI while the image is current, naming the AMI release step (MOTIR-10395)', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerImageFreshnessProbeService, 'check').mockResolvedValue({
+        verdict: 'current',
+        checkedAt: '2026-11-05T09:00:00.000Z',
+        build,
+        ami: {
+          state: 'stale',
+          build: {
+            amiId: 'ami-0123456789abcdef0',
+            name: 'motir-ci-runner-2.329.0-202611050900-4a9cb14',
+            commit: BUILT,
+            source: 'description',
+            account: 'motir-ci-1',
+          },
+          unreleased: [
+            {
+              commit: CHANGE,
+              committedAt: '2026-11-03T12:00:00Z',
+              subject: 'MOTIR-10293 Add the AWS CLI to the runner images',
+              paths: ['infra/ci-runner/Dockerfile'],
+              relation: 'ahead',
+            },
+          ],
+        },
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('RunnerAmiStaleError');
+      expect(error?.message).toContain('The pinned runner AMI ami-0123456789abcdef0');
+      expect(error?.message).toContain(`git tag ci-runner-ami-v<next> ${CHANGE}`);
+    });
+
+    it('PASSES and records an AMI it could not read as indeterminate (MOTIR-10395)', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerImageFreshnessProbeService, 'check').mockResolvedValue({
+        verdict: 'current',
+        checkedAt: '2026-11-05T09:00:00.000Z',
+        build,
+        ami: {
+          state: 'indeterminate',
+          amiId: 'ami-0123456789abcdef0',
+          phase: 'ec2',
+          detail: 'EC2 refused DescribeImages (UnauthorizedOperation)',
+        },
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        runnerImageFreshness: { ami: { state: 'indeterminate', phase: 'ec2' } },
+      });
     });
 
     it('PASSES and records indeterminate when the registry entry cannot be read', async () => {

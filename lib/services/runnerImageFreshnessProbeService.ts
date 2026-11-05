@@ -1,4 +1,4 @@
-import { listImageTags, readImageLabels } from '@motir/orchestrator';
+import { Ec2ApiError, listImageTags, readImageLabels } from '@motir/orchestrator';
 import {
   GithubAppNotConfiguredError,
   GithubAppTokenError,
@@ -12,14 +12,26 @@ import {
   type RepoRef,
 } from '@/lib/github/repoCommitHistory';
 import {
+  amiBuildCommitFrom,
   commitFromShaTag,
   imageRepositoryOf,
   imageRevisionFromLabels,
+  RUNNER_AMI_INPUTS,
   RUNNER_IMAGE_INPUTS,
   RUNNER_IMAGE_SOURCE_REPO,
 } from '@/lib/ciFleet/runnerImageSources';
-import { AWS_RUNNER_AMI_ENV_VAR, configuredFleetRunnerImage } from '@/lib/orchestrator';
+import type { FleetShardDTO } from '@/lib/dto/fleetShard';
+import { toFleetShardDTO } from '@/lib/mappers/fleetShardMappers';
+import {
+  AWS_RUNNER_AMI_ENV_VAR,
+  configuredFleetRunnerImage,
+  describeAwsImages,
+  OrchestratorNotConfiguredError,
+} from '@/lib/orchestrator';
+import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { withSystemContext } from '@/lib/workspaces/context';
 import type {
+  RunnerAmiBuildDTO,
   RunnerAmiFreshnessDTO,
   RunnerImageBuildDTO,
   RunnerImageFreshnessVerdictDTO,
@@ -49,28 +61,22 @@ import type {
 // its version (`runner-image.yml`), so the probe finds the `sha-` tag whose
 // bytes are the pinned image's. Neither found is "could not tell", not a pass.
 //
+// THE AMI (MOTIR-10395). The AWS fleet boots `MOTIR_AWS_RUNNER_AMI_ID`, built
+// from `RUNNER_AMI_INPUTS` by its own lane (`ci-runner-ami-v*`), and it is
+// judged by the same rule. The build commit is read through the
+// `motir-fleet-runner` role of an active aws `ci_runner` account, the
+// deployment's only identity there, with `ec2:DescribeImages`. The AMI's
+// `GitSha` tag cannot be used: EC2 shows a shared AMI's tags only in the
+// account that owns it. Its description carries the full commit (an AMI built
+// since this card) and its name the first seven characters (any AMI).
+//
 // ⚠️ `indeterminate` IS RECORDED, NOT THROWN — the file's rule for every probe:
 // a registry or GitHub that did not answer is a statement about the read, and a
 // health check that pages on someone else's uptime is one somebody silences.
 // It is never `current`, and it is on the job_run row with the read it failed.
 
-/** Why the AMI is not judged. Stated on the row so the gap is read, not assumed. */
-export const RUNNER_AMI_NOT_READ_REASON =
-  'The AMI cannot be read from this deployment: its only identity in a pool account is the ' +
-  'motir-fleet-runner role, which is not granted ec2:DescribeImages, and the AMI records its ' +
-  'build commit as a GitSha tag in the build account, which accounts the AMI is shared with ' +
-  'cannot see. Compare its name (motir-ci-runner-<runner>-<time>-<commit>) with the newest ' +
-  'change to infra/ci-runner-aws by hand after each ci-runner-ami-v* release (MOTIR-10395).';
-
 /** The registry tags read before the probe gives up looking for the pinned bytes. */
 const MAX_SHA_TAGS = 60;
-
-function amiState(): RunnerAmiFreshnessDTO {
-  const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
-  return amiId
-    ? { state: 'not_read', amiId, reason: RUNNER_AMI_NOT_READ_REASON }
-    : { state: 'unset' };
-}
 
 /** An installation token for the source repository's owner when this deployment
  *  has the provisioning App there, else null — the repository is public, and an
@@ -169,12 +175,111 @@ export async function unreleasedChanges(
   return [...byCommit.values()].sort((a, b) => b.committedAt.localeCompare(a.committedAt));
 }
 
+/** The account the AMI is read in: the oldest active aws `ci_runner` account.
+ *  Every one of them is shared the same AMI and boots it, so any one answers. */
+async function amiReadAccount(): Promise<FleetShardDTO | null> {
+  const rows = await withSystemContext((tx) =>
+    fleetShardRepository.listByRole(
+      null,
+      { fleetKind: 'ci_runner', state: 'active', provider: 'aws' },
+      tx,
+    ),
+  );
+  return rows[0] ? toFleetShardDTO(rows[0]) : null;
+}
+
+type AmiBuildRead =
+  | { ok: true; build: RunnerAmiBuildDTO }
+  | { ok: false; phase: 'account' | 'ec2' | 'build_commit'; detail: string };
+
+/** The commit the pinned AMI was built from (MOTIR-10395). Never throws on a
+ *  refused read. */
+async function readAmiBuild(amiId: string): Promise<AmiBuildRead> {
+  const account = await amiReadAccount();
+  if (!account) {
+    return {
+      ok: false,
+      phase: 'account',
+      detail: 'there is no active aws ci_runner fleet account whose runner role could read it',
+    };
+  }
+  let images;
+  try {
+    images = await describeAwsImages(account, [amiId]);
+  } catch (err) {
+    if (!(err instanceof Ec2ApiError) && !(err instanceof OrchestratorNotConfiguredError)) {
+      throw err;
+    }
+    const why =
+      err instanceof Ec2ApiError
+        ? `EC2 refused DescribeImages (${err.code})` +
+          (err.code === 'UnauthorizedOperation'
+            ? '; the motir-fleet-runner role there does not hold ec2:DescribeImages yet'
+            : '')
+        : err.message;
+    return {
+      ok: false,
+      phase: 'ec2',
+      detail: `${amiId} could not be read in fleet account ${account.name}: ${why}`,
+    };
+  }
+  const image = images.find((i) => i.imageId === amiId);
+  if (!image) {
+    return {
+      ok: false,
+      phase: 'ec2',
+      detail: `EC2 in fleet account ${account.name} answered no image for ${amiId}`,
+    };
+  }
+  const recorded = amiBuildCommitFrom(image);
+  if (!recorded) {
+    return {
+      ok: false,
+      phase: 'build_commit',
+      detail:
+        `${amiId} records no build commit: its description carries no "commit <sha>" and its ` +
+        `name ${JSON.stringify(image.name)} does not end in -<YYYYMMDDhhmm>-<sha7>`,
+    };
+  }
+  return {
+    ok: true,
+    build: { amiId, name: image.name, ...recorded, account: account.name },
+  };
+}
+
+/** Judge the pinned AMI against `RUNNER_AMI_INPUTS` with the image's rule. */
+async function judgeAmi(token: () => Promise<string | null>): Promise<RunnerAmiFreshnessDTO> {
+  const amiId = process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim();
+  if (!amiId) return { state: 'unset' };
+  const read = await readAmiBuild(amiId);
+  if (!read.ok) return { state: 'indeterminate', amiId, phase: read.phase, detail: read.detail };
+  const repo = RUNNER_IMAGE_SOURCE_REPO;
+  let unreleased: RunnerImageUnreleasedChangeDTO[];
+  try {
+    unreleased = await unreleasedChanges(repo, read.build.commit, RUNNER_AMI_INPUTS, await token());
+  } catch (err) {
+    if (!(err instanceof RepoCommitHistoryError)) throw err;
+    return {
+      state: 'indeterminate',
+      amiId,
+      phase: 'github',
+      detail: `${repo.owner}/${repo.name}'s history could not be read against ${read.build.commit}: ${err.message}`,
+    };
+  }
+  return unreleased.length > 0
+    ? { state: 'stale', build: read.build, unreleased }
+    : { state: 'current', build: read.build };
+}
+
 export const runnerImageFreshnessProbeService = {
-  /** Judge the pinned runner image. Never throws on a stale image or a refused
-   *  read — the caller decides which arms are loud. */
+  /** Judge the pinned runner image and the pinned runner AMI. Never throws on a
+   *  stale pin or a refused read — the caller decides which arms are loud. */
   async check(options: { now?: Date } = {}): Promise<RunnerImageFreshnessVerdictDTO> {
     const checkedAt = (options.now ?? new Date()).toISOString();
-    const ami = amiState();
+    // One token for both arms, minted only when an arm reaches GitHub.
+    let tokenRead: Promise<string | null> | null = null;
+    const token = () => (tokenRead ??= sourceRepoToken(RUNNER_IMAGE_SOURCE_REPO.owner));
+    const ami = await judgeAmi(token);
     const image = configuredFleetRunnerImage();
     if (!image) return { verdict: 'not_applicable', checkedAt, reason: 'runner_image_unset', ami };
 
@@ -192,8 +297,12 @@ export const runnerImageFreshnessProbeService = {
     const repo = RUNNER_IMAGE_SOURCE_REPO;
     let unreleased: RunnerImageUnreleasedChangeDTO[];
     try {
-      const token = await sourceRepoToken(repo.owner);
-      unreleased = await unreleasedChanges(repo, read.build.commit, RUNNER_IMAGE_INPUTS, token);
+      unreleased = await unreleasedChanges(
+        repo,
+        read.build.commit,
+        RUNNER_IMAGE_INPUTS,
+        await token(),
+      );
     } catch (err) {
       if (!(err instanceof RepoCommitHistoryError)) throw err;
       return {

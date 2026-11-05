@@ -28,17 +28,45 @@ export interface RunnerImageUnreleasedChangeDTO {
   relation: 'ahead' | 'diverged';
 }
 
+/** The commit the pinned runner AMI was built from, as an account it is shared
+ *  with reads it (MOTIR-10395). */
+export interface RunnerAmiBuildDTO {
+  /** The `MOTIR_AWS_RUNNER_AMI_ID` value, as configured. */
+  amiId: string;
+  /** The AMI's name, `motir-ci-runner-<runner>-<YYYYMMDDhhmm>-<sha7>`. */
+  name: string | null;
+  /** The commit: the full SHA when the description records it, else the name's
+   *  seven characters, which GitHub resolves as long as they are unambiguous. */
+  commit: string;
+  /** `description` — an AMI built since MOTIR-10395 writes `commit <sha>` into
+   *  its description; `name` — an older AMI, read from the name's suffix. */
+  source: 'description' | 'name';
+  /** The fleet account (an active aws `ci_runner` account) whose runner role read it. */
+  account: string;
+}
+
 /**
- * The runner AMI the AWS fleet boots. It is NOT judged: the deployment's only
- * identity in a pool account is the `motir-fleet-runner` role, which holds no
- * `ec2:DescribeImages`, and the AMI's `GitSha` tag lives in the build account,
- * where a shared AMI's tags are not visible to the accounts it is shared with.
- * The reason is recorded on every run so the gap is read, not assumed; judging
- * it is MOTIR-10395.
+ * The runner AMI the AWS fleet boots (`MOTIR_AWS_RUNNER_AMI_ID`), judged the
+ * way the image is: is the commit it was built from at or after the newest
+ * default-branch change to `RUNNER_AMI_INPUTS`? It is read through the
+ * `motir-fleet-runner` role of one active aws `ci_runner` account, which holds
+ * `ec2:DescribeImages` since MOTIR-10395. The AMI's `GitSha` tag is not used: a
+ * shared AMI's tags are visible only in the build account. `indeterminate` is a
+ * read that did not answer, never a pass.
  */
 export type RunnerAmiFreshnessDTO =
   | { state: 'unset' }
-  | { state: 'not_read'; amiId: string; reason: string };
+  | { state: 'current'; build: RunnerAmiBuildDTO }
+  | { state: 'stale'; build: RunnerAmiBuildDTO; unreleased: RunnerImageUnreleasedChangeDTO[] }
+  | {
+      state: 'indeterminate';
+      amiId: string;
+      /** `account` — no active aws `ci_runner` account to read it in; `ec2` —
+       *  the account's EC2 refused or did not show it; `build_commit` — its name
+       *  and description record no commit; `github` — the history read failed. */
+      phase: 'account' | 'ec2' | 'build_commit' | 'github';
+      detail: string;
+    };
 
 export type RunnerImageFreshnessVerdictDTO =
   | {

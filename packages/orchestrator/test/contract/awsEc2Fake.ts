@@ -7,6 +7,7 @@ import {
   type Ec2AvailabilityZone,
   type Ec2DescribeInstancesInput,
   type Ec2Filter,
+  type Ec2Image,
   type Ec2Instance,
   type Ec2InternetGateway,
   type Ec2RouteTable,
@@ -117,6 +118,8 @@ export class AwsEc2Fake implements Ec2Api {
   private addressSeq = 0;
   /** Each instance's user-data, raw text, by id. */
   readonly userData = new Map<string, string>();
+  /** The AMIs this account can see, by id — seeded by a test (MOTIR-10395). */
+  readonly images = new Map<string, Ec2Image>();
   /** Every instance ever launched, terminated ones included, by id. */
   readonly instances = new Map<string, Ec2Instance & { request: Ec2RunInstanceInput }>();
   /** The instance each `ClientToken` made. */
@@ -837,6 +840,14 @@ export class AwsEc2Fake implements Ec2Api {
       throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
     }
     return this.consoles.get(instanceId) ?? null;
+  }
+
+  async describeImages(imageIds: readonly string[]) {
+    this.record('describeImages', [...imageIds]);
+    // EC2 refuses the whole call when one named id is unknown.
+    const missing = imageIds.find((id) => !this.images.has(id));
+    if (missing) throw new Ec2ApiError('InvalidAMIID.NotFound', 400, false);
+    return imageIds.map((id) => ({ ...this.images.get(id)! }));
   }
 
   /** What DescribeInstances reports — the instance without its recorded request. */

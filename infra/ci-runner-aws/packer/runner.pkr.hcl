@@ -152,7 +152,11 @@ source "amazon-ebs" "runner" {
   temporary_key_pair_type = "ed25519"
 
   ami_name        = local.ami_name
-  ami_description = "Motir CI runner: Ubuntu 24.04, GitHub runner ${var.runner_version}, Docker on a 20 GB data volume (${substr(var.git_sha, 0, 7)})"
+  # The full commit, because a shared AMI's tags (GitSha above) are visible only
+  # in this build account; the accounts it is shared with see the name and this
+  # description, and the daily health check reads the commit from here
+  # (MOTIR-10395, lib/ciFleet/runnerImageSources.ts amiBuildCommitFrom).
+  ami_description = "Motir CI runner: Ubuntu 24.04, GitHub runner ${var.runner_version}, Docker on a 20 GB data volume (commit ${var.git_sha})"
   ami_org_arns    = var.org_arns
   # Instances launched from the AMI accept IMDSv2 only.
   imds_support = "v2.0"

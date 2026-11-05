@@ -37,7 +37,7 @@ export const RUNNER_IMAGE_INPUTS = [
 /** Every path the AWS runner AMI is built from: the Dockerfile's pins, the
  *  scripts it copies, and the packer tree — the same set as
  *  `release-ci-runner-ami.yml`'s `pull_request.paths`, minus the workflow file
- *  itself. Not judged yet: `RunnerAmiFreshnessDTO` says why. */
+ *  itself. Judged by the same probe since MOTIR-10395. */
 export const RUNNER_AMI_INPUTS = [
   'infra/ci-runner-aws',
   'infra/ci-runner/Dockerfile',
@@ -73,4 +73,27 @@ export function imageRepositoryOf(image: string): string {
   const lastSlash = withoutDigest.lastIndexOf('/');
   const colon = withoutDigest.lastIndexOf(':');
   return colon > lastSlash ? withoutDigest.slice(0, colon) : withoutDigest;
+}
+
+/** `ami_description`'s commit, written by `infra/ci-runner-aws/packer/runner.pkr.hcl`
+ *  since MOTIR-10395. */
+const AMI_DESCRIPTION_COMMIT = /\bcommit ([0-9a-f]{40})\b/;
+/** `ami_name`: `motir-ci-runner-<runner>-<YYYYMMDDhhmm>-<sha7>`. */
+const AMI_NAME_COMMIT = /^motir-ci-runner-.+-\d{12}-([0-9a-f]{7})$/;
+
+/**
+ * The commit a runner AMI was built from, read from the two fields an account
+ * the AMI is SHARED with can see — its name and description. The `GitSha` tag
+ * the build writes is not one of them: EC2 shows an AMI's tags only in the
+ * account that owns it. The description's full SHA wins; an AMI built before it
+ * existed has only the name's seven characters. Null when neither records one.
+ */
+export function amiBuildCommitFrom(image: {
+  readonly name: string | null;
+  readonly description: string | null;
+}): { commit: string; source: 'description' | 'name' } | null {
+  const full = AMI_DESCRIPTION_COMMIT.exec(image.description?.toLowerCase() ?? '');
+  if (full) return { commit: full[1]!, source: 'description' };
+  const short = AMI_NAME_COMMIT.exec(image.name?.trim().toLowerCase() ?? '');
+  return short ? { commit: short[1]!, source: 'name' } : null;
 }
