@@ -14,7 +14,7 @@ import {
   Moon,
   UserCheck,
 } from 'lucide-react';
-import { agentVerdictAnchor } from '@/lib/agentReview/verdictActivity';
+import { agentVerdictHref } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationDTO } from '@/lib/dto/notifications';
 
@@ -155,9 +155,10 @@ export function NotificationRow({
     data.kind === 'code_access_refused'
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
       : issueKey
-        ? // A send-back lands on its own activity entry, whose findings open there.
+        ? // A send-back lands on its own activity entry, whose findings open there — on the
+          // All tab, since the default Comments tab does not draw it (MOTIR-10458).
           data.kind === 'review_sent_back' && data.recordId
-          ? `/items/${issueKey}#${agentVerdictAnchor(data.recordId)}`
+          ? agentVerdictHref(`/items/${issueKey}`, data.recordId)
           : `/items/${issueKey}`
         : null;
   const createdAt = new Date(notification.createdAt);

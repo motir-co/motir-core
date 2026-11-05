@@ -18,7 +18,8 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('@/lib/navigation/shallowUrl', () => ({ shallowPush: vi.fn(), shallowReplace: vi.fn() }));
 
-import { ReviewLine, findingsHrefOf } from '@/components/approvals/ReviewLine';
+import { ReviewLine } from '@/components/approvals/ReviewLine';
+import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 import { ReviewToRunRow } from '@/components/approvals/ReviewToRunRow';
 import { AuthorNote } from '@/components/approvals/AuthorNote';
 import { ApprovalRow } from '@/components/approvals/ApprovalRow';
@@ -72,16 +73,6 @@ function lineEl() {
   return document.querySelector('[data-review-line]') as HTMLElement;
 }
 
-describe('findingsHrefOf', () => {
-  it('opens a record by its activity anchor, a gate at the development section, nothing at null', () => {
-    expect(findingsHrefOf('/items/A-1', { kind: 'record', id: 'r1' })).toBe(
-      '/items/A-1#agent-verdict-r1',
-    );
-    expect(findingsHrefOf('/items/A-1', { kind: 'gate', id: 'g1' })).toBe('/items/A-1#development');
-    expect(findingsHrefOf('/items/A-1', null)).toBeNull();
-  });
-});
-
 describe('ReviewLine — the four values', () => {
   it('Reviewed by agent: the hosted agent, when, and Findings and checklist', () => {
     render(
@@ -105,7 +96,7 @@ describe('ReviewLine — the four values', () => {
     expect(el.textContent).toContain('1 hour ago');
     expect(el.className).toContain('text-xs');
     const link = screen.getByRole('link', { name: 'Findings and checklist' });
-    expect(link.getAttribute('href')).toBe('/items/ACME-412#agent-verdict-rec-1');
+    expect(link.getAttribute('href')).toBe('/items/ACME-412?activity=all#agent-verdict-rec-1');
   });
 
   it('Reviewed by agent: a person’s own agent names them and the harness; no ref draws no link', () => {
@@ -192,11 +183,42 @@ describe('ReviewLine — the four values', () => {
     expect(lineEl().textContent).toContain('Not reviewed by an agent');
     expect(
       screen.getByRole('link', { name: 'Last reviewed at an earlier commit' }).getAttribute('href'),
-    ).toBe('/items/ACME-412#agent-verdict-old');
+    ).toBe('/items/ACME-412?activity=all#agent-verdict-old');
     expect(screen.getByTestId('review-command-copy-ACME-412')).toBeTruthy();
     const github = document.querySelector('[data-review-github]') as HTMLElement;
     expect(github.textContent).toContain('Approved on GitHub');
     expect(github.textContent).toContain('@dana, @li');
+  });
+
+  it('on the Visitor tree both links keep the reader’s own route, on the All tab (MOTIR-10458)', () => {
+    render(
+      <ReaderRoutesProvider identifier="acme">
+        <ReviewLine
+          line={lineOf({
+            value: 'reviewed_by_agent',
+            reviewer: { kind: 'hosted', model: null },
+            at: null,
+          })}
+          identifier="ACME-412"
+          recordRef={{ kind: 'record', id: 'rec-1' }}
+        />
+        <ReviewLine
+          line={lineOf({
+            value: 'not_reviewed',
+            lastReviewedVersion: 'v1',
+            lastReviewedRef: { kind: 'record', id: 'old' },
+          })}
+          identifier="ACME-412"
+          recordRef={null}
+        />
+      </ReaderRoutesProvider>,
+    );
+    expect(screen.getByRole('link', { name: 'Findings and checklist' }).getAttribute('href')).toBe(
+      '/p/acme/items/ACME-412?activity=all#agent-verdict-rec-1',
+    );
+    expect(
+      screen.getByRole('link', { name: 'Last reviewed at an earlier commit' }).getAttribute('href'),
+    ).toBe('/p/acme/items/ACME-412?activity=all#agent-verdict-old');
   });
 
   it('Not reviewed with no earlier pass and no command draws neither', () => {

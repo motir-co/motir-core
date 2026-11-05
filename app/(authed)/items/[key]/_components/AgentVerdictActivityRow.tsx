@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Bot } from 'lucide-react';
 import { MarkdownView } from '@/components/ui/MarkdownView';
@@ -56,6 +56,13 @@ export function AgentVerdictActivityRow({
   );
   const [toggled, setToggled] = useState<boolean | null>(null);
   const open = toggled ?? atAnchor;
+  // ARRIVING AT THE ANCHOR PUTS THE ENTRY IN VIEW (MOTIR-10458). Activity streams in after
+  // the browser — or the router, on a client navigation — has looked for the fragment, so the
+  // entry lands itself, the `#pages` precedent; a later hash change scrolls it natively.
+  const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (atAnchor) rowRef.current?.scrollIntoView?.({ block: 'start' });
+  }, [atAnchor]);
 
   const commits = reviewCommitsLabel(part.subjectVersion);
   const agentName = part.hosted
@@ -81,7 +88,11 @@ export function AgentVerdictActivityRow({
     part.notified?.type === 'user' ? (part.notified.name ?? tActivity('formerMember')) : null;
 
   return (
-    <div id={anchor} className="grid scroll-mt-6 grid-cols-[22px_minmax(0,1fr)] gap-x-2.5">
+    <div
+      ref={rowRef}
+      id={anchor}
+      className="grid scroll-mt-6 grid-cols-[22px_minmax(0,1fr)] gap-x-2.5"
+    >
       <span
         className="mt-px inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center justify-self-center rounded-full bg-(--el-tint-lavender) text-(--el-text-strong)"
         aria-hidden
