@@ -10,6 +10,7 @@ import { POST as validatePlanForestPOST } from '@/app/api/internal/ai/validate-p
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { isRunnerStopAdvisory, type WorkItemValidityAdvisoryDto } from '@/lib/dto/workItems';
 
 // CONTRACT TEST — the two pre-commit plan-validation endpoints (Subtask 7.28.2)
 // end-to-end through the REAL routes, real Postgres. Asserts the auth grants
@@ -18,6 +19,16 @@ import { truncateAuthTables } from '../../helpers/db';
 // planValidityService.
 
 const SERVICE_SECRET = 'core-callback-secret-test';
+
+/**
+ * A plan-read body without its RUNNER-STOP advisories (MOTIR-10380). Those fire on
+ * any fixture leaf with no body or no criteria, and these cases assert the route's
+ * pass-through of the other families; the runner stops have their own cases.
+ */
+const withoutRunnerStops = <V extends { advisories: WorkItemValidityAdvisoryDto[] }>(v: V): V => ({
+  ...v,
+  advisories: v.advisories.filter((a) => !isRunnerStopAdvisory(a)),
+});
 
 beforeEach(async () => {
   process.env['CORE_CALLBACK_SECRET'] = SERVICE_SECRET;
@@ -162,7 +173,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       }),
     );
     expect(invalid.status).toBe(200);
-    expect(await invalid.json()).toEqual({
+    expect(withoutRunnerStops(await invalid.json())).toEqual({
       key: story.identifier,
       valid: false,
       blockers: [
@@ -200,7 +211,7 @@ describe('POST /api/internal/ai/validate-plan', () => {
       }),
     );
     expect(valid.status).toBe(200);
-    expect(await valid.json()).toEqual({
+    expect(withoutRunnerStops(await valid.json())).toEqual({
       key: story.identifier,
       valid: true,
       blockers: [],
@@ -388,7 +399,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       }),
     );
     expect(invalid.status).toBe(200);
-    expect(await invalid.json()).toEqual({
+    expect(withoutRunnerStops(await invalid.json())).toEqual({
       planId: plan.id,
       valid: false,
       // Finishability fails; APPROVABILITY passes — a cross-project blocker is a
@@ -483,7 +494,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
     const brokenRes = await post(broken.id);
     expect(brokenRes.status).toBe(200);
     const brokenBody = await brokenRes.json();
-    expect(brokenBody.advisories).toEqual([
+    expect(withoutRunnerStops(brokenBody).advisories).toEqual([
       {
         kind: 'shape',
         item: `planItem:${addId}`,
@@ -498,7 +509,7 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
     const cleanRes = await post(clean.id);
     expect(cleanRes.status).toBe(200);
     const cleanBody = await cleanRes.json();
-    expect(cleanBody.advisories).toEqual([]);
+    expect(withoutRunnerStops(cleanBody).advisories).toEqual([]);
 
     // `valid` is the verdict's alone: the advisory never moves it.
     expect(brokenBody.valid).toBe(true);

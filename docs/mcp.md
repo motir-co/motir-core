@@ -654,16 +654,19 @@ can read, does not say so.
 A **`shape`** entry has no far end at all: the card contradicts itself. Six
 severities, each with its own remedy:
 
-| severity                                  | what it found                                                                                                                                                                                           | remedy                                                                   |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `likely-ordering-violation`               | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426)                             | CUT the card at that criterion                                           |
-| `likely-repo-straddle`                    | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                                                         | SPLIT the card per repo (one repo, one PR)                               |
-| `likely-over-gate-sizing`                 | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                                             | BUILD it and report the sizing — size never stops a run (MOTIR-5372)     |
-| `under-authored`                          | a childless task / bug / subtask with no `storyPoints`, `estimateMinutes`, `type` or `executor` AND no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`) | BUILD it, state the criteria you worked to — never a gate (MOTIR-5427)   |
-| `likely-self-blocking-design`             | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                                            | LIFT the design criterion onto its own `type: design` card               |
-| `likely-post-merge-child-under-container` | the CHILD `item` (a `verification` / `deploy` / `manual` or human card) reads the deployment (`phrase`) while sitting inside the runnable container `container` whose merge it waits on (MOTIR-8863)    | lay it as a sibling the container `blocks`, or split into two containers |
-| `likely-blocker-count-mismatch`           | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                                                      | update the stale prose or wire the genuinely missing edge                |
-| `body-edit-above-field-move`              | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                                                         | RE-READ the body against those fields — a prompt, never a stop           |
+| severity                                  | what it found                                                                                                                                                                                                                  | remedy                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `likely-ordering-violation`               | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426)                                                    | CUT the card at that criterion                                           |
+| `likely-repo-straddle`                    | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                                                                                | SPLIT the card per repo (one repo, one PR)                               |
+| `likely-over-gate-sizing`                 | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                                                                    | BUILD it and report the sizing — size never stops a run (MOTIR-5372)     |
+| `under-authored`                          | a childless task / bug / subtask with no `storyPoints`, `estimateMinutes`, `type` or `executor` AND no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`)                        | BUILD it, state the criteria you worked to — never a gate (MOTIR-5427)   |
+| `leaf-no-description`                     | PLAN READS ONLY (`validate_plan`, `validate_work_item { planId }`), `runnerStop: true`: a childless, non-exempt task / bug / subtask whose description is blank, whatever its sizing, type and executor (MOTIR-10380)          | write the body before sealing — the runner stops on it                   |
+| `leaf-no-criteria`                        | PLAN READS ONLY, `runnerStop: true`: a childless, non-exempt leaf with a body and no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`), even typed and sized (MOTIR-10380)      | enumerate the criteria before sealing — the runner stops on it           |
+| `leaf-multi-repo`                         | PLAN READS ONLY, `runnerStop: true`: a childless, non-exempt leaf whose criteria name paths in two or more repositories (`repo` the second, `path`, `criterionIndex`), even when its repository set carries both (MOTIR-10381) | SPLIT the card per repo before sealing — one card is one pull request    |
+| `likely-self-blocking-design`             | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                                                                   | LIFT the design criterion onto its own `type: design` card               |
+| `likely-post-merge-child-under-container` | the CHILD `item` (a `verification` / `deploy` / `manual` or human card) reads the deployment (`phrase`) while sitting inside the runnable container `container` whose merge it waits on (MOTIR-8863)                           | lay it as a sibling the container `blocks`, or split into two containers |
+| `likely-blocker-count-mismatch`           | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                                                                             | update the stale prose or wire the genuinely missing edge                |
+| `body-edit-above-field-move`              | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                                                                                | RE-READ the body against those fields — a prompt, never a stop           |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -5326,6 +5329,21 @@ shape and stay `validate_work_item`'s. A runner reads a two-index entry as LIFT
 and stops, so a planner disposes of each before sealing: re-word the criterion,
 lift the design half into its own card, or record on the card why it is a false
 positive.
+
+**The RUNNER-STOP members are a plan read's alone (MOTIR-10380, MOTIR-10381).**
+Each carries `runnerStop: true` and a severity in the exported
+`RUNNER_STOP_SEVERITIES`: `leaf-no-description` (a childless task, bug or
+subtask whose description is blank), `leaf-no-criteria` (a body with no
+enumerated acceptance criterion, `criteria` `no-heading` or `no-criterion`),
+whatever the card's points, estimate, type and executor, and `leaf-multi-repo`
+(criteria naming file paths in two or more repositories, even when the card's
+repository set carries both — `repo` is the second repository, `path` its first
+path, `criterionIndex` the criterion naming it; a card that also trips
+`likely-repo-straddle` reports both). A card with children, an epic or story, a
+`type: design` leaf and an `executor: human` leaf are exempt. A blank body is
+reported once, as no description. `validate_work_item` without a `planId`, the
+dispatch prompt and `claim_next_ready` never carry them, and none is a gate
+(`docs/decisions/leaf-body-runner-stop-advisories.md`).
 
 `likely-mislabelled-link` keeps its narrower scope: it is listed only for a body
 the plan writes — an `add`'s description or explanation, or a `modify` that

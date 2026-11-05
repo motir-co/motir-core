@@ -1979,7 +1979,28 @@ export type WorkItemProseShapeSeverityDto =
   | 'body-edit-above-field-move'
   | 'likely-blocker-count-mismatch'
   | 'under-authored'
-  | 'likely-mislabelled-link';
+  | 'likely-mislabelled-link'
+  | RunnerStopSeverityDto;
+
+/**
+ * The RUNNER-STOP shape severities (MOTIR-10380) — the conditions the runner
+ * stops a card on that a reading of the card alone can find, reported by
+ * `validate_plan` so a planner repairs them before a run meets them.
+ *
+ * ⚠️ THE TUPLE IS THE CONTRACT FOR READERS. A runner-stop advisory carries the
+ * literal `runnerStop: true` and its severity is a member of this tuple, so a
+ * reader (the hosted planner's repair pass) keys on that field and never on a
+ * criterion index — the body members have none. A severity added to the family
+ * is added here, and every reader picks it up.
+ */
+export const RUNNER_STOP_SEVERITIES = [
+  'leaf-no-description',
+  'leaf-no-criteria',
+  'leaf-multi-repo',
+] as const;
+
+/** One member of {@link RUNNER_STOP_SEVERITIES}. */
+export type RunnerStopSeverityDto = (typeof RUNNER_STOP_SEVERITIES)[number];
 
 /**
  * ONE prose-vs-graph advisory (MOTIR-1969): an in-subtree card whose
@@ -2345,6 +2366,53 @@ export interface WorkItemProseUnderAuthoredAdvisoryDto extends WorkItemProseShap
 }
 
 /**
+ * A RUNNER-STOP body advisory (MOTIR-10380): a childless, non-exempt leaf whose
+ * description is null or blank (`leaf-no-description`), or whose body has no
+ * enumerated acceptance criterion (`leaf-no-criteria`, with `criteria` saying
+ * whether the heading is missing or empty) — whatever its points, estimate, type
+ * and executor are. The runner stops on both.
+ *
+ * ⚠️ Emitted by `validate_plan` only, and never a gate: `valid` and readiness are
+ * unchanged by it. A card with children, an epic or story, a `type: design` leaf
+ * and an `executor: human` leaf are exempt (`isLeafBodyCheckExempt`). A blank body
+ * is reported once, as no description.
+ * `docs/decisions/leaf-body-runner-stop-advisories.md`.
+ */
+export type WorkItemProseRunnerStopAdvisoryDto =
+  | (WorkItemProseShapeAdvisoryBaseDto & {
+      severity: 'leaf-no-description';
+      /** Always `true`: what a reader keys on (see {@link RUNNER_STOP_SEVERITIES}). */
+      runnerStop: true;
+    })
+  | (WorkItemProseShapeAdvisoryBaseDto & {
+      severity: 'leaf-no-criteria';
+      runnerStop: true;
+      /** Whether the `## Acceptance criteria` heading is missing or just empty. */
+      criteria: 'no-heading' | 'no-criterion';
+    })
+  | WorkItemProseMultiRepoRunnerStopAdvisoryDto;
+
+/**
+ * The MULTI-REPO runner stop (MOTIR-10381): a childless, non-exempt leaf whose
+ * acceptance criteria name file paths in two or more repositories — INCLUDING when
+ * its repository set already carries both, which `likely-repo-straddle` does not
+ * report. One card is one pull request, so the runner stops on it. `repo` is the
+ * SECOND repository, `path` its first path and `criterionIndex` the criterion that
+ * names it, numbered as the straddle advisory numbers them. Plan reads only; never
+ * a gate. `docs/decisions/leaf-body-runner-stop-advisories.md`.
+ */
+export interface WorkItemProseMultiRepoRunnerStopAdvisoryDto extends WorkItemProseShapeAdvisoryBaseDto {
+  severity: 'leaf-multi-repo';
+  runnerStop: true;
+  /** The repo-qualified path the criterion names, markup stripped. */
+  path: string;
+  /** The second repository, in the connected repository's own casing. */
+  repo: string;
+  /** 1-based index of the criterion naming it. */
+  criterionIndex: number;
+}
+
+/**
  * A `[label](motir:<id>)` link in the card's body whose label names one work-item
  * key while its id opens a different card — or whose id opens no card the reader
  * can see at all (MOTIR-9007).
@@ -2398,7 +2466,8 @@ export type WorkItemProseShapeAdvisoryDto =
   | WorkItemProseBodyAboveFieldMoveAdvisoryDto
   | WorkItemProseBlockerCountAdvisoryDto
   | WorkItemProseUnderAuthoredAdvisoryDto
-  | WorkItemProseMislabelledLinkAdvisoryDto;
+  | WorkItemProseMislabelledLinkAdvisoryDto
+  | WorkItemProseRunnerStopAdvisoryDto;
 
 /**
  * The severity of a SUBSUMPTION advisory (MOTIR-2903). Named rather than inlined
@@ -2763,6 +2832,16 @@ export function isUnderAuthoredAdvisory(
   a: WorkItemValidityAdvisoryDto,
 ): a is WorkItemProseUnderAuthoredAdvisoryDto {
   return a.kind === 'shape' && a.severity === 'under-authored';
+}
+
+/**
+ * Narrow an advisory to a RUNNER-STOP shape (MOTIR-10380) — any member of
+ * {@link RUNNER_STOP_SEVERITIES}, by the `runnerStop` field it carries.
+ */
+export function isRunnerStopAdvisory(
+  a: WorkItemValidityAdvisoryDto,
+): a is WorkItemProseRunnerStopAdvisoryDto {
+  return a.kind === 'shape' && 'runnerStop' in a && a.runnerStop === true;
 }
 
 /** Narrow an advisory to the MISLABELLED-LINK shape (MOTIR-9007). */
