@@ -4114,7 +4114,200 @@
         "members": "Leden",
         "security": "Beveiliging",
         "usage": "Gebruik en kosten",
+        "fleet": "Vloot",
         "billing": "Facturering en abonnementen"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · Instellingen",
+        "title": "Vloot",
+        "lead": "Wat {org} nu op de vloot van Motir draait, en de bediening om het te stoppen. Capaciteitsaanvragen blijven onder <link>Facturering en abonnementen › Vlootgebruik</link>.",
+        "refresh": {
+          "button": "Vernieuwen",
+          "cue": "Bijgewerkt {time} · wordt elke 30 seconden vernieuwd zolang dit tabblad open is",
+          "refreshing": "Vernieuwen…",
+          "failed": "Vernieuwen is mislukt. De laatst gelezen gegevens blijven zichtbaar."
+        },
+        "lastStop": {
+          "by": "Laatst gestopt door {name}, {when}",
+          "byYou": "Laatst gestopt door jou, {when}",
+          "bySomeone": "Laatst gestopt {when}",
+          "never": "Nog niemand in {org} heeft vlootwerk gestopt.",
+          "failed": "Kan niet lezen wie het vlootwerk het laatst heeft gestopt."
+        },
+        "when": {
+          "today": "vandaag om {time}",
+          "yesterday": "gisteren om {time}"
+        },
+        "tiles": {
+          "agentRuns": "Agent-runs tegelijk",
+          "agentRunsNote": "Per machineminuut in rekening gebracht",
+          "agents": "Agents",
+          "agentsNote": "Actief en slapend",
+          "ciJobs": "Lopende CI-jobs",
+          "ciWaiting": "{count, plural, =0 {Geen wachtend} other {# wachtend}}",
+          "index": "Indexeringsjobs",
+          "indexNote": "Niet in rekening gebracht",
+          "of": " van {figure}",
+          "notRead": "Niet gelezen",
+          "failedTitle": "Kan de vlootcijfers niet lezen",
+          "failedBody": "Niets hier wordt als nul getoond. De onderdelen hieronder zijn niet getroffen."
+        },
+        "section": {
+          "retry": "Opnieuw",
+          "failedBody": "Niets hier wordt als nul getoond. De andere onderdelen zijn niet getroffen."
+        },
+        "hosted": {
+          "title": "Agent-runs",
+          "lead": "Werkitems die de agent van Motir nu voor deze organisatie bouwt.",
+          "count": "{count} actief",
+          "empty": "Er is geen agent-run actief.",
+          "failed": "Kan de agent-runs niet lezen",
+          "noCard": "Een run zonder werkitem",
+          "meta": "{project} · gestart door {name} · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "Een verwijderd project",
+          "openRun": "Run openen",
+          "running": "Actief",
+          "cancel": "Annuleren",
+          "cancelAria": "De run van {key} annuleren",
+          "cancelling": "Annuleren…"
+        },
+        "agents": {
+          "title": "Agent-instanties",
+          "lead": "De agents van alle leden, actief of slapend. Hier wordt alleen In slaap zetten aangeboden.",
+          "count": "{count} actief",
+          "empty": "Er is geen agent actief of slapend.",
+          "failed": "Kan de agent-instanties niet lezen",
+          "name": "Agent van {owner} · {profile}",
+          "unknownOwner": "Een lid",
+          "runningSince": "{project} · actief sinds {time}",
+          "hibernatingSince": "{project} · slaapt sinds {time}",
+          "inStateSince": "{project} · {state} sinds {time}",
+          "running": "Actief",
+          "hibernating": "Slaapt",
+          "hibernatingAt": "Slaapt · sinds {time}",
+          "hibernate": "In slaap zetten",
+          "hibernateAria": "Agent van {owner} in slaap zetten",
+          "hibernatingNow": "Gaat slapen…",
+          "state": {
+            "starting": "Start",
+            "waking": "Wordt gewekt",
+            "updating": "Wordt bijgewerkt",
+            "deleting": "Wordt verwijderd",
+            "hibernated": "Slaapt",
+            "failed": "Mislukt",
+            "other": "Bezig"
+          }
+        },
+        "ci": {
+          "title": "CI-jobs",
+          "lead": "Jobs op de runners van Motir, lopend en wachtend.",
+          "count": "{inFlight} lopend · {waiting} wachtend",
+          "empty": "Er is geen CI-job lopend of wachtend.",
+          "failed": "Kan de CI-jobs niet lezen",
+          "meta": "{project} · in de wachtrij {time} · ",
+          "noProject": "Geen project",
+          "viewOnGithub": "Bekijken op GitHub",
+          "running": "Actief",
+          "waiting": "Wachtend · {cause}",
+          "cause": {
+            "planLimit": "abonnementslimiet",
+            "poolFull": "pool vol",
+            "other": "overig"
+          }
+        },
+        "index": {
+          "title": "Indexeringsjobs",
+          "running": "<n>{count}</n> actief",
+          "note": "Indexering houdt het zoeken in code actueel. Het wordt niet in rekening gebracht en wordt hier niet gestopt.",
+          "failed": "Kan de indexeringsjobs niet lezen"
+        },
+        "motirStops": {
+          "title": "Gestopt door Motir · afgelopen 7 dagen",
+          "lead": "Machines die Motir zelf voor deze organisatie heeft gestopt, en waarom.",
+          "empty": "Motir heeft de afgelopen 7 dagen niets voor deze organisatie gestopt.",
+          "failed": "Kan de stops van Motir niet lezen",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "CI-jobcontainer",
+            "hosted_agent": "Agent-run",
+            "agent_instance": "Agent-instantie",
+            "code_graph_index": "Indexeringsjob",
+            "other": "Machine"
+          },
+          "reason": {
+            "record_ended": "de job was al beëindigd",
+            "no_record": "er is geen registratie van gevonden",
+            "org_stopped": "het werk van de organisatie is gestopt",
+            "foreign_org": "het voerde werk van een andere organisatie uit"
+          },
+          "done": "Klaar",
+          "notDone": "Niet voltooid"
+        },
+        "cancelRun": {
+          "title": "Deze run annuleren?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} heeft deze run om {time} gestart. Annuleren sluit hem af als <strong>geannuleerd</strong> en stopt de machine nu. Werk dat de agent heeft gepusht, blijft op de branch.",
+          "bodyNoName": "Deze run is om {time} gestart. Annuleren sluit hem af als <strong>geannuleerd</strong> en stopt de machine nu. Werk dat de agent heeft gepusht, blijft op de branch.",
+          "keep": "Laten draaien",
+          "confirm": "Run annuleren",
+          "confirming": "Annuleren…",
+          "alreadyClosed": "De run van {key} was al beëindigd.",
+          "notFound": "Die run is niet meer actief.",
+          "failed": "Kan de run van {key} niet annuleren. Probeer het opnieuw."
+        },
+        "hibernate": {
+          "title": "Agent van {owner} in slaap zetten?",
+          "description": "{profile} · {project} · actief sinds {time}",
+          "body": "De machine stopt en de bestanden blijven bewaard. Een werkitem dat erin draait, wordt eerst geannuleerd.",
+          "told": "<strong>{owner} krijgt een bericht</strong> dat je hem in slaap hebt gezet, en wanneer. Alleen die persoon kan hem wekken, openen of verwijderen.",
+          "toldSelf": "Alleen jij kunt hem wekken, openen of verwijderen.",
+          "keep": "Laten draaien",
+          "confirm": "Agent in slaap zetten",
+          "confirming": "Gaat slapen…",
+          "alreadyResting": "De agent van {owner} sliep al.",
+          "inMotion": "De agent van {owner} start of wisselt van status en is daarom niet in slaap gezet. Probeer het zo opnieuw.",
+          "notFound": "Die agent is niet meer actief.",
+          "failed": "Kan de agent van {owner} niet in slaap zetten. Probeer het opnieuw."
+        },
+        "stopAll": {
+          "button": "Alles stoppen",
+          "title": "Alles stoppen wat {org} draait?",
+          "lead": "Dit stopt nu het betaalde werk hieronder.",
+          "counting": "Tellen wat er draait…",
+          "ci": "{runs, plural, one {CI-job geannuleerd} other {CI-jobs geannuleerd}} en <strong>{containers, plural, one {# container} other {# containers}}</strong> gestopt",
+          "ciUnknownRuns": "CI-jobs geannuleerd",
+          "hosted": "{count, plural, one {agent-run beëindigd} other {agent-runs beëindigd}}",
+          "agents": "{count, plural, one {actieve agent in slaap gezet} other {actieve agents in slaap gezet}}",
+          "index": "{count, plural, one {indexeringsjob blijft draaien} other {indexeringsjobs blijven draaien}} — indexering wordt hier niet gestopt",
+          "afterwards": "Daarna is niets geblokkeerd: leden kunnen meteen nieuw werk starten. De eigenaren van agents die in slaap zijn gezet, krijgen een bericht.",
+          "countedAt": "Geteld om {time}.",
+          "unreadableTitle": "Kan niet tellen wat er draait",
+          "unreadableBody": "Er is niets gestopt. Lees de aantallen opnieuw voordat je bevestigt.",
+          "cancel": "Annuleren",
+          "retry": "Opnieuw proberen",
+          "confirm": "Alles stoppen",
+          "confirming": "Stoppen…",
+          "failed": "Kan het vlootwerk niet stoppen. Een deel is mogelijk gestopt; vernieuw om te zien wat nog draait."
+        },
+        "result": {
+          "doneTitle": "Alles is gestopt",
+          "partialTitle": "Een deel van het werk is niet gestopt",
+          "ci": "{runs, plural, one {# CI-job geannuleerd} other {# CI-jobs geannuleerd}}, {stopped} van {total} containers gestopt",
+          "hosted": "{count, plural, one {# agent-run beëindigd} other {# agent-runs beëindigd}}",
+          "agents": "{count, plural, one {# actieve agent in slaap gezet} other {# actieve agents in slaap gezet}}",
+          "agentsPartial": "{done} van {total} actieve agents in slaap gezet",
+          "hostedPartial": "{done} van {total} agent-runs beëindigd",
+          "ciFailed": "{count, plural, one {# CI-repository of -container is niet gestopt.} other {# CI-repository's of -containers zijn niet gestopt.}} Vernieuw en probeer Alles stoppen opnieuw.",
+          "hostedFailed": "{count, plural, one {# agent-run is niet beëindigd.} other {# agent-runs zijn niet beëindigd.}} Probeer Annuleren op de rij.",
+          "agentsFailed": "{count, plural, one {# agent is niet gestopt: de stop is niet bevestigd. Probeer In slaap zetten op de rij.} other {# agents zijn niet gestopt: de stop is niet bevestigd. Probeer In slaap zetten op hun rijen.}}",
+          "index": "Indexeringsjobs bleven draaien.",
+          "byYou": "Gestopt door jou, {when}.",
+          "dismiss": "Sluiten",
+          "dismissAria": "Het stopresultaat sluiten"
+        },
+        "forbidden": "Alleen een eigenaar of beheerder kan het vlootwerk van deze organisatie stoppen."
       }
     },
     "gitAccounts": {

@@ -80,6 +80,7 @@ export function toOrgFleetHostedRunDTO(input: {
 export function toOrgFleetAgentInstanceDTO(
   instance: { id: string; profileId: string; state: string; stateChangedAt: Date },
   names: { ownerName: string | null; projectName: string | null },
+  ownedByViewer: boolean,
 ): OrgFleetAgentInstanceDTO {
   return {
     id: instance.id,
@@ -88,6 +89,7 @@ export function toOrgFleetAgentInstanceDTO(
     projectName: names.projectName,
     state: instance.state,
     since: instance.stateChangedAt.toISOString(),
+    ownedByViewer,
   };
 }
 

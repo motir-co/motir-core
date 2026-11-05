@@ -172,6 +172,7 @@ async function readHostedRuns(
 
 async function readAgentInstances(
   organizationId: string,
+  viewerUserId: string,
 ): Promise<{ rows: OrgFleetAgentInstanceDTO[] }> {
   const instances = await withSystemContext((tx) =>
     agentInstanceRepository.listLiveForOrganization(organizationId, tx),
@@ -181,10 +182,14 @@ async function readAgentInstances(
   const owners = await displayNamesOf(instances.map((instance) => instance.ownerId));
   return {
     rows: instances.map((instance) =>
-      toOrgFleetAgentInstanceDTO(instance, {
-        ownerName: owners.get(instance.ownerId) ?? null,
-        projectName: projectNames.get(instance.projectId) ?? null,
-      }),
+      toOrgFleetAgentInstanceDTO(
+        instance,
+        {
+          ownerName: owners.get(instance.ownerId) ?? null,
+          projectName: projectNames.get(instance.projectId) ?? null,
+        },
+        instance.ownerId === viewerUserId,
+      ),
     ),
   };
 }
@@ -278,7 +283,7 @@ export const orgFleetService = {
         readHostedRuns(organizationId, now),
       ),
       agentInstances: await contained('agent instances', organizationId, () =>
-        readAgentInstances(organizationId),
+        readAgentInstances(organizationId, input.actorUserId),
       ),
       ciJobs: await contained('CI jobs', organizationId, () => readCiJobs(organizationId)),
       indexJobs: await contained('index jobs', organizationId, () =>

@@ -426,6 +426,7 @@ describe('an owner or admin reads every part of their own org', () => {
         projectName: a.projectName,
         state: 'running',
         since: new Date(NOW.getTime() - 2 * 60 * 60_000).toISOString(),
+        ownedByViewer: false,
       },
       {
         id: a.marks.instanceIds[1],
@@ -434,6 +435,7 @@ describe('an owner or admin reads every part of their own org', () => {
         projectName: a.projectName,
         state: 'hibernated',
         since: new Date(NOW.getTime() - DAY).toISOString(),
+        ownedByViewer: false,
       },
     ]);
 
@@ -520,6 +522,7 @@ describe('the response is built field by field', () => {
     for (const row of answer.agentInstances.rows) {
       expect(Object.keys(row).sort()).toEqual([
         'id',
+        'ownedByViewer',
         'ownerName',
         'profileId',
         'projectName',
@@ -728,6 +731,21 @@ describe('a name that cannot be found reads null — never a guess', () => {
       expect(agent).toMatchObject({ projectName: null, ownerName: null });
     }
     for (const job of answer.ciJobs.rows) expect(job.projectName).toBeNull();
+  });
+
+  it("flags the reader's own agent with a boolean, never an id", async () => {
+    await seed(a);
+    await adminDb.agentInstance.update({
+      where: { id: a.marks.instanceIds[0] },
+      data: { ownerId: a.owner.id },
+    });
+    const answer = await read(a);
+    if (answer.agentInstances.kind !== 'read') throw new Error('agents not read');
+    expect(answer.agentInstances.rows.map((row) => [row.id, row.ownedByViewer])).toEqual([
+      [a.marks.instanceIds[0], true],
+      [a.marks.instanceIds[1], false],
+    ]);
+    expect(JSON.stringify(answer)).not.toContain(a.owner.id);
   });
 
   it('a thrown value that is not an Error is logged by a neutral name', async () => {

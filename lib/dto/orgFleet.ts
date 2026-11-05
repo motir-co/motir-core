@@ -52,6 +52,9 @@ export interface OrgFleetAgentInstanceDTO {
   state: string;
   /** When it entered that state. */
   since: string;
+  /** The reader's own agent — a boolean, never the owner's id: a Hibernate of it
+   *  tells nobody (MOTIR-10368 skips the self-notification). */
+  ownedByViewer: boolean;
 }
 
 export type OrgFleetCiJobState = 'in_flight' | 'waiting';
