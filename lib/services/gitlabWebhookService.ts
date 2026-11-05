@@ -7,7 +7,7 @@ import type {
 } from '@/lib/git/types';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
-import { gitlabBaseUrl } from '@/lib/gitlab/gitlabOAuth';
+import { changeRequestChecksUrl } from '@/lib/git/checksUrl';
 import { enqueueCodeGraphRefresh } from '@/lib/github/indexEnqueue';
 import {
   syncChangeRequestStatus,
@@ -315,8 +315,7 @@ async function resolveGitlabCiContext(
     kind: 'resolved',
     installation: repo.installation,
     repo,
-    buildChecksUrl: (number) =>
-      `${gitlabBaseUrl()}/${repo.owner}/${repo.name}/-/merge_requests/${number}/pipelines`,
+    buildChecksUrl: (number) => changeRequestChecksUrl('gitlab', repo, number),
   };
 }
 

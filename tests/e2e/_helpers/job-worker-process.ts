@@ -439,6 +439,58 @@ export function jobWorkerEnabled(): boolean {
 }
 
 /**
+ * The keys of the app server's environment a GitHub webhook HANDLER reads — the
+ * GitHub App and its token key, the preview lifecycle's host and its fake's state,
+ * the runner hot path's fleet adapter, and the base URL links are built on.
+ */
+const WEBHOOK_HANDLER_ENV_KEYS: readonly (string | RegExp)[] = [
+  /^GITHUB_/,
+  'MOTIR_BASE_URL',
+  'MOTIR_FLEET_ORCHESTRATOR',
+  'MOTIR_PREVIEW_DOMAIN',
+  'MOTIR_HOSTING_GATE_SIGNING_KEY',
+  'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
+  'MOTIR_FAKE_HOSTING_STATE_PATH',
+];
+
+/**
+ * ⚠️ THE APP SERVER'S WEBHOOK CONFIGURATION, MIRRORED INTO THE WORKER (Bug MOTIR-10425).
+ *
+ * `POST /api/github/webhook` stores a delivery and answers; the
+ * `system.github-webhook-delivery` job processes it. So every GitHub webhook handler
+ * — the status sync, the CI feedback and its promotion, the preview lifecycle, the
+ * runner hot path, the deployment ledger — now runs in THIS process, and reads what
+ * the app server's `webServer.env` gave it: the MOTIR-3498 shape again, a
+ * webServer-only variable a job handler reads.
+ *
+ * ⚠️ ONLY {@link WEBHOOK_HANDLER_ENV_KEYS}, NEVER THE WHOLE ENVIRONMENT. Handed the
+ * server's entire env, this worker ran EVERY job differently, not only the webhook's:
+ * its seam flags installed interceptors whose journals specs hold empty (the fleet-org
+ * seam recorded the worker's readiness reads, `regression-admin-fleet-settings`; the
+ * AI-jobs seam received an `analyze_bug` submission, `regression-ask-single-read`), and
+ * the cloud posture changed what the monitor check did. Which seams this worker
+ * installs stays the decision of the opt-in functions above, one at a time.
+ *
+ * Each lane's config publishes its app server's env as JSON in `E2E_WORKER_APP_ENV`
+ * (`APP_SERVER_ENV` in `playwright.config.ts`, `playwright.acceptance.config.ts`,
+ * `playwright.cloud.config.ts`). A lane that sets none mirrors nothing.
+ */
+export function appServerEnv(): Record<string, string> {
+  const raw = process.env['E2E_WORKER_APP_ENV'];
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value !== 'string') continue;
+    const wanted = WEBHOOK_HANDLER_ENV_KEYS.some((k) =>
+      typeof k === 'string' ? k === key : k.test(key),
+    );
+    if (wanted) env[key] = value;
+  }
+  return env;
+}
+
+/**
  * Start the worker and wait until it has announced itself.
  *
  * Resolves on the worker's own startup line rather than after a sleep — the
@@ -460,6 +512,9 @@ export async function startJobWorker(): Promise<void> {
   const child = spawn(process.execPath, [WORKER_BUNDLE], {
     env: {
       ...process.env,
+      // The app server's own environment — see `appServerEnv`. Applied BEFORE every
+      // key below, so each deliberate worker setting still has the last word.
+      ...appServerEnv(),
       // The worker is a background process; nothing about it is a request path.
       NODE_ENV: process.env['NODE_ENV'] ?? 'production',
       // ⚠️ THE WORKER NEEDS THE SAME HARNESS FLAG THE APP webServer GETS, and
@@ -623,6 +678,9 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
   const child = spawn(process.execPath, [WORKER_BUNDLE], {
     env: {
       ...process.env,
+      // The app server's own environment — see `appServerEnv`. Applied BEFORE every
+      // key below, so each deliberate worker setting still has the last word.
+      ...appServerEnv(),
       NODE_ENV: process.env['NODE_ENV'] ?? 'production',
       E2E_PROD_HARNESS: '1',
       // The private view of the cutover switch — the whole point of this worker.

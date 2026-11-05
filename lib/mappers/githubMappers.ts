@@ -3,12 +3,14 @@ import type {
   GithubInstallation,
   GithubPullRequest,
   GithubRepo,
+  GithubWebhookDelivery,
   PreviewDeployment,
 } from '@/generated/prisma/client';
 import type {
   GithubIdentityDTO,
   GithubInstallationDTO,
   GithubRepoDTO,
+  GithubWebhookDeliveryDTO,
   LinkedPullRequestDto,
   LinkedPullRequestPreviewDto,
   PullRequestLinkCandidateDto,
@@ -226,5 +228,20 @@ export function toPullRequestLinkCandidateDto(
     number: row.number,
     state: row.merged ? 'merged' : row.state === 'open' ? 'open' : 'closed',
     linkedTo: [...linkedTo],
+  };
+}
+
+/** A GitHub webhook inbox row → its DTO (Bug MOTIR-10425). The body stays behind. */
+export function toGithubWebhookDeliveryDTO(row: GithubWebhookDelivery): GithubWebhookDeliveryDTO {
+  return {
+    deliveryId: row.deliveryId,
+    event: row.event,
+    state: row.state,
+    attempts: row.attempts,
+    generation: row.generation,
+    lastError: row.lastError,
+    result: row.result,
+    receivedAt: row.receivedAt.toISOString(),
+    processedAt: row.processedAt?.toISOString() ?? null,
   };
 }

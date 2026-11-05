@@ -66,9 +66,12 @@ export type ResetExecutor = Pick<typeof db, '$executeRawUnsafe'>;
 // create its repositories there, in a file that never mentions fleet accounts.
 // `github_runner_call_event` (MOTIR-8969), the runner-call ledger, is the same
 // class: one suite's calls would read as the next suite's GitHub headroom.
+// `github_webhook_delivery` (MOTIR-10425), the webhook inbox, too: keyed on the
+// delivery GUID alone, so one suite's processed row would make the next suite's
+// delivery of the same fixture GUID a `duplicate` that never runs.
 export async function truncateAuthTables(executor: ResetExecutor = db): Promise<void> {
   await executor.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "fleet_shard", "github_runner_call_event", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "fleet_shard", "github_runner_call_event", "github_webhook_delivery", "user" RESTART IDENTITY CASCADE',
   );
 }
 

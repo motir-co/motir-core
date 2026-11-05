@@ -9,6 +9,8 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { safeEnvironmentUrl } from '@/lib/services/repoDeploymentService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // Preview deployments are INGESTED (Story MOTIR-4906 · MOTIR-5329) — a
 // `deployment_status` delivery through the real route and service, on real
@@ -55,6 +57,8 @@ function deliveryBody(over: {
   };
 }
 
+const DELIVERY_ID = 'deployment-status-route-delivery';
+
 function signedPost(body: unknown): NextRequest {
   const raw = JSON.stringify(body);
   return new NextRequest('http://localhost/api/github/webhook', {
@@ -63,6 +67,7 @@ function signedPost(body: unknown): NextRequest {
     headers: {
       'content-type': 'application/json',
       'x-github-event': 'deployment_status',
+      'x-github-delivery': DELIVERY_ID,
       'x-hub-signature-256': `sha256=${createHmac('sha256', SECRET).update(raw).digest('hex')}`,
     },
   });
@@ -129,10 +134,16 @@ describe('POST /api/github/webhook — deployment_status', () => {
   it('writes a repo_deployment row for a connected repository, through the signed route', async () => {
     const { repo, workspace } = await connectedWorkspace();
     const { POST } = await import('@/app/api/github/webhook/route');
+    // The inbox's enqueue is swallowed: this suite drives the processing itself, and a
+    // real system event would outlive the workspace cascade into the next file.
+    const swallowed = spyOnJobDispatch();
 
     const res = await POST(signedPost(deliveryBody({})));
-    expect(res.status).toBe(200);
-    expect((await res.json()).result).toEqual({
+    // Stored and answered 202; the inbox job records it (Bug MOTIR-10425).
+    expect(res.status).toBe(202);
+    await githubWebhookInboxService.processDelivery({ deliveryId: DELIVERY_ID, generation: 0 });
+    swallowed.mockRestore();
+    expect((await githubWebhookInboxService.findDelivery(DELIVERY_ID))?.result).toEqual({
       event: 'deployment_status',
       outcome: 'recorded',
     });

@@ -3,6 +3,7 @@ import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
+import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
 import { pullRequestAutoMergeService } from '@/lib/services/pullRequestAutoMergeService';
 import { designAutoRerunService } from '@/lib/services/designAutoRerunService';
 import { gateResumeService } from '@/lib/services/gateResumeService';
@@ -230,6 +231,9 @@ export const jobServices = {
   // The open-delivery reconcile (MOTIR-5390): re-reads open, delivering pull
   // requests from GitHub and replays a close whose webhook delivery was lost.
   pullRequestReconcile: pullRequestReconcileService,
+  // The GitHub webhook inbox (Bug MOTIR-10425): processes each delivery the webhook
+  // route persisted, and the sweep that re-enqueues a lost one and prunes the rest.
+  githubWebhookInbox: githubWebhookInboxService,
   pullRequestAutoMerge: pullRequestAutoMergeService,
   // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
   // request for an awaiting `agent_review` gate.

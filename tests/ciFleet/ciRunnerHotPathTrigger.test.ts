@@ -20,6 +20,7 @@ import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
+import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
 
 // THE HOT-PATH BOOT TRIGGER against real Postgres (Story MOTIR-1916 ·
 // MOTIR-1996) — `docs/decisions/ci-runner-fleet.md` §6.
@@ -331,7 +332,10 @@ describe('a FAILING send never costs the delivery its 200', () => {
     expect(error.mock.calls[0]?.[0]).toContain('hot-path boot dispatch');
   });
 
-  it('the ROUTE still acks 200 — the ack is what stops GitHub retrying', async () => {
+  it('the ROUTE still acks 2xx, and the stored delivery records the intent', async () => {
+    // Since MOTIR-10425 the route answers before anything runs, so the ack no longer
+    // depends on the handler at all — and GitHub never retried a failed delivery
+    // anyway. The handler runs in the inbox job, and records the intent there.
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     captured.restore();
     spyOnJobDispatch().mockRejectedValue(new Error('inngest unreachable'));
@@ -344,17 +348,22 @@ describe('a FAILING send never costs the delivery its 200', () => {
         method: 'POST',
         headers: {
           'x-github-event': 'workflow_job',
+          'x-github-delivery': 'hot-path-route-delivery',
           'x-hub-signature-256': `sha256=${createHmac('sha256', WEBHOOK_SECRET).update(rawBody).digest('hex')}`,
         },
         body: rawBody,
       }),
     );
 
-    expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({
-      ok: true,
-      result: { event: 'workflow_job', outcome: 'recorded' },
+    expect(res.status).toBe(202);
+    expect(await res.json()).toMatchObject({ ok: true, deliveryId: 'hot-path-route-delivery' });
+    await githubWebhookInboxService.processDelivery({
+      deliveryId: 'hot-path-route-delivery',
+      generation: 0,
     });
+    expect(
+      (await githubWebhookInboxService.findDelivery('hot-path-route-delivery'))?.result,
+    ).toEqual({ event: 'workflow_job', outcome: 'recorded' });
   });
 });
 
