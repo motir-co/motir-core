@@ -1,3 +1,4 @@
+import { reviewToRunService } from '@/lib/services/reviewToRunService';
 import {
   ReviewAgainForbiddenError,
   ReviewAgainGateNotFoundError,
@@ -8,6 +9,7 @@ import type { AgentReviewRequestedData } from '@/lib/jobs/types';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
@@ -46,7 +48,13 @@ export type AgentReviewStartOutcome =
   | { outcome: 'already_started'; dispatchRunId: string }
   | {
       outcome: 'skipped';
-      why: 'gate_missing' | 'not_awaiting' | 'version_moved' | 'could_not_run' | 'run_in_flight';
+      why:
+        | 'gate_missing'
+        | 'not_awaiting'
+        | 'version_moved'
+        | 'could_not_run'
+        | 'run_in_flight'
+        | 'source_own';
     }
   | { outcome: 'refused'; reason: string };
 
@@ -115,7 +123,11 @@ export const agentReviewStartService = {
         idempotencyKey,
         tx,
       );
-      return { gate, item, already };
+      // The source is read HERE, at start time, and not at the raise: every raise path
+      // funnels through this job, so a request queued before a switch to `own` is
+      // skipped, and no raise site can still start a run (§12.10).
+      const settings = item ? await projectRepository.findMergeSettings(item.projectId, tx) : null;
+      return { gate, item, already, source: settings?.reviewAgentSource ?? 'hosted' };
     });
     // A redelivery of a request whose run was opened: it is that run, whatever it did.
     if (read.already) return { outcome: 'already_started', dispatchRunId: read.already.id };
@@ -127,6 +139,13 @@ export const agentReviewStartService = {
     if (gate.state !== 'awaiting') return { outcome: 'skipped', why: 'not_awaiting' };
     if (gate.subjectVersion !== subjectVersion) return { outcome: 'skipped', why: 'version_moved' };
     if (gate.reviewUnavailableReason !== null) return { outcome: 'skipped', why: 'could_not_run' };
+    // `own`: the gate waits for a verdict through the user-token door. Nothing is
+    // started, billed or recorded as could-not-run (§12.6 is a hosted-only state).
+    // It is now a review to run, and its routed person is told once (MOTIR-10340).
+    if (read.source === 'own') {
+      await reviewToRunService.notifyRaised(workspaceId, gateId);
+      return { outcome: 'skipped', why: 'source_own' };
+    }
     if ((await runningReviewRuns(workspaceId, [gateId])).length > 0) {
       return { outcome: 'skipped', why: 'run_in_flight' };
     }
@@ -192,6 +211,10 @@ export const agentReviewStartService = {
 
         if (locked.state !== 'awaiting' || locked.subjectVersion === null) {
           throw new ReviewAgainNotOfferedError(gateId, 'not_awaiting');
+        }
+        const settings = await projectRepository.findMergeSettings(item.projectId, tx);
+        if (settings?.reviewAgentSource === 'own') {
+          throw new ReviewAgainNotOfferedError(gateId, 'source_own');
         }
         const gate = await approvalGateRepository.findById(gateId, tx);
         if (!gate?.reviewUnavailableReason)

@@ -382,6 +382,10 @@ async function syncOnce(
       // head rather than the newest check row's commit. `undefined` (not asserted)
       // when the payload names none, which leaves the stored head alone.
       headSha: cr.headSha ?? undefined,
+      // The author (MOTIR-10340), on every delivery that names one; `undefined` (not
+      // asserted) otherwise, which leaves a stored author alone.
+      authorGithubUserId: cr.author?.githubUserId ?? undefined,
+      authorLogin: cr.author?.login ?? undefined,
       // ⚠️ NO LINK IS WRITTEN HERE, and there is no longer a field to omit
       // (MOTIR-3721 stopped writing it, MOTIR-3757 dropped it). A delivery says
       // what a pull request IS; only `link_pull_request` says which cards it
@@ -1481,6 +1485,9 @@ export async function resyncLinkedPullRequest(
     draft: subject.draft,
     // The stored head, echoed rather than guessed (MOTIR-7005); null writes nothing.
     headSha: subject.headSha,
+    // A link carries no payload, so it does not assert the author (MOTIR-10340): `null`
+    // here is written as "not asserted", which leaves the stored author alone.
+    author: null,
   };
 
   // ROUTED THROUGH THE SEAM, not a literal (MOTIR-5002). The `'implemented'` this

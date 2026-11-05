@@ -790,6 +790,20 @@ export interface JobEventDataMap {
    *  (`lib/jobs/definitions/agentReviewRequested.ts`, MOTIR-6820), and emitted again by
    *  *Review again*. */
   'agent-review/requested': AgentReviewRequestedData;
+  /** A person DISMISSED a standing agent send-back (Story MOTIR-10327 · MOTIR-10334;
+   *  `approval-gates.md` §12.15). Emitted after the dismissal commits, never on a
+   *  rollback. The bot-posting consumer (MOTIR-10335) dismisses the bot's own Request
+   *  changes on the card's pull requests. */
+  'review/dismissed': ReviewDismissedData;
+  /** An agent verdict that ANSWERS its version (`decided` or `recorded`) committed (Story
+   *  MOTIR-10327 · MOTIR-10335; `approval-gates.md` §12 rule 7) — Motir's App bot posts it
+   *  on each open pull request of the card's set. Consumed by `review-bot/post`. */
+  'review-bot/post.requested': ReviewBotPostRequestedData;
+  /** Something that can retire the bot's standing Request changes on a card committed —
+   *  an answering verdict, or the project's posting switch turning off (rule 8). Consumed
+   *  by `review-bot/reconcile`; a Dismiss reaches the same reconcile through
+   *  `review/dismissed`. */
+  'review-bot/reconcile.requested': ReviewBotReconcileRequestedData;
   /** A person sent a HOSTED design back with Revise (MOTIR-700): start its automatic
    *  re-run, or record why not. Emitted by the design handler AFTER the refusal commits. */
   'design/auto-rerun.requested': DesignAutoRerunRequestedData;
@@ -950,6 +964,32 @@ export interface AgentReviewRequestedData {
    * emitted before it existed: the consumer then reads it as the raise.
    */
   idempotencyKey?: string;
+}
+
+/** The `review-bot/post.requested` payload (MOTIR-10335) — ids only; the job re-reads. */
+export interface ReviewBotPostRequestedData {
+  workspaceId: string;
+  /** The `review_verdict_record` to post. */
+  recordId: string;
+}
+
+/** The `review-bot/reconcile.requested` payload (MOTIR-10335) — ids only. */
+export interface ReviewBotReconcileRequestedData {
+  workspaceId: string;
+  /** The card whose standing bot Request changes are reconciled. */
+  workItemId: string;
+}
+
+/** The `review/dismissed` event payload (Story MOTIR-10327 · MOTIR-10334) — ids only. */
+export interface ReviewDismissedData {
+  workspaceId: string;
+  projectId: string;
+  /** The card whose send-back was dismissed. */
+  workItemId: string;
+  /** The delivery-set version the dismissed send-back was about. */
+  subjectVersion: string;
+  /** The `review_dismissal` row — who, when, why. */
+  dismissalId: string;
 }
 
 /**

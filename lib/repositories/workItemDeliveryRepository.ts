@@ -457,6 +457,46 @@ export const workItemDeliveryRepository = {
   },
 
   /**
+   * The card's OPEN GitHub pull requests, with what a bot review needs to address each
+   * one (Story MOTIR-10327 · MOTIR-10335) — closed and merged ones are skipped, and so is
+   * any other host's change request.
+   */
+  async listOpenGithubTargetsByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    {
+      pullRequestId: string;
+      number: number;
+      owner: string;
+      name: string;
+      installationId: string;
+    }[]
+  > {
+    const rows = await tx.workItemDelivery.findMany({
+      where: {
+        workItemId,
+        pullRequest: { provider: 'github', state: 'open', merged: false },
+        repo: { provider: 'github' },
+      },
+      select: {
+        pullRequest: { select: { id: true, number: true } },
+        repo: {
+          select: { owner: true, name: true, installation: { select: { installationId: true } } },
+        },
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map((row) => ({
+      pullRequestId: row.pullRequest.id,
+      number: row.pullRequest.number,
+      owner: row.repo.owner,
+      name: row.repo.name,
+      installationId: row.repo.installation.installationId,
+    }));
+  },
+
+  /**
    * Every card ONE pull request delivers — the direction the singular FK could not
    * express at all.
    *

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { activityService } from '@/lib/services/activityService';
@@ -151,6 +152,22 @@ function partText(part: ActivityEntryPartDto): string {
       return `deleted a comment by ${valueText(part.author)} (${part.replyCount} replies)`;
     case 'generic':
       return `${part.key}: ${part.from ?? '—'} → ${part.to ?? '—'}`;
+    // An agent's verdict (MOTIR-10338): what it said, whether it decided anything, which
+    // commits it read, and who ran it — the findings in full for an agent reading the card.
+    case 'agentVerdict': {
+      const agent = part.hosted ? "Motir's hosted agent" : `${part.harness} (${part.model})`;
+      const said = part.verdict === 'pass' ? 'passed the review' : 'asked for changes';
+      const decided =
+        part.outcome === 'late'
+          ? ' — late: it decided nothing'
+          : part.outcome === 'second'
+            ? ' — a second review: it decided nothing'
+            : '';
+      const findings = part.findingsExcerpt
+        ? `\n    findings:\n    ${part.findingsExcerpt.split('\n').join('\n    ')}`
+        : '';
+      return `agent verdict: ${agent} ${said} at ${reviewCommitsLabel(part.subjectVersion)}${decided}${findings}`;
+    }
   }
 }
 

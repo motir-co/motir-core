@@ -45,7 +45,11 @@ export type RevisionChangeKind =
   | 'archived'
   | 'unarchived'
   | 'comment_deleted'
-  | 'deleted';
+  | 'deleted'
+  // An agent's review verdict was recorded (Story MOTIR-10327 · MOTIR-10338) — written
+  // by `reviewVerdictRecordService` beside every verdict record, diff
+  // `{ agentVerdict: { from: null, to: <snapshot> } }` (`lib/agentReview/verdictActivity.ts`).
+  | 'agent_verdict';
 
 /**
  * The arguments a service write passes when recording a revision. `diff` is

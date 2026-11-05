@@ -1167,5 +1167,34 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.79.0` after MOTIR-10380's
  *   `1.78.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.80.0` — MOTIR-10333 (Story MOTIR-10327, the agent review path) adds
+ *   `submitWorkItemReviewVerdict` (`POST /api/v1/work-items/{key}/review-verdict`,
+ *   `work_item:edit`, `200` with `ReviewVerdictResult`) — a person's OWN review agent's
+ *   one verdict, with the person's own token, over the same `reviewVerdictService.submit`
+ *   door as the MCP `submit_review_verdict` tool (`docs/decisions/approval-gates.md`
+ *   §12.11–§12.14). The approval-gate record gains the supersede cause
+ *   `agent_changes_requested`. New codes `REVIEW_VERDICT_LATE`, `REVIEW_VERDICT_SECOND`
+ *   (409), `REVIEW_NOTHING_TO_REVIEW` (404), `REVIEW_TARGET_NOT_RUN_TARGET` and
+ *   `INVALID_REVIEW_VERDICT` (422).
+ *
+ *   Additive: one new operation, one new component, a new member of an enum every client
+ *   must tolerate unknown members of, and new codes for new conditions (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.80.0` after MOTIR-10381's
+ *   `1.79.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.81.0` — MOTIR-10334 (Story MOTIR-10327) adds `dismissWorkItemReview`
+ *   (`POST /api/v1/work-items/{key}/review-dismissal`, `work_item:edit`, `200` with
+ *   `ReviewDismissalResult`) — the routed person dismisses the review agent's standing
+ *   send-back at the current version, with a reason; the approve-and-merge gate is asked
+ *   again at the same version (`docs/decisions/approval-gates.md` §12.15). New codes
+ *   `REVIEW_DISMISSAL_FORBIDDEN` (403), `NO_STANDING_REVIEW_SENDBACK`,
+ *   `REVIEW_SENDBACK_ALREADY_DISMISSED`, `REVIEW_DISMISSAL_STALE` (409) and
+ *   `REASON_REQUIRED` (422).
+ *
+ *   Additive: one new operation, one new component and new codes for new conditions.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.81.0` after `1.80.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.79.0';
+export const V1_CONTRACT_VERSION = '1.81.0';

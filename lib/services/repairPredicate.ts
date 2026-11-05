@@ -317,8 +317,7 @@ export async function evaluateRepair(
           reviewerName: byAgent
             ? REVIEW_AGENT_REVIEWER_NAME
             : reviewerNameOf(person, review.decidedByLabel),
-          // `findLatestDecidedByWorkItem` reads only rows whose `decidedAt` is set.
-          decidedAt: (review.decidedAt as Date).toISOString(),
+          decidedAt: review.decidedAt.toISOString(),
         },
         pullRequests: openRows.map((row) =>
           toRepairPullRequest({

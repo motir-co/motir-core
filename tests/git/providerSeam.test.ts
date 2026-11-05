@@ -60,6 +60,21 @@ describe('github.parseChangeRequestEvent', () => {
       draft: false,
       // MOTIR-7005 — the head COMMIT, the host's word for where the pull request is.
       headSha: 'abc123',
+      // MOTIR-10340 — no `user` on this payload, so no author.
+      author: null,
+    });
+  });
+
+  it('reads the author from `pull_request.user` — the id as a string, and the login (MOTIR-10340)', () => {
+    expect(
+      github.parseChangeRequestEvent(prEvent({ user: { id: 4242, login: 'octo', type: 'User' } })),
+    ).toMatchObject({ author: { githubUserId: '4242', login: 'octo' } });
+    // An id without a login, or a login without an id, names no author.
+    expect(github.parseChangeRequestEvent(prEvent({ user: { id: 4242 } }))).toMatchObject({
+      author: null,
+    });
+    expect(github.parseChangeRequestEvent(prEvent({ user: { login: 'octo' } }))).toMatchObject({
+      author: null,
     });
   });
 
@@ -119,6 +134,7 @@ describe('github.changeRequestLifecycle', () => {
     title: null,
     draft: false,
     headSha: null,
+    author: null,
   } as const;
 
   it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {

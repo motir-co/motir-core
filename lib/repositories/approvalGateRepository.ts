@@ -1214,6 +1214,47 @@ export const approvalGateRepository = {
   },
 
   /**
+   * THE REVIEWS TO RUN routed to the reader (Story MOTIR-10327 · MOTIR-10340;
+   * `approval-gates.md` §12.1's 2026-11-04 amendment) — every AWAITING `agent_review` gate
+   * of a project whose review agent is on with the source `own`, routed by §2's rule
+   * (`assigneeId ?? reporterId`) exactly as {@link findAwaitingRoutedTo} routes a card
+   * gate. Oldest first, bounded by `take`.
+   *
+   * ⚠️ A SEPARATE READ, NOT AN ARM OF `awaitingRoutedToWhere`. A review to run asks the
+   * person to RUN something, not to decide it, so it is listed as its own row kind and is
+   * never counted as an approval: that predicate's `kind: { not: 'agent_review' }` stays,
+   * and the approvals list, its count, the home count and the marker are unchanged.
+   *
+   * ⚠️ THE SOURCE IS READ FROM THE PROJECT, NOT THE GATE, so a switch to `hosted` takes a
+   * gate off this list at once — the hosted run is then the one answering it.
+   */
+  async findAwaitingReviewsToRunRoutedTo(
+    scope: Pick<AwaitingRoutingScope, 'projectIds' | 'userId'>,
+    take: number,
+    tx: Prisma.TransactionClient,
+  ) {
+    if (scope.projectIds.length === 0) return [];
+    return tx.approvalGate.findMany({
+      where: {
+        projectId: { in: scope.projectIds },
+        kind: 'agent_review',
+        state: 'awaiting',
+        project: { reviewAgentEnabled: true, reviewAgentSource: 'own' },
+        workItem: { archivedAt: null, ...routedCardWhere(scope.userId) },
+      },
+      select: {
+        id: true,
+        projectId: true,
+        subjectVersion: true,
+        createdAt: true,
+        workItem: { select: { id: true, identifier: true, title: true } },
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take,
+    });
+  },
+
+  /**
    * HOW MANY gates {@link findAwaitingRoutedTo} would return over the whole set
    * — the tab strip's badge, and the pager's denominator.
    *
@@ -1450,6 +1491,14 @@ function planningSessionLiveWhere(scope: AwaitingRoutingScope): Prisma.ApprovalG
 }
 
 /**
+ * §2's routed-card clause, `assigneeId ?? reporterId`, written ONCE — the approvals
+ * predicate below and the reviews-to-run read (MOTIR-10327) both route by it.
+ */
+function routedCardWhere(userId: string): Prisma.WorkItemWhereInput {
+  return { OR: [{ assigneeId: userId }, { assigneeId: null, reporterId: userId }] };
+}
+
+/**
  * §2's routing predicate, written ONCE — the list and the count both call it.
  *
  * The `OR` is the SQL spelling of `assigneeId ?? reporterId`: the second arm is
@@ -1464,9 +1513,7 @@ function awaitingRoutedToWhere(scope: AwaitingRoutingScope): Prisma.ApprovalGate
     state: 'awaiting',
     OR: [
       {
-        workItem: {
-          OR: [{ assigneeId: scope.userId }, { assigneeId: null, reporterId: scope.userId }],
-        },
+        workItem: routedCardWhere(scope.userId),
       },
       // ⚠️ THE CARD-LESS ARM (Story MOTIR-6012 · MOTIR-6034; ADR `approval-gates.md`
       // §11.6). A gate with no work item has no assignee to re-derive routing from, so

@@ -397,3 +397,56 @@ describe('the room decides nothing about access, and its door is browse-only', (
     ).toBe(true);
   });
 });
+
+// THE APPROVAL-RECORD LINE (MOTIR-10338; `approvals-row--review-path.mock.html` panel A3).
+describe('an approved merge names the review it stood on', () => {
+  const merge = (review: ApprovalRecordDecidedRowDto['review']) =>
+    decidedRow({
+      kind: 'pull_request_approval',
+      state: 'approved',
+      subject: null,
+      review,
+    });
+
+  it('draws the line under the row, spanning it, and lets the row grow', () => {
+    renderWithIntl(
+      <ApprovalRecordsList
+        records={page({
+          sections: {
+            awaiting: { items: [], total: 0 },
+            decided: {
+              items: [merge({ kind: 'reviewed', commits: 'acme/web#88 @ 3f2a9c1' })],
+              total: 1,
+            },
+          },
+          total: 1,
+        })}
+      />,
+    );
+    const row = screen.getByTestId('approval-row-gate-d');
+    const line = within(row).getByTestId('approval-review-line');
+    expect(line.textContent).toBe(
+      'Approved by Otto Other · reviewed by agent at acme/web#88 @ 3f2a9c1',
+    );
+    expect(line.parentElement?.className).toContain('md:col-span-full');
+    // The fixed one-line height gives way, or the line would be clipped.
+    expect(row.className).not.toContain('md:h-11');
+  });
+
+  it('draws no line, and keeps the one-line row, where the record carries none', () => {
+    renderWithIntl(
+      <ApprovalRecordsList
+        records={page({
+          sections: {
+            awaiting: { items: [], total: 0 },
+            decided: { items: [merge(null)], total: 1 },
+          },
+          total: 1,
+        })}
+      />,
+    );
+    const row = screen.getByTestId('approval-row-gate-d');
+    expect(within(row).queryByTestId('approval-review-line')).toBeNull();
+    expect(row.className).toContain('md:h-11');
+  });
+});

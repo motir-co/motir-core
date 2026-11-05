@@ -1,6 +1,7 @@
 import type { JobQueueRun, Prisma } from '@/generated/prisma/client';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { alertTerminalJobFailure } from '@/lib/monitoring/jobFailureAlert';
+import type { JobRunFailure } from '@/lib/dto/jobs';
 import { engineJob } from './registry';
 import { buildEngineContext, UnknownEngineJobError } from './runner';
 import { jobServices } from '../services';
@@ -204,15 +205,31 @@ export async function recordEngineTerminalFailure(
 }
 
 /** Serialize an unknown thrown value into the ledger's failure shape. */
-function serializeFailure(err: unknown): { message: string; stack?: string; code?: string } {
+function serializeFailure(err: unknown): JobRunFailure {
   if (err instanceof Error) {
-    const failure: { message: string; stack?: string; code?: string } = { message: err.message };
+    const failure: JobRunFailure = { message: err.message };
     if (err.stack) failure.stack = err.stack;
     const maybeCode = (err as { code?: unknown }).code;
     if (typeof maybeCode === 'string') failure.code = maybeCode;
+    const data = serializeFailureData((err as { failureData?: unknown }).failureData);
+    if (data) failure.data = data;
     return failure;
   }
   return { message: String(err) };
+}
+
+/**
+ * JSON-roundtrip an error's `failureData` (MOTIR-10429). Degrades to `undefined`
+ * rather than failing the write, for the reason `serializeOutput` gives: the
+ * failure row must land even when the extra facts cannot.
+ */
+function serializeFailureData(data: unknown): Record<string, unknown> | undefined {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return undefined;
+  try {
+    return JSON.parse(JSON.stringify(data)) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

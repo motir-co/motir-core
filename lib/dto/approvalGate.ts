@@ -4,6 +4,11 @@ import type {
   ChosenOption,
   ParsedChoice,
 } from '@/lib/approvalGates/choiceOptions';
+import type {
+  ApprovalRowReviewDTO,
+  GateReviewPathDTO,
+  ReviewToRunRowDTO,
+} from '@/lib/dto/reviewState';
 import type { GateRefusal } from '@/lib/approvalGates/refusals';
 import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRecord';
 import type {
@@ -20,6 +25,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import type { ApprovedReviewDTO } from '@/lib/dto/reviewState';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
@@ -190,6 +196,9 @@ export type ApprovalGateSupersedeCauseDTO =
   | 'queue_failed'
   /** The project turned its review agent OFF while the review was awaiting (ADR §12.5). */
   | 'review_agent_disabled'
+  /** The review agent requested changes at the version an awaiting approve-and-merge gate
+   *  asked about, so the card was sent back (MOTIR-10333; ADR §12.14). */
+  | 'agent_changes_requested'
   /** The gate's subject no longer resolves through its kind's handler, so a read that
    *  observed it withdrew the question (MOTIR-7146). */
   | 'subject_gone'
@@ -953,6 +962,12 @@ export interface ApprovalQueueRowDto {
    * unbuilt.
    */
   subject: ApprovalGateSubjectSummaryDTO | null;
+  /**
+   * THE AGENT REVIEW of an approve-and-merge row (Story MOTIR-10327 · MOTIR-10342; design
+   * notes § 32.3–32.4) — its review line and Reviewed badge at the card's current version.
+   * Absent on every other kind, and for a card the read model answered nothing about.
+   */
+  review?: ApprovalRowReviewDTO | null;
 }
 
 /**
@@ -970,6 +985,11 @@ export interface ApprovalQueueDto {
   total: number;
   /** `total > items.length`: the ceiling cut the set, and the list must say so. */
   truncated: boolean;
+  /**
+   * THE REVIEWS TO RUN routed to the reader (MOTIR-10342; § 32.5) — their own row kind,
+   * never counted in `total`: they ask the reader to RUN a review, not to decide.
+   */
+  reviewsToRun?: ReviewToRunRowDTO[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1049,6 +1069,13 @@ export interface ApprovalRecordDecidedRowDto {
    * state and kind, and on a GitHub-synced refusal.
    */
   refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
+  /**
+   * WHAT ANSWERED THE AGENT REVIEW AT THE APPROVED VERSION (MOTIR-10338; design notes § 32,
+   * mock A3) — the record line's second clause. Set only on an APPROVED
+   * `pull_request_approval` row with a `subjectVersion`; null on every other row. Optional,
+   * so a row built before the line existed reads as none drawn.
+   */
+  review?: ApprovedReviewDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */
@@ -1314,6 +1341,10 @@ export interface ApprovalGateOverlayReadDTO {
   movedSince: StampComponent[];
   /** The approval a RE-ASKED merge gate replaced (MOTIR-5863) — `WorkItemGateRead.earlierApproval`. */
   earlierApproval: EarlierApprovalDTO | null;
+  /** The review an APPROVED merge stood on (MOTIR-10338) — `WorkItemGateRead.approvedReview`. */
+  approvedReview?: ApprovedReviewDTO | null;
+  /** The review path on the frame (MOTIR-10342) — `WorkItemGateRead.reviewPath`. */
+  reviewPath?: GateReviewPathDTO | null;
   subject: ApprovalGateOverlaySubjectDTO;
 }
 

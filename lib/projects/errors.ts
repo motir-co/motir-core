@@ -218,6 +218,18 @@ export class MergeModeReviewAgentOnError extends Error {
 }
 
 /**
+ * A review-source write naming something other than `hosted` or `own` (Story
+ * MOTIR-10327 · MOTIR-10332; `approval-gates.md` §12.10). → 400.
+ */
+export class InvalidReviewAgentSourceError extends Error {
+  readonly code = 'INVALID_REVIEW_AGENT_SOURCE' as const;
+  constructor(readonly value: unknown) {
+    super('`reviewAgentSource` must be "hosted" or "own".');
+    this.name = 'InvalidReviewAgentSourceError';
+  }
+}
+
+/**
  * A bug-destination write carrying something other than a folder id or `null`
  * (Story MOTIR-4927 · MOTIR-4938). `null` is a CHOICE — the project root — so it
  * is valid; a missing key, a number or an empty string is not. → 400.

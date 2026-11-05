@@ -202,6 +202,28 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 409 — a LATE verdict (`approval-gates.md` §12.5): a version the gate no longer asks
   // about, or a gate already superseded or decided. Recorded on the run; nothing decided.
   REVIEW_STALE: 409,
+  // ── MOTIR-10333, the USER-TOKEN verdict door (`approval-gates.md` §12.11–§12.13) ──
+  // 404 — the card delivers no pull request: there is no version a review could be about.
+  REVIEW_NOTHING_TO_REVIEW: 404,
+  // 409 — a LATE verdict (a version the card no longer has) or a SECOND one (the version
+  // was already reviewed). Stored with that outcome; nothing decided.
+  REVIEW_VERDICT_LATE: 409,
+  REVIEW_VERDICT_SECOND: 409,
+  // 422 — the card is not a run target; the message names the one to review instead.
+  REVIEW_TARGET_NOT_RUN_TARGET: 422,
+  // 422 — the service's own body guard (findings on a send-back, evidence on `met`, a
+  // harness and a model); the body schema refuses the same input first as `INVALID_BODY`.
+  INVALID_REVIEW_VERDICT: 422,
+  // ── MOTIR-10334, DISMISS THE REVIEW (`approval-gates.md` §12.15) ──
+  // 403 — the caller holds `work_item:edit` but is not the routed person (§12.3).
+  REVIEW_DISMISSAL_FORBIDDEN: 403,
+  // 409 — nothing to dismiss at the current version, already dismissed, or a push moved
+  // the version so the send-back has ended. Nothing written.
+  NO_STANDING_REVIEW_SENDBACK: 409,
+  REVIEW_SENDBACK_ALREADY_DISMISSED: 409,
+  REVIEW_DISMISSAL_STALE: 409,
+  // 422 — the reason is empty once trimmed, or over 2000 characters.
+  REASON_REQUIRED: 422,
   // ── MOTIR-6538, a hosted run's git credentials ─────────────────────────────
   // 409 — the run ended between its read and the mint (a close racing the call).
   // The same fact as DISPATCH_RUN_TERMINAL, raised from the mint's own re-read.

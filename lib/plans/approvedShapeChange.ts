@@ -97,6 +97,9 @@ export const APPROVED_SHAPE_IGNORED_KEYS: ReadonlySet<string> = new Set([
   // marking an approved card is not a change to the work the plan approved
   'obsolescence',
   'obsolescenceNoteMd',
+  // a review agent's verdict on the card's delivery (Story MOTIR-10327 · MOTIR-10333) —
+  // a judgement of the work, recorded on the card's trail; it changes nothing the plan approved
+  'agentVerdict',
   // identity columns only a `created` row carries
   'projectId',
   'key',

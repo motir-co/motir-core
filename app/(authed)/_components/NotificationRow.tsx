@@ -7,12 +7,14 @@ import {
   ShieldAlert,
   AtSign,
   Bell,
+  Bot,
   Check,
   GitPullRequest,
   MessageSquare,
   Moon,
   UserCheck,
 } from 'lucide-react';
+import { agentVerdictAnchor } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
 import type { NotificationDTO } from '@/lib/dto/notifications';
 
@@ -59,12 +61,23 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   // glyph the Fleet page's Hibernate control carries. It HAS an actor — the
   // admin — so it keeps the initial avatar and is NOT in ACTORLESS_TYPES.
   agent_hibernated_by_admin: { Icon: Moon, badge: 'bg-(--el-notif-agent-hibernated)' },
+  // MOTIR-10340 — a review waits for the recipient's OWN agent. `Bot`, the glyph the review
+  // markers and the To approve "review to run" row draw (`design/github/design-notes.md`
+  // § 32.1, § 32.5), so the same thing looks the same wherever it is said.
+  review_to_run: { Icon: Bot, badge: 'bg-(--el-notif-review-to-run)' },
+  // MOTIR-10338 — an agent sent the recipient's card back. The same `Bot` glyph, on the
+  // To fix hue, because the row reports the refusal the To fix tag stands for.
+  review_sent_back: { Icon: Bot, badge: 'bg-(--el-notif-review-sent-back)' },
 };
 
 /** Types whose subject is a PROJECT rather than a work item — no actor, and a
  *  destination resolved from the TYPE. `code_access_refused` is the first
  *  (MOTIR-5016); `Notification.workItemId` is null on these rows. */
-const ACTORLESS_TYPES = new Set<string>(['code_access_refused']);
+const ACTORLESS_TYPES = new Set<string>([
+  'code_access_refused',
+  'review_to_run',
+  'review_sent_back',
+]);
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
 
 /** Pick the summary i18n key for a notification's type (+ whether it deep-links). */
@@ -76,6 +89,10 @@ function summaryKey(type: string, hasKey: boolean): string {
   if (type === 'code_access_refused') return 'summary.accessRefused';
   // Also not about a work item, so also checked before `hasKey` (MOTIR-10368).
   if (type === 'agent_hibernated_by_admin') return 'summary.agentHibernatedByAdmin';
+  // Actorless too (MOTIR-10340): its summary names no actor, so it never takes the
+  // actor-shaped `generic` fallback below.
+  if (type === 'review_to_run' && hasKey) return 'summary.reviewToRun';
+  if (type === 'review_sent_back' && hasKey) return 'summary.reviewSentBack';
   if (!hasKey) return 'summary.genericNoKey';
   switch (type) {
     case 'mentioned':
@@ -138,7 +155,10 @@ export function NotificationRow({
     data.kind === 'code_access_refused'
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
       : issueKey
-        ? `/items/${issueKey}`
+        ? // A send-back lands on its own activity entry, whose findings open there.
+          data.kind === 'review_sent_back' && data.recordId
+          ? `/items/${issueKey}#${agentVerdictAnchor(data.recordId)}`
+          : `/items/${issueKey}`
         : null;
   const createdAt = new Date(notification.createdAt);
 

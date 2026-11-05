@@ -9,6 +9,8 @@ import type { WorkbenchApprovalsWindowDto } from '@/lib/dto/workbench';
 import { useLiveRows } from './useLiveRows';
 import { useTabWindowContent } from './useTabWindowContent';
 import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
+import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
+import { ReviewToRunRow } from '@/components/approvals/ReviewToRunRow';
 
 // THE APPROVALS TAB'S LIST (Story MOTIR-4879 · Subtask MOTIR-4794), built to
 // `design/workbench/approvals-row.mock.html` and its § 20 in
@@ -35,12 +37,15 @@ import type { ApprovalQueueRowDto } from '@/lib/dto/approvalGate';
 // and a changed one re-renders only the rows it changed.
 
 const GRID_TEMPLATE = APPROVALS_GRID_TEMPLATE;
+const EMPTY_REVIEWS_TO_RUN: ReviewToRunRowDTO[] = [];
 
 type Ceiling = { shown: number; total: number } | null;
 
 interface ApprovalsContent {
   rows: ApprovalQueueRowDto[];
   ceiling: Ceiling;
+  /** The reviews to run routed to the reader (MOTIR-10342; § 32.5) — their own rows. */
+  reviewsToRun: ReviewToRunRowDTO[];
 }
 
 /** The tab's content out of a window answer — the same shape `<ApprovalsTab>` hands in. */
@@ -49,13 +54,17 @@ function contentOf(window: WorkbenchApprovalsWindowDto): ApprovalsContent {
   return {
     rows: queue.items,
     ceiling: queue.truncated ? { shown: queue.items.length, total: queue.total } : null,
+    reviewsToRun: queue.reviewsToRun ?? [],
   };
 }
 
 function mergeContent(prev: ApprovalsContent, next: ApprovalsContent): ApprovalsContent {
   const rows = mergeRowsByIdentity(prev.rows, next.rows, (row) => row.gateId);
   const ceiling = keepIfEqual(prev.ceiling, next.ceiling);
-  return rows === prev.rows && ceiling === prev.ceiling ? prev : { rows, ceiling };
+  const reviewsToRun = keepIfEqual(prev.reviewsToRun, next.reviewsToRun);
+  return rows === prev.rows && ceiling === prev.ceiling && reviewsToRun === prev.reviewsToRun
+    ? prev
+    : { rows, ceiling, reviewsToRun };
 }
 
 /** One row, re-rendered only when its gate, its held state or its `New` mark moved. */
@@ -89,8 +98,11 @@ export function ApprovalsList({
   label,
   ceiling,
   empty,
+  reviewsToRun = EMPTY_REVIEWS_TO_RUN,
 }: {
   rows: ApprovalQueueRowDto[];
+  /** The reviews to run on the first paint (MOTIR-10342); the window read's after it. */
+  reviewsToRun?: ReviewToRunRowDTO[];
   label: string;
   /**
    * Set when the read's ceiling CUT the set: how many rows are shown and how many
@@ -115,7 +127,7 @@ export function ApprovalsList({
   empty: ReactNode;
 }) {
   const t = useTranslations('workbench.approvals');
-  const seed = useSeed(rows, ceiling);
+  const seed = useSeed(rows, ceiling, reviewsToRun);
   const { content } = useTabWindowContent('approvals', seed, contentOf, mergeContent);
   // THE LIVE RULE, for the one tab § 20's settled-row decision is about
   // (Story MOTIR-5238 · MOTIR-5242). The reset key is the "next load" § 26
@@ -126,7 +138,7 @@ export function ApprovalsList({
   // ⚠️ `live.rows`, NOT `rows` — a HELD row keeps the list non-empty, so a queue
   // the reader has just emptied does not flip to the empty state underneath the
   // receipt of the decision they have only just made (§ 20, § 26).
-  if (live.rows.length === 0) return <>{empty}</>;
+  if (live.rows.length === 0 && content.reviewsToRun.length === 0) return <>{empty}</>;
 
   return (
     <div
@@ -164,6 +176,10 @@ export function ApprovalsList({
               arrived={live.arrivedIds.has(row.gateId)}
             />
           ))}
+          {/* THE REVIEWS TO RUN (§ 32.5, A2) — after the approvals, never counted with them. */}
+          {content.reviewsToRun.map((row) => (
+            <ReviewToRunRow key={row.gateId} row={row} gridTemplate={GRID_TEMPLATE} />
+          ))}
         </div>
       </div>
       {content.ceiling === null ? null : (
@@ -193,10 +209,18 @@ export function ApprovalsList({
 }
 
 /** The server's props as one seed object, kept while they are structurally the same. */
-function useSeed(rows: ApprovalQueueRowDto[], ceiling: Ceiling): ApprovalsContent {
-  const [seed, setSeed] = useState<ApprovalsContent>(() => ({ rows, ceiling }));
-  if (seed.rows !== rows || !structurallyEqual(seed.ceiling, ceiling)) {
-    const next = { rows, ceiling };
+function useSeed(
+  rows: ApprovalQueueRowDto[],
+  ceiling: Ceiling,
+  reviewsToRun: ReviewToRunRowDTO[],
+): ApprovalsContent {
+  const [seed, setSeed] = useState<ApprovalsContent>(() => ({ rows, ceiling, reviewsToRun }));
+  if (
+    seed.rows !== rows ||
+    !structurallyEqual(seed.ceiling, ceiling) ||
+    !structurallyEqual(seed.reviewsToRun, reviewsToRun)
+  ) {
+    const next = { rows, ceiling, reviewsToRun };
     setSeed(next);
     return next;
   }

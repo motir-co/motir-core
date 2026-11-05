@@ -98,6 +98,13 @@ export default defineConfig({
       'tests/hostedRuns/hostedRunStartFix.test.ts',
       // MOTIR-6930 — the Workbench's sent-back row, which reads `isReviewSentBack`.
       'tests/services/homeServiceToFix.test.ts',
+      // MOTIR-10332 — the review SOURCE: `own` skips the hosted start and refuses Review again.
+      'tests/approvalGates/reviewAgentSource.test.ts',
+      // MOTIR-10333 · MOTIR-10334 — the own-agent verdict door and Dismiss, whose refusals
+      // (`lib/agentReview/errors.ts`) and gate-off send-back source (`reviewRefusal.ts`)
+      // are story files of this lane.
+      'tests/approvalGates/reviewVerdictDoor.test.ts',
+      'tests/approvalGates/reviewDismissal.test.ts',
     ],
     coverage: {
       provider: 'v8',

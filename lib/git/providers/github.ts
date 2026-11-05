@@ -34,8 +34,10 @@ import {
   RepoTarballUrlTimeoutError,
   RepoTarballUrlUnreachableError,
   ProviderPermissionReadError,
+  ProviderReviewWriteError,
 } from '../errors';
 import type {
+  ChangeRequestAuthor,
   ChangeRequestLifecycle,
   CiConclusion,
   InstallationToken,
@@ -74,6 +76,10 @@ import type {
   ReleaseContainsMergeInput,
   RepositoryPermission,
   RepositoryPermissionInput,
+  CreatePullRequestReviewInput,
+  CreatePullRequestReviewResult,
+  DismissPullRequestReviewInput,
+  DismissPullRequestReviewResult,
 } from '../types';
 import { DEPLOYMENT_STATES } from '../types';
 import { githubReadCodeBlame, githubReadCodeLog } from './githubCodeHistory';
@@ -129,6 +135,17 @@ function normalizePermission(value: unknown): RepositoryPermission | null {
   if (typeof value !== 'string') return null;
   const lowered = value.toLowerCase();
   return PERMISSIONS.find((p) => p === lowered) ?? null;
+}
+
+/**
+ * The pull request's author from its `user` object (MOTIR-10340), or null when the payload
+ * names no id and login. The id is GitHub's numeric user id, kept as a string.
+ */
+function changeRequestAuthorOf(raw: unknown): ChangeRequestAuthor | null {
+  const user = asRecord(raw);
+  const githubUserId = idToString(user?.['id']);
+  const login = typeof user?.['login'] === 'string' ? user['login'] : null;
+  return githubUserId && login ? { githubUserId, login } : null;
 }
 
 function idToString(value: unknown): string | null {
@@ -539,6 +556,42 @@ function githubMintOutcome(
 function shaOf(value: unknown): string | null {
   const sha = asRecord(value)?.['sha'];
   return typeof sha === 'string' && /^[0-9a-f]{7,64}$/i.test(sha) ? sha : null;
+}
+
+/**
+ * One write of Motir's own App review (MOTIR-10335), as the App the repository's
+ * provenance names — the provisioning App (`motir-studio`) on a Motir-created repository,
+ * the user-facing one (`motir-integration`) on an imported one, exactly as every other
+ * GitHub call picks it. A network failure is a `ProviderReviewWriteError`.
+ */
+async function reviewWrite(
+  operation: 'post' | 'dismiss',
+  input: { installationId: string; owner: string; repo: string },
+  method: 'POST' | 'PUT',
+  path: string,
+  body: Record<string, unknown>,
+): Promise<Response> {
+  const role = githubAppRoleForRepo({ owner: input.owner }, await motirOwnedOrgLogins());
+  const { token } = await mintInstallationToken(input.installationId, role);
+  const url =
+    `${GITHUB_API}/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}` +
+    path;
+  try {
+    return await fetch(url, {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: 'application/vnd.github+json',
+        'content-type': 'application/json',
+        'user-agent': 'motir',
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    throw new ProviderReviewWriteError('github', operation, {
+      message: err instanceof Error ? err.message : 'unknown',
+    });
+  }
 }
 
 export const githubProvider: GitProvider = {
@@ -1296,6 +1349,7 @@ export const githubProvider: GitProvider = {
       // not offered". `=== true` rather than a truthiness coercion for the same
       // reason `merged` uses it — an absent field is not a draft.
       draft: pr['draft'] === true,
+      author: changeRequestAuthorOf(pr['user']),
     };
   },
 
@@ -1438,6 +1492,59 @@ export const githubProvider: GitProvider = {
       normalizePermission(body?.['permission']) ??
       'none'
     );
+  },
+
+  async createPullRequestReview(
+    input: CreatePullRequestReviewInput,
+  ): Promise<CreatePullRequestReviewResult> {
+    // `pull_requests: write` — both Apps hold it (the run's own git credential asks for
+    // it too). https://docs.github.com/en/rest/pulls/reviews#create-a-review-for-a-pull-request
+    // — an event with a body submits the review at once, rather than leaving it PENDING.
+    const res = await reviewWrite('post', input, 'POST', `/pulls/${input.number}/reviews`, {
+      event: input.event,
+      body: input.body,
+    });
+    if (res.ok) {
+      const body = asRecord(await res.json());
+      const id = body?.['id'];
+      if (typeof id !== 'number' && typeof id !== 'string') {
+        throw new ProviderReviewWriteError('github', 'post', {
+          status: res.status,
+          message: 'no review id in the answer',
+        });
+      }
+      return { kind: 'posted', reviewId: String(id) };
+    }
+    // ⚠️ GitHub answers 422 "Can not request changes on your own pull request" when the
+    // App asking authored the pull request — a Motir-created repository's run pushes its
+    // pull requests as that very App. It is an answer, not a failure (rule 7).
+    if (
+      res.status === 422 &&
+      input.event === 'REQUEST_CHANGES' &&
+      /own pull request/i.test(await res.text())
+    ) {
+      return { kind: 'own_pull_request' };
+    }
+    throw new ProviderReviewWriteError('github', 'post', { status: res.status });
+  },
+
+  async dismissPullRequestReview(
+    input: DismissPullRequestReviewInput,
+  ): Promise<DismissPullRequestReviewResult> {
+    // https://docs.github.com/en/rest/pulls/reviews#dismiss-a-review-for-a-pull-request
+    const res = await reviewWrite(
+      'dismiss',
+      input,
+      'PUT',
+      `/pulls/${input.number}/reviews/${encodeURIComponent(input.reviewId)}/dismissals`,
+      { message: input.message, event: 'DISMISS' },
+    );
+    if (res.ok) return 'dismissed';
+    // 404 — the review, its pull request or the repository is gone; 422 — the review is
+    // no longer one that can be dismissed (already dismissed). Either way nothing of the
+    // bot's stands on the pull request any more.
+    if (res.status === 404 || res.status === 422) return 'gone';
+    throw new ProviderReviewWriteError('github', 'dismiss', { status: res.status });
   },
 
   // PURE, and deliberately payload-only: `merged → done` is the CANONICAL

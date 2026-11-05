@@ -14,6 +14,7 @@ import type { ActivityEntryDto, ActivityEntryPartDto, ActivityValueDto } from '@
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { AgentVerdictActivityRow } from './AgentVerdictActivityRow';
 
 // One History feed row (Story 5.5 · Subtask 5.5.4), per
 // `design/work-items/activity-history.mock.html` panels 1–2: comment-row-
@@ -109,6 +110,21 @@ export function ActivityEntryRow({
   entry: ActivityEntryDto;
   part: ActivityEntryPartDto;
   /** Status key → lifecycle category (the project workflow) — the Pill tint. */
+  statusCategories: Readonly<Record<string, StatusCategoryDto>>;
+}) {
+  // An agent's review verdict (MOTIR-10338) has its own row grammar — a Bot disc, not an
+  // initial avatar — so it is its own component rather than one more sentence here.
+  if (part.kind === 'agentVerdict') return <AgentVerdictActivityRow entry={entry} part={part} />;
+  return <RevisionEntryRow entry={entry} part={part} statusCategories={statusCategories} />;
+}
+
+function RevisionEntryRow({
+  entry,
+  part,
+  statusCategories,
+}: {
+  entry: ActivityEntryDto;
+  part: Exclude<ActivityEntryPartDto, { kind: 'agentVerdict' }>;
   statusCategories: Readonly<Record<string, StatusCategoryDto>>;
 }) {
   const routes = useReaderRoutes();

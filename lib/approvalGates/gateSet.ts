@@ -214,6 +214,22 @@ export interface GateSetInput {
   reviewAgentEnabled?: boolean;
   /** The card's most recent `agent_review` gate, whatever its state, or null. */
   latestAgentReviewGate?: ExistingGate | null;
+  /**
+   * The version of the card's newest GATE-OFF agent send-back — a review verdict record the
+   * review agent stored as `changes_requested` with the review gate off (Story MOTIR-10327 ·
+   * MOTIR-10333; `approval-gates.md` §12.14) — or null. When it is the set's CURRENT version
+   * the send-back stands, and neither the merge question nor a review is asked at it.
+   * Optional; absent reads as none.
+   */
+  agentSendBackVersion?: string | null;
+  /**
+   * The version of the card's newest DISMISSAL of an agent send-back (Story MOTIR-10327 ·
+   * MOTIR-10334; `approval-gates.md` §12.15), or null. When it is the set's CURRENT version
+   * the send-back there — a gate-off record or a decided `agent_review` refusal — no longer
+   * stands, and the merge question is asked again at the same version. Optional; absent
+   * reads as none.
+   */
+  dismissedSendBackVersion?: string | null;
 }
 
 /** One question the card should be asking. */
@@ -446,6 +462,8 @@ export function acceptanceRefusalHoldsMerge(
  *    person continuing without it): the ordinary flow is asked.
  *  · `refused` — the agent requested changes at this version: nothing further is asked
  *    for it (§12.4). ONE REVIEW PER VERSION — a decided review is never asked again.
+ *    A person's DISMISSAL at this version (`dismissedVersion`, §12.15) reads as `passed`:
+ *    the review is answered, overruled, and the merge question is asked.
  *  · `owed` — no decided review at this version (none yet, or only a WITHDRAWN one — a red
  *    build and a green again at the same head is reviewed again): ask the review, and not
  *    the merge.
@@ -463,6 +481,8 @@ export function agentReviewStanding(args: {
   version: string | null;
   latestAgentReviewGate: Pick<ExistingGate, 'state' | 'subjectId' | 'subjectVersion'> | null;
   latestMergeGate: Pick<ExistingGate, 'state' | 'subjectVersion'> | null;
+  /** The version of the card's newest dismissal of an agent send-back, or null. */
+  dismissedVersion?: string | null;
 }): AgentReviewStanding {
   if (!args.reviewAgentEnabled || args.prMergeMode !== 'manual' || args.version === null) {
     return 'not_required';
@@ -474,7 +494,9 @@ export function agentReviewStanding(args: {
   const review = args.latestAgentReviewGate;
   if (review && review.subjectId === args.workItemId && review.subjectVersion === args.version) {
     if (review.state === 'approved') return 'passed';
-    if (review.state === 'changes_requested' || review.state === 'overturned') return 'refused';
+    if (review.state === 'changes_requested' || review.state === 'overturned') {
+      return args.dismissedVersion === args.version ? 'passed' : 'refused';
+    }
   }
   return 'owed';
 }
@@ -721,14 +743,25 @@ export function resolveGateSet(input: GateSetInput): GateSet {
     version,
     latestAgentReviewGate: input.latestAgentReviewGate ?? null,
     latestMergeGate: input.latestMergeGate,
+    dismissedVersion: input.dismissedSendBackVersion ?? null,
   });
-  if (mergeAskable && review === 'owed') {
+  // ⚠️ A STANDING AGENT SEND-BACK ASKS NOTHING AT ITS VERSION (MOTIR-10333; §12.14). With
+  // the review gate off the send-back is a record, not a gate, so `review` cannot see it:
+  // the merge question stays withdrawn (`agent_changes_requested`) until a push moves the
+  // version, and a review switched on since is not asked of commits already reviewed.
+  // A person's DISMISSAL at the version (MOTIR-10334; §12.15) ends it: the merge question is
+  // asked again, at the same version, through this one rule.
+  const sentBack =
+    version !== null &&
+    (input.agentSendBackVersion ?? null) === version &&
+    (input.dismissedSendBackVersion ?? null) !== version;
+  if (mergeAskable && !sentBack && review === 'owed') {
     awaited.push({
       kind: 'agent_review',
       subjectId: input.workItemId,
       subjectVersion: version,
     });
-  } else if (mergeAskable && review !== 'refused' && !answered) {
+  } else if (mergeAskable && !sentBack && review !== 'refused' && !answered) {
     awaited.push({
       kind: 'pull_request_approval',
       subjectId: input.workItemId,

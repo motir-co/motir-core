@@ -6,6 +6,9 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
 import { ToFixTag } from '@/components/workItems/ToFixTag';
+import { ReviewMarker } from '@/components/approvals/ReviewMarker';
+import { decisionBesideReview } from '@/lib/dto/reviewState';
+import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
 import { ObsolescenceBadge } from '@/components/issues/ObsolescenceBadge';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
@@ -57,6 +60,23 @@ type Translator = ReturnType<typeof useTranslations>;
  * the trailing row-actions cell was the only member and MOTIR-4258 removed it —
  * so that branch is kept for a future non-sortable column, not for a live one.
  */
+
+/**
+ * The status cell's decision glyph — except for the awaiting `agent_review` gate on a card
+ * whose review marker tells it, which steps aside for that marker (MOTIR-10345).
+ */
+function DecisionGlyph({ row }: { row: IssueRowData }) {
+  const pending = decisionBesideReview(row.pendingDecision, row.review);
+  return pending ? (
+    <DecisionWaitingMarker
+      form="glyph"
+      state={pending.state}
+      kind={pending.kind}
+      routedToName={row.pendingRoutedToName}
+    />
+  ) : null;
+}
+
 export interface IssueColumn {
   key: string;
   header: string;
@@ -239,14 +259,16 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
               the status pill, before the decision glyph, outside the edit
               trigger. A finished card's widest pairing fits the 144px track. */}
           {r.obsolescence ? <ObsolescenceBadge mark={r.obsolescence} form="glyph" /> : null}
-          {r.pendingDecision ? (
-            <DecisionWaitingMarker
-              form="glyph"
-              state={r.pendingDecision.state}
-              kind={r.pendingDecision.kind}
-              routedToName={r.pendingRoutedToName}
-            />
+          <DecisionGlyph row={r} />
+          {/* THE REVIEW MARKER (MOTIR-10341, § 32.1, mock M7) — the decision glyph's
+              slot: the awaiting `agent_review` gate's own glyph steps aside for it
+              above (MOTIR-10345), and no approve-and-merge gate exists while it
+              awaits, so the two never draw together. Then THE REVIEWED GLYPH (§ 32.3),
+              after the decision glyph, focusable, above the row's stretched link. */}
+          {r.review?.marker ? (
+            <ReviewMarker form="glyph" marker={r.review.marker} identifier={r.review.identifier} />
           ) : null}
+          {r.review ? <ReviewedBadge form="glyph" review={r.review} /> : null}
           {/* THE TO FIX TAG (MOTIR-6610) — the glyph form, after the decision
               glyph when both hold, outside the edit trigger like it. In the STATUS
               cell rather than beside the CI glyph in the title cell, so a red CI

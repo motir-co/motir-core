@@ -1,4 +1,5 @@
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
@@ -64,6 +65,7 @@ import { credentialExpiryService } from '@/lib/services/credentialExpiryService'
 import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
 import { fleetImageCoverageProbeService } from '@/lib/services/fleetImageCoverageProbeService';
 import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
+import { indeterminateStreakService } from '@/lib/services/indeterminateStreakService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -183,6 +185,9 @@ export const jobServices = {
   // The runner-image freshness probe (MOTIR-10393) — a merged change to the
   // runner image that was never released and pinned.
   runnerImageFreshness: runnerImageFreshnessProbeService,
+  // The escalation over every probe above with an `indeterminate` arm
+  // (MOTIR-10429) — the same probe unable to tell on the last N runs.
+  indeterminateStreak: indeterminateStreakService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,
@@ -233,6 +238,8 @@ export const jobServices = {
   // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
   // request for an awaiting `agent_review` gate.
   agentReviewStart: agentReviewStartService,
+  // Motir's App bot on the pull request (Story MOTIR-10327 · MOTIR-10335).
+  reviewBotPost: reviewBotPostService,
   // The automatic hosted re-run after a design Revise (MOTIR-700).
   designAutoRerun: designAutoRerunService,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).

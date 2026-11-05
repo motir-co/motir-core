@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "Um administrador hibernou seu agente",
             "desc": "Um proprietário ou administrador da organização parou um dos seus agentes na página Fleet da organização."
+          },
+          "review_to_run": {
+            "label": "Uma revisão está à espera do seu agente",
+            "desc": "O seu projeto revê com o seu próprio agente, e a revisão de um item de trabalho é sua para executar com motir review."
+          },
+          "review_sent_back": {
+            "label": "Um agente pediu alterações",
+            "desc": "Um agente de revisão devolveu um item de trabalho atribuído a você, com suas constatações."
           }
         },
         "soon": "Em breve",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s> atualizou <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> enviou uma notificação para você",
       "accessRefused": "O código de <s>{project}</s> está pronto, mas você ainda não pode abri-lo — tente enviar o convite novamente",
+      "reviewToRun": "Uma revisão de <s>{key}</s> está à espera do seu agente",
+      "reviewSentBack": "Um agente pediu alterações em <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernou seu agente <s>{agent}</s>"
     },
     "excerpt": {
@@ -14503,6 +14513,8 @@
         "plan_stale": "Um trabalho que este plano altera foi concluído, então o plano ficou desatualizado e esta pergunta foi retirada.",
         "plan_discarded": "Todas as propostas do plano foram retiradas, então o plano terminou e esta pergunta junto.",
         "queue_failed": "A fila de merge reprovou estes commits, então esta pergunta foi retirada.",
+        "review_agent_disabled": "O agente de revisão foi desligado, então esta pergunta foi retirada.",
+        "agent_changes_requested": "O agente de revisão pediu alterações nestes commits, então esta pergunta foi retirada até um novo push.",
         "subject_gone": "O objeto desta pergunta não existe mais, então esta pergunta foi retirada.",
         "no_longer_manual": "O item de trabalho não é mais trabalho manual, então esta pergunta foi retirada.",
         "closed_without_decision": "O item de trabalho foi fechado sem que ninguém o marcasse como concluído, então esta pergunta foi retirada.",
@@ -15351,6 +15363,99 @@
         "since": "desde {when}",
         "open": "Abrir a sessão de planejamento — {sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> aprovou a revisão em {commits}",
+        "sentBack": "<actor>{agent}</actor> pediu alterações em {commits}",
+        "late": "Atrasada",
+        "secondTag": "Segunda revisão",
+        "lateNote": "Revisou {commits}, que não é mais a versão atual. Não decidiu nada.",
+        "second": "Uma segunda revisão de uma versão já decidida. Não decidiu nada.",
+        "notified": "{name} foi notificado.",
+        "findings": "Constatações",
+        "agentHosted": "O agente hospedado do Motir",
+        "agentOwn": "O agente de {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Aprovado por {name} · revisado por agente em {commits}",
+        "skipped": "Aprovado por {name} · revisão ignorada por {who}",
+        "dismissed": "Aprovado por {name} · revisão descartada por {who}",
+        "none": "Aprovado por {name} · sem revisão de agente",
+        "someone": "alguém",
+        "reason": "Motivo: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agente revisando",
+        "reviewingName": "Um agente está revisando este trabalho",
+        "couldNotRun": "Não foi possível executar a revisão",
+        "couldNotRunName": "Não foi possível executar a revisão do agente — aguardando você",
+        "couldNotRunOn": "Não foi possível executar a revisão · {name}",
+        "couldNotRunOnName": "Não foi possível executar a revisão do agente — aguardando {name}",
+        "waitingYours": "Aguardando seu agente de revisão",
+        "waitingYoursName": "Aguardando seu agente de revisão — execute motir review {key}",
+        "waitingOn": "Aguardando o agente de revisão de {name}",
+        "waitingOnName": "Aguardando o agente de revisão de {name}"
+      },
+      "command": {
+        "copy": "Copiar motir review {key}",
+        "copied": "Copiado",
+        "toastTitle": "Comando copiado",
+        "toastBody": "Execute {command} no seu próprio agente para revisar este trabalho."
+      },
+      "badge": {
+        "reviewed": "Revisado",
+        "reviewedName": "Revisado por um agente nos commits atuais",
+        "container": "{total, plural, one {{done} de # revisado} other {{done} de # revisados}}",
+        "containerName": "{total, plural, one {{done} de # parte revisada por um agente nos commits atuais} other {{done} de # partes revisadas por um agente nos commits atuais}}",
+        "containerAllName": "Todas as partes revisadas por um agente nos commits atuais",
+        "card": {
+          "hosted": "Revisado pelo agente hospedado do Motir",
+          "own": "Revisado pelo próprio agente de {name}",
+          "harness": "{harness} · {model}",
+          "commits": "Nestes commits",
+          "link": "Constatações e checklist"
+        }
+      },
+      "line": {
+        "label": "Revisão do agente",
+        "reviewed": "<b>Revisado por um agente</b> · {who} · {when}",
+        "whoHosted": "O agente hospedado do Motir",
+        "whoOwn": "O agente de {name} · {harness}",
+        "findings": "Constatações e checklist",
+        "skipped": "<b>Revisão ignorada por {name}</b> — “{reason}”",
+        "dismissed": "<b>Revisão descartada por {name}</b> — “{reason}”",
+        "notReviewed": "<b>Sem revisão de agente</b>",
+        "earlier": "Revisado pela última vez em um commit anterior",
+        "github": "<b>Aprovado no GitHub</b> por {logins}"
+      },
+      "toRun": {
+        "sentence": "Revise <title>{name}</title> com seu agente",
+        "tag": "Revisão a executar",
+        "details": "Ainda não é uma aprovação. Sua aprovação é pedida quando a revisão passar.",
+        "open": "Abrir {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Descartar a revisão",
+        "title": "Descartar a revisão do agente?",
+        "body": "O agente pediu alterações nestes commits. Ao descartá-la, o item de trabalho sai de A corrigir e sua aprovação é pedida nos mesmos commits. A revisão e seu motivo ficam no item de trabalho.",
+        "reasonLabel": "Por que você está descartando?",
+        "reasonHint": "Obrigatório. Seu motivo aparece na aprovação e no histórico do item de trabalho.",
+        "reasonPlaceholder": "A constatação é sobre código que este item de trabalho não altera.",
+        "confirm": "Descartar a revisão",
+        "cancel": "Cancelar",
+        "submitting": "Descartando…",
+        "error": "Não foi possível descartar a revisão. Nada mudou. Tente novamente.",
+        "stale": "Novos commits chegaram desde que você leu esta revisão, então nada foi descartado. Mostre a versão atual e leia de novo.",
+        "already": "Esta revisão já foi descartada. Mostre a versão atual para vê-la.",
+        "notStanding": "Esta revisão não vale mais, então não há nada a descartar. Mostre a versão atual.",
+        "reread": "Mostrar a versão atual",
+        "toFixNote": "Uma revisão de agente que você pediu devolveu isto. Corrija ou descarte a revisão com um motivo."
+      },
+      "authorNote": {
+        "title": "O GitHub não deixa você aprovar suas próprias pull requests",
+        "body": "Você abriu todas as pull requests daqui. Aprove no Motir ou peça a um colega para revisá-las no GitHub."
+      }
     }
   },
   "approvalOverlay": {
@@ -15430,7 +15535,19 @@
       "billingNote": "Cada revisão é uma execução de agente hospedado, paga com os créditos de IA da sua organização.",
       "offNote": "Desativar isto cancela as revisões em andamento — esses itens de trabalho seguem direto para o fluxo comum.",
       "saved": "Salvo",
-      "saveError": "Não foi possível salvar — tente novamente."
+      "saveError": "Não foi possível salvar — tente novamente.",
+      "source": {
+        "label": "Quem revisa",
+        "hosted": "Agente hospedado do Motir",
+        "hostedWhat": "O Motir inicia uma execução de revisão quando as verificações passam. <strong>Usa créditos de IA.</strong>",
+        "own": "Seu próprio agente",
+        "ownWhat": "Grátis. A revisão espera até alguém executar <cmd>motir review</cmd> a partir do próprio agente. Nada começa sozinho."
+      },
+      "posting": {
+        "title": "Publicar as revisões do agente nos pull requests",
+        "on": "O app do GitHub do Motir comenta cada veredito nos pull requests e pede alterações ao devolver o trabalho. Ele nunca aprova.",
+        "off": "Os veredictos ficam no Motir. Nada é publicado nos pull requests."
+      }
     },
     "designApproval": {
       "title": "Aprovação de design",

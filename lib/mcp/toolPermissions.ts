@@ -367,6 +367,15 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // creates the mistake is strictly worse than no door at all. `CLI_TOKEN_GRANT`
   // already carries `work_item:edit`, so nothing is widened here either.
   unlink_pull_request: 'work_item:edit',
+  // `find_work_items_for_pull_request` (MOTIR-10331) — a READ, gated on the edit
+  // key on purpose: its only use is to submit a review verdict for the cards it
+  // returns, which needs `work_item:edit`. The service asserts it on every
+  // returned card's project; `CLI_TOKEN_GRANT` already carries it.
+  find_work_items_for_pull_request: 'work_item:edit',
+  // `submit_review_verdict` (MOTIR-10333; `approval-gates.md` §12.11) — any teammate
+  // holding the edit key on the card may submit their review agent's verdict; the service
+  // asserts it on the card's project. `CLI_TOKEN_GRANT` already carries it.
+  submit_review_verdict: 'work_item:edit',
 
   // ── sprint:manage — the sprint lifecycle + membership ────────────────────
   // `sprintsService.assertCanManageSprints` and `backlogService.assertCanGroom`

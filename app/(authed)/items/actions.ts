@@ -1,5 +1,7 @@
 'use server';
 
+import { reviewStateService } from '@/lib/services/reviewStateService';
+import type { CardReviewMap } from '@/lib/dto/reviewState';
 import { revalidatePath } from 'next/cache';
 import { resolveActionReadActor } from '@/lib/visitor/readActor';
 import { redirect } from 'next/navigation';
@@ -281,7 +283,7 @@ export interface ListTreeLevelInput {
  * beside the DTOs rather than on them. A folder row gets no entry.
  */
 export type TreeLevelResult =
-  | { ok: true; level: TreeLevelDto; pending: PendingDecisionMap }
+  | { ok: true; level: TreeLevelDto; pending: PendingDecisionMap; reviews: CardReviewMap }
   | { ok: false; error: string };
 
 /** The decision-waiting answer for one level's work-item rows. */
@@ -298,6 +300,25 @@ async function pendingForLevel(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     ),
   );
+}
+
+/**
+ * The decision answer AND the review markers / Reviewed badges (Story MOTIR-10327 ·
+ * MOTIR-10341) for one level's work-item rows — each one batch, asked together.
+ */
+async function answersForLevel(
+  level: TreeLevelDto,
+  ctx: { userId: string; workspaceId: string; projectId: string },
+): Promise<{ pending: PendingDecisionMap; reviews: CardReviewMap }> {
+  const ids = level.rows.filter((row) => row.kind !== 'folder').map((row) => row.id);
+  const [pending, reviews] = await Promise.all([
+    pendingForLevel(level, ctx),
+    reviewStateService.cardReviewsFor(ctx.projectId, ids, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    }),
+  ]);
+  return { pending, reviews };
 }
 
 /** What a tree level answers a Visitor who has spent their read budget (MOTIR-6647). */
@@ -317,7 +338,7 @@ export async function listRootIssuesAction(input: ListTreeLevelInput): Promise<T
       { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
       actor.ctx,
     );
-    return { ok: true, level, pending: {} };
+    return { ok: true, level, pending: {}, reviews: {} };
   }
   const ctx = await getActiveProject();
   if (!ctx) return { ok: false, error: 'No active project.' };
@@ -326,7 +347,7 @@ export async function listRootIssuesAction(input: ListTreeLevelInput): Promise<T
     { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
   );
-  return { ok: true, level, pending: await pendingForLevel(level, ctx) };
+  return { ok: true, level, ...(await answersForLevel(level, ctx)) };
 }
 
 export async function listChildIssuesAction(
@@ -345,7 +366,7 @@ export async function listChildIssuesAction(
         { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
         actor.ctx,
       );
-      return { ok: true, level, pending: {} };
+      return { ok: true, level, pending: {}, reviews: {} };
     } catch (err) {
       if (err instanceof WorkItemNotFoundError) {
         return { ok: false, error: 'That issue no longer exists.' };
@@ -361,7 +382,7 @@ export async function listChildIssuesAction(
       { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
-    return { ok: true, level, pending: await pendingForLevel(level, ctx) };
+    return { ok: true, level, ...(await answersForLevel(level, ctx)) };
   } catch (err) {
     if (err instanceof WorkItemNotFoundError) {
       return { ok: false, error: 'That issue no longer exists.' };
@@ -392,7 +413,7 @@ export async function listFolderLevelAction(
         { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
         actor.ctx,
       );
-      return { ok: true, level, pending: {} };
+      return { ok: true, level, pending: {}, reviews: {} };
     } catch (err) {
       if (err instanceof FolderNotFoundError) {
         return { ok: false, error: 'That folder no longer exists.' };
@@ -408,7 +429,7 @@ export async function listFolderLevelAction(
       { sort: parseSort(input.sortParam), offset: input.offset ?? 0 },
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
     );
-    return { ok: true, level, pending: await pendingForLevel(level, ctx) };
+    return { ok: true, level, ...(await answersForLevel(level, ctx)) };
   } catch (err) {
     if (err instanceof FolderNotFoundError) {
       return { ok: false, error: 'That folder no longer exists.' };

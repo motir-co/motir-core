@@ -140,6 +140,10 @@ interface TargetRow {
   /** NOT ASSERTED either (MOTIR-7005), for `draft`'s reason: a merged row's head
    *  decides nothing, and asserting it would rewrite every historical row once. */
   headSha: undefined;
+  /** NOT ASSERTED either (MOTIR-10340): the author columns are not backfilled, and a
+   *  merged row's author decides nothing the review state reads. */
+  authorGithubUserId: undefined;
+  authorLogin: undefined;
 }
 
 function emptyRepoReport(repo: GithubRepo): HistoricalPrRepoReport {
@@ -344,6 +348,8 @@ async function applyOne(
     // See `TargetRow.draft`: merged rows only, where the flag decides nothing.
     draft: undefined,
     headSha: undefined,
+    authorGithubUserId: undefined,
+    authorLogin: undefined,
   };
 
   if (existing && rowMatches(existing, target)) {

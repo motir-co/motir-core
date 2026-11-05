@@ -193,3 +193,67 @@ describe('assembleReviewPrompt — CODING CONVENTIONS', () => {
     expect(prompt).not.toContain('zzz');
   });
 });
+
+// ── The CRITERIA CHECKLIST over the run target's tree (Story MOTIR-10327 · MOTIR-10336) ──
+
+describe('assembleReviewPrompt — the criteria checklist over the tree', () => {
+  const STORY: ReviewPromptInput = {
+    ...TWO_REPOSITORY_CARD,
+    criteriaTree: [
+      { key: 'ACME-7', title: 'The story', state: 'open', criteria: ['- The story ships.'] },
+      { key: 'ACME-8', title: 'The API', state: 'done', criteria: ['- The endpoint answers.'] },
+      { key: 'ACME-9', title: 'The header', state: 'open', criteria: [] },
+      { key: 'ACME-10', title: 'A dropped idea', state: 'skipped', criteria: ['- Never read.'] },
+      { key: 'ACME-11', title: 'A grandchild', state: 'open', criteria: ['- Zero renders 0.'] },
+    ],
+  };
+
+  it('lists every card’s criteria under CRITERIA CHECKLIST, grouped by card in the given order', () => {
+    const { prompt } = assembleReviewPrompt(STORY);
+    expect(prompt).toMatchSnapshot();
+    expect(prompt).toContain('CRITERIA CHECKLIST — this card and every card under it');
+    expect(prompt).not.toContain('\nACCEPTANCE CRITERIA\n');
+    const order = ['ACME-7 — The story (the run target)', 'ACME-8 — The API (done', 'ACME-9 —'];
+    const at = order.map((head) => prompt.indexOf(head));
+    expect(at.every((i) => i > 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(prompt).toContain('    - The endpoint answers.');
+    expect(prompt).toContain('    (This card names no acceptance criteria.');
+    expect(prompt).toContain('ACME-10 — A dropped idea (skipped — cancelled or archived');
+    expect(prompt).not.toContain('Never read.');
+    expect(prompt.indexOf('ACME-11')).toBeGreaterThan(prompt.indexOf('ACME-10'));
+  });
+
+  it('states the checklist rule and the one-verdict-per-run-target rule', () => {
+    const { prompt } = assembleReviewPrompt(STORY);
+    expect(prompt).toContain(
+      'ONE checklist row per criterion, each `met`, `not met` or `cannot tell`',
+    );
+    expect(prompt).toContain(
+      'A `met` without evidence is not allowed: write that row as `cannot tell`.',
+    );
+    expect(prompt).toContain('ONE verdict, for ACME-7 — the run target — only.');
+    expect(prompt).toContain('never verdict targets');
+    expect(prompt).toContain('any checklist row is `not met`, or any finding is a blocker');
+    expect(prompt).toContain('Minor findings and nits never send the card back.');
+    expect(prompt).toContain('A `cannot tell` row alone does not send the card back');
+    expect(prompt).toContain('Put the checklist at the TOP of `findingsMd`');
+  });
+
+  it('a card with no descendants keeps today’s ACCEPTANCE CRITERIA listing', () => {
+    const alone = assembleReviewPrompt({
+      ...TWO_REPOSITORY_CARD,
+      criteriaTree: [STORY.criteriaTree![0]!],
+    }).prompt;
+    const without = assembleReviewPrompt(TWO_REPOSITORY_CARD).prompt;
+    expect(alone).toBe(without);
+    expect(alone).toContain('\nACCEPTANCE CRITERIA\n');
+    expect(alone).not.toContain('CRITERIA CHECKLIST');
+  });
+
+  it('is deterministic: the same input gives byte-identical text', () => {
+    expect(assembleReviewPrompt(STORY).prompt).toBe(
+      assembleReviewPrompt(structuredClone(STORY)).prompt,
+    );
+  });
+});

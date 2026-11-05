@@ -955,3 +955,28 @@ describe('a conflicted pull request — in zh (MOTIR-5916)', () => {
     expect(screen.getByText(fill(zpra.row.conflicts, { base: 'main' }))).toBeTruthy();
   });
 });
+
+// THE DONE CARD'S APPROVAL RECORD (MOTIR-10338; design § 32.9) — the review it stood on.
+describe('the approved frame names the review the merge stood on', () => {
+  it('draws the record line in the record strip, from the approved version', () => {
+    renderFrame(
+      {
+        gate: APPROVED,
+        approvedReview: { kind: 'reviewed', commits: 'moooon/motir-core#131 @ 3f2a91c' },
+      },
+      fakeActions(),
+    );
+    const line = screen.getByTestId('approval-review-line');
+    expect(line.textContent).toBe(
+      'Approved by Ada L. · reviewed by agent at moooon/motir-core#131 @ 3f2a91c',
+    );
+  });
+
+  it('draws no line when the read carries none, nor on a gate still awaiting', () => {
+    renderFrame({ gate: APPROVED }, fakeActions());
+    expect(screen.queryByTestId('approval-review-line')).toBeNull();
+    cleanup();
+    renderFrame({ gate: AWAITING, approvedReview: { kind: 'none' } }, fakeActions());
+    expect(screen.queryByTestId('approval-review-line')).toBeNull();
+  });
+});

@@ -18,6 +18,14 @@ export interface JobRunFailure {
   message: string;
   stack?: string;
   code?: string;
+  /**
+   * Machine-readable facts the thrown error chose to carry (MOTIR-10429), copied
+   * from its `failureData` property. A failed run records no `output`, so this is
+   * the only part of a failed row a LATER run can read without parsing the
+   * message — the daily health check's indeterminate-streak read is the reader.
+   * Absent when the error carries none.
+   */
+  data?: Record<string, unknown>;
 }
 
 /**

@@ -120,7 +120,18 @@ export type ReviewAgainRefusal =
   /** The review has not failed to run: there is no `reviewUnavailableReason` to clear. */
   | 'no_reason'
   /** A review run for this gate is still running — one review at a time. */
-  | 'run_in_flight';
+  | 'run_in_flight'
+  /** The project's review source is `own`: no hosted run is started (§12.6, §12.10). */
+  | 'source_own';
+
+/** What each refusal tells the person. */
+const REVIEW_AGAIN_REFUSAL_MESSAGES: Record<ReviewAgainRefusal, string> = {
+  not_awaiting: 'This review is no longer waiting, so it cannot be run again.',
+  no_reason: 'This review has not failed to run, so there is nothing to run again.',
+  run_in_flight: 'A review of this version is already running.',
+  source_own:
+    'This project reviews with your own agent, so Motir does not start a review run. Run `motir review` from your agent.',
+};
 
 /**
  * 409 — *Review again* is offered only on an AWAITING review that could not run and has
@@ -132,13 +143,171 @@ export class ReviewAgainNotOfferedError extends Error {
     readonly gateId: string,
     readonly reason: ReviewAgainRefusal,
   ) {
-    super(
-      reason === 'run_in_flight'
-        ? 'A review of this version is already running.'
-        : reason === 'no_reason'
-          ? 'This review has not failed to run, so there is nothing to run again.'
-          : 'This review is no longer waiting, so it cannot be run again.',
-    );
+    super(REVIEW_AGAIN_REFUSAL_MESSAGES[reason]);
     this.name = 'ReviewAgainNotOfferedError';
+  }
+}
+
+// ── THE USER-TOKEN VERDICT DOOR (Story MOTIR-10327 · MOTIR-10333; `approval-gates.md`
+// §12.11–§12.13) ───────────────────────────────────────────────────────────────────────
+//
+// Raised by `reviewVerdictService.submit`, the one service behind the MCP tool
+// `submit_review_verdict` and `POST /api/v1/work-items/{key}/review-verdict`. Mapped by
+// code (`lib/api/v1/errors.ts`, `lib/mcp/toolResult.ts`). `ReviewStaleError` above is not
+// reused: it speaks of a RUN, and this door's caller is a person's own agent.
+
+/**
+ * 422 — the card is not a RUN TARGET (§12.11): its tests are its ancestor's, so the
+ * review is that ancestor's to receive. The refusal names it. Nothing was stored.
+ */
+export class ReviewTargetNotRunTargetError extends Error {
+  readonly code = 'REVIEW_TARGET_NOT_RUN_TARGET';
+  constructor(
+    readonly workItemKey: string,
+    readonly runTargetKey: string,
+  ) {
+    super(
+      `${workItemKey} is reviewed as part of ${runTargetKey}, its run target. Submit the verdict for ${runTargetKey}.`,
+    );
+    this.name = 'ReviewTargetNotRunTargetError';
+  }
+}
+
+/**
+ * 422 — the verdict is malformed in a way only the service can see, or that a transport
+ * did not check first: no findings on a send-back, a `met` row without evidence, an
+ * empty harness or model. `field` names it. Nothing was stored.
+ */
+export class ReviewVerdictInvalidError extends Error {
+  readonly code = 'INVALID_REVIEW_VERDICT';
+  constructor(
+    readonly field: string,
+    readonly problem: string,
+  ) {
+    super(`\`${field}\` ${problem}.`);
+    this.name = 'ReviewVerdictInvalidError';
+  }
+}
+
+/**
+ * 404 — the card delivers no pull request, so it has no delivery-set version a review
+ * could be about. Nothing was stored.
+ */
+export class ReviewNothingToReviewError extends Error {
+  readonly code = 'REVIEW_NOTHING_TO_REVIEW';
+  constructor(readonly workItemKey: string) {
+    super(`${workItemKey} delivers no pull request, so there is nothing to review.`);
+    this.name = 'ReviewNothingToReviewError';
+  }
+}
+
+/**
+ * 409 — a LATE verdict (§12.13): it names a version that is not the card's current
+ * delivery-set version. It was STORED as `late` and decided nothing.
+ */
+export class ReviewVerdictLateError extends Error {
+  readonly code = 'REVIEW_VERDICT_LATE';
+  constructor(
+    readonly subjectVersion: string,
+    /** The card's current version, when the door read it; null when the set moved under
+     *  the decide itself. */
+    readonly currentVersion: string | null,
+  ) {
+    super(
+      'This verdict is about a version the card no longer has: a push moved it. It was recorded as late and decided nothing. Review the current version.',
+    );
+    this.name = 'ReviewVerdictLateError';
+  }
+}
+
+/**
+ * 409 — a SECOND verdict (§12.13): the version already has a decided review or a stored
+ * verdict. It was STORED as `second` and decided nothing.
+ */
+export class ReviewVerdictSecondError extends Error {
+  readonly code = 'REVIEW_VERDICT_SECOND';
+  constructor(readonly subjectVersion: string) {
+    super(
+      'This version has already been reviewed. The verdict was recorded as a second review and decided nothing.',
+    );
+    this.name = 'ReviewVerdictSecondError';
+  }
+}
+
+/**
+ * INTERNAL — an answering verdict (`decided` / `recorded`) already exists for the
+ * (card, version): the partial unique index's refusal, translated by the repository. The
+ * services catch it and store the verdict as `second`; it never reaches a caller.
+ */
+export class ReviewVerdictAnswerExistsError extends Error {
+  readonly code = 'REVIEW_VERDICT_ANSWER_EXISTS';
+  constructor(
+    readonly workItemId: string,
+    readonly subjectVersion: string,
+  ) {
+    super('This version already has an answering review verdict.');
+    this.name = 'ReviewVerdictAnswerExistsError';
+  }
+}
+
+// ── DISMISS THE REVIEW (Story MOTIR-10327 · MOTIR-10334; `approval-gates.md` §12.15) ───────
+//
+// Raised by `reviewDismissalService.dismiss`, behind
+// `POST /api/v1/work-items/{key}/review-dismissal`. Each is raised BEFORE anything is
+// written, except the already-dismissed backstop, whose transaction rolls back.
+
+/** 403 — the caller is not the routed person (§12.3's authority set). Nothing was written. */
+export class ReviewDismissalForbiddenError extends Error {
+  readonly code = 'REVIEW_DISMISSAL_FORBIDDEN';
+  constructor(readonly workItemKey: string) {
+    super(
+      `Only the person ${workItemKey}'s approvals are routed to — its assignee, its reporter when it has no assignee, or someone who may decide any approval — can dismiss its review.`,
+    );
+    this.name = 'ReviewDismissalForbiddenError';
+  }
+}
+
+/** 422 — the reason is empty once trimmed, or longer than the limit. Nothing was written. */
+export class ReviewDismissalReasonRequiredError extends Error {
+  readonly code = 'REASON_REQUIRED';
+  constructor(readonly maxLength: number) {
+    super(`A reason is required to dismiss the review, at most ${maxLength} characters.`);
+    this.name = 'ReviewDismissalReasonRequiredError';
+  }
+}
+
+/** 409 — no agent send-back stands at the card's current version. Nothing was written. */
+export class ReviewSendBackNotStandingError extends Error {
+  readonly code = 'NO_STANDING_REVIEW_SENDBACK';
+  constructor(readonly workItemKey: string) {
+    super(`${workItemKey} has no review agent send-back standing at its current version.`);
+    this.name = 'ReviewSendBackNotStandingError';
+  }
+}
+
+/**
+ * 409 — the dismissal names a version the card no longer has: a push moved it, so the
+ * send-back it meant has already ended. Nothing was written.
+ */
+export class ReviewDismissalStaleError extends Error {
+  readonly code = 'REVIEW_DISMISSAL_STALE';
+  constructor(
+    readonly subjectVersion: string,
+    /** The card's current version, or null when it delivers no pull request. */
+    readonly currentVersion: string | null,
+  ) {
+    super(
+      'This dismissal is about a version the card no longer has: a push moved it, and the send-back it meant has already ended.',
+    );
+    this.name = 'ReviewDismissalStaleError';
+  }
+}
+
+/** 409 — the send-back at this version was already dismissed. Nothing was written. */
+export class ReviewSendBackAlreadyDismissedError extends Error {
+  readonly code = 'REVIEW_SENDBACK_ALREADY_DISMISSED';
+  constructor(readonly subjectVersion: string) {
+    super('The review agent’s send-back at this version has already been dismissed.');
+    this.name = 'ReviewSendBackAlreadyDismissedError';
   }
 }

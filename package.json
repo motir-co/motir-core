@@ -19,6 +19,7 @@
     "assert:nft-trace": "node scripts/assert-nft-trace-scope.mjs",
     "generate:cli-api": "tsx --tsconfig tsconfig.node.json scripts/generate-cli-api.ts",
     "generate:mcp-tool-schemas": "tsx --tsconfig tsconfig.node.json scripts/generate-mcp-tool-schemas.ts",
+    "generate:plan-change-frame-kinds": "tsx --tsconfig tsconfig.node.json scripts/generate-plan-change-frame-kinds.ts",
     "deploy:aws": "tsx --tsconfig tsconfig.node.json scripts/aws-deploy/awsDeploy.ts",
     "staging:two-machine-check": "tsx --tsconfig tsconfig.node.json scripts/staging/two-machine-check.ts",
     "loadtest:preflight": "tsx --tsconfig tsconfig.node.json loadtest/preflight/sideEffects.ts",

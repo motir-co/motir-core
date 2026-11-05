@@ -1,12 +1,14 @@
 import type { Prisma } from '@/generated/prisma/client';
 import {
   ReviewGateNotFoundError,
+  ReviewVerdictAnswerExistsError,
   ReviewRunTokenRequiredError,
   ReviewStaleError,
   ReviewVerdictAlreadySubmittedError,
   type ReviewStaleCause,
 } from '@/lib/agentReview/errors';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
+import { HOSTED_REVIEW_HARNESS } from '@/lib/agentReview/reviewState';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotFoundError,
@@ -15,6 +17,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import {
   assembleReviewPrompt,
+  type ReviewCriteriaGroupForPrompt,
   type ReviewPullRequestForPrompt,
   type ReviewVerdict,
 } from '@/lib/dispatch/reviewPromptTemplate';
@@ -23,17 +26,22 @@ import type {
   ReviewPromptDto,
   ReviewPullRequestDto,
 } from '@/lib/dto/agentReview';
+import { splitPlanBody } from '@/lib/markdown/planBody';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { reviewVerdictRecordService } from '@/lib/services/reviewVerdictRecordService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { reviewConventionsService } from '@/lib/services/reviewConventionsService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { readProject } from '@/lib/workspaces/tenantRead';
@@ -64,6 +72,8 @@ type VerdictOutcome = 'decided' | ReviewStaleCause;
 
 interface ReviewRunRef {
   id: string;
+  /** The model the run reviewed on — the verdict record's model. */
+  model: string | null;
 }
 
 /** The token's run, when it is a REVIEW run — else the refusal. Nothing is read for a PAT. */
@@ -75,7 +85,7 @@ async function requireReviewRun(ctx: ServiceContext): Promise<ReviewRunRef> {
     (tx) => dispatchRunRepository.findById(runId, tx),
   );
   if (!run || run.command !== 'review') throw new ReviewRunTokenRequiredError();
-  return { id: run.id };
+  return { id: run.id, model: run.model };
 }
 
 function pullRequestUrl(repository: string, number: number): string {
@@ -125,6 +135,130 @@ async function recordVerdict(
   });
 }
 
+/**
+ * The hosted verdict's REVIEW VERDICT RECORD (Story MOTIR-10327 · MOTIR-10333;
+ * `approval-gates.md` §12.12–§12.13) — written after the decide commits, beside the run's
+ * own event, so every agent verdict, hosted or from a person's own agent, has one record
+ * the bot, the activity and the read model consume. A run's verdict is `decided`, or LATE
+ * (a moved version, a withdrawn review) or SECOND (a review already decided). An
+ * answering record already at the version (a gate-off verdict before the switch went on)
+ * makes a `decided` one `second` instead, so the index's one-answer rule holds.
+ */
+async function recordVerdictRow(
+  run: ReviewRunRef,
+  item: { id: string; projectId: string },
+  data: {
+    verdict: ReviewVerdict;
+    subjectVersion: string;
+    outcome: 'decided' | 'late' | 'second';
+    gateId: string | null;
+    summaryMd: string | null;
+    findingsMd: string | null;
+  },
+  ctx: ServiceContext,
+): Promise<void> {
+  const write = (outcome: 'decided' | 'late' | 'second') =>
+    withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const record = await reviewVerdictRecordService.record(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId: item.projectId,
+          workItemId: item.id,
+          gateId: data.gateId,
+          subjectVersion: data.subjectVersion,
+          verdict: data.verdict,
+          outcome,
+          summaryMd: data.summaryMd,
+          findingsMd: data.findingsMd,
+          checklist: [],
+          submittedById: ctx.userId,
+          harness: HOSTED_REVIEW_HARNESS,
+          model: run.model ?? 'unknown',
+        },
+        tx,
+      );
+      // A decided verdict is posted on the pull requests once this commits (MOTIR-10335);
+      // a late or second one is history and is never posted.
+      if (outcome === 'decided') {
+        reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, record.id);
+      }
+    });
+  try {
+    await write(data.outcome);
+  } catch (err) {
+    /* v8 ignore next 2 -- needs a gate-off record at the very version a review was then
+       raised over and decided by this run. */
+    if (data.outcome === 'decided' && err instanceof ReviewVerdictAnswerExistsError) {
+      await write('second');
+      return;
+    }
+    throw err;
+  }
+}
+
+/** The run target's subtree with each card's body (MOTIR-10336) — one recursive read and
+ *  one batched body read, inside the run's workspace context, so a card of another
+ *  workspace can never appear. */
+async function readCriteriaTree(rootId: string, tx: Prisma.TransactionClient) {
+  const rows = await workItemRepository.findSubtree(rootId, tx);
+  const bodies = await workItemRepository.findByIds(
+    rows.map((r) => r.id),
+    tx,
+  );
+  const byId = new Map(bodies.map((b) => [b.id, b]));
+  return rows.flatMap((row) => {
+    const full = byId.get(row.id);
+    return full ? [{ ...row, descriptionMd: full.descriptionMd, archivedAt: full.archivedAt }] : [];
+  });
+}
+
+/**
+ * The CRITERIA CHECKLIST groups (MOTIR-10336): the run target first, then its descendants
+ * BREADTH-FIRST — each level by its parent's order, then by position — so the order is the
+ * tree's and stable. Every card's criteria are split by `splitPlanBody`, exactly as the
+ * run target's. A card is `skipped` when archived or cancelled, `done` when its status is
+ * in the project's done category.
+ */
+async function criteriaTreeOf(
+  rows: Awaited<ReturnType<typeof readCriteriaTree>>,
+  projectId: string,
+  workspaceId: string,
+): Promise<ReviewCriteriaGroupForPrompt[]> {
+  const root = rows.find((r) => r.depth === 1);
+  /* v8 ignore next -- the subtree read always returns its root. */
+  if (!root) return [];
+  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+  const doneKeys = new Set(statuses.filter((st) => st.category === 'done').map((st) => st.key));
+  const children = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (!row.parentId || row.depth === 1) continue;
+    const list = children.get(row.parentId) ?? [];
+    list.push(row);
+    children.set(row.parentId, list);
+  }
+  for (const list of children.values()) {
+    list.sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+  }
+  const ordered: typeof rows = [];
+  const queue = [root];
+  while (queue.length > 0) {
+    const next = queue.shift()!;
+    ordered.push(next);
+    queue.push(...(children.get(next.id) ?? []));
+  }
+  return ordered.map((row) => ({
+    key: row.identifier,
+    title: row.title,
+    state:
+      row.depth > 1 && (row.archivedAt !== null || row.status === 'cancelled')
+        ? 'skipped'
+        : row.depth > 1 && doneKeys.has(row.status)
+          ? 'done'
+          : 'open',
+    criteria: splitPlanBody(row.descriptionMd).acceptanceCriteria,
+  }));
+}
+
 async function hasVerdict(run: ReviewRunRef, ctx: ServiceContext): Promise<boolean> {
   const prior = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -162,7 +296,7 @@ export const agentReviewRunService = {
     // The card binding — the run's own cards only (`runTokenScopeService`).
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
-    const { gate, deliveries } = await withWorkspaceContext(
+    const { gate, deliveries, tree } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const found = await approvalGateRepository.findLatestByWorkItem(
@@ -175,6 +309,7 @@ export const agentReviewRunService = {
           deliveries: found
             ? await workItemDeliveryRepository.listByWorkItemWithChecks(found.subjectId, tx)
             : [],
+          tree: await readCriteriaTree(item.id, tx),
         };
       },
     );
@@ -225,6 +360,7 @@ export const agentReviewRunService = {
       subjectVersion: gate.subjectVersion,
       pullRequests,
       conventions,
+      criteriaTree: await criteriaTreeOf(tree, projectId, ctx.workspaceId),
     });
 
     return {
@@ -316,6 +452,19 @@ export const agentReviewRunService = {
           (tx) => approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
         );
         await record(cause, gate?.id ?? null);
+        await recordVerdictRow(
+          run,
+          item,
+          {
+            verdict: input.verdict,
+            subjectVersion: input.subjectVersion,
+            outcome: cause === 'already_decided' ? 'second' : 'late',
+            gateId: gate?.id ?? null,
+            summaryMd,
+            findingsMd,
+          },
+          ctx,
+        );
         throw new ReviewStaleError(cause, input.subjectVersion);
       }
       if (err instanceof ApprovalGateNotFoundError) {
@@ -325,6 +474,19 @@ export const agentReviewRunService = {
     }
 
     await record('decided', decided.gate.id);
+    await recordVerdictRow(
+      run,
+      item,
+      {
+        verdict: input.verdict,
+        subjectVersion: input.subjectVersion,
+        outcome: 'decided',
+        gateId: decided.gate.id,
+        summaryMd,
+        findingsMd,
+      },
+      ctx,
+    );
     return {
       key: item.identifier,
       gateId: decided.gate.id,

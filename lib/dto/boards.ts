@@ -11,6 +11,7 @@
 // summary for the projection; the move path populates `assigneeId` — the id is
 // what the optimistic-update reconcile needs, the UI already holds the avatar.)
 
+import type { CardReviewDTO } from '@/lib/dto/reviewState';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type {
   WorkItemKindDto,
@@ -180,6 +181,12 @@ export interface BoardCardDto {
    * shared list DTO `/api/v1` also serves.
    */
   pendingDecision: PendingDecisionDTO | null;
+  /**
+   * The agent review's marker, Reviewed state and container count (Story MOTIR-10327 ·
+   * MOTIR-10341) — `reviewStateService.cardReviewsFor`, one batch for the board, beside
+   * `pendingDecision` and per-reader like it. Absent or null: the card wears neither.
+   */
+  review?: CardReviewDTO | null;
   /**
    * The card's CI verdict over its whole delivery set (`WorkItem.ciState`,
    * MOTIR-5470) — `failing` / `running` / `passing` / `null`. The board draws

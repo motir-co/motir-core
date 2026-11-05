@@ -1,3 +1,4 @@
+import { reviewVerdictResultSchema } from '@/lib/api/v1/workLoop/reviewVerdict';
 import { z } from 'zod/v4';
 import {
   dispatchPromptSchema,
@@ -517,3 +518,14 @@ export function presentMcpWorkItemContinueClaim(
 ): z.infer<typeof workItemContinueClaimSchema> {
   return presentWorkItemContinueClaim(dto);
 }
+
+/**
+ * `submit_review_verdict` (Story MOTIR-10327 · MOTIR-10333) — v1's `ReviewVerdictResult`
+ * whole: the REST door and the tool answer through one presenter, so it PROBES it.
+ */
+export const reviewVerdictPayload = definePayload({
+  schema: reviewVerdictResultSchema as unknown as z.ZodType<
+    z.infer<typeof reviewVerdictResultSchema>
+  >,
+  probes: [{ resource: 'ReviewVerdictResult', select: (p) => [p] }],
+});

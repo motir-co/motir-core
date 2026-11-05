@@ -217,3 +217,65 @@ describe('NotificationDrawer — the hibernated-agent row', () => {
     expect(row.textContent).toContain(`${en.notifications.actorFallback} hibernated your agent`);
   });
 });
+
+// MOTIR-10340 — a review waiting for the recipient's OWN agent: actorless, about a card.
+describe('NotificationDrawer — the review-to-run row', () => {
+  const reviewRow = () => ({
+    id: 'n-review',
+    type: 'review_to_run',
+    category: 'direct' as const,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+    actor: null,
+    workItemId: 'wi-1',
+    data: {
+      kind: 'review_to_run' as const,
+      issueKey: 'ACME-412',
+      title: 'Export the report',
+      command: 'motir review ACME-412',
+    },
+  });
+
+  it('reads the catalogue copy, names no actor, and opens the card', async () => {
+    renderDrawer(pageDTO({ notifications: [reviewRow()] as never, totalCount: 1 }));
+
+    const expected = String(en.notifications.summary.reviewToRun)
+      .replace(/<\/?s>/g, '')
+      .replace('{key}', 'ACME-412');
+    const row = await screen.findByRole('link', { name: new RegExp('ACME-412') });
+    expect(row.textContent).toContain(expected);
+    expect(row.textContent).not.toContain(en.notifications.actorFallback);
+    expect(row.getAttribute('href')).toBe('/items/ACME-412');
+  });
+});
+
+// MOTIR-10338 — an agent sent the recipient's card back: actorless, opening the findings.
+describe('NotificationDrawer — the review-sent-back row', () => {
+  const sentBackRow = () => ({
+    id: 'n-sent-back',
+    type: 'review_sent_back',
+    category: 'direct' as const,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+    actor: null,
+    workItemId: 'wi-1',
+    data: {
+      kind: 'review_sent_back' as const,
+      issueKey: 'ACME-412',
+      title: 'Export the report',
+      recordId: 'rec-1',
+    },
+  });
+
+  it('reads the catalogue copy, names no actor, and opens the verdict’s findings', async () => {
+    renderDrawer(pageDTO({ notifications: [sentBackRow()] as never, totalCount: 1 }));
+
+    const expected = String(en.notifications.summary.reviewSentBack)
+      .replace(/<\/?s>/g, '')
+      .replace('{key}', 'ACME-412');
+    const row = await screen.findByRole('link', { name: new RegExp('ACME-412') });
+    expect(row.textContent).toContain(expected);
+    expect(row.textContent).not.toContain(en.notifications.actorFallback);
+    expect(row.getAttribute('href')).toBe('/items/ACME-412#agent-verdict-rec-1');
+  });
+});

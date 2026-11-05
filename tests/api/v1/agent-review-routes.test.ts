@@ -280,6 +280,103 @@ describe('GET …/review-prompt — the brief, for the review run’s own card o
     expect(await awaitingOf(item.id, REVIEW)).toHaveLength(1);
   });
 
+  it('lists the criteria of the run target and every descendant in tree order, and nothing of another workspace (MOTIR-10336)', async () => {
+    const s = await makeScenario('prompt-tree');
+    const crit = (line: string) => `Intro.\n\n## Acceptance criteria\n\n- ${line}\n`;
+    const make = (kind: 'story' | 'task' | 'subtask', title: string, parentId?: string) =>
+      workItemsService.createWorkItem(
+        { projectId: s.project.id, kind, title, descriptionMd: crit(`${title} holds.`), parentId },
+        s.ctx,
+      );
+    const story = await make('story', 'The story');
+    const first = await make('task', 'First child', story.id);
+    const second = await make('task', 'Second child', story.id);
+    const grandchild = await make('subtask', 'Grandchild', first.id);
+    const dropped = await make('task', 'Dropped child', story.id);
+    const bare = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Bare child', parentId: story.id },
+      s.ctx,
+    );
+    // A card of ANOTHER workspace, forced under the story behind every guard: the tree is
+    // read inside the run's workspace context, so it never appears.
+    const strangerUser = await usersService.createUser({
+      email: 'stranger-tree@example.com',
+      password: 'hunter2hunter2',
+      name: 'Stranger',
+    });
+    const { workspace: strangerSpace } = await workspacesService.createWorkspace({
+      name: 'Elsewhere',
+      ownerUserId: strangerUser.id,
+    });
+    const strangerProject = await projectsService.createProject({
+      workspaceId: strangerSpace.id,
+      actorUserId: strangerUser.id,
+      name: 'Elsewhere',
+      identifier: 'ELSE',
+    });
+    const foreign = await workItemsService.createWorkItem(
+      { projectId: strangerProject.id, kind: 'task', title: 'Foreign child' },
+      { userId: strangerUser.id, workspaceId: strangerSpace.id },
+    );
+    await adminDb.$executeRawUnsafe('ALTER TABLE "work_item" DISABLE TRIGGER USER');
+    try {
+      await adminDb.workItem.update({ where: { id: foreign.id }, data: { parentId: story.id } });
+    } finally {
+      await adminDb.$executeRawUnsafe('ALTER TABLE "work_item" ENABLE TRIGGER USER');
+    }
+    await workItemsService.updateStatus(dropped.id, 'cancelled', s.ctx);
+    // The story is reviewed once the cards under it are finished.
+    for (const child of [grandchild, first, second, bare]) {
+      await workItemsService.updateStatus(child.id, 'in_progress', s.ctx);
+      await workItemsService.updateStatus(child.id, 'done', s.ctx);
+    }
+    await workItemsService.updateStatus(story.id, 'in_progress', s.ctx);
+    const headRef = `story/${story.identifier}-75`;
+    await linkPrByIdentifier({
+      identifier: story.identifier,
+      owner: 'moooon',
+      name: 'acme',
+      number: 75,
+      headRef,
+    });
+    await githubWebhookService.handleEvent(
+      'pull_request',
+      pullRequestPayload('opened', 75, headRef),
+    );
+    await ci('sha-a', 75);
+    expect(await awaitingOf(story.id, REVIEW)).toHaveLength(1);
+    const { headers } = await runFor(s, story, 'review');
+
+    const res = await readPrompt(headers, story.identifier);
+    expect(res.status).toBe(200);
+    const body = await bodyOf(res);
+    expect(Object.keys(body).sort()).toEqual(
+      ['gateId', 'key', 'prompt', 'pullRequests', 'subjectVersion'].sort(),
+    );
+    const prompt = String(body['prompt']);
+    expect(prompt).toContain('CRITERIA CHECKLIST');
+    const heads = [
+      `${story.identifier} — The story (the run target)`,
+      `${first.identifier} — First child (done`,
+      `${second.identifier} — Second child (done`,
+      `${dropped.identifier} — Dropped child (skipped`,
+      `${bare.identifier} — Bare child`,
+      `${grandchild.identifier} — Grandchild`,
+    ];
+    const at = heads.map((head) => prompt.indexOf(head));
+    expect(
+      at.every((i) => i > 0),
+      JSON.stringify(at),
+    ).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(prompt).toContain('    - Grandchild holds.');
+    expect(prompt).toContain('    - Second child holds.');
+    expect(prompt).not.toContain('Dropped child holds.');
+    expect(prompt).not.toContain('Foreign child');
+    expect(prompt).toContain('    (This card names no acceptance criteria.');
+    expect(prompt).toContain(`ONE verdict, for ${story.identifier} — the run target — only.`);
+  });
+
   it('is SERVED when motir-ai fails every convention read — each repository reviewed against the card alone (MOTIR-6904)', async () => {
     const s = await makeScenario('prompt-no-convention');
     const { item } = await reviewedCard(s, 74, 'Show the widget count');

@@ -39,11 +39,29 @@ export interface ApprovalGateSettingsDTO {
    * this setting — on the record, never by skipping it.
    */
   designApprovalGate: boolean;
+  /**
+   * WHO answers the review while `reviewAgentEnabled` is on (Story MOTIR-10327 ·
+   * MOTIR-10332; `approval-gates.md` §12.10): `hosted` — Motir's hosted review run,
+   * the default — or `own`, the person's own agent through the verdict door, with
+   * no hosted run and nothing billed. Stored while the switch is off too.
+   */
+  reviewAgentSource: ReviewAgentSourceValue;
+  /**
+   * Whether Motir's own GitHub App bot posts every agent verdict on the pull
+   * requests (`approval-gates.md` §12.16). On by default.
+   */
+  reviewBotPostsEnabled: boolean;
 }
+
+/** The two values of the review source (§12.10). */
+export const REVIEW_AGENT_SOURCES = ['hosted', 'own'] as const;
+export type ReviewAgentSourceValue = (typeof REVIEW_AGENT_SOURCES)[number];
 
 /** The PATCH body: any subset of the switches, each optional. */
 export interface UpdateApprovalGateSettingsInput {
   acceptanceVideoEnabled?: boolean;
   reviewAgentEnabled?: boolean;
   designApprovalGate?: boolean;
+  reviewAgentSource?: ReviewAgentSourceValue;
+  reviewBotPostsEnabled?: boolean;
 }

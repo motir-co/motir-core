@@ -578,8 +578,14 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // RUN's own token, never an external client's PAT (which they refuse with
     // `REVIEW_RUN_TOKEN_REQUIRED`), so this PAT journey has no step to give them.
     // Their journey is `tests/api/v1/agent-review-routes.test.ts`.)
+    // (`…/review-verdict` and `…/review-dismissal` joined them in Story MOTIR-10327 — a
+    // person's OWN review agent submitting its verdict (MOTIR-10333), and the routed
+    // person dismissing a send-back (MOTIR-10334): the same review loop as
+    // `…/agent-review`, addressed by the card it judges. Their journeys are
+    // `tests/approvalGates/reviewVerdictDoor.test.ts` and
+    // `tests/approvalGates/reviewDismissal.test.ts`, and the drift guard drives both.)
     const WORK_LOOP_SUBRESOURCES =
-      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests|how-to-test|repair|continue|review-prompt|agent-review)\//;
+      /\/(dispatch-prompt|integration|implementation|expansions|activity|claim|plan-approval|pull-requests|how-to-test|repair|continue|review-prompt|agent-review|review-verdict|review-dismissal)\//;
     // ⚠️ Story MOTIR-3000's attachment door is excluded for the SAME reason as
     // the two groups above, and the reason is worth stating rather than
     // inheriting: `…/attachments` hangs off a work item because that is what the

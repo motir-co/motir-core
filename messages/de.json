@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "Ein Admin hat Ihren Agenten in den Ruhezustand versetzt",
             "desc": "Ein Inhaber oder Admin der Organisation hat einen Ihrer Agenten auf der Fleet-Seite der Organisation gestoppt."
+          },
+          "review_to_run": {
+            "label": "Ein Review wartet auf deinen Agenten",
+            "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review eines Arbeitselements führst du mit motir review aus."
+          },
+          "review_sent_back": {
+            "label": "Ein Agent hat Änderungen angefordert",
+            "desc": "Ein Review-Agent hat ein Ihnen zugewiesenes Arbeitselement mit seinen Befunden zurückgeschickt."
           }
         },
         "soon": "Demnächst",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
       "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
+      "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten",
+      "reviewSentBack": "Ein Agent hat Änderungen an <s>{key}</s> angefordert",
       "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt"
     },
     "excerpt": {
@@ -14503,6 +14513,8 @@
         "plan_stale": "Arbeit, die dieser Plan ändert, wurde abgeschlossen, daher ist der Plan veraltet und diese Frage wurde zurückgezogen.",
         "plan_discarded": "Jeder Vorschlag im Plan wurde zurückgezogen, daher endete der Plan und mit ihm diese Frage.",
         "queue_failed": "Die Merge-Queue hat diese Commits abgewiesen, daher wurde diese Frage zurückgezogen.",
+        "review_agent_disabled": "Der Review-Agent wurde ausgeschaltet, daher wurde diese Frage zurückgezogen.",
+        "agent_changes_requested": "Der Review-Agent hat bei diesen Commits Änderungen angefordert, daher wurde diese Frage bis zum nächsten Push zurückgezogen.",
         "subject_gone": "Das, wonach diese Frage gefragt hat, existiert nicht mehr, daher wurde diese Frage zurückgezogen.",
         "no_longer_manual": "Das Arbeitselement ist keine manuelle Arbeit mehr, daher wurde diese Frage zurückgezogen.",
         "closed_without_decision": "Das Arbeitselement wurde geschlossen, ohne dass jemand es als erledigt markiert hat, daher wurde diese Frage zurückgezogen.",
@@ -15351,6 +15363,99 @@
         "since": "seit {when}",
         "open": "Planungssitzung öffnen — {sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> hat das Review bei {commits} bestanden",
+        "sentBack": "<actor>{agent}</actor> hat bei {commits} Änderungen angefordert",
+        "late": "Verspätet",
+        "secondTag": "Zweites Review",
+        "lateNote": "Geprüft wurde {commits}, das nicht mehr die aktuelle Version ist. Es hat nichts entschieden.",
+        "second": "Ein zweites Review einer bereits entschiedenen Version. Es hat nichts entschieden.",
+        "notified": "{name} wurde benachrichtigt.",
+        "findings": "Befunde",
+        "agentHosted": "Der gehostete Agent von Motir",
+        "agentOwn": "Agent von {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Genehmigt von {name} · vom Agenten geprüft bei {commits}",
+        "skipped": "Genehmigt von {name} · Review übersprungen von {who}",
+        "dismissed": "Genehmigt von {name} · Review verworfen von {who}",
+        "none": "Genehmigt von {name} · nicht von einem Agenten geprüft",
+        "someone": "jemand",
+        "reason": "Grund: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent prüft",
+        "reviewingName": "Ein Agent prüft diese Arbeit",
+        "couldNotRun": "Review konnte nicht laufen",
+        "couldNotRunName": "Das Agenten-Review konnte nicht laufen — wartet auf Sie",
+        "couldNotRunOn": "Review konnte nicht laufen · {name}",
+        "couldNotRunOnName": "Das Agenten-Review konnte nicht laufen — wartet auf {name}",
+        "waitingYours": "Wartet auf Ihren Review-Agenten",
+        "waitingYoursName": "Wartet auf Ihren Review-Agenten — führen Sie motir review {key} aus",
+        "waitingOn": "Wartet auf den Review-Agenten von {name}",
+        "waitingOnName": "Wartet auf den Review-Agenten von {name}"
+      },
+      "command": {
+        "copy": "motir review {key} kopieren",
+        "copied": "Kopiert",
+        "toastTitle": "Befehl kopiert",
+        "toastBody": "Führen Sie {command} in Ihrem eigenen Agenten aus, um diese Arbeit zu prüfen."
+      },
+      "badge": {
+        "reviewed": "Geprüft",
+        "reviewedName": "Von einem Agenten bei den aktuellen Commits geprüft",
+        "container": "{total, plural, one {{done} von # geprüft} other {{done} von # geprüft}}",
+        "containerName": "{total, plural, one {{done} von # Teil von einem Agenten bei seinen aktuellen Commits geprüft} other {{done} von # Teilen von einem Agenten bei ihren aktuellen Commits geprüft}}",
+        "containerAllName": "Jeder Teil von einem Agenten bei seinen aktuellen Commits geprüft",
+        "card": {
+          "hosted": "Geprüft vom gehosteten Agenten von Motir",
+          "own": "Geprüft vom eigenen Agenten von {name}",
+          "harness": "{harness} · {model}",
+          "commits": "Bei diesen Commits",
+          "link": "Befunde und Checkliste"
+        }
+      },
+      "line": {
+        "label": "Agenten-Review",
+        "reviewed": "<b>Von einem Agenten geprüft</b> · {who} · {when}",
+        "whoHosted": "Der gehostete Agent von Motir",
+        "whoOwn": "Agent von {name} · {harness}",
+        "findings": "Befunde und Checkliste",
+        "skipped": "<b>Review übersprungen von {name}</b> — „{reason}“",
+        "dismissed": "<b>Review verworfen von {name}</b> — „{reason}“",
+        "notReviewed": "<b>Nicht von einem Agenten geprüft</b>",
+        "earlier": "Zuletzt bei einem früheren Commit geprüft",
+        "github": "<b>Auf GitHub genehmigt</b> von {logins}"
+      },
+      "toRun": {
+        "sentence": "<title>{name}</title> mit Ihrem Agenten prüfen",
+        "tag": "Review auszuführen",
+        "details": "Noch keine Genehmigung. Ihre Genehmigung wird angefragt, sobald das Review bestanden ist.",
+        "open": "{key} öffnen: {sentence}"
+      },
+      "dismiss": {
+        "button": "Review verwerfen",
+        "title": "Das Review des Agenten verwerfen?",
+        "body": "Der Agent hat bei diesen Commits Änderungen angefordert. Wenn Sie es verwerfen, verlässt das Arbeitselement „Zu beheben“, und Ihre Genehmigung wird bei denselben Commits angefragt. Das Review und Ihr Grund bleiben am Arbeitselement.",
+        "reasonLabel": "Warum verwerfen Sie es?",
+        "reasonHint": "Erforderlich. Ihr Grund wird bei der Genehmigung und im Verlauf des Arbeitselements angezeigt.",
+        "reasonPlaceholder": "Der Befund betrifft Code, den dieses Arbeitselement nicht ändert.",
+        "confirm": "Review verwerfen",
+        "cancel": "Abbrechen",
+        "submitting": "Wird verworfen…",
+        "error": "Das Review konnte nicht verworfen werden. Nichts wurde geändert. Versuchen Sie es erneut.",
+        "stale": "Seit Sie dieses Review gelesen haben, sind neue Commits eingetroffen, daher wurde nichts verworfen. Zeigen Sie die aktuelle Version an und lesen Sie es erneut.",
+        "already": "Dieses Review wurde bereits verworfen. Zeigen Sie die aktuelle Version an, um es zu sehen.",
+        "notStanding": "Dieses Review gilt nicht mehr, daher gibt es nichts zu verwerfen. Zeigen Sie die aktuelle Version an.",
+        "reread": "Aktuelle Version anzeigen",
+        "toFixNote": "Ein von Ihnen angefordertes Agenten-Review hat dies zurückgeschickt. Beheben Sie es oder verwerfen Sie das Review mit einem Grund."
+      },
+      "authorNote": {
+        "title": "GitHub lässt Sie Ihre eigenen Pull Requests nicht genehmigen",
+        "body": "Sie haben jeden Pull Request hier geöffnet. Genehmigen Sie in Motir oder bitten Sie eine Teamkollegin oder einen Teamkollegen, sie auf GitHub zu prüfen."
+      }
     }
   },
   "approvalOverlay": {
@@ -15430,7 +15535,19 @@
       "billingNote": "Jede Prüfung ist ein gehosteter Agent-Lauf, bezahlt aus den AI-Credits Ihrer Organisation.",
       "offNote": "Das Ausschalten bricht laufende Prüfungen ab — diese Arbeitselemente gehen direkt in den gewöhnlichen Ablauf.",
       "saved": "Gespeichert",
-      "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut."
+      "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut.",
+      "source": {
+        "label": "Wer prüft",
+        "hosted": "Motirs gehosteter Agent",
+        "hostedWhat": "Motir startet einen Prüf-Lauf, sobald die Checks bestanden sind. <strong>Verbraucht AI-Credits.</strong>",
+        "own": "Ihr eigener Agent",
+        "ownWhat": "Kostenlos. Die Prüfung wartet, bis jemand <cmd>motir review</cmd> mit dem eigenen Agent ausführt. Nichts startet von selbst."
+      },
+      "posting": {
+        "title": "Agent-Prüfungen in Pull Requests posten",
+        "on": "Motirs GitHub-App kommentiert jedes Ergebnis in den Pull Requests und fordert bei einer Rückgabe Änderungen an. Sie genehmigt nie.",
+        "off": "Ergebnisse bleiben in Motir. In den Pull Requests wird nichts gepostet."
+      }
     },
     "designApproval": {
       "title": "Design-Genehmigung",

@@ -378,3 +378,39 @@ export interface GithubWebhookDeliveryDTO {
   receivedAt: string;
   processedAt: string | null;
 }
+
+// The reverse lookup — which cards a pull request delivers (MOTIR-10331). Read by
+// `find_work_items_for_pull_request`, which the `motir review` skill calls with a
+// pull-request URL before it builds its checklist.
+
+/** One card a pull request delivers, through a `work_item_delivery` row. */
+export interface DeliveredWorkItemDto {
+  /** `ACME-12`. */
+  key: string;
+  title: string;
+  kind: string;
+  /** The workflow status key (`in_review`). */
+  status: string;
+  /** The key of the project the card belongs to (`ACME`). */
+  projectKey: string;
+}
+
+/**
+ * Why a pull request answered no card. None of them is an error: each is a plain
+ * answer the caller stops on, and none says anything about another workspace.
+ *
+ * - `repository_not_connected` — no repository by that owner and name is connected
+ *   to this organisation.
+ * - `pull_request_unknown` — the repository is connected, but Motir has no row for
+ *   that pull-request number (never linked, and no webhook delivered it).
+ * - `no_deliveries` — the pull request is known, and delivers no card this
+ *   workspace can see.
+ */
+export type PullRequestNotLinkedReason =
+  | 'repository_not_connected'
+  | 'pull_request_unknown'
+  | 'no_deliveries';
+
+export type PullRequestDeliveriesDto =
+  | { outcome: 'linked'; pullRequest: string; workItems: DeliveredWorkItemDto[] }
+  | { outcome: 'not_linked'; pullRequest: string; reason: PullRequestNotLinkedReason };
