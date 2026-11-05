@@ -2334,6 +2334,24 @@ export interface components {
                 kind: "shape";
                 item: string;
                 severity: string;
+                /** @constant */
+                runnerStop: true;
+                path: string;
+                repo: string;
+                criterionIndex: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                /** @constant */
+                runnerStop: true;
+                criteria?: string;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
                 criterionIndex: number;
                 phrase?: string;
                 path?: string;

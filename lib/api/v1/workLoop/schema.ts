@@ -17,6 +17,7 @@ import {
   isPostMergeChildAdvisory,
   isBlockerCountAdvisory,
   isSelfBlockingDesignAdvisory,
+  isRunnerStopAdvisory,
   isSizingAdvisory,
   isUnderAuthoredAdvisory,
 } from '@/lib/dto/workItems';
@@ -263,6 +264,56 @@ const underAuthoredShapeAdvisorySchema = z.object({
 });
 
 /**
+ * A RUNNER-STOP body member (MOTIR-10380): `leaf-no-description` (a childless,
+ * non-exempt leaf whose description is blank) or `leaf-no-criteria` (a body with no
+ * enumerated acceptance criterion; `criteria` is `no-heading` or `no-criterion`).
+ * Both carry the literal `runnerStop: true`, which is what a reader keys on.
+ * `validate_plan` emits them; the dispatch path does not today, and the variant is
+ * here so the published contract parses a payload that carries one.
+ *
+ * ⚠️ LISTED FIRST in the union below, and that is load-bearing: the union's object
+ * members strip unknown keys, so a `leaf-no-criteria` payload tried against the
+ * under-authored member first would parse there and lose `runnerStop`. Its required
+ * `runnerStop` literal is what makes this member match only a runner stop.
+ *
+ * Additive under §8: a new member of a union whose `severity` is open-ended.
+ */
+const leafBodyRunnerStopShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  runnerStop: z.literal(true),
+  /** `leaf-no-criteria` only: `no-heading` or `no-criterion`. */
+  criteria: z.string().optional(),
+});
+
+/**
+ * The MULTI-REPO RUNNER-STOP member (MOTIR-10381): `leaf-multi-repo` — a childless,
+ * non-exempt leaf whose acceptance criteria name paths in two or more repositories,
+ * whatever its repository set carries. `repo` is the second repository, `path` its
+ * first path and `criterionIndex` the criterion naming it. Carries `runnerStop: true`.
+ *
+ * ⚠️ FIRST in the union, ahead of the body member and the criterion-shaped member:
+ * the criterion-shaped member would otherwise accept this payload and strip
+ * `runnerStop`, and the body member would strip `path` / `repo` / `criterionIndex`.
+ * Its required fields are a superset of both, so it never captures either of them.
+ *
+ * Additive under §8, on the same terms as the body member.
+ */
+const leafMultiRepoRunnerStopShapeAdvisorySchema = z.object({
+  kind: z.literal('shape'),
+  item: workItemKeySchema,
+  severity: advisorySeveritySchema,
+  runnerStop: z.literal(true),
+  /** The repo-qualified path the criterion names. */
+  path: z.string(),
+  /** The second repository that path resolves to. */
+  repo: z.string(),
+  /** 1-based index of the criterion naming it. */
+  criterionIndex: z.number().int(),
+});
+
+/**
  * A SUBSUMPTION advisory — a path the card's body names was touched by a merged
  * pull request that is not this card's own and that merged after the card was
  * filed, so its deliverable may already be in the repository (MOTIR-2903).
@@ -330,6 +381,8 @@ const subsumptionAdvisorySchema = z.union([
  * untagged object, and only an untagged one, is a reference.
  */
 export const dispatchAdvisorySchema = z.union([
+  leafMultiRepoRunnerStopShapeAdvisorySchema,
+  leafBodyRunnerStopShapeAdvisorySchema,
   criterionShapeAdvisorySchema,
   sizingShapeAdvisorySchema,
   selfBlockingDesignShapeAdvisorySchema,
@@ -472,6 +525,35 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
         > => !isPostMergeChildAdvisory(advisory) && !isMislabelledLinkAdvisory(advisory),
       )
       .map((advisory) => {
+        // The RUNNER-STOP members (MOTIR-10380) first: they carry no
+        // `criterionIndex`, so the generic `shape` branch below must never see one.
+        if (isRunnerStopAdvisory(advisory)) {
+          if (advisory.severity === 'leaf-multi-repo') {
+            return {
+              kind: 'shape' as const,
+              item: advisory.item,
+              severity: advisory.severity,
+              runnerStop: true as const,
+              path: advisory.path,
+              repo: advisory.repo,
+              criterionIndex: advisory.criterionIndex,
+            };
+          }
+          return advisory.severity === 'leaf-no-criteria'
+            ? {
+                kind: 'shape' as const,
+                item: advisory.item,
+                severity: advisory.severity,
+                runnerStop: true as const,
+                criteria: advisory.criteria,
+              }
+            : {
+                kind: 'shape' as const,
+                item: advisory.item,
+                severity: advisory.severity,
+                runnerStop: true as const,
+              };
+        }
         if (isUnderAuthoredAdvisory(advisory)) {
           return {
             kind: 'shape' as const,

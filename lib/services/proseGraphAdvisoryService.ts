@@ -13,14 +13,18 @@ import {
   firstBlockerCountClaim,
   firstPostMergeChildTell,
   firstPostMergeCriterion,
+  firstMultiRepoCriterion,
   firstRepoStraddleCriterion,
   hasCriterionPathTokens,
+  isLeafBodyCheckExempt,
   isOrderingCheckExempt,
   isPostMergeChildCandidate,
   isPostMergeChildCheckExemptContainer,
   isSelfBlockingDesignCheckExempt,
   isMislabelledLink,
   isSubsumptionCheckExempt,
+  leafNoCriteria,
+  leafNoDescription,
   overGateSizing,
   underAuthored,
   selfBlockingDesignCriteria,
@@ -79,8 +83,8 @@ export interface ProseAdvisorySubject {
    */
   explanationMd?: string | null;
   /**
-   * Its kind — read ONLY by the UNDER-AUTHORED check (MOTIR-5427), which exempts a
-   * container kind because it cannot carry a `type` or `executor`. Optional: a
+   * Its kind — read ONLY by the UNDER-AUTHORED check (MOTIR-5427) and the
+   * RUNNER-STOP checks (MOTIR-10380), which exempt a container kind. Optional: a
    * caller that does not know is not exempt.
    */
   kind?: string | null;
@@ -236,9 +240,19 @@ export async function buildProseVsGraphAdvisories(
   subjects: ProseAdvisorySubject[],
   ctx: ServiceContext,
   localRefs?: ReadonlyMap<string, ProseAdvisoryLocalRef>,
-  options: { mislabelledLinks?: boolean } = {},
+  options: {
+    mislabelledLinks?: boolean;
+    /**
+     * Emit the RUNNER-STOP advisories (MOTIR-10380) — the stops the runner makes
+     * on a card's body that a reading of the card finds. Off by default: only
+     * `validate_plan` asks for them, so no payload of `validate_work_item`, the
+     * dispatch prompt or `claim_next_ready` changes.
+     */
+    runnerStops?: boolean;
+  } = {},
 ): Promise<WorkItemProseAdvisoryDto[]> {
   const checkLinks = options.mislabelledLinks ?? true;
+  const runnerStops = options.runnerStops ?? false;
   // Scan every body once, dropping the exempt references as we go. The LINKS
   // (MOTIR-9007) are scanned separately and keep the exempt ones: a link to the
   // card's own blocker with the wrong label is as wrong as any other.
@@ -369,6 +383,12 @@ export async function buildProseVsGraphAdvisories(
     if (sizing) advisories.push(sizing);
     const underAuthoredFound = underAuthoredAdvisory(s.subject);
     if (underAuthoredFound) advisories.push(underAuthoredFound);
+    if (runnerStops) {
+      const leafBody = leafBodyRunnerStopAdvisory(s.subject);
+      if (leafBody) advisories.push(leafBody);
+      const multiRepo = multiRepoRunnerStopAdvisory(s.subject, repoCandidates);
+      if (multiRepo) advisories.push(multiRepo);
+    }
     const selfBlocking = selfBlockingDesignAdvisory(s.subject);
     if (selfBlocking) advisories.push(selfBlocking);
     const postMergeChild = postMergeChildAdvisory(s.subject);
@@ -603,6 +623,72 @@ function underAuthoredAdvisory(subject: ProseAdvisorySubject): WorkItemProseAdvi
     item: subject.item,
     severity: 'under-authored',
     criteria: found.criteria,
+  };
+}
+
+/**
+ * THE RUNNER-STOP body advisory for ONE subject (MOTIR-10380) — one
+ * `leaf-no-description` for a blank body, else one `leaf-no-criteria` for a body
+ * with no enumerated criterion, else nothing. Both read only the body and the
+ * exemption ({@link leafNoDescription}, {@link leafNoCriteria}); sizing, type and
+ * executor do not excuse a card the runner stops on.
+ */
+function leafBodyRunnerStopAdvisory(
+  subject: ProseAdvisorySubject,
+): WorkItemProseAdvisoryDto | null {
+  const card = {
+    kind: subject.kind,
+    descriptionMd: subject.descriptionMd,
+    hasChildren: subject.hasChildren,
+    type: subject.type,
+    executor: subject.executor,
+  };
+  if (leafNoDescription(card)) {
+    return { kind: 'shape', item: subject.item, severity: 'leaf-no-description', runnerStop: true };
+  }
+  const criteria = leafNoCriteria(card);
+  if (!criteria) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'leaf-no-criteria',
+    runnerStop: true,
+    criteria,
+  };
+}
+
+/**
+ * THE MULTI-REPO RUNNER-STOP advisory for ONE subject (MOTIR-10381) — one
+ * `leaf-multi-repo` when the criteria name paths in two or more repositories,
+ * whatever the card's repository set carries. Pure once `candidates` is in hand:
+ * the SAME candidates the straddle advisory resolves, read only when some body
+ * names a criterion path. Not emitted for a card {@link isLeafBodyCheckExempt}
+ * exempts. A card that also trips `likely-repo-straddle` reports both.
+ */
+function multiRepoRunnerStopAdvisory(
+  subject: ProseAdvisorySubject,
+  candidates: readonly RepoCandidate[],
+): WorkItemProseAdvisoryDto | null {
+  if (
+    isLeafBodyCheckExempt({
+      kind: subject.kind,
+      type: subject.type,
+      executor: subject.executor,
+      hasChildren: subject.hasChildren,
+    })
+  ) {
+    return null;
+  }
+  const found = firstMultiRepoCriterion(subject.descriptionMd, subject.targetRepos, candidates);
+  if (!found) return null;
+  return {
+    kind: 'shape',
+    item: subject.item,
+    severity: 'leaf-multi-repo',
+    runnerStop: true,
+    path: found.path,
+    repo: found.repo,
+    criterionIndex: found.criterionIndex,
   };
 }
 
