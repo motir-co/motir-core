@@ -37,6 +37,10 @@ export const NOTIFICATION_EVENT_TYPE = {
   /** GitHub REFUSED a collaborator invitation (MOTIR-5016 · Story MOTIR-5010).
    *  The first type whose subject is a PROJECT rather than a work item. */
   codeAccessRefused: 'code_access_refused',
+  /** An organisation owner or admin HIBERNATED the recipient's agent (MOTIR-10368 ·
+   *  Story MOTIR-10363). Its subject is an agent, not a work item, and it has an
+   *  actor: the admin. */
+  agentHibernatedByAdmin: 'agent_hibernated_by_admin',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -91,6 +95,16 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // user's to turn off.
   {
     type: NOTIFICATION_EVENT_TYPE.codeAccessRefused,
+    settable: true,
+    defaults: { email: true, in_app: true },
+  },
+  // ⚠️ LAST again, for the same reason (MOTIR-10368): appended so every row above
+  // keeps its position. Its defaults mirror the access-refused row's. EMAIL HAS NO
+  // PRODUCER for this type — only the in-app drawer row is written — exactly as the
+  // email arm of the access-refused row has none; the cell is the user's standing
+  // choice for when one ships.
+  {
+    type: NOTIFICATION_EVENT_TYPE.agentHibernatedByAdmin,
     settable: true,
     defaults: { email: true, in_app: true },
   },

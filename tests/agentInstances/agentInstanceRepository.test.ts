@@ -652,4 +652,76 @@ describe('agentInstanceIntervalRepository', () => {
       ),
     ).toEqual([]);
   });
+
+  it("reads ONE organisation's org-admin stops: the newest end, and the count in a window", async () => {
+    const f = await seedFixture();
+    const other = await seedFixture();
+    const a = await createInstance(f, { name: 'yue-a' });
+    const b = await createInstance(f, { name: 'yue-b' });
+    const c = await createInstance(f, { name: 'yue-c' });
+    const theirs = await createInstance(other, { name: 'ann-a' });
+    const closeAt = async (
+      fx: Fixture,
+      id: string,
+      endedAt: Date,
+      endReason: 'org_admin_stop' | 'idle',
+    ) => {
+      const interval = await open(fx, id, new Date(endedAt.getTime() - 60_000));
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        agentInstanceIntervalRepository.close(
+          interval.id,
+          { endedAt, endReason, billableSeconds: 60 },
+          tx,
+        ),
+      );
+    };
+    const t1 = new Date('2026-11-04T10:00:00.000Z');
+    const t2 = new Date('2026-11-04T10:05:00.000Z');
+    await closeAt(f, a.id, t1, 'org_admin_stop');
+    await closeAt(f, b.id, t2, 'org_admin_stop');
+    // A later end for another reason, and another org's later stop, are not this org's stop.
+    await closeAt(f, c.id, new Date('2026-11-04T11:00:00.000Z'), 'idle');
+    await closeAt(other, theirs.id, new Date('2026-11-04T12:00:00.000Z'), 'org_admin_stop');
+    // An interval still open has no end and is never counted.
+    await open(f, a.id, new Date('2026-11-04T10:30:00.000Z'));
+
+    await withSystemContext(async (tx) => {
+      expect(
+        await agentInstanceIntervalRepository.latestEndedForOrganization(
+          f.organizationId,
+          'org_admin_stop',
+          tx,
+        ),
+      ).toEqual(t2);
+      expect(
+        await agentInstanceIntervalRepository.countEndedForOrganizationBetween(
+          f.organizationId,
+          'org_admin_stop',
+          new Date(t2.getTime() - 10 * 60_000),
+          t2,
+          tx,
+        ),
+      ).toBe(2);
+      expect(
+        await agentInstanceIntervalRepository.countEndedForOrganizationBetween(
+          f.organizationId,
+          'org_admin_stop',
+          new Date(t1.getTime() + 1),
+          t2,
+          tx,
+        ),
+      ).toBe(1);
+    });
+
+    const none = await seedFixture();
+    expect(
+      await withSystemContext((tx) =>
+        agentInstanceIntervalRepository.latestEndedForOrganization(
+          none.organizationId,
+          'org_admin_stop',
+          tx,
+        ),
+      ),
+    ).toBeNull();
+  });
 });

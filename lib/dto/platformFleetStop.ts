@@ -51,3 +51,26 @@ export interface FleetLastStopDTO {
   hostedRunsEnded: number;
   agentInstancesHibernated: number;
 }
+
+/**
+ * The newest stop an ORGANISATION owner or admin made of the org's own fleet
+ * work — read from the stored `org_admin_stop` end and teardown reasons, never
+ * from `fleet.stop` rows, so the tenant page's Fleet card shows it apart from a
+ * platform stop. One Stop everything ends many rows within seconds: the counts
+ * are the rows of each kind inside the 10-minute window ending at `at`. The
+ * admin's name is in neither record, so it carries no actor.
+ */
+export interface FleetLastOrgAdminStopDTO {
+  /** ISO-8601 — the newest of the stored times (interval, intent, last-stop record). */
+  at: string;
+  ciContainersStopped: number;
+  agentInstancesHibernated: number;
+  /**
+   * The admin's display name at the stop, from the org's last-stop record
+   * (MOTIR-10373) when that record is this stop; null when it is not or has none.
+   */
+  stoppedByName: string | null;
+  /** True when this stop was the cancel of one hosted agent run, which leaves no
+   *  end reason on an interval or intent and is known only from the record. */
+  hostedRunCancelled: boolean;
+}

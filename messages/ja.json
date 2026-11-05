@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "コードアクセスを付与できなかったとき",
             "desc": "Motir がプロジェクト用に作成したリポジトリへのアクセス権を、あなたに付与できなかったとき。"
+          },
+          "agent_hibernated_by_admin": {
+            "label": "管理者があなたのエージェントを休止しました",
+            "desc": "組織のオーナーまたは管理者が、組織の Fleet ページからあなたのエージェントの 1 つを停止しました。"
           }
         },
         "soon": "近日提供",
@@ -4110,7 +4114,200 @@
         "members": "メンバー",
         "security": "セキュリティ",
         "usage": "使用量とコスト",
+        "fleet": "フリート",
         "billing": "請求とプラン"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · 設定",
+        "title": "フリート",
+        "lead": "{org} が現在 Motir のフリートで実行しているものと、それを停止するための操作です。容量のリクエストは引き続き<link>請求とプラン › フリートの利用状況</link>で行います。",
+        "refresh": {
+          "button": "更新",
+          "cue": "{time} に更新 · このタブを開いている間は 30 秒ごとに更新されます",
+          "refreshing": "更新中…",
+          "failed": "更新できませんでした。最後に読み取ったデータを表示しています。"
+        },
+        "lastStop": {
+          "by": "最後に停止したのは {name} です（{when}）",
+          "byYou": "最後に停止したのはあなたです（{when}）",
+          "bySomeone": "最後の停止：{when}",
+          "never": "{org} ではまだ誰もフリートの作業を停止していません。",
+          "failed": "最後にフリートの作業を停止した人を読み取れませんでした。"
+        },
+        "when": {
+          "today": "今日 {time}",
+          "yesterday": "昨日 {time}"
+        },
+        "tiles": {
+          "agentRuns": "エージェントの並列実行",
+          "agentRunsNote": "マシン稼働 1 分ごとに課金",
+          "agents": "エージェント",
+          "agentsNote": "稼働中と休止中",
+          "ciJobs": "実行中の CI ジョブ",
+          "ciWaiting": "{count, plural, =0 {待機なし} other {# 件待機中}}",
+          "index": "インデックスジョブ",
+          "indexNote": "課金対象外",
+          "of": " / {figure}",
+          "notRead": "読み取れません",
+          "failedTitle": "フリートの数値を読み取れませんでした",
+          "failedBody": "ここでは何も 0 として表示しません。下のセクションには影響しません。"
+        },
+        "section": {
+          "retry": "再試行",
+          "failedBody": "ここでは何も 0 として表示しません。ほかのセクションには影響しません。"
+        },
+        "hosted": {
+          "title": "エージェントの実行",
+          "lead": "Motir のエージェントが現在この組織のために構築している作業項目です。",
+          "count": "{count} 件稼働中",
+          "empty": "稼働中のエージェントの実行はありません。",
+          "failed": "エージェントの実行を読み取れませんでした",
+          "noCard": "作業項目のない実行",
+          "meta": "{project} · {name} が開始 · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "削除されたプロジェクト",
+          "openRun": "実行を開く",
+          "running": "実行中",
+          "cancel": "キャンセル",
+          "cancelAria": "{key} の実行をキャンセル",
+          "cancelling": "キャンセル中…"
+        },
+        "agents": {
+          "title": "エージェントインスタンス",
+          "lead": "すべてのメンバーのエージェント（稼働中または休止中）です。ここで行えるのは休止のみです。",
+          "count": "{count} 件稼働中",
+          "empty": "稼働中または休止中のエージェントはありません。",
+          "failed": "エージェントインスタンスを読み取れませんでした",
+          "name": "{owner} のエージェント · {profile}",
+          "unknownOwner": "メンバー",
+          "runningSince": "{project} · {time} から稼働中",
+          "hibernatingSince": "{project} · {time} から休止中",
+          "inStateSince": "{project} · {time} から{state}",
+          "running": "稼働中",
+          "hibernating": "休止中",
+          "hibernatingAt": "休止中 · {time} から",
+          "hibernate": "休止",
+          "hibernateAria": "{owner} のエージェントを休止",
+          "hibernatingNow": "休止処理中…",
+          "state": {
+            "starting": "起動中",
+            "waking": "再開中",
+            "updating": "更新中",
+            "deleting": "削除中",
+            "hibernated": "休止中",
+            "failed": "失敗",
+            "other": "処理中"
+          }
+        },
+        "ci": {
+          "title": "CI ジョブ",
+          "lead": "Motir のランナー上のジョブ（実行中と待機中）です。",
+          "count": "{inFlight} 件実行中 · {waiting} 件待機中",
+          "empty": "実行中または待機中の CI ジョブはありません。",
+          "failed": "CI ジョブを読み取れませんでした",
+          "meta": "{project} · {time} にキュー投入 · ",
+          "noProject": "プロジェクトなし",
+          "viewOnGithub": "GitHub で表示",
+          "running": "実行中",
+          "waiting": "待機中 · {cause}",
+          "cause": {
+            "planLimit": "プランの上限",
+            "poolFull": "プールが満杯",
+            "other": "その他"
+          }
+        },
+        "index": {
+          "title": "インデックスジョブ",
+          "running": "<n>{count}</n> 件実行中",
+          "note": "インデックス作成によりコード検索が最新に保たれます。課金対象外で、ここでは停止されません。",
+          "failed": "インデックスジョブを読み取れませんでした"
+        },
+        "motirStops": {
+          "title": "Motir による停止 · 過去 7 日間",
+          "lead": "Motir 自身がこの組織のために停止したマシンとその理由です。",
+          "empty": "過去 7 日間、Motir がこの組織のために停止したものはありません。",
+          "failed": "Motir による停止を読み取れませんでした",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "CI ジョブのコンテナ",
+            "hosted_agent": "エージェントの実行",
+            "agent_instance": "エージェントインスタンス",
+            "code_graph_index": "インデックスジョブ",
+            "other": "マシン"
+          },
+          "reason": {
+            "record_ended": "そのジョブはすでに終了していました",
+            "no_record": "その記録が見つかりませんでした",
+            "org_stopped": "組織の作業が停止されました",
+            "foreign_org": "別の組織の作業を実行していました"
+          },
+          "done": "完了",
+          "notDone": "完了しませんでした"
+        },
+        "cancelRun": {
+          "title": "この実行をキャンセルしますか？",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} がこの実行を {time} に開始しました。キャンセルすると<strong>キャンセル済み</strong>として終了し、そのマシンをすぐに停止します。エージェントがプッシュした作業はブランチに残ります。",
+          "bodyNoName": "この実行は {time} に開始されました。キャンセルすると<strong>キャンセル済み</strong>として終了し、そのマシンをすぐに停止します。エージェントがプッシュした作業はブランチに残ります。",
+          "keep": "実行を続ける",
+          "confirm": "実行をキャンセル",
+          "confirming": "キャンセル中…",
+          "alreadyClosed": "{key} の実行はすでに終了していました。",
+          "notFound": "その実行はもう稼働していません。",
+          "failed": "{key} の実行をキャンセルできませんでした。もう一度お試しください。"
+        },
+        "hibernate": {
+          "title": "{owner} のエージェントを休止しますか？",
+          "description": "{profile} · {project} · {time} から稼働中",
+          "body": "マシンは停止し、ファイルは保持されます。その中で実行中の作業項目は先にキャンセルされます。",
+          "told": "<strong>{owner} に通知されます</strong>。あなたが休止したことと、その日時が伝わります。再開、開く、削除ができるのはその人だけです。",
+          "toldSelf": "再開、開く、削除ができるのはあなただけです。",
+          "keep": "稼働を続ける",
+          "confirm": "エージェントを休止",
+          "confirming": "休止処理中…",
+          "alreadyResting": "{owner} のエージェントはすでに休止していました。",
+          "inMotion": "{owner} のエージェントは起動中または状態を変更中のため、休止しませんでした。少し待ってからもう一度お試しください。",
+          "notFound": "そのエージェントはもう稼働していません。",
+          "failed": "{owner} のエージェントを休止できませんでした。もう一度お試しください。"
+        },
+        "stopAll": {
+          "button": "すべて停止",
+          "title": "{org} が実行しているものをすべて停止しますか？",
+          "lead": "以下の課金対象の作業を今すぐ停止します。",
+          "counting": "実行中のものを数えています…",
+          "ci": "{runs, plural, other {件の CI ジョブをキャンセル}}、<strong>{containers, plural, other {# 個のコンテナ}}</strong>を停止",
+          "ciUnknownRuns": "CI ジョブをキャンセル",
+          "hosted": "{count, plural, other {件のエージェントの実行を終了}}",
+          "agents": "{count, plural, other {件の稼働中エージェントを休止}}",
+          "index": "{count, plural, other {件のインデックスジョブは実行を継続}} — ここではインデックス作成を停止しません",
+          "afterwards": "停止後に何かがブロックされることはありません。メンバーはすぐに新しい作業を開始できます。休止したエージェントの所有者には通知されます。",
+          "countedAt": "{time} 時点の数です。",
+          "unreadableTitle": "実行中のものを数えられませんでした",
+          "unreadableBody": "何も停止していません。確定する前に、もう一度数を読み取ってください。",
+          "cancel": "キャンセル",
+          "retry": "もう一度試す",
+          "confirm": "すべて停止",
+          "confirming": "停止中…",
+          "failed": "フリートの作業を停止できませんでした。一部は停止した可能性があります。更新して、まだ実行中のものを確認してください。"
+        },
+        "result": {
+          "doneTitle": "すべて停止しました",
+          "partialTitle": "一部の作業が停止しませんでした",
+          "ci": "{runs, plural, other {# 件の CI ジョブをキャンセル}}、{total} 個中 {stopped} 個のコンテナを停止",
+          "hosted": "{count, plural, other {# 件のエージェントの実行を終了}}",
+          "agents": "{count, plural, other {# 件の稼働中エージェントを休止}}",
+          "agentsPartial": "稼働中エージェント {total} 件中 {done} 件を休止",
+          "hostedPartial": "エージェントの実行 {total} 件中 {done} 件を終了",
+          "ciFailed": "{count, plural, other {# 件の CI リポジトリまたはコンテナが停止しませんでした。}}更新して、もう一度「すべて停止」をお試しください。",
+          "hostedFailed": "{count, plural, other {# 件のエージェントの実行が終了しませんでした。}}その行の「キャンセル」をお試しください。",
+          "agentsFailed": "{count, plural, other {# 件のエージェントが停止しませんでした。停止が確認されませんでした。その行の「休止」をお試しください。}}",
+          "index": "インデックスジョブは実行を継続しました。",
+          "byYou": "あなたが停止しました（{when}）。",
+          "dismiss": "閉じる",
+          "dismissAria": "停止結果を閉じる"
+        },
+        "forbidden": "この組織のフリートの作業を停止できるのは、所有者または管理者のみです。"
       }
     },
     "gitAccounts": {
@@ -5770,7 +5967,11 @@
       "transitioned": "<s>{actor}</s> さんが <s>{key}</s> を {status} に移動しました",
       "generic": "<s>{actor}</s> さんが <s>{key}</s> を更新しました",
       "genericNoKey": "<s>{actor}</s> さんから通知が届きました",
-      "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください"
+      "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください",
+      "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。"
     }
   },
   "orgAdmin": {
@@ -12232,6 +12433,13 @@
           "unknownActor": "元オペレーター",
           "noReason": "理由の記録なし",
           "counts": "CI の実行 {runs} 件 · CI コンテナー {containers} 個 · ホスト型の実行 {hosted} 件 · エージェントインスタンス {instances} 個"
+        },
+        "orgAdminStop": {
+          "title": "組織の管理者による前回の停止",
+          "titleNamed": "組織の管理者 {name} による前回の停止",
+          "when": "{time}",
+          "counts": "CI コンテナー {containers} 個 · エージェントインスタンス {instances} 個",
+          "hostedRun": "エージェント実行 1 件をキャンセル"
         }
       }
     },
@@ -13297,7 +13505,8 @@
       "credits": "停止しました：組織のクレジットがなくなりました。クレジットを追加してから再開してください。",
       "idle": "30 分間使用されなかったため休止しました",
       "backstop": "12 時間実行したため停止しました。続けるには再開してください。",
-      "admin_stop": "Motir サポートにより停止されました。続けるには再開してください。"
+      "admin_stop": "Motir サポートにより停止されました。続けるには再開してください。",
+      "org_admin_stop": "組織の管理者により停止されました。続けるには再開してください。"
     },
     "menu": {
       "wake": "再開",

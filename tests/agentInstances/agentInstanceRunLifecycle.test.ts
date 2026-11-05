@@ -517,6 +517,23 @@ describe('the lifecycle under a live run (§6)', () => {
     await expectRevoked(runId, token);
   });
 
+  it('an org owner or admin’s stop closes the run cancelled FIRST, then hibernates the agent (org_admin_stop)', async () => {
+    const { runId, agentId, token } = await startedRun();
+    const result = await lifecycle.hibernateAllForOrganization(
+      fx.workspace.organizationId,
+      'org_admin_stop',
+    );
+    expect(result).toMatchObject({ hibernated: 1, failures: [] });
+    expect(await runRow(runId)).toMatchObject({ status: 'cancelled' });
+    expect((await closingLines(runId))[0]).toContain(AGENT_RUN_END_DETAIL.orgAdminStop);
+    expect((await agentRow(agentId)).state).toBe('hibernated');
+    const closed = await adminDb.agentInstanceInterval.findMany({
+      where: { agentInstanceId: agentId, endedAt: { not: null } },
+    });
+    expect(closed.map((i) => i.endReason)).toEqual(['org_admin_stop']);
+    await expectRevoked(runId, token);
+  });
+
   it('a machine found lost by reconcile closes its run failed, releases its legs and revokes', async () => {
     const { runId, agentId, token, item } = await startedRun();
     fleet.destroyOutside((await agentRow(agentId)).machineId!);

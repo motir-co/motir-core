@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "코드 액세스를 부여하지 못함",
             "desc": "Motir가 프로젝트용으로 만든 저장소에 대한 액세스를 회원님에게 부여하지 못했습니다."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "관리자가 내 에이전트를 최대 절전 모드로 전환했습니다",
+            "desc": "조직 소유자 또는 관리자가 조직의 Fleet 페이지에서 내 에이전트 중 하나를 중지했습니다."
           }
         },
         "soon": "곧 제공",
@@ -4110,7 +4114,200 @@
         "members": "멤버",
         "security": "보안",
         "usage": "사용량 및 비용",
+        "fleet": "플릿",
         "billing": "결제 및 요금제"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · 설정",
+        "title": "플릿",
+        "lead": "{org}이(가) 지금 Motir의 플릿에서 실행 중인 작업과 이를 중지하는 컨트롤입니다. 용량 요청은 계속 <link>결제 및 요금제 › 플릿 사용량</link>에서 합니다.",
+        "refresh": {
+          "button": "새로 고침",
+          "cue": "{time}에 업데이트됨 · 이 탭이 열려 있는 동안 30초마다 새로 고칩니다",
+          "refreshing": "새로 고치는 중…",
+          "failed": "새로 고칠 수 없습니다. 마지막으로 읽은 데이터가 계속 표시됩니다."
+        },
+        "lastStop": {
+          "by": "마지막 중지: {name}, {when}",
+          "byYou": "마지막 중지: 나, {when}",
+          "bySomeone": "마지막 중지: {when}",
+          "never": "{org}에서 아직 아무도 플릿 작업을 중지하지 않았습니다.",
+          "failed": "플릿 작업을 마지막으로 중지한 사람을 읽을 수 없습니다."
+        },
+        "when": {
+          "today": "오늘 {time}",
+          "yesterday": "어제 {time}"
+        },
+        "tiles": {
+          "agentRuns": "병렬 에이전트 실행",
+          "agentRunsNote": "머신 사용 분 단위로 과금",
+          "agents": "에이전트",
+          "agentsNote": "실행 중 및 절전 중",
+          "ciJobs": "진행 중인 CI 작업",
+          "ciWaiting": "{count, plural, =0 {대기 없음} other {#개 대기 중}}",
+          "index": "인덱스 작업",
+          "indexNote": "과금되지 않음",
+          "of": " / {figure}",
+          "notRead": "읽을 수 없음",
+          "failedTitle": "플릿 수치를 읽을 수 없습니다",
+          "failedBody": "여기서는 아무것도 0으로 표시하지 않습니다. 아래 섹션은 영향을 받지 않습니다."
+        },
+        "section": {
+          "retry": "다시 시도",
+          "failedBody": "여기서는 아무것도 0으로 표시하지 않습니다. 다른 섹션은 영향을 받지 않습니다."
+        },
+        "hosted": {
+          "title": "에이전트 실행",
+          "lead": "Motir의 에이전트가 지금 이 조직을 위해 만들고 있는 작업 항목입니다.",
+          "count": "{count}개 실행 중",
+          "empty": "실행 중인 에이전트 실행이 없습니다.",
+          "failed": "에이전트 실행을 읽을 수 없습니다",
+          "noCard": "작업 항목이 없는 실행",
+          "meta": "{project} · {name}이(가) 시작 · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "삭제된 프로젝트",
+          "openRun": "실행 열기",
+          "running": "실행 중",
+          "cancel": "취소",
+          "cancelAria": "{key}의 실행 취소",
+          "cancelling": "취소하는 중…"
+        },
+        "agents": {
+          "title": "에이전트 인스턴스",
+          "lead": "모든 멤버의 에이전트(실행 중 또는 절전 중)입니다. 여기서는 절전만 제공합니다.",
+          "count": "{count}개 실행 중",
+          "empty": "실행 중이거나 절전 중인 에이전트가 없습니다.",
+          "failed": "에이전트 인스턴스를 읽을 수 없습니다",
+          "name": "{owner}의 에이전트 · {profile}",
+          "unknownOwner": "멤버",
+          "runningSince": "{project} · {time}부터 실행 중",
+          "hibernatingSince": "{project} · {time}부터 절전 중",
+          "inStateSince": "{project} · {time}부터 {state}",
+          "running": "실행 중",
+          "hibernating": "절전 중",
+          "hibernatingAt": "절전 중 · {time}부터",
+          "hibernate": "절전",
+          "hibernateAria": "{owner}의 에이전트 절전",
+          "hibernatingNow": "절전 전환 중…",
+          "state": {
+            "starting": "시작 중",
+            "waking": "깨우는 중",
+            "updating": "업데이트 중",
+            "deleting": "삭제 중",
+            "hibernated": "절전 중",
+            "failed": "실패",
+            "other": "처리 중"
+          }
+        },
+        "ci": {
+          "title": "CI 작업",
+          "lead": "Motir 러너에서 진행 중이거나 대기 중인 작업입니다.",
+          "count": "{inFlight}개 진행 중 · {waiting}개 대기 중",
+          "empty": "진행 중이거나 대기 중인 CI 작업이 없습니다.",
+          "failed": "CI 작업을 읽을 수 없습니다",
+          "meta": "{project} · {time}에 대기열 등록 · ",
+          "noProject": "프로젝트 없음",
+          "viewOnGithub": "GitHub에서 보기",
+          "running": "실행 중",
+          "waiting": "대기 중 · {cause}",
+          "cause": {
+            "planLimit": "요금제 한도",
+            "poolFull": "풀 가득 참",
+            "other": "기타"
+          }
+        },
+        "index": {
+          "title": "인덱스 작업",
+          "running": "<n>{count}</n>개 실행 중",
+          "note": "인덱싱은 코드 검색을 최신 상태로 유지합니다. 과금되지 않으며 여기서 중지되지 않습니다.",
+          "failed": "인덱스 작업을 읽을 수 없습니다"
+        },
+        "motirStops": {
+          "title": "Motir가 중지함 · 최근 7일",
+          "lead": "Motir가 직접 이 조직을 위해 중지한 머신과 그 이유입니다.",
+          "empty": "최근 7일 동안 Motir가 이 조직을 위해 중지한 것이 없습니다.",
+          "failed": "Motir의 중지 내역을 읽을 수 없습니다",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "CI 작업 컨테이너",
+            "hosted_agent": "에이전트 실행",
+            "agent_instance": "에이전트 인스턴스",
+            "code_graph_index": "인덱스 작업",
+            "other": "머신"
+          },
+          "reason": {
+            "record_ended": "작업이 이미 끝났습니다",
+            "no_record": "해당 기록을 찾을 수 없습니다",
+            "org_stopped": "조직의 작업이 중지되었습니다",
+            "foreign_org": "다른 조직의 작업을 실행하고 있었습니다"
+          },
+          "done": "완료",
+          "notDone": "완료되지 않음"
+        },
+        "cancelRun": {
+          "title": "이 실행을 취소할까요?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name}이(가) {time}에 이 실행을 시작했습니다. 취소하면 <strong>취소됨</strong>으로 종료되고 머신이 지금 중지됩니다. 에이전트가 푸시한 작업은 브랜치에 남습니다.",
+          "bodyNoName": "이 실행은 {time}에 시작되었습니다. 취소하면 <strong>취소됨</strong>으로 종료되고 머신이 지금 중지됩니다. 에이전트가 푸시한 작업은 브랜치에 남습니다.",
+          "keep": "계속 실행",
+          "confirm": "실행 취소",
+          "confirming": "취소하는 중…",
+          "alreadyClosed": "{key}의 실행은 이미 끝났습니다.",
+          "notFound": "해당 실행은 더 이상 실행 중이 아닙니다.",
+          "failed": "{key}의 실행을 취소할 수 없습니다. 다시 시도하세요."
+        },
+        "hibernate": {
+          "title": "{owner}의 에이전트를 절전할까요?",
+          "description": "{profile} · {project} · {time}부터 실행 중",
+          "body": "머신이 중지되고 파일은 보존됩니다. 그 안에서 실행 중인 작업 항목은 먼저 취소됩니다.",
+          "told": "<strong>{owner}에게 알림이 전송됩니다</strong>. 내가 절전했다는 사실과 시간이 전달됩니다. 깨우기, 열기, 삭제는 그 사람만 할 수 있습니다.",
+          "toldSelf": "깨우기, 열기, 삭제는 나만 할 수 있습니다.",
+          "keep": "계속 실행",
+          "confirm": "에이전트 절전",
+          "confirming": "절전 전환 중…",
+          "alreadyResting": "{owner}의 에이전트는 이미 쉬고 있었습니다.",
+          "inMotion": "{owner}의 에이전트가 시작 중이거나 상태를 바꾸는 중이어서 절전하지 않았습니다. 잠시 후 다시 시도하세요.",
+          "notFound": "해당 에이전트는 더 이상 실행 중이 아닙니다.",
+          "failed": "{owner}의 에이전트를 절전할 수 없습니다. 다시 시도하세요."
+        },
+        "stopAll": {
+          "button": "모두 중지",
+          "title": "{org}이(가) 실행 중인 모든 것을 중지할까요?",
+          "lead": "아래의 과금 대상 작업을 지금 중지합니다.",
+          "counting": "실행 중인 항목을 세는 중…",
+          "ci": "{runs, plural, other {개의 CI 작업 취소}}, <strong>{containers, plural, other {#개 컨테이너}}</strong> 중지",
+          "ciUnknownRuns": "CI 작업 취소",
+          "hosted": "{count, plural, other {개의 에이전트 실행 종료}}",
+          "agents": "{count, plural, other {개의 실행 중인 에이전트 절전}}",
+          "index": "{count, plural, other {개의 인덱스 작업은 계속 실행}} — 여기서는 인덱싱을 중지하지 않습니다",
+          "afterwards": "이후 차단되는 것은 없습니다. 멤버는 바로 새 작업을 시작할 수 있습니다. 절전된 에이전트의 소유자에게는 알림이 전송됩니다.",
+          "countedAt": "{time} 기준 집계입니다.",
+          "unreadableTitle": "실행 중인 항목을 셀 수 없습니다",
+          "unreadableBody": "아무것도 중지되지 않았습니다. 확인하기 전에 개수를 다시 읽으세요.",
+          "cancel": "취소",
+          "retry": "다시 시도",
+          "confirm": "모두 중지",
+          "confirming": "중지하는 중…",
+          "failed": "플릿 작업을 중지할 수 없습니다. 일부는 중지되었을 수 있습니다. 새로 고쳐 아직 실행 중인 항목을 확인하세요."
+        },
+        "result": {
+          "doneTitle": "모두 중지되었습니다",
+          "partialTitle": "일부 작업이 중지되지 않았습니다",
+          "ci": "{runs, plural, other {CI 작업 #개 취소}}, 컨테이너 {total}개 중 {stopped}개 중지",
+          "hosted": "{count, plural, other {에이전트 실행 #개 종료}}",
+          "agents": "{count, plural, other {실행 중인 에이전트 #개 절전}}",
+          "agentsPartial": "실행 중인 에이전트 {total}개 중 {done}개 절전",
+          "hostedPartial": "에이전트 실행 {total}개 중 {done}개 종료",
+          "ciFailed": "{count, plural, other {CI 저장소 또는 컨테이너 #개가 중지되지 않았습니다.}} 새로 고친 후 모두 중지를 다시 시도하세요.",
+          "hostedFailed": "{count, plural, other {에이전트 실행 #개가 종료되지 않았습니다.}} 해당 행에서 취소를 시도하세요.",
+          "agentsFailed": "{count, plural, other {에이전트 #개가 중지되지 않았습니다. 중지가 확인되지 않았습니다. 해당 행에서 절전을 시도하세요.}}",
+          "index": "인덱스 작업은 계속 실행되었습니다.",
+          "byYou": "내가 중지함, {when}.",
+          "dismiss": "닫기",
+          "dismissAria": "중지 결과 닫기"
+        },
+        "forbidden": "소유자 또는 관리자만 이 조직의 플릿 작업을 중지할 수 있습니다."
       }
     },
     "gitAccounts": {
@@ -5770,7 +5967,11 @@
       "transitioned": "<s>{actor}</s>님이 <s>{key}</s>을(를) {status}(으)로 이동했습니다",
       "generic": "<s>{actor}</s>님이 <s>{key}</s>을(를) 업데이트했습니다",
       "genericNoKey": "<s>{actor}</s>님이 알림을 보냈습니다",
-      "accessRefused": "<s>{project}</s>의 코드가 준비되었지만 아직 열 수 없습니다 — 초대를 다시 보내 보세요"
+      "accessRefused": "<s>{project}</s>의 코드가 준비되었지만 아직 열 수 없습니다 — 초대를 다시 보내 보세요",
+      "agentHibernatedByAdmin": "<s>{actor}</s> 님이 내 에이전트 <s>{agent}</s>을(를) 최대 절전 모드로 전환했습니다"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "조직 관리자가 {time}에 중지했습니다. 파일은 보존되며, 에이전트에서 깨울 수 있습니다."
     }
   },
   "orgAdmin": {
@@ -12229,6 +12430,13 @@
           "unknownActor": "이전 운영자",
           "noReason": "기록된 사유 없음",
           "counts": "CI 실행 {runs}개 · CI 컨테이너 {containers}개 · 호스팅 실행 {hosted}개 · 에이전트 인스턴스 {instances}개"
+        },
+        "orgAdminStop": {
+          "title": "조직 관리자의 마지막 중지",
+          "titleNamed": "조직 관리자 {name}님의 마지막 중지",
+          "when": "{time}",
+          "counts": "CI 컨테이너 {containers}개 · 에이전트 인스턴스 {instances}개",
+          "hostedRun": "에이전트 실행 1건 취소됨"
         }
       }
     },
@@ -13294,7 +13502,8 @@
       "credits": "중지됨: 조직의 크레딧이 소진되었습니다. 크레딧을 추가한 후 깨우세요.",
       "idle": "30분 동안 사용하지 않아 절전 상태로 전환됨",
       "backstop": "12시간 실행 후 중지되었습니다. 계속하려면 깨우세요.",
-      "admin_stop": "Motir 지원팀이 중지했습니다. 계속하려면 깨우세요."
+      "admin_stop": "Motir 지원팀이 중지했습니다. 계속하려면 깨우세요.",
+      "org_admin_stop": "조직 관리자가 중지했습니다. 계속하려면 깨우세요."
     },
     "menu": {
       "wake": "깨우기",
