@@ -127,7 +127,7 @@ describe('record_planner_finding — tools/list', () => {
   });
 
   it('serves a strict schema with exactly the agreed property set', async () => {
-    const schema = (await listed()).inputSchema as {
+    const schema = (await listed()).inputSchema as unknown as {
       properties: Record<string, { properties?: Record<string, unknown> }>;
       required: string[];
       additionalProperties: boolean;

@@ -228,7 +228,10 @@ describe('recordFinding — the request it builds', () => {
     [{ commit: 'abc123' }, { baselineCommit: 'abc123' }],
     [{ branch: '  ', commit: '' }, {}],
     [undefined, {}],
-  ])('splits baseline %j into the two store fields', async (baseline, expected) => {
+  ] as [
+    RecordPlannerFindingInput['baseline'],
+    { baselineBranch?: string; baselineCommit?: string },
+  ][])('splits baseline %j into the two store fields', async (baseline, expected) => {
     await plannerFindingsService.recordFinding('MOTIR', ctx, { ...REQUIRED, baseline });
 
     const req = sent() as unknown as Record<string, unknown>;
