@@ -8335,6 +8335,7 @@
       },
       "progress": {
         "submitted": "Het gesprek naar Motir AI versturen…",
+        "watching": "Motir AI schrijft dit plan…",
         "proposed": "{count, plural, =0 {Voorgesteld werk op het canvas plaatsen…} one {Tot nu toe # item voorgesteld…} other {Tot nu toe # items voorgesteld…}}",
         "validating": "Het voorstel toetsen aan je plan…",
         "reading": "Je verzoek lezen…",

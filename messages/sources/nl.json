@@ -6654,6 +6654,7 @@
   "planningWorkspace.conversation.starters.drop": "Drop something we don't need",
   "planningWorkspace.conversation.starters.blocked": "What's blocked, and why?",
   "planningWorkspace.conversation.progress.submitted": "Sending the conversation to Motir AI…",
+  "planningWorkspace.conversation.progress.watching": "Motir AI is writing this plan…",
   "planningWorkspace.conversation.progress.proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
   "planningWorkspace.conversation.progress.validating": "Checking the proposal against your plan…",
   "planningWorkspace.conversation.progress.reading": "Reading your request…",

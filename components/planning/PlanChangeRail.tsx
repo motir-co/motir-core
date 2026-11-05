@@ -30,7 +30,7 @@ import { MarkdownView } from '@/components/ui/MarkdownView';
 import { PlanBriefing } from '@/components/planning/PlanBriefing';
 import { WorkItemRefChip } from '@/components/markdown/WorkItemRefChip';
 import { AiPaywall } from '@/components/ai/AiPaywall';
-import { PlanChangeComposer } from '@/components/planning/PlanChangeComposer';
+import { PlanChangeComposer, PlanChangeRunningBar } from '@/components/planning/PlanChangeComposer';
 import { GrillMeControl } from '@/components/planning/GrillMeControl';
 import { SharpenThread } from '@/components/planning/SharpenThread';
 import { ConversationGrill } from '@/components/planning/ConversationGrill';
@@ -100,7 +100,7 @@ import type {
   PlanChangeProgress,
   QueuedTurn,
 } from '@/lib/hooks/usePlanChangeConversation';
-import { planRunPhase } from '@/lib/planning/planRunPhase';
+import { planRunPhase, reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -1834,6 +1834,11 @@ export function PlanChangeRail({
         // continue it — the composer is REPLACED by the reason (design §19.8,
         // panel 6), in the composer's own slot.
         <div className="border-t border-(--el-border) px-3 py-3" data-testid="planning-read-only">
+          {/* …and a run Motir is writing on it is still SAID (bug MOTIR-10428):
+              the same running bar, with no Stop — this reader may not end it. */}
+          {reopenedPlanJobId(state) !== undefined ? (
+            <PlanChangeRunningBar running={{ line: tc('progress.watching'), stopping: false }} />
+          ) : null}
           <p className="flex items-start gap-2 text-xs leading-relaxed text-(--el-text-secondary)">
             <Lock className="mt-px size-3.5 flex-none" aria-hidden />
             <span>{ts('readOnly')}</span>
@@ -1916,7 +1921,10 @@ export function PlanChangeRail({
                   // lookup names its family (MOTIR-4069).
                   // With per-call lines (MOTIR-7975) that is the open step's newest
                   // call, and with parallel author sessions `{line} · {title}`.
-                  line: runningBarLine(acts, tc) ?? tc('progress.submitted'),
+                  // An ADOPTED run has no act yet until its stream replays one
+                  // (MOTIR-10428): nothing was sent from this screen, so the bar
+                  // says the plan is being written rather than "Sending…".
+                  line: runningBarLine(acts, tc) ?? tc('progress.watching'),
                   stopping: state.stopping,
                   onStop,
                   ...(paused && runPause ? { paused: { kind: runPause.kind } } : {}),
