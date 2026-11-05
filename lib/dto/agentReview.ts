@@ -136,3 +136,30 @@ export interface ReviewVerdictResultDto {
   withdrewApprovalGateIds: string[];
   submittedAt: string;
 }
+
+// ── DISMISS THE REVIEW (Story MOTIR-10327 · MOTIR-10334; `approval-gates.md` §12.15) ───────
+
+/** The longest dismissal reason kept. */
+export const REVIEW_DISMISSAL_REASON_MAX_LENGTH = 2_000;
+
+/** What a person sends to dismiss a standing agent send-back. */
+export interface DismissReviewInput {
+  /** The delivery-set version the person read the send-back at. */
+  subjectVersion: string;
+  /** Why — required, trimmed, at most {@link REVIEW_DISMISSAL_REASON_MAX_LENGTH}. */
+  reasonMd: string;
+}
+
+/** What a dismissal did. */
+export interface ReviewDismissalResultDto {
+  key: string;
+  dismissalId: string;
+  subjectVersion: string;
+  /** The send-back dismissed: a gate-off review verdict record, or a decided review gate. */
+  dismissed: { kind: 'record' | 'gate'; id: string };
+  reasonMd: string;
+  dismissedBy: { id: string; name: string | null };
+  dismissedAt: string;
+  /** The approve-and-merge gate asked again at the same version, or null when none was. */
+  approvalGateId: string | null;
+}

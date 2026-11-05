@@ -249,3 +249,65 @@ export class ReviewVerdictAnswerExistsError extends Error {
     this.name = 'ReviewVerdictAnswerExistsError';
   }
 }
+
+// ── DISMISS THE REVIEW (Story MOTIR-10327 · MOTIR-10334; `approval-gates.md` §12.15) ───────
+//
+// Raised by `reviewDismissalService.dismiss`, behind
+// `POST /api/v1/work-items/{key}/review-dismissal`. Each is raised BEFORE anything is
+// written, except the already-dismissed backstop, whose transaction rolls back.
+
+/** 403 — the caller is not the routed person (§12.3's authority set). Nothing was written. */
+export class ReviewDismissalForbiddenError extends Error {
+  readonly code = 'REVIEW_DISMISSAL_FORBIDDEN';
+  constructor(readonly workItemKey: string) {
+    super(
+      `Only the person ${workItemKey}'s approvals are routed to — its assignee, its reporter when it has no assignee, or someone who may decide any approval — can dismiss its review.`,
+    );
+    this.name = 'ReviewDismissalForbiddenError';
+  }
+}
+
+/** 422 — the reason is empty once trimmed, or longer than the limit. Nothing was written. */
+export class ReviewDismissalReasonRequiredError extends Error {
+  readonly code = 'REASON_REQUIRED';
+  constructor(readonly maxLength: number) {
+    super(`A reason is required to dismiss the review, at most ${maxLength} characters.`);
+    this.name = 'ReviewDismissalReasonRequiredError';
+  }
+}
+
+/** 409 — no agent send-back stands at the card's current version. Nothing was written. */
+export class ReviewSendBackNotStandingError extends Error {
+  readonly code = 'NO_STANDING_REVIEW_SENDBACK';
+  constructor(readonly workItemKey: string) {
+    super(`${workItemKey} has no review agent send-back standing at its current version.`);
+    this.name = 'ReviewSendBackNotStandingError';
+  }
+}
+
+/**
+ * 409 — the dismissal names a version the card no longer has: a push moved it, so the
+ * send-back it meant has already ended. Nothing was written.
+ */
+export class ReviewDismissalStaleError extends Error {
+  readonly code = 'REVIEW_DISMISSAL_STALE';
+  constructor(
+    readonly subjectVersion: string,
+    /** The card's current version, or null when it delivers no pull request. */
+    readonly currentVersion: string | null,
+  ) {
+    super(
+      'This dismissal is about a version the card no longer has: a push moved it, and the send-back it meant has already ended.',
+    );
+    this.name = 'ReviewDismissalStaleError';
+  }
+}
+
+/** 409 — the send-back at this version was already dismissed. Nothing was written. */
+export class ReviewSendBackAlreadyDismissedError extends Error {
+  readonly code = 'REVIEW_SENDBACK_ALREADY_DISMISSED';
+  constructor(readonly subjectVersion: string) {
+    super('The review agent’s send-back at this version has already been dismissed.');
+    this.name = 'ReviewSendBackAlreadyDismissedError';
+  }
+}

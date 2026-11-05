@@ -150,3 +150,59 @@ describe('resolveGateSet — MOTIR-6971: the review is asked only at `in_review`
     expect(resolveGateSet(input({ cardInReview: false }))).toEqual({ awaited: [], primary: null });
   });
 });
+
+describe('resolveGateSet — an agent SEND-BACK and its DISMISSAL (MOTIR-10333 · MOTIR-10334; §12.14–§12.15)', () => {
+  it('a gate-off send-back at the current version asks nothing — neither review nor merge', () => {
+    expect(kinds({ reviewAgentEnabled: false, agentSendBackVersion: V1 })).toEqual([]);
+    expect(kinds({ agentSendBackVersion: V1 })).toEqual([]);
+  });
+
+  it('a send-back about an OLDER version stands no more — a push ended it', () => {
+    expect(kinds({ reviewAgentEnabled: false, agentSendBackVersion: V2 })).toEqual([
+      ['pull_request_approval', V1],
+    ]);
+  });
+
+  it('a dismissal at the current version asks the merge again at the SAME version', () => {
+    expect(
+      kinds({
+        reviewAgentEnabled: false,
+        agentSendBackVersion: V1,
+        dismissedSendBackVersion: V1,
+      }),
+    ).toEqual([['pull_request_approval', V1]]);
+    // Gate on: the refused review reads as answered, and no second review is asked.
+    expect(
+      kinds({ latestAgentReviewGate: gate('changes_requested', V1), dismissedSendBackVersion: V1 }),
+    ).toEqual([['pull_request_approval', V1]]);
+  });
+
+  it('a dismissal at ANOTHER version never suppresses a send-back', () => {
+    expect(
+      kinds({
+        reviewAgentEnabled: false,
+        agentSendBackVersion: V1,
+        dismissedSendBackVersion: V2,
+      }),
+    ).toEqual([]);
+    expect(
+      kinds({ latestAgentReviewGate: gate('changes_requested', V1), dismissedSendBackVersion: V2 }),
+    ).toEqual([]);
+  });
+
+  it('agentReviewStanding reads a dismissed refusal as passed, and only at its version', () => {
+    const at = (dismissedVersion: string | null) =>
+      agentReviewStanding({
+        reviewAgentEnabled: true,
+        prMergeMode: 'manual',
+        workItemId: WORK_ITEM,
+        version: V1,
+        latestAgentReviewGate: gate('changes_requested', V1),
+        latestMergeGate: null,
+        dismissedVersion,
+      });
+    expect(at(V1)).toBe('passed');
+    expect(at(V2)).toBe('refused');
+    expect(at(null)).toBe('refused');
+  });
+});

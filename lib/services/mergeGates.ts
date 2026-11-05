@@ -19,6 +19,7 @@ import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryR
 import { asksTheDecisionQuestion } from '@/lib/approvalGates/decisionDocument';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { reviewDismissalRepository } from '@/lib/repositories/reviewDismissalRepository';
 import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';
 import { designEvidenceRepository } from '@/lib/repositories/designEvidenceRepository';
@@ -193,14 +194,24 @@ export async function agentReviewHoldsMerge(
   // A GATE-OFF agent send-back at the current version holds the carried merge too
   // (MOTIR-10333; `approval-gates.md` §12.14): no code the review agent sent back merges
   // on a carry, whatever the switch says.
-  const [deliveries, latestAgentReviewGate, latestMergeGate, latestSendBack] = await Promise.all([
-    workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
-    approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
-    approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
-    reviewVerdictRecordRepository.findLatestRecordedSendBack(item.id, tx),
-  ]);
+  // A person's DISMISSAL at the version (MOTIR-10334; §12.15) releases it again.
+  const [deliveries, latestAgentReviewGate, latestMergeGate, latestSendBack, latestDismissal] =
+    await Promise.all([
+      workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+      approvalGateRepository.findLatestByWorkItem(item.id, 'agent_review', tx),
+      approvalGateRepository.findLatestByWorkItem(item.id, 'pull_request_approval', tx),
+      reviewVerdictRecordRepository.findLatestRecordedSendBack(item.id, tx),
+      reviewDismissalRepository.findLatestByWorkItem(item.id, tx),
+    ]);
   const version = deliverySetVersion(deliveries.map((delivery) => deliveryMemberVersion(delivery)));
-  if (version !== null && latestSendBack?.subjectVersion === version) return true;
+  const dismissedVersion = latestDismissal?.subjectVersion ?? null;
+  if (
+    version !== null &&
+    latestSendBack?.subjectVersion === version &&
+    dismissedVersion !== version
+  ) {
+    return true;
+  }
   if (!settings.reviewAgentEnabled) return false;
   const standing = agentReviewStanding({
     reviewAgentEnabled: settings.reviewAgentEnabled,
@@ -209,6 +220,7 @@ export async function agentReviewHoldsMerge(
     version,
     latestAgentReviewGate,
     latestMergeGate,
+    dismissedVersion,
   });
   return standing === 'owed' || standing === 'refused';
 }

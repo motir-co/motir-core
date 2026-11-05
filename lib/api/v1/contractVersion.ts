@@ -1158,5 +1158,18 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.78.0` after MOTIR-9566's
  *   `1.77.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.79.0` — MOTIR-10334 (Story MOTIR-10327) adds `dismissWorkItemReview`
+ *   (`POST /api/v1/work-items/{key}/review-dismissal`, `work_item:edit`, `200` with
+ *   `ReviewDismissalResult`) — the routed person dismisses the review agent's standing
+ *   send-back at the current version, with a reason; the approve-and-merge gate is asked
+ *   again at the same version (`docs/decisions/approval-gates.md` §12.15). New codes
+ *   `REVIEW_DISMISSAL_FORBIDDEN` (403), `NO_STANDING_REVIEW_SENDBACK`,
+ *   `REVIEW_SENDBACK_ALREADY_DISMISSED`, `REVIEW_DISMISSAL_STALE` (409) and
+ *   `REASON_REQUIRED` (422).
+ *
+ *   Additive: one new operation, one new component and new codes for new conditions.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.79.0` after `1.78.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.78.0';
+export const V1_CONTRACT_VERSION = '1.79.0';

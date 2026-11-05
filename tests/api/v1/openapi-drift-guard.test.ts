@@ -1004,12 +1004,27 @@ describe('every operation’s REAL response validates against its declared schem
       'submitWorkItemReviewVerdict',
       () => import('@/app/api/v1/work-items/[key]/review-verdict/route'),
       send(`/api/v1/work-items/${verdictCard}/review-verdict`, 'POST', {
-        verdict: 'approved',
+        verdict: 'changes_requested',
         subjectVersion: `${repoRef}#4344@drift-verdict-head`,
-        summaryMd: 'Every criterion is met.',
-        checklist: [{ criterion: 'It works', status: 'met', evidence: '`a.test.ts` passes' }],
+        summaryMd: 'One criterion is unmet.',
+        findingsMd: '- `a.ts:1` — breaks the first criterion; change it.',
+        checklist: [
+          { criterion: 'It works', status: 'met', evidence: '`a.test.ts` passes' },
+          { criterion: 'It is fast', status: 'not_met' },
+        ],
         harness: 'Claude Code',
         model: 'drift-model',
+      }),
+      { key: verdictCard },
+    );
+    // ── Dismiss the review (MOTIR-10334) — the send-back just stored, overruled by the
+    // card's reporter (the routed person: it has no assignee).
+    await drive(
+      'dismissWorkItemReview',
+      () => import('@/app/api/v1/work-items/[key]/review-dismissal/route'),
+      send(`/api/v1/work-items/${verdictCard}/review-dismissal`, 'POST', {
+        subjectVersion: `${repoRef}#4344@drift-verdict-head`,
+        reason: 'The criterion is out of scope for this card.',
       }),
       { key: verdictCard },
     );

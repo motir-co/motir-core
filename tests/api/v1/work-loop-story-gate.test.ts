@@ -255,6 +255,12 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'wrote into `$MOTIR_AGENT_REPORT`: one comment and the move to Planning, with the run’s own ' +
     'credential. An agent with the Motir tools makes the same writes through `add_comment` and ' +
     '`transition_status`; no single tool mirrors the pair. `work_item:edit`, the key both assert.',
+  dismissWorkItemReview:
+    'MOTIR-10334 · `approval-gates.md` §12.15 — DISMISS THE REVIEW is the routed PERSON ' +
+    'overruling the review agent, with a reason, from the card’s review line. Its caller is ' +
+    'the operator’s UI and loop; an agent is the party whose send-back is being overruled, so ' +
+    'a tool would hand the overrule to the very surface it answers. It takes `work_item:edit`, ' +
+    'the floor every work-loop write asserts, with §12.3’s routed set checked by the service.',
 };
 
 /**
@@ -322,7 +328,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 28 since MOTIR-8698: the run's unbuildable report the CLI posts.
     // 30 since MOTIR-8722: the run's discrepancy record and its STOP report.
     // 31 since MOTIR-10333: the user-token verdict door.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(31);
+    // 32 since MOTIR-10334: Dismiss the review, the person's overrule of a send-back.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(32);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

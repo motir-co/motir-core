@@ -767,6 +767,11 @@ export interface JobEventDataMap {
    *  (`lib/jobs/definitions/agentReviewRequested.ts`, MOTIR-6820), and emitted again by
    *  *Review again*. */
   'agent-review/requested': AgentReviewRequestedData;
+  /** A person DISMISSED a standing agent send-back (Story MOTIR-10327 · MOTIR-10334;
+   *  `approval-gates.md` §12.15). Emitted after the dismissal commits, never on a
+   *  rollback. The bot-posting consumer (MOTIR-10335) dismisses the bot's own Request
+   *  changes on the card's pull requests. */
+  'review/dismissed': ReviewDismissedData;
   /** A person sent a HOSTED design back with Revise (MOTIR-700): start its automatic
    *  re-run, or record why not. Emitted by the design handler AFTER the refusal commits. */
   'design/auto-rerun.requested': DesignAutoRerunRequestedData;
@@ -927,6 +932,18 @@ export interface AgentReviewRequestedData {
    * emitted before it existed: the consumer then reads it as the raise.
    */
   idempotencyKey?: string;
+}
+
+/** The `review/dismissed` event payload (Story MOTIR-10327 · MOTIR-10334) — ids only. */
+export interface ReviewDismissedData {
+  workspaceId: string;
+  projectId: string;
+  /** The card whose send-back was dismissed. */
+  workItemId: string;
+  /** The delivery-set version the dismissed send-back was about. */
+  subjectVersion: string;
+  /** The `review_dismissal` row — who, when, why. */
+  dismissalId: string;
 }
 
 /**

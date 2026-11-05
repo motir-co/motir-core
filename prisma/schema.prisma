@@ -477,6 +477,7 @@ model User {
 
   /// Agent review verdicts this user submitted (MOTIR-10333).
   reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
 
   @@index([lastActiveProjectId])
   @@map("user")
@@ -1873,6 +1874,7 @@ model Workspace {
   agentTerminalConnections    AgentTerminalConnection[]
 
   reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -2396,6 +2398,7 @@ model Project {
   plannerBugDestinationFolder   Folder?                      @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
 
   reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3441,6 +3444,7 @@ model WorkItem {
   monitorIssues MonitorIssue[]
 
   reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -5923,6 +5927,7 @@ model ApprovalGate {
   frozenPageVersions PageVersion[]         @relation("PageVersionFrozenByGate")
 
   reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
 
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
@@ -15988,11 +15993,12 @@ model ReviewVerdictRecord {
   model          String
   createdAt      DateTime              @default(now()) @map("created_at")
 
-  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  workItem    WorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
-  gate        ApprovalGate? @relation(fields: [gateId], references: [id], onDelete: SetNull)
-  submittedBy User?         @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  gate        ApprovalGate?     @relation(fields: [gateId], references: [id], onDelete: SetNull)
+  submittedBy User?             @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  dismissals  ReviewDismissal[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -16000,4 +16006,45 @@ model ReviewVerdictRecord {
   @@index([gateId])
   @@index([submittedById])
   @@map("review_verdict_record")
+}
+
+/// A person's DISMISSAL of a standing agent send-back (Story MOTIR-10327 · MOTIR-10334;
+/// `approval-gates.md` §12.15) — the routed person overrules the review agent, with a
+/// reason, at one delivery-set version. Append only: the send-back it dismisses is never
+/// edited, and the approve-and-merge gate withdrawn under `agent_changes_requested` stays
+/// superseded as history; the card's gate set asks again because THIS row exists.
+///
+/// Exactly one of `reviewVerdictRecordId` (a gate-off send-back) and `approvalGateId` (a
+/// decided `agent_review` gate sent back) is set — a CHECK in the creating migration.
+/// One dismissal per (card, version): the unique index is the concurrency backstop.
+model ReviewDismissal {
+  id                    String   @id @default(cuid())
+  workspaceId           String   @map("workspace_id")
+  projectId             String   @map("project_id")
+  workItemId            String   @map("work_item_id")
+  /// The gate-off send-back dismissed — a `recorded` `changes_requested` record.
+  reviewVerdictRecordId String?  @map("review_verdict_record_id")
+  /// The gate-on send-back dismissed — a decided `agent_review` gate.
+  approvalGateId        String?  @map("approval_gate_id")
+  /// The delivery-set version the dismissed send-back is about.
+  subjectVersion        String   @map("subject_version")
+  /// Why the person dismissed it — required, trimmed, at most 2000 characters.
+  reasonMd              String   @map("reason_md") @db.Text
+  dismissedById         String?  @map("dismissed_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem            WorkItem             @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  reviewVerdictRecord ReviewVerdictRecord? @relation(fields: [reviewVerdictRecordId], references: [id], onDelete: Cascade)
+  approvalGate        ApprovalGate?        @relation(fields: [approvalGateId], references: [id], onDelete: Cascade)
+  dismissedBy         User?                @relation(fields: [dismissedById], references: [id], onDelete: SetNull)
+
+  @@unique([workItemId, subjectVersion])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([reviewVerdictRecordId])
+  @@index([approvalGateId])
+  @@index([dismissedById])
+  @@map("review_dismissal")
 }

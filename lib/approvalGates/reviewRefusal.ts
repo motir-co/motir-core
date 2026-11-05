@@ -2,6 +2,7 @@ import type { ApprovalGate, Prisma } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import { reviewDismissalRepository } from '@/lib/repositories/reviewDismissalRepository';
 import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { standingMergeRefusalOf } from '@/lib/workItems/fixReason';
 
@@ -52,6 +53,11 @@ export interface StandingReviewRefusal {
  * before; a gate-off send-back record at the CURRENT version is the second source — the
  * review agent sent the card back with the switch off, so no gate holds the refusal. When
  * both stand at the current version the later one is the card's latest word.
+ *
+ * ⚠️ A DISMISSED AGENT SEND-BACK DOES NOT STAND (MOTIR-10334; §12.15). A dismissal at the
+ * current version removes the review AGENT's refusal from both sources; a person's own
+ * *Request changes* on the approve-and-merge gate is never dismissed by it. This is the one
+ * predicate the To fix derivation, the repair claim and the dismissal itself read.
  */
 export async function readStandingReviewRefusal(
   workItemId: string,
@@ -59,14 +65,20 @@ export async function readStandingReviewRefusal(
   tx: Prisma.TransactionClient,
 ): Promise<StandingReviewRefusal | null> {
   const currentVersion = deliverySetVersion(deliveries.map((d) => deliveryMemberVersion(d)));
-  const [latest, record] = await Promise.all([
+  const [latest, record, dismissal] = await Promise.all([
     approvalGateRepository.findLatestDecidedByWorkItem(workItemId, tx),
     currentVersion === null
       ? Promise.resolve(null)
       : reviewVerdictRecordRepository.findRecordedSendBackAt(workItemId, currentVersion, tx),
+    currentVersion === null
+      ? Promise.resolve(null)
+      : reviewDismissalRepository.findAt(workItemId, currentVersion, tx),
   ]);
+  const dismissed = dismissal !== null;
   const gate =
-    latest && standingMergeRefusalOf(latest, currentVersion)
+    latest &&
+    standingMergeRefusalOf(latest, currentVersion) &&
+    !(dismissed && latest.kind === 'agent_review')
       ? {
           kind: latest.kind as StandingReviewRefusal['kind'],
           id: latest.id,
@@ -80,19 +92,20 @@ export async function readStandingReviewRefusal(
           decidedAt: latest.decidedAt as Date,
         }
       : null;
-  const sentBack: StandingReviewRefusal | null = record
-    ? {
-        kind: 'agent_review',
-        id: null,
-        recordId: record.id,
-        subjectVersion: record.subjectVersion,
-        noteMd: record.findingsMd,
-        decidedById: record.submittedById,
-        decidedByLabel: null,
-        decidedUnderAuthority: 'review_agent',
-        decidedAt: record.createdAt,
-      }
-    : null;
+  const sentBack: StandingReviewRefusal | null =
+    record && !dismissed
+      ? {
+          kind: 'agent_review',
+          id: null,
+          recordId: record.id,
+          subjectVersion: record.subjectVersion,
+          noteMd: record.findingsMd,
+          decidedById: record.submittedById,
+          decidedByLabel: null,
+          decidedUnderAuthority: 'review_agent',
+          decidedAt: record.createdAt,
+        }
+      : null;
   if (gate && sentBack) return gate.decidedAt > sentBack.decidedAt ? gate : sentBack;
   return gate ?? sentBack;
 }

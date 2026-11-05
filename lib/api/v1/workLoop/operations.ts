@@ -51,6 +51,10 @@ import {
   reviewPromptSchema,
 } from '@/lib/api/v1/workLoop/agentReview';
 import {
+  reviewDismissalBodySchema,
+  reviewDismissalResultSchema,
+} from '@/lib/api/v1/workLoop/reviewDismissal';
+import {
   reviewVerdictBodySchema,
   reviewVerdictResultSchema,
 } from '@/lib/api/v1/workLoop/reviewVerdict';
@@ -1368,6 +1372,45 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // delivers no pull request; 409 late or second; 422 a malformed body or not a run target.
     errorStatuses: [403, 404, 409, 422],
   }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/review-dismissal',
+    operationId: 'dismissWorkItemReview',
+    summary: 'Dismiss the review agent’s send-back on a card',
+    description:
+      'Dismiss the review agent’s STANDING send-back at the card’s current delivery-set ' +
+      'version, with a required `reason` (at most 2000 characters). Only the routed person ' +
+      'may — the card’s assignee, its reporter when it has no assignee, or someone who may ' +
+      'decide any approval — holding `work_item:edit`. Works with the review gate on or off ' +
+      'and under either review source. The send-back is not edited: the dismissal is its own ' +
+      'record (who, when, why, which version). The card stops being To fix for it, no status ' +
+      'moves, and the approve-and-merge gate is asked again at the same version ' +
+      '(`approvalGateId`). Refused, writing nothing, with `NO_STANDING_REVIEW_SENDBACK`, ' +
+      '`REVIEW_SENDBACK_ALREADY_DISMISSED` or `REVIEW_DISMISSAL_STALE` (a push moved the ' +
+      'version) — all 409 — `REVIEW_DISMISSAL_FORBIDDEN` (403) or `REASON_REQUIRED` (422).',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: reviewDismissalBodySchema,
+      description: 'The version the send-back is about, and why it is dismissed.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: reviewDismissalResultSchema },
+      description: 'The dismissal, and the approve-and-merge gate asked again.',
+    },
+    // 403 not the routed person, no `work_item:edit`, or a run token; 404 an unknown card;
+    // 409 nothing standing, already dismissed or stale; 422 a malformed body or no reason.
+    errorStatuses: [403, 404, 409, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -1396,4 +1439,5 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   ReviewPrompt: reviewPromptSchema,
   AgentReviewResult: agentReviewResultSchema,
   ReviewVerdictResult: reviewVerdictResultSchema,
+  ReviewDismissalResult: reviewDismissalResultSchema,
 };

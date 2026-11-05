@@ -214,6 +214,16 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 422 — the service's own body guard (findings on a send-back, evidence on `met`, a
   // harness and a model); the body schema refuses the same input first as `INVALID_BODY`.
   INVALID_REVIEW_VERDICT: 422,
+  // ── MOTIR-10334, DISMISS THE REVIEW (`approval-gates.md` §12.15) ──
+  // 403 — the caller holds `work_item:edit` but is not the routed person (§12.3).
+  REVIEW_DISMISSAL_FORBIDDEN: 403,
+  // 409 — nothing to dismiss at the current version, already dismissed, or a push moved
+  // the version so the send-back has ended. Nothing written.
+  NO_STANDING_REVIEW_SENDBACK: 409,
+  REVIEW_SENDBACK_ALREADY_DISMISSED: 409,
+  REVIEW_DISMISSAL_STALE: 409,
+  // 422 — the reason is empty once trimmed, or over 2000 characters.
+  REASON_REQUIRED: 422,
   // ── MOTIR-6538, a hosted run's git credentials ─────────────────────────────
   // 409 — the run ended between its read and the mint (a close racing the call).
   // The same fact as DISPATCH_RUN_TERMINAL, raised from the mint's own re-read.
