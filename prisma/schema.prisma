@@ -11458,15 +11458,6 @@ model CiLiveAccrual {
   @@map("ci_live_accrual")
 }
 
-/// THE KILL RECORD (Story MOTIR-6906 · MOTIR-6925, `fleet-per-org-pool.md` §5) —
-/// one row per machine the attribution reconciler destroyed or stopped, for the
-/// platform admin's list (MOTIR-6905) and the audit of what the reconciler did.
-///
-/// ⚠️ WRITTEN BEFORE THE DESTROY. The decision commits first and the provider
-/// call follows (`docs/jobs.md`'s commit-then-effect rule), so a destroy that
-/// throws leaves a row with no `completedAt` and its `failureDetail` — never a
-/// machine killed with no record of why. The next pass decides again and writes
-/// a new row; a machine that keeps failing to die shows up as several.
 /// What an organisation owner or admin stopped from the org's Fleet page.
 enum OrgFleetStopAction {
   stop_everything
@@ -11498,6 +11489,15 @@ model OrgFleetLastStop {
   @@map("org_fleet_last_stop")
 }
 
+/// THE KILL RECORD (Story MOTIR-6906 · MOTIR-6925, `fleet-per-org-pool.md` §5) —
+/// one row per machine the attribution reconciler destroyed or stopped, for the
+/// platform admin's list (MOTIR-6905) and the audit of what the reconciler did.
+///
+/// ⚠️ WRITTEN BEFORE THE DESTROY. The decision commits first and the provider
+/// call follows (`docs/jobs.md`'s commit-then-effect rule), so a destroy that
+/// throws leaves a row with no `completedAt` and its `failureDetail` — never a
+/// machine killed with no record of why. The next pass decides again and writes
+/// a new row; a machine that keeps failing to die shows up as several.
 model FleetMachineKill {
   id          String @id @default(cuid())
   /// The provider app and machine, as the provider listed them.
