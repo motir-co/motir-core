@@ -8527,6 +8527,7 @@
       },
       "progress": {
         "submitted": "正在把对话发送给 Motir AI…",
+        "watching": "Motir AI 正在撰写这份计划…",
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
         "validating": "正在对照你的计划校验提案…",
         "reading": "正在理解你的请求……",

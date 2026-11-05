@@ -8536,6 +8536,7 @@
       },
       "progress": {
         "submitted": "Envoi de la conversation à Motir AI…",
+        "watching": "Motir AI rédige ce plan…",
         "proposed": "{count, plural, =0 {Placement du travail proposé sur le canevas…} one {# élément proposé jusqu'ici…} other {# éléments proposés jusqu'ici…}}",
         "validating": "Vérification de la proposition par rapport à votre plan…",
         "reading": "Lecture de votre message…",

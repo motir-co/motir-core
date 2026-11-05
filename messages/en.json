@@ -8533,6 +8533,7 @@
       },
       "progress": {
         "submitted": "Sending the conversation to Motir AI…",
+        "watching": "Motir AI is writing this plan…",
         "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",

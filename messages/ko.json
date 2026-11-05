@@ -8530,6 +8530,7 @@
       },
       "progress": {
         "submitted": "대화를 Motir AI에 보내는 중…",
+        "watching": "Motir AI가 이 계획을 작성하는 중…",
         "proposed": "{count, plural, =0 {제안된 작업을 캔버스에 배치하는 중…} other {지금까지 항목 #개 제안됨…}}",
         "validating": "제안을 계획과 대조하는 중…",
         "reading": "요청을 읽는 중…",

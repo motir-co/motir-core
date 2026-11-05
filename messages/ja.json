@@ -8533,6 +8533,7 @@
       },
       "progress": {
         "submitted": "会話を Motir AI に送信しています…",
+        "watching": "Motir AI がこの計画を作成しています…",
         "proposed": "{count, plural, =0 {提案された作業をキャンバスに配置しています…} other {これまでに # 項目を提案しました…}}",
         "validating": "提案を計画と照らし合わせて確認しています…",
         "reading": "依頼内容を読み取っています…",
