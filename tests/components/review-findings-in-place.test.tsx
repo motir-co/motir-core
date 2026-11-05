@@ -359,7 +359,7 @@ describe('the doors open the review in place, only on the Workbench (§ 42.3, F0
       </Workbench>,
     );
     const link = screen.getByRole('link', { name: 'Findings and checklist' });
-    expect(link.getAttribute('href')).toBe('/items/ACME-412#agent-verdict-rec-1');
+    expect(link.getAttribute('href')).toBe('/items/ACME-412?activity=all#agent-verdict-rec-1');
     expect(link.getAttribute('aria-haspopup')).toBe('dialog');
     link.focus();
     fireEvent.click(link);
