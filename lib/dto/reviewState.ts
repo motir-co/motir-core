@@ -248,6 +248,24 @@ export interface CardReviewDTO {
   recordRef: ReviewRecordRefDTO | null;
 }
 
+/**
+ * The decision-waiting marker a surface draws BESIDE a card's review (Story MOTIR-10327 ·
+ * MOTIR-10345). While the review agent is on, the awaiting `agent_review` gate IS the fact the
+ * review marker tells — *Waiting for your review agent*, *Agent reviewing*, *Review could not
+ * run* — so its decision-waiting marker steps aside and the review marker takes the slot
+ * (§ 32.1: the review marker sits in the decision marker's slot). Any other kind, and an
+ * `agent_review` gate on a card with no review marker (the gate off, an older row), keeps its
+ * decision marker.
+ */
+export function decisionBesideReview<T extends { kind: string }>(
+  pending: T | null | undefined,
+  review: Pick<CardReviewDTO, 'marker'> | null | undefined,
+): T | null {
+  if (!pending) return null;
+  if (pending.kind === 'agent_review' && review?.marker) return null;
+  return pending;
+}
+
 /** A page's card reviews, keyed by work-item id — serializable, beside the rows. */
 export type CardReviewMap = Record<string, CardReviewDTO>;
 

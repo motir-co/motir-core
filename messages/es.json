@@ -14303,6 +14303,8 @@
         "plan_stale": "Se terminó trabajo que este plan modifica, así que el plan quedó desactualizado y esta pregunta se retiró.",
         "plan_discarded": "Se retiraron todas las propuestas del plan, así que el plan terminó y esta pregunta con él.",
         "queue_failed": "La cola de fusión rechazó estos commits, así que esta pregunta se retiró.",
+        "review_agent_disabled": "Se desactivó el agente de revisión, así que esta pregunta se retiró.",
+        "agent_changes_requested": "El agente de revisión pidió cambios en estos commits, así que esta pregunta se retiró hasta un nuevo push.",
         "subject_gone": "Aquello sobre lo que preguntaba esta pregunta ya no existe, así que se retiró.",
         "no_longer_manual": "El elemento de trabajo ya no es trabajo manual, así que esta pregunta se retiró.",
         "closed_without_decision": "El elemento de trabajo se cerró sin que nadie lo marcara como hecho, así que esta pregunta se retiró.",

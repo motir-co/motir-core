@@ -11126,6 +11126,8 @@
   "approvalGate.withdrawn.cause.plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
   "approvalGate.withdrawn.cause.plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
   "approvalGate.withdrawn.cause.queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
+  "approvalGate.withdrawn.cause.review_agent_disabled": "The review agent was switched off, so this question was withdrawn.",
+  "approvalGate.withdrawn.cause.agent_changes_requested": "The review agent asked for changes at these commits, so this question was withdrawn until a push.",
   "approvalGate.withdrawn.cause.subject_gone": "What this question asked about is gone, so this question was withdrawn.",
   "approvalGate.withdrawn.cause.no_longer_manual": "The work item is no longer manual work, so this question was withdrawn.",
   "approvalGate.withdrawn.cause.closed_without_decision": "The work item was closed without anyone marking it done, so this question was withdrawn.",

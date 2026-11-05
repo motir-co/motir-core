@@ -14303,6 +14303,8 @@
         "plan_stale": "Praca, którą zmienia ten plan, została ukończona, więc plan stał się nieaktualny, a to pytanie zostało wycofane.",
         "plan_discarded": "Wszystkie propozycje w planie zostały wycofane, więc plan się zakończył, a wraz z nim to pytanie.",
         "queue_failed": "Kolejka scalania odrzuciła te commity, więc to pytanie zostało wycofane.",
+        "review_agent_disabled": "Agent przeglądu został wyłączony, więc to pytanie wycofano.",
+        "agent_changes_requested": "Agent przeglądu poprosił o zmiany w tych commitach, więc to pytanie wycofano do czasu kolejnego pusha.",
         "subject_gone": "To, czego dotyczyło pytanie, już nie istnieje, więc to pytanie zostało wycofane.",
         "no_longer_manual": "Element roboczy nie jest już pracą ręczną, więc to pytanie zostało wycofane.",
         "closed_without_decision": "Element roboczy został zamknięty bez oznaczenia go jako gotowy, więc to pytanie zostało wycofane.",

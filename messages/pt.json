@@ -14303,6 +14303,8 @@
         "plan_stale": "Um trabalho que este plano altera foi concluído, então o plano ficou desatualizado e esta pergunta foi retirada.",
         "plan_discarded": "Todas as propostas do plano foram retiradas, então o plano terminou e esta pergunta junto.",
         "queue_failed": "A fila de merge reprovou estes commits, então esta pergunta foi retirada.",
+        "review_agent_disabled": "O agente de revisão foi desligado, então esta pergunta foi retirada.",
+        "agent_changes_requested": "O agente de revisão pediu alterações nestes commits, então esta pergunta foi retirada até um novo push.",
         "subject_gone": "O objeto desta pergunta não existe mais, então esta pergunta foi retirada.",
         "no_longer_manual": "O item de trabalho não é mais trabalho manual, então esta pergunta foi retirada.",
         "closed_without_decision": "O item de trabalho foi fechado sem que ninguém o marcasse como concluído, então esta pergunta foi retirada.",

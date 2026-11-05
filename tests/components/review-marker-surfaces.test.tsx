@@ -34,7 +34,11 @@ import { IssueListTable } from '@/app/(authed)/items/_components/IssueListTable'
 import { toIssueListRows, toIssueRows } from '@/app/(authed)/items/_components/issueRows';
 import { BoardCard } from '@/app/(authed)/boards/_components/BoardCard';
 import type { BoardCardDto } from '@/lib/dto/boards';
-import type { CardReviewDTO, CardReviewMap } from '@/lib/dto/reviewState';
+import {
+  decisionBesideReview,
+  type CardReviewDTO,
+  type CardReviewMap,
+} from '@/lib/dto/reviewState';
 import type { WorkItemTreeNodeDto, WorkItemTreeRowDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
@@ -151,6 +155,35 @@ describe('the board card — the review marker in the exclusive slot', () => {
         key: 5,
         pendingDecision: { state: 'yours', kind: 'design_result', routedToId: 'u-me' },
         review: WAITING_YOURS,
+      }),
+    );
+    expect(document.querySelector('[data-decision-marker="yours"]')).toBeTruthy();
+    expect(document.querySelector('[data-review-marker]')).toBeNull();
+  });
+
+  it('the awaiting agent_review gate is the review marker’s own fact — its decision marker steps aside (MOTIR-10345)', () => {
+    renderCard(
+      card({
+        id: 'c6',
+        key: 6,
+        status: 'in_review',
+        pendingDecision: { state: 'yours', kind: 'agent_review', routedToId: 'u-me' },
+        review: WAITING_YOURS,
+      }),
+    );
+    expect(document.querySelector('[data-decision-marker]')).toBeNull();
+    expect(document.querySelector('[data-review-marker]')?.textContent).toBe(
+      'Waiting for your review agent',
+    );
+    cleanup();
+
+    // With no review marker (the gate off), the agent_review gate keeps its decision marker.
+    renderCard(
+      card({
+        id: 'c7',
+        key: 7,
+        pendingDecision: { state: 'yours', kind: 'agent_review', routedToId: 'u-me' },
+        review: REVIEWED,
       }),
     );
     expect(document.querySelector('[data-decision-marker="yours"]')).toBeTruthy();
@@ -311,5 +344,18 @@ describe('the row shaping carries each row its review answer', () => {
 
   it('the defaults carry no review at all', () => {
     expect(toIssueListRows([node({ id: 'a', key: 1 })], workflow, members)[0]!.review).toBeNull();
+  });
+});
+
+describe('decisionBesideReview — which decision marker draws beside a review', () => {
+  const agentReview = { state: 'yours' as const, kind: 'agent_review', routedToId: 'u-me' };
+  const design = { state: 'others' as const, kind: 'design_result', routedToId: 'u-b' };
+  it('drops only the agent_review gate, and only when a review marker tells it', () => {
+    expect(decisionBesideReview(agentReview, WAITING_YOURS)).toBeNull();
+    expect(decisionBesideReview(agentReview, REVIEWED)).toBe(agentReview);
+    expect(decisionBesideReview(agentReview, null)).toBe(agentReview);
+    expect(decisionBesideReview(design, WAITING_YOURS)).toBe(design);
+    expect(decisionBesideReview(null, WAITING_YOURS)).toBeNull();
+    expect(decisionBesideReview(undefined, undefined)).toBeNull();
   });
 });

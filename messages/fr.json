@@ -14303,6 +14303,8 @@
         "plan_stale": "Du travail modifié par ce plan a été terminé, le plan est donc devenu obsolète et cette question a été retirée.",
         "plan_discarded": "Toutes les propositions du plan ont été retirées : le plan a pris fin, et cette question avec lui.",
         "queue_failed": "La file de fusion a rejeté ces commits, cette question a donc été retirée.",
+        "review_agent_disabled": "L’agent de revue a été désactivé, cette question a donc été retirée.",
+        "agent_changes_requested": "L’agent de revue a demandé des modifications sur ces commits, cette question a donc été retirée jusqu’au prochain push.",
         "subject_gone": "L'objet de cette question n'existe plus, elle a donc été retirée.",
         "no_longer_manual": "L'élément de travail n'est plus un travail manuel, cette question a donc été retirée.",
         "closed_without_decision": "L'élément de travail a été fermé sans que personne ne le marque comme terminé, cette question a donc été retirée.",

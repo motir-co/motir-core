@@ -1,5 +1,6 @@
 import { RelatedTitles } from './_components/translation/RelatedTitles';
 import { reviewStateService } from '@/lib/services/reviewStateService';
+import { decisionBesideReview } from '@/lib/dto/reviewState';
 import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
 import { ReviewMarkerHeaderLink } from './_components/ReviewMarkerHeaderLink';
 import { Suspense } from 'react';
@@ -477,8 +478,10 @@ export default async function ItemView({
   // The marker's entry for THIS item, and the routed person named the way the
   // board names members (`name || email`); a routee outside the member list falls
   // back to the marker's own *this work item's assignee*.
-  const pendingDecision = pendingDecisions.get(item.id) ?? null;
+  // The awaiting `agent_review` gate's marker steps aside for the review marker, which tells
+  // the same fact (MOTIR-10345).
   const cardReview = cardReviews?.[item.id] ?? null;
+  const pendingDecision = decisionBesideReview(pendingDecisions.get(item.id), cardReview);
   const routedMember = pendingDecision?.routedToId
     ? members.find((m) => m.userId === pendingDecision.routedToId)
     : undefined;
@@ -620,7 +623,7 @@ export default async function ItemView({
                         />
                       ) : null}
                       {/* THE REVIEW MARKER (MOTIR-10341, § 32.1, M9) — the decision
-                marker's slot (the two never draw together), the same pointer to
+                marker's slot (the `agent_review` gate's own marker steps aside above), the same pointer to
                 Development, and for the waiting marker the copyable command after it.
                 Then THE REVIEWED BADGE (§ 32.3, M10–M11), focusable, with its card. */}
                       {cardReview?.marker ? (

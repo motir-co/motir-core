@@ -14300,6 +14300,8 @@
         "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
+        "review_agent_disabled": "The review agent was switched off, so this question was withdrawn.",
+        "agent_changes_requested": "The review agent asked for changes at these commits, so this question was withdrawn until a push.",
         "subject_gone": "What this question asked about is gone, so this question was withdrawn.",
         "no_longer_manual": "The work item is no longer manual work, so this question was withdrawn.",
         "closed_without_decision": "The work item was closed without anyone marking it done, so this question was withdrawn.",

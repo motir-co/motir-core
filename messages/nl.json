@@ -14303,6 +14303,8 @@
         "plan_stale": "Werk dat dit plan wijzigt is afgerond, dus het plan raakte verouderd en deze vraag is ingetrokken.",
         "plan_discarded": "Elk voorstel in het plan is ingetrokken, dus het plan is beëindigd en deze vraag ook.",
         "queue_failed": "De merge-wachtrij heeft deze commits afgekeurd, dus deze vraag is ingetrokken.",
+        "review_agent_disabled": "De review-agent is uitgezet, dus deze vraag is ingetrokken.",
+        "agent_changes_requested": "De review-agent vroeg om wijzigingen bij deze commits, dus deze vraag is ingetrokken tot een nieuwe push.",
         "subject_gone": "Waar deze vraag over ging, is weg, dus deze vraag is ingetrokken.",
         "no_longer_manual": "Het werkitem is geen handmatig werk meer, dus deze vraag is ingetrokken.",
         "closed_without_decision": "Het werkitem is gesloten zonder dat iemand het als klaar heeft gemarkeerd, dus deze vraag is ingetrokken.",

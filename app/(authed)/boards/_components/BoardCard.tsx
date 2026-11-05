@@ -23,6 +23,7 @@ import { ToFixTag, toFixTagId, toFixTagState } from '@/components/workItems/ToFi
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
+import { decisionBesideReview } from '@/lib/dto/reviewState';
 import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
 import { planRowDestination, sessionHoldDestination } from '@/lib/planning/planDestination';
@@ -86,18 +87,20 @@ export function reviewedBadgeId(cardId: string): string {
 /**
  * Which marker the EXCLUSIVE SLOT draws, in the design's precedence (MOTIR-5875; § 32.1 of
  * the review path, MOTIR-10341): a decision waiting on YOU › `Blocked` › a review marker or
- * a decision waiting on someone else › the priority chip. A review marker and a
- * decision-waiting one never hold together — while the `agent_review` gate awaits, no
- * approve-and-merge gate exists — so the review marker is checked first only to keep the
- * order total.
+ * a decision waiting on someone else › the priority chip. The awaiting `agent_review` gate
+ * is the one decision a review marker tells, so {@link decisionBesideReview} drops its
+ * decision marker first; no other gate awaits beside it (no approve-and-merge gate exists
+ * while the review awaits), so the review marker is checked before `decision` only to keep
+ * the order total.
  */
 function slotOf(
   card: BoardCardDto,
 ): 'decisionYours' | 'blocked' | 'review' | 'decision' | 'priority' {
-  if (card.pendingDecision?.state === 'yours') return 'decisionYours';
+  const pending = decisionBesideReview(card.pendingDecision, card.review);
+  if (pending?.state === 'yours') return 'decisionYours';
   if (!card.ready) return 'blocked';
   if (card.review?.marker) return 'review';
-  if (card.pendingDecision) return 'decision';
+  if (pending) return 'decision';
   return 'priority';
 }
 
@@ -147,6 +150,8 @@ export function BoardCardView({
   // read identically on every surface. A STATIC span, not `EstimateBadge`: the
   // whole card is the drag-handle `<button>` (see below), so the badge's
   // click-to-edit button cannot nest inside it.
+  // The `agent_review` gate's decision marker steps aside for the review marker (MOTIR-10345).
+  const pending = decisionBesideReview(card.pendingDecision, card.review);
   const points = card.storyPoints != null ? formatStoryPoints(card.storyPoints) : null;
 
   return (
@@ -189,11 +194,11 @@ export function BoardCardView({
             (MOTIR-1636): every pending receipt raises an `acceptance_result` gate,
             so the two said one fact twice. State is text + glyph, never colour
             alone (finding #35). */}
-        {card.pendingDecision?.state === 'yours' ? (
+        {pending?.state === 'yours' ? (
           <DecisionWaitingMarker
             id={markerId}
             state="yours"
-            kind={card.pendingDecision.kind}
+            kind={pending.kind}
             routedToName={routedToName}
           />
         ) : !card.ready ? (
@@ -205,11 +210,11 @@ export function BoardCardView({
           // THE REVIEW MARKER (MOTIR-10341; § 32.1, M2–M4) — in the decision marker's
           // slot, at its size and precedence. No copy button here: the card is one button.
           <ReviewMarker id={markerId} marker={card.review.marker} identifier={card.identifier} />
-        ) : card.pendingDecision ? (
+        ) : pending ? (
           <DecisionWaitingMarker
             id={markerId}
             state="others"
-            kind={card.pendingDecision.kind}
+            kind={pending.kind}
             routedToName={routedToName}
           />
         ) : (

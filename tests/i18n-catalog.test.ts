@@ -831,6 +831,10 @@ const BANNED_WORD_ALLOWLIST: Partial<Record<Locale, Record<string, string>>> = {
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.withdrawn.cause.queue_failed':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.review_agent_disabled':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
+    'approvalGate.withdrawn.cause.agent_changes_requested':
+      'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.withdrawn.cause.subject_gone':
       'problem — 出了问题 / 有问题 / 遇到问题, not a work item',
     'approvalGate.withdrawn.cause.no_longer_manual':

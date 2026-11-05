@@ -14303,6 +14303,8 @@
         "plan_stale": "Il lavoro che questo piano modifica è stato completato, quindi il piano non è più aggiornato e questa domanda è stata ritirata.",
         "plan_discarded": "Tutte le proposte del piano sono state ritirate, quindi il piano si è chiuso e questa domanda con esso.",
         "queue_failed": "La coda di merge ha respinto questi commit, quindi questa domanda è stata ritirata.",
+        "review_agent_disabled": "L’agente di revisione è stato disattivato, quindi questa domanda è stata ritirata.",
+        "agent_changes_requested": "L’agente di revisione ha chiesto modifiche su questi commit, quindi questa domanda è stata ritirata fino a un nuovo push.",
         "subject_gone": "Ciò su cui verteva questa domanda non esiste più, quindi questa domanda è stata ritirata.",
         "no_longer_manual": "L’elemento di lavoro non è più lavoro manuale, quindi questa domanda è stata ritirata.",
         "closed_without_decision": "L’elemento di lavoro è stato chiuso senza che nessuno lo segnasse come completato, quindi questa domanda è stata ritirata.",

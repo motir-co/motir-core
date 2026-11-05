@@ -14303,6 +14303,8 @@
         "plan_stale": "Arbeit, die dieser Plan ändert, wurde abgeschlossen, daher ist der Plan veraltet und diese Frage wurde zurückgezogen.",
         "plan_discarded": "Jeder Vorschlag im Plan wurde zurückgezogen, daher endete der Plan und mit ihm diese Frage.",
         "queue_failed": "Die Merge-Queue hat diese Commits abgewiesen, daher wurde diese Frage zurückgezogen.",
+        "review_agent_disabled": "Der Review-Agent wurde ausgeschaltet, daher wurde diese Frage zurückgezogen.",
+        "agent_changes_requested": "Der Review-Agent hat bei diesen Commits Änderungen angefordert, daher wurde diese Frage bis zum nächsten Push zurückgezogen.",
         "subject_gone": "Das, wonach diese Frage gefragt hat, existiert nicht mehr, daher wurde diese Frage zurückgezogen.",
         "no_longer_manual": "Das Arbeitselement ist keine manuelle Arbeit mehr, daher wurde diese Frage zurückgezogen.",
         "closed_without_decision": "Das Arbeitselement wurde geschlossen, ohne dass jemand es als erledigt markiert hat, daher wurde diese Frage zurückgezogen.",
