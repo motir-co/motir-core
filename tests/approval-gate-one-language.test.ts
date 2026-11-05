@@ -306,6 +306,10 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
         // decided (`closed_without_decision`) — product-written, no actor, never a decision.
         'lib/services/manualWorkGateService.ts',
         'lib/services/pullRequestApprovalGates.ts',
+        // MOTIR-10333 (`approval-gates.md` §12.14): an agent's SEND-BACK withdraws the
+        // card's awaiting approve-and-merge gate, cause `agent_changes_requested` —
+        // product-written, no actor, never a decision. The verdict door is its one writer.
+        'lib/services/reviewVerdictService.ts',
       ],
     },
     // AMENDED ON THE RECORD — MOTIR-5527, 2026-09-14 (ADR `approval-gates.md` §6d
@@ -403,7 +407,14 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // no decider: the gate stays `awaiting`, so it is a note on the open question, never a
       // decision.
       writes: 'awaiting',
-      callers: ['lib/services/agentReviewStartService.ts', 'lib/services/hostedRunService.ts'],
+      callers: [
+        'lib/services/agentReviewStartService.ts',
+        // MOTIR-10332 (`approval-gates.md` §12.10): switching the review source to `own`
+        // CLEARS the reason on each awaiting review — could-not-run is hosted-only (§12.6).
+        // The gate stays `awaiting`; nothing is decided.
+        'lib/services/approvalGateSettingsService.ts',
+        'lib/services/hostedRunService.ts',
+      ],
     },
   ] as const;
 

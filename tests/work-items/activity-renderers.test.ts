@@ -258,3 +258,69 @@ describe('registry totality plumbing', () => {
     expect([...refs.issues].sort()).toEqual(['w1', 'w2', 'w3']);
   });
 });
+
+// MOTIR-10338 — an agent verdict's snapshot, written beside its record.
+describe('the agentVerdict snapshot', () => {
+  const snapshot = {
+    recordId: 'rec-1',
+    verdict: 'changes_requested',
+    outcome: 'decided',
+    hosted: false,
+    harness: 'Claude Code',
+    model: 'claude-opus-5-5',
+    subjectVersion: 'moooon/acme#1@abc',
+    findingsExcerpt: 'The finding.',
+    notifiedUserId: 'u-2',
+  };
+
+  it('renders a well-formed snapshot as one verdict part, resolving the notified person', () => {
+    expect(parts('agent_verdict', { agentVerdict: { from: null, to: snapshot } })).toEqual([
+      {
+        kind: 'agentVerdict',
+        recordId: 'rec-1',
+        verdict: 'changes_requested',
+        outcome: 'decided',
+        hosted: false,
+        harness: 'Claude Code',
+        model: 'claude-opus-5-5',
+        subjectVersion: 'moooon/acme#1@abc',
+        findingsExcerpt: 'The finding.',
+        notified: { type: 'user', userId: 'u-2', name: 'user:u-2', image: null },
+      },
+    ]);
+    const refs = emptyDiffRefs();
+    collectDiffRefs('agent_verdict', { agentVerdict: { from: null, to: snapshot } }, refs);
+    expect([...refs.users]).toEqual(['u-2']);
+  });
+
+  it('missing optional fields read as empty, not as a crash', () => {
+    const [part] = parts('agent_verdict', {
+      agentVerdict: {
+        from: null,
+        to: { recordId: 'r', verdict: 'pass', outcome: 'late', subjectVersion: 'v' },
+      },
+    });
+    expect(part).toMatchObject({
+      kind: 'agentVerdict',
+      hosted: false,
+      harness: '',
+      model: '',
+      findingsExcerpt: null,
+      notified: null,
+    });
+    const refs = emptyDiffRefs();
+    collectDiffRefs('agent_verdict', { agentVerdict: { from: null, to: 'nope' } }, refs);
+    expect(refs.users.size).toBe(0);
+  });
+
+  it.each([
+    ['not an object', 'nope'],
+    ['no record id', { ...snapshot, recordId: 7 }],
+    ['an unknown verdict', { ...snapshot, verdict: 'maybe' }],
+    ['an unknown outcome', { ...snapshot, outcome: 'eventually' }],
+    ['no version', { ...snapshot, subjectVersion: null }],
+  ])('a malformed snapshot (%s) degrades to the generic part', (_label, to) => {
+    const [part] = parts('agent_verdict', { agentVerdict: { from: null, to } });
+    expect(part?.kind).toBe('generic');
+  });
+});

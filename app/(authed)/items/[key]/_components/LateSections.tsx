@@ -145,6 +145,11 @@ function frameGateFor(
           // The approval a re-asked merge gate replaced (MOTIR-5863) — the merge read's,
           // like `members`, whichever gate leads the frame.
           earlierApproval: r.mergeGate.earlierApproval,
+          // The review the APPROVED merge stood on (MOTIR-10338) — the Done card's record line.
+          approvedReview: r.mergeGate.approvedReview ?? null,
+          // The review path at the card's current version (MOTIR-10342) — the line, the
+          // gate-off send-back and its Dismiss, the author note.
+          reviewPath: r.mergeGate.reviewPath ?? null,
         }
       : null;
   const merge = r.mergeGate.gate ? primary(r.mergeGate) : null;

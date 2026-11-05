@@ -3708,6 +3708,15 @@
      warning or danger: nothing was lost — the files are kept and the owner can
      wake it — but somebody else acted on their agent and they should know. */
   --el-notif-agent-hibernated: var(--color-info);
+  /* A review waits for the routed person's OWN agent (Story MOTIR-10327 · MOTIR-10340).
+     --color-warning, the hue of the review markers' loud "awaiting" form, because the row
+     says the same thing they do: something is waiting on you. Its own slot, as the
+     access row has its own, so a palette can move one without the other. */
+  --el-notif-review-to-run: var(--color-warning);
+  /* An agent SENT BACK the recipient's card (Story MOTIR-10327 · MOTIR-10338).
+     --color-destructive, the hue of the To fix tag the send-back puts on the card: the row
+     says the card was refused and is now theirs to repair. Its own slot, as above. */
+  --el-notif-review-sent-back: var(--color-destructive);
   /* The EXECUTOR badge on a Workbench row's assignee avatar (Story MOTIR-2649 ·
      Subtask MOTIR-2653, per design/workbench/design-notes.md §"The agent state"
      — that area was renamed with the surface by MOTIR-4779).

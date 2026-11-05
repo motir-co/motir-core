@@ -268,3 +268,23 @@ describe('`ci_rerunning` — the set left green without going red', () => {
     );
   });
 });
+
+// THE REVIEW PATH'S CAUSES HAVE WORDS (Story MOTIR-10327 · MOTIR-10345): a gate the review
+// agent withdrew — the gate switched off, or a send-back at the asked version — reads
+// `withdrawn.cause.<cause>` like every other cause. Found by the story's recording, where the
+// frame threw MISSING_MESSAGE for `agent_changes_requested`.
+describe('the review path’s withdrawn causes have copy in every locale', () => {
+  const locales = ['de', 'en', 'es', 'fr', 'it', 'ja', 'ko', 'nl', 'pl', 'pt', 'zh'] as const;
+  const causes: ApprovalGateSupersedeCauseDTO[] = [
+    'review_agent_disabled',
+    'agent_changes_requested',
+  ];
+  it.each(locales)('%s', async (locale) => {
+    const messages = (await import(`@/messages/${locale}.json`)).default as {
+      approvalGate: { withdrawn: { cause: Record<string, string> } };
+    };
+    for (const cause of causes) {
+      expect(messages.approvalGate.withdrawn.cause[cause], `${locale}:${cause}`).toBeTruthy();
+    }
+  });
+});

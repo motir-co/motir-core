@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "관리자가 내 에이전트를 최대 절전 모드로 전환했습니다",
             "desc": "조직 소유자 또는 관리자가 조직의 Fleet 페이지에서 내 에이전트 중 하나를 중지했습니다."
+          },
+          "review_to_run": {
+            "label": "리뷰가 내 에이전트를 기다리고 있어요",
+            "desc": "이 프로젝트는 내 에이전트로 리뷰하며, 작업 항목의 리뷰는 motir review로 직접 실행해야 해요."
+          },
+          "review_sent_back": {
+            "label": "에이전트가 변경을 요청했습니다",
+            "desc": "리뷰 에이전트가 담당자로 지정된 작업 항목을 발견 사항과 함께 돌려보냈습니다."
           }
         },
         "soon": "곧 제공",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s>님이 <s>{key}</s>을(를) 업데이트했습니다",
       "genericNoKey": "<s>{actor}</s>님이 알림을 보냈습니다",
       "accessRefused": "<s>{project}</s>의 코드가 준비되었지만 아직 열 수 없습니다 — 초대를 다시 보내 보세요",
+      "reviewToRun": "<s>{key}</s>의 리뷰가 내 에이전트를 기다리고 있어요",
+      "reviewSentBack": "에이전트가 <s>{key}</s>에 변경을 요청했습니다",
       "agentHibernatedByAdmin": "<s>{actor}</s> 님이 내 에이전트 <s>{agent}</s>을(를) 최대 절전 모드로 전환했습니다"
     },
     "excerpt": {
@@ -14497,6 +14507,8 @@
         "plan_stale": "이 계획이 변경하는 작업이 완료되어 계획이 오래된 상태가 되었으므로 이 질문이 철회되었습니다.",
         "plan_discarded": "계획의 모든 제안이 철회되어 계획이 종료되었고, 이 질문도 함께 철회되었습니다.",
         "queue_failed": "병합 대기열에서 이 커밋이 실패하여 이 질문이 철회되었습니다.",
+        "review_agent_disabled": "리뷰 에이전트가 꺼져서 이 질문이 철회되었습니다.",
+        "agent_changes_requested": "리뷰 에이전트가 이 커밋에 변경을 요청해서, 다음 푸시까지 이 질문이 철회되었습니다.",
         "subject_gone": "이 질문의 대상이 사라져 이 질문이 철회되었습니다.",
         "no_longer_manual": "작업 항목이 더 이상 수동 작업이 아니므로 이 질문이 철회되었습니다.",
         "closed_without_decision": "아무도 완료로 표시하지 않은 채 작업 항목이 닫혀 이 질문이 철회되었습니다.",
@@ -15345,6 +15357,99 @@
         "since": "{when}부터",
         "open": "계획 세션 열기 — {sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor>이(가) {commits}에서 리뷰를 통과시켰습니다",
+        "sentBack": "<actor>{agent}</actor>이(가) {commits}에서 변경을 요청했습니다",
+        "late": "늦음",
+        "secondTag": "두 번째 리뷰",
+        "lateNote": "{commits}을(를) 리뷰했지만 더 이상 현재 버전이 아닙니다. 아무것도 결정하지 않았습니다.",
+        "second": "이미 결정된 버전에 대한 두 번째 리뷰입니다. 아무것도 결정하지 않았습니다.",
+        "notified": "{name}에게 알렸습니다.",
+        "findings": "발견 사항",
+        "agentHosted": "Motir 호스팅 에이전트",
+        "agentOwn": "{name}의 에이전트({harness})"
+      },
+      "record": {
+        "reviewed": "{name} 승인 · {commits}에서 에이전트 리뷰 완료",
+        "skipped": "{name} 승인 · {who}이(가) 리뷰를 건너뜀",
+        "dismissed": "{name} 승인 · {who}이(가) 리뷰를 기각함",
+        "none": "{name} 승인 · 에이전트 리뷰 없음",
+        "someone": "누군가",
+        "reason": "사유: {reason}"
+      },
+      "marker": {
+        "reviewing": "에이전트 리뷰 중",
+        "reviewingName": "에이전트가 이 작업을 리뷰하고 있습니다",
+        "couldNotRun": "리뷰를 실행할 수 없음",
+        "couldNotRunName": "에이전트 리뷰를 실행할 수 없음 — 내 조치 대기 중",
+        "couldNotRunOn": "리뷰를 실행할 수 없음 · {name}",
+        "couldNotRunOnName": "에이전트 리뷰를 실행할 수 없음 — {name}의 조치 대기 중",
+        "waitingYours": "내 리뷰 에이전트 대기 중",
+        "waitingYoursName": "내 리뷰 에이전트 대기 중 — motir review {key} 실행",
+        "waitingOn": "{name}의 리뷰 에이전트 대기 중",
+        "waitingOnName": "{name}의 리뷰 에이전트 대기 중"
+      },
+      "command": {
+        "copy": "motir review {key} 복사",
+        "copied": "복사됨",
+        "toastTitle": "명령을 복사했습니다",
+        "toastBody": "이 작업을 리뷰하려면 내 에이전트에서 {command}을(를) 실행하세요."
+      },
+      "badge": {
+        "reviewed": "리뷰됨",
+        "reviewedName": "현재 커밋에서 에이전트가 리뷰함",
+        "container": "{total, plural, other {{done}/# 리뷰됨}}",
+        "containerName": "{total, plural, other {#개 부분 중 {done}개가 현재 커밋에서 에이전트 리뷰를 받음}}",
+        "containerAllName": "모든 부분이 현재 커밋에서 에이전트 리뷰를 받음",
+        "card": {
+          "hosted": "Motir 호스팅 에이전트가 리뷰함",
+          "own": "{name}의 에이전트가 리뷰함",
+          "harness": "{harness} · {model}",
+          "commits": "리뷰한 커밋",
+          "link": "발견 사항 및 체크리스트"
+        }
+      },
+      "line": {
+        "label": "에이전트 리뷰",
+        "reviewed": "<b>에이전트가 리뷰함</b> · {who} · {when}",
+        "whoHosted": "Motir 호스팅 에이전트",
+        "whoOwn": "{name}의 에이전트 · {harness}",
+        "findings": "발견 사항 및 체크리스트",
+        "skipped": "<b>{name}이(가) 리뷰를 건너뜀</b> — “{reason}”",
+        "dismissed": "<b>{name}이(가) 리뷰를 기각함</b> — “{reason}”",
+        "notReviewed": "<b>에이전트 리뷰 없음</b>",
+        "earlier": "이전 커밋에서 마지막으로 리뷰됨",
+        "github": "<b>GitHub에서 승인</b>: {logins}"
+      },
+      "toRun": {
+        "sentence": "내 에이전트로 <title>{name}</title> 리뷰",
+        "tag": "실행할 리뷰",
+        "details": "아직 승인이 아닙니다. 리뷰가 통과하면 승인을 요청합니다.",
+        "open": "{key} 열기: {sentence}"
+      },
+      "dismiss": {
+        "button": "리뷰 기각",
+        "title": "에이전트의 리뷰를 기각할까요?",
+        "body": "에이전트가 이 커밋에서 변경을 요청했습니다. 기각하면 작업 항목이 수정 필요에서 빠지고 같은 커밋에서 승인을 요청합니다. 리뷰와 사유는 작업 항목에 남습니다.",
+        "reasonLabel": "기각하는 이유는 무엇인가요?",
+        "reasonHint": "필수입니다. 사유는 승인과 작업 항목 기록에 표시됩니다.",
+        "reasonPlaceholder": "이 발견 사항은 이 작업 항목이 변경하지 않는 코드에 관한 것입니다.",
+        "confirm": "리뷰 기각",
+        "cancel": "취소",
+        "submitting": "기각하는 중…",
+        "error": "리뷰를 기각할 수 없습니다. 변경된 내용이 없습니다. 다시 시도하세요.",
+        "stale": "이 리뷰를 읽은 뒤 새 커밋이 추가되어 아무것도 기각되지 않았습니다. 현재 버전을 표시하고 다시 읽어 주세요.",
+        "already": "이 리뷰는 이미 기각되었습니다. 현재 버전을 표시해 확인하세요.",
+        "notStanding": "이 리뷰는 더 이상 유효하지 않아 기각할 것이 없습니다. 현재 버전을 표시하세요.",
+        "reread": "현재 버전 표시",
+        "toFixNote": "요청한 에이전트 리뷰가 이것을 돌려보냈습니다. 수정하거나 사유와 함께 리뷰를 기각하세요."
+      },
+      "authorNote": {
+        "title": "GitHub에서는 자신의 풀 리퀘스트를 승인할 수 없습니다",
+        "body": "여기의 모든 풀 리퀘스트는 내가 열었습니다. Motir에서 승인하거나 팀원에게 GitHub에서 리뷰를 요청하세요."
+      }
     }
   },
   "approvalOverlay": {
@@ -15424,7 +15529,19 @@
       "billingNote": "각 리뷰는 호스팅 에이전트 실행이며, 조직의 AI 크레딧으로 결제됩니다.",
       "offNote": "끄면 진행 중인 리뷰가 취소되며, 해당 작업 항목은 바로 일반 흐름으로 넘어갑니다.",
       "saved": "저장됨",
-      "saveError": "저장하지 못했습니다 — 다시 시도하세요."
+      "saveError": "저장하지 못했습니다 — 다시 시도하세요.",
+      "source": {
+        "label": "리뷰 주체",
+        "hosted": "Motir 호스팅 에이전트",
+        "hostedWhat": "체크가 통과하면 Motir가 리뷰 실행을 시작합니다. <strong>AI 크레딧을 사용합니다.</strong>",
+        "own": "내 에이전트",
+        "ownWhat": "무료. 누군가 자신의 에이전트에서 <cmd>motir review</cmd>를 실행할 때까지 리뷰가 기다립니다. 저절로 시작되는 것은 없습니다."
+      },
+      "posting": {
+        "title": "에이전트 리뷰를 풀 리퀘스트에 게시",
+        "on": "Motir의 GitHub 앱이 모든 판정을 풀 리퀘스트에 댓글로 남기고, 돌려보낼 때는 변경을 요청합니다. 승인은 하지 않습니다.",
+        "off": "판정은 Motir에만 남습니다. 풀 리퀘스트에는 아무것도 게시되지 않습니다."
+      }
     },
     "designApproval": {
       "title": "디자인 승인",

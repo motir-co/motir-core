@@ -1,4 +1,8 @@
 import { RelatedTitles } from './_components/translation/RelatedTitles';
+import { reviewStateService } from '@/lib/services/reviewStateService';
+import { decisionBesideReview } from '@/lib/dto/reviewState';
+import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
+import { ReviewMarkerHeaderLink } from './_components/ReviewMarkerHeaderLink';
 import { Suspense } from 'react';
 import { personDisplayName } from '@/lib/people/personLabel';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -338,6 +342,7 @@ export default async function ItemView({
     repairRun,
     readerTranslation,
     todoRefs,
+    cardReviews,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -460,13 +465,23 @@ export default async function ItemView({
       : null,
     translationRead,
     todoRefsRead,
+    // THE HEADER'S REVIEW MARKER AND REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341), in
+    // THIS group for the decision marker's reason: the eyebrow is what the reader lands on.
+    // Per-reader (who a marker is loud for), so a Visitor reads none. Evidence, never the
+    // card: a failing read draws no marker rather than failing the page.
+    isVisitor
+      ? null
+      : reviewStateService.cardReviewsFor(item.projectId, [item.id], svc).catch(() => null),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
   // The marker's entry for THIS item, and the routed person named the way the
   // board names members (`name || email`); a routee outside the member list falls
   // back to the marker's own *this work item's assignee*.
-  const pendingDecision = pendingDecisions.get(item.id) ?? null;
+  // The awaiting `agent_review` gate's marker steps aside for the review marker, which tells
+  // the same fact (MOTIR-10345).
+  const cardReview = cardReviews?.[item.id] ?? null;
+  const pendingDecision = decisionBesideReview(pendingDecisions.get(item.id), cardReview);
   const routedMember = pendingDecision?.routedToId
     ? members.find((m) => m.userId === pendingDecision.routedToId)
     : undefined;
@@ -607,6 +622,17 @@ export default async function ItemView({
                           routedToName={routedToName}
                         />
                       ) : null}
+                      {/* THE REVIEW MARKER (MOTIR-10341, § 32.1, M9) — the decision
+                marker's slot (the `agent_review` gate's own marker steps aside above), the same pointer to
+                Development, and for the waiting marker the copyable command after it.
+                Then THE REVIEWED BADGE (§ 32.3, M10–M11), focusable, with its card. */}
+                      {cardReview?.marker ? (
+                        <ReviewMarkerHeaderLink
+                          marker={cardReview.marker}
+                          identifier={item.identifier}
+                        />
+                      ) : null}
+                      {cardReview ? <ReviewedBadge review={cardReview} /> : null}
                       {/* THE OBSOLESCENCE BADGE (MOTIR-6674): the cell's LAST member,
                 a pointer that scrolls to the rail's Obsolescence field. Nothing at
                 all on an unmarked item. */}

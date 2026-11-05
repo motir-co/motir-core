@@ -1551,6 +1551,20 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  find_work_items_for_pull_request: {
+    type: 'object',
+    properties: {
+      url: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The pull request as its GitHub URL, e.g. "https://github.com/acme/web/pull/2291" — the line `gh pr create` prints, or the address in a browser.',
+      },
+    },
+    required: ['url'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   get_approval_gate: {
     type: 'object',
     properties: {
@@ -3843,6 +3857,82 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  submit_review_verdict: {
+    type: 'object',
+    properties: {
+      key: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+      },
+      verdict: {
+        type: 'string',
+        enum: ['approved', 'changes_requested'],
+        description: '`approved`, or `changes_requested` (then `findingsMd` is required).',
+      },
+      subjectVersion: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The delivery-set version reviewed — every pull request as `owner/name#number@headSha`, sorted, comma-joined. A version the card no longer has is recorded as late.',
+      },
+      summaryMd: {
+        type: 'string',
+        maxLength: 500,
+        description: 'What the review concluded, in a line or two.',
+      },
+      findingsMd: {
+        type: 'string',
+        maxLength: 65536,
+        description:
+          'The findings, Markdown: each naming a file and line, what it breaks and what to change. Required and non-empty on `changes_requested`.',
+      },
+      checklist: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            key: {
+              type: 'string',
+              minLength: 1,
+              maxLength: 64,
+              description: 'The card the criterion is on.',
+            },
+            criterion: {
+              type: 'string',
+              minLength: 1,
+              description: 'The acceptance criterion, as the card says it.',
+            },
+            status: { type: 'string', enum: ['met', 'not_met', 'cannot_tell'] },
+            evidence: {
+              type: 'string',
+              description: 'What shows the result — required when `status` is `met`.',
+            },
+          },
+          required: ['criterion', 'status'],
+          additionalProperties: false,
+        },
+        maxItems: 200,
+        description: 'One row per acceptance criterion of the run target and its descendants.',
+      },
+      harness: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'The harness the review ran in, e.g. "Claude Code".',
+      },
+      model: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 200,
+        description: 'The model the review ran on.',
+      },
+    },
+    required: ['key', 'verdict', 'subjectVersion', 'harness', 'model'],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   touch_work_item_continue: {
     type: 'object',
     properties: {
@@ -5028,6 +5118,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   dispatch_prompt: 'Dispatch prompt',
   edit_comment: 'Edit comment',
   expand_item: 'Expand work item',
+  find_work_items_for_pull_request: 'Find work items for pull request',
   get_approval_gate: 'Get approval gate',
   get_approved_shape_verdict: 'Is this card still what its plan approved?',
   get_code_health: 'Get code health',
@@ -5090,6 +5181,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   start_sprint: 'Start sprint',
   start_work_item_run: 'Start your run of a work item',
   submit_plan_session: 'Submit plan conversation',
+  submit_review_verdict: 'Submit review verdict',
   touch_work_item_continue: 'Keep a continue alive',
   touch_work_item_repair: 'Keep a repair alive',
   transition_status: 'Transition status',
@@ -5332,6 +5424,11 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,
+    openWorldHint: false,
+  },
+  find_work_items_for_pull_request: {
+    title: 'Find work items for pull request',
+    readOnlyHint: true,
     openWorldHint: false,
   },
   get_approval_gate: { title: 'Get approval gate', readOnlyHint: true, openWorldHint: false },
@@ -5601,6 +5698,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   },
   submit_plan_session: {
     title: 'Submit plan conversation',
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  submit_review_verdict: {
+    title: 'Submit review verdict',
     readOnlyHint: false,
     destructiveHint: true,
     idempotentHint: false,

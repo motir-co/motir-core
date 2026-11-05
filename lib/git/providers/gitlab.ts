@@ -690,6 +690,9 @@ export const gitlabProvider: GitProvider = {
       // instances lag the SaaS release by arbitrary amounts, which is exactly
       // the case a single-name read would fail silently on.
       draft: attrs['draft'] === true || attrs['work_in_progress'] === true,
+      // A GitLab user id is not a GitHub one, so it could never match a GitHub identity
+      // (MOTIR-10340): the author fact reads unknown for a merge request.
+      author: null,
     };
   },
 

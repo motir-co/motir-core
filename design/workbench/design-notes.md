@@ -4182,3 +4182,14 @@ A card whose latest run stopped at a gate waits on To resume. Once **a new CI ru
 | the story E2E                          | **ELEMENT:** what to assert: the tag's words in en and zh, the unchanged count, the tag gone on red, the held row on green, the To resume count and the In progress listing.                                                                        | Nothing |
 
 No tab and no workflow status is added, and no shipped card's criteria are contradicted.
+
+## 41 · TO APPROVE — the review line on an approval row, and a review to run (`approvals-row--review-path.mock.html`, 2026-11-04)
+
+**AMENDS** `design/workbench/approvals-row.mock.html` **without editing it**. The delta mock `design/workbench/approvals-row--review-path.mock.html` holds only the changed panels, English then Chinese:
+
+- **A1** — the review line as the approve-and-merge row's second grid row (_Reviewed by agent_, _Review skipped by_, _Review dismissed by_, _Not reviewed by an agent_ with the command, and _Approved on GitHub by_ beside any of them), and the Reviewed badge after the key.
+- **A2** — a review to run (source _Your own agent_): a `Bot` glyph on the yellow disc, _Review {title} with your agent_, the command in the details track and the _Review to run_ tag in the Decide track, above an ordinary approval row for contrast.
+- **A3** — the decided approval-record line in the Approvals room.
+- **A4** — the same rows at 390px.
+
+The element spec, tokens and copy keys are in **`design/github/design-notes.md` § 32.4, § 32.5 and § 32.9**; this section only indexes the surface.

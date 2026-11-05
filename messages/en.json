@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "An admin hibernated your agent",
             "desc": "An organization owner or admin stopped one of your agents from the organization's Fleet page."
+          },
+          "review_to_run": {
+            "label": "A review is waiting for your agent",
+            "desc": "Your project reviews with your own agent, and a work item's review is yours to run with motir review."
+          },
+          "review_sent_back": {
+            "label": "An agent asked for changes",
+            "desc": "A review agent sent back a work item assigned to you, with its findings."
           }
         },
         "soon": "Soon",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s> updated <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> sent you a notification",
       "accessRefused": "<s>{project}</s>'s code is ready, but you can't open it yet — try sending the invitation again",
+      "reviewToRun": "A review of <s>{key}</s> is waiting for your agent",
+      "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>"
     },
     "excerpt": {
@@ -14500,6 +14510,8 @@
         "plan_stale": "Work this plan changes was finished, so the plan went out of date and this question was withdrawn.",
         "plan_discarded": "Every proposal in the plan was withdrawn, so the plan ended and this question with it.",
         "queue_failed": "The merge queue failed these commits, so this question was withdrawn.",
+        "review_agent_disabled": "The review agent was switched off, so this question was withdrawn.",
+        "agent_changes_requested": "The review agent asked for changes at these commits, so this question was withdrawn until a push.",
         "subject_gone": "What this question asked about is gone, so this question was withdrawn.",
         "no_longer_manual": "The work item is no longer manual work, so this question was withdrawn.",
         "closed_without_decision": "The work item was closed without anyone marking it done, so this question was withdrawn.",
@@ -15348,6 +15360,99 @@
         "since": "since {when}",
         "open": "Open the planning session — {sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> passed the review at {commits}",
+        "sentBack": "<actor>{agent}</actor> asked for changes at {commits}",
+        "late": "Late",
+        "secondTag": "Second review",
+        "lateNote": "Reviewed {commits}, which is no longer the current version. It decided nothing.",
+        "second": "A second review at a version already decided. It decided nothing.",
+        "notified": "{name} was notified.",
+        "findings": "Findings",
+        "agentHosted": "Motir's hosted agent",
+        "agentOwn": "{name}'s agent ({harness})"
+      },
+      "record": {
+        "reviewed": "Approved by {name} · reviewed by agent at {commits}",
+        "skipped": "Approved by {name} · review skipped by {who}",
+        "dismissed": "Approved by {name} · review dismissed by {who}",
+        "none": "Approved by {name} · not reviewed by an agent",
+        "someone": "someone",
+        "reason": "Reason: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent reviewing",
+        "reviewingName": "An agent is reviewing this work",
+        "couldNotRun": "Review could not run",
+        "couldNotRunName": "The agent review could not run — waiting on you",
+        "couldNotRunOn": "Review could not run · {name}",
+        "couldNotRunOnName": "The agent review could not run — waiting on {name}",
+        "waitingYours": "Waiting for your review agent",
+        "waitingYoursName": "Waiting for your review agent — run motir review {key}",
+        "waitingOn": "Waiting for {name}'s review agent",
+        "waitingOnName": "Waiting for {name}'s review agent"
+      },
+      "command": {
+        "copy": "Copy motir review {key}",
+        "copied": "Copied",
+        "toastTitle": "Command copied",
+        "toastBody": "Run {command} in your own agent to review this work."
+      },
+      "badge": {
+        "reviewed": "Reviewed",
+        "reviewedName": "Reviewed by an agent at the current commits",
+        "container": "{total, plural, one {{done} of # reviewed} other {{done} of # reviewed}}",
+        "containerName": "{total, plural, one {{done} of # part reviewed by an agent at its current commits} other {{done} of # parts reviewed by an agent at their current commits}}",
+        "containerAllName": "Every part reviewed by an agent at its current commits",
+        "card": {
+          "hosted": "Reviewed by Motir's hosted agent",
+          "own": "Reviewed by {name}'s own agent",
+          "harness": "{harness} · {model}",
+          "commits": "At these commits",
+          "link": "Findings and checklist"
+        }
+      },
+      "line": {
+        "label": "Agent review",
+        "reviewed": "<b>Reviewed by agent</b> · {who} · {when}",
+        "whoHosted": "Motir's hosted agent",
+        "whoOwn": "{name}'s agent · {harness}",
+        "findings": "Findings and checklist",
+        "skipped": "<b>Review skipped by {name}</b> — “{reason}”",
+        "dismissed": "<b>Review dismissed by {name}</b> — “{reason}”",
+        "notReviewed": "<b>Not reviewed by an agent</b>",
+        "earlier": "Last reviewed at an earlier commit",
+        "github": "<b>Approved on GitHub</b> by {logins}"
+      },
+      "toRun": {
+        "sentence": "Review <title>{name}</title> with your agent",
+        "tag": "Review to run",
+        "details": "Not an approval yet. Your approval is asked once the review passes.",
+        "open": "Open {key}: {sentence}"
+      },
+      "dismiss": {
+        "button": "Dismiss the review",
+        "title": "Dismiss the agent's review?",
+        "body": "The agent asked for changes at these commits. Dismissing it takes the work item off To fix and asks for your approval at the same commits. The review and your reason stay on the work item.",
+        "reasonLabel": "Why are you dismissing it?",
+        "reasonHint": "Required. Your reason is shown on the approval and in the work item's history.",
+        "reasonPlaceholder": "The finding is about code this work item does not change.",
+        "confirm": "Dismiss the review",
+        "cancel": "Cancel",
+        "submitting": "Dismissing…",
+        "error": "The review could not be dismissed. Nothing changed. Try again.",
+        "stale": "New commits arrived since you read this review, so nothing was dismissed. Show the current version and read it again.",
+        "already": "This review was already dismissed. Show the current version to see it.",
+        "notStanding": "This review no longer stands, so there is nothing to dismiss. Show the current version.",
+        "reread": "Show the current version",
+        "toFixNote": "An agent review you asked for sent this back. Fix it, or dismiss the review with a reason."
+      },
+      "authorNote": {
+        "title": "GitHub will not let you approve your own pull requests",
+        "body": "You opened every pull request here. Approve in Motir, or ask a teammate to review them on GitHub."
+      }
     }
   },
   "approvalOverlay": {
@@ -15427,7 +15532,19 @@
       "billingNote": "Each review is a hosted agent run, paid from your organisation's AI credits.",
       "offNote": "Turning this off cancels reviews in progress — those work items go straight to the ordinary flow.",
       "saved": "Saved",
-      "saveError": "Couldn't save — try again."
+      "saveError": "Couldn't save — try again.",
+      "source": {
+        "label": "Who reviews",
+        "hosted": "Motir's hosted agent",
+        "hostedWhat": "Motir starts a review run when the checks pass. <strong>Uses AI credits.</strong>",
+        "own": "Your own agent",
+        "ownWhat": "Free. The review waits until someone runs <cmd>motir review</cmd> from their own agent. Nothing starts by itself."
+      },
+      "posting": {
+        "title": "Post agent reviews on pull requests",
+        "on": "Motir's GitHub app comments every verdict on the pull requests, and asks for changes on a send-back. It never approves.",
+        "off": "Verdicts stay in Motir. Nothing is posted on the pull requests."
+      }
     },
     "designApproval": {
       "title": "Design approval",

@@ -323,6 +323,18 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
     // looked at, so a non-member learns neither that A's card exists nor
     // which repositories A has connected, and no row is removed from A.
     unlink_pull_request: { key: t.item1, repository: 'acme/web', number: 7 },
+    // MOTIR-10331 — the reverse lookup names no project key: the PULL REQUEST is the
+    // target, and a repository A connected answers nothing a non-member can see.
+    find_work_items_for_pull_request: { url: 'https://github.com/acme/web/pull/7' },
+    // MOTIR-10333 — the verdict door, aimed at A's card: the KEY must read as not-found
+    // before anything is stored.
+    submit_review_verdict: {
+      key: t.item1,
+      verdict: 'approved',
+      subjectVersion: 'acme/web#7@0000000',
+      harness: 'Claude Code',
+      model: 'test-model',
+    },
     link_work_items: { fromKey: t.item1, toKey: t.item2, relationship: 'relates_to' },
     unlink_work_items: { fromKey: t.item1, toKey: t.item2, relationship: 'relates_to' },
     move_to_parent: { key: t.item1, parentKey: t.item2 },

@@ -324,3 +324,7 @@ asset.
 - `lib/repositories/approvalGateRepository.ts`: `findAwaitingRoutedTo`'s `createdAt asc`
 - `prisma/schema.prisma`, `model ApprovalGate`: the audit set, `decidedByLabel`, `subjectVersion`
 - `lib/settings/projectSettingsNav.ts`: the settings Approvals row this room is named apart from
+
+## The REVIEW PATH in the Approvals room — the approval-record line (2026-11-04)
+
+**AMENDS** `design/approvals/approvals-room.mock.html` **without editing it**. A decided approve-and-merge record carries one `--el-text-secondary` line under its sentence saying how its commits were reviewed: _reviewed by agent at {commits}_, _review skipped by {who}_, _review dismissed by {who}_ or _not reviewed by an agent_. It is drawn in `design/workbench/approvals-row--review-path.mock.html` Panel A3, over the shipped records list; the copy keys are in `design/github/design-notes.md` § 32.9 and § 32.10.

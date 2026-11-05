@@ -44,6 +44,11 @@ import { decisionDocumentShown } from './DecisionDocumentSlot';
 import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
+import type { ApprovedReviewDTO, GateReviewPathDTO } from '@/lib/dto/reviewState';
+import { AuthorNote } from '@/components/approvals/AuthorNote';
+import { DismissReviewControl } from '@/components/approvals/DismissReview';
+import { ReviewLine } from '@/components/approvals/ReviewLine';
+import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
 import {
   CouldNotRunBand,
   OverrideBand,
@@ -119,6 +124,17 @@ export interface DevelopmentGateRead {
    * fields are null by construction.
    */
   earlierApproval?: EarlierApprovalDTO | null;
+  /**
+   * The agent review the APPROVED merge stood on (MOTIR-10338; design § 32.9) — the record
+   * line under band 1's meta on a Done card. Absent or null, the frame draws no line.
+   */
+  approvedReview?: ApprovedReviewDTO | null;
+  /**
+   * The agent review at the card's CURRENT version (MOTIR-10342; design § 32.4, § 32.6,
+   * § 32.8) — the review line on the approve-and-merge frame, a gate-off send-back with
+   * Dismiss the review, and the author note. Absent, the frame draws none of them.
+   */
+  reviewPath?: GateReviewPathDTO | null;
 }
 
 /**
@@ -883,6 +899,57 @@ export function DevelopmentGateFrame({
     agentReview.gate.subjectVersion === gate.subjectVersion
       ? agentReview
       : null;
+  // ── THE REVIEW PATH (MOTIR-10342; design § 32.4, § 32.6, § 32.8) ──────────────────
+  const reviewPath = read.reviewPath ?? null;
+  // A GATE-OFF SEND-BACK is a review RECORD, not a gate: the shipped Sent back band draws it
+  // here too (G5), with Dismiss the review under it for the routed person. With the gate ON
+  // the send-back is the `agent_review` gate, drawn above, and its override is *Continue
+  // without the review* — so this never draws over an agent-review frame.
+  const recordSentBack = !isAgentReview ? (reviewPath?.sentBackRecord ?? null) : null;
+  const recordSentBackBand: ReactNode =
+    recordSentBack && reviewPath ? (
+      <>
+        <SentBackBand
+          findingsMd={recordSentBack.findingsMd}
+          findingsRefs={agentReview?.findingsRefs ?? {}}
+          run={null}
+          decidedAt={recordSentBack.at}
+          count={count}
+        />
+        {reviewPath.viewerIsRouted && reviewPath.currentVersion ? (
+          <div className="border-b border-(--el-border) px-3.5 py-2.5">
+            <DismissReviewControl
+              identifier={itemIdentifier}
+              subjectVersion={reviewPath.currentVersion}
+              onDismissed={() => (onShowCurrentVersion ?? (() => router.refresh()))()}
+            />
+          </div>
+        ) : null}
+      </>
+    ) : null;
+  // THE REVIEW LINE (G1–G3, G7) — on the AWAITING approve-and-merge frame, read at the
+  // frame's own version (a frame over older commits is about to be withdrawn, and the
+  // line would describe commits it does not ask about). The AUTHOR NOTE (G4) under it.
+  const lineHere =
+    reviewPath?.line &&
+    gate.kind === 'pull_request_approval' &&
+    gate.state === 'awaiting' &&
+    gate.subjectVersion !== null &&
+    gate.subjectVersion === reviewPath.currentVersion
+      ? reviewPath.line
+      : null;
+  const reviewSummary: ReactNode =
+    lineHere && reviewPath ? (
+      <div className="mb-3 flex flex-col gap-2" data-review-summary="">
+        <ReviewLine
+          size="frame"
+          line={lineHere}
+          identifier={itemIdentifier}
+          recordRef={reviewPath.recordRef}
+        />
+        {reviewPath.viewerIsRouted && reviewPath.authorOfEveryPr ? <AuthorNote /> : null}
+      </div>
+    ) : null;
   const reviewBand: ReactNode = isAgentReview ? (
     gate.state === 'awaiting' ? (
       reviewReason !== null ? (
@@ -931,7 +998,9 @@ export function DevelopmentGateFrame({
         count={membersOf(reviewBehindMerge.gate.subjectVersion).length}
       />
     )
-  ) : null;
+  ) : (
+    recordSentBackBand
+  );
   // Band 1's pill in the review's own words while it awaits (Panels 1 and 4a). A reader the
   // could-not-run question is not routed to sees the shipped neutral *Awaiting* (Panel 4d).
   const reviewStateOverride: { label: ReactNode; pill: PillProps } | null =
@@ -1346,6 +1415,17 @@ export function DevelopmentGateFrame({
     replanDoor
   );
 
+  // THE APPROVAL-RECORD LINE (MOTIR-10338; design § 32.9) — on a Done card's approved merge,
+  // which agent review it stood on, read at the APPROVED version. Its own line of the strip.
+  const approvedReviewLine =
+    gate.state === 'approved' && read.approvedReview ? (
+      <ApprovalReviewLine
+        className="basis-full"
+        review={read.approvedReview}
+        deciderLabel={gate.decidedByLabel}
+      />
+    ) : null;
+
   // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 · Subtask MOTIR-5667;
   // `design-result.md` AMENDMENT 6 Q1). A design card with commits holds TWO gates and the
   // DESIGN one leads: the frame is its port, with the pull requests beneath it as what
@@ -1384,6 +1464,7 @@ export function DevelopmentGateFrame({
             {reviewBand}
           </div>
         ) : null}
+        {reviewSummary}
         {children}
         <div className="mt-4">
           <GateCallToActionBand
@@ -1449,6 +1530,7 @@ export function DevelopmentGateFrame({
           // `--el-surface` (§20 Decisions: the same fill would leave only the edge).
           port={
             <div data-port className="min-w-0">
+              {reviewSummary}
               {children}
             </div>
           }
@@ -1457,7 +1539,16 @@ export function DevelopmentGateFrame({
           confirmConsequences={confirmConsequences}
           routedToLabel={read.routedToLabel}
           alert={alert ?? notice}
-          recordDetail={recordDetail}
+          recordDetail={
+            approvedReviewLine ? (
+              <>
+                {recordDetail}
+                {approvedReviewLine}
+              </>
+            ) : (
+              recordDetail
+            )
+          }
           recordBand={replanAskBand}
           recordLead={
             isAgentReview && gate.state === 'changes_requested'

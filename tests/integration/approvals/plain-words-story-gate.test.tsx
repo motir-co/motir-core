@@ -269,7 +269,7 @@ describe('SEAM 1 · the To-approve read is the WHOLE set, under a ceiling it SAY
     expect(queue).toMatchObject({ total: 1, truncated: false });
     expect(
       await approvalGatesService.listAwaitingMe({ ...readerCtx, projectId: hidden.id }),
-    ).toEqual({ items: [], total: 0, truncated: false });
+    ).toEqual({ items: [], total: 0, truncated: false, reviewsToRun: [] });
   });
 });
 

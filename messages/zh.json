@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "管理员让你的智能体进入了休眠",
             "desc": "组织的所有者或管理员在组织的 Fleet 页面停止了你的一个智能体。"
+          },
+          "review_to_run": {
+            "label": "有一个评审在等你的智能体",
+            "desc": "你的项目使用你自己的智能体评审，一个工作项的评审需要你用 motir review 来运行。"
+          },
+          "review_sent_back": {
+            "label": "智能体要求修改",
+            "desc": "审查智能体退回了一个分配给你的工作项，并附上了发现。"
           }
         },
         "soon": "即将推出",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
       "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
+      "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体",
+      "reviewSentBack": "智能体要求修改 <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠"
     },
     "excerpt": {
@@ -14494,6 +14504,8 @@
         "plan_stale": "此计划要改动的工作已经完成，计划因此过期，该问题已撤回。",
         "plan_discarded": "计划中的所有提案都已撤回，计划随之结束，该问题也一并撤回。",
         "queue_failed": "合并队列未能合并这些提交，因此该问题已撤回。",
+        "review_agent_disabled": "审查代理已关闭，因此撤回了此问题。",
+        "agent_changes_requested": "审查代理要求修改这些提交，因此在下次推送前撤回了此问题。",
         "subject_gone": "此问题针对的内容已不存在，因此该问题已撤回。",
         "no_longer_manual": "该工作项已不再是人工工作，因此该问题已撤回。",
         "closed_without_decision": "该工作项在无人标记完成的情况下被关闭，因此该问题已撤回。",
@@ -15342,6 +15354,99 @@
         "since": "自 {when}",
         "open": "打开规划会话——{sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> 在 {commits} 上通过了审查",
+        "sentBack": "<actor>{agent}</actor> 在 {commits} 上要求修改",
+        "late": "迟到",
+        "secondTag": "第二次审查",
+        "lateNote": "审查的是 {commits}，它已不是当前版本。此审查未作出任何决定。",
+        "second": "在已决定的版本上的第二次审查。此审查未作出任何决定。",
+        "notified": "已通知 {name}。",
+        "findings": "发现",
+        "agentHosted": "Motir 托管智能体",
+        "agentOwn": "{name} 的智能体（{harness}）"
+      },
+      "record": {
+        "reviewed": "{name} 已批准 · 智能体已在 {commits} 上审查",
+        "skipped": "{name} 已批准 · {who} 跳过了审查",
+        "dismissed": "{name} 已批准 · {who} 驳回了审查",
+        "none": "{name} 已批准 · 未经智能体审查",
+        "someone": "某人",
+        "reason": "理由：{reason}"
+      },
+      "marker": {
+        "reviewing": "智能体审查中",
+        "reviewingName": "智能体正在审查此工作",
+        "couldNotRun": "审查无法运行",
+        "couldNotRunName": "智能体审查无法运行 — 等待你处理",
+        "couldNotRunOn": "审查无法运行 · {name}",
+        "couldNotRunOnName": "智能体审查无法运行 — 等待 {name} 处理",
+        "waitingYours": "等待你的审查智能体",
+        "waitingYoursName": "等待你的审查智能体 — 运行 motir review {key}",
+        "waitingOn": "等待 {name} 的审查智能体",
+        "waitingOnName": "等待 {name} 的审查智能体"
+      },
+      "command": {
+        "copy": "复制 motir review {key}",
+        "copied": "已复制",
+        "toastTitle": "命令已复制",
+        "toastBody": "在你自己的智能体中运行 {command} 来审查此工作。"
+      },
+      "badge": {
+        "reviewed": "已审查",
+        "reviewedName": "已由智能体在当前提交上审查",
+        "container": "{total, plural, other {已审查 {done}/#}}",
+        "containerName": "{total, plural, other {# 个部分中有 {done} 个已由智能体在当前提交上审查}}",
+        "containerAllName": "每个部分都已由智能体在当前提交上审查",
+        "card": {
+          "hosted": "由 Motir 托管智能体审查",
+          "own": "由 {name} 自己的智能体审查",
+          "harness": "{harness} · {model}",
+          "commits": "审查的提交",
+          "link": "发现和检查清单"
+        }
+      },
+      "line": {
+        "label": "智能体审查",
+        "reviewed": "<b>已由智能体审查</b> · {who} · {when}",
+        "whoHosted": "Motir 托管智能体",
+        "whoOwn": "{name} 的智能体 · {harness}",
+        "findings": "发现和检查清单",
+        "skipped": "<b>{name} 跳过了审查</b> — “{reason}”",
+        "dismissed": "<b>{name} 驳回了审查</b> — “{reason}”",
+        "notReviewed": "<b>未经智能体审查</b>",
+        "earlier": "上次审查于较早的提交",
+        "github": "<b>已在 GitHub 上批准</b>：{logins}"
+      },
+      "toRun": {
+        "sentence": "用你的智能体审查<title>{name}</title>",
+        "tag": "待运行审查",
+        "details": "尚不是审批。审查通过后才会请求你的审批。",
+        "open": "打开 {key}：{sentence}"
+      },
+      "dismiss": {
+        "button": "驳回审查",
+        "title": "驳回智能体的审查？",
+        "body": "智能体要求在这些提交上进行修改。驳回后，工作项将离开“待修复”，并在相同的提交上请求你的审批。审查和你的理由会保留在工作项上。",
+        "reasonLabel": "你为什么要驳回它？",
+        "reasonHint": "必填。你的理由会显示在审批和工作项历史中。",
+        "reasonPlaceholder": "该发现涉及此工作项未修改的代码。",
+        "confirm": "驳回审查",
+        "cancel": "取消",
+        "submitting": "正在驳回…",
+        "error": "无法驳回审查。没有任何更改。请重试。",
+        "stale": "你阅读此审查后有新的提交，因此没有驳回任何内容。请显示当前版本并重新阅读。",
+        "already": "此审查已被驳回。显示当前版本即可查看。",
+        "notStanding": "此审查已不再有效，因此无需驳回。请显示当前版本。",
+        "reread": "显示当前版本",
+        "toFixNote": "你请求的智能体审查将此退回。请修复，或附上理由驳回审查。"
+      },
+      "authorNote": {
+        "title": "GitHub 不允许你批准自己的拉取请求",
+        "body": "这里的每个拉取请求都是你创建的。请在 Motir 中批准，或请队友在 GitHub 上审查。"
+      }
     }
   },
   "approvalOverlay": {
@@ -15421,7 +15526,19 @@
       "billingNote": "每次审查都是一次托管智能体运行，费用从你组织的 AI 额度中扣除。",
       "offNote": "关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。",
       "saved": "已保存",
-      "saveError": "保存失败，请重试。"
+      "saveError": "保存失败，请重试。",
+      "source": {
+        "label": "由谁审查",
+        "hosted": "Motir 托管智能体",
+        "hostedWhat": "检查通过后，Motir 会启动一次审查运行。<strong>会消耗 AI 额度。</strong>",
+        "own": "你自己的智能体",
+        "ownWhat": "免费。审查会等待有人从自己的智能体运行 <cmd>motir review</cmd>。不会自动开始。"
+      },
+      "posting": {
+        "title": "在拉取请求上发布智能体审查",
+        "on": "Motir 的 GitHub 应用会在拉取请求上评论每个结论，并在退回时要求修改。它从不批准。",
+        "off": "结论只保留在 Motir 中。不会在拉取请求上发布任何内容。"
+      }
     },
     "designApproval": {
       "title": "设计审批",

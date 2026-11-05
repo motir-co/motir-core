@@ -50,6 +50,8 @@ import { withdrawPullRequestApprovalGatesOnHeadMove } from './pullRequestApprova
 import { resolveDeliveredWorkItems } from './changeRequestWorkItems';
 import { recomputeWorkItemFixReason } from './fixReasonService';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { reviewBotPostRepository } from '@/lib/repositories/reviewBotPostRepository';
+import { motirAppBotLogins } from '@/lib/github/appBotLogins';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { evaluateForPullRequest } from './pullRequestReviewSync';
 import { ProviderPermissionReadError } from '@/lib/git/errors';
@@ -170,6 +172,9 @@ export type GithubWebhookResult =
         // The evaluation threw AFTER the row committed. The row is the retry.
         | 'recorded_evaluation_failed'
         | 'ignored_action'
+        // Written by one of Motir's own App bots (MOTIR-10335, rule 8): stored nowhere,
+        // counted toward nothing — its dismissal delivery too.
+        | 'ignored_bot'
         | 'malformed'
         | 'unknown_installation'
         | 'unknown_repo'
@@ -260,6 +265,25 @@ async function runPreviewLifecycle(eventType: string, run: () => Promise<unknown
       error: err instanceof Error ? err.message : 'unknown',
     });
   }
+}
+
+/**
+ * Whether a review was written by one of Motir's own App bots (MOTIR-10335) — a `Bot`
+ * reviewer whose login is `<slug>[bot]` of either App registration, read from the Apps
+ * themselves. The bot's own post row is the backstop when an App's slug could not be
+ * read: a review id Motir recorded posting is Motir's whatever the slug read says.
+ */
+async function isMotirBotReview(
+  review: { id: string; reviewer: { login: string; type: string } },
+  workspaceId: string,
+): Promise<boolean> {
+  if (review.reviewer.type !== 'Bot') return false;
+  const { logins } = await motirAppBotLogins();
+  if (logins.has(review.reviewer.login.toLowerCase())) return true;
+  return withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    return reviewBotPostRepository.existsByGithubReviewId(review.id, tx);
+  });
 }
 
 export const githubWebhookService = {
@@ -474,6 +498,14 @@ export const githubWebhookService = {
       };
     });
     if (resolved.kind !== 'resolved') return { event, outcome: resolved.kind };
+
+    // ⚠️ MOTIR'S OWN BOT IS NOT A REVIEWER (MOTIR-10335, rule 8). The bot posts each agent
+    // verdict on the pull request; recorded here, its Request changes would decide the
+    // very gate it sits beside. It is returned BEFORE the upsert, so nothing the
+    // evaluation reads ever holds it — and a `dismissed` delivery of it is ignored too.
+    if (await isMotirBotReview(review.review, resolved.workspaceId)) {
+      return { event, outcome: 'ignored_bot' };
+    }
 
     // ⚠️ THE PERMISSION READ IS BEFORE THE WRITE AND OUTSIDE EVERY TRANSACTION. It is a
     // network round trip to the host; inside one it would hold a pooled connection open on

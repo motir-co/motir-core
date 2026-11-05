@@ -353,6 +353,52 @@ const deletedEntry: RegistryEntry = {
   render: (key, value) => [genericPart(key, value)],
 };
 
+/**
+ * An agent's review VERDICT (changeKind `agent_verdict`, diff
+ * `{ agentVerdict: { from: null, to: AgentVerdictSnapshot } }`; Story MOTIR-10327 ·
+ * MOTIR-10338) — the snapshot `reviewVerdictRecordService` wrote beside the record. The
+ * notified assignee is the one reference to resolve; a malformed snapshot degrades to the
+ * generic part rather than crash the feed.
+ */
+const OUTCOMES = new Set(['decided', 'recorded', 'late', 'second']);
+const agentVerdictEntry: RegistryEntry = {
+  disposition: 'renderable',
+  collectRefs: (value, refs) => {
+    const to = asCell(value)?.to;
+    if (isRecord(to) && typeof to['notifiedUserId'] === 'string') {
+      refs.users.add(to['notifiedUserId']);
+    }
+  },
+  render: (key, value, r) => {
+    const to = asCell(value)?.to;
+    if (
+      !isRecord(to) ||
+      typeof to['recordId'] !== 'string' ||
+      (to['verdict'] !== 'pass' && to['verdict'] !== 'changes_requested') ||
+      typeof to['outcome'] !== 'string' ||
+      !OUTCOMES.has(to['outcome']) ||
+      typeof to['subjectVersion'] !== 'string'
+    ) {
+      return [genericPart(key, value)];
+    }
+    const text = (v: unknown) => (typeof v === 'string' ? v : '');
+    return [
+      {
+        kind: 'agentVerdict',
+        recordId: to['recordId'],
+        verdict: to['verdict'],
+        outcome: to['outcome'] as 'decided' | 'recorded' | 'late' | 'second',
+        hosted: to['hosted'] === true,
+        harness: text(to['harness']),
+        model: text(to['model']),
+        subjectVersion: to['subjectVersion'],
+        findingsExcerpt: typeof to['findingsExcerpt'] === 'string' ? to['findingsExcerpt'] : null,
+        notified: typeof to['notifiedUserId'] === 'string' ? r.user(to['notifiedUserId']) : null,
+      },
+    ];
+  },
+};
+
 /** Exact-match dispositions. */
 const REGISTRY: Record<string, RegistryEntry> = {
   // -- suppressed (the explicit noise policy) ------------------------------
@@ -445,6 +491,7 @@ const REGISTRY: Record<string, RegistryEntry> = {
   attachments: collectionField(),
   labels: collectionField(),
   components: collectionField(),
+  agentVerdict: agentVerdictEntry,
 };
 
 /** Every exact-match key the registry holds a disposition for — the population

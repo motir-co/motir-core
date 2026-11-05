@@ -45,6 +45,8 @@ describe('gitlab.parseChangeRequestEvent', () => {
       draft: false,
       // MOTIR-7005 — the MR's head commit, `last_commit.id`.
       headSha: 'def456',
+      // MOTIR-10340 — a GitLab user is never a GitHub author.
+      author: null,
     });
   });
 
@@ -113,6 +115,7 @@ describe('gitlab.changeRequestLifecycle', () => {
     title: null,
     draft: false,
     headSha: null,
+    author: null,
   } as const;
 
   it('maps open → implemented, merged → done, closed-unmerged → todo (MOTIR-3005)', () => {

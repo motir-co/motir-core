@@ -1,5 +1,6 @@
 'use client';
 
+import type { CardReviewMap } from '@/lib/dto/reviewState';
 import { useSurfaceTitleResolver } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import {
   useCallback,
@@ -212,6 +213,9 @@ export interface IssueTreeTableProps {
    * more* or an expand carries its own level's marker.
    */
   initialPending?: PendingDecisionMap;
+  /** The review markers and badges for those roots (MOTIR-10341), merged per level the
+   *  same way. */
+  initialReviews?: CardReviewMap;
   sort: IssueSort;
   /** Preserved across a header-sort navigation (the filter applies to the Tree too). */
   filter: IssueFilter;
@@ -236,6 +240,7 @@ export interface IssueTreeTableProps {
 export function IssueTreeTable({
   initialLevel,
   initialPending,
+  initialReviews,
   sort,
   filter,
   workflow,
@@ -267,6 +272,8 @@ export function IssueTreeTable({
   // re-fetched level overwrites its own ids, so a decided gate's marker clears on
   // the next read of that level.
   const [pendingById, setPendingById] = useState<PendingDecisionMap>(() => initialPending ?? {});
+  // …and every level's review answer (MOTIR-10341), merged by id the same way.
+  const [reviewsById, setReviewsById] = useState<CardReviewMap>(() => initialReviews ?? {});
   const [levels, setLevels] = useState<Record<string, LevelState>>(() => ({
     [ROOTS]: {
       rows: initialLevel.rows,
@@ -344,6 +351,15 @@ export function IssueTreeTable({
             const next = { ...prev };
             for (const id of levelIds) {
               if (fresh[id]) next[id] = fresh[id];
+              else delete next[id];
+            }
+            return next;
+          });
+          const freshReviews = result.reviews ?? {};
+          setReviewsById((prev) => {
+            const next = { ...prev };
+            for (const id of levelIds) {
+              if (freshReviews[id]) next[id] = freshReviews[id];
               else delete next[id];
             }
             return next;
@@ -1095,7 +1111,7 @@ export function IssueTreeTable({
         }
         const node: TreeTableRow<TreeNode> = {
           id: dto.id,
-          data: { kind: 'issue', row: shape(dto, pendingById) },
+          data: { kind: 'issue', row: shape(dto, pendingById, reviewsById) },
           hasChildren: dto.hasChildren,
           posinset: i + 1,
           setsize: total,
@@ -1128,7 +1144,7 @@ export function IssueTreeTable({
           },
         ]
       : rootRows;
-  }, [levels, expanded, shape, draft, pendingById]);
+  }, [levels, expanded, shape, draft, pendingById, reviewsById]);
 
   // Columns: the shared issue cells, wrapped to (a) render synthetic status rows
   // in the tree column only, (b) make every header a sort button with aria-sort.

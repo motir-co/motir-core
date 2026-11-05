@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { reviewStateService } from '@/lib/services/reviewStateService';
+import type { CardReviewMap } from '@/lib/dto/reviewState';
 import Link from 'next/link';
 import { getLocale, getTranslations } from 'next-intl/server';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -106,6 +108,11 @@ export async function IssueTreeSection({
     Object.fromEntries(
       await approvalGatesService.pendingDecisionsFor({ projectId, workItemIds }, ctx),
     );
+  // THE REVIEW MARKERS AND THE REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341): the
+  // review state read model's ONE batch for the same ids, beside the decision answer and
+  // for its reason. Per-reader (who a marker is loud for), so a Visitor reads none.
+  const reviewsFor = async (workItemIds: string[]): Promise<CardReviewMap> =>
+    isVisitorContext(reader) ? {} : reviewStateService.cardReviewsFor(projectId, workItemIds, ctx);
   const withEstimation = (node: ReactNode) => (
     <EstimationConfigProvider config={estimationConfig} canEdit={caps.canEdit}>
       {node}
@@ -164,12 +171,13 @@ export async function IssueTreeSection({
       reader,
     );
     if (items.length === 0) return empty;
-    const pending = await pendingFor(items.map((item) => item.id));
+    const ids = items.map((item) => item.id);
+    const [pending, reviews] = await Promise.all([pendingFor(ids), reviewsFor(ids)]);
     return withEstimation(
       <div className="flex flex-col gap-3">
         {countLine(total)}
         <IssueListTable
-          rows={toIssueListRows(items, workflow, members, locale, pending)}
+          rows={toIssueListRows(items, workflow, members, locale, pending, reviews)}
           sort={sort}
           filter={filter}
           pagination={{ total, page: clampedPage, pageSize }}
@@ -186,12 +194,13 @@ export async function IssueTreeSection({
   if (filtered) {
     const tree = await workItemsService.getProjectTree(projectId, repoFilter, reader);
     if (tree.length === 0) return empty;
-    const pending = await pendingFor(collectTreeIds(tree));
+    const ids = collectTreeIds(tree);
+    const [pending, reviews] = await Promise.all([pendingFor(ids), reviewsFor(ids)]);
     return withEstimation(
       <div className="flex flex-col gap-3">
         {countLine(countMatchedNodes(tree))}
         <IssueTreeStaticTable
-          rows={toIssueRows(tree, workflow, members, locale, pending)}
+          rows={toIssueRows(tree, workflow, members, locale, pending, reviews)}
           workflow={workflow}
           members={members}
         />
@@ -218,14 +227,17 @@ export async function IssueTreeSection({
   // draws the folder rows and the same empty state below them, decided by the
   // read's `workItemTotal` rather than by counting rows (MOTIR-5541).
   if (initialLevel.total === 0 && !caps.canEdit) return empty;
-  const initialPending = await pendingFor(
-    initialLevel.rows.filter((row) => row.kind !== 'folder').map((row) => row.id),
-  );
+  const rootIds = initialLevel.rows.filter((row) => row.kind !== 'folder').map((row) => row.id);
+  const [initialPending, initialReviews] = await Promise.all([
+    pendingFor(rootIds),
+    reviewsFor(rootIds),
+  ]);
   return withEstimation(
     <IssueTreeTable
       key={`${projectId}:${serializeSort(sort)}`}
       initialLevel={initialLevel}
       initialPending={initialPending}
+      initialReviews={initialReviews}
       sort={sort}
       filter={filter}
       workflow={workflow}

@@ -123,6 +123,32 @@ async function seed(count: number, parentId?: string) {
 
 const N = 6;
 
+/**
+ * The gate reads a page makes, each ONE batch: the decision marker's, then the review state
+ * read model's two (its `agent_review` gates and the latest decided gates — Story
+ * MOTIR-10327 · MOTIR-10341, which put the review markers and the Reviewed badge on the
+ * board and the List / Tree).
+ */
+const GATE_BATCHES = ['approvalGate.findMany', 'approvalGate.findMany', 'approvalGate.findMany'];
+
+/**
+ * What the review state read model adds to a board read, all per CALL (MOTIR-10341): its
+ * own access reads, the subtree and card reads, then one batch each of deliveries, gates,
+ * records, dismissals and people. None grows with the rows (the tests below).
+ */
+const REVIEW_READS = [
+  'project.findUnique',
+  'workspaceMembership.findUnique',
+  'workItem.findMany',
+  'workflowStatus.findMany',
+  'workItemDelivery.findMany',
+  'approvalGate.findMany',
+  'approvalGate.findMany',
+  'reviewVerdictRecord.findMany',
+  'reviewDismissal.findMany',
+  'user.findMany',
+];
+
 async function listOps() {
   const workflow = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
   return recordModelOps(() =>
@@ -150,12 +176,10 @@ describe('the operation count does not grow with rows', () => {
 
     expect(large.result.columns.flatMap((c) => c.cards)).toHaveLength(3 * N);
     expect(large.ops.length).toBe(small.ops.length);
-    expect(large.ops.filter((op) => op.startsWith('approvalGate.'))).toEqual([
-      'approvalGate.findMany',
-    ]);
+    expect(large.ops.filter((op) => op.startsWith('approvalGate.'))).toEqual(GATE_BATCHES);
   });
 
-  it('the BOARD read against its PRE-STORY count — the marker adds a FIXED six reads, whatever the rows', async () => {
+  it('the BOARD read against its PRE-STORY count — the marker adds a FIXED six reads and the review read ten, whatever the rows', async () => {
     // ⚠️ MEASURED, and it falsifies the story's "the board's query count is
     // literally unchanged". This fixture (N tasks, every third gated, no story in
     // review) was run against `origin/main` at `de31060f1`, before this story:
@@ -178,9 +202,12 @@ describe('the operation count does not grow with rows', () => {
     const { ops } = await recordModelOps(() => boardsService.getBoard(fx.projectId, fx.ctx));
     const modelOps = ops.filter((op) => !op.startsWith('_'));
 
-    expect(modelOps.length).toBe(PRE_STORY_BOARD_MODEL_OPS + MARKER_READS.length);
-    for (const op of new Set(MARKER_READS)) {
-      const extra = MARKER_READS.filter((o) => o === op).length;
+    expect(modelOps.length).toBe(
+      PRE_STORY_BOARD_MODEL_OPS + MARKER_READS.length + REVIEW_READS.length,
+    );
+    const added = [...MARKER_READS, ...REVIEW_READS];
+    for (const op of new Set(added)) {
+      const extra = added.filter((o) => o === op).length;
       expect(modelOps.filter((o) => o === op).length).toBeGreaterThanOrEqual(extra);
     }
   });
@@ -192,9 +219,7 @@ describe('the operation count does not grow with rows', () => {
     const large = await listOps();
 
     expect(large.ops.length).toBe(small.ops.length);
-    expect(large.ops.filter((op) => op.startsWith('approvalGate.'))).toEqual([
-      'approvalGate.findMany',
-    ]);
+    expect(large.ops.filter((op) => op.startsWith('approvalGate.'))).toEqual(GATE_BATCHES);
   });
 
   it('one LAZY level (a work item’s children) — equal at N and 3N', async () => {

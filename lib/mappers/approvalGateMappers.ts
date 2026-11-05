@@ -12,6 +12,7 @@ import type {
 import { membersOf } from '@/lib/approvalGates/memberVersion';
 import { replanOwedOf } from '@/lib/approvalGates/decisionRecord';
 import type { AwaitingGateRow, RecordGateRow } from '@/lib/repositories/approvalGateRepository';
+import type { ApprovedReviewDTO } from '@/lib/dto/reviewState';
 
 // Prisma row → the wire DTO the decide control / Approvals tab reads (Story
 // MOTIR-4778 · Subtask MOTIR-4788, widened by MOTIR-4912 with the ADR §6a AUDIT
@@ -117,6 +118,7 @@ export function toEarlierApprovalDto(row: ApprovalGate): EarlierApprovalDTO | nu
 export function toApprovalRecordDecidedRowDto(
   row: RecordGateRow,
   subject: ApprovalGateSubjectSummaryDTO | null,
+  review: ApprovedReviewDTO | null = null,
 ): ApprovalRecordDecidedRowDto {
   if (
     row.state !== 'approved' &&
@@ -145,6 +147,8 @@ export function toApprovalRecordDecidedRowDto(
       row.state === 'changes_requested' || row.state === 'declined' ? row.noteMd : null,
     // Only a refusal carries one (MOTIR-6421); the door writes it on no other state.
     refusalVerdict: row.state === 'changes_requested' ? row.refusalVerdict : null,
+    // Only an approved merge carries the review clause (MOTIR-10338); the service reads it.
+    review: row.state === 'approved' && row.kind === 'pull_request_approval' ? review : null,
   };
 }
 

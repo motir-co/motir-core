@@ -475,6 +475,10 @@ model User {
   /// Production releases of a ref this user asked for (MOTIR-10103). SetNull on delete.
   hostedReleasesRequested          HostedRelease[]                     @relation("HostedReleaseRequestedBy")
 
+  /// Agent review verdicts this user submitted (MOTIR-10333).
+  reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
+
   @@index([lastActiveProjectId])
   @@map("user")
 }
@@ -1871,6 +1875,10 @@ model Workspace {
   agentTerminalTickets        AgentTerminalTicket[]
   agentTerminalConnections    AgentTerminalConnection[]
 
+  reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
+  reviewBotPosts       ReviewBotPost[]
+
   @@index([organizationId])
   @@map("workspace")
 }
@@ -1995,6 +2003,18 @@ model Project {
   /// a review is a hosted run paid from the organisation's AI credits, so no
   /// existing project starts paying for one. Nothing is backfilled.
   reviewAgentEnabled               Boolean               @default(false) @map("review_agent_enabled")
+  /// WHO answers the review while `reviewAgentEnabled` is on (Story MOTIR-10327 ·
+  /// MOTIR-10332; `approval-gates.md` §12.10): `hosted` starts a hosted review run
+  /// for every raised `agent_review` gate, as before; `own` raises the same gate,
+  /// starts NO run and bills nothing, and the gate waits for a verdict through the
+  /// user-token door. Kept while the switch is off, so turning it back on restores
+  /// the project's choice. The §12.2a exclusion with `auto` merging reads the
+  /// switch, so it holds for both values.
+  reviewAgentSource                ReviewAgentSource     @default(hosted) @map("review_agent_source")
+  /// Whether Motir's own GitHub App bot posts every agent verdict on the pull
+  /// requests (Story MOTIR-10327 · MOTIR-10332; `approval-gates.md` §12.16). ON by
+  /// default; the verdict is recorded in Motir either way.
+  reviewBotPostsEnabled            Boolean               @default(true) @map("review_bot_posts_enabled")
   /// The project's ACCESS MODE (Story MOTIR-6169 · MOTIR-6541) — who may ENTER
   /// it: `workspace` (every Full-scope workspace member, plus the people added),
   /// `members` (only the people added) or `public` (as `workspace`, plus anyone
@@ -2380,6 +2400,10 @@ model Project {
   plannerBugDestinationFolderId String?                      @map("planner_bug_destination_folder_id")
   plannerBugDestinationFolder   Folder?                      @relation("ProjectPlannerBugDestinationFolder", fields: [plannerBugDestinationFolderId], references: [id], onDelete: NoAction)
 
+  reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
+  reviewBotPosts       ReviewBotPost[]
+
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
   @@index([workspaceId])
@@ -2727,6 +2751,16 @@ enum PrMergeMode {
   manual
 
   @@map("pr_merge_mode")
+}
+
+/// Who answers a project's `agent_review` gate (Story MOTIR-10327 · MOTIR-10332;
+/// `approval-gates.md` §12.10). `hosted`: Motir's hosted review run. `own`: the
+/// person's own agent through `submit_review_verdict`; nothing starts by itself.
+enum ReviewAgentSource {
+  hosted
+  own
+
+  @@map("review_agent_source")
 }
 
 /// WHAT AUTHORISED a merge Motir performed (Story MOTIR-4882 · MOTIR-5520;
@@ -3412,6 +3446,10 @@ model WorkItem {
   // most one. SetNull on the child: a deleted bug leaves the issue row with a
   // null pointer, which is how the reconciler tells "deleted" from "never filed".
   monitorIssues MonitorIssue[]
+
+  reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
+  reviewBotPosts       ReviewBotPost[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -5603,6 +5641,10 @@ enum ApprovalGateSupersedeCause {
   /// parent cascade, the rollup — so the question closes without being recorded as
   /// approved (MOTIR-7474; `docs/decisions/manual-work-gate.md` §6).
   closed_without_decision
+  /// The review agent requested changes at the version an awaiting approve-and-merge gate
+  /// asked about (Story MOTIR-10327 · MOTIR-10333; `approval-gates.md` §12.14): the card is
+  /// sent back, so the merge question leaves To approve until a push or a Dismiss.
+  agent_changes_requested
   /// A `manual_work` gate's card stopped being ready for a person — it was moved to
   /// Blocked, or gained a `blocked_by` on unfinished work — so nobody can do the work
   /// it asks for (MOTIR-8670; `docs/decisions/manual-work-gate.md` §6, amended).
@@ -5888,6 +5930,9 @@ model ApprovalGate {
   /// The page versions this gate FROZE at its approval (Story MOTIR-5761 ·
   /// MOTIR-7428). SetNull on the version side: the freeze outlives the row.
   frozenPageVersions PageVersion[]         @relation("PageVersionFrozenByGate")
+
+  reviewVerdictRecords ReviewVerdictRecord[]
+  reviewDismissals     ReviewDismissal[]
 
   @@index([workspaceId, state])
   /// THE ROUTING READ's index (MOTIR-4791) — the Approvals tab asks for one
@@ -8696,6 +8741,21 @@ model GithubPullRequest {
   /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — then the readers fall back
   /// to the check rows' head, which is what they did before the column existed.
   headSha               String?             @map("head_sha")
+  /// The pull request's AUTHOR on the host — GitHub's `pull_request.user` (Story MOTIR-10327 ·
+  /// MOTIR-10340). The review state read model compares `authorGithubUserId` with the routed
+  /// person's `GithubIdentity.githubUserId` to say whether they opened every pull request of
+  /// the set (GitHub will not let an author approve their own pull request).
+  ///
+  /// ⚠️ THE ID IS THE FACT, THE LOGIN IS ONLY ITS LABEL. A login can be renamed; the numeric
+  /// id cannot, so every comparison reads the id.
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — `head_sha`'s rule. A row mirrored
+  /// before these columns existed does not know its author, and the author fact reads false
+  /// for it rather than guessing. Written by every `pull_request` delivery that names one;
+  /// the link door and the historical backfill do not assert it.
+  authorGithubUserId    String?             @map("author_github_user_id")
+  /// The author's login as of the last delivery — a display label, never compared.
+  authorLogin           String?             @map("author_login")
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///
@@ -8796,6 +8856,9 @@ model GithubPullRequest {
   mergeRefusals      GithubPullRequestMergeRefusal[]
   queueAttempts      GithubMergeQueueAttempt[]
   reviews            GithubPullRequestReview[]
+  // One per (pull request, agent verdict record) — Motir's App bot's review of that
+  // verdict on this pull request (MOTIR-10335).
+  reviewBotPosts     ReviewBotPost[]
 
   @@unique([repoId, number])
   @@index([repoId])
@@ -15934,4 +15997,175 @@ model EnvironmentConfigChange {
   @@index([workspaceId])
   @@index([actorId])
   @@map("environment_config_change")
+}
+
+/// What became of one agent review VERDICT (Story MOTIR-10327 · MOTIR-10333;
+/// `approval-gates.md` §12.11–§12.13).
+enum ReviewVerdictOutcome {
+  /// It decided the card's awaiting `agent_review` gate.
+  decided
+  /// The review gate was off: the verdict is the record itself, at its version.
+  recorded
+  /// It named a version that is not the card's current delivery-set version.
+  late
+  /// Its version already had a decided review or a stored verdict.
+  second
+
+  @@map("review_verdict_outcome")
+}
+
+/// ONE AGENT REVIEW VERDICT, as submitted (Story MOTIR-10327 · MOTIR-10333;
+/// `approval-gates.md` §12.11–§12.13) — from the hosted review run or from a person's own
+/// review agent through the user-token door. A gate-off verdict has no gate to live on and
+/// a late or second one must be kept as history, so every verdict is a row here. Append
+/// only: nothing updates a row but a later card's Dismiss.
+///
+/// ⚠️ AT MOST ONE `decided` OR `recorded` ROW PER (card, version) — a partial unique index
+/// in the creating migration, the backstop that keeps two concurrent submissions from both
+/// answering one version. Its column list matches no `@@index` here, so Prisma's differ
+/// never pairs it.
+model ReviewVerdictRecord {
+  id             String                @id @default(cuid())
+  workspaceId    String                @map("workspace_id")
+  projectId      String                @map("project_id")
+  workItemId     String                @map("work_item_id")
+  /// The `agent_review` gate it decided, or the one its version was asked under; null
+  /// when the review gate was off.
+  gateId         String?               @map("gate_id")
+  /// The delivery-set version the verdict says it reviewed.
+  subjectVersion String                @map("subject_version")
+  /// `pass` or `changes_requested` — the gate's own verdict words.
+  verdict        String
+  outcome        ReviewVerdictOutcome
+  summaryMd      String?               @map("summary_md")
+  findingsMd     String?               @map("findings_md")
+  /// The criteria checklist — `{ criterion, status, evidence }` rows.
+  checklist      Json                  @default("[]")
+  /// The token's user; null once that user is deleted.
+  submittedById  String?               @map("submitted_by_id")
+  /// Always `review_agent`: a verdict is never a person's approval.
+  authority      ApprovalGateAuthority @default(review_agent)
+  /// The harness and model the submitter named, free text.
+  harness        String
+  model          String
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  workspace   Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem    WorkItem          @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  gate        ApprovalGate?     @relation(fields: [gateId], references: [id], onDelete: SetNull)
+  submittedBy User?             @relation(fields: [submittedById], references: [id], onDelete: SetNull)
+  dismissals  ReviewDismissal[]
+  botPosts    ReviewBotPost[]
+
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([workItemId, createdAt])
+  @@index([gateId])
+  @@index([submittedById])
+  @@map("review_verdict_record")
+}
+
+/// A person's DISMISSAL of a standing agent send-back (Story MOTIR-10327 · MOTIR-10334;
+/// `approval-gates.md` §12.15) — the routed person overrules the review agent, with a
+/// reason, at one delivery-set version. Append only: the send-back it dismisses is never
+/// edited, and the approve-and-merge gate withdrawn under `agent_changes_requested` stays
+/// superseded as history; the card's gate set asks again because THIS row exists.
+///
+/// Exactly one of `reviewVerdictRecordId` (a gate-off send-back) and `approvalGateId` (a
+/// decided `agent_review` gate sent back) is set — a CHECK in the creating migration.
+/// One dismissal per (card, version): the unique index is the concurrency backstop.
+model ReviewDismissal {
+  id                    String   @id @default(cuid())
+  workspaceId           String   @map("workspace_id")
+  projectId             String   @map("project_id")
+  workItemId            String   @map("work_item_id")
+  /// The gate-off send-back dismissed — a `recorded` `changes_requested` record.
+  reviewVerdictRecordId String?  @map("review_verdict_record_id")
+  /// The gate-on send-back dismissed — a decided `agent_review` gate.
+  approvalGateId        String?  @map("approval_gate_id")
+  /// The delivery-set version the dismissed send-back is about.
+  subjectVersion        String   @map("subject_version")
+  /// Why the person dismissed it — required, trimmed, at most 2000 characters.
+  reasonMd              String   @map("reason_md") @db.Text
+  dismissedById         String?  @map("dismissed_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  workspace           Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem            WorkItem             @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  reviewVerdictRecord ReviewVerdictRecord? @relation(fields: [reviewVerdictRecordId], references: [id], onDelete: Cascade)
+  approvalGate        ApprovalGate?        @relation(fields: [approvalGateId], references: [id], onDelete: Cascade)
+  dismissedBy         User?                @relation(fields: [dismissedById], references: [id], onDelete: SetNull)
+
+  @@unique([workItemId, subjectVersion])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([reviewVerdictRecordId])
+  @@index([approvalGateId])
+  @@index([dismissedById])
+  @@map("review_dismissal")
+}
+
+/// What Motir's GitHub App bot POSTED for one agent review verdict on one pull request
+/// (Story MOTIR-10327 · MOTIR-10335; `approval-gates.md` §12 rules 7 and 8). One review per
+/// pull request per verdict record — the unique pair is the idempotency record, so a
+/// retried post job is a no-op once the row exists. The row is written AFTER GitHub
+/// answered, never before, so a job that crashed mid-call leaves no row and its retry
+/// posts exactly one review.
+///
+/// A `request_changes` post stays `posted` while its send-back stands; the reconcile
+/// dismisses it on GitHub and marks it `dismissed` once a later pass, a person's Dismiss
+/// or the project's posting switch turning off retires it — a Request changes from a
+/// writer blocks a merge under branch protection and GitHub never makes it stale.
+model ReviewBotPost {
+  id                    String             @id @default(cuid())
+  workspaceId           String             @map("workspace_id")
+  projectId             String             @map("project_id")
+  workItemId            String             @map("work_item_id")
+  reviewVerdictRecordId String             @map("review_verdict_record_id")
+  githubPullRequestId   String             @map("github_pull_request_id")
+  /// What was posted: a Request changes review, or a comment review (a pass, or a
+  /// send-back on a pull request the posting App itself authored).
+  kind                  ReviewBotPostKind
+  state                 ReviewBotPostState @default(posted)
+  /// GitHub's review id, as a string (the API's number can exceed 2^53 one day).
+  githubReviewId        String?            @map("github_review_id")
+  postedAt              DateTime?          @map("posted_at")
+  dismissedAt           DateTime?          @map("dismissed_at")
+  /// How many dismiss attempts failed; the post itself is retried by its job.
+  attempts              Int                @default(0)
+  lastError             String?            @map("last_error")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project             Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem            WorkItem            @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  reviewVerdictRecord ReviewVerdictRecord @relation(fields: [reviewVerdictRecordId], references: [id], onDelete: Cascade)
+  pullRequest         GithubPullRequest   @relation(fields: [githubPullRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([githubPullRequestId, reviewVerdictRecordId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([workItemId, state])
+  @@index([reviewVerdictRecordId])
+  @@index([githubReviewId])
+  @@map("review_bot_post")
+}
+
+/// What the bot posted (MOTIR-10335). Never an approval: the type admits no `approve`.
+enum ReviewBotPostKind {
+  request_changes
+  comment
+
+  @@map("review_bot_post_kind")
+}
+
+/// Whether a bot post still stands on GitHub (MOTIR-10335).
+enum ReviewBotPostState {
+  posted
+  dismissed
+
+  @@map("review_bot_post_state")
 }

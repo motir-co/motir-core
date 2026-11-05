@@ -1,4 +1,5 @@
 import { personDisplayName } from '@/lib/people/personLabel';
+import type { CardReviewDTO, CardReviewMap } from '@/lib/dto/reviewState';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type {
   WorkItemKindDto,
@@ -122,6 +123,13 @@ export interface IssueRowData {
    *  when no marker, or when the member list cannot name them (the marker then
    *  reads *this work item's assignee*). */
   pendingRoutedToName: string | null;
+  /**
+   * The agent review's marker, Reviewed state and container count (Story MOTIR-10327 ·
+   * MOTIR-10341) — `reviewStateService.cardReviewsFor`'s answer for this id, carried
+   * BESIDE the DTOs as a {@link CardReviewMap} for the per-reader reason above. `null`
+   * when the row wears neither.
+   */
+  review?: CardReviewDTO | null;
 }
 
 /** `pendingDecisionsFor`'s answer for one load, keyed by work-item id — serializable,
@@ -174,6 +182,7 @@ function shapeRowData(
   nameById: Map<string, string>,
   locale: Locale,
   pending: PendingDecisionMap = {},
+  reviews: CardReviewMap = {},
 ): IssueRowData {
   const status = statusByKey.get(item.status);
   const pendingDecision = pending[item.id] ?? null;
@@ -212,6 +221,7 @@ function shapeRowData(
     pendingRoutedToName: pendingDecision?.routedToId
       ? (nameById.get(pendingDecision.routedToId) ?? null)
       : null,
+    review: reviews[item.id] ?? null,
   };
 }
 
@@ -226,9 +236,14 @@ export function makeRowShaper(
   workflow: WorkflowDto,
   members: WorkspaceMemberDTO[],
   locale: Locale = defaultLocale,
-): (item: WorkItemListItemDto, pending?: PendingDecisionMap) => IssueRowData {
+): (
+  item: WorkItemListItemDto,
+  pending?: PendingDecisionMap,
+  reviews?: CardReviewMap,
+) => IssueRowData {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return (item, pending) => shapeRowData(item, statusByKey, nameById, locale, pending);
+  return (item, pending, reviews) =>
+    shapeRowData(item, statusByKey, nameById, locale, pending, reviews);
 }
 
 export function toIssueRows(
@@ -237,12 +252,13 @@ export function toIssueRows(
   members: WorkspaceMemberDTO[],
   locale: Locale = defaultLocale,
   pending: PendingDecisionMap = {},
+  reviews: CardReviewMap = {},
 ): TreeTableRow<IssueRowData>[] {
   const { statusByKey, nameById } = buildLookups(workflow, members);
 
   const shape = (node: WorkItemTreeNodeDto): TreeTableRow<IssueRowData> => ({
     id: node.id,
-    data: shapeRowData(node, statusByKey, nameById, locale, pending),
+    data: shapeRowData(node, statusByKey, nameById, locale, pending, reviews),
     children: node.children.map(shape),
   });
 
@@ -261,7 +277,8 @@ export function toIssueListRows(
   members: WorkspaceMemberDTO[],
   locale: Locale = defaultLocale,
   pending: PendingDecisionMap = {},
+  reviews: CardReviewMap = {},
 ): IssueRowData[] {
   const { statusByKey, nameById } = buildLookups(workflow, members);
-  return items.map((item) => shapeRowData(item, statusByKey, nameById, locale, pending));
+  return items.map((item) => shapeRowData(item, statusByKey, nameById, locale, pending, reviews));
 }

@@ -81,6 +81,11 @@ import { runLivenessSweep } from './definitions/runLivenessSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
+import {
+  reviewBotPost,
+  reviewBotReconcile,
+  reviewBotReconcileOnDismissal,
+} from './definitions/reviewBotPost';
 import { designAutoRerun } from './definitions/designAutoRerun';
 import { gateResume } from './definitions/gateResume';
 import { planOfferRequirementPage } from './definitions/planOfferRequirementPage';
@@ -209,6 +214,11 @@ export const jobDefinitions = [
   pullRequestAutoMerge,
   // The review run's start (Story MOTIR-1626 · MOTIR-6820).
   agentReviewRequested,
+  // Motir's App bot posts each agent verdict and dismisses its own Request changes
+  // (Story MOTIR-10327 · MOTIR-10335).
+  reviewBotPost,
+  reviewBotReconcile,
+  reviewBotReconcileOnDismissal,
   designAutoRerun,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).
   gateResume,

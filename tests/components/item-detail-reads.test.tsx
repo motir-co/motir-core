@@ -250,6 +250,11 @@ vi.mock('@/lib/services/estimationService', () => ({
 vi.mock('@/lib/services/componentsService', () => ({
   componentsService: { listComponents: deferred('components', [], 'tierTwo') },
 }));
+// The header's review marker read (MOTIR-10341) — answered empty unless a case sets it.
+const cardReviewsFor = vi.fn(async (..._args: unknown[]): Promise<Record<string, unknown>> => ({}));
+vi.mock('@/lib/services/reviewStateService', () => ({
+  reviewStateService: { cardReviewsFor: (...args: unknown[]) => cardReviewsFor(...args) },
+}));
 vi.mock('@/lib/services/activityService', () => ({
   activityService: {
     listHistory: deferred('history', null, 'late'),
@@ -883,6 +888,49 @@ describe('the header’s decision-waiting marker (MOTIR-5878)', () => {
     expect(markers[0]!.routedToName).toBeNull();
   });
 });
+describe('the header’s review marker (MOTIR-10341)', () => {
+  const findAll = (node: unknown, type: unknown, out: Record<string, unknown>[] = []) => {
+    if (Array.isArray(node)) {
+      for (const n of node) findAll(n, type, out);
+    } else if (node && typeof node === 'object' && '$$typeof' in node) {
+      const el = node as unknown as { type: unknown; props: Record<string, unknown> };
+      if (el.type === type) out.push(el.props);
+      for (const value of Object.values(el.props ?? {})) findAll(value, type, out);
+    }
+    return out;
+  };
+  const renderMarker = async () => {
+    const { ReviewMarkerHeaderLink } =
+      await import('@/app/(authed)/items/[key]/_components/ReviewMarkerHeaderLink');
+    getSession.mockResolvedValue({ user: { id: 'u1', name: 'Yue' } });
+    getActiveProject.mockResolvedValue(PROJECT);
+    getIssueDetail.mockResolvedValue(detailFor());
+    getPermissions.mockResolvedValue(new Set(['work_item:edit']));
+    releaseAll();
+    return findAll(await callPage(), ReviewMarkerHeaderLink);
+  };
+
+  it('mounts the marker the card’s review carries', async () => {
+    cardReviewsFor.mockResolvedValueOnce({
+      i1: {
+        identifier: 'PROD-1',
+        marker: { kind: 'agent_reviewing' },
+        reviewed: null,
+        container: null,
+        recordRef: null,
+      },
+    });
+    const markers = await renderMarker();
+    expect(markers).toHaveLength(1);
+    expect(markers[0]!.marker).toEqual({ kind: 'agent_reviewing' });
+  });
+
+  it('a failing review read draws no marker and does not reject the page', async () => {
+    cardReviewsFor.mockRejectedValueOnce(new Error('review read down'));
+    expect(await renderMarker()).toHaveLength(0);
+  });
+});
+
 describe('the Pages section’s capability is threaded from the page (MOTIR-7575)', () => {
   const findAll = (node: unknown, type: unknown, out: Record<string, unknown>[] = []) => {
     if (Array.isArray(node)) {

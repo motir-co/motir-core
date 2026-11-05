@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { PrMergeModeValue } from '@/lib/dto/projects';
+import type { ReviewAgentSourceValue } from '@/lib/dto/approvalGateSettings';
 import { PrMergeModeCard } from './PrMergeModeCard';
 import { ReviewAgentCard } from './ReviewAgentCard';
 
@@ -11,17 +12,23 @@ import { ReviewAgentCard } from './ReviewAgentCard';
 // value each one shows, so choosing a mode re-renders the review-agent card and
 // flipping the switch re-renders the merge-mode card — without a reload (the
 // page-state contract, case 3: `router.refresh()` could not reach either island).
+// The review source and bot posting (MOTIR-10337) are seeded straight through to
+// the review-agent card: the exclusion reads the switch, never the source.
 
 export interface MergeModeAndReviewAgentCardsProps {
   projectKey: string;
   initialPrMergeMode: PrMergeModeValue;
   initialReviewAgentEnabled: boolean;
+  initialReviewAgentSource?: ReviewAgentSourceValue;
+  initialReviewBotPostsEnabled?: boolean;
 }
 
 export function MergeModeAndReviewAgentCards({
   projectKey,
   initialPrMergeMode,
   initialReviewAgentEnabled,
+  initialReviewAgentSource = 'hosted',
+  initialReviewBotPostsEnabled = true,
 }: MergeModeAndReviewAgentCardsProps) {
   const [prMergeMode, setPrMergeMode] = useState(initialPrMergeMode);
   const [reviewAgentEnabled, setReviewAgentEnabled] = useState(initialReviewAgentEnabled);
@@ -37,6 +44,8 @@ export function MergeModeAndReviewAgentCards({
       <ReviewAgentCard
         projectKey={projectKey}
         initialEnabled={initialReviewAgentEnabled}
+        initialSource={initialReviewAgentSource}
+        initialBotPostsEnabled={initialReviewBotPostsEnabled}
         prMergeMode={prMergeMode}
         onEnabledChange={setReviewAgentEnabled}
       />

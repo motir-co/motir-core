@@ -423,8 +423,10 @@ export const notificationFanInService = {
 
   /**
    * Notify ONE recipient about something whose subject is a PROJECT rather than a
-   * work item (MOTIR-5016 · Story MOTIR-5010) — today only a REFUSED collaborator
-   * invitation, the one access outcome with no other carrier.
+   * work item (MOTIR-5016 · Story MOTIR-5010) — a REFUSED collaborator invitation —
+   * or about a card with NO ACTOR (MOTIR-10340): a review waiting for the routed
+   * person's own agent. Neither has a person who did it, which is what `fanIn`'s
+   * actor-shaped plan assumes.
    *
    * ⚠️ WHY THIS IS A SIBLING OF `fanIn` AND NOT A CALL INTO IT. `fanIn` opens by
    * resolving `event.workItemId` and returns `NO_OP` when the item does not
@@ -456,6 +458,9 @@ export const notificationFanInService = {
     category: NotificationCategory;
     dedupeKey: string;
     data: NotificationData;
+    /** The card the row is about, for a SYSTEM event that has one (the review to run,
+     *  MOTIR-10340) — the row then dies with the card. Null or absent for a project. */
+    workItemId?: string | null;
     /** Who acted, when someone did (MOTIR-10368); null for a system event. */
     actorId?: string | null;
   }): Promise<boolean> {
@@ -475,9 +480,10 @@ export const notificationFanInService = {
               recipientUserId: args.recipientUserId,
               type: args.type,
               category: args.category,
-              // NULL — the subject is a project. The drawer resolves this row's
-              // destination from the TYPE, not from an issue key.
-              workItemId: null,
+              // NULL when the subject is a project: the drawer resolves that row's
+              // destination from the TYPE, not from an issue key. A system event about a
+              // card (the review to run) names it.
+              workItemId: args.workItemId ?? null,
               actorId: args.actorId ?? null,
               data: args.data as unknown as Prisma.InputJsonValue,
               dedupeKey: args.dedupeKey,

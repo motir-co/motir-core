@@ -529,6 +529,18 @@ export const nl: McpSummaryTranslations = {
     summary: 'Herstel een gearchiveerd item — het omgekeerde van archive.',
     source: 'Restore an archived item — the inverse of archive.',
   },
+  find_work_items_for_pull_request: {
+    summary:
+      'De werkitems die een GitHub-pull request levert, gelezen uit de koppelingen ervan — of waarom er geen zijn. Het omgekeerde van `link_pull_request`.',
+    source:
+      'The cards a GitHub pull request delivers, read from its links — or why there are none. The reverse of `link_pull_request`.',
+  },
+  submit_review_verdict: {
+    summary:
+      'Dien het ene oordeel van je eigen review-agent over een item in: het beslist de wachtende agent-review of wordt bewaard als reviewrecord. Het keurt de merge nooit goed.',
+    source:
+      'Submit your own review agent’s one verdict on a card: it decides the waiting agent review, or is kept as the review record. It never approves the merge.',
+  },
   unlink_pull_request: {
     summary:
       'Maak ÉÉN `link_pull_request` ongedaan — verwijder de levering die is vastgelegd tussen een werkitem en een pull request. Een levering is een rij, dus het opnieuw koppelen van het juiste werkitem VOEGT TOE in plaats van te corrigeren; dit verwijdert precies het ene paar dat je noemt en laat elke andere levering met rust.',

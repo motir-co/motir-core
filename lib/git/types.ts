@@ -121,6 +121,23 @@ export interface NormalizedChangeRequest {
    * REQUIRED, for `draft`'s reason; `null` when the payload names none.
    */
   headSha: string | null;
+  /**
+   * Who OPENED the change request on the host (Story MOTIR-10327 · MOTIR-10340) — GitHub's
+   * `pull_request.user`. Persisted as `GithubPullRequest.authorGithubUserId` / `authorLogin`
+   * and read by the review state model's author-of-every-PR fact.
+   *
+   * REQUIRED, for `draft`'s reason; `null` when the payload names none — and always `null`
+   * from GitLab, whose user ids are not GitHub's and could never match a GitHub identity.
+   */
+  author: ChangeRequestAuthor | null;
+}
+
+/** A change request's author on the host — the stable id, and the login it is shown by. */
+export interface ChangeRequestAuthor {
+  /** The host's numeric user id, as a string — the fact every comparison reads. */
+  githubUserId: string;
+  /** The login at the time of the delivery — a label only; a login can be renamed. */
+  login: string;
 }
 
 /** The canonical, provider-agnostic lifecycle signal a change request maps to —
@@ -271,6 +288,44 @@ export interface RepositoryPermissionInput {
   repo: string;
   username: string;
 }
+
+/** The review events Motir's App bot may post (Story MOTIR-10327 · MOTIR-10335;
+ *  `approval-gates.md` §12 rule 7). ⚠️ A CLOSED union WITHOUT `APPROVE`: an agent's pass
+ *  is never an approval on the host, and the type is what makes that impossible to
+ *  write rather than merely unwritten. */
+export type PullRequestReviewPostEvent = 'REQUEST_CHANGES' | 'COMMENT';
+
+/** One review the bot posts on a pull request. */
+export interface CreatePullRequestReviewInput {
+  installationId: string;
+  owner: string;
+  repo: string;
+  number: number;
+  event: PullRequestReviewPostEvent;
+  /** Markdown; GitHub requires a body on both events. */
+  body: string;
+}
+
+/** What the host answered a review post. `own_pull_request` is GitHub refusing an App's
+ *  Request changes on a pull request that same App authored — the caller posts a
+ *  comment instead (rule 7). */
+export type CreatePullRequestReviewResult =
+  | { kind: 'posted'; reviewId: string }
+  | { kind: 'own_pull_request' };
+
+/** One review the bot dismisses, with the one-line reason GitHub shows. */
+export interface DismissPullRequestReviewInput {
+  installationId: string;
+  owner: string;
+  repo: string;
+  number: number;
+  reviewId: string;
+  message: string;
+}
+
+/** `dismissed` — GitHub dismissed it now; `gone` — there is nothing left to dismiss (the
+ *  review, the pull request or the repository is gone, or it was dismissed already). */
+export type DismissPullRequestReviewResult = 'dismissed' | 'gone';
 
 /** The lifecycle of ONE deployment status a repository's host reported, normalized
  *  across providers (Story MOTIR-4906 · MOTIR-5329). A CLOSED union so every

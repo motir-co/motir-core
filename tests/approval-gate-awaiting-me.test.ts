@@ -286,7 +286,7 @@ describe('approvalGatesService.listAwaitingMe — access, enforced IN the query'
     // convention. A scoped and an unscoped read cannot return the same number
     // over this fixture, which is what makes the assertion mean something.
     const page = await approvalGatesService.listAwaitingMe(strangerCtx);
-    expect(page).toEqual({ items: [], total: 0, truncated: false });
+    expect(page).toEqual({ items: [], total: 0, truncated: false, reviewsToRun: [] });
     expect(await approvalGatesService.countAwaitingMe(strangerCtx)).toBe(0);
   });
 
@@ -316,7 +316,12 @@ describe('approvalGatesService.listAwaitingMe — the WHOLE set, under a stated 
 
     const queue = await approvalGatesService.listAwaitingMe(meCtx);
 
-    expect(queue).toEqual({ items: expect.any(Array), total: 30, truncated: false });
+    expect(queue).toEqual({
+      items: expect.any(Array),
+      total: 30,
+      truncated: false,
+      reviewsToRun: [],
+    });
     expect(queue.items).toHaveLength(30);
     expect(new Set(queue.items.map((row) => row.gateId)).size).toBe(30);
   });
@@ -349,6 +354,7 @@ describe('approvalGatesService.listAwaitingMe — the WHOLE set, under a stated 
       items: [],
       total: 0,
       truncated: false,
+      reviewsToRun: [],
     });
   });
 });

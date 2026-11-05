@@ -381,3 +381,15 @@ describe('the operation table the transport will read', () => {
     expect(GENERATED_AGAINST.startsWith(`${API_MAJOR}.`)).toBe(true);
   });
 });
+
+// THE MODULE IS PURE ESM WITH NO RUNTIME IMPORT (MOTIR-10327). Ajv's standalone output
+// `require`s a runtime helper for some keywords — `maxLength` / `minLength` pull in
+// `ajv/dist/runtime/ucs2length` — and a `require` in this ES module throws on the first
+// load, which took down every hosted-agent command at once. A response schema carries no
+// length bound for that reason; this pins it.
+describe('validators.js loads as plain ESM', () => {
+  it('has no require() call', () => {
+    const source = readFileSync(new URL('../src/api/validators.js', import.meta.url), 'utf8');
+    expect(source).not.toMatch(/\brequire\(/);
+  });
+});

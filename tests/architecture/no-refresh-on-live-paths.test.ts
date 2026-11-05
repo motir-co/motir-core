@@ -118,6 +118,13 @@ const ALLOWED: readonly Allowed[] = [
   },
   {
     file: 'components/github/DevelopmentGateFrame.tsx',
+    symbol: 'onDismissed',
+    reason:
+      "the reader's OWN Dismiss the review press (MOTIR-10342): the card page re-reads after " +
+      'the dismissal it just made; inside the overlay the overlay’s own re-read runs instead.',
+  },
+  {
+    file: 'components/github/DevelopmentGateFrame.tsx',
     symbol: 'retryMember',
     reason: "the reader's OWN retry of one pull request the host refused to merge.",
   },

@@ -5,6 +5,7 @@ import type {
   Sprint,
   WorkItem,
 } from '@/generated/prisma/client';
+import type { CardReviewDTO } from '@/lib/dto/reviewState';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type {
   BoardCardDto,
@@ -109,6 +110,8 @@ export function toBoardCardDto(
     statusCategory?: StatusCategoryDto | null;
     /** The undecided plan holding the card (MOTIR-6268); `null` when omitted. */
     planHold?: PlanHoldDTO | null;
+    /** The agent review the card wears (MOTIR-10341); omitted, none. */
+    review?: CardReviewDTO | null;
   },
 ): BoardCardDto {
   const dto: BoardCardDto = {
@@ -134,6 +137,7 @@ export function toBoardCardDto(
     planHold: opts.planHold ?? null,
     statusCategory: opts.statusCategory ?? null,
   };
+  if (opts.review) dto.review = opts.review;
   if (opts.swimlaneKey !== undefined) dto.swimlaneKey = opts.swimlaneKey;
   return dto;
 }

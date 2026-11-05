@@ -1,4 +1,6 @@
 import { Prisma, BoardSwimlaneGroupBy, BoardType } from '@/generated/prisma/client';
+import { reviewStateService } from '@/lib/services/reviewStateService';
+import type { CardReviewMap } from '@/lib/dto/reviewState';
 import type { BoardColumn, WorkItem } from '@/generated/prisma/client';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
@@ -426,6 +428,17 @@ export const boardsService = {
           member,
         )
       : new Map();
+    // THE REVIEW MARKERS AND THE REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341): the
+    // review state read model's ONE batch over every card on the board — a fixed number of
+    // queries, never one per card. Per-reader like the marker above (who a marker is loud
+    // for), so a Visitor's board reads none.
+    const reviewById: CardReviewMap = member
+      ? await reviewStateService.cardReviewsFor(
+          projectId,
+          allRows.map((r) => r.id),
+          member,
+        )
+      : {};
 
     // The PLAN HOLD, up front (Story MOTIR-6017 · MOTIR-6268): which loaded cards an
     // undecided plan holds at Planning, and per holding plan its label and held
@@ -534,6 +547,7 @@ export const boardsService = {
         const card = toBoardCardDto(r, {
           ready: readyById.get(r.id) ?? true,
           pendingDecision: pendingById.get(r.id) ?? null,
+          review: reviewById[r.id] ?? null,
           planHold: planHoldRead.byItemId.get(r.id) ?? null,
           swimlaneKey: swimlaneKeyByCard.get(r.id),
           statusCategory: categoryByStatusKey.get(r.status) ?? null,
@@ -814,6 +828,8 @@ export const boardsService = {
       { projectId: row.projectId, workItemIds: [row.id] },
       ctx,
     );
+    // …and its review marker and badge (MOTIR-10341), for the same reason.
+    const reviewById = await reviewStateService.cardReviewsFor(row.projectId, [row.id], ctx);
     // …and its plan hold (MOTIR-6268): a rank change inside Planning is never
     // refused, and the card must come back still wearing its plan footer.
     const { byItemId: planHoldById } = await planTargetLockService.readBoardPlanHolds(
@@ -825,6 +841,7 @@ export const boardsService = {
       card: toBoardCardDto(row, {
         ready,
         pendingDecision: pendingById.get(row.id) ?? null,
+        review: reviewById[row.id] ?? null,
         planHold: planHoldById.get(row.id) ?? null,
         swimlaneKey: swimlaneKeyByCard.get(row.id),
         statusCategory: appliedStatusCategory,

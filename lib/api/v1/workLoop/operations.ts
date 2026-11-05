@@ -50,6 +50,14 @@ import {
   agentReviewResultSchema,
   reviewPromptSchema,
 } from '@/lib/api/v1/workLoop/agentReview';
+import {
+  reviewDismissalBodySchema,
+  reviewDismissalResultSchema,
+} from '@/lib/api/v1/workLoop/reviewDismissal';
+import {
+  reviewVerdictBodySchema,
+  reviewVerdictResultSchema,
+} from '@/lib/api/v1/workLoop/reviewVerdict';
 
 // The WORK-LOOP operation declarations (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237). Paths, verbs and scopes come from ADR Amendment 6 Q1/Q2; the
@@ -1318,6 +1326,91 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     // card with no review; 409 for a second or late verdict; 422 for a malformed body.
     errorStatuses: [403, 404, 409, 422],
   }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/review-verdict',
+    operationId: 'submitWorkItemReviewVerdict',
+    summary: 'Submit your own review agent’s verdict on a card',
+    description:
+      'Submit ONE agent review verdict for a RUN-TARGET card with your own token (not a run ' +
+      'token — a hosted review run uses `submitWorkItemAgentReview`). Any teammate holding ' +
+      '`work_item:edit` on the card may submit. `verdict` is `approved` or ' +
+      '`changes_requested` (`findingsMd` required, non-empty); `subjectVersion` is the ' +
+      'delivery-set version reviewed; `checklist` rows judge each acceptance criterion ' +
+      '(`evidence` required on `met`); `harness` and `model` say what reviewed. With the ' +
+      'project’s review gate ON the verdict decides the awaiting `agent_review` gate ' +
+      '(`outcome: decided`); OFF, it is stored as the review record (`outcome: recorded`). ' +
+      'It is recorded under the authority `review_agent` and NEVER decides the ' +
+      'approve-and-merge gate. A `changes_requested` withdraws an awaiting approve-and-merge ' +
+      'gate (cause `agent_changes_requested`) and puts the card in To fix; no status moves. A ' +
+      'verdict about a version the card no longer has is stored as late ' +
+      '(`REVIEW_VERDICT_LATE`, 409); one about a version already reviewed is stored as second ' +
+      '(`REVIEW_VERDICT_SECOND`, 409); neither decides anything. A card that is not its own ' +
+      'run target is refused naming the run target (`REVIEW_TARGET_NOT_RUN_TARGET`, 422).',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The run-target work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: reviewVerdictBodySchema,
+      description:
+        'The verdict, the reviewed version, the findings, the criteria checklist, and the ' +
+        'harness and model.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: reviewVerdictResultSchema },
+      description: 'What the verdict did — decided the review gate, or was recorded.',
+    },
+    // 403 without `work_item:edit` or with a run token; 404 for an unknown card or one that
+    // delivers no pull request; 409 late or second; 422 a malformed body or not a run target.
+    errorStatuses: [403, 404, 409, 422],
+  }),
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/review-dismissal',
+    operationId: 'dismissWorkItemReview',
+    summary: 'Dismiss the review agent’s send-back on a card',
+    description:
+      'Dismiss the review agent’s STANDING send-back at the card’s current delivery-set ' +
+      'version, with a required `reason` (at most 2000 characters). Only the routed person ' +
+      'may — the card’s assignee, its reporter when it has no assignee, or someone who may ' +
+      'decide any approval — holding `work_item:edit`. Works with the review gate on or off ' +
+      'and under either review source. The send-back is not edited: the dismissal is its own ' +
+      'record (who, when, why, which version). The card stops being To fix for it, no status ' +
+      'moves, and the approve-and-merge gate is asked again at the same version ' +
+      '(`approvalGateId`). Refused, writing nothing, with `NO_STANDING_REVIEW_SENDBACK`, ' +
+      '`REVIEW_SENDBACK_ALREADY_DISMISSED` or `REVIEW_DISMISSAL_STALE` (a push moved the ' +
+      'version) — all 409 — `REVIEW_DISMISSAL_FORBIDDEN` (403) or `REASON_REQUIRED` (422).',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item key, e.g. `ACME-7`.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: reviewDismissalBodySchema,
+      description: 'The version the send-back is about, and why it is dismissed.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: reviewDismissalResultSchema },
+      description: 'The dismissal, and the approve-and-merge gate asked again.',
+    },
+    // 403 not the routed person, no `work_item:edit`, or a run token; 404 an unknown card;
+    // 409 nothing standing, already dismissed or stale; 422 a malformed body or no reason.
+    errorStatuses: [403, 404, 409, 422],
+  }),
 ];
 
 /** The named component schemas this resource contributes to the document. */
@@ -1345,4 +1438,6 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   CurrentTestInstructions: currentTestInstructionsSchema,
   ReviewPrompt: reviewPromptSchema,
   AgentReviewResult: agentReviewResultSchema,
+  ReviewVerdictResult: reviewVerdictResultSchema,
+  ReviewDismissalResult: reviewDismissalResultSchema,
 };

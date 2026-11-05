@@ -10026,3 +10026,14 @@ dead title with no navigation rather than dropped, which is P24's choice.
 The strip on the page (MOTIR-9196), the write path's errors and semantics (MOTIR-9197 — this asset words
 only the sentences they put on screen), the page-side read (MOTIR-9198), the separating field and the
 live-page join (MOTIR-9203), and embedded cards (the embed story).
+
+## ⭐ The REVIEW PATH on the card — the review markers, the Reviewed badge and the review's history (`decision-waiting--review-path.mock.html`, DATED 2026-11-04)
+
+**AMENDS** `design/work-items/decision-waiting.mock.html` (the decision-waiting marker slot) **without editing it**. The delta mock `design/work-items/decision-waiting--review-path.mock.html` holds only the changed panels (M1–M13, English then Chinese), rendered with `renderMock` over the shipped `BoardCardView`, `DecisionWaitingMarker`, `CiStateBadge`, `StatusValue` and `ActivityEntryRow` grammar.
+
+- **Review markers** — _Agent reviewing_, _Review could not run_, _Waiting for your review agent_ — take the decision-waiting marker's slot, size and precedence on the board card, the List / Tree status cell and the item header (M2–M4, M7, M9). One marker at a time.
+- **The copyable `motir review <KEY>` command** is in the item header and quick view only, never on the board card, which is one button (M4, M9).
+- **The Reviewed badge** sits after the slot, before the CI badge; it is gone after a push and absent on Done (M5); a container shows _n of m reviewed_ (M6, M11); its hover / focus card names the reviewer, the commits and the findings (M8, M10).
+- **Activity** gains pass, send-back, late and second-review entries (M12).
+
+The full element spec, tokens, accessibility contract and the en / zh copy keys are in **`design/github/design-notes.md` § 32**, which is the one source; this section only indexes the surface.

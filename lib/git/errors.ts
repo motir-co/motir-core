@@ -217,6 +217,35 @@ export class ProviderPermissionReadError extends Error {
   }
 }
 
+// ── A BOT REVIEW THE HOST WOULD NOT TAKE (MOTIR-10335) ──
+// A post or dismiss of Motir's own App review that failed for a reason other than the
+// two answers the seam types (`own_pull_request`, `gone`). The job retries it; it never
+// touches the verdict it was posting.
+
+/** A review post or dismissal the host did not take. */
+export class ProviderReviewWriteError extends Error {
+  readonly code = 'PROVIDER_REVIEW_WRITE_FAILED' as const;
+  readonly providerId: string;
+  readonly operation: 'post' | 'dismiss';
+  readonly status: number | null;
+
+  constructor(
+    providerId: string,
+    operation: 'post' | 'dismiss',
+    detail: { status?: number; message?: string } = {},
+  ) {
+    super(
+      `the ${providerId} review ${operation === 'post' ? 'post' : 'dismissal'} ` +
+        (detail.status === undefined ? 'could not be reached' : `answered ${detail.status}`) +
+        (detail.message ? ` (${detail.message})` : ''),
+    );
+    this.name = 'ProviderReviewWriteError';
+    this.providerId = providerId;
+    this.operation = operation;
+    this.status = detail.status ?? null;
+  }
+}
+
 // ── A MERGE DELIVERY THAT COULD NOT MOVE EVERY CARD IT DELIVERS (MOTIR-5587) ──
 // The status sync moves each delivered card in its own transaction, so one card's
 // FAULT — a transaction that could not start, a connection reset — says nothing

@@ -148,6 +148,9 @@ export function normalizeHistoricalPullRequest(
       // for the same reason `state` above is, rather than read from the payload:
       // this backfill has exactly one shape and says so.
       draft: false,
+      // Not backfilled (MOTIR-10340): the review state reads a historical row's author
+      // as unknown, and a merged row decides nothing it reads.
+      author: null,
     },
     mergedAt,
   };

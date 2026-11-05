@@ -1,8 +1,8 @@
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
-import { CircleX, Copy, TriangleAlert, Undo2 } from 'lucide-react';
+import { CircleX, TriangleAlert, Undo2 } from 'lucide-react';
 import { relativeLabel, RepairRunLink } from '@/components/github/RepairFixPart';
 import {
   ContinueHostedAnswer,
@@ -18,8 +18,7 @@ import type { OpenRepairRunDto } from '@/lib/dto/workItemRepair';
 import { isReviewSentBack } from '@/lib/workItems/reviewSentBack';
 import { FixingTag } from '@/components/workItems/ToFixTag';
 import { Pill } from '@/components/ui/Pill';
-import { Tooltip } from '@/components/ui/Tooltip';
-import { useToast } from '@/components/ui/Toast';
+import { CommandChip } from '@/components/ui/CommandChip';
 import { cn } from '@/lib/utils/cn';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { formatRunInstant } from '@/lib/runs/runClock';
@@ -215,55 +214,11 @@ function ReasonGlyph({ reason }: { reason: WorkItemFixReasonDto }) {
   );
 }
 
-/** The copy button — `ReadyList`'s icon-button, ALWAYS visible here (§ 30: the command
- *  is the answer the row exists to give, and a touch screen cannot hover). Raised above
- *  the row's stretched link, so pressing it copies and does not open the card. */
-function CopyFixCommand({
-  command,
-  itemKey,
-  ariaLabel,
-}: {
-  command: string;
-  itemKey: string;
-  ariaLabel?: string;
-}) {
-  const t = useTranslations('workbench');
-  const { toast } = useToast();
-  const copy = useCallback(
-    async (e: React.MouseEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      await navigator.clipboard.writeText(command);
-      toast({
-        variant: 'success',
-        title: t('toFix.toast.title'),
-        description: t('toFix.toast.body', { command }),
-      });
-    },
-    [command, t, toast],
-  );
-  return (
-    <Tooltip
-      content={t.rich('toFix.copyTooltip', {
-        command,
-        cmd: (chunks) => <code className="font-mono">{chunks}</code>,
-      })}
-    >
-      <button
-        type="button"
-        onClick={copy}
-        aria-label={ariaLabel ?? t('toFix.copyAria', { key: itemKey })}
-        data-testid={`workbench-fix-copy-${itemKey}`}
-        className="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface-soft) hover:text-(--el-text) focus-visible:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-      >
-        <Copy className="h-4 w-4" aria-hidden />
-      </button>
-    </Tooltip>
-  );
-}
-
 /** The command chip and its copy button — § 30's command part, reused by To resume's
- *  *Ready to resume* (§ 35.5) with its own accessible name. */
+ *  *Ready to resume* (§ 35.5) with its own accessible name. The chip is the shared
+ *  `CommandChip` (extracted for the review path's command, MOTIR-10341); ALWAYS visible
+ *  here (§ 30: the command is the row's answer), and it stops the event, so pressing it
+ *  inside the row's stretched link copies and does not open the card. */
 export function FixCommand({
   command,
   itemKey,
@@ -273,13 +228,19 @@ export function FixCommand({
   itemKey: string;
   ariaLabel?: string;
 }) {
+  const t = useTranslations('workbench');
   return (
-    <span className="flex shrink-0 items-center gap-1">
-      <code className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-mono text-(--el-code-text)">
-        {command}
-      </code>
-      <CopyFixCommand command={command} itemKey={itemKey} ariaLabel={ariaLabel} />
-    </span>
+    <CommandChip
+      command={command}
+      copyLabel={ariaLabel ?? t('toFix.copyAria', { key: itemKey })}
+      toastTitle={t('toFix.toast.title')}
+      toastBody={t('toFix.toast.body', { command })}
+      tooltip={t.rich('toFix.copyTooltip', {
+        command,
+        cmd: (chunks) => <code className="font-mono">{chunks}</code>,
+      })}
+      testId={`workbench-fix-copy-${itemKey}`}
+    />
   );
 }
 

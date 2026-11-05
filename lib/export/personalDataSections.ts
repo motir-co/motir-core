@@ -137,7 +137,9 @@ export type PersonalDataDelegate =
   | 'monitorConnection'
   | 'approvalGate'
   | 'planRevision'
-  | 'hostedRelease';
+  | 'hostedRelease'
+  | 'reviewVerdictRecord'
+  | 'reviewDismissal';
 
 const byUserId = (userId: string) => ({ userId });
 
@@ -762,6 +764,26 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     // exported rather than excluded. A release a merge made carries no actor.
     basis: 'Production releases the reader rolled back to or asked for.',
     where: (userId) => ({ OR: [{ restoredById: userId }, { requestedById: userId }] }),
+  },
+  {
+    table: 'review_verdict_record',
+    model: 'reviewVerdictRecord',
+    tier: 'tenant',
+    // `submitted_by_id` is the user whose token submitted a review agent's verdict
+    // (Story MOTIR-10327 · MOTIR-10333): a SetNull-preserved attribution of an act to
+    // a person, the same shape as `test_instructions.publishedById`, so it is exported.
+    basis: "Review verdicts submitted under the reader's token.",
+    where: (userId) => ({ submittedById: userId }),
+  },
+  {
+    table: 'review_dismissal',
+    model: 'reviewDismissal',
+    tier: 'tenant',
+    // `dismissed_by_id` records WHO overruled a review agent's send-back, with the
+    // reason they wrote (MOTIR-10334) — a person's decision, like
+    // `approval_gate.decidedById`, so it is exported.
+    basis: 'Review-agent send-backs the reader dismissed.',
+    where: (userId) => ({ dismissedById: userId }),
   },
 ];
 

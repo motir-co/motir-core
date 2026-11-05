@@ -239,7 +239,7 @@ describe('CLAIM 2 · access is enforced IN the query, over a population the read
       ...readerCtx,
       projectId: hiddenProject.id,
     });
-    expect(atHidden).toEqual({ items: [], total: 0, truncated: false });
+    expect(atHidden).toEqual({ items: [], total: 0, truncated: false, reviewsToRun: [] });
   });
 });
 

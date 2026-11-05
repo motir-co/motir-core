@@ -1,16 +1,29 @@
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import { reviewToRunService } from '@/lib/services/reviewToRunService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { reviewBotPostRepository } from '@/lib/repositories/reviewBotPostRepository';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { evaluateAfterRaise } from '@/lib/services/pullRequestReviewSync';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { ProjectNotFoundError, ReviewAgentNeedsManualMergeError } from '@/lib/projects/errors';
-import type {
-  ApprovalGateSettingsDTO,
-  UpdateApprovalGateSettingsInput,
+import {
+  InvalidReviewAgentSourceError,
+  ProjectNotFoundError,
+  ReviewAgentNeedsManualMergeError,
+} from '@/lib/projects/errors';
+import {
+  REVIEW_AGENT_SOURCES,
+  type ApprovalGateSettingsDTO,
+  type ReviewAgentSourceValue,
+  type UpdateApprovalGateSettingsInput,
 } from '@/lib/dto/approvalGateSettings';
+import { reviewSourceKey } from '@/lib/agentReview/reviewRunKey';
+import type { AgentReviewRequestedData } from '@/lib/jobs/types';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -41,12 +54,93 @@ function toSettingsDTO(project: {
   acceptanceVideoEnabled: boolean;
   reviewAgentEnabled: boolean;
   designApprovalGate: boolean;
+  reviewAgentSource: ReviewAgentSourceValue;
+  reviewBotPostsEnabled: boolean;
 }): ApprovalGateSettingsDTO {
   return {
     acceptanceVideoEnabled: project.acceptanceVideoEnabled,
     reviewAgentEnabled: project.reviewAgentEnabled,
     designApprovalGate: project.designApprovalGate,
+    reviewAgentSource: project.reviewAgentSource,
+    reviewBotPostsEnabled: project.reviewBotPostsEnabled,
   };
+}
+
+/**
+ * SWITCHING THE REVIEW SOURCE with the agent on (Story MOTIR-10327 · MOTIR-10332;
+ * `approval-gates.md` §12.10) — in the switch's own transaction, after the write, under
+ * the same gate lock the switch-off takes. The gates themselves are never superseded or
+ * re-raised: their question (review this version) has not changed, only who answers it.
+ *
+ * - `hosted` → `own`: the in-flight hosted run of every awaiting `agent_review` is
+ *   cancelled once this transaction commits, and each gate's could-not-run reason is
+ *   cleared (§12.6 is hosted-only). Each gate stays awaiting at its version.
+ * - `own` → `hosted`: ONE start request per awaiting gate is emitted after commit, under a
+ *   FRESH key, so a gate whose raise run an earlier switch cancelled starts again rather
+ *   than reading as already started.
+ */
+async function switchAwaitingReviewSource(
+  project: { id: string; workspaceId: string },
+  to: ReviewAgentSourceValue,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const awaiting = await approvalGateRepository.lockAwaitingByProjectAndKind(
+    project.id,
+    'agent_review',
+    tx,
+  );
+  if (awaiting.length === 0) return;
+  if (to === 'own') {
+    agentReviewStartService.cancelRunsAfterCommit(
+      project.workspaceId,
+      awaiting.map((gate) => gate.id),
+    );
+    for (const gate of awaiting) {
+      await approvalGateRepository.setReviewUnavailableReason(gate.id, null, tx);
+      // Each is now a review to run; its routed person is told once, after commit
+      // (MOTIR-10340). The gate id is the dedupe key, so a second switch tells nobody.
+      deferUntilCommit(async () => {
+        await reviewToRunService.notifyRaised(project.workspaceId, gate.id);
+      });
+    }
+    return;
+  }
+  for (const locked of awaiting) {
+    const gate = await approvalGateRepository.findById(locked.id, tx);
+    // An agent_review gate is raised only on a card at a named set version.
+    /* v8 ignore next */
+    if (!gate?.workItemId || gate.subjectVersion === null) continue;
+    const request: AgentReviewRequestedData = {
+      workspaceId: project.workspaceId,
+      gateId: gate.id,
+      workItemId: gate.workItemId,
+      subjectVersion: gate.subjectVersion,
+      idempotencyKey: reviewSourceKey(gate.id),
+    };
+    deferUntilCommit(() => sendEvent('agent-review/requested', request));
+  }
+}
+
+/** The patch's keys that are present, validated — only these are written. */
+function patchToWrite(patch: UpdateApprovalGateSettingsInput): UpdateApprovalGateSettingsInput {
+  const data: UpdateApprovalGateSettingsInput = {};
+  if (patch.acceptanceVideoEnabled !== undefined) {
+    data.acceptanceVideoEnabled = patch.acceptanceVideoEnabled;
+  }
+  if (patch.reviewAgentEnabled !== undefined) data.reviewAgentEnabled = patch.reviewAgentEnabled;
+  // The design switch is read at RAISE time (MOTIR-697), so writing it never decides
+  // a gate already waiting (§2f).
+  if (patch.designApprovalGate !== undefined) data.designApprovalGate = patch.designApprovalGate;
+  if (patch.reviewAgentSource !== undefined) {
+    if (!(REVIEW_AGENT_SOURCES as readonly unknown[]).includes(patch.reviewAgentSource)) {
+      throw new InvalidReviewAgentSourceError(patch.reviewAgentSource);
+    }
+    data.reviewAgentSource = patch.reviewAgentSource;
+  }
+  if (patch.reviewBotPostsEnabled !== undefined) {
+    data.reviewBotPostsEnabled = patch.reviewBotPostsEnabled;
+  }
+  return data;
 }
 
 /**
@@ -138,14 +232,7 @@ export const approvalGateSettingsService = {
     // Returning the current state keeps the client's reconcile honest either way.
     // Only the switches the patch carries are written, so a PATCH naming one switch
     // leaves every other exactly as it was.
-    const data: UpdateApprovalGateSettingsInput = {};
-    if (patch.acceptanceVideoEnabled !== undefined) {
-      data.acceptanceVideoEnabled = patch.acceptanceVideoEnabled;
-    }
-    if (patch.reviewAgentEnabled !== undefined) data.reviewAgentEnabled = patch.reviewAgentEnabled;
-    // The design switch is read at RAISE time (MOTIR-697), so writing it never decides
-    // a gate already waiting (§2f).
-    if (patch.designApprovalGate !== undefined) data.designApprovalGate = patch.designApprovalGate;
+    const data = patchToWrite(patch);
     if (Object.keys(data).length === 0) {
       const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
       if (!project) throw new ProjectNotFoundError(projectId);
@@ -169,9 +256,39 @@ export const approvalGateSettingsService = {
           if (!mode) throw new ProjectNotFoundError(projectId);
           if (mode.prMergeMode === 'auto') throw new ReviewAgentNeedsManualMergeError(projectId);
         }
+        // The source as it stood, read under the project's row lock so two admins
+        // switching it at once cannot both see the old value and both act on it.
+        let before: {
+          reviewAgentEnabled: boolean;
+          reviewAgentSource: ReviewAgentSourceValue;
+        } | null = null;
+        if (data.reviewAgentSource !== undefined) {
+          await projectRepository.lockById(projectId, tx);
+          before = await projectRepository.findMergeSettings(projectId, tx);
+          if (!before) throw new ProjectNotFoundError(projectId);
+        }
         const project = await projectRepository.updateApprovalGateSettings(projectId, data, tx);
         const retired =
           data.reviewAgentEnabled === false ? await retireAwaitingReviews(projectId, tx) : [];
+        // POSTING TURNED OFF (MOTIR-10335, rule 8): the bot's standing Request changes on
+        // every card would otherwise go on blocking Motir's own merge. Each card is
+        // reconciled once this commits.
+        if (data.reviewBotPostsEnabled === false) {
+          reviewBotPostService.requestReconcileAfterCommit(
+            project.workspaceId,
+            await reviewBotPostRepository.listWorkItemIdsWithLiveRequestChanges(projectId, tx),
+          );
+        }
+        // A source change acts on awaiting reviews only while the agent was on and
+        // stays on: a disable just retired them, and an enable has none yet.
+        if (
+          before &&
+          before.reviewAgentEnabled &&
+          project.reviewAgentEnabled &&
+          before.reviewAgentSource !== project.reviewAgentSource
+        ) {
+          await switchAwaitingReviewSource(project, project.reviewAgentSource, tx);
+        }
         return { project, retired };
       },
     );

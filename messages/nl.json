@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "Een beheerder heeft je agent in slaapstand gezet",
             "desc": "Een eigenaar of beheerder van de organisatie heeft een van je agents gestopt via de Fleet-pagina van de organisatie."
+          },
+          "review_to_run": {
+            "label": "Een review wacht op je agent",
+            "desc": "Je project reviewt met je eigen agent, en de review van een werkitem start je zelf met motir review."
+          },
+          "review_sent_back": {
+            "label": "Een agent vroeg om wijzigingen",
+            "desc": "Een review-agent stuurde een werkitem dat aan je is toegewezen terug, met zijn bevindingen."
           }
         },
         "soon": "Binnenkort",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s> heeft <s>{key}</s> bijgewerkt",
       "genericNoKey": "<s>{actor}</s> heeft je een melding gestuurd",
       "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
+      "reviewToRun": "Een review van <s>{key}</s> wacht op je agent",
+      "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>",
       "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet"
     },
     "excerpt": {
@@ -14503,6 +14513,8 @@
         "plan_stale": "Werk dat dit plan wijzigt is afgerond, dus het plan raakte verouderd en deze vraag is ingetrokken.",
         "plan_discarded": "Elk voorstel in het plan is ingetrokken, dus het plan is beëindigd en deze vraag ook.",
         "queue_failed": "De merge-wachtrij heeft deze commits afgekeurd, dus deze vraag is ingetrokken.",
+        "review_agent_disabled": "De review-agent is uitgezet, dus deze vraag is ingetrokken.",
+        "agent_changes_requested": "De review-agent vroeg om wijzigingen bij deze commits, dus deze vraag is ingetrokken tot een nieuwe push.",
         "subject_gone": "Waar deze vraag over ging, is weg, dus deze vraag is ingetrokken.",
         "no_longer_manual": "Het werkitem is geen handmatig werk meer, dus deze vraag is ingetrokken.",
         "closed_without_decision": "Het werkitem is gesloten zonder dat iemand het als klaar heeft gemarkeerd, dus deze vraag is ingetrokken.",
@@ -15351,6 +15363,99 @@
         "since": "sinds {when}",
         "open": "De planningssessie openen — {sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> keurde de review goed bij {commits}",
+        "sentBack": "<actor>{agent}</actor> vroeg om wijzigingen bij {commits}",
+        "late": "Te laat",
+        "secondTag": "Tweede review",
+        "lateNote": "Beoordeelde {commits}, wat niet meer de huidige versie is. Het besliste niets.",
+        "second": "Een tweede review van een versie waarover al besloten is. Het besliste niets.",
+        "notified": "{name} is op de hoogte gebracht.",
+        "findings": "Bevindingen",
+        "agentHosted": "De gehoste agent van Motir",
+        "agentOwn": "Agent van {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Goedgekeurd door {name} · beoordeeld door een agent bij {commits}",
+        "skipped": "Goedgekeurd door {name} · review overgeslagen door {who}",
+        "dismissed": "Goedgekeurd door {name} · review afgewezen door {who}",
+        "none": "Goedgekeurd door {name} · niet beoordeeld door een agent",
+        "someone": "iemand",
+        "reason": "Reden: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent beoordeelt",
+        "reviewingName": "Een agent beoordeelt dit werk",
+        "couldNotRun": "Review kon niet draaien",
+        "couldNotRunName": "De agent-review kon niet draaien — wacht op jou",
+        "couldNotRunOn": "Review kon niet draaien · {name}",
+        "couldNotRunOnName": "De agent-review kon niet draaien — wacht op {name}",
+        "waitingYours": "Wacht op je review-agent",
+        "waitingYoursName": "Wacht op je review-agent — voer motir review {key} uit",
+        "waitingOn": "Wacht op de review-agent van {name}",
+        "waitingOnName": "Wacht op de review-agent van {name}"
+      },
+      "command": {
+        "copy": "motir review {key} kopiëren",
+        "copied": "Gekopieerd",
+        "toastTitle": "Opdracht gekopieerd",
+        "toastBody": "Voer {command} uit in je eigen agent om dit werk te beoordelen."
+      },
+      "badge": {
+        "reviewed": "Beoordeeld",
+        "reviewedName": "Beoordeeld door een agent bij de huidige commits",
+        "container": "{total, plural, one {{done} van # beoordeeld} other {{done} van # beoordeeld}}",
+        "containerName": "{total, plural, one {{done} van # onderdeel beoordeeld door een agent bij de huidige commits} other {{done} van # onderdelen beoordeeld door een agent bij hun huidige commits}}",
+        "containerAllName": "Elk onderdeel beoordeeld door een agent bij de huidige commits",
+        "card": {
+          "hosted": "Beoordeeld door de gehoste agent van Motir",
+          "own": "Beoordeeld door de eigen agent van {name}",
+          "harness": "{harness} · {model}",
+          "commits": "Bij deze commits",
+          "link": "Bevindingen en checklist"
+        }
+      },
+      "line": {
+        "label": "Agent-review",
+        "reviewed": "<b>Beoordeeld door een agent</b> · {who} · {when}",
+        "whoHosted": "De gehoste agent van Motir",
+        "whoOwn": "Agent van {name} · {harness}",
+        "findings": "Bevindingen en checklist",
+        "skipped": "<b>Review overgeslagen door {name}</b> — ‘{reason}’",
+        "dismissed": "<b>Review afgewezen door {name}</b> — ‘{reason}’",
+        "notReviewed": "<b>Niet beoordeeld door een agent</b>",
+        "earlier": "Laatst beoordeeld bij een eerdere commit",
+        "github": "<b>Goedgekeurd op GitHub</b> door {logins}"
+      },
+      "toRun": {
+        "sentence": "Beoordeel <title>{name}</title> met je agent",
+        "tag": "Review uit te voeren",
+        "details": "Nog geen goedkeuring. Je goedkeuring wordt gevraagd zodra de review slaagt.",
+        "open": "{key} openen: {sentence}"
+      },
+      "dismiss": {
+        "button": "Review afwijzen",
+        "title": "De review van de agent afwijzen?",
+        "body": "De agent vroeg om wijzigingen bij deze commits. Door af te wijzen verdwijnt het werkitem uit Te herstellen en wordt je goedkeuring gevraagd bij dezelfde commits. De review en je reden blijven op het werkitem staan.",
+        "reasonLabel": "Waarom wijs je het af?",
+        "reasonHint": "Verplicht. Je reden wordt getoond bij de goedkeuring en in de geschiedenis van het werkitem.",
+        "reasonPlaceholder": "De bevinding gaat over code die dit werkitem niet wijzigt.",
+        "confirm": "Review afwijzen",
+        "cancel": "Annuleren",
+        "submitting": "Bezig met afwijzen…",
+        "error": "De review kon niet worden afgewezen. Er is niets gewijzigd. Probeer het opnieuw.",
+        "stale": "Er zijn nieuwe commits binnengekomen sinds je deze review las, dus er is niets afgewezen. Toon de huidige versie en lees hem opnieuw.",
+        "already": "Deze review is al afgewezen. Toon de huidige versie om hem te zien.",
+        "notStanding": "Deze review geldt niet meer, dus er valt niets af te wijzen. Toon de huidige versie.",
+        "reread": "Huidige versie tonen",
+        "toFixNote": "Een agent-review waar je om vroeg heeft dit teruggestuurd. Herstel het, of wijs de review af met een reden."
+      },
+      "authorNote": {
+        "title": "GitHub laat je je eigen pull requests niet goedkeuren",
+        "body": "Je hebt elke pull request hier geopend. Keur goed in Motir, of vraag een teamgenoot ze op GitHub te beoordelen."
+      }
     }
   },
   "approvalOverlay": {
@@ -15430,7 +15535,19 @@
       "billingNote": "Elke review is een gehoste agentrun, betaald uit de AI-credits van je organisatie.",
       "offNote": "Dit uitzetten annuleert lopende reviews — die werkitems gaan meteen door naar de gewone stroom.",
       "saved": "Opgeslagen",
-      "saveError": "Kan niet opslaan — probeer het opnieuw."
+      "saveError": "Kan niet opslaan — probeer het opnieuw.",
+      "source": {
+        "label": "Wie reviewt",
+        "hosted": "Motirs gehoste agent",
+        "hostedWhat": "Motir start een reviewrun zodra de checks slagen. <strong>Gebruikt AI-credits.</strong>",
+        "own": "Je eigen agent",
+        "ownWhat": "Gratis. De review wacht tot iemand <cmd>motir review</cmd> vanuit de eigen agent uitvoert. Er start niets vanzelf."
+      },
+      "posting": {
+        "title": "Agentreviews op pull requests plaatsen",
+        "on": "De GitHub-app van Motir plaatst elk oordeel als reactie op de pull requests en vraagt om wijzigingen bij een terugzending. Hij keurt nooit goed.",
+        "off": "Oordelen blijven in Motir. Er wordt niets op de pull requests geplaatst."
+      }
     },
     "designApproval": {
       "title": "Ontwerpgoedkeuring",

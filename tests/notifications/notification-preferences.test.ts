@@ -62,6 +62,10 @@ describe('notificationPreferencesService.getMatrix', () => {
       'transitioned',
       'code_access_refused',
       'agent_hibernated_by_admin',
+      // MOTIR-10340 — a review waiting for the person's own agent, appended last.
+      'review_to_run',
+      // MOTIR-10338 — an agent sent the person's work item back, appended after it.
+      'review_sent_back',
     ]);
     // Direct/mention events default ON for both channels — INCLUDING the
     // access-refused row, and its email arm is a decision rather than an

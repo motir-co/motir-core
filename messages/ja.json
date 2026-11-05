@@ -3089,6 +3089,14 @@
           "agent_hibernated_by_admin": {
             "label": "管理者があなたのエージェントを休止しました",
             "desc": "組織のオーナーまたは管理者が、組織の Fleet ページからあなたのエージェントの 1 つを停止しました。"
+          },
+          "review_to_run": {
+            "label": "レビューがあなたのエージェントを待っています",
+            "desc": "このプロジェクトはあなた自身のエージェントでレビューします。作業項目のレビューは motir review で実行してください。"
+          },
+          "review_sent_back": {
+            "label": "エージェントが変更を求めました",
+            "desc": "レビューエージェントが、あなたが担当する作業項目を指摘事項とともに差し戻しました。"
           }
         },
         "soon": "近日提供",
@@ -5968,6 +5976,8 @@
       "generic": "<s>{actor}</s> さんが <s>{key}</s> を更新しました",
       "genericNoKey": "<s>{actor}</s> さんから通知が届きました",
       "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください",
+      "reviewToRun": "<s>{key}</s> のレビューがあなたのエージェントを待っています",
+      "reviewSentBack": "エージェントが <s>{key}</s> に変更を求めました",
       "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました"
     },
     "excerpt": {
@@ -14500,6 +14510,8 @@
         "plan_stale": "この計画が変更する作業が完了したため、計画が古くなり、この質問は取り下げられました。",
         "plan_discarded": "計画内のすべての提案が取り下げられたため、計画は終了し、この質問も取り下げられました。",
         "queue_failed": "マージキューでこれらのコミットが失敗したため、この質問は取り下げられました。",
+        "review_agent_disabled": "レビューエージェントがオフになったため、この確認は取り下げられました。",
+        "agent_changes_requested": "レビューエージェントがこれらのコミットに変更を求めたため、次のプッシュまでこの確認は取り下げられました。",
         "subject_gone": "この質問の対象がなくなったため、この質問は取り下げられました。",
         "no_longer_manual": "作業項目が手作業ではなくなったため、この質問は取り下げられました。",
         "closed_without_decision": "誰も完了にしないまま作業項目がクローズされたため、この質問は取り下げられました。",
@@ -15348,6 +15360,99 @@
         "since": "{when}から",
         "open": "計画セッションを開く — {sentence}"
       }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> が {commits} でレビューを通過させました",
+        "sentBack": "<actor>{agent}</actor> が {commits} で変更を求めました",
+        "late": "遅延",
+        "secondTag": "2 回目のレビュー",
+        "lateNote": "{commits} をレビューしましたが、これはもう現在のバージョンではありません。何も決定していません。",
+        "second": "すでに決定済みのバージョンに対する 2 回目のレビューです。何も決定していません。",
+        "notified": "{name} に通知しました。",
+        "findings": "指摘事項",
+        "agentHosted": "Motir のホスト型エージェント",
+        "agentOwn": "{name} のエージェント（{harness}）"
+      },
+      "record": {
+        "reviewed": "{name} が承認 · {commits} でエージェントがレビュー済み",
+        "skipped": "{name} が承認 · {who} がレビューをスキップ",
+        "dismissed": "{name} が承認 · {who} がレビューを却下",
+        "none": "{name} が承認 · エージェントのレビューなし",
+        "someone": "誰か",
+        "reason": "理由: {reason}"
+      },
+      "marker": {
+        "reviewing": "エージェントがレビュー中",
+        "reviewingName": "エージェントがこの作業をレビューしています",
+        "couldNotRun": "レビューを実行できませんでした",
+        "couldNotRunName": "エージェントのレビューを実行できませんでした — あなたの対応待ち",
+        "couldNotRunOn": "レビューを実行できませんでした · {name}",
+        "couldNotRunOnName": "エージェントのレビューを実行できませんでした — {name} の対応待ち",
+        "waitingYours": "あなたのレビューエージェント待ち",
+        "waitingYoursName": "あなたのレビューエージェント待ち — motir review {key} を実行",
+        "waitingOn": "{name} のレビューエージェント待ち",
+        "waitingOnName": "{name} のレビューエージェント待ち"
+      },
+      "command": {
+        "copy": "motir review {key} をコピー",
+        "copied": "コピーしました",
+        "toastTitle": "コマンドをコピーしました",
+        "toastBody": "この作業をレビューするには、自分のエージェントで {command} を実行してください。"
+      },
+      "badge": {
+        "reviewed": "レビュー済み",
+        "reviewedName": "現在のコミットでエージェントがレビュー済み",
+        "container": "{total, plural, other {{done}/# レビュー済み}}",
+        "containerName": "{total, plural, other {# 個中 {done} 個の部分が現在のコミットでエージェントによりレビュー済み}}",
+        "containerAllName": "すべての部分が現在のコミットでエージェントによりレビュー済み",
+        "card": {
+          "hosted": "Motir のホスト型エージェントがレビュー",
+          "own": "{name} のエージェントがレビュー",
+          "harness": "{harness} · {model}",
+          "commits": "対象のコミット",
+          "link": "指摘事項とチェックリスト"
+        }
+      },
+      "line": {
+        "label": "エージェントのレビュー",
+        "reviewed": "<b>エージェントがレビュー済み</b> · {who} · {when}",
+        "whoHosted": "Motir のホスト型エージェント",
+        "whoOwn": "{name} のエージェント · {harness}",
+        "findings": "指摘事項とチェックリスト",
+        "skipped": "<b>{name} がレビューをスキップ</b> — “{reason}”",
+        "dismissed": "<b>{name} がレビューを却下</b> — “{reason}”",
+        "notReviewed": "<b>エージェントのレビューなし</b>",
+        "earlier": "以前のコミットで最後にレビュー",
+        "github": "<b>GitHub で承認</b>：{logins}"
+      },
+      "toRun": {
+        "sentence": "<title>{name}</title> を自分のエージェントでレビュー",
+        "tag": "実行待ちのレビュー",
+        "details": "まだ承認ではありません。レビューが通過すると承認を求められます。",
+        "open": "{key} を開く: {sentence}"
+      },
+      "dismiss": {
+        "button": "レビューを却下",
+        "title": "エージェントのレビューを却下しますか？",
+        "body": "エージェントはこれらのコミットで変更を求めました。却下すると作業項目は「要修正」から外れ、同じコミットであなたの承認が求められます。レビューとあなたの理由は作業項目に残ります。",
+        "reasonLabel": "却下する理由は何ですか？",
+        "reasonHint": "必須です。理由は承認と作業項目の履歴に表示されます。",
+        "reasonPlaceholder": "この指摘はこの作業項目が変更しないコードに関するものです。",
+        "confirm": "レビューを却下",
+        "cancel": "キャンセル",
+        "submitting": "却下しています…",
+        "error": "レビューを却下できませんでした。何も変更されていません。もう一度お試しください。",
+        "stale": "このレビューを読んだ後に新しいコミットが追加されたため、何も却下されていません。現在のバージョンを表示して読み直してください。",
+        "already": "このレビューはすでに却下されています。現在のバージョンを表示して確認してください。",
+        "notStanding": "このレビューはもう有効ではないため、却下するものはありません。現在のバージョンを表示してください。",
+        "reread": "現在のバージョンを表示",
+        "toFixNote": "あなたが依頼したエージェントのレビューがこれを差し戻しました。修正するか、理由を添えてレビューを却下してください。"
+      },
+      "authorNote": {
+        "title": "GitHub では自分のプルリクエストを承認できません",
+        "body": "ここのプルリクエストはすべてあなたが作成しました。Motir で承認するか、チームメイトに GitHub でのレビューを依頼してください。"
+      }
     }
   },
   "approvalOverlay": {
@@ -15427,7 +15532,19 @@
       "billingNote": "各レビューはホスト型エージェントの実行であり、組織の AI クレジットから支払われます。",
       "offNote": "オフにすると進行中のレビューはキャンセルされ、それらの作業項目は通常のフローに直接進みます。",
       "saved": "保存しました",
-      "saveError": "保存できませんでした。もう一度お試しください。"
+      "saveError": "保存できませんでした。もう一度お試しください。",
+      "source": {
+        "label": "レビューする人",
+        "hosted": "Motir のホスト型エージェント",
+        "hostedWhat": "チェックが通ると、Motir がレビューの実行を開始します。<strong>AI クレジットを使用します。</strong>",
+        "own": "自分のエージェント",
+        "ownWhat": "無料。誰かが自分のエージェントから <cmd>motir review</cmd> を実行するまで、レビューは待機します。自動では何も始まりません。"
+      },
+      "posting": {
+        "title": "エージェントのレビューをプルリクエストに投稿",
+        "on": "Motir の GitHub アプリが、すべての判定をプルリクエストにコメントし、差し戻し時には変更を求めます。承認することはありません。",
+        "off": "判定は Motir 内にとどまります。プルリクエストには何も投稿されません。"
+      }
     },
     "designApproval": {
       "title": "デザインの承認",
