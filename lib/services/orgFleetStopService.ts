@@ -204,7 +204,19 @@ export const orgFleetStopService = {
     const stoppedByName = await displayNameOf(actorUserId);
 
     // ── 1 · CI: cancel the runs, then destroy the containers ─────────────────
-    const ci = await fleetStopService.stopOrganization(organizationId, 'org_admin_stop', { now });
+    // `stopOrganization` contains each repository and container, but its two
+    // listing reads can still throw; a throw there is one CI failure, never a
+    // reason to leave the hosted runs and agents running.
+    let ci = { runsCancelled: 0, containersStopped: 0, failures: 0 };
+    try {
+      ci = await fleetStopService.stopOrganization(organizationId, 'org_admin_stop', { now });
+    } catch (err) {
+      ci = { ...ci, failures: 1 };
+      console.error(`${LOG} could not stop the CI containers`, {
+        organizationId,
+        detail: detailOf(err),
+      });
+    }
 
     // ── 2 · hosted-agent runs: end each; its supervisor tears the container down
     let hostedRunsEnded = 0;

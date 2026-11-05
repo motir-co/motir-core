@@ -484,6 +484,19 @@ describe('stopEverything', () => {
       stoppedByName: null,
     });
   });
+  it('a CI step whose listing throws is one CI failure, and the hosted runs and agents still stop', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(fleetStopService.stopOrganization).mockRejectedValueOnce(new Error('db down'));
+    const result = await orgFleetStopService.stopEverything(actor(fx), () => clock.now());
+    expect(result).toMatchObject({
+      runsCancelled: 0,
+      ciContainersStopped: 0,
+      hostedRunsEnded: 1,
+      agentsHibernated: 2,
+      failures: { ci: 1, hosted: 0, agents: 0 },
+    });
+    for (const id of a.instances) expect((await instanceRow(id)).state).toBe('hibernated');
+  });
 });
 
 describe('cancelHostedRun', () => {
