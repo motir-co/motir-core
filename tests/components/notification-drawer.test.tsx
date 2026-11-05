@@ -276,6 +276,6 @@ describe('NotificationDrawer — the review-sent-back row', () => {
     const row = await screen.findByRole('link', { name: new RegExp('ACME-412') });
     expect(row.textContent).toContain(expected);
     expect(row.textContent).not.toContain(en.notifications.actorFallback);
-    expect(row.getAttribute('href')).toBe('/items/ACME-412#agent-verdict-rec-1');
+    expect(row.getAttribute('href')).toBe('/items/ACME-412?activity=all#agent-verdict-rec-1');
   });
 });

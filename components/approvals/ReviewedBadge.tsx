@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Bot, Check } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
+import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { CardReviewDTO, ReviewReviewerDTO } from '@/lib/dto/reviewState';
@@ -60,11 +61,7 @@ function ReviewedCardBody({
   const format = useFormatter();
   const routes = useReaderRoutes();
   const when = new Date(at);
-  const findingsHref = review.recordRef
-    ? review.recordRef.kind === 'record'
-      ? `${routes.item(review.identifier)}#agent-verdict-${review.recordRef.id}`
-      : `${routes.item(review.identifier)}#development`
-    : null;
+  const findingsHref = findingsHrefOf(routes.item(review.identifier), review.recordRef);
   return (
     <>
       <p className="m-0 font-medium text-(--el-text)">
