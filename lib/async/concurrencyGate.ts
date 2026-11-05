@@ -1,4 +1,4 @@
-import { awaitAsIdle } from './waitScope';
+import { awaitAsIdle, throwIfWithdrawn } from './waitScope';
 
 /**
  * A FIFO limit on how many pieces of async work run at once in this module
@@ -26,6 +26,8 @@ import { awaitAsIdle } from './waitScope';
  * A unit waiting for a slot tells the enclosing wait scope it is idle
  * (`./waitScope.ts`), so a runner that counts its own busy work — the job worker's
  * pool — does not count a unit that is only standing in this line (MOTIR-10457).
+ * A unit whose runner withdraws it leaves the line and is never started, and the
+ * slot it would have taken goes to the next in line (MOTIR-10462).
  */
 export interface ConcurrencyGate {
   /** Run `work` once a slot is free, releasing the slot when it settles. */
@@ -54,7 +56,29 @@ export function createConcurrencyGate(limit: number): ConcurrencyGate {
     // The wait is reported as IDLE to whoever runs this work (`./waitScope.ts`,
     // MOTIR-10457): a unit in this line holds nothing, and the job worker must
     // not count it against its pool while it stands here.
-    await awaitAsIdle(new Promise<void>((resolve) => waiting.push(resolve)));
+    //
+    // A unit whose runner withdraws it while it waits (MOTIR-10462) LEAVES the
+    // line: its turn is taken out of `waiting`, so `release` never hands a slot to
+    // work that will not use it. Too late to leave — `release` has just handed it
+    // the slot — it keeps the turn and `run` gives the slot straight back.
+    let turn!: () => void;
+    const admitted = new Promise<void>((resolve) => {
+      turn = resolve;
+      waiting.push(turn);
+    });
+    await awaitAsIdle(admitted, () => leaveLine(turn));
+  }
+
+  function leaveLine(turn: () => void): boolean {
+    const at = waiting.indexOf(turn);
+    /* v8 ignore next -- the race this guards needs a withdrawal queued as a
+       microtask BEFORE `release` hands the turn over and run AFTER it, which no test
+       can order; the slot it keeps is given back by `run`'s second
+       `throwIfWithdrawn`, pinned by *gives the slot straight back* in
+       `tests/async/waitScope.test.ts`. */
+    if (at < 0) return false;
+    waiting.splice(at, 1);
+    return true;
   }
 
   function release(): void {
@@ -65,8 +89,12 @@ export function createConcurrencyGate(limit: number): ConcurrencyGate {
 
   return {
     async run<T>(work: () => Promise<T>): Promise<T> {
+      // Withdrawn work never starts (MOTIR-10462): not at the door, and not once
+      // admitted, whichever of the withdrawal and the admission came first.
+      throwIfWithdrawn();
       await acquire();
       try {
+        throwIfWithdrawn();
         return await work();
       } finally {
         release();

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { JobQueueRun } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
-import { runObservingWaits } from '@/lib/async/waitScope';
+import { isWaitWithdrawn, runObservingWaits } from '@/lib/async/waitScope';
 import { isJobStepYield } from './step';
 import { isJobRunDefer } from './defer';
 
@@ -83,7 +83,8 @@ import { isJobRunDefer } from './defer';
 //     a burst larger than any line we expect still stops the worker claiming
 //     rather than taking the whole queue into memory;
 //   * a parked run keeps its claim and its lease — the heartbeat renews every row
-//     the worker holds — and the drain treats it like any in-flight run.
+//     the worker holds — and the drain treats it like any in-flight run, up to the
+//     release: see *the drain WITHDRAWS what it releases* below.
 //
 // ⚠️ BUSY WORK CAN OVERSHOOT POOL_SIZE BY WHAT THE GATES ADMIT, AND NO MORE. A
 // parked run unparks only when its gate hands it a slot, and its own slot may
@@ -193,6 +194,20 @@ import { isJobRunDefer } from './defer';
 // the deadline is released anyway and re-run later by whoever claims it, which
 // is safe precisely because the step ledger memoized everything it completed.
 // That is the shim paying for itself outside its own card.
+//
+// ⚠️ THE DRAIN WITHDRAWS WHAT IT RELEASES (MOTIR-10462). Since MOTIR-10457 a
+// drain that times out is mostly releasing PARKED runs — a burst behind the
+// three-slot CI gate leaves hundreds in its line — and a released row is
+// claimable by another machine the moment the release commits. A parked run left
+// in the line would be admitted later, in this process, and do the work the next
+// claimant may already be doing, in an order nobody keeps. So before the release
+// every run still in flight is WITHDRAWN: its wait scope's signal is aborted, a
+// waiter leaves its gate's line at once and is never admitted, and a run that
+// reaches a gate after the release is refused at the door. A withdrawn settle
+// writes NOTHING — the release's `pending`, unclaimed, attempt-refunded row is the
+// state it leaves, and the next claimant runs it once. Work already past every
+// gate is not interrupted: it holds what it holds, as before, and its next
+// claimant resumes it from the step ledger.
 
 /** How long a claim is held before another worker may reclaim it. */
 export const LEASE_MS = 60_000;
@@ -278,10 +293,14 @@ export interface JobWorkerOptions {
    * an operator reading a stream of these is the one consumer who can tell a
    * supervisor SLEEPING from a supervisor ADVANCING. Collapsing them would
    * make a stalled chain look exactly like a healthy one.
+   *
+   * `withdrawn` (MOTIR-10462): the drain released this run while it waited on an
+   * in-process gate, and it left without starting the work. The row is as the
+   * release wrote it; the pass wrote nothing.
    */
   onOutcome?: (
     run: JobQueueRun,
-    outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded' | 'deferred',
+    outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded' | 'deferred' | 'withdrawn',
   ) => void;
   /**
    * ⚠️ THE AFTER-ALL-RETRIES-EXHAUSTED HOOK — the engine's `onFailure`
@@ -397,6 +416,11 @@ export class JobWorker {
    * against the pool. The header's *parked* section is the contract.
    */
   private readonly parked = new Set<string>();
+  /**
+   * How the drain WITHDRAWS each in-flight run before it releases the claim
+   * (MOTIR-10462): one controller per settle, whose signal is the run's wait scope's.
+   */
+  private readonly withdrawals = new Map<string, AbortController>();
   /**
    * The DETACHED settle of each in-flight run, kept so {@link settled} can await
    * them. `tick()` returns at the claim now, so a caller that wants "and then
@@ -581,14 +605,29 @@ export class JobWorker {
 
   /** Run one claimed row and record its terminal state. Never throws — a failure is an outcome, not an exception the loop should die on. */
   private async settle(run: JobQueueRun): Promise<void> {
+    const withdrawal = new AbortController();
+    this.withdrawals.set(run.id, withdrawal);
     try {
       await runObservingWaits(
-        { onWaitStart: () => this.park(run.id), onWaitEnd: () => this.parked.delete(run.id) },
+        {
+          onWaitStart: () => this.park(run.id),
+          onWaitEnd: () => this.parked.delete(run.id),
+          signal: withdrawal.signal,
+        },
         () => this.execute(run),
       );
       await withSystemContext((tx) => jobQueueRepository.markSucceeded(run.id, tx));
       this.onOutcome(run, 'succeeded');
     } catch (err) {
+      if (withdrawal.signal.aborted && isWaitWithdrawn(err)) {
+        // RELEASED WHILE IT WAITED (MOTIR-10462). The drain gave the row back —
+        // `pending`, unclaimed, attempt refunded — before this run was admitted, so
+        // the work never started here and the row is the next claimant's. Writing
+        // anything now would overwrite a row this worker no longer holds.
+        this.onOutcome(run, 'withdrawn');
+        return;
+      }
+
       if (isJobStepYield(err)) {
         // A durable sleep. NOT a failure: the attempt is refunded and the run is
         // re-enqueued at the deadline the step recorded.
@@ -656,6 +695,7 @@ export class JobWorker {
     } finally {
       this.parked.delete(run.id);
       this.inFlight.delete(run.id);
+      this.withdrawals.delete(run.id);
     }
   }
 
@@ -773,8 +813,10 @@ export class JobWorker {
   }
 
   /**
-   * Drain: stop claiming, wait for in-flight runs (bounded), then RELEASE
-   * whatever this worker still holds so another machine can take it at once.
+   * Drain: stop claiming, wait for in-flight runs (bounded), then WITHDRAW and
+   * RELEASE whatever this worker still holds so another machine can take it at
+   * once. A run withdrawn while it waits on an in-process gate never starts its
+   * work here (MOTIR-10462).
    *
    * The release is unconditional — it runs whether the wait succeeded or timed
    * out. A run released mid-execution is re-run later by its next claimant, and
@@ -811,8 +853,14 @@ export class JobWorker {
     }
     if (this.inFlight.size > 0) {
       this.log.warn(
-        `[job-worker] drain timed out with ${this.inFlight.size} run(s) in flight; releasing them`,
+        `[job-worker] drain timed out with ${this.inFlight.size} run(s) in flight ` +
+          `(${this.parked.size} parked); withdrawing and releasing them`,
       );
+      // WITHDRAW BEFORE THE RELEASE (MOTIR-10462). Aborting runs each waiter's
+      // leave synchronously, so every parked run is out of its gate's line before
+      // the release below makes its row claimable elsewhere, and none can be
+      // admitted in between. See the header's *the drain WITHDRAWS what it releases*.
+      for (const withdrawal of this.withdrawals.values()) withdrawal.abort();
     }
 
     const released = await withSystemContext((tx) =>
