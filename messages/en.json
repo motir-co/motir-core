@@ -3086,6 +3086,10 @@
             "label": "Code access couldn't be granted",
             "desc": "Motir couldn't give you access to a repository it made for your project."
           },
+          "agent_hibernated_by_admin": {
+            "label": "An admin hibernated your agent",
+            "desc": "An organization owner or admin stopped one of your agents from the organization's Fleet page."
+          },
           "review_to_run": {
             "label": "A review is waiting for your agent",
             "desc": "Your project reviews with your own agent, and a work item's review is yours to run with motir review."
@@ -4118,7 +4122,200 @@
         "members": "Members",
         "security": "Security",
         "usage": "Usage & cost",
+        "fleet": "Fleet",
         "billing": "Billing & plans"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · Settings",
+        "title": "Fleet",
+        "lead": "What {org} is running on Motir’s fleet right now, and the controls to stop it. Capacity requests stay on <link>Billing & plans › Fleet use</link>.",
+        "refresh": {
+          "button": "Refresh",
+          "cue": "Updated {time} · refreshes every 30 seconds while this tab is open",
+          "refreshing": "Refreshing…",
+          "failed": "Couldn’t refresh. The last data read is still shown."
+        },
+        "lastStop": {
+          "by": "Last stopped by {name}, {when}",
+          "byYou": "Last stopped by you, {when}",
+          "bySomeone": "Last stopped {when}",
+          "never": "No one in {org} has stopped fleet work yet.",
+          "failed": "Couldn’t read who last stopped fleet work."
+        },
+        "when": {
+          "today": "today at {time}",
+          "yesterday": "yesterday at {time}"
+        },
+        "tiles": {
+          "agentRuns": "Agent runs in parallel",
+          "agentRunsNote": "Charged per machine minute",
+          "agents": "Agents",
+          "agentsNote": "Running and hibernating",
+          "ciJobs": "CI jobs in flight",
+          "ciWaiting": "{count, plural, =0 {None waiting} other {# waiting}}",
+          "index": "Index jobs",
+          "indexNote": "Not charged",
+          "of": " of {figure}",
+          "notRead": "Couldn’t read",
+          "failedTitle": "Couldn’t read the fleet figures",
+          "failedBody": "Nothing here is shown as zero. The sections below are unaffected."
+        },
+        "section": {
+          "retry": "Retry",
+          "failedBody": "Nothing here is shown as zero. The other sections are unaffected."
+        },
+        "hosted": {
+          "title": "Agent runs",
+          "lead": "Work items Motir’s agent is building for this organization now.",
+          "count": "{count} live",
+          "empty": "No agent run is live.",
+          "failed": "Couldn’t read the agent runs",
+          "noCard": "A run with no work item",
+          "meta": "{project} · started by {name} · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "A deleted project",
+          "openRun": "Open run",
+          "running": "Running",
+          "cancel": "Cancel",
+          "cancelAria": "Cancel the run of {key}",
+          "cancelling": "Cancelling…"
+        },
+        "agents": {
+          "title": "Agent instances",
+          "lead": "Every member’s agents, running or hibernating. Only Hibernate is offered here.",
+          "count": "{count} live",
+          "empty": "No agent is running or hibernating.",
+          "failed": "Couldn’t read the agent instances",
+          "name": "{owner}’s agent · {profile}",
+          "unknownOwner": "A member",
+          "runningSince": "{project} · running since {time}",
+          "hibernatingSince": "{project} · hibernating since {time}",
+          "inStateSince": "{project} · {state} since {time}",
+          "running": "Running",
+          "hibernating": "Hibernating",
+          "hibernatingAt": "Hibernating · since {time}",
+          "hibernate": "Hibernate",
+          "hibernateAria": "Hibernate {owner}’s agent",
+          "hibernatingNow": "Hibernating…",
+          "state": {
+            "starting": "Starting",
+            "waking": "Waking",
+            "updating": "Updating",
+            "deleting": "Deleting",
+            "hibernated": "Hibernated",
+            "failed": "Failed",
+            "other": "Busy"
+          }
+        },
+        "ci": {
+          "title": "CI jobs",
+          "lead": "Jobs on Motir’s runners, in flight and waiting.",
+          "count": "{inFlight} in flight · {waiting} waiting",
+          "empty": "No CI job is in flight or waiting.",
+          "failed": "Couldn’t read the CI jobs",
+          "meta": "{project} · queued {time} · ",
+          "noProject": "No project",
+          "viewOnGithub": "View on GitHub",
+          "running": "Running",
+          "waiting": "Waiting · {cause}",
+          "cause": {
+            "planLimit": "plan limit",
+            "poolFull": "pool full",
+            "other": "other"
+          }
+        },
+        "index": {
+          "title": "Index jobs",
+          "running": "<n>{count}</n> running",
+          "note": "Indexing keeps code search current. It is not charged and is not stopped here.",
+          "failed": "Couldn’t read the index jobs"
+        },
+        "motirStops": {
+          "title": "Stopped by Motir · last 7 days",
+          "lead": "Machines Motir itself stopped for this organization, and why.",
+          "empty": "Motir stopped nothing for this organization in the last 7 days.",
+          "failed": "Couldn’t read Motir’s stops",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "CI job container",
+            "hosted_agent": "Agent run",
+            "agent_instance": "Agent instance",
+            "code_graph_index": "Index job",
+            "other": "Machine"
+          },
+          "reason": {
+            "record_ended": "its job had already ended",
+            "no_record": "no record of it was found",
+            "org_stopped": "the organization’s work was stopped",
+            "foreign_org": "it was running another organization’s work"
+          },
+          "done": "Done",
+          "notDone": "Did not complete"
+        },
+        "cancelRun": {
+          "title": "Cancel this run?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} started this run at {time}. Cancelling closes it as <strong>cancelled</strong> and stops its machine now. Work the agent pushed stays on its branch.",
+          "bodyNoName": "This run started at {time}. Cancelling closes it as <strong>cancelled</strong> and stops its machine now. Work the agent pushed stays on its branch.",
+          "keep": "Keep it running",
+          "confirm": "Cancel run",
+          "confirming": "Cancelling…",
+          "alreadyClosed": "The run of {key} had already ended.",
+          "notFound": "That run is no longer live.",
+          "failed": "Couldn’t cancel the run of {key}. Try again."
+        },
+        "hibernate": {
+          "title": "Hibernate {owner}’s agent?",
+          "description": "{profile} · {project} · running since {time}",
+          "body": "The machine stops and its files are kept. A work item running in it is cancelled first.",
+          "told": "<strong>{owner} will be told</strong> that you hibernated it, and when. Only they can wake, open or delete it.",
+          "toldSelf": "Only you can wake, open or delete it.",
+          "keep": "Keep it running",
+          "confirm": "Hibernate agent",
+          "confirming": "Hibernating…",
+          "alreadyResting": "{owner}’s agent was already resting.",
+          "inMotion": "{owner}’s agent is starting or changing state, so it was not hibernated. Try again in a moment.",
+          "notFound": "That agent is no longer live.",
+          "failed": "Couldn’t hibernate {owner}’s agent. Try again."
+        },
+        "stopAll": {
+          "button": "Stop everything",
+          "title": "Stop everything {org} runs?",
+          "lead": "This stops the charged work below, now.",
+          "counting": "Counting what is running…",
+          "ci": "{runs, plural, one {CI job cancelled} other {CI jobs cancelled}} and <strong>{containers, plural, one {# container} other {# containers}}</strong> stopped",
+          "ciUnknownRuns": "CI jobs cancelled",
+          "hosted": "{count, plural, one {agent run ended} other {agent runs ended}}",
+          "agents": "{count, plural, one {running agent hibernated} other {running agents hibernated}}",
+          "index": "{count, plural, one {index job keeps running} other {index jobs keep running}} — indexing is not stopped here",
+          "afterwards": "Nothing is blocked afterwards: members can start new work straight away. The owners of hibernated agents are told.",
+          "countedAt": "Counted at {time}.",
+          "unreadableTitle": "Couldn’t count what is running",
+          "unreadableBody": "Nothing has been stopped. Try again to read the counts before you confirm.",
+          "cancel": "Cancel",
+          "retry": "Try again",
+          "confirm": "Stop everything",
+          "confirming": "Stopping…",
+          "failed": "Couldn’t stop the fleet work. Some of it may have stopped; refresh to see what is still running."
+        },
+        "result": {
+          "doneTitle": "Everything was stopped",
+          "partialTitle": "Some work did not stop",
+          "ci": "{runs, plural, one {# CI job cancelled} other {# CI jobs cancelled}}, {stopped} of {total} containers stopped",
+          "hosted": "{count, plural, one {# agent run ended} other {# agent runs ended}}",
+          "agents": "{count, plural, one {# running agent hibernated} other {# running agents hibernated}}",
+          "agentsPartial": "{done} of {total} running agents hibernated",
+          "hostedPartial": "{done} of {total} agent runs ended",
+          "ciFailed": "{count, plural, one {# CI repository or container did not stop.} other {# CI repositories or containers did not stop.}} Refresh and try Stop everything again.",
+          "hostedFailed": "{count, plural, one {# agent run did not end.} other {# agent runs did not end.}} Try Cancel on its row.",
+          "agentsFailed": "{count, plural, one {# agent did not stop: the stop did not confirm. Try Hibernate on its row.} other {# agents did not stop: the stop did not confirm. Try Hibernate on their rows.}}",
+          "index": "Index jobs were left running.",
+          "byYou": "Stopped by you, {when}.",
+          "dismiss": "Dismiss",
+          "dismissAria": "Dismiss the stop result"
+        },
+        "forbidden": "Only an owner or admin can stop this organization’s fleet work."
       }
     },
     "gitAccounts": {
@@ -5780,7 +5977,11 @@
       "genericNoKey": "<s>{actor}</s> sent you a notification",
       "accessRefused": "<s>{project}</s>'s code is ready, but you can't open it yet — try sending the invitation again",
       "reviewToRun": "A review of <s>{key}</s> is waiting for your agent",
-      "reviewSentBack": "An agent asked for changes on <s>{key}</s>"
+      "reviewSentBack": "An agent asked for changes on <s>{key}</s>",
+      "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents."
     }
   },
   "orgAdmin": {
@@ -8342,6 +8543,7 @@
       },
       "progress": {
         "submitted": "Sending the conversation to Motir AI…",
+        "watching": "Motir AI is writing this plan…",
         "proposed": "{count, plural, =0 {Placing proposed work on the canvas…} one {# item proposed so far…} other {# items proposed so far…}}",
         "validating": "Checking the proposal against your plan…",
         "reading": "Reading your request…",
@@ -12242,6 +12444,13 @@
           "unknownActor": "a former operator",
           "noReason": "No reason recorded",
           "counts": "{runs} CI runs · {containers} CI containers · {hosted} hosted runs · {instances} agent instances"
+        },
+        "orgAdminStop": {
+          "title": "Last stopped by an organization admin",
+          "titleNamed": "Last stopped by {name}, an organization admin",
+          "when": "{time}",
+          "counts": "{containers} CI containers · {instances} agent instances",
+          "hostedRun": "one agent run cancelled"
         }
       }
     },
@@ -13307,7 +13516,8 @@
       "credits": "Stopped: your organization ran out of credits. Add credits, then wake it.",
       "idle": "Hibernated after 30 minutes without use",
       "backstop": "Stopped after 12 hours running. Wake it to carry on.",
-      "admin_stop": "Stopped by Motir support. Wake it to carry on."
+      "admin_stop": "Stopped by Motir support. Wake it to carry on.",
+      "org_admin_stop": "Stopped by an admin of your organization. Wake it to carry on."
     },
     "menu": {
       "wake": "Wake",

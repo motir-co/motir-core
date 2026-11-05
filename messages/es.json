@@ -3086,6 +3086,10 @@
             "label": "No se pudo conceder el acceso al código",
             "desc": "Motir no pudo darte acceso a un repositorio que creó para tu proyecto."
           },
+          "agent_hibernated_by_admin": {
+            "label": "Un administrador hibernó tu agente",
+            "desc": "Un propietario o administrador de la organización detuvo uno de tus agentes desde la página Fleet de la organización."
+          },
           "review_to_run": {
             "label": "Una revisión espera a tu agente",
             "desc": "Tu proyecto revisa con tu propio agente, y la revisión de un elemento de trabajo la ejecutas tú con motir review."
@@ -4118,7 +4122,200 @@
         "members": "Miembros",
         "security": "Seguridad",
         "usage": "Uso y coste",
+        "fleet": "Flota",
         "billing": "Facturación y planes"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · Configuración",
+        "title": "Flota",
+        "lead": "Lo que {org} está ejecutando ahora en la flota de Motir y los controles para detenerlo. Las solicitudes de capacidad siguen en <link>Facturación y planes › Uso de la flota</link>.",
+        "refresh": {
+          "button": "Actualizar",
+          "cue": "Actualizado {time} · se actualiza cada 30 segundos mientras esta pestaña está abierta",
+          "refreshing": "Actualizando…",
+          "failed": "No se pudo actualizar. Se siguen mostrando los últimos datos leídos."
+        },
+        "lastStop": {
+          "by": "Detenido por última vez por {name}, {when}",
+          "byYou": "Detenido por última vez por ti, {when}",
+          "bySomeone": "Detenido por última vez {when}",
+          "never": "Nadie en {org} ha detenido aún trabajo de la flota.",
+          "failed": "No se pudo leer quién detuvo por última vez el trabajo de la flota."
+        },
+        "when": {
+          "today": "hoy a las {time}",
+          "yesterday": "ayer a las {time}"
+        },
+        "tiles": {
+          "agentRuns": "Ejecuciones de agente en paralelo",
+          "agentRunsNote": "Se cobra por minuto de máquina",
+          "agents": "Agentes",
+          "agentsNote": "En ejecución e hibernando",
+          "ciJobs": "Trabajos de CI en curso",
+          "ciWaiting": "{count, plural, =0 {Ninguno en espera} other {# en espera}}",
+          "index": "Trabajos de indexación",
+          "indexNote": "No se cobra",
+          "of": " de {figure}",
+          "notRead": "No se pudo leer",
+          "failedTitle": "No se pudieron leer las cifras de la flota",
+          "failedBody": "Aquí nada se muestra como cero. Las secciones de abajo no se ven afectadas."
+        },
+        "section": {
+          "retry": "Reintentar",
+          "failedBody": "Aquí nada se muestra como cero. Las demás secciones no se ven afectadas."
+        },
+        "hosted": {
+          "title": "Ejecuciones de agente",
+          "lead": "Elementos de trabajo que el agente de Motir está construyendo ahora para esta organización.",
+          "count": "{count} activas",
+          "empty": "No hay ninguna ejecución de agente activa.",
+          "failed": "No se pudieron leer las ejecuciones de agente",
+          "noCard": "Una ejecución sin elemento de trabajo",
+          "meta": "{project} · iniciada por {name} · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "Un proyecto eliminado",
+          "openRun": "Abrir ejecución",
+          "running": "En ejecución",
+          "cancel": "Cancelar",
+          "cancelAria": "Cancelar la ejecución de {key}",
+          "cancelling": "Cancelando…"
+        },
+        "agents": {
+          "title": "Instancias de agente",
+          "lead": "Los agentes de todos los miembros, en ejecución o hibernando. Aquí solo se ofrece Hibernar.",
+          "count": "{count} activas",
+          "empty": "Ningún agente está en ejecución ni hibernando.",
+          "failed": "No se pudieron leer las instancias de agente",
+          "name": "Agente de {owner} · {profile}",
+          "unknownOwner": "Un miembro",
+          "runningSince": "{project} · en ejecución desde {time}",
+          "hibernatingSince": "{project} · hibernando desde {time}",
+          "inStateSince": "{project} · {state} desde {time}",
+          "running": "En ejecución",
+          "hibernating": "Hibernando",
+          "hibernatingAt": "Hibernando · desde {time}",
+          "hibernate": "Hibernar",
+          "hibernateAria": "Hibernar el agente de {owner}",
+          "hibernatingNow": "Hibernando…",
+          "state": {
+            "starting": "Iniciando",
+            "waking": "Despertando",
+            "updating": "Actualizando",
+            "deleting": "Eliminando",
+            "hibernated": "Hibernado",
+            "failed": "Con error",
+            "other": "Ocupado"
+          }
+        },
+        "ci": {
+          "title": "Trabajos de CI",
+          "lead": "Trabajos en los runners de Motir, en curso y en espera.",
+          "count": "{inFlight} en curso · {waiting} en espera",
+          "empty": "No hay ningún trabajo de CI en curso ni en espera.",
+          "failed": "No se pudieron leer los trabajos de CI",
+          "meta": "{project} · en cola {time} · ",
+          "noProject": "Sin proyecto",
+          "viewOnGithub": "Ver en GitHub",
+          "running": "En ejecución",
+          "waiting": "En espera · {cause}",
+          "cause": {
+            "planLimit": "límite del plan",
+            "poolFull": "pool lleno",
+            "other": "otro"
+          }
+        },
+        "index": {
+          "title": "Trabajos de indexación",
+          "running": "<n>{count}</n> en ejecución",
+          "note": "La indexación mantiene actualizada la búsqueda de código. No se cobra y no se detiene aquí.",
+          "failed": "No se pudieron leer los trabajos de indexación"
+        },
+        "motirStops": {
+          "title": "Detenido por Motir · últimos 7 días",
+          "lead": "Máquinas que el propio Motir detuvo para esta organización, y por qué.",
+          "empty": "Motir no detuvo nada para esta organización en los últimos 7 días.",
+          "failed": "No se pudieron leer las detenciones de Motir",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "Contenedor de trabajo de CI",
+            "hosted_agent": "Ejecución de agente",
+            "agent_instance": "Instancia de agente",
+            "code_graph_index": "Trabajo de indexación",
+            "other": "Máquina"
+          },
+          "reason": {
+            "record_ended": "su trabajo ya había terminado",
+            "no_record": "no se encontró ningún registro",
+            "org_stopped": "se detuvo el trabajo de la organización",
+            "foreign_org": "estaba ejecutando trabajo de otra organización"
+          },
+          "done": "Hecho",
+          "notDone": "No se completó"
+        },
+        "cancelRun": {
+          "title": "¿Cancelar esta ejecución?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} inició esta ejecución a las {time}. Al cancelarla, se cierra como <strong>cancelada</strong> y su máquina se detiene ahora. El trabajo que el agente subió se queda en su rama.",
+          "bodyNoName": "Esta ejecución se inició a las {time}. Al cancelarla, se cierra como <strong>cancelada</strong> y su máquina se detiene ahora. El trabajo que el agente subió se queda en su rama.",
+          "keep": "Mantenerla en ejecución",
+          "confirm": "Cancelar ejecución",
+          "confirming": "Cancelando…",
+          "alreadyClosed": "La ejecución de {key} ya había terminado.",
+          "notFound": "Esa ejecución ya no está activa.",
+          "failed": "No se pudo cancelar la ejecución de {key}. Inténtalo de nuevo."
+        },
+        "hibernate": {
+          "title": "¿Hibernar el agente de {owner}?",
+          "description": "{profile} · {project} · en ejecución desde {time}",
+          "body": "La máquina se detiene y sus archivos se conservan. Primero se cancela cualquier elemento de trabajo que se esté ejecutando en ella.",
+          "told": "<strong>Se avisará a {owner}</strong> de que lo hibernaste, y cuándo. Solo esa persona puede despertarlo, abrirlo o eliminarlo.",
+          "toldSelf": "Solo tú puedes despertarlo, abrirlo o eliminarlo.",
+          "keep": "Mantenerlo en ejecución",
+          "confirm": "Hibernar agente",
+          "confirming": "Hibernando…",
+          "alreadyResting": "El agente de {owner} ya estaba en reposo.",
+          "inMotion": "El agente de {owner} se está iniciando o cambiando de estado, así que no se hibernó. Inténtalo de nuevo en un momento.",
+          "notFound": "Ese agente ya no está activo.",
+          "failed": "No se pudo hibernar el agente de {owner}. Inténtalo de nuevo."
+        },
+        "stopAll": {
+          "button": "Detener todo",
+          "title": "¿Detener todo lo que ejecuta {org}?",
+          "lead": "Esto detiene ahora el trabajo con cargo que aparece abajo.",
+          "counting": "Contando lo que está en ejecución…",
+          "ci": "{runs, plural, one {trabajo de CI cancelado} other {trabajos de CI cancelados}} y <strong>{containers, plural, one {# contenedor} other {# contenedores}}</strong> detenidos",
+          "ciUnknownRuns": "Trabajos de CI cancelados",
+          "hosted": "{count, plural, one {ejecución de agente terminada} other {ejecuciones de agente terminadas}}",
+          "agents": "{count, plural, one {agente en ejecución hibernado} other {agentes en ejecución hibernados}}",
+          "index": "{count, plural, one {trabajo de indexación sigue en ejecución} other {trabajos de indexación siguen en ejecución}} — la indexación no se detiene aquí",
+          "afterwards": "Después no queda nada bloqueado: los miembros pueden iniciar trabajo nuevo enseguida. Se avisa a los propietarios de los agentes hibernados.",
+          "countedAt": "Contado a las {time}.",
+          "unreadableTitle": "No se pudo contar lo que está en ejecución",
+          "unreadableBody": "No se ha detenido nada. Vuelve a leer los recuentos antes de confirmar.",
+          "cancel": "Cancelar",
+          "retry": "Intentar de nuevo",
+          "confirm": "Detener todo",
+          "confirming": "Deteniendo…",
+          "failed": "No se pudo detener el trabajo de la flota. Puede que parte se haya detenido; actualiza para ver lo que sigue en ejecución."
+        },
+        "result": {
+          "doneTitle": "Se detuvo todo",
+          "partialTitle": "Parte del trabajo no se detuvo",
+          "ci": "{runs, plural, one {# trabajo de CI cancelado} other {# trabajos de CI cancelados}}, {stopped} de {total} contenedores detenidos",
+          "hosted": "{count, plural, one {# ejecución de agente terminada} other {# ejecuciones de agente terminadas}}",
+          "agents": "{count, plural, one {# agente en ejecución hibernado} other {# agentes en ejecución hibernados}}",
+          "agentsPartial": "{done} de {total} agentes en ejecución hibernados",
+          "hostedPartial": "{done} de {total} ejecuciones de agente terminadas",
+          "ciFailed": "{count, plural, one {# repositorio o contenedor de CI no se detuvo.} other {# repositorios o contenedores de CI no se detuvieron.}} Actualiza y vuelve a probar Detener todo.",
+          "hostedFailed": "{count, plural, one {# ejecución de agente no terminó.} other {# ejecuciones de agente no terminaron.}} Prueba Cancelar en su fila.",
+          "agentsFailed": "{count, plural, one {# agente no se detuvo: la detención no se confirmó. Prueba Hibernar en su fila.} other {# agentes no se detuvieron: la detención no se confirmó. Prueba Hibernar en sus filas.}}",
+          "index": "Los trabajos de indexación siguieron en ejecución.",
+          "byYou": "Detenido por ti, {when}.",
+          "dismiss": "Descartar",
+          "dismissAria": "Descartar el resultado de la detención"
+        },
+        "forbidden": "Solo un propietario o administrador puede detener el trabajo de la flota de esta organización."
       }
     },
     "gitAccounts": {
@@ -5780,7 +5977,11 @@
       "genericNoKey": "<s>{actor}</s> te ha enviado una notificación",
       "accessRefused": "El código de <s>{project}</s> está listo, pero aún no puedes abrirlo: prueba a enviar la invitación de nuevo",
       "reviewToRun": "Una revisión de <s>{key}</s> espera a tu agente",
-      "reviewSentBack": "Un agente pidió cambios en <s>{key}</s>"
+      "reviewSentBack": "Un agente pidió cambios en <s>{key}</s>",
+      "agentHibernatedByAdmin": "<s>{actor}</s> hibernó tu agente <s>{agent}</s>"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Un administrador de la organización lo detuvo a las {time}. Sus archivos se conservan; despiértalo desde Agentes."
     }
   },
   "orgAdmin": {
@@ -8345,6 +8546,7 @@
       },
       "progress": {
         "submitted": "Enviando la conversación a Motir AI…",
+        "watching": "Motir AI está escribiendo este plan…",
         "proposed": "{count, plural, =0 {Colocando el trabajo propuesto en el lienzo…} one {# elemento propuesto hasta ahora…} other {# elementos propuestos hasta ahora…}}",
         "validating": "Comprobando la propuesta con tu plan…",
         "reading": "Leyendo tu solicitud…",
@@ -12245,6 +12447,13 @@
           "unknownActor": "un antiguo operador",
           "noReason": "No se registró ningún motivo",
           "counts": "{runs} ejecuciones de CI · {containers} contenedores de CI · {hosted} ejecuciones alojadas · {instances} instancias de agentes"
+        },
+        "orgAdminStop": {
+          "title": "Última detención por un administrador de la organización",
+          "titleNamed": "Detenido por última vez por {name}, admin de la organización",
+          "when": "{time}",
+          "counts": "{containers} contenedores de CI · {instances} instancias de agentes",
+          "hostedRun": "una ejecución de agente cancelada"
         }
       }
     },
@@ -13310,7 +13519,8 @@
       "credits": "Detenido: tu organización se quedó sin créditos. Añade créditos y luego despiértalo.",
       "idle": "Hibernado tras 30 minutos sin uso",
       "backstop": "Detenido tras 12 horas en ejecución. Despiértalo para continuar.",
-      "admin_stop": "Detenido por el soporte de Motir. Despiértalo para continuar."
+      "admin_stop": "Detenido por el soporte de Motir. Despiértalo para continuar.",
+      "org_admin_stop": "Detenido por un administrador de tu organización. Despiértalo para continuar."
     },
     "menu": {
       "wake": "Despertar",

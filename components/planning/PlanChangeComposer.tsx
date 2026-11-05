@@ -73,7 +73,12 @@ export interface RunningBar {
   line: string;
   /** The user has asked for a stop and the walk has not reached its boundary yet. */
   stopping: boolean;
-  onStop: () => void;
+  /**
+   * The Stop. ABSENT for a viewer who may not end the run (bug MOTIR-10428): a
+   * member reading someone's session without `ai:plan` sees the run working and is
+   * offered nothing to press, the same answer the stop door would give them.
+   */
+  onStop?: () => void;
   /**
    * The planner has PAUSED and is waiting on the person (Story MOTIR-7990 ·
    * MOTIR-8010; design states 7 and 9a): the bar draws the paused indicator in the
@@ -364,52 +369,12 @@ export function PlanChangeComposer({
   const insetPadding =
     mentions && attach ? 'pl-[60px]' : mentions || attach ? 'pl-8' : 'pl-(--spacing-input-x)';
 
-  // The pinned bar's Stop — one control, drawn by the running bar and the paused one.
-  const stopButton =
-    running !== null ? (
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={running.onStop}
-        disabled={running.stopping}
-        leftIcon={<CircleStop className="size-4" aria-hidden="true" />}
-        data-testid="plan-change-stop"
-      >
-        {running.stopping ? tc('stoppingAction') : tc('stop')}
-      </Button>
-    ) : null;
-
   return (
     <form
       onSubmit={submit}
       className={bare ? 'relative px-3 py-3' : 'relative border-t border-(--el-border) px-3 py-3'}
     >
-      {/* THE RUNNING BAR — the live line and the STOP, in the pinned footer.
-          NOT an alert and NOT a warning tint: nothing has failed, a run is simply
-          working. It reuses `--el-surface-soft`, which is the fill the shipped
-          progress row already carries, so this is that row moved into the region
-          that never scrolls and given a control — composition, not a new
-          treatment (`design/ai-chat/plan-change-run-live.mock.html` sheet 4's
-          token map). */}
-      {running !== null && running.paused ? (
-        <PausedRunIndicator kind={running.paused.kind} finishing={false} stop={stopButton} />
-      ) : running !== null ? (
-        <div
-          data-testid="plan-change-running-bar"
-          className="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
-        >
-          <Spinner size="sm" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)">
-            {running.stopping ? tc('stopping') : running.line}
-          </span>
-          {/* SECONDARY, never destructive. A stop is a DECISION, and the whole
-              card turns on it not reading as one: if stopping looks like throwing
-              work away, people wait runs out instead and the control is
-              decorative. So no `--el-danger`, and the label is a word rather than
-              an icon alone. */}
-          {stopButton}
-        </div>
-      ) : null}
+      {running !== null ? <PlanChangeRunningBar running={running} /> : null}
 
       {/* THE ANSWER BAR — a sibling above the field, where the target tray sits.
           Not an alert: nothing failed, the planner is simply waiting. Its copy
@@ -665,5 +630,55 @@ export function PlanChangeComposer({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * THE RUNNING BAR — the live line and the STOP, in the pinned footer
+ * (MOTIR-4068). Its own component since bug MOTIR-10428, because two slots draw
+ * it: the composer, and the read-only slot that replaces the composer for a
+ * member who may read a running session but not end it — the same bar, with no
+ * Stop.
+ *
+ * NOT an alert and NOT a warning tint: nothing has failed, a run is simply
+ * working. It reuses `--el-surface-soft`, which is the fill the shipped progress
+ * row already carries, so this is that row moved into the region that never
+ * scrolls and given a control — composition, not a new treatment
+ * (`design/ai-chat/plan-change-run-live.mock.html` sheet 4's token map).
+ */
+export function PlanChangeRunningBar({ running }: { running: RunningBar }) {
+  const tc = useTranslations('planningWorkspace.conversation');
+  // The pinned bar's Stop — one control, drawn by the running bar and the paused one.
+  const stopButton = running.onStop ? (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={running.onStop}
+      disabled={running.stopping}
+      leftIcon={<CircleStop className="size-4" aria-hidden="true" />}
+      data-testid="plan-change-stop"
+    >
+      {running.stopping ? tc('stoppingAction') : tc('stop')}
+    </Button>
+  ) : null;
+  if (running.paused) {
+    return <PausedRunIndicator kind={running.paused.kind} finishing={false} stop={stopButton} />;
+  }
+  return (
+    <div
+      data-testid="plan-change-running-bar"
+      className="mb-2 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8)"
+    >
+      <Spinner size="sm" aria-hidden="true" />
+      <span className="min-w-0 flex-1 truncate text-xs text-(--el-text-secondary)">
+        {running.stopping ? tc('stopping') : running.line}
+      </span>
+      {/* SECONDARY, never destructive. A stop is a DECISION, and the whole
+          card turns on it not reading as one: if stopping looks like throwing
+          work away, people wait runs out instead and the control is
+          decorative. So no `--el-danger`, and the label is a word rather than
+          an icon alone. */}
+      {stopButton}
+    </div>
   );
 }

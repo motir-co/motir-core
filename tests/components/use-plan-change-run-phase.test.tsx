@@ -12,18 +12,29 @@ import { planRunPhase } from '@/lib/planning/planRunPhase';
 // `conversation` until it arrives. A REOPENED overlay settles from the replay of the
 // run's frames, so it agrees with a live viewer.
 
-const { open, getSession, submit, stream, fetchReview, record, submitAsk, settleAsk, streamAsk } =
-  vi.hoisted(() => ({
-    open: vi.fn(),
-    getSession: vi.fn(),
-    submit: vi.fn(),
-    stream: vi.fn(),
-    fetchReview: vi.fn(),
-    record: vi.fn(),
-    submitAsk: vi.fn(),
-    settleAsk: vi.fn(),
-    streamAsk: vi.fn(),
-  }));
+const {
+  open,
+  getSession,
+  submit,
+  stream,
+  fetchReview,
+  record,
+  submitAsk,
+  settleAsk,
+  streamAsk,
+  streamAnchored,
+} = vi.hoisted(() => ({
+  open: vi.fn(),
+  getSession: vi.fn(),
+  submit: vi.fn(),
+  stream: vi.fn(),
+  fetchReview: vi.fn(),
+  record: vi.fn(),
+  submitAsk: vi.fn(),
+  settleAsk: vi.fn(),
+  streamAsk: vi.fn(),
+  streamAnchored: vi.fn(),
+}));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
   findResumableSession: async (...a: unknown[]) => ({
@@ -48,7 +59,7 @@ vi.mock('@/lib/planning/planEditsClient', async (importOriginal) => {
     ...actual,
     streamAugmentJob: stream,
     streamAskJob: streamAsk,
-    streamContextualPlanJob: vi.fn(),
+    streamContextualPlanJob: streamAnchored,
   };
 });
 
@@ -219,7 +230,12 @@ describe('a REOPENED overlay mid-run', () => {
     fetchReview.mockResolvedValue(generating);
   });
 
-  it('settles from the replay of the run’s frames, and closes the replay once it has it', async () => {
+  // A READ-ONLY viewer only watches the run (bug MOTIR-10428): a viewer who may plan
+  // ADOPTS it instead, and the adopted stream settles it (the next case).
+  it('a read-only viewer settles from the replay of the run’s frames, and closes the replay once it has it', async () => {
+    getSession.mockResolvedValue(
+      session({ pendingPlanId: 'plan-1', lastJobId: 'job-1', viewerCanPlan: false }),
+    );
     const replay = heldStream();
     stream.mockImplementation(replay.impl);
     const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
@@ -238,6 +254,42 @@ describe('a REOPENED overlay mid-run', () => {
     const signal = replay.impl.mock.calls[0]![1] as AbortSignal;
     expect(signal.aborted).toBe(true);
     expect(replay.impl).toHaveBeenCalledTimes(1);
+  });
+
+  it('a viewer who may plan ADOPTS the run, and the adopted stream settles its phase', async () => {
+    const adopted = heldStream();
+    stream.mockImplementation(adopted.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    expect(hook.result.current.state.jobId).toBe('job-1');
+    expect(hook.result.current.state.planId).toBe('plan-1');
+    // ONE subscription: the adoption's — no replay beside it.
+    expect(adopted.impl).toHaveBeenCalledTimes(1);
+    expect(adopted.impl.mock.calls[0]![0]).toBe('job-1');
+    // The plan on screen is kept, and nothing claims this screen sent a turn.
+    expect(hook.result.current.state.liveReview?.status).toBe('generating');
+    expect(hook.result.current.state.acts).toEqual([]);
+    expect(planRunPhase(hook.result.current.state)).toBe('conversation');
+
+    adopted.emit('target_settled', { seq: 1 });
+    expect(planRunPhase(hook.result.current.state)).toBe('planning');
+    adopted.emit('status', { status: 'succeeded' });
+    await adopted.end();
+    await waitFor(() => expect(hook.result.current.state.phase).not.toBe('streaming'));
+    expect(adopted.impl).toHaveBeenCalledTimes(1);
+  });
+
+  it('an ANCHORED overlay adopts the run through the item’s own relay', async () => {
+    streamAnchored.mockImplementation(async () => {});
+    const hook = renderHook(() =>
+      usePlanChangeConversation({ sessionId: 's1', anchorId: 'item-1' }),
+    );
+
+    await waitFor(() => expect(streamAnchored).toHaveBeenCalled());
+    expect(streamAnchored.mock.calls[0]!.slice(0, 2)).toEqual(['item-1', 'job-1']);
+    expect(stream).not.toHaveBeenCalled();
+    await waitFor(() => expect(hook.result.current.state.phase).not.toBe('streaming'));
   });
 
   it('a plan an agent writes over MCP opens no replay: it has no conversation phase', async () => {

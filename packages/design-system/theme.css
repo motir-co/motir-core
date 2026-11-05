@@ -3703,6 +3703,11 @@
      colour. NOT danger: nothing was lost or destroyed — the repository exists and
      the plan is safe; the user simply cannot open it yet. */
   --el-notif-access-refused: var(--color-warning);
+  /* An organisation owner or admin HIBERNATED the recipient's agent (MOTIR-10368,
+     per design/org-admin/design-notes.md, the Fleet delta's one token). Info, not
+     warning or danger: nothing was lost — the files are kept and the owner can
+     wake it — but somebody else acted on their agent and they should know. */
+  --el-notif-agent-hibernated: var(--color-info);
   /* A review waits for the routed person's OWN agent (Story MOTIR-10327 · MOTIR-10340).
      --color-warning, the hue of the review markers' loud "awaiting" form, because the row
      says the same thing they do: something is waiting on you. Its own slot, as the

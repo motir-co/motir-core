@@ -461,6 +461,8 @@ export const notificationFanInService = {
     /** The card the row is about, for a SYSTEM event that has one (the review to run,
      *  MOTIR-10340) — the row then dies with the card. Null or absent for a project. */
     workItemId?: string | null;
+    /** Who acted, when someone did (MOTIR-10368); null for a system event. */
+    actorId?: string | null;
   }): Promise<boolean> {
     try {
       const enabled = await notificationPreferencesService.isChannelEnabled(
@@ -482,7 +484,7 @@ export const notificationFanInService = {
               // destination from the TYPE, not from an issue key. A system event about a
               // card (the review to run) names it.
               workItemId: args.workItemId ?? null,
-              actorId: null,
+              actorId: args.actorId ?? null,
               data: args.data as unknown as Prisma.InputJsonValue,
               dedupeKey: args.dedupeKey,
             },

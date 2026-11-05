@@ -10,6 +10,7 @@ import {
   CreateTagsCommand,
   CreateVpcCommand,
   DescribeAvailabilityZonesCommand,
+  DescribeImagesCommand,
   DescribeInstanceAttributeCommand,
   DescribeInstancesCommand,
   DescribeInternetGatewaysCommand,
@@ -28,6 +29,7 @@ import {
   StopInstancesCommand,
   TerminateInstancesCommand,
   type Filter,
+  type Image,
   type Instance,
   type ResourceType,
   type Tag,
@@ -181,6 +183,18 @@ export interface Ec2Volume {
 }
 
 /** One EBS mapping on a launch — the runner's Docker data disk, an agent's home. */
+/** An AMI as `DescribeImages` shows it to the account asking. An image shared
+ *  with that account shows its name and description, but not the tags the
+ *  owner wrote on it: tags are visible only in the owning account. */
+export interface Ec2Image {
+  readonly imageId: string;
+  readonly name: string | null;
+  readonly description: string | null;
+  readonly ownerId: string | null;
+  /** ISO 8601, as EC2 answers it. */
+  readonly creationDate: string | null;
+}
+
 export interface Ec2BlockDeviceMapping {
   readonly deviceName: string;
   readonly volumeSizeGb: number;
@@ -325,6 +339,12 @@ export interface Ec2Api {
     cidrIp: string;
     description: string;
   }): Promise<void>;
+  /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_DescribeImages.html —
+   *  the named AMIs this account can launch, its own and those shared with it.
+   *  An unknown or deregistered id is `InvalidAMIID.NotFound` (or
+   *  `InvalidAMIID.Unavailable`), a malformed one `InvalidAMIID.Malformed`, all
+   *  thrown. */
+  describeImages(imageIds: readonly string[]): Promise<Ec2Image[]>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetConsoleOutput.html —
    *  the instance's serial console, decoded, with `Latest` (a Nitro instance's
    *  most recent output). Null when EC2 holds none yet. An unknown id throws as
@@ -430,7 +450,8 @@ type InstanceMethod =
   | 'modifyInstanceUserData'
   | 'createTags'
   | 'authorizeSecurityGroupIngress'
-  | 'getConsoleOutput';
+  | 'getConsoleOutput'
+  | 'describeImages';
 type NetworkCalls = Omit<Ec2Api, InstanceMethod>;
 type InstanceCalls = Pick<Ec2Api, InstanceMethod>;
 
@@ -603,6 +624,18 @@ function instanceCalls(send: Send): InstanceCalls {
         new GetConsoleOutputCommand({ InstanceId: instanceId, Latest: true }),
       );
       return out.Output ? Buffer.from(out.Output, 'base64').toString('utf8') : null;
+    },
+    async describeImages(imageIds) {
+      const out = await send<{ Images?: Image[] }>(
+        new DescribeImagesCommand({ ImageIds: [...imageIds] }),
+      );
+      return (out.Images ?? []).map((i) => ({
+        imageId: required(i.ImageId, 'ImageId'),
+        name: i.Name || null,
+        description: i.Description || null,
+        ownerId: i.OwnerId || null,
+        creationDate: i.CreationDate || null,
+      }));
     },
   };
 }

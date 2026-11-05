@@ -74,6 +74,8 @@ describe('no colour moves — resolved --el-* tokens against the pre-rename shee
   // Unassigned segment hues, MOTIR-8919), the same way: new tokens only.
   // And for the `--el-mark-wave-*` family (the Motir mark's at-work flow,
   // MOTIR-9213), the same way: new tokens only.
+  // And for `--el-notif-agent-hibernated` (the agent-hibernated-by-an-admin
+  // notification hue, MOTIR-10368), the same way: new tokens only.
   // And for the `--el-notif-review-*` pair (the review-path notification hues,
   // MOTIR-10327), the same way: new tokens only.
   const before = JSON.parse(

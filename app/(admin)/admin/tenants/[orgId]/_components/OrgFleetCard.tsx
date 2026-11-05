@@ -8,7 +8,7 @@ import type {
   FleetOrgRowDTO,
   FleetWindowDTO,
 } from '@/lib/dto/platformFleetMonitor';
-import type { FleetLastStopDTO } from '@/lib/dto/platformFleetStop';
+import type { FleetLastOrgAdminStopDTO, FleetLastStopDTO } from '@/lib/dto/platformFleetStop';
 import { FleetVerdictChip } from '@/app/(admin)/admin/monitoring/_components/FleetVerdictChip';
 import { StopContainersDialog } from './StopContainersDialog';
 
@@ -43,6 +43,9 @@ export interface OrgFleetCardProps {
   row: FleetOrgRowDTO;
   window: FleetWindowDTO;
   lastStop: FleetLastStopDTO | null;
+  /** The newest stop an organisation owner or admin made — its own block,
+   *  never merged into the `fleet.stop` foot. Absent or null: none. */
+  lastOrgAdminStop?: FleetLastOrgAdminStopDTO | null;
 }
 
 const TILES: {
@@ -92,7 +95,15 @@ export function stoppableCount(row: FleetOrgRowDTO): number {
 
 const strong = (chunks: ReactNode) => <strong className="font-semibold">{chunks}</strong>;
 
-export function OrgFleetCard({ orgId, orgName, role, row, window, lastStop }: OrgFleetCardProps) {
+export function OrgFleetCard({
+  orgId,
+  orgName,
+  role,
+  row,
+  window,
+  lastStop,
+  lastOrgAdminStop = null,
+}: OrgFleetCardProps) {
   const t = useTranslations('platformAdmin.tenant.fleet');
   const format = useFormatter();
   const running = stoppableCount(row) + row.byWorkload.code_graph_index;
@@ -204,6 +215,7 @@ export function OrgFleetCard({ orgId, orgName, role, row, window, lastStop }: Or
           {t.rich('facts.pending', { credits: format.number(row.pendingCredits), strong })}
         </span>
       </p>
+      {lastOrgAdminStop ? <LastOrgAdminStop stop={lastOrgAdminStop} /> : null}
       <StopContainersDialog
         orgId={orgId}
         orgName={orgName}
@@ -270,6 +282,35 @@ function LastStop({ id, lastStop }: { id: string; lastStop: FleetLastStopDTO }) 
           hosted: format.number(lastStop.hostedRunsEnded),
           instances: format.number(lastStop.agentInstancesHibernated),
         })}
+      </dd>
+    </dl>
+  );
+}
+
+/** The newest stop by an organisation owner or admin — titled as theirs, so it
+ *  cannot be read as a platform `fleet.stop` or as the operator's own. */
+function LastOrgAdminStop({ stop }: { stop: FleetLastOrgAdminStopDTO }) {
+  const t = useTranslations('platformAdmin.tenant.fleet.orgAdminStop');
+  const format = useFormatter();
+  return (
+    <dl
+      data-testid="org-fleet-last-org-admin-stop"
+      className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-sans text-xs text-(--el-text-secondary)"
+    >
+      <dt className="font-medium">
+        {stop.stoppedByName ? t('titleNamed', { name: stop.stoppedByName }) : t('title')}
+      </dt>
+      <dd className="text-(--el-text)">
+        {t('when', { time: format.relativeTime(new Date(stop.at)) })}
+        {' · '}
+        {stop.hostedRunCancelled &&
+        stop.ciContainersStopped === 0 &&
+        stop.agentInstancesHibernated === 0
+          ? t('hostedRun')
+          : t('counts', {
+              containers: format.number(stop.ciContainersStopped),
+              instances: format.number(stop.agentInstancesHibernated),
+            })}
       </dd>
     </dl>
   );

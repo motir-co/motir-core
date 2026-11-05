@@ -836,7 +836,18 @@ type RunFn = (
   submitter?: (
     signal: AbortSignal,
   ) => Promise<{ jobId: string; planId?: string; session: PlanChangeSessionDto }>,
+  opts?: RunOptions,
 ) => Promise<void>;
+
+/**
+ * How a run begins. `adopted` (bug MOTIR-10428): nothing was sent from this screen —
+ * the job is one already RUNNING on the session it opened, and the run attaches to
+ * it. The plan is on the canvas already, so it is not cleared, and no act claims
+ * this screen sent anything.
+ */
+interface RunOptions {
+  adopted?: boolean;
+}
 
 /** Whether the picker's target set names exactly the session's own targets. No set
  *  ("no opinion") matches, as it falls back to the entrance anchor everywhere else. */
@@ -1242,10 +1253,23 @@ export function usePlanChangeConversation({
   // and the whole time it is open nothing else is narrated from it: the live pane
   // and the stored narration already draw the run. Best-effort: a stream that
   // cannot be opened leaves the run in its conversation phase.
-  const unsettledReopenedJob = (() => {
-    const job = reopenedPlanJobId(state);
-    return job !== undefined && job !== (state.settledJobId ?? null) ? job : null;
-  })();
+  //
+  // ⚠️ ONLY FOR A RUN THIS SCREEN DOES NOT ADOPT (bug MOTIR-10428). A viewer who may
+  // plan adopts the job below, and the adopted stream reads `target_settled` itself;
+  // a replay beside it would be a second subscription to the same job.
+  const reopenedJob = reopenedPlanJobId(state) ?? null;
+  const adoptableJob =
+    reopenedJob !== null &&
+    !state.readOnly &&
+    state.session !== null &&
+    !sessionEnded(state.session) &&
+    !sessionFailed(state.session)
+      ? reopenedJob
+      : null;
+  const unsettledReopenedJob =
+    reopenedJob !== null && adoptableJob === null && reopenedJob !== (state.settledJobId ?? null)
+      ? reopenedJob
+      : null;
   useEffect(() => {
     if (!unsettledReopenedJob) return;
     const controller = new AbortController();
@@ -1807,6 +1831,9 @@ export function usePlanChangeConversation({
       // run did, and how. `null` when no status frame arrived at all.
       let jobStatus: string | null = null;
       let lastSeq = 0;
+      // THE RUN REPLIED TO A PLAN OF NOTHING (MOTIR-10407): its turn gives the reason and
+      // the next step, so the generic EMPTY error would contradict it.
+      let emptyRunReplied = false;
       // ⚠️ THE CONNECTION THREW (MOTIR-9186): a fetch or read rejected under a run —
       // a locked screen, a sleeping laptop. That is no word from the server, so it
       // is not a failure: the loop subscribes again and the job's own status frames
@@ -1854,6 +1881,7 @@ export function usePlanChangeConversation({
             // THE CONVERSATION PHASE IS OVER (MOTIR-8203): the planner has settled
             // what it is planning, so the hand-off becomes true. Quiet on the act
             // rail; it moves only the phase.
+            if (event === 'empty_run_reply') emptyRunReplied = true;
             if (event === 'target_settled') {
               setState((s) => (s.settledJobId === jobId ? s : { ...s, settledJobId: jobId }));
             }
@@ -1950,6 +1978,7 @@ export function usePlanChangeConversation({
       // not take the run down with it.
       let asked = false;
       let declined = false;
+      let replied = false;
       try {
         const sessionId = stateRef.current.session?.id;
         if (!sessionId) throw new Error('no session to narrate into');
@@ -1957,6 +1986,8 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
         asked = pendingQuestion(withTurn.turns) !== null;
         declined = latestTurnDeclined(withTurn.turns) || latestTurnUnsearchable(withTurn.turns);
+        // Only once the turn is on the thread: a lost recording must not lose the error too.
+        replied = emptyRunReplied;
         setState((s) => ({ ...s, session: withTurn }));
       } catch {
         /* the run still happened; the thread simply carries no narration */
@@ -2009,7 +2040,8 @@ export function usePlanChangeConversation({
           // not an error either (MOTIR-8564). A turn that STOPPED because a target
           // repository's code cannot be searched is the same outcome, drawn as a
           // banner (MOTIR-9165).
-          errorCode: asked || declined || s.stopping || canceled ? null : 'EMPTY',
+          // A run that REPLIED with why it planned nothing is the fifth (MOTIR-10407).
+          errorCode: asked || declined || replied || s.stopping || canceled ? null : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
           // bar says "stopping", which is the honest thing to say.
@@ -2056,10 +2088,14 @@ export function usePlanChangeConversation({
       submitter?: (
         signal: AbortSignal,
       ) => Promise<{ jobId: string; planId?: string; session: PlanChangeSessionDto }>,
+      opts: RunOptions = {},
     ) => {
+      const adopted = opts.adopted === true;
       const controller = new AbortController();
       abortRef.current = controller;
-      resetLiveRun();
+      // An ADOPTED run's plan has been SEEN generating already: forgetting that
+      // would cost its hand-over to the proposed review.
+      if (!adopted) resetLiveRun();
       // The previous run's job is OVER: until this run's id comes back there is
       // no job to stop, and a Stop pressed now waits for it (MOTIR-7924).
       setState((s) => ({ ...s, jobId: null }));
@@ -2107,10 +2143,15 @@ export function usePlanChangeConversation({
           // would drop a proposal the user is still looking at and the server
           // still awaits a decision on.
           review: s.decided ? null : s.review,
-          liveReview: null,
+          // An ADOPTED run keeps the plan it found being written (MOTIR-10428): it
+          // is the plan this run writes, and clearing it would blank the canvas
+          // until the next poll tick. Its act record starts EMPTY — the stream
+          // replays the run from its first frame, and nothing was sent from here.
+          ...(adopted
+            ? { liveReview: s.liveReview, progress: null, acts: [] }
+            : { liveReview: null, ...firstAct('submitted') }),
           discardedReview: null,
           decided: null,
-          ...firstAct('submitted'),
           errorCode: null,
           outOfCredits: false,
           // The send went through, so nothing holds its targets from this person.
@@ -2156,6 +2197,44 @@ export function usePlanChangeConversation({
     ],
   );
   runRef.current = run;
+
+  // ADOPT THE RUN THE SESSION OPENED ON (bug MOTIR-10428). A session opened from a
+  // Plans row, the Workbench or a reload — not from the screen that sent its turn —
+  // finds Motir still writing its plan: the poll shows the plan `generating`, and
+  // `reopenedPlanJobId` names the session's own job. Until now that screen only
+  // WATCHED it, so the running bar and its Stop were never drawn and the person
+  // could only wait. The job is adopted into the conversation through `run`, the
+  // same way an automatic resume's job is followed, so from here the run is
+  // indistinguishable from one this screen submitted: the bar and its Stop, the
+  // act record from the replayed stream, mid-run turns, and the settle into the
+  // review.
+  //
+  // Only a viewer who may plan adopts it — the stop door and every mid-run door are
+  // gated on `ai:plan`, which is what `readOnly` reflects; a read-only viewer keeps
+  // watching, and the rail draws the running line without a Stop. An ended session,
+  // or one waiting on a failed attempt, has nothing running to adopt: its own line
+  // (the end marker, Resume) is the way on. Once per job, so a run that settles or
+  // fails is never adopted twice. (`adoptableJob` is derived above, beside the
+  // replay it replaces.)
+  const adoptedJobRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!adoptableJob || adoptedJobRef.current === adoptableJob || abortRef.current) return;
+    const { session, liveReview } = stateRef.current;
+    if (!session) return;
+    adoptedJobRef.current = adoptableJob;
+    const anchor =
+      lastAnchorRef.current ??
+      (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
+    void runRef.current?.(
+      anchor,
+      async () => ({
+        jobId: adoptableJob,
+        ...(liveReview ? { planId: liveReview.id } : {}),
+        session,
+      }),
+      { adopted: true },
+    );
+  }, [adoptableJob]);
 
   /**
    * Run ONE turn through the ask door — the project thread's only entrance since

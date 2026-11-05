@@ -22,6 +22,8 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // pair (the drafted card's at-work cue, MOTIR-8416), the same way. And the
 // `--el-chart-workload-*` pair (the Workload report's Assigned / Unassigned segment
 // hues, MOTIR-8919), the same way. And the `--el-mark-wave-*` family (the Motir
+// mark's at-work flow, MOTIR-9213), the same way. And `--el-notif-agent-hibernated`
+// (the agent-hibernated-by-an-admin notification hue, MOTIR-10368), the same way.
 // mark's at-work flow, MOTIR-9213), the same way. And the `--el-notif-review-*` pair
 // (the review-path notification hues, MOTIR-10327), the same way.
 

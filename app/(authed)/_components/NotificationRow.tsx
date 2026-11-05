@@ -11,6 +11,7 @@ import {
   Check,
   GitPullRequest,
   MessageSquare,
+  Moon,
   UserCheck,
 } from 'lucide-react';
 import { agentVerdictAnchor } from '@/lib/agentReview/verdictActivity';
@@ -55,6 +56,11 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   // review rail's `needs_access` outcome uses, so one product story is told in one
   // colour. NOT danger: nothing was lost, the repository exists.
   code_access_refused: { Icon: ShieldAlert, badge: 'bg-(--el-notif-access-refused)' },
+  // MOTIR-10368 · Story MOTIR-10363 — an org owner or admin hibernated YOUR agent
+  // (design/org-admin/design-notes.md, the Fleet delta's panel 12). `moon`, the
+  // glyph the Fleet page's Hibernate control carries. It HAS an actor — the
+  // admin — so it keeps the initial avatar and is NOT in ACTORLESS_TYPES.
+  agent_hibernated_by_admin: { Icon: Moon, badge: 'bg-(--el-notif-agent-hibernated)' },
   // MOTIR-10340 — a review waits for the recipient's OWN agent. `Bot`, the glyph the review
   // markers and the To approve "review to run" row draw (`design/github/design-notes.md`
   // § 32.1, § 32.5), so the same thing looks the same wherever it is said.
@@ -81,6 +87,8 @@ function summaryKey(type: string, hasKey: boolean): string {
   // below is for a work-item row whose key is missing — a degraded payload — which
   // is a different thing from a row that is not about a work item at all.
   if (type === 'code_access_refused') return 'summary.accessRefused';
+  // Also not about a work item, so also checked before `hasKey` (MOTIR-10368).
+  if (type === 'agent_hibernated_by_admin') return 'summary.agentHibernatedByAdmin';
   // Actorless too (MOTIR-10340): its summary names no actor, so it never takes the
   // actor-shaped `generic` fallback below.
   if (type === 'review_to_run' && hasKey) return 'summary.reviewToRun';
@@ -121,7 +129,18 @@ export function NotificationRow({
   // arm-specific nouns; `issueKey` / `title` are shared across arms.
   const data = notification.data;
   const issueKey = 'issueKey' in data ? data.issueKey || null : null;
-  const excerpt = data.kind === 'mentioned' ? data.excerpt : null;
+  // The hibernated-agent row's second line names WHEN, in the reader's own
+  // clock (design/org-admin, panel 12) — the relative time sits on the right.
+  const excerpt =
+    data.kind === 'mentioned'
+      ? data.excerpt
+      : data.kind === 'agent_hibernated_by_admin'
+        ? t('excerpt.agentHibernatedByAdmin', {
+            time: data.hibernatedAt
+              ? format.dateTime(new Date(data.hibernatedAt), { timeStyle: 'short' })
+              : '',
+          })
+        : null;
   const toStatus = data.kind === 'transitioned' ? data.toStatus : '';
   // ⚠️ NO ACTOR, AND NO FALLBACK NAME. Motir tried something on the user's behalf
   // and GitHub said no, so `actorFallback` would put a FICTIONAL actor into the
@@ -130,7 +149,8 @@ export function NotificationRow({
   const actorless = ACTORLESS_TYPES.has(notification.type);
   const actorName = actorless ? '' : (notification.actor?.name ?? t('actorFallback'));
   // The destination is resolved from the TYPE, never from the presence of an
-  // issue key: this is the first row whose subject is a PROJECT.
+  // issue key: this is the first row whose subject is a PROJECT. A hibernated
+  // agent's row resolves to NONE — no route to an agent's panel or terminal.
   const href =
     data.kind === 'code_access_refused'
       ? `/settings/project/code-access?project=${encodeURIComponent(data.projectKey)}`
@@ -159,6 +179,7 @@ export function NotificationRow({
     key: issueKey ?? '',
     status: toStatus,
     project: data.kind === 'code_access_refused' ? data.projectName : '',
+    agent: data.kind === 'agent_hibernated_by_admin' ? data.agentName : '',
     s: strong,
   });
 

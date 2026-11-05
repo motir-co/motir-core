@@ -510,3 +510,224 @@ describe('preview', () => {
     expect(preview.ciRuns).toBeNull();
   });
 });
+
+describe('lastOrgAdminStop', () => {
+  async function stoppedIntent(
+    t: WorkItemFixture,
+    teardownReason: string,
+    settledAt: Date,
+  ): Promise<void> {
+    const id = await seedCiContainer(t);
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id },
+      data: { status: 'failed', teardownReason, settledAt },
+    });
+  }
+
+  /** An interval of one of the org's agents, closed for `endReason` at `endedAt`.
+   *  One running agent per org carries them all — the plan caps agents per person,
+   *  and the read counts intervals, not agents. */
+  const agentOf = new Map<string, string>();
+  async function closedInterval(
+    t: WorkItemFixture,
+    endReason: 'org_admin_stop' | 'admin_stop' | 'credits' | 'idle' | 'backstop',
+    endedAt: Date,
+  ): Promise<void> {
+    let instanceId = agentOf.get(t.workspaceId);
+    if (!instanceId) {
+      instanceId = await runningInstance(t, `agent-${seq++}`);
+      agentOf.set(t.workspaceId, instanceId);
+    }
+    seq += 1;
+    await adminDb.agentInstanceInterval.create({
+      data: {
+        workspaceId: t.workspaceId,
+        organizationId: t.workspace.organizationId,
+        agentInstanceId: instanceId,
+        runId: `run-closed-${seq}`,
+        runStartedAt: new Date(endedAt.getTime() - MIN),
+        startedAt: new Date(endedAt.getTime() - MIN),
+        endedAt,
+        endReason,
+        chargeReference: `closed-${seq}`,
+      },
+    });
+  }
+
+  const at = (minutesAgo: number) => new Date(clock.now().getTime() - minutesAgo * MIN);
+
+  beforeEach(async () => {
+    agentOf.clear();
+    currentPrincipal = await principal('support');
+  });
+
+  it('none yet: null, and the read is audited estate.read on the org', async () => {
+    const before = await adminDb.platformAuditLog.count();
+    expect(
+      await platformFleetStopService.lastOrgAdminStop(
+        currentPrincipal,
+        fx.workspace.organizationId,
+      ),
+    ).toBeNull();
+    const rows = await adminDb.platformAuditLog.findMany({ orderBy: { createdAt: 'asc' } });
+    expect(rows).toHaveLength(before + 1);
+    expect(rows.at(-1)).toMatchObject({
+      action: 'estate.read',
+      targetKind: 'organization',
+      targetId: fx.workspace.organizationId,
+    });
+  });
+
+  it('the newest moment, the rows of each kind in the 10 minutes before it, org_admin_stop only', async () => {
+    await stoppedIntent(fx, 'org_admin_stop', at(1));
+    await stoppedIntent(fx, 'org_admin_stop', at(9));
+    await stoppedIntent(fx, 'org_admin_stop', at(30)); // outside the window
+    await stoppedIntent(fx, 'admin_stop', at(1));
+    await stoppedIntent(fx, 'credits_exhausted', at(1));
+    await closedInterval(fx, 'org_admin_stop', at(2));
+    await closedInterval(fx, 'org_admin_stop', at(45)); // outside the window
+    await closedInterval(fx, 'credits', at(1));
+    await closedInterval(fx, 'admin_stop', at(1));
+    await closedInterval(fx, 'idle', at(1));
+    await closedInterval(fx, 'backstop', at(1));
+
+    const stop = await platformFleetStopService.lastOrgAdminStop(
+      currentPrincipal,
+      fx.workspace.organizationId,
+    );
+    expect(stop).toEqual({
+      at: at(1).toISOString(),
+      ciContainersStopped: 2,
+      agentInstancesHibernated: 1,
+      stoppedByName: null,
+      hostedRunCancelled: false,
+    });
+  });
+
+  it('a single Hibernate reads as a stop of one, timed by its interval', async () => {
+    await closedInterval(fx, 'org_admin_stop', at(3));
+    expect(
+      await platformFleetStopService.lastOrgAdminStop(
+        currentPrincipal,
+        fx.workspace.organizationId,
+      ),
+    ).toEqual({
+      at: at(3).toISOString(),
+      ciContainersStopped: 0,
+      agentInstancesHibernated: 1,
+      stoppedByName: null,
+      hostedRunCancelled: false,
+    });
+  });
+
+  it('org A’s answer carries nothing of org B, though B stopped later and more', async () => {
+    const elsewhere = await makeWorkItemFixture({ name: 'Elsewhere', identifier: 'ELSE' });
+    await stoppedIntent(fx, 'org_admin_stop', at(5));
+    await stoppedIntent(elsewhere, 'org_admin_stop', at(1));
+    await stoppedIntent(elsewhere, 'org_admin_stop', at(2));
+    await closedInterval(elsewhere, 'org_admin_stop', at(1));
+
+    const mine = await platformFleetStopService.lastOrgAdminStop(
+      currentPrincipal,
+      fx.workspace.organizationId,
+    );
+    expect(mine).toEqual({
+      at: at(5).toISOString(),
+      ciContainersStopped: 1,
+      agentInstancesHibernated: 0,
+      stoppedByName: null,
+      hostedRunCancelled: false,
+    });
+    expect(Object.keys(mine!).sort()).toEqual([
+      'agentInstancesHibernated',
+      'at',
+      'ciContainersStopped',
+      'hostedRunCancelled',
+      'stoppedByName',
+    ]);
+    expect(
+      await platformFleetStopService.lastOrgAdminStop(
+        currentPrincipal,
+        elsewhere.workspace.organizationId,
+      ),
+    ).toEqual({
+      at: at(1).toISOString(),
+      ciContainersStopped: 2,
+      agentInstancesHibernated: 1,
+      stoppedByName: null,
+      hostedRunCancelled: false,
+    });
+  });
+
+  async function lastStopRecord(
+    t: WorkItemFixture,
+    action: 'stop_everything' | 'cancel_hosted_run' | 'hibernate_agent',
+    stoppedAt: Date,
+    actorName: string | null = 'Ada Admin',
+  ): Promise<void> {
+    await adminDb.orgFleetLastStop.create({
+      data: {
+        organizationId: t.workspace.organizationId,
+        actorUserId: t.ownerId,
+        actorName,
+        action,
+        stoppedAt,
+      },
+    });
+  }
+
+  it('a hosted-run cancel, known only from the last-stop record, shows with the admin’s name', async () => {
+    await lastStopRecord(fx, 'cancel_hosted_run', at(2));
+    expect(
+      await platformFleetStopService.lastOrgAdminStop(
+        currentPrincipal,
+        fx.workspace.organizationId,
+      ),
+    ).toEqual({
+      at: at(2).toISOString(),
+      ciContainersStopped: 0,
+      agentInstancesHibernated: 0,
+      stoppedByName: 'Ada Admin',
+      hostedRunCancelled: true,
+    });
+  });
+
+  it('the record names the stop only when it falls in the same window', async () => {
+    await stoppedIntent(fx, 'org_admin_stop', at(1));
+    await closedInterval(fx, 'org_admin_stop', at(1));
+    await lastStopRecord(fx, 'stop_everything', at(1));
+    expect(
+      await platformFleetStopService.lastOrgAdminStop(
+        currentPrincipal,
+        fx.workspace.organizationId,
+      ),
+    ).toMatchObject({ stoppedByName: 'Ada Admin', hostedRunCancelled: false });
+
+    await adminDb.orgFleetLastStop.update({
+      where: { organizationId: fx.workspace.organizationId },
+      data: { stoppedAt: at(40) },
+    });
+    expect(
+      await platformFleetStopService.lastOrgAdminStop(
+        currentPrincipal,
+        fx.workspace.organizationId,
+      ),
+    ).toMatchObject({ at: at(1).toISOString(), stoppedByName: null, hostedRunCancelled: false });
+  });
+
+  it('refuses a non-staff principal before any read or audit row, and an unknown org', async () => {
+    await stoppedIntent(fx, 'org_admin_stop', at(1));
+    const before = await adminDb.platformAuditLog.count();
+    currentPrincipal = { ...currentPrincipal, role: null as unknown as PlatformRole };
+    await expect(
+      platformFleetStopService.lastOrgAdminStop(currentPrincipal, fx.workspace.organizationId),
+    ).rejects.toBeInstanceOf(NotPlatformStaffError);
+    expect(await adminDb.platformAuditLog.count()).toBe(before);
+
+    currentPrincipal = await principal('support');
+    await expect(
+      platformFleetStopService.lastOrgAdminStop(currentPrincipal, 'no-such-org'),
+    ).rejects.toThrow();
+    expect(await adminDb.platformAuditLog.count()).toBe(before);
+  });
+});

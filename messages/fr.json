@@ -3086,6 +3086,10 @@
             "label": "L’accès au code n’a pas pu être accordé",
             "desc": "Motir n’a pas pu vous donner accès à un dépôt qu’il a créé pour votre projet."
           },
+          "agent_hibernated_by_admin": {
+            "label": "Un administrateur a mis votre agent en veille",
+            "desc": "Un propriétaire ou un administrateur de l’organisation a arrêté l’un de vos agents depuis la page Fleet de l’organisation."
+          },
           "review_to_run": {
             "label": "Une revue attend votre agent",
             "desc": "Votre projet fait ses revues avec votre propre agent, et c'est à vous de lancer la revue d'un élément de travail avec motir review."
@@ -4118,7 +4122,200 @@
         "members": "Membres",
         "security": "Sécurité",
         "usage": "Utilisation et coûts",
+        "fleet": "Flotte",
         "billing": "Facturation et forfaits"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · Paramètres",
+        "title": "Flotte",
+        "lead": "Ce que {org} exécute en ce moment sur la flotte de Motir, et les commandes pour l’arrêter. Les demandes de capacité restent dans <link>Facturation et forfaits › Utilisation de la flotte</link>.",
+        "refresh": {
+          "button": "Actualiser",
+          "cue": "Mis à jour {time} · actualisé toutes les 30 secondes tant que cet onglet est ouvert",
+          "refreshing": "Actualisation…",
+          "failed": "Impossible d’actualiser. Les dernières données lues restent affichées."
+        },
+        "lastStop": {
+          "by": "Dernier arrêt par {name}, {when}",
+          "byYou": "Dernier arrêt par vous, {when}",
+          "bySomeone": "Dernier arrêt {when}",
+          "never": "Personne dans {org} n’a encore arrêté de travail de la flotte.",
+          "failed": "Impossible de lire qui a arrêté en dernier le travail de la flotte."
+        },
+        "when": {
+          "today": "aujourd’hui à {time}",
+          "yesterday": "hier à {time}"
+        },
+        "tiles": {
+          "agentRuns": "Exécutions d’agent en parallèle",
+          "agentRunsNote": "Facturé à la minute machine",
+          "agents": "Agents",
+          "agentsNote": "En cours et en veille",
+          "ciJobs": "Jobs CI en cours",
+          "ciWaiting": "{count, plural, =0 {Aucun en attente} other {# en attente}}",
+          "index": "Jobs d’indexation",
+          "indexNote": "Non facturé",
+          "of": " sur {figure}",
+          "notRead": "Lecture impossible",
+          "failedTitle": "Impossible de lire les chiffres de la flotte",
+          "failedBody": "Rien ici n’est affiché comme zéro. Les sections ci-dessous ne sont pas affectées."
+        },
+        "section": {
+          "retry": "Réessayer",
+          "failedBody": "Rien ici n’est affiché comme zéro. Les autres sections ne sont pas affectées."
+        },
+        "hosted": {
+          "title": "Exécutions d’agent",
+          "lead": "Les éléments de travail que l’agent de Motir construit en ce moment pour cette organisation.",
+          "count": "{count} en cours",
+          "empty": "Aucune exécution d’agent en cours.",
+          "failed": "Impossible de lire les exécutions d’agent",
+          "noCard": "Une exécution sans élément de travail",
+          "meta": "{project} · lancée par {name} · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "Un projet supprimé",
+          "openRun": "Ouvrir l’exécution",
+          "running": "En cours",
+          "cancel": "Annuler",
+          "cancelAria": "Annuler l’exécution de {key}",
+          "cancelling": "Annulation…"
+        },
+        "agents": {
+          "title": "Instances d’agent",
+          "lead": "Les agents de tous les membres, en cours ou en veille. Seule la mise en veille est proposée ici.",
+          "count": "{count} en cours",
+          "empty": "Aucun agent n’est en cours ni en veille.",
+          "failed": "Impossible de lire les instances d’agent",
+          "name": "Agent de {owner} · {profile}",
+          "unknownOwner": "Un membre",
+          "runningSince": "{project} · en cours depuis {time}",
+          "hibernatingSince": "{project} · en veille depuis {time}",
+          "inStateSince": "{project} · {state} depuis {time}",
+          "running": "En cours",
+          "hibernating": "En veille",
+          "hibernatingAt": "En veille · depuis {time}",
+          "hibernate": "Mettre en veille",
+          "hibernateAria": "Mettre en veille l’agent de {owner}",
+          "hibernatingNow": "Mise en veille…",
+          "state": {
+            "starting": "Démarrage",
+            "waking": "Réveil",
+            "updating": "Mise à jour",
+            "deleting": "Suppression",
+            "hibernated": "En veille",
+            "failed": "En échec",
+            "other": "Occupé"
+          }
+        },
+        "ci": {
+          "title": "Jobs CI",
+          "lead": "Les jobs sur les runners de Motir, en cours et en attente.",
+          "count": "{inFlight} en cours · {waiting} en attente",
+          "empty": "Aucun job CI en cours ni en attente.",
+          "failed": "Impossible de lire les jobs CI",
+          "meta": "{project} · mis en file {time} · ",
+          "noProject": "Aucun projet",
+          "viewOnGithub": "Voir sur GitHub",
+          "running": "En cours",
+          "waiting": "En attente · {cause}",
+          "cause": {
+            "planLimit": "limite du plan",
+            "poolFull": "pool plein",
+            "other": "autre"
+          }
+        },
+        "index": {
+          "title": "Jobs d’indexation",
+          "running": "<n>{count}</n> en cours",
+          "note": "L’indexation garde la recherche de code à jour. Elle n’est pas facturée et n’est pas arrêtée ici.",
+          "failed": "Impossible de lire les jobs d’indexation"
+        },
+        "motirStops": {
+          "title": "Arrêté par Motir · 7 derniers jours",
+          "lead": "Les machines que Motir a arrêtées lui-même pour cette organisation, et pourquoi.",
+          "empty": "Motir n’a rien arrêté pour cette organisation ces 7 derniers jours.",
+          "failed": "Impossible de lire les arrêts de Motir",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "Conteneur de job CI",
+            "hosted_agent": "Exécution d’agent",
+            "agent_instance": "Instance d’agent",
+            "code_graph_index": "Job d’indexation",
+            "other": "Machine"
+          },
+          "reason": {
+            "record_ended": "son job était déjà terminé",
+            "no_record": "aucun enregistrement n’a été trouvé",
+            "org_stopped": "le travail de l’organisation a été arrêté",
+            "foreign_org": "il exécutait le travail d’une autre organisation"
+          },
+          "done": "Terminé",
+          "notDone": "Non terminé"
+        },
+        "cancelRun": {
+          "title": "Annuler cette exécution ?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} a lancé cette exécution à {time}. L’annuler la clôt comme <strong>annulée</strong> et arrête sa machine maintenant. Le travail poussé par l’agent reste sur sa branche.",
+          "bodyNoName": "Cette exécution a été lancée à {time}. L’annuler la clôt comme <strong>annulée</strong> et arrête sa machine maintenant. Le travail poussé par l’agent reste sur sa branche.",
+          "keep": "La laisser tourner",
+          "confirm": "Annuler l’exécution",
+          "confirming": "Annulation…",
+          "alreadyClosed": "L’exécution de {key} était déjà terminée.",
+          "notFound": "Cette exécution n’est plus en cours.",
+          "failed": "Impossible d’annuler l’exécution de {key}. Réessayez."
+        },
+        "hibernate": {
+          "title": "Mettre en veille l’agent de {owner} ?",
+          "description": "{profile} · {project} · en cours depuis {time}",
+          "body": "La machine s’arrête et ses fichiers sont conservés. Un élément de travail qui s’y exécute est d’abord annulé.",
+          "told": "<strong>{owner} sera averti</strong> que vous l’avez mis en veille, et quand. Seule cette personne peut le réveiller, l’ouvrir ou le supprimer.",
+          "toldSelf": "Vous seul pouvez le réveiller, l’ouvrir ou le supprimer.",
+          "keep": "Le laisser tourner",
+          "confirm": "Mettre l’agent en veille",
+          "confirming": "Mise en veille…",
+          "alreadyResting": "L’agent de {owner} était déjà au repos.",
+          "inMotion": "L’agent de {owner} démarre ou change d’état, il n’a donc pas été mis en veille. Réessayez dans un instant.",
+          "notFound": "Cet agent n’est plus en cours.",
+          "failed": "Impossible de mettre en veille l’agent de {owner}. Réessayez."
+        },
+        "stopAll": {
+          "button": "Tout arrêter",
+          "title": "Arrêter tout ce que {org} exécute ?",
+          "lead": "Cela arrête maintenant le travail facturé ci-dessous.",
+          "counting": "Comptage de ce qui est en cours…",
+          "ci": "{runs, plural, one {job CI annulé} other {jobs CI annulés}} et <strong>{containers, plural, one {# conteneur} other {# conteneurs}}</strong> arrêtés",
+          "ciUnknownRuns": "Jobs CI annulés",
+          "hosted": "{count, plural, one {exécution d’agent terminée} other {exécutions d’agent terminées}}",
+          "agents": "{count, plural, one {agent en cours mis en veille} other {agents en cours mis en veille}}",
+          "index": "{count, plural, one {job d’indexation continue} other {jobs d’indexation continuent}} — l’indexation n’est pas arrêtée ici",
+          "afterwards": "Rien n’est bloqué ensuite : les membres peuvent lancer de nouveaux travaux tout de suite. Les propriétaires des agents mis en veille sont avertis.",
+          "countedAt": "Compté à {time}.",
+          "unreadableTitle": "Impossible de compter ce qui est en cours",
+          "unreadableBody": "Rien n’a été arrêté. Relisez les comptes avant de confirmer.",
+          "cancel": "Annuler",
+          "retry": "Réessayer",
+          "confirm": "Tout arrêter",
+          "confirming": "Arrêt…",
+          "failed": "Impossible d’arrêter le travail de la flotte. Une partie a peut-être été arrêtée ; actualisez pour voir ce qui tourne encore."
+        },
+        "result": {
+          "doneTitle": "Tout a été arrêté",
+          "partialTitle": "Une partie du travail ne s’est pas arrêtée",
+          "ci": "{runs, plural, one {# job CI annulé} other {# jobs CI annulés}}, {stopped} conteneurs sur {total} arrêtés",
+          "hosted": "{count, plural, one {# exécution d’agent terminée} other {# exécutions d’agent terminées}}",
+          "agents": "{count, plural, one {# agent en cours mis en veille} other {# agents en cours mis en veille}}",
+          "agentsPartial": "{done} agents en cours sur {total} mis en veille",
+          "hostedPartial": "{done} exécutions d’agent sur {total} terminées",
+          "ciFailed": "{count, plural, one {# dépôt ou conteneur CI ne s’est pas arrêté.} other {# dépôts ou conteneurs CI ne se sont pas arrêtés.}} Actualisez et relancez Tout arrêter.",
+          "hostedFailed": "{count, plural, one {# exécution d’agent ne s’est pas terminée.} other {# exécutions d’agent ne se sont pas terminées.}} Essayez Annuler sur sa ligne.",
+          "agentsFailed": "{count, plural, one {# agent ne s’est pas arrêté : l’arrêt n’a pas été confirmé. Essayez Mettre en veille sur sa ligne.} other {# agents ne se sont pas arrêtés : l’arrêt n’a pas été confirmé. Essayez Mettre en veille sur leurs lignes.}}",
+          "index": "Les jobs d’indexation ont continué.",
+          "byYou": "Arrêté par vous, {when}.",
+          "dismiss": "Fermer",
+          "dismissAria": "Fermer le résultat de l’arrêt"
+        },
+        "forbidden": "Seul un propriétaire ou un administrateur peut arrêter le travail de la flotte de cette organisation."
       }
     },
     "gitAccounts": {
@@ -5780,7 +5977,11 @@
       "genericNoKey": "<s>{actor}</s> vous a envoyé une notification",
       "accessRefused": "Le code de <s>{project}</s> est prêt, mais vous ne pouvez pas encore l’ouvrir — essayez de renvoyer l’invitation",
       "reviewToRun": "Une revue de <s>{key}</s> attend votre agent",
-      "reviewSentBack": "Un agent a réclamé des modifications sur <s>{key}</s>"
+      "reviewSentBack": "Un agent a réclamé des modifications sur <s>{key}</s>",
+      "agentHibernatedByAdmin": "<s>{actor}</s> a mis votre agent <s>{agent}</s> en veille"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Un administrateur de l’organisation l’a arrêté à {time}. Ses fichiers sont conservés ; réveillez-le depuis Agents."
     }
   },
   "orgAdmin": {
@@ -8345,6 +8546,7 @@
       },
       "progress": {
         "submitted": "Envoi de la conversation à Motir AI…",
+        "watching": "Motir AI rédige ce plan…",
         "proposed": "{count, plural, =0 {Placement du travail proposé sur le canevas…} one {# élément proposé jusqu'ici…} other {# éléments proposés jusqu'ici…}}",
         "validating": "Vérification de la proposition par rapport à votre plan…",
         "reading": "Lecture de votre message…",
@@ -12245,6 +12447,13 @@
           "unknownActor": "un ancien opérateur",
           "noReason": "Aucun motif enregistré",
           "counts": "{runs} exécutions CI · {containers} conteneurs CI · {hosted} exécutions hébergées · {instances} instances d'agent"
+        },
+        "orgAdminStop": {
+          "title": "Dernier arrêt par un administrateur de l'organisation",
+          "titleNamed": "Dernier arrêt par {name}, admin de l’organisation",
+          "when": "{time}",
+          "counts": "{containers} conteneurs CI · {instances} instances d'agent",
+          "hostedRun": "une exécution d’agent annulée"
         }
       }
     },
@@ -13310,7 +13519,8 @@
       "credits": "Arrêté : votre organisation n'a plus de crédits. Ajoutez des crédits, puis réveillez-le.",
       "idle": "Mis en veille après 30 minutes sans utilisation",
       "backstop": "Arrêté après 12 heures d'exécution. Réveillez-le pour continuer.",
-      "admin_stop": "Arrêté par l'assistance Motir. Réveillez-le pour continuer."
+      "admin_stop": "Arrêté par l'assistance Motir. Réveillez-le pour continuer.",
+      "org_admin_stop": "Arrêté par un administrateur de votre organisation. Réveillez-le pour continuer."
     },
     "menu": {
       "wake": "Réveiller",

@@ -61,6 +61,7 @@ describe('notificationPreferencesService.getMatrix', () => {
       'assigned',
       'transitioned',
       'code_access_refused',
+      'agent_hibernated_by_admin',
       // MOTIR-10340 — a review waiting for the person's own agent, appended last.
       'review_to_run',
       // MOTIR-10338 — an agent sent the person's work item back, appended after it.

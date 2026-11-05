@@ -1500,6 +1500,8 @@ model Organization {
   // The attribution reconciler's kills (MOTIR-6925) — SetNull: an audit row
   // outlives the org it named.
   fleetMachineKills           FleetMachineKill[]
+  /// The newest stop an owner or admin made from the org's Fleet page.
+  orgFleetLastStop            OrgFleetLastStop?
   // Runner-fleet provisioning intents (Story MOTIR-1916 · MOTIR-1920) — the
   // queued fleet jobs attributed to this org. Cascade for the same reason: an
   // intent is a request to spend on the org's behalf, meaningless without it.
@@ -11519,6 +11521,37 @@ model CiLiveAccrual {
   @@map("ci_live_accrual")
 }
 
+/// What an organisation owner or admin stopped from the org's Fleet page.
+enum OrgFleetStopAction {
+  stop_everything
+  cancel_hosted_run
+  hibernate_agent
+
+  @@map("org_fleet_stop_action")
+}
+
+/// THE NEWEST ORG-ADMIN STOP of one organisation's fleet work — the Fleet page's
+/// "Last stopped by {name}, {when}" line, kept across admins and browsers. One
+/// row per organisation: the newest stop replaces the last. Written best-effort
+/// by `orgFleetStopService` after a stop that did something; read into
+/// `orgFleetService.read`'s `lastStop` part. `actorName` is the display name AT
+/// THE STOP, so it survives a rename or a departure; `actorUserId` is kept for
+/// that reason only and never leaves in a DTO.
+model OrgFleetLastStop {
+  id             String             @id @default(cuid())
+  organizationId String             @unique @map("organization_id")
+  actorUserId    String             @map("actor_user_id")
+  /// Null when the name could not be read at the stop.
+  actorName      String?            @map("actor_name")
+  action         OrgFleetStopAction
+  stoppedAt      DateTime           @map("stopped_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("org_fleet_last_stop")
+}
+
 /// THE KILL RECORD (Story MOTIR-6906 · MOTIR-6925, `fleet-per-org-pool.md` §5) —
 /// one row per machine the attribution reconciler destroyed or stopped, for the
 /// platform admin's list (MOTIR-6905) and the audit of what the reconciler did.
@@ -14965,6 +14998,9 @@ enum AgentInstanceIntervalEndReason {
   /// A platform admin stopped the organisation's containers (Story MOTIR-6905,
   /// MOTIR-7323) — never recorded as `credits`.
   admin_stop
+  /// An owner or admin of the organisation stopped it from the org's Fleet page
+  /// (`agent-instances.md` §8 AMENDMENT 8) — never recorded as `admin_stop`.
+  org_admin_stop
 
   @@map("agent_instance_interval_end_reason")
 }

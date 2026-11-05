@@ -244,6 +244,54 @@ describe('a question is an OUTCOME, not an empty result', () => {
     expect(hook.result.current.state.errorCode).toBeNull();
   });
 
+  it('shows no EMPTY error when the run replied with why it planned nothing (MOTIR-10407)', async () => {
+    stream.mockImplementation(
+      async (
+        _jobId: string,
+        _signal: AbortSignal,
+        _onError: unknown,
+        _onDone: unknown,
+        onFrame: (event: string, data: unknown) => void,
+      ) => {
+        onFrame('empty_run_reply', { seq: 1 });
+      },
+    );
+    record.mockResolvedValue(
+      session([
+        turn('user', 'add payments'),
+        turn('assistant', 'Nothing was planned this time.\n\nWhat to do next: Plan B first.'),
+      ]),
+    );
+
+    const hook = renderHook(() => usePlanChangeConversation());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    await sendOne(hook);
+
+    await waitFor(() => expect(hook.result.current.state.session?.turns).toHaveLength(2));
+    expect(hook.result.current.state.errorCode).toBeNull();
+  });
+
+  it('keeps the EMPTY error when the reply could not be recorded (MOTIR-10407)', async () => {
+    stream.mockImplementation(
+      async (
+        _jobId: string,
+        _signal: AbortSignal,
+        _onError: unknown,
+        _onDone: unknown,
+        onFrame: (event: string, data: unknown) => void,
+      ) => {
+        onFrame('empty_run_reply', { seq: 1 });
+      },
+    );
+    record.mockRejectedValue(new Error('network'));
+
+    const hook = renderHook(() => usePlanChangeConversation());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    await sendOne(hook);
+
+    await waitFor(() => expect(hook.result.current.state.errorCode).toBe('EMPTY'));
+  });
+
   it('still reports EMPTY when the turn only REPORTED and proposed nothing', async () => {
     record.mockResolvedValue(
       session([turn('user', 'add payments'), turn('assistant', 'I found nothing to change.')]),
