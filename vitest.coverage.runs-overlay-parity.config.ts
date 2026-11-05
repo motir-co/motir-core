@@ -62,6 +62,9 @@ export default defineConfig({
       'tests/components/RunLogPane.test.tsx',
       'tests/components/RunCanvasPane.test.tsx',
       'tests/dispatchRunProjectHistory.test.ts',
+      // The shared read's branches, each driven by a held promise (MOTIR-10432):
+      // the gate above reaches the `live === false` arm only by timing.
+      'tests/components/useRunSetLevel.test.tsx',
     ],
     coverage: {
       provider: 'v8',
