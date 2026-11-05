@@ -317,17 +317,9 @@ export function deterministicLayout(
   const connected = nodeIds.filter((id) => touched.has(id));
   const loose = nodeIds.filter((id) => !touched.has(id));
 
-  // longest-path layering over the connected subgraph (topo order → each node sits
-  // one layer past its deepest predecessor; cycles fall back to layer 0 via topo).
-  const preds = new Map<string, string[]>(connected.map((id) => [id, []]));
-  for (const e of real) preds.get(e.to)?.push(e.from);
-  const order = topologicalOrder(connected, real);
-  const layer = new Map<string, number>();
-  for (const id of order) {
-    let L = 0;
-    for (const p of preds.get(id) ?? []) L = Math.max(L, (layer.get(p) ?? 0) + 1);
-    layer.set(id, L);
-  }
+  // longest-path layering over the connected subgraph — the one helper the
+  // roadmap's "you are here" pick reads too (bug MOTIR-10454).
+  const { order, layer } = longestPathLayers(connected, real);
   const byLayer = new Map<number, string[]>();
   for (const id of order) {
     const L = layer.get(id) ?? 0;
@@ -354,6 +346,42 @@ export function deterministicLayout(
     pos[id] = { x: ORIGIN + col * (NODE_W + GAP_X), y: bandY + row * (NODE_H + GAP_Y) };
   });
   return pos;
+}
+
+/**
+ * LONGEST-PATH DEPTH of each node over the blocker → blocked `edges` — the layer
+ * `deterministicLayout` draws a connected node in, so a node sits one column past
+ * its DEEPEST predecessor: a card reached both by a direct edge and by a longer
+ * chain takes its depth from the chain.
+ *
+ * Exported so a reader that must agree with the columns asks THIS function rather
+ * than re-deriving an order of its own (bug MOTIR-10454: the roadmap's "you are
+ * here" tag picked by key order and could land a column right of a blocker that
+ * was still in progress).
+ *
+ * `order` is the stable topological order the depths were computed in. Edges with
+ * an end outside `nodeIds`, and self-edges, are ignored. A CYCLE never throws: its
+ * members are appended in input order by `topologicalOrder`, and a predecessor
+ * not yet reached counts as depth 0. Same input → same output.
+ */
+export function longestPathLayers(
+  nodeIds: string[],
+  edges: ReadonlyArray<{ from: string; to: string }>,
+): { order: string[]; layer: Map<string, number> } {
+  const idSet = new Set(nodeIds);
+  const preds = new Map<string, string[]>(nodeIds.map((id) => [id, []]));
+  for (const e of edges) {
+    if (!idSet.has(e.from) || !idSet.has(e.to) || e.from === e.to) continue;
+    preds.get(e.to)!.push(e.from);
+  }
+  const order = topologicalOrder(nodeIds, edges);
+  const layer = new Map<string, number>();
+  for (const id of order) {
+    let L = 0;
+    for (const p of preds.get(id) ?? []) L = Math.max(L, (layer.get(p) ?? 0) + 1);
+    layer.set(id, L);
+  }
+  return { order, layer };
 }
 
 /** Stable Kahn topological order; cycles/leftovers appended in input order. */
