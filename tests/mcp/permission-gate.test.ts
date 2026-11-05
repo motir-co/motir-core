@@ -118,6 +118,9 @@ describe('permissionDenial — pure decision over the whole registry', () => {
     // and MOTIR-10069 `list_changed_files` — the hosted planner's own listing —
     // and MOTIR-10237 `get_code_history`, the commit metadata off the same host —
     // and MOTIR-10242's two dependency reads, the hosted planner's own.
+    // MOTIR-10354 adds `record_planner_finding`: a planning WRITE a check run
+    // makes, not a billable submit, on `ai:plan` so reporting a defect needs no
+    // lesson-management right.
     const noPlanning = GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan');
     const blocked = MCP_TOOL_NAMES.filter((n) => permissionDenial(n, noPlanning) !== null);
     expect([...blocked].sort()).toEqual(
@@ -135,6 +138,7 @@ describe('permissionDenial — pure decision over the whole registry', () => {
         'list_changed_files',
         'open_plan_session',
         'read_file',
+        'record_planner_finding',
         'submit_plan_session',
       ].sort(),
     );

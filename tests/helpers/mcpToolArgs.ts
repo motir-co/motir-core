@@ -238,6 +238,18 @@ export function mcpToolArgs(t: McpToolTargets): Record<McpToolName, Record<strin
       lessonId: 'les_whatever',
       occurrenceRef: 'MOTIR-1',
     },
+    // MOTIR-10354. Aimed at tenant A's project like the lesson tools: a
+    // cross-tenant caller must read the key as not-found before anything is
+    // relayed to motir-ai.
+    record_planner_finding: {
+      projectKey: t.projectKey,
+      planner: 'plan_py',
+      site: 'MOTIR-1 criterion 1',
+      prediction: 'STOPS',
+      whatHappened: 'leak?',
+      evidence: 'lib/x.ts:1',
+      outcome: 'reported',
+    },
     // MOTIR-3058. Aimed at tenant A's item like its neighbours: a
     // cross-tenant caller must read the key as not-found — never a 403 that
     // confirms it exists, and never a file landing in another workspace.

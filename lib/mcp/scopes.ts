@@ -348,6 +348,11 @@ export const TOOL_SCOPES: Record<McpToolName, TokenScope> = {
   // under the nearest write bucket rather than inventing a scope in a table this
   // story deprecates.
   reinforce_lesson: 'work_items:write',
+  // `record_planner_finding` (MOTIR-10354). A WRITE — it adds a finding row in
+  // motir-ai — filed beside the lesson writes under the nearest write bucket.
+  // The real gate is the PERMISSION (`ai:plan`, in `toolPermissions.ts`), which
+  // this legacy scope already confers, so it is not a recorded scope loss.
+  record_planner_finding: 'work_items:write',
   // A WRITE: it puts a row on the item and spends the org's storage quota.
   attach_file: 'work_items:write',
   publish_design_result: 'work_items:write',
