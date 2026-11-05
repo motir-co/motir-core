@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "Een review wacht op je agent",
             "desc": "Je project reviewt met je eigen agent, en de review van een werkitem start je zelf met motir review."
+          },
+          "review_sent_back": {
+            "label": "Een agent vroeg om wijzigingen",
+            "desc": "Een review-agent stuurde een werkitem dat aan je is toegewezen terug, met zijn bevindingen."
           }
         },
         "soon": "Binnenkort",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> heeft <s>{key}</s> bijgewerkt",
       "genericNoKey": "<s>{actor}</s> heeft je een melding gestuurd",
       "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
-      "reviewToRun": "Een review van <s>{key}</s> wacht op je agent"
+      "reviewToRun": "Een review van <s>{key}</s> wacht op je agent",
+      "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>"
     }
   },
   "orgAdmin": {
@@ -15145,6 +15150,28 @@
         "waitReply": "Motir AI wacht op je antwoord.",
         "since": "sinds {when}",
         "open": "De planningssessie openen — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> keurde de review goed bij {commits}",
+        "sentBack": "<actor>{agent}</actor> vroeg om wijzigingen bij {commits}",
+        "late": "Te laat",
+        "secondTag": "Tweede review",
+        "lateNote": "Beoordeelde {commits}, wat niet meer de huidige versie is. Het besliste niets.",
+        "second": "Een tweede review van een versie waarover al besloten is. Het besliste niets.",
+        "notified": "{name} is op de hoogte gebracht.",
+        "findings": "Bevindingen",
+        "agentHosted": "De gehoste agent van Motir",
+        "agentOwn": "Agent van {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Goedgekeurd door {name} · beoordeeld door een agent bij {commits}",
+        "skipped": "Goedgekeurd door {name} · review overgeslagen door {who}",
+        "dismissed": "Goedgekeurd door {name} · review afgewezen door {who}",
+        "none": "Goedgekeurd door {name} · niet beoordeeld door een agent",
+        "someone": "iemand",
+        "reason": "Reden: {reason}"
       }
     }
   },

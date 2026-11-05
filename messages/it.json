@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "Una revisione aspetta il tuo agente",
             "desc": "Il tuo progetto esegue le revisioni con il tuo agente, e la revisione di un elemento di lavoro la avvii tu con motir review."
+          },
+          "review_sent_back": {
+            "label": "Un agente ha chiesto modifiche",
+            "desc": "Un agente di revisione ha rimandato indietro un elemento di lavoro assegnato a te, con i suoi rilievi."
           }
         },
         "soon": "Presto",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> ha aggiornato <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> ti ha inviato una notifica",
       "accessRefused": "Il codice di <s>{project}</s> è pronto, ma non puoi ancora aprirlo: prova a inviare di nuovo l’invito",
-      "reviewToRun": "Una revisione di <s>{key}</s> aspetta il tuo agente"
+      "reviewToRun": "Una revisione di <s>{key}</s> aspetta il tuo agente",
+      "reviewSentBack": "Un agente ha chiesto modifiche a <s>{key}</s>"
     }
   },
   "orgAdmin": {
@@ -15145,6 +15150,28 @@
         "waitReply": "Motir AI attende la tua risposta.",
         "since": "da {when}",
         "open": "Apri la sessione di pianificazione — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> ha superato la revisione a {commits}",
+        "sentBack": "<actor>{agent}</actor> ha chiesto modifiche a {commits}",
+        "late": "In ritardo",
+        "secondTag": "Seconda revisione",
+        "lateNote": "Ha revisionato {commits}, che non è più la versione attuale. Non ha deciso nulla.",
+        "second": "Una seconda revisione di una versione già decisa. Non ha deciso nulla.",
+        "notified": "{name} è stato avvisato.",
+        "findings": "Rilievi",
+        "agentHosted": "L'agente ospitato di Motir",
+        "agentOwn": "L'agente di {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Approvato da {name} · revisionato da un agente a {commits}",
+        "skipped": "Approvato da {name} · revisione saltata da {who}",
+        "dismissed": "Approvato da {name} · revisione respinta da {who}",
+        "none": "Approvato da {name} · non revisionato da un agente",
+        "someone": "qualcuno",
+        "reason": "Motivo: {reason}"
       }
     }
   },

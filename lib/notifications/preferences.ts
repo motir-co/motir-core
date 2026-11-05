@@ -40,6 +40,9 @@ export const NOTIFICATION_EVENT_TYPE = {
   /** A review waits for the routed person's OWN agent (Story MOTIR-10327 · MOTIR-10340;
    *  `approval-gates.md` §12.1, §12.10). Actorless; one row per awaiting review gate. */
   reviewToRun: 'review_to_run',
+  /** An agent SENT BACK the recipient's card (Story MOTIR-10327 · MOTIR-10338;
+   *  `approval-gates.md` §12.16). Actorless; one row per send-back verdict record. */
+  reviewSentBack: 'review_sent_back',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -101,6 +104,13 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // row is the one thing that tells the routed person a review is theirs to run.
   {
     type: NOTIFICATION_EVENT_TYPE.reviewToRun,
+    settable: true,
+    defaults: { email: true, in_app: true },
+  },
+  // APPENDED, for the same reason. An agent's send-back moves the card to To fix and asks
+  // nobody to approve it, so the assignee is the one person who must hear of it.
+  {
+    type: NOTIFICATION_EVENT_TYPE.reviewSentBack,
     settable: true,
     defaults: { email: true, in_app: true },
   },

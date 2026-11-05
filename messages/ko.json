@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "리뷰가 내 에이전트를 기다리고 있어요",
             "desc": "이 프로젝트는 내 에이전트로 리뷰하며, 작업 항목의 리뷰는 motir review로 직접 실행해야 해요."
+          },
+          "review_sent_back": {
+            "label": "에이전트가 변경을 요청했습니다",
+            "desc": "리뷰 에이전트가 담당자로 지정된 작업 항목을 발견 사항과 함께 돌려보냈습니다."
           }
         },
         "soon": "곧 제공",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s>님이 <s>{key}</s>을(를) 업데이트했습니다",
       "genericNoKey": "<s>{actor}</s>님이 알림을 보냈습니다",
       "accessRefused": "<s>{project}</s>의 코드가 준비되었지만 아직 열 수 없습니다 — 초대를 다시 보내 보세요",
-      "reviewToRun": "<s>{key}</s>의 리뷰가 내 에이전트를 기다리고 있어요"
+      "reviewToRun": "<s>{key}</s>의 리뷰가 내 에이전트를 기다리고 있어요",
+      "reviewSentBack": "에이전트가 <s>{key}</s>에 변경을 요청했습니다"
     }
   },
   "orgAdmin": {
@@ -15139,6 +15144,28 @@
         "waitReply": "Motir AI가 회신을 기다리고 있습니다.",
         "since": "{when}부터",
         "open": "계획 세션 열기 — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor>이(가) {commits}에서 리뷰를 통과시켰습니다",
+        "sentBack": "<actor>{agent}</actor>이(가) {commits}에서 변경을 요청했습니다",
+        "late": "늦음",
+        "secondTag": "두 번째 리뷰",
+        "lateNote": "{commits}을(를) 리뷰했지만 더 이상 현재 버전이 아닙니다. 아무것도 결정하지 않았습니다.",
+        "second": "이미 결정된 버전에 대한 두 번째 리뷰입니다. 아무것도 결정하지 않았습니다.",
+        "notified": "{name}에게 알렸습니다.",
+        "findings": "발견 사항",
+        "agentHosted": "Motir 호스팅 에이전트",
+        "agentOwn": "{name}의 에이전트({harness})"
+      },
+      "record": {
+        "reviewed": "{name} 승인 · {commits}에서 에이전트 리뷰 완료",
+        "skipped": "{name} 승인 · {who}이(가) 리뷰를 건너뜀",
+        "dismissed": "{name} 승인 · {who}이(가) 리뷰를 기각함",
+        "none": "{name} 승인 · 에이전트 리뷰 없음",
+        "someone": "누군가",
+        "reason": "사유: {reason}"
       }
     }
   },

@@ -46,7 +46,31 @@ export type ActivityEntryPartDto =
   | { kind: 'link'; op: 'added' | 'removed'; linkKind: string; target: ActivityValueDto }
   | { kind: 'collection'; field: string; op: 'added' | 'removed'; items: string[] }
   | { kind: 'commentDeleted'; author: ActivityValueDto; replyCount: number }
+  | ActivityAgentVerdictPartDto
   | { kind: 'generic'; key: string; from: string | null; to: string | null };
+
+/**
+ * An agent's review VERDICT (Story MOTIR-10327 · MOTIR-10338; design
+ * `decision-waiting--review-path.mock.html` M12) — one per verdict record, at every
+ * version and outcome. The entry's ACTOR is who submitted it (the token's user, or the
+ * hosted run's); `hosted` says whether Motir's hosted agent or that person's own agent
+ * (`harness`, `model`) reviewed. `late` and `second` decided nothing, and say so.
+ */
+export interface ActivityAgentVerdictPartDto {
+  kind: 'agentVerdict';
+  recordId: string;
+  verdict: 'pass' | 'changes_requested';
+  outcome: 'decided' | 'recorded' | 'late' | 'second';
+  hosted: boolean;
+  harness: string;
+  model: string;
+  /** The delivery-set version reviewed — `owner/name#n@sha`, comma-joined. */
+  subjectVersion: string;
+  /** The findings as the trail kept them (capped), or null. */
+  findingsExcerpt: string | null;
+  /** The assignee a send-back notified, or null. */
+  notified: ActivityValueDto | null;
+}
 
 /** One history feed entry — a displayable revision, actor resolved. */
 export interface ActivityEntryDto {

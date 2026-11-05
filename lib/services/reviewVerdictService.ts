@@ -27,6 +27,7 @@ import {
   reviewVerdictRecordRepository,
   type ReviewVerdictRecordCreateRow,
 } from '@/lib/repositories/reviewVerdictRecordRepository';
+import { reviewVerdictRecordService } from '@/lib/services/reviewVerdictRecordService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -220,7 +221,7 @@ export const reviewVerdictService = {
     /** Store the verdict as `second` and refuse it — its own transaction. */
     const refuseSecond = async (gateId: string | null): Promise<never> => {
       await withWorkspaceContext(scope, (tx) =>
-        reviewVerdictRecordRepository.create(rowOf('second', gateId), tx),
+        reviewVerdictRecordService.record(rowOf('second', gateId), tx),
       );
       throw new ReviewVerdictSecondError(input.subjectVersion);
     };
@@ -244,25 +245,19 @@ export const reviewVerdictService = {
         );
         const reviewAtVersion = review?.subjectVersion === input.subjectVersion ? review : null;
         if (input.subjectVersion !== current) {
-          await reviewVerdictRecordRepository.create(
-            rowOf('late', reviewAtVersion?.id ?? null),
-            tx,
-          );
+          await reviewVerdictRecordService.record(rowOf('late', reviewAtVersion?.id ?? null), tx);
           return { refused: 'late', currentVersion: current };
         }
         const answered = await reviewVerdictRecordRepository.findAnswerAt(item.id, current, tx);
         if (answered || decidedAt(review, current)) {
-          await reviewVerdictRecordRepository.create(
-            rowOf('second', reviewAtVersion?.id ?? null),
-            tx,
-          );
+          await reviewVerdictRecordService.record(rowOf('second', reviewAtVersion?.id ?? null), tx);
           return { refused: 'second' };
         }
         if (review && review.state === 'awaiting' && review.subjectVersion === current) {
           return { decide: { gateId: review.id } };
         }
         // GATE OFF — the verdict is the record.
-        const recorded = await reviewVerdictRecordRepository.create(rowOf('recorded', null), tx);
+        const recorded = await reviewVerdictRecordService.record(rowOf('recorded', null), tx);
         // Motir's App bot posts it on the pull requests once this commits (MOTIR-10335).
         reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, recorded.id);
         const withdrew = verdict === 'changes_requested' ? await applySendBack(item.id, tx) : [];
@@ -314,7 +309,7 @@ export const reviewVerdictService = {
       ) {
         // The set moved, or the review was withdrawn, between the read and the decide.
         await withWorkspaceContext(scope, (tx) =>
-          reviewVerdictRecordRepository.create(rowOf('late', gateId), tx),
+          reviewVerdictRecordService.record(rowOf('late', gateId), tx),
         );
         throw new ReviewVerdictLateError(input.subjectVersion, null);
       }
@@ -324,7 +319,7 @@ export const reviewVerdictService = {
     let decided: { record: ReviewVerdictRecord; withdrew: string[] };
     try {
       decided = await withWorkspaceContext(scope, async (tx) => {
-        const record = await reviewVerdictRecordRepository.create(rowOf('decided', gateId), tx);
+        const record = await reviewVerdictRecordService.record(rowOf('decided', gateId), tx);
         reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, record.id);
         // A hosted run still reviewing this gate can no longer decide anything (§12.12).
         agentReviewStartService.cancelRunsAfterCommit(ctx.workspaceId, [gateId]);

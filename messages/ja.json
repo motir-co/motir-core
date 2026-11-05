@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "レビューがあなたのエージェントを待っています",
             "desc": "このプロジェクトはあなた自身のエージェントでレビューします。作業項目のレビューは motir review で実行してください。"
+          },
+          "review_sent_back": {
+            "label": "エージェントが変更を求めました",
+            "desc": "レビューエージェントが、あなたが担当する作業項目を指摘事項とともに差し戻しました。"
           }
         },
         "soon": "近日提供",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> さんが <s>{key}</s> を更新しました",
       "genericNoKey": "<s>{actor}</s> さんから通知が届きました",
       "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください",
-      "reviewToRun": "<s>{key}</s> のレビューがあなたのエージェントを待っています"
+      "reviewToRun": "<s>{key}</s> のレビューがあなたのエージェントを待っています",
+      "reviewSentBack": "エージェントが <s>{key}</s> に変更を求めました"
     }
   },
   "orgAdmin": {
@@ -15142,6 +15147,28 @@
         "waitReply": "Motir AI があなたの返信を待っています。",
         "since": "{when}から",
         "open": "計画セッションを開く — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> が {commits} でレビューを通過させました",
+        "sentBack": "<actor>{agent}</actor> が {commits} で変更を求めました",
+        "late": "遅延",
+        "secondTag": "2 回目のレビュー",
+        "lateNote": "{commits} をレビューしましたが、これはもう現在のバージョンではありません。何も決定していません。",
+        "second": "すでに決定済みのバージョンに対する 2 回目のレビューです。何も決定していません。",
+        "notified": "{name} に通知しました。",
+        "findings": "指摘事項",
+        "agentHosted": "Motir のホスト型エージェント",
+        "agentOwn": "{name} のエージェント（{harness}）"
+      },
+      "record": {
+        "reviewed": "{name} が承認 · {commits} でエージェントがレビュー済み",
+        "skipped": "{name} が承認 · {who} がレビューをスキップ",
+        "dismissed": "{name} が承認 · {who} がレビューを却下",
+        "none": "{name} が承認 · エージェントのレビューなし",
+        "someone": "誰か",
+        "reason": "理由: {reason}"
       }
     }
   },

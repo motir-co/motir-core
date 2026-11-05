@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "有一个评审在等你的智能体",
             "desc": "你的项目使用你自己的智能体评审，一个工作项的评审需要你用 motir review 来运行。"
+          },
+          "review_sent_back": {
+            "label": "智能体要求修改",
+            "desc": "审查智能体退回了一个分配给你的工作项，并附上了发现。"
           }
         },
         "soon": "即将推出",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
       "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
-      "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体"
+      "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体",
+      "reviewSentBack": "智能体要求修改 <s>{key}</s>"
     }
   },
   "orgAdmin": {
@@ -15136,6 +15141,28 @@
         "waitReply": "Motir AI 在等你回复。",
         "since": "自 {when}",
         "open": "打开规划会话——{sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> 在 {commits} 上通过了审查",
+        "sentBack": "<actor>{agent}</actor> 在 {commits} 上要求修改",
+        "late": "迟到",
+        "secondTag": "第二次审查",
+        "lateNote": "审查的是 {commits}，它已不是当前版本。此审查未作出任何决定。",
+        "second": "在已决定的版本上的第二次审查。此审查未作出任何决定。",
+        "notified": "已通知 {name}。",
+        "findings": "发现",
+        "agentHosted": "Motir 托管智能体",
+        "agentOwn": "{name} 的智能体（{harness}）"
+      },
+      "record": {
+        "reviewed": "{name} 已批准 · 智能体已在 {commits} 上审查",
+        "skipped": "{name} 已批准 · {who} 跳过了审查",
+        "dismissed": "{name} 已批准 · {who} 驳回了审查",
+        "none": "{name} 已批准 · 未经智能体审查",
+        "someone": "某人",
+        "reason": "理由：{reason}"
       }
     }
   },

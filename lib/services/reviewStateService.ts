@@ -2,6 +2,8 @@ import type { Prisma } from '@/generated/prisma/client';
 import {
   containerReviewCount,
   deriveReviewState,
+  reviewAnswerAt,
+  skippedByName,
   type ReviewState,
   type ReviewStateFacts,
   type ReviewStateMember,
@@ -9,7 +11,12 @@ import {
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
-import { toReviewStateDto, type ReviewStateDTO } from '@/lib/dto/reviewState';
+import { reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
+import {
+  toReviewStateDto,
+  type ApprovedReviewDTO,
+  type ReviewStateDTO,
+} from '@/lib/dto/reviewState';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
@@ -265,6 +272,79 @@ export async function readReviewStates(
 }
 
 /** The pure derivation, exported beside the read so it can be pinned without a database. */
+/** The key {@link readApprovedReviews} answers by — one card at one version. */
+export function approvedReviewKey(workItemId: string, subjectVersion: string): string {
+  return `${workItemId}\u0000${subjectVersion}`;
+}
+
+/**
+ * WHAT ANSWERED THE AGENT REVIEW AT EACH APPROVED VERSION (MOTIR-10338) — the approval
+ * record's second clause, for a whole page of approved merge gates in a FIXED number of
+ * queries (records, `agent_review` gates, dismissals, then the skipping deciders' names).
+ * Read at the version the merge was APPROVED at, never the card's current one, by the
+ * review line's own precedence (`reviewAnswerAt`). The callers hand only gates they already
+ * read under the workspace's context, so every card id here is the reader's.
+ */
+export async function readApprovedReviews(
+  approved: readonly { workItemId: string; subjectVersion: string }[],
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, ApprovedReviewDTO>> {
+  const out = new Map<string, ApprovedReviewDTO>();
+  if (approved.length === 0) return out;
+  const ids = [...new Set(approved.map((a) => a.workItemId))];
+  const [agentGates, records, dismissals] = await Promise.all([
+    reviewStateRepository.listAgentReviewGates(ids, tx),
+    reviewStateRepository.listRecords(ids, tx),
+    reviewStateRepository.listDismissals(ids, tx),
+  ]);
+  const deciderIds = [
+    ...new Set(agentGates.flatMap((g) => (g.decidedById ? [g.decidedById] : []))),
+  ];
+  const people = await reviewStateRepository.listPeople(deciderIds, tx);
+  const personById = new Map(people.map((p) => [p.id, p] as const));
+  const gatesByCard = groupBy(agentGates, (g) => g.workItemId);
+  const recordsByCard = groupBy(records, (r) => r.workItemId);
+  const dismissalsByCard = groupBy(dismissals, (d) => d.workItemId);
+
+  for (const { workItemId, subjectVersion } of approved) {
+    const answer = reviewAnswerAt(subjectVersion, {
+      agentGates: (gatesByCard.get(workItemId) ?? []).map((gate) => ({
+        ...gate,
+        decidedByName: gate.decidedById
+          ? routedToDisplayName(personById.get(gate.decidedById) ?? null)
+          : null,
+      })),
+      records: (recordsByCard.get(workItemId) ?? []).map((record) => ({
+        ...record,
+        submittedByName: record.submittedBy?.name ?? null,
+      })),
+      dismissals: (dismissalsByCard.get(workItemId) ?? []).map((dismissal) => ({
+        ...dismissal,
+        dismissedByName: dismissal.dismissedBy?.name ?? null,
+      })),
+    });
+    out.set(approvedReviewKey(workItemId, subjectVersion), approvedReviewDtoOf(answer));
+  }
+  return out;
+}
+
+function approvedReviewDtoOf(answer: ReturnType<typeof reviewAnswerAt>): ApprovedReviewDTO {
+  switch (answer.kind) {
+    case 'reviewed':
+      return { kind: 'reviewed', commits: reviewCommitsLabel(answer.pass.subjectVersion) };
+    case 'dismissed':
+      return {
+        kind: 'dismissed',
+        by: answer.dismissal.dismissedByName,
+        reason: answer.dismissal.reasonMd,
+      };
+    case 'skipped':
+      return { kind: 'skipped', by: skippedByName(answer.gate), reason: answer.gate.noteMd };
+    case 'none':
+      return { kind: 'none' };
+  }
+}
+
 export { deriveReviewState } from '@/lib/agentReview/reviewState';
 
 export const reviewStateService = {

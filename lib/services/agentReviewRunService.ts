@@ -32,7 +32,7 @@ import { approvalGateRepository } from '@/lib/repositories/approvalGateRepositor
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
-import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
+import { reviewVerdictRecordService } from '@/lib/services/reviewVerdictRecordService';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
@@ -159,7 +159,7 @@ async function recordVerdictRow(
 ): Promise<void> {
   const write = (outcome: 'decided' | 'late' | 'second') =>
     withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
-      const record = await reviewVerdictRecordRepository.create(
+      const record = await reviewVerdictRecordService.record(
         {
           workspaceId: ctx.workspaceId,
           projectId: item.projectId,

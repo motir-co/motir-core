@@ -212,3 +212,15 @@ export interface ReviewToRunRowDTO {
   /** `motir review <KEY>` — the row's one verb is Copy. */
   command: string;
 }
+
+/**
+ * WHAT ANSWERED THE AGENT REVIEW AT AN APPROVED VERSION (MOTIR-10338; design notes § 32,
+ * mock A3) — the approval record's second clause. `reviewed` names the commits the agent
+ * passed; `skipped` / `dismissed` name the person and carry their reason (drawn as the
+ * clause's tooltip); `none` is a merge approved with no agent review at that version.
+ */
+export type ApprovedReviewDTO =
+  | { kind: 'reviewed'; commits: string }
+  | { kind: 'skipped'; by: string | null; reason: string | null }
+  | { kind: 'dismissed'; by: string | null; reason: string | null }
+  | { kind: 'none' };

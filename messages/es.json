@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "Una revisión espera a tu agente",
             "desc": "Tu proyecto revisa con tu propio agente, y la revisión de un elemento de trabajo la ejecutas tú con motir review."
+          },
+          "review_sent_back": {
+            "label": "Un agente pidió cambios",
+            "desc": "Un agente de revisión devolvió un elemento de trabajo asignado a ti, con sus hallazgos."
           }
         },
         "soon": "Próximamente",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> ha actualizado <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> te ha enviado una notificación",
       "accessRefused": "El código de <s>{project}</s> está listo, pero aún no puedes abrirlo: prueba a enviar la invitación de nuevo",
-      "reviewToRun": "Una revisión de <s>{key}</s> espera a tu agente"
+      "reviewToRun": "Una revisión de <s>{key}</s> espera a tu agente",
+      "reviewSentBack": "Un agente pidió cambios en <s>{key}</s>"
     }
   },
   "orgAdmin": {
@@ -15145,6 +15150,28 @@
         "waitReply": "Motir AI está esperando tu respuesta.",
         "since": "desde {when}",
         "open": "Abrir la sesión de planificación — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> aprobó la revisión en {commits}",
+        "sentBack": "<actor>{agent}</actor> pidió cambios en {commits}",
+        "late": "Tardía",
+        "secondTag": "Segunda revisión",
+        "lateNote": "Revisó {commits}, que ya no es la versión actual. No decidió nada.",
+        "second": "Una segunda revisión de una versión ya decidida. No decidió nada.",
+        "notified": "Se notificó a {name}.",
+        "findings": "Hallazgos",
+        "agentHosted": "El agente alojado de Motir",
+        "agentOwn": "El agente de {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Aprobado por {name} · revisado por un agente en {commits}",
+        "skipped": "Aprobado por {name} · revisión omitida por {who}",
+        "dismissed": "Aprobado por {name} · revisión descartada por {who}",
+        "none": "Aprobado por {name} · sin revisión de un agente",
+        "someone": "alguien",
+        "reason": "Motivo: {reason}"
       }
     }
   },

@@ -44,6 +44,8 @@ import { decisionDocumentShown } from './DecisionDocumentSlot';
 import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy';
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
+import type { ApprovedReviewDTO } from '@/lib/dto/reviewState';
+import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
 import {
   CouldNotRunBand,
   OverrideBand,
@@ -119,6 +121,11 @@ export interface DevelopmentGateRead {
    * fields are null by construction.
    */
   earlierApproval?: EarlierApprovalDTO | null;
+  /**
+   * The agent review the APPROVED merge stood on (MOTIR-10338; design § 32.9) — the record
+   * line under band 1's meta on a Done card. Absent or null, the frame draws no line.
+   */
+  approvedReview?: ApprovedReviewDTO | null;
 }
 
 /**
@@ -1346,6 +1353,17 @@ export function DevelopmentGateFrame({
     replanDoor
   );
 
+  // THE APPROVAL-RECORD LINE (MOTIR-10338; design § 32.9) — on a Done card's approved merge,
+  // which agent review it stood on, read at the APPROVED version. Its own line of the strip.
+  const approvedReviewLine =
+    gate.state === 'approved' && read.approvedReview ? (
+      <ApprovalReviewLine
+        className="basis-full"
+        review={read.approvedReview}
+        deciderLabel={gate.decidedByLabel}
+      />
+    ) : null;
+
   // ⚠️ THE KIND LABEL FOLLOWS THE GATE, not the block (Story MOTIR-5652 · Subtask MOTIR-5667;
   // `design-result.md` AMENDMENT 6 Q1). A design card with commits holds TWO gates and the
   // DESIGN one leads: the frame is its port, with the pull requests beneath it as what
@@ -1457,7 +1475,16 @@ export function DevelopmentGateFrame({
           confirmConsequences={confirmConsequences}
           routedToLabel={read.routedToLabel}
           alert={alert ?? notice}
-          recordDetail={recordDetail}
+          recordDetail={
+            approvedReviewLine ? (
+              <>
+                {recordDetail}
+                {approvedReviewLine}
+              </>
+            ) : (
+              recordDetail
+            )
+          }
           recordBand={replanAskBand}
           recordLead={
             isAgentReview && gate.state === 'changes_requested'

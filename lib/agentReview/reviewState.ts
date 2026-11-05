@@ -278,6 +278,46 @@ function githubApprovalsOf(members: readonly ReviewStateMember[]): ReviewLine['g
   );
 }
 
+/** What answered one version's review, by the review line's precedence (§ 32.4). */
+export type ReviewAnswer =
+  | { kind: 'reviewed'; pass: ReviewPass }
+  | { kind: 'dismissed'; dismissal: ReviewStateDismissal }
+  | { kind: 'skipped'; gate: ReviewStateGate }
+  | { kind: 'none' };
+
+/**
+ * THE PRECEDENCE AT ONE VERSION — the agent PASSED; else a person DISMISSED the agent's
+ * send-back; else a person CONTINUED WITHOUT the review (the `agent_review` gate approved
+ * under a person's authority); else nothing. One version has one answering review
+ * (§12.13), so the order only settles what cannot happen together. The review line reads it
+ * at the CURRENT version; the approval record (MOTIR-10338) reads it at the APPROVED one.
+ */
+export function reviewAnswerAt(
+  version: string,
+  facts: Pick<ReviewStateFacts, 'records' | 'agentGates' | 'dismissals'>,
+  passes: readonly ReviewPass[] = agentPasses(facts),
+): ReviewAnswer {
+  const pass = passes.find((p) => p.subjectVersion === version);
+  if (pass) return { kind: 'reviewed', pass };
+  const dismissal = facts.dismissals.find((d) => d.subjectVersion === version);
+  if (dismissal) return { kind: 'dismissed', dismissal };
+  const gate = facts.agentGates.find(
+    (g) =>
+      g.subjectVersion === version &&
+      g.state === 'approved' &&
+      g.decidedUnderAuthority !== null &&
+      g.decidedUnderAuthority !== 'review_agent',
+  );
+  if (gate) return { kind: 'skipped', gate };
+  return { kind: 'none' };
+}
+
+/** The name a skipping gate's decider is shown by: their live name, else the stored label
+ *  without its `<email>`. */
+export function skippedByName(gate: ReviewStateGate): string | null {
+  return gate.decidedByName ?? (gate.decidedByLabel?.replace(/\s*<[^<>]*>\s*$/, '').trim() || null);
+}
+
 /**
  * THE DERIVATION — one card's review state from its facts.
  *
@@ -296,15 +336,11 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
 
   const awaiting = atVersion(facts.agentGates).find((gate) => gate.state === 'awaiting') ?? null;
   const passes = agentPasses(facts);
-  const pass = version === null ? null : (passes.find((p) => p.subjectVersion === version) ?? null);
+  const answer: ReviewAnswer =
+    version === null ? { kind: 'none' } : reviewAnswerAt(version, facts, passes);
+  const pass = answer.kind === 'reviewed' ? answer.pass : null;
+  // The To fix rule asks whether ANY dismissal stands at the version, whatever answered it.
   const dismissal = atVersion(facts.dismissals)[0] ?? null;
-  const skipped =
-    atVersion(facts.agentGates).find(
-      (gate) =>
-        gate.state === 'approved' &&
-        gate.decidedUnderAuthority !== null &&
-        gate.decidedUnderAuthority !== 'review_agent',
-    ) ?? null;
 
   // The To fix rule's own predicate (`reviewRefusal.ts`), so the two cannot disagree.
   const sendBackRecord =
@@ -337,26 +373,21 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
     };
     if (pass) {
       reviewLine = { ...base, value: 'reviewed_by_agent', reviewer: pass.reviewer, at: pass.at };
-    } else if (dismissal) {
+    } else if (answer.kind === 'dismissed') {
+      const d = answer.dismissal;
       reviewLine = {
         ...base,
         value: 'review_dismissed',
-        actor: dismissal.dismissedById
-          ? { id: dismissal.dismissedById, name: dismissal.dismissedByName }
-          : null,
-        reason: dismissal.reasonMd,
+        actor: d.dismissedById ? { id: d.dismissedById, name: d.dismissedByName } : null,
+        reason: d.reasonMd,
       };
-    } else if (skipped) {
+    } else if (answer.kind === 'skipped') {
+      const skipped = answer.gate;
       reviewLine = {
         ...base,
         value: 'review_skipped',
         actor: skipped.decidedById
-          ? {
-              id: skipped.decidedById,
-              name:
-                skipped.decidedByName ??
-                (skipped.decidedByLabel?.replace(/\s*<[^<>]*>\s*$/, '').trim() || null),
-            }
+          ? { id: skipped.decidedById, name: skippedByName(skipped) }
           : null,
         reason: skipped.noteMd,
       };

@@ -20,6 +20,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { AcceptanceEvidenceDTO } from '@/lib/dto/acceptanceEvidence';
 import type { DesignEvidenceDTO } from '@/lib/dto/designEvidence';
 import type { WorkItemRepairViewDto } from '@/lib/dto/workItemRepair';
+import type { ApprovedReviewDTO } from '@/lib/dto/reviewState';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { LinkedPullRequestDto, WorkItemDeliveryDto } from '@/lib/dto/github';
 import type { HowToTestDto } from '@/lib/dto/howToTest';
@@ -1052,6 +1053,13 @@ export interface ApprovalRecordDecidedRowDto {
    * state and kind, and on a GitHub-synced refusal.
    */
   refusalVerdict: ApprovalGateRefusalVerdictDTO | null;
+  /**
+   * WHAT ANSWERED THE AGENT REVIEW AT THE APPROVED VERSION (MOTIR-10338; design notes § 32,
+   * mock A3) — the record line's second clause. Set only on an APPROVED
+   * `pull_request_approval` row with a `subjectVersion`; null on every other row. Optional,
+   * so a row built before the line existed reads as none drawn.
+   */
+  review?: ApprovedReviewDTO | null;
 }
 
 /** One SECTION of the room: its rows on this page, and its total over every page. */
@@ -1317,6 +1325,8 @@ export interface ApprovalGateOverlayReadDTO {
   movedSince: StampComponent[];
   /** The approval a RE-ASKED merge gate replaced (MOTIR-5863) — `WorkItemGateRead.earlierApproval`. */
   earlierApproval: EarlierApprovalDTO | null;
+  /** The review an APPROVED merge stood on (MOTIR-10338) — `WorkItemGateRead.approvedReview`. */
+  approvedReview?: ApprovedReviewDTO | null;
   subject: ApprovalGateOverlaySubjectDTO;
 }
 

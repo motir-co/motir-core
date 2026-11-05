@@ -1,5 +1,8 @@
 import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
+import { approvedReviewKey, readApprovedReviews } from '@/lib/services/reviewStateService';
+import type { ApprovedReviewDTO } from '@/lib/dto/reviewState';
 import type {
+  ApprovalGate,
   ApprovalGateKind,
   ApprovalGateState,
   Prisma,
@@ -394,6 +397,12 @@ export interface WorkItemGateRead {
    * and draws no band.
    */
   earlierApproval: EarlierApprovalDTO | null;
+  /**
+   * WHAT ANSWERED THE AGENT REVIEW AT THE APPROVED VERSION (MOTIR-10338) — the approval
+   * record a Done card shows. Read ONLY for an APPROVED `pull_request_approval` gate, at
+   * the gate's own version; absent on every other read.
+   */
+  approvedReview?: ApprovedReviewDTO | null;
   /**
    * The SETTINGS DOOR this viewer is handed for the gate's kind (MOTIR-5513) —
    * the kind's own door when they hold `workflow:manage`, the key its destination
@@ -1095,6 +1104,13 @@ export const approvalGatesService = {
             : null,
       };
       const earlierDto = earlier ? toEarlierApprovalDto(earlier) : null;
+      // THE DONE CARD'S RECORD LINE (MOTIR-10338) — at the version the merge was approved at.
+      const approvedPair = approvedMergeVersions([{ ...row, workItemId: input.workItemId }])[0];
+      const approvedReview = approvedPair
+        ? ((await readApprovedReviews([approvedPair], tx)).get(
+            approvedReviewKey(approvedPair.workItemId, approvedPair.subjectVersion),
+          ) ?? null)
+        : null;
       // A Visitor reads every person by name only (MOTIR-6646).
       const decider = isVisitorActor(ctx)
         ? await visitorDeciderNames([row.decidedById, earlier?.decidedById ?? null], tx)
@@ -1109,6 +1125,7 @@ export const approvalGatesService = {
           earlierDto && decider && earlier
             ? { ...earlierDto, decidedByLabel: decider(earlier.decidedById) }
             : earlierDto,
+        approvedReview,
         settingsDoor: settingsDoorFor(
           isRegisteredGateKind(input.kind) ? handlerFor(input.kind).settingsDoor : undefined,
           held,
@@ -1925,7 +1942,17 @@ export const approvalGatesService = {
         : null;
 
       // ONE subject query per KIND on the page, across BOTH sections.
-      const subjects = await summarizeGateSubjects([...awaitingRows, ...decidedRows], tx);
+      const [subjects, approvedReviews] = await Promise.all([
+        summarizeGateSubjects([...awaitingRows, ...decidedRows], tx),
+        // THE RECORD LINE'S REVIEW CLAUSE (MOTIR-10338) — one batched read for the page's
+        // approved merges, each at the version it was approved at.
+        readApprovedReviews(
+          approvedMergeVersions(
+            decidedRows.map((r) => ({ ...r, workItemId: r.workItem?.id ?? null })),
+          ),
+          tx,
+        ),
+      ]);
 
       // THE ROUTED-TO NAMES, read ONCE for the page (never one read per row), keyed
       // by user id. Each row then resolves its own name and its own decide flag
@@ -1973,7 +2000,11 @@ export const approvalGatesService = {
           awaiting: { items: awaitingItems, total: awaitingTotal },
           decided: {
             items: decidedRows.map((row) => {
-              const dto = toApprovalRecordDecidedRowDto(row, subjects.get(row.id) ?? null);
+              const dto = toApprovalRecordDecidedRowDto(
+                row,
+                subjects.get(row.id) ?? null,
+                approvedReviewOf({ ...row, workItemId: row.workItem?.id ?? null }, approvedReviews),
+              );
               return decider ? { ...dto, decidedByLabel: decider(row.decidedById) } : dto;
             }),
             total: decidedTotal,
@@ -2927,3 +2958,28 @@ export const approvalGatesService = {
     };
   },
 };
+
+/** The approved merge gates of a set, as the (card, version) pairs the review clause is
+ *  read at (MOTIR-10338). A gate approved with no version names no commits to answer. */
+function approvedMergeVersions(
+  rows: readonly Pick<ApprovalGate, 'kind' | 'state' | 'workItemId' | 'subjectVersion'>[],
+): { workItemId: string; subjectVersion: string }[] {
+  return rows.flatMap((row) =>
+    row.kind === 'pull_request_approval' &&
+    row.state === 'approved' &&
+    row.workItemId &&
+    row.subjectVersion
+      ? [{ workItemId: row.workItemId, subjectVersion: row.subjectVersion }]
+      : [],
+  );
+}
+
+function approvedReviewOf(
+  row: Pick<ApprovalGate, 'kind' | 'state' | 'workItemId' | 'subjectVersion'>,
+  reviews: ReadonlyMap<string, ApprovedReviewDTO>,
+): ApprovedReviewDTO | null {
+  const [pair] = approvedMergeVersions([row]);
+  return pair
+    ? (reviews.get(approvedReviewKey(pair.workItemId, pair.subjectVersion)) ?? null)
+    : null;
+}

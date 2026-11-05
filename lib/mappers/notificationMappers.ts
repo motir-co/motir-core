@@ -48,6 +48,14 @@ function toNotificationData(raw: Notification['data']): NotificationData {
       repoRef: str(d.repoRef),
     };
   }
+  if (d.kind === 'review_sent_back') {
+    return {
+      kind: 'review_sent_back',
+      issueKey: str(d.issueKey),
+      title: str(d.title),
+      recordId: str(d.recordId),
+    };
+  }
   if (d.kind === 'review_to_run') {
     return {
       kind: 'review_to_run',

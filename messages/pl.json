@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "Recenzja czeka na twojego agenta",
             "desc": "Twój projekt recenzuje własnym agentem, a recenzję elementu roboczego uruchamiasz sam poleceniem motir review."
+          },
+          "review_sent_back": {
+            "label": "Agent poprosił o zmiany",
+            "desc": "Agent przeglądu odesłał przypisany do ciebie element roboczy wraz ze swoimi uwagami."
           }
         },
         "soon": "Wkrótce",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> aktualizuje <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> wysyła Ci powiadomienie",
       "accessRefused": "Kod projektu <s>{project}</s> jest gotowy, ale nie możesz go jeszcze otworzyć — spróbuj wysłać zaproszenie ponownie",
-      "reviewToRun": "Recenzja <s>{key}</s> czeka na twojego agenta"
+      "reviewToRun": "Recenzja <s>{key}</s> czeka na twojego agenta",
+      "reviewSentBack": "Agent poprosił o zmiany w <s>{key}</s>"
     }
   },
   "orgAdmin": {
@@ -15145,6 +15150,28 @@
         "waitReply": "Motir AI czeka na Twoją odpowiedź.",
         "since": "od {when}",
         "open": "Otwórz sesję planowania — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> zatwierdził przegląd przy {commits}",
+        "sentBack": "<actor>{agent}</actor> poprosił o zmiany przy {commits}",
+        "late": "Spóźniony",
+        "secondTag": "Drugi przegląd",
+        "lateNote": "Przejrzano {commits}, co nie jest już bieżącą wersją. Niczego nie rozstrzygnął.",
+        "second": "Drugi przegląd wersji, która jest już rozstrzygnięta. Niczego nie rozstrzygnął.",
+        "notified": "Powiadomiono: {name}.",
+        "findings": "Uwagi",
+        "agentHosted": "Hostowany agent Motir",
+        "agentOwn": "Agent użytkownika {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Zatwierdził(a) {name} · przejrzane przez agenta przy {commits}",
+        "skipped": "Zatwierdził(a) {name} · przegląd pominięty przez: {who}",
+        "dismissed": "Zatwierdził(a) {name} · przegląd odrzucony przez: {who}",
+        "none": "Zatwierdził(a) {name} · bez przeglądu agenta",
+        "someone": "ktoś",
+        "reason": "Powód: {reason}"
       }
     }
   },

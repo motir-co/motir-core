@@ -3089,6 +3089,10 @@
           "review_to_run": {
             "label": "Ein Review wartet auf deinen Agenten",
             "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review eines Arbeitselements führst du mit motir review aus."
+          },
+          "review_sent_back": {
+            "label": "Ein Agent hat Änderungen angefordert",
+            "desc": "Ein Review-Agent hat ein Ihnen zugewiesenes Arbeitselement mit seinen Befunden zurückgeschickt."
           }
         },
         "soon": "Demnächst",
@@ -5775,7 +5779,8 @@
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
       "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
-      "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten"
+      "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten",
+      "reviewSentBack": "Ein Agent hat Änderungen an <s>{key}</s> angefordert"
     }
   },
   "orgAdmin": {
@@ -15145,6 +15150,28 @@
         "waitReply": "Motir AI wartet auf Ihre Antwort.",
         "since": "seit {when}",
         "open": "Planungssitzung öffnen — {sentence}"
+      }
+    },
+    "reviewPath": {
+      "activity": {
+        "passed": "<actor>{agent}</actor> hat das Review bei {commits} bestanden",
+        "sentBack": "<actor>{agent}</actor> hat bei {commits} Änderungen angefordert",
+        "late": "Verspätet",
+        "secondTag": "Zweites Review",
+        "lateNote": "Geprüft wurde {commits}, das nicht mehr die aktuelle Version ist. Es hat nichts entschieden.",
+        "second": "Ein zweites Review einer bereits entschiedenen Version. Es hat nichts entschieden.",
+        "notified": "{name} wurde benachrichtigt.",
+        "findings": "Befunde",
+        "agentHosted": "Der gehostete Agent von Motir",
+        "agentOwn": "Agent von {name} ({harness})"
+      },
+      "record": {
+        "reviewed": "Genehmigt von {name} · vom Agenten geprüft bei {commits}",
+        "skipped": "Genehmigt von {name} · Review übersprungen von {who}",
+        "dismissed": "Genehmigt von {name} · Review verworfen von {who}",
+        "none": "Genehmigt von {name} · nicht von einem Agenten geprüft",
+        "someone": "jemand",
+        "reason": "Grund: {reason}"
       }
     }
   },

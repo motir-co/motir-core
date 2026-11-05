@@ -1720,7 +1720,14 @@ export interface WorkItemRevisionDto {
   workItemId: string;
   changedById: string;
   changedAt: string;
-  changeKind: 'created' | 'updated' | 'archived' | 'unarchived' | 'comment_deleted' | 'deleted';
+  changeKind:
+    | 'created'
+    | 'updated'
+    | 'archived'
+    | 'unarchived'
+    | 'comment_deleted'
+    | 'deleted'
+    | 'agent_verdict';
   diff: Record<string, { from: unknown; to: unknown }>;
 }
 

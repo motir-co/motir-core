@@ -43,7 +43,8 @@ export type NotificationData =
   | NotificationMentionedData
   | NotificationTransitionedData
   | NotificationCodeAccessRefusedData
-  | NotificationReviewToRunData;
+  | NotificationReviewToRunData
+  | NotificationReviewSentBackData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -97,6 +98,21 @@ export interface NotificationCodeAccessRefusedData {
 }
 
 /**
+ * An agent SENT BACK the recipient's card (Story MOTIR-10327 · MOTIR-10338) — written once
+ * per answering send-back verdict record, to the card's assignee. No actor: the agent did
+ * it, not a person.
+ */
+export interface NotificationReviewSentBackData {
+  kind: 'review_sent_back';
+  /** The card sent back — the row's deep-link target. */
+  issueKey: string;
+  /** The card's title, for the summary line. */
+  title: string;
+  /** The verdict record — the deep link lands on its activity entry and findings. */
+  recordId: string;
+}
+
+/**
  * A review waits for the routed person's OWN agent (Story MOTIR-10327 · MOTIR-10340) —
  * raised once per awaiting `agent_review` gate with the project's review source `own`. No
  * actor: nobody did this to the recipient.
@@ -126,8 +142,17 @@ export interface NotificationReviewToRunData {
  */
 export function isWorkItemNotificationData(
   data: NotificationData,
-): data is NotificationMentionedData | NotificationTransitionedData | NotificationReviewToRunData {
-  return data.kind === 'mentioned' || data.kind === 'transitioned' || data.kind === 'review_to_run';
+): data is
+  | NotificationMentionedData
+  | NotificationTransitionedData
+  | NotificationReviewToRunData
+  | NotificationReviewSentBackData {
+  return (
+    data.kind === 'mentioned' ||
+    data.kind === 'transitioned' ||
+    data.kind === 'review_to_run' ||
+    data.kind === 'review_sent_back'
+  );
 }
 
 export interface NotificationDTO {

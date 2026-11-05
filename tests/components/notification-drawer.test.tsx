@@ -191,3 +191,34 @@ describe('NotificationDrawer — the review-to-run row', () => {
     expect(row.getAttribute('href')).toBe('/items/ACME-412');
   });
 });
+
+// MOTIR-10338 — an agent sent the recipient's card back: actorless, opening the findings.
+describe('NotificationDrawer — the review-sent-back row', () => {
+  const sentBackRow = () => ({
+    id: 'n-sent-back',
+    type: 'review_sent_back',
+    category: 'direct' as const,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+    actor: null,
+    workItemId: 'wi-1',
+    data: {
+      kind: 'review_sent_back' as const,
+      issueKey: 'ACME-412',
+      title: 'Export the report',
+      recordId: 'rec-1',
+    },
+  });
+
+  it('reads the catalogue copy, names no actor, and opens the verdict’s findings', async () => {
+    renderDrawer(pageDTO({ notifications: [sentBackRow()] as never, totalCount: 1 }));
+
+    const expected = String(en.notifications.summary.reviewSentBack)
+      .replace(/<\/?s>/g, '')
+      .replace('{key}', 'ACME-412');
+    const row = await screen.findByRole('link', { name: new RegExp('ACME-412') });
+    expect(row.textContent).toContain(expected);
+    expect(row.textContent).not.toContain(en.notifications.actorFallback);
+    expect(row.getAttribute('href')).toBe('/items/ACME-412#agent-verdict-rec-1');
+  });
+});

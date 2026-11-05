@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useLocale, useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils/cn';
+import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import { shallowPush } from '@/lib/navigation/shallowUrl';
@@ -772,6 +773,10 @@ export function ApprovalRow({
     openApproval({ workItem: card, kind: row.kind });
   }
 
+  // THE APPROVAL-RECORD LINE (MOTIR-10338; mock A3) — an approved merge's record says which
+  // agent review it stood on, on a line of its own under the sentence.
+  const reviewLine = record.section === 'decided' ? (record.row.review ?? null) : null;
+
   return (
     <div
       role="row"
@@ -779,7 +784,9 @@ export function ApprovalRow({
       className={cn(
         'group relative flex flex-col gap-1 border-b border-(--el-border) px-4 py-2.5 last:border-b-0',
         'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
-        'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-4 md:pl-4',
+        reviewLine
+          ? 'md:grid md:items-center md:gap-x-4 md:gap-y-1 md:py-2 md:pr-4 md:pl-4'
+          : 'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-4 md:pl-4',
       )}
       style={{ gridTemplateColumns: gridTemplate }}
     >
@@ -936,6 +943,11 @@ export function ApprovalRow({
           )}
         </div>
       </div>
+      {reviewLine && record.section === 'decided' ? (
+        <div role="cell" className="min-w-0 pl-6 md:col-span-full md:col-start-1">
+          <ApprovalReviewLine review={reviewLine} deciderLabel={record.row.decidedByLabel} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1237,6 +1249,10 @@ function PlanApprovalRow({
 
   const keys = subject.targets.map((target) => target.key);
 
+  // THE APPROVAL-RECORD LINE (MOTIR-10338; mock A3) — an approved merge's record says which
+  // agent review it stood on, on a line of its own under the sentence.
+  const reviewLine = record.section === 'decided' ? (record.row.review ?? null) : null;
+
   return (
     <div
       role="row"
@@ -1244,7 +1260,9 @@ function PlanApprovalRow({
       className={cn(
         'group relative flex flex-col gap-1 border-b border-(--el-border) px-4 py-2.5 last:border-b-0',
         'hover:bg-(--el-surface) focus-within:ring-2 focus-within:ring-(--focus-ring-color) focus-within:outline-none focus-within:-outline-offset-2',
-        'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-4 md:pl-4',
+        reviewLine
+          ? 'md:grid md:items-center md:gap-x-4 md:gap-y-1 md:py-2 md:pr-4 md:pl-4'
+          : 'md:grid md:h-11 md:items-center md:gap-x-4 md:gap-y-0 md:py-0 md:pr-4 md:pl-4',
       )}
       style={{ gridTemplateColumns: gridTemplate }}
     >
