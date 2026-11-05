@@ -4193,3 +4193,166 @@ No tab and no workflow status is added, and no shipped card's criteria are contr
 - **A4** — the same rows at 390px.
 
 The element spec, tokens and copy keys are in **`design/github/design-notes.md` § 32.4, § 32.5 and § 32.9**; this section only indexes the surface.
+
+## 42 · FINDINGS AND CHECKLIST IN PLACE — the review opens over the Workbench, and the stored checklist rows are drawn (`approvals-row--findings-in-place.mock.html`, 2026-11-05, MOTIR-10459)
+
+**Design system (step 1).** Read `package.json` (`"@motir/design-system": "workspace:*"`) and `app/globals.css` (`@import '@motir/design-system/theme.css'`): both hold, so this project is **on Motir Design**, version 0.19.0 (`packages/design-system/package.json`). Axes from `app/layout.tsx`: `warm-editorial` · `motir` · `motir`. The package exports `@motir/design-system/mock`, so the mock is rendered with `renderMock` (`boardWidth: 'full'`). The shipped parts in it are the REAL components rendered with the real `en` and `zh` catalogues — `ApprovalRow` (with `ReviewLine` and `ReviewedBadge` inside it), `ReviewLine` at the frame size, `AgentVerdictActivityRow` and `MarkdownView` — beside the package's `Pill`, `Button`, `Spinner` and `SectionLabel`. The open dialog is the package `Modal`'s content markup at size `xl`, drawn static because a portal does not render on a board. `ApprovalsList`'s table shell and the approval overlay's exit row are copied class for class. The prose styles `MarkdownView` wears (`components/ui/markdown-editor.css`, `.motir-prose` and its tables) are inlined so the findings render as they ship.
+
+**AMENDS § 41 and `design/github/design-notes.md` § 32.3, § 32.4 and § 32.9 without editing any mock.** The base is `design/workbench/approvals-row--review-path.mock.html` (A1, the review line and its _Findings and checklist_ link) and, for the Activity entry, `design/work-items/decision-waiting--review-path.mock.html` M12. The delta mock **`design/workbench/approvals-row--findings-in-place.mock.html`** holds only what changes, English (F0–F12) then Chinese (the same panels, marked _(zh)_):
+
+| Panel   | State                                                                                                                          |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **F0**  | The door: the shipped row and review line on Waiting on you (the To approve tab), with _Findings and checklist_ focused        |
+| **F1**  | Open over the list: a pass whose record carries checklist rows (met, not met, can’t tell, each with its evidence) and findings |
+| **F2**  | The hosted review: its checklist is a table inside its findings, and it has no stored rows                                     |
+| **F3**  | Findings with no checklist; checklist rows with no findings                                                                    |
+| **F4**  | A pass with no record, only a gate: its note is the findings, and there are no rows                                            |
+| **F5**  | The earlier review, opened from _Last reviewed at an earlier commit_, marked as not the current commits                        |
+| **F6**  | Long findings: the whole text scrolls inside the view, and the head and footer stay put                                        |
+| **F7**  | Loading; could not load, with _Try again_                                                                                      |
+| **F8**  | From the Reviewed badge’s card on a row: the card’s link opens the same view                                                   |
+| **F9**  | From the review line inside the approval overlay: the view opens over the overlay, which stays open                            |
+| **F10** | The card page’s Activity: the agent-verdict entry draws the stored checklist rows                                              |
+| **F11** | A 390px list with the view open                                                                                                |
+| **F12** | Keyboard: focus on open, the tab order, and close                                                                              |
+
+**Access path.** No new door. The view is opened by the three links that already ship with the words _Findings and checklist_ or _Last reviewed at an earlier commit_: the review line on an approve-and-merge row (§ 41 A1), the Reviewed badge's hover/focus card on that row (§ 32.3), and the review line in the approve-and-merge gate frame inside the approval overlay opened from the Workbench (§ 32.4, G1). **Out of scope:** the board and `/items` badges keep going to the card page, the item page's own Development frame keeps its anchor link, and the card-page landing those links use is MOTIR-10458's.
+
+### 42.1 THE VIEW — `ReviewFindingsDialog` (product-local)
+
+The package **`Modal`, size `xl`** (`max-w-[58rem]`, `w-[90vw]`, `max-h-[90vh]`). It is the shape the Workbench already uses for reading a card without leaving the list (the quick view is the same Modal size), and Radix's dialog gives the focus trap, Escape, the scrim press and focus return. It is not a new route and not the approval overlay: the review is evidence, so nothing in it decides.
+
+- **Head** (the Modal's title block, then one meta block):
+  - the title _Findings and checklist_ (the Modal title, serif) and the subtitle _{title} · {key}_ (`--el-text-subtitle`);
+  - the verdict: `Pill severity="success"` with the shipped `ReviewedGlyph` and _Passed_, or `Pill severity="warning"` with _Asked for changes_ (an earlier review can be a send-back; a current one on Waiting on you is always a pass);
+  - for an earlier review, a `Pill tone="neutral"` with `History` and _Earlier commits_;
+  - who reviewed: _Motir's hosted agent_, or _{name}'s own agent · {harness} · {model}_, then `·` and the relative time (`<time>` with the absolute time as its title, as the badge card does);
+  - _At these commits_ and one `owner/repo#n @ sha7` per pull request in mono, `--el-text-identifier`.
+
+  All meta is `text-xs` `--el-text-secondary`.
+
+- **Body** — `Modal.Body`, the one scroll region. It is `role="region"`, labelled _The review_, and focusable (`tabIndex=0`), so the keyboard scrolls it. Sections are spaced `gap-5`, in this order:
+  1. the **earlier-review note** (42.4), when the review is an earlier one;
+  2. the **checklist** (42.2), only when the record stores rows. It comes first because it is bounded and scannable;
+  3. the **findings**: a `SectionLabel` _Findings_ (`role="heading"`, `aria-level=3`) and the whole findings through the shipped `MarkdownView`, never an excerpt. A hosted review's table renders as the prose table (F2). With no findings text the section says _The review wrote no findings._ (F3 right).
+- **Footer** — `Modal.Footer`: _Open the card_ (`--el-link`, `ArrowUpRight`) at the start goes to the card page, and _Close_ (`Button variant="secondary" size="sm"`) at the end. The Modal's corner × ships as it is.
+- **Long findings** (F6): the body scrolls and the head and footer do not. Nothing is truncated or clamped.
+- **Loading** (F7 left): the head shows only the title and subtitle. The body shows a `Spinner size="sm"` and _Loading the review…_ in a `role="status"`, with `aria-busy` on the body.
+- **Could not load** (F7 right): one `role="alert"` line on `--el-danger-surface`, with `--el-text-strong` ink and a `TriangleAlert` glyph in `--el-danger-on-surface`. Its text is **_The review could not be loaded._** _Nothing changed. Try again._ Under it sits a `Button variant="secondary" size="sm"` _Try again_, which re-reads in place. This is the shipped pattern of the Dismiss dialog's error (§ 32.6). The package's `ErrorState` is not used, because its description ink is `--el-text-muted` on a card.
+- **What it reads.** It reads the answering pass that the link's `recordRef` names, or `lastReviewedRef` for the earlier link:
+  - a **record**: verdict, harness, model, submitter, time, `subjectVersion`, `findingsMd` and `checklist`;
+  - a **gate** (F4, no record): the verdict comes from the gate state; the reviewer comes from `decidedUnderAuthority` and the run; the time is `decidedAt`; the commits are the gate's `subjectVersion`; the findings are the gate's `noteMd`. There is no checklist section.
+
+  The read is fetched when the view opens, never with the list. How it is served is MOTIR-10460's.
+
+- **Narrow** (F11): the same Modal at `w-[90vw]`. The head meta wraps, and the checklist row stacks (42.2).
+
+### 42.2 THE CHECKLIST ROW — `ReviewChecklist` / `ReviewChecklistRow` (product-local)
+
+The stored `checklist` rows of a verdict record (`ReviewChecklistRowDto`: `key`, `criterion`, `status` ∈ `met` · `not_met` · `cannot_tell`, `evidence`), drawn in the order stored. The same part is used in the view and in the Activity entry (42.5).
+
+- **Heading line**: a `SectionLabel` _Checklist_ (`role="heading"`, `aria-level=3`), then a `text-xs` `--el-text-secondary` count, for example _4 criteria · 2 met · 1 not met · 1 can’t tell_. A zero count is left out (_1 criterion · 1 not met_).
+- **The list**: `<ul>`, one `<li>` per row, `data-checklist-status`. Rows are divided by `--el-border-soft` hairlines, with `py-(--spacing-control-y-8)` row padding.
+- **The row**: a grid `6.75rem | minmax(0,1fr)`.
+  - **Status pill** (the first column). The words carry the status, and the fill and glyph shape differ too, so it is never colour alone:
+    - **met**: `Pill severity="success"` · `Check` · _Met_
+    - **not met**: `Pill severity="warning"` · `X` · _Not met_. Warning, not danger, as the gate's _changes requested_ pill is.
+    - **can’t tell**: `Pill tone="neutral"` · `CircleHelp` · _Can’t tell_
+  - **Criterion**: `text-sm` (`text-[13px]` when compact) `--el-text`.
+  - **Key**: when the rows span more than one card, the row's `key` comes before the criterion in mono `text-xs` `--el-text-identifier`. A single-card checklist omits it.
+  - **Evidence**: on the next line, `text-xs` `leading-relaxed` `--el-text-secondary`, `overflow-wrap:anywhere`. Code spans render as inline chips (`--el-code-bg` / `--el-code-text`, `--radius-control`). Evidence is not passed through the block prose renderer, which would force `text-sm` `--el-text`. A row with no evidence (allowed on not met and can’t tell) says _No evidence given._
+- **Below `sm`** the grid becomes one column, with the pill above the criterion (F11).
+
+### 42.3 OPEN AND CLOSE
+
+- **Opening.** Each of the three links keeps its real `href` to the card page and gains `aria-haspopup="dialog"`.
+  - A plain primary click opens the view in place. This is `usePeekRowClick`'s contract, the same one the row's own door and the overlay's title door use.
+  - A modified, middle or secondary click keeps its native meaning: the card opens in a new tab.
+  - The view is **not written to the address**. It is a reading aid over a list the reader is working through: Back keeps meaning _leave this page_, and the card page is the shareable address. _Open the card_ is in the footer for that.
+- **Place kept.** Nothing navigates and nothing re-renders the list. Its scroll, its rows, any row held after a decision (§ 22) and any open overlay stay as they were.
+- **From the badge card** (F8). The card's link opens the view, and the card closes as focus leaves it.
+- **From the overlay** (F9). The view stacks over the approval overlay. Escape, Close, × and the scrim press close **only the view**. A second Escape closes the overlay, as it ships.
+- **Closing.** Escape, _Close_, the corner ×, or a press on the scrim. Focus returns to the link that opened it.
+
+### 42.4 THE EARLIER REVIEW
+
+When the view is opened from _Last reviewed at an earlier commit_ (F5), it is marked three times, so it cannot be read as the current review:
+
+- the neutral _Earlier commits_ pill in the head;
+- the earlier commits themselves under _At these commits_;
+- a `role="note"` at the top of the body: `--el-tint-yellow` with `--el-text-strong` ink, `History` glyph, `--radius-control`, `--spacing-control-x/y`. Its text is **_An earlier review._** _It reviewed commits that are no longer the ones waiting for your approval. The work changed after it._
+
+The note is a tint with strong ink, the AA recipe for coloured chips, not a warning: nothing is wrong, it is just not current.
+
+### 42.5 THE ACTIVITY ENTRY — the checklist rows on the card page (amends § 32.9 / M12)
+
+The shipped `AgentVerdictActivityRow` keeps its grid, disc, sentence, time and _{name} was notified._ line. It changes in one way: **when the record stores checklist rows, its toggle reads _Findings and checklist_** (`approvalGate.reviewPath.line.findings`). Opening it shows the findings, as shipped, and then a compact `ReviewChecklist` under them.
+
+- A record with rows and no findings text still gets the toggle, and opens to the rows alone (F10, second entry).
+- A record with no rows, such as the hosted review, is unchanged: _Findings_ only (F10, third entry).
+- The `#agent-verdict-<id>` landing still opens it.
+- A late or second verdict still draws no toggle (§ 32.9).
+
+### 42.6 COPY — new keys, `en` and `zh`
+
+Under `approvalGate.reviewPath.view`. The other nine locales take the same keys when MOTIR-10460 builds them. Reused, not new: `approvalGate.reviewPath.line.findings` (the entry's toggle).
+
+| key                     | `en`                                                                                                                              | `zh`                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `view.title`            | Findings and checklist                                                                                                            | 发现和检查清单                                                                          |
+| `view.subtitle`         | {title} · {key}                                                                                                                   | {title} · {key}                                                                         |
+| `view.verdictPassed`    | Passed                                                                                                                            | 已通过                                                                                  |
+| `view.verdictSentBack`  | Asked for changes                                                                                                                 | 要求修改                                                                                |
+| `view.byHosted`         | Motir's hosted agent                                                                                                              | Motir 托管智能体                                                                        |
+| `view.byOwn`            | {name}'s own agent                                                                                                                | {name} 自己的智能体                                                                     |
+| `view.byOwnHarness`     | {name}'s own agent · {harness} · {model}                                                                                          | {name} 自己的智能体 · {harness} · {model}                                               |
+| `view.commits`          | At these commits                                                                                                                  | 审查的提交                                                                              |
+| `view.earlierTag`       | Earlier commits                                                                                                                   | 较早的提交                                                                              |
+| `view.earlierNote`      | `<b>An earlier review.</b>` It reviewed commits that are no longer the ones waiting for your approval. The work changed after it. | `<b>这是较早的一次审查。</b>`它审查的提交已不是现在等待你审批的提交。此后工作有了变更。 |
+| `view.bodyLabel`        | The review                                                                                                                        | 审查内容                                                                                |
+| `view.checklistHeading` | Checklist                                                                                                                         | 检查清单                                                                                |
+| `view.checklistTotal`   | {total, plural, one {# criterion} other {# criteria}}                                                                             | {total, plural, other {# 条标准}}                                                       |
+| `view.countMet`         | {n} met                                                                                                                           | {n} 条满足                                                                              |
+| `view.countNotMet`      | {n} not met                                                                                                                       | {n} 条未满足                                                                            |
+| `view.countCannotTell`  | {n} can’t tell                                                                                                                    | {n} 条无法判断                                                                          |
+| `view.statusMet`        | Met                                                                                                                               | 满足                                                                                    |
+| `view.statusNotMet`     | Not met                                                                                                                           | 未满足                                                                                  |
+| `view.statusCannotTell` | Can’t tell                                                                                                                        | 无法判断                                                                                |
+| `view.noEvidence`       | No evidence given.                                                                                                                | 未给出依据。                                                                            |
+| `view.findingsHeading`  | Findings                                                                                                                          | 发现                                                                                    |
+| `view.noFindings`       | The review wrote no findings.                                                                                                     | 此审查没有写下发现。                                                                    |
+| `view.loading`          | Loading the review…                                                                                                               | 正在加载审查…                                                                           |
+| `view.errorTitle`       | The review could not be loaded.                                                                                                   | 无法加载审查。                                                                          |
+| `view.errorBody`        | Nothing changed. Try again.                                                                                                       | 没有任何更改。请重试。                                                                  |
+| `view.retry`            | Try again                                                                                                                         | 重试                                                                                    |
+| `view.openCard`         | Open the card                                                                                                                     | 打开卡片                                                                                |
+| `view.close`            | Close                                                                                                                             | 关闭                                                                                    |
+
+`zh` follows the shipped catalogue's term 智能体 for _agent_. The design-notes § 32.10 table still says 代理; the catalogue is what ships.
+
+### 42.7 FOCUS ORDER
+
+1. **On open**, focus moves to the body region (_The review_), so the arrow keys, Page Up/Down and Space scroll it at once.
+2. **Tab**: body region → each link inside the findings (`MarkdownView` links and card chips) → _Open the card_ → _Close_ → the corner ×, then back to the body region.
+3. Focus is trapped while the view is open.
+4. Loading and error take the same order. The error's _Try again_ comes right after the body region.
+5. **On close**, focus returns to the opening link. A link whose row has gone in the meantime (a live update removed it) hands focus to the list's next row door, as § 26's held-row rule does.
+
+### 42.8 Token map — no new token
+
+| Element                     | Colour                                                                                           | Shape                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| view panel                  | `--el-page-bg` · `--el-border` · `--el-overlay-scrim`                                            | `--radius-modal` · `--shadow-modal` · `--spacing-card-padding` · `--spacing-md` |
+| head meta, counts, evidence | `--el-text-secondary` · `--el-text-identifier` (commits, keys) · `--el-text-subtitle` (subtitle) | —                                                                               |
+| verdict / status pills      | `Pill severity="success"` · `severity="warning"` · `tone="neutral"`                              | `--radius-badge` · `--spacing-chip-x/y`                                         |
+| checklist rows              | `--el-text` · `--el-border-soft` · `--el-code-bg` / `--el-code-text`                             | `py-(--spacing-control-y-8)` · `--radius-control`                               |
+| earlier note                | `--el-tint-yellow` · `--el-text-strong`                                                          | `--radius-control` · `--spacing-control-x/y`                                    |
+| error line                  | `--el-danger-surface` · `--el-text-strong` · `--el-danger-on-surface` (glyph)                    | `--radius-control` · `--spacing-control-x/y`                                    |
+| links                       | `--el-link` · `--focus-ring-color`                                                               | —                                                                               |
+
+No `--el-text-muted` or `--el-text-faint` carries text, no `--el-danger-text` sits off a danger fill, and nothing this section adds uses a raw hex value or a raw shape utility. The board captions are `--el-text-secondary`.
+
+### 42.9 What this asset does NOT decide
+
+- **The read.** How the view fetches a record or a gate by its reference, and the record's access rule, are MOTIR-10460's. The view draws what that read returns.
+- **The card-page links** (MOTIR-10458), the To fix row and banner, and the board and `/items` badges, which keep going to the card page.
