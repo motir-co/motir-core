@@ -15375,7 +15375,9 @@
         "notified": "{name} foi notificado.",
         "findings": "Constatações",
         "agentHosted": "O agente hospedado do Motir",
-        "agentOwn": "O agente de {name} ({harness})"
+        "agentOwn": "O agente de {name} ({harness})",
+        "dismissed": "<actor></actor> descartou a revisão do agente em {commits}",
+        "dismissedReason": "Motivo: {reason}"
       },
       "record": {
         "reviewed": "Aprovado por {name} · revisado por agente em {commits}",

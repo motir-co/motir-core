@@ -100,6 +100,9 @@ export const APPROVED_SHAPE_IGNORED_KEYS: ReadonlySet<string> = new Set([
   // a review agent's verdict on the card's delivery (Story MOTIR-10327 · MOTIR-10333) —
   // a judgement of the work, recorded on the card's trail; it changes nothing the plan approved
   'agentVerdict',
+  // a person's dismissal of that verdict (bug MOTIR-10434) — the same kind of fact: it
+  // overrules a review of the work and changes nothing the plan approved
+  'reviewDismissal',
   // identity columns only a `created` row carries
   'projectId',
   'key',

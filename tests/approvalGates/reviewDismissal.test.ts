@@ -67,6 +67,7 @@ const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 const { PermissionDeniedError } = await import('@/lib/projects/errors');
 const { reviewDismissalService } = await import('@/lib/services/reviewDismissalService');
 const { reviewDismissalRepository } = await import('@/lib/repositories/reviewDismissalRepository');
+const { activityService } = await import('@/lib/services/activityService');
 const {
   ReviewDismissalForbiddenError,
   ReviewDismissalReasonRequiredError,
@@ -491,6 +492,12 @@ const dismissalsOf = (workItemId: string) =>
 
 const dismissedEvents = () => sent.filter((e) => e.name === 'review/dismissed');
 
+const dismissedRevisionsOf = (workItemId: string) =>
+  adminDb.workItemRevision.findMany({
+    where: { workItemId, changeKind: 'review_dismissed' },
+    orderBy: { changedAt: 'asc' },
+  });
+
 const why = (version: string, reasonMd = 'The criterion is out of scope for this card.') => ({
   subjectVersion: version,
   reasonMd,
@@ -760,6 +767,74 @@ describe('dismissing a standing send-back', () => {
     expect(await dismissalsOf(item.id)).toEqual([]);
     expect(dismissedEvents()).toEqual([]);
     expect((await itemRow(item.id)).fixReason).toBe('changes_requested');
+    // And no activity entry claims a dismissal that never happened (MOTIR-10434).
+    expect(await dismissedRevisionsOf(item.id)).toEqual([]);
+  });
+});
+
+// ── The activity (bug MOTIR-10434) ────────────────────────────────────────────
+
+describe('the dismissal in the card’s activity', () => {
+  it('History and All show who dismissed, at which commits, with the reason, after the send-back', async () => {
+    const { s, item, recordId } = await sentBackGateOff('activity-off', 91);
+    const dto = await reviewDismissalService.dismiss(
+      s.project.id,
+      item.identifier,
+      why(versionOf(91), '  The finding is about code this card does not change.  '),
+      s.ctx,
+    );
+
+    const [revision, ...more] = await dismissedRevisionsOf(item.id);
+    expect(more).toEqual([]);
+    expect(revision).toMatchObject({
+      changedById: s.user.id,
+      diff: {
+        reviewDismissal: {
+          from: null,
+          to: {
+            dismissalId: dto.dismissalId,
+            dismissed: { kind: 'record', id: recordId },
+            subjectVersion: versionOf(91),
+            reasonMd: 'The finding is about code this card does not change.',
+          },
+        },
+      },
+    });
+
+    const part = {
+      kind: 'reviewDismissed',
+      dismissalId: dto.dismissalId,
+      subjectVersion: versionOf(91),
+      reasonMd: 'The finding is about code this card does not change.',
+    };
+    const history = await activityService.listHistory(item.id, { order: 'asc' }, s.ctx);
+    const kinds = history.entries.map((e) => e.changeKind);
+    // The person's dismissal sits right after the agent's send-back it overrules.
+    expect(kinds.slice(-2)).toEqual(['agent_verdict', 'review_dismissed']);
+    const dismissedEntry = history.entries.at(-1)!;
+    expect(dismissedEntry.actor).toMatchObject({ userId: s.user.id, name: 'Owner' });
+    expect(dismissedEntry.parts).toEqual([part]);
+
+    const all = await activityService.listAll(item.id, { order: 'asc' }, s.ctx);
+    const last = all.entries.at(-1);
+    expect(last?.type === 'history' ? last.entry.parts : null).toEqual([part]);
+  });
+
+  it('gate on: the entry names the decided review gate it dismissed', async () => {
+    const { s, item, review } = await sentBackGateOn('own', 'activity-on', 92);
+    await reviewDismissalService.dismiss(s.project.id, item.identifier, why(versionOf(92)), s.ctx);
+    const [revision] = await dismissedRevisionsOf(item.id);
+    expect(revision?.diff).toMatchObject({
+      reviewDismissal: { to: { dismissed: { kind: 'gate', id: review.id } } },
+    });
+  });
+
+  it('a refused dismissal writes no entry', async () => {
+    const { s, item } = await sentBackGateOff('activity-refused', 93);
+    await expect(
+      reviewDismissalService.dismiss(s.project.id, item.identifier, why(versionOf(93), ' '), s.ctx),
+    ).rejects.toBeInstanceOf(ReviewDismissalReasonRequiredError);
+    expect(await dismissedRevisionsOf(item.id)).toEqual([]);
   });
 });
 

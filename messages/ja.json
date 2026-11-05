@@ -15372,7 +15372,9 @@
         "notified": "{name} に通知しました。",
         "findings": "指摘事項",
         "agentHosted": "Motir のホスト型エージェント",
-        "agentOwn": "{name} のエージェント（{harness}）"
+        "agentOwn": "{name} のエージェント（{harness}）",
+        "dismissed": "<actor></actor> が {commits} でのエージェントのレビューを却下しました",
+        "dismissedReason": "理由：{reason}"
       },
       "record": {
         "reviewed": "{name} が承認 · {commits} でエージェントがレビュー済み",
