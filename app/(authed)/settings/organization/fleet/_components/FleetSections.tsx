@@ -36,7 +36,8 @@ export function HostedRunsSection({
 }: {
   part: OrgFleetDTO['hostedRuns'];
   onRetry: () => void;
-  onCancel: (run: OrgFleetHostedRunDTO) => void;
+  /** Absent when the viewer may not stop: the row offers no Cancel. */
+  onCancel?: (run: OrgFleetHostedRunDTO) => void;
   busy: ReadonlyMap<string, RowState>;
 }) {
   const t = useTranslations('settings.organization.fleet');
@@ -80,7 +81,8 @@ function HostedRunRow({
   t: T;
   run: OrgFleetHostedRunDTO;
   working: boolean;
-  onCancel: (run: OrgFleetHostedRunDTO) => void;
+  /** Absent when the viewer may not stop: the row offers no Cancel. */
+  onCancel?: (run: OrgFleetHostedRunDTO) => void;
 }) {
   const time = useFleetTime();
   const key = run.card?.key ?? '';
@@ -111,16 +113,18 @@ function HostedRunRow({
       }
       status={<Pill severity="info">{t('hosted.running')}</Pill>}
       action={
-        <Button
-          variant="secondary"
-          size="sm"
-          aria-label={t('hosted.cancelAria', { key: key || project })}
-          loading={working}
-          disabled={working}
-          onClick={() => onCancel(run)}
-        >
-          {working ? t('hosted.cancelling') : t('hosted.cancel')}
-        </Button>
+        onCancel ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-label={t('hosted.cancelAria', { key: key || project })}
+            loading={working}
+            disabled={working}
+            onClick={() => onCancel(run)}
+          >
+            {working ? t('hosted.cancelling') : t('hosted.cancel')}
+          </Button>
+        ) : undefined
       }
     />
   );
@@ -134,7 +138,8 @@ export function AgentInstancesSection({
 }: {
   part: OrgFleetDTO['agentInstances'];
   onRetry: () => void;
-  onHibernate: (agent: OrgFleetAgentInstanceDTO) => void;
+  /** Absent when the viewer may not stop: the row offers no Hibernate. */
+  onHibernate?: (agent: OrgFleetAgentInstanceDTO) => void;
   rowState: ReadonlyMap<string, { state: RowState; at?: string }>;
 }) {
   const t = useTranslations('settings.organization.fleet');
@@ -183,7 +188,8 @@ function AgentRow({
   t: T;
   agent: OrgFleetAgentInstanceDTO;
   local: { state: RowState; at?: string } | undefined;
-  onHibernate: (agent: OrgFleetAgentInstanceDTO) => void;
+  /** Absent when the viewer may not stop: the row offers no Hibernate. */
+  onHibernate?: (agent: OrgFleetAgentInstanceDTO) => void;
 }) {
   const time = useFleetTime();
   const owner = ownerOf(t, agent);
@@ -213,7 +219,7 @@ function AgentRow({
         )
       }
       action={
-        running ? (
+        running && onHibernate ? (
           <Button
             variant="secondary"
             size="sm"

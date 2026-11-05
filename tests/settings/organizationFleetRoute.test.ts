@@ -56,7 +56,7 @@ const { FleetClient } =
 const actions = await import('@/app/(authed)/settings/organization/fleet/actions');
 
 const SESSION = { user: { id: 'user_1' } };
-const ORG = { organization: { id: 'org_1', name: 'Acme' } };
+const ORG = { organization: { id: 'org_1', name: 'Acme' }, role: 'admin' };
 const FLEET = { tiles: { kind: 'not_read' } };
 
 afterEach(() => {
@@ -125,7 +125,12 @@ describe('the page decides existence before it renders', () => {
     read.mockResolvedValue(FLEET);
     const el = content(await OrganizationFleetPage());
     expect(el.type).toBe(FleetClient);
-    expect(el.props).toMatchObject({ orgId: 'org_1', orgName: 'Acme', initialFleet: FLEET });
+    expect(el.props).toMatchObject({
+      orgId: 'org_1',
+      orgName: 'Acme',
+      initialFleet: FLEET,
+      canStop: true,
+    });
     expect(read).toHaveBeenCalledTimes(1);
     expect(read).toHaveBeenCalledWith({ organizationId: 'org_1', actorUserId: 'user_1' });
   });

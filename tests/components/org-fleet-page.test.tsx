@@ -180,7 +180,7 @@ afterEach(() => {
   }
 });
 
-function renderPage(initial: OrgFleetDTO = fleet()) {
+function renderPage(initial: OrgFleetDTO = fleet(), canStop = true) {
   return render(
     <ToastProvider>
       <FleetClient
@@ -188,6 +188,7 @@ function renderPage(initial: OrgFleetDTO = fleet()) {
         orgName="Acme"
         initialFleet={initial}
         initialReadAt={new Date(NOW).toISOString()}
+        canStop={canStop}
       />
     </ToastProvider>,
   );
@@ -291,6 +292,20 @@ describe('the populated page (panel 2)', () => {
     expect(hosted.textContent).toContain('A run with no work item');
     expect(hosted.textContent).toContain('A deleted project · ');
     expect(hosted.textContent).not.toContain('started by');
+  });
+});
+
+describe('a viewer who may not stop', () => {
+  it('reads every section but is offered no Cancel, Hibernate or Stop everything', () => {
+    renderPage(fleet(), false);
+    expect(screen.getByTestId('fleet-hosted').textContent).toContain('PAY-12');
+    expect(
+      screen.getByTestId('fleet-agents').querySelectorAll('[data-testid="fleet-agent-row"]').length,
+    ).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /^Cancel the run of/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Hibernate / })).toBeNull();
+    expect(screen.queryByTestId('fleet-stop-all')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
   });
 });
 
@@ -917,6 +932,7 @@ describe('the stop result survives a reload (criterion 4)', () => {
             orgName="Acme"
             initialFleet={fleet()}
             initialReadAt={new Date(NOW).toISOString()}
+            canStop
           />
         </ToastProvider>
       </NextIntlClientProvider>,
@@ -952,6 +968,7 @@ describe('the stop result survives a reload (criterion 4)', () => {
           orgName="Other"
           initialFleet={fleet()}
           initialReadAt={new Date(NOW).toISOString()}
+          canStop
         />
       </ToastProvider>,
     );

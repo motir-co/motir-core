@@ -59,9 +59,19 @@ export interface FleetClientProps {
   orgName: string;
   initialFleet: OrgFleetDTO;
   initialReadAt: string;
+  /** Whether the viewer may stop this org's fleet work (owner or admin). The
+   *  server's stop service decides it again on every action; without it the
+   *  island offers no Cancel, Hibernate or Stop everything. */
+  canStop: boolean;
 }
 
-export function FleetClient({ orgId, orgName, initialFleet, initialReadAt }: FleetClientProps) {
+export function FleetClient({
+  orgId,
+  orgName,
+  initialFleet,
+  initialReadAt,
+  canStop,
+}: FleetClientProps) {
   const t = useTranslations('settings.organization.fleet');
   const router = useRouter();
   const { toast } = useToast();
@@ -256,15 +266,17 @@ export function FleetClient({ orgId, orgName, initialFleet, initialReadAt }: Fle
           >
             {t('refresh.button')}
           </Button>
-          <Button
-            variant="secondary"
-            leftIcon={<Ban aria-hidden className="h-4 w-4" />}
-            disabled={nothingRunning}
-            onClick={openStopAll}
-            data-testid="fleet-stop-all"
-          >
-            {t('stopAll.button')}
-          </Button>
+          {canStop ? (
+            <Button
+              variant="secondary"
+              leftIcon={<Ban aria-hidden className="h-4 w-4" />}
+              disabled={nothingRunning}
+              onClick={openStopAll}
+              data-testid="fleet-stop-all"
+            >
+              {t('stopAll.button')}
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -275,13 +287,13 @@ export function FleetClient({ orgId, orgName, initialFleet, initialReadAt }: Fle
       <HostedRunsSection
         part={fleet.hostedRuns}
         onRetry={() => void read()}
-        onCancel={setCancelling}
+        onCancel={canStop ? setCancelling : undefined}
         busy={hostedBusy}
       />
       <AgentInstancesSection
         part={fleet.agentInstances}
         onRetry={() => void read()}
-        onHibernate={setHibernating}
+        onHibernate={canStop ? setHibernating : undefined}
         rowState={agentState}
       />
       <CiJobsSection part={fleet.ciJobs} onRetry={() => void read()} />

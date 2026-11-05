@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { BillingForbiddenError, BillingNotAvailableError } from '@/lib/billing/errors';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
+import { orgCan } from '@/lib/organizations/capabilities';
 import { orgFleetService } from '@/lib/services/orgFleetService';
 import { resolveActiveOrganizationForPane } from '@/lib/workspaces/tierDisclosure.server';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -81,6 +82,7 @@ export default async function OrganizationFleetPage() {
       orgName={org.name}
       initialFleet={fleet}
       initialReadAt={new Date().toISOString()}
+      canStop={orgCan(current.role, 'manageBilling')}
     />
   );
 }
