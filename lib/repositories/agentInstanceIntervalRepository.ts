@@ -173,4 +173,33 @@ export const agentInstanceIntervalRepository = {
       distinct: ['agentInstanceId'],
     });
   },
+
+  /**
+   * When ONE organisation's newest interval closed for `endReason`, or null —
+   * the platform Fleet card's "last stopped by an organisation admin" moment.
+   */
+  async latestEndedForOrganization(
+    organizationId: string,
+    endReason: AgentInstanceIntervalEndReason,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const agg = await tx.agentInstanceInterval.aggregate({
+      where: { organizationId, endReason, endedAt: { not: null } },
+      _max: { endedAt: true },
+    });
+    return agg._max.endedAt ?? null;
+  },
+
+  /** How many of ONE organisation's intervals closed for `endReason` in `[from, to]`. */
+  async countEndedForOrganizationBetween(
+    organizationId: string,
+    endReason: AgentInstanceIntervalEndReason,
+    from: Date,
+    to: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.agentInstanceInterval.count({
+      where: { organizationId, endReason, endedAt: { gte: from, lte: to } },
+    });
+  },
 };

@@ -160,3 +160,60 @@ describe('NotificationDrawer — the access-refused row', () => {
     expect(row.textContent).not.toContain(fallback);
   });
 });
+
+// ── THE HIBERNATED-AGENT ROW (MOTIR-10368 · Story MOTIR-10363) ───────────────
+//
+// design/org-admin/design-notes.md, the Fleet delta's panel 12: the admin's
+// initial avatar with a `Moon` badge, "{actor} hibernated your agent {agent}", the
+// time in the excerpt, and NO destination — no route to an agent's panel or
+// terminal.
+
+describe('NotificationDrawer — the hibernated-agent row', () => {
+  const hibernatedRow = (actor: { id: string; name: string; image: null } | null) => ({
+    id: 'n-hibernated',
+    type: 'agent_hibernated_by_admin',
+    category: 'direct' as const,
+    readAt: null,
+    createdAt: new Date().toISOString(),
+    actor,
+    workItemId: null,
+    data: {
+      kind: 'agent_hibernated_by_admin' as const,
+      agentName: 'night-owl',
+      hibernatedAt: '2026-11-05T14:33:00.000Z',
+    },
+  });
+  const ada = { id: 'u-ada', name: 'Ada Admin', image: null };
+
+  it('names the admin and the agent, in the catalog’s words, with the time below', async () => {
+    renderDrawer(pageDTO({ notifications: [hibernatedRow(ada)] as never, totalCount: 1 }));
+
+    const expected = String(en.notifications.summary.agentHibernatedByAdmin)
+      .replace(/<\/?s>/g, '')
+      .replace('{actor}', 'Ada Admin')
+      .replace('{agent}', 'night-owl');
+    const row = await screen.findByRole('button', { name: new RegExp('night-owl') });
+    expect(row.textContent).toContain(expected);
+    const [before, after] = String(en.notifications.excerpt.agentHibernatedByAdmin).split('{time}');
+    expect(row.textContent).toContain(before);
+    expect(row.textContent).toContain(after);
+    // It HAS an actor: the initial avatar is drawn, as for a work-item row.
+    expect(row.textContent).toContain('A');
+  });
+
+  it('deep-links nowhere — a button, never a link to an agent', async () => {
+    renderDrawer(pageDTO({ notifications: [hibernatedRow(ada)] as never, totalCount: 1 }));
+
+    await screen.findByRole('button', { name: new RegExp('night-owl') });
+    for (const link of screen.queryAllByRole('link')) {
+      expect(link.getAttribute('href') ?? '').not.toMatch(/agent|terminal/i);
+    }
+  });
+
+  it('a deleted admin reads as the shipped actor fallback', async () => {
+    renderDrawer(pageDTO({ notifications: [hibernatedRow(null)] as never, totalCount: 1 }));
+
+    const row = await screen.findByRole('button', { name: new RegExp('night-owl') });
+    expect(row.textContent).toContain(`${en.notifications.actorFallback} hibernated your agent`);
+  });
+});

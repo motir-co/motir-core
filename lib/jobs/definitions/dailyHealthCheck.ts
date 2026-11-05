@@ -7,7 +7,11 @@ import type { MonitorConfigVerdict } from '@/lib/monitors';
 import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe';
 import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
 import type { FleetImageCoverageVerdictDTO } from '@/lib/dto/fleetImageCoverage';
-import type { RunnerImageFreshnessVerdictDTO } from '@/lib/dto/runnerImageFreshness';
+import type {
+  RunnerAmiFreshnessDTO,
+  RunnerImageFreshnessVerdictDTO,
+  RunnerImageUnreleasedChangeDTO,
+} from '@/lib/dto/runnerImageFreshness';
 import {
   PROBE_INDETERMINATE_STREAK_CODE,
   type IndeterminateStreakFailureData,
@@ -606,24 +610,46 @@ export class FleetImageCoverageGapError extends Error {
  * unreleased commit and the release step, because it is the whole DLQ row an
  * operator reads. Releasing and pinning stay a person's step.
  */
+/** One stale pin's changes, as the error sentences list them. */
+function describeUnreleased(unreleased: readonly RunnerImageUnreleasedChangeDTO[], what: string) {
+  return unreleased
+    .map(
+      (c) =>
+        `${c.commit.slice(0, 12)} (${c.committedAt}, "${c.subject}", changes ${c.paths.join(', ')}` +
+        `${c.relation === 'diverged' ? `; the ${what} was built from a branch without it` : ''})`,
+    )
+    .join('; ');
+}
+
+/** The sentence a stale runner AMI is reported in (MOTIR-10395). */
+function amiStaleSentence(ami: Extract<RunnerAmiFreshnessDTO, { state: 'stale' }>): string {
+  const { build, unreleased } = ami;
+  const newest = unreleased[0]!.commit;
+  return (
+    `The pinned runner AMI ${build.amiId}${build.name ? ` (${build.name})` : ''} was built from ` +
+    `${build.commit.slice(0, 12)} (read from its ${build.source}, in fleet account ${build.account}), ` +
+    `which does not contain ${unreleased.length} merged change(s) to the AMI: ` +
+    `${describeUnreleased(unreleased, 'AMI')}. The AWS fleet still boots the old AMI. Build it — ` +
+    `\`git tag ci-runner-ami-v<next> ${newest} && git push origin ci-runner-ami-v<next>\` ` +
+    `(.github/workflows/release-ci-runner-ami.yml) — then set poolAccount.images.ci_runner in ` +
+    `motir-infra and MOTIR_AWS_RUNNER_AMI_ID to the AMI id the build's job summary prints.`
+  );
+}
+
 export class RunnerImageStaleError extends Error {
   constructor(readonly verdict: Extract<RunnerImageFreshnessVerdictDTO, { verdict: 'stale' }>) {
     const { build, unreleased } = verdict;
-    const changes = unreleased
-      .map(
-        (c) =>
-          `${c.commit.slice(0, 12)} (${c.committedAt}, "${c.subject}", changes ${c.paths.join(', ')}` +
-          `${c.relation === 'diverged' ? '; the image was built from a branch without it' : ''})`,
-      )
-      .join('; ');
     const newest = unreleased[0]!.commit;
     super(
       `The pinned runner image ${build.image} was built from ${build.commit.slice(0, 12)} ` +
         `(read from its ${build.source === 'label' ? 'org.opencontainers.image.revision label' : 'sha- registry tag'}), ` +
-        `which does not contain ${unreleased.length} merged change(s) to the image: ${changes}. ` +
+        `which does not contain ${unreleased.length} merged change(s) to the image: ` +
+        `${describeUnreleased(unreleased, 'image')}. ` +
         `The fleet still boots the old image. Release it — \`git tag runner-v<next> ${newest} && ` +
         `git push origin runner-v<next>\` (.github/workflows/release-runner-image.yml) — then set ` +
-        `MOTIR_RUNNER_IMAGE to the digest the release's job summary prints.`,
+        `MOTIR_RUNNER_IMAGE to the digest the release's job summary prints.` +
+        // Both pins can be stale at once; one run names both (MOTIR-10395).
+        (verdict.ami.state === 'stale' ? ` ${amiStaleSentence(verdict.ami)}` : ''),
     );
     this.name = 'RunnerImageStaleError';
   }
@@ -730,29 +756,70 @@ export const DAILY_HEALTH_CHECK_PROBES: {
           },
   },
   runnerImageFreshness: {
-    step: 'runner-image-freshness',
+    step: 'runner-image-freshness-v2',
     describeIndeterminate: (v) => ({ phase: v.phase, detail: `${v.image}: ${v.detail}` }),
   },
 };
 
+/**
+ * Judgements NESTED inside one probe's verdict that carry an `indeterminate`
+ * state of their own — one step that judges two things. Each is read as its own
+ * probe, keyed by its path on the result, so a read that keeps failing on the
+ * nested judgement alone is not hidden behind a definite outer verdict. The
+ * runner AMI (MOTIR-10395) is judged inside `runner-image-freshness-v2`, and its
+ * read can stay `indeterminate` while the image itself is `current`.
+ */
+export const DAILY_HEALTH_CHECK_NESTED_PROBES: ReadonlyArray<{
+  probe: string;
+  step: string;
+  read: (
+    verdicts: Pick<DailyHealthCheckResult, DailyHealthCheckProbeKey>,
+  ) => { phase: string; detail: string } | null;
+}> = [
+  {
+    probe: 'runnerImageFreshness.ami',
+    step: 'runner-image-freshness-v2',
+    read: ({ runnerImageFreshness: { ami } }) =>
+      ami.state === 'indeterminate'
+        ? { phase: `ami ${ami.phase}`, detail: `${ami.amiId}: ${ami.detail}` }
+        : null,
+  },
+];
+
 /** This run's verdicts, as the streak reads them: one reading per probe that has
- *  an `indeterminate` arm. Exported for the test. */
+ *  an `indeterminate` arm, and one per nested judgement. Exported for the test. */
 export function indeterminateReadings(
   verdicts: Pick<DailyHealthCheckResult, DailyHealthCheckProbeKey>,
 ): IndeterminateProbeReading[] {
-  return (Object.keys(DAILY_HEALTH_CHECK_PROBES) as DailyHealthCheckProbeKey[]).flatMap((key) => {
-    const { step, describeIndeterminate } = DAILY_HEALTH_CHECK_PROBES[key];
-    if (!describeIndeterminate) return [];
-    const verdict = verdicts[key] as { verdict?: unknown };
-    const describe = describeIndeterminate as (v: unknown) => { phase: string; detail: string };
-    return [
-      {
-        probe: key,
-        step,
-        indeterminate: verdict.verdict === 'indeterminate' ? describe(verdict) : null,
-      },
-    ];
-  });
+  const nested = DAILY_HEALTH_CHECK_NESTED_PROBES.map(({ probe, step, read }) => ({
+    probe,
+    step,
+    indeterminate: read(verdicts),
+  }));
+  const top = (Object.keys(DAILY_HEALTH_CHECK_PROBES) as DailyHealthCheckProbeKey[]).flatMap(
+    (key) => {
+      const { step, describeIndeterminate } = DAILY_HEALTH_CHECK_PROBES[key];
+      if (!describeIndeterminate) return [];
+      const verdict = verdicts[key] as { verdict?: unknown };
+      const describe = describeIndeterminate as (v: unknown) => { phase: string; detail: string };
+      return [
+        {
+          probe: key,
+          step,
+          indeterminate: verdict.verdict === 'indeterminate' ? describe(verdict) : null,
+        },
+      ];
+    },
+  );
+  return [...top, ...nested];
+}
+
+/** The runner AMI is stale while the image is not (MOTIR-10395). */
+export class RunnerAmiStaleError extends Error {
+  constructor(readonly ami: Extract<RunnerAmiFreshnessDTO, { state: 'stale' }>) {
+    super(amiStaleSentence(ami));
+    this.name = 'RunnerAmiStaleError';
+  }
 }
 
 export const dailyHealthCheck = defineJob(
@@ -801,7 +868,8 @@ export const dailyHealthCheck = defineJob(
     const fleetImageCoverage = await ctx.step.run('fleet-image-coverage', () =>
       services.fleetImageCoverage.check(),
     );
-    const runnerImageFreshness = await ctx.step.run('runner-image-freshness', () =>
+    // `-v2`: MOTIR-10395 replaced the AMI's `not_read` arm with a judged verdict.
+    const runnerImageFreshness = await ctx.step.run('runner-image-freshness-v2', () =>
       services.runnerImageFreshness.check(),
     );
     const verdicts = {
@@ -930,6 +998,10 @@ export const dailyHealthCheck = defineJob(
     // no runner image.
     if (runnerImageFreshness.verdict === 'stale') {
       throw new RunnerImageStaleError(runnerImageFreshness);
+    }
+    // The AMI arm (MOTIR-10395) is loud on the same terms: `stale` only.
+    if (runnerImageFreshness.ami.state === 'stale') {
+      throw new RunnerAmiStaleError(runnerImageFreshness.ami);
     }
 
     // The STREAK, reported last: every definite fault above is the more

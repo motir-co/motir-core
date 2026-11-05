@@ -61,13 +61,20 @@ export interface IndeterminateProbeReading {
   indeterminate: { phase: string; detail: string } | null;
 }
 
-/** True when a stored result field is an `indeterminate` verdict. */
-function isIndeterminate(value: unknown): boolean {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { verdict?: unknown }).verdict === 'indeterminate'
-  );
+/**
+ * True when the stored result holds an `indeterminate` judgement at `probe` — a
+ * top-level field (`fleet`) whose `verdict` is `indeterminate`, or a nested path
+ * (`runnerImageFreshness.ami`) whose `state` is.
+ */
+function isIndeterminate(output: Record<string, unknown>, probe: string): boolean {
+  let value: unknown = output;
+  for (const part of probe.split('.')) {
+    if (typeof value !== 'object' || value === null) return false;
+    value = (value as Record<string, unknown>)[part];
+  }
+  if (typeof value !== 'object' || value === null) return false;
+  const judged = value as { verdict?: unknown; state?: unknown };
+  return judged.verdict === 'indeterminate' || judged.state === 'indeterminate';
 }
 
 /**
@@ -90,7 +97,7 @@ function whatTheRowSays(
 ): 'indeterminate' | 'answered' | 'unknown' {
   if (row.status === 'succeeded') {
     const output = row.output as Record<string, unknown> | null;
-    return output && isIndeterminate(output[probe]) ? 'indeterminate' : 'answered';
+    return output && isIndeterminate(output, probe) ? 'indeterminate' : 'answered';
   }
   const failure = row.failure as {
     code?: unknown;

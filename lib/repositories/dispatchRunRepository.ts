@@ -709,6 +709,31 @@ export const dispatchRunRepository = {
   },
 
   /**
+   * The heads of those of these runs still RUNNING — where each runs, when it
+   * started and who started it — in ONE query: the org Fleet page names a live
+   * hosted run by them. A cancelled run keeps its slot until its supervisor's next
+   * poll tears the container down, so a slot alone does not make a run live.
+   */
+  async findRunningHeadsByIds(
+    ids: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    {
+      id: string;
+      workspaceId: string;
+      projectId: string;
+      startedAt: Date;
+      createdById: string | null;
+    }[]
+  > {
+    if (ids.length === 0) return [];
+    return tx.dispatchRun.findMany({
+      where: { id: { in: [...ids] }, status: 'running' },
+      select: { id: true, workspaceId: true, projectId: true, startedAt: true, createdById: true },
+    });
+  },
+
+  /**
    * A gated run's header as its To resume entry names it (MOTIR-7712): where it ran,
    * who reported it, and who started it.
    */

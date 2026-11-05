@@ -93,7 +93,11 @@ export const FLEET_ATTRIBUTION_GRACE_MS = 10 * 60_000;
 export const CI_INTENT_END_AFTER_BOOT_MS = FLEET_TIME_BUDGETS.reapAfterMs;
 
 /** The teardown reasons the org stop writes (`fleetStopService`, MOTIR-6908). */
-const ORG_STOP_REASONS: ReadonlySet<string> = new Set(['credits_exhausted', 'admin_stop']);
+const ORG_STOP_REASONS: ReadonlySet<string> = new Set([
+  'credits_exhausted',
+  'admin_stop',
+  'org_admin_stop',
+]);
 
 /** How long the pass waits before asking a listing a second time (MOTIR-8302). */
 export const FLEET_LISTING_RETRY_DELAY_MS = 2_000;

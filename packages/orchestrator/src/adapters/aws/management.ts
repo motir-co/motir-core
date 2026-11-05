@@ -1228,9 +1228,17 @@ export function awsRunnerPolicyDocument(input: {
     Version: '2012-10-17',
     Statement: [
       {
+        // `DescribeImages` reads the pinned runner AMI's name, which carries the
+        // commit it was built from, for the daily health check's freshness step
+        // (MOTIR-10395). Like the others it takes no resource-level permission.
         Sid: 'Describe',
         Effect: 'Allow',
-        Action: ['ec2:DescribeInstances', 'ec2:DescribeSubnets', 'ec2:DescribeSecurityGroups'],
+        Action: [
+          'ec2:DescribeInstances',
+          'ec2:DescribeSubnets',
+          'ec2:DescribeSecurityGroups',
+          'ec2:DescribeImages',
+        ],
         Resource: '*',
       },
       {

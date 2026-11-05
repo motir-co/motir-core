@@ -217,9 +217,13 @@ test('platform staff read the whole job ledger, and an operator replays one row,
     await expect(page).toHaveURL(/tab=dlq/);
     await expect(main.getByRole('note')).toHaveText(jm.readOnly);
     // The newest 200 waiting rows: none of them a sweep, which are all older.
+    // Matched on the FUNCTION cell, not the row's text: the lane's live
+    // `system.daily-health-check` dead letter names every overdue job in its
+    // failure message, `system.rate-limit-sweep` among them once its 04:00 UTC
+    // tick has passed.
     await expect(bodyRows).toHaveCount(200);
     await expect(bodyRows.filter({ hasText: INDEX }).first()).toBeVisible();
-    await expect(bodyRows.filter({ hasText: SWEEP })).toHaveCount(0);
+    await expect(bodyRows.filter({ has: page.locator(`td[title="${SWEEP}"]`) })).toHaveCount(0);
     await expect(bodyRows.filter({ hasText: jm.noWorkspace }).first()).toBeVisible();
     await expect(bodyRows.filter({ hasText: tenant.workspaceId }).first()).toBeVisible();
     await expect(main.getByRole('button', { name: /^Replay/ })).toHaveCount(0);

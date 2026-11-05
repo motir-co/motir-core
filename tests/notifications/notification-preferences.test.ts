@@ -61,6 +61,7 @@ describe('notificationPreferencesService.getMatrix', () => {
       'assigned',
       'transitioned',
       'code_access_refused',
+      'agent_hibernated_by_admin',
     ]);
     // Direct/mention events default ON for both channels — INCLUDING the
     // access-refused row, and its email arm is a decision rather than an

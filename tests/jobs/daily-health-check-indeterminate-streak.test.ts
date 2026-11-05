@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import { Prisma } from '@/generated/prisma/client';
 import {
   dailyHealthCheck,
+  DAILY_HEALTH_CHECK_NESTED_PROBES,
   DAILY_HEALTH_CHECK_PROBES,
   indeterminateReadings,
 } from '@/lib/jobs/definitions/dailyHealthCheck';
@@ -103,7 +104,7 @@ describe('the daily check fails on a probe that cannot tell on N runs in a row',
         streaks: [
           {
             probe: 'runnerImageFreshness',
-            step: 'runner-image-freshness',
+            step: 'runner-image-freshness-v2',
             consecutive: INDETERMINATE_STREAK_THRESHOLD - 1,
             phase: 'github',
           },
@@ -126,7 +127,7 @@ describe('the daily check fails on a probe that cannot tell on N runs in a row',
     expect(result).toBeUndefined();
     expect(error?.name).toBe('ProbeIndeterminateStreakError');
     expect(error?.message).toContain(
-      `runnerImageFreshness (step runner-image-freshness) on ${INDETERMINATE_STREAK_THRESHOLD} runs in a row`,
+      `runnerImageFreshness (step runner-image-freshness-v2) on ${INDETERMINATE_STREAK_THRESHOLD} runs in a row`,
     );
     expect(error?.message).toContain(
       `latest read failed at github: ${RUNNER_IMAGE}: GitHub answered 403 (rate limit) listing commits`,
@@ -168,10 +169,36 @@ describe('the daily check fails on a probe that cannot tell on N runs in a row',
   });
 });
 
+describe('a nested judgement keeps its own streak', () => {
+  it('FAILS when the AMI read cannot tell on N runs while the image is current', async () => {
+    await seedHealthyJobSchedules();
+    const amiStuck = {
+      runnerImageFreshness: { verdict: 'current', ami: { state: 'indeterminate' } },
+    };
+    for (let day = INDETERMINATE_STREAK_THRESHOLD - 1; day >= 1; day -= 1) {
+      await seedRun(day, amiStuck);
+    }
+    vi.spyOn(runnerImageFreshnessProbeService, 'check').mockResolvedValue({
+      verdict: 'current',
+      checkedAt: '2026-11-05T09:00:00.000Z',
+      build: { image: RUNNER_IMAGE, commit: 'abc', source: 'label' },
+      ami: { state: 'indeterminate', amiId: 'ami-0123', phase: 'ec2', detail: 'AccessDenied' },
+    } as never);
+
+    const { error } = await new JobTestEngine({ function: dailyHealthCheck }).execute();
+
+    expect(error?.name).toBe('ProbeIndeterminateStreakError');
+    expect(error?.message).toContain(
+      `runnerImageFreshness.ami (step runner-image-freshness-v2) on ${INDETERMINATE_STREAK_THRESHOLD} runs in a row`,
+    );
+    expect(error?.message).toContain('latest read failed at ami ec2: ami-0123: AccessDenied');
+  });
+});
+
 describe('indeterminateStreakService.check', () => {
   const reading = {
     probe: 'runnerImageFreshness',
-    step: 'runner-image-freshness',
+    step: 'runner-image-freshness-v2',
     indeterminate: { phase: 'registry', detail: 'no answer' },
   };
 
@@ -358,7 +385,36 @@ describe('every probe of the daily check is in the streak table', () => {
           detail: `${RUNNER_IMAGE}: GitHub answered 403 (rate limit) listing commits`,
         },
       ],
+      ['runnerImageFreshness.ami', null],
     ]);
+  });
+
+  it('reads every nested judgement whose pinned shape has an indeterminate state', () => {
+    // A step that judges two things — the runner image AND its AMI (MOTIR-10395)
+    // — carries a second `indeterminate`, as a `state` inside the verdict. The
+    // top-level table cannot see it, so it must be in the nested one.
+    const nestedSteps = new Set(DAILY_HEALTH_CHECK_NESTED_PROBES.map((n) => n.step));
+    for (const entry of Object.values(DAILY_HEALTH_CHECK_PROBES)) {
+      const hasNested = LIVE_STEP_SHAPES[entry.step]!.shape.includes('state: "indeterminate"');
+      expect(
+        nestedSteps.has(entry.step),
+        `${entry.step}: ${hasNested ? 'has' : 'has no'} nested indeterminate state`,
+      ).toBe(hasNested);
+    }
+  });
+
+  it('describes an indeterminate AMI read by its phase and the AMI', () => {
+    const [ami] = DAILY_HEALTH_CHECK_NESTED_PROBES;
+    expect(
+      ami!.read({
+        runnerImageFreshness: {
+          ...indeterminateFreshness,
+          verdict: 'current',
+          build: { image: RUNNER_IMAGE, commit: 'abc', source: 'label' },
+          ami: { state: 'indeterminate', amiId: 'ami-0123', phase: 'ec2', detail: 'AccessDenied' },
+        },
+      } as never),
+    ).toEqual({ phase: 'ami ec2', detail: 'ami-0123: AccessDenied' });
   });
 
   it('describes an unreadable target list by the status GitHub gave', () => {

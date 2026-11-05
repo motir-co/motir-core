@@ -661,7 +661,13 @@ describe('the stop’s edges (coverage top-up)', () => {
       fx.workspace.organizationId,
       'admin_stop',
     );
-    expect(result).toEqual({ hibernated: 0, alreadyResting: 0, inMotion: 2, failures: [] });
+    expect(result).toEqual({
+      hibernated: 0,
+      alreadyResting: 0,
+      inMotion: 2,
+      failures: [],
+      hibernatedInstanceIds: [],
+    });
     expect((await adminDb.agentInstance.findUniqueOrThrow({ where: { id: starting } })).state).toBe(
       'starting',
     );

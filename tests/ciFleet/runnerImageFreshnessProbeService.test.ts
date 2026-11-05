@@ -30,9 +30,33 @@ vi.mock('@/lib/github/appAuth', async (importOriginal) => ({
   mintInstallationToken: app.mintInstallationToken,
 }));
 
-const { RunnerImageStaleError } = await import('@/lib/jobs/definitions/dailyHealthCheck');
-const { runnerImageFreshnessProbeService, RUNNER_AMI_NOT_READ_REASON, unreleasedChanges } =
+// The AMI arm (MOTIR-10395): the fleet account it is read in, and EC2 there.
+const fleet = vi.hoisted(() => ({ listByRole: vi.fn(), describeAwsImages: vi.fn() }));
+vi.mock('@/lib/repositories/fleetShardRepository', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/repositories/fleetShardRepository')>();
+  return {
+    ...original,
+    fleetShardRepository: { ...original.fleetShardRepository, listByRole: fleet.listByRole },
+  };
+});
+vi.mock('@/lib/workspaces/context', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/workspaces/context')>()),
+  withSystemContext: (fn: (tx: unknown) => unknown) => fn({}),
+}));
+vi.mock('@/lib/mappers/fleetShardMappers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/mappers/fleetShardMappers')>()),
+  toFleetShardDTO: (row: unknown) => row,
+}));
+vi.mock('@/lib/orchestrator', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/orchestrator')>()),
+  describeAwsImages: fleet.describeAwsImages,
+}));
+
+const { RunnerAmiStaleError, RunnerImageStaleError } =
+  await import('@/lib/jobs/definitions/dailyHealthCheck');
+const { runnerImageFreshnessProbeService, unreleasedChanges } =
   await import('@/lib/services/runnerImageFreshnessProbeService');
+const { Ec2ApiError, OrchestratorNotConfiguredError } = await import('@motir/orchestrator');
 const { repoCommitHistoryClient, RepoCommitHistoryError } =
   await import('@/lib/github/repoCommitHistory');
 const { GithubAppTokenError } = await import('@/lib/github/appAuth');
@@ -85,6 +109,8 @@ afterEach(() => {
   registry.listImageTags.mockReset();
   app.getOrgInstallation.mockReset();
   app.mintInstallationToken.mockReset();
+  fleet.listByRole.mockReset();
+  fleet.describeAwsImages.mockReset();
 });
 
 describe('runnerImageFreshnessProbeService.check', () => {
@@ -328,17 +354,265 @@ describe('runnerImageFreshnessProbeService.check', () => {
     });
   });
 
-  it('records the AMI as not read, with why, whenever one is pinned (criterion 5)', async () => {
-    vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
-    expect(await runnerImageFreshnessProbeService.check({ now: NOW })).toMatchObject({
-      ami: {
-        state: 'not_read',
-        amiId: 'ami-0123456789abcdef0',
-        reason: RUNNER_AMI_NOT_READ_REASON,
-      },
+  describe('the runner AMI (MOTIR-10395)', () => {
+    const AMI = 'ami-0123456789abcdef0';
+    const ACCOUNT = { id: 'shard-1', name: 'motir-ci-1', provider: 'aws' };
+    const AMI_NAME = 'motir-ci-runner-2.329.0-202611050900-4a9cb14';
+    const packerChange = {
+      sha: SCRIPT_CHANGE,
+      committedAt: '2026-11-04T08:00:00Z',
+      subject: 'MOTIR-10293 Install the AWS CLI on the AMI',
+    };
+    const image = (over: Record<string, unknown> = {}) => ({
+      imageId: AMI,
+      name: AMI_NAME,
+      description: `Motir CI runner (commit ${BUILD})`,
+      ownerId: '111122223333',
+      creationDate: '2026-11-05T09:00:00.000Z',
+      ...over,
     });
-    expect(RUNNER_AMI_NOT_READ_REASON).toContain('ec2:DescribeImages');
+
+    beforeEach(() => {
+      vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', AMI);
+      vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
+      fleet.listByRole.mockResolvedValue([ACCOUNT]);
+    });
+
+    it('is unset, and reads nothing, when no AMI is pinned', async () => {
+      vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', '  ');
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toEqual({
+        state: 'unset',
+      });
+      expect(fleet.listByRole).not.toHaveBeenCalled();
+    });
+
+    it("is STALE when a change to an AMI input is ahead of the description's commit", async () => {
+      fleet.describeAwsImages.mockResolvedValue([image()]);
+      const { touching, compare } = github(
+        { 'infra/ci-runner-aws': packerChange, 'infra/ci-runner/Dockerfile': dockerfileChange },
+        { [SCRIPT_CHANGE]: 'ahead', [DOCKERFILE_CHANGE]: 'behind' },
+      );
+
+      const verdict = await runnerImageFreshnessProbeService.check({ now: NOW });
+
+      expect(verdict).toEqual({
+        verdict: 'not_applicable',
+        checkedAt: NOW.toISOString(),
+        reason: 'runner_image_unset',
+        ami: {
+          state: 'stale',
+          build: {
+            amiId: AMI,
+            name: AMI_NAME,
+            commit: BUILD,
+            source: 'description',
+            account: 'motir-ci-1',
+          },
+          unreleased: [
+            {
+              commit: SCRIPT_CHANGE,
+              committedAt: '2026-11-04T08:00:00Z',
+              subject: 'MOTIR-10293 Install the AWS CLI on the AMI',
+              paths: ['infra/ci-runner-aws'],
+              relation: 'ahead',
+            },
+          ],
+        },
+      });
+      // Read in one active aws ci_runner account, through its runner role.
+      expect(fleet.listByRole).toHaveBeenCalledWith(
+        null,
+        { fleetKind: 'ci_runner', state: 'active', provider: 'aws' },
+        {},
+      );
+      expect(fleet.describeAwsImages).toHaveBeenCalledWith(ACCOUNT, [AMI]);
+      // Judged against the AMI's inputs, not the image's.
+      expect(touching.mock.calls.map((c) => c[1])).toEqual([
+        'infra/ci-runner-aws',
+        'infra/ci-runner/Dockerfile',
+        'infra/ci-runner/entrypoint.sh',
+        'infra/ci-runner/start-dockerd.sh',
+        'infra/ci-runner/job-started.sh',
+      ]);
+      expect(compare).toHaveBeenCalledWith(
+        { owner: 'motir-co', name: 'motir-core' },
+        BUILD,
+        SCRIPT_CHANGE,
+        null,
+      );
+    });
+
+    it("is CURRENT on the name's seven characters for an AMI built before the description", async () => {
+      fleet.describeAwsImages.mockResolvedValue([
+        image({ description: 'Motir CI runner (4a9cb14)' }),
+      ]);
+      const { compare } = github(
+        { 'infra/ci-runner-aws': packerChange },
+        { [SCRIPT_CHANGE]: 'identical' },
+      );
+
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toEqual({
+        state: 'current',
+        build: {
+          amiId: AMI,
+          name: AMI_NAME,
+          commit: '4a9cb14',
+          source: 'name',
+          account: 'motir-ci-1',
+        },
+      });
+      expect(compare).toHaveBeenCalledWith(expect.anything(), '4a9cb14', SCRIPT_CHANGE, null);
+    });
+
+    it('judges both pins in one run, sharing one GitHub token', async () => {
+      vi.stubEnv('MOTIR_RUNNER_IMAGE', PINNED);
+      vi.stubEnv('GITHUB_STUDIO_APP_ID', '4242');
+      vi.stubEnv('GITHUB_STUDIO_APP_PRIVATE_KEY', 'a-key');
+      app.getOrgInstallation.mockResolvedValue({ id: 'inst-1', suspendedAt: null });
+      app.mintInstallationToken.mockResolvedValue({ token: 'ghs_x' });
+      registry.readImageLabels.mockResolvedValue(
+        labelsRead({ 'org.opencontainers.image.revision': BUILD }),
+      );
+      fleet.describeAwsImages.mockResolvedValue([image()]);
+      github({ 'infra/ci-runner/Dockerfile': dockerfileChange }, { [DOCKERFILE_CHANGE]: 'ahead' });
+
+      const verdict = await runnerImageFreshnessProbeService.check({ now: NOW });
+
+      expect(verdict.verdict).toBe('stale');
+      expect(verdict.ami.state).toBe('stale');
+      expect(app.mintInstallationToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('is indeterminate when there is no active aws ci_runner account to read it in', async () => {
+      fleet.listByRole.mockResolvedValue([]);
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toEqual({
+        state: 'indeterminate',
+        amiId: AMI,
+        phase: 'account',
+        detail: 'there is no active aws ci_runner fleet account whose runner role could read it',
+      });
+      expect(fleet.describeAwsImages).not.toHaveBeenCalled();
+    });
+
+    it('is indeterminate, naming the missing permission, when the runner role is refused', async () => {
+      fleet.describeAwsImages.mockRejectedValue(
+        new Ec2ApiError('UnauthorizedOperation', 403, false),
+      );
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toEqual({
+        state: 'indeterminate',
+        amiId: AMI,
+        phase: 'ec2',
+        detail:
+          `${AMI} could not be read in fleet account motir-ci-1: EC2 refused DescribeImages ` +
+          '(UnauthorizedOperation); the motir-fleet-runner role there does not hold ' +
+          'ec2:DescribeImages yet',
+      });
+    });
+
+    it('is indeterminate on any other EC2 refusal, or an unset management credential', async () => {
+      fleet.describeAwsImages.mockRejectedValueOnce(
+        new Ec2ApiError('InvalidAMIID.NotFound', 400, false),
+      );
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toMatchObject({
+        state: 'indeterminate',
+        phase: 'ec2',
+        detail: `${AMI} could not be read in fleet account motir-ci-1: EC2 refused DescribeImages (InvalidAMIID.NotFound)`,
+      });
+      fleet.describeAwsImages.mockRejectedValueOnce(
+        new OrchestratorNotConfiguredError('set MOTIR_AWS_MANAGEMENT_ROLE_ARN'),
+      );
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toMatchObject({
+        state: 'indeterminate',
+        phase: 'ec2',
+        detail: expect.stringContaining('set MOTIR_AWS_MANAGEMENT_ROLE_ARN'),
+      });
+    });
+
+    it('rethrows anything that is not an EC2 or configuration refusal', async () => {
+      fleet.describeAwsImages.mockRejectedValue(new TypeError('bug'));
+      await expect(runnerImageFreshnessProbeService.check({ now: NOW })).rejects.toThrow('bug');
+    });
+
+    it('is indeterminate when EC2 shows no such image', async () => {
+      fleet.describeAwsImages.mockResolvedValue([image({ imageId: 'ami-other' })]);
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toEqual({
+        state: 'indeterminate',
+        amiId: AMI,
+        phase: 'ec2',
+        detail: `EC2 in fleet account motir-ci-1 answered no image for ${AMI}`,
+      });
+    });
+
+    it('is indeterminate when neither the name nor the description records a commit', async () => {
+      fleet.describeAwsImages.mockResolvedValue([image({ name: 'hand-made', description: null })]);
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toMatchObject({
+        state: 'indeterminate',
+        phase: 'build_commit',
+        detail: expect.stringContaining('"hand-made" does not end in -<YYYYMMDDhhmm>-<sha7>'),
+      });
+    });
+
+    it('is indeterminate when GitHub cannot read the history against the build', async () => {
+      fleet.describeAwsImages.mockResolvedValue([image()]);
+      vi.spyOn(repoCommitHistoryClient, 'newestTouching').mockRejectedValue(
+        new RepoCommitHistoryError(404, 'No commit found'),
+      );
+      expect((await runnerImageFreshnessProbeService.check({ now: NOW })).ami).toMatchObject({
+        state: 'indeterminate',
+        phase: 'github',
+        detail: expect.stringContaining(`history could not be read against ${BUILD}`),
+      });
+    });
+
+    it('rethrows a GitHub failure that is not a refusal', async () => {
+      fleet.describeAwsImages.mockResolvedValue([image()]);
+      vi.spyOn(repoCommitHistoryClient, 'newestTouching').mockRejectedValue(new TypeError('bug'));
+      await expect(runnerImageFreshnessProbeService.check({ now: NOW })).rejects.toThrow('bug');
+    });
+
+    it('names the AMI, both commits and the AMI release step in its error', async () => {
+      fleet.describeAwsImages.mockResolvedValue([image()]);
+      github({ 'infra/ci-runner-aws': packerChange }, { [SCRIPT_CHANGE]: 'diverged' });
+      const { ami } = await runnerImageFreshnessProbeService.check({ now: NOW });
+      if (ami.state !== 'stale') throw new Error(`expected stale, got ${ami.state}`);
+
+      const error = new RunnerAmiStaleError(ami);
+      expect(error.name).toBe('RunnerAmiStaleError');
+      expect(error.message).toContain(
+        `The pinned runner AMI ${AMI} (${AMI_NAME}) was built from 4a9cb14b54e2 (read from its description, in fleet account motir-ci-1)`,
+      );
+      expect(error.message).toContain(
+        'c22cba55d5ec (2026-11-04T08:00:00Z, "MOTIR-10293 Install the AWS CLI on the AMI", changes infra/ci-runner-aws; the AMI was built from a branch without it)',
+      );
+      expect(error.message).toContain(
+        `git tag ci-runner-ami-v<next> ${SCRIPT_CHANGE} && git push origin ci-runner-ami-v<next>`,
+      );
+      expect(error.message).toContain('.github/workflows/release-ci-runner-ami.yml');
+      expect(error.message).toContain('poolAccount.images.ci_runner');
+      expect(error.message).toContain('MOTIR_AWS_RUNNER_AMI_ID');
+
+      // An AMI with no name still reads.
+      const unnamed = new RunnerAmiStaleError({ ...ami, build: { ...ami.build, name: null } });
+      expect(unnamed.message).toContain(`The pinned runner AMI ${AMI} was built from`);
+
+      // With the image stale too, the image's error carries both.
+      const both = new RunnerImageStaleError({
+        verdict: 'stale',
+        checkedAt: NOW.toISOString(),
+        build: { image: PINNED, commit: BUILD, source: 'label' },
+        unreleased: [
+          {
+            ...dockerfileChange,
+            commit: DOCKERFILE_CHANGE,
+            paths: ['infra/ci-runner/Dockerfile'],
+            relation: 'ahead',
+          },
+        ],
+        ami,
+      });
+      expect(both.message).toContain(`The pinned runner image ${PINNED}`);
+      expect(both.message).toContain(`The pinned runner AMI ${AMI}`);
+    });
   });
 
   describe('the GitHub token', () => {
