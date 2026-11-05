@@ -79,6 +79,10 @@ import { publicHostnameReservationSweep } from './definitions/publicHostnameRese
 import { dispatchRunSweep } from './definitions/dispatchRunSweep';
 import { runLivenessSweep } from './definitions/runLivenessSweep';
 import { pullRequestReconcile } from './definitions/pullRequestReconcile';
+import {
+  githubWebhookDelivery,
+  githubWebhookInboxSweep,
+} from './definitions/githubWebhookDelivery';
 import { pullRequestAutoMerge } from './definitions/pullRequestAutoMerge';
 import { agentReviewRequested } from './definitions/agentReviewRequested';
 import {
@@ -211,6 +215,8 @@ export const jobDefinitions = [
   organizationErasureSweep,
   organizationRetentionPurge,
   pullRequestReconcile,
+  githubWebhookDelivery,
+  githubWebhookInboxSweep,
   pullRequestAutoMerge,
   // The review run's start (Story MOTIR-1626 · MOTIR-6820).
   agentReviewRequested,

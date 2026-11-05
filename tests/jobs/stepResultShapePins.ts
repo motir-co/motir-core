@@ -616,6 +616,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/monitorIssueResolve.ts',
     shape: '{ failed: number; gone: number; links: number; resolved: number; skipped: number }',
   },
+  'process-delivery': {
+    file: 'lib/jobs/definitions/githubWebhookDelivery.ts',
+    shape:
+      '{ event: string; outcome: "processed" } | { outcome: "skipped"; reason: "already_processed" | "missing" | "superseded" }',
+  },
+  'sweep-inbox': {
+    file: 'lib/jobs/definitions/githubWebhookDelivery.ts',
+    shape: '{ prunedFailed: number; prunedProcessed: number; reenqueued: number }',
+  },
   'reconcile-open-deliveries-v5': {
     file: 'lib/jobs/definitions/pullRequestReconcile.ts',
     shape:

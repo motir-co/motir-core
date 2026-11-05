@@ -16,9 +16,10 @@
 //     7.10.4 signature gate + the full service path run end-to-end — the
 //     assertion is on Motir's observable behavior, not on GitHub.
 
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
+import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import {
   E2E_GITHUB_USER,
@@ -59,28 +60,81 @@ export function signWebhook(rawBody: string): string {
   return `sha256=${createHmac('sha256', E2E_GITHUB_WEBHOOK_SECRET).update(rawBody).digest('hex')}`;
 }
 
-let deliverySeq = 0;
+/** How long {@link postSignedWebhook} waits for the inbox job to process a delivery —
+ *  past the delivery job's whole retry budget (five attempts on a 1·2·4·8 s backoff). */
+const DELIVERY_PROCESSED_TIMEOUT_MS = 60_000;
+const DELIVERY_POLL_MS = 100;
 
-/** POST one signed delivery to the real webhook route. `payload` is serialized
- *  ONCE and the signature is computed over those exact bytes (a re-serialized
- *  body would not match the HMAC). Returns the raw response; callers assert
- *  status + the `result` body (the authoritative completion signal — the route
- *  awaits the full service handling before responding). */
+/** What {@link postSignedWebhook} answers once the delivery has been processed: the
+ *  answer the route gave before MOTIR-10425 — `200 { ok, result }` — or, for a
+ *  delivery whose processing kept failing, `500` with the error, so a spec asserting
+ *  `status() === 200` fails on the real cause. */
+function processedResponse(raw: APIResponse, status: number, body: unknown): APIResponse {
+  const text = JSON.stringify(body);
+  return Object.assign(Object.create(raw) as APIResponse, {
+    status: () => status,
+    ok: () => status >= 200 && status < 300,
+    statusText: () => (status === 200 ? 'OK' : 'Internal Server Error'),
+    text: async () => text,
+    json: async () => JSON.parse(text) as unknown,
+    body: async () => Buffer.from(text),
+  });
+}
+
+/** POST one signed delivery to the real webhook route, and wait for it to be
+ *  PROCESSED. `payload` is serialized ONCE and signed over those exact bytes (a
+ *  re-serialized body would not match the HMAC).
+ *
+ *  ⚠️ THE ROUTE ANSWERS BEFORE THE WORK RUNS since Bug MOTIR-10425: it stores the
+ *  delivery and returns `202`, and the `system.github-webhook-delivery` job processes
+ *  it in the lane's job worker. Every caller asserts what the delivery DID, so this
+ *  waits on the inbox row — the authoritative completion signal, never a sleep — and
+ *  answers as the route used to: `200 { ok: true, result }`. Any other answer from the
+ *  route (a `200` for an ignored event, a `401`, a `400`) is returned as it came.
+ *
+ *  The delivery GUID is random, as GitHub's is: the inbox is keyed on it, so a GUID
+ *  repeated across specs or runs would be a duplicate that never runs. */
 export async function postSignedWebhook(
   request: Page['request'] | APIRequestContext,
   event: string,
   payload: unknown,
 ): Promise<APIResponse> {
   const rawBody = JSON.stringify(payload);
-  return request.post('/api/github/webhook', {
+  const deliveryId = randomUUID();
+  const res = await request.post('/api/github/webhook', {
     headers: {
       'content-type': 'application/json',
       'x-github-event': event,
       'x-hub-signature-256': signWebhook(rawBody),
-      'x-github-delivery': `e2e-delivery-${++deliverySeq}`,
+      'x-github-delivery': deliveryId,
     },
     data: rawBody,
   });
+  if (res.status() !== 202) return res;
+
+  const deadline = Date.now() + DELIVERY_PROCESSED_TIMEOUT_MS;
+  let last: Awaited<ReturnType<typeof githubWebhookInboxService.findDelivery>> = null;
+  while (Date.now() < deadline) {
+    last = await githubWebhookInboxService.findDelivery(deliveryId);
+    if (last?.state === 'processed') {
+      return processedResponse(res, 200, { ok: true, result: last.result });
+    }
+    // Spent: the job runner has dead-lettered it.
+    if (last?.state === 'failed' && last.attempts >= 5) break;
+    await new Promise((resolve) => setTimeout(resolve, DELIVERY_POLL_MS));
+  }
+  if (last?.state === 'failed') {
+    return processedResponse(res, 500, {
+      code: 'GITHUB_WEBHOOK_PROCESSING_FAILED',
+      deliveryId,
+      error: last.lastError,
+    });
+  }
+  throw new Error(
+    `[github-seed] ${event} delivery ${deliveryId} was not processed within ` +
+      `${DELIVERY_PROCESSED_TIMEOUT_MS} ms (inbox state: ${last?.state ?? 'missing'}) — ` +
+      "is the lane's job worker running?",
+  );
 }
 
 /** A minimal `pull_request` delivery carrying every field the provider seam's

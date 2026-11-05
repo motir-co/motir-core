@@ -61,6 +61,7 @@ import {
   type MergeQueueExitResult,
 } from './mergeQueueExitService';
 import { mergeQueueCheckService, type MergeGroupResult } from './mergeQueueCheckService';
+import { changeRequestChecksUrl } from '@/lib/git/checksUrl';
 
 // githubWebhookService (Story 7.10 · MOTIR-892) — the inbound-webhook logic
 // layer: the `installation` / `installation_repositories` grant-mirror + the
@@ -132,6 +133,30 @@ const HANDLED_PR_ACTIONS = new Set([
   'closed',
   'ready_for_review',
   'converted_to_draft',
+]);
+
+/**
+ * The `X-GitHub-Event` types {@link githubWebhookService.handleEvent} acts on — every
+ * case of its switch (Bug MOTIR-10425). The webhook route persists a delivery of one
+ * of these to the inbox and answers at once; any other event (`ping`, and every event
+ * the App receives but Motir does not sync) is acknowledged with the same `ignored`
+ * answer `handleEvent` gives it, and nothing is stored, because there is nothing to
+ * process. A new case in the switch is added here too, or its deliveries are ignored:
+ * `tests/github/githubWebhookInbox.test.ts` holds the two lists equal.
+ */
+export const GITHUB_WEBHOOK_HANDLED_EVENTS: ReadonlySet<string> = new Set([
+  'installation',
+  'installation_repositories',
+  'pull_request',
+  'pull_request_review',
+  'push',
+  'check_suite',
+  'check_run',
+  'merge_group',
+  'workflow_run',
+  'workflow_job',
+  'repository',
+  'deployment_status',
 ]);
 
 export type GithubWebhookResult =
@@ -1166,8 +1191,7 @@ async function resolveGithubCiContext(
     kind: 'resolved',
     installation,
     repo,
-    buildChecksUrl: (number) =>
-      `https://github.com/${repo.owner}/${repo.name}/pull/${number}/checks`,
+    buildChecksUrl: (number) => changeRequestChecksUrl('github', repo, number),
     // MOTIR-4199 — the GitHub half of "how many checks does this commit have?".
     // The consumer calls it only when the recorded set claims to be complete,
     // and reads a `null` as "could not establish", so an unreachable host costs

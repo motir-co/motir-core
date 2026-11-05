@@ -430,6 +430,24 @@ export interface CiRunnerBootData {
 }
 
 /**
+ * The `system.github-webhook-delivery` event payload (Bug MOTIR-10425) — one per
+ * verified GitHub App delivery the webhook route persisted to the inbox.
+ *
+ * It carries the inbox row's KEY and nothing else, for `CiRunnerBootData`'s reason:
+ * the body is on the row, and the row is the source of truth for it.
+ * `idempotencyKey` is `<deliveryId>:<generation>`, so a GitHub redelivery of a
+ * delivery still in hand enqueues nothing new, while one that re-arms a FAILED
+ * delivery (a new generation) gets a run of its own. `workspaceId` is the literal
+ * `null`: a delivery is about an App installation, not a tenant.
+ */
+export interface GithubWebhookDeliveryData {
+  deliveryId: string;
+  generation: number;
+  idempotencyKey: string;
+  workspaceId: null;
+}
+
+/**
  * The `hosted-run/supervise` event payload (Story MOTIR-683 · MOTIR-690) — one
  * per hosted run, emitted by the start path once its container is booted.
  *
@@ -670,6 +688,11 @@ export interface JobEventDataMap {
    *  a missed merge no longer holds its card at In Review for ever. Carries no
    *  payload beyond the scheduled envelope. Cross-tenant by design. */
   'system.pull-request-reconcile': SystemScheduledData;
+  /** The GitHub webhook inbox (Bug MOTIR-10425): one run per persisted delivery, and
+   *  the sweep that re-enqueues a delivery whose run was never enqueued and prunes
+   *  the processed ones. Cross-tenant by design: a delivery names an installation. */
+  'system.github-webhook-delivery': GithubWebhookDeliveryData;
+  'system.github-webhook-inbox-sweep': SystemScheduledData;
   /** The abandoned-plan reconciler (MOTIR-3064) — asks motir-ai what became of
    *  the job behind every empty `generating` plan past its grace, and declines
    *  the ones whose producer is gone, so a dead generation can no longer pause a

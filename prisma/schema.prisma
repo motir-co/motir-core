@@ -15852,6 +15852,56 @@ model ProjectRunnerGroup {
 }
 
 /// Which GitHub runner call a ledger row records (MOTIR-8969).
+/// THE GITHUB WEBHOOK INBOX (Bug MOTIR-10425). One row per verified App delivery,
+/// written BEFORE the route answers, so the route can answer in milliseconds and the
+/// work runs afterwards in the `system.github-webhook-delivery` job. GitHub waits ten
+/// seconds for a response and never redelivers on its own, so a delivery processed
+/// inline behind a busy CI-feedback gate was lost for good.
+///
+/// `deliveryId` is GitHub's `X-GitHub-Delivery` GUID — a hand redelivery repeats it,
+/// which is what makes processing idempotent per delivery. `generation` counts the
+/// times a FAILED delivery was re-armed by such a redelivery; it is part of the job's
+/// idempotency key, so a re-armed delivery gets a fresh run. Platform bookkeeping
+/// with no workspace (a delivery is about an App installation, and may reach any
+/// tenant or none): RLS admits `app.system_admin` only. Processed rows are pruned by
+/// the inbox sweep after a retention window.
+model GithubWebhookDelivery {
+  id          String                     @id @default(cuid())
+  deliveryId  String                     @unique @map("delivery_id")
+  /// The `X-GitHub-Event` header — `check_run`, `pull_request`, …
+  event       String
+  /// The verified, parsed request body — CLEARED once the delivery is processed. A
+  /// motir-core push alone produces hundreds of check deliveries of several KB each,
+  /// and a processed row is kept for its outcome, never re-run, so the body is kept
+  /// only while it can still be needed: until processing succeeds.
+  payload     Json?
+  state       GithubWebhookDeliveryState @default(received)
+  /// Processing attempts so far, across every run of every generation.
+  attempts    Int                        @default(0)
+  generation  Int                        @default(0)
+  /// The last processing error's message, kept while the row is `failed`.
+  lastError   String?                    @map("last_error")
+  /// What processing answered (`GithubWebhookResult`), for diagnosis.
+  result      Json?
+  receivedAt  DateTime                   @default(now()) @map("received_at")
+  processedAt DateTime?                  @map("processed_at")
+  updatedAt   DateTime                   @updatedAt @map("updated_at")
+
+  @@index([state, receivedAt])
+  @@map("github_webhook_delivery")
+}
+
+/// Where one inbox row stands. `received` — persisted and owed a run; `processed`
+/// — the service answered; `failed` — the last attempt threw (the job retries, and
+/// the row stays here, with `lastError`, once the job's budget is spent).
+enum GithubWebhookDeliveryState {
+  received
+  processed
+  failed
+
+  @@map("github_webhook_delivery_state")
+}
+
 enum GithubRunnerCallKind {
   mint
   delete

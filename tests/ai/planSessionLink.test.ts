@@ -42,6 +42,7 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { planChangeSessionsService } = await import('@/lib/services/planChangeSessionsService');
 const { planSessionEndService } = await import('@/lib/services/planSessionEndService');
+const { planChangeMailboxService } = await import('@/lib/services/planChangeMailboxService');
 
 let fx: WorkItemFixture;
 
@@ -159,6 +160,79 @@ describe('each author path attaches a session of the right origin', () => {
       plansService.createPlan(fx.projectId, { session: { sessionId: theirs.id } }, fx.ctx),
     ).rejects.toBeInstanceOf(PlanSessionNotFoundError);
     expect(await adminDb.plan.count({ where: { projectId: fx.projectId } })).toBe(0);
+  });
+});
+
+// BUG MOTIR-10431 — a plan Motir writes for the auto-plan cadence, an expand or a
+// generation had no Stop. Its session was opened with no `lastJobId`, while the stop
+// door and the run's own boundary read resolve the thread BY `last_job_id`, so a stop
+// on that job was refused and could never reach the walk. The session opened for a
+// hosted job now owns it, as a conversation's submit does; an MCP plan has no job.
+describe('a session Motir opens for its own job owns that job (MOTIR-10431)', () => {
+  const hosted: Array<[string, () => Promise<{ planId: string }>]> = [
+    [
+      'an auto-plan CADENCE plan',
+      async () => {
+        const story = await makeStory();
+        return aiPlanEditsService.submitExpand(story.identifier, pctx(), { origin: 'cadence' });
+      },
+    ],
+    [
+      'an EXPAND',
+      async () => {
+        const story = await makeStory();
+        return aiPlanEditsService.submitExpand(story.identifier, pctx());
+      },
+    ],
+    ['a GENERATION', () => aiGenerationService.startGeneration(pctx(), { title: 'gen' })],
+    ['a one-shot AUGMENT', () => aiPlanEditsService.submitAugment('add audit logging', pctx())],
+  ];
+
+  it.each(hosted)('%s records its job on its session', async (_label, open) => {
+    const { planId } = await open();
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    const s = await sessionOf(planId);
+
+    expect(plan.sourceJobId).toMatch(/^job-link-/);
+    expect(s.lastJobId).toBe(plan.sourceJobId);
+    expect(s.lastSubmittedAt).not.toBeNull();
+  });
+
+  it.each(hosted)('%s can be STOPPED: the stop reaches its walk', async (_label, open) => {
+    const { planId } = await open();
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    const s = await sessionOf(planId);
+    const mctx = { userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId };
+
+    // The overlay addresses the session it opened on and the job it names.
+    const raised = await planChangeMailboxService.raiseStop(
+      plan.sourceJobId!,
+      `stop:${plan.sourceJobId}`,
+      mctx,
+      s.id,
+    );
+    expect(raised.stopped).toBe(true);
+    // …and the run's next phase boundary reads it.
+    const boundary = await planChangeMailboxService.readForBoundary(plan.sourceJobId!, mctx);
+    expect(boundary.stopped).toBe(true);
+  });
+
+  it('an MCP `create_plan` binds no job — nothing Motir runs writes it', async () => {
+    await runCreatePlan({ projectKey: fx.project.identifier, title: 'agent plan' }, fx.ctx);
+    const plan = await adminDb.plan.findFirstOrThrow({ where: { projectId: fx.projectId } });
+    const s = await sessionOf(plan.id);
+
+    expect(s.lastJobId).toBeNull();
+    expect(s.lastSubmittedAt).toBeNull();
+  });
+
+  it('a conversation submit still binds the job on the conversation it names', async () => {
+    const convo = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'x');
+    const { planId } = await planChangeSessionsService.submit(pctx(), { sessionId: convo.id });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId! } });
+
+    expect((await sessionOf(planId!)).lastJobId).toBe(plan.sourceJobId);
+    expect(await adminDb.planChangeSession.count({ where: { projectId: fx.projectId } })).toBe(1);
   });
 });
 

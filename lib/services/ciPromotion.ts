@@ -4,7 +4,8 @@ import {
   withWorkspaceContext,
 } from '@/lib/workspaces/context';
 import type { GithubCheckRun, Prisma, WorkItem } from '@/generated/prisma/client';
-import { prCiStateAtHead } from '@/lib/github/pullRequestHead';
+import { prCiStateAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
+import { refreshFeedbackComments } from './ciFeedbackComments';
 import {
   readReportedCheckSet,
   reconcileRecordedCheckSet,
@@ -514,7 +515,7 @@ export async function promoteIfCiAlreadyGreen(
   // paid for on the same terms: only the delivering pull requests whose recorded
   // set CLAIMS to be complete are asked about, so the ordinary card (one pull
   // request, checks still reporting pending rows) pays nothing.
-  await reconcileClaimedCompleteDeliveries(workItemId, ctx, readCheckSet, now);
+  const refreshed = await reconcileClaimedCompleteDeliveries(workItemId, ctx, readCheckSet, now);
 
   const shouldPromote = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, ctx.workspaceId);
@@ -532,7 +533,66 @@ export async function promoteIfCiAlreadyGreen(
 
   if (!shouldPromote) return false;
   const promoted = await promoteEach([workItemId], ctx);
-  return promoted.length > 0;
+  if (promoted.length === 0) return false;
+
+  // ⚠️ A PROMOTION ON THIS EDGE HAS NO DELIVERY BEHIND IT, SO NOTHING ELSE RE-RENDERS
+  // THE COMMENT (Bug MOTIR-10425). Edge 1 promotes from inside a delivery that has
+  // just rendered it; this edge promotes because a card arrived, or because the
+  // reconcile tick re-read the host after a delivery was LOST — and that is exactly
+  // the case where the comment was last written by an earlier delivery and still
+  // reads "87 of 88". So every delivering pull request's comment is re-rendered at
+  // its head, from the recorded set; the pairs the reconcile above already
+  // re-rendered are not rendered twice.
+  await refreshDeliveringComments(workItemId, ctx.workspaceId, refreshed);
+  return true;
+}
+
+/** `(pull request, commit)` as one key, for "already re-rendered". */
+function feedbackKey(pullRequestId: string, commitSha: string): string {
+  return `${pullRequestId}@${commitSha}`;
+}
+
+/** Re-render the CI feedback comment of each pair, best-effort: the rows and the
+ *  promotion are committed and are the record, and a comment that fails to render
+ *  must not fail either (the same terms the delivery's own render runs on). */
+async function refreshFeedbackPairs(
+  pairs: { pullRequestId: string; commitSha: string }[],
+  workspaceId: string,
+): Promise<void> {
+  for (const pair of pairs) {
+    try {
+      await refreshFeedbackComments({ ...pair, workspaceId });
+    } catch (err) {
+      console.warn('[ciPromotion] could not re-render the CI feedback comment', {
+        pullRequestId: pair.pullRequestId,
+        commitSha: pair.commitSha,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+/** Re-render the comment of every pull request delivering this card, at its head —
+ *  skipping the pairs in `already`. */
+async function refreshDeliveringComments(
+  workItemId: string,
+  workspaceId: string,
+  already: ReadonlySet<string>,
+): Promise<void> {
+  const pairs = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, workspaceId);
+    const item = await workItemRepository.findById(workItemId, tx);
+    if (!item) return [];
+    const byId = await collectDeliveries(item, tx);
+    const owed: { pullRequestId: string; commitSha: string }[] = [];
+    for (const [pullRequestId, pr] of byId) {
+      const commitSha = pullRequestHead(pr);
+      if (commitSha === null || already.has(feedbackKey(pullRequestId, commitSha))) continue;
+      owed.push({ pullRequestId, commitSha });
+    }
+    return owed;
+  });
+  await refreshFeedbackPairs(pairs, workspaceId);
 }
 
 /**
@@ -546,13 +606,21 @@ export async function promoteIfCiAlreadyGreen(
  * write what is missing or unsettled — because a round trip inside
  * `withSystemContext` would hold a connection open on GitHub's latency for every
  * card arriving at Implemented.
+ *
+ * ⚠️ AND A PASS THAT CHANGED THE SET RE-RENDERS ITS COMMENT (Bug MOTIR-10425).
+ * The rows it writes or settles are ones no delivery reported — a delivery GitHub
+ * gave up on — so no delivery will render a comment about them either. Answers the
+ * `(pull request, commit)` keys it re-rendered, so the promotion after it does not
+ * render them a second time.
  */
 async function reconcileClaimedCompleteDeliveries(
   workItemId: string,
   ctx: { userId: string; workspaceId: string },
   readCheckSet: typeof readReportedCheckSet,
   now: Date,
-): Promise<void> {
+): Promise<Set<string>> {
+  // The pairs whose recorded set this pass CHANGED — re-rendered after it.
+  const changed: { pullRequestId: string; commitSha: string }[] = [];
   try {
     // Phase 1 — WHICH pull requests claim a complete set, and everything needed
     // to ask about them. Resolved in ONE transaction, subject and all: reading
@@ -608,14 +676,14 @@ async function reconcileClaimedCompleteDeliveries(
     for (const c of candidates) {
       const reported = await readCheckSet(c);
       if (reported === null) continue;
-      await withSystemContext(async (tx) => {
+      const wrote = await withSystemContext(async (tx) => {
         await bindWorkspaceContext(tx, ctx.workspaceId);
         const recorded = await githubCheckRunRepository.listByPrAndSha(
           c.pullRequestId,
           c.commitSha,
           tx,
         );
-        await reconcileRecordedCheckSet({
+        return reconcileRecordedCheckSet({
           pullRequestId: c.pullRequestId,
           commitSha: c.commitSha,
           reported,
@@ -623,6 +691,9 @@ async function reconcileClaimedCompleteDeliveries(
           tx,
         });
       });
+      if (wrote.created + wrote.settled > 0) {
+        changed.push({ pullRequestId: c.pullRequestId, commitSha: c.commitSha });
+      }
     }
   } catch (err) {
     // Best-effort in the same sense the promotion itself is: this runs BEFORE a
@@ -634,6 +705,11 @@ async function reconcileClaimedCompleteDeliveries(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+
+  // OUTSIDE the try: a pair whose rows were committed before a later pair threw is
+  // still owed its comment.
+  await refreshFeedbackPairs(changed, ctx.workspaceId);
+  return new Set(changed.map((pair) => feedbackKey(pair.pullRequestId, pair.commitSha)));
 }
 
 /**

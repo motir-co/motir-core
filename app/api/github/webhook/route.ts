@@ -2,20 +2,29 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { CLIENT_CLOSED_REQUEST_STATUS, readRawBodyUnlessAborted } from '@/lib/api/clientAbort';
 import { verifyGithubWebhookSignature } from '@/lib/github/webhookSignature';
 import { GithubWebhookNotConfiguredError, GithubWebhookSignatureError } from '@/lib/github/errors';
-import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
 
 // POST /api/github/webhook (Story 7.10 · MOTIR-892) — the inbound GitHub App
-// webhook: PR lifecycle → work-item status sync, plus the installation grant
-// mirror. HTTP-only (CLAUDE.md 4-layer): this route verifies the signature and
-// dispatches to ONE service method; ALL logic lives in `githubWebhookService`.
+// webhook: PR lifecycle → work-item status sync, CI feedback, the installation
+// grant mirror and the rest of `githubWebhookService.handleEvent`. HTTP-only
+// (CLAUDE.md 4-layer): this route verifies the signature and hands the delivery
+// to ONE service method.
 //
 // Signature verification FIRST, over the RAW body, BEFORE any parse: an
-// unauthentic delivery is rejected 401 and never processed. We then read the
-// event type from `X-GitHub-Event`, parse the body, and hand both to the
-// service. We return a fast 2xx on success (a slow handler makes GitHub retry)
-// and never leak internals: a bad/missing signature → 401, an unconfigured
-// secret → 500, a malformed JSON body → 400, a sender that hung up before the
-// body was read → 499 and a warning, never a thrown `Error: aborted`.
+// unauthentic delivery is rejected 401 and nothing is stored or processed.
+//
+// ⚠️ IT ANSWERS BEFORE THE WORK RUNS (Bug MOTIR-10425). GitHub waits ten seconds
+// for the response headers, records a slower delivery as failed, and does NOT
+// retry it — a failed delivery is redelivered only by a person, from the App's
+// Recent Deliveries. So the route stores the verified delivery in the webhook
+// inbox and answers 202; the `system.github-webhook-delivery` job processes it
+// afterwards, and retries it if processing throws. An event Motir does not act on
+// (`ping`, …) is answered 200 `ignored` and stored nowhere.
+//
+// Never leak internals: a bad/missing signature → 401, an unconfigured secret →
+// 500, a malformed JSON body → 400, a handled event with no `X-GitHub-Delivery`
+// GUID → 400, a sender that hung up before the body was read → 499 and a warning,
+// never a thrown `Error: aborted`.
 
 export async function POST(req: NextRequest): Promise<Response> {
   // Read the EXACT bytes GitHub signed — before any JSON parse (a re-serialized
@@ -57,11 +66,25 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json({ code: 'GITHUB_WEBHOOK_MALFORMED_BODY' }, { status: 400 });
   }
 
-  const eventType = req.headers.get('x-github-event') ?? '';
-  // The delivery's GUID — a hand REDELIVERY repeats it, which is what makes it the
-  // merge-queue exit's idempotency key (MOTIR-5632).
-  const deliveryId = req.headers.get('x-github-delivery');
-  const result = await githubWebhookService.handleEvent(eventType, payload, deliveryId);
-  // 2xx ack — the result payload is for logging/observability, not a contract.
-  return NextResponse.json({ ok: true, result }, { status: 200 });
+  const receipt = await githubWebhookInboxService.receive({
+    event: req.headers.get('x-github-event') ?? '',
+    payload,
+    // The delivery's GUID — a hand REDELIVERY repeats it, which is what makes it the
+    // processing's idempotency key (and the merge-queue exit's, MOTIR-5632).
+    deliveryId: req.headers.get('x-github-delivery'),
+  });
+
+  switch (receipt.kind) {
+    case 'ignored':
+      return NextResponse.json({ ok: true, result: receipt.result }, { status: 200 });
+    case 'missing_delivery_id':
+      return NextResponse.json({ code: 'GITHUB_WEBHOOK_MISSING_DELIVERY_ID' }, { status: 400 });
+    default:
+      // 202 — stored, and processed after this answer. The body is for logging and
+      // tests (`tests/e2e/_helpers/github-seed.ts` waits on the delivery by its id).
+      return NextResponse.json(
+        { ok: true, receipt: receipt.kind, deliveryId: receipt.deliveryId },
+        { status: 202 },
+      );
+  }
 }
