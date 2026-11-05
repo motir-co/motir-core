@@ -199,6 +199,16 @@ export interface NormalizedStatusEvent {
    *  for every workflow of that App (MOTIR-6274). Stored on the row so the
    *  supersession rule can leave it out of its shared-name test. Absent = a check. */
   suiteAggregate?: boolean;
+  /** WHEN, by the provider's own clock, the check reached the state this event
+   *  reports (MOTIR-10456): the moment it STARTED for a `pending` event, the
+   *  moment it FINISHED for a terminal one. It is what orders two deliveries
+   *  about one check row, because GitHub never guaranteed delivery order and the
+   *  webhook inbox replays a delivery minutes or hours late: a `pending` event
+   *  older than the terminal conclusion the row already holds is a LATE delivery
+   *  of the run that settled it, and one newer than it is a RE-RUN.
+   *  `null` / absent where the payload carries no usable time — the write then
+   *  cannot be ordered, and behaves as it did before the field existed. */
+  occurredAt?: Date | null;
 }
 
 /** A push to a repository branch, normalized across providers — consumed by the

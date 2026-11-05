@@ -43,6 +43,9 @@ export interface UpsertGithubCheckRunInput {
    *  note. Omitted = a check, which is every row but a GitHub `check_suite`'s. */
   suiteAggregate?: boolean;
   conclusion: string;
+  /** The provider's time for `conclusion` — a pending check's start, a terminal
+   *  one's finish (MOTIR-10456). Omitted / null = unknown; see the schema's note. */
+  conclusionAt?: Date | null;
 }
 
 export const githubCheckRunRepository = {
@@ -138,11 +141,68 @@ export const githubCheckRunRepository = {
           checkSuiteId: input.checkSuiteId,
           conclusion: 'pending',
         },
-        data: { conclusion: input.conclusion },
+        // The host's finish time, which a late pending delivery is ordered against.
+        data: { conclusion: input.conclusion, conclusionAt: input.conclusionAt },
       });
       settled += count;
     }
     return settled;
+  },
+
+  /**
+   * Move an EXISTING row to `pending` — unless it already holds a terminal
+   * conclusion this pending state predates (MOTIR-10456).
+   *
+   * ⚠️ `upsert` IS WRONG FOR THIS, AND THAT WAS THE DEFECT. It refreshes the
+   * conclusion unconditionally, so a `pending` delivery processed after the same
+   * check's terminal one — GitHub never promised order, and the webhook inbox
+   * re-runs a lost or failed delivery minutes to hours late — turned `success` /
+   * `failure` back into `pending`, and the card read `running` until the
+   * reconcile tick settled it again. Like `settlePending`, the arbiter is the
+   * row's own current value read IN THIS STATEMENT, never a snapshot of it:
+   *
+   * - a row still `pending` is refreshed (a redelivery converges, as before);
+   * - a terminal row is reopened only by a pending state that STARTED AFTER the
+   *   terminal one finished (`conclusion_at < occurredAt`) — a RE-RUN of the check
+   *   under the same name and suite, which must read running while it runs;
+   * - a row with no recorded time cannot be ordered and is refreshed, which is
+   *   the behaviour every row had before the column existed;
+   * - and a pending event with no time of its own is written unguarded for the
+   *   same reason — refusing it would hide a genuine re-run, which nothing heals,
+   *   whereas a wrongly-reopened row is settled again by the reconcile.
+   *
+   * It never creates — `createMissing` does, and the caller tries that first.
+   * Returns how many rows it moved: zero on an existing row means the delivery
+   * was STALE and nothing changed.
+   */
+  async reopenAsPending(
+    input: UpsertGithubCheckRunInput & { conclusion: 'pending' },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const occurredAt = input.conclusionAt ?? null;
+    const { count } = await tx.githubCheckRun.updateMany({
+      where: {
+        pullRequestId: input.pullRequestId,
+        commitSha: input.commitSha,
+        checkName: input.checkName,
+        checkSuiteId: input.checkSuiteId,
+        ...(occurredAt === null
+          ? {}
+          : {
+              OR: [
+                { conclusion: 'pending' },
+                { conclusionAt: null },
+                { conclusionAt: { lt: occurredAt } },
+              ],
+            }),
+      },
+      data: {
+        conclusion: 'pending',
+        conclusionAt: occurredAt,
+        suiteAggregate: input.suiteAggregate === true,
+      },
+    });
+    return count;
   },
 
   /** Create-or-refresh a check row, keyed on the unique

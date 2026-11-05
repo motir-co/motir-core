@@ -10,6 +10,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { linkPrByIdentifier } from '../helpers/prLink';
+import { reconcileRecordedCheckSet } from '@/lib/services/checkSetReconcile';
 
 // Story 7.10 · Subtask 7.10.6 / MOTIR-894 — the CI feedback loop, against a real
 // Postgres (the motir-core convention). Covers: a check_suite / check_run
@@ -112,6 +113,8 @@ function checkSuitePayload(opts: {
   prNumbers?: number[];
   appSlug?: string;
   repoId?: number;
+  suiteId?: number;
+  updatedAt?: string;
 }) {
   return {
     action: 'completed',
@@ -123,6 +126,8 @@ function checkSuitePayload(opts: {
       status: opts.status ?? 'completed',
       conclusion: opts.conclusion,
       app: { slug: opts.appSlug ?? 'github-actions' },
+      ...(opts.suiteId !== undefined ? { id: opts.suiteId } : {}),
+      ...(opts.updatedAt !== undefined ? { updated_at: opts.updatedAt } : {}),
       pull_requests: (opts.prNumbers ?? []).map((n) => ({ number: n })),
     },
   };
@@ -135,6 +140,9 @@ function checkRunPayload(opts: {
   headSha: string;
   headBranch?: string | null;
   prNumbers?: number[];
+  suiteId?: number;
+  startedAt?: string;
+  completedAt?: string;
 }) {
   return {
     action: 'completed',
@@ -145,7 +153,12 @@ function checkRunPayload(opts: {
       status: opts.status ?? 'completed',
       conclusion: opts.conclusion,
       name: opts.name ?? 'build',
-      check_suite: { head_branch: opts.headBranch ?? null },
+      ...(opts.startedAt !== undefined ? { started_at: opts.startedAt } : {}),
+      ...(opts.completedAt !== undefined ? { completed_at: opts.completedAt } : {}),
+      check_suite: {
+        head_branch: opts.headBranch ?? null,
+        ...(opts.suiteId !== undefined ? { id: opts.suiteId } : {}),
+      },
       pull_requests: (opts.prNumbers ?? []).map((n) => ({ number: n })),
     },
   };
@@ -794,5 +807,205 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const roadmap = await workItemsService.getProjectRoadmap(s.project.id, null, s.ctx);
     const storyNode = roadmap.nodes.find((n) => n.id === story.id)!;
     expect(storyNode.progress).toEqual({ done: 0, total: 2, verified: 1 });
+  });
+});
+
+// ── MOTIR-10456 — a LATE pending delivery never undoes a verdict it predates ──
+//
+// GitHub never promised delivery order, and the webhook inbox (MOTIR-10425)
+// re-runs a lost delivery 2–7 minutes late and retries / replays one that threw.
+// Before this card the pending write was an unconditional upsert, so such a
+// delivery turned `success` back into `pending` and the card read `running`
+// until the reconcile tick. The arbiter is the provider's own time for each
+// state: a pending state that STARTED before the row's terminal one FINISHED is
+// that run's late delivery; one that started after it is a re-run.
+describe('githubWebhookService — late pending deliveries (MOTIR-10456)', () => {
+  const SUITE = 87626227873;
+  const run = (o: Partial<Parameters<typeof checkRunPayload>[0]>) =>
+    checkRunPayload({ headSha: 'sha1', prNumbers: [7], suiteId: SUITE, conclusion: null, ...o });
+
+  async function settledGreen(email: string) {
+    const s = await makeScenario(email);
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+    await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'in_progress', startedAt: '2026-11-05T10:00:00Z' }),
+    );
+    const done = await githubWebhookService.handleEvent(
+      'check_run',
+      run({
+        conclusion: 'success',
+        startedAt: '2026-11-05T10:00:00Z',
+        completedAt: '2026-11-05T10:04:00Z',
+      }),
+    );
+    expect(done).toMatchObject({ outcome: 'verified' });
+    expect(await ciStateOf(item.id)).toBe('passing');
+    return { s, item };
+  }
+
+  it('a pending delivery processed AFTER the same run finished leaves the terminal row and ciState alone', async () => {
+    const { item } = await settledGreen('late-pending@example.com');
+    const before = await adminDb.githubCheckRun.findFirstOrThrow();
+    expect(before.conclusionAt).toEqual(new Date('2026-11-05T10:04:00Z'));
+
+    // The SAME run's `in_progress` delivery, replayed by the inbox sweep.
+    const late = await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'in_progress', startedAt: '2026-11-05T10:00:00Z' }),
+    );
+    expect(late).toMatchObject({ event: 'ci', outcome: 'stale_pending', workItemId: item.id });
+    const rows = await adminDb.githubCheckRun.findMany();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      conclusion: 'success',
+      conclusionAt: new Date('2026-11-05T10:04:00Z'),
+    });
+    expect(rows[0]!.updatedAt).toEqual(before.updatedAt); // nothing was written
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a pending state that started at the very instant the run finished is still the late one', async () => {
+    const { item } = await settledGreen('late-pending-tie@example.com');
+    const late = await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'queued', startedAt: '2026-11-05T10:04:00Z' }),
+    );
+    expect(late).toMatchObject({ outcome: 'stale_pending' });
+    expect(await ciStateOf(item.id)).toBe('passing');
+  });
+
+  it('a RE-RUN of the check in the same suite reads running while it runs, then settles', async () => {
+    const { item } = await settledGreen('rerun-pending@example.com');
+
+    // A re-run: a new check run under the same name and suite, started after
+    // the first one finished.
+    const rerun = await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'queued', startedAt: '2026-11-05T10:10:00Z' }),
+    );
+    expect(rerun).toMatchObject({ outcome: 'pending_recorded' });
+    expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+      { conclusion: 'pending', conclusionAt: new Date('2026-11-05T10:10:00Z') },
+    ]);
+    expect(await ciStateOf(item.id)).toBe('running');
+
+    // …and the FIRST run's late in_progress arriving now refreshes a row that is
+    // pending anyway, which leaves it running — the redelivery convergence.
+    await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'in_progress', startedAt: '2026-11-05T10:00:00Z' }),
+    );
+    expect(await ciStateOf(item.id)).toBe('running');
+
+    const failed = await githubWebhookService.handleEvent(
+      'check_run',
+      run({
+        conclusion: 'failure',
+        startedAt: '2026-11-05T10:10:00Z',
+        completedAt: '2026-11-05T10:13:00Z',
+      }),
+    );
+    expect(failed).toMatchObject({ outcome: 'failed' });
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('a check_suite is ordered by updated_at the same way — late `requested` refused, `rerequested` written', async () => {
+    const s = await makeScenario('late-suite@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+    const suite = (o: Partial<Parameters<typeof checkSuitePayload>[0]>) =>
+      checkSuitePayload({
+        headSha: 'sha1',
+        prNumbers: [7],
+        suiteId: SUITE,
+        conclusion: null,
+        ...o,
+      });
+
+    await githubWebhookService.handleEvent(
+      'check_suite',
+      suite({ conclusion: 'success', updatedAt: '2026-11-05T10:05:00Z' }),
+    );
+    expect(await ciStateOf(item.id)).toBe('passing');
+
+    const late = await githubWebhookService.handleEvent(
+      'check_suite',
+      suite({ status: 'queued', updatedAt: '2026-11-05T10:00:00Z' }),
+    );
+    expect(late).toMatchObject({ outcome: 'stale_pending' });
+    expect(await ciStateOf(item.id)).toBe('passing');
+
+    const rerequested = await githubWebhookService.handleEvent(
+      'check_suite',
+      suite({ status: 'queued', updatedAt: '2026-11-05T10:20:00Z' }),
+    );
+    expect(rerequested).toMatchObject({ outcome: 'pending_recorded' });
+    expect(await ciStateOf(item.id)).toBe('running');
+  });
+
+  it('a terminal row with no recorded time cannot be ordered, and keeps last-write-wins', async () => {
+    const { item } = await settledGreen('untimed-row@example.com');
+    // A row written before `conclusion_at` existed.
+    await adminDb.githubCheckRun.updateMany({ data: { conclusionAt: null } });
+    const res = await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'in_progress', startedAt: '2026-11-05T10:00:00Z' }),
+    );
+    expect(res).toMatchObject({ outcome: 'pending_recorded' });
+    expect(await ciStateOf(item.id)).toBe('running');
+  });
+
+  it('the reconcile stamps the host’s finish time on what it creates and settles, so a late pending is refused against it too', async () => {
+    const s = await makeScenario('reconcile-time@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'A change' },
+      s.ctx,
+    );
+    await openPr(item.identifier, 7);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 7 } });
+    // A pending row whose completion delivery was lost.
+    await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'in_progress', startedAt: '2026-11-05T10:00:00Z' }),
+    );
+    const finished = new Date('2026-11-05T10:04:00Z');
+    const reported = [
+      { checkName: 'build', checkSuiteId: String(SUITE), conclusion: 'success' as const },
+      { checkName: 'lint', checkSuiteId: String(SUITE), conclusion: 'success' as const },
+      // Still running on the host: created pending, with no finish to date it by.
+      { checkName: 'e2e', checkSuiteId: String(SUITE), conclusion: 'pending' as const },
+    ].map((r) => ({
+      ...r,
+      rawConclusion: r.conclusion === 'pending' ? null : 'success',
+      url: null,
+      completedAt: r.conclusion === 'pending' ? null : finished,
+    }));
+    const result = await reconcileRecordedCheckSet({
+      pullRequestId: pr.id,
+      commitSha: 'sha1',
+      reported,
+      recorded: [{ checkName: 'build', checkSuiteId: String(SUITE), conclusion: 'pending' }],
+      tx: adminDb,
+    });
+    expect(result).toEqual({ created: 2, settled: 1 });
+    expect(await adminDb.githubCheckRun.findMany({ orderBy: { checkName: 'asc' } })).toMatchObject([
+      { checkName: 'build', conclusion: 'success', conclusionAt: finished },
+      { checkName: 'e2e', conclusion: 'pending', conclusionAt: null },
+      { checkName: 'lint', conclusion: 'success', conclusionAt: finished },
+    ]);
+
+    const late = await githubWebhookService.handleEvent(
+      'check_run',
+      run({ status: 'in_progress', startedAt: '2026-11-05T10:00:00Z' }),
+    );
+    expect(late).toMatchObject({ outcome: 'stale_pending', workItemId: item.id });
   });
 });

@@ -114,6 +114,7 @@ export type CiFeedbackResult = {
     | 'failed' // a terminal FAILURE → failure summary + ciState 'failing'
     | 'noop' // a redelivery of an already-recorded conclusion
     | 'pending_recorded' // an in-flight check RECORDED as a pending row (MOTIR-1579) — no comment, no ciState
+    | 'stale_pending' // a pending delivery older than the terminal conclusion its row holds (MOTIR-10456) — nothing written
     | 'ignored_pending' // a neutral (skipped / stale) conclusion — a clean no-op
     | 'no_pull_request' // no stored change request matches the event's PR/MR list / branch
     | 'no_work_item' // the change request carries no linked work item — a clean no-op
@@ -352,19 +353,31 @@ async function applyOneCiDelivery(
   // check — which is precisely the window in which a person scanning for red cards
   // would go and fix one that somebody is already fixing. The column now carries
   // `running`, so the push itself moves the badge.
+  //
+  // ⚠️ AND A PENDING DELIVERY NEVER UNDOES A VERDICT IT PREDATES (MOTIR-10456).
+  // GitHub does not deliver in order, and the webhook inbox (MOTIR-10425) re-runs a
+  // delivery whose enqueue was lost 2–7 minutes later, or retries / replays one
+  // that threw. Written with `upsert`, such a late `pending` turned the row's
+  // `success` / `failure` back into `pending` and the card read `running` until the
+  // reconcile tick. The row is now CREATED if it is missing and otherwise only
+  // REOPENED when it is still pending or when this pending state started after its
+  // terminal one finished — a re-run, which must still read running while it runs.
+  // A refused delivery changes no row, so it recomputes and withdraws nothing.
   if (event.conclusion === 'pending') {
-    await withSystemContext(async (tx) => {
-      await githubCheckRunRepository.upsert(
-        {
-          pullRequestId: resolved.prId,
-          commitSha: event.commitSha,
-          checkName: event.context,
-          checkSuiteId: suiteId,
-          suiteAggregate: event.suiteAggregate === true,
-          conclusion: 'pending',
-        },
-        tx,
-      );
+    const recorded = await withSystemContext(async (tx) => {
+      const pendingRow = {
+        pullRequestId: resolved.prId,
+        commitSha: event.commitSha,
+        checkName: event.context,
+        checkSuiteId: suiteId,
+        suiteAggregate: event.suiteAggregate === true,
+        conclusion: 'pending' as const,
+        conclusionAt: event.occurredAt ?? null,
+      };
+      const written =
+        (await githubCheckRunRepository.createMissing([pendingRow], tx)) > 0 ||
+        (await githubCheckRunRepository.reopenAsPending(pendingRow, tx)) > 0;
+      if (!written) return false;
       // A pending row is usually the FIRST sign of a new head — a push starts
       // CI before anything finishes — so it withdraws the old head's approve-to-merge
       // gate too (MOTIR-5482). `approval_gate` has no system arm: bind the tenant.
@@ -381,7 +394,15 @@ async function applyOneCiDelivery(
         // means the card is moving again (MOTIR-10308).
         await recomputeWorkItemResumeState(workItemId, tx);
       }
+      return true;
     }, CI_FEEDBACK_SYSTEM_TX);
+    if (!recorded) {
+      return {
+        event: 'ci',
+        outcome: 'stale_pending',
+        ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
+      };
+    }
     // …and a pending row at the SAME head is a set leaving green without going red
     // (MOTIR-6946): the question asked over it is retired until the next green. After the
     // durable write and best-effort, like both verdict arms below; it re-derives
@@ -480,6 +501,8 @@ async function applyOneCiDelivery(
         checkSuiteId: suiteId,
         suiteAggregate: event.suiteAggregate === true,
         conclusion: event.conclusion,
+        // The finish time the next pending delivery is ordered against (MOTIR-10456).
+        conclusionAt: event.occurredAt ?? null,
       },
       tx,
     );

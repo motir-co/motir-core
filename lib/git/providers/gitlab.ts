@@ -85,6 +85,34 @@ function parseGitlabTimestamp(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * WHEN a pipeline reached the state its hook reports (MOTIR-10456) — what orders
+ * two deliveries about one pipeline row. A finished pipeline is dated by its
+ * `finished_at`. An unfinished one is dated by the LATEST moment anything in it
+ * was created or started: a retried job is a new build inside the SAME pipeline
+ * id, created after the pipeline last finished, so a retry reads newer than the
+ * terminal row while a late `running` hook of the first attempt — whose builds
+ * all predate that finish — reads older. `null` where the hook carries no time.
+ */
+function pipelineStateTime(
+  conclusion: CiConclusion,
+  attrs: Record<string, unknown>,
+  builds: unknown,
+): Date | null {
+  if (conclusion !== 'pending') return parseGitlabTimestamp(attrs['finished_at']);
+  const stamps = [parseGitlabTimestamp(attrs['created_at'])];
+  for (const raw of Array.isArray(builds) ? builds : []) {
+    const build = asRecord(raw);
+    if (!build) continue;
+    stamps.push(
+      parseGitlabTimestamp(build['created_at']),
+      parseGitlabTimestamp(build['started_at']),
+    );
+  }
+  const times = stamps.filter((d): d is Date => d !== null).map((d) => d.getTime());
+  return times.length > 0 ? new Date(Math.max(...times)) : null;
+}
+
 /** Narrow an `unknown` to a plain object without asserting `any`. */
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null;
@@ -728,10 +756,11 @@ export const gitlabProvider: GitProvider = {
     // A pipeline hook carries the associated MR iid on `merge_request.iid` when it
     // ran for one; `object_attributes.ref` is the branch it ran on.
     const mrIid = asRecord(payload['merge_request'])?.['iid'];
+    const conclusion = mapPipelineStatus(status);
     return {
       providerRepoId,
       commitSha,
-      conclusion: mapPipelineStatus(status),
+      conclusion,
       context: 'pipeline',
       prNumbers: typeof mrIid === 'number' && Number.isInteger(mrIid) ? [mrIid] : [],
       headBranch: typeof attrs['ref'] === 'string' && attrs['ref'].length > 0 ? attrs['ref'] : null,
@@ -740,6 +769,7 @@ export const gitlabProvider: GitProvider = {
       // pipeline reports under `context: 'pipeline'`, so a later pipeline at the
       // same commit shares that name and retires the one it replaced.
       suiteId: idToString(attrs['id']),
+      occurredAt: pipelineStateTime(conclusion, attrs, payload['builds']),
     };
   },
 
