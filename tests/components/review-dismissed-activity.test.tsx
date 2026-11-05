@@ -45,9 +45,7 @@ afterEach(() => cleanup());
 describe('the review-dismissal activity entry', () => {
   it('names who dismissed the review, at which commits, with the reason', () => {
     const { container } = renderEntry();
-    expect(container.textContent).toContain(
-      `Ana Lima dismissed the agent's review at ${COMMITS}`,
-    );
+    expect(container.textContent).toContain(`Ana Lima dismissed the agent's review at ${COMMITS}`);
     expect(container.textContent).toContain(
       'Reason: The finding is about code this card does not change.',
     );
