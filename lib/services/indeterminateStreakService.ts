@@ -2,6 +2,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import {
   INDETERMINATE_STREAK_BLIND_SPOT,
+  PROBE_INDETERMINATE_STREAK_CODE,
   type IndeterminateStreakEntryDTO,
   type IndeterminateStreakVerdictDTO,
 } from '@/lib/dto/indeterminateStreak';
@@ -39,7 +40,7 @@ import {
 export const INDETERMINATE_STREAK_THRESHOLD = 3;
 
 /**
- * How many earlier succeeded runs are read. The threshold needs only
+ * How many earlier settled runs are read. The threshold needs only
  * `threshold - 1`; reading further lets the error state how long the read has
  * really been failing, which tells an operator whether it began with a deploy.
  * Thirty is the ledger's terminal-row retention in days (`JOB_RUN_RETENTION_MS`), so a longer reading would have nothing to read.
@@ -69,6 +70,38 @@ function isIndeterminate(value: unknown): boolean {
   );
 }
 
+/**
+ * What one earlier run says about one probe.
+ *
+ * - A SUCCEEDED run: its `output` verdict — `indeterminate`, or anything else,
+ *   which answered (a run from before the probe existed answers too: the streak
+ *   cannot reach past it).
+ * - A run failed BY THIS STREAK: its `failure.data` lists every probe that was
+ *   `indeterminate` on it, so a probe in the list extends the streak and one
+ *   missing from it had answered. Without this read, the alarm's own failed runs
+ *   were skipped, the count stuck at the threshold, and once the 30-day
+ *   retention pruned the succeeded rows that seeded it the check went green for
+ *   two runs while the read was still broken.
+ * - Any other failed run: unknown, skipped.
+ */
+function whatTheRowSays(
+  row: { status: 'succeeded' | 'failed'; output: unknown; failure: unknown },
+  probe: string,
+): 'indeterminate' | 'answered' | 'unknown' {
+  if (row.status === 'succeeded') {
+    const output = row.output as Record<string, unknown> | null;
+    return output && isIndeterminate(output[probe]) ? 'indeterminate' : 'answered';
+  }
+  const failure = row.failure as {
+    code?: unknown;
+    data?: { indeterminateProbes?: unknown };
+  } | null;
+  if (failure?.code !== PROBE_INDETERMINATE_STREAK_CODE) return 'unknown';
+  const probes = failure.data?.indeterminateProbes;
+  if (!Array.isArray(probes)) return 'unknown';
+  return probes.includes(probe) ? 'indeterminate' : 'answered';
+}
+
 export const indeterminateStreakService = {
   /**
    * How long has each probe that is `indeterminate` on this run been so?
@@ -80,7 +113,9 @@ export const indeterminateStreakService = {
    * A streak ends at the first earlier run whose verdict for that probe is
    * anything but `indeterminate` — a pass, a fault or `not_applicable` all
    * answered the question — and at the first run that carries no verdict for it
-   * at all, which is a run from before the probe existed.
+   * at all, which is a run from before the probe existed. A run this streak
+   * failed is read from its `failure.data`; any other failed run is skipped
+   * (see `whatTheRowSays`).
    */
   async check(
     readings: IndeterminateProbeReading[],
@@ -88,7 +123,7 @@ export const indeterminateStreakService = {
   ): Promise<IndeterminateStreakVerdictDTO> {
     const checkedAt = now.toISOString();
     const rows = await withSystemContext((tx) =>
-      jobRunRepository.listRecentSucceededRuns(
+      jobRunRepository.listRecentSettledRuns(
         DAILY_HEALTH_CHECK_FUNCTION_ID,
         INDETERMINATE_STREAK_HISTORY,
         tx,
@@ -101,8 +136,9 @@ export const indeterminateStreakService = {
       let consecutive = 1;
       let since = checkedAt;
       for (const row of rows) {
-        const output = row.output as Record<string, unknown> | null;
-        if (!output || !isIndeterminate(output[reading.probe])) break;
+        const said = whatTheRowSays(row, reading.probe);
+        if (said === 'unknown') continue;
+        if (said === 'answered') break;
         consecutive += 1;
         since = row.startedAt.toISOString();
       }

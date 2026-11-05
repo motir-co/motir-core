@@ -485,26 +485,41 @@ export const jobRunRepository = {
   },
 
   /**
-   * The newest SUCCEEDED runs of one job, across ALL workspaces, newest first
-   * (MOTIR-10429) — the history the daily health check's indeterminate-streak
-   * read walks. Like `listSucceededCodeGraphRuns` it carries no workspace
-   * filter, so the caller MUST supply a `withSystemContext` tx.
+   * The newest SETTLED (succeeded or failed) runs of one job, across ALL
+   * workspaces, newest first (MOTIR-10429) — the history the daily health
+   * check's indeterminate-streak read walks. Like `listSucceededCodeGraphRuns` it
+   * carries no workspace filter, so the caller MUST supply a `withSystemContext`
+   * tx.
    *
-   * ⚠️ `status: 'succeeded'` IS THE PREDICATE: only a succeeded run carries the
-   * probe verdicts on `output`. A failed run's `output` is null, so admitting one
-   * would put a row into the walk that reads as "this probe was not measured".
+   * A succeeded run carries the probe verdicts on `output`; a failed run's
+   * `output` is null and its `failure` is all it says, so both come back and the
+   * reader decides what each row can tell it. `running` (this run) and
+   * `abandoned` rows are not settled and are left out.
    */
-  async listRecentSucceededRuns(
+  async listRecentSettledRuns(
     functionId: string,
     limit: number,
     tx: Prisma.TransactionClient,
-  ): Promise<Array<{ startedAt: Date; output: Prisma.JsonValue | null }>> {
-    return tx.jobRun.findMany({
-      where: { functionId, status: 'succeeded' },
-      select: { startedAt: true, output: true },
+  ): Promise<
+    Array<{
+      startedAt: Date;
+      status: 'succeeded' | 'failed';
+      output: Prisma.JsonValue | null;
+      failure: Prisma.JsonValue | null;
+    }>
+  > {
+    const rows = await tx.jobRun.findMany({
+      where: { functionId, status: { in: ['succeeded', 'failed'] } },
+      select: { startedAt: true, status: true, output: true, failure: true },
       orderBy: { startedAt: 'desc' },
       take: limit,
     });
+    return rows as Array<{
+      startedAt: Date;
+      status: 'succeeded' | 'failed';
+      output: Prisma.JsonValue | null;
+      failure: Prisma.JsonValue | null;
+    }>;
   },
 
   /**

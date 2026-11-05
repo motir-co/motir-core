@@ -8,7 +8,11 @@ import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe
 import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
 import type { FleetImageCoverageVerdictDTO } from '@/lib/dto/fleetImageCoverage';
 import type { RunnerImageFreshnessVerdictDTO } from '@/lib/dto/runnerImageFreshness';
-import type { IndeterminateStreakVerdictDTO } from '@/lib/dto/indeterminateStreak';
+import {
+  PROBE_INDETERMINATE_STREAK_CODE,
+  type IndeterminateStreakFailureData,
+  type IndeterminateStreakVerdictDTO,
+} from '@/lib/dto/indeterminateStreak';
 import type { IndeterminateProbeReading } from '@/lib/services/indeterminateStreakService';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
@@ -637,6 +641,12 @@ export class RunnerImageStaleError extends Error {
  * reason {@link IndexRebuildStreakError} gives.
  */
 export class ProbeIndeterminateStreakError extends Error {
+  /** Lands on the failed row's `failure.code`, so a later run knows this row. */
+  readonly code = PROBE_INDETERMINATE_STREAK_CODE;
+  /** Lands on the failed row's `failure.data`: every probe that could not tell on
+   *  THIS run, which is how the next run's streak counts through this one. */
+  readonly failureData: IndeterminateStreakFailureData;
+
   constructor(readonly verdict: Extract<IndeterminateStreakVerdictDTO, { verdict: 'persistent' }>) {
     const offenders = verdict.offenders
       .map(
@@ -652,6 +662,7 @@ export class ProbeIndeterminateStreakError extends Error {
         `path or a rate limit — not the verdict. ⚠️ SCOPE: ${verdict.blindSpot}`,
     );
     this.name = 'ProbeIndeterminateStreakError';
+    this.failureData = { indeterminateProbes: verdict.streaks.map((s) => s.probe) };
   }
 }
 
@@ -922,8 +933,9 @@ export const dailyHealthCheck = defineJob(
     }
 
     // The STREAK, reported last: every definite fault above is the more
-    // actionable message, and a run that throws one of them records no verdicts,
-    // so the streak is read again — and still there — on the next run.
+    // actionable message. A run that throws one of them records no verdicts and
+    // is skipped by the next run's read; a run that throws THIS records which
+    // probes could not tell on `failure.data`, so the streak keeps counting.
     if (indeterminateStreak.verdict === 'persistent') {
       throw new ProbeIndeterminateStreakError(indeterminateStreak);
     }

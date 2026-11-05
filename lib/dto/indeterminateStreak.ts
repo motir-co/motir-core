@@ -33,8 +33,22 @@ export interface IndeterminateStreakEntryDTO {
  * for more than it measured will be wrong.
  */
 export const INDETERMINATE_STREAK_BLIND_SPOT =
-  'A run that FAILED records no probe verdicts, so it is skipped: it neither extends nor breaks a ' +
-  'streak. A streak can therefore span a day on which another probe failed the check.';
+  'A run that FAILED on anything but this streak records no probe verdicts, so it is skipped: ' +
+  'it neither extends nor breaks a streak. A streak can therefore span a day on which another ' +
+  'probe failed the check.';
+
+/**
+ * The `failure.code` of a run this escalation failed (`ProbeIndeterminateStreakError`). Its `failure.data` carries {@link IndeterminateStreakFailureData},
+ * which is how a later run's streak reads THROUGH the failed runs the alarm
+ * itself produced (a failed run has no `output`).
+ */
+export const PROBE_INDETERMINATE_STREAK_CODE = 'probe_indeterminate_streak';
+
+/** What a streak-failed run records on `failure.data`. */
+export interface IndeterminateStreakFailureData {
+  /** Every probe that was `indeterminate` on that run, whatever its streak length. */
+  indeterminateProbes: string[];
+}
 
 export type IndeterminateStreakVerdictDTO =
   | {
@@ -42,7 +56,7 @@ export type IndeterminateStreakVerdictDTO =
        *  `indeterminate` on this run, below it — readable, not an alarm. */
       verdict: 'ok';
       threshold: number;
-      /** How many earlier succeeded runs were read. */
+      /** How many earlier settled (succeeded or failed) runs were read. */
       runsRead: number;
       streaks: IndeterminateStreakEntryDTO[];
       checkedAt: string;

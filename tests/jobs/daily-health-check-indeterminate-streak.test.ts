@@ -11,6 +11,7 @@ import {
   DAILY_HEALTH_CHECK_PROBES,
   indeterminateReadings,
 } from '@/lib/jobs/definitions/dailyHealthCheck';
+import { PROBE_INDETERMINATE_STREAK_CODE } from '@/lib/dto/indeterminateStreak';
 import {
   DAILY_HEALTH_CHECK_FUNCTION_ID,
   INDETERMINATE_STREAK_THRESHOLD,
@@ -46,6 +47,7 @@ async function seedRun(
   daysAgo: number,
   output: Record<string, unknown> | null,
   status = 'succeeded',
+  failure: Record<string, unknown> | null = null,
 ) {
   await adminDb.jobRun.create({
     data: {
@@ -59,6 +61,7 @@ async function seedRun(
       startedAt: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000),
       finishedAt: new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000 + 1000),
       output: output === null ? Prisma.DbNull : (output as Prisma.InputJsonValue),
+      failure: failure === null ? Prisma.DbNull : (failure as Prisma.InputJsonValue),
     },
   });
 }
@@ -129,6 +132,11 @@ describe('the daily check fails on a probe that cannot tell on N runs in a row',
       `latest read failed at github: ${RUNNER_IMAGE}: GitHub answered 403 (rate limit) listing commits`,
     );
     expect(error?.message).toContain('⚠️ SCOPE:');
+    // What the failed row records, so the next run counts through this one.
+    expect(error).toMatchObject({
+      code: PROBE_INDETERMINATE_STREAK_CODE,
+      failureData: { indeterminateProbes: ['runnerImageFreshness'] },
+    });
     const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
     expect(stepIds).toContain('indeterminate-streak');
   });
@@ -174,9 +182,55 @@ describe('indeterminateStreakService.check', () => {
 
     const verdict = await indeterminateStreakService.check([reading]);
 
-    expect(verdict).toMatchObject({ verdict: 'persistent', runsRead: 2 });
+    expect(verdict).toMatchObject({ verdict: 'persistent', runsRead: 3 });
     expect(verdict.streaks[0]).toMatchObject({ consecutive: 3, phase: 'registry' });
     expect(verdict.blindSpot).toContain('FAILED');
+  });
+
+  it('counts THROUGH the runs the alarm itself failed, so the streak keeps growing', async () => {
+    // Day 5 and 4 seeded the streak; days 3..1 are the alarm firing. Before
+    // MOTIR-10429's review fix those three were skipped, the count stuck at the
+    // threshold, and once retention pruned days 5 and 4 the check went green.
+    const streakFailure = {
+      message: 'health probe(s) could not tell',
+      code: PROBE_INDETERMINATE_STREAK_CODE,
+      data: { indeterminateProbes: ['runnerImageFreshness'] },
+    };
+    await seedRun(5, stillIndeterminate);
+    await seedRun(4, stillIndeterminate);
+    for (const day of [3, 2, 1]) await seedRun(day, null, 'failed', streakFailure);
+
+    const verdict = await indeterminateStreakService.check([reading]);
+
+    expect(verdict).toMatchObject({ verdict: 'persistent', runsRead: 5 });
+    expect(verdict.streaks[0]).toMatchObject({ consecutive: 6 });
+  });
+
+  it('keeps the alarm on after the rows that seeded the streak are pruned', async () => {
+    const streakFailure = {
+      message: 'health probe(s) could not tell',
+      code: PROBE_INDETERMINATE_STREAK_CODE,
+      data: { indeterminateProbes: ['runnerImageFreshness'] },
+    };
+    for (const day of [2, 1]) await seedRun(day, null, 'failed', streakFailure);
+
+    const verdict = await indeterminateStreakService.check([reading]);
+
+    expect(verdict).toMatchObject({ verdict: 'persistent', streaks: [{ consecutive: 3 }] });
+  });
+
+  it('a streak-failed run that does NOT list the probe means it answered there', async () => {
+    await seedRun(3, stillIndeterminate);
+    await seedRun(2, stillIndeterminate);
+    await seedRun(1, null, 'failed', {
+      message: 'health probe(s) could not tell',
+      code: PROBE_INDETERMINATE_STREAK_CODE,
+      data: { indeterminateProbes: ['fleet'] },
+    });
+
+    const verdict = await indeterminateStreakService.check([reading]);
+
+    expect(verdict).toMatchObject({ verdict: 'ok', streaks: [{ consecutive: 1 }] });
   });
 
   it('ends a streak at a run from before the probe existed', async () => {

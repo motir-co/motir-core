@@ -221,6 +221,41 @@ describe('terminal failure — the ledger row AND the dead-letter row', () => {
     expect(dlq[0]?.replayedAt).toBeNull();
   });
 
+  it("carries an error's `failureData` and `code` onto the failed row (MOTIR-10429)", async () => {
+    // A failed row has no `output`, so this is all a LATER run can read of it —
+    // the daily health check's indeterminate streak counts through its own
+    // failed runs by it.
+    class CarryingError extends Error {
+      readonly code = 'carrying';
+      readonly failureData = { probes: ['fleet'], since: new Date('2026-11-01T00:00:00Z') };
+    }
+    const { jobId, runId, workspaceId } = await seedJob(
+      () => {
+        throw new CarryingError('carries facts');
+      },
+      { retryPolicy: 'none', maxAttempts: 1 },
+    );
+    const w = new JobWorker({
+      workerId: 'ledger-failure-data',
+      logger: silent,
+      execute: async (r) => {
+        await executeWithLedger(r, { workspaceId });
+      },
+      onTerminalFailure: async (r, e) => recordEngineTerminalFailure(r, e, { workspaceId }),
+    });
+
+    await w.tick();
+    await w.settled();
+
+    expect((await readRun(runId)).state).toBe('failed');
+    const runs = await adminDb.jobRun.findMany({ where: { functionId: jobId } });
+    expect(runs[0]?.failure).toMatchObject({
+      message: 'carries facts',
+      code: 'carrying',
+      data: { probes: ['fleet'], since: '2026-11-01T00:00:00.000Z' },
+    });
+  });
+
   it('a hook that THROWS still lets the run settle — a stranded row is worse', async () => {
     const { runId, workspaceId } = await seedJob(
       () => {
