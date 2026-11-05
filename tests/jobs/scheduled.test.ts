@@ -1124,7 +1124,7 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       expect(error?.message).toContain(`git tag runner-v<next> ${CHANGE}`);
       const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
       expect(stepIds).toEqual(
-        expect.arrayContaining(['fleet-image-coverage', 'runner-image-freshness']),
+        expect.arrayContaining(['fleet-image-coverage', 'runner-image-freshness-v2']),
       );
     });
 

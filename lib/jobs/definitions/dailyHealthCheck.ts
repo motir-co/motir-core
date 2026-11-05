@@ -681,7 +681,8 @@ export const dailyHealthCheck = defineJob(
     const fleetImageCoverage = await ctx.step.run('fleet-image-coverage', () =>
       services.fleetImageCoverage.check(),
     );
-    const runnerImageFreshness = await ctx.step.run('runner-image-freshness', () =>
+    // `-v2`: MOTIR-10395 replaced the AMI's `not_read` arm with a judged verdict.
+    const runnerImageFreshness = await ctx.step.run('runner-image-freshness-v2', () =>
       services.runnerImageFreshness.check(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
