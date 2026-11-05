@@ -15163,6 +15163,38 @@
         "none": "{name} 已批准 · 未经智能体审查",
         "someone": "某人",
         "reason": "理由：{reason}"
+      },
+      "marker": {
+        "reviewing": "智能体审查中",
+        "reviewingName": "智能体正在审查此工作",
+        "couldNotRun": "审查无法运行",
+        "couldNotRunName": "智能体审查无法运行 — 等待你处理",
+        "couldNotRunOn": "审查无法运行 · {name}",
+        "couldNotRunOnName": "智能体审查无法运行 — 等待 {name} 处理",
+        "waitingYours": "等待你的审查智能体",
+        "waitingYoursName": "等待你的审查智能体 — 运行 motir review {key}",
+        "waitingOn": "等待 {name} 的审查智能体",
+        "waitingOnName": "等待 {name} 的审查智能体"
+      },
+      "command": {
+        "copy": "复制 motir review {key}",
+        "copied": "已复制",
+        "toastTitle": "命令已复制",
+        "toastBody": "在你自己的智能体中运行 {command} 来审查此工作。"
+      },
+      "badge": {
+        "reviewed": "已审查",
+        "reviewedName": "已由智能体在当前提交上审查",
+        "container": "{total, plural, other {已审查 {done}/#}}",
+        "containerName": "{total, plural, other {# 个部分中有 {done} 个已由智能体在当前提交上审查}}",
+        "containerAllName": "每个部分都已由智能体在当前提交上审查",
+        "card": {
+          "hosted": "由 Motir 托管智能体审查",
+          "own": "由 {name} 自己的智能体审查",
+          "harness": "{harness} · {model}",
+          "commits": "审查的提交",
+          "link": "发现和检查清单"
+        }
       }
     }
   },

@@ -15169,6 +15169,38 @@
         "none": "Approved by {name} · not reviewed by an agent",
         "someone": "someone",
         "reason": "Reason: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent reviewing",
+        "reviewingName": "An agent is reviewing this work",
+        "couldNotRun": "Review could not run",
+        "couldNotRunName": "The agent review could not run — waiting on you",
+        "couldNotRunOn": "Review could not run · {name}",
+        "couldNotRunOnName": "The agent review could not run — waiting on {name}",
+        "waitingYours": "Waiting for your review agent",
+        "waitingYoursName": "Waiting for your review agent — run motir review {key}",
+        "waitingOn": "Waiting for {name}'s review agent",
+        "waitingOnName": "Waiting for {name}'s review agent"
+      },
+      "command": {
+        "copy": "Copy motir review {key}",
+        "copied": "Copied",
+        "toastTitle": "Command copied",
+        "toastBody": "Run {command} in your own agent to review this work."
+      },
+      "badge": {
+        "reviewed": "Reviewed",
+        "reviewedName": "Reviewed by an agent at the current commits",
+        "container": "{total, plural, one {{done} of # reviewed} other {{done} of # reviewed}}",
+        "containerName": "{total, plural, one {{done} of # part reviewed by an agent at its current commits} other {{done} of # parts reviewed by an agent at their current commits}}",
+        "containerAllName": "Every part reviewed by an agent at its current commits",
+        "card": {
+          "hosted": "Reviewed by Motir's hosted agent",
+          "own": "Reviewed by {name}'s own agent",
+          "harness": "{harness} · {model}",
+          "commits": "At these commits",
+          "link": "Findings and checklist"
+        }
       }
     }
   },

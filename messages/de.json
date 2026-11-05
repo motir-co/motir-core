@@ -15172,6 +15172,38 @@
         "none": "Genehmigt von {name} · nicht von einem Agenten geprüft",
         "someone": "jemand",
         "reason": "Grund: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent prüft",
+        "reviewingName": "Ein Agent prüft diese Arbeit",
+        "couldNotRun": "Review konnte nicht laufen",
+        "couldNotRunName": "Das Agenten-Review konnte nicht laufen — wartet auf Sie",
+        "couldNotRunOn": "Review konnte nicht laufen · {name}",
+        "couldNotRunOnName": "Das Agenten-Review konnte nicht laufen — wartet auf {name}",
+        "waitingYours": "Wartet auf Ihren Review-Agenten",
+        "waitingYoursName": "Wartet auf Ihren Review-Agenten — führen Sie motir review {key} aus",
+        "waitingOn": "Wartet auf den Review-Agenten von {name}",
+        "waitingOnName": "Wartet auf den Review-Agenten von {name}"
+      },
+      "command": {
+        "copy": "motir review {key} kopieren",
+        "copied": "Kopiert",
+        "toastTitle": "Befehl kopiert",
+        "toastBody": "Führen Sie {command} in Ihrem eigenen Agenten aus, um diese Arbeit zu prüfen."
+      },
+      "badge": {
+        "reviewed": "Geprüft",
+        "reviewedName": "Von einem Agenten bei den aktuellen Commits geprüft",
+        "container": "{total, plural, one {{done} von # geprüft} other {{done} von # geprüft}}",
+        "containerName": "{total, plural, one {{done} von # Teil von einem Agenten bei seinen aktuellen Commits geprüft} other {{done} von # Teilen von einem Agenten bei ihren aktuellen Commits geprüft}}",
+        "containerAllName": "Jeder Teil von einem Agenten bei seinen aktuellen Commits geprüft",
+        "card": {
+          "hosted": "Geprüft vom gehosteten Agenten von Motir",
+          "own": "Geprüft vom eigenen Agenten von {name}",
+          "harness": "{harness} · {model}",
+          "commits": "Bei diesen Commits",
+          "link": "Befunde und Checkliste"
+        }
       }
     }
   },

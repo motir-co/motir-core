@@ -1059,3 +1059,63 @@ describe('access and the edges', () => {
     expect(await reviewStateRepository.listPeople([], tx)).toEqual([]);
   });
 });
+
+// THE SURFACES' READ (MOTIR-10341) — the board and the List / Tree read the model through
+// `cardReviewsFor`: ONE batch over the page, a serializable map holding only the cards that
+// draw something, and nothing of another workspace.
+describe('the surfaces’ read — cardReviewsFor and the board', () => {
+  it('answers only the cards that draw something, as plain data, in one batch', async () => {
+    const { s, item } = await reviewingUnder('own', 'surf-own', 128);
+    await reviewVerdictService.submit(s.project.id, item.identifier, input(versionOf(128)), s.ctx);
+    const quiet = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Undelivered' },
+      s.ctx,
+    );
+    const forCards = vi.spyOn(reviewStateService, 'forCards');
+    const map = await reviewStateService.cardReviewsFor(s.project.id, [item.id, quiet.id], s.ctx);
+    expect(forCards).toHaveBeenCalledTimes(1);
+    expect(Object.keys(map)).toEqual([item.id]);
+    expect(map[item.id]).toMatchObject({
+      identifier: item.identifier,
+      marker: null,
+      container: null,
+      reviewed: { commits: [{ repo: 'moooon/acme', number: 128, headSha: 'sha-a' }] },
+      recordRef: { kind: 'record' },
+    });
+    // Crosses the server → client boundary unchanged.
+    expect(JSON.parse(JSON.stringify(map))).toEqual(map);
+  });
+
+  it('the board carries each card its review with one batch, and none for a foreign reader', async () => {
+    const { s, item } = await reviewingUnder('own', 'surf-board', 129);
+    const second = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Second' },
+      s.ctx,
+    );
+    const { boardsService } = await import('@/lib/services/boardsService');
+    const batch = vi.spyOn(reviewStateService, 'cardReviewsFor');
+    const board = await boardsService.getBoard(s.project.id, s.ctx);
+    expect(batch).toHaveBeenCalledTimes(1);
+    const cards = board.columns.flatMap((c) => c.cards);
+    const mine = cards.find((c) => c.id === item.id);
+    expect(mine?.review?.marker).toMatchObject({
+      kind: 'waiting_for_own_agent',
+      command: `motir review ${item.identifier}`,
+    });
+    const plain = cards.find((c) => c.id === second.id);
+    expect(plain).toBeDefined();
+    expect(plain?.review ?? null).toBeNull();
+
+    const outsider = await createTestUser({ name: 'Elsewhere' });
+    const elsewhere = await workspacesService.createWorkspace({
+      name: 'Elsewhere',
+      ownerUserId: outsider.id,
+    });
+    expect(
+      await reviewStateService.cardReviewsFor(s.project.id, [item.id], {
+        userId: outsider.id,
+        workspaceId: elsewhere.workspace.id,
+      }),
+    ).toEqual({});
+  });
+});

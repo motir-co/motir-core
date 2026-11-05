@@ -6,6 +6,8 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
 import { ToFixTag } from '@/components/workItems/ToFixTag';
+import { ReviewMarker } from '@/components/approvals/ReviewMarker';
+import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
 import { ObsolescenceBadge } from '@/components/issues/ObsolescenceBadge';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { EstimateBadge } from '@/components/issues/EstimateBadge';
@@ -247,6 +249,14 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
               routedToName={r.pendingRoutedToName}
             />
           ) : null}
+          {/* THE REVIEW MARKER (MOTIR-10341, § 32.1, mock M7) — the decision glyph's
+              slot: while the `agent_review` gate awaits no approve-and-merge gate
+              exists, so the two never draw together. Then THE REVIEWED GLYPH (§ 32.3),
+              after the decision glyph, focusable, above the row's stretched link. */}
+          {r.review?.marker ? (
+            <ReviewMarker form="glyph" marker={r.review.marker} identifier={r.review.identifier} />
+          ) : null}
+          {r.review ? <ReviewedBadge form="glyph" review={r.review} /> : null}
           {/* THE TO FIX TAG (MOTIR-6610) — the glyph form, after the decision
               glyph when both hold, outside the edit trigger like it. In the STATUS
               cell rather than beside the CI glyph in the title cell, so a red CI

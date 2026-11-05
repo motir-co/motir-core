@@ -1,4 +1,7 @@
 import { RelatedTitles } from './_components/translation/RelatedTitles';
+import { reviewStateService } from '@/lib/services/reviewStateService';
+import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
+import { ReviewMarkerHeaderLink } from './_components/ReviewMarkerHeaderLink';
 import { Suspense } from 'react';
 import { personDisplayName } from '@/lib/people/personLabel';
 import { notFound, permanentRedirect } from 'next/navigation';
@@ -338,6 +341,7 @@ export default async function ItemView({
     repairRun,
     readerTranslation,
     todoRefs,
+    cardReviews,
   ] = await Promise.all([
     // Members back the inline assignee picker + reporter display, and the
     // Activity section's mention candidates. Assignable users are scoped by
@@ -460,6 +464,10 @@ export default async function ItemView({
       : null,
     translationRead,
     todoRefsRead,
+    // THE HEADER'S REVIEW MARKER AND REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341), in
+    // THIS group for the decision marker's reason: the eyebrow is what the reader lands on.
+    // Per-reader (who a marker is loud for), so a Visitor reads none.
+    isVisitor ? null : reviewStateService.cardReviewsFor(item.projectId, [item.id], svc),
   ]);
 
   const activeSprint = sprints.find((s) => s.state === 'active') ?? null;
@@ -467,6 +475,7 @@ export default async function ItemView({
   // board names members (`name || email`); a routee outside the member list falls
   // back to the marker's own *this work item's assignee*.
   const pendingDecision = pendingDecisions.get(item.id) ?? null;
+  const cardReview = cardReviews?.[item.id] ?? null;
   const routedMember = pendingDecision?.routedToId
     ? members.find((m) => m.userId === pendingDecision.routedToId)
     : undefined;
@@ -607,6 +616,17 @@ export default async function ItemView({
                           routedToName={routedToName}
                         />
                       ) : null}
+                      {/* THE REVIEW MARKER (MOTIR-10341, § 32.1, M9) — the decision
+                marker's slot (the two never draw together), the same pointer to
+                Development, and for the waiting marker the copyable command after it.
+                Then THE REVIEWED BADGE (§ 32.3, M10–M11), focusable, with its card. */}
+                      {cardReview?.marker ? (
+                        <ReviewMarkerHeaderLink
+                          marker={cardReview.marker}
+                          identifier={item.identifier}
+                        />
+                      ) : null}
+                      {cardReview ? <ReviewedBadge review={cardReview} /> : null}
                       {/* THE OBSOLESCENCE BADGE (MOTIR-6674): the cell's LAST member,
                 a pointer that scrolls to the rail's Obsolescence field. Nothing at
                 all on an unmarked item. */}

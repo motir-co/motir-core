@@ -224,3 +224,34 @@ export type ApprovedReviewDTO =
   | { kind: 'skipped'; by: string | null; reason: string | null }
   | { kind: 'dismissed'; by: string | null; reason: string | null }
   | { kind: 'none' };
+
+/**
+ * WHAT A CARD SURFACE DRAWS OF THE REVIEW (MOTIR-10341; design notes § 32.1, § 32.3) — the
+ * board card, the List / Tree status cell and the item header read only the marker, the
+ * Reviewed state, the container count and the record its badge links to. Null when there is
+ * nothing to draw, so a page carries an entry only for the cards that wear one.
+ */
+export interface CardReviewDTO {
+  identifier: string;
+  marker: ReviewMarkerDTO | null;
+  reviewed: ReviewStateDTO['reviewed'];
+  /** A container's count over its open run targets; never one with no target. */
+  container: ReviewContainerDTO | null;
+  recordRef: ReviewRecordRefDTO | null;
+}
+
+/** A page's card reviews, keyed by work-item id — serializable, beside the rows. */
+export type CardReviewMap = Record<string, CardReviewDTO>;
+
+/** The surfaces' slice of a review state; null when it draws nothing. */
+export function toCardReviewDto(state: ReviewStateDTO): CardReviewDTO | null {
+  const container = state.container && state.container.total > 0 ? state.container : null;
+  if (!state.marker && !state.reviewed && !container) return null;
+  return {
+    identifier: state.identifier,
+    marker: state.marker,
+    reviewed: state.reviewed,
+    container,
+    recordRef: state.recordRef,
+  };
+}

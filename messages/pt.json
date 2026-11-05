@@ -15172,6 +15172,38 @@
         "none": "Aprovado por {name} · sem revisão de agente",
         "someone": "alguém",
         "reason": "Motivo: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agente revisando",
+        "reviewingName": "Um agente está revisando este trabalho",
+        "couldNotRun": "Não foi possível executar a revisão",
+        "couldNotRunName": "Não foi possível executar a revisão do agente — aguardando você",
+        "couldNotRunOn": "Não foi possível executar a revisão · {name}",
+        "couldNotRunOnName": "Não foi possível executar a revisão do agente — aguardando {name}",
+        "waitingYours": "Aguardando seu agente de revisão",
+        "waitingYoursName": "Aguardando seu agente de revisão — execute motir review {key}",
+        "waitingOn": "Aguardando o agente de revisão de {name}",
+        "waitingOnName": "Aguardando o agente de revisão de {name}"
+      },
+      "command": {
+        "copy": "Copiar motir review {key}",
+        "copied": "Copiado",
+        "toastTitle": "Comando copiado",
+        "toastBody": "Execute {command} no seu próprio agente para revisar este trabalho."
+      },
+      "badge": {
+        "reviewed": "Revisado",
+        "reviewedName": "Revisado por um agente nos commits atuais",
+        "container": "{total, plural, one {{done} de # revisado} other {{done} de # revisados}}",
+        "containerName": "{total, plural, one {{done} de # parte revisada por um agente nos commits atuais} other {{done} de # partes revisadas por um agente nos commits atuais}}",
+        "containerAllName": "Todas as partes revisadas por um agente nos commits atuais",
+        "card": {
+          "hosted": "Revisado pelo agente hospedado do Motir",
+          "own": "Revisado pelo próprio agente de {name}",
+          "harness": "{harness} · {model}",
+          "commits": "Nestes commits",
+          "link": "Constatações e checklist"
+        }
       }
     }
   },

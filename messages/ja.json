@@ -15169,6 +15169,38 @@
         "none": "{name} が承認 · エージェントのレビューなし",
         "someone": "誰か",
         "reason": "理由: {reason}"
+      },
+      "marker": {
+        "reviewing": "エージェントがレビュー中",
+        "reviewingName": "エージェントがこの作業をレビューしています",
+        "couldNotRun": "レビューを実行できませんでした",
+        "couldNotRunName": "エージェントのレビューを実行できませんでした — あなたの対応待ち",
+        "couldNotRunOn": "レビューを実行できませんでした · {name}",
+        "couldNotRunOnName": "エージェントのレビューを実行できませんでした — {name} の対応待ち",
+        "waitingYours": "あなたのレビューエージェント待ち",
+        "waitingYoursName": "あなたのレビューエージェント待ち — motir review {key} を実行",
+        "waitingOn": "{name} のレビューエージェント待ち",
+        "waitingOnName": "{name} のレビューエージェント待ち"
+      },
+      "command": {
+        "copy": "motir review {key} をコピー",
+        "copied": "コピーしました",
+        "toastTitle": "コマンドをコピーしました",
+        "toastBody": "この作業をレビューするには、自分のエージェントで {command} を実行してください。"
+      },
+      "badge": {
+        "reviewed": "レビュー済み",
+        "reviewedName": "現在のコミットでエージェントがレビュー済み",
+        "container": "{total, plural, other {{done}/# レビュー済み}}",
+        "containerName": "{total, plural, other {# 個中 {done} 個の部分が現在のコミットでエージェントによりレビュー済み}}",
+        "containerAllName": "すべての部分が現在のコミットでエージェントによりレビュー済み",
+        "card": {
+          "hosted": "Motir のホスト型エージェントがレビュー",
+          "own": "{name} のエージェントがレビュー",
+          "harness": "{harness} · {model}",
+          "commits": "対象のコミット",
+          "link": "指摘事項とチェックリスト"
+        }
       }
     }
   },

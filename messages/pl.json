@@ -15172,6 +15172,38 @@
         "none": "Zatwierdził(a) {name} · bez przeglądu agenta",
         "someone": "ktoś",
         "reason": "Powód: {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent przegląda",
+        "reviewingName": "Agent przegląda tę pracę",
+        "couldNotRun": "Nie udało się uruchomić przeglądu",
+        "couldNotRunName": "Nie udało się uruchomić przeglądu agenta — czeka na ciebie",
+        "couldNotRunOn": "Nie udało się uruchomić przeglądu · {name}",
+        "couldNotRunOnName": "Nie udało się uruchomić przeglądu agenta — czeka na: {name}",
+        "waitingYours": "Czeka na twojego agenta przeglądu",
+        "waitingYoursName": "Czeka na twojego agenta przeglądu — uruchom motir review {key}",
+        "waitingOn": "Czeka na agenta przeglądu użytkownika {name}",
+        "waitingOnName": "Czeka na agenta przeglądu użytkownika {name}"
+      },
+      "command": {
+        "copy": "Kopiuj motir review {key}",
+        "copied": "Skopiowano",
+        "toastTitle": "Skopiowano polecenie",
+        "toastBody": "Uruchom {command} we własnym agencie, aby przejrzeć tę pracę."
+      },
+      "badge": {
+        "reviewed": "Przejrzane",
+        "reviewedName": "Przejrzane przez agenta przy bieżących commitach",
+        "container": "{total, plural, one {Przejrzano {done} z #} few {Przejrzano {done} z #} many {Przejrzano {done} z #} other {Przejrzano {done} z #}}",
+        "containerName": "{total, plural, one {{done} z # części przejrzana przez agenta przy bieżących commitach} few {{done} z # części przejrzanych przez agenta przy bieżących commitach} many {{done} z # części przejrzanych przez agenta przy bieżących commitach} other {{done} z # części przejrzanych przez agenta przy bieżących commitach}}",
+        "containerAllName": "Każda część przejrzana przez agenta przy bieżących commitach",
+        "card": {
+          "hosted": "Przejrzane przez hostowanego agenta Motir",
+          "own": "Przejrzane przez własnego agenta użytkownika {name}",
+          "harness": "{harness} · {model}",
+          "commits": "Przy tych commitach",
+          "link": "Uwagi i lista kontrolna"
+        }
       }
     }
   },

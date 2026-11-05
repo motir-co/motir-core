@@ -15172,6 +15172,38 @@
         "none": "Approuvé par {name} · non examiné par un agent",
         "someone": "quelqu’un",
         "reason": "Motif : {reason}"
+      },
+      "marker": {
+        "reviewing": "Agent en revue",
+        "reviewingName": "Un agent examine ce travail",
+        "couldNotRun": "La revue n’a pas pu s’exécuter",
+        "couldNotRunName": "La revue par agent n’a pas pu s’exécuter — en attente de vous",
+        "couldNotRunOn": "La revue n’a pas pu s’exécuter · {name}",
+        "couldNotRunOnName": "La revue par agent n’a pas pu s’exécuter — en attente de {name}",
+        "waitingYours": "En attente de votre agent de revue",
+        "waitingYoursName": "En attente de votre agent de revue — exécutez motir review {key}",
+        "waitingOn": "En attente de l’agent de revue de {name}",
+        "waitingOnName": "En attente de l’agent de revue de {name}"
+      },
+      "command": {
+        "copy": "Copier motir review {key}",
+        "copied": "Copié",
+        "toastTitle": "Commande copiée",
+        "toastBody": "Exécutez {command} dans votre propre agent pour examiner ce travail."
+      },
+      "badge": {
+        "reviewed": "Examiné",
+        "reviewedName": "Examiné par un agent aux commits actuels",
+        "container": "{total, plural, one {{done} sur # examiné} other {{done} sur # examinés}}",
+        "containerName": "{total, plural, one {{done} partie sur # examinée par un agent à ses commits actuels} other {{done} parties sur # examinées par un agent à leurs commits actuels}}",
+        "containerAllName": "Chaque partie examinée par un agent à ses commits actuels",
+        "card": {
+          "hosted": "Examiné par l’agent hébergé de Motir",
+          "own": "Examiné par l’agent de {name}",
+          "harness": "{harness} · {model}",
+          "commits": "À ces commits",
+          "link": "Constats et liste de contrôle"
+        }
       }
     }
   },

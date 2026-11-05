@@ -15166,6 +15166,38 @@
         "none": "{name} 승인 · 에이전트 리뷰 없음",
         "someone": "누군가",
         "reason": "사유: {reason}"
+      },
+      "marker": {
+        "reviewing": "에이전트 리뷰 중",
+        "reviewingName": "에이전트가 이 작업을 리뷰하고 있습니다",
+        "couldNotRun": "리뷰를 실행할 수 없음",
+        "couldNotRunName": "에이전트 리뷰를 실행할 수 없음 — 내 조치 대기 중",
+        "couldNotRunOn": "리뷰를 실행할 수 없음 · {name}",
+        "couldNotRunOnName": "에이전트 리뷰를 실행할 수 없음 — {name}의 조치 대기 중",
+        "waitingYours": "내 리뷰 에이전트 대기 중",
+        "waitingYoursName": "내 리뷰 에이전트 대기 중 — motir review {key} 실행",
+        "waitingOn": "{name}의 리뷰 에이전트 대기 중",
+        "waitingOnName": "{name}의 리뷰 에이전트 대기 중"
+      },
+      "command": {
+        "copy": "motir review {key} 복사",
+        "copied": "복사됨",
+        "toastTitle": "명령을 복사했습니다",
+        "toastBody": "이 작업을 리뷰하려면 내 에이전트에서 {command}을(를) 실행하세요."
+      },
+      "badge": {
+        "reviewed": "리뷰됨",
+        "reviewedName": "현재 커밋에서 에이전트가 리뷰함",
+        "container": "{total, plural, other {{done}/# 리뷰됨}}",
+        "containerName": "{total, plural, other {#개 부분 중 {done}개가 현재 커밋에서 에이전트 리뷰를 받음}}",
+        "containerAllName": "모든 부분이 현재 커밋에서 에이전트 리뷰를 받음",
+        "card": {
+          "hosted": "Motir 호스팅 에이전트가 리뷰함",
+          "own": "{name}의 에이전트가 리뷰함",
+          "harness": "{harness} · {model}",
+          "commits": "리뷰한 커밋",
+          "link": "발견 사항 및 체크리스트"
+        }
       }
     }
   },

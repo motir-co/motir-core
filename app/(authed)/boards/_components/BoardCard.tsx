@@ -17,6 +17,8 @@ import { Pill } from '@/components/ui/Pill';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { ObsolescenceBadge } from '@/components/issues/ObsolescenceBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
+import { ReviewMarker } from '@/components/approvals/ReviewMarker';
+import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
 import { ToFixTag, toFixTagId, toFixTagState } from '@/components/workItems/ToFixTag';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { formatStoryPoints } from '@/lib/estimation/scales';
@@ -76,18 +78,49 @@ export function decisionMarkerId(cardId: string): string {
   return `decision-marker-${cardId}`;
 }
 
+/** The DOM id of the card's Reviewed badge, which the card's `aria-describedby` names. */
+export function reviewedBadgeId(cardId: string): string {
+  return `reviewed-badge-${cardId}`;
+}
+
+/**
+ * Which marker the EXCLUSIVE SLOT draws, in the design's precedence (MOTIR-5875; § 32.1 of
+ * the review path, MOTIR-10341): a decision waiting on YOU › `Blocked` › a review marker or
+ * a decision waiting on someone else › the priority chip. A review marker and a
+ * decision-waiting one never hold together — while the `agent_review` gate awaits, no
+ * approve-and-merge gate exists — so the review marker is checked first only to keep the
+ * order total.
+ */
+function slotOf(
+  card: BoardCardDto,
+): 'decisionYours' | 'blocked' | 'review' | 'decision' | 'priority' {
+  if (card.pendingDecision?.state === 'yours') return 'decisionYours';
+  if (!card.ready) return 'blocked';
+  if (card.review?.marker) return 'review';
+  if (card.pendingDecision) return 'decision';
+  return 'priority';
+}
+
+/** Does the card wear a Reviewed badge (or a container's count)? */
+function wearsReviewedBadge(card: BoardCardDto): boolean {
+  return Boolean(card.review && (card.review.container || card.review.reviewed));
+}
+
 /**
  * dnd-kit's instructions id joined with the marker's, when the slot draws the
- * marker, and the To fix tag's, when the card draws the tag (MOTIR-6610) — the
- * card is one `<button>`, so its own label would otherwise hide both.
+ * marker, the To fix tag's, when the card draws the tag (MOTIR-6610), and the
+ * Reviewed badge's (MOTIR-10341) — the card is one `<button>`, so its own label
+ * would otherwise hide them.
  */
 function describedBy(dndId: string | undefined, card: BoardCardDto): string | undefined {
+  const slot = slotOf(card);
   const marker =
-    card.pendingDecision && (card.pendingDecision.state === 'yours' || card.ready)
+    slot === 'decisionYours' || slot === 'decision' || slot === 'review'
       ? decisionMarkerId(card.id)
       : null;
   const toFix = toFixTagState(card.fixReason, card.statusCategory) ? toFixTagId(card.id) : null;
-  const ids = [dndId, marker, toFix].filter((id): id is string => Boolean(id));
+  const reviewed = wearsReviewedBadge(card) ? reviewedBadgeId(card.id) : null;
+  const ids = [dndId, marker, toFix, reviewed].filter((id): id is string => Boolean(id));
   return ids.length > 0 ? ids.join(' ') : undefined;
 }
 
@@ -168,6 +201,10 @@ export function BoardCardView({
             <CircleAlert className="h-3 w-3" aria-hidden />
             {t('blocked')}
           </Pill>
+        ) : card.review?.marker ? (
+          // THE REVIEW MARKER (MOTIR-10341; § 32.1, M2–M4) — in the decision marker's
+          // slot, at its size and precedence. No copy button here: the card is one button.
+          <ReviewMarker id={markerId} marker={card.review.marker} identifier={card.identifier} />
         ) : card.pendingDecision ? (
           <DecisionWaitingMarker
             id={markerId}
@@ -195,6 +232,16 @@ export function BoardCardView({
             it takes no slot and hides nothing. The same Pill the item header
             wears, so the mark reads one way everywhere. */}
         {card.obsolescence ? <ObsolescenceBadge mark={card.obsolescence} /> : null}
+        {/* THE REVIEWED BADGE (MOTIR-10341; § 32.3, M5, M6): after the slot, before the CI
+            badge. Not interactive — the card is the button — so its title names it and
+            the card's `aria-describedby` reads it. */}
+        {card.review ? (
+          <ReviewedBadge
+            review={card.review}
+            interactive={false}
+            id={markerId ? reviewedBadgeId(card.id) : undefined}
+          />
+        ) : null}
         {/* THE CI BADGE (MOTIR-5474), in the slot the design gives it: an
             ADDITIONAL pill immediately after the exclusive one, never replacing
             it — so `Blocked` and the decision-waiting marker both survive beside it.

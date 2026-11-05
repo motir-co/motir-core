@@ -13,8 +13,10 @@ import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
 import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
 import { reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
 import {
+  toCardReviewDto,
   toReviewStateDto,
   type ApprovedReviewDTO,
+  type CardReviewMap,
   type ReviewStateDTO,
 } from '@/lib/dto/reviewState';
 import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
@@ -359,6 +361,24 @@ export const reviewStateService = {
   ): Promise<Map<string, ReviewStateDTO>> {
     if (workItemIds.length === 0) return new Map();
     return withWorkspaceContext(ctx, (tx) => readReviewStates(projectId, workItemIds, ctx, tx));
+  },
+
+  /**
+   * WHAT THE CARD SURFACES DRAW (MOTIR-10341) — the board, a List / Tree level and the item
+   * header: {@link forCards}' one batch, sliced to the marker, the Reviewed state and the
+   * container count, with an entry only for a card that wears one.
+   */
+  async cardReviewsFor(
+    projectId: string,
+    workItemIds: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<CardReviewMap> {
+    const out: CardReviewMap = {};
+    for (const [id, state] of await reviewStateService.forCards(projectId, workItemIds, ctx)) {
+      const card = toCardReviewDto(state);
+      if (card) out[id] = card;
+    }
+    return out;
   },
 
   /** One card's review state — the item header and the gate frame. Null when not visible. */
