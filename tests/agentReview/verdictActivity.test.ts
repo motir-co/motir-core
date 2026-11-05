@@ -40,7 +40,7 @@ let assigneeId: string;
 beforeEach(async () => {
   await truncateAuthTables();
   await adminDb.$executeRawUnsafe(
-    'TRUNCATE TABLE "work_item", "approval_gate", "notification" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "approval_gate", "work_item", "notification" RESTART IDENTITY CASCADE',
   );
   spyOnJobDispatch();
   fx = await makeWorkItemFixture();

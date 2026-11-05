@@ -2,7 +2,6 @@ import type { Prisma, ReviewVerdictRecord } from '@/generated/prisma/client';
 import { HOSTED_REVIEW_HARNESS } from '@/lib/agentReview/reviewState';
 import {
   AGENT_VERDICT_CHANGE_KIND,
-  AGENT_VERDICT_DIFF_KEY,
   findingsExcerptOf,
   isAnsweringSendBack,
   type AgentVerdictSnapshot,
@@ -74,7 +73,9 @@ export const reviewVerdictRecordService = {
           workItemId: row.workItemId,
           changedById: row.submittedById,
           changeKind: AGENT_VERDICT_CHANGE_KIND,
-          diff: { [AGENT_VERDICT_DIFF_KEY]: { from: null, to: snapshot } },
+          // The key is `AGENT_VERDICT_DIFF_KEY`, spelled out so the activity registry's
+          // static scan can resolve it.
+          diff: { agentVerdict: { from: null, to: snapshot } },
         },
         tx,
       );
