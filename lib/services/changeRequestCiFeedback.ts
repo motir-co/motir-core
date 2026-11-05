@@ -187,6 +187,11 @@ export type CiFeedbackContextResolution =
  *
  * Module-local on purpose: it limits the pool of the runtime it runs in, and the
  * webhook routes that reach it share one route-handler runtime (MOTIR-7073).
+ *
+ * On the job worker, where every GitHub delivery now runs (MOTIR-10425), a delivery
+ * standing in this line is PARKED: the gate reports the wait as idle
+ * (`lib/async/waitScope.ts`) and the worker stops counting it against its pool, so a
+ * burst waiting here leaves the pool to every other job (MOTIR-10457).
  */
 const CI_FEEDBACK_CONCURRENCY = 3;
 const ciFeedbackGate = createConcurrencyGate(CI_FEEDBACK_CONCURRENCY);

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { JobQueueRun } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
+import { runObservingWaits } from '@/lib/async/waitScope';
 import { isJobStepYield } from './step';
 import { isJobRunDefer } from './defer';
 
@@ -59,6 +60,44 @@ import { isJobRunDefer } from './defer';
 // `claimDueRuns`'s statement — its predicate, its `ORDER BY run_at`, its plan —
 // is unchanged. §15.2 is the distinction, with the test that settles which side
 // a change is on.
+//
+// ===========================================================================
+// A run WAITING on an in-process gate is PARKED, and leaves the pool (MOTIR-10457)
+// ===========================================================================
+// POOL_SIZE counts work that is RUNNING. A run that stands in an in-process
+// admission line — today the three-slot CI-feedback gate
+// (`lib/services/changeRequestCiFeedback.ts`) that every CI delivery of
+// `system.github-webhook-delivery` passes through — holds no connection, no lock
+// and no CPU while it waits, and counting it as busy is what let a burst of check
+// deliveries fill the pool: three working inside the gate, seven parked in its
+// line, and `email.send`, every scheduled fire and every supervisor step queued
+// behind the backlog until it drained.
+//
+// So each settle runs inside a WAIT SCOPE (`lib/async/waitScope.ts`), and a wait
+// reported through `awaitAsIdle` — the gate's line reports itself that way — moves
+// the run to `parked` for exactly its extent:
+//
+//   * `freeCapacity` counts BUSY runs against POOL_SIZE, so a parked run's slot is
+//     claimable again, and a park wakes a loop that was waiting for a slot;
+//   * every claim held, parked or not, is bounded by POOL_SIZE + PARK_HEADROOM, so
+//     a burst larger than any line we expect still stops the worker claiming
+//     rather than taking the whole queue into memory;
+//   * a parked run keeps its claim and its lease — the heartbeat renews every row
+//     the worker holds — and the drain treats it like any in-flight run.
+//
+// ⚠️ BUSY WORK CAN OVERSHOOT POOL_SIZE BY WHAT THE GATES ADMIT, AND NO MORE. A
+// parked run unparks only when its gate hands it a slot, and its own slot may
+// have been claimed meanwhile, so busy runs may exceed the pool by the sum of the
+// gates' limits (three today). That work is rationed by its gate — which exists
+// to bound exactly what it may take — and nothing else can unpark.
+//
+// ⚠️ NOT A SCHEDULER, AND §14.1 IS UNTOUCHED. Nothing here picks which job runs:
+// `DefineJobOptions` gains nothing and `claimDueRuns` is unchanged, so the claim
+// is still by `run_at` alone. A gated run still waits in its gate's own FIFO line,
+// in the order the claim reached it, which is why the fix is a park and not a
+// defer: a deferred delivery returns at a time of its own, so a check's
+// `in_progress` could land after its `completed` and pull the row back to
+// `pending`. `docs/decisions/job-queue-foundation.md` §18 is the decision.
 //
 // ===========================================================================
 // THE THREE WAYS A CLAIM ENDS WITHOUT THE WORK BEING FINISHED — and only one
@@ -188,6 +227,20 @@ export const CLAIM_BATCH = 5;
  * three supervisors watch containers.
  */
 export const POOL_SIZE = 10;
+/**
+ * How many claims a worker may hold BEYOND its pool while runs are parked on an
+ * in-process gate (MOTIR-10457) — so every claim it holds, busy or parked, is
+ * bounded by `POOL_SIZE + PARK_HEADROOM`.
+ *
+ * A parked run is a `JobQueueRun` row and, for a GitHub delivery, the delivery's
+ * stored body (kilobytes), so the cost of a large line is memory and one heartbeat
+ * statement over more rows, not connections. One push produces about two
+ * deliveries per check (an 88-check workflow is ~180) and several pull requests
+ * push at once, so the headroom is sized for "hundreds" with margin, and it is a
+ * BOUND rather than a target: past it the worker stops claiming, which is the
+ * pre-MOTIR-10457 behaviour, reached only after five hundred runs are waiting.
+ */
+export const PARK_HEADROOM = 500;
 /** The channel the dispatcher NOTIFYs when it enqueues. */
 export const JOB_QUEUE_CHANNEL = 'motir_job_queue';
 
@@ -213,6 +266,7 @@ export interface JobWorkerOptions {
     drainTimeoutMs: number;
     claimBatch: number;
     poolSize: number;
+    parkHeadroom: number;
   }>;
   /**
    * Called on every outcome of one PASS — which is not the same as every
@@ -328,6 +382,7 @@ export class JobWorker {
   private readonly drainTimeoutMs: number;
   private readonly claimBatch: number;
   private readonly poolSize: number;
+  private readonly parkHeadroom: number;
 
   /** Set by `shutdown()`; the loop stops CLAIMING the moment it is true. */
   private draining = false;
@@ -336,6 +391,12 @@ export class JobWorker {
   private heartbeat: NodeJS.Timeout | undefined;
   /** Runs this worker has claimed and not yet settled. The drain waits on these. */
   private readonly inFlight = new Set<string>();
+  /**
+   * The in-flight runs that are only WAITING on an in-process gate right now
+   * (MOTIR-10457). Always a subset of {@link inFlight}; they do not count
+   * against the pool. The header's *parked* section is the contract.
+   */
+  private readonly parked = new Set<string>();
   /**
    * The DETACHED settle of each in-flight run, kept so {@link settled} can await
    * them. `tick()` returns at the claim now, so a caller that wants "and then
@@ -368,6 +429,7 @@ export class JobWorker {
     this.drainTimeoutMs = opts.timings?.drainTimeoutMs ?? DRAIN_TIMEOUT_MS;
     this.claimBatch = opts.timings?.claimBatch ?? CLAIM_BATCH;
     this.poolSize = Math.max(1, opts.timings?.poolSize ?? POOL_SIZE);
+    this.parkHeadroom = Math.max(0, opts.timings?.parkHeadroom ?? PARK_HEADROOM);
     this.idleDelay = this.idleMinMs;
   }
 
@@ -376,9 +438,21 @@ export class JobWorker {
     return this.inFlight.size;
   }
 
-  /** How many more runs this worker may take before its pool is full. */
+  /** How many of the runs this worker holds are parked on an in-process gate. */
+  get parkedCount(): number {
+    return this.parked.size;
+  }
+
+  /**
+   * How many more runs this worker may take: the pool's free BUSY slots — a
+   * parked run occupies none — capped so that every claim held stays within
+   * `poolSize + parkHeadroom` (MOTIR-10457).
+   */
   get freeCapacity(): number {
-    return Math.max(0, this.poolSize - this.inFlight.size);
+    const busy = this.inFlight.size - this.parked.size;
+    const busyRoom = this.poolSize - busy;
+    const claimRoom = this.poolSize + this.parkHeadroom - this.inFlight.size;
+    return Math.max(0, Math.min(busyRoom, claimRoom));
   }
 
   /**
@@ -508,7 +582,10 @@ export class JobWorker {
   /** Run one claimed row and record its terminal state. Never throws — a failure is an outcome, not an exception the loop should die on. */
   private async settle(run: JobQueueRun): Promise<void> {
     try {
-      await this.execute(run);
+      await runObservingWaits(
+        { onWaitStart: () => this.park(run.id), onWaitEnd: () => this.parked.delete(run.id) },
+        () => this.execute(run),
+      );
       await withSystemContext((tx) => jobQueueRepository.markSucceeded(run.id, tx));
       this.onOutcome(run, 'succeeded');
     } catch (err) {
@@ -577,8 +654,22 @@ export class JobWorker {
       );
       this.onOutcome(run, 'retrying');
     } finally {
+      this.parked.delete(run.id);
       this.inFlight.delete(run.id);
     }
+  }
+
+  /**
+   * A run began waiting on an in-process gate: it leaves the busy count, and a
+   * loop waiting for a slot is woken to claim into it (MOTIR-10457).
+   */
+  private park(runId: string): void {
+    /* v8 ignore next -- defensive: `settle` is the only scope that reports, and
+       it reports only while `runId` is in flight. A wait that outlives the settle
+       (work the handler left running detached) must not park a run that is gone. */
+    if (!this.inFlight.has(runId)) return;
+    this.parked.add(runId);
+    this.releaseSlot();
   }
 
   /**
