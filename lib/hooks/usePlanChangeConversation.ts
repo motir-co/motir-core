@@ -1263,7 +1263,11 @@ export function usePlanChangeConversation({
     !state.readOnly &&
     state.session !== null &&
     !sessionEnded(state.session) &&
-    !sessionFailed(state.session)
+    !sessionFailed(state.session) &&
+    // A run that asked is OVER, and the person's next turn is its answer (MOTIR-10453):
+    // adopting it would send that answer through the mid-run door for as long as the
+    // finished job's replay lasts, and no new run would start.
+    pendingQuestion(state.session.turns) === null
       ? reopenedJob
       : null;
   const unsettledReopenedJob =
@@ -1800,6 +1804,7 @@ export function usePlanChangeConversation({
       planId: string | undefined,
       anchor: RunAnchor | null,
       controller: AbortController,
+      adopted = false,
     ) => {
       let failed = false;
       // Anchored runs subscribe through the item's own relay (which re-gates the
@@ -2015,6 +2020,13 @@ export function usePlanChangeConversation({
         }));
         stoppingRef.current = false;
       } else {
+        // AN ADOPTED JOB THAT WAS ALREADY OVER (MOTIR-10453). The session read as writing
+        // its plan, but the job has ended with nothing proposed and the plan stays
+        // `generating` until the abandoned-plan sweep closes it. This screen sent nothing,
+        // so nothing failed here: it goes back to watching the plan, which still draws
+        // what the plan's status says. A stopped run is not this; it reads as stopped.
+        const backToWatching = adopted && !stoppingRef.current && !canceled;
+        adoptedRunOverRef.current = backToWatching;
         // Nothing came back. The thread stays; the previous proposal (if any) too.
         //
         // A turn that ASKED proposes nothing BY DESIGN — the planner is blocked
@@ -2025,7 +2037,7 @@ export function usePlanChangeConversation({
           ...s,
           phase: s.review ? 'review' : 'idle',
           progress: null,
-          liveReview: null,
+          liveReview: backToWatching ? s.liveReview : null,
           // ⚠️ A STOPPED RUN IS THE THIRD REASON NOTHING CAME BACK, and without
           // this arm it would surface as `EMPTY` — a failure banner on the one
           // outcome the user chose deliberately (MOTIR-4068). The three are:
@@ -2041,7 +2053,10 @@ export function usePlanChangeConversation({
           // repository's code cannot be searched is the same outcome, drawn as a
           // banner (MOTIR-9165).
           // A run that REPLIED with why it planned nothing is the fifth (MOTIR-10407).
-          errorCode: asked || declined || replied || s.stopping || canceled ? null : 'EMPTY',
+          errorCode:
+            backToWatching || asked || declined || replied || s.stopping || canceled
+              ? null
+              : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
           // bar says "stopping", which is the honest thing to say.
@@ -2069,6 +2084,8 @@ export function usePlanChangeConversation({
    * records the next loss. Through a ref, because `run` is what calls it.
    */
   const runRef = useRef<RunFn | null>(null);
+  /** The adopted run just settled with its job over and nothing proposed (MOTIR-10453). */
+  const adoptedRunOverRef = useRef(false);
   const followAutoResume = useCallback(
     async (anchor: RunAnchor | null, session: PlanChangeSessionDto, planId: string | null) => {
       const jobId = session.lastJobId;
@@ -2171,14 +2188,16 @@ export function usePlanChangeConversation({
         stoppingRef.current = carried;
         if (carried) void raiseStop(session.id, jobId);
 
-        resumedBy = (await finishPlanRun(jobId, planId, anchor, controller)) ?? null;
+        resumedBy = (await finishPlanRun(jobId, planId, anchor, controller, adopted)) ?? null;
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
         if (!mountedRef.current) return;
         refuseRun(err, controller);
       } finally {
         if (abortRef.current === controller) abortRef.current = null;
-        endLive(livePlan);
+        // Back to watching keeps the poll: it is what closes the plan's live pane later.
+        if (!adoptedRunOverRef.current) endLive(livePlan);
+        adoptedRunOverRef.current = false;
         releasePendingStop();
         // AFTER `endLive`: the follow re-arms the live poll this run just released.
         if (resumedBy) await followAutoResume(anchor, resumedBy, livePlan);

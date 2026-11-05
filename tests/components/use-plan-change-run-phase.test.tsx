@@ -280,6 +280,63 @@ describe('a REOPENED overlay mid-run', () => {
     expect(adopted.impl).toHaveBeenCalledTimes(1);
   });
 
+  // THE JOB IT ADOPTED WAS ALREADY OVER (the nightly on 2083799). A session can read as
+  // writing its plan with no job running: a job that ended with nothing proposed leaves
+  // its empty plan `generating` until the abandoned-plan sweep closes it.
+  it('a run that ASKED is over: its question is not adopted, so the answer stays an answer', async () => {
+    getSession.mockResolvedValue(
+      session({
+        pendingPlanId: 'plan-1',
+        lastJobId: 'job-1',
+        turns: [
+          turn('user', 'Split this story.'),
+          turn('assistant', 'One thing first.', { question: 'Own subtask?' }),
+        ],
+      }),
+    );
+    const replay = heldStream();
+    stream.mockImplementation(replay.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.liveReview?.status).toBe('generating'));
+    await act(async () => {});
+    expect(hook.result.current.state.phase).toBe('idle');
+    expect(hook.result.current.state.jobId).toBeNull();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('an adopted run that turns out to be over goes back to watching the plan', async () => {
+    const adopted = heldStream();
+    stream.mockImplementation(adopted.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    adopted.emit('status', { status: 'succeeded' });
+    await adopted.end();
+
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    // The plan still reads `generating`, so the screen still says so, and it is not an
+    // error on a screen that sent nothing.
+    expect(hook.result.current.state.liveReview?.status).toBe('generating');
+    expect(hook.result.current.state.errorCode).toBeNull();
+    // Once per job: going back to watching does not adopt it again.
+    await act(async () => {});
+    expect(adopted.impl).toHaveBeenCalledTimes(1);
+  });
+
+  it('an adopted run STOPPED under the screen reads as stopped, not as still writing', async () => {
+    const adopted = heldStream();
+    stream.mockImplementation(adopted.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    adopted.emit('status', { status: 'canceled' });
+    await adopted.end();
+
+    await waitFor(() => expect(hook.result.current.state.stopped).toBe(true));
+    expect(hook.result.current.state.liveReview).toBeNull();
+  });
+
   it('an ANCHORED overlay adopts the run through the item’s own relay', async () => {
     streamAnchored.mockImplementation(async () => {});
     const hook = renderHook(() =>
