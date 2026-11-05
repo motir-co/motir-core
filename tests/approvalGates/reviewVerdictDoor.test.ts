@@ -1,3 +1,5 @@
+import { checkPayloadDrift } from '@/lib/mcp/payloads/driftGuard';
+import { TOOL_PAYLOADS } from '@/lib/mcp/payloads/registry';
 import { generateKeyPairSync } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -1063,6 +1065,10 @@ describe('the MCP tool submit_review_verdict', () => {
     });
     expect(textOf(res)).toContain('To fix');
     expect(textOf(res)).toContain('withdrawn');
+    // The tool's payload IS v1's `ReviewVerdictResult`: the drift guard finds no drift.
+    expect(checkPayloadDrift(TOOL_PAYLOADS.submit_review_verdict!, res.structuredContent)).toEqual(
+      [],
+    );
   });
 
   it('a gate-on approval says a person still approves the merge', async () => {
