@@ -13300,7 +13300,8 @@
       "credits": "Arrêté : votre organisation n'a plus de crédits. Ajoutez des crédits, puis réveillez-le.",
       "idle": "Mis en veille après 30 minutes sans utilisation",
       "backstop": "Arrêté après 12 heures d'exécution. Réveillez-le pour continuer.",
-      "admin_stop": "Arrêté par l'assistance Motir. Réveillez-le pour continuer."
+      "admin_stop": "Arrêté par l'assistance Motir. Réveillez-le pour continuer.",
+      "org_admin_stop": "Arrêté par un administrateur de votre organisation. Réveillez-le pour continuer."
     },
     "menu": {
       "wake": "Réveiller",

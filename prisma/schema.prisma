@@ -14902,6 +14902,9 @@ enum AgentInstanceIntervalEndReason {
   /// A platform admin stopped the organisation's containers (Story MOTIR-6905,
   /// MOTIR-7323) — never recorded as `credits`.
   admin_stop
+  /// An owner or admin of the organisation stopped it from the org's Fleet page
+  /// (`agent-instances.md` §8 AMENDMENT 8) — never recorded as `admin_stop`.
+  org_admin_stop
 
   @@map("agent_instance_interval_end_reason")
 }

@@ -178,7 +178,13 @@ import {
 // (MOTIR-6940: the terminal relay imports them without this file's graph).
 export { agentInstanceClock };
 
-const STOP_REASONS: readonly string[] = ['credits', 'idle', 'backstop', 'admin_stop'];
+const STOP_REASONS: readonly string[] = [
+  'credits',
+  'idle',
+  'backstop',
+  'admin_stop',
+  'org_admin_stop',
+];
 
 /** The states an organisation-wide stop leaves alone and counts as already at rest. */
 const RESTING_STATES: readonly AgentInstance['state'][] = ['hibernated', 'hibernating', 'failed'];
@@ -1600,6 +1606,10 @@ export const agentInstanceLifecycleService = {
       // A platform admin's stop holds over a running card exactly as money does
       // (MOTIR-7323): the run is closed `cancelled` FIRST, then the machine stops.
       await endRunIn(row, 'cancelled', AGENT_RUN_END_DETAIL.adminStop);
+    } else if (endReason === 'org_admin_stop') {
+      // An org owner or admin's stop (`agent-instances.md` §8 AMENDMENT 8) holds
+      // over a running card as the platform's does: closed `cancelled` FIRST.
+      await endRunIn(row, 'cancelled', AGENT_RUN_END_DETAIL.orgAdminStop);
     } else {
       await assertNoRunningRun(row, 'hibernated');
     }
@@ -1633,8 +1643,9 @@ export const agentInstanceLifecycleService = {
 
   /**
    * Hibernate EVERY running instance of ONE organisation, for a platform admin's
-   * stop (Story MOTIR-6905 · MOTIR-7323). Each goes through {@link beginHibernate}
-   * with `admin_stop`, so a run in the agent is closed `cancelled` before its
+   * stop (Story MOTIR-6905 · MOTIR-7323) or an org owner or admin's
+   * (`org_admin_stop`, `agent-instances.md` §8 AMENDMENT 8). Each goes through
+   * {@link beginHibernate} with that reason, so a run in the agent is closed `cancelled` before its
    * machine stops, and the closed interval says who stopped it. Only that
    * organisation's rows are read; nobody else's agent is touched.
    *
@@ -1648,7 +1659,7 @@ export const agentInstanceLifecycleService = {
    */
   async hibernateAllForOrganization(
     organizationId: string,
-    endReason: Extract<AgentInstanceIntervalEndReason, 'admin_stop'>,
+    endReason: Extract<AgentInstanceIntervalEndReason, 'admin_stop' | 'org_admin_stop'>,
   ): Promise<AgentInstanceOrgHibernateResult> {
     const rows = await withSystemContext((tx) =>
       agentInstanceRepository.listLiveForOrganization(organizationId, tx),

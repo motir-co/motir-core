@@ -13300,7 +13300,8 @@
       "credits": "Gestoppt: Ihrer Organisation sind die Credits ausgegangen. Fügen Sie Credits hinzu und wecken Sie ihn dann auf.",
       "idle": "Nach 30 Minuten ohne Nutzung in den Ruhezustand versetzt",
       "backstop": "Nach 12 Stunden Laufzeit gestoppt. Wecken Sie ihn auf, um weiterzumachen.",
-      "admin_stop": "Vom Motir-Support gestoppt. Wecken Sie ihn auf, um weiterzumachen."
+      "admin_stop": "Vom Motir-Support gestoppt. Wecken Sie ihn auf, um weiterzumachen.",
+      "org_admin_stop": "Von einem Admin Ihrer Organisation gestoppt. Wecken Sie ihn auf, um weiterzumachen."
     },
     "menu": {
       "wake": "Aufwecken",

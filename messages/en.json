@@ -13297,7 +13297,8 @@
       "credits": "Stopped: your organization ran out of credits. Add credits, then wake it.",
       "idle": "Hibernated after 30 minutes without use",
       "backstop": "Stopped after 12 hours running. Wake it to carry on.",
-      "admin_stop": "Stopped by Motir support. Wake it to carry on."
+      "admin_stop": "Stopped by Motir support. Wake it to carry on.",
+      "org_admin_stop": "Stopped by an admin of your organization. Wake it to carry on."
     },
     "menu": {
       "wake": "Wake",

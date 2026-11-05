@@ -13300,7 +13300,8 @@
       "credits": "Gestopt: je organisatie heeft geen credits meer. Voeg credits toe en wek hem daarna.",
       "idle": "In slaap gezet na 30 minuten zonder gebruik",
       "backstop": "Gestopt na 12 uur draaien. Wek hem om verder te gaan.",
-      "admin_stop": "Gestopt door Motir-support. Wek hem om verder te gaan."
+      "admin_stop": "Gestopt door Motir-support. Wek hem om verder te gaan.",
+      "org_admin_stop": "Gestopt door een beheerder van je organisatie. Wek hem om verder te gaan."
     },
     "menu": {
       "wake": "Wekken",

@@ -22,6 +22,8 @@ export const AGENT_RUN_END_DETAIL = {
   cancelled: 'cancelled by the agent’s owner',
   /** A platform admin stopped the organisation's containers (Story MOTIR-6905, MOTIR-7323). */
   adminStop: 'stopped by a platform admin',
+  /** An owner or admin of the organisation stopped it (`agent-instances.md` §8 AMENDMENT 8). */
+  orgAdminStop: 'stopped by an organization admin',
 } as const;
 
 /**

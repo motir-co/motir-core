@@ -13300,7 +13300,8 @@
       "credits": "Parado: sua organização ficou sem créditos. Adicione créditos e depois desperte-o.",
       "idle": "Hibernado após 30 minutos sem uso",
       "backstop": "Parado após 12 horas em execução. Desperte-o para continuar.",
-      "admin_stop": "Parado pelo suporte do Motir. Desperte-o para continuar."
+      "admin_stop": "Parado pelo suporte do Motir. Desperte-o para continuar.",
+      "org_admin_stop": "Parado por um administrador da sua organização. Desperte-o para continuar."
     },
     "menu": {
       "wake": "Despertar",

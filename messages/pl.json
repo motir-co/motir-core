@@ -13300,7 +13300,8 @@
       "credits": "Zatrzymany: Twojej organizacji skończyły się kredyty. Dodaj kredyty, a potem go wybudź.",
       "idle": "Uśpiony po 30 minutach bezczynności",
       "backstop": "Zatrzymany po 12 godzinach działania. Wybudź go, aby kontynuować.",
-      "admin_stop": "Zatrzymany przez wsparcie Motir. Wybudź go, aby kontynuować."
+      "admin_stop": "Zatrzymany przez wsparcie Motir. Wybudź go, aby kontynuować.",
+      "org_admin_stop": "Zatrzymany przez administratora Twojej organizacji. Wybudź go, aby kontynuować."
     },
     "menu": {
       "wake": "Wybudź",

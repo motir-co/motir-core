@@ -13300,7 +13300,8 @@
       "credits": "Detenido: tu organización se quedó sin créditos. Añade créditos y luego despiértalo.",
       "idle": "Hibernado tras 30 minutos sin uso",
       "backstop": "Detenido tras 12 horas en ejecución. Despiértalo para continuar.",
-      "admin_stop": "Detenido por el soporte de Motir. Despiértalo para continuar."
+      "admin_stop": "Detenido por el soporte de Motir. Despiértalo para continuar.",
+      "org_admin_stop": "Detenido por un administrador de tu organización. Despiértalo para continuar."
     },
     "menu": {
       "wake": "Despertar",

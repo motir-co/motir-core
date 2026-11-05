@@ -13300,7 +13300,8 @@
       "credits": "Arrestato: la tua organizzazione ha esaurito i crediti. Aggiungi crediti, poi risveglialo.",
       "idle": "Ibernato dopo 30 minuti di inutilizzo",
       "backstop": "Arrestato dopo 12 ore di funzionamento. Risveglialo per continuare.",
-      "admin_stop": "Arrestato dall’assistenza Motir. Risveglialo per continuare."
+      "admin_stop": "Arrestato dall’assistenza Motir. Risveglialo per continuare.",
+      "org_admin_stop": "Arrestato da un amministratore della tua organizzazione. Risveglialo per continuare."
     },
     "menu": {
       "wake": "Risveglia",

@@ -10415,6 +10415,7 @@
   "myAgents.stop.idle": "Hibernated after 30 minutes without use",
   "myAgents.stop.backstop": "Stopped after 12 hours running. Wake it to carry on.",
   "myAgents.stop.admin_stop": "Stopped by Motir support. Wake it to carry on.",
+  "myAgents.stop.org_admin_stop": "Stopped by an admin of your organization. Wake it to carry on.",
   "myAgents.menu.wake": "Wake",
   "myAgents.menu.hibernate": "Hibernate",
   "myAgents.menu.delete": "Delete…",
