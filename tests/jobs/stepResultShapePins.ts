@@ -389,6 +389,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ address: string; detail: string; verdict: "indeterminate" } | { address: string; detail: string; verdict: "private_address" } | { address: string; status: number; verdict: "reachable" } | { detail: string; verdict: "not_applicable" } | { detail: string; verdict: "unconfigured" }',
   },
+  // The indeterminate-streak escalation (MOTIR-10429): a verdict the handler
+  // branches on, like every probe of the daily check.
+  'indeterminate-streak': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ blindSpot: string; checkedAt: string; offenders: Array<{ consecutive: number; detail: string; phase: string; probe: string; since: string; step: string }>; runsRead: number; streaks: Array<{ consecutive: number; detail: string; phase: string; probe: string; since: string; step: string }>; threshold: number; verdict: "persistent" } | { blindSpot: string; checkedAt: string; runsRead: number; streaks: Array<{ consecutive: number; detail: string; phase: string; probe: string; since: string; step: string }>; threshold: number; verdict: "ok" }',
+  },
   'index-rebuild-streak': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
     shape:
@@ -399,15 +406,18 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ detail: string; reference: string; verdict: "indeterminate" } | { detail: string; reference: string; verdict: "unpullable" } | { detail: string; verdict: "not_applicable" } | { digest: null | string; reference: string; verdict: "bootable" }',
   },
+  // MOTIR-10429 added the OPTIONAL `failure.data` member to both ledger steps and
+  // KEPT their ids: a memo written before it has no `data`, and absent is what
+  // that run recorded. Nothing branches on a replayed row's failure.
   'job-run:start': {
     file: 'lib/jobs/engine/ledger.ts',
     shape:
-      'null | { attempt: number; delivery: null | { lastEventAt: null | string; providerMessageId: null | string; recipient: string; state: "accepted" | "bounced" | "complained" | "delayed" | "delivered"; template: string }; durationMs: null | number; eventId: string; eventName: string; failure: null | { code?: string | undefined; message: string; stack?: string | undefined }; finishedAt: null | string; functionId: string; id: string; idempotencyKey: null | string; lane: "engine" | "inngest"; output: unknown; startedAt: string; status: "abandoned" | "failed" | "running" | "succeeded"; workspaceId: null | string }',
+      'null | { attempt: number; delivery: null | { lastEventAt: null | string; providerMessageId: null | string; recipient: string; state: "accepted" | "bounced" | "complained" | "delayed" | "delivered"; template: string }; durationMs: null | number; eventId: string; eventName: string; failure: null | { code?: string | undefined; data?: undefined | { [key: string]: unknown }; message: string; stack?: string | undefined }; finishedAt: null | string; functionId: string; id: string; idempotencyKey: null | string; lane: "engine" | "inngest"; output: unknown; startedAt: string; status: "abandoned" | "failed" | "running" | "succeeded"; workspaceId: null | string }',
   },
   'job-run:succeeded': {
     file: 'lib/jobs/engine/ledger.ts',
     shape:
-      'null | { attempt: number; delivery: null | { lastEventAt: null | string; providerMessageId: null | string; recipient: string; state: "accepted" | "bounced" | "complained" | "delayed" | "delivered"; template: string }; durationMs: null | number; eventId: string; eventName: string; failure: null | { code?: string | undefined; message: string; stack?: string | undefined }; finishedAt: null | string; functionId: string; id: string; idempotencyKey: null | string; lane: "engine" | "inngest"; output: unknown; startedAt: string; status: "abandoned" | "failed" | "running" | "succeeded"; workspaceId: null | string }',
+      'null | { attempt: number; delivery: null | { lastEventAt: null | string; providerMessageId: null | string; recipient: string; state: "accepted" | "bounced" | "complained" | "delayed" | "delivered"; template: string }; durationMs: null | number; eventId: string; eventName: string; failure: null | { code?: string | undefined; data?: undefined | { [key: string]: unknown }; message: string; stack?: string | undefined }; finishedAt: null | string; functionId: string; id: string; idempotencyKey: null | string; lane: "engine" | "inngest"; output: unknown; startedAt: string; status: "abandoned" | "failed" | "running" | "succeeded"; workspaceId: null | string }',
   },
   'list-members': {
     file: 'lib/jobs/definitions/pullRequestBaseMoved.ts',
