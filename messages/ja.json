@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "コードアクセスを付与できなかったとき",
             "desc": "Motir がプロジェクト用に作成したリポジトリへのアクセス権を、あなたに付与できなかったとき。"
+          },
+          "review_to_run": {
+            "label": "レビューがあなたのエージェントを待っています",
+            "desc": "このプロジェクトはあなた自身のエージェントでレビューします。カードのレビューは motir review で実行してください。"
           }
         },
         "soon": "近日提供",
@@ -5770,7 +5774,8 @@
       "transitioned": "<s>{actor}</s> さんが <s>{key}</s> を {status} に移動しました",
       "generic": "<s>{actor}</s> さんが <s>{key}</s> を更新しました",
       "genericNoKey": "<s>{actor}</s> さんから通知が届きました",
-      "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください"
+      "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください",
+      "reviewToRun": "<s>{key}</s> のレビューがあなたのエージェントを待っています"
     }
   },
   "orgAdmin": {

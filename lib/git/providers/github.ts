@@ -37,6 +37,7 @@ import {
   ProviderReviewWriteError,
 } from '../errors';
 import type {
+  ChangeRequestAuthor,
   ChangeRequestLifecycle,
   CiConclusion,
   InstallationToken,
@@ -134,6 +135,17 @@ function normalizePermission(value: unknown): RepositoryPermission | null {
   if (typeof value !== 'string') return null;
   const lowered = value.toLowerCase();
   return PERMISSIONS.find((p) => p === lowered) ?? null;
+}
+
+/**
+ * The pull request's author from its `user` object (MOTIR-10340), or null when the payload
+ * names no id and login. The id is GitHub's numeric user id, kept as a string.
+ */
+function changeRequestAuthorOf(raw: unknown): ChangeRequestAuthor | null {
+  const user = asRecord(raw);
+  const githubUserId = idToString(user?.['id']);
+  const login = typeof user?.['login'] === 'string' ? user['login'] : null;
+  return githubUserId && login ? { githubUserId, login } : null;
 }
 
 function idToString(value: unknown): string | null {
@@ -1337,6 +1349,7 @@ export const githubProvider: GitProvider = {
       // not offered". `=== true` rather than a truthiness coercion for the same
       // reason `merged` uses it — an absent field is not a draft.
       draft: pr['draft'] === true,
+      author: changeRequestAuthorOf(pr['user']),
     };
   },
 

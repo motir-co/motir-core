@@ -1,3 +1,4 @@
+import { reviewToRunService } from '@/lib/services/reviewToRunService';
 import {
   ReviewAgainForbiddenError,
   ReviewAgainGateNotFoundError,
@@ -140,7 +141,11 @@ export const agentReviewStartService = {
     if (gate.reviewUnavailableReason !== null) return { outcome: 'skipped', why: 'could_not_run' };
     // `own`: the gate waits for a verdict through the user-token door. Nothing is
     // started, billed or recorded as could-not-run (§12.6 is a hosted-only state).
-    if (read.source === 'own') return { outcome: 'skipped', why: 'source_own' };
+    // It is now a review to run, and its routed person is told once (MOTIR-10340).
+    if (read.source === 'own') {
+      await reviewToRunService.notifyRaised(workspaceId, gateId);
+      return { outcome: 'skipped', why: 'source_own' };
+    }
     if ((await runningReviewRuns(workspaceId, [gateId])).length > 0) {
       return { outcome: 'skipped', why: 'run_in_flight' };
     }

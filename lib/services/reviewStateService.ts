@@ -1,0 +1,294 @@
+import type { Prisma } from '@/generated/prisma/client';
+import {
+  containerReviewCount,
+  deriveReviewState,
+  type ReviewState,
+  type ReviewStateFacts,
+  type ReviewStateMember,
+} from '@/lib/agentReview/reviewState';
+import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
+import { parseMemberVersion } from '@/lib/approvalGates/memberVersion';
+import { routedToDisplayName, routingTargetId } from '@/lib/approvalGates/routing';
+import { toReviewStateDto, type ReviewStateDTO } from '@/lib/dto/reviewState';
+import { githubPullRequestReviewRepository } from '@/lib/repositories/githubPullRequestReviewRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
+import {
+  reviewStateRepository,
+  type ReviewStateCardRow,
+  type ReviewStatePersonRow,
+} from '@/lib/repositories/reviewStateRepository';
+import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workflowsService } from '@/lib/services/workflowsService';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+
+// THE REVIEW STATE READ MODEL (Story MOTIR-10327 · MOTIR-10340; `approval-gates.md` §12;
+// `design/github/design-notes.md` § 32). ONE place answers, per card at its CURRENT
+// delivery-set version, what every surface says about its agent review — the marker, the
+// Reviewed state, the review line, a container's n of m, a review to run, and whether the
+// routed person opened every pull request — so the board, the list, the header, To approve
+// and the gate frame cannot disagree about the same card at the same commits.
+//
+// ⚠️ A FIXED NUMBER OF QUERIES, whatever the page's size: every read below is one batch
+// over the whole set (`reviewStateRepository`), and the derivation is pure
+// (`lib/agentReview/reviewState.ts`). A per-card read here would cost a board page one
+// round trip per card.
+//
+// ⚠️ ACCESS TRAVELS INTO THE READ. Every query runs in the reader's workspace transaction,
+// so RLS keeps another workspace's card out, and a project the reader may not browse
+// answers an empty map — never an error, the no-existence-leak convention the decision
+// marker follows (`approvalGatesService.pendingDecisionsFor`).
+//
+// ⚠️ IT DECIDES NOTHING AND WRITES NOTHING. It never records a verdict, dismisses,
+// supersedes or posts.
+
+/**
+ * §2's routed person — `assigneeId ?? reporterId` (`routingTargetId`). A card always has a
+ * reporter, so a card always has one.
+ */
+function routedIdOf(card: ReviewStateCardRow): string {
+  /* v8 ignore next -- `reporterId` is NOT NULL on `work_item`. */
+  return routingTargetId(card) ?? card.reporterId;
+}
+
+/** A card of a subtree walk, as the run-target rule reads it. */
+interface TreeNode {
+  id: string;
+  parentId: string | null;
+}
+
+function groupBy<T>(rows: readonly T[], key: (row: T) => string | null): Map<string, T[]> {
+  const out = new Map<string, T[]>();
+  for (const row of rows) {
+    const k = key(row);
+    if (k === null) continue;
+    const list = out.get(k) ?? [];
+    list.push(row);
+    out.set(k, list);
+  }
+  return out;
+}
+
+/** The set's version and its members; a member whose rows RLS hid makes the version unknown. */
+function setOf(
+  deliveries: readonly WorkItemDeliveryWithChecks[],
+  reviewsByPr: Map<string, ReviewStateMember['reviews']>,
+): { version: string | null; members: ReviewStateMember[] } {
+  const members: ReviewStateMember[] = [];
+  const versions: (string | null)[] = [];
+  for (const delivery of deliveries) {
+    // The type says these joins are never null; under RLS they can be (MOTIR-8215). A set
+    // with a member the reader cannot see has no version anybody can name.
+    /* v8 ignore next 6 -- a repository that left the card's organisation; the read model
+       answers it as an unknown version rather than the 500 MOTIR-8215 fixed. */
+    if (
+      (delivery.pullRequest as WorkItemDeliveryWithChecks['pullRequest'] | null) === null ||
+      (delivery.repo as WorkItemDeliveryWithChecks['repo'] | null) === null
+    ) {
+      return { version: null, members: [] };
+    }
+    const version = deliveryMemberVersion(delivery);
+    versions.push(version);
+    const member = version ? parseMemberVersion(version) : null;
+    if (!member) continue;
+    members.push({
+      repo: member.repo,
+      number: member.number,
+      headSha: member.headSha,
+      authorGithubUserId: delivery.pullRequest.authorGithubUserId,
+      reviews: reviewsByPr.get(delivery.githubPullRequestId) ?? [],
+    });
+  }
+  return { version: deliverySetVersion(versions), members };
+}
+
+/**
+ * The open RUN TARGETS of a tree: each card holding a delivery set of its own that its
+ * nearest delivering ancestor (within the tree) does not already cover. A child built onto
+ * its parent's pull requests is reviewed as that parent, so it is not counted twice; a
+ * card with pull requests of its own is. A Done, Cancelled or archived card is not open.
+ */
+function openRunTargets(
+  rootId: string,
+  nodes: readonly TreeNode[],
+  prIdsByCard: Map<string, Set<string>>,
+  isOpen: (id: string) => boolean,
+): string[] {
+  const parentOf = new Map(nodes.map((n) => [n.id, n.parentId] as const));
+  const targets: string[] = [];
+  for (const node of nodes) {
+    const own = prIdsByCard.get(node.id);
+    if (!own || own.size === 0) continue;
+    let covered = false;
+    let cursor: string | null = node.id === rootId ? null : (parentOf.get(node.id) ?? null);
+    while (cursor !== null) {
+      const above = prIdsByCard.get(cursor);
+      if (above && above.size > 0) {
+        covered = [...own].some((id) => above.has(id));
+        break;
+      }
+      cursor = cursor === rootId ? null : (parentOf.get(cursor) ?? null);
+    }
+    if (!covered && isOpen(node.id)) targets.push(node.id);
+  }
+  return targets;
+}
+
+/**
+ * The review state of `workItemIds` in `projectId`, inside the caller's workspace-bound
+ * transaction. A card that is not in the project, or not visible, is absent from the map.
+ */
+export async function readReviewStates(
+  projectId: string,
+  workItemIds: readonly string[],
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<Map<string, ReviewStateDTO>> {
+  const out = new Map<string, ReviewStateDTO>();
+  const project = await projectRepository.findById(projectId, tx);
+  if (!project || project.workspaceId !== ctx.workspaceId) return out;
+  if ((await projectAccessService.filterBrowsable([project], ctx, tx)).length === 0) return out;
+
+  const tree = await reviewStateRepository.listSubtrees([...new Set(workItemIds)], projectId, tx);
+  const allIds = [...new Set(tree.map((row) => row.id))];
+  const [cards, statuses, deliveries, agentGates, latestDecided, records, dismissals] =
+    await Promise.all([
+      reviewStateRepository.listCards(allIds, tx),
+      workflowsService.listStatusesByProject(projectId, ctx.workspaceId, tx),
+      reviewStateRepository.listDeliveries(allIds, tx),
+      reviewStateRepository.listAgentReviewGates(allIds, tx),
+      reviewStateRepository.listLatestDecidedGates(allIds, tx),
+      reviewStateRepository.listRecords(allIds, tx),
+      reviewStateRepository.listDismissals(allIds, tx),
+    ]);
+
+  const cardById = new Map(cards.map((card) => [card.id, card] as const));
+  const finishedStatuses = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
+  const isFinished = (card: ReviewStateCardRow) => finishedStatuses.has(card.status);
+
+  const awaitingGateIds = agentGates.filter((g) => g.state === 'awaiting').map((g) => g.id);
+  const prIds = [
+    ...new Set(
+      deliveries
+        .filter((d) => (d.pullRequest as unknown) !== null)
+        .map((d) => d.githubPullRequestId),
+    ),
+  ];
+  const personIds = new Set<string>();
+  for (const card of cards) personIds.add(routedIdOf(card));
+  for (const gate of agentGates) if (gate.decidedById) personIds.add(gate.decidedById);
+  const [running, reviews, people] = await Promise.all([
+    reviewStateRepository.listGateIdsWithRunningReview(ctx.workspaceId, awaitingGateIds, tx),
+    githubPullRequestReviewRepository.listForPullRequests(prIds, tx),
+    reviewStateRepository.listPeople([...personIds], tx),
+  ]);
+
+  const personById = new Map<string, ReviewStatePersonRow>(people.map((p) => [p.id, p] as const));
+  const nameOf = (id: string | null) =>
+    id ? routedToDisplayName(personById.get(id) ?? null) : null;
+  const reviewsByPr = groupBy(reviews, (r) => r.githubPullRequestId);
+  const deliveriesByCard = groupBy(deliveries, (d) => d.workItemId);
+  const gatesByCard = groupBy(agentGates, (g) => g.workItemId);
+  const latestByCard = new Map(
+    latestDecided.flatMap((g) => (g.workItemId ? [[g.workItemId, g] as const] : [])),
+  );
+  const recordsByCard = groupBy(records, (r) => r.workItemId);
+  const dismissalsByCard = groupBy(dismissals, (d) => d.workItemId);
+
+  const derived = new Map<string, ReviewState>();
+  const stateOf = (id: string): ReviewState | null => {
+    const cached = derived.get(id);
+    if (cached) return cached;
+    const card = cardById.get(id);
+    /* v8 ignore next -- every id here came from the same transaction's tree walk. */
+    if (!card) return null;
+    const set = setOf(deliveriesByCard.get(id) ?? [], reviewsByPr);
+    const routedId = routedIdOf(card);
+    const routed = personById.get(routedId);
+    const gates = gatesByCard.get(id) ?? [];
+    const facts: ReviewStateFacts = {
+      identifier: card.identifier,
+      finished: isFinished(card),
+      reviewAgentEnabled: project.reviewAgentEnabled,
+      reviewAgentSource: project.reviewAgentSource,
+      currentVersion: set.version,
+      members: set.members,
+      agentGates: gates.map((gate) => ({ ...gate, decidedByName: nameOf(gate.decidedById) })),
+      latestDecidedGate: latestByCard.get(id) ?? null,
+      records: (recordsByCard.get(id) ?? []).map((record) => ({
+        ...record,
+        submittedByName: record.submittedBy?.name ?? null,
+      })),
+      dismissals: (dismissalsByCard.get(id) ?? []).map((dismissal) => ({
+        ...dismissal,
+        dismissedByName: dismissal.dismissedBy?.name ?? null,
+      })),
+      reviewRunInFlight: gates.some((g) => g.state === 'awaiting' && running.has(g.id)),
+      routedTo: { id: routedId, name: nameOf(routedId) },
+      routedGithubUserId: routed?.githubUserId ?? null,
+      viewerUserId: ctx.userId,
+    };
+    const state = deriveReviewState(facts);
+    derived.set(id, state);
+    return state;
+  };
+
+  const treeByRoot = groupBy(tree, (row) => row.rootId);
+  const prIdsByCard = new Map(
+    [...deliveriesByCard].map(([id, rows]) => [
+      id,
+      new Set(rows.map((d) => d.githubPullRequestId)),
+    ]),
+  );
+  const isOpen = (id: string) => {
+    const card = cardById.get(id);
+    return card !== undefined && card.archivedAt === null && !isFinished(card);
+  };
+
+  for (const id of new Set(workItemIds)) {
+    const card = cardById.get(id);
+    const state = card ? stateOf(id) : null;
+    if (!card || !state || card.projectId !== projectId) continue;
+    const nodes = treeByRoot.get(id) ?? [];
+    const container =
+      nodes.length > 1
+        ? containerReviewCount(
+            openRunTargets(id, nodes, prIdsByCard, isOpen).map((target) => ({
+              reviewed: Boolean(stateOf(target)?.reviewed),
+            })),
+          )
+        : null;
+    out.set(id, toReviewStateDto(card, state, container));
+  }
+  return out;
+}
+
+/** The pure derivation, exported beside the read so it can be pinned without a database. */
+export { deriveReviewState } from '@/lib/agentReview/reviewState';
+
+export const reviewStateService = {
+  /**
+   * The review state of a page of cards — the board, a list, To approve. ONE workspace-bound
+   * transaction and a fixed number of queries for the whole page.
+   */
+  async forCards(
+    projectId: string,
+    workItemIds: readonly string[],
+    ctx: ServiceContext,
+  ): Promise<Map<string, ReviewStateDTO>> {
+    if (workItemIds.length === 0) return new Map();
+    return withWorkspaceContext(ctx, (tx) => readReviewStates(projectId, workItemIds, ctx, tx));
+  },
+
+  /** One card's review state — the item header and the gate frame. Null when not visible. */
+  async forCard(
+    projectId: string,
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<ReviewStateDTO | null> {
+    return (
+      (await reviewStateService.forCards(projectId, [workItemId], ctx)).get(workItemId) ?? null
+    );
+  },
+};

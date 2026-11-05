@@ -7,6 +7,7 @@ import {
   ShieldAlert,
   AtSign,
   Bell,
+  Bot,
   Check,
   GitPullRequest,
   MessageSquare,
@@ -53,12 +54,16 @@ const TYPE_META: Record<string, { Icon: ComponentType<{ className?: string }>; b
   // review rail's `needs_access` outcome uses, so one product story is told in one
   // colour. NOT danger: nothing was lost, the repository exists.
   code_access_refused: { Icon: ShieldAlert, badge: 'bg-(--el-notif-access-refused)' },
+  // MOTIR-10340 — a review waits for the recipient's OWN agent. `Bot`, the glyph the review
+  // markers and the To approve "review to run" row draw (`design/github/design-notes.md`
+  // § 32.1, § 32.5), so the same thing looks the same wherever it is said.
+  review_to_run: { Icon: Bot, badge: 'bg-(--el-notif-review-to-run)' },
 };
 
 /** Types whose subject is a PROJECT rather than a work item — no actor, and a
  *  destination resolved from the TYPE. `code_access_refused` is the first
  *  (MOTIR-5016); `Notification.workItemId` is null on these rows. */
-const ACTORLESS_TYPES = new Set<string>(['code_access_refused']);
+const ACTORLESS_TYPES = new Set<string>(['code_access_refused', 'review_to_run']);
 const DEFAULT_META = { Icon: Bell, badge: 'bg-(--el-text-muted)' };
 
 /** Pick the summary i18n key for a notification's type (+ whether it deep-links). */
@@ -68,6 +73,9 @@ function summaryKey(type: string, hasKey: boolean): string {
   // below is for a work-item row whose key is missing — a degraded payload — which
   // is a different thing from a row that is not about a work item at all.
   if (type === 'code_access_refused') return 'summary.accessRefused';
+  // Actorless too (MOTIR-10340): its summary names no actor, so it never takes the
+  // actor-shaped `generic` fallback below.
+  if (type === 'review_to_run' && hasKey) return 'summary.reviewToRun';
   if (!hasKey) return 'summary.genericNoKey';
   switch (type) {
     case 'mentioned':

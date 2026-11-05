@@ -453,6 +453,9 @@ export const githubPullRequestService = {
           // Nor is it asked the head commit (MOTIR-7005): the delivery still to come
           // writes it, and until then `pullRequestHead` falls back to the check rows.
           headSha: undefined,
+          // Nor its author (MOTIR-10340): the delivery still to come writes it.
+          authorGithubUserId: undefined,
+          authorLogin: undefined,
         };
         try {
           prId = (await githubPullRequestRepository.upsert(row, tx)).id;

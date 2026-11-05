@@ -1,4 +1,5 @@
 import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/context';
+import { reviewToRunService } from '@/lib/services/reviewToRunService';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -96,6 +97,11 @@ async function switchAwaitingReviewSource(
     );
     for (const gate of awaiting) {
       await approvalGateRepository.setReviewUnavailableReason(gate.id, null, tx);
+      // Each is now a review to run; its routed person is told once, after commit
+      // (MOTIR-10340). The gate id is the dedupe key, so a second switch tells nobody.
+      deferUntilCommit(async () => {
+        await reviewToRunService.notifyRaised(project.workspaceId, gate.id);
+      });
     }
     return;
   }

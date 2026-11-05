@@ -37,6 +37,9 @@ export const NOTIFICATION_EVENT_TYPE = {
   /** GitHub REFUSED a collaborator invitation (MOTIR-5016 · Story MOTIR-5010).
    *  The first type whose subject is a PROJECT rather than a work item. */
   codeAccessRefused: 'code_access_refused',
+  /** A review waits for the routed person's OWN agent (Story MOTIR-10327 · MOTIR-10340;
+   *  `approval-gates.md` §12.1, §12.10). Actorless; one row per awaiting review gate. */
+  reviewToRun: 'review_to_run',
 } as const;
 
 export interface NotificationPreferenceEventTypeMeta {
@@ -91,6 +94,13 @@ export const NOTIFICATION_PREFERENCE_EVENT_TYPES: readonly NotificationPreferenc
   // user's to turn off.
   {
     type: NOTIFICATION_EVENT_TYPE.codeAccessRefused,
+    settable: true,
+    defaults: { email: true, in_app: true },
+  },
+  // APPENDED, for the reason above. Nothing starts a review with the source `own`, so this
+  // row is the one thing that tells the routed person a review is theirs to run.
+  {
+    type: NOTIFICATION_EVENT_TYPE.reviewToRun,
     settable: true,
     defaults: { email: true, in_app: true },
   },

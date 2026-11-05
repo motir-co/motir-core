@@ -22,6 +22,8 @@ import type {
   PendingDecisionDTO,
 } from '@/lib/dto/approvalGate';
 import { APPROVAL_GATE_REFUSAL_VERDICTS } from '@/lib/dto/approvalGate';
+import type { ReviewToRunRowDTO } from '@/lib/dto/reviewState';
+import { reviewCommand } from '@/lib/agentReview/reviewState';
 import type { AppliedGateTransition, GateEffect } from '@/lib/approvalGates/registry';
 import { emitAppliedGateTransitions } from '@/lib/approvalGates/gateTransition';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -1567,6 +1569,48 @@ export const approvalGatesService = {
     const items = read.queue.items.filter((row) => !withdrawn.has(row.gateId));
     const total = read.queue.total - withdrawn.size;
     return { items, total, truncated: total > items.length };
+  },
+
+  /**
+   * THE REVIEWS TO RUN on the reader's To approve (Story MOTIR-10327 · MOTIR-10340;
+   * `approval-gates.md` §12.1's 2026-11-04 amendment; `design/github/design-notes.md`
+   * § 32.5) — each awaiting `agent_review` gate of the ACTIVE project, when it reviews with
+   * its own agent, routed to the reader by §2's rule. A DISTINCT row kind beside
+   * {@link listAwaitingMe}'s approvals, which this read leaves exactly as they were.
+   *
+   * Access travels into the query as the queue's does: a project the reader may not browse
+   * answers an empty list. Bounded by {@link APPROVAL_QUEUE_CEILING}, the queue's own
+   * safety bound.
+   */
+  async listReviewsToRun(
+    ctx: HomeActorContext,
+    options: ApprovalQueueReadOptions = {},
+  ): Promise<ReviewToRunRowDTO[]> {
+    const ceiling = options.ceiling ?? APPROVAL_QUEUE_CEILING;
+    return withWorkspaceContext(ctx, async (tx) => {
+      const projectIds = await browsableProjectIds(ctx.projectId, ctx, tx);
+      const rows = await approvalGateRepository.findAwaitingReviewsToRunRoutedTo(
+        { projectIds, userId: ctx.userId },
+        ceiling,
+        tx,
+      );
+      return rows.flatMap((row) =>
+        row.workItem
+          ? [
+              {
+                kind: 'review_to_run' as const,
+                gateId: row.id,
+                workItemId: row.workItem.id,
+                identifier: row.workItem.identifier,
+                title: row.workItem.title,
+                subjectVersion: row.subjectVersion,
+                raisedAt: row.createdAt.toISOString(),
+                command: reviewCommand(row.workItem.identifier),
+              },
+            ]
+          : [],
+      );
+    });
   },
 
   /**

@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Codetoegang kon niet worden verleend",
             "desc": "Motir kon je geen toegang geven tot een repository die het voor je project heeft gemaakt."
+          },
+          "review_to_run": {
+            "label": "Een review wacht op je agent",
+            "desc": "Je project reviewt met je eigen agent, en de review van een kaart start je zelf met motir review."
           }
         },
         "soon": "Binnenkort",
@@ -5770,7 +5774,8 @@
       "transitioned": "<s>{actor}</s> heeft <s>{key}</s> naar {status} verplaatst",
       "generic": "<s>{actor}</s> heeft <s>{key}</s> bijgewerkt",
       "genericNoKey": "<s>{actor}</s> heeft je een melding gestuurd",
-      "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen"
+      "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
+      "reviewToRun": "Een review van <s>{key}</s> wacht op je agent"
     }
   },
   "orgAdmin": {

@@ -121,6 +121,23 @@ export interface NormalizedChangeRequest {
    * REQUIRED, for `draft`'s reason; `null` when the payload names none.
    */
   headSha: string | null;
+  /**
+   * Who OPENED the change request on the host (Story MOTIR-10327 · MOTIR-10340) — GitHub's
+   * `pull_request.user`. Persisted as `GithubPullRequest.authorGithubUserId` / `authorLogin`
+   * and read by the review state model's author-of-every-PR fact.
+   *
+   * REQUIRED, for `draft`'s reason; `null` when the payload names none — and always `null`
+   * from GitLab, whose user ids are not GitHub's and could never match a GitHub identity.
+   */
+  author: ChangeRequestAuthor | null;
+}
+
+/** A change request's author on the host — the stable id, and the login it is shown by. */
+export interface ChangeRequestAuthor {
+  /** The host's numeric user id, as a string — the fact every comparison reads. */
+  githubUserId: string;
+  /** The login at the time of the delivery — a label only; a login can be renamed. */
+  login: string;
 }
 
 /** The canonical, provider-agnostic lifecycle signal a change request maps to —

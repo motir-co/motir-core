@@ -61,6 +61,8 @@ describe('notificationPreferencesService.getMatrix', () => {
       'assigned',
       'transitioned',
       'code_access_refused',
+      // MOTIR-10340 — a review waiting for the person's own agent, appended last.
+      'review_to_run',
     ]);
     // Direct/mention events default ON for both channels — INCLUDING the
     // access-refused row, and its email arm is a decision rather than an

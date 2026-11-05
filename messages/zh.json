@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "无法授予代码访问权限",
             "desc": "Motir 无法让你访问它为你的项目创建的代码仓库。"
+          },
+          "review_to_run": {
+            "label": "有一个评审在等你的智能体",
+            "desc": "你的项目使用你自己的智能体评审，一张卡片的评审需要你用 motir review 来运行。"
           }
         },
         "soon": "即将推出",
@@ -5770,7 +5774,8 @@
       "transitioned": "<s>{actor}</s> 将 <s>{key}</s> 移动到 {status}",
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
-      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请"
+      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
+      "reviewToRun": "<s>{key}</s> 的评审正在等你的智能体"
     }
   },
   "orgAdmin": {

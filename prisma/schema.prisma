@@ -8739,6 +8739,21 @@ model GithubPullRequest {
   /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — then the readers fall back
   /// to the check rows' head, which is what they did before the column existed.
   headSha               String?             @map("head_sha")
+  /// The pull request's AUTHOR on the host — GitHub's `pull_request.user` (Story MOTIR-10327 ·
+  /// MOTIR-10340). The review state read model compares `authorGithubUserId` with the routed
+  /// person's `GithubIdentity.githubUserId` to say whether they opened every pull request of
+  /// the set (GitHub will not let an author approve their own pull request).
+  ///
+  /// ⚠️ THE ID IS THE FACT, THE LOGIN IS ONLY ITS LABEL. A login can be renamed; the numeric
+  /// id cannot, so every comparison reads the id.
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — `head_sha`'s rule. A row mirrored
+  /// before these columns existed does not know its author, and the author fact reads false
+  /// for it rather than guessing. Written by every `pull_request` delivery that names one;
+  /// the link door and the historical backfill do not assert it.
+  authorGithubUserId    String?             @map("author_github_user_id")
+  /// The author's login as of the last delivery — a display label, never compared.
+  authorLogin           String?             @map("author_login")
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///

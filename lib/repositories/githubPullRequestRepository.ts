@@ -66,6 +66,15 @@ export interface UpsertGithubPullRequestInput {
    * historical backfill do not know it.
    */
   headSha: string | undefined;
+  /**
+   * The pull request's author on the host (MOTIR-10340) — `headSha`'s contract exactly: a
+   * REQUIRED key whose value is `undefined` when the writer does not know, which leaves the
+   * stored author alone. Only the status sync supplies it, from the delivery's
+   * `pull_request.user`; the link door and the historical backfill do not assert it.
+   */
+  authorGithubUserId: string | undefined;
+  /** The author's login, written with {@link authorGithubUserId} — a label only. */
+  authorLogin: string | undefined;
   /* ⚠️ `linkedManually` WAS A FIELD HERE and is removed by MOTIR-4894. It said
    * the association was DECLARED rather than inferred by the MOTIR-892
    * auto-resolver; MOTIR-3674 deleted that resolver, so the distinction had no

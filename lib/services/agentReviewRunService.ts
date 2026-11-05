@@ -8,6 +8,7 @@ import {
   type ReviewStaleCause,
 } from '@/lib/agentReview/errors';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
+import { HOSTED_REVIEW_HARNESS } from '@/lib/agentReview/reviewState';
 import {
   ApprovalGateAlreadyDecidedError,
   ApprovalGateNotFoundError,
@@ -257,9 +258,6 @@ async function criteriaTreeOf(
     criteria: splitPlanBody(row.descriptionMd).acceptanceCriteria,
   }));
 }
-
-/** The harness a hosted review run's verdict record names — the hosted agent itself. */
-const HOSTED_REVIEW_HARNESS = 'Motir hosted review';
 
 async function hasVerdict(run: ReviewRunRef, ctx: ServiceContext): Promise<boolean> {
   const prior = await withWorkspaceContext(

@@ -42,7 +42,8 @@ export interface NotificationActorDTO {
 export type NotificationData =
   | NotificationMentionedData
   | NotificationTransitionedData
-  | NotificationCodeAccessRefusedData;
+  | NotificationCodeAccessRefusedData
+  | NotificationReviewToRunData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -96,6 +97,21 @@ export interface NotificationCodeAccessRefusedData {
 }
 
 /**
+ * A review waits for the routed person's OWN agent (Story MOTIR-10327 · MOTIR-10340) —
+ * raised once per awaiting `agent_review` gate with the project's review source `own`. No
+ * actor: nobody did this to the recipient.
+ */
+export interface NotificationReviewToRunData {
+  kind: 'review_to_run';
+  /** The card to review — the row's deep-link target. */
+  issueKey: string;
+  /** The card's title, for the summary line. */
+  title: string;
+  /** `motir review <KEY>` — the command the recipient runs in their own agent. */
+  command: string;
+}
+
+/**
  * The arms whose subject is a WORK ITEM — the ones carrying `issueKey` and
  * `title`. Every arm did until MOTIR-5016 added `code_access_refused`, whose
  * subject is a PROJECT, so a reader that wants the deep-link key now has to say
@@ -110,8 +126,8 @@ export interface NotificationCodeAccessRefusedData {
  */
 export function isWorkItemNotificationData(
   data: NotificationData,
-): data is NotificationMentionedData | NotificationTransitionedData {
-  return data.kind === 'mentioned' || data.kind === 'transitioned';
+): data is NotificationMentionedData | NotificationTransitionedData | NotificationReviewToRunData {
+  return data.kind === 'mentioned' || data.kind === 'transitioned' || data.kind === 'review_to_run';
 }
 
 export interface NotificationDTO {

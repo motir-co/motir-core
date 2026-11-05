@@ -1,4 +1,4 @@
-import type { ApprovalGate, Prisma } from '@/generated/prisma/client';
+import type { ApprovalGate, Prisma, ReviewVerdictRecord } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -74,7 +74,33 @@ export async function readStandingReviewRefusal(
       ? Promise.resolve(null)
       : reviewDismissalRepository.findAt(workItemId, currentVersion, tx),
   ]);
-  const dismissed = dismissal !== null;
+  return standingReviewRefusalFrom({
+    latest,
+    record,
+    dismissed: dismissal !== null,
+    currentVersion,
+  });
+}
+
+/**
+ * THE RULE ITSELF, over rows already read — {@link readStandingReviewRefusal}'s answer for a
+ * caller that reads many cards at once (the review state read model, MOTIR-10340), so the
+ * batch reader and the per-card one are the same predicate rather than two copies of it.
+ *
+ * `latest` is the card's latest DECIDED gate of any kind; `record` its gate-off agent
+ * send-back at the CURRENT version (`outcome: 'recorded'`, `verdict: 'changes_requested'`),
+ * or null; `dismissed` whether a dismissal stands at the current version.
+ */
+export function standingReviewRefusalFrom(facts: {
+  latest: ApprovalGate | null;
+  record: Pick<
+    ReviewVerdictRecord,
+    'id' | 'subjectVersion' | 'findingsMd' | 'submittedById' | 'createdAt'
+  > | null;
+  dismissed: boolean;
+  currentVersion: string | null;
+}): StandingReviewRefusal | null {
+  const { latest, record, dismissed, currentVersion } = facts;
   const gate =
     latest &&
     standingMergeRefusalOf(latest, currentVersion) &&

@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Codezugriff konnte nicht gewährt werden",
             "desc": "Motir konnte Ihnen keinen Zugriff auf ein Repository geben, das es für Ihr Projekt angelegt hat."
+          },
+          "review_to_run": {
+            "label": "Ein Review wartet auf deinen Agenten",
+            "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review einer Karte führst du mit motir review aus."
           }
         },
         "soon": "Demnächst",
@@ -5770,7 +5774,8 @@
       "transitioned": "<s>{actor}</s> hat <s>{key}</s> nach {status} verschoben",
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
-      "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden"
+      "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
+      "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten"
     }
   },
   "orgAdmin": {
