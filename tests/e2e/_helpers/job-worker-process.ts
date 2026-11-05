@@ -439,47 +439,37 @@ export function jobWorkerEnabled(): boolean {
 }
 
 /**
- * Start the worker and wait until it has announced itself.
- *
- * Resolves on the worker's own startup line rather than after a sleep — the
- * authoritative signal, the same discipline every spec in this lane owes its
- * assertions.
+ * The keys of the app server's environment a GitHub webhook HANDLER reads — the
+ * GitHub App and its token key, the preview lifecycle's host and its fake's state,
+ * the runner hot path's fleet adapter, and the base URL links are built on.
  */
-/**
- * Keys of the app server's environment that describe THAT PROCESS rather than the
- * app, and so are never handed to the worker:
- *
- *   * the server's own sizing and runtime (`NODE_OPTIONS`, `UV_THREADPOOL_SIZE`,
- *     `NODE_ENV`, `PORT`) — the worker sets its own below;
- *   * the database it connects with — an app-role lane rewrites the SERVER's
- *     `DATABASE_URL` to the restricted role (`appRoleServer.ts`), and the worker keeps
- *     the runner's, exactly as it always has;
- *   * `E2E_TEST_GITHUB_REPOS`, whose fake keeps the repositories it "created" in a
- *     PROCESS-LOCAL map, so a second copy here would be a second GitHub that disagrees
- *     with the first (the reason `githubMergeSeamEnv` gives for not mirroring it).
- */
-const SERVER_PROCESS_ONLY_KEYS = new Set([
-  'NODE_OPTIONS',
-  'UV_THREADPOOL_SIZE',
-  'NODE_ENV',
-  'PORT',
-  'DATABASE_URL',
-  'DATABASE_URL_UNPOOLED',
-  'E2E_TEST_GITHUB_REPOS',
-]);
+const WEBHOOK_HANDLER_ENV_KEYS: readonly (string | RegExp)[] = [
+  /^GITHUB_/,
+  'MOTIR_BASE_URL',
+  'MOTIR_FLEET_ORCHESTRATOR',
+  'MOTIR_PREVIEW_DOMAIN',
+  'MOTIR_HOSTING_GATE_SIGNING_KEY',
+  'MOTIR_HOSTING_ORIGIN_SECRET_KEY',
+  'MOTIR_FAKE_HOSTING_STATE_PATH',
+];
 
 /**
- * ⚠️ THE APP SERVER'S ENVIRONMENT, MIRRORED INTO THE WORKER (Bug MOTIR-10425).
+ * ⚠️ THE APP SERVER'S WEBHOOK CONFIGURATION, MIRRORED INTO THE WORKER (Bug MOTIR-10425).
  *
  * `POST /api/github/webhook` stores a delivery and answers; the
  * `system.github-webhook-delivery` job processes it. So every GitHub webhook handler
  * — the status sync, the CI feedback and its promotion, the preview lifecycle, the
- * runner hot path, the deployment ledger — now runs in THIS process, and reads
- * whatever the app server reads: its seams, its fakes' state paths, its secrets.
- * Mirroring them one at a time is how this file grew its opt-in functions, each
- * added after a job had quietly read a webServer-only variable (the MOTIR-3498
- * shape). A delivery can reach any of those handlers, so the whole environment is
- * handed over instead, minus {@link SERVER_PROCESS_ONLY_KEYS}.
+ * runner hot path, the deployment ledger — now runs in THIS process, and reads what
+ * the app server's `webServer.env` gave it: the MOTIR-3498 shape again, a
+ * webServer-only variable a job handler reads.
+ *
+ * ⚠️ ONLY {@link WEBHOOK_HANDLER_ENV_KEYS}, NEVER THE WHOLE ENVIRONMENT. Handed the
+ * server's entire env, this worker ran EVERY job differently, not only the webhook's:
+ * its seam flags installed interceptors whose journals specs hold empty (the fleet-org
+ * seam recorded the worker's readiness reads, `regression-admin-fleet-settings`; the
+ * AI-jobs seam received an `analyze_bug` submission, `regression-ask-single-read`), and
+ * the cloud posture changed what the monitor check did. Which seams this worker
+ * installs stays the decision of the opt-in functions above, one at a time.
  *
  * Each lane's config publishes its app server's env as JSON in `E2E_WORKER_APP_ENV`
  * (`APP_SERVER_ENV` in `playwright.config.ts`, `playwright.acceptance.config.ts`,
@@ -491,12 +481,22 @@ export function appServerEnv(): Record<string, string> {
   const parsed = JSON.parse(raw) as Record<string, unknown>;
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(parsed)) {
-    if (SERVER_PROCESS_ONLY_KEYS.has(key) || typeof value !== 'string') continue;
-    env[key] = value;
+    if (typeof value !== 'string') continue;
+    const wanted = WEBHOOK_HANDLER_ENV_KEYS.some((k) =>
+      typeof k === 'string' ? k === key : k.test(key),
+    );
+    if (wanted) env[key] = value;
   }
   return env;
 }
 
+/**
+ * Start the worker and wait until it has announced itself.
+ *
+ * Resolves on the worker's own startup line rather than after a sleep — the
+ * authoritative signal, the same discipline every spec in this lane owes its
+ * assertions.
+ */
 export async function startJobWorker(): Promise<void> {
   if (!jobWorkerEnabled() || worker) return;
 

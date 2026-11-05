@@ -441,9 +441,9 @@ const { privateKey: E2E_USER_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
  * The app webServer's environment — named, so the job worker can be handed the same
  * one (Bug MOTIR-10425). GitHub webhook deliveries are processed by the
  * `system.github-webhook-delivery` JOB now, so every handler that used to run in the
- * app server runs in the worker, and reads whatever this server reads.
- * `tests/e2e/_helpers/job-worker-process.ts` (`appServerEnv`) applies it to the worker,
- * minus the keys that describe the server process rather than the app.
+ * app server runs in the worker.
+ * `tests/e2e/_helpers/job-worker-process.ts` (`appServerEnv`) hands the worker the
+ * keys of it a webhook handler reads, and nothing else.
  */
 const APP_SERVER_ENV = {
   // MOTIR-1682: production-harness flag — re-relaxes the NODE_ENV=production
