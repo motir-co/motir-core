@@ -451,6 +451,34 @@ describe('POST /api/ai/plan-change/session/late-changes — STRANDED turns', () 
     expect(await pendingTurns()).toEqual([]);
   });
 
+  it('a plan re-pointed at another job while the session still names the run is found as the session’s latest plan', async () => {
+    await strand('one', 'k1');
+    // A hosted revision of a plan still `generating` re-points `sourceJobId` but not
+    // the session (MOTIR-10455 binds the session only on a re-open), so the run's id
+    // resolves no plan and the door falls back to the session's latest one.
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'generating' } });
+    await plansService.acquireRevisionLease(
+      planId,
+      fx.ctx,
+      { source: 'native', harness: 'Motir', model: null },
+      { jobId: 'job-rev-other' },
+    );
+    setRun('succeeded');
+    submitJobMock.mockClear();
+
+    const body = await (await lateChanges(lateReq())).json();
+
+    expect(body).toMatchObject({
+      outcome: 'refused',
+      code: 'PLAN_REVISION_IN_FLIGHT',
+      texts: ['one'],
+    });
+    expect(submitJobMock).not.toHaveBeenCalled();
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } })).lastJobId,
+    ).toBe(RUN_JOB);
+  });
+
   it('leaves a restart turn and the stop alone: only fold turns are claimed', async () => {
     setRun('running');
     await planChangeMailboxService.attachTurn(
