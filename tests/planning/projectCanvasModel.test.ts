@@ -8,6 +8,7 @@ import {
   focalNode,
   hasChildren,
   levelOf,
+  longestPathLayers,
   searchMatches,
   topologicalOrder,
   type ProjectCanvasDep,
@@ -262,5 +263,82 @@ describe('topologicalOrder and deterministicLayout — the defensive arms', () =
     );
     expect(pos['A']!.x).toBeLessThan(pos['B']!.x);
     expect(pos['B']!.x).toBeLessThan(pos['C']!.x);
+  });
+});
+
+// Bug MOTIR-10454 — the longest-path layering was lifted out of
+// `deterministicLayout` so the roadmap's "you are here" pick reads the SAME depth
+// the columns are drawn by. The layout's positions must not move.
+describe('longestPathLayers (MOTIR-10454)', () => {
+  const repro = [
+    { from: '10449', to: '10451' },
+    { from: '10449', to: '10450' },
+    { from: '10451', to: '10450' },
+    { from: '10450', to: '10452' },
+    { from: '10451', to: '10452' },
+  ];
+
+  it('gives each node its LONGEST-path depth, not its shortest', () => {
+    const { layer } = longestPathLayers(['10449', '10450', '10451', '10452'], repro);
+    // 10450 has a direct edge from 10449 (depth 1) and the chain via 10451 (depth 2).
+    expect(Object.fromEntries(layer)).toEqual({ '10449': 0, '10451': 1, '10450': 2, '10452': 3 });
+  });
+
+  it('returns the stable topological order it computed the depths in', () => {
+    const { order } = longestPathLayers(['10449', '10450', '10451', '10452'], repro);
+    expect(order).toEqual(['10449', '10451', '10450', '10452']);
+  });
+
+  it('ignores self-edges and edges with an end outside the set; a node no edge reaches is depth 0', () => {
+    const { layer } = longestPathLayers(
+      ['a', 'b', 'loose'],
+      [
+        { from: 'a', to: 'b' },
+        { from: 'b', to: 'b' },
+        { from: 'ghost', to: 'a' },
+        { from: 'b', to: 'ghost' },
+      ],
+    );
+    expect(Object.fromEntries(layer)).toEqual({ a: 0, b: 1, loose: 0 });
+  });
+
+  it('does not throw on a cycle, and still assigns every node a depth', () => {
+    const { layer, order } = longestPathLayers(
+      ['a', 'b', 'c'],
+      [
+        { from: 'a', to: 'b' },
+        { from: 'b', to: 'c' },
+        { from: 'c', to: 'a' },
+      ],
+    );
+    expect(order).toEqual(['a', 'b', 'c']);
+    expect([...layer.keys()].sort()).toEqual(['a', 'b', 'c']);
+  });
+
+  it("leaves deterministicLayout's positions exactly where they were", () => {
+    // Pinned from the layout as it shipped before the lift (motir-core 2083799f4).
+    expect(deterministicLayout(['10449', '10450', '10451', '10452', 'loose'], repro)).toEqual({
+      '10449': { x: 40, y: 40 },
+      '10450': { x: 760, y: 40 },
+      '10451': { x: 400, y: 40 },
+      '10452': { x: 1120, y: 40 },
+      loose: { x: 40, y: 260 },
+    });
+    expect(
+      deterministicLayout(
+        ['a', 'b', 'c', 'd'],
+        [
+          { from: 'a', to: 'b' },
+          { from: 'b', to: 'c' },
+          { from: 'c', to: 'b' },
+          { from: 'c', to: 'd' },
+        ],
+      ),
+    ).toEqual({
+      a: { x: 40, y: 40 },
+      b: { x: 400, y: 40 },
+      c: { x: 760, y: 40 },
+      d: { x: 1120, y: 40 },
+    });
   });
 });

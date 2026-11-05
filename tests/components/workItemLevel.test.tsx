@@ -92,6 +92,111 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
     expect(screen.queryByText('You are here')).toBeNull();
   });
 
+  // Bug MOTIR-10454 — the tag follows the level's BLOCKER order, not its key order.
+  // The reproduction from the card: key order 10449 (implemented), 10450, 10451,
+  // 10452 (in progress); 10451 blocks 10450, so 10451 sits a column LEFT of it.
+  describe('"you are here" follows the blocker order (MOTIR-10454)', () => {
+    function hereIds(data: RoadmapLevelData): string[] {
+      return buildWorkItemLevel(data, { markActive: true })
+        .nodes.filter((n) => n.here)
+        .map((n) => n.id);
+    }
+    const edge = (blockerId: string, blockedId: string) => ({ blockerId, blockedId });
+
+    it('tags the in-progress card EARLIEST along the blocker chain, not the lowest key', () => {
+      const data: RoadmapLevelData = {
+        items: [
+          item({ id: '10449', kind: 'subtask', status: 'implemented' }),
+          item({ id: '10450', kind: 'subtask', status: 'in_progress' }),
+          item({ id: '10451', kind: 'subtask', status: 'in_progress' }),
+          item({ id: '10452', kind: 'subtask', status: 'in_progress' }),
+        ],
+        edges: [
+          edge('10449', '10451'),
+          edge('10449', '10450'),
+          edge('10451', '10450'),
+          edge('10450', '10452'),
+          edge('10451', '10452'),
+        ],
+        offLevelBlockers: [],
+      };
+      expect(hereIds(data)).toEqual(['10451']);
+    });
+
+    it("takes a card's depth from its LONGEST blocker route, not its direct edge", () => {
+      // C has a direct edge from F (depth 1 by the shortest route) AND the chain
+      // F → M → N → C (depth 3). Y is one step from F. By the shortest route C and
+      // Y would tie and C would win on read order; by the longest, Y is earlier.
+      const data: RoadmapLevelData = {
+        items: [
+          item({ id: 'F', kind: 'subtask', status: 'done' }),
+          item({ id: 'C', kind: 'subtask', status: 'in_progress' }),
+          item({ id: 'M', kind: 'subtask', status: 'done' }),
+          item({ id: 'N', kind: 'subtask', status: 'implemented' }),
+          item({ id: 'Y', kind: 'subtask', status: 'in_progress' }),
+        ],
+        edges: [edge('F', 'C'), edge('F', 'M'), edge('M', 'N'), edge('N', 'C'), edge('F', 'Y')],
+        offLevelBlockers: [],
+      };
+      expect(hereIds(data)).toEqual(['Y']);
+    });
+
+    it('keeps the read order between in-progress cards at EQUAL depth', () => {
+      const data: RoadmapLevelData = {
+        items: [
+          item({ id: 'R', kind: 'subtask', status: 'done' }),
+          item({ id: 'P', kind: 'subtask', status: 'in_progress' }),
+          item({ id: 'Q', kind: 'subtask', status: 'in_progress' }),
+        ],
+        edges: [edge('R', 'P'), edge('R', 'Q')],
+        offLevelBlockers: [],
+      };
+      expect(hereIds(data)).toEqual(['P']);
+    });
+
+    it('has no tag when nothing is in progress — an Implemented card does not qualify', () => {
+      const data: RoadmapLevelData = {
+        items: [
+          item({ id: 'A', kind: 'subtask', status: 'implemented' }),
+          item({ id: 'B', kind: 'subtask', status: 'todo' }),
+        ],
+        edges: [edge('A', 'B')],
+        offLevelBlockers: [],
+      };
+      expect(hereIds(data)).toEqual([]);
+    });
+
+    it("survives a CYCLE among the level's edges and still yields at most one tag", () => {
+      const data: RoadmapLevelData = {
+        items: [
+          item({ id: 'A', kind: 'subtask', status: 'in_progress' }),
+          item({ id: 'B', kind: 'subtask', status: 'in_progress' }),
+          item({ id: 'C', kind: 'subtask', status: 'in_progress' }),
+        ],
+        edges: [edge('A', 'B'), edge('B', 'C'), edge('C', 'A')],
+        offLevelBlockers: [],
+      };
+      expect(() => hereIds(data)).not.toThrow();
+      expect(hereIds(data)).toHaveLength(1);
+    });
+
+    it('does not let an OFF-level blocker move the tag — only edges on the level count', () => {
+      // A waits on an off-level card X (drawn as an anchor); B is free. Neither has
+      // an on-level blocker, so both sit at depth 0 and A keeps the read order.
+      const data: RoadmapLevelData = {
+        items: [
+          item({ id: 'A', kind: 'subtask', status: 'in_progress' }),
+          item({ id: 'B', kind: 'subtask', status: 'in_progress' }),
+        ],
+        edges: [edge('X', 'A')],
+        offLevelBlockers: [
+          { id: 'X', identifier: 'PROD-9', title: 'External dep', parentTitle: null },
+        ],
+      };
+      expect(hereIds(data)).toEqual(['A']);
+    });
+  });
+
   it('does NOT mark "you are here" without markActive (e.g. onboarding)', () => {
     const { nodes } = buildWorkItemLevel(level([item({ id: 'E1', status: 'in_progress' })]));
     render(<>{nodes[0]!.content}</>);

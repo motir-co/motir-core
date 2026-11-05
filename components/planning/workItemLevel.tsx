@@ -16,6 +16,7 @@ import {
   FOLDER_NODE_PREFIX,
   folderIdFromNodeId,
   folderNodeId,
+  longestPathLayers,
   workItemCrumbLabel,
   type ProjectCanvasDep,
   type ProjectCanvasNode,
@@ -281,6 +282,30 @@ export function ghostAnchorNode(
   };
 }
 
+/**
+ * The "you are here" row of a level (bug MOTIR-10454): among the `in_progress`
+ * rows, the one with the smallest longest-path depth over `deps` — the depth
+ * `deterministicLayout` draws its column by — ties broken by `rows`' own order.
+ * `longestPathLayers` ignores every dep with an end off `rows`, so an off-level
+ * blocker's anchor arrow does not move the tag. No `in_progress` row → `null`.
+ */
+function pickHereId(
+  rows: ReadonlyArray<{ id: string; status: string }>,
+  deps: ReadonlyArray<ProjectCanvasDep>,
+): string | null {
+  const inProgress = rows.filter((r) => r.status === 'in_progress');
+  if (inProgress.length === 0) return null;
+  const { layer } = longestPathLayers(
+    rows.map((r) => r.id),
+    deps,
+  );
+  let best = inProgress[0]!;
+  for (const r of inProgress) {
+    if ((layer.get(r.id) ?? 0) < (layer.get(best.id) ?? 0)) best = r;
+  }
+  return best.id;
+}
+
 export function buildWorkItemLevel(
   wi: RoadmapLevelData,
   opts: BuildWorkItemLevelOptions = {},
@@ -537,12 +562,16 @@ export function buildWorkItemLevel(
     );
   }
 
-  // The current-position ("you are here") node = the FIRST in-progress item on
-  // this level, in the level's key-asc order (at the root that's the active epic).
+  // The current-position ("you are here") node = the in-progress item EARLIEST
+  // along the level's blocker order (bug MOTIR-10454): the one with the smallest
+  // longest-path depth over the level's own edges — the same depth
+  // `deterministicLayout` places its column by, read from the one helper, so the
+  // tag can never sit a column right of an in-progress card that blocks it. Rows
+  // at equal depth (and rows no edge reaches) keep the level's read order, key
+  // ascending — at the root that's the active epic. Only edges with BOTH ends on
+  // the level count: an off-level blocker is drawn as an anchor, not a card.
   // None in progress → no marker.
-  const activeId = opts.markActive
-    ? (onLevel.find((i) => i.status === 'in_progress')?.id ?? null)
-    : null;
+  const activeId = opts.markActive ? pickHereId(onLevel, deps) : null;
 
   const kindById = new Map(onLevel.map((item) => [item.id, item.kind]));
   const itemNodes: ProjectCanvasNode[] = onLevel.map((item) => {
