@@ -1596,6 +1596,14 @@ export const githubProvider: GitProvider = {
         context: typeof checkRun['name'] === 'string' ? checkRun['name'] : 'check',
         ...readPrLink(checkRun['pull_requests'], asRecord(checkRun['check_suite'])),
         suiteId: readSuiteId(asRecord(checkRun['check_suite'])),
+        // ⚠️ THE TIME OF THE STATE, NOT OF THE DELIVERY (MOTIR-10456). An unfinished
+        // run is dated by `started_at` and a finished one by `completed_at`, so a
+        // late `in_progress` delivery of the run that has since finished reads OLDER
+        // than the row it would overwrite, while a re-run — a new run under the same
+        // name and suite, started after the old one completed — reads newer.
+        occurredAt: parseDate(
+          status !== 'completed' ? checkRun['started_at'] : checkRun['completed_at'],
+        ),
       };
     }
 
@@ -1625,6 +1633,10 @@ export const githubProvider: GitProvider = {
         ...readPrLink(checkSuite['pull_requests'], checkSuite),
         suiteId: readSuiteId(checkSuite),
         suiteAggregate: true,
+        // A suite carries no start / finish pair; `updated_at` moves on every state
+        // change — completion, and a `rerequested` re-run after it — so it orders
+        // the suite's own deliveries the way the check run's pair orders a run's.
+        occurredAt: parseDate(checkSuite['updated_at']),
       };
     }
 
@@ -1643,6 +1655,7 @@ export const githubProvider: GitProvider = {
         // run to name, and the rows it writes degrade to the one no-identity
         // group `liveCheckRows` leaves alone.
         suiteId: null,
+        occurredAt: parseDate(payload['updated_at']),
       };
     }
 

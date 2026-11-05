@@ -268,6 +268,9 @@ export async function reconcileRecordedCheckSet(args: {
       checkSuiteId: run.checkSuiteId,
       ...(run.suiteAggregate === true ? { suiteAggregate: true } : {}),
       conclusion: run.conclusion,
+      // A finished run's own finish time, so a late pending delivery about it is
+      // ordered against the row this writes exactly as against a webhook's (MOTIR-10456).
+      conclusionAt: run.conclusion === 'pending' ? null : run.completedAt,
     })),
     args.tx,
   );
@@ -288,6 +291,7 @@ export async function reconcileRecordedCheckSet(args: {
       checkName: run.checkName,
       checkSuiteId: run.checkSuiteId,
       conclusion: run.conclusion,
+      conclusionAt: run.completedAt,
     })),
     args.tx,
   );

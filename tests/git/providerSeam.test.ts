@@ -192,6 +192,8 @@ describe('github.parseCiStatusEvent', () => {
       // run its own check suite, which is what lets a re-run at one commit
       // supersede the run it cancelled instead of merging into it by name.
       suiteId: '87626227873',
+      // No `completed_at` in this payload, so the state cannot be dated.
+      occurredAt: null,
     });
   });
 
@@ -234,6 +236,7 @@ describe('github.parseCiStatusEvent', () => {
       // The App slug names the APP, not the workflow, so the row is marked as a
       // roll-up the supersession rule must not read as a shared check (MOTIR-6274).
       suiteAggregate: true,
+      occurredAt: null,
     });
   });
 
@@ -315,7 +318,52 @@ describe('github.parseCiStatusEvent', () => {
       // A commit-`status` event predates check suites — there is no run to name,
       // and the rows it writes degrade to the one no-identity group.
       suiteId: null,
+      occurredAt: null,
     });
+  });
+
+  // MOTIR-10456 — the time of the STATE the event reports, which is what orders a
+  // late pending delivery against a terminal row (older: refused) and a re-run
+  // (newer: written).
+  it('dates a pending check_run by started_at and a completed one by completed_at', () => {
+    const run = (status: string, conclusion: string | null) =>
+      github.parseCiStatusEvent({
+        repository: { id: 9 },
+        check_run: {
+          head_sha: 'abc',
+          status,
+          conclusion,
+          name: 'ci',
+          started_at: '2026-11-05T10:00:00Z',
+          completed_at: status === 'completed' ? '2026-11-05T10:04:00Z' : null,
+        },
+      });
+    expect(run('in_progress', null)?.occurredAt).toEqual(new Date('2026-11-05T10:00:00Z'));
+    expect(run('queued', null)?.occurredAt).toEqual(new Date('2026-11-05T10:00:00Z'));
+    expect(run('completed', 'success')?.occurredAt).toEqual(new Date('2026-11-05T10:04:00Z'));
+  });
+
+  it('dates a check_suite and a commit status by updated_at, and an unparseable time as null', () => {
+    expect(
+      github.parseCiStatusEvent({
+        repository: { id: 9 },
+        check_suite: { head_sha: 'a', status: 'queued', updated_at: '2026-11-05T10:01:00Z' },
+      })?.occurredAt,
+    ).toEqual(new Date('2026-11-05T10:01:00Z'));
+    expect(
+      github.parseCiStatusEvent({
+        repository: { id: 9 },
+        sha: 'deadbeef',
+        state: 'pending',
+        updated_at: '2026-11-05T10:02:00Z',
+      })?.occurredAt,
+    ).toEqual(new Date('2026-11-05T10:02:00Z'));
+    expect(
+      github.parseCiStatusEvent({
+        repository: { id: 9 },
+        check_run: { head_sha: 'a', status: 'in_progress', name: 'ci', started_at: 'not a date' },
+      })?.occurredAt,
+    ).toBeNull();
   });
 
   it('returns null for an unrelated payload', () => {

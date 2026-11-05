@@ -9126,16 +9126,16 @@ model WorkItemDelivery {
 /// normalizes into the same shape. The work item's own `ciState` signal is
 /// derived from these rows and denormalized onto `WorkItem.ciState`.
 model GithubCheckRun {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   /// FK → GithubPullRequest.id (internal cuid) — the PR this check ran against.
-  pullRequestId  String   @map("pull_request_id")
+  pullRequestId  String    @map("pull_request_id")
   /// The head commit SHA the check ran on (the payload's `head_sha`). Part of the
   /// idempotency key: a re-run against a NEW commit is a distinct row.
-  commitSha      String   @map("commit_sha")
+  commitSha      String    @map("commit_sha")
   /// The check's name / context (a `check_run.name`, a `check_suite` app slug, or
   /// a legacy commit-status `context`) — distinguishes concurrent checks on one
   /// commit so each keeps its own feedback.
-  checkName      String   @map("check_name")
+  checkName      String    @map("check_name")
   /// The CI RUN this check belongs to — GitHub's `check_suite.id` (one suite per
   /// workflow run), GitLab's pipeline id. Part of the idempotency key since
   /// MOTIR-3209: `cancel-in-progress` makes TWO runs at one commit ordinary, and
@@ -9151,18 +9151,27 @@ model GithubCheckRun {
   /// reports no run identity (a legacy commit-`status` event) — one degraded
   /// group that supersedes nothing and is superseded by nothing, i.e. exactly
   /// the behaviour those rows had before.
-  checkSuiteId   String   @default("") @map("check_suite_id")
+  checkSuiteId   String    @default("") @map("check_suite_id")
   /// TRUE for a suite's OWN roll-up row — a GitHub `check_suite` event, recorded
   /// under the App slug — rather than a check (MOTIR-6274). Every GitHub Actions
   /// workflow is the same App, so that name is shared by suites of DIFFERENT
   /// workflows at one commit and says nothing about which workflow a suite is:
   /// `liveCheckRows` leaves these rows out of its shared-name test. A GitLab
   /// pipeline row is NOT one — its `pipeline` name is the supersession key there.
-  suiteAggregate Boolean  @default(false) @map("suite_aggregate")
+  suiteAggregate Boolean   @default(false) @map("suite_aggregate")
   /// Normalized `CiConclusion`: "success" | "failure" | "pending" | "neutral".
   conclusion     String
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  /// WHEN, by the provider's clock, the check reached `conclusion` (MOTIR-10456):
+  /// its start for `pending`, its finish for a terminal conclusion. It is the
+  /// arbiter between a LATE `pending` delivery of the run that settled the row
+  /// (older than this — refused) and a RE-RUN under the same name and suite
+  /// (newer — written). Null where the provider gave no time, or on a row written
+  /// before the column existed; such a row cannot be ordered and keeps the old
+  /// last-write-wins behaviour. Deliberately NOT `updated_at`, which is when WE
+  /// received a delivery — minutes or hours after the fact on an inbox replay.
+  conclusionAt   DateTime? @map("conclusion_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
   pullRequest GithubPullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
 
