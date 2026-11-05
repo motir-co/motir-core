@@ -3703,6 +3703,11 @@
      colour. NOT danger: nothing was lost or destroyed — the repository exists and
      the plan is safe; the user simply cannot open it yet. */
   --el-notif-access-refused: var(--color-warning);
+  /* An organisation owner or admin HIBERNATED the recipient's agent (MOTIR-10368,
+     per design/org-admin/design-notes.md, the Fleet delta's one token). Info, not
+     warning or danger: nothing was lost — the files are kept and the owner can
+     wake it — but somebody else acted on their agent and they should know. */
+  --el-notif-agent-hibernated: var(--color-info);
   /* The EXECUTOR badge on a Workbench row's assignee avatar (Story MOTIR-2649 ·
      Subtask MOTIR-2653, per design/workbench/design-notes.md §"The agent state"
      — that area was renamed with the surface by MOTIR-4779).

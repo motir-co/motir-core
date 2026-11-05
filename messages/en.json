@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Code access couldn't be granted",
             "desc": "Motir couldn't give you access to a repository it made for your project."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "An admin hibernated your agent",
+            "desc": "An organization owner or admin stopped one of your agents from the organization's Fleet page."
           }
         },
         "soon": "Soon",
@@ -5770,7 +5774,11 @@
       "transitioned": "<s>{actor}</s> moved <s>{key}</s> to {status}",
       "generic": "<s>{actor}</s> updated <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> sent you a notification",
-      "accessRefused": "<s>{project}</s>'s code is ready, but you can't open it yet — try sending the invitation again"
+      "accessRefused": "<s>{project}</s>'s code is ready, but you can't open it yet — try sending the invitation again",
+      "agentHibernatedByAdmin": "<s>{actor}</s> hibernated your agent <s>{agent}</s>"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "An organization admin stopped it at {time}. Its files are kept; wake it from Agents."
     }
   },
   "orgAdmin": {

@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "无法授予代码访问权限",
             "desc": "Motir 无法让你访问它为你的项目创建的代码仓库。"
+          },
+          "agent_hibernated_by_admin": {
+            "label": "管理员让你的智能体进入了休眠",
+            "desc": "组织的所有者或管理员在组织的 Fleet 页面停止了你的一个智能体。"
           }
         },
         "soon": "即将推出",
@@ -5770,7 +5774,11 @@
       "transitioned": "<s>{actor}</s> 将 <s>{key}</s> 移动到 {status}",
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
-      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请"
+      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
+      "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。"
     }
   },
   "orgAdmin": {

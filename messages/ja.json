@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "コードアクセスを付与できなかったとき",
             "desc": "Motir がプロジェクト用に作成したリポジトリへのアクセス権を、あなたに付与できなかったとき。"
+          },
+          "agent_hibernated_by_admin": {
+            "label": "管理者があなたのエージェントを休止しました",
+            "desc": "組織のオーナーまたは管理者が、組織の Fleet ページからあなたのエージェントの 1 つを停止しました。"
           }
         },
         "soon": "近日提供",
@@ -5770,7 +5774,11 @@
       "transitioned": "<s>{actor}</s> さんが <s>{key}</s> を {status} に移動しました",
       "generic": "<s>{actor}</s> さんが <s>{key}</s> を更新しました",
       "genericNoKey": "<s>{actor}</s> さんから通知が届きました",
-      "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください"
+      "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください",
+      "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。"
     }
   },
   "orgAdmin": {

@@ -199,6 +199,8 @@ export interface AgentInstanceOrgHibernateResult {
   inMotion: number;
   /** One entry per instance whose stop threw or did not confirm inline. */
   failures: { instanceId: string; detail: string }[];
+  /** The ids counted in `hibernated`, in list order — who to tell (MOTIR-10368). */
+  hibernatedInstanceIds: string[];
 }
 
 interface ResolvedProject {
@@ -1669,6 +1671,7 @@ export const agentInstanceLifecycleService = {
       alreadyResting: 0,
       inMotion: 0,
       failures: [],
+      hibernatedInstanceIds: [],
     };
     for (const row of rows) {
       if (RESTING_STATES.includes(row.state)) {
@@ -1687,6 +1690,7 @@ export const agentInstanceLifecycleService = {
         const after = await reload(row);
         if (after.state === 'hibernated') {
           result.hibernated += 1;
+          result.hibernatedInstanceIds.push(row.id);
         } else {
           result.failures.push({
             instanceId: row.id,

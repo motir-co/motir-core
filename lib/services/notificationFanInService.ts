@@ -456,6 +456,8 @@ export const notificationFanInService = {
     category: NotificationCategory;
     dedupeKey: string;
     data: NotificationData;
+    /** Who acted, when someone did (MOTIR-10368); null for a system event. */
+    actorId?: string | null;
   }): Promise<boolean> {
     try {
       const enabled = await notificationPreferencesService.isChannelEnabled(
@@ -476,7 +478,7 @@ export const notificationFanInService = {
               // NULL — the subject is a project. The drawer resolves this row's
               // destination from the TYPE, not from an issue key.
               workItemId: null,
-              actorId: null,
+              actorId: args.actorId ?? null,
               data: args.data as unknown as Prisma.InputJsonValue,
               dedupeKey: args.dedupeKey,
             },

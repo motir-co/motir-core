@@ -39,7 +39,13 @@ describe('hibernateAllForOrganization', () => {
       fx.workspace.organizationId,
       'admin_stop',
     );
-    expect(first).toEqual({ hibernated: 2, alreadyResting: 0, inMotion: 0, failures: [] });
+    expect(first).toEqual({
+      hibernated: 2,
+      alreadyResting: 0,
+      inMotion: 0,
+      failures: [],
+      hibernatedInstanceIds: [a, b],
+    });
     expect((await row(a)).state).toBe('hibernated');
     expect((await row(b)).state).toBe('hibernated');
     expect((await intervals()).map((i) => i.endReason)).toEqual(['admin_stop', 'admin_stop']);
@@ -48,7 +54,13 @@ describe('hibernateAllForOrganization', () => {
       fx.workspace.organizationId,
       'admin_stop',
     );
-    expect(second).toEqual({ hibernated: 0, alreadyResting: 2, inMotion: 0, failures: [] });
+    expect(second).toEqual({
+      hibernated: 0,
+      alreadyResting: 2,
+      inMotion: 0,
+      failures: [],
+      hibernatedInstanceIds: [],
+    });
   });
 
   it('counts an instance already hibernated as resting and moves nothing of it', async () => {
@@ -60,7 +72,13 @@ describe('hibernateAllForOrganization', () => {
       fx.workspace.organizationId,
       'admin_stop',
     );
-    expect(result).toEqual({ hibernated: 1, alreadyResting: 1, inMotion: 0, failures: [] });
+    expect(result).toEqual({
+      hibernated: 1,
+      alreadyResting: 1,
+      inMotion: 0,
+      failures: [],
+      hibernatedInstanceIds: [b],
+    });
     const reasons = Object.fromEntries(
       (await intervals()).map((i) => [i.agentInstanceId, i.endReason]),
     );

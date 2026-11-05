@@ -17,6 +17,7 @@ import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifec
 import { billingService, type OrgActorInput } from '@/lib/services/billingService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { fleetStopService } from '@/lib/services/fleetStopService';
+import { orgFleetNotificationService } from '@/lib/services/orgFleetNotificationService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -235,6 +236,16 @@ export const orgFleetStopService = {
       );
       agentsHibernated = agents.hibernated;
       agentFailures = agents.failures.length;
+      // Each owner whose agent this stop hibernated is told (MOTIR-10368); the
+      // service skips the admin's own agents and never throws.
+      const at = now();
+      for (const instanceId of agents.hibernatedInstanceIds) {
+        await orgFleetNotificationService.notifyOwnerOfAdminHibernate({
+          instanceId,
+          actorUserId,
+          at,
+        });
+      }
     } catch (err) {
       agentFailures += 1;
       console.error(`${LOG} could not hibernate the agents`, {
@@ -334,6 +345,11 @@ export const orgFleetStopService = {
       at,
     );
     // ── The owner-notification point: the owner is told here, after success. ──
+    await orgFleetNotificationService.notifyOwnerOfAdminHibernate({
+      instanceId: row.id,
+      actorUserId,
+      at,
+    });
     return {
       kind: 'hibernated',
       instanceId: row.id,

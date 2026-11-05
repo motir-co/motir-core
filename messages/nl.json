@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Codetoegang kon niet worden verleend",
             "desc": "Motir kon je geen toegang geven tot een repository die het voor je project heeft gemaakt."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "Een beheerder heeft je agent in slaapstand gezet",
+            "desc": "Een eigenaar of beheerder van de organisatie heeft een van je agents gestopt via de Fleet-pagina van de organisatie."
           }
         },
         "soon": "Binnenkort",
@@ -5770,7 +5774,11 @@
       "transitioned": "<s>{actor}</s> heeft <s>{key}</s> naar {status} verplaatst",
       "generic": "<s>{actor}</s> heeft <s>{key}</s> bijgewerkt",
       "genericNoKey": "<s>{actor}</s> heeft je een melding gestuurd",
-      "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen"
+      "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
+      "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents."
     }
   },
   "orgAdmin": {

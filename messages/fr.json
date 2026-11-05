@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "L’accès au code n’a pas pu être accordé",
             "desc": "Motir n’a pas pu vous donner accès à un dépôt qu’il a créé pour votre projet."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "Un administrateur a mis votre agent en veille",
+            "desc": "Un propriétaire ou un administrateur de l’organisation a arrêté l’un de vos agents depuis la page Fleet de l’organisation."
           }
         },
         "soon": "Bientôt",
@@ -5770,7 +5774,11 @@
       "transitioned": "<s>{actor}</s> a déplacé <s>{key}</s> vers {status}",
       "generic": "<s>{actor}</s> a mis à jour <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> vous a envoyé une notification",
-      "accessRefused": "Le code de <s>{project}</s> est prêt, mais vous ne pouvez pas encore l’ouvrir — essayez de renvoyer l’invitation"
+      "accessRefused": "Le code de <s>{project}</s> est prêt, mais vous ne pouvez pas encore l’ouvrir — essayez de renvoyer l’invitation",
+      "agentHibernatedByAdmin": "<s>{actor}</s> a mis votre agent <s>{agent}</s> en veille"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Un administrateur de l’organisation l’a arrêté à {time}. Ses fichiers sont conservés ; réveillez-le depuis Agents."
     }
   },
   "orgAdmin": {

@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Codezugriff konnte nicht gewährt werden",
             "desc": "Motir konnte Ihnen keinen Zugriff auf ein Repository geben, das es für Ihr Projekt angelegt hat."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "Ein Admin hat Ihren Agenten in den Ruhezustand versetzt",
+            "desc": "Ein Inhaber oder Admin der Organisation hat einen Ihrer Agenten auf der Fleet-Seite der Organisation gestoppt."
           }
         },
         "soon": "Demnächst",
@@ -5770,7 +5774,11 @@
       "transitioned": "<s>{actor}</s> hat <s>{key}</s> nach {status} verschoben",
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
-      "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden"
+      "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
+      "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Ein Admin der Organisation hat ihn um {time} gestoppt. Seine Dateien bleiben erhalten; wecken Sie ihn unter Agenten auf."
     }
   },
   "orgAdmin": {
