@@ -183,7 +183,7 @@ async function intent(t: WorkItemFixture, repo: string, status: 'running' | 'pen
       requestedLabels: [MOTIR_RUNNER_LABEL],
       queuedAt: clock.now(),
       status,
-      waitingReason: status === 'pending' ? 'plan_limit' : null,
+      waitingReason: status === 'pending' ? 'plan_cap' : null,
       containerProvider: handle?.provider ?? null,
       containerId: handle?.id ?? null,
       containerRegion: handle?.region ?? null,

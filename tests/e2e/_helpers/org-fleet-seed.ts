@@ -157,7 +157,7 @@ export async function seedCiJob(
             containerRegion: 'iad',
             bootedAt: new Date(now - 70_000),
           }
-        : { waitingReason: 'plan_limit', waitingSince: new Date(now - MIN) }),
+        : { waitingReason: 'plan_cap', waitingSince: new Date(now - MIN) }),
     },
   });
   return row.id;
