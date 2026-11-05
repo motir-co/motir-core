@@ -632,6 +632,24 @@ export const planChangeSessionRepository = {
   },
 
   /**
+   * A REVISION JOB bound onto the session of the plan it re-opens (Bug MOTIR-10455):
+   * `lastJobId` / `lastSubmittedAt`, on an OPEN session only, inside the revision
+   * acquire's transaction. Returns whether a row moved — `false` on an ended session,
+   * which keeps the job it last ran.
+   */
+  async recordRevisionJob(
+    id: string,
+    revision: { jobId: string; at: Date },
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const result = await tx.planChangeSession.updateMany({
+      where: { id, endedAt: null },
+      data: { lastJobId: revision.jobId, lastSubmittedAt: revision.at },
+    });
+    return result.count > 0;
+  },
+
+  /**
    * Mark a recorded failure as one that cannot be resumed (MOTIR-9121) — motir-ai refused a
    * resume of it for want of a settled conversation. Guarded on the failure still being the
    * one the caller judged (`failedJobId`) on an open session, so a newer attempt or an end

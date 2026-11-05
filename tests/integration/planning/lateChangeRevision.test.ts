@@ -184,6 +184,10 @@ describe('a forward REFUSED because the run already ended', () => {
       revisedLate: { revisionJobId: 'job-rev-1' },
     });
     expect(await adminDb.planChangeMailboxEntry.count({ where: { sessionId } })).toBe(0);
+    // The session now names the revision as its run (MOTIR-10455), so the reopened
+    // overlay's Stop addresses the job that is actually writing the plan.
+    const bound = await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } });
+    expect(bound.lastJobId).toBe('job-rev-1');
   });
 
   it('a replayed settle answers revised_late again and submits nothing', async () => {
@@ -212,11 +216,14 @@ describe('a forward REFUSED because the run already ended', () => {
     const again = await aiAskService.settle(jobId, ctx, { sessionId });
 
     expect(find).toHaveBeenCalledWith('job-rev-1', ctx);
-    // It is re-derived instead: the revision it started still holds the plan, so
-    // the forward is refused with the words kept — and no second revision starts.
+    // It is re-derived instead: the revision it started is the session's run now
+    // (MOTIR-10455), so the finished walk no longer addresses the thread and the
+    // forward is refused as superseded, with the words kept — and no second
+    // revision starts.
     expect(again).toMatchObject({
       outcome: 'forward_refused',
-      code: 'PLAN_REVISION_IN_FLIGHT',
+      code: 'PLAN_CHANGE_MAILBOX_JOB_MISMATCH',
+      jobStatus: 'superseded',
       text: 'add a reporting epic',
     });
     expect(submitJobMock).not.toHaveBeenCalled();
@@ -275,9 +282,13 @@ describe('a forward REFUSED because the run already ended', () => {
 
   it('another revision holding the plan refuses PLAN_REVISION_IN_FLIGHT, the text kept, no second start', async () => {
     setRun('succeeded');
-    submitJobMock.mockResolvedValueOnce({ jobId: 'job-rev-held' });
-    await aiPlanEditsService.submitRevise(planId, 'someone elses revision', ctx);
     const jobId = await settledForward('late idea');
+    // The plan is held by an MCP revision — no job, so the session keeps naming the run.
+    await plansService.acquireRevisionLease(planId, fx.ctx, {
+      source: 'mcp',
+      harness: 'Claude Code',
+      model: null,
+    });
     submitJobMock.mockClear();
 
     const settled = await aiAskService.settle(jobId, ctx, { sessionId });
@@ -287,6 +298,19 @@ describe('a forward REFUSED because the run already ended', () => {
       code: 'PLAN_REVISION_IN_FLIGHT',
       text: 'late idea',
     });
+    expect(submitJobMock).not.toHaveBeenCalled();
+    expect(await revisionStarts()).toHaveLength(1);
+  });
+
+  it('a review-page revision moves the session onto its job: a turn addressed at the finished run is refused before any write', async () => {
+    setRun('succeeded');
+    submitJobMock.mockResolvedValueOnce({ jobId: 'job-rev-held' });
+    await aiPlanEditsService.submitRevise(planId, 'someone elses revision', ctx);
+    submitJobMock.mockClear();
+
+    await expect(
+      aiAskService.submitMidRunTurn('late idea', ctx, { sessionId, runJobId: RUN_JOB, planId }),
+    ).rejects.toMatchObject({ code: 'PLAN_CHANGE_MAILBOX_JOB_MISMATCH' });
     expect(submitJobMock).not.toHaveBeenCalled();
     expect(await revisionStarts()).toHaveLength(1);
   });
@@ -316,9 +340,15 @@ describe('POST /api/ai/plan-change/session/late-changes — STRANDED turns', () 
     expect(entries).toHaveLength(2);
     expect(entries.every((e) => e.consumedAt !== null)).toBe(true);
 
+    // The revision is the session's run now (MOTIR-10455): the finished walk no
+    // longer addresses the thread, so a second call is a 404 that claims and submits
+    // nothing.
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } })).lastJobId,
+    ).toBe('job-rev-1');
     submitJobMock.mockClear();
     const second = await lateChanges(lateReq());
-    expect(await second.json()).toEqual({ outcome: 'none' });
+    expect(second.status).toBe(404);
     expect(submitJobMock).not.toHaveBeenCalled();
     expect(await revisionStarts()).toHaveLength(1);
   });
@@ -399,10 +429,13 @@ describe('POST /api/ai/plan-change/session/late-changes — STRANDED turns', () 
   });
 
   it('a held revision lease refuses PLAN_REVISION_IN_FLIGHT, the texts kept, no second start', async () => {
-    setRun('succeeded');
-    submitJobMock.mockResolvedValueOnce({ jobId: 'job-rev-held' });
-    await aiPlanEditsService.submitRevise(planId, 'someone elses revision', ctx);
     await strand('one', 'k1');
+    // An MCP revision holds the plan — no job, so the session keeps naming the run.
+    await plansService.acquireRevisionLease(planId, fx.ctx, {
+      source: 'mcp',
+      harness: 'Claude Code',
+      model: null,
+    });
     setRun('succeeded');
     submitJobMock.mockClear();
 
@@ -416,6 +449,34 @@ describe('POST /api/ai/plan-change/session/late-changes — STRANDED turns', () 
     expect(submitJobMock).not.toHaveBeenCalled();
     expect(await revisionStarts()).toHaveLength(1);
     expect(await pendingTurns()).toEqual([]);
+  });
+
+  it('a plan re-pointed at another job while the session still names the run is found as the session’s latest plan', async () => {
+    await strand('one', 'k1');
+    // A hosted revision of a plan still `generating` re-points `sourceJobId` but not
+    // the session (MOTIR-10455 binds the session only on a re-open), so the run's id
+    // resolves no plan and the door falls back to the session's latest one.
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'generating' } });
+    await plansService.acquireRevisionLease(
+      planId,
+      fx.ctx,
+      { source: 'native', harness: 'Motir', model: null },
+      { jobId: 'job-rev-other' },
+    );
+    setRun('succeeded');
+    submitJobMock.mockClear();
+
+    const body = await (await lateChanges(lateReq())).json();
+
+    expect(body).toMatchObject({
+      outcome: 'refused',
+      code: 'PLAN_REVISION_IN_FLIGHT',
+      texts: ['one'],
+    });
+    expect(submitJobMock).not.toHaveBeenCalled();
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } })).lastJobId,
+    ).toBe(RUN_JOB);
   });
 
   it('leaves a restart turn and the stop alone: only fold turns are claimed', async () => {

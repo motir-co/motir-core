@@ -110,10 +110,11 @@ export const planChangeLateChangeService = {
     // session's; `stopped` is whether the person ended it.
     const mailbox = await planChangeMailboxService.peekForJob(input.runJobId, ctx, input.sessionId);
 
-    // The run's plan: by `sourceJobId` (what a revision re-points at the REVISION job,
-    // so a second late change finds no plan by the run's id), else the
-    // conversation's latest plan — which is how a change arriving while the first
-    // late revision still holds the plan reaches `PLAN_REVISION_IN_FLIGHT`.
+    // The run's plan: by `sourceJobId`, else the conversation's latest plan. A
+    // revision re-points `sourceJobId` at its own job; when it RE-OPENED the plan it
+    // took the session too (MOTIR-10455) and the peek above already refused the
+    // finished run, so the fallback is how a revision of a plan still `generating`
+    // (which leaves the session on the run) reaches `PLAN_REVISION_IN_FLIGHT`.
     const planId =
       (await plansService.findPlanIdForJob(input.runJobId, ctx)) ??
       (await plansService.findLatestPlanIdForSession(ctx.projectId, input.sessionId, ctx));
