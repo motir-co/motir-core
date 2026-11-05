@@ -427,6 +427,12 @@ export const nl: McpSummaryTranslations = {
     source:
       'Record WHY an unapproved plan had to change — four branches, two of which file a planning bug; it changes nothing about the plan.',
   },
+  record_planner_finding: {
+    summary:
+      'Leg één plannerfout die je bij het controleren van een plan vond vast als één bevinding — alleen leesbaar voor platformbeheerders.',
+    source:
+      'Record one planner defect found while checking a plan as one finding, readable only by platform admins.',
+  },
   reinforce_lesson: {
     summary:
       'Leg vast dat een les die je vond beschrijft wat net misging — of je daarnaast ook iets wijzigt of niet.',
