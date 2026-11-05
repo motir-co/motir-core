@@ -1142,5 +1142,30 @@
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.77.0` after MOTIR-9552's
  *   `1.76.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.78.0` — MOTIR-10380 adds the RUNNER-STOP body advisory shape to the dispatch
+ *   advisory union: `{ kind: 'shape', item, severity, runnerStop: true, criteria? }`, with
+ *   severity `leaf-no-description` (a childless leaf whose description is blank) or
+ *   `leaf-no-criteria` (a body with no enumerated acceptance criterion; `criteria` is
+ *   `no-heading` or `no-criterion`). The plan reads emit them; dispatch does not today.
+ *   Never a gate.
+ *
+ *   Additive: one new member of an advisory union whose severity is explicitly
+ *   open-ended (§8's allowed list); no existing shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.78.0` after MOTIR-9566's
+ *   `1.77.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.79.0` — MOTIR-10381 adds the MULTI-REPO runner-stop advisory shape to the dispatch
+ *   advisory union: `{ kind: 'shape', item, severity: 'leaf-multi-repo', runnerStop: true,
+ *   path, repo, criterionIndex }` — a childless leaf whose acceptance criteria name paths
+ *   in two or more repositories, whatever its repository set carries. The plan reads emit
+ *   it; dispatch does not today. Never a gate.
+ *
+ *   Additive: one new member of an advisory union whose severity is explicitly
+ *   open-ended (§8's allowed list); no existing shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.79.0` after MOTIR-10380's
+ *   `1.78.0`. If a sibling has taken it since, RENUMBER this entry.
  */
-export const V1_CONTRACT_VERSION = '1.77.0';
+export const V1_CONTRACT_VERSION = '1.79.0';

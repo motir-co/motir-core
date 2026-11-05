@@ -5725,7 +5725,7 @@
         "how": "Una línea descendente indica que el trabajo se termina más rápido. Los periodos se cuentan por fecha de resolución, así que un elemento antiguo resuelto hoy eleva el periodo de hoy."
       },
       "workload": {
-        "what": "El trabajo abierto que tiene cada persona en un periodo elegido, contado en Puntos de historia o en elementos de trabajo. El trabajo sin Responsable se cuenta a nombre de su Creador.",
+        "what": "El trabajo abierto que tuvo cada persona en algún momento del periodo elegido, contado en Puntos de historia o en elementos de trabajo. El trabajo sin Responsable se cuenta a nombre de su Creador.",
         "how": "Las barras más largas son las personas con más trabajo abierto. Busca un reparto muy desigual antes de asignar más."
       }
     }

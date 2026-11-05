@@ -217,15 +217,27 @@ describe('useReportHelpHidden — storage that fails', () => {
 });
 
 describe('ReportWindowControls — the stepper both ways', () => {
-  it('steps the window shorter and longer along the period ladder', () => {
+  it('steps the window shorter and longer along the bucket-free ladder', () => {
     const onChange = vi.fn();
-    render(<ReportWindowControls period="week" daysBack={30} onChange={onChange} />);
+    render(<ReportWindowControls daysBack={30} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: 'Shorter window' }));
     expect(onChange).toHaveBeenLastCalledWith({ daysBack: 14 });
     fireEvent.click(screen.getByRole('button', { name: 'Longer window' }));
     expect(onChange).toHaveBeenLastCalledWith({ daysBack: 60 });
-    fireEvent.click(screen.getByRole('button', { name: 'Daily' }));
-    expect(onChange).toHaveBeenLastCalledWith({ period: 'day', daysBack: 30 });
+    // No Period control (MOTIR-10346).
+    expect(screen.queryByRole('button', { name: 'Daily' })).toBeNull();
+  });
+
+  it('disables each end of the ladder: 7 cannot shrink, 365 cannot grow', () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<ReportWindowControls daysBack={7} onChange={onChange} />);
+    const fewer = () => screen.getByRole('button', { name: 'Shorter window' }) as HTMLButtonElement;
+    const more = () => screen.getByRole('button', { name: 'Longer window' }) as HTMLButtonElement;
+    expect(fewer().disabled).toBe(true);
+    expect(more().disabled).toBe(false);
+    rerender(<ReportWindowControls daysBack={365} onChange={onChange} />);
+    expect(fewer().disabled).toBe(false);
+    expect(more().disabled).toBe(true);
   });
 });
 

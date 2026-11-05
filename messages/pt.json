@@ -5725,7 +5725,7 @@
         "how": "Uma linha em queda significa que o trabalho está sendo concluído mais rápido. Os períodos são contados pela data de resolução, então um item antigo resolvido hoje aumenta o período de hoje."
       },
       "workload": {
-        "what": "O trabalho em aberto que cada pessoa tem em um período escolhido, contado em pontos de história ou itens de trabalho. O trabalho sem responsável é contado para quem o criou.",
+        "what": "O trabalho em aberto que cada pessoa teve em algum momento do período escolhido, contado em pontos de história ou itens de trabalho. O trabalho sem responsável é contado para quem o criou.",
         "how": "As barras mais longas são das pessoas com mais trabalho em aberto. Procure uma distribuição muito desigual antes de atribuir mais."
       }
     }

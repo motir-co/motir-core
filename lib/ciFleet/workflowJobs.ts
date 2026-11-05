@@ -61,14 +61,32 @@ const WRAPPERS = new Set(['sudo', 'env', 'time', 'nohup', 'exec', 'nice', 'timeo
 type Frame = 'code' | 'subst' | 'paren' | 'backtick' | 'single' | 'double' | 'array';
 
 /**
+ * The index of the `))` closing the arithmetic that opens with the `((` at
+ * `open`, or -1 when this is not plain arithmetic: no `((` there, `$((a); (b))`
+ * whose inner parenthesis closes on its own, or arithmetic holding a `$( )` or a
+ * backtick, which runs a command. All of those stay with the command reading.
+ */
+function arithmeticEnd(src: string, open: number): number {
+  if (src[open] !== '(' || src[open + 1] !== '(') return -1;
+  let depth = 2;
+  for (let i = open + 2; i < src.length; i++) {
+    const c = src[i]!;
+    if (c === '`' || c === '\n' || (c === '$' && src[i + 1] === '(')) return -1;
+    if (c === '(') depth++;
+    if (c === ')' && --depth === 1) return src[i + 1] === ')' ? i + 1 : -1;
+  }
+  return -1;
+}
+
+/**
  * Cut a script into simple commands. A separator (`&&`, `||`, `;`, `|`, a
  * newline) ends a command only OUTSIDE quotes (MOTIR-9126: a quoted jq filter is
  * one argument, not a pipeline). `$( )`, backticks and a `( )` subshell open a
  * nested command — inside double quotes too, since the shell runs them there —
  * and the text after one closes resumes the command it interrupted. Here-document
  * bodies and comments are dropped; a quote may span lines. An array literal
- * (`args+=(a b)`) is one word, and the text before a stray `)` — a `case`
- * pattern — is not a command at all.
+ * (`args+=(a b)`) is one word, the text before a stray `)` — a `case` pattern —
+ * is not a command at all, and neither is arithmetic (`$((n * 10))`, `((n++))`).
  */
 function commandSegments(script: string): string[] {
   const segments: string[] = [];
@@ -120,6 +138,9 @@ function commandSegments(script: string): string[] {
       } else if (c === '"') {
         stack.pop();
         append(c);
+      } else if (c === '$' && arithmeticEnd(src, i + 1) !== -1) {
+        append('0');
+        i = arithmeticEnd(src, i + 1);
       } else if (c === '$' && src[i + 1] === '(') {
         open('subst');
         i++;
@@ -157,6 +178,11 @@ function commandSegments(script: string): string[] {
     } else if (c === '"') {
       stack.push('double');
       append(c);
+    } else if (c === '$' && arithmeticEnd(src, i + 1) !== -1) {
+      append('0');
+      i = arithmeticEnd(src, i + 1);
+    } else if (c === '(' && buf().trim() === '' && arithmeticEnd(src, i) !== -1) {
+      i = arithmeticEnd(src, i);
     } else if (c === '$' && src[i + 1] === '(') {
       open('subst');
       i++;
@@ -231,6 +257,12 @@ function shellWords(segment: string): string[] {
   if (word !== '') words.push(word);
   return words;
 }
+
+/** A command under a directory the runner itself provides (`$RUNNER_TEMP/tool`,
+ *  `${GITHUB_ACTION_PATH}/run.sh`): a file of the run or of the action, which, like
+ *  `./scripts/x.sh`, is not a tool the image must hold. Any other computed name
+ *  stays computed. */
+const RUNNER_DIR_PATH = /^\$\{?(RUNNER_TEMP|GITHUB_ACTION_PATH|GITHUB_WORKSPACE)\}?\//;
 
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/;
 
@@ -357,6 +389,7 @@ export function scriptCommands(script: string): ScriptCommands {
       }
       const bare = unquote(word);
       if (bare === '' || SHELL_WORDS.has(bare)) break;
+      if (RUNNER_DIR_PATH.test(bare)) break;
       if (bare.includes('$')) {
         dynamic.add(bare);
         break;

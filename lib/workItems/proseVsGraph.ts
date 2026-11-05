@@ -798,6 +798,41 @@ export function firstRepoStraddleCriterion(
   return second ? { ...second, reason: 'unpinnable' } : null;
 }
 
+/**
+ * THE MULTI-REPO RUNNER STOP (MOTIR-10381): the first acceptance criterion that
+ * names a path in a SECOND repository, or `null` — WHATEVER the card's repository
+ * set carries.
+ *
+ * The runner stops on a card whose criteria name paths in two repositories,
+ * because one card is one pull request. {@link firstRepoStraddleCriterion} cannot
+ * say so once the card carries both repositories: its contradiction arm only
+ * reports a repo the set does NOT hold. This reads the criteria alone — the
+ * unpinnable arm's rule (the first resolvable path's repo, then the first path
+ * whose repo differs) applied to every card — so its path and numbering match the
+ * straddle advisory's ({@link criterionRepoPaths}).
+ *
+ * The one thing it takes from the set is the namespace decline
+ * ({@link isCarriedNamespaceDirectory}, MOTIR-6288): a bare-name path whose first
+ * segment is the name-namespace of a carried repo is more plausibly that repo's
+ * own top-level directory, so it is dropped before the comparison. A card carrying
+ * `motir-gateway` is not reported for `motir/catalog/x.go`; an `owner/name/…` path
+ * is never declined.
+ */
+export function firstMultiRepoCriterion(
+  md: string | null | undefined,
+  targetRepos: readonly string[],
+  candidates: readonly RepoCandidate[],
+): CriterionRepoPath | null {
+  const carried = new Set(targetRepos.map((r) => r.toLowerCase()));
+  const paths = criterionRepoPaths(md, candidates).filter(
+    (p) => !isCarriedNamespaceDirectory(p.path, carried, candidates),
+  );
+  const firstPath = paths[0];
+  if (!firstPath) return null;
+  const first = firstPath.repo.toLowerCase();
+  return paths.find((p) => p.repo.toLowerCase() !== first) ?? null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // THE SUBSUMPTION CHECK (MOTIR-2903) — "is this card's deliverable already in
 // the repository?", asked of the one artifact where the overlap is a FACT.
@@ -1206,6 +1241,97 @@ export function underAuthored(card: {
   return {
     criteria: parsed.headed.includes('acceptanceCriteria') ? 'no-criterion' : 'no-heading',
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE RUNNER-STOP BODY CHECKS (MOTIR-10380) — a childless leaf with an empty
+// body, or with a body and no enumerated acceptance criterion.
+//
+// The runner stops on both: a card with no description gives an agent nothing to
+// build, and a card with no criterion gives it no way to know it is done. The
+// under-authored check above cannot see either on a card that is TYPED or SIZED,
+// because its conjunction over the null columns is what keeps it a defect about
+// an untouched leaf. These two read only the BODY, so a `code` leaf at 3 points
+// with an empty description is reported.
+//
+// Same argument as the under-authored family for why they are null checks and
+// advisories, never gates: every input is an absent body or an absent list item,
+// and a card is saved mid-authoring. They are emitted only on the `validate_plan`
+// path (the service's `runnerStops` option), so no payload of `validate_work_item`,
+// the dispatch prompt or `claim_next_ready` changes.
+// `docs/decisions/leaf-body-runner-stop-advisories.md`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Whether a card is EXEMPT from the runner-stop body checks — the cards the
+ * runner does not stop on for an empty body or missing criteria.
+ *
+ * - **A card with children** — its body is its subtree's; the runner runs the
+ *   children, never the container's own body.
+ * - **A container KIND (epic, story)** — the same reason, before the children are
+ *   laid: a childless story awaiting its children is not a leaf.
+ * - **`type: design`** — its deliverable is a mock and a note file judged at the
+ *   design gate, not code criteria a pull request discharges.
+ * - **`executor: human`** — a person does the work and confirms it on its gate;
+ *   no runner reads the body.
+ *
+ * Also the exemption the two-repository check reuses, so the family has ONE
+ * answer to "which cards does the runner stop on".
+ */
+export function isLeafBodyCheckExempt(card: {
+  kind: string | null | undefined;
+  type: string | null | undefined;
+  executor: string | null | undefined;
+  hasChildren: boolean;
+}): boolean {
+  if (card.hasChildren) return true;
+  if (card.kind != null && !isTypeableKind(card.kind as WorkItemKindDto)) return true;
+  return card.type === 'design' || card.executor === 'human';
+}
+
+/** The card shape the two body checks read. */
+export interface LeafBodyCard {
+  /** Absent reads as a task, the cell every childless leaf shares. */
+  kind?: string | null | undefined;
+  descriptionMd: string | null | undefined;
+  hasChildren: boolean;
+  type: string | null | undefined;
+  executor: string | null | undefined;
+}
+
+const isLeafBodyExempt = (card: LeafBodyCard): boolean =>
+  isLeafBodyCheckExempt({
+    kind: card.kind,
+    type: card.type,
+    executor: card.executor,
+    hasChildren: card.hasChildren,
+  });
+
+/**
+ * Whether a non-exempt leaf's description is null or blank — whatever its
+ * points, estimate, type and executor are.
+ */
+export function leafNoDescription(card: LeafBodyCard): boolean {
+  if (isLeafBodyExempt(card)) return false;
+  return card.descriptionMd == null || card.descriptionMd.trim() === '';
+}
+
+/**
+ * WHY a non-exempt leaf with a body has no criteria — `no-heading` or
+ * `no-criterion`, exactly as {@link underAuthored} reads them — or `null` when a
+ * criterion is enumerated, the card is exempt, or the body is blank (a blank body
+ * is {@link leafNoDescription}'s finding, reported once).
+ */
+export function leafNoCriteria(card: LeafBodyCard): UnderAuthoredCriteria | null {
+  if (isLeafBodyExempt(card)) return null;
+  if (card.descriptionMd == null || card.descriptionMd.trim() === '') return null;
+  const parsed = parseSections(
+    card.descriptionMd,
+    (card.kind ?? 'task') as IssueType,
+    (card.type ?? null) as SectionType,
+  );
+  if (parsed.found.includes('acceptanceCriteria')) return null;
+  return parsed.headed.includes('acceptanceCriteria') ? 'no-criterion' : 'no-heading';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

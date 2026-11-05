@@ -100,10 +100,18 @@ export function coerceMeasure(raw: string | null): WorkloadMeasureDto {
  */
 export const DAYS_BACK_LADDER = [7, 14, 30, 60, 90, 180, 365] as const;
 
+/**
+ * The period a days-back window is bucketed by — or `null` for a window with NO
+ * bucket axis (Workload's ranked bars, MOTIR-10346), which only the overall
+ * {@link MAX_REPORT_WINDOW_DAYS} bounds. Every ladder helper below takes it.
+ */
+export type ReportWindowPeriod = ReportPeriod | null;
+
 /** The max days-back a period can request without exceeding the bucket cap: a
  * DAILY window is bounded by {@link MAX_REPORT_BUCKETS} (one bucket per day),
- * week/month by the overall {@link MAX_REPORT_WINDOW_DAYS}. */
-export function maxDaysBackForPeriod(period: ReportPeriod): number {
+ * week/month — and a window with no buckets (`null`) — by the overall
+ * {@link MAX_REPORT_WINDOW_DAYS}. */
+export function maxDaysBackForPeriod(period: ReportWindowPeriod): number {
   return period === 'day'
     ? Math.min(MAX_REPORT_BUCKETS, MAX_REPORT_WINDOW_DAYS)
     : MAX_REPORT_WINDOW_DAYS;
@@ -111,7 +119,7 @@ export function maxDaysBackForPeriod(period: ReportPeriod): number {
 
 /** The ladder values valid for a period (≤ its max). Never empty — the
  * smallest rung (7) is always ≤ every period's cap. */
-export function daysBackLadder(period: ReportPeriod): number[] {
+export function daysBackLadder(period: ReportWindowPeriod): number[] {
   return DAYS_BACK_LADDER.filter((d) => d <= maxDaysBackForPeriod(period));
 }
 
@@ -121,7 +129,7 @@ export function daysBackLadder(period: ReportPeriod): number[] {
  * `?daysBack=120` daily URL lands on 90, the nearest valid rung, not an
  * off-ladder value the stepper couldn't then move from).
  */
-export function clampDaysBack(period: ReportPeriod, daysBack: number): number {
+export function clampDaysBack(period: ReportWindowPeriod, daysBack: number): number {
   const ladder = daysBackLadder(period);
   const min = ladder[0]!;
   const max = ladder[ladder.length - 1]!;
@@ -135,7 +143,7 @@ export function clampDaysBack(period: ReportPeriod, daysBack: number): number {
 
 /** Step the days-back one rung along its period's ladder (the stepper's −/+). A
  * value mid-ladder snaps in first, so the move is always to a real rung. */
-export function stepDaysBack(period: ReportPeriod, current: number, dir: -1 | 1): number {
+export function stepDaysBack(period: ReportWindowPeriod, current: number, dir: -1 | 1): number {
   const ladder = daysBackLadder(period);
   const snapped = clampDaysBack(period, current);
   const i = ladder.indexOf(snapped);
@@ -149,8 +157,9 @@ export function coercePeriod(raw: string | null): ReportPeriod {
   return raw === 'day' || raw === 'week' || raw === 'month' ? raw : REPORT_DEFAULTS.period;
 }
 
-/** Coerce a raw `?daysBack` to a valid, in-ladder window for the period. */
-export function coerceDaysBack(period: ReportPeriod, raw: string | null): number {
+/** Coerce a raw `?daysBack` to a valid, in-ladder window for the period
+ * (`null`: a window with no bucket axis, whose ladder reaches 365). */
+export function coerceDaysBack(period: ReportWindowPeriod, raw: string | null): number {
   const n = raw === null ? REPORT_DEFAULTS.daysBack : Number(raw);
   return clampDaysBack(period, Number.isFinite(n) ? n : REPORT_DEFAULTS.daysBack);
 }

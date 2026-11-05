@@ -356,9 +356,10 @@ export interface WorkloadDto {
   assignees: WorkloadAssigneeDto[];
   totalPoints: number;
   totalCount: number;
-  /** The window a windowed read covered (ISO strings); `null` for the open-now snapshot. */
+  /** The window a windowed read covered (ISO strings); `null` for the open-now
+   * snapshot. Days back only — the bars have no time buckets, so no period
+   * (MOTIR-10346). */
   window: {
-    period: ReportPeriodDto;
     daysBack: number;
     windowStart: string;
     windowEnd: string;

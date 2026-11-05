@@ -547,7 +547,7 @@ describe('validate_plan — the MISLABELLED-LINK advisory beside the verdict (MO
           title: 'New card',
           kind: 'task',
           type: 'code',
-          descriptionMd: `Depends on [${meant.identifier}](motir:${opened.id}).`,
+          descriptionMd: `Depends on [${meant.identifier}](motir:${opened.id}).\n\n## Acceptance criteria\n\n- it holds`,
         },
       },
     ]);
@@ -585,7 +585,7 @@ describe('validate_plan — the MISLABELLED-LINK advisory beside the verdict (MO
           title: 'Explained card',
           kind: 'task',
           type: 'code',
-          descriptionMd: 'Nothing linked.',
+          descriptionMd: 'Nothing linked.\n\n## Acceptance criteria\n\n- it holds',
           explanationMd: 'Matters because of [PROD-404](motir:cl_dead).',
         },
       },
@@ -616,7 +616,16 @@ describe('validate_plan — the MISLABELLED-LINK advisory beside the verdict (MO
     const fx = await makeWorkItemFixture();
     const planId = await freshPlan(fx);
     await addProposals(fx, planId, [
-      { op: 'add', proposedFields: { title: 'Plain', kind: 'task', type: 'code' } },
+      {
+        op: 'add',
+        proposedFields: {
+          title: 'Plain',
+          kind: 'task',
+          type: 'code',
+          // A body a run can build (MOTIR-10380): no runner-stop advisory either.
+          descriptionMd: 'A plain card.\n\n## Acceptance criteria\n\n- it holds',
+        },
+      },
     ]);
     await plansService.markPlanned(planId, fx.ctx);
 
@@ -809,7 +818,10 @@ describe('validate_plan — every SHAPE advisory on the plan’s proposals (MOTI
     const old = await workItemsService.createWorkItem(
       {
         projectId: fx.projectId,
-        ...leaf('Old card', `Built on [PROD-99](motir:${opened.id}).`),
+        ...leaf(
+          'Old card',
+          `Built on [PROD-99](motir:${opened.id}).\n\n## Acceptance criteria\n\n- it holds`,
+        ),
         kind: 'task',
       },
       fx.ctx,

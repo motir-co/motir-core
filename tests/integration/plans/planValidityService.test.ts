@@ -11,6 +11,9 @@ import type { PlanWithItemsDto } from '@/lib/dto/plans';
 import {
   isCoverageAdvisory,
   isMislabelledLinkAdvisory,
+  isRunnerStopAdvisory,
+  RUNNER_STOP_SEVERITIES,
+  type WorkItemValidityAdvisoryDto,
   type WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import type { ProposalInput } from '@/lib/dto/plans';
@@ -21,6 +24,7 @@ import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { seedBlockedBy } from '../../helpers/seedBlockedBy';
+import { connectRepairRepo } from '../../helpers/repairFixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { renderSections } from '@/lib/workItems/sections/render';
 import { fixture as sectionsFixture } from '../../unit/workItems/sections/helpers/sectionFixture';
@@ -54,6 +58,25 @@ async function freePlanTargets(planId: string): Promise<string> {
 
 beforeEach(async () => {
   await truncateAuthTables();
+});
+
+/**
+ * The advisories a case is ABOUT, with the RUNNER-STOP members (MOTIR-10380) left
+ * out. Those are a plan read's alone, and most fixtures here build leaves with no
+ * body or no criteria, so a case asserting another family narrows to it rather than
+ * listing a body finding it does not test. The runner stops' own cases assert them.
+ */
+const plainAdvisories = <A extends WorkItemValidityAdvisoryDto>(advisories: readonly A[]): A[] =>
+  advisories.filter((a) => !isRunnerStopAdvisory(a));
+
+/**
+ * A projected verdict as the POST-materialize `validate_work_item` returns it: the
+ * runner stops are a plan read's alone (MOTIR-10380), so the committed read never
+ * carries them and the projection==materialize contract holds for everything else.
+ */
+const withoutRunnerStops = <V extends { advisories: WorkItemValidityAdvisoryDto[] }>(v: V): V => ({
+  ...v,
+  advisories: plainAdvisories(v.advisories),
 });
 
 afterAll(async () => {
@@ -343,7 +366,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       story.identifier,
       fx.ctx,
     );
-    expect(materialized).toEqual(projected);
+    expect(materialized).toEqual(withoutRunnerStops(projected));
   });
 
   it('a `remove` drops the target node AND every edge touching it (a removed blocker no longer gates)', async () => {
@@ -376,7 +399,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       story.identifier,
       fx.ctx,
     );
-    expect(materialized).toEqual(projected);
+    expect(materialized).toEqual(withoutRunnerStops(projected));
   });
 
   it('an unknown targetKey throws WorkItemNotFoundError; an unknown planId throws PlanNotFoundError', async () => {
@@ -1037,7 +1060,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       fx.ctx,
     );
     expect(res.valid).toBe(true);
-    expect(res.advisories).toEqual([
+    expect(plainAdvisories(res.advisories)).toEqual([
       {
         item: `planItem:${itemIdByTitle(withConsumer, 'Consumer')}`,
         referenced: `planItem:${producerItemId}`,
@@ -1075,7 +1098,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       story.identifier,
       fx.ctx,
     );
-    expect(res.advisories).toEqual([]);
+    expect(plainAdvisories(res.advisories)).toEqual([]);
   });
 
   it("a `modify`'s PATCHED body is what gets scanned, not the stored one", async () => {
@@ -1101,7 +1124,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       story.identifier,
       fx.ctx,
     );
-    expect(res.advisories).toEqual([
+    expect(plainAdvisories(res.advisories)).toEqual([
       {
         item: child.identifier,
         referenced: substrate.identifier,
@@ -1135,7 +1158,7 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       story.identifier,
       fx.ctx,
     );
-    expect(res.advisories).toEqual([]);
+    expect(plainAdvisories(res.advisories)).toEqual([]);
   });
 
   it('the FOREST verdict carries no advisories — an advisory is a per-CARD property', async () => {
@@ -1272,7 +1295,9 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
       fx.ctx,
     );
     expect(subtree.advisories.filter(isMislabelledLinkAdvisory)).toEqual([expected]);
-    expect(await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).toEqual([expected]);
+    expect(
+      plainAdvisories(await planValidityService.projectedShapeAdvisories(planId, fx.ctx)),
+    ).toEqual([expected]);
   });
 
   it('the whole-plan check scans PROPOSED bodies only — an untouched committed card is not the plan’s finding', async () => {
@@ -1301,7 +1326,9 @@ describe('the MISLABELLED-LINK advisory on a PROPOSED body (MOTIR-9007)', () => 
     });
     await plansService.markPlanned(planId, fx.ctx);
 
-    expect(await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).toEqual([]);
+    expect(
+      plainAdvisories(await planValidityService.projectedShapeAdvisories(planId, fx.ctx)),
+    ).toEqual([]);
   });
 });
 
@@ -1517,7 +1544,7 @@ describe('planValidityService — the not-done filter (MOTIR-3123)', () => {
     // The BETA node entered the projection off a live/plan edge with no browse
     // check, so it is deliberately EXCLUDED from the local reference map and
     // goes through the advisory service's own batched read + `filterBrowsable`.
-    expect(res.advisories).toEqual([]);
+    expect(plainAdvisories(res.advisories)).toEqual([]);
   });
 });
 
@@ -1831,7 +1858,7 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
     );
     expect(res.valid).toBe(true);
     expect(res.blockers).toEqual([]);
-    expect(res.advisories).toEqual([
+    expect(plainAdvisories(res.advisories)).toEqual([
       {
         kind: 'shape',
         item: `planItem:${itemIdByTitle(p, 'A 13-pointer')}`,
@@ -1876,7 +1903,7 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
       story.identifier,
       fx.ctx,
     );
-    expect(grown.advisories).toMatchObject([
+    expect(plainAdvisories(grown.advisories)).toMatchObject([
       { item: child.identifier, severity: 'likely-over-gate-sizing', threshold: 'both' },
     ]);
 
@@ -1903,7 +1930,7 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
       story.identifier,
       fx.ctx,
     );
-    expect(shrunk.advisories).toEqual([]);
+    expect(plainAdvisories(shrunk.advisories)).toEqual([]);
   });
 
   it('falls through to the STORED sizing when the plan touches neither number', async () => {
@@ -1938,7 +1965,7 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
       story.identifier,
       fx.ctx,
     );
-    expect(res.advisories).toMatchObject([
+    expect(plainAdvisories(res.advisories)).toMatchObject([
       { item: child.identifier, severity: 'likely-over-gate-sizing' },
     ]);
   });
@@ -1986,7 +2013,7 @@ describe('planValidityService.validateProjectedWorkItem — THE ESTIMATION GATE,
       story.identifier,
       fx.ctx,
     );
-    expect(res.advisories).toEqual([]);
+    expect(plainAdvisories(res.advisories)).toEqual([]);
   });
 });
 
@@ -2119,7 +2146,7 @@ describe('planValidityService.validateProjectedWorkItem — THE DESIGN GATE, pro
       fx.ctx,
     );
     expect(res.valid).toBe(true);
-    expect(res.advisories).toEqual([]);
+    expect(plainAdvisories(res.advisories)).toEqual([]);
   });
 });
 
@@ -2906,5 +2933,438 @@ describe('planValidityService — SECTION findings parsed from the projected bod
       'unstructured',
     );
     expect(bare.valid).toBe(true);
+  });
+});
+
+describe('planValidityService — the RUNNER-STOP body advisories, projected (MOTIR-10380)', () => {
+  const sized = {
+    executor: 'coding_agent' as const,
+    type: 'code' as const,
+    storyPoints: 3,
+    estimateMinutes: 45,
+  };
+
+  it('reports a blank body and a criteria-less body on typed, sized leaves, and stays valid', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+
+    const planId = await freshPlan(fx);
+    const add = (title: string, fields: Record<string, unknown>) =>
+      addProposal(fx, planId, {
+        op: 'add',
+        proposedFields: { title, kind: 'subtask', ...sized, ...fields },
+        parentRef: story.id,
+      });
+    await add('Blank', {});
+    await add('Headless', { descriptionMd: 'Builds the export.' });
+    await add('Empty heading', { descriptionMd: 'Builds the export.\n\n## Acceptance criteria\n' });
+    await add('Complete', {
+      descriptionMd: 'Builds it.\n\n## Acceptance criteria\n\n- It exports.',
+    });
+    await add('Drawn', { type: 'design' });
+    const p = await add('By hand', { executor: 'human', type: 'manual' });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const ref = (title: string) => `planItem:${itemIdByTitle(p, title)}`;
+    const expected = [
+      { kind: 'shape', item: ref('Blank'), severity: 'leaf-no-description', runnerStop: true },
+      {
+        kind: 'shape',
+        item: ref('Headless'),
+        severity: 'leaf-no-criteria',
+        runnerStop: true,
+        criteria: 'no-heading',
+      },
+      {
+        kind: 'shape',
+        item: ref('Empty heading'),
+        severity: 'leaf-no-criteria',
+        runnerStop: true,
+        criteria: 'no-criterion',
+      },
+    ];
+    const byItem = (a: { item: string }, b: { item: string }) => a.item.localeCompare(b.item);
+
+    const subtree = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(subtree.valid).toBe(true);
+    expect(subtree.advisories.filter(isRunnerStopAdvisory).sort(byItem)).toEqual(
+      [...expected].sort(byItem),
+    );
+
+    const whole = await planValidityService.projectedShapeAdvisories(planId, fx.ctx);
+    expect(whole.filter(isRunnerStopAdvisory).sort(byItem)).toEqual([...expected].sort(byItem));
+  });
+
+  it('a container, and a leaf the plan gives a child, are not reported', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const planId = await freshPlan(fx);
+    const p = await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: { title: 'Parent leaf', kind: 'task', ...sized },
+      parentRef: story.id,
+    });
+    await addProposal(fx, planId, {
+      op: 'add',
+      proposedFields: {
+        title: 'Child',
+        kind: 'subtask',
+        ...sized,
+        descriptionMd: 'Builds it.\n\n## Acceptance criteria\n\n- It exports.',
+      },
+      parentRef: `${TEMP_REF_PREFIX}${itemIdByTitle(p, 'Parent leaf')}`,
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.advisories.filter(isRunnerStopAdvisory)).toEqual([]);
+  });
+
+  it('the committed read never carries them — only the plan read does', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const leaf = await mk(fx, 'Leaf', 'subtask', story.id); // typed `code`, no body
+
+    const committed = await workItemsService.validateWorkItem(
+      fx.projectId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(committed.advisories.filter(isRunnerStopAdvisory)).toEqual([]);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: leaf.id,
+      patch: { storyPoints: 2 },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+    const projected = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(projected.advisories.filter(isRunnerStopAdvisory)).toEqual([
+      { kind: 'shape', item: leaf.identifier, severity: 'leaf-no-description', runnerStop: true },
+    ]);
+  });
+});
+
+describe('planValidityService — the MULTI-REPO runner stop, projected (MOTIR-10381)', () => {
+  const TWO_REPO_BODY = [
+    'Moves the reader across the boundary.',
+    '',
+    '## Acceptance criteria',
+    '',
+    '- `motir-core/lib/services/x.ts` emits the advisory',
+    '- `motir-ai/src/core/y.ts` reads it',
+  ].join('\n');
+
+  it('reports a committed task whose set carries BOTH repositories; the straddle advisory stays silent', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepairRepo(fx, 'motir-core');
+    await connectRepairRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const make = (title: string, type: 'code' | 'design') =>
+      workItemsService.createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'task',
+          type,
+          title,
+          descriptionMd: TWO_REPO_BODY,
+          targetRepos: ['motir-core', 'motir-ai'],
+          parentId: story.id,
+        },
+        fx.ctx,
+      );
+    const both = await make('Both repos', 'code');
+    const drawn = await make('Drawn', 'design');
+
+    const planId = await freshPlan(fx);
+    for (const card of [both, drawn]) {
+      await addProposal(fx, planId, {
+        op: 'modify',
+        workItemId: card.id,
+        patch: { storyPoints: 3 },
+      });
+    }
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(res.valid).toBe(true);
+    const expected = {
+      kind: 'shape',
+      item: both.identifier,
+      severity: 'leaf-multi-repo',
+      runnerStop: true,
+      path: 'motir-ai/src/core/y.ts',
+      repo: 'motir-ai',
+      criterionIndex: 2,
+    };
+    expect(res.advisories.filter(isRunnerStopAdvisory)).toEqual([expected]);
+    expect(
+      res.advisories.some((a) => a.kind === 'shape' && a.severity === 'likely-repo-straddle'),
+    ).toBe(false);
+    expect(
+      (await planValidityService.projectedShapeAdvisories(planId, fx.ctx)).filter(
+        isRunnerStopAdvisory,
+      ),
+    ).toEqual([expected]);
+  });
+
+  it('a card carrying ONE of the repositories reports both advisories', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepairRepo(fx, 'motir-core');
+    await connectRepairRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const one = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        type: 'code',
+        title: 'One repo',
+        descriptionMd: TWO_REPO_BODY,
+        targetRepos: ['motir-core'],
+        parentId: story.id,
+      },
+      fx.ctx,
+    );
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, { op: 'modify', workItemId: one.id, patch: { storyPoints: 3 } });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
+    );
+    const severities = res.advisories
+      .filter((a) => a.kind === 'shape' && a.item === one.identifier)
+      .map((a) => (a as { severity: string }).severity);
+    expect(severities).toEqual(expect.arrayContaining(['likely-repo-straddle', 'leaf-multi-repo']));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STORY-LEVEL (MOTIR-10383, Story MOTIR-10350): ONE projected plan holding every
+// runner-stop case and every exemption, read the way `validate_plan` reads it —
+// `validateProjectedPlan` for `valid`, `projectedShapeAdvisories` for the
+// advisories — proving the three advisories fire together on the right cards and
+// stay silent on the cards the runner does not stop on.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('validate_plan — the three runner-stop advisories together (MOTIR-10383)', () => {
+  const sized = {
+    executor: 'coding_agent' as const,
+    type: 'code' as const,
+    storyPoints: 3,
+    estimateMinutes: 45,
+  };
+  const CLEAN = 'Builds it.\n\n## Acceptance criteria\n\n- `motir-core/lib/a.ts` exports it';
+  const TWO_REPOS = [
+    'Moves the reader across the boundary.',
+    '',
+    '## Acceptance criteria',
+    '',
+    '- `motir-core/lib/services/x.ts` emits the advisory',
+    '- `motir-ai/src/core/y.ts` reads it',
+  ].join('\n');
+
+  type Shape = Extract<WorkItemValidityAdvisoryDto, { kind: 'shape' }>;
+  const shapesOf = (advisories: readonly WorkItemValidityAdvisoryDto[], item: string): Shape[] =>
+    advisories.filter((a): a is Shape => a.kind === 'shape' && a.item === item);
+  const severitiesOf = (advisories: readonly WorkItemValidityAdvisoryDto[], item: string) =>
+    shapesOf(advisories, item).map((a) => a.severity);
+
+  it('fires each advisory on its card, none on the exempt cards, and leaves the plan valid', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepairRepo(fx, 'motir-core');
+    await connectRepairRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const bothRepos = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        type: 'code',
+        title: 'Both repos',
+        descriptionMd: TWO_REPOS,
+        targetRepos: ['motir-core', 'motir-ai'],
+        parentId: story.id,
+      },
+      fx.ctx,
+    );
+
+    const planId = await freshPlan(fx);
+    let plan!: PlanWithItemsDto;
+    const add = async (title: string, fields: Record<string, unknown>, parentRef?: string) => {
+      plan = await addProposal(fx, planId, {
+        op: 'add',
+        proposedFields: { title, ...fields },
+        ...(parentRef ? { parentRef } : {}),
+      });
+    };
+    const leafUnder = (title: string, fields: Record<string, unknown>) =>
+      add(title, { kind: 'subtask', ...sized, ...fields }, story.id);
+
+    await leafUnder('Blank', {});
+    await leafUnder('Headless', { descriptionMd: 'Builds the export.' });
+    await leafUnder('Empty heading', { descriptionMd: 'Builds it.\n\n## Acceptance criteria\n' });
+    await add('Two repos add', { kind: 'task', ...sized, descriptionMd: TWO_REPOS }, story.id);
+    await leafUnder('One repo', { descriptionMd: CLEAN });
+    await add('Childless story', { kind: 'story' });
+    await add('Epic', { kind: 'epic' });
+    await add('Parent task', { kind: 'task', ...sized }, story.id);
+    await add(
+      'Kid',
+      { kind: 'subtask', ...sized, descriptionMd: CLEAN },
+      `planItem:${itemIdByTitle(plan, 'Parent task')}`,
+    );
+    await leafUnder('Drawn', { type: 'design', descriptionMd: 'Draws the empty state.' });
+    await leafUnder('By hand', { type: 'manual', executor: 'human' });
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: bothRepos.id,
+      patch: { storyPoints: 3 },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const ref = (title: string) => `planItem:${itemIdByTitle(plan, title)}`;
+    const verdict = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    const advisories = await planValidityService.projectedShapeAdvisories(planId, fx.ctx);
+
+    // Blank body → one `leaf-no-description`, never also `leaf-no-criteria`.
+    expect(shapesOf(advisories, ref('Blank')).filter(isRunnerStopAdvisory)).toEqual([
+      { kind: 'shape', item: ref('Blank'), severity: 'leaf-no-description', runnerStop: true },
+    ]);
+
+    // A body with no heading → `no-heading`; `under-authored` silent (typed and sized).
+    expect(shapesOf(advisories, ref('Headless'))).toEqual([
+      {
+        kind: 'shape',
+        item: ref('Headless'),
+        severity: 'leaf-no-criteria',
+        runnerStop: true,
+        criteria: 'no-heading',
+      },
+    ]);
+    expect(severitiesOf(advisories, ref('Blank'))).not.toContain('under-authored');
+
+    // The heading with nothing under it → `no-criterion`.
+    expect(shapesOf(advisories, ref('Empty heading')).filter(isRunnerStopAdvisory)).toEqual([
+      {
+        kind: 'shape',
+        item: ref('Empty heading'),
+        severity: 'leaf-no-criteria',
+        runnerStop: true,
+        criteria: 'no-criterion',
+      },
+    ]);
+
+    // A committed card carrying both repositories → `leaf-multi-repo`, no straddle.
+    expect(shapesOf(advisories, bothRepos.identifier)).toEqual([
+      {
+        kind: 'shape',
+        item: bothRepos.identifier,
+        severity: 'leaf-multi-repo',
+        runnerStop: true,
+        path: 'motir-ai/src/core/y.ts',
+        repo: 'motir-ai',
+        criterionIndex: 2,
+      },
+    ]);
+
+    // The same criteria on an `add` → both, the accepted overlap.
+    const onAdd = shapesOf(advisories, ref('Two repos add'));
+    expect(onAdd).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ severity: 'likely-repo-straddle', reason: 'unpinnable' }),
+        expect.objectContaining({
+          severity: 'leaf-multi-repo',
+          runnerStop: true,
+          repo: 'motir-ai',
+        }),
+      ]),
+    );
+
+    // Nothing runner-stop on a one-repo, described card or on any exempt card.
+    for (const title of [
+      'One repo',
+      'Childless story',
+      'Epic',
+      'Parent task',
+      'Kid',
+      'Drawn',
+      'By hand',
+    ]) {
+      expect(shapesOf(advisories, ref(title)).filter(isRunnerStopAdvisory), title).toEqual([]);
+    }
+
+    // Every runner stop is marked and listed; no pre-existing advisory is marked.
+    const stops = advisories.filter(isRunnerStopAdvisory);
+    expect(stops).toHaveLength(5);
+    for (const a of stops) {
+      expect(a.runnerStop).toBe(true);
+      expect(RUNNER_STOP_SEVERITIES).toContain(a.severity);
+    }
+    for (const a of advisories) {
+      if (
+        a.kind === 'shape' &&
+        (a.severity === 'under-authored' || a.severity === 'likely-repo-straddle')
+      ) {
+        expect('runnerStop' in a).toBe(false);
+      }
+    }
+
+    // Advisory only.
+    expect(verdict.valid).toBe(true);
+  });
+
+  it('the committed copies, read through validate_work_item, carry none of the three', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectRepairRepo(fx, 'motir-core');
+    await connectRepairRepo(fx, 'motir-ai');
+    const story = await mk(fx, 'Story', 'story');
+    const create = (title: string, descriptionMd: string | undefined, targetRepos?: string[]) =>
+      workItemsService.createWorkItem(
+        {
+          projectId: fx.projectId,
+          kind: 'subtask',
+          ...sized,
+          title,
+          ...(descriptionMd !== undefined ? { descriptionMd } : {}),
+          ...(targetRepos ? { targetRepos } : {}),
+          parentId: story.id,
+        },
+        fx.ctx,
+      );
+    await create('Blank', undefined);
+    await create('Headless', 'Builds the export.');
+    await create('Empty heading', 'Builds it.\n\n## Acceptance criteria\n');
+    await create('Both repos', TWO_REPOS, ['motir-core', 'motir-ai']);
+
+    const committed = await workItemsService.validateWorkItem(
+      fx.projectId,
+      story.identifier,
+      fx.ctx,
+    );
+    expect(
+      committed.advisories.filter(
+        (a) =>
+          a.kind === 'shape' && (RUNNER_STOP_SEVERITIES as readonly string[]).includes(a.severity),
+      ),
+    ).toEqual([]);
   });
 });
