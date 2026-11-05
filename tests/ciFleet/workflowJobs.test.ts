@@ -87,6 +87,37 @@ describe('scriptCommands', () => {
     expect(read.dynamic).toEqual(['$PYTHON', '${{']);
   });
 
+  it('reads arithmetic as text, and a command inside it as a command', () => {
+    const script = [
+      'sleep $((attempt * 10))',
+      'echo "waited $((attempt * (2 + 1)))"',
+      '((attempt++))',
+    ].join('\n');
+    expect(commandWords(script).sort()).toEqual(['echo', 'sleep']);
+    // Arithmetic that runs a command stays with the command reading, which fails
+    // closed: `wc` is seen, at the cost of `n` reading as a tool.
+    expect(commandWords('echo $((n + $(wc -l < f)))').sort()).toEqual(['echo', 'n', 'wc']);
+    // Two nested subshells, not arithmetic: the shell runs both.
+    expect(commandWords('( (git a); (gh b) )').sort()).toEqual(['gh', 'git']);
+    expect(commandWords('x=$((git a); (gh b))').sort()).toEqual(['gh', 'git']);
+    // A substitution with parentheses of its own is not arithmetic either.
+    expect(commandWords(`x=$(jq '((.a))' f; (gh b))`).sort()).toEqual(['gh', 'jq']);
+  });
+
+  it('reads a command under a runner directory as a path, any other as computed', () => {
+    const script = [
+      '"$RUNNER_TEMP/actionlint" -color',
+      '"${GITHUB_ACTION_PATH}/dist/codecov.sh"',
+      '$GITHUB_WORKSPACE/bin/x',
+      '"$HOME/bin/y"',
+      '"$RUNNER_TEMP"',
+    ].join('\n');
+    expect(scriptCommands(script)).toMatchObject({
+      commands: [],
+      dynamic: ['$HOME/bin/y', '$RUNNER_TEMP'],
+    });
+  });
+
   it('skips paths, the functions a script defines, and redirections', () => {
     const script = [
       'retry() { "$@"; }',
