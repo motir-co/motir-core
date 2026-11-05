@@ -73,10 +73,11 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(code).not.toMatch(/ci\.yml|flyctl|needs:/);
   });
 
-  it('has no environment, a non-cancelling concurrency group and a 60-minute ceiling', () => {
+  // 80: the 20-minute stack wait of MOTIR-10436 on top of the deploy's 60.
+  it('has no environment, a non-cancelling concurrency group and an 80-minute ceiling', () => {
     expect(job.environment).toBeUndefined();
     expect(job.concurrency).toEqual({ group: 'aws-deploy', 'cancel-in-progress': false });
-    expect(job['timeout-minutes']).toBe(60);
+    expect(job['timeout-minutes']).toBe(80);
   });
 
   it('reads no AWS key or secret: role ARNs, region and prefix come from vars', () => {
@@ -96,6 +97,7 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     const roles = steps.filter((s) => s.uses?.startsWith('aws-actions/configure-aws-credentials'));
     expect(roles.map((s) => s.with?.['role-to-assume'])).toEqual([
       '${{ vars.AWS_ECR_PUSH_ROLE_ARN }}',
+      '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
       '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
     ]);
     const push = stepIndex((s) => s.with?.['role-to-assume'] === roles[0]!.with!['role-to-assume']);
@@ -127,6 +129,26 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(existing.run).toContain('imageTag=$GITHUB_SHA');
     const build = steps[stepIndex((s) => s.id === 'build')]!;
     expect(build.if).toBe("steps.existing.outputs.digest == ''");
+  });
+
+  // MOTIR-10436. The check needs the deploy role's credentials, so it runs after they
+  // are assumed, and the deploy may run only on its answer. The check can wait 20
+  // minutes of an hour-long session, so the roll takes a fresh one.
+  it('rolls only on the answer of the check it runs just before, in a fresh session', () => {
+    const gate = stepIndex((s) => s.id === 'gate');
+    const deploy = stepIndex((s) => !!s.run?.includes('deploy:aws'));
+    const deployRole = stepIndex(
+      (s) => s.with?.['role-to-assume'] === '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
+    );
+    expect(gate).toBeGreaterThan(deployRole);
+    expect(deploy).toBe(gate + 2);
+    expect(steps[gate]!.run).toBe('bash scripts/aws-deploy/deploy-gate.sh');
+    expect(steps[gate]!.env?.['DEPLOY_STACKS']).toBe('${{ vars.AWS_DEPLOY_NAME_PREFIX }}-services');
+    const fresh = steps[gate + 1]!;
+    expect(fresh.uses).toMatch(/^aws-actions\/configure-aws-credentials@/);
+    expect(fresh.with?.['role-to-assume']).toBe('${{ vars.AWS_DEPLOY_ROLE_ARN }}');
+    expect(fresh.if).toBe("steps.gate.outputs.deploy == 'true'");
+    expect(steps[deploy]!.if).toBe("steps.gate.outputs.deploy == 'true'");
   });
 
   it('adds --no-roll only when AWS_DEPLOY_NO_ROLL is true', () => {
