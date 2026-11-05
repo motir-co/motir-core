@@ -129,6 +129,21 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(build.if).toBe("steps.existing.outputs.digest == ''");
   });
 
+  // MOTIR-10436. The check needs the deploy role's credentials, so it runs after they
+  // are assumed, and the deploy may run only on its answer.
+  it('rolls only on the answer of the check it runs just before', () => {
+    const gate = stepIndex((s) => s.id === 'gate');
+    const deploy = stepIndex((s) => !!s.run?.includes('deploy:aws'));
+    const deployRole = stepIndex(
+      (s) => s.with?.['role-to-assume'] === '${{ vars.AWS_DEPLOY_ROLE_ARN }}',
+    );
+    expect(gate).toBeGreaterThan(deployRole);
+    expect(deploy).toBe(gate + 1);
+    expect(steps[gate]!.run).toBe('bash scripts/aws-deploy/deploy-gate.sh');
+    expect(steps[gate]!.env?.['DEPLOY_STACKS']).toBe('${{ vars.AWS_DEPLOY_NAME_PREFIX }}-services');
+    expect(steps[deploy]!.if).toBe("steps.gate.outputs.deploy == 'true'");
+  });
+
   it('adds --no-roll only when AWS_DEPLOY_NO_ROLL is true', () => {
     const deploy = steps[stepIndex((s) => !!s.run?.includes('deploy:aws'))]!;
     expect(deploy.env?.NO_ROLL).toBe(

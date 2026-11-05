@@ -126,9 +126,18 @@ jobs:
         env:
           HUSKY: '0'
 
+      # Waits out a motir-infra update of the services stack, and stands down if
+      # this commit is no longer main's newest (MOTIR-10436, docs/aws-deploy.md).
+      - name: Check it is safe to roll
+        id: gate
+        env:
+          DEPLOY_STACKS: ${{ vars.AWS_DEPLOY_NAME_PREFIX }}-services
+        run: bash scripts/aws-deploy/deploy-gate.sh
+
       # `--no-roll` only while `AWS_DEPLOY_NO_ROLL` is `true`: the first run,
       # before the services exist (docs/aws-deploy.md, The first run).
       - name: Deploy
+        if: steps.gate.outputs.deploy == 'true'
         env:
           DIGEST: ${{ steps.digest.outputs.digest }}
           NO_ROLL: ${{ vars.AWS_DEPLOY_NO_ROLL == 'true' && '--no-roll' || '' }}

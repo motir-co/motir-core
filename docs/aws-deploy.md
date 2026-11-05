@@ -67,6 +67,14 @@ forward. The log names the service and the revision it was left on. Re-run the
 workflow once the other deploy has finished: it copies the revision each
 service runs now.
 
+Before it rolls, the workflow runs `scripts/aws-deploy/deploy-gate.sh`
+(MOTIR-10436). It waits up to 20 minutes for a running update of the services
+stack to finish, which avoids most of those collisions. An update that starts
+after the roll begins still collides. It also stands down when a first attempt's
+commit is no longer main's newest, because that commit's deploy carries it; such
+a run is green and its log says so. A re-run or a manual dispatch of an older
+commit still deploys, with a warning, and puts the older image on the services.
+
 The roll registers each service's next revision by copying the one it runs now,
 with only the image changed. So before it migrates or changes anything, the
 deploy refuses a service whose revision sets `MOTIR_BREACH_ENABLED` on a
