@@ -34,6 +34,8 @@ import type {
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
+import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
+import { reviewChecklistRowsOf } from '@/lib/agentReview/checklist';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
@@ -192,7 +194,7 @@ async function buildResolvers(
   // (checked against `pg_policies`), so it stays on the singleton.
   const users =
     refs.users.size > 0 ? await userRepository.findByIds([...refs.users]) : ([] as User[]);
-  const { statuses, sprints, issues, folders } = await withWorkspaceServiceContext(
+  const { statuses, sprints, issues, folders, reviewRecords } = await withWorkspaceServiceContext(
     ctx.workspaceId,
     async (tx) => ({
       statuses:
@@ -208,10 +210,23 @@ async function buildResolvers(
           ? await workItemRepository.findByIds([...refs.issues], tx)
           : ([] as WorkItem[]),
       folders: refs.folders.size > 0 ? await folderRepository.findByIds([...refs.folders], tx) : [],
+      // The checklist rows an agent-verdict entry draws (MOTIR-10460), read from the
+      // RECORDS — held to this card, so a snapshot naming another card's record shows none.
+      reviewRecords:
+        refs.reviewRecords.size > 0
+          ? await reviewVerdictRecordRepository.findChecklistsForWorkItem(
+              item.id,
+              [...refs.reviewRecords],
+              tx,
+            )
+          : [],
     }),
   );
 
   const userById = new Map(users.map((u) => [u.id, u]));
+  const checklistByRecord = new Map(
+    reviewRecords.map((r) => [r.id, reviewChecklistRowsOf(r.checklist)]),
+  );
   const statusByKey = new Map(statuses.map((s) => [s.key, s]));
   const sprintById = new Map(sprints.map((s) => [s.id, s]));
   // Identifiers stay workspace-gated even through old diffs (finding #44):
@@ -249,6 +264,9 @@ async function buildResolvers(
     folder(id: string): ActivityValueDto {
       const name = folderById.get(id)?.name;
       return name === undefined ? { type: 'none' } : { type: 'text', text: name };
+    },
+    reviewChecklist(recordId: string) {
+      return checklistByRecord.get(recordId) ?? [];
     },
   };
 }

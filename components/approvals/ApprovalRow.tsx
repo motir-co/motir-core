@@ -964,6 +964,7 @@ export function ApprovalRow({
           <ReviewLine
             line={liveReview.line}
             identifier={card.identifier}
+            title={shownCardTitle}
             recordRef={liveReview.recordRef}
           />
         </div>

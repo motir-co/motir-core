@@ -27,6 +27,7 @@ const resolvers: DisplayResolvers = {
   sprint: (id) => ({ type: 'sprint', sprintId: id, name: 'Sprint 4' }),
   issue: (id) => ({ type: 'issue', workItemId: id, identifier: 'MOTIR-2' }),
   folder: (id) => ({ type: 'text', text: id }),
+  reviewChecklist: () => [],
 };
 
 /** A diff value of the shape the key's renderer reads. */

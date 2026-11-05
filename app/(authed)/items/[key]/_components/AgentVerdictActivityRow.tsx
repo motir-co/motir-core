@@ -3,6 +3,7 @@
 import { useId, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Bot } from 'lucide-react';
+import { ReviewChecklist } from '@/components/approvals/ReviewChecklist';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Pill } from '@/components/ui/Pill';
 import { agentVerdictAnchor, reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
@@ -21,6 +22,12 @@ import type { ActivityAgentVerdictPartDto, ActivityEntryDto } from '@/lib/dto/ac
 //   which is no longer the current version. It decided nothing.*
 // - a SECOND verdict: a neutral *Second review* pill, and *A second review at a version
 //   already decided. It decided nothing.*
+//
+// - THE CHECKLIST (MOTIR-10460; `design/workbench/design-notes.md` § 42.5, F10): when the
+//   record stores checklist rows the toggle reads *Findings and checklist*, and opening it
+//   shows the findings and then the rows, through the same `ReviewChecklist` the Workbench's
+//   in-place view draws. A record with rows and no findings opens to the rows alone; one
+//   with no rows is unchanged.
 //
 // ⚠️ INK. The time takes `--el-text-secondary`, not the shipped row's `--el-text-muted`,
 // which fails AA on `--el-surface` (the notes say this entry does not repeat that).
@@ -42,6 +49,7 @@ export function AgentVerdictActivityRow({
 }) {
   const t = useTranslations('approvalGate.reviewPath.activity');
   const tActivity = useTranslations('activity');
+  const tLine = useTranslations('approvalGate.reviewPath.line');
   const format = useFormatter();
   const changedAt = new Date(entry.changedAt);
   const anchor = agentVerdictAnchor(part.recordId);
@@ -76,7 +84,8 @@ export function AgentVerdictActivityRow({
     agent: agentName,
     commits,
   });
-  const showFindings = !decidedNothing && part.findingsExcerpt !== null;
+  const { checklist } = part;
+  const showFindings = !decidedNothing && (part.findingsExcerpt !== null || checklist.length > 0);
   const notifiedName =
     part.notified?.type === 'user' ? (part.notified.name ?? tActivity('formerMember')) : null;
 
@@ -117,20 +126,23 @@ export function AgentVerdictActivityRow({
                 onClick={() => setToggled(!open)}
                 className="text-xs font-medium text-(--el-link) hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
-                {t('findings')}
+                {checklist.length > 0 ? tLine('findings') : t('findings')}
               </button>
             ) : null}
             {notifiedName ? <span>{t('notified', { name: notifiedName })}</span> : null}
           </span>
         ) : null}
         {showFindings && open ? (
-          <div id={findingsId}>
-            <MarkdownView
-              value={part.findingsExcerpt ?? ''}
-              workItemRefs={{}}
-              className="motir-how-to-test min-w-0 text-[13px]"
-              data-testid="agent-verdict-findings"
-            />
+          <div id={findingsId} className="flex flex-col gap-2">
+            {part.findingsExcerpt !== null ? (
+              <MarkdownView
+                value={part.findingsExcerpt}
+                workItemRefs={{}}
+                className="motir-how-to-test min-w-0 text-[13px]"
+                data-testid="agent-verdict-findings"
+              />
+            ) : null}
+            <ReviewChecklist rows={checklist} compact />
           </div>
         ) : null}
       </div>

@@ -43,6 +43,7 @@ const resolvers: DisplayResolvers = {
   sprint: (id) => ({ type: 'sprint', sprintId: id, name: id }),
   issue: (id) => ({ type: 'issue', workItemId: id, identifier: id }),
   folder: (id) => ({ type: 'text', text: id }),
+  reviewChecklist: () => [],
 };
 
 describe('activity feed — a difficulty change', () => {

@@ -21,6 +21,7 @@
 // parts functions, unit-testable without a database.
 
 import type { ActivityEntryPartDto, ActivityValueDto } from '@/lib/dto/activity';
+import type { ReviewChecklistRowDto } from '@/lib/dto/agentReview';
 
 /** The `{ from, to }` cell every scalar diff key carries. */
 interface DiffCell {
@@ -35,6 +36,8 @@ export interface DiffRefs {
   sprints: Set<string>;
   issues: Set<string>;
   folders: Set<string>;
+  /** Review verdict records an `agent_verdict` entry names — for their checklist rows. */
+  reviewRecords: Set<string>;
 }
 
 /** The user-shaped display value (narrowed so the actor needs no re-check). */
@@ -52,6 +55,11 @@ export interface DisplayResolvers {
   issue(id: string): ActivityValueDto;
   /** A folder, by name (MOTIR-5313); the placement a `folderId` diff records. */
   folder(id: string): ActivityValueDto;
+  /**
+   * A review verdict record's stored checklist rows (MOTIR-10460), read from the RECORD — the
+   * trail's snapshot does not carry them — or `[]` when it has none or is not the card's.
+   */
+  reviewChecklist(recordId: string): ReviewChecklistRowDto[];
 }
 
 type RefCollector = (value: unknown, refs: DiffRefs) => void;
@@ -365,9 +373,9 @@ const agentVerdictEntry: RegistryEntry = {
   disposition: 'renderable',
   collectRefs: (value, refs) => {
     const to = asCell(value)?.to;
-    if (isRecord(to) && typeof to['notifiedUserId'] === 'string') {
-      refs.users.add(to['notifiedUserId']);
-    }
+    if (!isRecord(to)) return;
+    if (typeof to['notifiedUserId'] === 'string') refs.users.add(to['notifiedUserId']);
+    if (typeof to['recordId'] === 'string') refs.reviewRecords.add(to['recordId']);
   },
   render: (key, value, r) => {
     const to = asCell(value)?.to;
@@ -394,6 +402,7 @@ const agentVerdictEntry: RegistryEntry = {
         subjectVersion: to['subjectVersion'],
         findingsExcerpt: typeof to['findingsExcerpt'] === 'string' ? to['findingsExcerpt'] : null,
         notified: typeof to['notifiedUserId'] === 'string' ? r.user(to['notifiedUserId']) : null,
+        checklist: r.reviewChecklist(to['recordId']),
       },
     ];
   },
@@ -571,6 +580,7 @@ export function emptyDiffRefs(): DiffRefs {
     sprints: new Set(),
     issues: new Set(),
     folders: new Set(),
+    reviewRecords: new Set(),
   };
 }
 

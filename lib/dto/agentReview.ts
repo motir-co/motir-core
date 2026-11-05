@@ -163,3 +163,41 @@ export interface ReviewDismissalResultDto {
   /** The approve-and-merge gate asked again at the same version, or null when none was. */
   approvalGateId: string | null;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONE REVIEW'S FINDINGS AND CHECKLIST (MOTIR-10460; `design/workbench/design-notes.md`
+// § 42) — what *Findings and checklist* opens in place over the Workbench, read when the
+// view opens and never with the list. `GET /api/work-items/{key}/review-findings`.
+
+/** Which review the view reads — the `recordRef` / `lastReviewedRef` the link carries. */
+export type ReviewFindingsRefDto = { kind: 'record'; id: string } | { kind: 'gate'; id: string };
+
+/** One commit the review was at. */
+export interface ReviewFindingsCommitDto {
+  repo: string;
+  number: number;
+  headSha: string;
+}
+
+export interface ReviewFindingsDto {
+  identifier: string;
+  title: string;
+  ref: ReviewFindingsRefDto;
+  /** The gate's own verdict words. */
+  verdict: 'pass' | 'changes_requested';
+  /** Motir's hosted agent, or a person's own agent (with its harness and model). */
+  reviewer:
+    | { kind: 'hosted'; model: string | null }
+    | { kind: 'own'; name: string | null; harness: string; model: string };
+  /** ISO-8601 — when the record was written, or the gate decided. */
+  at: string;
+  /** The delivery-set version the review was at; null on a gate that names none. */
+  subjectVersion: string | null;
+  commits: ReviewFindingsCommitDto[];
+  /** The WHOLE findings — the record's `findingsMd`, or a gate-only pass's note. */
+  findingsMd: string | null;
+  /** The chips of every `[KEY](motir:<id>)` in the findings, resolved for the reader. */
+  findingsRefs: WorkItemRefMap;
+  /** The stored checklist rows, in stored order; `[]` for a gate or a record with none. */
+  checklist: ReviewChecklistRowDto[];
+}

@@ -27,6 +27,7 @@ import { PlanningTab } from './_components/PlanningTab';
 import { toWorkbenchRowViews } from './_components/workbenchRows';
 import { NO_PROJECT_PATH } from '@/lib/navigation/landing';
 import { withRequestLabel } from '@/lib/monitoring/requestLabel';
+import { ReviewFindingsInPlace } from '@/components/approvals/ReviewFindingsInPlace';
 
 // `/workbench` — the signed-in landing surface (Story MOTIR-2649 · MOTIR-2653,
 // renamed and split by lifecycle in Story MOTIR-4777 · MOTIR-4782), per
@@ -375,6 +376,11 @@ async function renderWorkbenchPage({ searchParams }: WorkbenchPageProps) {
             </Suspense>
           ) : null}
         </WorkbenchLiveView>
+
+        {/* *Findings and checklist* opens IN PLACE here (MOTIR-10460; § 42.3): the review
+          line, the Reviewed badge's card and the approval overlay's review line open the
+          review over the list instead of navigating to the card page. */}
+        <ReviewFindingsInPlace />
 
         {/* The quick-view peek — the SAME `?peek=` island /items, /ready and the
           board mount. Opening a row here is not a different interaction, so it

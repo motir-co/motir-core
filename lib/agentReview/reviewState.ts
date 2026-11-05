@@ -201,7 +201,10 @@ export function reviewCommand(identifier: string): string {
   return `motir review ${identifier}`;
 }
 
-function reviewerOfRecord(record: ReviewStateRecord): ReviewReviewer {
+/** Who reviewed, from a verdict record: the hosted run's harness, or a person's own agent. */
+export function reviewerOfRecord(
+  record: Pick<ReviewStateRecord, 'harness' | 'model' | 'submittedById' | 'submittedByName'>,
+): ReviewReviewer {
   if (record.harness === HOSTED_REVIEW_HARNESS) {
     return { kind: 'hosted', model: record.model === 'unknown' ? null : record.model };
   }
