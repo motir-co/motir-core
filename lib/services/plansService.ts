@@ -5381,6 +5381,18 @@ async function planOpenedForJobWithin(
  * conversation's submit — must name a session of THIS project. Otherwise a new
  * session of the door's origin is opened: owned by the plan's requester (null
  * for cadence, where nobody asked), with no turn, anchored at `targetKeys`.
+ *
+ * ⚠️ A NEW SESSION OPENED FOR A HOSTED JOB OWNS THAT JOB (Bug MOTIR-10431). The
+ * cadence, an expand and a generation submit their job and then open the plan
+ * with `sourceJobId`, so the session made here is the one the job was submitted
+ * FOR — exactly what a conversation's submit records as `lastJobId` /
+ * `lastSubmittedAt`. Binding them here is what lets the session's run be
+ * addressed the way every conversation's is: the stop door and the run's own
+ * boundary read resolve the thread by `last_job_id`
+ * (`planChangeMailboxService.findThreadForJob`), and the overlay names the
+ * running job from it (`reopenedPlanJobId`). Without it the job belonged to no
+ * session, so such a plan had no Stop and a stop could never reach its walk. A
+ * plan opened over MCP has no `sourceJobId` and binds nothing.
  */
 async function attachPlanSessionWithin(
   projectId: string,
@@ -5408,6 +5420,7 @@ async function attachPlanSessionWithin(
         ? 'cadence'
         : 'generation');
   const scope = buildScope(ref?.targetKeys ?? []);
+  const now = new Date();
   const created = await planChangeSessionRepository.create(
     {
       workspaceId: ctx.workspaceId,
@@ -5416,7 +5429,8 @@ async function attachPlanSessionWithin(
       scopeKey: scope.scopeKey,
       targetKeys: scope.targetKeys,
       origin,
-      lastActivityAt: new Date(),
+      lastActivityAt: now,
+      ...(input.sourceJobId ? { lastJobId: input.sourceJobId, lastSubmittedAt: now } : {}),
     },
     tx,
   );

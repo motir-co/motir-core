@@ -235,7 +235,11 @@ async function appendLocked(
  *
  * It also answers for the right thread when a project has several: a contextual
  * conversation and the project-wide one are different rows, and the mailbox
- * belongs to whichever of them SUBMITTED this job.
+ * belongs to whichever of them SUBMITTED this job. A session Motir opened for
+ * its own job (the auto-plan cadence, an expand, a generation) records that job
+ * as its `last_job_id` when it is created (`plansService`'s
+ * `attachPlanSessionWithin`, Bug MOTIR-10431), so its run is addressed here
+ * exactly as a conversation's is.
  *
  * ⚠️ IT STAYS KEYED BY `last_job_id`, and NOT by `Plan.sessionId`, on purpose
  * (MOTIR-6021; AMENDMENT 17 §5, §7). The mailbox addresses a RUNNING job, and a
