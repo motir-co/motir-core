@@ -1041,6 +1041,8 @@ export default defineConfig({
         'lib/repositories/watcherRepository.ts',
         'lib/services/activityService.ts',
         'lib/activity/renderers.ts',
+        // MOTIR-10463 — the All tab's bounded walk to an older verdict entry.
+        'lib/activity/anchorWalk.ts',
         'lib/mappers/activityMappers.ts',
         // Story 5.3 custom fields — the three data-access leaves (5.3.1) +
         // the definitions half of the service and its mappers (5.3.2); the
@@ -6836,6 +6838,7 @@ export default defineConfig({
         // fallback/suppression branches are the mistake-#29 guarantee.
         'lib/services/activityService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/activity/renderers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/activity/anchorWalk.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/activityMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 5.3 (custom fields): the repo leaves land gated from day one
         // (Subtask 5.3.1); customFieldsService + mappers joined with 5.3.2
