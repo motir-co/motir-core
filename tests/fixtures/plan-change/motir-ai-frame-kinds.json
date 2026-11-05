@@ -1,5 +1,5 @@
 {
-  "_comment": "Every progress-event kind motir-ai emits (ctx.emit, sink.signal, safeEmit and `event:` literals), swept from motir-ai origin/main on 2026-10-10. tests/planning/frameKindParity.test.ts requires a disposition in lib/planning/planChangeFrames.ts for each. Refresh: in a motir-ai checkout, run `git grep -ohE \"(emit|signal|safeEmit)\\??\\.?\\(\\s*'[a-z_]+'|event: '[a-z_]+'\" origin/main -- src | grep -oE \"'[a-z_]+'\" | tr -d \"'\" | sort -u`, then add any kind that is chosen by a ternary (`failure ? 'a' : 'b'`).",
+  "_comment": "Every progress-event kind motir-ai emits, swept from motir-ai origin/main (961d75d) on 2026-11-05. tests/planning/frameKindParity.test.ts requires a disposition in lib/planning/planChangeFrames.ts for each. Refresh: in a motir-ai checkout, run `git grep -ohE \"<pattern>\" origin/main -- src | grep -oE \"'[a-z_]+'\" | tr -d \"'\" | sort -u`, where <pattern> is `sweep.pattern` in contracts/plan-change-frame-kinds.json, then drop the names that file lists under `sweepFalseMatches`.",
   "kinds": [
     "assistant",
     "audit",
@@ -21,7 +21,7 @@
     "gap",
     "info",
     "lay",
-    "lessons_injected",
+    "level_closed_empty",
     "level_complete",
     "model_stop",
     "neighbourhood",
@@ -40,9 +40,12 @@
     "planning_failure_filed",
     "planning_record_attached",
     "planning_record_not_filed",
+    "post_merge_move_refused",
+    "post_merge_moved",
     "provenance",
     "read",
     "reauthor_target",
+    "resume_seeded",
     "retrieval",
     "retrieval_ready",
     "revision_landed",
@@ -66,7 +69,9 @@
     "validation_doc",
     "validation_skipped",
     "validity_reopen",
+    "validity_unfixable",
     "vision_doc",
+    "walk_position",
     "wired"
   ]
 }
