@@ -65,7 +65,7 @@ export function evidenceParts(evidence: string): ReactNode[] {
       return (
         <code
           key={index}
-          className="rounded-(--radius-control) bg-(--el-code-bg) px-1 font-mono text-[11.5px] text-(--el-code-text)"
+          className="rounded-(--radius-control) bg-(--el-code-bg) px-(--spacing-tooltip-x) font-mono text-[11.5px] text-(--el-code-text)"
         >
           {part}
         </code>
