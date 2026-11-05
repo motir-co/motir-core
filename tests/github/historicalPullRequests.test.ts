@@ -109,6 +109,8 @@ describe('normalizeHistoricalPullRequest', () => {
       draft: false,
       // MOTIR-7005 — the head commit, read off `head.sha` like the ref beside it.
       headSha: 'sha-42',
+      // MOTIR-10340 — the author is not backfilled: a historical row has none.
+      author: null,
     });
     expect(pr!.mergedAt.toISOString()).toBe('2026-06-20T10:00:00.000Z');
   });
