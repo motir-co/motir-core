@@ -352,3 +352,130 @@ describe('the session release follows the conversation’s LATEST plan', () => {
     expect(await adminDb.planTargetLock.findFirst({ where: { workItemId: story.id } })).toBeNull();
   });
 });
+
+// BUG MOTIR-10455 — a plan revised from the review page (or by a late change) showed
+// a Stop that did nothing. The revision re-pointed the PLAN at its job but never the
+// SESSION, so the overlay adopted the session's PREVIOUS, finished job, and a stop
+// raised on it was appended to the old job's thread while the revision's boundary
+// read found none. The acquire now binds the revision job on the session as well.
+describe('a revision Motir runs outside a conversation owns its session (MOTIR-10455)', () => {
+  const NATIVE = { source: 'native', harness: 'Motir', model: null } as const;
+  const mctx = () => ({ userId: fx.ownerId, workspaceId: fx.workspaceId, projectId: fx.projectId });
+
+  /** A cadence plan whose walk finished: `planned`, its session naming the walk's job. */
+  async function plannedCadencePlan() {
+    const story = await makeStory();
+    const { planId } = await aiPlanEditsService.submitExpand(story.identifier, pctx(), {
+      origin: 'cadence',
+    });
+    await adminDb.plan.update({ where: { id: planId }, data: { status: 'planned' } });
+    const walk = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    return { planId, walkJobId: walk.sourceJobId! };
+  }
+
+  it('a review-page Revise binds the revision job on the plan’s session', async () => {
+    const { planId, walkJobId } = await plannedCadencePlan();
+
+    const { jobId } = await aiPlanEditsService.submitRevise(planId, 'smaller please', pctx());
+
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    const s = await sessionOf(planId);
+    expect(plan.status).toBe('generating');
+    expect(plan.sourceJobId).toBe(jobId);
+    expect(s.lastJobId).toBe(jobId);
+    expect(s.lastJobId).not.toBe(walkJobId);
+    expect(s.lastSubmittedAt).not.toBeNull();
+  });
+
+  it('a Stop raised on that job reaches the revision’s boundary read', async () => {
+    const { planId, walkJobId } = await plannedCadencePlan();
+    const { jobId } = await aiPlanEditsService.submitRevise(planId, 'smaller please', pctx());
+    const s = await sessionOf(planId);
+
+    const raised = await planChangeMailboxService.raiseStop(jobId, `stop:${jobId}`, mctx(), s.id);
+    expect(raised.stopped).toBe(true);
+    expect((await planChangeMailboxService.readForBoundary(jobId, mctx())).stopped).toBe(true);
+    // The finished walk no longer addresses the session's thread.
+    await expect(
+      planChangeMailboxService.raiseStop(walkJobId, `stop:${walkJobId}`, mctx(), s.id),
+    ).rejects.toThrow();
+  });
+
+  it('a conversation plan revised from the review page binds the revision job too', async () => {
+    const convo = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'x');
+    const { planId } = await planChangeSessionsService.submit(pctx(), { sessionId: convo.id });
+    await adminDb.plan.update({ where: { id: planId! }, data: { status: 'planned' } });
+
+    const { jobId } = await aiPlanEditsService.submitRevise(planId!, 'add a test', pctx());
+
+    expect((await sessionOf(planId!)).lastJobId).toBe(jobId);
+  });
+
+  it('a revision held over MCP (no job) leaves the session’s job where it was', async () => {
+    const { planId, walkJobId } = await plannedCadencePlan();
+
+    await plansService.acquireRevisionLease(planId, fx.ctx, {
+      source: 'mcp',
+      harness: 'Claude Code',
+      model: null,
+    });
+
+    const s = await sessionOf(planId);
+    expect(s.lastJobId).toBe(walkJobId);
+  });
+
+  it('a `generating` plan keeps naming the job its session already runs', async () => {
+    const story = await makeStory();
+    const { planId } = await aiPlanEditsService.submitExpand(story.identifier, pctx());
+    const walkJobId = (await sessionOf(planId)).lastJobId;
+
+    await plansService.acquireRevisionLease(planId, fx.ctx, NATIVE, { jobId: 'job-revision-g' });
+
+    expect((await sessionOf(planId)).lastJobId).toBe(walkJobId);
+  });
+
+  it('an ENDED session keeps the job it last ran', async () => {
+    const { planId, walkJobId } = await plannedCadencePlan();
+    const { id } = await sessionOf(planId);
+    await adminDb.planChangeSession.update({ where: { id }, data: { endedAt: new Date() } });
+
+    await plansService.acquireRevisionLease(planId, fx.ctx, NATIVE, { jobId: 'job-revision-e' });
+
+    expect((await sessionOf(planId)).lastJobId).toBe(walkJobId);
+  });
+
+  it('a FAILED review-page revision still settles as a revision: the plan comes back, the session stays open', async () => {
+    const { planId } = await plannedCadencePlan();
+    const { jobId } = await aiPlanEditsService.submitRevise(planId, 'smaller please', pctx());
+
+    const settled = await planSessionEndService.settleFailedJob(jobId, mctx(), {
+      status: 'failed',
+    });
+
+    expect(settled).toMatchObject({ arm: 'revision', settled: 'released' });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.status).toBe('planned');
+    const s = await sessionOf(planId);
+    expect(s.endedAt).toBeNull();
+    expect(s.lastJobId).toBe(jobId);
+  });
+
+  it('a FAILED revision of a conversation plan is recorded on its open session', async () => {
+    const convo = await planChangeSessionsService.startWithFirstTurn(pctx(), PROJECT_SCOPE, 'x');
+    const { planId } = await planChangeSessionsService.submit(pctx(), { sessionId: convo.id });
+    await adminDb.plan.update({ where: { id: planId! }, data: { status: 'planned' } });
+    const { jobId } = await aiPlanEditsService.submitRevise(planId!, 'add a test', pctx());
+
+    const settled = await planSessionEndService.settleFailedJob(
+      jobId,
+      mctx(),
+      { status: 'failed' },
+      { readJob: async () => ({ error: null, walkStop: null }) },
+    );
+
+    expect(settled).toMatchObject({ arm: 'revision', settled: 'recorded', sessionId: convo.id });
+    const s = await sessionOf(planId!);
+    expect(s.endedAt).toBeNull();
+    expect(s.failedJobId).toBe(jobId);
+  });
+});

@@ -9280,6 +9280,27 @@ export const plansService = {
             tx,
           );
         }
+        // ⚠️ AND THE SESSION'S JOB RIDES IT TOO (Bug MOTIR-10455). A re-opened plan is
+        // drawn as a RUN: the overlay names the running job from the session's
+        // `lastJobId` (`reopenedPlanJobId`), and the stop door and the revision's own
+        // boundary read resolve the thread by `last_job_id`
+        // (`planChangeMailboxService.findThreadForJob`). A revision that is not a
+        // conversation's turn — the review page's Revise, a late change — binds
+        // nothing else on the session, so without this the overlay adopted the
+        // PREVIOUS, finished job and drew a Stop that reached nobody. Bound here, in
+        // the acquire's transaction, the plan and its session name the revision job
+        // together; the plan's lock is held first and the session's second, the order
+        // every decision body takes. Only a RE-OPEN binds: a `generating` plan is
+        // still being written by the job its session already names, and an MCP hold
+        // (no `jobId`) has no job a Stop could address. A conversation's revision
+        // writes the same value again in `bindRevisionTurn`, with its marker turn.
+        if (opts.jobId && reopens && fresh.sessionId) {
+          await planChangeSessionRepository.recordRevisionJob(
+            fresh.sessionId,
+            { jobId: opts.jobId, at },
+            tx,
+          );
+        }
         await planRevisionsService.recordRevision(
           {
             planId,

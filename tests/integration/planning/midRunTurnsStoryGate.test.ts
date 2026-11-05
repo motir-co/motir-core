@@ -576,11 +576,17 @@ describe('a change forwarded after the walk ended — the late revision (cases 6
     expect(rows.every((e) => e.consumedAt !== null)).toBe(true);
     expect(await revisionStarts()).toHaveLength(1);
 
+    // The revision is the session's run now (MOTIR-10455), so its Stop reaches it —
+    // and the finished walk no longer addresses the thread: a second call is a 404
+    // that claims and submits nothing.
+    expect(
+      (await adminDb.planChangeSession.findUniqueOrThrow({ where: { id: sessionId } })).lastJobId,
+    ).toBe('job-rev-1');
     submitJobMock.mockClear();
     const second = await lateChanges(
       req('/api/ai/plan-change/session/late-changes', 'POST', { sessionId, runJobId: RUN_JOB }),
     );
-    expect(await readJson(second)).toEqual({ outcome: 'none' });
+    expect(second.status).toBe(404);
     expect(submitJobMock).not.toHaveBeenCalled();
   });
 
@@ -612,6 +618,19 @@ describe('a change forwarded after the walk ended — the late revision (cases 6
     [
       'a revision lease another revision holds',
       'PLAN_REVISION_IN_FLIGHT',
+      async () => {
+        setJob('succeeded');
+        // An MCP hold carries no job, so the session still names the run.
+        await plansService.acquireRevisionLease(planId, fx.ctx, {
+          source: 'mcp',
+          harness: 'Claude Code',
+          model: null,
+        });
+      },
+    ],
+    [
+      'a review-page revision that has become the session’s run (MOTIR-10455)',
+      'PLAN_CHANGE_MAILBOX_JOB_MISMATCH',
       async () => {
         setJob('succeeded');
         submitJobMock.mockResolvedValueOnce({ jobId: 'job-rev-held' });
