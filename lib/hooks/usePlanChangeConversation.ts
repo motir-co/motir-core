@@ -1807,6 +1807,9 @@ export function usePlanChangeConversation({
       // run did, and how. `null` when no status frame arrived at all.
       let jobStatus: string | null = null;
       let lastSeq = 0;
+      // THE RUN REPLIED TO A PLAN OF NOTHING (MOTIR-10407): its turn gives the reason and
+      // the next step, so the generic EMPTY error would contradict it.
+      let emptyRunReplied = false;
       // ⚠️ THE CONNECTION THREW (MOTIR-9186): a fetch or read rejected under a run —
       // a locked screen, a sleeping laptop. That is no word from the server, so it
       // is not a failure: the loop subscribes again and the job's own status frames
@@ -1854,6 +1857,7 @@ export function usePlanChangeConversation({
             // THE CONVERSATION PHASE IS OVER (MOTIR-8203): the planner has settled
             // what it is planning, so the hand-off becomes true. Quiet on the act
             // rail; it moves only the phase.
+            if (event === 'empty_run_reply') emptyRunReplied = true;
             if (event === 'target_settled') {
               setState((s) => (s.settledJobId === jobId ? s : { ...s, settledJobId: jobId }));
             }
@@ -1950,6 +1954,7 @@ export function usePlanChangeConversation({
       // not take the run down with it.
       let asked = false;
       let declined = false;
+      let replied = false;
       try {
         const sessionId = stateRef.current.session?.id;
         if (!sessionId) throw new Error('no session to narrate into');
@@ -1957,6 +1962,8 @@ export function usePlanChangeConversation({
         if (!mountedRef.current) return;
         asked = pendingQuestion(withTurn.turns) !== null;
         declined = latestTurnDeclined(withTurn.turns) || latestTurnUnsearchable(withTurn.turns);
+        // Only once the turn is on the thread: a lost recording must not lose the error too.
+        replied = emptyRunReplied;
         setState((s) => ({ ...s, session: withTurn }));
       } catch {
         /* the run still happened; the thread simply carries no narration */
@@ -2009,7 +2016,8 @@ export function usePlanChangeConversation({
           // not an error either (MOTIR-8564). A turn that STOPPED because a target
           // repository's code cannot be searched is the same outcome, drawn as a
           // banner (MOTIR-9165).
-          errorCode: asked || declined || s.stopping || canceled ? null : 'EMPTY',
+          // A run that REPLIED with why it planned nothing is the fifth (MOTIR-10407).
+          errorCode: asked || declined || replied || s.stopping || canceled ? null : 'EMPTY',
           // The interval closes HERE and only here: the stream has ended, so the
           // walk reached its boundary and read the flag. Until this moment the
           // bar says "stopping", which is the honest thing to say.
