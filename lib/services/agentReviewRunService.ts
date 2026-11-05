@@ -16,6 +16,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import {
   assembleReviewPrompt,
+  type ReviewCriteriaGroupForPrompt,
   type ReviewPullRequestForPrompt,
   type ReviewVerdict,
 } from '@/lib/dispatch/reviewPromptTemplate';
@@ -24,6 +25,7 @@ import type {
   ReviewPromptDto,
   ReviewPullRequestDto,
 } from '@/lib/dto/agentReview';
+import { splitPlanBody } from '@/lib/markdown/planBody';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
@@ -31,12 +33,14 @@ import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventR
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictRecordRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
 import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { reviewConventionsService } from '@/lib/services/reviewConventionsService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { readProject } from '@/lib/workspaces/tenantRead';
@@ -191,6 +195,69 @@ async function recordVerdictRow(
   }
 }
 
+/** The run target's subtree with each card's body (MOTIR-10336) — one recursive read and
+ *  one batched body read, inside the run's workspace context, so a card of another
+ *  workspace can never appear. */
+async function readCriteriaTree(rootId: string, tx: Prisma.TransactionClient) {
+  const rows = await workItemRepository.findSubtree(rootId, tx);
+  const bodies = await workItemRepository.findByIds(
+    rows.map((r) => r.id),
+    tx,
+  );
+  const byId = new Map(bodies.map((b) => [b.id, b]));
+  return rows.flatMap((row) => {
+    const full = byId.get(row.id);
+    return full ? [{ ...row, descriptionMd: full.descriptionMd, archivedAt: full.archivedAt }] : [];
+  });
+}
+
+/**
+ * The CRITERIA CHECKLIST groups (MOTIR-10336): the run target first, then its descendants
+ * BREADTH-FIRST — each level by its parent's order, then by position — so the order is the
+ * tree's and stable. Every card's criteria are split by `splitPlanBody`, exactly as the
+ * run target's. A card is `skipped` when archived or cancelled, `done` when its status is
+ * in the project's done category.
+ */
+async function criteriaTreeOf(
+  rows: Awaited<ReturnType<typeof readCriteriaTree>>,
+  projectId: string,
+  workspaceId: string,
+): Promise<ReviewCriteriaGroupForPrompt[]> {
+  const root = rows.find((r) => r.depth === 1);
+  /* v8 ignore next -- the subtree read always returns its root. */
+  if (!root) return [];
+  const statuses = await workflowsService.listStatusesByProject(projectId, workspaceId);
+  const doneKeys = new Set(statuses.filter((st) => st.category === 'done').map((st) => st.key));
+  const children = new Map<string, typeof rows>();
+  for (const row of rows) {
+    if (!row.parentId || row.depth === 1) continue;
+    const list = children.get(row.parentId) ?? [];
+    list.push(row);
+    children.set(row.parentId, list);
+  }
+  for (const list of children.values()) {
+    list.sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+  }
+  const ordered: typeof rows = [];
+  const queue = [root];
+  while (queue.length > 0) {
+    const next = queue.shift()!;
+    ordered.push(next);
+    queue.push(...(children.get(next.id) ?? []));
+  }
+  return ordered.map((row) => ({
+    key: row.identifier,
+    title: row.title,
+    state:
+      row.depth > 1 && (row.archivedAt !== null || row.status === 'cancelled')
+        ? 'skipped'
+        : row.depth > 1 && doneKeys.has(row.status)
+          ? 'done'
+          : 'open',
+    criteria: splitPlanBody(row.descriptionMd).acceptanceCriteria,
+  }));
+}
+
 /** The harness a hosted review run's verdict record names — the hosted agent itself. */
 const HOSTED_REVIEW_HARNESS = 'Motir hosted review';
 
@@ -231,7 +298,7 @@ export const agentReviewRunService = {
     // The card binding — the run's own cards only (`runTokenScopeService`).
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
-    const { gate, deliveries } = await withWorkspaceContext(
+    const { gate, deliveries, tree } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
         const found = await approvalGateRepository.findLatestByWorkItem(
@@ -244,6 +311,7 @@ export const agentReviewRunService = {
           deliveries: found
             ? await workItemDeliveryRepository.listByWorkItemWithChecks(found.subjectId, tx)
             : [],
+          tree: await readCriteriaTree(item.id, tx),
         };
       },
     );
@@ -294,6 +362,7 @@ export const agentReviewRunService = {
       subjectVersion: gate.subjectVersion,
       pullRequests,
       conventions,
+      criteriaTree: await criteriaTreeOf(tree, projectId, ctx.workspaceId),
     });
 
     return {

@@ -96,6 +96,20 @@ export interface ReviewPullRequestForPrompt {
   url: string;
 }
 
+/**
+ * One card's criteria in the CRITERIA CHECKLIST (Story MOTIR-10327 · MOTIR-10336) — the run
+ * target first, then every descendant in tree order. `state` says how to read the card:
+ * `open` is still to be delivered, `done` delivered already (its criteria still count, the
+ * run target's acceptance can rest on them), `skipped` cancelled or archived.
+ */
+export interface ReviewCriteriaGroupForPrompt {
+  key: string;
+  title: string;
+  state: 'open' | 'done' | 'skipped';
+  /** The card's acceptance-criteria lines, as `splitPlanBody` reads them. */
+  criteria: readonly string[];
+}
+
 export interface ReviewPromptInput {
   key: string;
   title: string;
@@ -114,6 +128,12 @@ export interface ReviewPromptInput {
    * empty ⇒ no CODING CONVENTIONS section at all.
    */
   conventions?: readonly ReviewConventionForPrompt[];
+  /**
+   * The run target and every descendant, in tree order, each with its criteria
+   * (MOTIR-10336). The first group is the run target. Omitted, or the run target alone ⇒
+   * the single-card ACCEPTANCE CRITERIA listing, exactly as before.
+   */
+  criteriaTree?: readonly ReviewCriteriaGroupForPrompt[];
 }
 
 export interface AssembledReviewPrompt {
@@ -171,6 +191,47 @@ function conventionSectionLines(conventions: readonly ReviewConventionForPrompt[
   ]);
 }
 
+const GROUP_STATE_NOTE: Record<ReviewCriteriaGroupForPrompt['state'], string> = {
+  open: '',
+  done: ' (done — its criteria still count)',
+  skipped: ' (skipped — cancelled or archived; not reviewed)',
+};
+
+function criteriaGroupLines(group: ReviewCriteriaGroupForPrompt, index: number): string[] {
+  const head = `  ${group.key} — ${group.title}${index === 0 ? ' (the run target)' : ''}${GROUP_STATE_NOTE[group.state]}`;
+  if (group.state === 'skipped') return ['', head];
+  return [
+    '',
+    head,
+    ...(group.criteria.length > 0
+      ? group.criteria.map((line) => `    ${line}`)
+      : [
+          '    (This card names no acceptance criteria. That is a checklist row of its own and',
+          '    a finding — never a pass.)',
+        ]),
+  ];
+}
+
+/** The criteria part: the whole tree's checklist, or the run target's own listing. */
+function criteriaSectionLines(
+  ownCriteria: readonly string[],
+  tree: readonly ReviewCriteriaGroupForPrompt[] | undefined,
+): string[] {
+  if (!tree || tree.length <= 1) {
+    return section(
+      'ACCEPTANCE CRITERIA',
+      ownCriteria.length > 0
+        ? ownCriteria.map((line) => `  ${line}`)
+        : ['  (The card names none. Review against its description and How to test.)'],
+    );
+  }
+  return section('CRITERIA CHECKLIST — this card and every card under it', [
+    '  The run target’s acceptance rests on what the cards under it delivered, so every',
+    '  card’s criteria are checked here, grouped by card, the run target first.',
+    ...tree.flatMap(criteriaGroupLines),
+  ]);
+}
+
 /**
  * Assemble the review prompt. Deterministic: the same input gives byte-identical text.
  */
@@ -191,12 +252,7 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '',
       ...(body ? indent(body) : ['  (The card has no description.)']),
     ]),
-    ...section(
-      'ACCEPTANCE CRITERIA',
-      acceptanceCriteria.length > 0
-        ? acceptanceCriteria.map((line) => `  ${line}`)
-        : ['  (The card names none. Review against its description and How to test.)'],
-    ),
+    ...criteriaSectionLines(acceptanceCriteria, input.criteriaTree),
     ...section(
       'WHY IT MATTERS (the card’s explanation)',
       input.explanationMd?.trim() ? indent(input.explanationMd.trim()) : ['  (None written.)'],
@@ -223,6 +279,11 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '  - Read the whole diff of every pull request above, and enough of the surrounding',
       '    code to judge it.',
       '  - Check it against EACH acceptance criterion: is it met, and is it tested?',
+      '  - Write ONE checklist row per criterion, each `met`, `not met` or `cannot tell`.',
+      '    A `met` row QUOTES its evidence: the file and line, or the test that pins it.',
+      '    A `met` without evidence is not allowed: write that row as `cannot tell`.',
+      '  - A card that names no criteria is a checklist row of its own, and a finding.',
+      '  - Rank every finding blocker, major, minor or nit.',
       '  - Look for defects the change introduces: wrong behaviour, a missed case the card',
       '    names, broken error handling, a security hole, a regression in code it touches.',
       '  - Report what must change for the card to be right. Style preferences that no',
@@ -245,10 +306,16 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '  }',
       '',
       '  - `subjectVersion` is EXACTLY the string above: the version you reviewed.',
-      '  - `pass` — the code meets the card. `findingsMd` is optional (minor notes only).',
-      '  - `changes_requested` — something must change. `findingsMd` is REQUIRED: one',
-      '    finding per item, each naming the FILE and LINE, the criterion (or quoted rule)',
-      '    it breaks, and WHAT TO CHANGE.',
+      `  - ONE verdict, for ${input.key} — the run target — only. Cards under it are sources`,
+      '    of criteria, never verdict targets: never submit a verdict for one of them.',
+      '  - `changes_requested` — any checklist row is `not met`, or any finding is a blocker',
+      '    or major. `findingsMd` is REQUIRED then: one finding per item, each naming the',
+      '    FILE and LINE, the criterion (or quoted rule) it breaks, and WHAT TO CHANGE.',
+      '    Minor findings and nits never send the card back.',
+      '  - A `cannot tell` row alone does not send the card back: name it in `summaryMd`.',
+      '  - `pass` — otherwise. `findingsMd` then holds the checklist and minor notes only.',
+      '  - Put the checklist at the TOP of `findingsMd`, on either verdict, as a Markdown',
+      '    table — | criterion | status | evidence | — ahead of the findings.',
       '  - One verdict per review. A second is refused. If the code moved while you were',
       '    reviewing, your verdict is recorded and decides nothing — that is expected.',
     ]),
