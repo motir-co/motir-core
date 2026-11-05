@@ -115,6 +115,7 @@ export type CiFeedbackResult = {
     | 'noop' // a redelivery of an already-recorded conclusion
     | 'pending_recorded' // an in-flight check RECORDED as a pending row (MOTIR-1579) — no comment, no ciState
     | 'stale_pending' // a pending delivery older than the terminal conclusion its row holds (MOTIR-10456) — nothing written
+    | 'stale_terminal' // a terminal delivery reached before the pending state its row holds started (MOTIR-10461) — nothing written, no comment, no promotion
     | 'ignored_pending' // a neutral (skipped / stale) conclusion — a clean no-op
     | 'no_pull_request' // no stored change request matches the event's PR/MR list / branch
     | 'no_work_item' // the change request carries no linked work item — a clean no-op
@@ -227,7 +228,7 @@ async function applyOneCiDelivery(
   // The CI run this check belongs to, as the row stores it: `''` is "no run
   // identity" — a legacy commit-`status` event, or any provider that reports
   // none — and NOT null, because Postgres treats NULLs in a unique index as
-  // distinct and the upsert would stop converging (MOTIR-3209).
+  // distinct and a redelivery would stop converging on its row (MOTIR-3209).
   const suiteId = event.suiteId ?? '';
 
   // Phase 1 — resolve under system context (one tx, no writes): connection + repo
@@ -496,21 +497,33 @@ async function applyOneCiDelivery(
   // a transaction that is already open and saves MOTIR-4199's claim check below
   // from projecting this delivery into a set read before it: the row is committed
   // here, so what comes back IS the set the render is about to fold.
+  //
+  // ⚠️ AND A TERMINAL DELIVERY NEVER SETTLES A RE-RUN IT PREDATES (MOTIR-10461).
+  // The mirror of the pending arm's guard above. A re-run reopens the row as
+  // `pending`, dated by its start; the FIRST run's completion processed after that
+  // finished before the re-run started, and written with `upsert` it read the card
+  // red or green — commenting, and promoting on a stale green — while the re-run
+  // was still running. The row is now CREATED if it is missing and otherwise only
+  // SETTLED when it is terminal already, carries no time, or this conclusion was
+  // reached at or after its pending start. A refused delivery writes nothing, so
+  // it renders, recomputes, withdraws and promotes nothing: the re-run's own
+  // completion is the verdict, and it settles the row as before.
   const recordedAtSha = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, resolved.workspaceId);
-    await githubCheckRunRepository.upsert(
-      {
-        pullRequestId: resolved.prId,
-        commitSha: event.commitSha,
-        checkName: event.context,
-        checkSuiteId: suiteId,
-        suiteAggregate: event.suiteAggregate === true,
-        conclusion: event.conclusion,
-        // The finish time the next pending delivery is ordered against (MOTIR-10456).
-        conclusionAt: event.occurredAt ?? null,
-      },
-      tx,
-    );
+    const terminalRow = {
+      pullRequestId: resolved.prId,
+      commitSha: event.commitSha,
+      checkName: event.context,
+      checkSuiteId: suiteId,
+      suiteAggregate: event.suiteAggregate === true,
+      conclusion: event.conclusion,
+      // The finish time the next pending delivery is ordered against (MOTIR-10456).
+      conclusionAt: event.occurredAt ?? null,
+    };
+    const written =
+      (await githubCheckRunRepository.createMissing([terminalRow], tx)) > 0 ||
+      (await githubCheckRunRepository.settleAsTerminal(terminalRow, tx)) > 0;
+    if (!written) return null;
     // A check row for a NEW head is how Motir learns the head moved, so it
     // withdraws the approve-to-merge gate asked about the old one, in the transaction
     // that records it (MOTIR-5482). The current head is the latest check's commit —
@@ -519,6 +532,13 @@ async function applyOneCiDelivery(
     await withdrawPullRequestApprovalGatesOnHeadMove(resolved.prId, tx);
     return githubCheckRunRepository.listByPrAndSha(resolved.prId, event.commitSha, tx);
   }, CI_FEEDBACK_SYSTEM_TX);
+  if (recordedAtSha === null) {
+    return {
+      event: 'ci',
+      outcome: 'stale_terminal',
+      ...(reportedWorkItemId(resolved.deliveredWorkItemIds) ?? {}),
+    };
+  }
 
   // ── 1b. IS THAT SET THE WHOLE SET? (MOTIR-4199) ──────────────────────────
   // Everything below folds these rows into a sentence and an action —

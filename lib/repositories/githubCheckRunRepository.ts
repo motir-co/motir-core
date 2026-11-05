@@ -37,7 +37,7 @@ export interface UpsertGithubCheckRunInput {
   checkName: string;
   /** The CI run — `''` where the provider reports none. Never null: Postgres
    *  treats NULLs in a unique index as distinct, so a nullable member would
-   *  stop the upsert converging (see the schema's note). */
+   *  stop a redelivery converging on its row (see the schema's note). */
   checkSuiteId: string;
   /** A suite's own roll-up row, not a check (MOTIR-6274) — see the schema's
    *  note. Omitted = a check, which is every row but a GitHub `check_suite`'s. */
@@ -90,8 +90,8 @@ export const githubCheckRunRepository = {
    * those (MOTIR-4199).
    *
    * ⚠️ IT CREATES, IT NEVER UPDATES, AND THAT IS THE WHOLE OF ITS SAFETY.
-   * `upsert` above refreshes a row's conclusion, which is right for a delivery
-   * about that check and wrong for a reconcile: the reconcile's snapshot was
+   * `settleAsTerminal` below refreshes a row's conclusion, which is right for a
+   * delivery about that check and wrong for a reconcile: the reconcile's snapshot was
    * taken before the write, so a delivery that landed in between would be
    * overwritten by a staler answer read from a different transport. `createMany`
    * with `skipDuplicates` makes the unique key itself the arbiter — a row that
@@ -161,7 +161,12 @@ export const githubCheckRunRepository = {
    * reconcile tick settled it again. Like `settlePending`, the arbiter is the
    * row's own current value read IN THIS STATEMENT, never a snapshot of it:
    *
-   * - a row still `pending` is refreshed (a redelivery converges, as before);
+   * - a row still `pending` is refreshed by a pending state that started no
+   *   EARLIER than the one it holds (a redelivery converges, as before) — but
+   *   never moved back to an older start (MOTIR-10461): a late `in_progress` of
+   *   the FIRST run, arriving after a re-run reopened the row, would otherwise
+   *   date the row before that first run finished, and `settleAsTerminal` would
+   *   then take the first run's late verdict for the re-run's;
    * - a terminal row is reopened only by a pending state that STARTED AFTER the
    *   terminal one finished (`conclusion_at < occurredAt`) — a RE-RUN of the check
    *   under the same name and suite, which must read running while it runs;
@@ -190,9 +195,12 @@ export const githubCheckRunRepository = {
           ? {}
           : {
               OR: [
-                { conclusion: 'pending' },
                 { conclusionAt: null },
                 { conclusionAt: { lt: occurredAt } },
+                // The same start again: a redelivery of the pending state the row
+                // holds. (A terminal row finished at this instant stays — the tie
+                // MOTIR-10456 gives to the finish.)
+                { conclusion: 'pending', conclusionAt: occurredAt },
               ],
             }),
       },
@@ -205,27 +213,62 @@ export const githubCheckRunRepository = {
     return count;
   },
 
-  /** Create-or-refresh a check row, keyed on the unique
-   *  `(pull_request_id, commit_sha, check_name, check_suite_id)`. Refreshes
-   *  `conclusion` so a REDELIVERY of one run's check converges on one row —
-   *  while a DIFFERENT run's check of the same name gets its own row, which is
-   *  what lets the derivation retire the loser. */
-  async upsert(
+  /**
+   * Record a TERMINAL conclusion on an EXISTING row — unless that row is a
+   * `pending` state that STARTED AFTER this conclusion was reached (MOTIR-10461).
+   *
+   * The mirror of `reopenAsPending`, and it replaces the unconditional `upsert`
+   * this write used to be. A check re-run in the same suite reopens its row as
+   * `pending`, dated by the re-run's start. The FIRST run's completion, processed
+   * after that — GitHub never promised order, and the webhook inbox re-runs a lost
+   * delivery 2–7 minutes late and retries / replays one that threw — finished
+   * before the re-run started: it is the old run's verdict, and writing it read the
+   * card `failing` / `passing` (and could comment and promote) while the re-run was
+   * still running. As in `reopenAsPending`, the arbiter is the row's own current
+   * value read IN THIS STATEMENT:
+   *
+   * - a terminal row is overwritten, as before — a redelivery converges, and a
+   *   re-run's verdict replaces the one it re-ran;
+   * - a `pending` row is settled by a conclusion reached at or after its start
+   *   (`conclusion_at <= occurredAt`) — the run it is waiting on. The tie goes to
+   *   the finish, as it does in `reopenAsPending`;
+   * - a row with no recorded time cannot be ordered and is written, which is the
+   *   behaviour every row had before the column existed;
+   * - and a conclusion with no time of its own is written unguarded for the same
+   *   reason: a wrongly-settled row is healed by the re-run's own completion or by
+   *   the reconcile, whereas a wrongly-refused verdict would leave the row pending.
+   *
+   * It never creates — `createMissing` does, and the caller tries that first.
+   * Returns how many rows it wrote: zero on an existing row means the delivery
+   * was STALE and nothing changed.
+   */
+  async settleAsTerminal(
     input: UpsertGithubCheckRunInput,
     tx: Prisma.TransactionClient,
-  ): Promise<GithubCheckRun> {
-    const { pullRequestId, commitSha, checkName, checkSuiteId, ...rest } = input;
-    return tx.githubCheckRun.upsert({
+  ): Promise<number> {
+    const occurredAt = input.conclusionAt ?? null;
+    const { count } = await tx.githubCheckRun.updateMany({
       where: {
-        pullRequestId_commitSha_checkName_checkSuiteId: {
-          pullRequestId,
-          commitSha,
-          checkName,
-          checkSuiteId,
-        },
+        pullRequestId: input.pullRequestId,
+        commitSha: input.commitSha,
+        checkName: input.checkName,
+        checkSuiteId: input.checkSuiteId,
+        ...(occurredAt === null
+          ? {}
+          : {
+              OR: [
+                { conclusion: { not: 'pending' } },
+                { conclusionAt: null },
+                { conclusionAt: { lte: occurredAt } },
+              ],
+            }),
       },
-      create: { pullRequestId, commitSha, checkName, checkSuiteId, ...rest },
-      update: rest,
+      data: {
+        conclusion: input.conclusion,
+        conclusionAt: occurredAt,
+        suiteAggregate: input.suiteAggregate === true,
+      },
     });
+    return count;
   },
 };

@@ -9165,7 +9165,9 @@ model GithubCheckRun {
   /// its start for `pending`, its finish for a terminal conclusion. It is the
   /// arbiter between a LATE `pending` delivery of the run that settled the row
   /// (older than this — refused) and a RE-RUN under the same name and suite
-  /// (newer — written). Null where the provider gave no time, or on a row written
+  /// (newer — written); and, the mirror (MOTIR-10461), between the re-run's
+  /// pending row and the FIRST run's late completion, which finished before that
+  /// start and is refused. Null where the provider gave no time, or on a row written
   /// before the column existed; such a row cannot be ordered and keeps the old
   /// last-write-wins behaviour. Deliberately NOT `updated_at`, which is when WE
   /// received a delivery — minutes or hours after the fact on an inbox replay.
