@@ -746,6 +746,7 @@ describe('awsRunnerPolicyDocument', () => {
         'ec2:DescribeInstances',
         'ec2:DescribeSubnets',
         'ec2:DescribeSecurityGroups',
+        'ec2:DescribeImages',
         'ec2:RunInstances',
         'ec2:CreateTags',
         'ec2:TerminateInstances',

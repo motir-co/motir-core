@@ -407,6 +407,11 @@ export function createFileBackedEc2(
     async getConsoleOutput() {
       return null;
     },
+    // The lane's AMI is a placeholder that names no build (MOTIR-10395): EC2
+    // answers an id it does not know with InvalidAMIID.NotFound.
+    async describeImages() {
+      return fail('InvalidAMIID.NotFound');
+    },
   };
 }
 

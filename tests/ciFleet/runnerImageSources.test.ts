@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import {
+  amiBuildCommitFrom,
   commitFromShaTag,
   IMAGE_REVISION_LABEL,
   imageRepositoryOf,
@@ -87,5 +88,48 @@ describe('imageRepositoryOf', () => {
       'ghcr.io/motir-co/motir-ci-runner',
     );
     expect(imageRepositoryOf('localhost:5000/runner')).toBe('localhost:5000/runner');
+  });
+});
+
+describe('amiBuildCommitFrom (MOTIR-10395)', () => {
+  const SHA = '4a9cb14b54e2366d2a30ad19ac4b924dddca6d31';
+  const NAME = 'motir-ci-runner-2.329.0-202611050900-4a9cb14';
+
+  it("takes the description's full commit over the name's seven characters", () => {
+    expect(
+      amiBuildCommitFrom({
+        name: NAME,
+        description: `Motir CI runner (commit ${SHA.toUpperCase()})`,
+      }),
+    ).toEqual({ commit: SHA, source: 'description' });
+  });
+
+  it('falls back to the name for an AMI built before the description carried it', () => {
+    expect(
+      amiBuildCommitFrom({ name: NAME, description: 'Motir CI runner: Docker (4a9cb14)' }),
+    ).toEqual({ commit: '4a9cb14', source: 'name' });
+    expect(amiBuildCommitFrom({ name: ` ${NAME.toUpperCase()} `, description: null })).toEqual({
+      commit: '4a9cb14',
+      source: 'name',
+    });
+  });
+
+  it('is null when neither records a commit', () => {
+    expect(amiBuildCommitFrom({ name: null, description: null })).toBeNull();
+    expect(
+      amiBuildCommitFrom({ name: 'ubuntu-noble-24.04', description: 'commit 4a9cb14' }),
+    ).toBeNull();
+    expect(
+      amiBuildCommitFrom({ name: 'motir-ci-runner-2.329.0-2026110509-4a9cb14', description: '' }),
+    ).toBeNull();
+  });
+
+  it("matches what the packer template writes into the AMI's name and description", () => {
+    const packer = read('infra/ci-runner-aws/packer/runner.pkr.hcl');
+    expect(packer).toContain(
+      'ami_name  = "motir-ci-runner-${var.runner_version}-${local.timestamp}-${substr(var.git_sha, 0, 7)}"',
+    );
+    expect(packer).toContain('timestamp = formatdate("YYYYMMDDhhmm", timestamp())');
+    expect(packer).toMatch(/ami_description = ".*\(commit \$\{var\.git_sha\}\)"/);
   });
 });
