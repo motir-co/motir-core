@@ -86,6 +86,18 @@ export interface OrgFleetMotirStopDTO {
   completed: boolean;
 }
 
+/** What an owner or admin stopped, as recorded. */
+export type OrgFleetStopActionDTO = 'stop_everything' | 'cancel_hosted_run' | 'hibernate_agent';
+
+/** The org's newest owner or admin stop — the "Last stopped by" line. */
+export interface OrgFleetLastStopDTO {
+  /** The display name at the stop; null when it could not be read then. */
+  actorName: string | null;
+  action: OrgFleetStopActionDTO;
+  /** ISO-8601. */
+  at: string;
+}
+
 export interface OrgFleetDTO {
   tiles: OrgFleetPart<OrgFleetTilesDTO>;
   hostedRuns: OrgFleetPart<{ rows: OrgFleetHostedRunDTO[] }>;
@@ -99,4 +111,6 @@ export interface OrgFleetDTO {
   indexJobs: OrgFleetPart<{ running: number }>;
   /** The last seven days, newest first. */
   motirStops: OrgFleetPart<{ since: string; entries: OrgFleetMotirStopDTO[] }>;
+  /** Null inside `read` when no owner or admin has stopped anything yet. */
+  lastStop: OrgFleetPart<{ stop: OrgFleetLastStopDTO | null }>;
 }

@@ -1,10 +1,15 @@
-import type { CiRunnerProvisioningIntent, FleetMachineKill } from '@/generated/prisma/client';
+import type {
+  CiRunnerProvisioningIntent,
+  FleetMachineKill,
+  OrgFleetLastStop,
+} from '@/generated/prisma/client';
 import type { AttributionKillReason } from '@/lib/ciFleet/attributionErrors';
 import type { FleetUseDTO } from '@/lib/dto/fleetUse';
 import type {
   OrgFleetAgentInstanceDTO,
   OrgFleetCiJobDTO,
   OrgFleetHostedRunDTO,
+  OrgFleetLastStopDTO,
   OrgFleetMotirStopDTO,
   OrgFleetTilesDTO,
   OrgFleetWaitingCause,
@@ -113,5 +118,14 @@ export function toOrgFleetMotirStopDTO(kill: FleetMachineKill): OrgFleetMotirSto
     workload: kill.workload,
     reason: kill.reason,
     completed: kill.completedAt !== null,
+  };
+}
+
+/** The last-stop row → its line. The actor's user id never leaves. */
+export function toOrgFleetLastStopDTO(row: OrgFleetLastStop): OrgFleetLastStopDTO {
+  return {
+    actorName: row.actorName,
+    action: row.action,
+    at: row.stoppedAt.toISOString(),
   };
 }

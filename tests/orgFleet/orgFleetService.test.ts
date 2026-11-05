@@ -596,7 +596,15 @@ describe('Motir’s stops', () => {
 });
 
 describe('each part fails alone', () => {
-  const PARTS = ['tiles', 'hostedRuns', 'agentInstances', 'ciJobs', 'indexJobs', 'motirStops'];
+  const PARTS = [
+    'tiles',
+    'hostedRuns',
+    'agentInstances',
+    'ciJobs',
+    'indexJobs',
+    'motirStops',
+    'lastStop',
+  ];
 
   it.each([
     ['tiles', () => vi.spyOn(fleetUseService, 'readForOrganization')],

@@ -4,6 +4,7 @@ import type {
   OrgFleetCiJobDTO,
   OrgFleetDTO,
   OrgFleetHostedRunDTO,
+  OrgFleetLastStopDTO,
   OrgFleetMotirStopDTO,
   OrgFleetPart,
   OrgFleetTilesDTO,
@@ -13,6 +14,7 @@ import {
   toOrgFleetAgentInstanceDTO,
   toOrgFleetCiJobDTO,
   toOrgFleetHostedRunDTO,
+  toOrgFleetLastStopDTO,
   toOrgFleetMotirStopDTO,
   toOrgFleetTilesDTO,
 } from '@/lib/mappers/orgFleetMappers';
@@ -21,6 +23,7 @@ import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunne
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { fleetMachineKillRepository } from '@/lib/repositories/fleetMachineKillRepository';
+import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { billingService, type OrgActorInput } from '@/lib/services/billingService';
@@ -252,6 +255,13 @@ async function readMotirStops(
   return { since: since.toISOString(), entries };
 }
 
+async function readLastStop(organizationId: string): Promise<{ stop: OrgFleetLastStopDTO | null }> {
+  const row = await withSystemContext((tx) =>
+    orgFleetLastStopRepository.findForOrganization(organizationId, tx),
+  );
+  return { stop: row ? toOrgFleetLastStopDTO(row) : null };
+}
+
 export const orgFleetService = {
   /**
    * What the org runs on the fleet now. Owner or admin only — Billing & plans'
@@ -277,6 +287,7 @@ export const orgFleetService = {
       motirStops: await contained('Motir stops', organizationId, () =>
         readMotirStops(organizationId, now),
       ),
+      lastStop: await contained('last stop', organizationId, () => readLastStop(organizationId)),
     };
   },
 };

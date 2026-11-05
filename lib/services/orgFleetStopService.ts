@@ -1,4 +1,4 @@
-import type { AgentInstance } from '@/generated/prisma/client';
+import type { AgentInstance, OrgFleetStopAction } from '@/generated/prisma/client';
 import type {
   OrgFleetCancelRunOutcomeDTO,
   OrgFleetHibernateOutcomeDTO,
@@ -11,6 +11,7 @@ import { OrgFleetInstanceNotFoundError, OrgFleetRunNotFoundError } from '@/lib/o
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
+import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { agentInstanceLifecycleService } from '@/lib/services/agentInstanceLifecycleService';
 import { billingService, type OrgActorInput } from '@/lib/services/billingService';
@@ -103,6 +104,34 @@ async function displayNameOf(userId: string): Promise<string | null> {
   } catch (err) {
     console.error(`${LOG} could not read the acting admin's name`, { detail: detailOf(err) });
     return null;
+  }
+}
+
+/**
+ * Record the org's newest stop for the Fleet page's "Last stopped by" line —
+ * AFTER the stop's effects, best effort: a failed write is logged and never
+ * changes, undoes or fails the stop. The org id is the caller's, never a row's.
+ */
+async function recordLastStop(
+  organizationId: string,
+  actorUserId: string,
+  actorName: string | null,
+  action: OrgFleetStopAction,
+  stoppedAt: Date,
+): Promise<void> {
+  try {
+    await withSystemContext((tx) =>
+      orgFleetLastStopRepository.upsert(
+        { organizationId, actorUserId, actorName, action, stoppedAt },
+        tx,
+      ),
+    );
+  } catch (err) {
+    console.error(`${LOG} could not record the last stop`, {
+      organizationId,
+      action,
+      detail: detailOf(err),
+    });
   }
 }
 
@@ -214,7 +243,7 @@ export const orgFleetStopService = {
       });
     }
 
-    return {
+    const result: OrgFleetStopResultDTO = {
       runsCancelled: ci.runsCancelled,
       ciContainersStopped: ci.containersStopped,
       hostedRunsEnded,
@@ -223,6 +252,24 @@ export const orgFleetStopService = {
       stoppedByName,
       stoppedAt: now().toISOString(),
     };
+    // Only a stop that stopped something replaces the record: a second call
+    // that found nothing keeps the earlier admin's line.
+    const stoppedSomething =
+      result.runsCancelled +
+        result.ciContainersStopped +
+        result.hostedRunsEnded +
+        result.agentsHibernated >
+      0;
+    if (stoppedSomething) {
+      await recordLastStop(
+        organizationId,
+        actorUserId,
+        stoppedByName,
+        'stop_everything',
+        new Date(result.stoppedAt),
+      );
+    }
+    return result;
   },
 
   /**
@@ -240,11 +287,15 @@ export const orgFleetStopService = {
     if (!(await liveHostedRuns(organizationId, now)).includes(dispatchRunId)) {
       throw new OrgFleetRunNotFoundError(dispatchRunId);
     }
+    const actorName = await displayNameOf(actorUserId);
     const ended = await hostedRunService.endHostedRun(
       dispatchRunId,
       'cancelled',
-      hostedRunDetail(await displayNameOf(actorUserId)),
+      hostedRunDetail(actorName),
     );
+    if (ended.closed) {
+      await recordLastStop(organizationId, actorUserId, actorName, 'cancel_hosted_run', now);
+    }
     return { dispatchRunId, closed: ended.closed, at: now.toISOString() };
   },
 
@@ -274,13 +325,21 @@ export const orgFleetStopService = {
         ? { kind: 'already_resting', instanceId }
         : { kind: 'in_motion', instanceId };
     }
+    const at = now();
+    await recordLastStop(
+      organizationId,
+      actorUserId,
+      await displayNameOf(actorUserId),
+      'hibernate_agent',
+      at,
+    );
     // ── The owner-notification point: the owner is told here, after success. ──
     return {
       kind: 'hibernated',
       instanceId: row.id,
       ownerUserId: row.ownerId,
       actorUserId,
-      at: now().toISOString(),
+      at: at.toISOString(),
     };
   },
 };
