@@ -389,6 +389,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ address: string; detail: string; verdict: "indeterminate" } | { address: string; detail: string; verdict: "private_address" } | { address: string; status: number; verdict: "reachable" } | { detail: string; verdict: "not_applicable" } | { detail: string; verdict: "unconfigured" }',
   },
+  // The indeterminate-streak escalation (MOTIR-10429): a verdict the handler
+  // branches on, like every probe of the daily check.
+  'indeterminate-streak': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ blindSpot: string; checkedAt: string; offenders: Array<{ consecutive: number; detail: string; phase: string; probe: string; since: string; step: string }>; runsRead: number; streaks: Array<{ consecutive: number; detail: string; phase: string; probe: string; since: string; step: string }>; threshold: number; verdict: "persistent" } | { blindSpot: string; checkedAt: string; runsRead: number; streaks: Array<{ consecutive: number; detail: string; phase: string; probe: string; since: string; step: string }>; threshold: number; verdict: "ok" }',
+  },
   'index-rebuild-streak': {
     file: 'lib/jobs/definitions/dailyHealthCheck.ts',
     shape:

@@ -485,6 +485,29 @@ export const jobRunRepository = {
   },
 
   /**
+   * The newest SUCCEEDED runs of one job, across ALL workspaces, newest first
+   * (MOTIR-10429) — the history the daily health check's indeterminate-streak
+   * read walks. Like `listSucceededCodeGraphRuns` it carries no workspace
+   * filter, so the caller MUST supply a `withSystemContext` tx.
+   *
+   * ⚠️ `status: 'succeeded'` IS THE PREDICATE: only a succeeded run carries the
+   * probe verdicts on `output`. A failed run's `output` is null, so admitting one
+   * would put a row into the walk that reads as "this probe was not measured".
+   */
+  async listRecentSucceededRuns(
+    functionId: string,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ startedAt: Date; output: Prisma.JsonValue | null }>> {
+    return tx.jobRun.findMany({
+      where: { functionId, status: 'succeeded' },
+      select: { startedAt: true, output: true },
+      orderBy: { startedAt: 'desc' },
+      take: limit,
+    });
+  },
+
+  /**
    * The most recent run of one event name, across ALL workspaces (MOTIR-1167).
    *
    * The operator console's "Last health check" signal: the `job_run` row for

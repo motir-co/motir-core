@@ -8,6 +8,8 @@ import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe
 import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
 import type { FleetImageCoverageVerdictDTO } from '@/lib/dto/fleetImageCoverage';
 import type { RunnerImageFreshnessVerdictDTO } from '@/lib/dto/runnerImageFreshness';
+import type { IndeterminateStreakVerdictDTO } from '@/lib/dto/indeterminateStreak';
+import type { IndeterminateProbeReading } from '@/lib/services/indeterminateStreakService';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -173,6 +175,24 @@ import type { RunnerImageFreshnessVerdictDTO } from '@/lib/dto/runnerImageFreshn
 // move the job off the fleet. A pinned image with no tool list is released again
 // from current motir-core and its digest pinned.
 //
+// As of MOTIR-10429 it carries an ESCALATION over every probe above that has an
+// `indeterminate` arm, and it is not a probe of anything outside this job: it
+// reads this job's own recent rows. One `indeterminate` stays quiet, as each
+// probe's own comment below argues. But nothing ever read the run of them, so a
+// read that failed every morning for a reason that would not clear by itself —
+// an expired token, a revoked App installation, anonymous GitHub reads
+// rate-limited on a shared egress IP — hid the fault its probe exists to find,
+// for as long as it lasted. A probe that is `indeterminate` on the last
+// `INDETERMINATE_STREAK_THRESHOLD` runs now fails the check, naming the probe,
+// the streak and the read that failed.
+//
+// ⚠️ A NEW PROBE IS COVERED BY BEING IN `DAILY_HEALTH_CHECK_PROBES`, and it
+// cannot be left out: the table is typed over every field of the result, so a
+// new verdict field does not compile without an entry, and an entry for a
+// verdict with an `indeterminate` arm must say how to describe it.
+// `tests/jobs/daily-health-check-indeterminate-streak.test.ts` checks the
+// table's step ids against the handler's.
+//
 // `retryPolicy: 'none'` (run at most once): a health check is a point-in-time
 // probe — retrying it minutes later would record a stale verdict, so a failed
 // tick dead-letters immediately rather than retrying. That is also what makes
@@ -252,6 +272,10 @@ export interface DailyHealthCheckResult {
    *  read, and with the AMI's state, so `current` is distinguishable from
    *  `indeterminate` or `not_applicable`. */
   runnerImageFreshness: RunnerImageFreshnessVerdictDTO;
+  /** How many runs in a row each probe has been `indeterminate` (MOTIR-10429) —
+   *  recorded on the healthy tick too, so a probe two runs into a streak is
+   *  readable before it fails the check on the third. */
+  indeterminateStreak: IndeterminateStreakVerdictDTO;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -601,6 +625,125 @@ export class RunnerImageStaleError extends Error {
   }
 }
 
+/**
+ * Thrown when a probe has been `indeterminate` — its read did not answer — on
+ * the threshold number of consecutive runs (MOTIR-10429). One such verdict is a
+ * blip and stays quiet; a streak is a read that is broken, and while it lasts
+ * the fault the probe watches for is invisible.
+ *
+ * The message names each probe and its step, how many runs in a row and since
+ * when, and the phase and detail of the latest read, because the DLQ row is the
+ * whole of what an operator reads. The blind spot travels with it, for the
+ * reason {@link IndexRebuildStreakError} gives.
+ */
+export class ProbeIndeterminateStreakError extends Error {
+  constructor(readonly verdict: Extract<IndeterminateStreakVerdictDTO, { verdict: 'persistent' }>) {
+    const offenders = verdict.offenders
+      .map(
+        (o) =>
+          `${o.probe} (step ${o.step}) on ${o.consecutive} runs in a row since ${o.since}; ` +
+          `latest read failed at ${o.phase}: ${o.detail}`,
+      )
+      .join(' | ');
+    super(
+      `${verdict.offenders.length} health probe(s) could not tell on ${verdict.threshold}+ ` +
+        `consecutive runs: ${offenders}. While a probe's read keeps failing, the fault it ` +
+        `watches for cannot be seen. Fix the read — a token, an App installation, a registry ` +
+        `path or a rate limit — not the verdict. ⚠️ SCOPE: ${verdict.blindSpot}`,
+    );
+    this.name = 'ProbeIndeterminateStreakError';
+  }
+}
+
+/** The probe verdict fields of the result — everything but the stable payload
+ *  and the streak read itself. */
+type DailyHealthCheckProbeKey = Exclude<
+  keyof DailyHealthCheckResult,
+  keyof typeof DAILY_HEALTH_CHECK_PAYLOAD | 'indeterminateStreak'
+>;
+
+type IndeterminateArm<K extends DailyHealthCheckProbeKey> = Extract<
+  DailyHealthCheckResult[K],
+  { verdict: 'indeterminate' }
+>;
+
+/** What the streak needs of one probe: its step id, and — when its verdict has an
+ *  `indeterminate` arm — how to say which read failed and what it said. A verdict
+ *  with no such arm takes `null`; one with the arm cannot. */
+type DailyHealthCheckProbe<K extends DailyHealthCheckProbeKey> = {
+  step: string;
+  describeIndeterminate: [IndeterminateArm<K>] extends [never]
+    ? null
+    : (verdict: IndeterminateArm<K>) => { phase: string; detail: string };
+};
+
+const describeImage = (v: { reference: string; detail: string }) => ({
+  phase: 'registry',
+  detail: `${v.reference}: ${v.detail}`,
+});
+
+/**
+ * Every probe of the check, keyed by its field on the result (MOTIR-10429).
+ * Typed over EVERY field, so a probe added to the result does not compile until
+ * it is listed here — which is what makes the streak cover it.
+ */
+export const DAILY_HEALTH_CHECK_PROBES: {
+  [K in DailyHealthCheckProbeKey]: DailyHealthCheckProbe<K>;
+} = {
+  schedules: { step: 'schedule-health', describeIndeterminate: null },
+  fleet: { step: 'fleet-boot-preflight', describeIndeterminate: describeImage },
+  indexFleet: { step: 'index-fleet-boot-preflight', describeIndeterminate: describeImage },
+  hostedAgentImage: { step: 'hosted-agent-image-preflight', describeIndeterminate: describeImage },
+  indexContainerAi: {
+    step: 'index-container-ai-address',
+    describeIndeterminate: (v) => ({ phase: 'address', detail: `${v.address}: ${v.detail}` }),
+  },
+  indexRebuildStreak: { step: 'index-rebuild-streak', describeIndeterminate: null },
+  monitorConfig: { step: 'monitor-config-preflight', describeIndeterminate: null },
+  credentialExpiry: { step: 'credential-expiry', describeIndeterminate: null },
+  hostedRuns: { step: 'hosted-run-probe', describeIndeterminate: null },
+  fleetImageCoverage: {
+    step: 'fleet-image-coverage',
+    describeIndeterminate: (v) =>
+      v.targetsUnreadable
+        ? {
+            phase: 'targets',
+            detail: `GitHub answered ${v.targetsUnreadable.status ?? 'nothing'} listing the pairs`,
+          }
+        : {
+            phase: 'pairs',
+            detail: v.pairs
+              .filter((p) => p.state === 'unknown')
+              .map((p) => `${p.projectKey} on ${p.org}: ${p.message}`)
+              .join('; '),
+          },
+  },
+  runnerImageFreshness: {
+    step: 'runner-image-freshness',
+    describeIndeterminate: (v) => ({ phase: v.phase, detail: `${v.image}: ${v.detail}` }),
+  },
+};
+
+/** This run's verdicts, as the streak reads them: one reading per probe that has
+ *  an `indeterminate` arm. Exported for the test. */
+export function indeterminateReadings(
+  verdicts: Pick<DailyHealthCheckResult, DailyHealthCheckProbeKey>,
+): IndeterminateProbeReading[] {
+  return (Object.keys(DAILY_HEALTH_CHECK_PROBES) as DailyHealthCheckProbeKey[]).flatMap((key) => {
+    const { step, describeIndeterminate } = DAILY_HEALTH_CHECK_PROBES[key];
+    if (!describeIndeterminate) return [];
+    const verdict = verdicts[key] as { verdict?: unknown };
+    const describe = describeIndeterminate as (v: unknown) => { phase: string; detail: string };
+    return [
+      {
+        probe: key,
+        step,
+        indeterminate: verdict.verdict === 'indeterminate' ? describe(verdict) : null,
+      },
+    ];
+  });
+}
+
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -650,6 +793,24 @@ export const dailyHealthCheck = defineJob(
     const runnerImageFreshness = await ctx.step.run('runner-image-freshness', () =>
       services.runnerImageFreshness.check(),
     );
+    const verdicts = {
+      schedules,
+      fleet,
+      indexFleet,
+      hostedAgentImage,
+      indexContainerAi,
+      indexRebuildStreak,
+      monitorConfig,
+      credentialExpiry,
+      hostedRuns,
+      fleetImageCoverage,
+      runnerImageFreshness,
+    };
+    // The ESCALATION (MOTIR-10429), read after every probe and before any throw:
+    // how many runs in a row each probe has been unable to tell.
+    const indeterminateStreak = await ctx.step.run('indeterminate-streak', () =>
+      services.indeterminateStreak.check(indeterminateReadings(verdicts)),
+    );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
     // faults, and a run that reported only the first would hide the rest for as
@@ -666,8 +827,9 @@ export const dailyHealthCheck = defineJob(
     // REACH the registry — a network statement, not an image one — and failing
     // on it would page an operator about ghcr.io's uptime and, worse, teach them
     // that this row is usually noise. The verdict is still recorded on the
-    // `job_run` row either way, so a run of consecutive indeterminates is
-    // readable; it is just not an alarm.
+    // `job_run` row either way, and a STREAK of them is the alarm instead: the
+    // `indeterminate-streak` read above fails the run once the same probe has
+    // not answered on the last `INDETERMINATE_STREAK_THRESHOLD` runs (MOTIR-10429).
     if (fleet.verdict === 'unpullable') throw new FleetImageUnpullableError(fleet);
 
     // The INDEXER path, reported after the runner's and on exactly the same
@@ -759,19 +921,13 @@ export const dailyHealthCheck = defineJob(
       throw new RunnerImageStaleError(runnerImageFreshness);
     }
 
-    return {
-      ...DAILY_HEALTH_CHECK_PAYLOAD,
-      schedules,
-      fleet,
-      indexFleet,
-      hostedAgentImage,
-      indexContainerAi,
-      indexRebuildStreak,
-      monitorConfig,
-      credentialExpiry,
-      hostedRuns,
-      fleetImageCoverage,
-      runnerImageFreshness,
-    };
+    // The STREAK, reported last: every definite fault above is the more
+    // actionable message, and a run that throws one of them records no verdicts,
+    // so the streak is read again — and still there — on the next run.
+    if (indeterminateStreak.verdict === 'persistent') {
+      throw new ProbeIndeterminateStreakError(indeterminateStreak);
+    }
+
+    return { ...DAILY_HEALTH_CHECK_PAYLOAD, ...verdicts, indeterminateStreak };
   },
 );

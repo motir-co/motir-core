@@ -63,6 +63,7 @@ import { credentialExpiryService } from '@/lib/services/credentialExpiryService'
 import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
 import { fleetImageCoverageProbeService } from '@/lib/services/fleetImageCoverageProbeService';
 import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
+import { indeterminateStreakService } from '@/lib/services/indeterminateStreakService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -182,6 +183,9 @@ export const jobServices = {
   // The runner-image freshness probe (MOTIR-10393) — a merged change to the
   // runner image that was never released and pinned.
   runnerImageFreshness: runnerImageFreshnessProbeService,
+  // The escalation over every probe above with an `indeterminate` arm
+  // (MOTIR-10429) — the same probe unable to tell on the last N runs.
+  indeterminateStreak: indeterminateStreakService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,
