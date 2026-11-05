@@ -778,6 +778,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   // server's first compile of the routes it opens), so an upper bound:
   // re-measure from its first green CI leg.
   'org-deletion.spec.ts': 47.0,
+  // Story MOTIR-10363 · MOTIR-10372 — the Fleet page's self-host arm. NOT
+  // measured: the lane could not be booted where it was written. Recorded as
+  // 3.0, in line with its nearest neighbour by shape (`billing-selfhost.spec.ts`
+  // at 2.7: one sign-up, then two navigations and one bare HTTP read).
+  // Re-measure from its first green bulk leg.
+  'org-fleet-selfhost.spec.ts': 3.0,
   'per-domain-admin-permissions.spec.ts': 12.4,
   'permission-gated-surfaces.spec.ts': 18.0,
   'permission-gated-ui.spec.ts': 14.0,

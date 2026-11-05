@@ -468,6 +468,55 @@ describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
   });
 });
 
+describe('createEc2Api — describeImages (MOTIR-10395)', () => {
+  it('reads the named AMIs as the account sees them, with what an absent field is', async () => {
+    const { sent, factory } = stub({
+      DescribeImagesCommand: {
+        Images: [
+          {
+            ImageId: 'ami-1',
+            Name: 'motir-ci-runner-2.329.0-202611050900-4a9cb14',
+            Description: 'Motir CI runner (commit 4a9cb14b54e2366d2a30ad19ac4b924dddca6d31)',
+            OwnerId: '111122223333',
+            CreationDate: '2026-11-05T09:00:00.000Z',
+          },
+          { ImageId: 'ami-2', Name: '', Description: '' },
+        ],
+      },
+    });
+    const ec2 = createEc2Api(CONFIG, factory);
+    expect(await ec2.describeImages(['ami-1', 'ami-2'])).toEqual([
+      {
+        imageId: 'ami-1',
+        name: 'motir-ci-runner-2.329.0-202611050900-4a9cb14',
+        description: 'Motir CI runner (commit 4a9cb14b54e2366d2a30ad19ac4b924dddca6d31)',
+        ownerId: '111122223333',
+        creationDate: '2026-11-05T09:00:00.000Z',
+      },
+      { imageId: 'ami-2', name: null, description: null, ownerId: null, creationDate: null },
+    ]);
+    expect(sent[0]).toEqual({
+      command: 'DescribeImagesCommand',
+      input: { ImageIds: ['ami-1', 'ami-2'] },
+    });
+
+    const none = createEc2Api(CONFIG, stub({ DescribeImagesCommand: {} }).factory);
+    expect(await none.describeImages(['ami-1'])).toEqual([]);
+  });
+
+  it('a refusal is an Ec2ApiError carrying the code', async () => {
+    const refusal = Object.assign(new Error('no'), {
+      name: 'UnauthorizedOperation',
+      $metadata: { httpStatusCode: 403 },
+    });
+    const ec2 = createEc2Api(CONFIG, stub({ DescribeImagesCommand: refusal }).factory);
+    await expect(ec2.describeImages(['ami-1'])).rejects.toMatchObject({
+      code: 'UnauthorizedOperation',
+      httpStatus: 403,
+    });
+  });
+});
+
 describe('createEc2Api — the persistent calls (MOTIR-9469)', () => {
   it('stops and starts by id, and reads an instance’s attached volumes by device', async () => {
     const { sent, factory } = stub({

@@ -48,6 +48,13 @@ function toNotificationData(raw: Notification['data']): NotificationData {
       repoRef: str(d.repoRef),
     };
   }
+  if (d.kind === 'agent_hibernated_by_admin') {
+    return {
+      kind: 'agent_hibernated_by_admin',
+      agentName: str(d.agentName),
+      hibernatedAt: str(d.hibernatedAt),
+    };
+  }
   if (d.kind === 'transitioned') {
     return {
       kind: 'transitioned',

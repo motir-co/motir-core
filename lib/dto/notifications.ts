@@ -42,7 +42,8 @@ export interface NotificationActorDTO {
 export type NotificationData =
   | NotificationMentionedData
   | NotificationTransitionedData
-  | NotificationCodeAccessRefusedData;
+  | NotificationCodeAccessRefusedData
+  | NotificationAgentHibernatedByAdminData;
 
 /** A mention — the SHIPPED 5.1.6 `work-item/mentioned` + `work-item/comment.created`
  * events. `source` selects the row copy (comment body vs item description);
@@ -93,6 +94,23 @@ export interface NotificationCodeAccessRefusedData {
   projectName: string;
   /** The repository GitHub refused the invitation on, as `owner/name`. */
   repoRef: string;
+}
+
+/**
+ * An organisation owner or admin HIBERNATED the recipient's agent (MOTIR-10368 ·
+ * Story MOTIR-10363, `docs/decisions/agent-instances.md` §8 AMENDMENT 8). The
+ * row's ACTOR is the admin, so who did it travels on `actorId`, not here. The row
+ * deep-links nowhere: the drawer offers no route to an agent's panel or terminal.
+ *
+ * ⚠️ NAMES AND A TIME ONLY — never an organisation, account, shard, machine,
+ * volume, region or provider id.
+ */
+export interface NotificationAgentHibernatedByAdminData {
+  kind: 'agent_hibernated_by_admin';
+  /** The agent's name, as its owner named it. */
+  agentName: string;
+  /** When it was hibernated, ISO-8601. */
+  hibernatedAt: string;
 }
 
 /**

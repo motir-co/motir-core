@@ -1,5 +1,6 @@
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import type {
+  FleetLastOrgAdminStopDTO,
   FleetLastStopDTO,
   FleetStopPreviewDTO,
   FleetStopResultDTO,
@@ -11,7 +12,9 @@ import { toFleetLastStopDTO } from '@/lib/mappers/platformFleetStopMappers';
 import { platformAuditLogRepository } from '@/lib/repositories/platformAuditLogRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { actionsRunsClient } from '@/lib/github/actionsRuns';
+import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -50,6 +53,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // BEFORE the first effect.
 
 const ADMIN_STOP_DETAIL = 'stopped by a platform admin';
+/** The window one org-admin stop's rows are grouped in, ending at its newest. */
+export const ORG_ADMIN_STOP_WINDOW_MS = 10 * 60_000;
 const HOSTED_RUN_PREFIX = hostedRunDispatchId('');
 
 function detailOf(err: unknown): string {
@@ -166,6 +171,71 @@ export const platformFleetStopService = {
         ),
     );
     return row ? toFleetLastStopDTO(row) : null;
+  },
+
+  /**
+   * The newest stop an organisation owner or admin made of this org's fleet
+   * work, or null — the tenant page's Fleet card shows it in a block of its
+   * own, never as a `fleet.stop`. Read from the stored `org_admin_stop` reasons
+   * and the org's last-stop record under the system arm, filtered by the org id; audited `estate.read` on the
+   * org, as `preview` is.
+   */
+  async lastOrgAdminStop(
+    principal: PlatformPrincipal,
+    organizationId: string,
+  ): Promise<FleetLastOrgAdminStopDTO | null> {
+    await requirePlatformStaff('support');
+    const org = await requireOrganization(organizationId);
+    const answer = await withSystemContext(async (tx) => {
+      const agentAt = await agentInstanceIntervalRepository.latestEndedForOrganization(
+        organizationId,
+        'org_admin_stop',
+        tx,
+      );
+      const ciAt = await intents.latestSettledForOrganization(organizationId, 'org_admin_stop', tx);
+      // The durable record (MOTIR-10373) adds what the end reasons cannot carry:
+      // the admin's name, and a hosted-run cancel, which closes with free text only.
+      const record = await orgFleetLastStopRepository.findForOrganization(organizationId, tx);
+      const times = [agentAt, ciAt, record?.stoppedAt ?? null].filter(
+        (at): at is Date => at !== null,
+      );
+      if (times.length === 0) return null;
+      const at = new Date(Math.max(...times.map((time) => time.getTime())));
+      const from = new Date(at.getTime() - ORG_ADMIN_STOP_WINDOW_MS);
+      // The record names THIS stop only when it falls inside the same window.
+      const recordIsThisStop =
+        record !== null &&
+        record.stoppedAt.getTime() >= from.getTime() &&
+        record.stoppedAt.getTime() <= at.getTime();
+      return {
+        at: at.toISOString(),
+        stoppedByName: recordIsThisStop ? record.actorName : null,
+        hostedRunCancelled: recordIsThisStop && record.action === 'cancel_hosted_run',
+        ciContainersStopped: await intents.countSettledForOrganizationBetween(
+          organizationId,
+          'org_admin_stop',
+          from,
+          at,
+          tx,
+        ),
+        agentInstancesHibernated:
+          await agentInstanceIntervalRepository.countEndedForOrganizationBetween(
+            organizationId,
+            'org_admin_stop',
+            from,
+            at,
+            tx,
+          ),
+      };
+    });
+    await platformAuditService.record(principal, {
+      action: 'estate.read',
+      targetKind: 'organization',
+      targetId: organizationId,
+      targetLabel: org.name,
+      organizationId,
+    });
+    return answer;
   },
 
   /**

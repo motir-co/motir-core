@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Codezugriff konnte nicht gewährt werden",
             "desc": "Motir konnte Ihnen keinen Zugriff auf ein Repository geben, das es für Ihr Projekt angelegt hat."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "Ein Admin hat Ihren Agenten in den Ruhezustand versetzt",
+            "desc": "Ein Inhaber oder Admin der Organisation hat einen Ihrer Agenten auf der Fleet-Seite der Organisation gestoppt."
           }
         },
         "soon": "Demnächst",
@@ -4110,7 +4114,200 @@
         "members": "Mitglieder",
         "security": "Sicherheit",
         "usage": "Nutzung & Kosten",
+        "fleet": "Flotte",
         "billing": "Abrechnung & Pläne"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · Einstellungen",
+        "title": "Flotte",
+        "lead": "Was {org} gerade auf der Flotte von Motir ausführt, und die Steuerelemente, um es zu stoppen. Kapazitätsanfragen bleiben unter <link>Abrechnung & Pläne › Flottennutzung</link>.",
+        "refresh": {
+          "button": "Aktualisieren",
+          "cue": "Aktualisiert {time} · wird alle 30 Sekunden aktualisiert, solange dieser Tab geöffnet ist",
+          "refreshing": "Wird aktualisiert…",
+          "failed": "Aktualisierung fehlgeschlagen. Die zuletzt gelesenen Daten werden weiter angezeigt."
+        },
+        "lastStop": {
+          "by": "Zuletzt gestoppt von {name}, {when}",
+          "byYou": "Zuletzt von Ihnen gestoppt, {when}",
+          "bySomeone": "Zuletzt gestoppt {when}",
+          "never": "In {org} hat noch niemand Flottenarbeit gestoppt.",
+          "failed": "Es konnte nicht gelesen werden, wer die Flottenarbeit zuletzt gestoppt hat."
+        },
+        "when": {
+          "today": "heute um {time}",
+          "yesterday": "gestern um {time}"
+        },
+        "tiles": {
+          "agentRuns": "Parallele Agent-Läufe",
+          "agentRunsNote": "Abrechnung pro Maschinenminute",
+          "agents": "Agents",
+          "agentsNote": "Aktiv und im Ruhezustand",
+          "ciJobs": "Laufende CI-Jobs",
+          "ciWaiting": "{count, plural, =0 {Keiner wartet} other {# warten}}",
+          "index": "Indexierungsjobs",
+          "indexNote": "Nicht berechnet",
+          "of": " von {figure}",
+          "notRead": "Nicht lesbar",
+          "failedTitle": "Die Flottenwerte konnten nicht gelesen werden",
+          "failedBody": "Hier wird nichts als null angezeigt. Die Abschnitte darunter sind nicht betroffen."
+        },
+        "section": {
+          "retry": "Erneut versuchen",
+          "failedBody": "Hier wird nichts als null angezeigt. Die anderen Abschnitte sind nicht betroffen."
+        },
+        "hosted": {
+          "title": "Agent-Läufe",
+          "lead": "Arbeitselemente, die der Agent von Motir gerade für diese Organisation erstellt.",
+          "count": "{count} aktiv",
+          "empty": "Kein Agent-Lauf ist aktiv.",
+          "failed": "Die Agent-Läufe konnten nicht gelesen werden",
+          "noCard": "Ein Lauf ohne Arbeitselement",
+          "meta": "{project} · gestartet von {name} · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "Ein gelöschtes Projekt",
+          "openRun": "Lauf öffnen",
+          "running": "Läuft",
+          "cancel": "Abbrechen",
+          "cancelAria": "Den Lauf von {key} abbrechen",
+          "cancelling": "Wird abgebrochen…"
+        },
+        "agents": {
+          "title": "Agent-Instanzen",
+          "lead": "Die Agents aller Mitglieder, aktiv oder im Ruhezustand. Hier wird nur der Ruhezustand angeboten.",
+          "count": "{count} aktiv",
+          "empty": "Kein Agent ist aktiv oder im Ruhezustand.",
+          "failed": "Die Agent-Instanzen konnten nicht gelesen werden",
+          "name": "Agent von {owner} · {profile}",
+          "unknownOwner": "Ein Mitglied",
+          "runningSince": "{project} · aktiv seit {time}",
+          "hibernatingSince": "{project} · im Ruhezustand seit {time}",
+          "inStateSince": "{project} · {state} seit {time}",
+          "running": "Aktiv",
+          "hibernating": "Im Ruhezustand",
+          "hibernatingAt": "Im Ruhezustand · seit {time}",
+          "hibernate": "Ruhezustand",
+          "hibernateAria": "Agent von {owner} in den Ruhezustand versetzen",
+          "hibernatingNow": "Geht in Ruhezustand…",
+          "state": {
+            "starting": "Startet",
+            "waking": "Wird aufgeweckt",
+            "updating": "Wird aktualisiert",
+            "deleting": "Wird gelöscht",
+            "hibernated": "Im Ruhezustand",
+            "failed": "Fehlgeschlagen",
+            "other": "Beschäftigt"
+          }
+        },
+        "ci": {
+          "title": "CI-Jobs",
+          "lead": "Jobs auf den Runnern von Motir, laufend und wartend.",
+          "count": "{inFlight} laufend · {waiting} wartend",
+          "empty": "Kein CI-Job läuft oder wartet.",
+          "failed": "Die CI-Jobs konnten nicht gelesen werden",
+          "meta": "{project} · eingereiht {time} · ",
+          "noProject": "Kein Projekt",
+          "viewOnGithub": "Auf GitHub ansehen",
+          "running": "Läuft",
+          "waiting": "Wartet · {cause}",
+          "cause": {
+            "planLimit": "Planlimit",
+            "poolFull": "Pool voll",
+            "other": "Sonstiges"
+          }
+        },
+        "index": {
+          "title": "Indexierungsjobs",
+          "running": "<n>{count}</n> laufend",
+          "note": "Die Indexierung hält die Codesuche aktuell. Sie wird nicht berechnet und hier nicht gestoppt.",
+          "failed": "Die Indexierungsjobs konnten nicht gelesen werden"
+        },
+        "motirStops": {
+          "title": "Von Motir gestoppt · letzte 7 Tage",
+          "lead": "Maschinen, die Motir selbst für diese Organisation gestoppt hat, und warum.",
+          "empty": "Motir hat in den letzten 7 Tagen nichts für diese Organisation gestoppt.",
+          "failed": "Die Stopps von Motir konnten nicht gelesen werden",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "CI-Job-Container",
+            "hosted_agent": "Agent-Lauf",
+            "agent_instance": "Agent-Instanz",
+            "code_graph_index": "Indexierungsjob",
+            "other": "Maschine"
+          },
+          "reason": {
+            "record_ended": "sein Job war bereits beendet",
+            "no_record": "es wurde kein Eintrag dazu gefunden",
+            "org_stopped": "die Arbeit der Organisation wurde gestoppt",
+            "foreign_org": "es führte Arbeit einer anderen Organisation aus"
+          },
+          "done": "Erledigt",
+          "notDone": "Nicht abgeschlossen"
+        },
+        "cancelRun": {
+          "title": "Diesen Lauf abbrechen?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} hat diesen Lauf um {time} gestartet. Beim Abbrechen wird er als <strong>abgebrochen</strong> geschlossen und seine Maschine sofort gestoppt. Was der Agent gepusht hat, bleibt auf seinem Branch.",
+          "bodyNoName": "Dieser Lauf wurde um {time} gestartet. Beim Abbrechen wird er als <strong>abgebrochen</strong> geschlossen und seine Maschine sofort gestoppt. Was der Agent gepusht hat, bleibt auf seinem Branch.",
+          "keep": "Weiterlaufen lassen",
+          "confirm": "Lauf abbrechen",
+          "confirming": "Wird abgebrochen…",
+          "alreadyClosed": "Der Lauf von {key} war bereits beendet.",
+          "notFound": "Dieser Lauf ist nicht mehr aktiv.",
+          "failed": "Der Lauf von {key} konnte nicht abgebrochen werden. Versuchen Sie es erneut."
+        },
+        "hibernate": {
+          "title": "Agent von {owner} in den Ruhezustand versetzen?",
+          "description": "{profile} · {project} · aktiv seit {time}",
+          "body": "Die Maschine wird gestoppt, ihre Dateien bleiben erhalten. Ein darin laufendes Arbeitselement wird zuerst abgebrochen.",
+          "told": "<strong>{owner} wird benachrichtigt</strong>, dass Sie ihn in den Ruhezustand versetzt haben, und wann. Nur diese Person kann ihn aufwecken, öffnen oder löschen.",
+          "toldSelf": "Nur Sie können ihn aufwecken, öffnen oder löschen.",
+          "keep": "Weiterlaufen lassen",
+          "confirm": "Agent in Ruhezustand versetzen",
+          "confirming": "Geht in Ruhezustand…",
+          "alreadyResting": "Der Agent von {owner} war bereits im Ruhezustand.",
+          "inMotion": "Der Agent von {owner} startet gerade oder wechselt seinen Zustand und wurde daher nicht in den Ruhezustand versetzt. Versuchen Sie es gleich noch einmal.",
+          "notFound": "Dieser Agent ist nicht mehr aktiv.",
+          "failed": "Der Agent von {owner} konnte nicht in den Ruhezustand versetzt werden. Versuchen Sie es erneut."
+        },
+        "stopAll": {
+          "button": "Alles stoppen",
+          "title": "Alles stoppen, was {org} ausführt?",
+          "lead": "Damit wird die unten aufgeführte berechnete Arbeit sofort gestoppt.",
+          "counting": "Laufende Arbeit wird gezählt…",
+          "ci": "{runs, plural, one {CI-Job abgebrochen} other {CI-Jobs abgebrochen}} und <strong>{containers, plural, one {# Container} other {# Container}}</strong> gestoppt",
+          "ciUnknownRuns": "CI-Jobs abgebrochen",
+          "hosted": "{count, plural, one {Agent-Lauf beendet} other {Agent-Läufe beendet}}",
+          "agents": "{count, plural, one {aktiver Agent in Ruhezustand versetzt} other {aktive Agents in Ruhezustand versetzt}}",
+          "index": "{count, plural, one {Indexierungsjob läuft weiter} other {Indexierungsjobs laufen weiter}} — die Indexierung wird hier nicht gestoppt",
+          "afterwards": "Danach ist nichts blockiert: Mitglieder können sofort neue Arbeit starten. Die Eigentümer der Agents im Ruhezustand werden benachrichtigt.",
+          "countedAt": "Gezählt um {time}.",
+          "unreadableTitle": "Die laufende Arbeit konnte nicht gezählt werden",
+          "unreadableBody": "Es wurde nichts gestoppt. Lesen Sie die Zahlen erneut, bevor Sie bestätigen.",
+          "cancel": "Abbrechen",
+          "retry": "Erneut versuchen",
+          "confirm": "Alles stoppen",
+          "confirming": "Wird gestoppt…",
+          "failed": "Die Flottenarbeit konnte nicht gestoppt werden. Ein Teil davon wurde möglicherweise gestoppt; aktualisieren Sie, um zu sehen, was noch läuft."
+        },
+        "result": {
+          "doneTitle": "Alles wurde gestoppt",
+          "partialTitle": "Einige Arbeit wurde nicht gestoppt",
+          "ci": "{runs, plural, one {# CI-Job abgebrochen} other {# CI-Jobs abgebrochen}}, {stopped} von {total} Containern gestoppt",
+          "hosted": "{count, plural, one {# Agent-Lauf beendet} other {# Agent-Läufe beendet}}",
+          "agents": "{count, plural, one {# aktiver Agent in Ruhezustand versetzt} other {# aktive Agents in Ruhezustand versetzt}}",
+          "agentsPartial": "{done} von {total} aktiven Agents in Ruhezustand versetzt",
+          "hostedPartial": "{done} von {total} Agent-Läufen beendet",
+          "ciFailed": "{count, plural, one {# CI-Repository oder -Container wurde nicht gestoppt.} other {# CI-Repositorys oder -Container wurden nicht gestoppt.}} Aktualisieren Sie und versuchen Sie „Alles stoppen“ erneut.",
+          "hostedFailed": "{count, plural, one {# Agent-Lauf wurde nicht beendet.} other {# Agent-Läufe wurden nicht beendet.}} Verwenden Sie „Abbrechen“ in seiner Zeile.",
+          "agentsFailed": "{count, plural, one {# Agent wurde nicht gestoppt: Der Stopp wurde nicht bestätigt. Verwenden Sie „Ruhezustand“ in seiner Zeile.} other {# Agents wurden nicht gestoppt: Der Stopp wurde nicht bestätigt. Verwenden Sie „Ruhezustand“ in ihren Zeilen.}}",
+          "index": "Indexierungsjobs liefen weiter.",
+          "byYou": "Von Ihnen gestoppt, {when}.",
+          "dismiss": "Schließen",
+          "dismissAria": "Das Stoppergebnis schließen"
+        },
+        "forbidden": "Nur ein Eigentümer oder Admin kann die Flottenarbeit dieser Organisation stoppen."
       }
     },
     "gitAccounts": {
@@ -5770,7 +5967,11 @@
       "transitioned": "<s>{actor}</s> hat <s>{key}</s> nach {status} verschoben",
       "generic": "<s>{actor}</s> hat <s>{key}</s> aktualisiert",
       "genericNoKey": "<s>{actor}</s> hat Ihnen eine Benachrichtigung gesendet",
-      "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden"
+      "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
+      "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Ein Admin der Organisation hat ihn um {time} gestoppt. Seine Dateien bleiben erhalten; wecken Sie ihn unter Agenten auf."
     }
   },
   "orgAdmin": {
@@ -8335,6 +8536,7 @@
       },
       "progress": {
         "submitted": "Das Gespräch wird an Motir AI gesendet…",
+        "watching": "Motir AI schreibt diesen Plan…",
         "proposed": "{count, plural, =0 {Vorgeschlagene Arbeit wird auf der Arbeitsfläche platziert…} one {Bisher # Element vorgeschlagen…} other {Bisher # Elemente vorgeschlagen…}}",
         "validating": "Der Vorschlag wird mit Ihrem Plan abgeglichen…",
         "reading": "Ihre Anfrage wird gelesen…",
@@ -12235,6 +12437,13 @@
           "unknownActor": "ein ehemaliger Operator",
           "noReason": "Kein Grund erfasst",
           "counts": "{runs} CI-Läufe · {containers} CI-Container · {hosted} gehostete Läufe · {instances} Agent-Instanzen"
+        },
+        "orgAdminStop": {
+          "title": "Zuletzt von einem Admin der Organisation gestoppt",
+          "titleNamed": "Zuletzt von {name}, einem Admin der Organisation, gestoppt",
+          "when": "{time}",
+          "counts": "{containers} CI-Container · {instances} Agent-Instanzen",
+          "hostedRun": "ein Agent-Lauf abgebrochen"
         }
       }
     },
@@ -13300,7 +13509,8 @@
       "credits": "Gestoppt: Ihrer Organisation sind die Credits ausgegangen. Fügen Sie Credits hinzu und wecken Sie ihn dann auf.",
       "idle": "Nach 30 Minuten ohne Nutzung in den Ruhezustand versetzt",
       "backstop": "Nach 12 Stunden Laufzeit gestoppt. Wecken Sie ihn auf, um weiterzumachen.",
-      "admin_stop": "Vom Motir-Support gestoppt. Wecken Sie ihn auf, um weiterzumachen."
+      "admin_stop": "Vom Motir-Support gestoppt. Wecken Sie ihn auf, um weiterzumachen.",
+      "org_admin_stop": "Von einem Admin Ihrer Organisation gestoppt. Wecken Sie ihn auf, um weiterzumachen."
     },
     "menu": {
       "wake": "Aufwecken",

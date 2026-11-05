@@ -21,6 +21,11 @@
 #   4. copy the digest from the job summary into MOTIR-1979 / the deployment's
 #      `MOTIR_RUNNER_IMAGE`
 #
+# Skipping steps 2-4 after a merged image change is what the daily health
+# check's `runner-image-freshness` step reports (MOTIR-10393): it fails while the
+# pinned image was built from a commit without the newest change to an input in
+# `lib/ciFleet/runnerImageSources.ts`, naming both commits.
+#
 # `workflow_dispatch` with `dry_run: true` runs the whole lane WITHOUT pushing —
 # how you validate a change to the release path without minting a version.
 

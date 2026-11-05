@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "Nie udało się przyznać dostępu do kodu",
             "desc": "Motir nie mógł przyznać Ci dostępu do repozytorium utworzonego dla Twojego projektu."
+          },
+          "agent_hibernated_by_admin": {
+            "label": "Administrator uśpił Twojego agenta",
+            "desc": "Właściciel lub administrator organizacji zatrzymał jednego z Twoich agentów na stronie Fleet organizacji."
           }
         },
         "soon": "Wkrótce",
@@ -4110,7 +4114,200 @@
         "members": "Członkowie",
         "security": "Zabezpieczenia",
         "usage": "Użycie i koszty",
+        "fleet": "Flota",
         "billing": "Rozliczenia i plany"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · Ustawienia",
+        "title": "Flota",
+        "lead": "Co {org} uruchamia teraz we flocie Motir, oraz elementy sterujące do zatrzymania tego. Prośby o pojemność pozostają w <link>Rozliczenia i plany › Wykorzystanie floty</link>.",
+        "refresh": {
+          "button": "Odśwież",
+          "cue": "Zaktualizowano {time} · odświeżane co 30 sekund, gdy ta zakładka jest otwarta",
+          "refreshing": "Odświeżanie…",
+          "failed": "Nie udało się odświeżyć. Nadal widać ostatnio odczytane dane."
+        },
+        "lastStop": {
+          "by": "Ostatnio zatrzymane przez {name}, {when}",
+          "byYou": "Ostatnio zatrzymane przez Ciebie, {when}",
+          "bySomeone": "Ostatnio zatrzymane {when}",
+          "never": "Nikt w {org} nie zatrzymał jeszcze pracy floty.",
+          "failed": "Nie udało się odczytać, kto ostatnio zatrzymał pracę floty."
+        },
+        "when": {
+          "today": "dziś o {time}",
+          "yesterday": "wczoraj o {time}"
+        },
+        "tiles": {
+          "agentRuns": "Równoległe uruchomienia agenta",
+          "agentRunsNote": "Płatne za minutę maszyny",
+          "agents": "Agenci",
+          "agentsNote": "Działające i uśpione",
+          "ciJobs": "Trwające zadania CI",
+          "ciWaiting": "{count, plural, =0 {Brak oczekujących} one {# oczekuje} few {# oczekują} many {# oczekuje} other {# oczekuje}}",
+          "index": "Zadania indeksowania",
+          "indexNote": "Bezpłatne",
+          "of": " z {figure}",
+          "notRead": "Nie odczytano",
+          "failedTitle": "Nie udało się odczytać wartości floty",
+          "failedBody": "Nic tutaj nie jest pokazywane jako zero. Sekcje poniżej nie są objęte problemem."
+        },
+        "section": {
+          "retry": "Ponów",
+          "failedBody": "Nic tutaj nie jest pokazywane jako zero. Pozostałe sekcje nie są objęte problemem."
+        },
+        "hosted": {
+          "title": "Uruchomienia agenta",
+          "lead": "Elementy robocze, które agent Motir buduje teraz dla tej organizacji.",
+          "count": "Aktywne: {count}",
+          "empty": "Żadne uruchomienie agenta nie jest aktywne.",
+          "failed": "Nie udało się odczytać uruchomień agenta",
+          "noCard": "Uruchomienie bez elementu roboczego",
+          "meta": "{project} · rozpoczął(-ęła) {name} · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "Usunięty projekt",
+          "openRun": "Otwórz uruchomienie",
+          "running": "Działa",
+          "cancel": "Anuluj",
+          "cancelAria": "Anuluj uruchomienie {key}",
+          "cancelling": "Anulowanie…"
+        },
+        "agents": {
+          "title": "Instancje agentów",
+          "lead": "Agenci wszystkich członków, działający lub uśpieni. Tutaj dostępne jest tylko uśpienie.",
+          "count": "Aktywne: {count}",
+          "empty": "Żaden agent nie działa ani nie jest uśpiony.",
+          "failed": "Nie udało się odczytać instancji agentów",
+          "name": "Agent: {owner} · {profile}",
+          "unknownOwner": "Członek",
+          "runningSince": "{project} · działa od {time}",
+          "hibernatingSince": "{project} · uśpiony od {time}",
+          "inStateSince": "{project} · {state} od {time}",
+          "running": "Działa",
+          "hibernating": "Uśpiony",
+          "hibernatingAt": "Uśpiony · od {time}",
+          "hibernate": "Uśpij",
+          "hibernateAria": "Uśpij agenta: {owner}",
+          "hibernatingNow": "Usypianie…",
+          "state": {
+            "starting": "Uruchamianie",
+            "waking": "Wybudzanie",
+            "updating": "Aktualizowanie",
+            "deleting": "Usuwanie",
+            "hibernated": "Uśpiony",
+            "failed": "Błąd",
+            "other": "Zajęty"
+          }
+        },
+        "ci": {
+          "title": "Zadania CI",
+          "lead": "Zadania na runnerach Motir, trwające i oczekujące.",
+          "count": "Trwające: {inFlight} · oczekujące: {waiting}",
+          "empty": "Żadne zadanie CI nie trwa ani nie oczekuje.",
+          "failed": "Nie udało się odczytać zadań CI",
+          "meta": "{project} · w kolejce od {time} · ",
+          "noProject": "Brak projektu",
+          "viewOnGithub": "Zobacz w GitHub",
+          "running": "Działa",
+          "waiting": "Oczekuje · {cause}",
+          "cause": {
+            "planLimit": "limit planu",
+            "poolFull": "pula pełna",
+            "other": "inne"
+          }
+        },
+        "index": {
+          "title": "Zadania indeksowania",
+          "running": "Działające: <n>{count}</n>",
+          "note": "Indeksowanie utrzymuje aktualność wyszukiwania kodu. Jest bezpłatne i nie jest tu zatrzymywane.",
+          "failed": "Nie udało się odczytać zadań indeksowania"
+        },
+        "motirStops": {
+          "title": "Zatrzymane przez Motir · ostatnie 7 dni",
+          "lead": "Maszyny, które Motir sam zatrzymał dla tej organizacji, i dlaczego.",
+          "empty": "W ciągu ostatnich 7 dni Motir niczego nie zatrzymał dla tej organizacji.",
+          "failed": "Nie udało się odczytać zatrzymań Motir",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "Kontener zadania CI",
+            "hosted_agent": "Uruchomienie agenta",
+            "agent_instance": "Instancja agenta",
+            "code_graph_index": "Zadanie indeksowania",
+            "other": "Maszyna"
+          },
+          "reason": {
+            "record_ended": "jej zadanie już się zakończyło",
+            "no_record": "nie znaleziono jej zapisu",
+            "org_stopped": "praca organizacji została zatrzymana",
+            "foreign_org": "wykonywała pracę innej organizacji"
+          },
+          "done": "Gotowe",
+          "notDone": "Nie ukończono"
+        },
+        "cancelRun": {
+          "title": "Anulować to uruchomienie?",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} rozpoczął(-ęła) to uruchomienie o {time}. Anulowanie zamyka je jako <strong>anulowane</strong> i od razu zatrzymuje jego maszynę. Praca wypchnięta przez agenta zostaje na jego gałęzi.",
+          "bodyNoName": "To uruchomienie rozpoczęło się o {time}. Anulowanie zamyka je jako <strong>anulowane</strong> i od razu zatrzymuje jego maszynę. Praca wypchnięta przez agenta zostaje na jego gałęzi.",
+          "keep": "Pozostaw uruchomione",
+          "confirm": "Anuluj uruchomienie",
+          "confirming": "Anulowanie…",
+          "alreadyClosed": "Uruchomienie {key} już się zakończyło.",
+          "notFound": "To uruchomienie nie jest już aktywne.",
+          "failed": "Nie udało się anulować uruchomienia {key}. Spróbuj ponownie."
+        },
+        "hibernate": {
+          "title": "Uśpić agenta: {owner}?",
+          "description": "{profile} · {project} · działa od {time}",
+          "body": "Maszyna zatrzymuje się, a jej pliki są zachowywane. Element roboczy działający w niej jest najpierw anulowany.",
+          "told": "<strong>{owner} zostanie powiadomiony(-a)</strong>, że go uśpiono, i kiedy. Tylko ta osoba może go wybudzić, otworzyć lub usunąć.",
+          "toldSelf": "Tylko Ty możesz go wybudzić, otworzyć lub usunąć.",
+          "keep": "Pozostaw uruchomiony",
+          "confirm": "Uśpij agenta",
+          "confirming": "Usypianie…",
+          "alreadyResting": "Agent: {owner} był już uśpiony.",
+          "inMotion": "Agent: {owner} uruchamia się lub zmienia stan, więc nie został uśpiony. Spróbuj ponownie za chwilę.",
+          "notFound": "Ten agent nie jest już aktywny.",
+          "failed": "Nie udało się uśpić agenta: {owner}. Spróbuj ponownie."
+        },
+        "stopAll": {
+          "button": "Zatrzymaj wszystko",
+          "title": "Zatrzymać wszystko, co uruchamia {org}?",
+          "lead": "To od razu zatrzymuje płatną pracę wymienioną poniżej.",
+          "counting": "Liczenie tego, co działa…",
+          "ci": "{runs, plural, one {zadanie CI anulowane} few {zadania CI anulowane} many {zadań CI anulowanych} other {zadania CI anulowane}} i <strong>{containers, plural, one {# kontener} few {# kontenery} many {# kontenerów} other {# kontenera}}</strong> zatrzymanych",
+          "ciUnknownRuns": "Zadania CI anulowane",
+          "hosted": "{count, plural, one {uruchomienie agenta zakończone} few {uruchomienia agenta zakończone} many {uruchomień agenta zakończonych} other {uruchomienia agenta zakończone}}",
+          "agents": "{count, plural, one {działający agent uśpiony} few {działający agenci uśpieni} many {działających agentów uśpionych} other {działającego agenta uśpione}}",
+          "index": "{count, plural, one {zadanie indeksowania nadal działa} few {zadania indeksowania nadal działają} many {zadań indeksowania nadal działa} other {zadania indeksowania nadal działa}} — indeksowanie nie jest tu zatrzymywane",
+          "afterwards": "Potem nic nie jest zablokowane: członkowie mogą od razu rozpocząć nową pracę. Właściciele uśpionych agentów są powiadamiani.",
+          "countedAt": "Policzono o {time}.",
+          "unreadableTitle": "Nie udało się policzyć, co działa",
+          "unreadableBody": "Nic nie zostało zatrzymane. Odczytaj liczby ponownie przed potwierdzeniem.",
+          "cancel": "Anuluj",
+          "retry": "Spróbuj ponownie",
+          "confirm": "Zatrzymaj wszystko",
+          "confirming": "Zatrzymywanie…",
+          "failed": "Nie udało się zatrzymać pracy floty. Część mogła zostać zatrzymana; odśwież, aby zobaczyć, co nadal działa."
+        },
+        "result": {
+          "doneTitle": "Wszystko zostało zatrzymane",
+          "partialTitle": "Część pracy nie została zatrzymana",
+          "ci": "{runs, plural, one {# zadanie CI anulowane} few {# zadania CI anulowane} many {# zadań CI anulowanych} other {# zadania CI anulowane}}, zatrzymano {stopped} z {total} kontenerów",
+          "hosted": "{count, plural, one {# uruchomienie agenta zakończone} few {# uruchomienia agenta zakończone} many {# uruchomień agenta zakończonych} other {# uruchomienia agenta zakończone}}",
+          "agents": "{count, plural, one {# działający agent uśpiony} few {# działający agenci uśpieni} many {# działających agentów uśpionych} other {# działającego agenta uśpione}}",
+          "agentsPartial": "Uśpiono {done} z {total} działających agentów",
+          "hostedPartial": "Zakończono {done} z {total} uruchomień agenta",
+          "ciFailed": "{count, plural, one {# repozytorium lub kontener CI nie zatrzymał się.} few {# repozytoria lub kontenery CI nie zatrzymały się.} many {# repozytoriów lub kontenerów CI nie zatrzymało się.} other {# repozytorium lub kontenera CI nie zatrzymało się.}} Odśwież i ponów Zatrzymaj wszystko.",
+          "hostedFailed": "{count, plural, one {# uruchomienie agenta nie zakończyło się.} few {# uruchomienia agenta nie zakończyły się.} many {# uruchomień agenta nie zakończyło się.} other {# uruchomienia agenta nie zakończyło się.}} Użyj Anuluj w jego wierszu.",
+          "agentsFailed": "{count, plural, one {# agent nie zatrzymał się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w jego wierszu.} few {# agenci nie zatrzymali się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w ich wierszach.} many {# agentów nie zatrzymało się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w ich wierszach.} other {# agenta nie zatrzymało się: zatrzymanie nie zostało potwierdzone. Użyj Uśpij w ich wierszach.}}",
+          "index": "Zadania indeksowania nadal działały.",
+          "byYou": "Zatrzymane przez Ciebie, {when}.",
+          "dismiss": "Zamknij",
+          "dismissAria": "Zamknij wynik zatrzymania"
+        },
+        "forbidden": "Tylko właściciel lub administrator może zatrzymać pracę floty tej organizacji."
       }
     },
     "gitAccounts": {
@@ -5770,7 +5967,11 @@
       "transitioned": "<s>{actor}</s> przenosi <s>{key}</s> do statusu {status}",
       "generic": "<s>{actor}</s> aktualizuje <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> wysyła Ci powiadomienie",
-      "accessRefused": "Kod projektu <s>{project}</s> jest gotowy, ale nie możesz go jeszcze otworzyć — spróbuj wysłać zaproszenie ponownie"
+      "accessRefused": "Kod projektu <s>{project}</s> jest gotowy, ale nie możesz go jeszcze otworzyć — spróbuj wysłać zaproszenie ponownie",
+      "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci."
     }
   },
   "orgAdmin": {
@@ -8335,6 +8536,7 @@
       },
       "progress": {
         "submitted": "Wysyłanie rozmowy do Motir AI…",
+        "watching": "Motir AI pisze ten plan…",
         "proposed": "{count, plural, =0 {Umieszczanie proponowanej pracy na kanwie…} one {Dotąd zaproponowano # element…} few {Dotąd zaproponowano # elementy…} many {Dotąd zaproponowano # elementów…} other {Dotąd zaproponowano # elementu…}}",
         "validating": "Sprawdzanie propozycji względem planu…",
         "reading": "Czytanie prośby…",
@@ -12235,6 +12437,13 @@
           "unknownActor": "były operator",
           "noReason": "Nie zapisano powodu",
           "counts": "Uruchomienia CI: {runs} · Kontenery CI: {containers} · Uruchomienia hostowane: {hosted} · Instancje agentów: {instances}"
+        },
+        "orgAdminStop": {
+          "title": "Ostatnie zatrzymanie przez administratora organizacji",
+          "titleNamed": "Ostatnio zatrzymane przez {name}, administratora organizacji",
+          "when": "{time}",
+          "counts": "Kontenery CI: {containers} · Instancje agentów: {instances}",
+          "hostedRun": "anulowano jedno uruchomienie agenta"
         }
       }
     },
@@ -13300,7 +13509,8 @@
       "credits": "Zatrzymany: Twojej organizacji skończyły się kredyty. Dodaj kredyty, a potem go wybudź.",
       "idle": "Uśpiony po 30 minutach bezczynności",
       "backstop": "Zatrzymany po 12 godzinach działania. Wybudź go, aby kontynuować.",
-      "admin_stop": "Zatrzymany przez wsparcie Motir. Wybudź go, aby kontynuować."
+      "admin_stop": "Zatrzymany przez wsparcie Motir. Wybudź go, aby kontynuować.",
+      "org_admin_stop": "Zatrzymany przez administratora Twojej organizacji. Wybudź go, aby kontynuować."
     },
     "menu": {
       "wake": "Wybudź",

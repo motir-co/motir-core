@@ -110,6 +110,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'convention',
   'conversation',
   'discovery_doc',
+  'empty_run_reply',
   'docs',
   'done',
   'drill',
@@ -300,6 +301,8 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   contextual_scope: { quiet: NOT_AN_ACT },
   target_read: { quiet: NOT_AN_ACT },
   target_settled: { quiet: NOT_AN_ACT },
+  /** The run planned nothing and its reply says why (MOTIR-10407): read by the settle. */
+  empty_run_reply: { quiet: NOT_AN_ACT },
 
   // ── THE SIX THE 2026-11-05 SWEEP FOUND UNLISTED (MOTIR-10427) ─────────────
   // Each one was read at its emitter on motir-ai `main` before it was given a

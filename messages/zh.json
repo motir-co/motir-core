@@ -3085,6 +3085,10 @@
           "code_access_refused": {
             "label": "无法授予代码访问权限",
             "desc": "Motir 无法让你访问它为你的项目创建的代码仓库。"
+          },
+          "agent_hibernated_by_admin": {
+            "label": "管理员让你的智能体进入了休眠",
+            "desc": "组织的所有者或管理员在组织的 Fleet 页面停止了你的一个智能体。"
           }
         },
         "soon": "即将推出",
@@ -4110,7 +4114,200 @@
         "members": "成员",
         "security": "安全",
         "usage": "用量与费用",
+        "fleet": "集群",
         "billing": "账单与套餐"
+      },
+      "fleet": {
+        "breadcrumb": "{org} · 设置",
+        "title": "集群",
+        "lead": "{org} 当前在 Motir 集群上运行的内容，以及停止它们的操作。容量申请仍在<link>账单与套餐 › 集群用量</link>中提交。",
+        "refresh": {
+          "button": "刷新",
+          "cue": "更新于 {time} · 此标签页打开期间每 30 秒刷新一次",
+          "refreshing": "正在刷新…",
+          "failed": "无法刷新，仍显示上次读取的数据。"
+        },
+        "lastStop": {
+          "by": "上次由 {name} 停止，{when}",
+          "byYou": "上次由你停止，{when}",
+          "bySomeone": "上次停止于{when}",
+          "never": "{org} 中还没有人停止过集群工作。",
+          "failed": "无法读取上次停止集群工作的人。"
+        },
+        "when": {
+          "today": "今天 {time}",
+          "yesterday": "昨天 {time}"
+        },
+        "tiles": {
+          "agentRuns": "并行智能体运行",
+          "agentRunsNote": "按机器分钟计费",
+          "agents": "智能体",
+          "agentsNote": "运行中和休眠中",
+          "ciJobs": "进行中的 CI 作业",
+          "ciWaiting": "{count, plural, =0 {无等待} other {# 个等待中}}",
+          "index": "索引作业",
+          "indexNote": "不计费",
+          "of": " / {figure}",
+          "notRead": "无法读取",
+          "failedTitle": "无法读取集群数据",
+          "failedBody": "这里不会把任何内容显示为零。下方各部分不受影响。"
+        },
+        "section": {
+          "retry": "重试",
+          "failedBody": "这里不会把任何内容显示为零。其他部分不受影响。"
+        },
+        "hosted": {
+          "title": "智能体运行",
+          "lead": "Motir 智能体当前正在为此组织构建的工作项。",
+          "count": "{count} 个进行中",
+          "empty": "没有进行中的智能体运行。",
+          "failed": "无法读取智能体运行",
+          "noCard": "没有工作项的运行",
+          "meta": "{project} · 由 {name} 启动 · {time} · ",
+          "metaNoName": "{project} · {time} · ",
+          "noProject": "已删除的项目",
+          "openRun": "打开运行",
+          "running": "运行中",
+          "cancel": "取消",
+          "cancelAria": "取消 {key} 的运行",
+          "cancelling": "正在取消…"
+        },
+        "agents": {
+          "title": "智能体实例",
+          "lead": "所有成员的智能体，运行中或休眠中。此处只提供休眠操作。",
+          "count": "{count} 个进行中",
+          "empty": "没有运行中或休眠中的智能体。",
+          "failed": "无法读取智能体实例",
+          "name": "{owner} 的智能体 · {profile}",
+          "unknownOwner": "一位成员",
+          "runningSince": "{project} · 自 {time} 起运行",
+          "hibernatingSince": "{project} · 自 {time} 起休眠",
+          "inStateSince": "{project} · 自 {time} 起{state}",
+          "running": "运行中",
+          "hibernating": "休眠中",
+          "hibernatingAt": "休眠中 · 自 {time} 起",
+          "hibernate": "休眠",
+          "hibernateAria": "让 {owner} 的智能体休眠",
+          "hibernatingNow": "正在休眠…",
+          "state": {
+            "starting": "启动中",
+            "waking": "唤醒中",
+            "updating": "更新中",
+            "deleting": "删除中",
+            "hibernated": "已休眠",
+            "failed": "失败",
+            "other": "忙碌"
+          }
+        },
+        "ci": {
+          "title": "CI 作业",
+          "lead": "Motir 运行器上进行中和等待中的作业。",
+          "count": "{inFlight} 个进行中 · {waiting} 个等待中",
+          "empty": "没有进行中或等待中的 CI 作业。",
+          "failed": "无法读取 CI 作业",
+          "meta": "{project} · {time} 排队 · ",
+          "noProject": "无项目",
+          "viewOnGithub": "在 GitHub 上查看",
+          "running": "运行中",
+          "waiting": "等待中 · {cause}",
+          "cause": {
+            "planLimit": "套餐上限",
+            "poolFull": "资源池已满",
+            "other": "其他"
+          }
+        },
+        "index": {
+          "title": "索引作业",
+          "running": "<n>{count}</n> 个运行中",
+          "note": "索引让代码搜索保持最新。它不计费，也不会在此停止。",
+          "failed": "无法读取索引作业"
+        },
+        "motirStops": {
+          "title": "Motir 停止的工作 · 最近 7 天",
+          "lead": "Motir 自身为此组织停止的机器及原因。",
+          "empty": "最近 7 天 Motir 没有为此组织停止任何内容。",
+          "failed": "无法读取 Motir 的停止记录",
+          "line": "{when} · {reason}",
+          "workload": {
+            "ci_runner": "CI 作业容器",
+            "hosted_agent": "智能体运行",
+            "agent_instance": "智能体实例",
+            "code_graph_index": "索引作业",
+            "other": "机器"
+          },
+          "reason": {
+            "record_ended": "它的作业已经结束",
+            "no_record": "找不到它的记录",
+            "org_stopped": "组织的工作已被停止",
+            "foreign_org": "它在运行另一个组织的工作"
+          },
+          "done": "已完成",
+          "notDone": "未完成"
+        },
+        "cancelRun": {
+          "title": "取消此运行？",
+          "description": "{key} · {title}",
+          "descriptionNoCard": "{project}",
+          "body": "{name} 于 {time} 启动了此运行。取消后它将以<strong>已取消</strong>关闭，并立即停止其机器。智能体已推送的工作会保留在其分支上。",
+          "bodyNoName": "此运行于 {time} 启动。取消后它将以<strong>已取消</strong>关闭，并立即停止其机器。智能体已推送的工作会保留在其分支上。",
+          "keep": "继续运行",
+          "confirm": "取消运行",
+          "confirming": "正在取消…",
+          "alreadyClosed": "{key} 的运行已经结束。",
+          "notFound": "该运行已不再进行。",
+          "failed": "无法取消 {key} 的运行，请重试。"
+        },
+        "hibernate": {
+          "title": "让 {owner} 的智能体休眠？",
+          "description": "{profile} · {project} · 自 {time} 起运行",
+          "body": "机器会停止，其文件会保留。在其中运行的工作项会先被取消。",
+          "told": "<strong>{owner} 会收到通知</strong>，得知你让它休眠及时间。只有对方可以唤醒、打开或删除它。",
+          "toldSelf": "只有你可以唤醒、打开或删除它。",
+          "keep": "继续运行",
+          "confirm": "让智能体休眠",
+          "confirming": "正在休眠…",
+          "alreadyResting": "{owner} 的智能体已经处于休眠状态。",
+          "inMotion": "{owner} 的智能体正在启动或切换状态，因此未让它休眠。请稍后重试。",
+          "notFound": "该智能体已不再运行。",
+          "failed": "无法让 {owner} 的智能体休眠，请重试。"
+        },
+        "stopAll": {
+          "button": "全部停止",
+          "title": "停止 {org} 运行的所有内容？",
+          "lead": "这会立即停止下方的计费工作。",
+          "counting": "正在统计运行中的内容…",
+          "ci": "{runs, plural, other {个 CI 作业被取消}}，<strong>{containers, plural, other {# 个容器}}</strong>被停止",
+          "ciUnknownRuns": "CI 作业被取消",
+          "hosted": "{count, plural, other {个智能体运行被结束}}",
+          "agents": "{count, plural, other {个运行中的智能体被休眠}}",
+          "index": "{count, plural, other {个索引作业继续运行}} — 索引不会在此停止",
+          "afterwards": "之后不会有任何阻止：成员可以立即开始新的工作。被休眠智能体的所有者会收到通知。",
+          "countedAt": "统计于 {time}。",
+          "unreadableTitle": "无法统计运行中的内容",
+          "unreadableBody": "尚未停止任何内容。请在确认前重新读取统计数字。",
+          "cancel": "取消",
+          "retry": "重试",
+          "confirm": "全部停止",
+          "confirming": "正在停止…",
+          "failed": "无法停止集群工作。其中部分可能已停止；请刷新查看仍在运行的内容。"
+        },
+        "result": {
+          "doneTitle": "已全部停止",
+          "partialTitle": "部分工作未能停止",
+          "ci": "{runs, plural, other {已取消 # 个 CI 作业}}，已停止 {stopped}/{total} 个容器",
+          "hosted": "{count, plural, other {已结束 # 个智能体运行}}",
+          "agents": "{count, plural, other {已让 # 个运行中的智能体休眠}}",
+          "agentsPartial": "已让 {done}/{total} 个运行中的智能体休眠",
+          "hostedPartial": "已结束 {done}/{total} 个智能体运行",
+          "ciFailed": "{count, plural, other {# 个 CI 仓库或容器未能停止。}}请刷新后再次尝试全部停止。",
+          "hostedFailed": "{count, plural, other {# 个智能体运行未能结束。}}请在其所在行使用取消。",
+          "agentsFailed": "{count, plural, other {# 个智能体未能停止：停止未得到确认。请在其所在行使用休眠。}}",
+          "index": "索引作业保持运行。",
+          "byYou": "由你停止，{when}。",
+          "dismiss": "关闭",
+          "dismissAria": "关闭停止结果"
+        },
+        "forbidden": "只有所有者或管理员可以停止此组织的集群工作。"
       }
     },
     "gitAccounts": {
@@ -5770,7 +5967,11 @@
       "transitioned": "<s>{actor}</s> 将 <s>{key}</s> 移动到 {status}",
       "generic": "<s>{actor}</s> 更新了 <s>{key}</s>",
       "genericNoKey": "<s>{actor}</s> 给你发送了一条通知",
-      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请"
+      "accessRefused": "<s>{project}</s> 的代码已就绪，但你还打不开它——请尝试重新发送邀请",
+      "agentHibernatedByAdmin": "<s>{actor}</s> 让你的智能体 <s>{agent}</s> 进入了休眠"
+    },
+    "excerpt": {
+      "agentHibernatedByAdmin": "组织管理员在 {time} 停止了它。它的文件已保留；可在智能体中将其唤醒。"
     }
   },
   "orgAdmin": {
@@ -8326,6 +8527,7 @@
       },
       "progress": {
         "submitted": "正在把对话发送给 Motir AI…",
+        "watching": "Motir AI 正在撰写这份计划…",
         "proposed": "{count, plural, =0 {正在把提议的工作放到画布上…} other {已提议 # 项…}}",
         "validating": "正在对照你的计划校验提案…",
         "reading": "正在理解你的请求……",
@@ -12226,6 +12428,13 @@
           "unknownActor": "一位前任操作者",
           "noReason": "未记录原因",
           "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个托管运行 · {instances} 个智能体实例"
+        },
+        "orgAdminStop": {
+          "title": "组织管理员上次停止",
+          "titleNamed": "组织管理员 {name} 上次停止",
+          "when": "{time}",
+          "counts": "{containers} 个 CI 容器 · {instances} 个智能体实例",
+          "hostedRun": "已取消 1 次智能体运行"
         }
       }
     },
@@ -13291,7 +13500,8 @@
       "credits": "已停止：你的组织额度已用完。请充值额度后再唤醒。",
       "idle": "30 分钟未使用后已休眠",
       "backstop": "已连续运行 12 小时后停止。唤醒即可继续。",
-      "admin_stop": "已被 Motir 支持团队停止。唤醒即可继续。"
+      "admin_stop": "已被 Motir 支持团队停止。唤醒即可继续。",
+      "org_admin_stop": "已被你组织的管理员停止。唤醒即可继续。"
     },
     "menu": {
       "wake": "唤醒",

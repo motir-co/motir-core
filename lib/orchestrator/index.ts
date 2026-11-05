@@ -34,6 +34,7 @@ import {
   type AwsManagementApi,
   type ContainerOrchestrator,
   type Ec2Api,
+  type Ec2Image,
   type FakeOrchestratorControls,
   type FleetInventory,
   type OrchestratorProvider,
@@ -658,6 +659,24 @@ export function inventoryForShard(shard: FleetShardDTO): FleetInventory | null {
       return registeredAdapter(unrouted).inventory(shard);
     }
   }
+}
+
+/**
+ * The named AMIs as an `aws` account's runner role sees them (MOTIR-10395) — the
+ * daily health check reads the pinned runner AMI's name through this, on the
+ * same client and role the account's launches use. An AMI shared with the
+ * account shows its name and description but not its owner's tags. Throws
+ * `OrchestratorNotConfiguredError` when the management credential is not set
+ * and `Ec2ApiError` on EC2's refusal.
+ */
+export async function describeAwsImages(
+  shard: FleetShardDTO,
+  imageIds: readonly string[],
+): Promise<Ec2Image[]> {
+  if (shard.provider !== 'aws') {
+    throw new OrchestratorNotConfiguredError(`fleet account ${shard.name} is not an AWS account`);
+  }
+  return awsShardClient(shard).ec2.describeImages(imageIds);
 }
 
 /** WHERE an account's containers live, as a key two routes to one place share —

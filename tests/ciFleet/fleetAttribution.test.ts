@@ -376,15 +376,18 @@ describe('a machine whose record says it should have stopped', () => {
     expect(row).toMatchObject({ recordRef: intent.id, organizationId: fx.organizationId });
   });
 
-  it('an intent the org stop settled reads org_stopped', async () => {
-    const fx = await seedTenant();
-    const ci = await bootFleetContainer(fx, 'ci_runner');
-    await seedIntent(fx, ci, { status: 'failed', teardownReason: 'credits_exhausted' });
+  it.each(['credits_exhausted', 'admin_stop', 'org_admin_stop'])(
+    'an intent the org stop settled (%s) reads org_stopped',
+    async (teardownReason) => {
+      const fx = await seedTenant();
+      const ci = await bootFleetContainer(fx, 'ci_runner');
+      await seedIntent(fx, ci, { status: 'failed', teardownReason });
 
-    const result = await fleetAttributionService.reconcile({ now: pastGrace });
-    expect(result).toMatchObject({ killed: [{ reason: 'org_stopped' }] });
-    expect(alerts()[0]).toContain(': org_stopped.');
-  });
+      const result = await fleetAttributionService.reconcile({ now: pastGrace });
+      expect(result).toMatchObject({ killed: [{ reason: 'org_stopped' }] });
+      expect(alerts()[0]).toContain(': org_stopped.');
+    },
+  );
 
   it("an in-flight intent past its OWN end is torn down through the port and settled 'reaped'", async () => {
     const fx = await seedTenant();

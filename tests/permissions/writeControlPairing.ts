@@ -187,6 +187,24 @@ export const SERVER_ACTION_GATES: Record<string, ActionGate> = {
     role: 'org:owner-or-admin',
   },
   'settings/organization/git/actions.ts#listGitlabProjectsAction': READ,
+  // The Fleet page (MOTIR-10369): every action goes through orgFleetStopService,
+  // which applies Billing & plans' view gate (owner or admin) before any effect.
+  'settings/organization/fleet/actions.ts#cancelHostedRunAction': {
+    kind: 'role',
+    role: 'org:owner-or-admin',
+  },
+  'settings/organization/fleet/actions.ts#hibernateAgentAction': {
+    kind: 'role',
+    role: 'org:owner-or-admin',
+  },
+  'settings/organization/fleet/actions.ts#previewStopEverythingAction': {
+    kind: 'role',
+    role: 'org:owner-or-admin',
+  },
+  'settings/organization/fleet/actions.ts#stopEverythingAction': {
+    kind: 'role',
+    role: 'org:owner-or-admin',
+  },
   'settings/organization/actions.ts#reconcileActiveWorkspaceAction': {
     kind: 'self',
     reason:
