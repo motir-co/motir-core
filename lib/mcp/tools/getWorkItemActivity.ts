@@ -168,6 +168,9 @@ function partText(part: ActivityEntryPartDto): string {
         : '';
       return `agent verdict: ${agent} ${said} at ${reviewCommitsLabel(part.subjectVersion)}${decided}${findings}`;
     }
+    // A person dismissed the agent's send-back (MOTIR-10434): at which commits, and why.
+    case 'reviewDismissed':
+      return `dismissed the agent's review at ${reviewCommitsLabel(part.subjectVersion)}\n    reason: ${part.reasonMd.split('\n').join('\n    ')}`;
   }
 }
 

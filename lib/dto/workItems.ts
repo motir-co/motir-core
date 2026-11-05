@@ -1727,7 +1727,8 @@ export interface WorkItemRevisionDto {
     | 'unarchived'
     | 'comment_deleted'
     | 'deleted'
-    | 'agent_verdict';
+    | 'agent_verdict'
+    | 'review_dismissed';
   diff: Record<string, { from: unknown; to: unknown }>;
 }
 

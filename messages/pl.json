@@ -15375,7 +15375,9 @@
         "notified": "Powiadomiono: {name}.",
         "findings": "Uwagi",
         "agentHosted": "Hostowany agent Motir",
-        "agentOwn": "Agent użytkownika {name} ({harness})"
+        "agentOwn": "Agent użytkownika {name} ({harness})",
+        "dismissed": "<actor></actor> odrzucił(a) przegląd agenta przy {commits}",
+        "dismissedReason": "Powód: {reason}"
       },
       "record": {
         "reviewed": "Zatwierdził(a) {name} · przejrzane przez agenta przy {commits}",

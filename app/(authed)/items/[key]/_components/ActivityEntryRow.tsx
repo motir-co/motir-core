@@ -14,6 +14,7 @@ import type { ActivityEntryDto, ActivityEntryPartDto, ActivityValueDto } from '@
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { StatusPill } from '@/components/issues/StatusPill';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { reviewCommitsLabel } from '@/lib/agentReview/verdictActivity';
 import { AgentVerdictActivityRow } from './AgentVerdictActivityRow';
 
 // One History feed row (Story 5.5 · Subtask 5.5.4), per
@@ -129,6 +130,7 @@ function RevisionEntryRow({
 }) {
   const routes = useReaderRoutes();
   const t = useTranslations('activity');
+  const tReview = useTranslations('approvalGate.reviewPath.activity');
   const format = useFormatter();
   const locale = useLocale() as Locale;
   const changedAt = new Date(entry.changedAt);
@@ -349,6 +351,21 @@ function RevisionEntryRow({
               {part.replyCount > 0
                 ? t('commentDeletedReplies', { count: part.replyCount })
                 : t('commentDeletedGloss')}
+            </div>
+          ),
+        };
+      // A person dismissed the agent's send-back (MOTIR-10434) — the shipped row grammar, the
+      // person as the actor, the commits in the sentence and their reason on the value line
+      // (`--el-text-secondary`, which holds AA on every surface the feed sits on).
+      case 'reviewDismissed':
+        return {
+          sentence: tReview.rich('dismissed', {
+            actor,
+            commits: reviewCommitsLabel(part.subjectVersion),
+          }),
+          values: (
+            <div className="text-(--el-text-secondary) font-sans text-xs whitespace-pre-wrap break-words">
+              {tReview('dismissedReason', { reason: part.reasonMd })}
             </div>
           ),
         };

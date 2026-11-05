@@ -15375,7 +15375,9 @@
         "notified": "Se notificó a {name}.",
         "findings": "Hallazgos",
         "agentHosted": "El agente alojado de Motir",
-        "agentOwn": "El agente de {name} ({harness})"
+        "agentOwn": "El agente de {name} ({harness})",
+        "dismissed": "<actor></actor> descartó la revisión del agente en {commits}",
+        "dismissedReason": "Motivo: {reason}"
       },
       "record": {
         "reviewed": "Aprobado por {name} · revisado por un agente en {commits}",

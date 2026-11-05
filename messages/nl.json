@@ -15375,7 +15375,9 @@
         "notified": "{name} is op de hoogte gebracht.",
         "findings": "Bevindingen",
         "agentHosted": "De gehoste agent van Motir",
-        "agentOwn": "Agent van {name} ({harness})"
+        "agentOwn": "Agent van {name} ({harness})",
+        "dismissed": "<actor></actor> heeft de review van de agent bij {commits} afgewezen",
+        "dismissedReason": "Reden: {reason}"
       },
       "record": {
         "reviewed": "Goedgekeurd door {name} · beoordeeld door een agent bij {commits}",

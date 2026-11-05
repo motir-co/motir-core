@@ -49,7 +49,11 @@ export type RevisionChangeKind =
   // An agent's review verdict was recorded (Story MOTIR-10327 · MOTIR-10338) — written
   // by `reviewVerdictRecordService` beside every verdict record, diff
   // `{ agentVerdict: { from: null, to: <snapshot> } }` (`lib/agentReview/verdictActivity.ts`).
-  | 'agent_verdict';
+  | 'agent_verdict'
+  // The routed person dismissed the agent's standing send-back (bug MOTIR-10434) — written
+  // by `reviewDismissalService` beside the `review_dismissal` row, diff
+  // `{ reviewDismissal: { from: null, to: <snapshot> } }` (`lib/agentReview/dismissalActivity.ts`).
+  | 'review_dismissed';
 
 /**
  * The arguments a service write passes when recording a revision. `diff` is

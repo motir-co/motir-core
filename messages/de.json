@@ -15375,7 +15375,9 @@
         "notified": "{name} wurde benachrichtigt.",
         "findings": "Befunde",
         "agentHosted": "Der gehostete Agent von Motir",
-        "agentOwn": "Agent von {name} ({harness})"
+        "agentOwn": "Agent von {name} ({harness})",
+        "dismissed": "<actor></actor> hat das Review des Agenten bei {commits} verworfen",
+        "dismissedReason": "Grund: {reason}"
       },
       "record": {
         "reviewed": "Genehmigt von {name} · vom Agenten geprüft bei {commits}",
