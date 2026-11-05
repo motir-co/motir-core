@@ -316,6 +316,11 @@ export const EXEMPT_TOOLS = {
     '`nothing-matched` and `unavailable` are opposite answers that both carry an empty ' +
     '`lessons`, so a caller reading the payload structurally must be able to tell them apart ' +
     '(MOTIR-3480).',
+  record_planner_finding:
+    "Returns THE STORED FINDING's identity — `{ id, source, fingerprint, status }`. No `/api/v1` " +
+    'operation returns a planner finding: the findings store lives in motir-ai and is read only by ' +
+    "platform admins, through motir-ai's admin routes, so there is no shared resource schema to " +
+    'derive from (MOTIR-10354).',
   reinforce_lesson:
     'Returns WHAT WAS REINFORCED and whether this call counted — `{ id, title, scope, ' +
     'lastOccurredAt, recurrenceCount, counted }`. Exempt for the same reason its two lesson ' +

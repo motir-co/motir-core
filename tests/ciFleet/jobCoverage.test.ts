@@ -175,6 +175,15 @@ describe('judgeJob', () => {
     });
   });
 
+  it('asks nothing of the image for a builtin its tool list cannot hold', () => {
+    expect(
+      judge(job([run('[ -n "$x" ] && : ok\n. ./env.sh\n[ -f y ] || gh pr view')]), () => undefined),
+    ).toMatchObject({ verdict: 'needs-image', missing: ['gh'] });
+    expect(judge(job([run('[ -n "$x" ]')]), () => undefined)).toMatchObject({
+      verdict: 'runnable',
+    });
+  });
+
   it('never calls runnable what it cannot judge', () => {
     const cases: Array<[WorkflowJob, ActionLookup, string]> = [
       [job([run('"$CLI" deploy')]), () => undefined, 'the computed command $CLI'],

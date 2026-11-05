@@ -415,6 +415,13 @@ export const TOOL_PERMISSIONS: Record<McpToolName, PermissionKey> = {
   // (AMENDMENT 3 to §4), and `CLI_TOKEN_GRANT` holds the key, so every `motir run`
   // token reaches it without the grant widening.
   get_coding_convention: 'ai:plan',
+  // MOTIR-10354 — record ONE planner defect a check run found, relayed to
+  // motir-ai's findings store. A planning WRITE, not a billable submit, and on
+  // the planning key DELIBERATELY rather than a lesson key: a finding changes no
+  // standing instruction, so reporting one must not need `lesson:manage`.
+  // `plannerFindingsService` asserts `RECORD_PLANNER_FINDING_PERMISSION`, which
+  // must name this same key (`tests/mcp/recordPlannerFindingTool.test.ts`).
+  record_planner_finding: 'ai:plan',
   // ── ai:configure — the convention WRITE (MOTIR-10183) ─────────────────────
   // `aiConventionService.saveConventionByKey` → `saveConvention` asserts
   // `ai:configure` by name — the key the /code editor's save checks, which the

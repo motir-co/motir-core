@@ -1143,7 +1143,32 @@
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.77.0` after MOTIR-9552's
  *   `1.76.0`. If a sibling has taken it since, RENUMBER this entry.
  *
- * - `1.78.0` — MOTIR-10333 (Story MOTIR-10327, the agent review path) adds
+ * - `1.78.0` — MOTIR-10380 adds the RUNNER-STOP body advisory shape to the dispatch
+ *   advisory union: `{ kind: 'shape', item, severity, runnerStop: true, criteria? }`, with
+ *   severity `leaf-no-description` (a childless leaf whose description is blank) or
+ *   `leaf-no-criteria` (a body with no enumerated acceptance criterion; `criteria` is
+ *   `no-heading` or `no-criterion`). The plan reads emit them; dispatch does not today.
+ *   Never a gate.
+ *
+ *   Additive: one new member of an advisory union whose severity is explicitly
+ *   open-ended (§8's allowed list); no existing shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.78.0` after MOTIR-9566's
+ *   `1.77.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.79.0` — MOTIR-10381 adds the MULTI-REPO runner-stop advisory shape to the dispatch
+ *   advisory union: `{ kind: 'shape', item, severity: 'leaf-multi-repo', runnerStop: true,
+ *   path, repo, criterionIndex }` — a childless leaf whose acceptance criteria name paths
+ *   in two or more repositories, whatever its repository set carries. The plan reads emit
+ *   it; dispatch does not today. Never a gate.
+ *
+ *   Additive: one new member of an advisory union whose severity is explicitly
+ *   open-ended (§8's allowed list); no existing shape changes.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.79.0` after MOTIR-10380's
+ *   `1.78.0`. If a sibling has taken it since, RENUMBER this entry.
+ *
+ * - `1.80.0` — MOTIR-10333 (Story MOTIR-10327, the agent review path) adds
  *   `submitWorkItemReviewVerdict` (`POST /api/v1/work-items/{key}/review-verdict`,
  *   `work_item:edit`, `200` with `ReviewVerdictResult`) — a person's OWN review agent's
  *   one verdict, with the person's own token, over the same `reviewVerdictService.submit`
@@ -1156,10 +1181,10 @@
  *   Additive: one new operation, one new component, a new member of an enum every client
  *   must tolerate unknown members of, and new codes for new conditions (§8's allowed list).
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.78.0` after MOTIR-9566's
- *   `1.77.0`. If a sibling has taken it since, RENUMBER this entry.
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.80.0` after MOTIR-10381's
+ *   `1.79.0`. If a sibling has taken it since, RENUMBER this entry.
  *
- * - `1.79.0` — MOTIR-10334 (Story MOTIR-10327) adds `dismissWorkItemReview`
+ * - `1.81.0` — MOTIR-10334 (Story MOTIR-10327) adds `dismissWorkItemReview`
  *   (`POST /api/v1/work-items/{key}/review-dismissal`, `work_item:edit`, `200` with
  *   `ReviewDismissalResult`) — the routed person dismisses the review agent's standing
  *   send-back at the current version, with a reason; the approve-and-merge gate is asked
@@ -1170,6 +1195,6 @@
  *
  *   Additive: one new operation, one new component and new codes for new conditions.
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.79.0` after `1.78.0` above.
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.81.0` after `1.80.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.79.0';
+export const V1_CONTRACT_VERSION = '1.81.0';

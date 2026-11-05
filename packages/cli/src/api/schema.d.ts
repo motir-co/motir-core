@@ -1347,6 +1347,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/work-items/{key}/review-verdict": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit your own review agent’s verdict on a card
+         * @description Submit ONE agent review verdict for a RUN-TARGET card with your own token (not a run token — a hosted review run uses `submitWorkItemAgentReview`). Any teammate holding `work_item:edit` on the card may submit. `verdict` is `approved` or `changes_requested` (`findingsMd` required, non-empty); `subjectVersion` is the delivery-set version reviewed; `checklist` rows judge each acceptance criterion (`evidence` required on `met`); `harness` and `model` say what reviewed. With the project’s review gate ON the verdict decides the awaiting `agent_review` gate (`outcome: decided`); OFF, it is stored as the review record (`outcome: recorded`). It is recorded under the authority `review_agent` and NEVER decides the approve-and-merge gate. A `changes_requested` withdraws an awaiting approve-and-merge gate (cause `agent_changes_requested`) and puts the card in To fix; no status moves. A verdict about a version the card no longer has is stored as late (`REVIEW_VERDICT_LATE`, 409); one about a version already reviewed is stored as second (`REVIEW_VERDICT_SECOND`, 409); neither decides anything. A card that is not its own run target is refused naming the run target (`REVIEW_TARGET_NOT_RUN_TARGET`, 422).
+         *
+         *     Requires the `work_item:edit` permission.
+         */
+        post: operations["submitWorkItemReviewVerdict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/work-items/{key}/review-dismissal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss the review agent’s send-back on a card
+         * @description Dismiss the review agent’s STANDING send-back at the card’s current delivery-set version, with a required `reason` (at most 2000 characters). Only the routed person may — the card’s assignee, its reporter when it has no assignee, or someone who may decide any approval — holding `work_item:edit`. Works with the review gate on or off and under either review source. The send-back is not edited: the dismissal is its own record (who, when, why, which version). The card stops being To fix for it, no status moves, and the approve-and-merge gate is asked again at the same version (`approvalGateId`). Refused, writing nothing, with `NO_STANDING_REVIEW_SENDBACK`, `REVIEW_SENDBACK_ALREADY_DISMISSED` or `REVIEW_DISMISSAL_STALE` (a push moved the version) — all 409 — `REVIEW_DISMISSAL_FORBIDDEN` (403) or `REASON_REQUIRED` (422).
+         *
+         *     Requires the `work_item:edit` permission.
+         */
+        post: operations["dismissWorkItemReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/folders": {
         parameters: {
             query?: never;
@@ -2125,7 +2169,7 @@ export interface components {
             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent" | "project_setting") | null;
             decisionSource: ("ui" | "api" | "mcp" | "github" | "system") | null;
             subjectVersion: string | null;
-            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended") | null;
+            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "agent_changes_requested" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended") | null;
             outcomeRef: string | null;
             refusalVerdict: ("revise" | "re_plan") | null;
             offersRefusalVerdict: boolean;
@@ -2330,6 +2374,24 @@ export interface components {
             workBranch?: string | null;
             branch?: string | null;
             advisories: ({
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                /** @constant */
+                runnerStop: true;
+                path: string;
+                repo: string;
+                criterionIndex: number;
+            } | {
+                /** @constant */
+                kind: "shape";
+                item: string;
+                severity: string;
+                /** @constant */
+                runnerStop: true;
+                criteria?: string;
+            } | {
                 /** @constant */
                 kind: "shape";
                 item: string;
@@ -3177,6 +3239,37 @@ export interface components {
             subjectVersion: string;
             /** Format: date-time */
             decidedAt: string;
+        };
+        ReviewVerdictResult: {
+            key: string;
+            recordId: string;
+            /** @enum {string} */
+            outcome: "decided" | "recorded";
+            /** @enum {string} */
+            verdict: "approved" | "changes_requested";
+            subjectVersion: string;
+            gateId: string | null;
+            withdrewApprovalGateIds: string[];
+            /** Format: date-time */
+            submittedAt: string;
+        };
+        ReviewDismissalResult: {
+            key: string;
+            dismissalId: string;
+            subjectVersion: string;
+            dismissed: {
+                /** @enum {string} */
+                kind: "record" | "gate";
+                id: string;
+            };
+            reason: string;
+            dismissedBy: {
+                id: string;
+                name: string | null;
+            };
+            /** Format: date-time */
+            dismissedAt: string;
+            approvalGateId: string | null;
         };
         Folder: {
             id: string;
@@ -6264,7 +6357,7 @@ export interface operations {
                             decidedUnderAuthority: ("assignee" | "reporter" | "admin" | "github_review" | "plan_permission" | "review_agent" | "project_setting") | null;
                             decisionSource: ("ui" | "api" | "mcp" | "github" | "system") | null;
                             subjectVersion: string | null;
-                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended") | null;
+                            supersededCause: ("republished" | "withdrawn" | "head_moved" | "member_closed" | "member_drafted" | "conflict" | "set_changed" | "pulled_back" | "ci_failed" | "ci_rerunning" | "unknown" | "plan_stale" | "plan_discarded" | "queue_failed" | "review_agent_disabled" | "agent_changes_requested" | "subject_gone" | "no_longer_manual" | "closed_without_decision" | "not_ready" | "replanned" | "answered" | "session_ended") | null;
                             outcomeRef: string | null;
                             refusalVerdict: ("revise" | "re_plan") | null;
                             offersRefusalVerdict: boolean;
@@ -14094,6 +14187,371 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AgentReviewResult"];
+                };
+            };
+            /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */
+            401: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The token is valid but its granted scopes do not include the one this operation requires. */
+            403: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer. */
+            404: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with existing state. The body is well-formed; the state is not what the request assumed. */
+            409: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation. */
+            422: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
+            429: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description An unexpected server fault. The body carries no `code`, no stack and no driver text. */
+            500: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalErrorBody"];
+                };
+            };
+        };
+    };
+    submitWorkItemReviewVerdict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run-target work item key, e.g. `ACME-7`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** @description The verdict, the reviewed version, the findings, the criteria checklist, and the harness and model. */
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    verdict: "approved" | "changes_requested";
+                    subjectVersion: string;
+                    summaryMd?: string | null;
+                    findingsMd?: string | null;
+                    /** @default [] */
+                    checklist?: {
+                        key?: string | null;
+                        criterion: string;
+                        /** @enum {string} */
+                        status: "met" | "not_met" | "cannot_tell";
+                        evidence?: string | null;
+                    }[];
+                    harness: string;
+                    model: string;
+                };
+            };
+        };
+        responses: {
+            /** @description What the verdict did — decided the review gate, or was recorded. */
+            200: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewVerdictResult"];
+                };
+            };
+            /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */
+            401: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The token is valid but its granted scopes do not include the one this operation requires. */
+            403: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The resource does not exist, or it is outside the workspace this token is bound to — deliberately the same answer. */
+            404: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request conflicts with existing state. The body is well-formed; the state is not what the request assumed. */
+            409: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The request is malformed in a way the caller can fix: an invalid cursor, an out-of-range `limit`, a failed body validation. */
+            422: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description The token's rate-limit budget for the current window is exhausted. `Retry-After` and the body's `retryAfterSeconds` say how many seconds to wait; `X-RateLimit-Reset` says when it refills. */
+            429: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    /** @description Whole seconds to wait before retrying — the same number as the body `retryAfterSeconds`. Sent on a 429 only. */
+                    "Retry-After"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+            /** @description An unexpected server fault. The body carries no `code`, no stack and no driver text. */
+            500: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InternalErrorBody"];
+                };
+            };
+        };
+    };
+    dismissWorkItemReview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The work item key, e.g. `ACME-7`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** @description The version the send-back is about, and why it is dismissed. */
+        requestBody: {
+            content: {
+                "application/json": {
+                    subjectVersion: string;
+                    reason: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The dismissal, and the approve-and-merge gate asked again. */
+            200: {
+                headers: {
+                    /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */
+                    "X-Request-Id"?: string;
+                    /** @description The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document. */
+                    "X-Motir-Api-Version"?: string;
+                    /** @description The number of requests this token may make in the current window. */
+                    "X-RateLimit-Limit"?: string;
+                    /** @description Requests left in the current window. Reaches `0` before a 429 is returned. */
+                    "X-RateLimit-Remaining"?: string;
+                    /** @description Unix epoch SECONDS at which the current window resets and the budget refills. A 429 also carries `Retry-After` and a body `retryAfterSeconds`, the relative form of the same instant. */
+                    "X-RateLimit-Reset"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewDismissalResult"];
                 };
             };
             /** @description Authentication required. No token, or a token that is malformed, unknown, revoked or expired — the five are deliberately undifferentiated. */

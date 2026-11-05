@@ -36,6 +36,7 @@ import {
   bucketEnds,
   reportWindow,
   validateReportWindow,
+  validateWindowDays,
   type ReportPeriod,
 } from '@/lib/reports/buckets';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
@@ -535,27 +536,29 @@ export const reportsService = {
    * rows, per assignee — exactly the gadget's contract. With a `window` it is the
    * work that was open at any point in the last `daysBack` days (read from the
    * revision trail), one bar per person: the assignee, else the reporter, as a
-   * separate "unassigned" segment, else the neutral Unassigned bar. A window
-   * outside the allowed set is the typed 422, raised before scope resolution as
-   * in `getAverageAge`. Same scope / typed-state contract as the other reads
+   * separate "unassigned" segment, else the neutral Unassigned bar. The window
+   * is days back ONLY — a ranked bar chart has no time buckets, so it takes no
+   * period and no daily bucket cap (MOTIR-10346). A `daysBack` outside
+   * `[1, MAX_REPORT_WINDOW_DAYS]` is the typed 422, raised before scope
+   * resolution as in `getAverageAge`. Same scope / typed-state contract as the other reads
    * (`no_access` / `stale` on a degraded scope).
    */
   async getWorkload(
     scope: ReportScopeDto,
     config: {
       measure: WorkloadMeasureDto;
-      window?: { period: ReportPeriod; daysBack: number };
+      window?: { daysBack: number };
     },
     ctx: ServiceContext,
   ): Promise<ReportWidgetResultDto<WorkloadDto>> {
-    if (config.window) validateReportWindow(config.window.period, config.window.daysBack);
+    if (config.window) validateWindowDays(config.window.daysBack);
 
     const resolved = await resolveReportScope(scope, ctx);
     if (resolved.state !== 'ok') return resolved;
 
     const filter = await scopeAstFilter(resolved, ctx);
     if (config.window) {
-      const { period, daysBack } = config.window;
+      const { daysBack } = config.window;
       const { start, end } = reportWindow(new Date(), daysBack);
       const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         workItemRepository.aggregateWorkloadByPersonInWindow(
@@ -569,7 +572,6 @@ export const reportsService = {
       return {
         state: 'ok',
         data: toWorkloadDto(config.measure, rows, {
-          period,
           daysBack,
           windowStart: start,
           windowEnd: end,

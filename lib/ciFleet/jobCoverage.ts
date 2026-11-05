@@ -137,6 +137,13 @@ const need = (walk: Walk, tool: string) => {
   if (!walk.tools.has(tool) && !walk.provided.has(tool)) walk.missing.add(tool);
 };
 
+/**
+ * Builtins every POSIX shell has, so a shell body needs nothing more of the image
+ * for them. The image's tool list cannot hold them: `list-tools.sh` keeps only
+ * names that start with a letter, a digit or `_`.
+ */
+const PUNCTUATION_BUILTINS = new Set(['[', ':', '.']);
+
 /** The executable a `shell:` names: `bash`, `python3` for `python3 {0}`, … */
 function shellInterpreter(shell: string | null): string {
   if (shell === null) return 'bash';
@@ -153,7 +160,9 @@ function judgeRun(walk: Walk, step: Extract<WorkflowStep, { kind: 'run' }>): voi
   const read = scriptCommands(step.script);
   // An install in this body serves the commands after it in the same body too.
   for (const tool of read.installs) walk.provided.add(tool);
-  for (const tool of read.commands) need(walk, tool);
+  for (const tool of read.commands) {
+    if (!PUNCTUATION_BUILTINS.has(tool)) need(walk, tool);
+  }
   for (const word of read.dynamic) walk.unjudged.add(`the computed command ${word}`);
 }
 

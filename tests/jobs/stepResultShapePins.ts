@@ -452,6 +452,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ checkedAt: string; pairs: Array<{ message: string; org: string; projectKey: string; reasonCode: string; state: "met" | "unknown" | "unmet" }>; targetsUnreadable: null | { status: null | number }; verdict: "indeterminate" } | { checkedAt: string; pairs: Array<{ message: string; org: string; projectKey: string; reasonCode: string; state: "met" | "unknown" | "unmet" }>; verdict: "gap" } | { checkedAt: string; pairs: Array<{ message: string; org: string; projectKey: string; reasonCode: string; state: "met" | "unknown" | "unmet" }>; verdict: "runnable" } | { checkedAt: string; reason: "app_not_configured" | "no_targets" | "runner_image_unset"; verdict: "not_applicable" }',
   },
+  // The runner-image freshness probe (MOTIR-10393): a verdict the handler
+  // branches on, like every probe of the daily check.
+  'runner-image-freshness': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; build: { commit: string; image: string; source: "label" | "sha_tag" }; checkedAt: string; unreleased: Array<{ commit: string; committedAt: string; paths: Array<string>; relation: "ahead" | "diverged"; subject: string }>; verdict: "stale" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; build: { commit: string; image: string; source: "label" | "sha_tag" }; checkedAt: string; verdict: "current" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; checkedAt: string; detail: string; image: string; phase: "build_commit" | "github" | "registry"; verdict: "indeterminate" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; checkedAt: string; reason: "runner_image_unset"; verdict: "not_applicable" }',
+  },
   'notification-fan-in': {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',

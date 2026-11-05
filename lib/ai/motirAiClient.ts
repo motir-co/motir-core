@@ -2536,6 +2536,164 @@ export async function reinforceLesson(input: ReinforceLessonRequest): Promise<Ra
   return body as RawReinforcedLesson;
 }
 
+// ── The PLANNER-FINDING relay (Story MOTIR-10354 · MOTIR-10385) ─────────────
+//
+// `POST /v1/admin/planner-findings` — store ONE finding in motir-ai's findings
+// store (the store and its route are Story MOTIR-10348). The only core caller is
+// the `record_planner_finding` MCP tool, through `plannerFindingsService`, which
+// decides who may write, resolves the project, and maps the tool's arguments
+// into this request. This function sends what it is given and decides nothing.
+//
+// ⚠️ `source` IS THE LITERAL `'check_plan'`. The in-loop writer (the hosted
+// planner's own review stage) lives in motir-ai and never passes through core, so
+// a core caller has no business forming an `in_loop` row, and this type cannot.
+//
+// ⚠️ NO `rule`, `jobId`, `status`, `fingerprint`, `lessonId`, `bugKey` OR
+// `aiProjectId` MEMBER, and the body is built key by key so an extra member cast
+// onto the input never reaches the wire. `rule` and `jobId` ARE accepted upstream
+// (`PLANNER_FINDING_FIELDS` in motir-ai `src/app.ts`), so this type is what keeps
+// a core finding fingerprinting on site and attribution only. The rest are
+// computed or owned upstream.
+//
+// ⚠️ THE FIELD NAMES ARE A CROSS-REPO STRING AGREEMENT (as for `createLesson`):
+// motir-ai's `parsePlannerFindingBody` (`src/app.ts`) and `validateFinding`
+// (`src/services/plannerFindingService.ts`) are the contract, and a typo on
+// either side is a runtime `validation_error` with no type error in the repo
+// that made it. The seam test asserts on the SERIALIZED body for that reason.
+//
+// ⚠️ AN OMITTED OPTIONAL IS ABSENT, NEVER `null` OR `''`: the upstream
+// `optional()` helper refuses a present field that is not a non-empty string.
+//
+// ⚠️ ONE ATTEMPT, NEVER RETRIED. The route has no idempotency key, so a re-send
+// after a timeout could store a second row for the same defect. A failure is
+// thrown as the typed `MotirAi*` error carrying the upstream reason, and the
+// caller records the finding again if it wants one.
+
+/** The closed vocabularies, spelled as motir-ai's Prisma enums spell them. */
+export type PlannerFindingPlanner = 'hosted' | 'plan_py';
+export type PlannerFindingPrediction = 'STOPS' | 'SETTLES' | 'THRU';
+export type PlannerFindingOutcome = 'fixed' | 'reported' | 'fix_failed';
+export type PlannerFindingAttribution = 'code' | 'corpus' | 'model' | 'unattributed';
+
+export interface CreatePlannerFindingRequest {
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  /** Required and non-empty upstream. Text, never a foreign key: a finding outlives its plan. */
+  planId: string;
+  source: 'check_plan';
+  planner: PlannerFindingPlanner;
+  site: string;
+  prediction: PlannerFindingPrediction;
+  whatHappened: string;
+  evidence: string;
+  outcome: PlannerFindingOutcome;
+  planTitle?: string;
+  cardRef?: string;
+  authorModel?: string;
+  authorSessionKey?: string;
+  baselineBranch?: string;
+  baselineCommit?: string;
+  correction?: string;
+  attribution?: PlannerFindingAttribution;
+  why?: string;
+  hostedCell?: string;
+  planpyCell?: string;
+  fixDirection?: string;
+}
+
+/** One stored finding as the create route answers it (motir-ai `model PlannerFinding`). */
+export interface RawPlannerFinding {
+  id: string;
+  source: string;
+  planner: string;
+  site: string;
+  fingerprint: string;
+  status: string;
+  coreOrganizationId?: string;
+  coreWorkspaceId?: string;
+  coreProjectId?: string;
+  planId?: string;
+  prediction?: string;
+  whatHappened?: string;
+  evidence?: string;
+  outcome?: string;
+  jobId?: string | null;
+  planTitle?: string | null;
+  cardRef?: string | null;
+  authorModel?: string | null;
+  authorSessionKey?: string | null;
+  baselineBranch?: string | null;
+  baselineCommit?: string | null;
+  correction?: string | null;
+  rule?: string | null;
+  attribution?: string | null;
+  why?: string | null;
+  hostedCell?: string | null;
+  planpyCell?: string | null;
+  fixDirection?: string | null;
+  lessonId?: string | null;
+  bugKey?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** The optional members, in wire order. Each is sent only when the caller supplied it. */
+const PLANNER_FINDING_OPTIONAL_FIELDS = [
+  'planTitle',
+  'cardRef',
+  'authorModel',
+  'authorSessionKey',
+  'baselineBranch',
+  'baselineCommit',
+  'correction',
+  'attribution',
+  'why',
+  'hostedCell',
+  'planpyCell',
+  'fixDirection',
+] as const satisfies readonly (keyof CreatePlannerFindingRequest)[];
+
+function plannerFindingBody(input: CreatePlannerFindingRequest): Record<string, string> {
+  const body: Record<string, string> = {
+    coreOrganizationId: input.coreOrganizationId,
+    coreWorkspaceId: input.coreWorkspaceId,
+    coreProjectId: input.coreProjectId,
+    planId: input.planId,
+    source: input.source,
+    planner: input.planner,
+    site: input.site,
+    prediction: input.prediction,
+    whatHappened: input.whatHappened,
+    evidence: input.evidence,
+    outcome: input.outcome,
+  };
+  for (const key of PLANNER_FINDING_OPTIONAL_FIELDS) {
+    const value = input[key];
+    if (value !== undefined) body[key] = value;
+  }
+  return body;
+}
+
+export async function createPlannerFinding(
+  input: CreatePlannerFindingRequest,
+): Promise<RawPlannerFinding> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/planner-findings`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(plannerFindingBody(input)),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as Partial<RawPlannerFinding>;
+  // A 2xx whose shape is wrong is an unavailable upstream, never a recorded
+  // finding: a caller that read it as success would stop reporting the defect.
+  if (typeof body.id !== 'string') {
+    throw new MotirAiUnavailableError('create-planner-finding response missing `id`');
+  }
+  return body as RawPlannerFinding;
+}
+
 export async function getLesson(query: LessonDetailQuery): Promise<RawLesson> {
   const { url, serviceToken } = config();
   const params = new URLSearchParams({

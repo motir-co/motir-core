@@ -5536,7 +5536,7 @@
         "how": "Eine fallende Linie bedeutet, dass Arbeit schneller erledigt wird. Zeiträume werden nach Lösungsdatum gezählt; ein altes Element, das heute gelöst wird, erhöht also den heutigen Zeitraum."
       },
       "workload": {
-        "what": "Die offene Arbeit, die jede Person im gewählten Zeitraum trägt, gezählt in Story Points oder Arbeitselementen. Arbeit ohne Verantwortlichen wird ihrem Ersteller zugerechnet.",
+        "what": "Die offene Arbeit, die jede Person zu irgendeinem Zeitpunkt im gewählten Zeitraum hatte, gezählt in Story Points oder Arbeitselementen. Arbeit ohne Verantwortlichen wird ihrem Ersteller zugerechnet.",
         "how": "Die längsten Balken sind die Personen mit der meisten offenen Arbeit. Achten Sie auf eine sehr ungleiche Verteilung, bevor Sie weitere Arbeit zuweisen."
       }
     }

@@ -5476,8 +5476,8 @@
       "xPoints": "Story point (aperti)",
       "xCount": "Elementi di lavoro (aperti)",
       "unassigned": "Non assegnato",
-      "chartDesc": "{measure} aperti, in ordine per persona nel periodo scelto: {breakdown}. Totale {total} su {count} elementi di lavoro.",
-      "tableCaption": "Lavoro aperto per persona nel periodo scelto: assegnato, non assegnato e segnalato da loro, più il totale, per la misura attiva.",
+      "chartDesc": "{measure} aperti, in ordine per persona nell’intervallo scelto: {breakdown}. Totale {total} su {count} elementi di lavoro.",
+      "tableCaption": "Lavoro aperto per persona nell’intervallo scelto: assegnato, non assegnato e segnalato da loro, più il totale, per la misura attiva.",
       "tableAssignee": "Responsabile",
       "tablePoints": "Story point",
       "tableIssues": "Elementi di lavoro",
@@ -5536,7 +5536,7 @@
         "how": "Una linea che scende significa che il lavoro viene concluso più in fretta. I periodi si contano per data di risoluzione, quindi un elemento vecchio risolto oggi fa salire il periodo di oggi."
       },
       "workload": {
-        "what": "Il lavoro aperto che ogni persona ha in carico in un periodo scelto, contato in Story point o in elementi di lavoro. Il lavoro senza responsabile viene contato sotto chi l’ha segnalato.",
+        "what": "Il lavoro aperto che ogni persona ha avuto in carico in un qualsiasi momento dell’intervallo scelto, contato in Story point o in elementi di lavoro. Il lavoro senza responsabile viene contato sotto chi l’ha segnalato.",
         "how": "Le barre più lunghe sono le persone con più lavoro aperto. Cerca una distribuzione molto sbilanciata prima di assegnare altro lavoro."
       }
     }

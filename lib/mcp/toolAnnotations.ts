@@ -465,6 +465,13 @@ export const TOOL_ANNOTATIONS: Record<McpToolName, McpToolAnnotations> = {
     idempotentHint: true,
     openWorldHint: false,
   },
+  // W: recordPlannerFinding.ts → motir-ai createFinding — adds one finding row; a repeat call adds a second
+  record_planner_finding: {
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
   // W: attachFile.ts → attachmentsService.attachToWorkItem — a new blob, attachment row and link; additive
   attach_file: {
     readOnlyHint: false,

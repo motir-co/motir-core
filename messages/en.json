@@ -5476,8 +5476,8 @@
       "xPoints": "Story points (open)",
       "xCount": "Work items (open)",
       "unassigned": "Unassigned",
-      "chartDesc": "Open {measure}, ranked by person over the chosen period: {breakdown}. Total {total} across {count} work items.",
-      "tableCaption": "Open work per person over the chosen period — assigned, unassigned and reported by them, and the total, for the active measure.",
+      "chartDesc": "Open {measure}, ranked by person over the chosen window: {breakdown}. Total {total} across {count} work items.",
+      "tableCaption": "Open work per person over the chosen window — assigned, unassigned and reported by them, and the total, for the active measure.",
       "tableAssignee": "Assignee",
       "tablePoints": "Story points",
       "tableIssues": "Work items",
@@ -5536,7 +5536,7 @@
         "how": "A falling line means work is being finished faster. Periods are counted by resolution date, so an old item resolved today raises today's period."
       },
       "workload": {
-        "what": "The open work each person holds over a chosen period, counted in story points or work items. Work with no assignee is counted under its reporter.",
+        "what": "The open work each person held at any point in the chosen window, counted in story points or work items. Work with no assignee is counted under its reporter.",
         "how": "The longest bars are the people carrying the most open work. Look for a very uneven spread before assigning more."
       }
     }

@@ -693,3 +693,21 @@ Reused with no change: `--el-chart-cat-none` (no-reporter bar), `--el-chart-crea
 
 `period`, `daysBack` (Workload) · `form`, `series` (Created vs Resolved) · `endingAt`, `count` (Velocity);
 the Sprint report uses its path `/sprints/<id>/report`. `buildReportHref` builds them and omits defaults.
+
+## Workload drops Period — Days back only (MOTIR-10346)
+
+Amends **§ Reports refined › Workload (panel 4)** above and its URL summary, drawn in
+`more-reports.mock.html` panel 4. No new mock: the change removes one control and redraws nothing.
+
+Workload is a ranked horizontal bar chart with **no time buckets**, so the Period segmented control
+(Day / Week / Month) had nothing to bucket: switching it returned identical bars, and its only effect
+was the daily bucket cap hiding the 180- and 365-day rungs of Days back. So:
+
+- **Controls:** Scope · **Days back** · Measure. The Days-back stepper is the same element as before
+  (same markup, tokens and labels); its ladder is 7 · 14 · 30 · 60 · 90 · 180 · 365 for every reader,
+  bounded only by the one-year window cap.
+- **URL:** `daysBack` (Workload) beside `?savedFilterId=&measure=`. The page ignores a `?period=`, so an
+  old shared link that still carries one renders the same bars as the link without it.
+- **Copy:** the chart description, the data-table caption and the help text say "the chosen window",
+  not "the chosen period".
+- Average age, Resolution time and Created vs Resolved keep Period — there it buckets the axis.

@@ -2829,6 +2829,117 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
     additionalProperties: false,
     $schema: 'http://json-schema.org/draft-07/schema#',
   },
+  record_planner_finding: {
+    type: 'object',
+    properties: {
+      projectKey: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+      },
+      planId: {
+        type: 'string',
+        description:
+          'The plan the finding is about, as TEXT — a plan id, a session id, or nothing. It is never looked up: an id that is no plan in Motir (a plan.py run, a plan already decided or gone) is accepted and stored as given, because a finding outlives its plan.',
+      },
+      planTitle: {
+        type: 'string',
+        description: "The plan's title, as text, for a reader of the finding.",
+      },
+      cardRef: {
+        type: 'string',
+        description:
+          'The card the defect sits on, as text — a plan item id (`planItem:…`) or a work-item key (`MOTIR-123`).',
+      },
+      planner: {
+        type: 'string',
+        enum: ['hosted', 'plan_py'],
+        description:
+          'Which planner wrote the plan: "hosted" (Motir\'s own planner) or "plan_py" (the local planner).',
+      },
+      site: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'WHERE the defect is — the card and the part of it (a criterion, an edge, a field). Repeats of one defect are grouped by site and attribution, so name it the same way each time.',
+      },
+      prediction: {
+        type: 'string',
+        enum: ['STOPS', 'SETTLES', 'THRU'],
+        description:
+          'What the runner would do at that site: "STOPS" (it cannot build the card), "SETTLES" (it builds with a recorded deviation) or "THRU" (it builds straight through).',
+      },
+      whatHappened: {
+        type: 'string',
+        minLength: 1,
+        description: 'What is wrong, in a sentence or two.',
+      },
+      evidence: {
+        type: 'string',
+        minLength: 1,
+        description:
+          'What shows it — a `path:line` at a commit, a quoted criterion, a command and its output.',
+      },
+      correction: {
+        type: 'string',
+        description: 'The correction that was made or proposed, when there is one.',
+      },
+      outcome: {
+        type: 'string',
+        enum: ['fixed', 'reported', 'fix_failed'],
+        description:
+          'What was done about it: "fixed" (repaired in the plan), "reported" (only reported) or "fix_failed" (a repair was attempted and failed).',
+      },
+      attribution: {
+        type: 'string',
+        enum: ['code', 'corpus', 'model', 'unattributed'],
+        description:
+          'Whose fault it was: "code" (the planner\'s code), "corpus" (its rule packs), "model" (the planning model) or "unattributed" (nobody could tell). Omitted reads as unattributed.',
+      },
+      why: { type: 'string', description: 'Why you attribute it that way.' },
+      hostedCell: {
+        type: 'string',
+        description: 'Where in the hosted planner the defect comes from, when you know.',
+      },
+      planpyCell: {
+        type: 'string',
+        description: 'Where in plan.py the defect comes from, when you know.',
+      },
+      fixDirection: {
+        type: 'string',
+        description: 'Which way a fix to the planner should go, when you know.',
+      },
+      authorModel: {
+        type: 'string',
+        description: 'The model that wrote the plan, when you know it.',
+      },
+      authorSessionKey: {
+        type: 'string',
+        description: 'The planning session that wrote the plan, when you know it.',
+      },
+      baseline: {
+        type: 'object',
+        properties: {
+          branch: { type: 'string', description: 'The branch the code was read at.' },
+          commit: { type: 'string', description: 'The commit the code was read at.' },
+        },
+        additionalProperties: false,
+        description: 'The branch and commit the code was read at when the defect was judged.',
+      },
+    },
+    required: [
+      'projectKey',
+      'planner',
+      'site',
+      'prediction',
+      'whatHappened',
+      'evidence',
+      'outcome',
+    ],
+    additionalProperties: false,
+    $schema: 'http://json-schema.org/draft-07/schema#',
+  },
   record_run_discrepancy: {
     type: 'object',
     properties: {
@@ -5052,6 +5163,7 @@ export const MCP_TOOL_TITLES: Record<keyof typeof TOOL_PERMISSIONS, string> = {
   read_dependency_source: 'Read dependency source',
   read_file: 'Read a file',
   record_plan_revision_reason: 'Record WHY a plan had to change',
+  record_planner_finding: 'Record a planner finding',
   record_run_discrepancy: 'Record what you built differently from the plan',
   reinforce_lesson: 'Reinforce a lesson',
   rename_page: 'Rename page',
@@ -5490,6 +5602,13 @@ export const MCP_TOOL_ANNOTATIONS: Record<keyof typeof TOOL_PERMISSIONS, McpTool
   read_file: { title: 'Read a file', readOnlyHint: true, openWorldHint: true },
   record_plan_revision_reason: {
     title: 'Record WHY a plan had to change',
+    readOnlyHint: false,
+    destructiveHint: false,
+    idempotentHint: false,
+    openWorldHint: false,
+  },
+  record_planner_finding: {
+    title: 'Record a planner finding',
     readOnlyHint: false,
     destructiveHint: false,
     idempotentHint: false,

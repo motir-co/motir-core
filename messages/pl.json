@@ -5536,7 +5536,7 @@
         "how": "Spadająca linia oznacza, że praca jest kończona szybciej. Okresy są liczone według daty rozwiązania, więc stary element rozwiązany dzisiaj podnosi wartość dzisiejszego okresu."
       },
       "workload": {
-        "what": "Otwarta praca, którą ma każda osoba w wybranym okresie, liczona w punktach historii lub elementach roboczych. Praca bez osoby odpowiedzialnej jest liczona przy jej autorze.",
+        "what": "Otwarta praca, którą każda osoba miała w dowolnym momencie wybranego okresu, liczona w punktach historii lub elementach roboczych. Praca bez osoby odpowiedzialnej jest liczona przy jej autorze.",
         "how": "Najdłuższe słupki to osoby z największą ilością otwartej pracy. Zanim przypiszesz więcej, sprawdź, czy rozkład nie jest bardzo nierówny."
       }
     }

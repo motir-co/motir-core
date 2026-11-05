@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.77.0";
+export const GENERATED_AGAINST = "1.81.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -204,6 +204,13 @@ export const V1_OPERATIONS = {
     permission: "work_item:edit",
     successStatus: 204,
     responseComponent: undefined,
+  },
+  "dismissWorkItemReview": {
+    method: "POST",
+    path: "/api/v1/work-items/{key}/review-dismissal",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "ReviewDismissalResult",
   },
   "getDispatchRun": {
     method: "GET",
@@ -589,6 +596,13 @@ export const V1_OPERATIONS = {
     permission: "ai:plan",
     successStatus: 202,
     responseComponent: "PlanJobHandle",
+  },
+  "submitWorkItemReviewVerdict": {
+    method: "POST",
+    path: "/api/v1/work-items/{key}/review-verdict",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "ReviewVerdictResult",
   },
   "transitionWorkItem": {
     method: "POST",

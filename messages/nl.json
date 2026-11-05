@@ -5536,7 +5536,7 @@
         "how": "Een dalende lijn betekent dat werk sneller wordt afgerond. Periodes worden geteld op oplosdatum, dus een oud item dat vandaag is opgelost verhoogt de periode van vandaag."
       },
       "workload": {
-        "what": "Het open werk dat elke persoon over een gekozen periode heeft, geteld in storypoints of werkitems. Werk zonder verantwoordelijke wordt geteld onder de maker.",
+        "what": "Het open werk dat elke persoon op enig moment in de gekozen periode had, geteld in storypoints of werkitems. Werk zonder verantwoordelijke wordt geteld onder de maker.",
         "how": "De langste balken zijn de mensen met het meeste open werk. Let op een zeer ongelijke verdeling voordat je meer toewijst."
       }
     }

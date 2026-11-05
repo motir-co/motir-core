@@ -91,6 +91,10 @@ import {
 import { ADD_LESSON_TOOL_NAME, registerAddLesson } from './tools/addLesson';
 import { SEARCH_LESSONS_TOOL_NAME, registerSearchLessons } from './tools/searchLessons';
 import { REINFORCE_LESSON_TOOL_NAME, registerReinforceLesson } from './tools/reinforceLesson';
+import {
+  RECORD_PLANNER_FINDING_TOOL_NAME,
+  registerRecordPlannerFinding,
+} from './tools/recordPlannerFinding';
 import { ATTACH_FILE_TOOL_NAME, registerAttachFile } from './tools/attachFile';
 import { LINK_PULL_REQUEST_TOOL_NAME, registerLinkPullRequest } from './tools/linkPullRequest';
 import {
@@ -284,6 +288,7 @@ export const MCP_TOOL_NAMES = [
   ADD_LESSON_TOOL_NAME,
   SEARCH_LESSONS_TOOL_NAME,
   REINFORCE_LESSON_TOOL_NAME,
+  RECORD_PLANNER_FINDING_TOOL_NAME,
   ATTACH_FILE_TOOL_NAME,
   PUBLISH_DESIGN_RESULT_TOOL_NAME,
   CREATE_DESIGN_UPLOAD_TOOL_NAME,
@@ -513,6 +518,9 @@ export function registerMcpTools(
   registerAddLesson(target, resolveContext);
   registerSearchLessons(target, resolveContext);
   registerReinforceLesson(target, resolveContext);
+  // The planner-findings relay (MOTIR-10354) — one defect a check run found,
+  // relayed to motir-ai's findings store.
+  registerRecordPlannerFinding(target, resolveContext);
   // The general attachment door (MOTIR-3058) — the agent-facing half of
   // MOTIR-3057's `/api/v1` route, over the same service path.
   registerAttachFile(target, resolveContext);

@@ -34,7 +34,7 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const daysAgo = (days: number): Date => new Date(Date.now() - days * DAY_MS);
-const WINDOW = { period: 'day' as const, daysBack: 30 };
+const WINDOW = { daysBack: 30 };
 
 beforeEach(async () => {
   wsCtx.current = null;
@@ -362,6 +362,42 @@ describe('story gate A7 — the HTTP reads keep their scope', () => {
     expect(JSON.stringify(ranged.body)).not.toContain(b.ownerId);
     expect(snapshot.body.data).toBeUndefined();
     expect(ranged.body.data).toBeUndefined();
+  });
+
+  it('GET /api/reports/workload ignores a stray ?period= — any value, the same bars (MOTIR-10346)', async () => {
+    const fx = await makeWorkItemFixture();
+    await seedItem(fx, { assigneeId: fx.ownerId, reporterId: fx.ownerId, points: 5 });
+    wsCtx.current = fx.ctx;
+    const { GET } = await import('@/app/api/reports/workload/route');
+    const call = async (qs: string) => {
+      const res = await GET(
+        new Request(
+          `http://localhost:3000/api/reports/workload?projectId=${fx.projectId}&measure=story_points&${qs}`,
+        ),
+      );
+      return { status: res.status, body: await res.json() };
+    };
+
+    const plain = await call('daysBack=180');
+    expect(plain.status).toBe(200);
+    expect(plain.body.data.window.daysBack).toBe(180);
+    expect(plain.body.data.window).not.toHaveProperty('period');
+    // An old shared link: a period that used to cap the window at 120 days, and
+    // one that was never a period at all. Neither is a 422; both read the same.
+    for (const qs of ['period=day&daysBack=180', 'period=bogus&daysBack=180']) {
+      const res = await call(qs);
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({
+        ...plain.body.data,
+        window: { ...plain.body.data.window, windowEnd: res.body.data.window.windowEnd },
+      });
+    }
+    // `?period=` alone still asks for the window, as it did before (30 days).
+    const periodOnly = await call('period=week');
+    expect(periodOnly.status).toBe(200);
+    expect(periodOnly.body.data.window.daysBack).toBe(30);
+    // No window parameter at all is the open-now snapshot the gadget reads.
+    expect((await call('')).body.data.window).toBeNull();
   });
 
   it('GET /api/projects/<key>/velocity?lastN=3 keeps its shape', async () => {

@@ -987,7 +987,10 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // shape family on the plan's proposals — still beside the verdict, never in it.
     // Re-pinned for MOTIR-10106, summary UNCHANGED: `rescopeWarnings` (a `modify`
     // approve will send back from built work) rides beside the verdict, never in it.
-    descriptionFingerprint: 'ad45344ec714',
+    // Re-pinned for MOTIR-10380, summary UNCHANGED: the RUNNER-STOP body advisories
+    // (`leaf-no-description`, `leaf-no-criteria`) are more shape entries, never in it.
+    // Re-pinned for MOTIR-10381, summary UNCHANGED: `leaf-multi-repo` joins them.
+    descriptionFingerprint: 'de062c69eb5a',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool
@@ -1346,6 +1349,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     summary:
       'Record that a lesson you found describes something that just went wrong — whether or not you also change it.',
     descriptionFingerprint: '264d63e358fd',
+  },
+  record_planner_finding: {
+    summary:
+      'Record one planner defect found while checking a plan as one finding, readable only by platform admins.',
+    descriptionFingerprint: '70bd16729815',
   },
   expand_item: {
     summary:

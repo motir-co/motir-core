@@ -133,6 +133,8 @@ to the destroy is a deliberate tick.
 three plan-session tools, all of which spend the workspace's AI credits. Under
 the old vocabulary they travelled with _edit work items_ because nothing
 narrower existed; an agent wired only to file work items can now be denied them.
+It also gates `record_planner_finding`, a planning write that spends no credits:
+a check run reports a planner defect on `ai:plan`, not on a lesson key.
 
 **Editing a repository's coding convention is `ai:configure`** — the admin key
 the Code page's editor checks. Only `update_coding_convention` asserts it, and a
@@ -335,7 +337,7 @@ state.
 ## Tool catalog
 
 The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
-`initialize` handshake and registers **119 tools**.
+`initialize` handshake and registers **120 tools**.
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
@@ -652,16 +654,19 @@ can read, does not say so.
 A **`shape`** entry has no far end at all: the card contradicts itself. Six
 severities, each with its own remedy:
 
-| severity                                  | what it found                                                                                                                                                                                           | remedy                                                                   |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `likely-ordering-violation`               | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426)                             | CUT the card at that criterion                                           |
-| `likely-repo-straddle`                    | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                                                         | SPLIT the card per repo (one repo, one PR)                               |
-| `likely-over-gate-sizing`                 | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                                             | BUILD it and report the sizing — size never stops a run (MOTIR-5372)     |
-| `under-authored`                          | a childless task / bug / subtask with no `storyPoints`, `estimateMinutes`, `type` or `executor` AND no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`) | BUILD it, state the criteria you worked to — never a gate (MOTIR-5427)   |
-| `likely-self-blocking-design`             | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                                            | LIFT the design criterion onto its own `type: design` card               |
-| `likely-post-merge-child-under-container` | the CHILD `item` (a `verification` / `deploy` / `manual` or human card) reads the deployment (`phrase`) while sitting inside the runnable container `container` whose merge it waits on (MOTIR-8863)    | lay it as a sibling the container `blocks`, or split into two containers |
-| `likely-blocker-count-mismatch`           | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                                                      | update the stale prose or wire the genuinely missing edge                |
-| `body-edit-above-field-move`              | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                                                         | RE-READ the body against those fields — a prompt, never a stop           |
+| severity                                  | what it found                                                                                                                                                                                                                  | remedy                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| `likely-ordering-violation`               | criterion `criterionIndex` carries the merge-word `phrase` — a PARTIAL tell: an evidence-phrased post-deploy criterion carries none, so no entry is not a pass (MOTIR-5426)                                                    | CUT the card at that criterion                                           |
+| `likely-repo-straddle`                    | criterion `criterionIndex` names `path`, which lives in `repo` — a repo the card does not CARRY                                                                                                                                | SPLIT the card per repo (one repo, one PR)                               |
+| `likely-over-gate-sizing`                 | the card's own `storyPoints` / `estimateMinutes` are past the estimation gate (points = the gate's rule; minutes = a proxy)                                                                                                    | BUILD it and report the sizing — size never stops a run (MOTIR-5372)     |
+| `under-authored`                          | a childless task / bug / subtask with no `storyPoints`, `estimateMinutes`, `type` or `executor` AND no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`)                        | BUILD it, state the criteria you worked to — never a gate (MOTIR-5427)   |
+| `leaf-no-description`                     | PLAN READS ONLY (`validate_plan`, `validate_work_item { planId }`), `runnerStop: true`: a childless, non-exempt task / bug / subtask whose description is blank, whatever its sizing, type and executor (MOTIR-10380)          | write the body before sealing — the runner stops on it                   |
+| `leaf-no-criteria`                        | PLAN READS ONLY, `runnerStop: true`: a childless, non-exempt leaf with a body and no enumerated criterion under `## Acceptance criteria` (`criteria`: `no-heading` or `no-criterion`), even typed and sized (MOTIR-10380)      | enumerate the criteria before sealing — the runner stops on it           |
+| `leaf-multi-repo`                         | PLAN READS ONLY, `runnerStop: true`: a childless, non-exempt leaf whose criteria name paths in two or more repositories (`repo` the second, `path`, `criterionIndex`), even when its repository set carries both (MOTIR-10381) | SPLIT the card per repo before sealing — one card is one pull request    |
+| `likely-self-blocking-design`             | criterion `designCriterionIndex` produces a design asset while criterion `surfaceCriterionIndex` builds the surface it draws                                                                                                   | LIFT the design criterion onto its own `type: design` card               |
+| `likely-post-merge-child-under-container` | the CHILD `item` (a `verification` / `deploy` / `manual` or human card) reads the deployment (`phrase`) while sitting inside the runnable container `container` whose merge it waits on (MOTIR-8863)                           | lay it as a sibling the container `blocks`, or split into two containers |
+| `likely-blocker-count-mismatch`           | an explicit counted claim about the card's own blocker siblings disagrees with its current `blocked_by` edge count                                                                                                             | update the stale prose or wire the genuinely missing edge                |
+| `body-edit-above-field-move`              | the card's newest body write (`bodyEdit`) moved none of the fields a body describes, and the write beneath it (`fieldMove`) did                                                                                                | RE-READ the body against those fields — a prompt, never a stop           |
 
 **`likely-over-gate-sizing`'s two arms do not carry the same authority.**
 `storyPoints >= 8` IS the gate's rule — its literal split signal, read off the
@@ -2259,6 +2264,88 @@ not `lesson:manage` — checked **before** any call to motir-ai.
 
 **Output** — `structuredContent`: the recorded lesson's `id`, `title`, its three
 axes as stored, and `sourceRef`.
+
+#### `record_planner_finding`
+
+Record **one planner defect** — something wrong with a plan, found while checking
+it — as **one finding** in the findings store in motir-ai. It is what the
+`motir check plan` skill calls for each defect it finds. The finding is relayed
+over the 7.1 boundary and stored as a `check_plan` row, which the admin
+planner-findings page shows beside the findings the hosted planner records about
+its own plans.
+
+**One call records one defect.** Make one call per defect, never one call for
+several; there is no batch argument.
+
+**The stored row is readable only by platform admins.** No MCP tool reads
+findings back, so the result naming the stored id is the caller's record that it
+was written.
+
+**It never files a planning bug and never creates or reinforces a lesson.** It
+only records the finding; an admin later triages it into a lesson, a bug or
+nothing.
+
+**It has no `source` argument and always writes `check_plan`**, so a caller cannot
+write an `in_loop` row — those are the hosted planner's own review stage. It also
+has no `status`, `fingerprint`, `rule`, `lessonId`, `bugKey`, triage or batch
+argument. The schema is strict, so naming any of them is refused by name rather
+than dropped.
+
+⚠️ **A repeat call writes a second row.** The tool is not idempotent: a finding
+has no event key to replay against, and the admin view groups repeats by
+fingerprint (site and attribution). Call it once per defect, and do not retry a
+failure blindly — a refusal names the field or the upstream reason, so fix that
+first.
+
+| Input              | Type   | Required | Notes                                                                                                                    |
+| ------------------ | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `projectKey`       | string | yes      | The project the finding is stored against. The finding belongs to that project only.                                     |
+| `planId`           | string | no       | The plan, as **text** — never a foreign key. An id that is no plan in Motir is accepted and stored as given.             |
+| `planTitle`        | string | no       | The plan's title, as text.                                                                                               |
+| `cardRef`          | string | no       | The card the defect sits on, as text — a plan item id (`planItem:…`) or a work-item key.                                 |
+| `planner`          | enum   | yes      | `hosted` · `plan_py` — which planner wrote the plan.                                                                     |
+| `site`             | string | yes      | Where the defect is: the card and the part of it. Repeats group by site, so name it the same way each time.              |
+| `prediction`       | enum   | yes      | `STOPS` · `SETTLES` · `THRU` — what the runner would do at the site.                                                     |
+| `whatHappened`     | string | yes      | What is wrong, in a sentence or two.                                                                                     |
+| `evidence`         | string | yes      | What shows it — a `path:line` at a commit, a quoted criterion, a command and its output.                                 |
+| `correction`       | string | no       | The correction made or proposed.                                                                                         |
+| `outcome`          | enum   | yes      | `fixed` · `reported` · `fix_failed` — what was done about it.                                                            |
+| `attribution`      | enum   | no       | `code` · `corpus` · `model` · `unattributed` — whose fault it was. Omitted reads as unattributed.                        |
+| `why`              | string | no       | Why it is attributed that way.                                                                                           |
+| `hostedCell`       | string | no       | Where in the hosted planner the defect comes from.                                                                       |
+| `planpyCell`       | string | no       | Where in plan.py the defect comes from.                                                                                  |
+| `fixDirection`     | string | no       | Which way a fix to the planner should go.                                                                                |
+| `authorModel`      | string | no       | The model that wrote the plan.                                                                                           |
+| `authorSessionKey` | string | no       | The planning session that wrote the plan.                                                                                |
+| `baseline`         | object | no       | `{ branch?, commit? }` — the branch and commit the code was read at. One argument here; stored as a branch and a commit. |
+
+`planId` and `planTitle` are text and never a foreign key, because a finding
+outlives its plan and a check can run on a plan that is already decided, or one
+plan.py wrote. When `planId` is omitted, the service sends one fixed placeholder
+text in its place, because the store requires a non-empty plan id. Optional text
+that is blank is treated as omitted.
+
+Requires the **planning permission (`ai:plan`)**, checked **before** any request
+is sent to motir-ai. It is deliberately **not** `lesson:manage` and not a lesson
+key: a finding changes no standing instruction, so a plain member who holds
+`ai:plan` can report a defect without any right over the planner's lessons.
+
+**Output** — the first text line names the stored finding's id;
+`structuredContent` carries `id`, `source` (always `check_plan`), `fingerprint`
+and `status` (`new` for a fresh finding).
+
+| Refusal                                    | When                                                                                        |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| input validation error naming the argument | A value outside a closed enum, a missing required field, or an unknown key. Nothing sent.   |
+| `PERMISSION_DENIED`                        | The caller does not hold `ai:plan` on the project; the message names the key. Nothing sent. |
+| `PROJECT_NOT_FOUND`                        | `projectKey` resolves to no project the caller can see. Nothing sent.                       |
+| `MOTIR_AI_BAD_REQUEST`                     | motir-ai refused the finding; the message names the field.                                  |
+| `MOTIR_AI_UNAUTHORIZED`                    | motir-ai rejected the service credential.                                                   |
+| `MOTIR_AI_UNAVAILABLE`                     | motir-ai could not be reached, timed out, or answered with a server error.                  |
+| `MOTIR_AI_CONFIG`                          | motir-core has no motir-ai URL or service token configured.                                 |
+
+Every failure carries the upstream reason in its text, is **never** reported as a
+success, and is **never** retried — a retry could store a second row.
 
 #### `link_pull_request`
 
@@ -5242,6 +5329,21 @@ shape and stay `validate_work_item`'s. A runner reads a two-index entry as LIFT
 and stops, so a planner disposes of each before sealing: re-word the criterion,
 lift the design half into its own card, or record on the card why it is a false
 positive.
+
+**The RUNNER-STOP members are a plan read's alone (MOTIR-10380, MOTIR-10381).**
+Each carries `runnerStop: true` and a severity in the exported
+`RUNNER_STOP_SEVERITIES`: `leaf-no-description` (a childless task, bug or
+subtask whose description is blank), `leaf-no-criteria` (a body with no
+enumerated acceptance criterion, `criteria` `no-heading` or `no-criterion`),
+whatever the card's points, estimate, type and executor, and `leaf-multi-repo`
+(criteria naming file paths in two or more repositories, even when the card's
+repository set carries both — `repo` is the second repository, `path` its first
+path, `criterionIndex` the criterion naming it; a card that also trips
+`likely-repo-straddle` reports both). A card with children, an epic or story, a
+`type: design` leaf and an `executor: human` leaf are exempt. A blank body is
+reported once, as no description. `validate_work_item` without a `planId`, the
+dispatch prompt and `claim_next_ready` never carry them, and none is a gate
+(`docs/decisions/leaf-body-runner-stop-advisories.md`).
 
 `likely-mislabelled-link` keeps its narrower scope: it is listed only for a body
 the plan writes — an `add`'s description or explanation, or a `modify` that
