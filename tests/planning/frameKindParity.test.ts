@@ -81,6 +81,12 @@ describe('every frame kind motir-ai emits has a disposition in core', () => {
     }
   });
 
+  it('lay_stopped, which landed on motir-ai main after that sweep, is quiet with a reason', () => {
+    const disposition = FRAME_DISPOSITIONS.lay_stopped;
+    expect(disposition).toHaveProperty('quiet');
+    expect((disposition as { quiet: string }).quiet).toMatch(/error/);
+  });
+
   const checkout = process.env.MOTIR_AI_CHECKOUT ?? path.resolve(process.cwd(), '..', 'motir-ai');
   const live = existsSync(path.join(checkout, 'src')) ? it : it.skip;
   live('a live sweep of the motir-ai checkout finds no kind core has not listed', () => {

@@ -26,6 +26,7 @@
     "gap",
     "info",
     "lay",
+    "lay_stopped",
     "lessons_injected",
     "level_closed_empty",
     "level_complete",

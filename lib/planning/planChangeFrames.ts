@@ -121,6 +121,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'gap',
   'info',
   'lay',
+  'lay_stopped',
   'lessons_injected',
   'level_closed_empty',
   'level_complete',
@@ -339,6 +340,16 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  carried on the plan's validation report, which is where a person reads it. */
   validity_unfixable: {
     quiet: 'a validity finding the re-open could not fix — the validation report carries it',
+  },
+
+  // ── LANDED ON motir-ai `main` AFTER THAT SWEEP (MOTIR-10427 review) ───────
+  /** generationPass `runLaySession`: a lay session stopped by a session limit
+   *  (credits, output limit, …) with part of its level laid (MOTIR-10422). The
+   *  ORIGINAL error is rethrown right after it, so the run ends in the error
+   *  state the rail already shows; the laid cards stand for the retry or resume.
+   *  A rail row naming the limit is a design question, outside this card. */
+  lay_stopped: {
+    quiet: 'a limit stopped a part-laid level — the rethrown error is the run’s error state',
   },
 };
 
