@@ -12232,6 +12232,11 @@
           "unknownActor": "元オペレーター",
           "noReason": "理由の記録なし",
           "counts": "CI の実行 {runs} 件 · CI コンテナー {containers} 個 · ホスト型の実行 {hosted} 件 · エージェントインスタンス {instances} 個"
+        },
+        "orgAdminStop": {
+          "title": "組織の管理者による前回の停止",
+          "when": "{time}",
+          "counts": "CI コンテナー {containers} 個 · エージェントインスタンス {instances} 個"
         }
       }
     },

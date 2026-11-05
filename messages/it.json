@@ -12235,6 +12235,11 @@
           "unknownActor": "un ex operatore",
           "noReason": "Nessun motivo registrato",
           "counts": "{runs} esecuzioni CI · {containers} container CI · {hosted} esecuzioni ospitate · {instances} istanze di agenti"
+        },
+        "orgAdminStop": {
+          "title": "Ultimo arresto da parte di un amministratore dell’organizzazione",
+          "when": "{time}",
+          "counts": "{containers} container CI · {instances} istanze di agenti"
         }
       }
     },

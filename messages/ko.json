@@ -12229,6 +12229,11 @@
           "unknownActor": "이전 운영자",
           "noReason": "기록된 사유 없음",
           "counts": "CI 실행 {runs}개 · CI 컨테이너 {containers}개 · 호스팅 실행 {hosted}개 · 에이전트 인스턴스 {instances}개"
+        },
+        "orgAdminStop": {
+          "title": "조직 관리자의 마지막 중지",
+          "when": "{time}",
+          "counts": "CI 컨테이너 {containers}개 · 에이전트 인스턴스 {instances}개"
         }
       }
     },

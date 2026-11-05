@@ -701,4 +701,33 @@ export const ciRunnerProvisioningIntentRepository = {
       take: limit,
     });
   },
+
+  /**
+   * When ONE organisation's newest intent settled with `teardownReason`, or null
+   * — the platform Fleet card's "last stopped by an organisation admin" moment.
+   */
+  async latestSettledForOrganization(
+    organizationId: string,
+    teardownReason: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Date | null> {
+    const agg = await tx.ciRunnerProvisioningIntent.aggregate({
+      where: { organizationId, teardownReason, settledAt: { not: null } },
+      _max: { settledAt: true },
+    });
+    return agg._max.settledAt ?? null;
+  },
+
+  /** How many of ONE organisation's intents settled with `teardownReason` in `[from, to]`. */
+  async countSettledForOrganizationBetween(
+    organizationId: string,
+    teardownReason: string,
+    from: Date,
+    to: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.ciRunnerProvisioningIntent.count({
+      where: { organizationId, teardownReason, settledAt: { gte: from, lte: to } },
+    });
+  },
 };

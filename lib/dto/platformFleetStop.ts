@@ -51,3 +51,18 @@ export interface FleetLastStopDTO {
   hostedRunsEnded: number;
   agentInstancesHibernated: number;
 }
+
+/**
+ * The newest stop an ORGANISATION owner or admin made of the org's own fleet
+ * work — read from the stored `org_admin_stop` end and teardown reasons, never
+ * from `fleet.stop` rows, so the tenant page's Fleet card shows it apart from a
+ * platform stop. One Stop everything ends many rows within seconds: the counts
+ * are the rows of each kind inside the 10-minute window ending at `at`. The
+ * admin's name is in neither record, so it carries no actor.
+ */
+export interface FleetLastOrgAdminStopDTO {
+  /** ISO-8601 — the newest of the two stored times. */
+  at: string;
+  ciContainersStopped: number;
+  agentInstancesHibernated: number;
+}

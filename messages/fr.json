@@ -12235,6 +12235,11 @@
           "unknownActor": "un ancien opérateur",
           "noReason": "Aucun motif enregistré",
           "counts": "{runs} exécutions CI · {containers} conteneurs CI · {hosted} exécutions hébergées · {instances} instances d'agent"
+        },
+        "orgAdminStop": {
+          "title": "Dernier arrêt par un administrateur de l'organisation",
+          "when": "{time}",
+          "counts": "{containers} conteneurs CI · {instances} instances d'agent"
         }
       }
     },

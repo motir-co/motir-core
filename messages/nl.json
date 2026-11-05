@@ -12235,6 +12235,11 @@
           "unknownActor": "een voormalige operator",
           "noReason": "Geen reden vastgelegd",
           "counts": "{runs} CI-runs · {containers} CI-containers · {hosted} gehoste runs · {instances} agentinstanties"
+        },
+        "orgAdminStop": {
+          "title": "Laatst gestopt door een beheerder van de organisatie",
+          "when": "{time}",
+          "counts": "{containers} CI-containers · {instances} agentinstanties"
         }
       }
     },

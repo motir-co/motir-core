@@ -12235,6 +12235,11 @@
           "unknownActor": "un antiguo operador",
           "noReason": "No se registró ningún motivo",
           "counts": "{runs} ejecuciones de CI · {containers} contenedores de CI · {hosted} ejecuciones alojadas · {instances} instancias de agentes"
+        },
+        "orgAdminStop": {
+          "title": "Última detención por un administrador de la organización",
+          "when": "{time}",
+          "counts": "{containers} contenedores de CI · {instances} instancias de agentes"
         }
       }
     },

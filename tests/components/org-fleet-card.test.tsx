@@ -4,7 +4,7 @@ import { cleanup, screen, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { FleetOrgRowDTO, FleetVerdict } from '@/lib/dto/platformFleetMonitor';
-import type { FleetLastStopDTO } from '@/lib/dto/platformFleetStop';
+import type { FleetLastOrgAdminStopDTO, FleetLastStopDTO } from '@/lib/dto/platformFleetStop';
 import type { PlatformRole } from '@/generated/prisma/client';
 import zhMessages from '@/messages/zh.json';
 
@@ -71,7 +71,12 @@ function row(overrides: Partial<FleetOrgRowDTO> = {}): FleetOrgRowDTO {
 const WINDOW = { windowMinutes: 10, periodMinutes: 5, judgedAt: '2026-10-02T14:32:00.000Z' };
 
 function renderCard(
-  props: { role?: PlatformRole; row?: FleetOrgRowDTO; lastStop?: FleetLastStopDTO | null } = {},
+  props: {
+    role?: PlatformRole;
+    row?: FleetOrgRowDTO;
+    lastStop?: FleetLastStopDTO | null;
+    lastOrgAdminStop?: FleetLastOrgAdminStopDTO | null;
+  } = {},
   messages?: Record<string, unknown>,
 ) {
   render(
@@ -83,6 +88,9 @@ function renderCard(
         row={props.row ?? row()}
         window={WINDOW}
         lastStop={props.lastStop ?? null}
+        {...(props.lastOrgAdminStop !== undefined
+          ? { lastOrgAdminStop: props.lastOrgAdminStop }
+          : {})}
       />
     </ToastProvider>,
     { now: new Date('2026-10-02T14:40:00.000Z'), ...(messages ? { messages } : {}) },
@@ -260,5 +268,61 @@ describe('OrgFleetCard', () => {
     const last = screen.getByTestId('org-fleet-last-stop');
     expect(last.textContent).toContain('a former operator');
     expect(last.textContent).toContain('No reason recorded');
+  });
+});
+
+describe('OrgFleetCard — an organisation admin’s stop', () => {
+  const orgAdminStop: FleetLastOrgAdminStopDTO = {
+    at: '2026-10-02T14:35:00.000Z',
+    ciContainersStopped: 3,
+    agentInstancesHibernated: 2,
+  };
+  const platformStop: FleetLastStopDTO = {
+    at: '2026-10-02T14:38:00.000Z',
+    actorEmail: 'ops@moooon.net',
+    reason: 'Runaway spend',
+    runsCancelled: 2,
+    ciContainersStopped: 3,
+    hostedRunsEnded: 1,
+    agentInstancesHibernated: 2,
+  };
+
+  it('is its own block, titled as an organisation admin’s, with the time and the counts', () => {
+    renderCard({ lastOrgAdminStop: orgAdminStop });
+    const block = screen.getByTestId('org-fleet-last-org-admin-stop');
+    expect(block.textContent).toContain('Last stopped by an organization admin');
+    expect(block.textContent).toContain('5 minutes ago');
+    expect(block.textContent).toContain('3 CI containers · 2 agent instances');
+    // It never fills the fleet.stop foot.
+    expect(screen.queryByTestId('org-fleet-last-stop')).toBeNull();
+    expect(stopButton().hasAttribute('disabled')).toBe(false);
+  });
+
+  it('with a platform stop too, both show at once, each under its own title', () => {
+    renderCard({ lastStop: platformStop, lastOrgAdminStop: orgAdminStop });
+    const foot = screen.getByTestId('org-fleet-last-stop');
+    const block = screen.getByTestId('org-fleet-last-org-admin-stop');
+    expect(foot.textContent).toContain('Last stop');
+    expect(foot.textContent).toContain('ops@moooon.net');
+    expect(foot.textContent).not.toContain('organization admin');
+    expect(block.textContent).not.toContain('ops@moooon.net');
+  });
+
+  it('is absent when there is none — null or not passed', () => {
+    renderCard({ lastOrgAdminStop: null });
+    expect(screen.queryByTestId('org-fleet-last-org-admin-stop')).toBeNull();
+    cleanup();
+    renderCard();
+    expect(screen.queryByTestId('org-fleet-last-org-admin-stop')).toBeNull();
+  });
+
+  it('renders in zh from the zh catalog', () => {
+    renderCard(
+      { lastOrgAdminStop: orgAdminStop },
+      zhMessages as unknown as Record<string, unknown>,
+    );
+    const block = screen.getByTestId('org-fleet-last-org-admin-stop');
+    expect(block.textContent).toContain('组织管理员上次停止');
+    expect(block.textContent).toContain('3 个 CI 容器 · 2 个智能体实例');
   });
 });

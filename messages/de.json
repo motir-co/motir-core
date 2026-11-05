@@ -12235,6 +12235,11 @@
           "unknownActor": "ein ehemaliger Operator",
           "noReason": "Kein Grund erfasst",
           "counts": "{runs} CI-Läufe · {containers} CI-Container · {hosted} gehostete Läufe · {instances} Agent-Instanzen"
+        },
+        "orgAdminStop": {
+          "title": "Zuletzt von einem Admin der Organisation gestoppt",
+          "when": "{time}",
+          "counts": "{containers} CI-Container · {instances} Agent-Instanzen"
         }
       }
     },

@@ -12235,6 +12235,11 @@
           "unknownActor": "były operator",
           "noReason": "Nie zapisano powodu",
           "counts": "Uruchomienia CI: {runs} · Kontenery CI: {containers} · Uruchomienia hostowane: {hosted} · Instancje agentów: {instances}"
+        },
+        "orgAdminStop": {
+          "title": "Ostatnie zatrzymanie przez administratora organizacji",
+          "when": "{time}",
+          "counts": "Kontenery CI: {containers} · Instancje agentów: {instances}"
         }
       }
     },

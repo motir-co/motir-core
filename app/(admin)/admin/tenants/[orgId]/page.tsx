@@ -202,9 +202,10 @@ async function OrgFleetSection({
   orgId: string;
   orgName: string;
 }) {
-  const [fleet, lastStop] = await Promise.all([
+  const [fleet, lastStop, lastOrgAdminStop] = await Promise.all([
     platformFleetMonitorService.orgFleet(principal, orgId),
     platformFleetStopService.lastStop(principal, orgId),
+    platformFleetStopService.lastOrgAdminStop(principal, orgId),
   ]);
   if (fleet.meter === 'disabled') return null;
   return (
@@ -215,6 +216,7 @@ async function OrgFleetSection({
       row={fleet.row}
       window={fleet.window}
       lastStop={lastStop}
+      lastOrgAdminStop={lastOrgAdminStop}
     />
   );
 }

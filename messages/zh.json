@@ -12226,6 +12226,11 @@
           "unknownActor": "一位前任操作者",
           "noReason": "未记录原因",
           "counts": "{runs} 个 CI 运行 · {containers} 个 CI 容器 · {hosted} 个托管运行 · {instances} 个智能体实例"
+        },
+        "orgAdminStop": {
+          "title": "组织管理员上次停止",
+          "when": "{time}",
+          "counts": "{containers} 个 CI 容器 · {instances} 个智能体实例"
         }
       }
     },

@@ -259,6 +259,26 @@ describe('the tenant page’s Fleet section, for staff (coverage top-up)', () =>
       role: 'superadmin',
       row: expect.objectContaining({ organizationId: estate.orgId }),
       lastStop: expect.objectContaining({ reason: 'Runaway spend' }),
+      // A platform stop settles `admin_stop`: no org-admin stop to show.
+      lastOrgAdminStop: null,
+    });
+  });
+
+  it('an org admin’s stop reaches the card as its own prop, apart from lastStop', async () => {
+    currentSession = { user: { id: await staff('support') } };
+    const settledAt = new Date();
+    await adminDb.ciRunnerProvisioningIntent.update({
+      where: { id: estate.intentId },
+      data: { status: 'failed', teardownReason: 'org_admin_stop', settledAt },
+    });
+    const card = (await fleetSection()) as { props: Record<string, unknown> };
+    expect(card.props).toMatchObject({
+      lastStop: null,
+      lastOrgAdminStop: {
+        at: settledAt.toISOString(),
+        ciContainersStopped: 1,
+        agentInstancesHibernated: 0,
+      },
     });
   });
 
