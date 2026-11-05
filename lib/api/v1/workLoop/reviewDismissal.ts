@@ -1,9 +1,5 @@
 import { z } from 'zod/v4';
-import {
-  REVIEW_DISMISSAL_REASON_MAX_LENGTH,
-  type DismissReviewInput,
-  type ReviewDismissalResultDto,
-} from '@/lib/dto/agentReview';
+import type { DismissReviewInput, ReviewDismissalResultDto } from '@/lib/dto/agentReview';
 
 // DISMISS THE REVIEW's wire shapes (Story MOTIR-10327 · MOTIR-10334; `approval-gates.md`
 // §12.15) — `POST /api/v1/work-items/{key}/review-dismissal`. Their own module, beside
@@ -31,7 +27,10 @@ export const reviewDismissalResultSchema = z.object({
   subjectVersion: z.string(),
   /** The send-back dismissed — a gate-off review record, or a decided review gate. */
   dismissed: z.object({ kind: z.enum(['record', 'gate']), id: z.string() }),
-  reason: z.string().max(REVIEW_DISMISSAL_REASON_MAX_LENGTH),
+  /** The stored reason. Its 2000-character limit is the service's rule on the request; the
+   *  response carries no length bound, so a client's response validator never needs a
+   *  code-point counter (the CLI's precompiled validators cannot import one). */
+  reason: z.string(),
   dismissedBy: z.object({ id: z.string(), name: z.string().nullable() }),
   dismissedAt: z.string().datetime(),
   /** The approve-and-merge gate asked again at the same version, or null. */
