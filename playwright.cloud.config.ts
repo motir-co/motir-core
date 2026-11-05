@@ -163,6 +163,111 @@ process.env['MOTIR_LEGAL_DOCUMENTS'] ??= E2E_LEGAL_DOCUMENTS_JSON;
 process.env['MOTIR_AI_BILLING_FIXTURE_PATH'] ??= MOTIR_AI_BILLING_FIXTURE_PATH;
 process.env['MOTIR_AI_JOBS_FIXTURE_PATH'] ??= MOTIR_AI_JOBS_FIXTURE_PATH;
 
+/**
+ * The app webServer's environment — named, so the job worker can be handed the same
+ * one (Bug MOTIR-10425). GitHub webhook deliveries are processed by the
+ * `system.github-webhook-delivery` JOB now, so every handler that used to run in the
+ * app server runs in the worker, and reads whatever this server reads.
+ * `tests/e2e/_helpers/job-worker-process.ts` (`appServerEnv`) applies it to the worker,
+ * minus the keys that describe the server process rather than the app.
+ */
+const APP_SERVER_ENV = {
+  // ── The cloud posture ──
+  MOTIR_CLOUD: 'true',
+  E2E_TEST_BILLING: '1',
+  MOTIR_AI_URL,
+  // A placeholder service token: motirAiClient.config() requires it to be
+  // set, but the boundary mock intercepts every call before it leaves.
+  MOTIR_AI_SERVICE_TOKEN: 'e2e-billing-placeholder-token',
+  MOTIR_AI_BILLING_FIXTURE_PATH,
+  E2E_TEST_AI_JOBS: '1',
+  MOTIR_AI_JOBS_FIXTURE_PATH,
+  // The Sharpen seam (MOTIR-8180). An ending turn makes core's REAL
+  // write-back call, `PUT /api/internal/ai/plan-sharpening`, so the server
+  // needs the ai → core service bearer that route checks — the same literal
+  // the acceptance lane sets for its log-bug walk.
+  E2E_TEST_SHARPEN: '1',
+  MOTIR_AI_SHARPEN_CONTROL_PATH,
+  CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
+  MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
+  // THE TENANT BASE DOMAIN (Story MOTIR-4451 · MOTIR-4457). Without it the
+  // Public address pane renders an operator explanation and NO claim field.
+  // The release walk that needed it here moved to the acceptance lane's
+  // `acceptance-workspace-address` (Story MOTIR-4528 · MOTIR-9518); it stays
+  // armed, with the acceptance lane's value, so the two lanes agree about
+  // what `<base>` is for any cloud spec that reaches the pane.
+  MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
+  // The configured legal manifest (MOTIR-4015) — the same value the runner
+  // above reads, from the same module, so the two cannot drift. Its URLs
+  // sit under the synthetic public origin on the line above, which is
+  // deliberately unreachable: every assertion reads the `href`, none
+  // follows it.
+  MOTIR_LEGAL_DOCUMENTS: E2E_LEGAL_DOCUMENTS_JSON,
+  // The rail's Docs row is conditional too (MOTIR-4167), and
+  // `regression-legal-manifest.spec.ts` reads it as the CONTROL for the
+  // Legal row's absence — so it is configured, under the same synthetic
+  // public origin as the legal urls above.
+  MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',
+  // ── The prod-build harness (MOTIR-1682) ──
+  // `next start` forces NODE_ENV=production; this re-relaxes ONLY the test
+  // seams (Secure cookies / the `/api/_test` 404 gate / 'file' email — see
+  // lib/e2eProdHarness.ts). The specs here seed via `/api/_test`, so it MUST
+  // be set.
+  E2E_PROD_HARNESS: '1',
+  // `next build` is memory-heavy; and `next start` reads every static chunk
+  // through the libuv threadpool, whose default of FOUR queues Prisma's
+  // in-flight interactive transactions behind it until they blow the 5s
+  // budget and the render 500s (MOTIR-1753 — measured 4 → stalls, 64 → none).
+  UV_THREADPOOL_SIZE: '64',
+  NODE_OPTIONS: '--max-old-space-size=6144',
+  // ── The boundary seams the promoted specs drive (MOTIR-2849) ──
+  // Each is the same fixture the acceptance lane provided; a spec that moved
+  // here without its seam would assert against a product half switched on.
+  E2E_TEST_CODE_HEALTH: '1',
+  MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
+  E2E_TEST_LESSONS: '1',
+  MOTIR_AI_LESSONS_FIXTURE_PATH: LESSONS_FIXTURE,
+  E2E_TEST_PLANNER_MODEL: '1',
+  MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: PLANNER_MODEL_FIXTURE,
+  E2E_TEST_CODE_GRAPH_READ: '1',
+  MOTIR_AI_CODE_GRAPH_READ_FIXTURE_PATH,
+  MOTIR_AI_CODE_GRAPH_READ_JOURNAL_PATH,
+  E2E_TEST_GITHUB_REPOS: '1',
+  MOTIR_GITHUB_CONTROL_PATH,
+  MOTIR_GITHUB_JOURNAL_PATH,
+  // The merge seam (see its block above) and the signed-webhook secret the
+  // promoted approve-and-merge walk delivers its pull requests through.
+  E2E_TEST_GITHUB_MERGE: '1',
+  MOTIR_GITHUB_MERGE_CONTROL_PATH,
+  MOTIR_GITHUB_MERGE_JOURNAL_PATH,
+  GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
+  GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+  GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+  GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,
+  GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
+  E2E_TEST_OAUTH: '1',
+  GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
+  GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
+  // The object store is mocked — CI has no real credentials, and the
+  // acceptance panel's player reads through the private content path.
+  E2E_TEST_BLOB: '1',
+  MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
+  MOTIR_S3_REGION: 'auto',
+  MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
+  MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
+  MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
+  MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
+  MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
+  // ── The shared E2E server env (mirrors playwright.config.ts) ──
+  EMAIL_PROVIDER: 'file',
+  EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
+  MOTIR_BASE_URL: BASE_URL,
+  E2E_DISABLE_RATE_LIMIT: '1',
+  E2E_DISABLE_DEV_INDICATOR: '1',
+};
+process.env['E2E_WORKER_APP_ENV'] = JSON.stringify(APP_SERVER_ENV);
+
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/billing-cloud.spec.ts', '**/cloud-*.spec.ts'],
@@ -239,101 +344,7 @@ export default defineConfig({
       timeout: 600_000,
       stdout: 'pipe',
       stderr: 'pipe',
-      env: {
-        // ── The cloud posture ──
-        MOTIR_CLOUD: 'true',
-        E2E_TEST_BILLING: '1',
-        MOTIR_AI_URL,
-        // A placeholder service token: motirAiClient.config() requires it to be
-        // set, but the boundary mock intercepts every call before it leaves.
-        MOTIR_AI_SERVICE_TOKEN: 'e2e-billing-placeholder-token',
-        MOTIR_AI_BILLING_FIXTURE_PATH,
-        E2E_TEST_AI_JOBS: '1',
-        MOTIR_AI_JOBS_FIXTURE_PATH,
-        // The Sharpen seam (MOTIR-8180). An ending turn makes core's REAL
-        // write-back call, `PUT /api/internal/ai/plan-sharpening`, so the server
-        // needs the ai → core service bearer that route checks — the same literal
-        // the acceptance lane sets for its log-bug walk.
-        E2E_TEST_SHARPEN: '1',
-        MOTIR_AI_SHARPEN_CONTROL_PATH,
-        CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
-        MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
-        // THE TENANT BASE DOMAIN (Story MOTIR-4451 · MOTIR-4457). Without it the
-        // Public address pane renders an operator explanation and NO claim field.
-        // The release walk that needed it here moved to the acceptance lane's
-        // `acceptance-workspace-address` (Story MOTIR-4528 · MOTIR-9518); it stays
-        // armed, with the acceptance lane's value, so the two lanes agree about
-        // what `<base>` is for any cloud spec that reaches the pane.
-        MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
-        // The configured legal manifest (MOTIR-4015) — the same value the runner
-        // above reads, from the same module, so the two cannot drift. Its URLs
-        // sit under the synthetic public origin on the line above, which is
-        // deliberately unreachable: every assertion reads the `href`, none
-        // follows it.
-        MOTIR_LEGAL_DOCUMENTS: E2E_LEGAL_DOCUMENTS_JSON,
-        // The rail's Docs row is conditional too (MOTIR-4167), and
-        // `regression-legal-manifest.spec.ts` reads it as the CONTROL for the
-        // Legal row's absence — so it is configured, under the same synthetic
-        // public origin as the legal urls above.
-        MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',
-        // ── The prod-build harness (MOTIR-1682) ──
-        // `next start` forces NODE_ENV=production; this re-relaxes ONLY the test
-        // seams (Secure cookies / the `/api/_test` 404 gate / 'file' email — see
-        // lib/e2eProdHarness.ts). The specs here seed via `/api/_test`, so it MUST
-        // be set.
-        E2E_PROD_HARNESS: '1',
-        // `next build` is memory-heavy; and `next start` reads every static chunk
-        // through the libuv threadpool, whose default of FOUR queues Prisma's
-        // in-flight interactive transactions behind it until they blow the 5s
-        // budget and the render 500s (MOTIR-1753 — measured 4 → stalls, 64 → none).
-        UV_THREADPOOL_SIZE: '64',
-        NODE_OPTIONS: '--max-old-space-size=6144',
-        // ── The boundary seams the promoted specs drive (MOTIR-2849) ──
-        // Each is the same fixture the acceptance lane provided; a spec that moved
-        // here without its seam would assert against a product half switched on.
-        E2E_TEST_CODE_HEALTH: '1',
-        MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
-        E2E_TEST_LESSONS: '1',
-        MOTIR_AI_LESSONS_FIXTURE_PATH: LESSONS_FIXTURE,
-        E2E_TEST_PLANNER_MODEL: '1',
-        MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: PLANNER_MODEL_FIXTURE,
-        E2E_TEST_CODE_GRAPH_READ: '1',
-        MOTIR_AI_CODE_GRAPH_READ_FIXTURE_PATH,
-        MOTIR_AI_CODE_GRAPH_READ_JOURNAL_PATH,
-        E2E_TEST_GITHUB_REPOS: '1',
-        MOTIR_GITHUB_CONTROL_PATH,
-        MOTIR_GITHUB_JOURNAL_PATH,
-        // The merge seam (see its block above) and the signed-webhook secret the
-        // promoted approve-and-merge walk delivers its pull requests through.
-        E2E_TEST_GITHUB_MERGE: '1',
-        MOTIR_GITHUB_MERGE_CONTROL_PATH,
-        MOTIR_GITHUB_MERGE_JOURNAL_PATH,
-        GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
-        GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
-        GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
-        GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,
-        GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
-        GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
-        E2E_TEST_OAUTH: '1',
-        GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
-        GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
-        // The object store is mocked — CI has no real credentials, and the
-        // acceptance panel's player reads through the private content path.
-        E2E_TEST_BLOB: '1',
-        MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
-        MOTIR_S3_REGION: 'auto',
-        MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
-        MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
-        MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
-        MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
-        // ── The shared E2E server env (mirrors playwright.config.ts) ──
-        EMAIL_PROVIDER: 'file',
-        EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
-        MOTIR_BASE_URL: BASE_URL,
-        E2E_DISABLE_RATE_LIMIT: '1',
-        E2E_DISABLE_DEV_INDICATOR: '1',
-      },
+      env: APP_SERVER_ENV,
     },
   ],
 });

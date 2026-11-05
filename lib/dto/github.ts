@@ -360,3 +360,21 @@ export interface AccountDisconnectResultDto {
   /** True when this was the last organisation linked, so the row went too. */
   installationRemoved: boolean;
 }
+
+/**
+ * One GitHub webhook inbox row (Bug MOTIR-10425), as an operator or a test reads it:
+ * where the delivery stands and what processing answered. The body is not part of
+ * it — it is cleared once the delivery is processed.
+ */
+export interface GithubWebhookDeliveryDTO {
+  deliveryId: string;
+  event: string;
+  state: 'received' | 'processed' | 'failed';
+  attempts: number;
+  generation: number;
+  lastError: string | null;
+  /** The `GithubWebhookResult` processing answered, once processed. */
+  result: unknown;
+  receivedAt: string;
+  processedAt: string | null;
+}

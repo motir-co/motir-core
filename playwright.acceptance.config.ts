@@ -437,6 +437,271 @@ const { privateKey: E2E_USER_APP_PRIVATE_KEY } = generateKeyPairSync('rsa', {
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
 });
 
+/**
+ * The app webServer's environment — named, so the job worker can be handed the same
+ * one (Bug MOTIR-10425). GitHub webhook deliveries are processed by the
+ * `system.github-webhook-delivery` JOB now, so every handler that used to run in the
+ * app server runs in the worker, and reads whatever this server reads.
+ * `tests/e2e/_helpers/job-worker-process.ts` (`appServerEnv`) applies it to the worker,
+ * minus the keys that describe the server process rather than the app.
+ */
+const APP_SERVER_ENV = {
+  // MOTIR-1682: production-harness flag — re-relaxes the NODE_ENV=production
+  // test seams the prod server trips (see lib/e2eProdHarness.ts). Test-only,
+  // never a real deploy.
+  E2E_PROD_HARNESS: '1',
+  // Story 10.2 (MOTIR-7333): the system-health board's three providers,
+  // bound to their in-memory fakes so the walk films populated cards without
+  // calling Sentry, Fly or the gateway. Read server-side at call time, so they
+  // must reach THIS process; each is refused in a production build unless
+  // E2E_PROD_HARNESS is also set. FLY_APP_NAME / FLY_REGION give the Hosting
+  // card the deployment identity it reports beside the fake fleet.
+  MOTIR_E2E_FAKE_ERROR_COUNT: '1',
+  MOTIR_E2E_FAKE_DEPLOYMENT_STATUS: '1',
+  MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
+  FLY_APP_NAME: 'motir-core-e2e',
+  FLY_REGION: 'iad',
+  // `next build` is memory-heavy; give V8 old-space headroom (harmless for
+  // the lightweight `next start` that follows). Inside the CI 16 GB budget.
+  // MOTIR-1753 — size the libuv THREADPOOL for a Node-served build.
+  // `next start` reads every static chunk off disk through the threadpool,
+  // whose libuv default is FOUR. Measured here: 125 outstanding
+  // `fs/promises` requests against those 4 threads — a ~31x queue depth.
+  // Everything else that shares the pool then queues behind it, including
+  // the completions Prisma's in-flight INTERACTIVE transactions are waiting
+  // on, so a transaction sits `idle in transaction` (Postgres reporting
+  // `Client/ClientRead` — waiting on US) until it blows Prisma's 5s budget
+  // and the render 500s with P2028 / "commit cannot be executed on an
+  // expired transaction". A/B on this lane: pool 4 -> 8s stalls + failure;
+  // pool 64 -> zero stalls, green, 4.5x faster.
+  // Same exposure applies to any deployment where Node serves the assets
+  // (self-host `next start`); behind a CDN the static reads never reach it.
+  UV_THREADPOOL_SIZE: '64',
+  NODE_OPTIONS: '--max-old-space-size=6144',
+  EMAIL_PROVIDER: 'file',
+  // The GitHub webhook secret (Story MOTIR-2725 · MOTIR-2730). The
+  // acceptance lane had never needed it — no acceptance story drove a
+  // webhook until a card's completion depended on TWO merges arriving as
+  // real `pull_request` deliveries. Without it `/api/github/webhook`
+  // answers 500 `GITHUB_WEBHOOK_NOT_CONFIGURED` before verifying anything.
+  //
+  // The SAME synthetic literal the main lane sets and the spec signs with
+  // (`tests/e2e/_helpers/github-const.ts`), so the real 7.10.4 signature
+  // gate runs here exactly as it does there — the acceptance clip records
+  // the shipped path, not a relaxed one.
+  GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
+  EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
+  MOTIR_BASE_URL: BASE_URL,
+  // MOTIR-3886 — the moved public surfaces' redirect destination. A
+  // synthetic public origin so the redirect FIRES here and points at a
+  // host that need not be reachable (the spec asserts the Location header
+  // without following it). Must differ from MOTIR_BASE_URL above, which is
+  // the gate `publicSiteRedirect` reads. Test-only, never a real deploy.
+  MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
+  E2E_DISABLE_RATE_LIMIT: '1',
+  E2E_DISABLE_DEV_INDICATOR: '1',
+  // Mock the object store so any in-app upload the spec drives never needs
+  // a real store (mirrors the main lane; CI has no real credentials).
+  // MOTIR-2389: the store is S3-compatible; the endpoint is the host
+  // lib/test-blob-mock.ts intercepts, so it must match there.
+  E2E_TEST_BLOB: '1',
+  // MOTIR-7176: the cimd plugin's document fetch is answered from
+  // `lib/test-cimd-mock.ts`'s table (Claude, Claude Code, and a document
+  // calling itself Claude from example.org) — the hardened transport
+  // refuses a local fixture server, so the seam replaces the transport.
+  E2E_TEST_CIMD: '1',
+  MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
+  MOTIR_S3_REGION: 'auto',
+  MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
+  MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
+  MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
+  MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
+  MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
+  // ⚠️ THE DOCS ROW IS CONFIGURATION NOW (MOTIR-4167 / #2530, MOTIR-4257).
+  //
+  // `lib/docs/links.ts` resolves the rail's Docs row from an operator's
+  // absolute `MOTIR_DOCS_URL` and returns `null` when it is unset, so the
+  // row does not render at all — the shape the Legal row beside it already
+  // took when MOTIR-3932 moved the public reading surface to
+  // motir-marketing.
+  //
+  // `regression-legal-manifest.spec.ts` reads that row as its CONTROL: its
+  // chapter asserts the rail offers Docs and NOT Legal, and the Docs half
+  // is what makes Legal's absence mean *this build did not configure it*
+  // rather than *the rail is empty*. Once the row became conditional, a
+  // lane that configures no URL had no control — and the spec went red on
+  // `main` for reasons that had nothing to do with legal documents.
+  //
+  // This lane is the CLOUD-ON arm, and a cloud build has its docs
+  // configured, so setting it is what the arm is supposed to represent.
+  // The ASSERTION is untouched: a receipt records what was accepted, and
+  // relaxing it to match today is the reflex `acceptance-receipt-lifecycle.md`
+  // forbids.
+  MOTIR_DOCS_URL: 'https://motir.co/docs',
+  // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
+  MOTIR_CLOUD: 'true',
+  // ── The public-address story's two seams (MOTIR-3878 · MOTIR-4225) ──
+  //
+  // ⚠️ WITHOUT THESE THE SPEC CANNOT REACH THE STATES IT ASSERTS, and
+  // `plan-rules/type-test.md` tell (d) is exactly that: a lane that cannot
+  // reach the asserted state stays green for ever.
+  //
+  // The BASE DOMAIN, because the pane renders an operator explanation and
+  // no claim field when it is unset — the walk would film that instead of
+  // the room.
+  MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
+  // The two PORTS the flow crosses that leave this machine: the certificate
+  // platform and public DNS. `lib/publicAddresses/providers.ts` binds
+  // in-memory versions on this flag — and REFUSES to, whatever the flag
+  // says, when `NODE_ENV === 'production'`, which is what makes an env var
+  // an operator could set by accident harmless. Asserted in
+  // `tests/publicAddresses/dnsResolverPort.test.ts`.
+  MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS: '1',
+  // The records that point a customer domain at Motir (MOTIR-9533).
+  // `lib/publicAddresses/pointingRecords.ts` omits a row whose variable is
+  // unset, so without these the customer-domain walk could not assert the
+  // CNAME a subdomain is offered or the A/AAAA pair an apex is. Documentation
+  // addresses (RFC 5737 / RFC 3849): nothing here routes anywhere.
+  MOTIR_PUBLIC_ADDRESS_CNAME_TARGET: 'edge.motir.e2e',
+  MOTIR_PUBLIC_ADDRESS_A_RECORDS: '192.0.2.10',
+  MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS: '2001:db8::10',
+  E2E_TEST_BILLING: '1',
+  MOTIR_AI_URL,
+  E2E_TEST_CODE_HEALTH: '1',
+  MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
+  // The console's AI planning page (Story MOTIR-7220 · MOTIR-7235): the
+  // `/v1/planner-model-settings` intercept, from the same file the spec
+  // seeds (`tests/e2e/_helpers/planner-model-fixture.ts`).
+  E2E_TEST_PLANNER_MODEL: '1',
+  MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: path.join(
+    __dirname,
+    'out',
+    'e2e-planner-model-fixture.json',
+  ),
+  // The console's planning-lessons pages (Story MOTIR-1408 · MOTIR-1413):
+  // the `/v1/admin/lessons…` + `/v1/admin/lesson-retention…` intercept, from
+  // the same file the spec seeds (`tests/e2e/_helpers/platform-lessons-fixture.ts`).
+  E2E_TEST_PLATFORM_LESSONS: '1',
+  MOTIR_AI_PLATFORM_LESSONS_FIXTURE_PATH: path.join(
+    __dirname,
+    'out',
+    'e2e-platform-lessons-fixture.json',
+  ),
+  // The Sharpen seam (MOTIR-1101 · MOTIR-8179) — installed BEFORE the jobs seam
+  // by `lib/test-mock-seams.ts`. An ending turn makes core's REAL write-back,
+  // `PUT /api/internal/ai/plan-sharpening`, under `CORE_CALLBACK_SECRET` below.
+  E2E_TEST_SHARPEN: '1',
+  MOTIR_AI_SHARPEN_CONTROL_PATH,
+  E2E_TEST_AI_JOBS: '1',
+  MOTIR_AI_JOBS_FIXTURE_PATH,
+  // Page search by meaning (MOTIR-9577) — the query's embedding; the worker
+  // mirrors the same seam for a page's (`embeddingsSeamEnv`).
+  E2E_TEST_EMBEDDINGS: '1',
+  MOTIR_AI_EMBEDDINGS_CONTROL_PATH,
+  MOTIR_AI_EMBEDDINGS_JOURNAL_PATH,
+  MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
+  // The seat push the agent-billing walk makes (MOTIR-6924) — the literal
+  // lives with the helper that signs with it.
+  MOTIR_AI_TO_CORE_SERVICE_TOKEN: E2E_AI_TO_CORE_SERVICE_TOKEN,
+  // The §4a service bearer the job-token routes check (Story MOTIR-7797 ·
+  // MOTIR-7809): the confirmed-bug walk plays motir-ai's `log_bug` through
+  // the REAL `POST /api/internal/ai/log-bug`, which fails closed — every
+  // call 401 — while this is unset. The literal lives with the helper that
+  // presents it.
+  CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
+  MOTIR_AI_BILLING_FIXTURE_PATH,
+  E2E_TEST_PLATFORM_USAGE: '1',
+  MOTIR_AI_PLATFORM_FIXTURE_PATH,
+  // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
+  E2E_TEST_GITHUB_REPOS: '1',
+  MOTIR_GITHUB_CONTROL_PATH,
+  MOTIR_GITHUB_JOURNAL_PATH,
+  E2E_TEST_GITHUB_MERGE: '1',
+  MOTIR_GITHUB_MERGE_CONTROL_PATH,
+  MOTIR_GITHUB_MERGE_JOURNAL_PATH,
+  // The fleet settings journey's GitHub (MOTIR-8717) — see the block above.
+  E2E_TEST_GITHUB_FLEET_ORG_CI: '1',
+  E2E_GITHUB_FLEET_ORG_CI_CONTROL: process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL']!,
+  E2E_GITHUB_FLEET_ORG_CI_JOURNAL: process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL']!,
+  // The pinned runner image whose tool list the readiness verdict reads
+  // (MOTIR-10290) — `FLEET_E2E_RUNNER_IMAGE` in that seam, which answers its
+  // registry. A mismatch reads image coverage as unknown and fails case 4.
+  MOTIR_RUNNER_IMAGE: `registry.fleet-e2e.motir.test/motir-ci-runner@sha256:${'e2e10290'.repeat(8)}`,
+  GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
+  GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
+  GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,
+  // The Git room's account + repository pickers (Story MOTIR-8216 ·
+  // MOTIR-8225) — `lib/test-github-accounts-mock.ts`.
+  E2E_TEST_GITHUB_ACCOUNTS: '1',
+  GITHUB_APP_ID: E2E_USER_APP_ID,
+  GITHUB_APP_PRIVATE_KEY: E2E_USER_APP_PRIVATE_KEY,
+  // The identity/installation the seed binds are read back on this surface;
+  // the App slug is what the settings pane the step hands off to renders.
+  GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  // A repository's environment secrets (Story MOTIR-9795 · MOTIR-9968) are
+  // sealed under their OWN key, which never falls back to the GitHub one.
+  ENVIRONMENT_CONFIG_ENCRYPTION_KEY: E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
+  // The hosted-run gateway/motir-ai/GitHub seams (Story MOTIR-683 ·
+  // MOTIR-6452) — see the "HOSTED RUN seams" block above this config for
+  // why each of these exists.
+  MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR']!,
+  E2E_TEST_HOSTED_RUN: '1',
+  MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL']!,
+  MOTIR_GATEWAY_RUN_URL: process.env['MOTIR_GATEWAY_RUN_URL']!,
+  MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET']!,
+  MOTIR_HOSTED_RUN_FIXTURE_PATH,
+  MOTIR_HOSTED_RUN_JOURNAL_PATH,
+  MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
+  MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
+  // The preview host (MOTIR-5781) — see its block above this config.
+  MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
+  MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
+  MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
+  // The fake AWS (MOTIR-9429) — see its block above this config.
+  MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
+  MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
+  // The hosting fake's store — a production release's (MOTIR-10040) and a
+  // preview's (MOTIR-10098); see its block above.
+  MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+  // The capacity fake (MOTIR-9617) — see its block above this config.
+  MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
+  MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
+    process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH']!,
+  // The short capacity windows (MOTIR-9541) — see beside the capacity fake above.
+  MOTIR_AGENT_CAPACITY_CACHE_MS: process.env['MOTIR_AGENT_CAPACITY_CACHE_MS']!,
+  MOTIR_AGENT_CAPACITY_429_WINDOW_MS: process.env['MOTIR_AGENT_CAPACITY_429_WINDOW_MS']!,
+  MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE']!,
+  E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
+  // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
+  // ⚠️ THE FAKE IS SELECTED HERE OR NOWHERE. This server is spawned, so a
+  // `vi.mock` cannot reach it; `lib/monitors/index.ts` re-registers the fake
+  // provider under `sentry` when this switch is '1'. Without it every
+  // exchange would reach the real adapter and fail on missing credentials —
+  // a lane that could never reach a connected state. The slug and web base
+  // make the start route build an install URL at all (it answers
+  // `not_configured` without a slug); the base is a `.invalid` host the spec
+  // intercepts in the browser, so nothing ever leaves for sentry.io. The
+  // token key is the GitHub one above, which the monitor crypto falls back to.
+  MOTIR_MONITOR_FAKE_PROVIDER: '1',
+  SENTRY_APP_SLUG: 'motir-e2e',
+  SENTRY_WEB_BASE_URL: 'https://sentry-install.e2e.invalid',
+  GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
+  // The access step's "connect" is a REAL identity OAuth round-trip, not a
+  // seeded row: the recorded journey's whole point is that a user with no
+  // GitHub account connects one and the invitation follows. Same seam
+  // github.spec.ts drives (test-oauth-mock's synthetic `e2e-octocat`).
+  E2E_TEST_OAUTH: '1',
+  GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
+  GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
+  // The agent terminal (see "The AGENT TERMINAL" above): the ticket route
+  // needs the master key, and hands the browser the lane's relay.
+  MOTIR_TERMINAL_MASTER_KEY: process.env['MOTIR_TERMINAL_MASTER_KEY']!,
+  MOTIR_RELAY_URL: process.env['MOTIR_RELAY_URL']!,
+  // A card's run in an agent: the exec door (see "A CARD'S RUN IN AN AGENT").
+  MOTIR_FAKE_EXEC_URL: process.env['MOTIR_FAKE_EXEC_URL']!,
+};
+process.env['E2E_WORKER_APP_ENV'] = JSON.stringify(APP_SERVER_ENV);
+
 export default defineConfig({
   testDir: 'tests/e2e',
   testMatch: ['**/acceptance*.spec.ts'],
@@ -506,261 +771,7 @@ export default defineConfig({
       timeout: 600_000,
       stdout: 'pipe',
       stderr: 'pipe',
-      env: {
-        // MOTIR-1682: production-harness flag — re-relaxes the NODE_ENV=production
-        // test seams the prod server trips (see lib/e2eProdHarness.ts). Test-only,
-        // never a real deploy.
-        E2E_PROD_HARNESS: '1',
-        // Story 10.2 (MOTIR-7333): the system-health board's three providers,
-        // bound to their in-memory fakes so the walk films populated cards without
-        // calling Sentry, Fly or the gateway. Read server-side at call time, so they
-        // must reach THIS process; each is refused in a production build unless
-        // E2E_PROD_HARNESS is also set. FLY_APP_NAME / FLY_REGION give the Hosting
-        // card the deployment identity it reports beside the fake fleet.
-        MOTIR_E2E_FAKE_ERROR_COUNT: '1',
-        MOTIR_E2E_FAKE_DEPLOYMENT_STATUS: '1',
-        MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
-        FLY_APP_NAME: 'motir-core-e2e',
-        FLY_REGION: 'iad',
-        // `next build` is memory-heavy; give V8 old-space headroom (harmless for
-        // the lightweight `next start` that follows). Inside the CI 16 GB budget.
-        // MOTIR-1753 — size the libuv THREADPOOL for a Node-served build.
-        // `next start` reads every static chunk off disk through the threadpool,
-        // whose libuv default is FOUR. Measured here: 125 outstanding
-        // `fs/promises` requests against those 4 threads — a ~31x queue depth.
-        // Everything else that shares the pool then queues behind it, including
-        // the completions Prisma's in-flight INTERACTIVE transactions are waiting
-        // on, so a transaction sits `idle in transaction` (Postgres reporting
-        // `Client/ClientRead` — waiting on US) until it blows Prisma's 5s budget
-        // and the render 500s with P2028 / "commit cannot be executed on an
-        // expired transaction". A/B on this lane: pool 4 -> 8s stalls + failure;
-        // pool 64 -> zero stalls, green, 4.5x faster.
-        // Same exposure applies to any deployment where Node serves the assets
-        // (self-host `next start`); behind a CDN the static reads never reach it.
-        UV_THREADPOOL_SIZE: '64',
-        NODE_OPTIONS: '--max-old-space-size=6144',
-        EMAIL_PROVIDER: 'file',
-        // The GitHub webhook secret (Story MOTIR-2725 · MOTIR-2730). The
-        // acceptance lane had never needed it — no acceptance story drove a
-        // webhook until a card's completion depended on TWO merges arriving as
-        // real `pull_request` deliveries. Without it `/api/github/webhook`
-        // answers 500 `GITHUB_WEBHOOK_NOT_CONFIGURED` before verifying anything.
-        //
-        // The SAME synthetic literal the main lane sets and the spec signs with
-        // (`tests/e2e/_helpers/github-const.ts`), so the real 7.10.4 signature
-        // gate runs here exactly as it does there — the acceptance clip records
-        // the shipped path, not a relaxed one.
-        GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
-        EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
-        MOTIR_BASE_URL: BASE_URL,
-        // MOTIR-3886 — the moved public surfaces' redirect destination. A
-        // synthetic public origin so the redirect FIRES here and points at a
-        // host that need not be reachable (the spec asserts the Location header
-        // without following it). Must differ from MOTIR_BASE_URL above, which is
-        // the gate `publicSiteRedirect` reads. Test-only, never a real deploy.
-        MOTIR_PUBLIC_SITE_URL: 'https://public.motir.e2e',
-        E2E_DISABLE_RATE_LIMIT: '1',
-        E2E_DISABLE_DEV_INDICATOR: '1',
-        // Mock the object store so any in-app upload the spec drives never needs
-        // a real store (mirrors the main lane; CI has no real credentials).
-        // MOTIR-2389: the store is S3-compatible; the endpoint is the host
-        // lib/test-blob-mock.ts intercepts, so it must match there.
-        E2E_TEST_BLOB: '1',
-        // MOTIR-7176: the cimd plugin's document fetch is answered from
-        // `lib/test-cimd-mock.ts`'s table (Claude, Claude Code, and a document
-        // calling itself Claude from example.org) — the hardened transport
-        // refuses a local fixture server, so the seam replaces the transport.
-        E2E_TEST_CIMD: '1',
-        MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
-        MOTIR_S3_REGION: 'auto',
-        MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
-        MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
-        MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
-        MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
-        // ⚠️ THE DOCS ROW IS CONFIGURATION NOW (MOTIR-4167 / #2530, MOTIR-4257).
-        //
-        // `lib/docs/links.ts` resolves the rail's Docs row from an operator's
-        // absolute `MOTIR_DOCS_URL` and returns `null` when it is unset, so the
-        // row does not render at all — the shape the Legal row beside it already
-        // took when MOTIR-3932 moved the public reading surface to
-        // motir-marketing.
-        //
-        // `regression-legal-manifest.spec.ts` reads that row as its CONTROL: its
-        // chapter asserts the rail offers Docs and NOT Legal, and the Docs half
-        // is what makes Legal's absence mean *this build did not configure it*
-        // rather than *the rail is empty*. Once the row became conditional, a
-        // lane that configures no URL had no control — and the spec went red on
-        // `main` for reasons that had nothing to do with legal documents.
-        //
-        // This lane is the CLOUD-ON arm, and a cloud build has its docs
-        // configured, so setting it is what the arm is supposed to represent.
-        // The ASSERTION is untouched: a receipt records what was accepted, and
-        // relaxing it to match today is the reflex `acceptance-receipt-lifecycle.md`
-        // forbids.
-        MOTIR_DOCS_URL: 'https://motir.co/docs',
-        // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
-        MOTIR_CLOUD: 'true',
-        // ── The public-address story's two seams (MOTIR-3878 · MOTIR-4225) ──
-        //
-        // ⚠️ WITHOUT THESE THE SPEC CANNOT REACH THE STATES IT ASSERTS, and
-        // `plan-rules/type-test.md` tell (d) is exactly that: a lane that cannot
-        // reach the asserted state stays green for ever.
-        //
-        // The BASE DOMAIN, because the pane renders an operator explanation and
-        // no claim field when it is unset — the walk would film that instead of
-        // the room.
-        MOTIR_PUBLIC_TENANT_DOMAIN: 'motir.e2e',
-        // The two PORTS the flow crosses that leave this machine: the certificate
-        // platform and public DNS. `lib/publicAddresses/providers.ts` binds
-        // in-memory versions on this flag — and REFUSES to, whatever the flag
-        // says, when `NODE_ENV === 'production'`, which is what makes an env var
-        // an operator could set by accident harmless. Asserted in
-        // `tests/publicAddresses/dnsResolverPort.test.ts`.
-        MOTIR_E2E_FAKE_PUBLIC_ADDRESS_PROVIDERS: '1',
-        // The records that point a customer domain at Motir (MOTIR-9533).
-        // `lib/publicAddresses/pointingRecords.ts` omits a row whose variable is
-        // unset, so without these the customer-domain walk could not assert the
-        // CNAME a subdomain is offered or the A/AAAA pair an apex is. Documentation
-        // addresses (RFC 5737 / RFC 3849): nothing here routes anywhere.
-        MOTIR_PUBLIC_ADDRESS_CNAME_TARGET: 'edge.motir.e2e',
-        MOTIR_PUBLIC_ADDRESS_A_RECORDS: '192.0.2.10',
-        MOTIR_PUBLIC_ADDRESS_AAAA_RECORDS: '2001:db8::10',
-        E2E_TEST_BILLING: '1',
-        MOTIR_AI_URL,
-        E2E_TEST_CODE_HEALTH: '1',
-        MOTIR_AI_CODE_HEALTH_FIXTURE_PATH: CODE_HEALTH_FIXTURE,
-        // The console's AI planning page (Story MOTIR-7220 · MOTIR-7235): the
-        // `/v1/planner-model-settings` intercept, from the same file the spec
-        // seeds (`tests/e2e/_helpers/planner-model-fixture.ts`).
-        E2E_TEST_PLANNER_MODEL: '1',
-        MOTIR_AI_PLANNER_MODEL_FIXTURE_PATH: path.join(
-          __dirname,
-          'out',
-          'e2e-planner-model-fixture.json',
-        ),
-        // The console's planning-lessons pages (Story MOTIR-1408 · MOTIR-1413):
-        // the `/v1/admin/lessons…` + `/v1/admin/lesson-retention…` intercept, from
-        // the same file the spec seeds (`tests/e2e/_helpers/platform-lessons-fixture.ts`).
-        E2E_TEST_PLATFORM_LESSONS: '1',
-        MOTIR_AI_PLATFORM_LESSONS_FIXTURE_PATH: path.join(
-          __dirname,
-          'out',
-          'e2e-platform-lessons-fixture.json',
-        ),
-        // The Sharpen seam (MOTIR-1101 · MOTIR-8179) — installed BEFORE the jobs seam
-        // by `lib/test-mock-seams.ts`. An ending turn makes core's REAL write-back,
-        // `PUT /api/internal/ai/plan-sharpening`, under `CORE_CALLBACK_SECRET` below.
-        E2E_TEST_SHARPEN: '1',
-        MOTIR_AI_SHARPEN_CONTROL_PATH,
-        E2E_TEST_AI_JOBS: '1',
-        MOTIR_AI_JOBS_FIXTURE_PATH,
-        // Page search by meaning (MOTIR-9577) — the query's embedding; the worker
-        // mirrors the same seam for a page's (`embeddingsSeamEnv`).
-        E2E_TEST_EMBEDDINGS: '1',
-        MOTIR_AI_EMBEDDINGS_CONTROL_PATH,
-        MOTIR_AI_EMBEDDINGS_JOURNAL_PATH,
-        MOTIR_AI_SERVICE_TOKEN: 'e2e-acceptance-placeholder-token',
-        // The seat push the agent-billing walk makes (MOTIR-6924) — the literal
-        // lives with the helper that signs with it.
-        MOTIR_AI_TO_CORE_SERVICE_TOKEN: E2E_AI_TO_CORE_SERVICE_TOKEN,
-        // The §4a service bearer the job-token routes check (Story MOTIR-7797 ·
-        // MOTIR-7809): the confirmed-bug walk plays motir-ai's `log_bug` through
-        // the REAL `POST /api/internal/ai/log-bug`, which fails closed — every
-        // call 401 — while this is unset. The literal lives with the helper that
-        // presents it.
-        CORE_CALLBACK_SECRET: E2E_CORE_CALLBACK_SECRET,
-        MOTIR_AI_BILLING_FIXTURE_PATH,
-        E2E_TEST_PLATFORM_USAGE: '1',
-        MOTIR_AI_PLATFORM_FIXTURE_PATH,
-        // The GitHub repo-provisioning + collaborator boundary (MOTIR-1785).
-        E2E_TEST_GITHUB_REPOS: '1',
-        MOTIR_GITHUB_CONTROL_PATH,
-        MOTIR_GITHUB_JOURNAL_PATH,
-        E2E_TEST_GITHUB_MERGE: '1',
-        MOTIR_GITHUB_MERGE_CONTROL_PATH,
-        MOTIR_GITHUB_MERGE_JOURNAL_PATH,
-        // The fleet settings journey's GitHub (MOTIR-8717) — see the block above.
-        E2E_TEST_GITHUB_FLEET_ORG_CI: '1',
-        E2E_GITHUB_FLEET_ORG_CI_CONTROL: process.env['E2E_GITHUB_FLEET_ORG_CI_CONTROL']!,
-        E2E_GITHUB_FLEET_ORG_CI_JOURNAL: process.env['E2E_GITHUB_FLEET_ORG_CI_JOURNAL']!,
-        // The pinned runner image whose tool list the readiness verdict reads
-        // (MOTIR-10290) — `FLEET_E2E_RUNNER_IMAGE` in that seam, which answers its
-        // registry. A mismatch reads image coverage as unknown and fails case 4.
-        MOTIR_RUNNER_IMAGE: `registry.fleet-e2e.motir.test/motir-ci-runner@sha256:${'e2e10290'.repeat(8)}`,
-        GITHUB_FALLBACK_ORG: E2E_PROVISIONING_ORG,
-        GITHUB_STUDIO_APP_ID: E2E_STUDIO_APP_ID,
-        GITHUB_STUDIO_APP_PRIVATE_KEY: E2E_STUDIO_APP_PRIVATE_KEY,
-        // The Git room's account + repository pickers (Story MOTIR-8216 ·
-        // MOTIR-8225) — `lib/test-github-accounts-mock.ts`.
-        E2E_TEST_GITHUB_ACCOUNTS: '1',
-        GITHUB_APP_ID: E2E_USER_APP_ID,
-        GITHUB_APP_PRIVATE_KEY: E2E_USER_APP_PRIVATE_KEY,
-        // The identity/installation the seed binds are read back on this surface;
-        // the App slug is what the settings pane the step hands off to renders.
-        GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
-        // A repository's environment secrets (Story MOTIR-9795 · MOTIR-9968) are
-        // sealed under their OWN key, which never falls back to the GitHub one.
-        ENVIRONMENT_CONFIG_ENCRYPTION_KEY: E2E_ENVIRONMENT_CONFIG_ENCRYPTION_KEY,
-        // The hosted-run gateway/motir-ai/GitHub seams (Story MOTIR-683 ·
-        // MOTIR-6452) — see the "HOSTED RUN seams" block above this config for
-        // why each of these exists.
-        MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR']!,
-        E2E_TEST_HOSTED_RUN: '1',
-        MOTIR_GATEWAY_URL: process.env['MOTIR_GATEWAY_URL']!,
-        MOTIR_GATEWAY_RUN_URL: process.env['MOTIR_GATEWAY_RUN_URL']!,
-        MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET']!,
-        MOTIR_HOSTED_RUN_FIXTURE_PATH,
-        MOTIR_HOSTED_RUN_JOURNAL_PATH,
-        MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
-        MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
-        // The preview host (MOTIR-5781) — see its block above this config.
-        MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
-        MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
-        MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
-        // The fake AWS (MOTIR-9429) — see its block above this config.
-        MOTIR_FAKE_AWS_STATE_PATH: process.env['MOTIR_FAKE_AWS_STATE_PATH']!,
-        MOTIR_FAKE_FLEET_SWITCH_PATH: process.env['MOTIR_FAKE_FLEET_SWITCH_PATH']!,
-        // The hosting fake's store — a production release's (MOTIR-10040) and a
-        // preview's (MOTIR-10098); see its block above.
-        MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
-        // The capacity fake (MOTIR-9617) — see its block above this config.
-        MOTIR_E2E_FAKE_GATEWAY_CAPACITY: process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY']!,
-        MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH:
-          process.env['MOTIR_E2E_FAKE_GATEWAY_CAPACITY_STATE_PATH']!,
-        // The short capacity windows (MOTIR-9541) — see beside the capacity fake above.
-        MOTIR_AGENT_CAPACITY_CACHE_MS: process.env['MOTIR_AGENT_CAPACITY_CACHE_MS']!,
-        MOTIR_AGENT_CAPACITY_429_WINDOW_MS: process.env['MOTIR_AGENT_CAPACITY_429_WINDOW_MS']!,
-        MOTIR_HOSTED_AGENT_IMAGE: process.env['MOTIR_HOSTED_AGENT_IMAGE']!,
-        E2E_HOSTED_RUN_STALL_WINDOW_MS: process.env['E2E_HOSTED_RUN_STALL_WINDOW_MS']!,
-        // Story MOTIR-4928 · MOTIR-5264 — the MONITORING room's connect walk.
-        // ⚠️ THE FAKE IS SELECTED HERE OR NOWHERE. This server is spawned, so a
-        // `vi.mock` cannot reach it; `lib/monitors/index.ts` re-registers the fake
-        // provider under `sentry` when this switch is '1'. Without it every
-        // exchange would reach the real adapter and fail on missing credentials —
-        // a lane that could never reach a connected state. The slug and web base
-        // make the start route build an install URL at all (it answers
-        // `not_configured` without a slug); the base is a `.invalid` host the spec
-        // intercepts in the browser, so nothing ever leaves for sentry.io. The
-        // token key is the GitHub one above, which the monitor crypto falls back to.
-        MOTIR_MONITOR_FAKE_PROVIDER: '1',
-        SENTRY_APP_SLUG: 'motir-e2e',
-        SENTRY_WEB_BASE_URL: 'https://sentry-install.e2e.invalid',
-        GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
-        // The access step's "connect" is a REAL identity OAuth round-trip, not a
-        // seeded row: the recorded journey's whole point is that a user with no
-        // GitHub account connects one and the invitation follows. Same seam
-        // github.spec.ts drives (test-oauth-mock's synthetic `e2e-octocat`).
-        E2E_TEST_OAUTH: '1',
-        GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
-        GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
-        // The agent terminal (see "The AGENT TERMINAL" above): the ticket route
-        // needs the master key, and hands the browser the lane's relay.
-        MOTIR_TERMINAL_MASTER_KEY: process.env['MOTIR_TERMINAL_MASTER_KEY']!,
-        MOTIR_RELAY_URL: process.env['MOTIR_RELAY_URL']!,
-        // A card's run in an agent: the exec door (see "A CARD'S RUN IN AN AGENT").
-        MOTIR_FAKE_EXEC_URL: process.env['MOTIR_FAKE_EXEC_URL']!,
-      },
+      env: APP_SERVER_ENV,
     },
     {
       // The terminal relay, from the SAME bundle the `motir-relay` app runs. It

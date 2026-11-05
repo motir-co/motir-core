@@ -192,6 +192,158 @@ process.env['E2E_PREVIEW_TLS_PORT'] ??= '3093';
  * Workers are pinned to 1 because both specs touch the same auth tables
  * and `truncateAuthTables()` is global — parallel workers would race.
  */
+/**
+ * The app webServer's environment — named, so the job worker can be handed the same
+ * one (Bug MOTIR-10425). GitHub webhook deliveries are processed by the
+ * `system.github-webhook-delivery` JOB now, so every handler that used to run in the
+ * app server runs in the worker, and reads whatever this server reads.
+ * `tests/e2e/_helpers/job-worker-process.ts` (`appServerEnv`) applies it to the worker,
+ * minus the keys that describe the server process rather than the app.
+ */
+const APP_SERVER_ENV = {
+  // MOTIR-1679: run the suite against a production build; this flag
+  // re-relaxes the NODE_ENV=production test seams (Secure cookies /
+  // /api/_test 404 gate / 'file' email sink) that the production server
+  // would otherwise trip. Only ever set here, never in a real deploy.
+  E2E_PROD_HARNESS: '1',
+  // Story 10.2 (MOTIR-7333): the system-health board's three providers,
+  // bound to their in-memory fakes so the walk films populated cards without
+  // calling Sentry, Fly or the gateway. Read server-side at call time, so they
+  // must reach THIS process; each is refused in a production build unless
+  // E2E_PROD_HARNESS is also set. FLY_APP_NAME / FLY_REGION give the Hosting
+  // card the deployment identity it reports beside the fake fleet.
+  MOTIR_E2E_FAKE_ERROR_COUNT: '1',
+  MOTIR_E2E_FAKE_DEPLOYMENT_STATUS: '1',
+  MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
+  FLY_APP_NAME: 'motir-core-e2e',
+  FLY_REGION: 'iad',
+  // MOTIR-2816: the SERVER's own connection, and nothing else in the run.
+  ...(APP_ROLE_SERVER && OWNER_DATABASE_URL
+    ? { DATABASE_URL: appRoleDatabaseUrl(OWNER_DATABASE_URL) }
+    : {}),
+  // Give `next build` V8 old-space headroom (it is memory-heavy); harmless
+  // for the lightweight `next start` that follows. 6 GB is safely inside
+  // the 16 GB `ubuntu-latest` budget shared with Postgres, the worker
+  // binary, the Playwright runner, and Chromium. (An earlier fix bumped
+  // this to stop the `next dev` webServer GC-thrashing/OOMing under load;
+  // moving to a production build removes that failure mode entirely, but
+  // the headroom still helps the build.)
+  // MOTIR-1753 — size the libuv THREADPOOL for a Node-served build.
+  // `next start` reads every static chunk off disk through the threadpool,
+  // whose libuv default is FOUR. Measured here: 125 outstanding
+  // `fs/promises` requests against those 4 threads — a ~31x queue depth.
+  // Everything else that shares the pool then queues behind it, including
+  // the completions Prisma's in-flight INTERACTIVE transactions are waiting
+  // on, so a transaction sits `idle in transaction` (Postgres reporting
+  // `Client/ClientRead` — waiting on US) until it blows Prisma's 5s budget
+  // and the render 500s with P2028 / "commit cannot be executed on an
+  // expired transaction". A/B on this lane: pool 4 -> 8s stalls + failure;
+  // pool 64 -> zero stalls, green, 4.5x faster.
+  // Same exposure applies to any deployment where Node serves the assets
+  // (self-host `next start`); behind a CDN the static reads never reach it.
+  UV_THREADPOOL_SIZE: '64',
+  NODE_OPTIONS: '--max-old-space-size=6144',
+  EMAIL_PROVIDER: 'file',
+  EMAIL_OUTBOX_PATH: EMAIL_OUTBOX_FILE,
+  // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
+  // MockAgent that intercepts POSTs to oauth2.googleapis.com/token,
+  // returning a synthetic id_token. See instrumentation.ts +
+  // tests/e2e/auth-google.spec.ts for the wiring. Production builds
+  // (and any local dev where this var isn't set) leave the dispatcher
+  // untouched.
+  E2E_TEST_OAUTH: '1',
+  E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/motir-test-oauth-user.json'),
+  // Subtask 5.2.8: E2E_TEST_BLOB=1 makes instrumentation.ts mock the
+  // object store (see lib/test-blob-mock.ts), so the attachments journey
+  // uploads through the real route without a real blob store — CI
+  // deliberately has no real credentials ("no E2E performs a real
+  // upload", ci.yml). The placeholders below only have to be PRESENT and
+  // well-formed; every request they authorize is intercepted before it
+  // leaves the process. Forced even when real credentials are configured
+  // locally, so the suite never writes to (or depends on) a live store.
+  E2E_TEST_BLOB: '1',
+  // MOTIR-2389: the store is now S3-compatible. The endpoint is the host
+  // lib/test-blob-mock.ts intercepts, so it must match there.
+  MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
+  MOTIR_S3_REGION: 'auto',
+  MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
+  MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
+  MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
+  MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
+  MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
+  // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
+  // drives. lib/baseUrl.ts resolves MOTIR_BASE_URL, and lib/auth/index.ts
+  // uses that as both its baseURL and a trustedOrigins entry, so this is
+  // what lets /api/auth/* POSTs pass the CSRF origin guard on a
+  // non-default port.
+  MOTIR_BASE_URL: BASE_URL,
+  // The rail's Docs row renders only when the operator has configured
+  // where the documentation is published (MOTIR-4167) — the same shape as
+  // the Legal row. Four specs read the row as the CONTROL for "the bottom
+  // section is on screen", so the lane configures it; the value is
+  // deliberately unreachable and nothing follows it, every assertion
+  // reads visibility or the `href`.
+  MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',
+  // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
+  // IP-keyed window (10s / max 3). Multi-user specs sign up several users
+  // from localhost inside that window and hit 429s. This flag disables the
+  // limiter for the E2E dev server only; lib/auth/index.ts reads it and
+  // leaves the limiter fully active everywhere it isn't set (i.e. prod).
+  E2E_DISABLE_RATE_LIMIT: '1',
+  // Subtask 1.6.6: arm-able deterministic email-fault injector. lib/email.ts
+  // reads this file on every send and throws when the recipient matches the
+  // armed substring, so the jobs-flow spec can drive the real failure →
+  // DLQ → replay path. The file is absent (fault disarmed) unless a spec
+  // writes it via tests/e2e/_helpers/email-fault.ts; it is test-only and
+  // refused in production.
+  EMAIL_FAULT_PATH: EMAIL_FAULT_FILE,
+  // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
+  // fixed portal) so it stops occluding the sidebar footer's collapse
+  // toggle during the browser-driven shell-flows journey. next.config.ts
+  // reads this flag; a normal `pnpm dev` session keeps its indicator.
+  E2E_DISABLE_DEV_INDICATOR: '1',
+  // Subtask 3.5.1: the board load-model overrides, forwarded from the run's
+  // env only when set (empty by default — see BOARD_LOAD_SEAM_ENV above).
+  ...BOARD_LOAD_SEAM_ENV,
+  // Story 7.10 · MOTIR-897: the GitHub-integration E2E lane. The webhook
+  // secret is the SAME value the spec's signWebhook uses (shared via
+  // tests/e2e/_helpers/github-const.ts), so the real 7.10.4 signature
+  // gate runs against the spec's signed POSTs. The OAuth app creds are
+  // synthetic — the code→token exchange + /user read never leave the
+  // process (E2E_TEST_OAUTH's MockAgent above intercepts GitHub too).
+  GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
+  GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
+  GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
+  GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
+  GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
+  // Story 7.23 · MOTIR-1480: the GitLab-integration E2E lane. The webhook
+  // secret is the SAME token the spec sends in X-Gitlab-Token (shared via
+  // tests/e2e/_helpers/gitlab-const.ts), so the real MOTIR-1475 token gate
+  // runs against the spec's deliveries. The OAuth creds are synthetic — the
+  // code→token exchange + /api/v4/user read never leave the process
+  // (E2E_TEST_OAUTH's MockAgent above intercepts gitlab.com too). GitLab
+  // PERSISTS its OAuth tokens, so the connect callback needs the encryption
+  // key. GITLAB_BASE_URL is left at its gitlab.com default so the mock host
+  // matches.
+  GITLAB_WEBHOOK_SECRET: E2E_GITLAB_WEBHOOK_SECRET,
+  GITLAB_APP_CLIENT_ID: E2E_GITLAB_CLIENT_ID,
+  GITLAB_APP_CLIENT_SECRET: E2E_GITLAB_CLIENT_SECRET,
+  GITLAB_TOKEN_ENCRYPTION_KEY: E2E_GITLAB_TOKEN_ENCRYPTION_KEY,
+  // Story MOTIR-1981 · MOTIR-1993: the fleet adapter selector, handed to
+  // the SERVER (the runner sets its own copy at module scope above). This
+  // is the seam the app reads at boot — `webServer.env` REPLACES the
+  // child's environment for these keys, so an inherited `fly` from the
+  // developer's shell cannot leak in.
+  MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR'] ?? 'fake',
+  // The fake hosting port's shared store (MOTIR-10098) — see its default above.
+  MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
+  // The preview host (MOTIR-5781) — see its block above this config.
+  MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
+  MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
+  MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
+};
+process.env['E2E_WORKER_APP_ENV'] = JSON.stringify(APP_SERVER_ENV);
+
 export default defineConfig({
   testDir: 'tests/e2e',
   // MOTIR-921: resolve `server-only` to an empty stub for the RUNNER only (see
@@ -343,148 +495,7 @@ export default defineConfig({
       timeout: 600_000,
       stdout: 'pipe',
       stderr: 'pipe',
-      env: {
-        // MOTIR-1679: run the suite against a production build; this flag
-        // re-relaxes the NODE_ENV=production test seams (Secure cookies /
-        // /api/_test 404 gate / 'file' email sink) that the production server
-        // would otherwise trip. Only ever set here, never in a real deploy.
-        E2E_PROD_HARNESS: '1',
-        // Story 10.2 (MOTIR-7333): the system-health board's three providers,
-        // bound to their in-memory fakes so the walk films populated cards without
-        // calling Sentry, Fly or the gateway. Read server-side at call time, so they
-        // must reach THIS process; each is refused in a production build unless
-        // E2E_PROD_HARNESS is also set. FLY_APP_NAME / FLY_REGION give the Hosting
-        // card the deployment identity it reports beside the fake fleet.
-        MOTIR_E2E_FAKE_ERROR_COUNT: '1',
-        MOTIR_E2E_FAKE_DEPLOYMENT_STATUS: '1',
-        MOTIR_E2E_FAKE_GATEWAY_STATUS: '1',
-        FLY_APP_NAME: 'motir-core-e2e',
-        FLY_REGION: 'iad',
-        // MOTIR-2816: the SERVER's own connection, and nothing else in the run.
-        ...(APP_ROLE_SERVER && OWNER_DATABASE_URL
-          ? { DATABASE_URL: appRoleDatabaseUrl(OWNER_DATABASE_URL) }
-          : {}),
-        // Give `next build` V8 old-space headroom (it is memory-heavy); harmless
-        // for the lightweight `next start` that follows. 6 GB is safely inside
-        // the 16 GB `ubuntu-latest` budget shared with Postgres, the worker
-        // binary, the Playwright runner, and Chromium. (An earlier fix bumped
-        // this to stop the `next dev` webServer GC-thrashing/OOMing under load;
-        // moving to a production build removes that failure mode entirely, but
-        // the headroom still helps the build.)
-        // MOTIR-1753 — size the libuv THREADPOOL for a Node-served build.
-        // `next start` reads every static chunk off disk through the threadpool,
-        // whose libuv default is FOUR. Measured here: 125 outstanding
-        // `fs/promises` requests against those 4 threads — a ~31x queue depth.
-        // Everything else that shares the pool then queues behind it, including
-        // the completions Prisma's in-flight INTERACTIVE transactions are waiting
-        // on, so a transaction sits `idle in transaction` (Postgres reporting
-        // `Client/ClientRead` — waiting on US) until it blows Prisma's 5s budget
-        // and the render 500s with P2028 / "commit cannot be executed on an
-        // expired transaction". A/B on this lane: pool 4 -> 8s stalls + failure;
-        // pool 64 -> zero stalls, green, 4.5x faster.
-        // Same exposure applies to any deployment where Node serves the assets
-        // (self-host `next start`); behind a CDN the static reads never reach it.
-        UV_THREADPOOL_SIZE: '64',
-        NODE_OPTIONS: '--max-old-space-size=6144',
-        EMAIL_PROVIDER: 'file',
-        EMAIL_OUTBOX_PATH: EMAIL_OUTBOX_FILE,
-        // E2E_TEST_OAUTH=1 makes instrumentation.ts install an undici
-        // MockAgent that intercepts POSTs to oauth2.googleapis.com/token,
-        // returning a synthetic id_token. See instrumentation.ts +
-        // tests/e2e/auth-google.spec.ts for the wiring. Production builds
-        // (and any local dev where this var isn't set) leave the dispatcher
-        // untouched.
-        E2E_TEST_OAUTH: '1',
-        E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/motir-test-oauth-user.json'),
-        // Subtask 5.2.8: E2E_TEST_BLOB=1 makes instrumentation.ts mock the
-        // object store (see lib/test-blob-mock.ts), so the attachments journey
-        // uploads through the real route without a real blob store — CI
-        // deliberately has no real credentials ("no E2E performs a real
-        // upload", ci.yml). The placeholders below only have to be PRESENT and
-        // well-formed; every request they authorize is intercepted before it
-        // leaves the process. Forced even when real credentials are configured
-        // locally, so the suite never writes to (or depends on) a live store.
-        E2E_TEST_BLOB: '1',
-        // MOTIR-2389: the store is now S3-compatible. The endpoint is the host
-        // lib/test-blob-mock.ts intercepts, so it must match there.
-        MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
-        MOTIR_S3_REGION: 'auto',
-        MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
-        MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
-        MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
-        MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
-        // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
-        // drives. lib/baseUrl.ts resolves MOTIR_BASE_URL, and lib/auth/index.ts
-        // uses that as both its baseURL and a trustedOrigins entry, so this is
-        // what lets /api/auth/* POSTs pass the CSRF origin guard on a
-        // non-default port.
-        MOTIR_BASE_URL: BASE_URL,
-        // The rail's Docs row renders only when the operator has configured
-        // where the documentation is published (MOTIR-4167) — the same shape as
-        // the Legal row. Four specs read the row as the CONTROL for "the bottom
-        // section is on screen", so the lane configures it; the value is
-        // deliberately unreachable and nothing follows it, every assertion
-        // reads visibility or the `href`.
-        MOTIR_DOCS_URL: 'https://public.motir.e2e/docs',
-        // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
-        // IP-keyed window (10s / max 3). Multi-user specs sign up several users
-        // from localhost inside that window and hit 429s. This flag disables the
-        // limiter for the E2E dev server only; lib/auth/index.ts reads it and
-        // leaves the limiter fully active everywhere it isn't set (i.e. prod).
-        E2E_DISABLE_RATE_LIMIT: '1',
-        // Subtask 1.6.6: arm-able deterministic email-fault injector. lib/email.ts
-        // reads this file on every send and throws when the recipient matches the
-        // armed substring, so the jobs-flow spec can drive the real failure →
-        // DLQ → replay path. The file is absent (fault disarmed) unless a spec
-        // writes it via tests/e2e/_helpers/email-fault.ts; it is test-only and
-        // refused in production.
-        EMAIL_FAULT_PATH: EMAIL_FAULT_FILE,
-        // Subtask 1.5.6: hide the Next dev-tools indicator (a bottom-left
-        // fixed portal) so it stops occluding the sidebar footer's collapse
-        // toggle during the browser-driven shell-flows journey. next.config.ts
-        // reads this flag; a normal `pnpm dev` session keeps its indicator.
-        E2E_DISABLE_DEV_INDICATOR: '1',
-        // Subtask 3.5.1: the board load-model overrides, forwarded from the run's
-        // env only when set (empty by default — see BOARD_LOAD_SEAM_ENV above).
-        ...BOARD_LOAD_SEAM_ENV,
-        // Story 7.10 · MOTIR-897: the GitHub-integration E2E lane. The webhook
-        // secret is the SAME value the spec's signWebhook uses (shared via
-        // tests/e2e/_helpers/github-const.ts), so the real 7.10.4 signature
-        // gate runs against the spec's signed POSTs. The OAuth app creds are
-        // synthetic — the code→token exchange + /user read never leave the
-        // process (E2E_TEST_OAUTH's MockAgent above intercepts GitHub too).
-        GITHUB_WEBHOOK_SECRET: E2E_GITHUB_WEBHOOK_SECRET,
-        GITHUB_APP_CLIENT_ID: E2E_GITHUB_CLIENT_ID,
-        GITHUB_APP_CLIENT_SECRET: E2E_GITHUB_CLIENT_SECRET,
-        GITHUB_TOKEN_ENCRYPTION_KEY: E2E_GITHUB_TOKEN_ENCRYPTION_KEY,
-        GITHUB_APP_SLUG: E2E_GITHUB_APP_SLUG,
-        // Story 7.23 · MOTIR-1480: the GitLab-integration E2E lane. The webhook
-        // secret is the SAME token the spec sends in X-Gitlab-Token (shared via
-        // tests/e2e/_helpers/gitlab-const.ts), so the real MOTIR-1475 token gate
-        // runs against the spec's deliveries. The OAuth creds are synthetic — the
-        // code→token exchange + /api/v4/user read never leave the process
-        // (E2E_TEST_OAUTH's MockAgent above intercepts gitlab.com too). GitLab
-        // PERSISTS its OAuth tokens, so the connect callback needs the encryption
-        // key. GITLAB_BASE_URL is left at its gitlab.com default so the mock host
-        // matches.
-        GITLAB_WEBHOOK_SECRET: E2E_GITLAB_WEBHOOK_SECRET,
-        GITLAB_APP_CLIENT_ID: E2E_GITLAB_CLIENT_ID,
-        GITLAB_APP_CLIENT_SECRET: E2E_GITLAB_CLIENT_SECRET,
-        GITLAB_TOKEN_ENCRYPTION_KEY: E2E_GITLAB_TOKEN_ENCRYPTION_KEY,
-        // Story MOTIR-1981 · MOTIR-1993: the fleet adapter selector, handed to
-        // the SERVER (the runner sets its own copy at module scope above). This
-        // is the seam the app reads at boot — `webServer.env` REPLACES the
-        // child's environment for these keys, so an inherited `fly` from the
-        // developer's shell cannot leak in.
-        MOTIR_FLEET_ORCHESTRATOR: process.env['MOTIR_FLEET_ORCHESTRATOR'] ?? 'fake',
-        // The fake hosting port's shared store (MOTIR-10098) — see its default above.
-        MOTIR_FAKE_HOSTING_STATE_PATH: process.env['MOTIR_FAKE_HOSTING_STATE_PATH']!,
-        // The preview host (MOTIR-5781) — see its block above this config.
-        MOTIR_PREVIEW_DOMAIN: process.env['MOTIR_PREVIEW_DOMAIN']!,
-        MOTIR_HOSTING_GATE_SIGNING_KEY: process.env['MOTIR_HOSTING_GATE_SIGNING_KEY']!,
-        MOTIR_HOSTING_ORIGIN_SECRET_KEY: process.env['MOTIR_HOSTING_ORIGIN_SECRET_KEY']!,
-      },
+      env: APP_SERVER_ENV,
     },
   ],
 });

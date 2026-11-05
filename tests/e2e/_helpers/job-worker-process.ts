@@ -445,6 +445,58 @@ export function jobWorkerEnabled(): boolean {
  * authoritative signal, the same discipline every spec in this lane owes its
  * assertions.
  */
+/**
+ * Keys of the app server's environment that describe THAT PROCESS rather than the
+ * app, and so are never handed to the worker:
+ *
+ *   * the server's own sizing and runtime (`NODE_OPTIONS`, `UV_THREADPOOL_SIZE`,
+ *     `NODE_ENV`, `PORT`) — the worker sets its own below;
+ *   * the database it connects with — an app-role lane rewrites the SERVER's
+ *     `DATABASE_URL` to the restricted role (`appRoleServer.ts`), and the worker keeps
+ *     the runner's, exactly as it always has;
+ *   * `E2E_TEST_GITHUB_REPOS`, whose fake keeps the repositories it "created" in a
+ *     PROCESS-LOCAL map, so a second copy here would be a second GitHub that disagrees
+ *     with the first (the reason `githubMergeSeamEnv` gives for not mirroring it).
+ */
+const SERVER_PROCESS_ONLY_KEYS = new Set([
+  'NODE_OPTIONS',
+  'UV_THREADPOOL_SIZE',
+  'NODE_ENV',
+  'PORT',
+  'DATABASE_URL',
+  'DATABASE_URL_UNPOOLED',
+  'E2E_TEST_GITHUB_REPOS',
+]);
+
+/**
+ * ⚠️ THE APP SERVER'S ENVIRONMENT, MIRRORED INTO THE WORKER (Bug MOTIR-10425).
+ *
+ * `POST /api/github/webhook` stores a delivery and answers; the
+ * `system.github-webhook-delivery` job processes it. So every GitHub webhook handler
+ * — the status sync, the CI feedback and its promotion, the preview lifecycle, the
+ * runner hot path, the deployment ledger — now runs in THIS process, and reads
+ * whatever the app server reads: its seams, its fakes' state paths, its secrets.
+ * Mirroring them one at a time is how this file grew its opt-in functions, each
+ * added after a job had quietly read a webServer-only variable (the MOTIR-3498
+ * shape). A delivery can reach any of those handlers, so the whole environment is
+ * handed over instead, minus {@link SERVER_PROCESS_ONLY_KEYS}.
+ *
+ * Each lane's config publishes its app server's env as JSON in `E2E_WORKER_APP_ENV`
+ * (`APP_SERVER_ENV` in `playwright.config.ts`, `playwright.acceptance.config.ts`,
+ * `playwright.cloud.config.ts`). A lane that sets none mirrors nothing.
+ */
+export function appServerEnv(): Record<string, string> {
+  const raw = process.env['E2E_WORKER_APP_ENV'];
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as Record<string, unknown>;
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (SERVER_PROCESS_ONLY_KEYS.has(key) || typeof value !== 'string') continue;
+    env[key] = value;
+  }
+  return env;
+}
+
 export async function startJobWorker(): Promise<void> {
   if (!jobWorkerEnabled() || worker) return;
 
@@ -460,6 +512,9 @@ export async function startJobWorker(): Promise<void> {
   const child = spawn(process.execPath, [WORKER_BUNDLE], {
     env: {
       ...process.env,
+      // The app server's own environment — see `appServerEnv`. Applied BEFORE every
+      // key below, so each deliberate worker setting still has the last word.
+      ...appServerEnv(),
       // The worker is a background process; nothing about it is a request path.
       NODE_ENV: process.env['NODE_ENV'] ?? 'production',
       // ⚠️ THE WORKER NEEDS THE SAME HARNESS FLAG THE APP webServer GETS, and
@@ -623,6 +678,9 @@ export async function startSpecJobWorker(routingFile: string): Promise<Date> {
   const child = spawn(process.execPath, [WORKER_BUNDLE], {
     env: {
       ...process.env,
+      // The app server's own environment — see `appServerEnv`. Applied BEFORE every
+      // key below, so each deliberate worker setting still has the last word.
+      ...appServerEnv(),
       NODE_ENV: process.env['NODE_ENV'] ?? 'production',
       E2E_PROD_HARNESS: '1',
       // The private view of the cutover switch — the whole point of this worker.

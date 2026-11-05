@@ -33,6 +33,8 @@ import {
   type StoryRunScenario,
 } from './storyGateScenario';
 import { mcpRouteFetch } from '../helpers/mcpRouteFetch';
+import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
+import { spyOnJobDispatch } from '../helpers/jobs';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // THE STORY GATE — HOW TO TEST per RUN (Story MOTIR-4906 · Subtask MOTIR-5337)
@@ -473,6 +475,7 @@ describe('seam 6 — no provisioning: nothing under lib/ or packages/cli/ create
 // ── Seam 7 — ingestion to the read ───────────────────────────────────────────
 
 const GITHUB_SECRET = 'story-gate-github-secret';
+const GITHUB_DEPLOYMENT_DELIVERY_ID = 'story-gate-deployment-delivery';
 const GITLAB_SECRET = 'story-gate-gitlab-secret';
 
 function githubDeploymentStatus(sha: string, ref: string) {
@@ -496,6 +499,7 @@ function githubDeploymentStatus(sha: string, ref: string) {
     headers: {
       'content-type': 'application/json',
       'x-github-event': 'deployment_status',
+      'x-github-delivery': GITHUB_DEPLOYMENT_DELIVERY_ID,
       'x-hub-signature-256': `sha256=${createHmac('sha256', GITHUB_SECRET).update(raw).digest('hex')}`,
     },
   });
@@ -549,10 +553,25 @@ describe('seam 7 — a delivered deployment is recorded, and How to test does no
     vi.stubGlobal('fetch', outbound);
 
     const { POST: githubPost } = await import('@/app/api/github/webhook/route');
+    // The inbox's enqueue is swallowed: this suite drives the processing itself, and a
+    // real system event would outlive the workspace cascade into the next file.
+    const swallowed = spyOnJobDispatch();
     const { POST: gitlabPost } = await import('@/app/api/gitlab/webhook/route');
     const gh = await githubPost(githubDeploymentStatus(WEB_HEAD, WEB_BRANCH));
-    expect(gh.status).toBe(200);
-    expect((await gh.json()).result).toEqual({ event: 'deployment_status', outcome: 'recorded' });
+    // The GitHub route stores the delivery and answers 202; the inbox job records it
+    // (Bug MOTIR-10425).
+    expect(gh.status).toBe(202);
+    await githubWebhookInboxService.processDelivery({
+      deliveryId: GITHUB_DEPLOYMENT_DELIVERY_ID,
+      generation: 0,
+    });
+    swallowed.mockRestore();
+    expect(
+      (await githubWebhookInboxService.findDelivery(GITHUB_DEPLOYMENT_DELIVERY_ID))?.result,
+    ).toEqual({
+      event: 'deployment_status',
+      outcome: 'recorded',
+    });
     const gl = await gitlabPost(gitlabDeployment(API_HEAD, API_BRANCH));
     expect(gl.status).toBe(200);
     expect((await gl.json()).result).toEqual({ event: 'deployment_status', outcome: 'recorded' });
