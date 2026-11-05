@@ -32,7 +32,16 @@ echo "$s"`,
   );
 }
 
-const main = (sha: string) => stub('git', `printf '%s\\trefs/heads/main\\n' "${sha}"`);
+/** Answers each `git ls-remote` with the next commit, repeating the last. */
+function main(...shas: string[]): void {
+  writeFileSync(join(dir, 'heads'), `${shas.join('\n')}\n`);
+  stub(
+    'git',
+    `h="$(head -n 1 "${dir}/heads")"
+[ "$(wc -l < "${dir}/heads")" -gt 1 ] && sed -i.bak 1d "${dir}/heads"
+printf '%s\\trefs/heads/main\\n' "$h"`,
+  );
+}
 
 function gate(env: Record<string, string> = {}): { log: string; deploy: string; calls: number } {
   const log = execFileSync('bash', [SCRIPT], {
@@ -140,9 +149,21 @@ describe('a stack update is running', () => {
     expect(log).toContain('::warning::could not read stack one, not waiting for it: AccessDenied');
   });
 
-  it('re-reads main after the wait, so a merge during it counts', () => {
+  it('stands down before waiting, so it does not hold the deploy lock for nothing', () => {
     stacks('UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE');
     main(NEWER);
-    expect(gate().deploy).toBe('deploy=false');
+    const { deploy, log, calls } = gate();
+    expect(deploy).toBe('deploy=false');
+    expect(log).not.toContain('waiting');
+    expect(calls).toBe(0);
+  });
+
+  it('re-reads main after the wait, so a merge during it counts', () => {
+    stacks('UPDATE_IN_PROGRESS', 'UPDATE_COMPLETE');
+    main(SHA, NEWER);
+    const { deploy, log } = gate();
+    expect(deploy).toBe('deploy=false');
+    expect(log).toContain('waiting for a stack update to finish');
+    expect(log).toContain(`(${NEWER})`);
   });
 });

@@ -24,8 +24,34 @@ set -uo pipefail
 
 wait_seconds="${DEPLOY_GATE_WAIT_SECONDS:-1200}"
 poll_seconds="${DEPLOY_GATE_POLL_SECONDS:-20}"
-deadline=$((SECONDS + wait_seconds))
 
+answer() {
+  echo "deploy=$1" >> "${GITHUB_OUTPUT:-/dev/null}"
+  exit 0
+}
+
+# Stands this run down when its commit is no longer main's newest. A re-run or a
+# manual dispatch is never stood down, only warned about.
+stand_down_if_superseded() {
+  local head
+  head="$(git ls-remote origin refs/heads/main 2>/dev/null | cut -f1)"
+  if [ -z "$head" ]; then
+    echo "::warning::could not read main's newest commit, deploying ${GITHUB_SHA}"
+  elif [ "$head" != "$GITHUB_SHA" ]; then
+    if [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ "${GITHUB_RUN_ATTEMPT:-1}" = "1" ]; then
+      echo "::notice::${GITHUB_SHA} is no longer main's newest commit (${head}); that commit's deploy carries it, so this one stands down"
+      answer false
+    fi
+    echo "::warning::deploying ${GITHUB_SHA} on request, though main's newest commit is ${head}: this puts the older image on the services"
+  fi
+}
+
+# Asked first, so a run that will stand down does not hold the deploy lock
+# through a stack wait it has no use for.
+stand_down_if_superseded
+
+deadline=$((SECONDS + wait_seconds))
+waited=""
 while :; do
   busy=""
   for stack in ${DEPLOY_STACKS:-}; do
@@ -44,21 +70,12 @@ while :; do
     break
   fi
   echo "waiting for a stack update to finish:${busy}"
+  waited=yes
   sleep "$poll_seconds"
 done
 
-deploy=true
-head="$(git ls-remote origin refs/heads/main 2>/dev/null | cut -f1)"
-if [ -z "$head" ]; then
-  echo "::warning::could not read main's newest commit, deploying ${GITHUB_SHA}"
-elif [ "$head" != "$GITHUB_SHA" ]; then
-  if [ "${GITHUB_EVENT_NAME:-}" = "push" ] && [ "${GITHUB_RUN_ATTEMPT:-1}" = "1" ]; then
-    deploy=false
-    echo "::notice::${GITHUB_SHA} is no longer main's newest commit (${head}); that commit's deploy carries it, so this one stands down"
-  else
-    echo "::warning::deploying ${GITHUB_SHA} on request, though main's newest commit is ${head}: this puts the older image on the services"
-  fi
-fi
+# Asked again after a wait, because a merge during it means a newer deploy is
+# queued behind this one and carries it.
+[ -n "$waited" ] && stand_down_if_superseded
 
-echo "deploy=${deploy}" >> "${GITHUB_OUTPUT:-/dev/null}"
-exit 0
+answer true
