@@ -277,22 +277,20 @@ export const orgFleetService = {
   async read(input: OrgActorInput, now = new Date()): Promise<OrgFleetDTO> {
     await billingService.assertCanViewBilling(input);
     const { organizationId } = input;
-    return {
-      tiles: await contained('fleet use figures', organizationId, () => readTiles(input, now)),
-      hostedRuns: await contained('hosted runs', organizationId, () =>
-        readHostedRuns(organizationId, now),
-      ),
-      agentInstances: await contained('agent instances', organizationId, () =>
-        readAgentInstances(organizationId, input.actorUserId),
-      ),
-      ciJobs: await contained('CI jobs', organizationId, () => readCiJobs(organizationId)),
-      indexJobs: await contained('index jobs', organizationId, () =>
-        readIndexJobs(organizationId, now),
-      ),
-      motirStops: await contained('Motir stops', organizationId, () =>
-        readMotirStops(organizationId, now),
-      ),
-      lastStop: await contained('last stop', organizationId, () => readLastStop(organizationId)),
-    };
+    // The parts are independent and each contains its own failure, so they are
+    // read together: the 30 s poll waits for the slowest part, not the sum.
+    const [tiles, hostedRuns, agentInstances, ciJobs, indexJobs, motirStops, lastStop] =
+      await Promise.all([
+        contained('fleet use figures', organizationId, () => readTiles(input, now)),
+        contained('hosted runs', organizationId, () => readHostedRuns(organizationId, now)),
+        contained('agent instances', organizationId, () =>
+          readAgentInstances(organizationId, input.actorUserId),
+        ),
+        contained('CI jobs', organizationId, () => readCiJobs(organizationId)),
+        contained('index jobs', organizationId, () => readIndexJobs(organizationId, now)),
+        contained('Motir stops', organizationId, () => readMotirStops(organizationId, now)),
+        contained('last stop', organizationId, () => readLastStop(organizationId)),
+      ]);
+    return { tiles, hostedRuns, agentInstances, ciJobs, indexJobs, motirStops, lastStop };
   },
 };
