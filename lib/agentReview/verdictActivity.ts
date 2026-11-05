@@ -76,6 +76,17 @@ export function agentVerdictAnchor(recordId: string): string {
 }
 
 /**
+ * The record an address fragment lands on (`#agent-verdict-<id>` → `<id>`), or null when the
+ * fragment names no verdict entry. The All tab reads it to walk to an older entry (MOTIR-10463).
+ */
+export function agentVerdictRecordIdOfHash(hash: string): string | null {
+  const prefix = `#${agentVerdictAnchor('')}`;
+  if (!hash.startsWith(prefix)) return null;
+  const recordId = hash.slice(prefix.length);
+  return recordId.length > 0 ? recordId : null;
+}
+
+/**
  * The Activity tab that draws a verdict's entry. Comments — the DEFAULT tab — reads
  * comments only, so an address carrying the anchor alone lands on a page without it.
  */

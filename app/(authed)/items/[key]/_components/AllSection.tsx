@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState, type ReactNode } from 'react';
+import { useRef, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { History } from 'lucide-react';
@@ -12,6 +12,8 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { useCommentsSort } from '@/lib/hooks/useCommentsSort';
 import { useActivityRevision } from '@/lib/hooks/useActivityRevision';
+import { entriesDrawAgentVerdict, walkToAgentVerdict } from '@/lib/activity/anchorWalk';
+import { agentVerdictRecordIdOfHash } from '@/lib/agentReview/verdictActivity';
 import { ContentSectionCard } from './ContentSectionCard';
 import { CommentComposer } from './CommentComposer';
 import { CommentRow } from './CommentRow';
@@ -37,6 +39,11 @@ import { addCommentAction } from '../commentActions';
 interface ReplyTarget {
   rootId: string;
   author: CommentAuthorDTO;
+}
+
+function subscribeToHash(onChange: () => void): () => void {
+  window.addEventListener('hashchange', onChange);
+  return () => window.removeEventListener('hashchange', onChange);
 }
 
 export function AllSection({
@@ -85,6 +92,50 @@ export function AllSection({
     if (!res.ok) throw new Error(`Activity read failed (${res.status})`);
     return (await res.json()) as ActivityAllPageDto;
   }
+
+  // The window's continuation point, as the anchor walk last saw it: a walk whose window has
+  // moved on meanwhile (a reload, a Show more, a refresh after a save) appends nothing.
+  // Synced in an effect declared BEFORE the walk's, so the walk reads this render's window.
+  const nextCursorRef = useRef(nextCursor);
+  const entriesRef = useRef(entries);
+  const failedRef = useRef(failed);
+  useEffect(() => {
+    nextCursorRef.current = nextCursor;
+    entriesRef.current = entries;
+    failedRef.current = failed;
+  });
+
+  // THE ANCHOR WALK (MOTIR-10463) — read the address fragment as an external store, so a later
+  // hash change (a second verdict link on the same page) walks too.
+  const hash = useSyncExternalStore(
+    subscribeToHash,
+    () => window.location.hash,
+    /* v8 ignore next -- the server snapshot: a server render has no address hash. */
+    () => '',
+  );
+  useEffect(() => {
+    const recordId = agentVerdictRecordIdOfHash(hash);
+    const startCursor = nextCursorRef.current;
+    if (!recordId || failedRef.current || startCursor === null) return;
+    if (entriesDrawAgentVerdict(entriesRef.current, recordId)) return;
+    let cancelled = false;
+    setLoadingMore(true);
+    void walkToAgentVerdict({ recordId, cursor: startCursor, fetchPage }).then((reached) => {
+      if (cancelled) return;
+      setLoadingMore(false);
+      if (!reached || nextCursorRef.current !== startCursor) return;
+      setEntries((current) => [...current, ...reached.entries]);
+      setTotalComments(reached.totalComments);
+      setTotalChanges(reached.totalChanges);
+      setNextCursor(reached.nextCursor);
+      setWorkItemRefs((current) => ({ ...current, ...reached.workItemRefs }));
+    });
+    return () => {
+      cancelled = true;
+      setLoadingMore(false);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- walks once per address; the window is read through refs
+  }, [hash]);
 
   // A field saved on this page recorded a revision (MOTIR-6101): re-read the
   // first page silently, so the merged feed shows it without a reload.
