@@ -276,6 +276,8 @@ describe('OrgFleetCard — an organisation admin’s stop', () => {
     at: '2026-10-02T14:35:00.000Z',
     ciContainersStopped: 3,
     agentInstancesHibernated: 2,
+    stoppedByName: null,
+    hostedRunCancelled: false,
   };
   const platformStop: FleetLastStopDTO = {
     at: '2026-10-02T14:38:00.000Z',
@@ -306,6 +308,28 @@ describe('OrgFleetCard — an organisation admin’s stop', () => {
     expect(foot.textContent).toContain('ops@moooon.net');
     expect(foot.textContent).not.toContain('organization admin');
     expect(block.textContent).not.toContain('ops@moooon.net');
+  });
+
+  it('names the admin when the last-stop record carries the name', () => {
+    renderCard({ lastOrgAdminStop: { ...orgAdminStop, stoppedByName: 'Ada Admin' } });
+    const block = screen.getByTestId('org-fleet-last-org-admin-stop');
+    expect(block.textContent).toContain('Last stopped by Ada Admin, an organization admin');
+    expect(block.textContent).toContain('3 CI containers · 2 agent instances');
+  });
+
+  it('a lone hosted-run cancel says so instead of two zero counts', () => {
+    renderCard({
+      lastOrgAdminStop: {
+        ...orgAdminStop,
+        ciContainersStopped: 0,
+        agentInstancesHibernated: 0,
+        stoppedByName: 'Ada Admin',
+        hostedRunCancelled: true,
+      },
+    });
+    const block = screen.getByTestId('org-fleet-last-org-admin-stop');
+    expect(block.textContent).toContain('one agent run cancelled');
+    expect(block.textContent).not.toContain('0 CI containers');
   });
 
   it('is absent when there is none — null or not passed', () => {

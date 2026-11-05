@@ -12436,8 +12436,10 @@
         },
         "orgAdminStop": {
           "title": "組織の管理者による前回の停止",
+          "titleNamed": "組織の管理者 {name} による前回の停止",
           "when": "{time}",
-          "counts": "CI コンテナー {containers} 個 · エージェントインスタンス {instances} 個"
+          "counts": "CI コンテナー {containers} 個 · エージェントインスタンス {instances} 個",
+          "hostedRun": "エージェント実行 1 件をキャンセル"
         }
       }
     },

@@ -12439,8 +12439,10 @@
         },
         "orgAdminStop": {
           "title": "Zuletzt von einem Admin der Organisation gestoppt",
+          "titleNamed": "Zuletzt von {name}, einem Admin der Organisation, gestoppt",
           "when": "{time}",
-          "counts": "{containers} CI-Container · {instances} Agent-Instanzen"
+          "counts": "{containers} CI-Container · {instances} Agent-Instanzen",
+          "hostedRun": "ein Agent-Lauf abgebrochen"
         }
       }
     },

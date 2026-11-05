@@ -14,6 +14,7 @@ import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { actionsRunsClient } from '@/lib/github/actionsRuns';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
@@ -176,7 +177,7 @@ export const platformFleetStopService = {
    * The newest stop an organisation owner or admin made of this org's fleet
    * work, or null — the tenant page's Fleet card shows it in a block of its
    * own, never as a `fleet.stop`. Read from the stored `org_admin_stop` reasons
-   * under the system arm, filtered by the org id; audited `estate.read` on the
+   * and the org's last-stop record under the system arm, filtered by the org id; audited `estate.read` on the
    * org, as `preview` is.
    */
   async lastOrgAdminStop(
@@ -192,12 +193,24 @@ export const platformFleetStopService = {
         tx,
       );
       const ciAt = await intents.latestSettledForOrganization(organizationId, 'org_admin_stop', tx);
-      const times = [agentAt, ciAt].filter((at): at is Date => at !== null);
+      // The durable record (MOTIR-10373) adds what the end reasons cannot carry:
+      // the admin's name, and a hosted-run cancel, which closes with free text only.
+      const record = await orgFleetLastStopRepository.findForOrganization(organizationId, tx);
+      const times = [agentAt, ciAt, record?.stoppedAt ?? null].filter(
+        (at): at is Date => at !== null,
+      );
       if (times.length === 0) return null;
       const at = new Date(Math.max(...times.map((time) => time.getTime())));
       const from = new Date(at.getTime() - ORG_ADMIN_STOP_WINDOW_MS);
+      // The record names THIS stop only when it falls inside the same window.
+      const recordIsThisStop =
+        record !== null &&
+        record.stoppedAt.getTime() >= from.getTime() &&
+        record.stoppedAt.getTime() <= at.getTime();
       return {
         at: at.toISOString(),
+        stoppedByName: recordIsThisStop ? record.actorName : null,
+        hostedRunCancelled: recordIsThisStop && record.action === 'cancel_hosted_run',
         ciContainersStopped: await intents.countSettledForOrganizationBetween(
           organizationId,
           'org_admin_stop',

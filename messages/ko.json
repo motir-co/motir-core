@@ -12433,8 +12433,10 @@
         },
         "orgAdminStop": {
           "title": "조직 관리자의 마지막 중지",
+          "titleNamed": "조직 관리자 {name}님의 마지막 중지",
           "when": "{time}",
-          "counts": "CI 컨테이너 {containers}개 · 에이전트 인스턴스 {instances}개"
+          "counts": "CI 컨테이너 {containers}개 · 에이전트 인스턴스 {instances}개",
+          "hostedRun": "에이전트 실행 1건 취소됨"
         }
       }
     },

@@ -297,14 +297,20 @@ function LastOrgAdminStop({ stop }: { stop: FleetLastOrgAdminStopDTO }) {
       data-testid="org-fleet-last-org-admin-stop"
       className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-sans text-xs text-(--el-text-secondary)"
     >
-      <dt className="font-medium">{t('title')}</dt>
+      <dt className="font-medium">
+        {stop.stoppedByName ? t('titleNamed', { name: stop.stoppedByName }) : t('title')}
+      </dt>
       <dd className="text-(--el-text)">
         {t('when', { time: format.relativeTime(new Date(stop.at)) })}
         {' · '}
-        {t('counts', {
-          containers: format.number(stop.ciContainersStopped),
-          instances: format.number(stop.agentInstancesHibernated),
-        })}
+        {stop.hostedRunCancelled &&
+        stop.ciContainersStopped === 0 &&
+        stop.agentInstancesHibernated === 0
+          ? t('hostedRun')
+          : t('counts', {
+              containers: format.number(stop.ciContainersStopped),
+              instances: format.number(stop.agentInstancesHibernated),
+            })}
       </dd>
     </dl>
   );

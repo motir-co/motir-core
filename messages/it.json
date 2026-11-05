@@ -12439,8 +12439,10 @@
         },
         "orgAdminStop": {
           "title": "Ultimo arresto da parte di un amministratore dell’organizzazione",
+          "titleNamed": "Ultimo arresto di {name}, admin dell’organizzazione",
           "when": "{time}",
-          "counts": "{containers} container CI · {instances} istanze di agenti"
+          "counts": "{containers} container CI · {instances} istanze di agenti",
+          "hostedRun": "un’esecuzione dell’agente annullata"
         }
       }
     },

@@ -12439,8 +12439,10 @@
         },
         "orgAdminStop": {
           "title": "Última detención por un administrador de la organización",
+          "titleNamed": "Detenido por última vez por {name}, admin de la organización",
           "when": "{time}",
-          "counts": "{containers} contenedores de CI · {instances} instancias de agentes"
+          "counts": "{containers} contenedores de CI · {instances} instancias de agentes",
+          "hostedRun": "una ejecución de agente cancelada"
         }
       }
     },

@@ -12439,8 +12439,10 @@
         },
         "orgAdminStop": {
           "title": "Laatst gestopt door een beheerder van de organisatie",
+          "titleNamed": "Laatst gestopt door {name}, beheerder van de organisatie",
           "when": "{time}",
-          "counts": "{containers} CI-containers · {instances} agentinstanties"
+          "counts": "{containers} CI-containers · {instances} agentinstanties",
+          "hostedRun": "één agent-run geannuleerd"
         }
       }
     },

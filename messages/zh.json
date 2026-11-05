@@ -12430,8 +12430,10 @@
         },
         "orgAdminStop": {
           "title": "组织管理员上次停止",
+          "titleNamed": "组织管理员 {name} 上次停止",
           "when": "{time}",
-          "counts": "{containers} 个 CI 容器 · {instances} 个智能体实例"
+          "counts": "{containers} 个 CI 容器 · {instances} 个智能体实例",
+          "hostedRun": "已取消 1 次智能体运行"
         }
       }
     },

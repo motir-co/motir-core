@@ -445,7 +445,10 @@ test.describe('Fleet in Settings › Organization', () => {
         const res = await staff.goto(`/admin/tenants/${org.organizationId}`);
         expect(res?.status()).toBe(200);
         const block = staff.getByTestId('org-fleet-last-org-admin-stop');
-        await expect(block).toContainText(en.platformAdmin.tenant.fleet.orgAdminStop.title);
+        // The org's last-stop record names the admin who stopped it.
+        await expect(block).toContainText(
+          en.platformAdmin.tenant.fleet.orgAdminStop.titleNamed.replace('{name}', admin.name),
+        );
         await expect(block).toContainText('1 CI containers');
         await expect(staff.getByTestId('org-fleet-last-stop')).toHaveCount(0);
       } finally {
