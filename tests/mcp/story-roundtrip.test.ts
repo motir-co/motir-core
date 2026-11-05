@@ -930,7 +930,11 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         }
       }
       await client.close();
-    });
+      // ⏱️ TIMEOUT BUDGET: one MCP round-trip per registered tool, so the runtime grows
+      // with the tool registry — ~12s locally against vitest's 15s default, and over it on a
+      // loaded CI shard (MOTIR-10434's PR timed out here twice). The budget is the repo's
+      // 60s precedent for loops over a whole registry, not a retry.
+    }, 60_000);
 
     it('a DEFAULT token DOES the non-delete work — write/sprint/integration AND archive succeed', async () => {
       const fx = await makeWorkItemFixture();
