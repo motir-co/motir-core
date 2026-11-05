@@ -55,7 +55,7 @@ import {
 
 /** Why an org's fleet was stopped. Recorded as each torn-down intent's
  *  `teardownReason`. */
-export type FleetStopReason = 'credits_exhausted' | 'admin_stop';
+export type FleetStopReason = 'credits_exhausted' | 'admin_stop' | 'org_admin_stop';
 
 export interface FleetStopResult {
   /** Workflow runs GitHub accepted a cancel for. */
@@ -72,6 +72,7 @@ const CI_RUNNER_WORKLOAD = 'ci_runner' satisfies FleetWorkloadKind;
 const STOP_DETAIL: Record<FleetStopReason, string> = {
   credits_exhausted: "the organization's fleet was stopped at zero credits",
   admin_stop: "the organization's fleet was stopped by a platform admin",
+  org_admin_stop: "the organization's fleet was stopped by an organization admin",
 };
 
 function detailOf(err: unknown): string {

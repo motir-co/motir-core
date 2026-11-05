@@ -63,6 +63,7 @@ import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPrefl
 import { credentialExpiryService } from '@/lib/services/credentialExpiryService';
 import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
 import { fleetImageCoverageProbeService } from '@/lib/services/fleetImageCoverageProbeService';
+import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { planDriftService } from '@/lib/services/planDriftService';
@@ -179,6 +180,9 @@ export const jobServices = {
   // The fleet image-coverage probe (MOTIR-10290) — a job a connected org sends to
   // the fleet that the pinned runner image cannot run, found without opening the page.
   fleetImageCoverage: fleetImageCoverageProbeService,
+  // The runner-image freshness probe (MOTIR-10393) — a merged change to the
+  // runner image that was never released and pinned.
+  runnerImageFreshness: runnerImageFreshnessProbeService,
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   planDrift: planDriftService,

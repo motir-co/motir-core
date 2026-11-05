@@ -150,8 +150,6 @@ test('platform staff read the whole job ledger, and an operator replays one row,
   const table = main.getByRole('table');
   const bodyRows = table.locator('tbody tr');
   const fnFilter = main.getByRole('combobox', { name: jm.fn.label });
-  /** A row's Function cell, which carries the exact function id as its title. */
-  const functionCell = (fn: string) => page.locator(`td[title="${fn}"]`);
   const waitingLine = (waiting: number, replayed: number) =>
     main.getByText(fill(jm.waitingLine, { waiting, replayed }), { exact: true });
 
@@ -219,12 +217,13 @@ test('platform staff read the whole job ledger, and an operator replays one row,
     await expect(page).toHaveURL(/tab=dlq/);
     await expect(main.getByRole('note')).toHaveText(jm.readOnly);
     // The newest 200 waiting rows: none of them a sweep, which are all older.
-    // Matched on the Function cell, not the row's text: the worker's own
-    // `system.daily-health-check` dead letter can NAME the sweep in its message
-    // (an overdue schedule after a cron tick), and that row is not a sweep.
+    // Matched on the FUNCTION cell, not the row's text: the lane's live
+    // `system.daily-health-check` dead letter names every overdue job in its
+    // failure message, `system.rate-limit-sweep` among them once its 04:00 UTC
+    // tick has passed.
     await expect(bodyRows).toHaveCount(200);
     await expect(bodyRows.filter({ hasText: INDEX }).first()).toBeVisible();
-    await expect(bodyRows.filter({ has: functionCell(SWEEP) })).toHaveCount(0);
+    await expect(bodyRows.filter({ has: page.locator(`td[title="${SWEEP}"]`) })).toHaveCount(0);
     await expect(bodyRows.filter({ hasText: jm.noWorkspace }).first()).toBeVisible();
     await expect(bodyRows.filter({ hasText: tenant.workspaceId }).first()).toBeVisible();
     await expect(main.getByRole('button', { name: /^Replay/ })).toHaveCount(0);

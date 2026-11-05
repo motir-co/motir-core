@@ -1,4 +1,4 @@
-import { Building2, Coins, CreditCard, GitBranch, ShieldCheck, Users } from 'lucide-react';
+import { Building2, Coins, CreditCard, GitBranch, Server, ShieldCheck, Users } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The ORGANISATION-settings navigation REGISTRY (Story MOTIR-4669 · MOTIR-4710).
@@ -235,6 +235,20 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     // when the two collided at this merge. The PAGE is unchanged — it still
     // serves a Member their scoped slice if the URL is opened directly (7.2.11).
     orgAdminOnly: true,
+  },
+  // MOTIR-10369 · Story MOTIR-10363 (design/org-admin, the Fleet delta § *Where it
+  // lives*): what the org runs on Motir's fleet and the controls to stop it. After
+  // Usage & cost, before Billing & plans. Owner/admin only and only where the
+  // fleet meter is — the two flags Billing & plans carries, because the page's
+  // read is gated by Billing & plans' own view gate.
+  {
+    id: 'fleet',
+    group: 'billing',
+    href: '/settings/organization/fleet',
+    icon: Server,
+    labelKey: 'fleet',
+    orgAdminOnly: true,
+    cloudOnly: true,
   },
   {
     id: 'billing',

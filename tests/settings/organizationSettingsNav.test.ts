@@ -95,7 +95,15 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
 
   it('an org ADMIN on cloud sees every row', () => {
     const ids = visibleOrganizationSettingsNav(ADMIN, undefined, CLOUD).map((e) => e.id);
-    expect(ids).toEqual(['organization', 'git', 'members', 'security', 'usage', 'billing']);
+    expect(ids).toEqual([
+      'organization',
+      'git',
+      'members',
+      'security',
+      'usage',
+      'fleet',
+      'billing',
+    ]);
   });
 
   it('a PLAIN org member BELOW the reveal sees `Organisation` alone', () => {
@@ -127,6 +135,21 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     const ids = visibleOrganizationSettingsNav(ADMIN, undefined, SELF_HOST).map((e) => e.id);
     expect(ids).toContain('usage');
     expect(ids).not.toContain('billing');
+  });
+
+  it('`Fleet` sits after Usage & cost, Owner/Admin only and cloud only (MOTIR-10369)', () => {
+    // Off cloud there is no fleet meter and the route answers 404, so no row.
+    const self = visibleOrganizationSettingsNav(ADMIN, undefined, SELF_HOST).map((e) => e.id);
+    expect(self).not.toContain('fleet');
+    const member = visibleOrganizationSettingsNav(MEMBER, undefined, CLOUD).map((e) => e.id);
+    expect(member).not.toContain('fleet');
+    const fleet = ORGANIZATION_SETTINGS_NAV.find((e) => e.id === 'fleet')!;
+    expect(fleet).toMatchObject({
+      group: 'billing',
+      href: '/settings/organization/fleet',
+      orgAdminOnly: true,
+      cloudOnly: true,
+    });
   });
 
   it('⚠️ BOTH axes DEFAULT CLOSED — a caller that forgets to thread one loses rows', () => {

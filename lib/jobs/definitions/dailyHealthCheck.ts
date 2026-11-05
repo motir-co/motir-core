@@ -7,6 +7,11 @@ import type { MonitorConfigVerdict } from '@/lib/monitors';
 import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe';
 import type { HostedRunProbeVerdictDTO } from '@/lib/dto/hostedRunProbe';
 import type { FleetImageCoverageVerdictDTO } from '@/lib/dto/fleetImageCoverage';
+import type {
+  RunnerAmiFreshnessDTO,
+  RunnerImageFreshnessVerdictDTO,
+  RunnerImageUnreleasedChangeDTO,
+} from '@/lib/dto/runnerImageFreshness';
 
 // The canonical SCHEDULED job (Story 1.6 · Subtask 1.6.4) — the reference for
 // the cron primitive, and the replacement for the 1.6.2 `system.ping` smoke
@@ -245,6 +250,12 @@ export interface DailyHealthCheckResult {
    *  pair's condition, so `runnable` is distinguishable from `indeterminate` or
    *  `not_applicable`. */
   fleetImageCoverage: FleetImageCoverageVerdictDTO;
+  /** Whether the pinned runner image was built from a commit that contains the
+   *  newest default-branch change to every file it is built from (MOTIR-10393) —
+   *  recorded on the healthy tick too, with the build commit and where it was
+   *  read, and with the AMI's state, so `current` is distinguishable from
+   *  `indeterminate` or `not_applicable`. */
+  runnerImageFreshness: RunnerImageFreshnessVerdictDTO;
 }
 
 /** The stable half of the resolved payload. Exported for the test. */
@@ -563,6 +574,67 @@ export class FleetImageCoverageGapError extends Error {
   }
 }
 
+/**
+ * Thrown when a change to a file the runner image is built from has merged, but
+ * the image `MOTIR_RUNNER_IMAGE` pins was built from a commit that does not
+ * contain it (MOTIR-10393): the fix is on the default branch and the fleet boots
+ * the old image. The message names the pinned image, its build commit, each
+ * unreleased commit and the release step, because it is the whole DLQ row an
+ * operator reads. Releasing and pinning stay a person's step.
+ */
+/** One stale pin's changes, as the error sentences list them. */
+function describeUnreleased(unreleased: readonly RunnerImageUnreleasedChangeDTO[], what: string) {
+  return unreleased
+    .map(
+      (c) =>
+        `${c.commit.slice(0, 12)} (${c.committedAt}, "${c.subject}", changes ${c.paths.join(', ')}` +
+        `${c.relation === 'diverged' ? `; the ${what} was built from a branch without it` : ''})`,
+    )
+    .join('; ');
+}
+
+/** The sentence a stale runner AMI is reported in (MOTIR-10395). */
+function amiStaleSentence(ami: Extract<RunnerAmiFreshnessDTO, { state: 'stale' }>): string {
+  const { build, unreleased } = ami;
+  const newest = unreleased[0]!.commit;
+  return (
+    `The pinned runner AMI ${build.amiId}${build.name ? ` (${build.name})` : ''} was built from ` +
+    `${build.commit.slice(0, 12)} (read from its ${build.source}, in fleet account ${build.account}), ` +
+    `which does not contain ${unreleased.length} merged change(s) to the AMI: ` +
+    `${describeUnreleased(unreleased, 'AMI')}. The AWS fleet still boots the old AMI. Build it — ` +
+    `\`git tag ci-runner-ami-v<next> ${newest} && git push origin ci-runner-ami-v<next>\` ` +
+    `(.github/workflows/release-ci-runner-ami.yml) — then set poolAccount.images.ci_runner in ` +
+    `motir-infra and MOTIR_AWS_RUNNER_AMI_ID to the AMI id the build's job summary prints.`
+  );
+}
+
+export class RunnerImageStaleError extends Error {
+  constructor(readonly verdict: Extract<RunnerImageFreshnessVerdictDTO, { verdict: 'stale' }>) {
+    const { build, unreleased } = verdict;
+    const newest = unreleased[0]!.commit;
+    super(
+      `The pinned runner image ${build.image} was built from ${build.commit.slice(0, 12)} ` +
+        `(read from its ${build.source === 'label' ? 'org.opencontainers.image.revision label' : 'sha- registry tag'}), ` +
+        `which does not contain ${unreleased.length} merged change(s) to the image: ` +
+        `${describeUnreleased(unreleased, 'image')}. ` +
+        `The fleet still boots the old image. Release it — \`git tag runner-v<next> ${newest} && ` +
+        `git push origin runner-v<next>\` (.github/workflows/release-runner-image.yml) — then set ` +
+        `MOTIR_RUNNER_IMAGE to the digest the release's job summary prints.` +
+        // Both pins can be stale at once; one run names both (MOTIR-10395).
+        (verdict.ami.state === 'stale' ? ` ${amiStaleSentence(verdict.ami)}` : ''),
+    );
+    this.name = 'RunnerImageStaleError';
+  }
+}
+
+/** The runner AMI is stale while the image is not (MOTIR-10395). */
+export class RunnerAmiStaleError extends Error {
+  constructor(readonly ami: Extract<RunnerAmiFreshnessDTO, { state: 'stale' }>) {
+    super(amiStaleSentence(ami));
+    this.name = 'RunnerAmiStaleError';
+  }
+}
+
 export const dailyHealthCheck = defineJob(
   {
     id: 'system.daily-health-check',
@@ -608,6 +680,10 @@ export const dailyHealthCheck = defineJob(
     );
     const fleetImageCoverage = await ctx.step.run('fleet-image-coverage', () =>
       services.fleetImageCoverage.check(),
+    );
+    // `-v2`: MOTIR-10395 replaced the AMI's `not_read` arm with a judged verdict.
+    const runnerImageFreshness = await ctx.step.run('runner-image-freshness-v2', () =>
+      services.runnerImageFreshness.check(),
     );
     // ⚠️ EVERY PROBE RUNS BEFORE ANY OF THEM THROWS. A stopped schedule, an
     // unpullable runner image and an unpullable indexer image are independent
@@ -710,6 +786,18 @@ export const dailyHealthCheck = defineJob(
       throw new FleetImageCoverageGapError(fleetImageCoverage);
     }
 
+    // The FRESHNESS probe (MOTIR-10393). Only `stale` is loud: `indeterminate` is
+    // a registry or GitHub read that did not answer — never a pass, and on the
+    // row with the read it failed — and `not_applicable` a deployment that pins
+    // no runner image.
+    if (runnerImageFreshness.verdict === 'stale') {
+      throw new RunnerImageStaleError(runnerImageFreshness);
+    }
+    // The AMI arm (MOTIR-10395) is loud on the same terms: `stale` only.
+    if (runnerImageFreshness.ami.state === 'stale') {
+      throw new RunnerAmiStaleError(runnerImageFreshness.ami);
+    }
+
     return {
       ...DAILY_HEALTH_CHECK_PAYLOAD,
       schedules,
@@ -722,6 +810,7 @@ export const dailyHealthCheck = defineJob(
       credentialExpiry,
       hostedRuns,
       fleetImageCoverage,
+      runnerImageFreshness,
     };
   },
 );
