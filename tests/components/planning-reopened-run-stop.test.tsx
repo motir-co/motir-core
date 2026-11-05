@@ -212,7 +212,29 @@ describe('a session opened while Motir is writing its plan', () => {
     expect(stream).not.toHaveBeenCalled();
   });
 
-  it('a session with no job of its own (opened by the cadence or an expand) draws no Stop', async () => {
+  // Bug MOTIR-10431: the session Motir opens for the auto-plan cadence, an expand or a
+  // generation now records its job as `lastJobId` (`attachPlanSessionWithin`), so it
+  // is adopted like a conversation's, with nobody as its starter.
+  it('⭐ a CADENCE session, which carries its own job, draws the Stop on that job', async () => {
+    getNamed.mockResolvedValue(
+      named({
+        lastJobId: 'job-cad',
+        origin: 'cadence',
+        turnCount: 0,
+        startedBy: null,
+        startedByViewer: false,
+      }),
+    );
+    heldStream();
+    mount();
+
+    const stop = await screen.findByTestId('plan-change-stop');
+    expect(stream.mock.calls[0]![0]).toBe('job-cad');
+    fireEvent.click(stop);
+    await waitFor(() => expect(stopRun).toHaveBeenCalledWith('s9', 'job-cad', 'stop:job-cad'));
+  });
+
+  it('a session that names no job draws no Stop', async () => {
     getNamed.mockResolvedValue(
       named({ lastJobId: null, lastSubmittedAt: null, origin: 'cadence' }),
     );
