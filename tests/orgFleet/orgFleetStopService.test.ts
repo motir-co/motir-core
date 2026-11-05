@@ -196,7 +196,18 @@ async function seedBusy(t: WorkItemFixture, label: string): Promise<Tenant> {
   liveRuns.set(`${MOTIR_ORG}/${repos[0]}`, [101]);
   liveRuns.set(`${MOTIR_ORG}/${repos[1]}`, [202]);
   const intents = [await seedCiContainer(t), await seedCiContainer(t)];
-  const hostedRun = `run-${label}-${t.workspaceId}`;
+  const run = await adminDb.dispatchRun.create({
+    data: {
+      workspaceId: t.workspaceId,
+      projectId: t.projectId,
+      command: 'run',
+      origin: 'hosted',
+      status: 'running',
+      createdById: t.ownerId,
+      startedAt: clock.now(),
+    },
+  });
+  const hostedRun = run.id;
   await seedSlot(t, 'hosted_agent', hostedRunDispatchId(hostedRun));
   await seedSlot(t, 'code_graph_index', `index-${t.workspaceId}`);
   const instances = [
@@ -528,6 +539,18 @@ describe('cancelHostedRun', () => {
         orgFleetStopService.cancelHostedRun(actor(fx), id, clock.now()),
       ).rejects.toBeInstanceOf(OrgFleetRunNotFoundError);
     }
+    expect(hostedRunService.endHostedRun).not.toHaveBeenCalled();
+  });
+
+  it('a run already closed whose slot its supervisor has not released yet is not live', async () => {
+    // A cancel closes the run at once; the container and its slot go at the
+    // supervisor's next poll. In between the run is neither counted nor cancelled.
+    await adminDb.dispatchRun.update({ where: { id: a.hostedRun }, data: { status: 'cancelled' } });
+    await expect(
+      orgFleetStopService.cancelHostedRun(actor(fx), a.hostedRun, clock.now()),
+    ).rejects.toBeInstanceOf(OrgFleetRunNotFoundError);
+    const preview = await orgFleetStopService.previewStopEverything(actor(fx), clock.now());
+    expect(preview.hostedRuns).toBe(0);
     expect(hostedRunService.endHostedRun).not.toHaveBeenCalled();
   });
 

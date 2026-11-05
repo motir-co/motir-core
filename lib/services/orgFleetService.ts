@@ -139,7 +139,7 @@ async function readHostedRuns(
       const id = dispatchRunIdOf(slot.ref);
       return id ? [id] : [];
     });
-    return dispatchRunRepository.findHeadsByIds(ids, tx);
+    return dispatchRunRepository.findRunningHeadsByIds(ids, tx);
   });
   if (heads.length === 0) return { rows: [] };
 

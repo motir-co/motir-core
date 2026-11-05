@@ -709,10 +709,12 @@ export const dispatchRunRepository = {
   },
 
   /**
-   * These runs' heads — where each runs, when it started and who started it —
-   * in ONE query: the org Fleet page names a live hosted run by them.
+   * The heads of those of these runs still RUNNING — where each runs, when it
+   * started and who started it — in ONE query: the org Fleet page names a live
+   * hosted run by them. A cancelled run keeps its slot until its supervisor's next
+   * poll tears the container down, so a slot alone does not make a run live.
    */
-  async findHeadsByIds(
+  async findRunningHeadsByIds(
     ids: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<
@@ -726,7 +728,7 @@ export const dispatchRunRepository = {
   > {
     if (ids.length === 0) return [];
     return tx.dispatchRun.findMany({
-      where: { id: { in: [...ids] } },
+      where: { id: { in: [...ids] }, status: 'running' },
       select: { id: true, workspaceId: true, projectId: true, startedAt: true, createdById: true },
     });
   },

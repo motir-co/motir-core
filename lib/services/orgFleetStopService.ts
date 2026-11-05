@@ -9,6 +9,7 @@ import { actionsRunsClient } from '@/lib/github/actionsRuns';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
 import { OrgFleetInstanceNotFoundError, OrgFleetRunNotFoundError } from '@/lib/orgFleet/errors';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
 import { ciRunnerProvisioningIntentRepository as intents } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { fleetInFlightSlotRepository } from '@/lib/repositories/fleetInFlightSlotRepository';
 import { orgFleetLastStopRepository } from '@/lib/repositories/orgFleetLastStopRepository';
@@ -66,14 +67,25 @@ function dispatchRunIdOf(ref: string): string | null {
   return ref.startsWith(HOSTED_RUN_PREFIX) ? ref.slice(HOSTED_RUN_PREFIX.length) || null : null;
 }
 
-/** The org's live hosted-agent runs, by the slots that hold their containers. */
+/**
+ * The org's live hosted-agent runs: those a slot holds a container for AND that
+ * are still running. A cancelled run keeps its slot until its supervisor's next
+ * poll, and is not live in between — the page reads it the same way.
+ */
 async function liveHostedRuns(organizationId: string, now: Date): Promise<string[]> {
-  const slots = await withSystemContext((tx) =>
-    fleetInFlightSlotRepository.listLiveForOrganization(organizationId, 'hosted_agent', now, tx),
-  );
-  return slots.flatMap((slot) => {
-    const id = dispatchRunIdOf(slot.ref);
-    return id ? [id] : [];
+  return withSystemContext(async (tx) => {
+    const slots = await fleetInFlightSlotRepository.listLiveForOrganization(
+      organizationId,
+      'hosted_agent',
+      now,
+      tx,
+    );
+    const ids = slots.flatMap((slot) => {
+      const id = dispatchRunIdOf(slot.ref);
+      return id ? [id] : [];
+    });
+    const running = await dispatchRunRepository.findRunningHeadsByIds(ids, tx);
+    return running.map((run) => run.id);
   });
 }
 

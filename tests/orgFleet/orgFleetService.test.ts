@@ -700,6 +700,34 @@ describe('a name that cannot be found reads null — never a guess', () => {
     expect(answer.hostedRuns.rows.map((row) => row.dispatcherName)).toEqual([null, null]);
   });
 
+  it('a hosted run already closed, whose slot its supervisor has not released yet, is not listed', async () => {
+    const run = await adminDb.dispatchRun.create({
+      data: {
+        workspaceId: a.workspaceId,
+        projectId: a.projectId,
+        command: 'run',
+        origin: 'hosted',
+        status: 'cancelled',
+        createdById: null,
+        startedAt: new Date(NOW.getTime() - 60_000),
+      },
+    });
+    const ref = hostedRunDispatchId(run.id);
+    await adminDb.fleetInFlightSlot.create({
+      data: {
+        workload: 'hosted_agent',
+        ref,
+        ownerRef: ref,
+        organizationId: a.organizationId,
+        workspaceId: a.workspaceId,
+        expiresAt: LATER,
+      },
+    });
+    const answer = await read(a);
+    if (answer.hostedRuns.kind !== 'read') throw new Error('hosted runs not read');
+    expect(answer.hostedRuns.rows).toEqual([]);
+  });
+
   it('a CI job with no project; a waiting job no admission pass judged yet', async () => {
     const row = await intent(a, 'pending', { waitingReason: null });
     await adminDb.ciRunnerProvisioningIntent.update({

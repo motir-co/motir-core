@@ -183,7 +183,18 @@ async function seedBusy(t: WorkItemFixture, label: string): Promise<Tenant> {
   liveRuns.set(`${MOTIR_ORG}/${repos[0]}`, [101]);
   liveRuns.set(`${MOTIR_ORG}/${repos[1]}`, [202]);
   const intents = [await seedCiContainer(t), await seedCiContainer(t)];
-  const hostedRun = `run-${label}-${t.workspaceId}`;
+  const run = await adminDb.dispatchRun.create({
+    data: {
+      workspaceId: t.workspaceId,
+      projectId: t.projectId,
+      command: 'run',
+      origin: 'hosted',
+      status: 'running',
+      createdById: t.ownerId,
+      startedAt: new Date(),
+    },
+  });
+  const hostedRun = run.id;
   await seedSlot(t, 'hosted_agent', hostedRunDispatchId(hostedRun));
   await seedSlot(t, 'code_graph_index', `index-${t.workspaceId}`);
   const instances = [
