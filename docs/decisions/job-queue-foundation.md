@@ -1809,6 +1809,71 @@ add such a record, decided where it is introduced.
 - **An index for the pass.** It runs daily and capped (`JOB_QUEUE_PURGE_MAX_BATCHES`); whether its
   scans need an index is a measurement on production, not a decision taken here.
 
+## §18 — A run WAITING on an in-process gate is PARKED: it keeps its claim and leaves the pool (MOTIR-10457)
+
+**Amendment, 2026-11-05.** **Evidence pinned at:** `motir-core` `origin/main` @ `610ef0c`.
+**Consumed by:** [MOTIR-10457].
+
+### §18.1 — The defect
+
+Since [MOTIR-10425] every GitHub delivery is a `system.github-webhook-delivery` run, and a CI one
+(`check_run`, `check_suite`) waits on the CI-feedback gate, three slots in-process
+(`CI_FEEDBACK_CONCURRENCY`, `lib/services/changeRequestCiFeedback.ts`). The gate exists to bound what
+that path takes from the pg pool (MOTIR-6788), and a unit in its line holds no connection. The worker
+counted that unit as busy anyway, so a push's burst filled the pool: three runs inside the gate, seven
+in its line, and every other job — `email.send`, the scheduler's fires, supervisor steps — waited for
+the backlog to drain.
+
+**Reproduced on `610ef0c`** with a real worker against real Postgres
+(`tests/jobs/worker-gate-wait-occupancy.test.ts`, `tests/github/githubWebhookInbox.test.ts`): with the
+gate held and fourteen gated runs due before one unrelated run, the unrelated run is **not claimed at
+all** while the gate is held. Its wait is bounded only by the backlog.
+
+### §18.2 — The decision: the wait is PARKED
+
+A settle runs inside a wait scope (`lib/async/waitScope.ts`). A wait reported idle — the gate's line
+reports itself so — moves the run to `parked` for exactly the wait. `freeCapacity` counts BUSY runs
+against `POOL_SIZE`; every claim held, parked or not, is capped at `POOL_SIZE + PARK_HEADROOM` (500).
+A parked run keeps its claim and its lease, and the drain treats it like any in-flight run.
+
+**§14.1 is untouched, by §15.2's test:** `DefineJobOptions` gains no member and `claimDueRuns` gains no
+predicate. Nothing chooses which job runs; the claim is still by `run_at`.
+
+### §18.3 — The options refused, so they are not re-proposed
+
+- **A per-job concurrency limit at claim time.** §14.1 refuses the mechanism, and the card that found
+  this named it first. Refused for §14.2's reasons, unchanged.
+- **Defer the run while the gate is full** (`deferRun`, §16). It frees the slot, but a deferred run
+  comes back at a time of its own, so arrival order is lost. For CI that is a correctness bug, not a
+  latency one: a check's `in_progress` deferred past its own `completed` re-writes the row `pending`
+  (`githubCheckRunRepository.upsert` updates unconditionally, and must, because a re-run legitimately
+  takes a terminal row back to `pending`, MOTIR-6946). Short jobs and skipped jobs deliver both inside
+  a second. The gate's FIFO line is what keeps the order, so the wait stays in it.
+- **A bigger gate.** The gate is sized to the pg pool, not to the worker; raising it re-opens
+  MOTIR-6788.
+- **A bigger pool.** It moves the threshold and keeps the ratio: a burst larger than the pool still
+  starves it, the shape §15.6.2 already refused as a fix.
+
+### §18.4 — What it costs
+
+- **Busy work may exceed `POOL_SIZE` by the gates' limits, and no more.** A parked run unparks only
+  when its gate hands it a slot, and its own slot may have been taken meanwhile, so the overshoot is
+  at most the sum of the gates' limits (three today). That work is rationed by its gate.
+- **Memory for the line.** A parked delivery holds its row and its stored body, kilobytes each.
+  `PARK_HEADROOM` bounds it; past it the worker stops claiming, which is the old behaviour reached
+  only after five hundred waiters.
+- **One worker can hold more of a burst.** Every worker machine claims as fast as it can, so a burst
+  still spreads across machines, and each machine's gate drains its own share.
+
+### §18.5 — What §18 does not settle
+
+- **The gate's size and the pg pool's.** Unchanged; MOTIR-6788 decided them.
+- **Ordering across worker machines.** Two machines run two gates, and the order between them was
+  never kept. §18 keeps what one process kept.
+- **Any other in-process wait.** Only the concurrency gate reports itself idle today. A new wait that
+  holds nothing may report itself the same way (`awaitAsIdle`); a wait that holds a connection or a
+  lock must not.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
@@ -1841,3 +1906,5 @@ add such a record, decided where it is introduced.
 [MOTIR-8540]: https://app.motir.co/items/MOTIR-8540
 [MOTIR-6935]: https://app.motir.co/items/MOTIR-6935
 [MOTIR-3459]: https://app.motir.co/items/MOTIR-3459
+[MOTIR-10425]: https://app.motir.co/items/MOTIR-10425
+[MOTIR-10457]: https://app.motir.co/items/MOTIR-10457
