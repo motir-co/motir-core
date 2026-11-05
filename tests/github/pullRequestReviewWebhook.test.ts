@@ -14,6 +14,14 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
+// Motir's own App bots (MOTIR-10335): the two logins the Apps would answer for themselves.
+vi.mock('@/lib/github/appBotLogins', () => ({
+  motirAppBotLogins: async () => ({
+    logins: new Set(['motir-studio[bot]', 'motir-integration[bot]']),
+    complete: true,
+  }),
+}));
+
 // THE WEBHOOK ARM (Story MOTIR-4910 · MOTIR-5598;
 // `docs/decisions/approval-gates.md` §8 FOURTH AMENDMENT, decisions 2, 6 and 9), against a
 // REAL Postgres, through the real `githubWebhookService.handleEvent` — the door a GitHub
@@ -345,6 +353,45 @@ describe('the failure paths are all 2xx (MOTIR-5598)', () => {
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('evaluation failed after recording'),
       expect.objectContaining({ pullRequestId: pr.id }),
+    );
+  });
+});
+
+describe("Motir's own App bots are not reviewers (MOTIR-10335)", () => {
+  const asBot = (body: Record<string, unknown>, login: string) => {
+    (body['review'] as Record<string, unknown>)['user'] = { login, id: 777, type: 'Bot' };
+    return body;
+  };
+
+  it.each(['motir-studio[bot]', 'motir-integration[bot]'])(
+    '%s: a Request changes and its dismissal are ignored_bot, stored nowhere and decide nothing',
+    async (login) => {
+      const { pr, gate } = await pullRequest({ linked: true, withGate: true });
+
+      const submitted = await send(asBot(delivery('submitted-changes-requested'), login));
+      const dismissed = await send(asBot(delivery('dismissed'), login));
+
+      expect(submitted).toEqual({ event: 'pull_request_review', outcome: 'ignored_bot' });
+      expect(dismissed).toEqual({ event: 'pull_request_review', outcome: 'ignored_bot' });
+      expect(await reviewRows(pr.id)).toEqual([]);
+      expect(
+        (await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate!.id } })).state,
+      ).toBe('awaiting');
+    },
+  );
+
+  it('a human approval at the head still decides the gate after a bot review was ignored', async () => {
+    const { pr, gate } = await pullRequest({ linked: true, withGate: true });
+    await send(
+      asBot(delivery('submitted-changes-requested', { reviewId: 1 }), 'motir-studio[bot]'),
+    );
+
+    const result = await send(delivery('submitted-approved', { reviewId: 2 }));
+
+    expect(result).toEqual({ event: 'pull_request_review', outcome: 'decided_approved' });
+    expect((await reviewRows(pr.id)).map((r) => r.reviewerLogin)).toEqual(['ada-l']);
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: gate!.id } })).state).toBe(
+      'approved',
     );
   });
 });

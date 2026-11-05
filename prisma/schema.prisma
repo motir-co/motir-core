@@ -1875,6 +1875,7 @@ model Workspace {
 
   reviewVerdictRecords ReviewVerdictRecord[]
   reviewDismissals     ReviewDismissal[]
+  reviewBotPosts       ReviewBotPost[]
 
   @@index([organizationId])
   @@map("workspace")
@@ -2399,6 +2400,7 @@ model Project {
 
   reviewVerdictRecords ReviewVerdictRecord[]
   reviewDismissals     ReviewDismissal[]
+  reviewBotPosts       ReviewBotPost[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3445,6 +3447,7 @@ model WorkItem {
 
   reviewVerdictRecords ReviewVerdictRecord[]
   reviewDismissals     ReviewDismissal[]
+  reviewBotPosts       ReviewBotPost[]
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -8836,6 +8839,9 @@ model GithubPullRequest {
   mergeRefusals      GithubPullRequestMergeRefusal[]
   queueAttempts      GithubMergeQueueAttempt[]
   reviews            GithubPullRequestReview[]
+  // One per (pull request, agent verdict record) — Motir's App bot's review of that
+  // verdict on this pull request (MOTIR-10335).
+  reviewBotPosts     ReviewBotPost[]
 
   @@unique([repoId, number])
   @@index([repoId])
@@ -15999,6 +16005,7 @@ model ReviewVerdictRecord {
   gate        ApprovalGate?     @relation(fields: [gateId], references: [id], onDelete: SetNull)
   submittedBy User?             @relation(fields: [submittedById], references: [id], onDelete: SetNull)
   dismissals  ReviewDismissal[]
+  botPosts    ReviewBotPost[]
 
   @@index([workspaceId])
   @@index([projectId])
@@ -16047,4 +16054,67 @@ model ReviewDismissal {
   @@index([approvalGateId])
   @@index([dismissedById])
   @@map("review_dismissal")
+}
+
+/// What Motir's GitHub App bot POSTED for one agent review verdict on one pull request
+/// (Story MOTIR-10327 · MOTIR-10335; `approval-gates.md` §12 rules 7 and 8). One review per
+/// pull request per verdict record — the unique pair is the idempotency record, so a
+/// retried post job is a no-op once the row exists. The row is written AFTER GitHub
+/// answered, never before, so a job that crashed mid-call leaves no row and its retry
+/// posts exactly one review.
+///
+/// A `request_changes` post stays `posted` while its send-back stands; the reconcile
+/// dismisses it on GitHub and marks it `dismissed` once a later pass, a person's Dismiss
+/// or the project's posting switch turning off retires it — a Request changes from a
+/// writer blocks a merge under branch protection and GitHub never makes it stale.
+model ReviewBotPost {
+  id                    String             @id @default(cuid())
+  workspaceId           String             @map("workspace_id")
+  projectId             String             @map("project_id")
+  workItemId            String             @map("work_item_id")
+  reviewVerdictRecordId String             @map("review_verdict_record_id")
+  githubPullRequestId   String             @map("github_pull_request_id")
+  /// What was posted: a Request changes review, or a comment review (a pass, or a
+  /// send-back on a pull request the posting App itself authored).
+  kind                  ReviewBotPostKind
+  state                 ReviewBotPostState @default(posted)
+  /// GitHub's review id, as a string (the API's number can exceed 2^53 one day).
+  githubReviewId        String?            @map("github_review_id")
+  postedAt              DateTime?          @map("posted_at")
+  dismissedAt           DateTime?          @map("dismissed_at")
+  /// How many dismiss attempts failed; the post itself is retried by its job.
+  attempts              Int                @default(0)
+  lastError             String?            @map("last_error")
+  createdAt             DateTime           @default(now()) @map("created_at")
+  updatedAt             DateTime           @updatedAt @map("updated_at")
+
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project             Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  workItem            WorkItem            @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  reviewVerdictRecord ReviewVerdictRecord @relation(fields: [reviewVerdictRecordId], references: [id], onDelete: Cascade)
+  pullRequest         GithubPullRequest   @relation(fields: [githubPullRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([githubPullRequestId, reviewVerdictRecordId])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@index([workItemId, state])
+  @@index([reviewVerdictRecordId])
+  @@index([githubReviewId])
+  @@map("review_bot_post")
+}
+
+/// What the bot posted (MOTIR-10335). Never an approval: the type admits no `approve`.
+enum ReviewBotPostKind {
+  request_changes
+  comment
+
+  @@map("review_bot_post_kind")
+}
+
+/// Whether a bot post still stands on GitHub (MOTIR-10335).
+enum ReviewBotPostState {
+  posted
+  dismissed
+
+  @@map("review_bot_post_state")
 }

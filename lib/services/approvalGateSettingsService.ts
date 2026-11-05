@@ -2,6 +2,8 @@ import { withWorkspaceContext, withSystemContext } from '@/lib/workspaces/contex
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { reviewBotPostRepository } from '@/lib/repositories/reviewBotPostRepository';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
 import { evaluateAfterRaise } from '@/lib/services/pullRequestReviewSync';
@@ -262,6 +264,15 @@ export const approvalGateSettingsService = {
         const project = await projectRepository.updateApprovalGateSettings(projectId, data, tx);
         const retired =
           data.reviewAgentEnabled === false ? await retireAwaitingReviews(projectId, tx) : [];
+        // POSTING TURNED OFF (MOTIR-10335, rule 8): the bot's standing Request changes on
+        // every card would otherwise go on blocking Motir's own merge. Each card is
+        // reconciled once this commits.
+        if (data.reviewBotPostsEnabled === false) {
+          reviewBotPostService.requestReconcileAfterCommit(
+            project.workspaceId,
+            await reviewBotPostRepository.listWorkItemIdsWithLiveRequestChanges(projectId, tx),
+          );
+        }
         // A source change acts on awaiting reviews only while the agent was on and
         // stays on: a disable just retired them, and an enable has none yet.
         if (

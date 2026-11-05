@@ -11,6 +11,10 @@ import type {
   NormalizedReviewEvent,
   RepositoryPermission,
   RepositoryPermissionInput,
+  CreatePullRequestReviewInput,
+  CreatePullRequestReviewResult,
+  DismissPullRequestReviewInput,
+  DismissPullRequestReviewResult,
   NormalizedStatusEvent,
   NormalizedWorkflowJob,
   NormalizedWorkflowJobEvent,
@@ -605,6 +609,27 @@ export interface GitProvider {
    * still entitled when they approved.
    */
   getRepositoryPermission?(input: RepositoryPermissionInput): Promise<RepositoryPermission>;
+
+  /**
+   * Post one review on a pull request as the repository's own App bot (Story
+   * MOTIR-10327 · MOTIR-10335; `approval-gates.md` §12 rule 7) — the App chosen by the
+   * repository's provenance, never a person's token. The event type admits no APPROVE.
+   * GitHub refusing Request changes on a pull request the App itself authored is an
+   * ANSWER (`own_pull_request`), so the caller can post a comment instead; anything else
+   * the host would not take throws `ProviderReviewWriteError`.
+   */
+  createPullRequestReview?(
+    input: CreatePullRequestReviewInput,
+  ): Promise<CreatePullRequestReviewResult>;
+
+  /**
+   * Dismiss one review the App bot posted, with a one-line reason (rule 8). A review
+   * that is no longer there to dismiss answers `gone`; any other failure throws
+   * `ProviderReviewWriteError`.
+   */
+  dismissPullRequestReview?(
+    input: DismissPullRequestReviewInput,
+  ): Promise<DismissPullRequestReviewResult>;
 
   // --- CI-minutes metering (Story MOTIR-1775 · MOTIR-1896) -------------------
   //

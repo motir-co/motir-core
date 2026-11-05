@@ -99,6 +99,32 @@ export const reviewVerdictRecordRepository = {
     });
   },
 
+  /** One verdict by id, or null (absent, or another workspace's under RLS). */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<ReviewVerdictRecord | null> {
+    return tx.reviewVerdictRecord.findUnique({ where: { id } });
+  },
+
+  /**
+   * Whether the card has an ANSWERING pass recorded after `after` — the later verdict that
+   * retires the bot's earlier Request changes (MOTIR-10335, rule 8).
+   */
+  async hasAnsweringPassAfter(
+    workItemId: string,
+    after: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const row = await tx.reviewVerdictRecord.findFirst({
+      where: {
+        workItemId,
+        verdict: 'pass',
+        outcome: { in: ANSWERING },
+        createdAt: { gt: after },
+      },
+      select: { id: true },
+    });
+    return row !== null;
+  },
+
   /** Every verdict on the card, NEWEST FIRST — the card's review history. */
   async listByWorkItem(
     workItemId: string,

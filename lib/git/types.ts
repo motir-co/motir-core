@@ -272,6 +272,44 @@ export interface RepositoryPermissionInput {
   username: string;
 }
 
+/** The review events Motir's App bot may post (Story MOTIR-10327 · MOTIR-10335;
+ *  `approval-gates.md` §12 rule 7). ⚠️ A CLOSED union WITHOUT `APPROVE`: an agent's pass
+ *  is never an approval on the host, and the type is what makes that impossible to
+ *  write rather than merely unwritten. */
+export type PullRequestReviewPostEvent = 'REQUEST_CHANGES' | 'COMMENT';
+
+/** One review the bot posts on a pull request. */
+export interface CreatePullRequestReviewInput {
+  installationId: string;
+  owner: string;
+  repo: string;
+  number: number;
+  event: PullRequestReviewPostEvent;
+  /** Markdown; GitHub requires a body on both events. */
+  body: string;
+}
+
+/** What the host answered a review post. `own_pull_request` is GitHub refusing an App's
+ *  Request changes on a pull request that same App authored — the caller posts a
+ *  comment instead (rule 7). */
+export type CreatePullRequestReviewResult =
+  | { kind: 'posted'; reviewId: string }
+  | { kind: 'own_pull_request' };
+
+/** One review the bot dismisses, with the one-line reason GitHub shows. */
+export interface DismissPullRequestReviewInput {
+  installationId: string;
+  owner: string;
+  repo: string;
+  number: number;
+  reviewId: string;
+  message: string;
+}
+
+/** `dismissed` — GitHub dismissed it now; `gone` — there is nothing left to dismiss (the
+ *  review, the pull request or the repository is gone, or it was dismissed already). */
+export type DismissPullRequestReviewResult = 'dismissed' | 'gone';
+
 /** The lifecycle of ONE deployment status a repository's host reported, normalized
  *  across providers (Story MOTIR-4906 · MOTIR-5329). A CLOSED union so every
  *  consumer's `switch` is total and a compiler proves a new member is handled.

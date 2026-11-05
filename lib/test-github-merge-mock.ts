@@ -10,7 +10,8 @@
 // else. The REAL `mergeChangeRequest` runs against it, so the lane exercises the shipped
 // classification of every answer rather than a stub of it.
 //
-// What it intercepts (every call `mergeChangeRequest` makes for a pull request):
+// What it intercepts (every call `mergeChangeRequest` makes for a pull request, and the
+// review post and dismissal Motir's App bot makes — MOTIR-10335):
 //   - GET  /repos/{owner}/{name}                        → the allowed merge methods
 //   - GET  /repos/{owner}/{name}/pulls/{number}         → the pull request, and its re-read
 //   - GET  /repos/{owner}/{name}/rules/branches/{base}  → does the base require a merge queue?
@@ -129,6 +130,10 @@ export interface GithubMergeControl {
    *  (`lib/test-mock-agent.ts`) and the caller sees "no answer", exactly as it would for a
    *  host that could not be reached. */
   commitCheckRuns?: Record<string, GithubCommitCheckRun[]>;
+  /** `owner/name#number` of each pull request Motir's own App AUTHORED (Story MOTIR-10327 ·
+   *  MOTIR-10335): GitHub refuses that App's Request changes on it with 422, and the bot
+   *  posts a comment review instead. Every other review post is accepted. */
+  ownAuthoredPullRequests?: string[];
 }
 
 /** One check run as the host reports it on a commit. `status` defaults to `completed`. */
@@ -232,6 +237,8 @@ const FILES_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/files(?:\?.*)?$/;
 const CONTENTS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/contents\/([^?]+)(?:\?.*)?$/;
 const COMMIT_REF_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits\/([^/?]+)(?:\?.*)?$/;
 const CHECK_RUNS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/commits\/([0-9a-fA-F]+)\/check-runs(?:\?.*)?$/;
+const REVIEWS_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/reviews$/;
+const DISMISSAL_PATH = /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)\/reviews\/[^/]+\/dismissals$/;
 const PERMISSION_PATH = /^\/repos\/([^/]+)\/([^/]+)\/collaborators\/([^/?]+)\/permission(?:\?.*)?$/;
 
 /** A permission path's repository and username, when this seam answers for that repository. */
@@ -549,6 +556,51 @@ export function installGithubMergeMock(agent: MockAgent): void {
           };
         }),
       });
+    })
+    .persist();
+
+  // ── Motir's App bot posting and dismissing its own reviews (MOTIR-10335) ───
+  // A verdict is posted as one review per pull request; GitHub refuses the App's Request
+  // changes on a pull request it authored (`ownAuthoredPullRequests`), and the bot then
+  // posts a comment. The review id is derived from the call so a spec can match the
+  // dismissal to the post it retires.
+  pool
+    .intercept({ path: (p) => scoped(REVIEWS_PATH, p) !== null, method: 'POST' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { key } = scoped(REVIEWS_PATH, path)!;
+      const body = parseBody(req.body);
+      journal({ method: 'POST', path, body, pullRequest: key });
+      const own = (readControl().ownAuthoredPullRequests ?? []).some(
+        (k) => k.toLowerCase() === key!.toLowerCase(),
+      );
+      if (own && body?.['event'] === 'REQUEST_CHANGES') {
+        return reply(422, {
+          message: 'Unprocessable Entity',
+          errors: ['Review Can not request changes on your own pull request'],
+        });
+      }
+      const id = parseInt(
+        createHash('sha256')
+          .update(`${key}:${String(req.body)}`)
+          .digest('hex')
+          .slice(0, 8),
+        16,
+      );
+      return reply(200, {
+        id,
+        state: body?.['event'] === 'REQUEST_CHANGES' ? 'CHANGES_REQUESTED' : 'COMMENTED',
+      });
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => scoped(DISMISSAL_PATH, p) !== null, method: 'PUT' })
+    .reply((req: MockRequest): MockReply => {
+      const path = String(req.path);
+      const { key } = scoped(DISMISSAL_PATH, path)!;
+      journal({ method: 'PUT', path, body: parseBody(req.body), pullRequest: key });
+      return reply(200, { state: 'DISMISSED' });
     })
     .persist();
 

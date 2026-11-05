@@ -33,6 +33,7 @@ import { reviewVerdictRecordRepository } from '@/lib/repositories/reviewVerdictR
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { reviewConventionsService } from '@/lib/services/reviewConventionsService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -152,8 +153,8 @@ async function recordVerdictRow(
   ctx: ServiceContext,
 ): Promise<void> {
   const write = (outcome: 'decided' | 'late' | 'second') =>
-    withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
-      reviewVerdictRecordRepository.create(
+    withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, async (tx) => {
+      const record = await reviewVerdictRecordRepository.create(
         {
           workspaceId: ctx.workspaceId,
           projectId: item.projectId,
@@ -170,8 +171,13 @@ async function recordVerdictRow(
           model: run.model ?? 'unknown',
         },
         tx,
-      ),
-    );
+      );
+      // A decided verdict is posted on the pull requests once this commits (MOTIR-10335);
+      // a late or second one is history and is never posted.
+      if (outcome === 'decided') {
+        reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, record.id);
+      }
+    });
   try {
     await write(data.outcome);
   } catch (err) {

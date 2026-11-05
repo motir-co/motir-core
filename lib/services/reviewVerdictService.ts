@@ -32,6 +32,7 @@ import { agentReviewStartService } from '@/lib/services/agentReviewStartService'
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { resolveRunTargetFor } from '@/lib/services/runTarget';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -262,6 +263,8 @@ export const reviewVerdictService = {
         }
         // GATE OFF — the verdict is the record.
         const recorded = await reviewVerdictRecordRepository.create(rowOf('recorded', null), tx);
+        // Motir's App bot posts it on the pull requests once this commits (MOTIR-10335).
+        reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, recorded.id);
         const withdrew = verdict === 'changes_requested' ? await applySendBack(item.id, tx) : [];
         await recomputeWorkItemFixReason(item.id, tx);
         return { recorded, withdrew };
@@ -322,6 +325,7 @@ export const reviewVerdictService = {
     try {
       decided = await withWorkspaceContext(scope, async (tx) => {
         const record = await reviewVerdictRecordRepository.create(rowOf('decided', gateId), tx);
+        reviewBotPostService.requestPostAfterCommit(ctx.workspaceId, record.id);
         // A hosted run still reviewing this gate can no longer decide anything (§12.12).
         agentReviewStartService.cancelRunsAfterCommit(ctx.workspaceId, [gateId]);
         const withdrew = verdict === 'changes_requested' ? await applySendBack(item.id, tx) : [];

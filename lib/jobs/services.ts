@@ -1,4 +1,5 @@
 import { agentReviewStartService } from '@/lib/services/agentReviewStartService';
+import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
 import { dispatchRunSweepService } from '@/lib/services/dispatchRunSweepService';
 import { hostedRunService } from '@/lib/services/hostedRunService';
 import { pullRequestReconcileService } from '@/lib/services/pullRequestReconcileService';
@@ -225,6 +226,8 @@ export const jobServices = {
   // The review run's start (Story MOTIR-1626 · MOTIR-6820): one hosted `review` run per
   // request for an awaiting `agent_review` gate.
   agentReviewStart: agentReviewStartService,
+  // Motir's App bot on the pull request (Story MOTIR-10327 · MOTIR-10335).
+  reviewBotPost: reviewBotPostService,
   // The automatic hosted re-run after a design Revise (MOTIR-700).
   designAutoRerun: designAutoRerunService,
   // The automatic hosted resume after a held gate is approved (MOTIR-7710).
