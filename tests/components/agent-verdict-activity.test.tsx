@@ -125,6 +125,38 @@ describe('the agent-verdict activity entry', () => {
     expect(screen.getByTestId('agent-verdict-findings').textContent).toBe('The finding.');
   });
 
+  it('arriving at the entry’s address scrolls it into view once it streams in (MOTIR-10458)', async () => {
+    const scrolled = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      window.location.hash = '#agent-verdict-rec-1';
+      let container!: HTMLElement;
+      await act(async () => {
+        ({ container } = renderEntry({ verdict: 'changes_requested', findingsExcerpt: 'Here.' }));
+      });
+      expect(scrolled).toHaveBeenCalledWith({ block: 'start' });
+      expect(scrolled.mock.contexts[0]).toBe(container.querySelector('#agent-verdict-rec-1'));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('an entry the address does not name does not move the page', async () => {
+    const scrolled = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      window.location.hash = '#agent-verdict-another';
+      await act(async () => {
+        renderEntry({ verdict: 'changes_requested', findingsExcerpt: 'Elsewhere.' });
+      });
+      expect(scrolled).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it('a later move to the entry’s address opens it too, until the reader closes it', async () => {
     const { unmount } = renderEntry({ verdict: 'changes_requested', findingsExcerpt: 'Later.' });
     expect(screen.queryByTestId('agent-verdict-findings')).toBeNull();

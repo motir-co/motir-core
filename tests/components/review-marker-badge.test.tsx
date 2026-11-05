@@ -5,6 +5,7 @@ import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { ReviewMarker } from '@/components/approvals/ReviewMarker';
 import { ReviewCommand } from '@/components/approvals/ReviewCommand';
 import { ReviewedBadge } from '@/components/approvals/ReviewedBadge';
+import { ReaderRoutesProvider } from '@/lib/visitor/useReaderRoutes';
 import type { CardReviewDTO, ReviewMarkerDTO } from '@/lib/dto/reviewState';
 import zhMessages from '@/messages/zh.json';
 
@@ -210,11 +211,34 @@ describe('ReviewedBadge — reviewed', () => {
     expect(card.textContent).toContain('acme/web#88 @ 3f2a9c1');
     expect(card.textContent).toContain('acme/api#41 @ 9b07de4');
     expect(screen.getByRole('link', { name: 'Findings and checklist' }).getAttribute('href')).toBe(
-      '/items/ACME-412#agent-verdict-rec1',
+      '/items/ACME-412?activity=all#agent-verdict-rec1',
     );
 
     fireEvent.mouseLeave(badge.parentElement!);
     expect(screen.queryByTestId('reviewed-card')).toBeNull();
+  });
+
+  it('on the Visitor tree its Findings and checklist keeps the reader’s own route, on the All tab', () => {
+    render(
+      <ReaderRoutesProvider identifier="acme">
+        <ReviewedBadge review={REVIEWED} />
+      </ReaderRoutesProvider>,
+      { now: NOW },
+    );
+    fireEvent.mouseEnter(screen.getByRole('note').parentElement!);
+    expect(screen.getByRole('link', { name: 'Findings and checklist' }).getAttribute('href')).toBe(
+      '/p/acme/items/ACME-412?activity=all#agent-verdict-rec1',
+    );
+  });
+
+  it('a pass with only a gate opens the Development section, unchanged', () => {
+    render(<ReviewedBadge review={{ ...REVIEWED, recordRef: { kind: 'gate', id: 'g1' } }} />, {
+      now: NOW,
+    });
+    fireEvent.mouseEnter(screen.getByRole('note').parentElement!);
+    expect(screen.getByRole('link', { name: 'Findings and checklist' }).getAttribute('href')).toBe(
+      '/items/ACME-412#development',
+    );
   });
 
   it('opens on keyboard focus, stays open while focus moves into its link, closes on Escape', () => {

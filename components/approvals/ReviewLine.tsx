@@ -8,6 +8,7 @@ import { ReviewCommand } from '@/components/approvals/ReviewCommand';
 import { ReviewedGlyph } from '@/components/approvals/ReviewedBadge';
 import { useInPlaceFindings } from '@/components/approvals/ReviewFindingsInPlace';
 import { cn } from '@/lib/utils/cn';
+import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 import type { ReviewLineDTO, ReviewRecordRefDTO } from '@/lib/dto/reviewState';
 
@@ -25,12 +26,6 @@ import type { ReviewLineDTO, ReviewRecordRefDTO } from '@/lib/dto/reviewState';
 // ⚠️ EVIDENCE, NEVER A DECISION: its one verb is Copy. It computes nothing — a missing
 // field draws nothing rather than a guess. Glyphs are decorative; the words carry the value.
 // Secondary ink throughout (a row's hover fill is `--el-surface`, where muted fails AA).
-
-/** Where a review record or gate's findings live on the card page. */
-export function findingsHrefOf(itemHref: string, ref: ReviewRecordRefDTO | null): string | null {
-  if (!ref) return null;
-  return ref.kind === 'record' ? `${itemHref}#agent-verdict-${ref.id}` : `${itemHref}#development`;
-}
 
 const LINK =
   'relative z-10 text-(--el-link) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none';

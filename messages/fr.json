@@ -15375,7 +15375,9 @@
         "notified": "{name} a été prévenu.",
         "findings": "Constats",
         "agentHosted": "L’agent hébergé de Motir",
-        "agentOwn": "L’agent de {name} ({harness})"
+        "agentOwn": "L’agent de {name} ({harness})",
+        "dismissed": "<actor></actor> a écarté la revue de l’agent à {commits}",
+        "dismissedReason": "Motif : {reason}"
       },
       "record": {
         "reviewed": "Approuvé par {name} · examiné par un agent à {commits}",

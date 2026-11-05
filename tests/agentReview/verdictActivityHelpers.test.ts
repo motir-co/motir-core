@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_ACTIVITY_TAB, parseActivityTab } from '@/lib/activity/tab';
 import {
   FINDINGS_EXCERPT_MAX,
+  agentVerdictHref,
   findingsExcerptOf,
+  findingsHrefOf,
   isAnsweringSendBack,
   nameOfDeciderLabel,
   reviewCommitsLabel,
@@ -10,6 +13,33 @@ import {
 // The pure helpers the verdict entry and the record line share (MOTIR-10338).
 
 describe('verdictActivity helpers', () => {
+  it('addresses a verdict on the All tab, which draws it — never the default Comments tab (MOTIR-10458)', () => {
+    const href = agentVerdictHref('/items/A-1', 'r1');
+    expect(href).toBe('/items/A-1?activity=all#agent-verdict-r1');
+    const tab = parseActivityTab(
+      new URL(href, 'https://x.test').searchParams.get('activity') ?? '',
+    );
+    expect(tab).toBe('all');
+    expect(tab).not.toBe(DEFAULT_ACTIVITY_TAB);
+  });
+
+  it('keeps a query the card address already carries, and replaces a hash it carries', () => {
+    expect(agentVerdictHref('/p/acme/items/A-1?x=1', 'r1')).toBe(
+      '/p/acme/items/A-1?x=1&activity=all#agent-verdict-r1',
+    );
+    expect(agentVerdictHref('/items/A-1#development', 'r1')).toBe(
+      '/items/A-1?activity=all#agent-verdict-r1',
+    );
+  });
+
+  it('opens a record at its activity entry, a gate at the development section, nothing at null', () => {
+    expect(findingsHrefOf('/items/A-1', { kind: 'record', id: 'r1' })).toBe(
+      '/items/A-1?activity=all#agent-verdict-r1',
+    );
+    expect(findingsHrefOf('/items/A-1', { kind: 'gate', id: 'g1' })).toBe('/items/A-1#development');
+    expect(findingsHrefOf('/items/A-1', null)).toBeNull();
+  });
+
   it('only an answering send-back notifies', () => {
     expect(isAnsweringSendBack({ verdict: 'changes_requested', outcome: 'decided' })).toBe(true);
     expect(isAnsweringSendBack({ verdict: 'changes_requested', outcome: 'recorded' })).toBe(true);

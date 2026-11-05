@@ -408,6 +408,36 @@ const agentVerdictEntry: RegistryEntry = {
   },
 };
 
+/**
+ * A person DISMISSED the agent's review (changeKind `review_dismissed`, diff
+ * `{ reviewDismissal: { from: null, to: ReviewDismissalSnapshot } }`; bug MOTIR-10434) — the
+ * snapshot `reviewDismissalService` wrote beside the dismissal row. The actor is the revision's
+ * own `changedById`, so there is no reference to resolve; a malformed snapshot degrades to the
+ * generic part rather than crash the feed.
+ */
+const reviewDismissalEntry: RegistryEntry = {
+  disposition: 'renderable',
+  render: (key, value) => {
+    const to = asCell(value)?.to;
+    if (
+      !isRecord(to) ||
+      typeof to['dismissalId'] !== 'string' ||
+      typeof to['subjectVersion'] !== 'string' ||
+      typeof to['reasonMd'] !== 'string'
+    ) {
+      return [genericPart(key, value)];
+    }
+    return [
+      {
+        kind: 'reviewDismissed',
+        dismissalId: to['dismissalId'],
+        subjectVersion: to['subjectVersion'],
+        reasonMd: to['reasonMd'],
+      },
+    ];
+  },
+};
+
 /** Exact-match dispositions. */
 const REGISTRY: Record<string, RegistryEntry> = {
   // -- suppressed (the explicit noise policy) ------------------------------
@@ -501,6 +531,7 @@ const REGISTRY: Record<string, RegistryEntry> = {
   labels: collectionField(),
   components: collectionField(),
   agentVerdict: agentVerdictEntry,
+  reviewDismissal: reviewDismissalEntry,
 };
 
 /** Every exact-match key the registry holds a disposition for — the population

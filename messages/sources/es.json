@@ -12796,5 +12796,7 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "approvalGate.reviewPath.activity.dismissed": "<actor></actor> dismissed the agent's review at {commits}",
+  "approvalGate.reviewPath.activity.dismissedReason": "Reason: {reason}"
 }

@@ -48,6 +48,7 @@ export type ActivityEntryPartDto =
   | { kind: 'collection'; field: string; op: 'added' | 'removed'; items: string[] }
   | { kind: 'commentDeleted'; author: ActivityValueDto; replyCount: number }
   | ActivityAgentVerdictPartDto
+  | ActivityReviewDismissedPartDto
   | { kind: 'generic'; key: string; from: string | null; to: string | null };
 
 /**
@@ -76,6 +77,20 @@ export interface ActivityAgentVerdictPartDto {
    * § 42.5), read from the record at read time — the trail's snapshot does not carry them.
    */
   checklist: ReviewChecklistRowDto[];
+}
+
+/**
+ * The routed person DISMISSED the agent's standing send-back (bug MOTIR-10434, beside
+ * MOTIR-10338's verdict entry). The entry's ACTOR is who dismissed it; the part names the
+ * version dismissed at and the reason they gave.
+ */
+export interface ActivityReviewDismissedPartDto {
+  kind: 'reviewDismissed';
+  dismissalId: string;
+  /** The delivery-set version dismissed at — `owner/name#n@sha`, comma-joined. */
+  subjectVersion: string;
+  /** The reason, as the person wrote it. */
+  reasonMd: string;
 }
 
 /** One history feed entry — a displayable revision, actor resolved. */

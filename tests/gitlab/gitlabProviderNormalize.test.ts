@@ -170,7 +170,58 @@ describe('gitlab.parseCiStatusEvent', () => {
       // GitHub check suite, and what makes a retry at one sha supersede the run
       // it replaced instead of merging into it by job name.
       suiteId: '100',
+      // No `finished_at` in this hook, so the state cannot be dated.
+      occurredAt: null,
     });
+  });
+
+  // MOTIR-10456 — what orders a late `running` hook against a finished pipeline
+  // row. A RETRIED job is a new build inside the SAME pipeline id, created after
+  // the pipeline last finished; a late hook of the first attempt has none.
+  it('dates a finished pipeline by finished_at', () => {
+    expect(
+      gitlab.parseCiStatusEvent({
+        object_kind: 'pipeline',
+        project: { id: 9 },
+        object_attributes: {
+          id: 100,
+          sha: 'abc123',
+          status: 'failed',
+          created_at: '2026-11-05 10:00:00 UTC',
+          finished_at: '2026-11-05 10:05:00 UTC',
+        },
+      })?.occurredAt,
+    ).toEqual(new Date('2026-11-05T10:05:00Z'));
+  });
+
+  it('dates a running pipeline by the latest build it created or started', () => {
+    const running = (builds: unknown) =>
+      gitlab.parseCiStatusEvent({
+        object_kind: 'pipeline',
+        project: { id: 9 },
+        object_attributes: {
+          id: 100,
+          sha: 'abc123',
+          status: 'running',
+          created_at: '2026-11-05 10:00:00 UTC',
+          finished_at: null,
+        },
+        builds,
+      })?.occurredAt;
+    // A retry: the new build was created at 10:07, after the 10:05 finish.
+    expect(
+      running([
+        { id: 1, created_at: '2026-11-05 10:00:01 UTC', started_at: '2026-11-05 10:00:30 UTC' },
+        { id: 2, created_at: '2026-11-05 10:07:00 UTC', started_at: null },
+        null,
+      ]),
+    ).toEqual(new Date('2026-11-05T10:07:00Z'));
+    // No builds at all: the pipeline's own creation.
+    expect(running(undefined)).toEqual(new Date('2026-11-05T10:00:00Z'));
+  });
+
+  it('dates nothing when the hook carries no usable time', () => {
+    expect(gitlab.parseCiStatusEvent(pipeline('running'))).toMatchObject({ occurredAt: null });
   });
 
   it('maps failed → failure, running → pending, skipped → neutral', () => {

@@ -1,4 +1,6 @@
 import { membersOf } from '@/lib/approvalGates/memberVersion';
+import type { ActivityTab } from '@/lib/activity/tab';
+import type { ReviewRecordRefDTO } from '@/lib/dto/reviewState';
 
 // THE AGENT-VERDICT HISTORY ENTRY (Story MOTIR-10327 · MOTIR-10338; design
 // `design/work-items/decision-waiting--review-path.mock.html` M12, notes § 32.9).
@@ -71,6 +73,35 @@ export function reviewCommitsLabel(subjectVersion: string): string {
 /** The activity entry's element id — the send-back notification's deep link lands on it. */
 export function agentVerdictAnchor(recordId: string): string {
   return `agent-verdict-${recordId}`;
+}
+
+/**
+ * The Activity tab that draws a verdict's entry. Comments — the DEFAULT tab — reads
+ * comments only, so an address carrying the anchor alone lands on a page without it.
+ */
+const AGENT_VERDICT_TAB: ActivityTab = 'all';
+
+/**
+ * Where a verdict's Activity entry lives on its card page: `itemHref` (the reader's own
+ * route to the card, from `useReaderRoutes` on a shared body) on the All tab, then the
+ * entry's anchor — which the entry reads to open its findings (MOTIR-10458). The tab is
+ * named in the address, so the link lands the same whichever tab the reader last used.
+ */
+export function agentVerdictHref(itemHref: string, recordId: string): string {
+  const hashAt = itemHref.indexOf('#');
+  const path = hashAt < 0 ? itemHref : itemHref.slice(0, hashAt);
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}activity=${AGENT_VERDICT_TAB}#${agentVerdictAnchor(recordId)}`;
+}
+
+/**
+ * Where a review record or gate's findings live on the card page: a RECORD's Activity
+ * entry ({@link agentVerdictHref}), or the Development section for a pass with no record,
+ * only a gate. Null when there is nothing to open.
+ */
+export function findingsHrefOf(itemHref: string, ref: ReviewRecordRefDTO | null): string | null {
+  if (!ref) return null;
+  return ref.kind === 'record' ? agentVerdictHref(itemHref, ref.id) : `${itemHref}#development`;
 }
 
 /** The name in a stored decider label (`Name <email>`), without the address. */

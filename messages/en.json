@@ -15372,7 +15372,9 @@
         "notified": "{name} was notified.",
         "findings": "Findings",
         "agentHosted": "Motir's hosted agent",
-        "agentOwn": "{name}'s agent ({harness})"
+        "agentOwn": "{name}'s agent ({harness})",
+        "dismissed": "<actor></actor> dismissed the agent's review at {commits}",
+        "dismissedReason": "Reason: {reason}"
       },
       "record": {
         "reviewed": "Approved by {name} · reviewed by agent at {commits}",

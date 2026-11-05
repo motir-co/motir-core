@@ -326,3 +326,39 @@ describe('the agentVerdict snapshot', () => {
     expect(part?.kind).toBe('generic');
   });
 });
+
+describe('reviewDismissal — a person dismissed the agent review (MOTIR-10434)', () => {
+  const snapshot = {
+    dismissalId: 'dis-1',
+    dismissed: { kind: 'record', id: 'rec-1' },
+    subjectVersion: 'moooon/acme#1@abc',
+    reasonMd: 'The finding is about code this card does not change.',
+  };
+
+  it('renders a well-formed snapshot as one dismissal part, with no reference to resolve', () => {
+    const diff = { reviewDismissal: { from: null, to: snapshot } };
+    expect(isDisplayableRevision('review_dismissed', diff)).toBe(true);
+    expect(parts('review_dismissed', diff)).toEqual([
+      {
+        kind: 'reviewDismissed',
+        dismissalId: 'dis-1',
+        subjectVersion: 'moooon/acme#1@abc',
+        reasonMd: 'The finding is about code this card does not change.',
+      },
+    ]);
+    const refs = emptyDiffRefs();
+    collectDiffRefs('review_dismissed', diff, refs);
+    expect(refs.users.size).toBe(0);
+    expect(isRegisteredDiffKey('reviewDismissal')).toBe(true);
+  });
+
+  it.each([
+    ['not an object', 'nope'],
+    ['no dismissal id', { ...snapshot, dismissalId: 7 }],
+    ['no version', { ...snapshot, subjectVersion: null }],
+    ['no reason', { ...snapshot, reasonMd: undefined }],
+  ])('a malformed snapshot (%s) degrades to the generic part', (_label, to) => {
+    const [part] = parts('review_dismissed', { reviewDismissal: { from: null, to } });
+    expect(part?.kind).toBe('generic');
+  });
+});

@@ -15366,7 +15366,9 @@
         "notified": "已通知 {name}。",
         "findings": "发现",
         "agentHosted": "Motir 托管智能体",
-        "agentOwn": "{name} 的智能体（{harness}）"
+        "agentOwn": "{name} 的智能体（{harness}）",
+        "dismissed": "<actor></actor> 驳回了智能体在 {commits} 上的审查",
+        "dismissedReason": "理由：{reason}"
       },
       "record": {
         "reviewed": "{name} 已批准 · 智能体已在 {commits} 上审查",

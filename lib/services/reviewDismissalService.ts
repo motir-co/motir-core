@@ -6,6 +6,10 @@ import {
   ReviewSendBackAlreadyDismissedError,
   ReviewSendBackNotStandingError,
 } from '@/lib/agentReview/errors';
+import {
+  REVIEW_DISMISSED_CHANGE_KIND,
+  type ReviewDismissalSnapshot,
+} from '@/lib/agentReview/dismissalActivity';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
 import {
@@ -22,6 +26,7 @@ import { resolveGateAuthority } from '@/lib/services/approvalGatesService';
 import { recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { reconcileGatesFor } from '@/lib/services/gateSetFor';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { deferUntilCommit } from '@/lib/workspaces/afterCommit';
@@ -41,6 +46,11 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //     merge (`mergeGates.agentReviewHoldsMerge`).
 // So the card's gate set asks again, and the ONE raise path (`reconcileGatesFor`) raises a
 // fresh approve-and-merge gate at the same version — no second raise path exists.
+//
+// ⚠️ THE TRAIL (bug MOTIR-10434). The same transaction appends ONE `review_dismissed`
+// revision — the person, the version, the send-back and the reason — so the card's History
+// and All feeds show the dismissal beside the agent's `agent_verdict` send-back entry. A
+// rolled-back dismissal leaves no entry.
 //
 // ⚠️ LOCK ORDER — gate rows, then the card, the order every withdrawal takes. The card's
 // lock serialises two dismissals, and the unique (card, version) index is the backstop.
@@ -120,6 +130,28 @@ export const reviewDismissalService = {
           tx,
         );
 
+        const dismissed: ReviewDismissalSnapshot['dismissed'] =
+          created.reviewVerdictRecordId !== null
+            ? { kind: 'record', id: created.reviewVerdictRecordId }
+            : { kind: 'gate', id: created.approvalGateId as string };
+        const snapshot: ReviewDismissalSnapshot = {
+          dismissalId: created.id,
+          dismissed,
+          subjectVersion: current,
+          reasonMd: created.reasonMd,
+        };
+        await workItemRevisionsService.recordRevision(
+          {
+            workItemId: item.id,
+            changedById: ctx.userId,
+            changeKind: REVIEW_DISMISSED_CHANGE_KIND,
+            // The key is `REVIEW_DISMISSAL_DIFF_KEY`, spelled out so the activity
+            // registry's static scan can resolve it.
+            diff: { reviewDismissal: { from: null, to: snapshot } },
+          },
+          tx,
+        );
+
         // The card asks again — the merge question at the same version, through the one
         // raise path — and its To fix answer is recomputed: gates first, then the card.
         await reconcileGatesFor(item, tx);
@@ -143,10 +175,7 @@ export const reviewDismissalService = {
           key: item.identifier,
           dismissalId: created.id,
           subjectVersion: current,
-          dismissed:
-            created.reviewVerdictRecordId !== null
-              ? { kind: 'record', id: created.reviewVerdictRecordId }
-              : { kind: 'gate', id: created.approvalGateId as string },
+          dismissed,
           reasonMd: created.reasonMd,
           dismissedBy: { id: ctx.userId, name: row?.dismissedBy?.name ?? null },
           dismissedAt: created.createdAt.toISOString(),

@@ -1,3 +1,5 @@
+import { awaitAsIdle } from './waitScope';
+
 /**
  * A FIFO limit on how many pieces of async work run at once in this module
  * instance. Work beyond the limit waits IN MEMORY — holding nothing — until a slot
@@ -20,6 +22,10 @@
  * The state is per module instance on purpose: a Next server builds one pg pool per
  * runtime (MOTIR-7073), and a gate that lives beside the code using a pool limits
  * exactly that pool.
+ *
+ * A unit waiting for a slot tells the enclosing wait scope it is idle
+ * (`./waitScope.ts`), so a runner that counts its own busy work — the job worker's
+ * pool — does not count a unit that is only standing in this line (MOTIR-10457).
  */
 export interface ConcurrencyGate {
   /** Run `work` once a slot is free, releasing the slot when it settles. */
@@ -44,7 +50,11 @@ export function createConcurrencyGate(limit: number): ConcurrencyGate {
     }
     // The slot is handed over by `release` — `active` is not decremented and
     // re-incremented in between, so no later arrival can take it out of turn.
-    await new Promise<void>((resolve) => waiting.push(resolve));
+    //
+    // The wait is reported as IDLE to whoever runs this work (`./waitScope.ts`,
+    // MOTIR-10457): a unit in this line holds nothing, and the job worker must
+    // not count it against its pool while it stands here.
+    await awaitAsIdle(new Promise<void>((resolve) => waiting.push(resolve)));
   }
 
   function release(): void {

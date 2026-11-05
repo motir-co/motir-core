@@ -15369,7 +15369,9 @@
         "notified": "{name}에게 알렸습니다.",
         "findings": "발견 사항",
         "agentHosted": "Motir 호스팅 에이전트",
-        "agentOwn": "{name}의 에이전트({harness})"
+        "agentOwn": "{name}의 에이전트({harness})",
+        "dismissed": "<actor></actor>이(가) {commits}에서 에이전트의 리뷰를 기각함",
+        "dismissedReason": "사유: {reason}"
       },
       "record": {
         "reviewed": "{name} 승인 · {commits}에서 에이전트 리뷰 완료",

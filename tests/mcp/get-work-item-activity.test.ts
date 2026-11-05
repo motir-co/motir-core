@@ -536,6 +536,25 @@ describe('summarizeActivity — every part kind and value form renders', () => {
     expect(text).toContain('Yue'); // the resolved actor, on every line
   });
 
+  it('a dismissed review names the commits and the reason, every line kept (MOTIR-10434)', () => {
+    const text = summarizeActivity(
+      'PROD-7',
+      'history',
+      historyPage([
+        entry([
+          {
+            kind: 'reviewDismissed',
+            dismissalId: 'dis_1',
+            subjectVersion: 'moooon/acme#88@3f2a9c1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            reasonMd: 'Out of scope.\nThe header is kept upstream.',
+          },
+        ]),
+      ]),
+    );
+    expect(text).toContain("dismissed the agent's review at moooon/acme#88 @ 3f2a9c1");
+    expect(text).toContain('reason: Out of scope.\n    The header is kept upstream.');
+  });
+
   it('degrades to stored ids when the actor is gone and a generic diff side is null', () => {
     const gone: ActivityEntryDto = {
       ...entry([{ kind: 'generic', key: 'mystery', from: 'a', to: null }]),
