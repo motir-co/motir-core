@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "Een review wacht op je agent",
-            "desc": "Je project reviewt met je eigen agent, en de review van een kaart start je zelf met motir review."
+            "desc": "Je project reviewt met je eigen agent, en de review van een werkitem start je zelf met motir review."
           }
         },
         "soon": "Binnenkort",
@@ -15225,7 +15225,19 @@
       "billingNote": "Elke review is een gehoste agentrun, betaald uit de AI-credits van je organisatie.",
       "offNote": "Dit uitzetten annuleert lopende reviews — die werkitems gaan meteen door naar de gewone stroom.",
       "saved": "Opgeslagen",
-      "saveError": "Kan niet opslaan — probeer het opnieuw."
+      "saveError": "Kan niet opslaan — probeer het opnieuw.",
+      "source": {
+        "label": "Wie reviewt",
+        "hosted": "Motirs gehoste agent",
+        "hostedWhat": "Motir start een reviewrun zodra de checks slagen. <strong>Gebruikt AI-credits.</strong>",
+        "own": "Je eigen agent",
+        "ownWhat": "Gratis. De review wacht tot iemand <cmd>motir review</cmd> vanuit de eigen agent uitvoert. Er start niets vanzelf."
+      },
+      "posting": {
+        "title": "Agentreviews op pull requests plaatsen",
+        "on": "De GitHub-app van Motir plaatst elk oordeel als reactie op de pull requests en vraagt om wijzigingen bij een terugzending. Hij keurt nooit goed.",
+        "off": "Oordelen blijven in Motir. Er wordt niets op de pull requests geplaatst."
+      }
     },
     "designApproval": {
       "title": "Ontwerpgoedkeuring",

@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "Una revisione aspetta il tuo agente",
-            "desc": "Il tuo progetto esegue le revisioni con il tuo agente, e la revisione di una scheda la avvii tu con motir review."
+            "desc": "Il tuo progetto esegue le revisioni con il tuo agente, e la revisione di un elemento di lavoro la avvii tu con motir review."
           }
         },
         "soon": "Presto",
@@ -15225,7 +15225,19 @@
       "billingNote": "Ogni revisione è un’esecuzione ospitata di un agente, pagata con i crediti AI della tua organizzazione.",
       "offNote": "Disattivandolo, le revisioni in corso vengono annullate — quegli elementi di lavoro passano direttamente al flusso ordinario.",
       "saved": "Salvato",
-      "saveError": "Impossibile salvare — riprova."
+      "saveError": "Impossibile salvare — riprova.",
+      "source": {
+        "label": "Chi esegue la revisione",
+        "hosted": "Agente ospitato di Motir",
+        "hostedWhat": "Motir avvia un’esecuzione di revisione quando i controlli passano. <strong>Usa crediti AI.</strong>",
+        "own": "Il tuo agente",
+        "ownWhat": "Gratis. La revisione attende che qualcuno esegua <cmd>motir review</cmd> dal proprio agente. Niente parte da solo."
+      },
+      "posting": {
+        "title": "Pubblica le revisioni dell’agente sulle pull request",
+        "on": "L’app GitHub di Motir commenta ogni verdetto sulle pull request e chiede modifiche quando rimanda indietro il lavoro. Non approva mai.",
+        "off": "I verdetti restano in Motir. Sulle pull request non viene pubblicato nulla."
+      }
     },
     "designApproval": {
       "title": "Approvazione del design",

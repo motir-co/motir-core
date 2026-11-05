@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "有一个评审在等你的智能体",
-            "desc": "你的项目使用你自己的智能体评审，一张卡片的评审需要你用 motir review 来运行。"
+            "desc": "你的项目使用你自己的智能体评审，一个工作项的评审需要你用 motir review 来运行。"
           }
         },
         "soon": "即将推出",
@@ -15216,7 +15216,19 @@
       "billingNote": "每次审查都是一次托管智能体运行，费用从你组织的 AI 额度中扣除。",
       "offNote": "关闭后，进行中的审查会被取消——这些工作项将直接进入常规流程。",
       "saved": "已保存",
-      "saveError": "保存失败，请重试。"
+      "saveError": "保存失败，请重试。",
+      "source": {
+        "label": "由谁审查",
+        "hosted": "Motir 托管智能体",
+        "hostedWhat": "检查通过后，Motir 会启动一次审查运行。<strong>会消耗 AI 额度。</strong>",
+        "own": "你自己的智能体",
+        "ownWhat": "免费。审查会等待有人从自己的智能体运行 <cmd>motir review</cmd>。不会自动开始。"
+      },
+      "posting": {
+        "title": "在拉取请求上发布智能体审查",
+        "on": "Motir 的 GitHub 应用会在拉取请求上评论每个结论，并在退回时要求修改。它从不批准。",
+        "off": "结论只保留在 Motir 中。不会在拉取请求上发布任何内容。"
+      }
     },
     "designApproval": {
       "title": "设计审批",

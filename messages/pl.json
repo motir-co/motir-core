@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "Recenzja czeka na twojego agenta",
-            "desc": "Twój projekt recenzuje własnym agentem, a recenzję karty uruchamiasz sam poleceniem motir review."
+            "desc": "Twój projekt recenzuje własnym agentem, a recenzję elementu roboczego uruchamiasz sam poleceniem motir review."
           }
         },
         "soon": "Wkrótce",
@@ -15225,7 +15225,19 @@
       "billingNote": "Każdy przegląd to hostowane uruchomienie agenta, opłacane z kredytów AI Twojej organizacji.",
       "offNote": "Wyłączenie anuluje trwające przeglądy — te elementy robocze trafiają od razu do zwykłego przepływu.",
       "saved": "Zapisano",
-      "saveError": "Nie udało się zapisać — spróbuj ponownie."
+      "saveError": "Nie udało się zapisać — spróbuj ponownie.",
+      "source": {
+        "label": "Kto przegląda",
+        "hosted": "Hostowany agent Motir",
+        "hostedWhat": "Motir rozpoczyna uruchomienie przeglądu, gdy kontrole przejdą. <strong>Zużywa kredyty AI.</strong>",
+        "own": "Twój własny agent",
+        "ownWhat": "Bezpłatnie. Przegląd czeka, aż ktoś uruchomi <cmd>motir review</cmd> ze swojego agenta. Nic nie rusza samo."
+      },
+      "posting": {
+        "title": "Publikuj przeglądy agenta w pull requestach",
+        "on": "Aplikacja GitHub Motir komentuje każdy werdykt w pull requestach i prosi o zmiany przy odesłaniu. Nigdy nie zatwierdza.",
+        "off": "Werdykty zostają w Motir. W pull requestach nic nie jest publikowane."
+      }
     },
     "designApproval": {
       "title": "Zatwierdzanie projektów graficznych",

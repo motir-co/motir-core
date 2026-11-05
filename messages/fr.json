@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "Une revue attend votre agent",
-            "desc": "Votre projet fait ses revues avec votre propre agent, et c'est à vous de lancer la revue d'une carte avec motir review."
+            "desc": "Votre projet fait ses revues avec votre propre agent, et c'est à vous de lancer la revue d'un élément de travail avec motir review."
           }
         },
         "soon": "Bientôt",
@@ -15225,7 +15225,19 @@
       "billingNote": "Chaque relecture est une exécution d'agent hébergée, payée sur les crédits IA de votre organisation.",
       "offNote": "Désactiver cette option annule les relectures en cours — ces éléments de travail passent directement au flux ordinaire.",
       "saved": "Enregistré",
-      "saveError": "Impossible d'enregistrer — réessayez."
+      "saveError": "Impossible d'enregistrer — réessayez.",
+      "source": {
+        "label": "Qui relit",
+        "hosted": "Agent hébergé de Motir",
+        "hostedWhat": "Motir lance une exécution de relecture quand les vérifications passent. <strong>Consomme des crédits IA.</strong>",
+        "own": "Votre propre agent",
+        "ownWhat": "Gratuit. La relecture attend que quelqu'un lance <cmd>motir review</cmd> depuis son propre agent. Rien ne démarre tout seul."
+      },
+      "posting": {
+        "title": "Publier les relectures de l'agent sur les pull requests",
+        "on": "L'app GitHub de Motir commente chaque verdict sur les pull requests et réclame des modifications lors d'un renvoi. Elle n'approuve jamais.",
+        "off": "Les verdicts restent dans Motir. Rien n'est publié sur les pull requests."
+      }
     },
     "designApproval": {
       "title": "Approbation des designs",

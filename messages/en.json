@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "A review is waiting for your agent",
-            "desc": "Your project reviews with your own agent, and a card's review is yours to run with motir review."
+            "desc": "Your project reviews with your own agent, and a work item's review is yours to run with motir review."
           }
         },
         "soon": "Soon",
@@ -15222,7 +15222,19 @@
       "billingNote": "Each review is a hosted agent run, paid from your organisation's AI credits.",
       "offNote": "Turning this off cancels reviews in progress — those work items go straight to the ordinary flow.",
       "saved": "Saved",
-      "saveError": "Couldn't save — try again."
+      "saveError": "Couldn't save — try again.",
+      "source": {
+        "label": "Who reviews",
+        "hosted": "Motir's hosted agent",
+        "hostedWhat": "Motir starts a review run when the checks pass. <strong>Uses AI credits.</strong>",
+        "own": "Your own agent",
+        "ownWhat": "Free. The review waits until someone runs <cmd>motir review</cmd> from their own agent. Nothing starts by itself."
+      },
+      "posting": {
+        "title": "Post agent reviews on pull requests",
+        "on": "Motir's GitHub app comments every verdict on the pull requests, and asks for changes on a send-back. It never approves.",
+        "off": "Verdicts stay in Motir. Nothing is posted on the pull requests."
+      }
     },
     "designApproval": {
       "title": "Design approval",

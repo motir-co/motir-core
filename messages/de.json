@@ -3088,7 +3088,7 @@
           },
           "review_to_run": {
             "label": "Ein Review wartet auf deinen Agenten",
-            "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review einer Karte führst du mit motir review aus."
+            "desc": "Dein Projekt prüft mit deinem eigenen Agenten, und das Review eines Arbeitselements führst du mit motir review aus."
           }
         },
         "soon": "Demnächst",
@@ -15225,7 +15225,19 @@
       "billingNote": "Jede Prüfung ist ein gehosteter Agent-Lauf, bezahlt aus den AI-Credits Ihrer Organisation.",
       "offNote": "Das Ausschalten bricht laufende Prüfungen ab — diese Arbeitselemente gehen direkt in den gewöhnlichen Ablauf.",
       "saved": "Gespeichert",
-      "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut."
+      "saveError": "Speichern fehlgeschlagen — versuchen Sie es erneut.",
+      "source": {
+        "label": "Wer prüft",
+        "hosted": "Motirs gehosteter Agent",
+        "hostedWhat": "Motir startet einen Prüf-Lauf, sobald die Checks bestanden sind. <strong>Verbraucht AI-Credits.</strong>",
+        "own": "Ihr eigener Agent",
+        "ownWhat": "Kostenlos. Die Prüfung wartet, bis jemand <cmd>motir review</cmd> mit dem eigenen Agent ausführt. Nichts startet von selbst."
+      },
+      "posting": {
+        "title": "Agent-Prüfungen in Pull Requests posten",
+        "on": "Motirs GitHub-App kommentiert jedes Ergebnis in den Pull Requests und fordert bei einer Rückgabe Änderungen an. Sie genehmigt nie.",
+        "off": "Ergebnisse bleiben in Motir. In den Pull Requests wird nichts gepostet."
+      }
     },
     "designApproval": {
       "title": "Design-Genehmigung",
