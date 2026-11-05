@@ -69,8 +69,12 @@ async function person(
     role: role === 'admin' ? ORGANIZATION_ROLE.admin : ORGANIZATION_ROLE.member,
     actorUserId: org.ownerId,
   });
-  await db.workspaceMembership.create({
-    data: {
+  // `addMember` already seats the person in the org's workspaces; land them on
+  // the project's workbench whether or not it did.
+  await db.workspaceMembership.upsert({
+    where: { userId_workspaceId: { userId: user.id, workspaceId: org.workspaceId } },
+    update: { activeProjectId: org.projectId },
+    create: {
       workspaceId: org.workspaceId,
       userId: user.id,
       workspaceRole: 'member',
