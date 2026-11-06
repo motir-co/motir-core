@@ -14,6 +14,7 @@ import {
   Lightbulb,
   LogOut,
   ScrollText,
+  ScanSearch,
   Search,
   Server,
   ServerCog,
@@ -67,6 +68,7 @@ export interface AdminShellLabels {
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
   navAiPlanning: string;
   navPlanningLessons: string;
+  navPlannerFindings: string;
   /** Operations → Ideas (MOTIR-7680), visible to every staff role. */
   navIdeas: string;
   /** Operations → Starters (MOTIR-712), operator and superadmin only. */
@@ -220,6 +222,15 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
           label: labels.navPlanningLessons,
           href: '/admin/planning-lessons',
           active: pathname.startsWith('/admin/planning-lessons'),
+        },
+        // Every planner finding the hosted dry run and check plan stored
+        // (MOTIR-10353, design MOTIR-10362), directly after Planning lessons.
+        // Every staff role reads it; `startsWith` so a finding keeps it lit.
+        {
+          icon: <ScanSearch />,
+          label: labels.navPlannerFindings,
+          href: '/admin/planner-findings',
+          active: pathname.startsWith('/admin/planner-findings'),
         },
         // The idea store motir.co shows under Ideas to build (MOTIR-7680, design
         // `platform-admin` § Ideas, MOTIR-7679), directly after Planning lessons:
