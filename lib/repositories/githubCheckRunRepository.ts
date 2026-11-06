@@ -215,7 +215,8 @@ export const githubCheckRunRepository = {
 
   /**
    * Record a TERMINAL conclusion on an EXISTING row — unless that row is a
-   * `pending` state that STARTED AFTER this conclusion was reached (MOTIR-10461).
+   * `pending` state that STARTED AFTER this conclusion was reached (MOTIR-10461),
+   * or a terminal one that FINISHED AFTER it (MOTIR-10467).
    *
    * The mirror of `reopenAsPending`, and it replaces the unconditional `upsert`
    * this write used to be. A check re-run in the same suite reopens its row as
@@ -227,11 +228,17 @@ export const githubCheckRunRepository = {
    * still running. As in `reopenAsPending`, the arbiter is the row's own current
    * value read IN THIS STATEMENT:
    *
-   * - a terminal row is overwritten, as before — a redelivery converges, and a
-   *   re-run's verdict replaces the one it re-ran;
    * - a `pending` row is settled by a conclusion reached at or after its start
    *   (`conclusion_at <= occurredAt`) — the run it is waiting on. The tie goes to
    *   the finish, as it does in `reopenAsPending`;
+   * - a terminal row is overwritten by a conclusion reached at or after ITS finish
+   *   (the same `conclusion_at <= occurredAt`, read as a finish) — a redelivery
+   *   (an equal finish, which cannot be ordered and so keeps last-write-wins)
+   *   converges, and a re-run's verdict replaces the one it re-ran. One that
+   *   finished STRICTLY EARLIER is refused (MOTIR-10467): it is the first run's
+   *   late completion arriving after the re-run had already FINISHED, and writing
+   *   it read the card by the old verdict — commenting, withdrawing a gate and
+   *   promoting on it — until something else rewrote the row;
    * - a row with no recorded time cannot be ordered and is written, which is the
    *   behaviour every row had before the column existed;
    * - and a conclusion with no time of its own is written unguarded for the same
@@ -256,11 +263,10 @@ export const githubCheckRunRepository = {
         ...(occurredAt === null
           ? {}
           : {
-              OR: [
-                { conclusion: { not: 'pending' } },
-                { conclusionAt: null },
-                { conclusionAt: { lte: occurredAt } },
-              ],
+              // One comparison serves both states, because the column means the
+              // latest moment the row knows of: a pending row's start, a terminal
+              // row's finish. A conclusion is written only when it is no older.
+              OR: [{ conclusionAt: null }, { conclusionAt: { lte: occurredAt } }],
             }),
       },
       data: {

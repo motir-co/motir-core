@@ -115,7 +115,7 @@ export type CiFeedbackResult = {
     | 'noop' // a redelivery of an already-recorded conclusion
     | 'pending_recorded' // an in-flight check RECORDED as a pending row (MOTIR-1579) — no comment, no ciState
     | 'stale_pending' // a pending delivery older than the terminal conclusion its row holds (MOTIR-10456) — nothing written
-    | 'stale_terminal' // a terminal delivery reached before the pending state its row holds started (MOTIR-10461) — nothing written, no comment, no promotion
+    | 'stale_terminal' // a terminal delivery reached before the pending state its row holds started (MOTIR-10461), or before the terminal conclusion it holds finished (MOTIR-10467) — nothing written, no comment, no promotion
     | 'ignored_pending' // a neutral (skipped / stale) conclusion — a clean no-op
     | 'no_pull_request' // no stored change request matches the event's PR/MR list / branch
     | 'no_work_item' // the change request carries no linked work item — a clean no-op
@@ -504,10 +504,17 @@ async function applyOneCiDelivery(
   // finished before the re-run started, and written with `upsert` it read the card
   // red or green — commenting, and promoting on a stale green — while the re-run
   // was still running. The row is now CREATED if it is missing and otherwise only
-  // SETTLED when it is terminal already, carries no time, or this conclusion was
-  // reached at or after its pending start. A refused delivery writes nothing, so
+  // SETTLED when it carries no time, or this conclusion was reached at or after
+  // its pending start. A refused delivery writes nothing, so
   // it renders, recomputes, withdraws and promotes nothing: the re-run's own
   // completion is the verdict, and it settles the row as before.
+  //
+  // ⚠️ NOR OVERWRITES ONE THAT HAS ALREADY FINISHED (MOTIR-10467). When the re-run
+  // settled before the first run's completion is processed, the row is terminal
+  // again, dated by the re-run's finish — and the old verdict finished earlier.
+  // Terminal over terminal is ordered by the finish the same way: strictly older is
+  // refused, an equal finish (a redelivery) and a later one (a re-run's verdict)
+  // are written.
   const recordedAtSha = await withSystemContext(async (tx) => {
     await bindWorkspaceContext(tx, resolved.workspaceId);
     const terminalRow = {
