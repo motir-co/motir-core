@@ -75,7 +75,6 @@ const verdict = (recordId: string) =>
       findingsExcerpt: 'The export button still does nothing on Safari.',
       checklist: [],
       notified: null,
-      checklist: [],
     },
   ]);
 
