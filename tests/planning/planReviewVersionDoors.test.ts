@@ -35,6 +35,8 @@ const AUDITED: Record<string, string> = {
     'resumeAutomatically is a row of planReviewVersion.test.ts; the manual resume binds through the same bindWithin, whose repointSourceJob stamps lastActivityAt.',
   'lib/services/planDriftService.ts':
     'moves a PLANNED plan to `stale` (planStatusCanBeStale); never acts on a `generating` plan.',
+  'lib/services/planAuthorFinishedBackfillService.ts':
+    'the one-time authorFinished carry-over (MOTIR-10491), an operator script, not a door. It can reach a `generating` plan, but it writes ONLY the `authorFinished` key inside a proposal’s proposed fields, which nothing the review shows reads (no review DTO, hook or component names it), so the review version correctly stays put. Leaving `lastActivityAt` and the trail untouched is its own acceptance criterion; a card a live author step targets is skipped.',
   'lib/services/planRevisionsService.ts':
     'recordRevision appends to the trail inside a door above, in that door’s transaction; it is not a door itself.',
 };
