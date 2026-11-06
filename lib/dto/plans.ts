@@ -415,6 +415,17 @@ export interface PlanItemProposedFields {
    * additive.
    */
   subject?: string | null;
+  /**
+   * Whether an AUTHOR SESSION finished writing this card (MOTIR-10490) — planner
+   * state about the card, never a field of it. `true` is written; absent or
+   * `null` reads not written. A driver sets or clears it through the deepen
+   * doors (`update_plan_item`, the internal deepen and correction route); no
+   * `add` may claim it. When a body beyond its boundary is written by hand on a
+   * plan no session is working on, core sets it itself
+   * (`plansService`'s `stampHandWrittenBody`). Stays on the plan: approve carries
+   * nothing of it to the work item, and no reader consults it yet.
+   */
+  authorFinished?: true | null;
 }
 
 /**
@@ -1424,6 +1435,14 @@ export interface UpdateProposalInput {
    *  key, and a field this edit rewrites WITHOUT naming its language drops its
    *  recorded one. Fixed at generation, never re-read from the setting. */
   languages?: ProposalLanguages;
+  /**
+   * Set (`true`) or clear (`null`) the proposal's {@link
+   * PlanItemProposedFields.authorFinished} (MOTIR-10490) — sent only by a planner
+   * DRIVER, which knows whether its author session finished the card. Sparse:
+   * absent leaves the stored state alone. A write naming the key, `null`
+   * included, is taken at its word and never stamped by core.
+   */
+  authorFinished?: true | null;
 }
 
 /**
@@ -1563,6 +1582,8 @@ export const UPDATE_PROPOSAL_KEYS = [
   'todos',
   // The language of each text field the edit writes (MOTIR-8743).
   'languages',
+  // Whether an author session finished the card (MOTIR-10490) — planner state.
+  'authorFinished',
 ] as const;
 
 export type UpdateProposalKey = (typeof UPDATE_PROPOSAL_KEYS)[number];
