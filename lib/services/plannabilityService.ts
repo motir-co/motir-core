@@ -53,6 +53,7 @@ export const plannabilityService = {
     return plannabilityOf(
       item,
       blockers.map((b) => ({
+        id: b.id,
         identifier: b.identifier,
         key: b.key,
         title: b.title,

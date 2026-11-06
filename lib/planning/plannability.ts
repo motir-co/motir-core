@@ -28,6 +28,7 @@ import type { PlanBlockReasonDto, PlanBlockerDto, PlannabilityDto } from '@/lib/
 
 /** What the rule needs to know about each `blocked_by` target of the card. */
 export interface PlannabilityBlockerFacts {
+  id: string;
   identifier: string;
   /** The key NUMBER — the order the reason lines are drawn in. */
   key: number;
@@ -49,6 +50,7 @@ export function holdsStory(blocker: PlannabilityBlockerFacts): boolean {
 
 function toBlockerDto(blocker: PlannabilityBlockerFacts): PlanBlockerDto {
   return {
+    id: blocker.id,
     identifier: blocker.identifier,
     title: blocker.title,
     // A held blocker is already a childless story, so To plan is its category.

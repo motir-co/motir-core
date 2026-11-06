@@ -9,6 +9,8 @@
 
 /** One blocking story the planner would stop at. */
 export interface PlanBlockerDto {
+  /** The blocker's id — what the title-translation kit keys its title by. */
+  id: string;
   /** The blocker's key, e.g. `MOTIR-10550` — the link goes to `/items/{identifier}`. */
   identifier: string;
   title: string;

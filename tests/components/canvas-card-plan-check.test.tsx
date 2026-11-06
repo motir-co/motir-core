@@ -48,6 +48,7 @@ const ONE_BLOCKER: PlannabilityDto = {
       kind: 'blocker_has_no_subtasks',
       blockers: [
         {
+          id: 'blk-10550',
           identifier: 'MOTIR-10550',
           title: 'Store each sprint’s report data as a snapshot',
           toPlan: true,
@@ -63,8 +64,13 @@ const TWO_BLOCKERS: PlannabilityDto = {
     {
       kind: 'blocker_has_no_subtasks',
       blockers: [
-        { identifier: 'MOTIR-10546', title: 'Pick the report fields', toPlan: true },
-        { identifier: 'MOTIR-10548', title: 'Render the PDF', toPlan: false },
+        {
+          id: 'blk-10546',
+          identifier: 'MOTIR-10546',
+          title: 'Pick the report fields',
+          toPlan: true,
+        },
+        { id: 'blk-10548', identifier: 'MOTIR-10548', title: 'Render the PDF', toPlan: false },
       ],
     },
   ],

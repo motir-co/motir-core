@@ -141,7 +141,9 @@ describe('GET /api/work-items/plannability · the rule', () => {
       reasons: [
         {
           kind: 'blocker_has_no_subtasks',
-          blockers: [{ identifier: blocker.identifier, title: blocker.title, toPlan: true }],
+          blockers: [
+            { id: blocker.id, identifier: blocker.identifier, title: blocker.title, toPlan: true },
+          ],
         },
       ],
     });
@@ -177,7 +179,7 @@ describe('GET /api/work-items/plannability · the rule', () => {
     const answer = await answerFor(card.identifier);
     expect(answer.plannable).toBe(false);
     expect(answer.reasons[0].blockers).toEqual([
-      { identifier: blocker.identifier, title: blocker.title, toPlan: false },
+      { id: blocker.id, identifier: blocker.identifier, title: blocker.title, toPlan: false },
     ]);
   });
 
@@ -398,7 +400,7 @@ describe('plannabilityService · a blocker in ANOTHER project', () => {
     const answer = await plannabilityService.checkPlannable(s.project.id, card.identifier, s.ctx);
     expect(answer.plannable).toBe(false);
     expect(answer.reasons[0]!.blockers).toEqual([
-      { identifier: foreign.identifier, title: foreign.title, toPlan: false },
+      { id: foreign.id, identifier: foreign.identifier, title: foreign.title, toPlan: false },
     ]);
   });
 });

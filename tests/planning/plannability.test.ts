@@ -13,6 +13,7 @@ import { fetchPlannability } from '@/lib/planning/plannabilityClient';
 // `tests/api/plannability-route.test.ts`.
 
 const childlessStory: PlannabilityBlockerFacts = {
+  id: 'blk-10550',
   identifier: 'MOTIR-10550',
   key: 10550,
   title: 'Store each sprint report as a snapshot',
@@ -53,15 +54,33 @@ describe('planBlockReasons', () => {
   });
 
   it('lists every held blocker once, in key order, and drops the rest', () => {
-    const later = { ...childlessStory, identifier: 'MOTIR-10551', key: 10551, title: 'Later' };
-    const earlier = { ...childlessStory, identifier: 'MOTIR-9', key: 9, title: 'Earlier' };
-    const free = { ...childlessStory, identifier: 'MOTIR-3', key: 3, liveChildCount: 1 };
+    const later = {
+      ...childlessStory,
+      id: 'blk-10551',
+      identifier: 'MOTIR-10551',
+      key: 10551,
+      title: 'Later',
+    };
+    const earlier = {
+      ...childlessStory,
+      id: 'blk-9',
+      identifier: 'MOTIR-9',
+      key: 9,
+      title: 'Earlier',
+    };
+    const free = {
+      ...childlessStory,
+      id: 'blk-3',
+      identifier: 'MOTIR-3',
+      key: 3,
+      liveChildCount: 1,
+    };
     expect(planBlockReasons({ kind: 'story' }, [later, free, earlier])).toEqual([
       {
         kind: 'blocker_has_no_subtasks',
         blockers: [
-          { identifier: 'MOTIR-9', title: 'Earlier', toPlan: true },
-          { identifier: 'MOTIR-10551', title: 'Later', toPlan: true },
+          { id: 'blk-9', identifier: 'MOTIR-9', title: 'Earlier', toPlan: true },
+          { id: 'blk-10551', identifier: 'MOTIR-10551', title: 'Later', toPlan: true },
         ],
       },
     ]);
@@ -113,7 +132,7 @@ describe('fetchPlannability — the client read', () => {
     const reasons = [
       {
         kind: 'blocker_has_no_subtasks',
-        blockers: [{ identifier: 'M-1', title: 'T', toPlan: true }],
+        blockers: [{ id: 'blk-1', identifier: 'M-1', title: 'T', toPlan: true }],
       },
     ];
     stubFetch(200, { plannable: false, reasons });

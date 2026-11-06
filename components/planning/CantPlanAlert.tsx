@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
+import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import type { PlanBlockReasonDto, PlanBlockerDto } from '@/lib/dto/plannability';
 
 // THE CAN'T-PLAN ALERT (MOTIR-10544; design MOTIR-10543 panels 4, 5, 7 and 8,
@@ -133,7 +134,9 @@ function ReasonLine({
           className="text-sm leading-snug font-medium text-(--el-link) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <span className="font-mono text-xs font-semibold">{blocker.identifier}</span>{' '}
-          {blocker.title}
+          {/* The blocker's title in the reader's language when the roadmap's
+              title-translation host is on (the alert renders under it). */}
+          <SurfaceTitle id={blocker.id} title={blocker.title} layout="clamp" />
         </Link>
         <p className="mt-0.5 text-xs leading-snug text-(--el-text-secondary)">{reasonText}</p>
       </div>
