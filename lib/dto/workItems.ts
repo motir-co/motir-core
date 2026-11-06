@@ -813,8 +813,9 @@ export interface WorkItemTreeNodeDto {
    */
   fixHeadKey?: string;
   /**
-   * FIXING (MOTIR-10309): a fix was pushed and its checks are running, so the tag reads
-   * *Fixing* instead of the reason. `true` only — absent otherwise.
+   * FIXING (MOTIR-10309 · MOTIR-10506): a repair is live on the card, or a fix was pushed
+   * and its checks are running, so the tag reads *Fixing* instead of the reason. `true`
+   * only — absent otherwise.
    */
   fixing?: true;
   // The remaining core properties the list row shows alongside status/assignee
@@ -1134,8 +1135,9 @@ export interface WorkItemListItemDto {
    */
   fixHeadKey?: string;
   /**
-   * FIXING (MOTIR-10309): a fix was pushed and its checks are running, so the tag reads
-   * *Fixing* instead of the reason. `true` only — absent otherwise.
+   * FIXING (MOTIR-10309 · MOTIR-10506): a repair is live on the card, or a fix was pushed
+   * and its checks are running, so the tag reads *Fixing* instead of the reason. `true`
+   * only — absent otherwise.
    */
   fixing?: true;
   priority: WorkItemPriorityDto;
