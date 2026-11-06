@@ -1544,7 +1544,7 @@ describe('the review path on a story run’s acceptance (MOTIR-10533)', () => {
     ).toBeTruthy();
   });
 
-  it('a dismissal from the receipt port re-reads the overlay and the page behind it', async () => {
+  it('a dismissal from the receipt port re-reads the overlay, never the route', async () => {
     const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
     const dialog = await openReceiptPort({
@@ -1575,8 +1575,8 @@ describe('the review path on a story run’s acceptance (MOTIR-10533)', () => {
         body: JSON.stringify({ subjectVersion: SET, reason: 'Out of scope.' }),
       }),
     );
-    expect(refresh).toHaveBeenCalled();
     expect(fetchApprovalGateOverlay.mock.calls.length).toBeGreaterThan(reads);
+    expect(refresh).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 

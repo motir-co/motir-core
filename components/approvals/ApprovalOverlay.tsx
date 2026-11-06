@@ -1109,10 +1109,9 @@ export function ApprovalOverlay() {
                   reviewPath={read.reviewPath ?? null}
                   awaiting={gate.state === 'awaiting' && !decidedState}
                   identifier={identifier}
-                  onDismissed={() => {
-                    setReread((n) => n + 1);
-                    router.refresh();
-                  }}
+                  // The overlay's own re-read, exactly as the Development frame's dismissal
+                  // runs inside the overlay (no route refresh on a live path, MOTIR-8578).
+                  onDismissed={() => setReread((n) => n + 1)}
                 />
                 {/* The port is height-bounded here, so the recording fits it (MOTIR-6042). */}
                 <AcceptanceReceiptPlayer evidence={subject.evidence} fit="viewport" />
