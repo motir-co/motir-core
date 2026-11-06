@@ -10,6 +10,27 @@ export type EnqueueScheduledResult =
   | { outcome: 'enqueued'; run: JobQueueRun }
   | { outcome: 'already-queued' };
 
+/**
+ * ONE CLAIM of one run — what a settle write is fenced on (MOTIR-10466,
+ * MOTIR-10500). `claimToken` is the value `claimDueRuns` returned for this claim;
+ * the worker id alone cannot tell two claims by the same worker apart.
+ */
+export interface JobQueueClaim {
+  id: string;
+  workerId: string;
+  claimToken: number;
+}
+
+/** The row is still `claim`'s: running, under the same worker and the same fencing token. */
+function heldBy(claim: JobQueueClaim): Prisma.JobQueueRunWhereInput {
+  return {
+    id: claim.id,
+    state: 'running',
+    claimedBy: claim.workerId,
+    claimToken: claim.claimToken,
+  };
+}
+
 /** True when a thrown value is Prisma's unique-constraint violation. */
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'P2002';
@@ -131,6 +152,10 @@ export const jobQueueRepository = {
              "claimed_by"       = ${workerId},
              "lease_expires_at" = (now() AT TIME ZONE 'UTC') + make_interval(secs => ${leaseMs / 1000}::double precision),
              "attempts"         = q."attempts" + 1,
+             -- THE FENCING TOKEN (MOTIR-10500): a new value for every claim,
+             -- never lowered by anything, so a settle can tell THIS claim from
+             -- any later one -- including a later claim by the same worker.
+             "claim_token"      = q."claim_token" + 1,
              -- THE CLAIM CLOSES THE DEBOUNCE WINDOW (MOTIR-3483) -- see the
              -- doc comment above this method. A pending row carries the
              -- coalescing key; a claimed one must not.
@@ -150,6 +175,7 @@ export const jobQueueRepository = {
                 q."state",
                 q."claimed_by"       AS "claimedBy",
                 q."lease_expires_at" AS "leaseExpiresAt",
+                q."claim_token"      AS "claimToken",
                 q."last_error"       AS "lastError",
                 q."created_at"       AS "createdAt",
                 q."updated_at"       AS "updatedAt"
@@ -261,14 +287,15 @@ export const jobQueueRepository = {
   },
 
   /**
-   * Whether `workerId` still holds this run — `running`, and claimed by it. The
+   * Whether `claim` is still the run's live claim — `running`, claimed by its
+   * worker, under its fencing token (MOTIR-10500). The
    * worker asks before its terminal-failure hook writes a dead-letter record, so a
    * run whose claim was released mid-execution is not dead-lettered by a worker
    * that no longer holds it (MOTIR-10466). A pre-check only: the release can land
    * between this read and the write, which is why the write itself is fenced too.
    */
-  async isHeldBy(id: string, workerId: string, tx: Prisma.TransactionClient): Promise<boolean> {
-    const n = await tx.jobQueueRun.count({ where: { id, state: 'running', claimedBy: workerId } });
+  async isHeldBy(claim: JobQueueClaim, tx: Prisma.TransactionClient): Promise<boolean> {
+    const n = await tx.jobQueueRun.count({ where: heldBy(claim) });
     return n > 0;
   },
 
@@ -287,14 +314,16 @@ export const jobQueueRepository = {
    * this worker's any more, and what is in it belongs to whoever holds it, or to
    * its next claimant. `docs/decisions/job-queue-foundation.md` §18.7 is the
    * decision.
+   *
+   * ⚠️ AND ON THE CLAIM'S FENCING TOKEN, NOT ONLY ITS WORKER (MOTIR-10500). A live
+   * worker that misses its heartbeats has its lease reclaimed by its OWN next
+   * tick, which can then claim the very run it is still executing: both passes
+   * carry the same `claimed_by`, and only the token — bumped by every claim —
+   * tells the stale pass from the one that replaced it. §18.8.
    */
-  async markSucceeded(
-    id: string,
-    workerId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<boolean> {
+  async markSucceeded(claim: JobQueueClaim, tx: Prisma.TransactionClient): Promise<boolean> {
     const r = await tx.jobQueueRun.updateMany({
-      where: { id, state: 'running', claimedBy: workerId },
+      where: heldBy(claim),
       data: { state: 'succeeded', claimedBy: null, leaseExpiresAt: null },
     });
     return r.count > 0;
@@ -306,13 +335,12 @@ export const jobQueueRepository = {
    * `job_run.failure`. Fenced on the claim, like {@link markSucceeded}.
    */
   async markFailed(
-    id: string,
-    workerId: string,
+    claim: JobQueueClaim,
     lastError: Prisma.InputJsonValue,
     tx: Prisma.TransactionClient,
   ): Promise<boolean> {
     const r = await tx.jobQueueRun.updateMany({
-      where: { id, state: 'running', claimedBy: workerId },
+      where: heldBy(claim),
       data: { state: 'failed', claimedBy: null, leaseExpiresAt: null, lastError },
     });
     return r.count > 0;
@@ -326,14 +354,13 @@ export const jobQueueRepository = {
    * the claim, like {@link markSucceeded}.
    */
   async rescheduleAt(
-    id: string,
-    workerId: string,
+    claim: JobQueueClaim,
     runAt: Date,
     tx: Prisma.TransactionClient,
     opts?: { refundAttempt?: boolean; lastError?: Prisma.InputJsonValue },
   ): Promise<boolean> {
     const r = await tx.jobQueueRun.updateMany({
-      where: { id, state: 'running', claimedBy: workerId },
+      where: heldBy(claim),
       data: {
         state: 'pending',
         runAt,

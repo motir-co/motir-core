@@ -1216,3 +1216,170 @@ describe('the review path on To approve and the gate frame', () => {
     });
   });
 });
+
+// ── The open Workbench hears every review write (Bug MOTIR-10504) ─────────────
+//
+// THE FULL SEAM: a review write, through the real door → the committed `live_signal`
+// notification a real LISTEN session hears → the reader's own watermark read, whose
+// `moved` must name To approve so the open tab re-reads the row's review line and badge.
+// Before the fix the gate-off pass wrote one `review_verdict_record` and nothing else: no
+// trigger heard it and the To approve reading (`approval_gate` alone) did not move, so the
+// row kept *Not reviewed by an agent* until a reload.
+
+const { Client: PgClient } = await import('pg');
+const { LIVE_SIGNAL_CHANNEL, parseLiveNotification } = await import('@/lib/live/liveNotification');
+const { currentWorkerAdminUrl } = await import('../helpers/parallelDb');
+const { workbenchWatermarkService } = await import('@/lib/services/workbenchWatermarkService');
+const { githubPullRequestReviewRepository } =
+  await import('@/lib/repositories/githubPullRequestReviewRepository');
+
+describe('the open Workbench hears every review write on a To approve row (MOTIR-10504)', () => {
+  let listener: InstanceType<typeof PgClient>;
+  let heard: { workspaceId: string; projectId: string | null }[] = [];
+
+  beforeEach(async () => {
+    heard = [];
+    listener = new PgClient({ connectionString: currentWorkerAdminUrl() });
+    await listener.connect();
+    listener.on('notification', (msg) => {
+      const n =
+        msg.channel === LIVE_SIGNAL_CHANNEL ? parseLiveNotification(msg.payload ?? '') : null;
+      if (n) heard.push({ workspaceId: n.workspaceId, projectId: n.projectId });
+    });
+    await listener.query(`LISTEN ${LIVE_SIGNAL_CHANNEL}`);
+  });
+
+  afterEach(async () => {
+    await listener.end();
+  });
+
+  /** Wait until the listener has heard a signal for this project. */
+  async function signalled(s: Scenario): Promise<void> {
+    for (let i = 0; i < 300; i++) {
+      if (heard.some((n) => n.workspaceId === s.workspace.id && n.projectId === s.project.id)) {
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    throw new Error('no live signal was heard for the project');
+  }
+
+  /** The reader's watermark, then (after `write`) what moved since it — the stream's own read. */
+  async function movedBy(s: Scenario, write: () => Promise<unknown>, ctx = homeCtx(s)) {
+    const before = await workbenchWatermarkService.read(ctx);
+    heard = [];
+    await write();
+    await signalled(s);
+    return (await workbenchWatermarkService.read(ctx, before.cursor)).moved;
+  }
+
+  const mergeRow = async (s: Scenario, ctx = homeCtx(s)) =>
+    (await approvalGatesService.listAwaitingMe(ctx)).items.find(
+      (r) => r.kind === 'pull_request_approval',
+    );
+
+  it('a gate-off pass moves To approve, and the re-read row reads Reviewed by agent with the badge', async () => {
+    const { s, item } = await deliveredGateOff('live-pass', 140);
+    expect((await mergeRow(s))?.review).toMatchObject({
+      line: { value: 'not_reviewed' },
+      badge: null,
+    });
+
+    let recordId = '';
+    const moved = await movedBy(s, async () => {
+      const dto = await reviewVerdictService.submit(
+        s.project.id,
+        item.identifier,
+        input(versionOf(140)),
+        s.ctx,
+      );
+      expect(dto.outcome).toBe('recorded');
+      recordId = dto.recordId;
+    });
+    // The pass decided no gate: only the review reading can have moved the tab.
+    expect(await awaitingOf(item.id, PR_APPROVAL)).toHaveLength(1);
+    expect(moved).toContain('approvals');
+
+    const row = await mergeRow(s);
+    expect(row?.review?.line.value).toBe('reviewed_by_agent');
+    expect(row?.review?.recordRef).toEqual({ kind: 'record', id: recordId });
+    expect(row?.review?.badge).toMatchObject({ identifier: item.identifier, marker: null });
+  });
+
+  it('a pass with the review gate on moves To approve', async () => {
+    const { s, item } = await reviewingUnder('own', 'live-gate-on', 141);
+    const moved = await movedBy(s, () =>
+      reviewVerdictService.submit(s.project.id, item.identifier, input(versionOf(141)), s.ctx),
+    );
+    expect(moved).toContain('approvals');
+    expect((await mergeRow(s))?.review?.line.value).toBe('reviewed_by_agent');
+  });
+
+  it('a dismissal of a gate-off send-back moves To approve', async () => {
+    const { s, item } = await deliveredGateOff('live-dismiss', 142);
+    await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      sendBack(versionOf(142)),
+      s.ctx,
+    );
+    const moved = await movedBy(s, () =>
+      reviewDismissalService.dismiss(
+        s.project.id,
+        item.identifier,
+        { subjectVersion: versionOf(142), reasonMd: 'Reviewed by hand.' },
+        s.ctx,
+      ),
+    );
+    expect(moved).toContain('approvals');
+    expect((await mergeRow(s))?.review?.line.value).toBe('review_dismissed');
+  });
+
+  it('a GitHub approval stored at the head, deciding no gate, moves To approve', async () => {
+    const { s, item } = await deliveredGateOff('live-github', 143);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 143 } });
+    const moved = await movedBy(s, () =>
+      adminDb.$transaction((tx) =>
+        githubPullRequestReviewRepository.upsertByGithubReviewId(
+          {
+            githubReviewId: 'review-143',
+            githubPullRequestId: pr.id,
+            reviewerGithubUserId: '5150',
+            reviewerLogin: 'octo-reviewer',
+            reviewerType: 'User',
+            state: 'approved',
+            commitSha: 'sha-a',
+            reviewerPermission: 'write',
+            submittedAt: new Date(),
+          },
+          tx,
+        ),
+      ),
+    );
+    expect(await awaitingOf(item.id, PR_APPROVAL)).toHaveLength(1);
+    expect(moved).toContain('approvals');
+    expect((await mergeRow(s))?.review?.line.githubApprovals).toEqual([
+      { login: 'octo-reviewer', repo: 'moooon/acme', number: 143 },
+    ]);
+  });
+
+  it('a review on a card the reader has no row for moves nothing on their To approve', async () => {
+    const { s, item } = await deliveredGateOff('live-other', 144);
+    const mate = await teammate(s, 'Teammate', 'member');
+    await adminDb.workItem.update({ where: { id: item.id }, data: { assigneeId: mate.userId } });
+    const mateCtx = { ...mate, projectId: s.project.id };
+    expect(await mergeRow(s)).toBeUndefined();
+    expect(await mergeRow(s, mateCtx)).toBeDefined();
+
+    const before = await workbenchWatermarkService.read(mateCtx);
+    const moved = await movedBy(s, () =>
+      reviewVerdictService.submit(s.project.id, item.identifier, input(versionOf(144)), s.ctx),
+    );
+    // The owner's To approve is untouched — the card is routed to the teammate…
+    expect(moved).not.toContain('approvals');
+    // …whose own To approve moves.
+    expect((await workbenchWatermarkService.read(mateCtx, before.cursor)).moved).toContain(
+      'approvals',
+    );
+  });
+});

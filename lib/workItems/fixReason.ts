@@ -537,3 +537,40 @@ export function fixingReasonOf(
   if (!moved) return null;
   return { fixReason: prior.fixReason, fixDetail: { ...prior.fixDetail, fixing: true } };
 }
+
+// ── A LIVE REPAIR IS FIXING (MOTIR-10506) ───────────────────────────────────────────
+// Fixing used to turn on only once CI ran at a moved head, so a card with a repair under
+// way — a claimed `motir fix`, a hosted or agent `fix` run — kept its red reason until
+// the fix was pushed. Now the repair itself sets it: while a `fix` run is alive on the
+// card, whatever reason the card holds is stored with `fixing: true`, its reason, heads
+// and count unchanged. The moved-head rule above stays as the RECONCILE: it keeps Fixing
+// between the run's close and CI's verdict, and sets it for a push no tracked run made.
+
+/**
+ * The answer as it reads while a repair is live on the card: the same reason with
+ * `fixing: true`. Nothing to fix stays nothing — a live repair keeps no card on To fix
+ * that has nothing left stuck — and `run_died` is never Fixing: its repair is a continue.
+ */
+export function fixingWhileRepairing(value: FixReasonValue): FixReasonValue {
+  if (value.fixReason === null || value.fixReason === 'run_died' || value.fixDetail === null) {
+    return value;
+  }
+  return { ...value, fixDetail: { ...value.fixDetail, fixing: true } };
+}
+
+/**
+ * The card's PRIOR stored answer kept while a repair is live and CI has not decided —
+ * the predicate refused with nothing red and a member running, so nothing re-raises a
+ * reason, and the repair holding the card is what keeps it listed. Unlike
+ * {@link fixingReasonOf} it needs no moved head: the run is the evidence. Null when the
+ * prior answer is nothing, a reason with no detail, or `run_died`.
+ */
+export function priorWhileRepairing(prior: {
+  fixReason: WorkItemFixReasonDto | null;
+  fixDetail: FixDetailDto | null;
+}): FixReasonValue | null {
+  if (prior.fixReason === null || prior.fixReason === 'run_died' || prior.fixDetail === null) {
+    return null;
+  }
+  return { fixReason: prior.fixReason, fixDetail: { ...prior.fixDetail, fixing: true } };
+}

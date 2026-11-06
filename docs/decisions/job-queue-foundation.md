@@ -1966,6 +1966,60 @@ dropped and the job is retried (at-least-once delivery), rather than trusted.
 worker-id fence, and its in-flight bookkeeping is keyed on the run id: [MOTIR-10500], reproduced while
 building this.
 
+### §18.8 — The fence is the claim, not the worker (MOTIR-10500)
+
+**Amendment, 2026-11-06.** **Evidence pinned at:** `motir-core` `origin/main` @ `9ec1c00`.
+**Consumed by:** [MOTIR-10500].
+
+**The defect.** §18.7's fence is `state = 'running' AND claimed_by = <worker>`, which cannot tell two
+claims by the SAME worker apart. A live worker that misses its heartbeats until its lease lapses (an
+event-loop stall, a slow database) has the lease reclaimed by its OWN next tick — `reclaimExpiredLeases`
+runs before `claimDueRuns` — and can then claim the very run it is still executing. Reproduced on
+`9ec1c00` with one worker, `leaseMs: 50`, no heartbeat, two ticks 150 ms apart and both handlers held:
+
+```
+PROBE first=1 second=1 handlers=2 mid=running/same afterFirstSettle=succeeded/null inFlight=0
+```
+
+The first pass's settle passed the fence and wrote `succeeded` over the row the second pass was
+executing, and because `inFlight`, `parked`, `withdrawals` and `settling` were keyed on the run id, its
+`finally` dropped the second pass from the set the pool and the drain read.
+
+**The decision — a fencing token on the row, matched by every settle write.** `job_queue.claim_token`
+(`INTEGER NOT NULL DEFAULT 0`) is incremented by `claimDueRuns` in its claim statement and returned with
+the claimed row. Nothing lowers it — not a reclaim, a release, a refunded attempt or a settle — so no two
+claims of one row ever carry the same value. `markSucceeded`, `markFailed`, `rescheduleAt` and
+`isHeldBy` take the claim (`{ id, workerId, claimToken }`) and match all three; a pass whose claim was
+reclaimed writes nothing and is reported `released`, as §18.7 already reports a release, whoever made
+the new claim. This is Kleppmann's fencing token (_Designing Data-Intensive Applications_, ch. 8): the
+resource rejects a write carrying an older token than the one it last granted, which is the only check
+that holds when the lease holder cannot know its lease has lapsed. The worker id stays in the predicate:
+it is free, and keeps §18.7's reading of the row intact for anyone reading the SQL.
+
+The worker's in-flight bookkeeping is keyed on the PASS — `passKeyOf(run)`, the run id and its token —
+so both passes count in `inFlight` (and against `POOL_SIZE`) until each settles, the drain waits for
+and withdraws the live one, and the stale pass's `finally` removes only itself.
+
+**Refused:**
+
+- **The worker refuses to claim a run id it already holds.** The claim statement has already written the
+  row `running` under this worker by the time the worker can compare, so refusing means releasing it
+  again, and §14.1 keeps `claimDueRuns` free of a predicate over the worker's own set. Left in `pending`,
+  the row is claimed by another worker instead, so two passes still run, and the in-process set would
+  be the only thing standing between a stale settle and the row. The token puts the fence where the
+  write lands.
+- **A random token (`gen_random_uuid()`) per claim.** Equality alone needs no order, but a monotonic
+  integer is the textbook fencing token, costs four bytes instead of sixteen, and reads in a row dump as
+  how many times the run has been claimed.
+- **`attempts` as the token.** A reclaim and a release refund it, so a reclaim followed by a re-claim
+  hands the second pass the first pass's value — exactly the collision this closes.
+
+**What it does not change.** Two passes of one run can still execute at once in one process once a lease
+lapses — at-least-once delivery is the contract, and the step ledger is what makes the second resume
+rather than repeat. The token guarantees that only the LIVE claim's outcome is recorded. The heartbeat
+and the release stay scoped to `claimed_by`: both act on every claim the worker holds, which is what
+they mean.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484

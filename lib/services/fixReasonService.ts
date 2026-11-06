@@ -10,6 +10,8 @@ import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { isRunAlive } from '@/lib/runs/runLiveness';
 import { evaluateRepair } from '@/lib/services/repairPredicate';
 import {
   describeDeadRunWithin,
@@ -23,6 +25,8 @@ import {
   changesRequestedOf,
   deadRunReasonOf,
   fixingReasonOf,
+  fixingWhileRepairing,
+  priorWhileRepairing,
   pullRequestReasonOf,
   raisedHeadsOf,
   reviewerNameOf,
@@ -65,7 +69,19 @@ import {
 // stays on To fix and its count does not move until the CI decides. Green then clears it,
 // red raises a fresh reason on the new heads. The prior is read from the row the caller
 // passes — the recompute's locked row, so it is consistent with the write it decides.
-// Nothing here reads or clears a hosted repair; the surface decides which line wins.
+//
+// ── …and a LIVE REPAIR is Fixing from its first second (MOTIR-10506) ────────────
+// A `fix` run alive on the card — a claimed `motir fix`, a hosted or agent repair, read
+// through `isRunAlive`, the one liveness rule — stores whatever reason the card holds
+// with `fixing: true` (`fixingWhileRepairing`), so every surface that draws the tag
+// shows it the moment the repair is claimed, not once its push reaches CI. While CI is
+// running and nothing is red, the live run keeps the prior answer Fixing even at an
+// unmoved head (`priorWhileRepairing`). The moved-head rule above is the RECONCILE: it
+// holds Fixing between the run's close and CI's verdict, and sets it for a push no
+// tracked run made. A run's open and close recompute every card it covers
+// (`dispatchRunService.recomputeCovered`), which is what moves the tag at those moments.
+// Which LINE a surface draws over the tag — the hosted repair's, a holder's — is still
+// the surface's call.
 //
 // ── The shape is `recomputeWorkItemCiState`'s ───────────────────────────────
 // A read-derived write, so the card's row lock is taken FIRST and everything is read
@@ -153,10 +169,16 @@ export async function deriveFixReason(
     if (died) return withFixGroupKey(died, runFixGroupKey(continued.run.id));
   }
 
-  const [verdict, deliveries] = await Promise.all([
+  const [verdict, deliveries, repairs] = await Promise.all([
     evaluateRepair(item, statuses, { workspaceId: item.workspaceId }, tx),
     workItemDeliveryRepository.listByWorkItemWithChecks(item.id, tx),
+    dispatchRunRepository.findRunningLivenessByCommandForWorkItem(item.id, 'fix', tx),
   ]);
+  // A REPAIR IS LIVE on the card (MOTIR-10506): an open `fix` run the liveness rule still
+  // reads as alive. A lapsed local run the reap has not closed yet is not one.
+  const repairing = repairs.some((run) => isRunAlive(run, now));
+  const settled = (value: FixReasonValue): FixReasonValue =>
+    repairing ? fixingWhileRepairing(value) : value;
   // The predicate's own notion of an open member, so `total` counts what it counted.
   const open = deliveries.filter((d) => d.pullRequest.state === 'open' && !d.pullRequest.merged);
   const total = open.length;
@@ -184,7 +206,7 @@ export async function deriveFixReason(
       return { pullRequestId: d.pullRequest.id, headSha: kept ?? pullRequestHead(d.pullRequest) };
     }),
   );
-  const raised = (value: FixReasonValue): FixReasonValue => withRaisedHeads(value, heads);
+  const raised = (value: FixReasonValue): FixReasonValue => settled(withRaisedHeads(value, heads));
 
   if (verdict.ok) {
     // A claimable card is classed by the members the predicate handed over. On the
@@ -258,6 +280,14 @@ export async function deriveFixReason(
       verdict.running,
     );
     if (fixing) return fixing;
+    // The run itself is the evidence while it is live: no moved head is needed.
+    if (repairing) {
+      const kept = priorWhileRepairing({
+        fixReason: (item.fixReason ?? null) as WorkItemFixReasonDto | null,
+        fixDetail: priorDetail,
+      });
+      if (kept) return kept;
+    }
   }
 
   // Not claimable. The one reason left is a reviewer's standing Request changes on a card

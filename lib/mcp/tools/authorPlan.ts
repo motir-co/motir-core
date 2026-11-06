@@ -953,6 +953,18 @@ const updatePlanItemInputSchema = {
         ' REPLACES the list whole — a list has no sparse edit — so send the set you want; ' +
         '`[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
     ),
+  authorFinished: z
+    .literal(true)
+    .nullable()
+    .optional()
+    .describe(
+      'Planner state, sent ONLY by a planner DRIVER: `true` records that an author session ' +
+        'finished writing this card, `null` clears it, and omitting it leaves the state as it ' +
+        'is. It is not a field of the card and never reaches the work item. A write naming it ' +
+        '— `null` included — is taken at its word; a write omitting it whose body goes beyond ' +
+        'its boundary while no planner session is live is marked finished by Motir itself. ' +
+        'Do not send it when writing a card by hand.',
+    ),
   revision: z
     .boolean()
     .optional()
@@ -995,8 +1007,14 @@ const correctionRefField = z
 
 // `revision` is `update_plan_item`'s opt-in; the correction door is legal on a
 // `planned` plan already and takes no such flag, so it is dropped from the spread.
-const { revision: _updatePlanItemRevision, ...updatePlanItemFieldsSchema } =
-  updatePlanItemInputSchema;
+// `authorFinished` is a DRIVER's key (MOTIR-10490), carried by the deepen door
+// alone — a correction is judged by core's hand-written stamp instead — so it is
+// dropped from the spread beside `revision`.
+const {
+  revision: _updatePlanItemRevision,
+  authorFinished: _updatePlanItemAuthorFinished,
+  ...updatePlanItemFieldsSchema
+} = updatePlanItemInputSchema;
 
 const updatePlanProposalInputSchema = {
   ...updatePlanItemFieldsSchema,
@@ -1504,7 +1522,7 @@ interface ReportPlanStepArgs {
   lessonCalls?: unknown[];
 }
 
-interface UpdatePlanProposalArgs extends UpdatePlanItemArgs {
+interface UpdatePlanProposalArgs extends Omit<UpdatePlanItemArgs, 'authorFinished'> {
   parentRef?: string | null;
   blockedByRefs?: string[];
   supersedesRefs?: string[];
@@ -1552,6 +1570,7 @@ interface UpdatePlanItemArgs {
   estimateMinutes?: number | null;
   difficulty?: WorkItemDifficultyDto | null;
   todos?: ProposedTodoInput[] | null;
+  authorFinished?: true | null;
   revision?: boolean;
 }
 
@@ -2036,6 +2055,7 @@ export async function runUpdatePlanItem(
     'estimateMinutes',
     'difficulty',
     'todos',
+    'authorFinished',
   ] as const satisfies readonly UpdateProposalKey[];
 
   const input: UpdateProposalInput = {};

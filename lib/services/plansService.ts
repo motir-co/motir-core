@@ -41,6 +41,7 @@ import {
 } from '@/lib/repositories/planItemRepository';
 import { planRevisionRepository } from '@/lib/repositories/planRevisionRepository';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
+import { hasBodyBeyondBoundary } from '@/lib/plans/authorFinished';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { planCodeReadRepository } from '@/lib/repositories/planCodeReadRepository';
 import { planLessonCallRepository } from '@/lib/repositories/planLessonCallRepository';
@@ -849,6 +850,16 @@ function validateProposal(p: ProposalInput): void {
     if (!p.proposedFields || !p.proposedFields.title?.trim()) {
       throw new InvalidProposalError('An `add` proposal requires proposedFields.title.');
     }
+    // No `add` may claim the author state (MOTIR-10490): an append is the LAY,
+    // and only a driver that ran an author session knows the card was finished.
+    // Refused by name, before any write, so the whole batch is left unwritten.
+    if (Object.prototype.hasOwnProperty.call(p.proposedFields, 'authorFinished')) {
+      throw new InvalidProposalError(
+        `${proposalLabel({ op: p.op, title: p.proposedFields.title })}: \`authorFinished\` cannot be ` +
+          'set on an `add`. It says an author session finished the card, which only that ' +
+          "session's driver can say, through `update_plan_item` — omit it from the append.",
+      );
+    }
     validateProposedSizing(p.proposedFields);
     // The card's proposed STEPS (MOTIR-4616 · AMENDMENT 14 D4) — the store's own
     // caps, imported never re-declared, plus the container gate. Read the kind
@@ -1027,6 +1038,76 @@ function containPrismaFailure(err: unknown, operation: string): unknown {
 }
 
 /**
+ * Is an author SESSION working on this plan right now (MOTIR-10490)? A
+ * `PlanStep` row is one running planner session and `end` deletes it, so a row
+ * on a `generating` plan is a live session. Rows on a plan that has left
+ * `generating` are ignored, exactly as `planReviewService` ignores them: a
+ * session that never cleared must not outlive its plan.
+ *
+ * Returned as a MEMOISED reader so a batch asks at most once, and a write that
+ * fails an earlier test of the stamp never pays the read. Read under the
+ * caller's transaction — the doors' own access context, which `plan_step`'s
+ * policy (joined to `plan`) admits.
+ */
+function liveSessionReader(
+  plan: Pick<Plan, 'id' | 'status'>,
+  tx: Prisma.TransactionClient,
+): () => Promise<boolean> {
+  let answer: Promise<boolean> | null = null;
+  return () => {
+    if (plan.status !== 'generating') return Promise.resolve(false);
+    answer ??= planStepRepository.listByPlan(plan.id, tx).then((rows) => rows.length > 0);
+    return answer;
+  };
+}
+
+/**
+ * STAMP A CARD WRITTEN BY HAND (MOTIR-10490) — set `authorFinished` on the
+ * merged fields of an `add` when a person or an outside agent wrote its body
+ * with no planner session working on the plan, because no driver will ever come
+ * along to say the card is finished.
+ *
+ * Runs inside the transaction that holds the plan row lock, on the MERGED
+ * fields, just before the write — so a write the door refuses leaves the row's
+ * body and state exactly as they were. It sets the state only when ALL hold:
+ *
+ * 1. the write does not name `authorFinished` itself (`null` included — a
+ *    driver's word is taken as given; an `add` naming it is refused earlier);
+ * 2. the write names a body, through `descriptionMd` or `sections` — an edit of
+ *    a priority or an explanation stamps nothing;
+ * 3. the merged body holds something beyond its boundary
+ *    ({@link hasBodyBeyondBoundary});
+ * 4. no session is live on the plan ({@link liveSessionReader}).
+ *
+ * It only SETS. A state already set is returned unchanged whatever the body
+ * now says; only a write naming `null` clears it (in `mergeProposedFields`).
+ */
+async function stampHandWrittenBody(
+  write: { authorFinished?: unknown; descriptionMd?: unknown; sections?: unknown },
+  next: PlanItemProposedFields,
+  liveSession: () => Promise<boolean>,
+): Promise<PlanItemProposedFields> {
+  if (write.authorFinished !== undefined) return next;
+  if (write.descriptionMd === undefined && write.sections === undefined) return next;
+  if (next.authorFinished === true) return next;
+  if (!hasBodyBeyondBoundary(next.descriptionMd, next.kind ?? DEFAULT_PROPOSED_KIND, next.type)) {
+    return next;
+  }
+  if (await liveSession()) return next;
+  return { ...next, authorFinished: true };
+}
+
+/**
+ * The keys an `edited` revision row records for an edit (MOTIR-10490): every
+ * key the write supplied EXCEPT `authorFinished`, which is planner state about
+ * the card and not a change to it — the timeline renders an `edited` row as a
+ * proposal changing under a reviewer.
+ */
+function editedFieldsOf(keys: readonly string[]): string[] {
+  return keys.filter((k) => k !== 'authorFinished');
+}
+
+/**
  * Apply an `UpdateProposalInput` over an `add`'s existing `proposedFields`
  * (7.21.6 · MOTIR-1370). SPARSE: only the keys PRESENT in the input change; an
  * absent key (`undefined`) is left as-is, an explicit `null` on a nullable field
@@ -1076,6 +1157,14 @@ function mergeProposedFields(
   // per row: a list has no meaningful partial edit, the same reason a
   // correction's `blockedByRefs` replaces rather than merges.
   if (input.todos !== undefined) next.todos = input.todos;
+  // Whether an author session finished the card (MOTIR-10490) — sparse like
+  // every key above: absent leaves the stored state alone, `true` sets it and
+  // an explicit `null` clears it (absent and `null` both read not written, so
+  // the cleared state stores no key at all).
+  if (input.authorFinished !== undefined) {
+    if (input.authorFinished === true) next.authorFinished = true;
+    else delete next.authorFinished;
+  }
   // The LANGUAGES (MOTIR-8743) — per key, and a field this input rewrites
   // without naming its language drops that field's key, so a person's edit (the
   // public route sends none) never inherits the planner's claim about text it
@@ -5026,9 +5115,12 @@ async function applyAddProposalEdit(
       tx,
     );
   }
+  // A card written by hand is stamped as its body lands (MOTIR-10490) — on the
+  // merged fields, in this transaction, after every refusal above.
+  const stored = await stampHandWrittenBody(input, next, liveSessionReader(fresh, tx));
   await planItemRepository.update(
     planItemId,
-    { proposedFields: next as unknown as Prisma.InputJsonValue },
+    { proposedFields: stored as unknown as Prisma.InputJsonValue },
     tx,
   );
   // The edit, on the plan's content trail (MOTIR-3535), in the same
@@ -5049,23 +5141,31 @@ async function applyAddProposalEdit(
   // side of a proposal is already gone by the time it is written, and the
   // timeline shows a count rather than values in any case
   // (`design/ai-planning/design-notes.md` Part X §5).
-  await planRevisionsService.recordRevision(
-    {
-      planId: fresh.id,
-      planItemId,
-      changeKind: 'edited',
-      ...(mode === 'review' || mode === 'sharpen'
-        ? { changedById: ctx.userId, actor: null }
-        : generationActor(fresh, ctx)),
-      diff: {
-        fields: Object.keys(input),
-        proposalCount: 1,
-        ...(mode === 'revise' ? { revision: true } : {}),
-        ...(mode === 'sharpen' ? { sharpened: true } : {}),
+  //
+  // `authorFinished` is left out of the fields, and a write carrying ONLY that
+  // key records no row at all (MOTIR-10490): a driver saying its session
+  // finished is not the card changing under a reviewer. The activity stamp
+  // below still runs — the driver is a planner alive and writing.
+  const fields = editedFieldsOf(Object.keys(input));
+  if (fields.length > 0 || input.authorFinished === undefined) {
+    await planRevisionsService.recordRevision(
+      {
+        planId: fresh.id,
+        planItemId,
+        changeKind: 'edited',
+        ...(mode === 'review' || mode === 'sharpen'
+          ? { changedById: ctx.userId, actor: null }
+          : generationActor(fresh, ctx)),
+        diff: {
+          fields,
+          proposalCount: 1,
+          ...(mode === 'revise' ? { revision: true } : {}),
+          ...(mode === 'sharpen' ? { sharpened: true } : {}),
+        },
       },
-    },
-    tx,
-  );
+      tx,
+    );
+  }
   // The plan's activity stamp (MOTIR-7822), beside the trail row it mirrors.
   await stampPlanActivity(fresh, new Date(), tx);
 }
@@ -6138,6 +6238,9 @@ export const plansService = {
           const appendedItemIds: string[] = [];
           const inserted: ProposalInput[] = [];
           const reasons = foldEdgeReasons(existing, proposals, fold);
+          // A card written by hand is stamped as its body lands (MOTIR-10490),
+          // asked of the plan's live sessions at most once for the batch.
+          const liveSession = liveSessionReader(fresh, tx);
           for (const [index, p] of proposals.entries()) {
             const disposition = fold.dispositions[index]!;
             if (disposition.kind === 'mergeExisting') {
@@ -6165,10 +6268,11 @@ export const plansService = {
               reason: p.op === 'remove' && p.reason ? p.reason.trim() : null,
               ...(p.op === 'add' && p.proposedFields
                 ? {
-                    proposedFields: withProposalLanguages(
+                    proposedFields: (await stampHandWrittenBody(
                       p.proposedFields,
-                      p.languages,
-                    ) as unknown as Prisma.InputJsonValue,
+                      withProposalLanguages(p.proposedFields, p.languages),
+                      liveSession,
+                    )) as unknown as Prisma.InputJsonValue,
                   }
                 : {}),
               ...(p.op === 'modify' && patch
@@ -7398,9 +7502,16 @@ export const plansService = {
               tx,
             );
           }
-          data.proposedFields = next as unknown as Prisma.InputJsonValue;
+          // A card written by hand is stamped as its body lands (MOTIR-10490).
+          data.proposedFields = (await stampHandWrittenBody(
+            input,
+            next,
+            liveSessionReader(fresh, tx),
+          )) as unknown as Prisma.InputJsonValue;
+          // `authorFinished` is planner state, not a change to the card, so it is
+          // left out of what the trail row lists (MOTIR-10490).
           touched.push(
-            ...Object.keys(input).filter(
+            ...editedFieldsOf(Object.keys(input)).filter(
               (k) =>
                 k !== 'parentRef' &&
                 k !== 'blockedByRefs' &&
@@ -7581,7 +7692,10 @@ export const plansService = {
           touched.push('supersedesRefs');
         }
 
-        if (touched.length === 0)
+        // A write carrying only `authorFinished` changes the stored state and no
+        // field of the card (MOTIR-10490) — legal, and recorded below as no row.
+        const setsAuthorState = item.op === 'add' && input.authorFinished !== undefined;
+        if (touched.length === 0 && !setsAuthorState)
           throw new InvalidProposalError('A correction must change something.');
 
         // ⚠️ THE APPEND'S OWN CHECK, RE-RUN ON THE CORRECTED SHAPE (MOTIR-3539).
@@ -7690,18 +7804,20 @@ export const plansService = {
         // the sole caller. This method exists precisely so an AGENT can reach a
         // `planned` plan, and a reviewer must be able to see WHICH harness and
         // model changed the tree under them — that is the story's own criterion.
-        await planRevisionsService.recordRevision(
-          {
-            planId,
-            planItemId,
-            changeKind: 'edited',
-            ...(opts.byReviewer
-              ? { changedById: ctx.userId, actor: null }
-              : generationActor(fresh, ctx)),
-            diff: { fields: touched, proposalCount: 1, correction: true },
-          },
-          tx,
-        );
+        if (touched.length > 0) {
+          await planRevisionsService.recordRevision(
+            {
+              planId,
+              planItemId,
+              changeKind: 'edited',
+              ...(opts.byReviewer
+                ? { changedById: ctx.userId, actor: null }
+                : generationActor(fresh, ctx)),
+              diff: { fields: touched, proposalCount: 1, correction: true },
+            },
+            tx,
+          );
+        }
         // The plan's activity stamp (MOTIR-7822).
         await stampPlanActivity(fresh, new Date(), tx);
         return { row: fresh, items: await planItemRepository.findByPlan(planId, tx) };

@@ -509,10 +509,15 @@ describe('the repositories — the reads nothing else happened to exercise', () 
 
     await withSystemContext(async (tx) => {
       expect(
-        await jobQueueRepository.rescheduleAt(row.id, 'w', at, tx, {
-          refundAttempt: true,
-          lastError: { message: 'transient' },
-        }),
+        await jobQueueRepository.rescheduleAt(
+          { id: row.id, workerId: 'w', claimToken: row.claimToken },
+          at,
+          tx,
+          {
+            refundAttempt: true,
+            lastError: { message: 'transient' },
+          },
+        ),
       ).toBe(true);
       const back = await tx.jobQueueRun.findUniqueOrThrow({ where: { id: row.id } });
       expect(back.state).toBe('pending');
