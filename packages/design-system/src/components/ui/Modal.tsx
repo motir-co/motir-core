@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useId, useRef, type ReactNode } from 'react';
+import { forwardRef, useRef, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -174,8 +174,10 @@ function ModalRoot({
   // `undefined` lets Radix fall back to `document.body`.
   const portalContainer = container === undefined ? (fullscreenContainer ?? undefined) : container;
   // With `describedBy` the description's id is OURS, so the content can name it
-  // beside the extra ids; without it Radix wires its own id (unchanged).
-  const descriptionId = useId();
+  // beside the extra ids; without it Radix wires its own id (unchanged). Derived
+  // from the caller's id rather than a `useId` of our own, so a Modal without
+  // `describedBy` draws no extra id and every other `useId` keeps its value.
+  const descriptionId = describedBy ? `${describedBy}-description` : undefined;
   const describedByIds = describedBy
     ? [description ? descriptionId : null, describedBy].filter(Boolean).join(' ')
     : null;
