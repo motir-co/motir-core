@@ -101,6 +101,11 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
+    readyToStart: false,
+    statusLabel: 'To Do',
+    hasChildren: false,
+    type: null,
+    executor: null,
     pendingDecision: null,
     planHold: null,
     ciState: null,
@@ -140,7 +145,7 @@ describe('the board card — the review marker in the exclusive slot', () => {
   it('Blocked outranks it, and the priority returns when there is no marker', () => {
     renderCard(card({ id: 'c3', key: 3, ready: false, review: { ...WAITING_YOURS } }));
     expect(document.querySelector('[data-review-marker]')).toBeNull();
-    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Blocked' })).toBeTruthy();
     cleanup();
 
     renderCard(card({ id: 'c4', key: 4 }));

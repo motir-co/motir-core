@@ -210,6 +210,12 @@ describe('moveCard — cross-column move = workflow transition', () => {
     expect(result.appliedStatus).toBe('in_progress');
     expect(result.card.status).toBe('in_progress');
     expect(result.column.id).toBe(fx.columns['in_progress']);
+    // The moved card carries the canvas tag-row facts for its NEW status (MOTIR-10534).
+    expect(result.card).toMatchObject({
+      statusLabel: 'In Progress',
+      readyToStart: false,
+      hasChildren: false,
+    });
     expect(await statusOf(fx, id)).toBe('in_progress');
     // The persisted rank matches what the move returned (rank-change mechanics
     // are exercised by the in-column reorder test, which passes a neighbour).
@@ -303,6 +309,8 @@ describe('moveCard — in-column reorder = pure rank change', () => {
     expect(await revisionCount(a, fx.workspaceId)).toBe(revsBefore); // no status revision
     expect(await positionOf(a)).toBe(result.card.position);
     expect((await positionOf(a)) > (await positionOf(b))).toBe(true); // sorts after B now
+    // An unblocked To Do card is startable: the board draws it Ready (MOTIR-10534).
+    expect(result.card).toMatchObject({ statusLabel: 'To Do', ready: true, readyToStart: true });
   });
 
   it('a missing rank neighbour id → WorkItemNotFoundError', async () => {

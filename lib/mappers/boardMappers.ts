@@ -98,6 +98,16 @@ export function toBoardCardDto(
   row: WorkItem,
   opts: {
     ready: boolean;
+    /**
+     * The status slot's facts (MOTIR-10534), resolved by the CALLER for the same
+     * reason as `statusCategory`: the workflow row and the child count are not on a
+     * `WorkItem` row. `readyToStart` is `isReadyToStart(category, ready)`, and
+     * `statusLabel` (null for a status the workflow no longer holds) falls back to
+     * the key. Required, so no read can forget them and claim a story is To plan.
+     */
+    readyToStart: boolean;
+    statusLabel: string | null;
+    hasChildren: boolean;
     /** The card's decision-waiting marker (MOTIR-5876); `null` when omitted. */
     pendingDecision?: PendingDecisionDTO | null;
     swimlaneKey?: string;
@@ -130,6 +140,11 @@ export function toBoardCardDto(
     storyPoints: row.storyPoints === null ? null : Number(row.storyPoints),
     position: row.position,
     ready: opts.ready,
+    readyToStart: opts.readyToStart,
+    statusLabel: opts.statusLabel ?? row.status,
+    hasChildren: opts.hasChildren,
+    type: row.type,
+    executor: row.executor,
     pendingDecision: opts.pendingDecision ?? null,
     ciState: row.ciState,
     fixReason: row.fixReason,

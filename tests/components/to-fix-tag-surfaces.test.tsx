@@ -189,6 +189,11 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
+    readyToStart: false,
+    statusLabel: 'To Do',
+    hasChildren: false,
+    type: null,
+    executor: null,
     pendingDecision: null,
     planHold: null,
     ciState: null,
@@ -211,7 +216,7 @@ describe('the board card — the label in the pill row', () => {
     const tag = document.querySelector('[data-to-fix]') as HTMLElement;
     expect(tag.textContent).toBe('To fix · CI failed');
     // Blocked holds the exclusive slot and survives; the CI badge follows the tag.
-    expect(tag.previousElementSibling?.textContent).toContain('Blocked');
+    expect(tag.previousElementSibling?.getAttribute('aria-label')).toBe('Blocked');
     expect(tag.nextElementSibling?.getAttribute('data-ci-state')).toBe('failing');
   });
 

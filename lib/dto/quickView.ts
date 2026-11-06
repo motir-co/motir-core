@@ -98,6 +98,9 @@ export interface QuickViewData {
    * none of them.
    */
   id: string;
+  /** A Visitor's PRIVATE epic (MOTIR-10534): the header wears "Not public", as the
+   *  canvas card, the board card and the item page do. Absent on every member read. */
+  childrenHidden?: true;
   identifier: string;
   title: string;
   /**

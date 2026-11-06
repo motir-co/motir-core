@@ -34,6 +34,11 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
+    readyToStart: false,
+    statusLabel: 'To Do',
+    hasChildren: false,
+    type: null,
+    executor: null,
     pendingDecision: null,
     planHold: null,
     ...over,
@@ -81,7 +86,7 @@ describe('BoardColumn', () => {
     renderColumn(
       column({ id: 'c1', name: 'To Do', totalCount: 8, cards: [card({ id: 'w1', key: 1 })] }),
     );
-    expect(screen.getByText('To Do')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'To Do' })).toBeTruthy();
     // The count is the projection total, not the loaded card length.
     expect(screen.getByTestId('board-count-c1').textContent).toBe('8');
     expect(screen.getByTestId('board-card-PROD-1')).toBeTruthy();

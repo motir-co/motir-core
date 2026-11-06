@@ -27,6 +27,11 @@ function card(over: Partial<BoardCardDto> & { id: string; key: number }): BoardC
     storyPoints: null,
     position: 'a0',
     ready: true,
+    readyToStart: false,
+    statusLabel: 'To Do',
+    hasChildren: false,
+    type: null,
+    executor: null,
     pendingDecision: null,
     planHold: null,
     ciState: null,
@@ -241,7 +246,7 @@ describe('BoardCard', () => {
       />,
     );
     expect(document.querySelector('[data-decision-marker="yours"]')).toBeTruthy();
-    expect(screen.queryByText('Blocked')).toBeNull();
+    expect(screen.queryByRole('img', { name: 'Blocked' })).toBeNull();
   });
 
   it('PRECEDENCE — a BLOCKED card with someone else’s gate shows Blocked, not the quiet marker', () => {
@@ -258,7 +263,7 @@ describe('BoardCard', () => {
         onOpenQuickView={() => {}}
       />,
     );
-    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Blocked' })).toBeTruthy();
     expect(document.querySelector('[data-decision-marker]')).toBeNull();
     expect(
       screen.getByTestId('board-card-PROD-11').getAttribute('aria-describedby') ?? '',
@@ -321,7 +326,7 @@ describe('BoardCard', () => {
         onOpenQuickView={() => {}}
       />,
     );
-    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Blocked' })).toBeTruthy();
     // The priority chip is swapped out, not shown alongside.
     expect(screen.queryByText('High')).toBeNull();
   });
@@ -411,7 +416,7 @@ describe('BoardCard — the CI badge (MOTIR-5474)', () => {
         onOpenQuickView={vi.fn()}
       />,
     );
-    expect(screen.getByText('Blocked')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Blocked' })).toBeTruthy();
     expect(screen.getByText('Checks failing')).toBeTruthy();
   });
 
@@ -546,7 +551,7 @@ describe('BoardCard — the obsolescence badge (MOTIR-6677)', () => {
     );
     const mark = document.querySelector('[data-obsolescence]')!;
     const ci = document.querySelector('[data-ci-state]')!;
-    const blocked = screen.getByText('Blocked');
+    const blocked = screen.getByRole('img', { name: 'Blocked' });
     expect(mark.parentElement).toBe(ci.parentElement);
     expect(blocked.compareDocumentPosition(mark) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(mark.compareDocumentPosition(ci) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

@@ -63,6 +63,9 @@ export function toQuickViewData(
   const status = workflow.statuses.find((s) => s.key === item.status);
 
   return {
+    // A Visitor's PRIVATE epic (MOTIR-10534): the peek wears "Not public" like the
+    // canvas card, the board card and the item page. Absent on every member read.
+    ...(detail.childrenHidden ? { childrenHidden: true as const } : {}),
     id: item.id,
     identifier: item.identifier,
     title: item.title,

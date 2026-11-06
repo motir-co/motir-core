@@ -3782,6 +3782,27 @@ export const workItemRepository = {
   },
 
   /**
+   * Which of `parentIds` have at least one LIVE child, in ONE round-trip — the
+   * board card's `hasChildren` (MOTIR-10534), the bit the To plan pill reads. Live
+   * is the roadmap level's own `hasChildren` probe: not archived and not in
+   * triage. `workspaceId`-gated; empty `parentIds` short-circuits to an empty set.
+   */
+  async findParentIdsWithLiveChildren(
+    parentIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    if (parentIds.length === 0) return new Set();
+    const client = tx ?? dbRead;
+    const rows = await client.workItem.findMany({
+      where: { parentId: { in: parentIds }, workspaceId, archivedAt: null, triagedAt: null },
+      select: { parentId: true },
+      distinct: ['parentId'],
+    });
+    return new Set(rows.map((r) => r.parentId as string));
+  },
+
+  /**
    * The DIRECT children of a set of parents with each child's KIND, in ONE
    * round-trip — what a plan `modify` that RE-KINDS its target is judged against
    * (bug MOTIR-8192): the new kind must legally parent every child the target

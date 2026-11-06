@@ -6,6 +6,7 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -300,6 +301,84 @@ describe('boardsService.getBoard — projection', () => {
     const cardById = new Map(todo.cards.map((c) => [c.id, c]));
     expect(cardById.get(blocked.id)!.ready).toBe(false); // open blocker → not ready
     expect(cardById.get(blocker.id)!.ready).toBe(true); // the blocker itself has none
+  });
+
+  it('carries the canvas tag-row facts: readyToStart, statusLabel, hasChildren, type, executor (MOTIR-10534)', async () => {
+    const fx = await makeFixture('proj-tags@example.com');
+    const planned = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'story with a child' },
+      fx.ctx,
+    );
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'the child', parentId: planned.id },
+      fx.ctx,
+    );
+    const unplanned = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'childless story' },
+      fx.ctx,
+    );
+    // An ARCHIVED child is not a child: its parent still reads unplanned.
+    const archivedParent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'story whose only child is archived' },
+      fx.ctx,
+    );
+    const gone = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'archived child',
+        parentId: archivedParent.id,
+      },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
+    const blocked = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'task',
+        title: 'blocked by the planned story',
+        links: [{ targetId: planned.id, relationship: 'blocked_by' }],
+      },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({
+      where: { id: blocked.id },
+      data: { type: 'manual', executor: 'human' },
+    });
+    const started = await cardInStatus(fx, 'in_progress', 'already started');
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const cards = new Map(board.columns.flatMap((c) => c.cards).map((c) => [c.id, c]));
+
+    expect(cards.get(planned.id)).toMatchObject({
+      statusLabel: 'To Do',
+      hasChildren: true,
+      ready: true,
+      readyToStart: true,
+    });
+    expect(cards.get(unplanned.id)).toMatchObject({ hasChildren: false, readyToStart: true });
+    expect(cards.get(archivedParent.id)!.hasChildren).toBe(false);
+    // Blocked: unready, so never Ready; its type and executor ride along for Manual.
+    expect(cards.get(blocked.id)).toMatchObject({
+      ready: false,
+      readyToStart: false,
+      type: 'manual',
+      executor: 'human',
+    });
+    // Unblocked but already started: not startable, so not Ready.
+    expect(cards.get(started)).toMatchObject({
+      statusLabel: 'In Progress',
+      ready: true,
+      readyToStart: false,
+    });
+  });
+
+  it('findParentIdsWithLiveChildren short-circuits an empty id set', async () => {
+    const fx = await makeFixture('empty-live-children@example.com');
+    const result = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findParentIdsWithLiveChildren([], fx.workspaceId, tx),
+    );
+    expect(result.size).toBe(0);
   });
 
   it('findBlockerStatesForItems short-circuits an empty id set without a query', async () => {
