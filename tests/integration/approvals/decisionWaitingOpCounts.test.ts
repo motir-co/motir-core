@@ -198,14 +198,20 @@ describe('the operation count does not grow with rows', () => {
       'workspaceMembership.findUnique',
       'workspaceMembership.findUnique',
     ];
+    // MOTIR-10534's status slot adds ONE batched read over every card — which of
+    // them have live children (the To plan pill) — per call, not per row.
+    const STATUS_SLOT_READS = ['workItem.findMany'];
     await seed(N);
     const { ops } = await recordModelOps(() => boardsService.getBoard(fx.projectId, fx.ctx));
     const modelOps = ops.filter((op) => !op.startsWith('_'));
 
     expect(modelOps.length).toBe(
-      PRE_STORY_BOARD_MODEL_OPS + MARKER_READS.length + REVIEW_READS.length,
+      PRE_STORY_BOARD_MODEL_OPS +
+        MARKER_READS.length +
+        REVIEW_READS.length +
+        STATUS_SLOT_READS.length,
     );
-    const added = [...MARKER_READS, ...REVIEW_READS];
+    const added = [...MARKER_READS, ...REVIEW_READS, ...STATUS_SLOT_READS];
     for (const op of new Set(added)) {
       const extra = added.filter((o) => o === op).length;
       expect(modelOps.filter((o) => o === op).length).toBeGreaterThanOrEqual(extra);
