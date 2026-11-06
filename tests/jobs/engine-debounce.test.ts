@@ -266,7 +266,7 @@ describe('the CLAIM closes the window', () => {
       where: { id: first!.id },
       data: { runAt: new Date(Date.now() - 1_000) },
     });
-    await withSystemContext((tx) =>
+    const [claim] = await withSystemContext((tx) =>
       jobQueueRepository.claimDueRuns('worker-under-test', 5, 60_000, tx),
     );
     await dispatchEventToEngine(TRIGGER, push({ head: 'sha-2' }));
@@ -274,8 +274,7 @@ describe('the CLAIM closes the window', () => {
     await expect(
       withSystemContext((tx) =>
         jobQueueRepository.rescheduleAt(
-          first!.id,
-          'worker-under-test',
+          { id: first!.id, workerId: 'worker-under-test', claimToken: claim!.claimToken },
           new Date(Date.now() + 1_000),
           tx,
           { lastError: { message: 'transient' } },
