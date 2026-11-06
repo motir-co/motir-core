@@ -37,7 +37,7 @@ of the rounded family; Hand-Drawn / Indie is the hand-sketched end.
 | Surface / background  | Opaque, warm, paper-like panels; the rough wavy outline + soft shadow carry the feel.       |
 | Density rhythm        | Roomy and relaxed (20×12 buttons, 26px card pad, 38px controls) — margins round the sketch. |
 | Motion                | Springy + playful — 200ms transitions, a bouncy hover lift (1.02) + press squish (0.97).    |
-| Typography            | Editorial pairing (Fraunces display headlines + Inter body), via `defaultTypeId`.           |
+| Typography            | Marker pairing (Caveat hand-lettered headlines + Inter body), via `defaultTypeId`.          |
 | Component silhouettes | Wonky-cornered buttons/inputs/cards/modals, irregular chips, rough wavy-ink-bordered.       |
 
 ## The two moves that make it read as hand-drawn
@@ -152,13 +152,11 @@ from two pieces:
 Type is the independent `data-type` axis now (Subtask 7.3.53): a style keeps its
 out-of-the-box typographic feel through **`defaultTypeId`**, never by overriding
 `--font-*` in its own block (which the disjoint-axis test forbids). Hand-Drawn /
-Indie ships **`defaultTypeId: 'editorial'`** — the Fraunces display-serif pairing
-(characterful, soft, slightly-wonky headlines over an Inter body). Of the
-registered pairings it is the warmest and most hand-cut, so its optical wonk
-echoes the rough shapes while the Inter body stays fully legible. (A true marker /
-handwritten / script face would be the most literal match; that is a future
-`data-type` addition — this style adopts the closest registered pairing today, and
-will re-point `defaultTypeId` when one ships.) The user can still pin any other
+Indie ships **`defaultTypeId: 'marker'`** — the Caveat marker pairing
+([`docs/typography/marker.md`](../typography/marker.md)): hand-lettered marker
+headlines over an Inter body. The headlines read as if written with the same pen
+that inked the rough wavy strokes, while body and UI copy stay on Inter, so the
+app stays fully legible. The user can still pin any other
 type; this is only the curated default.
 
 ## Why this is more than a token swap

@@ -55,6 +55,7 @@ export const PAIRING_FACES: Record<string, Record<FontSetRole, string>> = {
   grotesk: { sans: 'Space Grotesk', serif: 'Space Grotesk', mono: 'JetBrains Mono' },
   editorial: { sans: 'Inter', serif: 'Fraunces', mono: 'JetBrains Mono' },
   'mono-technical': { sans: 'IBM Plex Mono', serif: 'IBM Plex Mono', mono: 'IBM Plex Mono' },
+  marker: { sans: 'Inter', serif: 'Caveat', mono: 'JetBrains Mono' },
 };
 export const PAIRING_NAMES: Record<string, string> = {
   motir: 'Motir',
@@ -63,6 +64,7 @@ export const PAIRING_NAMES: Record<string, string> = {
   grotesk: 'Grotesk',
   editorial: 'Editorial',
   'mono-technical': 'Mono-Technical',
+  marker: 'Marker',
 };
 export const DEFAULT_PAIRING = PAIRING_FACES.motir!;
 /** Every Latin face any pairing loads (every page preloads them all). */

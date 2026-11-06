@@ -30,6 +30,32 @@ const GLOBALS_CSS =
 // root layout AND app/global-error.tsx both import (MOTIR-6855).
 const FONTS_TS = readFileSync(join(process.cwd(), 'app/fonts.ts'), 'utf8');
 
+// The declaration body of one `[data-type='<id>']` block, comments stripped.
+function typeBlockBody(id: string): string {
+  const css = GLOBALS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const m = css.match(new RegExp(`\\[data-type='${id}'\\]\\s*\\{([^}]*)\\}`));
+  const body = m?.[1];
+  if (body === undefined) throw new Error(`no [data-type='${id}'] block`);
+  return body;
+}
+
+// Generic family keywords a `-pairing` chain must not carry (they would pre-empt
+// the font set's CJK face — the FONT SETS section of theme.css).
+const GENERIC_FAMILY =
+  /^(serif|sans-serif|cursive|fantasy|monospace|system-ui|ui-[a-z-]+|math|emoji|fangsong)$/i;
+
+/** Every generic keyword found in a block's three `-pairing` values. */
+function pairingGenerics(body: string): string[] {
+  const out: string[] = [];
+  for (const m of body.matchAll(/--font-(?:sans|serif|mono)-pairing:([^;]*);/g)) {
+    for (const family of (m[1] ?? '').replace(/var\([^)]*\)/g, '').split(',')) {
+      const f = family.trim().replace(/^['"]|['"]$/g, '');
+      if (f && GENERIC_FAMILY.test(f)) out.push(f);
+    }
+  }
+  return out;
+}
+
 describe('typography registry', () => {
   it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Editorial 7.3.55, Mono-Technical 7.3.56)', () => {
     expect(TYPE_IDS).toEqual([
@@ -39,6 +65,7 @@ describe('typography registry', () => {
       'grotesk',
       'editorial',
       'mono-technical',
+      'marker',
     ]);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
@@ -46,6 +73,7 @@ describe('typography registry', () => {
     expect(TYPE_REGISTRY['grotesk'].name).toBe('Grotesk');
     expect(TYPE_REGISTRY['editorial'].name).toBe('Editorial');
     expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
+    expect(TYPE_REGISTRY['marker'].name).toBe('Marker');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {
@@ -84,6 +112,7 @@ describe('isTypeId / resolveType', () => {
     expect(isTypeId('motir-sans')).toBe(true);
     expect(isTypeId('grotesk')).toBe(true); // registered in 7.3.54
     expect(isTypeId('editorial')).toBe(true); // registered in 7.3.55
+    expect(isTypeId('marker')).toBe(true); // registered in MOTIR-10553
     expect(isTypeId('serif-tech')).toBe(false); // not a registered pairing
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
@@ -144,6 +173,25 @@ describe('runtime contract in globals.css', () => {
     );
     expect(FONTS_TS).toContain("variable: '--font-editorial-source'");
     expect(FONTS_TS).toContain('Fraunces');
+  });
+
+  it('re-points the Marker serif role at the LOADED Caveat -source face, headlines only', () => {
+    // MOTIR-10553 — the marker block drives the headline role off
+    // `--font-marker-source`, the variable next/font binds to Caveat in
+    // app/fonts.ts, and keeps the body / meta chains at the Editorial block's
+    // values (display-only: a marker hand is unreadable as UI text).
+    const body = typeBlockBody('marker');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-marker-source/);
+    expect(FONTS_TS).toContain("variable: '--font-marker-source'");
+    expect(FONTS_TS).toContain('Caveat');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*caveat\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    const baseRoles = (b: string) =>
+      b
+        .split(';')
+        .map((d) => d.trim())
+        .filter((d) => /^--font-(sans|mono)-/.test(d));
+    expect(baseRoles(body)).toEqual(baseRoles(typeBlockBody('editorial')));
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

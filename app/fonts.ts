@@ -1,4 +1,5 @@
 import {
+  Caveat,
   Fraunces,
   IBM_Plex_Mono,
   Inter,
@@ -74,6 +75,18 @@ const spaceGrotesk = Space_Grotesk({
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-editorial-source',
+  display: 'swap',
+});
+
+// The Marker type pairing's display face (MOTIR-10553) — Caveat, a casual
+// hand-lettered marker. Not a base role: it feeds ONLY the `[data-type='marker']`
+// headline override in theme.css via `--font-marker-source`, re-pointing the
+// `--font-serif` role while body (Inter) and meta (JetBrains) keep the base roles.
+// Loaded as the variable font, so it only pays its weight when a user picks
+// Marker (or Hand-Drawn / Indie, whose default it is).
+const caveat = Caveat({
+  subsets: ['latin'],
+  variable: '--font-marker-source',
   display: 'swap',
 });
 
@@ -191,6 +204,7 @@ export const fontVariables = [
   ibmPlexMono.variable,
   spaceGrotesk.variable,
   fraunces.variable,
+  caveat.variable,
   notoSansSC.variable,
   notoSerifSC.variable,
   lxgwWenKaiTC.variable,

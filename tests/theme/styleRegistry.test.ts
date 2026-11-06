@@ -171,6 +171,8 @@ describe('style → type axis integration (7.3.53)', () => {
     expect(STYLE_REGISTRY['cybercore-y2k'].defaultTypeId).toBe('motir-mono');
     // Retrofuturism ships the wide geometric grotesque as its retro-display read.
     expect(STYLE_REGISTRY['retrofuturism'].defaultTypeId).toBe('grotesk');
+    // Hand-Drawn / Indie ships the hand-lettered Marker pairing (MOTIR-10553).
+    expect(STYLE_REGISTRY['hand-drawn-indie'].defaultTypeId).toBe('marker');
     // Styles that never overrode type stay on the base pairing.
     expect(STYLE_REGISTRY['warm-editorial'].defaultTypeId).toBe('motir');
     expect(STYLE_REGISTRY['glassmorphism'].defaultTypeId).toBe('motir');

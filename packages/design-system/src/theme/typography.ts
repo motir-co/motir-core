@@ -52,6 +52,11 @@
  *     meta); a precise, developer-grade UI (one new face — Inter reused for nothing
  *     now, kept as the ultimate fallback).
  *
+ * ── New-typeface pairings (Story MOTIR-10548) ─────────────────────────────
+ *   - `marker` (MOTIR-10553)    — Caveat hand-lettered marker headlines over the
+ *     Inter body; Hand-Drawn / Indie's default. Display-only, like `editorial`: a
+ *     marker hand is unreadable as UI text, so only the headline role is re-typed.
+ *
  * ── Whole-UI re-typing (Yue, 2026-06-19) ────────────────────────────────
  * A type pairing re-types the WHOLE app, chrome included (nav, header, buttons),
  * not just headlines: a pairing whose signature face reads as a UI sans/mono
@@ -127,6 +132,13 @@ export const TYPE_REGISTRY = {
     tagline: 'IBM Plex Mono throughout — a precise, developer-grade UI.',
     faces: 'IBM Plex Mono headlines + body/UI + meta/code.',
     designDoc: 'docs/typography/mono-technical.md',
+  },
+  marker: {
+    id: 'marker',
+    name: 'Marker',
+    tagline: 'Hand-lettered marker headlines over a clean sans body — sketchy, friendly, human.',
+    faces: 'Caveat marker headlines · Inter body · JetBrains Mono meta.',
+    designDoc: 'docs/typography/marker.md',
   },
 } satisfies Record<string, TypographyDefinition>;
 
