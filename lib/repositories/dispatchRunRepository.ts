@@ -189,6 +189,15 @@ export interface RunningDispatchRunHolder {
   createdBy: { id: string; name: string } | null;
 }
 
+/** An open run's LIVENESS columns — what `isRunAlive` reads (MOTIR-10506). */
+export interface RunningDispatchRunLiveness {
+  status: DispatchRunStatus;
+  origin: DispatchRun['origin'];
+  startedAt: Date;
+  lastHeartbeatAt: Date | null;
+  reportedBy: DispatchRun['reportedBy'];
+}
+
 /** An open run and the legs it holds among the cards asked about (MOTIR-6930). */
 export interface RunningDispatchRunForItems extends RunningDispatchRunHolder {
   origin: DispatchRun['origin'];
@@ -488,6 +497,31 @@ export const dispatchRunRepository = {
         createdById: true,
         origin: true,
         createdBy: { select: { id: true, name: true } },
+      },
+    });
+  },
+
+  /**
+   * The liveness columns of every RUNNING run of one command that holds a leg for this
+   * work item (MOTIR-10506) — the To fix reason's read of whether a repair is LIVE on
+   * the card. Every open row, not only the newest: a lapsed local run the reap has not
+   * closed yet must not hide a live one beside it. Whether each is alive is
+   * `isRunAlive`'s answer, never this query's.
+   */
+  async findRunningLivenessByCommandForWorkItem(
+    workItemId: string,
+    command: DispatchCommand,
+    tx: Prisma.TransactionClient,
+  ): Promise<RunningDispatchRunLiveness[]> {
+    return tx.dispatchRun.findMany({
+      where: { status: 'running', command, cards: { some: { workItemId } } },
+      orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
+      select: {
+        status: true,
+        origin: true,
+        startedAt: true,
+        lastHeartbeatAt: true,
+        reportedBy: true,
       },
     });
   },
