@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
-import { BrandMark } from '@/components/brand/BrandMark';
+import { WAVE_BAND_PATH } from '@/components/brand/BrandMark';
 import { ShellTierNav } from './ShellTierNav';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
@@ -237,32 +237,33 @@ export async function TopNav({
           <Link
             href={AUTHED_LANDING_PATH}
             aria-label={t('topNav.brandHome')}
-            // The tile (MOTIR-2557 · design/shell § *The brand tile*). The box
-            // was always here and simply unpainted; it now takes an
-            // `--el-surface` field and an `--el-border` hairline, and the
-            // hairline DIVIDER that used to follow it is gone — the tile's own
-            // edge says what the divider said, and that returns 9px to a row
-            // measured at 69px of slack.
+            // The tile (MOTIR-8932 · design/shell § *The brand tile*). The mark
+            // is drawn the way motir.co's header draws it (`motir-marketing`
+            // `app/_components/BrandTile.tsx`): the wave in `--el-logo-mark`,
+            // the palette's primary fill, on a rounded square in
+            // `--el-logo-tile`, a wash of that hue (or the dark tile a bright
+            // palette sets). Corner radius 7/32 of the side, wave inset to
+            // 0.8067 of it — the same geometry as `app/icon.svg`.
             //
-            // Deliberately NOT a tint. The ORIGINAL reason was adjacency:
-            // OrgControl's avatar was a 20px `--el-tint-lavender` tile and
-            // ProjectAvatar an `--el-avatar-lavender` one, so a third lavender
-            // square 20px away would have read as another tier chip. MOTIR-2679
-            // deleted both of those squares, and the conclusion is re-affirmed
-            // on new grounds (MOTIR-2674, design/shell/design-notes.md § The
-            // brand tile): the tile is now the ONLY boxed element in the left
-            // cluster, so the box itself is what marks it as identity rather
-            // than as a control — a tint would re-introduce the very tier-chip
-            // reading the neutral field was chosen to avoid. The
-            // glyph keeps `--el-accent-on-surface` — the token whose name is
-            // literally this composition — so `.brand-glyph`'s GLOBAL rule,
-            // shared with auth / explore / public / OG / the specimen, is not
-            // touched. 6.03:1 light, 4.24:1 dark; asserted in
+            // This overturns MOTIR-2557's neutral `--el-surface` field and
+            // `--el-border` hairline, which kept the glyph in `.brand-glyph`'s
+            // `--el-accent-on-surface`: the two products' marks now read as one
+            // identity. The tile is ARTWORK, not a control box, so its colours
+            // live on the SVG and the Link only keeps its 32px geometry
+            // (`rounded-(--radius-control)` now shapes just the focus ring).
+            // `.brand-glyph`'s GLOBAL rule, shared with auth / explore / public
+            // / OG / the specimen, is not touched — this SVG does not use it.
+            // The pair is measured over every palette × theme in
             // tests/theme/brand-tile-contrast.test.ts, because the ink guard
-            // cannot see a pair whose ink lives in a stylesheet.
-            className="hidden h-(--height-control-32) w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
+            // cannot see a pair whose colours live in SVG fills.
+            className="hidden h-(--height-control-32) w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex"
           >
-            <BrandMark variant="mark" size={24} />
+            <svg aria-hidden="true" viewBox="0 0 32 32" className="h-full w-full">
+              <rect width="32" height="32" rx="7" className="fill-(--el-logo-tile)" />
+              <g transform="translate(6.32 6.32) scale(0.8067)">
+                <path d={WAVE_BAND_PATH} className="fill-(--el-logo-mark)" />
+              </g>
+            </svg>
           </Link>
           {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
               where the persistent rail takes over. */}

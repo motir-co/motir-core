@@ -921,42 +921,51 @@ account areas keep their own headers (`SettingsSidebarHeader`, `AccountSidebarHe
 
 ### The brand tile
 
-The 32px box already exists in `TopNav.tsx` and is simply unpainted:
-`hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex`.
+**⚠️ AMENDED by [MOTIR-8932](motir:cmvdnhsl4007hhmov6lq1dkmv) (2026-11-06): the tile now matches
+motir.co's primary-colour tile.** The top bar's home link draws the mark exactly as motir.co's header
+does (its `BrandTile` component, in the `motir-marketing` repository — the same artwork as `app/icon.svg`): the
+wave in the palette's primary on a rounded square washed with it. MOTIR-2557's neutral tile — an
+`--el-surface` field, an `--el-border` hairline, the glyph in `.brand-glyph`'s
+`--el-accent-on-surface` — is overturned; its table and reasoning are replaced below, not kept beside
+them.
 
-| element       | token                                    | measured                                                   |
-| ------------- | ---------------------------------------- | ---------------------------------------------------------- |
-| the field     | `--el-surface`                           | #f6f5f4 light · #1a1a1a dark                               |
-| its edge      | `--el-border` hairline                   | the tile's outline at both themes                          |
-| the glyph     | `--el-accent-on-surface` — **unchanged** | #5645d4 light · #7b6ce5 dark                               |
-| glyph on fill | —                                        | **6.03:1** light · **4.24:1** dark (WCAG 1.4.11 needs 3:1) |
-| the shape     | `--radius-control` — unchanged           | —                                                          |
+The 32px box in `TopNav.tsx` keeps its geometry and its gates —
+`hidden h-(--height-control-32) w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex`
+(the radius now shapes only the focus ring) — and holds one `aria-hidden` SVG that fills it:
 
-Three things this pins, each for a reason:
+| element      | token / value                                             | default palette (`motir`)          |
+| ------------ | --------------------------------------------------------- | ---------------------------------- |
+| the tile     | `<rect>` `fill-(--el-logo-tile)`                          | #bdd1ee light · #2c3b52 dark       |
+| the mark     | `WAVE_BAND_PATH` `fill-(--el-logo-mark)`                  | #155bc4 light · #7db1ff dark       |
+| mark on tile | —                                                         | **4.07:1** light · **5.18:1** dark |
+| the shape    | 32-unit square, `rx="7"` (7/32 of the side)               | —                                  |
+| the inset    | `translate(6.32 6.32) scale(0.8067)` — the wave at 0.8067 | —                                  |
+| no field     | no `--el-surface`, no `--el-border` hairline on the Link  | —                                  |
 
-- **The glyph token does NOT change.** `.brand-glyph` in `app/globals.css` is the colour of EVERY
-  brand surface — auth, `ExploreTopBar`, `PublicTopBar`, the OG images, the specimen — and that block
-  is a verbatim copy of the approved artwork's own CSS. `--el-accent-on-surface` is the token whose
-  name is literally this composition, and it clears 1.4.11 on `--el-surface` in both themes, so this
-  story touches no other brand surface at all.
-- **Not a tint.** `--el-tint-lavender` was the obvious candidate and is wrong here. **The original
-  reason was ADJACENCY** — `OrgControl`'s `OrgAvatar` was a 20px `--el-tint-lavender` tile and
-  `ProjectAvatar` an `--el-avatar-lavender` one, so a third lavender square 20px away would have read
-  as a third tier chip.
-  **⚠️ RE-EXAMINED by MOTIR-2674: both of those squares are gone** (the org's is deleted; the
-  project's is now an optional photograph), so that argument no longer applies and the conclusion
-  cannot rest on it. **It is re-affirmed on a different and simpler ground: the tile is now the ONLY
-  boxed element in the left cluster, so the box itself is what marks it as identity rather than as a
-  control.** A tint would re-introduce exactly the tier-chip reading the neutral field was chosen to
-  avoid, this time with nothing beside it to excuse the resemblance. Same token, same measurement,
-  new reason — recorded rather than silently inherited, because a premise that has stopped being
-  true is worse than no premise: it reads as checked.
-- **The hairline DIVIDER is removed.** §7a introduced it to say the brand sits outside the tier
-  hierarchy; the tile's own edge now says that, and dropping it returns 9px to the row.
+The pair clears WCAG 1.4.11's 3:1 in all twenty palette × theme contexts; the lowest is amethyst dark
+at **3.86:1**, and the bright palettes (amber, sienna, citrine, candy) sit their mark on a dark tile at
+4.93–13.46:1. `tests/theme/brand-tile-contrast.test.ts` re-derives every one of them from
+`theme.css`.
 
-`design/brand/design-notes.md` §7a is amended in the same PR. **A field BEHIND the mark is not a
-recolour OF the mark** — §9's _"one token, never a hex, never a second hue"_ still holds exactly, and
-the glyph still takes one token, the same one it took before.
+What this pins, and why it overturns what stood here:
+
+- **One identity across the two products.** The reason for the change is the one the card states:
+  the mark at the top left of app.motir.co should look like the one at the top left of motir.co. Two
+  renderings of the same logo, one boxed in grey and one on its own colour, read as two brands.
+- **The neutral-field reasoning no longer holds.** MOTIR-2557 (and MOTIR-2674's re-affirmation)
+  chose a neutral field so that the box would mark identity rather than read as a tier chip. The
+  logo tile is not a tier chip: it is the brand's own artwork, the same square the tab icon and
+  motir.co draw, and it is still the only boxed element in the left cluster. The tint argument was
+  about a SECOND lavender chip beside the org and project squares; those squares are gone
+  (MOTIR-2679), and the logo tokens follow the palette rather than borrowing a tint slot.
+- **The colour comes only from the `--el-logo-*` tokens**, never a hex, so the tile follows
+  light/dark and every `data-palette`. Both tokens already exist for every theme and palette in
+  `packages/design-system/theme.css`.
+- **`.brand-glyph`'s global rule is unchanged.** It is still the colour of every other brand surface
+  — auth, `ExploreTopBar`, `PublicTopBar`, the OG images, the specimen — and the top bar simply no
+  longer uses it. This SVG does not carry the class, because that rule's ink would override the fill.
+- **The hairline DIVIDER stays removed.** §7a introduced it to say the brand sits outside the tier
+  hierarchy; the tile's own edge says that, and the 9px stays with the row.
 
 ### The target panels were CORRECTED, not supplemented (MOTIR-2674)
 
