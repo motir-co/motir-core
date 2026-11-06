@@ -1,6 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { AgentReviewVerdict, ReviewPrompt, ReviewPullRequest } from './client.js';
+import type {
+  AgentReviewBug,
+  AgentReviewVerdict,
+  ReviewPrompt,
+  ReviewPullRequest,
+} from './client.js';
 import type { LinkConfig } from './config/linkConfig.js';
 import {
   materializeDispatchCheckouts,
@@ -20,8 +25,9 @@ import type { CommandRunner } from './git.js';
 // `POST …/agent-review`. The agent cannot make that call: its environment is
 // allow-listed without the run credential (`hostedAgent.ts`). So the CLI tells it to
 // write that SAME body, as one JSON object, to a file outside every checkout, and the
-// CLI submits it — once. The file is held to the route's own rules, strictly: exactly
-// those four keys, the verdict one of the two, findings required and non-empty on
+// CLI submits it — once. The file is held to the route's own rules, strictly: those
+// four keys plus the optional `bugs` list (MOTIR-10513 — the defects the verdict cannot
+// carry, which the server files: the agent has no other way to log one), the verdict one of the two, findings required and non-empty on
 // `changes_requested`, the route's length bounds, and `subjectVersion` — when the agent
 // writes one — EXACTLY the version the CLI checked out. Anything else is NO verdict:
 // nothing is posted, and the run ends failed (the server writes the review as one that
@@ -37,8 +43,47 @@ export const REVIEW_GATE_ENV = 'MOTIR_REVIEW_GATE_ID';
 /** The route's bounds (`lib/dispatch/reviewPromptTemplate.ts`), mirrored — the route re-checks. */
 export const REVIEW_SUMMARY_MAX_LENGTH = 500;
 export const REVIEW_FINDINGS_MAX_LENGTH = 65_536;
+/** The bugs a verdict may log (MOTIR-10513), and each one's bounds. */
+export const REVIEW_BUGS_MAX = 5;
+export const REVIEW_BUG_TITLE_MAX_LENGTH = 200;
+export const REVIEW_BUG_DESCRIPTION_MAX_LENGTH = 20_000;
 
-const VERDICT_KEYS = new Set(['subjectVersion', 'verdict', 'summaryMd', 'findingsMd']);
+const VERDICT_KEYS = new Set(['subjectVersion', 'verdict', 'summaryMd', 'findingsMd', 'bugs']);
+const BUG_KEYS = new Set(['title', 'descriptionMd']);
+
+/** The verdict's optional `bugs` list, held to the route's rules — or why it is not. */
+function parseBugs(value: unknown): AgentReviewBug[] | Error {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) return new Error('`bugs` must be a list');
+  if (value.length > REVIEW_BUGS_MAX) {
+    return new Error(`\`bugs\` holds more than ${REVIEW_BUGS_MAX} entries`);
+  }
+  const bugs: AgentReviewBug[] = [];
+  for (const [index, entry] of value.entries()) {
+    const at = `\`bugs[${index}]\``;
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
+      return new Error(`${at} is not one JSON object`);
+    }
+    const bug = entry as Record<string, unknown>;
+    const extra = Object.keys(bug).filter((k) => !BUG_KEYS.has(k));
+    if (extra.length > 0) return new Error(`${at} has unknown key(s): ${extra.join(', ')}`);
+    const field = (name: 'title' | 'descriptionMd', max: number): string | Error => {
+      const raw = bug[name];
+      if (typeof raw !== 'string' || !raw.trim()) {
+        return new Error(`${at}.${name} is required and must not be empty`);
+      }
+      const trimmed = raw.trim();
+      if (trimmed.length > max) return new Error(`${at}.${name} is longer than ${max} characters`);
+      return trimmed;
+    };
+    const title = field('title', REVIEW_BUG_TITLE_MAX_LENGTH);
+    if (title instanceof Error) return title;
+    const descriptionMd = field('descriptionMd', REVIEW_BUG_DESCRIPTION_MAX_LENGTH);
+    if (descriptionMd instanceof Error) return descriptionMd;
+    bugs.push({ title, descriptionMd });
+  }
+  return bugs;
+}
 
 export type VerdictRead = { ok: true; verdict: AgentReviewVerdict } | { ok: false; reason: string };
 
@@ -82,6 +127,8 @@ export function parseReviewVerdict(raw: string, subjectVersion: string): Verdict
   if (verdict === 'changes_requested' && findingsMd === null) {
     return no('`findingsMd` is required, and must not be empty, on `changes_requested`');
   }
+  const bugs = parseBugs(body.bugs);
+  if (bugs instanceof Error) return no(bugs.message);
   return {
     ok: true,
     verdict: {
@@ -89,6 +136,7 @@ export function parseReviewVerdict(raw: string, subjectVersion: string): Verdict
       verdict,
       summaryMd: summaryMd === null ? null : summaryMd.trim(),
       findingsMd,
+      bugs,
     },
   };
 }
@@ -278,12 +326,16 @@ export function reviewRunSection(input: {
     `  ${input.verdictFile}`,
     `  (also in $${REVIEW_VERDICT_FILE_ENV})`,
     '',
-    'Motir submits it, exactly once, after you exit. Exactly these keys:',
+    'Motir submits it, exactly once, after you exit. These keys and no others:',
     '',
     `  "subjectVersion"  EXACTLY "${input.served.subjectVersion}"`,
     '  "verdict"         "pass" or "changes_requested"',
     `  "summaryMd"       at most ${REVIEW_SUMMARY_MAX_LENGTH} characters: what you concluded`,
     '  "findingsMd"      Markdown findings — REQUIRED and non-empty on "changes_requested"',
+    `  "bugs"            OPTIONAL — at most ${REVIEW_BUGS_MAX} { "title", "descriptionMd" } objects, the`,
+    '                    defects the verdict cannot carry (A DEFECT THE VERDICT CANNOT',
+    '                    CARRY, above). Motir files them with the verdict; you cannot',
+    '                    file a bug any other way. Leave the key out when there is none.',
     '',
     'A missing, unparseable or incomplete file, or any other key, is NO verdict: the',
     'review is recorded as one that could not run. Write the file LAST, once you are sure.',

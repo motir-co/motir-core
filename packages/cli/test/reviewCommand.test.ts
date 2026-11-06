@@ -171,6 +171,11 @@ function setup(over: {
         state: verdict.verdict === 'pass' ? 'approved' : 'changes_requested',
         subjectVersion: verdict.subjectVersion,
         decidedAt: '2026-09-29T10:00:00.000Z',
+        bugs: verdict.bugs.map((b, i) => ({
+          key: `PROD-${90 + i}`,
+          title: b.title,
+          outcome: 'filed' as const,
+        })),
       };
     },
     appendDispatchRunEvents: async (args: { events: Harness['events'] }) => {
@@ -250,6 +255,7 @@ describe('the verdict contract — parseReviewVerdict', () => {
         verdict: 'pass',
         summaryMd: 'Meets the card.',
         findingsMd: null,
+        bugs: [],
       },
     });
     expect(v({ subjectVersion: VERSION, verdict: 'pass', findingsMd: 'a nit' })).toMatchObject({
@@ -294,6 +300,36 @@ describe('the verdict contract — parseReviewVerdict', () => {
     ).toMatch(/longer than 65536/);
   });
 
+  it('carries the optional `bugs` list (MOTIR-10513), trimmed, and refuses a malformed one', () => {
+    const bug = {
+      title: ' The footer clock drifts ',
+      descriptionMd: ' app/footer.tsx:40 drifts. ',
+    };
+    expect(v({ verdict: 'pass', bugs: [bug] })).toMatchObject({
+      ok: true,
+      verdict: {
+        bugs: [{ title: 'The footer clock drifts', descriptionMd: 'app/footer.tsx:40 drifts.' }],
+      },
+    });
+    expect(v({ verdict: 'pass', bugs: null })).toMatchObject({ ok: true, verdict: { bugs: [] } });
+    expect(v({ verdict: 'pass', bugs: [] })).toMatchObject({ ok: true, verdict: { bugs: [] } });
+    const reason = (bugs: unknown) => {
+      const r = v({ verdict: 'pass', bugs });
+      return r.ok ? null : r.reason;
+    };
+    expect(reason('one')).toMatch(/`bugs` must be a list/);
+    expect(reason(Array.from({ length: 6 }, () => bug))).toMatch(/more than 5/);
+    expect(reason(['x'])).toMatch(/`bugs\[0\]` is not one JSON object/);
+    expect(reason([[]])).toMatch(/is not one JSON object/);
+    expect(reason([{ ...bug, kind: 'bug' }])).toMatch(/`bugs\[0\]` has unknown key.*kind/);
+    expect(reason([bug, { ...bug, title: '  ' }])).toMatch(/`bugs\[1\]`\.title is required/);
+    expect(reason([{ title: 'x' }])).toMatch(/descriptionMd is required/);
+    expect(reason([{ ...bug, title: 'x'.repeat(201) }])).toMatch(/title is longer than 200/);
+    expect(reason([{ ...bug, descriptionMd: 'x'.repeat(20_001) }])).toMatch(
+      /descriptionMd is longer than 20000/,
+    );
+  });
+
   it('a missing or empty file is no verdict', () => {
     const dir = mkdtempSync(join(tmpdir(), 'motir-verdict-'));
     try {
@@ -328,6 +364,9 @@ describe('the verdict contract — parseReviewVerdict', () => {
     expect(text).toContain(`acme/app-b #4 at ${SHA_B}`);
     expect(text).toContain('/w/app-b/AGENTS.md');
     expect(text).toMatch(/do NOT call it/);
+    // The one way a hosted reviewer logs a bug (MOTIR-10513): the same file.
+    expect(text).toContain('"bugs"            OPTIONAL — at most 5');
+    expect(text).toContain('you cannot');
     // No standards → no standards paragraph (§8.5: never required).
     expect(
       reviewRunSection({
@@ -541,6 +580,7 @@ describe('motir review — adopts the review run and submits ONE verdict', () =>
             verdict: 'pass',
             summaryMd: 'Meets it.',
             findingsMd: null,
+            bugs: [],
           },
         },
       },
@@ -566,6 +606,34 @@ describe('motir review — adopts the review run and submits ONE verdict', () =>
       data: { verdict: 'pass' },
     });
     expect(h.closed).toEqual(['completed']);
+  });
+
+  it('posts the bugs the verdict carries (MOTIR-10513), and names each one it logged', async () => {
+    setup({});
+    const lines: string[] = [];
+    vi.mocked(process.stderr.write).mockImplementation((chunk: unknown) => {
+      lines.push(String(chunk));
+      return true;
+    });
+    const bug = { title: 'The footer clock drifts', descriptionMd: 'app/footer.tsx:40 drifts.' };
+    await reviewCommand(
+      KEY,
+      deps({
+        runAgentFn: agentWriting(
+          JSON.stringify({ verdict: 'pass', summaryMd: 'Logged 1 bug.', bugs: [bug] }),
+        ),
+      }),
+    );
+    expect(process.exitCode).toBeUndefined();
+    expect(verdictPosts()).toHaveLength(1);
+    expect((verdictPosts()[0]!.args as { verdict: AgentReviewVerdict }).verdict.bugs).toEqual([
+      bug,
+    ]);
+    expect(lines.join('')).toContain('bug logged: PROD-90 — The footer clock drifts');
+    expect(h.events.at(-1)).toMatchObject({
+      disposition: 'implemented',
+      data: { verdict: 'pass', bugs: ['PROD-90'] },
+    });
   });
 
   it('two repositories: both checked out at their heads, one POST over both', async () => {
@@ -758,6 +826,12 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
             state: 'approved',
             subjectVersion: VERSION_2,
             decidedAt: '2026-09-29T10:00:00.000Z',
+            bugs:
+              (req.body as { bugs?: Array<{ title: string }> }).bugs?.map((b) => ({
+                key: 'PROD-90',
+                title: b.title,
+                outcome: 'filed',
+              })) ?? [],
           },
         }),
       },
@@ -770,15 +844,27 @@ describe('the client — the review prompt, and the verdict (a late one typed)',
         verdict: 'pass',
         summaryMd: 'ok',
         findingsMd: null,
+        bugs: [],
       };
       expect(await client.submitAgentReview(KEY, verdict)).toMatchObject({
         state: 'approved',
         subjectVersion: VERSION_2,
+        bugs: [],
       });
+      // A verdict that logs nothing sends the 1.81.0 body: no `bugs` key at all.
       expect(server.v1Calls.at(-1)).toMatchObject({
         method: 'POST',
         path: `/api/v1/work-items/${KEY}/agent-review`,
-        body: verdict,
+        body: { subjectVersion: VERSION_2, verdict: 'pass', summaryMd: 'ok', findingsMd: null },
+      });
+      expect(server.v1Calls.at(-1)!.body).not.toHaveProperty('bugs');
+
+      const withBug = { ...verdict, bugs: [{ title: 'A bug', descriptionMd: 'Why.' }] };
+      expect((await client.submitAgentReview(KEY, withBug)).bugs).toEqual([
+        { key: 'PROD-90', title: 'A bug', outcome: 'filed' },
+      ]);
+      expect(server.v1Calls.at(-1)!.body).toMatchObject({
+        bugs: [{ title: 'A bug', descriptionMd: 'Why.' }],
       });
 
       server.scriptV1({

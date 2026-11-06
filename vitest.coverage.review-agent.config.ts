@@ -72,6 +72,7 @@ const STORY_FILES = [
   'lib/services/agentReviewRunService.ts',
   'lib/services/agentReviewStartService.ts',
   'lib/services/agentReviewViewService.ts',
+  'lib/services/reviewBugFilingService.ts',
   'lib/services/reviewConventionsService.ts',
   'lib/workItems/reviewSentBack.ts',
   'lib/workspaces/afterCommit.ts',

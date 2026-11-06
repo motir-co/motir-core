@@ -1196,5 +1196,15 @@
  *   Additive: one new operation, one new component and new codes for new conditions.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.81.0` after `1.80.0` above.
+ * - `1.82.0` — MOTIR-10513 lets a hosted review LOG A BUG: `submitWorkItemAgentReview`'s
+ *   body gains the optional `bugs` list (at most 5 of `{ title, descriptionMd }`, each a
+ *   defect the verdict cannot carry) and `AgentReviewResult` gains `bugs` — each logged
+ *   bug's `key`, `title` and `outcome` (`filed` | `already_filed`)
+ *   (`docs/decisions/hosted-agent-run.md` §8.7).
+ *
+ *   Additive: one optional request field and one new response field. A body without
+ *   `bugs` is the 1.81.0 body, answered as before with `bugs: []`.
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.82.0` after `1.81.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.81.0';
+export const V1_CONTRACT_VERSION = '1.82.0';

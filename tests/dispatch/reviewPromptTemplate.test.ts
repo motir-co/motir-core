@@ -4,6 +4,7 @@ import {
   capConvention,
   CONVENTION_ABSENT_LINE,
   CONVENTION_SHORTENED_LINE,
+  REVIEW_BUGS_MAX,
   REVIEW_CONVENTION_MAX_CHARS,
   type ReviewPromptInput,
 } from '@/lib/dispatch/reviewPromptTemplate';
@@ -255,5 +256,46 @@ describe('assembleReviewPrompt — the criteria checklist over the tree', () => 
     expect(assembleReviewPrompt(STORY).prompt).toBe(
       assembleReviewPrompt(structuredClone(STORY)).prompt,
     );
+  });
+
+  describe('A DEFECT THE VERDICT CANNOT CARRY (MOTIR-10513, §8.7)', () => {
+    it('says a delivered defect is a finding, any other is a bug, and the verdict rule holds', () => {
+      const { prompt } = assembleReviewPrompt(TWO_REPOSITORY_CARD);
+      expect(prompt).toContain('A DEFECT THE VERDICT CANNOT CARRY — log it as a bug');
+      expect(prompt).toContain('A defect in the code the card DELIVERS is a FINDING');
+      expect(prompt).toContain('It is never also logged as a bug');
+      expect(prompt).toContain('one in code the pull');
+      expect(prompt).toContain('ROOT-CAUSE IT FIRST.');
+      expect(prompt).toContain('CHECK THE BUGS ALREADY FILED below.');
+      expect(prompt).toContain('Logging a bug NEVER changes the verdict rule');
+      expect(prompt).toContain('Name every bug you log, by its title, in `summaryMd`.');
+      expect(prompt).toContain(`\`bugs\` list — at most ${REVIEW_BUGS_MAX}.`);
+      // The verdict shape carries the list, and the read-only line names it as the one exception.
+      expect(prompt).toContain('"bugs": [ { "title": "<one line>"');
+      expect(prompt).toContain('Your verdict — with the bugs it');
+      expect(prompt).not.toContain('Your verdict is your only output.');
+      // With no list given, the section says none is filed.
+      expect(prompt).toContain('BUGS ALREADY FILED against this card (not done):\n    (None.)');
+      // After HOW TO REVIEW, before the read-only limits.
+      const at = prompt.indexOf('A DEFECT THE VERDICT CANNOT CARRY');
+      expect(at).toBeGreaterThan(prompt.indexOf('HOW TO REVIEW'));
+      expect(at).toBeLessThan(prompt.indexOf('YOU ARE READ-ONLY'));
+    });
+
+    it('lists the bugs already filed against the card', () => {
+      const { prompt } = assembleReviewPrompt({
+        ...TWO_REPOSITORY_CARD,
+        openBugs: [
+          { key: 'ACME-40', title: 'The footer clock drifts', status: 'todo' },
+          { key: 'ACME-41', title: 'The sidebar flickers', status: 'in_progress' },
+        ],
+      });
+      expect(prompt).toContain(
+        '  BUGS ALREADY FILED against this card (not done):\n' +
+          '    - ACME-40 — The footer clock drifts (todo)\n' +
+          '    - ACME-41 — The sidebar flickers (in_progress)\n',
+      );
+      expect(prompt).not.toContain('(None.)');
+    });
   });
 });

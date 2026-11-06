@@ -1,5 +1,8 @@
 import { z } from 'zod/v4';
 import {
+  REVIEW_BUG_DESCRIPTION_MAX_LENGTH,
+  REVIEW_BUG_TITLE_MAX_LENGTH,
+  REVIEW_BUGS_MAX,
   REVIEW_FINDINGS_MAX_LENGTH,
   REVIEW_SUMMARY_MAX_LENGTH,
   REVIEW_VERDICTS,
@@ -54,6 +57,19 @@ export function presentReviewPrompt(dto: ReviewPromptDto): V1ReviewPrompt {
 }
 
 /**
+ * One bug the review logs (MOTIR-10513, `hosted-agent-run.md` §8.7) — a defect the verdict
+ * cannot carry. Motir files it; the review names only what it found.
+ */
+export const agentReviewBugSchema = z
+  .object({
+    /** The one-line summary alone — the key Motir allocates is the id. */
+    title: z.string().trim().min(1).max(REVIEW_BUG_TITLE_MAX_LENGTH),
+    /** Root cause, reproduction, evidence and fix direction, in Markdown. */
+    descriptionMd: z.string().trim().min(1).max(REVIEW_BUG_DESCRIPTION_MAX_LENGTH),
+  })
+  .strict();
+
+/**
  * `POST /api/v1/work-items/{key}/agent-review` — ONE verdict. `findingsMd` is REQUIRED and
  * non-empty on `changes_requested` (`approval-gates.md` §12.4); a refusal without findings
  * is refused here, naming the field, before anything is read.
@@ -67,6 +83,8 @@ export const agentReviewBodySchema = z
     summaryMd: z.string().max(REVIEW_SUMMARY_MAX_LENGTH).nullable().optional(),
     /** The findings, Markdown: each naming a file and line, what it breaks, what to change. */
     findingsMd: z.string().max(REVIEW_FINDINGS_MAX_LENGTH).nullable().optional(),
+    /** The defects the verdict cannot carry, filed by Motir as bugs (MOTIR-10513). */
+    bugs: z.array(agentReviewBugSchema).max(REVIEW_BUGS_MAX).optional(),
   })
   .strict()
   .superRefine((body, ctx) => {
@@ -80,6 +98,13 @@ export const agentReviewBodySchema = z
   });
 export type V1AgentReviewBody = z.infer<typeof agentReviewBodySchema>;
 
+/** One bug the verdict logged: `filed` new, or `already_filed` — a not-done bug of the same title. */
+export const agentReviewLoggedBugSchema = z.object({
+  key: z.string(),
+  title: z.string(),
+  outcome: z.enum(['filed', 'already_filed']),
+});
+
 /** What an ACCEPTED verdict did. */
 export const agentReviewResultSchema = z.object({
   key: z.string(),
@@ -88,6 +113,8 @@ export const agentReviewResultSchema = z.object({
   state: z.enum(['approved', 'changes_requested']),
   subjectVersion: z.string(),
   decidedAt: z.string().datetime(),
+  /** Every bug the verdict carried, in its order — `[]` when it carried none. */
+  bugs: z.array(agentReviewLoggedBugSchema),
 });
 export type V1AgentReviewResult = z.infer<typeof agentReviewResultSchema>;
 
@@ -99,5 +126,6 @@ export function presentAgentReviewResult(dto: AgentReviewVerdictResultDto): V1Ag
     state: dto.state,
     subjectVersion: dto.subjectVersion,
     decidedAt: dto.decidedAt,
+    bugs: dto.bugs.map((b) => ({ key: b.key, title: b.title, outcome: b.outcome })),
   };
 }

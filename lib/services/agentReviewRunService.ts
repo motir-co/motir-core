@@ -23,6 +23,7 @@ import {
 } from '@/lib/dispatch/reviewPromptTemplate';
 import type {
   AgentReviewVerdictResultDto,
+  ReviewLoggedBugDto,
   ReviewPromptDto,
   ReviewPullRequestDto,
 } from '@/lib/dto/agentReview';
@@ -38,6 +39,11 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { approvalGatesService } from '@/lib/services/approvalGatesService';
 import { DISPATCH_RUN_EVENT_LIMIT } from '@/lib/services/dispatchRunService';
 import { reviewBotPostService } from '@/lib/services/reviewBotPostService';
+import {
+  reviewBugFilingService,
+  withLoggedBugs,
+  type ReviewBugInput,
+} from '@/lib/services/reviewBugFilingService';
 import { reviewConventionsService } from '@/lib/services/reviewConventionsService';
 import { testInstructionsService } from '@/lib/services/testInstructionsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -108,6 +114,9 @@ async function recordVerdict(
     outcome: VerdictOutcome;
     gateId: string | null;
     summaryMd: string | null;
+    /** The keys of the bugs the verdict logged (MOTIR-10513), in its order — written onto
+     *  the event only when there is one, so a verdict that logs none keeps its shape. */
+    bugKeys: string[];
   },
   ctx: ServiceContext,
 ): Promise<void> {
@@ -116,6 +125,8 @@ async function recordVerdict(
     if ((await dispatchRunEventRepository.countByRun(run.id, tx)) >= DISPATCH_RUN_EVENT_LIMIT) {
       return;
     }
+    const { bugKeys, ...rest } = data;
+    const eventData = bugKeys.length > 0 ? { ...rest, bugKeys } : rest;
     const leg = await dispatchRunCardRepository.findByRunAndWorkItem(run.id, workItemId, tx);
     const seq = ((await dispatchRunEventRepository.maxSeq(run.id, tx)) ?? 0) + 1;
     await dispatchRunEventRepository.createMany(
@@ -127,7 +138,7 @@ async function recordVerdict(
           seq,
           kind: 'review_verdict',
           reportedBy: 'cli',
-          data,
+          data: eventData,
         },
       ],
       tx,
@@ -350,6 +361,10 @@ export const agentReviewRunService = {
       pullRequests.map((pr) => pr.repository),
     );
 
+    // The not-done bugs already filed against the card (MOTIR-10513, §8.7), so a defect
+    // the verdict cannot carry is not logged twice.
+    const openBugs = await reviewBugFilingService.listOpenBugs(item, ctx.workspaceId);
+
     const { prompt } = assembleReviewPrompt({
       key: item.identifier,
       title: item.title,
@@ -361,6 +376,7 @@ export const agentReviewRunService = {
       pullRequests,
       conventions,
       criteriaTree: await criteriaTreeOf(tree, projectId, ctx.workspaceId),
+      openBugs,
     });
 
     return {
@@ -409,6 +425,7 @@ export const agentReviewRunService = {
       verdict: ReviewVerdict;
       summaryMd?: string | null;
       findingsMd?: string | null;
+      bugs?: readonly ReviewBugInput[];
     },
     ctx: ServiceContext,
   ): Promise<AgentReviewVerdictResultDto> {
@@ -416,9 +433,22 @@ export const agentReviewRunService = {
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
     if (await hasVerdict(run, ctx)) throw new ReviewVerdictAlreadySubmittedError(run.id);
 
+    // ⚠️ THE BUGS ARE FILED BEFORE THE DECIDE (MOTIR-10513, §8.7), so the gate's note, the
+    // run's event and the verdict record all name them. A bug is a defect the verdict does
+    // not cover — code the change did not touch, another card's — so a verdict that then
+    // turns out LATE does not retire it, and the next review finds it already filed.
+    const loggedBugs: ReviewLoggedBugDto[] = await reviewBugFilingService.fileReviewBugs(
+      item,
+      input.bugs ?? [],
+      input.subjectVersion,
+      ctx,
+    );
+    const bugKeys = loggedBugs.map((b) => b.key);
+
     const summaryMd = input.summaryMd?.trim() ? input.summaryMd.trim() : null;
-    const findingsMd = input.findingsMd?.trim() ? input.findingsMd : null;
-    const noteMd = findingsMd ?? summaryMd;
+    const rawFindingsMd = input.findingsMd?.trim() ? input.findingsMd : null;
+    const findingsMd = withLoggedBugs(rawFindingsMd, loggedBugs);
+    const noteMd = withLoggedBugs(rawFindingsMd ?? summaryMd, loggedBugs);
     const record = (outcome: VerdictOutcome, gateId: string | null) =>
       recordVerdict(
         run,
@@ -429,6 +459,7 @@ export const agentReviewRunService = {
           outcome,
           gateId,
           summaryMd,
+          bugKeys,
         },
         ctx,
       );
@@ -465,7 +496,7 @@ export const agentReviewRunService = {
           },
           ctx,
         );
-        throw new ReviewStaleError(cause, input.subjectVersion);
+        throw new ReviewStaleError(cause, input.subjectVersion, bugKeys);
       }
       if (err instanceof ApprovalGateNotFoundError) {
         throw new ReviewGateNotFoundError(item.identifier);
@@ -494,6 +525,7 @@ export const agentReviewRunService = {
       state: input.verdict === 'pass' ? 'approved' : 'changes_requested',
       subjectVersion: decided.gate.subjectVersion ?? input.subjectVersion,
       decidedAt: decided.gate.decidedAt ?? new Date().toISOString(),
+      bugs: loggedBugs,
     };
   },
 };

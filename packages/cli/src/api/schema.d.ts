@@ -1336,7 +1336,7 @@ export interface paths {
         put?: never;
         /**
          * Submit a hosted review run’s ONE verdict
-         * @description Decide a work item’s `agent_review` gate as the REVIEW AGENT: `pass` approves it, which raises the approve-and-merge gate for the same version; `changes_requested` records `findingsMd` (required, non-empty) as the gate’s note and moves nothing — the card is To fix. `subjectVersion` must be the version the review prompt named. ONE verdict per run (`REVIEW_VERDICT_ALREADY_SUBMITTED`, 409). A verdict for a version the gate no longer asks about, or a gate already superseded or decided, is RECORDED on the run and decides nothing (`REVIEW_STALE`, 409). Accepts ONLY the credential of a `review` dispatch run, for that run’s own card.
+         * @description Decide a work item’s `agent_review` gate as the REVIEW AGENT: `pass` approves it, which raises the approve-and-merge gate for the same version; `changes_requested` records `findingsMd` (required, non-empty) as the gate’s note and moves nothing — the card is To fix. `subjectVersion` must be the version the review prompt named. ONE verdict per run (`REVIEW_VERDICT_ALREADY_SUBMITTED`, 409). A verdict for a version the gate no longer asks about, or a gate already superseded or decided, is RECORDED on the run and decides nothing (`REVIEW_STALE`, 409). `bugs` (optional, at most 5) are the defects the verdict cannot carry — code the change did not touch, another card’s defect: Motir files each as a bug in the project’s bug destination, linked `relates_to` the card, and names each one’s key in the recorded findings; a title matching a not-done bug of the project is answered `already_filed` and not filed twice. Accepts ONLY the credential of a `review` dispatch run, for that run’s own card.
          *
          *     Requires the `work_item:edit` permission.
          */
@@ -3239,6 +3239,12 @@ export interface components {
             subjectVersion: string;
             /** Format: date-time */
             decidedAt: string;
+            bugs: {
+                key: string;
+                title: string;
+                /** @enum {string} */
+                outcome: "filed" | "already_filed";
+            }[];
         };
         ReviewVerdictResult: {
             key: string;
@@ -14157,7 +14163,7 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description The reviewed version, the verdict, a short summary and the findings. */
+        /** @description The reviewed version, the verdict, a short summary, the findings and the bugs to log. */
         requestBody: {
             content: {
                 "application/json": {
@@ -14166,11 +14172,15 @@ export interface operations {
                     verdict: "pass" | "changes_requested";
                     summaryMd?: string | null;
                     findingsMd?: string | null;
+                    bugs?: {
+                        title: string;
+                        descriptionMd: string;
+                    }[];
                 };
             };
         };
         responses: {
-            /** @description The gate the verdict decided and its new state. */
+            /** @description The gate the verdict decided, its new state, and every bug it logged. */
             200: {
                 headers: {
                     /** @description A correlation id for this response. Echoes the request `X-Request-Id` when it is id-shaped (`[A-Za-z0-9._-]{1,128}`), otherwise newly minted. Present on every response, success and failure alike. */

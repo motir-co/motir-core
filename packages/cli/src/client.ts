@@ -1274,6 +1274,21 @@ export interface AgentReviewVerdict {
   verdict: 'pass' | 'changes_requested';
   summaryMd: string | null;
   findingsMd: string | null;
+  /** The defects the verdict cannot carry, for Motir to file as bugs (MOTIR-10513). */
+  bugs: AgentReviewBug[];
+}
+
+/** One bug a review logs: the one-line title and the root-caused description. */
+export interface AgentReviewBug {
+  title: string;
+  descriptionMd: string;
+}
+
+/** A bug the verdict logged, as Motir landed it — filed new, or already filed. */
+export interface AgentReviewLoggedBug {
+  key: string;
+  title: string;
+  outcome: 'filed' | 'already_filed';
 }
 
 /** What an ACCEPTED verdict did. */
@@ -1284,6 +1299,8 @@ export interface AgentReviewResult {
   state: 'approved' | 'changes_requested';
   subjectVersion: string;
   decidedAt: string;
+  /** Every bug the verdict carried, in its order; `[]` when it carried none. */
+  bugs: AgentReviewLoggedBug[];
 }
 
 export interface DispatchRunContinues {
@@ -2497,6 +2514,13 @@ export class MotirClient {
         verdict: verdict.verdict,
         summaryMd: verdict.summaryMd,
         findingsMd: verdict.findingsMd,
+        // Sent only when there is one, so a verdict that logs nothing is the 1.81.0 body
+        // byte for byte.
+        ...(verdict.bugs.length > 0
+          ? {
+              bugs: verdict.bugs.map((b) => ({ title: b.title, descriptionMd: b.descriptionMd })),
+            }
+          : {}),
       },
     });
     return {
@@ -2506,6 +2530,7 @@ export class MotirClient {
       state: body.state,
       subjectVersion: body.subjectVersion,
       decidedAt: body.decidedAt,
+      bugs: body.bugs.map((b) => ({ key: b.key, title: b.title, outcome: b.outcome })),
     };
   }
 
