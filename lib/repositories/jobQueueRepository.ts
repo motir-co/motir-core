@@ -260,44 +260,80 @@ export const jobQueueRepository = {
     `;
   },
 
-  /** Terminal success. */
-  async markSucceeded(id: string, tx: Prisma.TransactionClient): Promise<JobQueueRun> {
-    return tx.jobQueueRun.update({
-      where: { id },
+  /**
+   * Whether `workerId` still holds this run — `running`, and claimed by it. The
+   * worker asks before its terminal-failure hook writes a dead-letter record, so a
+   * run whose claim was released mid-execution is not dead-lettered by a worker
+   * that no longer holds it (MOTIR-10466). A pre-check only: the release can land
+   * between this read and the write, which is why the write itself is fenced too.
+   */
+  async isHeldBy(id: string, workerId: string, tx: Prisma.TransactionClient): Promise<boolean> {
+    const n = await tx.jobQueueRun.count({ where: { id, state: 'running', claimedBy: workerId } });
+    return n > 0;
+  },
+
+  /**
+   * ⚠️ THE THREE SETTLE WRITES BELOW ARE FENCED ON THE CLAIM (MOTIR-10466). Each
+   * one writes only while the row is still `running` AND `claimed_by` is the
+   * worker settling it — the scope `renewLeases` and `releaseClaims` above have
+   * always had — and answers whether it wrote.
+   *
+   * A settle can outlive its claim: a drain that times out releases a run that is
+   * still executing (`JobWorker.shutdown()`), and a worker that misses its
+   * heartbeats has its lease reclaimed. Keyed on the id alone, the late settle
+   * wrote over a row it no longer held — another worker's `running` row read
+   * `succeeded` with no claimant while it was still executing, and a late
+   * reschedule handed it to a third. `false` means exactly that: the row is not
+   * this worker's any more, and what is in it belongs to whoever holds it, or to
+   * its next claimant. `docs/decisions/job-queue-foundation.md` §18.7 is the
+   * decision.
+   */
+  async markSucceeded(
+    id: string,
+    workerId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    const r = await tx.jobQueueRun.updateMany({
+      where: { id, state: 'running', claimedBy: workerId },
       data: { state: 'succeeded', claimedBy: null, leaseExpiresAt: null },
     });
+    return r.count > 0;
   },
 
   /**
    * Terminal failure — the retry budget is spent. `lastError` carries the final
    * failure so an operator sees WHY without reading a log, mirroring
-   * `job_run.failure`.
+   * `job_run.failure`. Fenced on the claim, like {@link markSucceeded}.
    */
   async markFailed(
     id: string,
+    workerId: string,
     lastError: Prisma.InputJsonValue,
     tx: Prisma.TransactionClient,
-  ): Promise<JobQueueRun> {
-    return tx.jobQueueRun.update({
-      where: { id },
+  ): Promise<boolean> {
+    const r = await tx.jobQueueRun.updateMany({
+      where: { id, state: 'running', claimedBy: workerId },
       data: { state: 'failed', claimedBy: null, leaseExpiresAt: null, lastError },
     });
+    return r.count > 0;
   },
 
   /**
    * Re-enqueue for another attempt (a retry's backoff) or for a resume (a
    * `step.sleep` yield). One method for both because the row change is
    * identical — back to `pending` at a future `run_at` — and the DIFFERENCE is
-   * whether `attempts` was spent, which the caller has already decided.
+   * whether `attempts` was spent, which the caller has already decided. Fenced on
+   * the claim, like {@link markSucceeded}.
    */
   async rescheduleAt(
     id: string,
+    workerId: string,
     runAt: Date,
     tx: Prisma.TransactionClient,
     opts?: { refundAttempt?: boolean; lastError?: Prisma.InputJsonValue },
-  ): Promise<JobQueueRun> {
-    return tx.jobQueueRun.update({
-      where: { id },
+  ): Promise<boolean> {
+    const r = await tx.jobQueueRun.updateMany({
+      where: { id, state: 'running', claimedBy: workerId },
       data: {
         state: 'pending',
         runAt,
@@ -307,6 +343,7 @@ export const jobQueueRepository = {
         ...(opts?.lastError !== undefined ? { lastError: opts.lastError } : {}),
       },
     });
+    return r.count > 0;
   },
 
   /** Insert one run. The dispatcher's write (MOTIR-3423) and the tests' seed. */

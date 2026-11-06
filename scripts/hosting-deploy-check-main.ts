@@ -28,7 +28,17 @@
  */
 import { pathToFileURL } from 'node:url';
 // Never `./fleet/fleetAdminMain`: in a one-file bundle its entry guard is true too.
-import { composeDatabaseUrl, redactor, type DatabaseEnv } from './fleet/fleetAdminDatabaseUrl';
+import {
+  composeDatabaseUrl,
+  redactor,
+  redactStream,
+  type DatabaseEnv,
+  type EntryStream,
+} from './fleet/fleetAdminDatabaseUrl';
+
+// Moved beside `redactor` (MOTIR-10465) so the data-script entry shares them without
+// importing this module, whose entry guard would run the check inside its bundle.
+export { redactStream, type EntryStream };
 
 const EXIT_ERROR = 1;
 const TAG = '[hosting-deploy-check]';
@@ -36,27 +46,12 @@ const TAG = '[hosting-deploy-check]';
 /** The last line on the Fargate path; the code is what the check answered. */
 export const deployCheckExitLine = (code: number): string => `deploy-check exit ${code}`;
 
-/** A stream the entry writes to and may redact — `process.stdout` / `process.stderr`. */
-export interface EntryStream {
-  write: (chunk: string | Uint8Array, ...rest: never[]) => boolean;
-}
-
 /** Runs one deploy-check command line; answers the process exit code. */
 export type LoadDeployCheck = () => Promise<(argv: readonly string[]) => Promise<number>>;
 
 /** Loads the check — and with it, lazily, the database client — after the URL is set. */
 export const loadDeployCheck: LoadDeployCheck = async () =>
   (await import('./hosting-deploy-check')).runHostingDeployCheck;
-
-/** Makes every later write to `stream` pass through `redact`. A chunk that is
- *  bytes is decoded as UTF-8 first; the check writes text. */
-export function redactStream(stream: EntryStream, redact: (text: string) => string): void {
-  const write = stream.write.bind(stream) as (chunk: string) => boolean;
-  stream.write = ((chunk: string | Uint8Array) =>
-    write(
-      redact(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')),
-    )) as EntryStream['write'];
-}
 
 /**
  * Runs the deploy check as the process entry: composes `DATABASE_URL` when only

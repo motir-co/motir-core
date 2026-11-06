@@ -10,6 +10,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
+import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { estimationService } from '@/lib/services/estimationService';
@@ -160,6 +161,44 @@ export const boardsService = {
       tx,
     );
     await seedColumnsForBoard(board.id, projectId, workspaceId, tx);
+  },
+
+  /**
+   * The projects `pnpm db:backfill:boards` walks (MOTIR-10465), in creation order.
+   *
+   * ⚠️ EVERY project, not only the board-less ones, and under `withSystemContext`.
+   * The sweep spans workspaces, and `project` carries a `system_admin` read arm,
+   * so the system context is what reads it under the non-bypass application role
+   * the script runs as in production (a core worker task). `board` carries NO
+   * such arm, so a `boards: { none: {} }` filter evaluated here would see no
+   * board anywhere and name every project — the filter is
+   * {@link backfillDefaultBoard}'s own probe instead, run under the project's
+   * workspace. Before this, the script read `project` unbound and found nothing
+   * as the application role; it worked only as Neon's owner.
+   */
+  async listBoardBackfillCandidates(): Promise<
+    Array<{ id: string; name: string; workspaceId: string }>
+  > {
+    return withSystemContext((tx) => projectRepository.listAllForSweep(tx));
+  },
+
+  /**
+   * The user the board backfill acts as in `workspaceId` (MOTIR-10465): the
+   * workspace's oldest Manager, else its oldest member, else null. Read under the
+   * workspace's service context — `workspace_membership` admits a read only for
+   * the bound workspace (or the caller's own rows), so an unbound read answers
+   * nothing under the application role.
+   */
+  async resolveBoardBackfillActor(workspaceId: string): Promise<string | null> {
+    return withWorkspaceServiceContext(workspaceId, async (tx) => {
+      const manager = await workspaceMembershipRepository.findStandInManagerByWorkspace(
+        workspaceId,
+        tx,
+      );
+      if (manager) return manager.userId;
+      const [first] = await workspaceMembershipRepository.findMembersByWorkspace(workspaceId, tx);
+      return first?.userId ?? null;
+    });
   },
 
   /**

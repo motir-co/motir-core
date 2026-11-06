@@ -96,3 +96,22 @@ export function redactor(secrets: readonly string[]): (text: string) => string {
   const ordered = [...new Set(secrets)].filter(Boolean).sort((a, b) => b.length - a.length);
   return (text) => scrubSecrets(ordered.reduce((out, s) => out.split(s).join(REDACTED), text));
 }
+
+/** A stream an entry writes to and may redact — `process.stdout` / `process.stderr`. */
+export interface EntryStream {
+  write: (chunk: string | Uint8Array, ...rest: never[]) => boolean;
+}
+
+/**
+ * Makes every later write to `stream` pass through `redact`. A chunk that is bytes
+ * is decoded as UTF-8 first; the commands write text. Shared by the deploy check's
+ * entry and the data-script entry (MOTIR-10465), which redact both streams on the
+ * Fargate path so nothing a dependency prints carries the URL or the password.
+ */
+export function redactStream(stream: EntryStream, redact: (text: string) => string): void {
+  const write = stream.write.bind(stream) as (chunk: string) => boolean;
+  stream.write = ((chunk: string | Uint8Array) =>
+    write(
+      redact(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')),
+    )) as EntryStream['write'];
+}
