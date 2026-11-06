@@ -7,13 +7,13 @@
 // `pnpm test:e2e --grep board-scrum-at-scale`):
 //
 //   • `board-scrum-at-scale — load model + scope + header (4.7.2)` ← THIS
-//       subtask (below): the Story-3.8 load model proven on the SCRUM board,
+//       subtask (below): the board's load model proven on the SCRUM board,
 //       scoped to the active sprint — sprint scope at scale (the backlog slice
-//       absent), bounded whole-set load with NO per-column "Load more" (flat AND
-//       swimlane), virtualization keeping the DOM bounded, the over-cap "refine
-//       your filter" banner past the cap, the age-based Done-age window, the
+//       absent), every lane PAGED as it scrolls since MOTIR-10535 (one page per
+//       lane with its full sprint-scoped count, never a "Load more" button),
+//       virtualization keeping the DOM bounded, a Done lane paging in full, the
 //       sprint header's aggregate (never page-sum) points, and the
-//       no-active-sprint empty state — never the retired cursor paging.
+//       no-active-sprint empty state.
 //   • `board-scrum-at-scale — interaction + complete (4.7.3)` ← the SIBLING
 //       subtask (drag-as-transition · snap-back · swimlanes · cross-lane
 //       reassign · WIP · complete-sprint carry-over + report), appended later.
@@ -27,19 +27,13 @@
 // whose load-model predicates this file re-asserts only in their sprint-scoped
 // form, because the sprint scope is exactly what 3.5.2 cannot cover).
 //
-// ── How this spec reaches the at-scale states cheaply (the 4.7.1 harness) ─────
-// The load model only shows its over-cap banner past `BOARD_ISSUE_CAP` (5,000)
-// and only trims the Done column past `DONE_AGE_WINDOW_DAYS` (14). Subtask 4.7.1
-// REUSES the 3.5.1 test seam (`BOARD_ISSUE_CAP_OVERRIDE` /
-// `DONE_AGE_WINDOW_DAYS_OVERRIDE`, forwarded to the dev server by
-// playwright.config.ts) — the scrum board is the SAME `getBoard` the seam
-// governs, scoped to the sprint — and ships the SPRINT-shaped large seed
-// (`seedLargeScrumSprint`): the 3.5.1 board-shaped distribution with the board
-// flipped to scrum, a large `active` sprint holding most of the issues (with a
-// story-point spread, some NULL), a backlog slice left OUTSIDE the sprint, and a
-// `planned` carry-over target. Like board-at-scale.spec.ts, this spec REQUIRES
-// the seam (see the beforeAll guard): it is excluded from the default
-// `pnpm test:e2e` run and runs in the dedicated seam-configured CI step.
+// ── The 4.7.1 harness ────────────────────────────────────────────────────────
+// The SPRINT-shaped large seed (`seedLargeScrumSprint`): the 3.5.1 board-shaped
+// distribution with the board flipped to scrum, a large `active` sprint holding
+// most of the issues (with a story-point spread, some NULL), a backlog slice
+// left OUTSIDE the sprint, and a `planned` carry-over target. The CI step that
+// selects this spec still exports the retired cap/Done-age override envs;
+// nothing reads them now.
 
 import { expect, test, type Page } from '@playwright/test';
 import { BoardSwimlaneGroupBy, BoardType } from '@/generated/prisma/client';
@@ -47,6 +41,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {
   getBoard,
+  getFullBoard,
   columnByStatus,
   columnCardNodes,
   columnTotalBadge,
@@ -54,8 +49,8 @@ import {
   expectActiveSprintScope,
   expectColumnVirtualized,
   expectNoLoadMore,
-  overCapBanner,
   gotoLoadedBoard,
+  scrollLaneToEnd,
   signInScrumSeedOwnerAndOpenScrumBoard,
 } from './_helpers/board';
 import { usersService } from '@/lib/services/usersService';
@@ -63,6 +58,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { keyForAppend } from '@/lib/workItems/positioning';
+import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
 import {
   seedLargeScrumSprint,
   SEED_LARGE_OWNER_EMAIL,
@@ -75,22 +71,10 @@ import {
 // loads, well above the 30s default.
 test.describe.configure({ timeout: 120_000 });
 
-// ── The 3.5.1 cap/Done-age test seam — REQUIRED for this spec (reused, 4.7.1) ─
-// Read the same envs playwright.config.ts forwards to the dev server, so the
-// spec and the server agree on the in-effect cap/window.
-function positiveIntEnv(name: string): number | null {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return null;
-  const v = Number(raw);
-  return Number.isInteger(v) && v > 0 ? v : null;
-}
-const CAP = positiveIntEnv('BOARD_ISSUE_CAP_OVERRIDE');
-const WINDOW_DAYS = positiveIntEnv('DONE_AGE_WINDOW_DAYS_OVERRIDE');
-
 // The sprint-shaped seed sizing. The board-shaped spread (93 cards — same maths
 // as board-at-scale.spec.ts) is partitioned by `backlogSliceEvery: 7` into ~80
-// in-sprint issues (comfortably OVER the lowered cap, so the banner shows on the
-// SPRINT-scoped board) + ~13 left in the backlog (the scope slice). 1-in-4
+// in-sprint issues (a tall lane many pages deep) + ~13 left in the backlog (the
+// scope slice). 1-in-4
 // sprint issues stays unestimated (`storyPoints` NULL — the contributes-0 path);
 // the rest cycle the point deck so the header totals are at scale.
 const SEED_OPTS = {
@@ -161,8 +145,7 @@ async function seedBigScrum(): Promise<BigSeed> {
   return { ownerId: owner.id, workspaceId: workspace.id, projectId: project.id, manifest };
 }
 
-// A second, tiny SCRUM tenant whose active sprint is comfortably UNDER the cap —
-// the "banner absent" case — and whose sprint is OVERDUE (endDate in the past →
+// A second, tiny SCRUM tenant whose sprint is OVERDUE (endDate in the past →
 // `daysRemaining` floored to 0 → "Ended") with a CONTROLLED point spread:
 //   A todo 5pts · B todo NULL · C done-category 3pts
 // → committed 8 · completed 3 · remaining 5, with the NULL estimate provably
@@ -175,20 +158,20 @@ interface SmallSeed {
   points: { committed: number; completed: number; remaining: number };
 }
 async function seedSmallScrum(): Promise<SmallSeed> {
-  const email = 'scrum-at-scale-undercap@example.com';
+  const email = 'scrum-at-scale-small@example.com';
   const owner = await usersService.createUser({
     email,
     password: SEED_LARGE_OWNER_PASSWORD,
-    name: 'Under-cap Scrum Owner',
+    name: 'Small Scrum Owner',
   });
   const { workspace } = await workspacesService.createWorkspace({
-    name: 'Under-cap scrum WS',
+    name: 'Small scrum WS',
     ownerUserId: owner.id,
   });
   const project = await projectsService.createProject({
     workspaceId: workspace.id,
     actorUserId: owner.id,
-    name: 'Under cap scrum',
+    name: 'Small scrum',
     identifier: 'SML',
   });
   // Flip the seeded default board to scrum (columns/mappings untouched) — the
@@ -306,36 +289,19 @@ async function setGroupBy(
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 
-// The terminal (category `done`) columns of the BIG board, with each column's
-// IN-SPRINT cards partitioned by the Done-age cutoff — so the spec asserts the
-// EXACT aged-out cards are absent and in-window cards present (the proof the
-// window is AGE-based, not count-based: the partition is by `updatedAt` against
-// the configured cutoff, and both buckets are non-empty — a count cap would keep
-// the most-recent N regardless of age; mirrors the 3.5.2 mandate's proof, since
-// the seam env is fixed for the server's lifetime and cannot shrink mid-run).
-async function terminalColumnsWithAge(big: BigSeed) {
+// The terminal (category `done`) statuses of the BIG board, each with its
+// IN-SPRINT cards in the Done lane's order (most recently updated first, key as
+// the tiebreak) — what paging the lane to its end must reproduce exactly.
+async function terminalSprintRows(big: BigSeed) {
   const statuses = await workflowsService.listStatusesByProject(big.projectId, big.workspaceId);
-  const terminalKeys = statuses.filter((s) => s.category === 'done').map((s) => s.key);
-  const cutoff = new Date(Date.now() - WINDOW_DAYS! * 24 * 60 * 60 * 1000);
-  const out: Array<{
-    statusKey: string;
-    agedOut: string[];
-    inWindow: string[];
-    sprintTotal: number;
-  }> = [];
-  for (const statusKey of terminalKeys) {
-    // SPRINT-scoped rows only — the scrum board never shows out-of-sprint cards,
-    // so the present/absent expectations are computed over the sprint's set.
+  const out: Array<{ statusKey: string; identifiers: string[] }> = [];
+  for (const s of statuses.filter((st) => st.category === 'done')) {
     const rows = await db.workItem.findMany({
-      where: { projectId: big.projectId, status: statusKey, sprintId: big.manifest.activeSprintId },
-      select: { identifier: true, updatedAt: true },
+      where: { projectId: big.projectId, status: s.key, sprintId: big.manifest.activeSprintId },
+      orderBy: [{ updatedAt: 'desc' }, { key: 'asc' }],
+      select: { identifier: true },
     });
-    out.push({
-      statusKey,
-      agedOut: rows.filter((r) => r.updatedAt < cutoff).map((r) => r.identifier),
-      inWindow: rows.filter((r) => r.updatedAt >= cutoff).map((r) => r.identifier),
-      sprintTotal: rows.length,
-    });
+    out.push({ statusKey: s.key, identifiers: rows.map((r) => r.identifier) });
   }
   return out;
 }
@@ -359,29 +325,10 @@ let small: SmallSeed;
 let noSprint: NoSprintSeed;
 
 test.beforeAll(async () => {
-  // The spec structurally requires the 3.5.1/4.7.1 cap/Done-age seam (it can't
-  // reach the over-cap state with tens of rows otherwise). When unset — e.g. a
-  // plain local `pnpm test:e2e` — SKIP the whole block visibly rather than fail:
-  // CI excludes it from the default run and runs it in the seam-configured step.
-  test.skip(
-    CAP === null || WINDOW_DAYS === null,
-    'board-scrum-at-scale needs the 3.5.1/4.7.1 seam — run `BOARD_ISSUE_CAP_OVERRIDE=40 ' +
-      'DONE_AGE_WINDOW_DAYS_OVERRIDE=7 pnpm test:e2e --grep board-scrum-at-scale` (or the dedicated CI step).',
-  );
   await resetDatabase();
   big = await seedBigScrum();
   small = await seedSmallScrum();
   noSprint = await seedNoActiveSprint();
-  // A set-but-too-high cap is an explicit misconfiguration of THIS run — fail
-  // loud. The over-cap state must come from the SPRINT-scoped total (the scrum
-  // board never sees the backlog slice), so the gate is sprintIssueCount.
-  if (big.manifest.sprintIssueCount <= CAP!) {
-    throw new Error(
-      `board-scrum-at-scale: the seeded ACTIVE-SPRINT total (${big.manifest.sprintIssueCount}) must ` +
-        `EXCEED the lowered cap (BOARD_ISSUE_CAP_OVERRIDE=${CAP}) so the over-cap banner shows on the ` +
-        'sprint-scoped board. Lower the cap override.',
-    );
-  }
 });
 
 test.afterAll(async () => {
@@ -398,7 +345,7 @@ test.afterAll(async () => {
 // carries the same hook, under the shared-tenant contract stated there.
 // MOTIR-2199.)
 test.beforeEach(async () => {
-  if (!big) return; // seam unset → the whole block is skipped
+  if (!big || !small) return;
   await db.board.updateMany({
     where: { projectId: { in: [big.projectId, small.projectId] } },
     data: { swimlaneGroupBy: BoardSwimlaneGroupBy.none },
@@ -410,7 +357,8 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     page,
   }) => {
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
-    const board = await getBoard(page.request);
+    // Every lane paged to its end, so "on the board" means the whole sprint.
+    const board = await getFullBoard(page.request);
 
     // The projection took the 4.5.2 scrum path: type scrum, the seeded active
     // sprint resolved (never the unscoped backlog masquerading as a sprint).
@@ -421,11 +369,9 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
 
     // A representative in-sprint issue IS on the board; a backlog-slice issue
     // (left OUTSIDE the sprint by the seed) is ABSENT — the scope filter holds
-    // over a large set. Projection-level, so independent of virtualization.
-    // Both samples come from a NON-tall column: that column's sprint set loads
-    // in full (well under the cap), so the in-sprint card is provably loaded and
-    // the out-of-sprint card's absence is provably the SCOPE filter — never the
-    // cap truncating the tall column.
+    // over a large set. Projection-level (every lane paged in full), so
+    // independent of virtualization: the out-of-sprint card's absence is the
+    // SCOPE filter, never a page the read did not reach.
     const inSprint = await db.workItem.findFirst({
       where: {
         projectId: big.projectId,
@@ -446,8 +392,7 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     expectActiveSprintScope(board, { present: inSprint!.id, absent: outOfSprint!.id });
 
     // Every column's totalCount is the SPRINT-scoped count (the backlog slice is
-    // not in any denominator), and the whole board sums to the sprint set —
-    // bounded by the cap, the column totals are the full sprint distribution.
+    // not in any denominator), and the whole board sums to the sprint set.
     for (const col of board.columns) {
       const dbCount = await db.workItem.count({
         where: {
@@ -464,141 +409,66 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     ).toBe(big.manifest.sprintIssueCount);
   });
 
-  test('loads the whole bounded sprint set with NO "Load more"; badges show full sprint totals', async ({
+  test('opens every sprint lane on ONE page with its full sprint count — no "Load more" button', async ({
     page,
   }) => {
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
     const board = await getBoard(page.request);
 
-    // The retired 3.8.3 per-column cursor paging is gone on the SCRUM board too:
-    // no "Load more" button and no scroll-sentinel footer anywhere on the flat
-    // sprint-scoped board.
     await expectNoLoadMore(page);
 
-    // Each column's count badge is its FULL sprint-scoped totalCount (the
-    // denominator is the whole sprint set, not the loaded window), and cards
-    // actually render.
     for (const col of board.columns) {
       expect(col.totalCount, `column ${col.name} populated`).toBeGreaterThan(0);
+      expect(col.cards.length, `${col.name} first page`).toBe(
+        Math.min(col.totalCount, BOARD_PAGE_SIZE),
+      );
+      expect(col.cursor === null, `${col.name} cursor iff more`).toBe(
+        col.totalCount <= BOARD_PAGE_SIZE,
+      );
       expect(await columnTotalBadge(page, col.id), `badge for ${col.name}`).toBe(col.totalCount);
     }
     const anyCol = board.columns.find((c) => c.totalCount > 0)!;
     await expect(columnCardNodes(page, anyCol.id).first()).toBeVisible();
   });
 
-  test('virtualizes a tall sprint column — bounded DOM, later cards reachable by scrolling not paging', async ({
-    page,
-  }) => {
+  test('pages a tall sprint lane in as it scrolls, and stays DOM-bounded', async ({ page }) => {
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
     const board = await getBoard(page.request);
 
-    // The seed's tall column (most cards), far past the row window even after
-    // the sprint scope removed the backlog slice.
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
     expect(tall.totalCount, 'tall column is the largest').toBe(
       Math.max(...board.columns.map((c) => c.totalCount)),
     );
+    expect(tall.totalCount).toBeGreaterThan(BOARD_PAGE_SIZE * 3);
 
-    // DOM-bounded: mounted card nodes are > 0 but well below the full total —
-    // it windowed (`useRowWindow`) rather than mounting every row.
+    await scrollLaneToEnd(page, tall.id, tall.totalCount);
+    const full = await getFullBoard(page.request);
+    const lastId = columnByStatus(full, big.manifest.tallStatusKey).cards.at(-1)!.identifier;
+    await expect(page.getByTestId(`board-card-${lastId}`)).toBeVisible();
     await expectColumnVirtualized(page, tall.id, tall.totalCount);
-
-    // A card deep in the loaded set is NOT mounted initially, then becomes
-    // reachable by SCROLLING the column body (not by a paging affordance).
-    const lastLoaded = tall.cards.at(-1)!.identifier;
-    const lastCard = page.getByTestId(`board-card-${lastLoaded}`);
-    await expect(lastCard).toHaveCount(0); // virtualized out of the initial window
-    const body = page.getByTestId(`board-column-${tall.id}`).locator('.overflow-y-auto');
-    await body.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
-    await expect(lastCard).toBeVisible(); // mounted by scrolling, not paging
-
-    // Still bounded after scrolling (it did not load-all), and still no "Load more".
-    expect(await columnCardNodes(page, tall.id).count()).toBeLessThan(tall.totalCount);
     await expectNoLoadMore(page);
   });
 
-  test('shows the over-cap "refine your filter" banner past the cap — flat AND swimlane', async ({
+  test('pages a Done sprint lane in FULL — the aged-out resolved cards load too', async ({
     page,
   }) => {
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
     const board = await getBoard(page.request);
+    expect(big.manifest.terminalAgedOut, 'the seed backdated some terminal cards').toBeGreaterThan(
+      0,
+    );
+    const full = await getFullBoard(page.request);
 
-    // Sanity: the seam put the SPRINT-scoped board over the (lowered) cap.
-    expect(board.cap, 'projection echoes the lowered cap').toBe(CAP);
-    expect(board.truncated, 'sprint total exceeds the cap → truncated').toBe(true);
-
-    // Flat scrum board: the banner shows above it, names the cap, pairs hue with
-    // the alert-triangle icon + copy (not colour-alone, finding #35), role=status.
-    const banner = overCapBanner(page);
-    await expect(banner).toBeVisible();
-    await expect(banner).toHaveAttribute('role', 'status');
-    await expect(banner).toContainText(String(CAP)); // copy names the cap number
-    await expect(banner.locator('svg').first()).toBeVisible(); // the AlertTriangle, not colour-alone
-
-    // Swimlane layout (group-by Assignee): the banner is mounted above BOTH
-    // layouts (3.8.4 — it lives in BoardContainer), so it stays visible on the
-    // sprint-scoped lanes; no per-lane "Load more" either (3.8.5).
-    await setGroupBy(page, 'Assignee');
-    await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    await expect(overCapBanner(page)).toBeVisible();
-    await expectNoLoadMore(page);
-  });
-
-  test('hides the over-cap banner on an under-cap scrum board (flat AND swimlane)', async ({
-    page,
-  }) => {
-    // The small tenant's sprint is well under the cap → truncated false → no banner.
-    await signIn(page, small.email, SEED_LARGE_OWNER_PASSWORD);
-    await gotoLoadedBoard(page);
-    const board = await getBoard(page.request);
-    expect(board.type).toBe('scrum');
-    expect(board.truncated, 'under-cap sprint is not truncated').toBe(false);
-    await expect(overCapBanner(page)).toHaveCount(0);
-
-    await setGroupBy(page, 'Assignee');
-    await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    await expect(overCapBanner(page)).toHaveCount(0);
-  });
-
-  test('windows the Done column to the recent sprint set — old resolved absent, full count on the badge', async ({
-    page,
-  }) => {
-    await signInScrumSeedOwnerAndOpenScrumBoard(page);
-    const board = await getBoard(page.request);
-    const terminals = await terminalColumnsWithAge(big);
-
-    // Seed sanity: the Done-age spread actually produced both buckets INSIDE the
-    // sprint, so the assertion below is meaningful (some trimmed, some kept).
-    const totalAgedOut = terminals.reduce((n, t) => n + t.agedOut.length, 0);
-    const totalInWindow = terminals.reduce((n, t) => n + t.inWindow.length, 0);
-    expect(totalAgedOut, 'some in-sprint terminal cards aged out of the window').toBeGreaterThan(0);
-    expect(totalInWindow, 'some in-sprint terminal cards inside the window').toBeGreaterThan(0);
-
-    for (const term of terminals) {
+    for (const term of await terminalSprintRows(big)) {
       const col = columnByStatus(board, term.statusKey);
-
-      // The count badge shows the FULL sprint-scoped terminal total (incl. the
-      // aged-out ones)…
+      expect(col.totalCount).toBe(term.identifiers.length);
       expect(await columnTotalBadge(page, col.id), `badge for ${term.statusKey}`).toBe(
-        col.totalCount,
+        term.identifiers.length,
       );
-      expect(col.totalCount).toBe(term.sprintTotal);
-
-      // …but every in-sprint card resolved OUTSIDE the window is windowed out of
-      // the DOM…
-      for (const id of term.agedOut) {
-        await expect(page.getByTestId(`board-card-${id}`), `aged-out ${id} absent`).toHaveCount(0);
-      }
-      // …while recently-resolved in-sprint cards are loaded + rendered. The
-      // column is short (terminal cards are not the tall column), so no
-      // virtualization hides them: their absence above is AGE-based, not a count
-      // cap (a count cap would keep the most-recent-by-position N regardless of
-      // resolved age — here the partition is strictly by the cutoff timestamp).
-      for (const id of term.inWindow) {
-        await expect(page.getByTestId(`board-card-${id}`), `in-window ${id} present`).toBeVisible();
-      }
+      expect(
+        columnByStatus(full, term.statusKey).cards.map((c) => c.identifier),
+        `${term.statusKey} pages every in-sprint card in recency order`,
+      ).toEqual(term.identifiers);
     }
   });
 
@@ -621,14 +491,14 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     expect(sprint.points.completed).toBe(completed);
     expect(sprint.points.remaining).toBe(committed - completed);
 
-    // …and STRICTLY exceed the sum over the bounded loaded card page: the board
-    // is truncated (over the cap), so estimated sprint issues exist beyond the
-    // loaded set — a page sum could never reproduce the aggregate. This is the
-    // finding-#57 proof that the figures are SUM aggregates, not client sums.
+    // …and STRICTLY exceed the sum over the loaded first pages: lanes have more
+    // pages, so estimated sprint issues exist beyond the loaded set — a page sum
+    // could never reproduce the aggregate. This is the finding-#57 proof that
+    // the figures are SUM aggregates, not client sums.
     const loadedSum = board.columns
       .flatMap((c) => c.cards)
       .reduce((n, card) => n + (card.storyPoints ?? 0), 0);
-    expect(board.truncated).toBe(true);
+    expect(board.columns.some((c) => c.cursor !== null)).toBe(true);
     expect(committed, 'aggregate exceeds any loaded-page sum').toBeGreaterThan(loadedSum);
 
     // The per-column point pills (4.5.3) each equal the column's sprint-scoped
@@ -692,32 +562,31 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     expect(board.sprint).toBeNull();
   });
 
-  test('never calls the retired per-column cursor / "Load more" route', async ({ page }) => {
-    const offending: string[] = [];
+  test('pages the swimlane sprint board from its footer row, over the lane route', async ({
+    page,
+  }) => {
+    const pageReads: string[] = [];
     page.on('request', (r) => {
-      const url = r.url();
-      // The retired 3.8.3 affordance was GET /api/board/columns/[id]/cards (+ a
-      // ?cursor= page token). The scrum board read is the same single GET /api/board.
-      if (/\/api\/board\/columns\/[^/?]+\/cards/.test(url) || url.includes('cursor=')) {
-        offending.push(`${r.method()} ${url}`);
-      }
+      if (/\/api\/board\/columns\/[^/?]+\/cards\?/.test(r.url())) pageReads.push(r.url());
     });
-
     await signInScrumSeedOwnerAndOpenScrumBoard(page);
-    const board = await getBoard(page.request);
-
-    // Exercise the surfaces that historically would have paged: scroll the tall
-    // sprint column and switch into the swimlane layout.
-    const tall = columnByStatus(board, big.manifest.tallStatusKey);
-    await page
-      .getByTestId(`board-column-${tall.id}`)
-      .locator('.overflow-y-auto')
-      .evaluate((el) => {
-        el.scrollTop = el.scrollHeight;
-      });
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
+    const board = await getBoard(page.request);
+    const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    expect(offending, 'no retired cursor/Load-more route calls').toEqual([]);
+    await expect(page.getByTestId('swimlane-load-row')).toBeAttached();
+    const badge = page.getByTestId(`board-count-${tall.id}`);
+    await expect
+      .poll(
+        async () => {
+          await page.getByTestId(`board-lane-sentinel-${tall.id}`).scrollIntoViewIfNeeded();
+          return (await badge.textContent())?.trim();
+        },
+        { message: 'the swimlane sprint lane pages to its full total', timeout: 60_000 },
+      )
+      .toBe(tall.totalCount.toLocaleString('en-US'));
+    expect(pageReads.some((u) => u.includes(`/columns/${tall.id}/cards?`))).toBe(true);
+    await expectNoLoadMore(page);
   });
 });

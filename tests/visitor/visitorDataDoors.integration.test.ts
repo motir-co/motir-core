@@ -13,6 +13,7 @@ import { consentedVisitor } from './_consentedVisitor';
 import { projectAccessData } from '@/tests/helpers/projectAccess';
 import { visitorRecordsService } from '@/lib/services/visitorRecordsService';
 import { VISITOR_ADDRESS_HEADER } from '@/lib/visitor/address';
+import { boardsService } from '@/lib/services/boardsService';
 
 // The client DATA DOORS a Visitor view calls (Story MOTIR-6170 · MOTIR-6647),
 // driven as the browser drives them: the Visitor tab's `x-motir-visitor` address
@@ -46,6 +47,7 @@ vi.mock('next-intl/server', async (importOriginal) => ({
 
 const { GET: boardGET } = await import('@/app/api/board/route');
 const { GET: boardsGET } = await import('@/app/api/boards/route');
+const { GET: lanePageGET } = await import('@/app/api/board/columns/[columnId]/cards/route');
 const { GET: peekGET } = await import('@/app/api/work-items/peek/route');
 const { GET: commentsGET } = await import('@/app/api/work-items/[id]/comments/route');
 const { GET: allGET } = await import('@/app/api/work-items/[id]/activity/all/route');
@@ -184,6 +186,86 @@ describe('a consented Visitor is served the public project, withheld rows exclud
     }
     const drill = await listChildIssuesAction({ sortParam: '', parentId: t.E.id });
     expect(drill.ok && drill.level.rows).toEqual([]);
+  });
+
+  it("a lane's next page withholds private-epic rows exactly as the first page does (MOTIR-10535)", async () => {
+    const t = await publicProject();
+    // Enough visible rows to page the To Do lane, then two more withheld rows
+    // created LAST so they rank onto the second page.
+    const visible = [t.V.id];
+    for (let i = 0; i < 11; i++) {
+      const w = await createTestWorkItem(t.fx, { kind: 'story', title: `Visible ${i}` });
+      visible.push(w.id);
+    }
+    const lateHidden = [];
+    for (let i = 0; i < 2; i++) {
+      const h = await createTestWorkItem(t.fx, {
+        kind: 'story',
+        title: `Hidden late ${i}`,
+        parentId: t.E.id,
+      });
+      lateHidden.push(h.id);
+    }
+    await adminDb.workItem.updateMany({
+      where: { projectId: t.fx.projectId },
+      data: { status: 'todo' },
+    });
+    await asVisitor(t);
+    const address = t.identifier;
+
+    const board = (await (await boardGET(req('/api/board', address))).json()) as {
+      boardId: string;
+      columns: Array<{
+        id: string;
+        statusKeys: string[];
+        cursor: string | null;
+        cards: Array<{ id: string }>;
+      }>;
+    };
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    expect(todo.cursor).not.toBeNull();
+    const seen = todo.cards.map((c) => c.id);
+    const qs = new URLSearchParams({ boardId: board.boardId, cursor: todo.cursor! });
+    const res = await lanePageGET(
+      req(`/api/board/columns/${todo.id}/cards?${qs.toString()}`, address),
+      params({ columnId: todo.id }),
+    );
+    expect(res.status).toBe(200);
+    const page = (await res.json()) as { cards: Array<{ id: string }>; cursor: string | null };
+    seen.push(...page.cards.map((c) => c.id));
+    expect(page.cursor).toBeNull();
+    // Every visible row exactly once, and no withheld row on either page.
+    for (const id of visible) expect(seen.filter((s) => s === id)).toHaveLength(1);
+    for (const id of [...t.hidden.map((h) => h.id), ...lateHidden]) {
+      expect(seen).not.toContain(id);
+    }
+  });
+
+  it('a Visitor lane page refuses a missing or forged cursor, and rethrows an untyped failure', async () => {
+    const t = await publicProject();
+    await asVisitor(t);
+    const address = t.identifier;
+    const board = (await (await boardGET(req('/api/board', address))).json()) as {
+      boardId: string;
+      columns: Array<{ id: string }>;
+    };
+    const lane = board.columns[0]!.id;
+    const pageOf = (qs: Record<string, string>) =>
+      lanePageGET(
+        req(`/api/board/columns/${lane}/cards?${new URLSearchParams(qs).toString()}`, address),
+        params({ columnId: lane }),
+      );
+
+    expect((await pageOf({ boardId: board.boardId })).status).toBe(400);
+    const forged = await pageOf({ boardId: board.boardId, cursor: 'forged' });
+    expect(forged.status).toBe(400);
+    expect(((await forged.json()) as { code: string }).code).toBe('INVALID_BOARD_CURSOR');
+
+    const spy = vi
+      .spyOn(boardsService, 'getColumnPage')
+      .mockRejectedValueOnce(new Error('visitor boom'));
+    await expect(pageOf({ boardId: board.boardId, cursor: 'c' })).rejects.toThrow('visitor boom');
+    spy.mockRestore();
   });
 
   it('a hidden item answers exactly as an unknown one does', async () => {

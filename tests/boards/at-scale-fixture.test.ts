@@ -1,13 +1,7 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { BoardSwimlaneGroupBy } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import {
-  boardsService,
-  BOARD_ISSUE_CAP,
-  DONE_AGE_WINDOW_DAYS,
-  resolveBoardIssueCap,
-  resolveDoneAgeWindowDays,
-} from '@/lib/services/boardsService';
+import { boardsService, BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
@@ -17,22 +11,16 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
-// Subtask 3.5.1 — the at-scale board FIXTURE + cap/Done-age test SEAM. Two
-// things, both unit-level against real Postgres (per CLAUDE.md, no mocks):
+// Subtask 3.5.1 — the at-scale board FIXTURE, unit-level against real Postgres
+// (per CLAUDE.md, no mocks): the board-shaped SEED (scripts/seedLargeBoard)
+// yields the documented distribution — every column populated (+ a tall one),
+// many assignee/epic lanes + their catch-alls, all five priority lanes, and a
+// Done-age spread.
 //
-//   1. The SEAM (boardsService.resolve{BoardIssueCap,DoneAgeWindowDays}) reads an
-//      env override when set, and falls back to the SHIPPED constants when unset —
-//      so production behaviour is byte-for-byte unchanged (the headline guarantee
-//      that makes this a test seam, not a behaviour change), while a test run can
-//      reach the over-cap / Done-age states cheaply.
-//   2. The board-shaped SEED (scripts/seedLargeBoard) yields the documented
-//      distribution — every column populated (+ a tall one), many assignee/epic
-//      lanes + their catch-alls, all five priority lanes, and a Done-age spread
-//      that the projection visibly trims.
-//
-// It does NOT re-prove the load model itself (3.8.2/3.8.6 own that — the cap
-// predicate over 5,000+ rows, the per-column projection, the banner component);
-// here the seam lets us reach those states with TENS of rows.
+// MOTIR-10535 retired the cap / Done-age test SEAM this file also pinned (the
+// board pages per lane now; there is no cap to override), so the Done-age
+// spread is asserted the other way round: aged-out terminal cards are no longer
+// trimmed — every one of them pages in.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -41,44 +29,6 @@ beforeEach(async () => {
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
-});
-
-describe('board load-model test seam (3.5.1)', () => {
-  // Guard the process env so a set/unset in one case never leaks into another.
-  const saved: Record<string, string | undefined> = {};
-  beforeEach(() => {
-    saved['BOARD_ISSUE_CAP_OVERRIDE'] = process.env['BOARD_ISSUE_CAP_OVERRIDE'];
-    saved['DONE_AGE_WINDOW_DAYS_OVERRIDE'] = process.env['DONE_AGE_WINDOW_DAYS_OVERRIDE'];
-    delete process.env['BOARD_ISSUE_CAP_OVERRIDE'];
-    delete process.env['DONE_AGE_WINDOW_DAYS_OVERRIDE'];
-  });
-  afterEach(() => {
-    for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
-      if (saved[k] === undefined) delete process.env[k];
-      else process.env[k] = saved[k];
-    }
-  });
-
-  it('falls back to the shipped constants when the override env is unset (production unchanged)', () => {
-    expect(resolveBoardIssueCap()).toBe(BOARD_ISSUE_CAP);
-    expect(resolveDoneAgeWindowDays()).toBe(DONE_AGE_WINDOW_DAYS);
-    expect(BOARD_ISSUE_CAP).toBe(5000);
-    expect(DONE_AGE_WINDOW_DAYS).toBe(14);
-  });
-
-  it('uses the override when set to a positive integer', () => {
-    process.env['BOARD_ISSUE_CAP_OVERRIDE'] = '40';
-    process.env['DONE_AGE_WINDOW_DAYS_OVERRIDE'] = '3';
-    expect(resolveBoardIssueCap()).toBe(40);
-    expect(resolveDoneAgeWindowDays()).toBe(3);
-  });
-
-  it('ignores a non-positive / non-numeric / empty override and keeps the constant', () => {
-    for (const bad of ['0', '-5', 'abc', '', '1.5']) {
-      process.env['BOARD_ISSUE_CAP_OVERRIDE'] = bad;
-      expect(resolveBoardIssueCap(), `override="${bad}"`).toBe(BOARD_ISSUE_CAP);
-    }
-  });
 });
 
 interface Fixture {
@@ -211,7 +161,7 @@ describe('board-shaped large seed distribution (3.5.1)', () => {
     expect(prioBoard.swimlanes.length).toBe(5);
   });
 
-  it('seeds a Done-age spread the projection visibly trims (rendered < full total)', async () => {
+  it('seeds a Done-age spread whose aged-out cards still page in (MOTIR-10535)', async () => {
     const fx = await makeFixture();
     const manifest = await seedLargeBoard(
       {
@@ -228,14 +178,32 @@ describe('board-shaped large seed distribution (3.5.1)', () => {
     expect(manifest.terminalInWindow).toBeGreaterThan(0);
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
-    // A terminal (done/cancelled) column: its FULL count is surfaced, but the
-    // aged-out cards (backdated outside the Done-age window) are trimmed from the
-    // rendered set — so rendered < total, the age-based window (3.8.2) in action.
+    // A terminal (done/cancelled) lane pages like any other: the first page is
+    // at most BOARD_PAGE_SIZE, and paging to the end reaches EVERY card,
+    // aged-out ones included — no Done-age window trims the lane any more.
     const terminalCols = board.columns.filter((c) =>
       c.statusKeys.some((k) => manifest.terminalStatusKeys.includes(k)),
     );
     expect(terminalCols.length).toBeGreaterThan(0);
-    const trimmed = terminalCols.filter((c) => c.cards.length < c.totalCount);
-    expect(trimmed.length, 'at least one terminal column is Done-age trimmed').toBeGreaterThan(0);
+    let loadedTerminal = 0;
+    for (const col of terminalCols) {
+      expect(col.cards.length).toBeLessThanOrEqual(BOARD_PAGE_SIZE);
+      const ids = new Set(col.cards.map((c) => c.id));
+      let cursor = col.cursor;
+      while (cursor) {
+        const page = await boardsService.getColumnPage(
+          fx.projectId,
+          fx.ctx,
+          board.boardId,
+          col.id,
+          cursor,
+        );
+        for (const c of page.cards) ids.add(c.id);
+        cursor = page.cursor;
+      }
+      expect(ids.size, `${col.name} pages to its full count`).toBe(col.totalCount);
+      loadedTerminal += ids.size;
+    }
+    expect(loadedTerminal).toBe(manifest.terminalAgedOut + manifest.terminalInWindow);
   });
 });

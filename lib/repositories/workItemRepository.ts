@@ -32,6 +32,7 @@ import type { DistributionGroupBy } from '@/lib/reports/statisticTypes';
 import type { FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueSort, IssueSortColumn } from '@/lib/issues/issueListView';
+import type { ColumnCursor } from '@/lib/boards/columnCursor';
 // The ONE declaration of the ready order. The Workbench reads it rather than
 // re-typing it — see `deriveKindSortOrder`.
 import { READY_KIND_RANK } from '@/lib/workItems/readyFilter';
@@ -4476,25 +4477,24 @@ export const workItemRepository = {
   },
 
   /**
-   * The BOUNDED card set of a board column (Subtask 3.1.4 / 3.8.2, finding #57):
-   * a project's non-archived work items whose `status` is one of `statusKeys`
-   * (the column's mapped statuses), ordered for the board and capped with `take`
-   * so the projection never ships an unbounded column. `order` is whitelisted
-   * (NOT user input): `'position'` ranks by the board rank (`position` asc — the
-   * fractional-index string sorts lexicographically) for an active column;
-   * `'recent'` orders by `updatedAt` desc for a terminal (done) column, so its
-   * bounded window is the most-recent work. A stable `key` asc tiebreak keeps
-   * the order total/deterministic.
+   * One PAGE of a board lane (Subtask 3.1.4, paged per lane by MOTIR-10535;
+   * finding #57): a project's non-archived work items whose `status` is one of
+   * `statusKeys` (the column's mapped statuses), in the lane's order, at most
+   * `opts.limit` rows. `order` is whitelisted (NOT user input): `'position'`
+   * ranks by the board rank (`position` asc — the fractional-index string sorts
+   * lexicographically) for an open lane; `'recent'` orders by `updatedAt` desc
+   * for a done-category lane. A `key` asc tiebreak makes each order TOTAL, which
+   * is what lets `opts.after` page it.
    *
-   * `opts.limit` caps the load at the board-level cap (Subtask 3.8.2 — there is
-   * no more per-column cursor paging; the whole bounded set loads at once and
-   * virtualizes client-side). `opts.updatedSince`, when present, applies the
-   * **Done-age window** (3.8.2): only cards touched on/after that instant load —
-   * the age-based shape Jira uses for terminal columns, while the FULL count is
-   * still surfaced separately via `countProjectIssues`. The explicit `projectId`
-   * + `workspaceId` gate is the app-layer tenancy check atop RLS (finding #26).
-   * Empty `statusKeys` short-circuits to `[]` (a column mapping no live status
-   * has no cards). Read-only → `db` singleton (optional `tx`).
+   * `opts.after` is the keyset cursor (`lib/boards/columnCursor.ts`): the last
+   * card of the page the caller already holds. The page starts strictly AFTER it
+   * in the same order — `(position, key) > (p, k)`, or for `recent`
+   * `updatedAt < u OR (updatedAt = u AND key > k)` — so no card repeats or is
+   * skipped across pages however far the caller scrolls. Callers ask for one row
+   * more than they show to learn whether a next page exists. The explicit
+   * `projectId` + `workspaceId` gate is the app-layer tenancy check atop RLS
+   * (finding #26). Empty `statusKeys` short-circuits to `[]` (a column mapping no
+   * live status has no cards). Read-only → `dbRead` (optional `tx`).
    */
   async findColumnCards(
     projectId: string,
@@ -4503,7 +4503,8 @@ export const workItemRepository = {
     order: 'position' | 'recent',
     opts: {
       limit: number;
-      updatedSince?: Date;
+      // The keyset cursor — the last card of the page already held (MOTIR-10535).
+      after?: ColumnCursor;
       sprintId?: string;
       // The advanced board filter (Story 6.15.2) — a compiled FilterAST AND-ed
       // into the card read so a column shows ONLY matching cards. Omitted on the
@@ -4535,11 +4536,14 @@ export const workItemRepository = {
         order === 'recent'
           ? Prisma.sql`w."updatedAt" DESC, w."key" ASC`
           : Prisma.sql`w."position" ASC, w."key" ASC`;
-      // Bind the cutoff as a JS Date param (never SQL NOW()) so the comparison
-      // stays timestamptz-correct, mirroring `aggregateCreatedByBucket`.
-      const updatedSinceSql = opts.updatedSince
-        ? Prisma.sql`AND w."updatedAt" >= ${opts.updatedSince}`
-        : Prisma.empty;
+      // The keyset predicate, in the order's own terms (the instant is bound as a
+      // JS Date param, never SQL NOW(), so the comparison is exact at ms).
+      const after = opts.after;
+      const afterSql = !after
+        ? Prisma.empty
+        : after.order === 'position'
+          ? Prisma.sql`AND (w."position", w."key") > (${after.position}, ${after.key})`
+          : Prisma.sql`AND (w."updatedAt" < ${after.updatedAt} OR (w."updatedAt" = ${after.updatedAt} AND w."key" > ${after.key}))`;
       const sprintScope = opts.sprintId
         ? Prisma.sql`AND w."sprintId" = ${opts.sprintId}`
         : Prisma.empty;
@@ -4551,7 +4555,7 @@ export const workItemRepository = {
             AND w."archivedAt" IS NULL
             AND ${notInTriageSql('w')}
             AND w."status" = ANY(${statusKeys})
-            ${updatedSinceSql}
+            ${afterSql}
             ${sprintScope}
             AND ${notExcludedSql('w', opts.excludeIds)}
             AND (${compileFilterConditionsSql(opts.ast, opts.referents)})
@@ -4579,7 +4583,7 @@ export const workItemRepository = {
         // board card — same predicate as the swimlane lane aggregates below.
         triagedAt: null,
         status: { in: statusKeys },
-        ...(opts.updatedSince ? { updatedAt: { gte: opts.updatedSince } } : {}),
+        ...(opts.after ? { OR: afterPredicate(opts.after) } : {}),
         // Sprint scope (Story 4.5.2) — a SCRUM board's projection passes the
         // active sprint's id so the column loads only that sprint's issues; a
         // kanban board omits it (unscoped, byte-for-byte the 3.1.4 load).
@@ -6896,6 +6900,21 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
  * `buildIssueFilterSql`. The Prisma-builder reads (`findColumnCards`, the lane
  * `groupBy`s) express the same predicate as `{ triagedAt: null }`.
  */
+/**
+ * The board lane's keyset predicate (MOTIR-10535) in the Prisma builder's terms —
+ * the rows strictly AFTER `after` in its order (`position ASC, key ASC`, or
+ * `updatedAt DESC, key ASC`). The raw-SQL twin in `findColumnCards` states the
+ * same predicate for the filtered read; the two must agree.
+ */
+function afterPredicate(after: ColumnCursor): Prisma.WorkItemWhereInput[] {
+  return after.order === 'position'
+    ? [{ position: { gt: after.position } }, { position: after.position, key: { gt: after.key } }]
+    : [
+        { updatedAt: { lt: after.updatedAt } },
+        { updatedAt: after.updatedAt, key: { gt: after.key } },
+      ];
+}
+
 /**
  * A lazy tree level's node predicate with its FOLDER treatment applied — one
  * function for `findProjectTreeLevel` and `countProjectTreeLevel`, so a level's

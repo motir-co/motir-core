@@ -112,8 +112,6 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     swimlaneGroupBy: 'none',
     swimlanes: [],
     unmappedStatuses: [],
-    cap: 5000,
-    truncated: false,
     sprint: null,
     planHolds: {},
     columns: cols(),

@@ -5,37 +5,23 @@
 // by the `board-at-scale` grep (the verification recipe runs
 // `pnpm test:e2e --grep board-at-scale`):
 //
-//   • `board-at-scale — load model (3.5.2)`  ← THIS subtask (below)
-//       the Story-3.8 load model proven at scale: bounded whole-set load with NO
-//       per-column "Load more", virtualization keeping the DOM bounded, the
-//       over-cap "refine your filter" banner past the cap (flat AND swimlane),
-//       and the age-based Done-age window — never the retired cursor paging.
-//   • `board-at-scale — interaction (3.5.3)` ← the SIBLING subtask, appended to
-//       this file by Subtask 3.5.3 (drag-as-transition · snap-back · swimlanes ·
-//       cross-lane reassign · WIP). Keep the two describes independent: each
-//       owns its own seeded tenant + helpers so neither block depends on the
-//       other's setup.  (3.5.3 was already flipped in_progress in a parallel
-//       session; this block is written to coexist with its append.)
+//   • `board-at-scale — load model (3.5.2)`  ← THIS file
+//       the board's load model proven at scale — PAGED PER LANE since
+//       MOTIR-10535 (which reversed the Story-3.8 whole-set load, its cap and
+//       over-cap banner, and the Done-age window): every lane opens on one page
+//       with its full count, pages in as it scrolls (never a "Load more"
+//       button), stays DOM-bounded by virtualization, and a Done lane pages in
+//       full — aged-out cards included.
+//   • `board-at-scale — interaction (3.5.3)` lives in its own file
+//       (board-at-scale-interaction.spec.ts) with its own seeded tenant.
 //
-// ── How this spec reaches the at-scale states cheaply (the 3.5.1 harness) ─────
-// The load model only shows its over-cap banner past `BOARD_ISSUE_CAP` (5,000)
-// and only trims the Done column past `DONE_AGE_WINDOW_DAYS` (14). Subtask 3.5.1
-// shipped a TEST SEAM so both are reachable with TENS of rows instead of
-// thousands: `boardsService.resolve{BoardIssueCap,DoneAgeWindowDays}` read the
-// `BOARD_ISSUE_CAP_OVERRIDE` / `DONE_AGE_WINDOW_DAYS_OVERRIDE` envs when set
-// (else the shipped constants), and `playwright.config.ts` forwards those envs
-// to the dev server ONLY when the run sets them. So this spec REQUIRES the seam
-// to be configured (see the beforeAll guard) — it is excluded from the default
-// `pnpm test:e2e` run and gets a dedicated, seam-configured CI step. 3.8.6
-// (`board-load.spec.ts`) already proves the load model end-to-enough with a
-// handful of rows + the default cap; this spec proves the SAME shape holds on
-// the board-shaped large seed (3.5.1) — the 5,000-card render 3.8.6 deferred
-// here — so it does NOT re-assert 3.8.6's unit-level predicates.
+// It runs on the board-shaped large seed (3.5.1) at TEST scale, through the
+// shipped services. The CI step that selects it with `--grep board-at-scale`
+// still exports the retired cap/Done-age override envs; nothing reads them now.
 
 import { expect, test, type Page } from '@playwright/test';
 import { BoardSwimlaneGroupBy } from '@/generated/prisma/client';
 import { resetDatabase, db } from './_helpers/db-reset';
-import { signIn } from './_helpers/shell-session';
 import {
   getBoard,
   columnByStatus,
@@ -43,15 +29,15 @@ import {
   columnTotalBadge,
   expectColumnVirtualized,
   expectNoLoadMore,
-  overCapBanner,
-  gotoLoadedBoard,
+  scrollLaneToEnd,
   signInBoardSeedOwnerAndOpenBoard,
 } from './_helpers/board';
+import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
+import type { BoardColumnPageDto, BoardProjectionDto } from '@/lib/dto/boards';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workflowsService } from '@/lib/services/workflowsService';
-import { keyForAppend } from '@/lib/workItems/positioning';
 import {
   seedLargeBoard,
   SEED_LARGE_OWNER_EMAIL,
@@ -64,27 +50,10 @@ import {
 // loads, well above the 30s default.
 test.describe.configure({ timeout: 120_000 });
 
-// ── The 3.5.1 cap/Done-age test seam — REQUIRED for this spec ────────────────
-// Read the same envs `playwright.config.ts` forwards to the dev server, so the
-// spec and the server agree on the in-effect cap/window. The spec is meaningless
-// without them (it could not reach the over-cap state cheaply), so it fails LOUD
-// rather than silently passing — it is excluded from the default e2e run and
-// invoked by its own seam-configured step (`pnpm test:e2e --grep board-at-scale`
-// with BOARD_ISSUE_CAP_OVERRIDE / DONE_AGE_WINDOW_DAYS_OVERRIDE set).
-function positiveIntEnv(name: string): number | null {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return null;
-  const v = Number(raw);
-  return Number.isInteger(v) && v > 0 ? v : null;
-}
-const CAP = positiveIntEnv('BOARD_ISSUE_CAP_OVERRIDE');
-const WINDOW_DAYS = positiveIntEnv('DONE_AGE_WINDOW_DAYS_OVERRIDE');
-
-// The board-shaped seed sizing. Chosen so — under the lowered cap the run sets —
-// the board is comfortably OVER the cap (banner shows) while staying tens of
-// rows: one tall column far past the row window (virtualization), a Done-age
-// spread (~half the terminal cards backdated outside the window), and enough
-// spread for every column + assignee/epic/priority lane to be populated.
+// The board-shaped seed sizing: tens of rows, one tall column many pages deep
+// and far past the row window (virtualization), a Done-age spread (~half the
+// terminal cards backdated weeks), and enough spread for every column +
+// assignee/epic/priority lane to be populated.
 const SEED_OPTS = {
   epics: 3,
   storiesPerEpic: 6,
@@ -93,11 +62,6 @@ const SEED_OPTS = {
   unassignedEvery: 4,
   doneAgedOutEvery: 2,
 };
-// epics + epics*stories + rootStories + tallExtra = 3 + 18 + 12 + 60 = 93.
-const SEEDED_TOTAL =
-  SEED_OPTS.epics * (1 + SEED_OPTS.storiesPerEpic) +
-  SEED_OPTS.rootStories +
-  SEED_OPTS.tallColumnExtra;
 
 interface BigSeed {
   ownerId: string;
@@ -157,60 +121,6 @@ async function seedBigBoard(): Promise<BigSeed> {
   return { ownerId: owner.id, workspaceId: workspace.id, projectId: project.id, manifest };
 }
 
-// A second, tiny tenant whose board is comfortably UNDER the cap — the
-// "banner absent" case. A separate owner keeps it fully isolated from the BIG
-// seed (no active-project juggling on the BIG owner that a later test could see).
-interface SmallSeed {
-  email: string;
-  projectId: string;
-  workspaceId: string;
-}
-async function seedSmallBoard(): Promise<SmallSeed> {
-  const email = 'board-at-scale-undercap@example.com';
-  const owner = await usersService.createUser({
-    email,
-    password: SEED_LARGE_OWNER_PASSWORD,
-    name: 'Under-cap Owner',
-  });
-  const { workspace } = await workspacesService.createWorkspace({
-    name: 'Under-cap WS',
-    ownerUserId: owner.id,
-  });
-  const project = await projectsService.createProject({
-    workspaceId: workspace.id,
-    actorUserId: owner.id,
-    name: 'Under cap',
-    identifier: 'SML',
-  });
-  // A few task cards in the first status — well under any sane lowered cap.
-  // `position` is a VALID fractional-index key chained in insertion order
-  // (MOTIR-2198): a padded/prefixed number like `p0000001` is a key nothing in
-  // the product can mint (head `'p'` demands a 17-char integer part), so a board
-  // seeded with them renders fine but exercises `keyBetweenSafe`'s invalid-bound
-  // tolerance arm instead of the ordinary reorder path this spec is about.
-  const statuses = await workflowsService.listStatusesByProject(project.id, workspace.id);
-  const firstKey = [...statuses].sort((a, b) => a.position.localeCompare(b.position))[0]!.key;
-  let smallPosition: string | null = null;
-  await db.workItem.createMany({
-    data: Array.from({ length: 3 }, (_, i) => ({
-      workspaceId: workspace.id,
-      projectId: project.id,
-      kind: 'task' as const,
-      key: i + 1,
-      identifier: `SML-${i + 1}`,
-      title: `Small ${i + 1}`,
-      status: firstKey,
-      reporterId: owner.id,
-      position: (smallPosition = keyForAppend(smallPosition)),
-    })),
-  });
-  await db.workspaceMembership.update({
-    where: { userId_workspaceId: { userId: owner.id, workspaceId: workspace.id } },
-    data: { activeProjectId: project.id },
-  });
-  return { email, projectId: project.id, workspaceId: workspace.id };
-}
-
 // Switch the active swimlane group-by via the board-header Segmented control,
 // waiting for the PATCH /api/board that persists it. Mirrors board-swimlanes.spec.ts.
 async function setGroupBy(
@@ -225,55 +135,32 @@ async function setGroupBy(
   expect((await patch).ok(), `group-by → ${label} persisted`).toBeTruthy();
 }
 
-// The terminal (category `done`) columns of the BIG board, paired with each
-// column's cards partitioned by the Done-age cutoff (from the configured window)
-// — so the spec asserts the EXACT aged-out cards are absent and in-window cards
-// present, rather than a blanket count.
-async function terminalColumnsWithAge(big: BigSeed) {
-  const statuses = await workflowsService.listStatusesByProject(big.projectId, big.workspaceId);
-  const terminalKeys = statuses.filter((s) => s.category === 'done').map((s) => s.key);
-  const cutoff = new Date(Date.now() - WINDOW_DAYS! * 24 * 60 * 60 * 1000);
-  const out: Array<{ statusKey: string; agedOut: string[]; inWindow: string[]; total: number }> =
-    [];
-  for (const statusKey of terminalKeys) {
-    const rows = await db.workItem.findMany({
-      where: { projectId: big.projectId, status: statusKey },
-      select: { identifier: true, updatedAt: true },
-    });
-    out.push({
-      statusKey,
-      agedOut: rows.filter((r) => r.updatedAt < cutoff).map((r) => r.identifier),
-      inWindow: rows.filter((r) => r.updatedAt >= cutoff).map((r) => r.identifier),
-      total: rows.length,
-    });
+// Every card of one lane, read the way the board reads it: the projection's
+// first page, then every next page over the real HTTP route.
+async function laneIdentifiers(
+  page: Page,
+  board: BoardProjectionDto,
+  columnId: string,
+): Promise<string[]> {
+  const col = board.columns.find((c) => c.id === columnId)!;
+  const ids = col.cards.map((c) => c.identifier);
+  let cursor = col.cursor;
+  while (cursor) {
+    const qs = new URLSearchParams({ boardId: board.boardId, cursor });
+    const res = await page.request.get(`/api/board/columns/${columnId}/cards?${qs.toString()}`);
+    expect(res.status(), 'lane page').toBe(200);
+    const next = (await res.json()) as BoardColumnPageDto;
+    ids.push(...next.cards.map((c) => c.identifier));
+    cursor = next.cursor;
   }
-  return out;
+  return ids;
 }
 
 let big: BigSeed;
-let small: SmallSeed;
 
 test.beforeAll(async () => {
-  // The spec structurally requires the 3.5.1 cap/Done-age seam (it can't reach
-  // the over-cap state with tens of rows otherwise). When it's unset — e.g. a
-  // plain local `pnpm test:e2e` — SKIP the whole block visibly rather than fail:
-  // CI excludes it from the default run (`--grep-invert`) and runs it in its own
-  // seam-configured step, so the real coverage is never silently dropped.
-  test.skip(
-    CAP === null || WINDOW_DAYS === null,
-    'board-at-scale needs the 3.5.1 seam — run `BOARD_ISSUE_CAP_OVERRIDE=40 ' +
-      'DONE_AGE_WINDOW_DAYS_OVERRIDE=7 pnpm test:e2e --grep board-at-scale` (or the dedicated CI step).',
-  );
-  // A set-but-too-high cap is an explicit misconfiguration of THIS run — fail loud.
-  if (SEEDED_TOTAL <= CAP!) {
-    throw new Error(
-      `board-at-scale: the seeded board total (${SEEDED_TOTAL}) must EXCEED the lowered cap ` +
-        `(BOARD_ISSUE_CAP_OVERRIDE=${CAP}) so the over-cap banner shows. Lower the cap override.`,
-    );
-  }
   await resetDatabase();
   big = await seedBigBoard();
-  small = await seedSmallBoard();
 });
 
 test.afterAll(async () => {
@@ -282,224 +169,120 @@ test.afterAll(async () => {
 
 // ── THE SHARED-TENANT CONTRACT for this file (MOTIR-2199) ────────────────────
 // Seeding happens ONCE, in `beforeAll` — deliberately, because the board-shaped
-// seed is expensive and scale is this file's whole point. The cost of that
-// choice is that this file's tests share ONE mutable tenant: every setting a
-// test PERSISTS survives into its successors, because nothing resets between
-// them. So the contract here is:
-//
-//   A test may NOT depend on shared state a sibling happened to leave behind,
-//   and the READER of a shared setting establishes the value it needs — the
-//   WRITER is not required to put it back.
-//
-// This hook is the reader's half, applied once for the whole file: it restores
-// the FLAT layout on both seeded tenants' boards before every test, so each
-// test starts from the default no matter what ran before it (or whether that
-// test even reached its last line). Putting it here rather than appending a
-// `setGroupBy(page, 'None')` to each writer is what makes the file order- AND
-// retry-independent: a cleanup line at the end of a test is skipped by any
-// failure above it, and a test inserted BETWEEN two existing ones inherits
-// whatever the one above it left behind.
-//
-// The leak this closes: `setGroupBy` PATCHes /api/board, which persists
-// `board.swimlaneGroupBy` on the board ROW (it is project-scoped server state,
-// not per-session), and `gotoLoadedBoard` waits on the FLAT board's `board`
-// testid — which a swimlaned board never renders (BoardContainer renders EITHER
-// `board` OR SwimlaneBoard's `swimlane-board`). Measured before this hook
-// existed: a full `--grep board-at-scale` run failed the "Refine filter" CTA
-// test on EVERY first attempt, and CI never saw it because `retries: 1`
-// (playwright.config.ts) re-runs in a fresh worker, re-running `beforeAll`'s
-// `resetDatabase()` — the reseed erases the leak, so the retry always passes.
-// The blast radius is not one fixed test either: pairing the swimlane writer
-// directly with the Done-window test makes THAT one fail instead. Whichever
-// test happens to read the board next is the one that breaks.
-//
-// If you add a test here that persists any OTHER shared setting (board config,
-// column mapping, a saved filter, WIP limits), extend this hook rather than
-// cleaning up at the end of the writer.
+// seed is expensive and scale is this file's whole point. The cost is that this
+// file's tests share ONE mutable tenant: a setting a test PERSISTS survives into
+// its successors. So the READER of a shared setting establishes the value it
+// needs: this hook restores the FLAT layout before every test, because
+// `setGroupBy` persists `board.swimlaneGroupBy` on the board ROW and
+// `gotoLoadedBoard` waits on the FLAT board's `board` testid, which a swimlaned
+// board never renders. If you add a test that persists any OTHER shared setting
+// (board config, column mapping, a saved filter, WIP limits), extend this hook
+// rather than cleaning up at the end of the writer.
 test.beforeEach(async () => {
-  if (!big || !small) return; // seam unset → the whole block is skipped
+  if (!big) return;
   await db.board.updateMany({
-    where: { projectId: { in: [big.projectId, small.projectId] } },
+    where: { projectId: big.projectId },
     data: { swimlaneGroupBy: BoardSwimlaneGroupBy.none },
   });
 });
 
 test.describe('board-at-scale — load model (3.5.2)', () => {
-  test('loads the whole bounded set with NO "Load more"; every column badge shows its full total', async ({
+  test('opens every lane on ONE page with its full count — no "Load more" button', async ({
     page,
   }) => {
     await signInBoardSeedOwnerAndOpenBoard(page);
     const board = await getBoard(page.request);
 
-    // The retired 3.8.3 per-column cursor paging is gone: no "Load more" button
-    // and no scroll-sentinel footer anywhere on the flat board.
     await expectNoLoadMore(page);
 
-    // Each column's count badge is its FULL totalCount (the denominator is the
-    // whole set, not the loaded window), and cards actually render.
     for (const col of board.columns) {
       expect(col.totalCount, `column ${col.name} populated`).toBeGreaterThan(0);
+      expect(col.cards.length, `${col.name} first page`).toBe(
+        Math.min(col.totalCount, BOARD_PAGE_SIZE),
+      );
+      expect(col.cursor === null, `${col.name} cursor iff more`).toBe(
+        col.totalCount <= BOARD_PAGE_SIZE,
+      );
+      // The badge's denominator is the FULL count, however much is loaded.
       expect(await columnTotalBadge(page, col.id), `badge for ${col.name}`).toBe(col.totalCount);
     }
     const anyCol = board.columns.find((c) => c.totalCount > 0)!;
     await expect(columnCardNodes(page, anyCol.id).first()).toBeVisible();
   });
 
-  test('virtualizes a tall column — bounded DOM, later cards reachable by scrolling not paging', async ({
+  test('pages a tall lane in as it scrolls, through the lane route, and stays DOM-bounded', async ({
     page,
   }) => {
+    const pageReads: string[] = [];
+    page.on('request', (r) => {
+      if (/\/api\/board\/columns\/[^/?]+\/cards\?/.test(r.url())) pageReads.push(r.url());
+    });
     await signInBoardSeedOwnerAndOpenBoard(page);
     const board = await getBoard(page.request);
 
-    // The seed's tall column (most cards), far past the row window.
+    // The seed's tall column (most cards), many pages deep.
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
     expect(tall.totalCount, 'tall column is the largest').toBe(
       Math.max(...board.columns.map((c) => c.totalCount)),
     );
+    expect(tall.totalCount).toBeGreaterThan(BOARD_PAGE_SIZE * 3);
 
-    // DOM-bounded: mounted card nodes are > 0 but well below the full total —
-    // it windowed (`useRowWindow`) rather than mounting every row.
+    // Scrolling the lane to its end pages it in, one lane read at a time…
+    await scrollLaneToEnd(page, tall.id, tall.totalCount);
+    const tallReads = pageReads.filter((u) => u.includes(`/columns/${tall.id}/cards?`));
+    expect(tallReads.length, 'the lane paged over its own route').toBeGreaterThanOrEqual(
+      Math.ceil(tall.totalCount / BOARD_PAGE_SIZE) - 1,
+    );
+
+    // …the last card of the lane is reachable, and the column still windows.
+    const ids = await laneIdentifiers(page, board, tall.id);
+    await expect(page.getByTestId(`board-card-${ids.at(-1)!}`)).toBeVisible();
     await expectColumnVirtualized(page, tall.id, tall.totalCount);
-
-    // A card deep in the loaded set is NOT mounted initially, then becomes
-    // reachable by SCROLLING the column body (not by a paging affordance).
-    const lastLoaded = tall.cards.at(-1)!.identifier;
-    const lastCard = page.getByTestId(`board-card-${lastLoaded}`);
-    await expect(lastCard).toHaveCount(0); // virtualized out of the initial window
-    const body = page.getByTestId(`board-column-${tall.id}`).locator('.overflow-y-auto');
-    await body.evaluate((el) => {
-      el.scrollTop = el.scrollHeight;
-    });
-    await expect(lastCard).toBeVisible(); // mounted by scrolling, not paging
-
-    // Still bounded after scrolling (it did not load-all), and still no "Load more".
-    expect(await columnCardNodes(page, tall.id).count()).toBeLessThan(tall.totalCount);
     await expectNoLoadMore(page);
   });
 
-  test('shows the over-cap "refine your filter" banner past the cap — flat AND swimlane', async ({
+  test('pages the swimlane board from its footer row, against the page scroll', async ({
     page,
   }) => {
     await signInBoardSeedOwnerAndOpenBoard(page);
-    const board = await getBoard(page.request);
-
-    // Sanity: the seam put the seeded board over the (lowered) cap.
-    expect(board.cap, 'projection echoes the lowered cap').toBe(CAP);
-    expect(board.truncated, 'board total exceeds the cap → truncated').toBe(true);
-
-    // Flat board: the banner shows above it, names the cap, pairs hue with the
-    // alert-triangle icon + copy (not colour-alone, finding #35), role=status.
-    const banner = overCapBanner(page);
-    await expect(banner).toBeVisible();
-    await expect(banner).toHaveAttribute('role', 'status');
-    await expect(banner).toContainText(String(CAP)); // copy names the cap number
-    await expect(banner.locator('svg').first()).toBeVisible(); // the AlertTriangle, not colour-alone
-
-    // Swimlane layout (group-by Assignee): the banner is mounted above BOTH
-    // layouts (3.8.4 — it lives in BoardContainer), so it stays visible.
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    await expect(overCapBanner(page)).toBeVisible();
-    await expectNoLoadMore(page); // no per-lane "Load more" either (3.8.5)
-  });
-
-  test('the over-cap banner "Refine filter" CTA opens the board filter (Story 6.15.3/6.15.4)', async ({
-    page,
-  }) => {
-    // The over-cap board is the only real surface where the banner renders, so
-    // its "Refine filter" CTA → board-filter-popover wiring (6.15.3) is proven
-    // here, over the real stack. (The CTA→onRefine→context-open seam is unit-
-    // tested in tests/components/board-filter.test.tsx; this is the composition.)
-    await signInBoardSeedOwnerAndOpenBoard(page);
-    await expect(overCapBanner(page)).toBeVisible();
-
-    // Closed: the quick-filter popover's facet listboxes are not mounted.
-    await expect(page.getByRole('listbox', { name: 'Kind' })).toHaveCount(0);
-
-    // Click the banner CTA — it opens the board's quick [Filter] popover through
-    // BoardFilterUiContext (the seam was dead before 6.15.3).
-    await page.getByTestId('board-overcap-filter').click();
-    const dialog = page.getByRole('dialog', { name: 'Filter work items' });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByRole('listbox', { name: 'Work type' })).toBeVisible();
-  });
-
-  test('hides the over-cap banner on an under-cap board (flat AND swimlane)', async ({ page }) => {
-    // The small tenant's board is well under the cap → truncated false → no banner.
-    await signIn(page, small.email, SEED_LARGE_OWNER_PASSWORD);
-    await gotoLoadedBoard(page);
     const board = await getBoard(page.request);
-    expect(board.truncated, 'under-cap board is not truncated').toBe(false);
-    await expect(overCapBanner(page)).toHaveCount(0);
-
-    await setGroupBy(page, 'Assignee');
-    await expect(page.getByTestId('swimlane-board')).toBeVisible();
-    await expect(overCapBanner(page)).toHaveCount(0);
-  });
-
-  test('windows the Done column to the recent set — old resolved items absent, full count on the badge', async ({
-    page,
-  }) => {
-    await signInBoardSeedOwnerAndOpenBoard(page);
-    const board = await getBoard(page.request);
-    const terminals = await terminalColumnsWithAge(big);
-
-    // Seed sanity: the Done-age spread actually produced both buckets, so the
-    // assertion below is meaningful (some trimmed, some kept).
-    const totalAgedOut = terminals.reduce((n, t) => n + t.agedOut.length, 0);
-    const totalInWindow = terminals.reduce((n, t) => n + t.inWindow.length, 0);
-    expect(totalAgedOut, 'some terminal cards aged out of the window').toBeGreaterThan(0);
-    expect(totalInWindow, 'some terminal cards inside the window').toBeGreaterThan(0);
-
-    for (const term of terminals) {
-      const col = columnByStatus(board, term.statusKey);
-
-      // The count badge shows the FULL terminal total (incl. the aged-out ones)…
-      expect(await columnTotalBadge(page, col.id), `badge for ${term.statusKey}`).toBe(
-        col.totalCount,
-      );
-      expect(col.totalCount).toBe(term.total);
-
-      // …but every card resolved OUTSIDE the window is windowed out of the DOM…
-      for (const id of term.agedOut) {
-        await expect(page.getByTestId(`board-card-${id}`), `aged-out ${id} absent`).toHaveCount(0);
-      }
-      // …while recently-resolved cards are loaded + rendered. The column is short
-      // (terminal cards are not the tall column), so no virtualization hides them:
-      // their absence above is AGE-based, not a count cap (a count cap would keep
-      // the most-recent-by-position N regardless of resolved age).
-      for (const id of term.inWindow) {
-        await expect(page.getByTestId(`board-card-${id}`), `in-window ${id} present`).toBeVisible();
-      }
-    }
-  });
-
-  test('never calls the retired per-column cursor / "Load more" route', async ({ page }) => {
-    const offending: string[] = [];
-    page.on('request', (r) => {
-      const url = r.url();
-      // The retired 3.8.3 affordance was GET /api/board/columns/[id]/cards (+ a
-      // ?cursor= page token). The board read is now a single GET /api/board.
-      if (/\/api\/board\/columns\/[^/?]+\/cards/.test(url) || url.includes('cursor=')) {
-        offending.push(`${r.method()} ${url}`);
-      }
-    });
-
-    await signInBoardSeedOwnerAndOpenBoard(page);
-    const board = await getBoard(page.request);
-
-    // Exercise the surfaces that historically would have paged: scroll the tall
-    // column and switch into the swimlane layout.
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
-    await page
-      .getByTestId(`board-column-${tall.id}`)
-      .locator('.overflow-y-auto')
-      .evaluate((el) => {
-        el.scrollTop = el.scrollHeight;
-      });
-    await setGroupBy(page, 'Assignee');
-    await expect(page.getByTestId('swimlane-board')).toBeVisible();
 
-    expect(offending, 'no retired cursor/Load-more route calls').toEqual([]);
+    await expect(page.getByTestId('swimlane-load-row')).toBeAttached();
+    const badge = page.getByTestId(`board-count-${tall.id}`);
+    await expect
+      .poll(
+        async () => {
+          await page.getByTestId(`board-lane-sentinel-${tall.id}`).scrollIntoViewIfNeeded();
+          return (await badge.textContent())?.trim();
+        },
+        { message: 'the swimlane lane pages to its full total', timeout: 60_000 },
+      )
+      .toBe(tall.totalCount.toLocaleString('en-US'));
+    await expectNoLoadMore(page);
+  });
+
+  test('pages a Done lane in FULL — the aged-out resolved cards load too', async ({ page }) => {
+    await signInBoardSeedOwnerAndOpenBoard(page);
+    const board = await getBoard(page.request);
+    expect(big.manifest.terminalAgedOut, 'the seed backdated some terminal cards').toBeGreaterThan(
+      0,
+    );
+
+    const statuses = await workflowsService.listStatusesByProject(big.projectId, big.workspaceId);
+    for (const status of statuses.filter((s) => s.category === 'done')) {
+      const col = columnByStatus(board, status.key);
+      const rows = await db.workItem.findMany({
+        where: { projectId: big.projectId, status: status.key },
+        orderBy: [{ updatedAt: 'desc' }, { key: 'asc' }],
+        select: { identifier: true },
+      });
+      expect(col.totalCount).toBe(rows.length);
+      expect(await columnTotalBadge(page, col.id), `badge for ${status.key}`).toBe(rows.length);
+      // Every resolved card, in recency order, no repeats — none windowed out.
+      expect(await laneIdentifiers(page, board, col.id)).toEqual(rows.map((r) => r.identifier));
+    }
   });
 });

@@ -278,7 +278,9 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
 
   it('board count badges (column / swimlane / WIP / points) use --el-count-bg / -text', () => {
     const files = [
-      'app/(authed)/boards/_components/BoardColumn.tsx',
+      // The lane header's count badge (flat column + swimlane pinned header)
+      // lives in LanePager since MOTIR-10535.
+      'app/(authed)/boards/_components/LanePager.tsx',
       'app/(authed)/boards/_components/SwimlaneBoard.tsx',
       'app/(authed)/boards/_components/ColumnWipBadge.tsx',
       'app/(authed)/boards/_components/ColumnPointsBadge.tsx',

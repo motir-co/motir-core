@@ -80,18 +80,6 @@ const PORT = new URL(BASE_URL).port || '3000';
 // `null` for anything that is not a bulk leg id, including an unset E2E_SHARD.
 const SHARD_TEST_MATCH = legTestMatch(process.env['E2E_SHARD'] ?? '');
 
-// Subtask 3.5.1 board load-model test seam: forward the cap / Done-age overrides
-// to the dev server ONLY when the run sets them, so a targeted
-// `BOARD_ISSUE_CAP_OVERRIDE=… pnpm test:e2e --grep board-at-scale` run can reach
-// the over-cap banner + Done-age trim with TENS of rows instead of 5,000. Unset
-// by default → every other E2E spec (and production) keeps the shipped
-// 5,000 / 14 constants (boardsService.resolve{BoardIssueCap,DoneAgeWindowDays}).
-const BOARD_LOAD_SEAM_ENV: Record<string, string> = {};
-for (const k of ['BOARD_ISSUE_CAP_OVERRIDE', 'DONE_AGE_WINDOW_DAYS_OVERRIDE']) {
-  const v = process.env[k];
-  if (v !== undefined && v !== '') BOARD_LOAD_SEAM_ENV[k] = v;
-}
-
 // ⚠️ THE RUNNER USED TO NEED AN EXECUTOR POINTED AT IT (Subtask 5.4.5 /
 // 5.4.11, removed by MOTIR-3418). Seed helpers call services directly and those
 // services emit post-commit, so the runner process published events too — and
@@ -302,9 +290,6 @@ const APP_SERVER_ENV = {
   // toggle during the browser-driven shell-flows journey. next.config.ts
   // reads this flag; a normal `pnpm dev` session keeps its indicator.
   E2E_DISABLE_DEV_INDICATOR: '1',
-  // Subtask 3.5.1: the board load-model overrides, forwarded from the run's
-  // env only when set (empty by default — see BOARD_LOAD_SEAM_ENV above).
-  ...BOARD_LOAD_SEAM_ENV,
   // Story 7.10 · MOTIR-897: the GitHub-integration E2E lane. The webhook
   // secret is the SAME value the spec's signWebhook uses (shared via
   // tests/e2e/_helpers/github-const.ts), so the real 7.10.4 signature

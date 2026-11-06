@@ -5,6 +5,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { cursorAfter } from '@/lib/boards/columnCursor';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -197,7 +198,23 @@ describe('getBoard — scrum sprint scope', () => {
     expect(board.columns.every((c) => c.cards.length === 0)).toBe(true);
     expect(board.columns.every((c) => c.totalCount === 0)).toBe(true);
     expect(board.swimlanes).toEqual([]);
-    expect(board.truncated).toBe(false);
+    expect(board.columns.every((c) => c.cursor === null)).toBe(true);
+    // ...and a page read for one of its lanes answers an empty last page.
+    const lane = board.columns[0]!;
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      lane.id,
+      cursorAfter('position', { position: 'a0', key: 1, updatedAt: new Date() }),
+    );
+    expect(page).toEqual({
+      columnId: lane.id,
+      cards: [],
+      totalCount: 0,
+      cursor: null,
+      planHolds: {},
+    });
     // the column meta (names/statusKeys) is still present — an honest shape
     expect(board.columns.length).toBeGreaterThan(0);
   });

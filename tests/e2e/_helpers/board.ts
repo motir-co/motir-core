@@ -9,7 +9,12 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { signIn } from './shell-session';
 import { SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD } from '../../../scripts/seedLargeBoard';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
-import type { BoardColumnDto, BoardProjectionDto, MoveCardTarget } from '@/lib/dto/boards';
+import type {
+  BoardColumnDto,
+  BoardColumnPageDto,
+  BoardProjectionDto,
+  MoveCardTarget,
+} from '@/lib/dto/boards';
 import type { TestUser } from './work-item-setup';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 
@@ -25,6 +30,31 @@ export async function getBoard(ctx: APIRequestContext): Promise<BoardProjectionD
   const res = await ctx.get('/api/board');
   expect(res.status(), 'GET /api/board').toBe(200);
   return (await res.json()) as BoardProjectionDto;
+}
+
+/**
+ * The board with EVERY lane paged to its end (MOTIR-10535): `GET /api/board`
+ * answers each lane's first page only, so a spec that asks "is this card on the
+ * board / in this column" over a lane longer than one page reads it through
+ * here. Each lane's remaining pages come from
+ * `GET /api/board/columns/[id]/cards`, exactly as the scrolling board reads them;
+ * the returned columns carry every card and a null cursor.
+ */
+export async function getFullBoard(ctx: APIRequestContext): Promise<BoardProjectionDto> {
+  const board = await getBoard(ctx);
+  for (const col of board.columns) {
+    while (col.cursor) {
+      const qs = new URLSearchParams({ boardId: board.boardId, cursor: col.cursor });
+      const res = await ctx.get(`/api/board/columns/${col.id}/cards?${qs.toString()}`);
+      expect(res.status(), `GET lane ${col.id} page`).toBe(200);
+      const page = (await res.json()) as BoardColumnPageDto;
+      col.cards.push(...page.cards);
+      col.cursor = page.cursor;
+      col.totalCount = page.totalCount;
+      Object.assign(board.planHolds, page.planHolds);
+    }
+  }
+  return board;
 }
 
 /**
@@ -83,12 +113,12 @@ export async function addCustomStatus(
 // board specs (3.5.2 load model · 3.5.3 interaction) drive against the seeded
 // board-shaped tenant. Additive — they do not touch the existing 3.1.7/3.6.4
 // API helpers. They lean on the board's stable testids (`board`, `board-column-`,
-// `board-card-`, `board-count-`, `board-overcap-banner`), the same set
+// `board-card-`, `board-count-`, `board-lane-*`), the same set
 // board-load.spec.ts asserts against.
 
 /** The board container testid flips `board-skeleton` → `board` once the projection
  *  fetch resolves. Navigate to `/boards` and wait for the loaded board. The at-scale
- *  seed ships a heavy set, so the default budget is generous; raise it for over-cap. */
+ *  seed ships a heavy set, so the default budget is generous. */
 export async function gotoLoadedBoard(page: Page, loadTimeout = 30_000): Promise<void> {
   await page.goto('/boards');
   await expect(page.getByTestId('board')).toBeVisible({ timeout: loadTimeout });
@@ -114,11 +144,34 @@ export function columnCardNodes(page: Page, columnId: string): Locator {
   return page.getByTestId(`board-column-${columnId}`).locator('[data-testid^="board-card-"]');
 }
 
-/** The column's count badge value (its FULL `totalCount` denominator, unaffected
- *  by virtualization or the Done-age window). */
+/** The column's count badge's FULL `totalCount` denominator, unaffected by
+ *  virtualization or paging. The badge reads "{loaded} of {total}" while the lane
+ *  has more pages and "{total}" once every card is loaded (MOTIR-10535), with
+ *  `en` digit grouping ("2,830"), so this reads the LAST number either way. */
 export async function columnTotalBadge(page: Page, columnId: string): Promise<number> {
-  const text = await page.getByTestId(`board-count-${columnId}`).textContent();
-  return Number((text ?? '').trim());
+  const text = (await page.getByTestId(`board-count-${columnId}`).textContent()) ?? '';
+  const numbers = text.match(/[\d,]+/g) ?? [];
+  return Number((numbers.at(-1) ?? '').replace(/,/g, ''));
+}
+
+/** Scroll a lane's own body to its end, page after page, until every card is
+ *  loaded — the badge drops its "of" and reads the bare total (MOTIR-10535). The
+ *  scroll is what the user does; each arrival at the bottom brings the
+ *  sentinel into view and the next page in. */
+export async function scrollLaneToEnd(page: Page, columnId: string, total: number): Promise<void> {
+  const badge = page.getByTestId(`board-count-${columnId}`);
+  const scroller = columnScroller(page, columnId);
+  await expect
+    .poll(
+      async () => {
+        await scroller.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+        });
+        return (await badge.textContent())?.trim();
+      },
+      { message: `lane ${columnId} pages to its full ${total}`, timeout: 60_000 },
+    )
+    .toBe(total.toLocaleString('en-US'));
 }
 
 /** Assert a column is DOM-bounded: its mounted card-node count is > 0 but well
@@ -136,19 +189,13 @@ export async function expectColumnVirtualized(
   expect(mounted, 'mounted < total (virtualized)').toBeLessThan(total);
 }
 
-/** Assert NO per-column "Load more" affordance exists anywhere on the board — the
- *  retired 3.8.3 cursor paging (neither a button nor any "load more" text). The
- *  board's only load affordance is the column's own scroll. */
+/** Assert NO "Load more" BUTTON exists anywhere on the board: a lane pages as
+ *  it scrolls (MOTIR-10535, `board.mock.html` panel 4), never on a click. The
+ *  failed-page retry is the one button a lane footer may show, and only after a
+ *  page failed — so a healthy board shows no "load more" text at all either. */
 export async function expectNoLoadMore(page: Page): Promise<void> {
   await expect(page.getByText(/load more/i)).toHaveCount(0);
   await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
-}
-
-/** The over-cap "refine your filter" banner Locator (`board-overcap-banner`) —
- *  present iff the board total exceeds the (resolved) cap. Use `.toHaveCount(0)`
- *  to assert absence under the cap, `.toBeVisible()` past it. */
-export function overCapBanner(page: Page): Locator {
-  return page.getByTestId('board-overcap-banner');
 }
 
 // ── At-scale SCRUM helpers (Subtask 4.7.1) ──────────────────────────────────

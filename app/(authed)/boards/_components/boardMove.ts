@@ -134,3 +134,32 @@ export function neighborsOf(
     afterId: after?.id,
   };
 }
+
+/**
+ * Append a lane's NEXT PAGE (MOTIR-10535) to the column it belongs to: its cards
+ * after the ones already loaded, its `cursor` replacing the spent one, and its
+ * `totalCount` (the server's current count) replacing the old denominator. A
+ * card already on the board in ANY column is skipped — one dragged into this
+ * lane after its first page loaded is already shown where it was dropped, and
+ * one the page names in this lane but the board shows elsewhere was moved there
+ * locally, which stays authoritative until the next projection. Pure; a page
+ * for a column no longer on the board changes nothing.
+ */
+export function appendColumnPage(
+  columns: BoardColumnDto[],
+  page: { columnId: string; cards: BoardCardDto[]; cursor: string | null; totalCount: number },
+): BoardColumnDto[] {
+  if (!columns.some((c) => c.id === page.columnId)) return columns;
+  const onBoard = new Set(columns.flatMap((c) => c.cards.map((card) => card.id)));
+  const fresh = page.cards.filter((card) => !onBoard.has(card.id));
+  return columns.map((col) =>
+    col.id === page.columnId
+      ? {
+          ...col,
+          cards: [...col.cards, ...fresh],
+          cursor: page.cursor,
+          totalCount: page.totalCount,
+        }
+      : col,
+  );
+}

@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { adminDb } from '../../helpers/adminDb';
 import { boardsService } from '@/lib/services/boardsService';
@@ -59,10 +59,6 @@ beforeEach(async () => {
   );
   await truncateAuthTables();
   fx = await makeWorkItemFixture({ identifier: 'APG' });
-});
-
-afterEach(() => {
-  delete process.env.DONE_AGE_WINDOW_DAYS_OVERRIDE;
 });
 
 afterAll(async () => {
@@ -280,14 +276,13 @@ describe('the integration seams', () => {
 // ───────────────────────────────────────────────────────────────────────────
 
 describe('every surface that counts open work counts an approved card', () => {
-  it('BOARD — an approved card is not aged out of the board; a done one is', async () => {
-    // The board trims TERMINAL columns to the last ~14 days (`DONE_AGE_WINDOW_DAYS`)
-    // and leaves every other column whole. `isTerminalColumn` asks the project's
-    // workflow which statuses are `category = 'done'`; the Approved column is not
-    // one, so an approved card survives regardless of age. The override env is the
-    // shipped test seam — production reads the constant.
-    process.env.DONE_AGE_WINDOW_DAYS_OVERRIDE = '1';
-
+  it('BOARD — an old approved card sits in the Approved lane, never the Done lane', async () => {
+    // The board pages every lane (MOTIR-10535; the Done-age window it replaced
+    // is gone), so age no longer decides whether a card shows. What still
+    // decides "is this finished?" is the lane: `isTerminalColumn` asks the
+    // project's workflow which statuses are `category = 'done'`. The Approved
+    // column is not one, so an approved card — however old — is in an open lane,
+    // ordered by rank with the work still in flight.
     const approved = await card('approved long ago');
     const done = await card('done long ago');
     await move(approved.id, ...TO_APPROVED);
@@ -296,12 +291,8 @@ describe('every surface that counts open work counts an approved card', () => {
     await backdate(done.id, 30);
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
-    const onBoard = board.columns.flatMap((c) => c.cards.map((card) => card.identifier));
-
-    expect(onBoard).toContain(approved.identifier);
-    // The control: the SAME age, the SAME back-dating, on the terminal side.
-    // It is what proves the window was actually in force rather than disabled.
-    expect(onBoard).not.toContain(done.identifier);
+    const doneColumn = board.columns.find((col) => col.statusKeys.includes('done'));
+    expect(doneColumn?.cards.map((r) => r.identifier)).toEqual([done.identifier]);
 
     // …and it is in the APPROVED column, not merely somewhere on the board. A
     // status the migration seeded without a column would be reported in

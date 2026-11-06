@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { ChevronDown } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -15,6 +16,7 @@ import { ColumnActionsMenu } from './ColumnActionsMenu';
 import { ColumnPointsBadge } from './ColumnPointsBadge';
 import { ColumnWipBadge } from './ColumnWipBadge';
 import { LaneCell } from './LaneCell';
+import { LaneCountBadge, LaneLoadFooter, useLaneSentinel, type LaneLoadState } from './LanePager';
 import { bucketLanes } from './boardSwimlanes';
 
 // SwimlaneBoard (Subtask 3.3.5; load model corrected by 3.8.5) — the board
@@ -26,12 +28,14 @@ import { bucketLanes } from './boardSwimlanes';
 // `.lane-head` (label/kind + aggregate count + collapse chevron) above its
 // `.lane-cols` row of `LaneCell`s.
 //
-// Load model (3.8.5, mistake #33): the board loads the WHOLE bounded set (the
-// 3.8.2 projection — bounded by `BOARD_ISSUE_CAP`, with the over-cap banner in
-// BoardContainer when `truncated`), so there is NO per-column "Load more" footer
-// — the mirror product (Jira) never pages a board. Each `(lane, column)` cell
-// renders its full bucket, virtualized per cell via `useRowWindow` (LaneCell,
-// kept) so the DOM stays bounded on a tall cell.
+// Load model (paged per lane by MOTIR-10535, reversing 3.8.5): each column holds
+// the cards LOADED so far (its first page, then each page after it), bucketed into
+// the swimlane cells. The grid scrolls as one, so the bottom of a column is the
+// bottom of the grid: a footer row under the last lane carries one scroll-to-load
+// sentinel per column (`LanePager`, the 3.2.8 grammar — no "Load more" button; a
+// Spinner + "Loading…" in flight; a focusable retry on a failed page), and the
+// pinned header reads "{loaded} of {total}" while a column has more. Each cell
+// still virtualizes via `useRowWindow` (LaneCell, kept) so the DOM stays bounded.
 //
 // Lanes come from the projection's `swimlanes` (already ordered: assignee alpha
 // / priority rank / epic position, catch-all LAST) and cards are bucketed by
@@ -57,6 +61,8 @@ export function SwimlaneBoard({
   activeCardId,
   overLaneKey,
   columnPoints = null,
+  loadStates = {},
+  onLoadMore,
 }: {
   boardId: string;
   columns: BoardColumnDto[];
@@ -70,6 +76,10 @@ export function SwimlaneBoard({
    *  on a kanban board / unestimated sprint — the pinned column header renders the
    *  "N pts" pill when present (the same scrum chrome as the flat board). */
   columnPoints?: Record<string, number> | null;
+  /** Each column's paging state (MOTIR-10535), keyed by column id. */
+  loadStates?: Record<string, LaneLoadState>;
+  /** Ask for a column's next page. Absent = no paging. */
+  onLoadMore?: (columnId: string) => void;
 }) {
   const t = useTranslations('boards');
   const { collapsed, toggle } = useCollapsedLanes(boardId);
@@ -94,12 +104,12 @@ export function SwimlaneBoard({
         {columns.map((column) => (
           <div key={column.id} className="flex w-72 shrink-0 items-center gap-2">
             <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
-            <span
-              className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-xs font-semibold text-(--el-count-text)"
-              data-testid={`board-count-${column.id}`}
-            >
-              {column.totalCount}
-            </span>
+            <LaneCountBadge
+              columnId={column.id}
+              loaded={column.cards.length}
+              total={column.totalCount}
+              hasMore={column.cursor !== null}
+            />
             {/* Per-column sprint point total (4.5.3) — coexists with the count on
                 the left; absent on a kanban board. */}
             <ColumnPointsBadge columnId={column.id} points={columnPoints?.[column.id] ?? null} />
@@ -240,6 +250,51 @@ export function SwimlaneBoard({
           </div>
         );
       })}
+
+      {/* The paging footer row (MOTIR-10535) — one cell per column, aligned to the
+          same track, under the last lane: the bottom of the grid is the bottom of
+          every column. Renders nothing in a cell whose column is fully loaded. */}
+      {onLoadMore && columns.some((c) => c.cursor !== null) ? (
+        <div className={`${track} py-(--spacing-card-padding-8)`} data-testid="swimlane-load-row">
+          {columns.map((column) => (
+            <SwimlaneColumnFooter
+              key={column.id}
+              column={column}
+              state={loadStates[column.id] ?? 'idle'}
+              onLoadMore={onLoadMore}
+            />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** One column's cell of the swimlane paging footer: its sentinel (observed
+ *  against the viewport — the grid has no vertical scroller of its own), the
+ *  in-flight spinner or the retry. */
+function SwimlaneColumnFooter({
+  column,
+  state,
+  onLoadMore,
+}: {
+  column: BoardColumnDto;
+  state: LaneLoadState;
+  onLoadMore: (columnId: string) => void;
+}) {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const hasMore = column.cursor !== null;
+  const load = useCallback(() => onLoadMore(column.id), [onLoadMore, column.id]);
+  useLaneSentinel(sentinelRef, null, hasMore && state === 'idle', column.cards.length, load);
+  return (
+    <div className="w-72 shrink-0">
+      <LaneLoadFooter
+        columnId={column.id}
+        hasMore={hasMore}
+        state={state}
+        sentinelRef={sentinelRef}
+        onRetry={load}
+      />
     </div>
   );
 }

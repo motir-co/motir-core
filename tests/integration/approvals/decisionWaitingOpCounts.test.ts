@@ -174,7 +174,10 @@ describe('the operation count does not grow with rows', () => {
     await seed(2 * N);
     const large = await recordModelOps(() => boardsService.getBoard(fx.projectId, fx.ctx));
 
-    expect(large.result.columns.flatMap((c) => c.cards)).toHaveLength(3 * N);
+    // The board pages per lane (MOTIR-10535): the counts cover all 3N rows while
+    // the loaded cards are each lane's first page — the batches run over those.
+    expect(large.result.columns.reduce((n, c) => n + c.totalCount, 0)).toBe(3 * N);
+    expect(large.result.columns.flatMap((c) => c.cards).length).toBeGreaterThan(0);
     expect(large.ops.length).toBe(small.ops.length);
     expect(large.ops.filter((op) => op.startsWith('approvalGate.'))).toEqual(GATE_BATCHES);
   });

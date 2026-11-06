@@ -299,14 +299,14 @@ export interface MoveCardResultDto {
 }
 
 /**
- * One column of the board projection (Subtask 3.1.4, load model corrected by
- * 3.8.2): the column meta, its mapped status keys, the column's BOUNDED card set
- * (ordered by rank, or by recency + windowed to the Done-age cutoff for a
- * terminal column), and the FULL count of cards in the column (`totalCount` —
- * the denominator the UI shows, unaffected by the Done-age window). The board
- * loads the whole bounded set up to the board-level `cap`, NOT a paged window
- * (finding #57: the cap is the bound, never "load every row"); the client
- * virtualizes a tall column.
+ * One column (lane) of the board projection (Subtask 3.1.4, paged per lane by
+ * MOTIR-10535): the column meta, its mapped status keys, the LOADED cards
+ * (ordered by rank, or by recency for a done-category lane), the FULL count of
+ * cards in the lane (`totalCount` — the denominator the header shows against the
+ * loaded count), and the cursor of the next page. The projection carries each
+ * lane's first page; the client appends further pages as the lane is scrolled
+ * (finding #57: a page is the bound, never "load every row") and virtualizes a
+ * tall lane.
  */
 export interface BoardColumnDto {
   id: string;
@@ -318,14 +318,32 @@ export interface BoardColumnDto {
   /** The workflow status keys this column maps (the statuses its cards hold). */
   statusKeys: string[];
   cards: BoardCardDto[];
+  /** The lane's FULL card count — the header's denominator, independent of how
+   *  many of its cards are loaded (finding #57). */
   totalCount: number;
   /**
-   * @deprecated Retired in Subtask 3.8.2 — the board loads the whole bounded set
-   * (no per-column paging), so this is ALWAYS `null`. The field is kept one PR
-   * longer because the flat/swimlane UI's load-more plumbing still reads it; it
-   * is removed in 3.8.3 / 3.8.5 along with that plumbing.
+   * The lane's next-page cursor (MOTIR-10535): opaque, naming the last loaded
+   * card, or `null` when every card of the lane is loaded. The board passes it to
+   * `GET /api/board/columns/{id}/cards?cursor=` when the lane is scrolled to its
+   * bottom, and replaces it with the page's own cursor.
    */
   cursor: string | null;
+}
+
+/**
+ * The NEXT PAGE of one board lane (MOTIR-10535) — what
+ * `GET /api/board/columns/{columnId}/cards?cursor=` answers. `cards` follow the
+ * lane's order strictly after the cursor that was sent; `cursor` is the page's
+ * own (null when the lane is exhausted); `totalCount` is the lane's CURRENT full
+ * count; `planHolds` holds the label fields of every plan that holds one of
+ * these cards (merged into the board's `planHolds` by the client).
+ */
+export interface BoardColumnPageDto {
+  columnId: string;
+  cards: BoardCardDto[];
+  totalCount: number;
+  cursor: string | null;
+  planHolds: Record<string, BoardPlanHoldSummaryDto>;
 }
 
 /**
@@ -365,9 +383,9 @@ export interface SprintSummaryDto {
 }
 
 /**
- * The board read projection (Subtask 3.1.4, load model corrected by 3.8.2): the
- * default board's columns (in `position` order), each with its bounded card set,
- * a board-level `cap` + `truncated` signal, plus `unmappedStatuses` — every
+ * The board read projection (Subtask 3.1.4, paged per lane by MOTIR-10535): the
+ * board's columns (in `position` order), each with its FIRST PAGE of cards, its
+ * full `totalCount` and a next-page `cursor`, plus `unmappedStatuses` — every
  * project workflow status mapped to NO column (Jira's behaviour: surfaced, never
  * silently dropped, so the 3.2 UI can offer to map them). The board itself
  * stores no card placement; a card's column is derived from its
@@ -394,20 +412,6 @@ export interface BoardProjectionDto {
   swimlanes: BoardSwimlaneDto[];
   unmappedStatuses: WorkflowStatusDto[];
   /**
-   * The board-level issue cap (Subtask 3.8.2) — the generous bound the board
-   * loads up to (the mirror-faithful replacement for per-column "Load more").
-   * Echoed so the 3.8.4 over-cap banner can name it in its copy.
-   */
-  cap: number;
-  /**
-   * True when the board's total card count exceeds `cap` (Subtask 3.8.2) — the
-   * load stopped at the cap and the 3.8.4 UI shows the "this board is too large
-   * — refine the filter" banner. The board is STILL bounded either way (the cap
-   * is the bound, finding #57); `truncated` only distinguishes "everything fit"
-   * from "the cap was hit".
-   */
-  truncated: boolean;
-  /**
    * The active-sprint summary for a SCRUM board (Subtask 4.5.2) — drives the
    * 4.5.3 sprint header. `null` on a `kanban` board (no sprint scope) AND on a
    * `scrum` board with no active sprint (the 4.5.3 UI then shows the
@@ -433,8 +437,8 @@ export interface BoardProjectionDto {
  * `builtin:<slug>`) resolved through the 6.2 saved-filter access gate — never
  * both (the service prefers `savedFilterId` when both are present). Absent (or
  * an empty AST) leaves the board unfiltered — byte-for-byte the prior
- * projection. The board read applies the predicate per column AND to the
- * cap/`truncated` count + the swimlane lane aggregates, and composes it with
+ * projection. The board read applies the predicate per column (its count and
+ * every page) AND to the swimlane lane aggregates, and composes it with
  * the 4.5 Scrum sprint scope (it narrows WITHIN the sprint, never widening it).
  */
 export interface BoardFilterInput {

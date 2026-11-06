@@ -22,11 +22,8 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createProject, createItem, transition } from './_helpers/workflow';
 import { getBoard, moveCard, columnByStatus, cardIdsIn, addCustomStatus } from './_helpers/board';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
-
-// 3.8.2 retired the per-column page; the board loads the whole bounded set up to
-// BOARD_ISSUE_CAP (5,000). Seed comfortably past the OLD 50-card page size to
-// prove the whole column loads at once with no cursor / "Load more".
-const OLD_PAGE_SIZE = 50;
+import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
+import type { BoardColumnPageDto } from '@/lib/dto/boards';
 
 test.beforeEach(async () => {
   await resetDatabase();
@@ -85,28 +82,37 @@ test.describe('board-projection @smoke', () => {
     expect(board.columns).toHaveLength(DEFAULT_STATUSES.length);
   });
 
-  test('a column past the old page size loads the WHOLE bounded set at once — no cursor, not truncated (3.8.2)', async () => {
+  test('a lane answers one page plus a cursor, and its next pages over HTTP reach every card once (MOTIR-10535)', async () => {
     test.setTimeout(120_000); // seeding the cards over HTTP is the slow part
     const owner = await signUp('e2e-board-paging@example.com');
     const project = await createProject(owner, 'Paging', 'PAG');
 
-    const total = OLD_PAGE_SIZE + 12; // comfortably past the retired 50-card page
+    const total = BOARD_PAGE_SIZE * 2 + 3; // three pages: full, full, partial
     for (let i = 0; i < total; i++) {
       await createItem(owner.ctx, project.id, `card ${i}`); // all land in To Do
     }
 
     const board = await getBoard(owner.ctx);
     const todo = columnByStatus(board, 'todo');
-    // The whole bounded column loads at once: every card, the full count, and NO
-    // cursor (the per-column paging is gone; the client virtualizes).
-    expect(todo.cards).toHaveLength(total);
+    expect(todo.cards).toHaveLength(BOARD_PAGE_SIZE);
     expect(todo.totalCount).toBe(total);
-    expect(todo.cursor).toBeNull();
-    // A normal-sized board is under the cap → not truncated, no over-cap banner.
-    expect(board.truncated).toBe(false);
-    expect(board.cap).toBeGreaterThan(total);
-    // Every card is unique (the whole set, no dupes).
-    expect(new Set(todo.cards.map((c) => c.id)).size).toBe(total);
+    expect(todo.cursor).not.toBeNull();
+
+    const ids = todo.cards.map((c) => c.id);
+    let cursor = todo.cursor;
+    while (cursor) {
+      const qs = new URLSearchParams({ boardId: board.boardId, cursor });
+      const res = await owner.ctx.get(`/api/board/columns/${todo.id}/cards?${qs.toString()}`);
+      expect(res.status()).toBe(200);
+      const page = (await res.json()) as BoardColumnPageDto;
+      expect(page.cards.length).toBeLessThanOrEqual(BOARD_PAGE_SIZE);
+      expect(page.totalCount).toBe(total);
+      ids.push(...page.cards.map((c) => c.id));
+      cursor = page.cursor;
+    }
+    // Every card exactly once, in rank order (creation order here).
+    expect(ids).toHaveLength(total);
+    expect(new Set(ids).size).toBe(total);
   });
 
   test('a legal cross-column move applies the workflow transition; the new status shows in a re-fetched projection', async () => {

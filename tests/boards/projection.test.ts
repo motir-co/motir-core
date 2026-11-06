@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import { boardsService, BOARD_ISSUE_CAP, DONE_AGE_WINDOW_DAYS } from '@/lib/services/boardsService';
+import { boardsService, BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
+import { BoardColumnNotFoundError, InvalidBoardCursorError } from '@/lib/boards/errors';
+import type { BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
@@ -21,10 +23,11 @@ import { truncateAuthTables } from '../helpers/db';
 // default board (3.1.2): one column per status, each mapped to its status. So
 // getBoard reads a fully-seeded board with no manual row inserts.
 //
-// 3.8.2 retired the per-column cursor + "Load more": the board now loads the
-// whole bounded set up to BOARD_ISSUE_CAP, windows terminal columns to the
-// Done-age (~14d), and returns board-level `truncated`/`cap`. These tests assert
-// that corrected model.
+// MOTIR-10535 pages the board PER LANE: each lane loads its first
+// BOARD_PAGE_SIZE cards plus a keyset cursor and its FULL totalCount, and
+// `getColumnPage` returns the page after a cursor. It reverses 3.8.2's
+// whole-bounded-set model (the cap, the `truncated` banner and the Done-age
+// window are gone), so a Done lane pages by recency like any other lane.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -111,6 +114,59 @@ async function bulkCards(fx: Fixture, status: string, n: number): Promise<void> 
   });
 }
 
+/** Like {@link bulkCards}, from a chosen key — for a second bulk set. The
+ * positions chain AFTER every card already in the project. */
+async function bulkCardsAt(fx: Fixture, status: string, n: number, from: number): Promise<void> {
+  const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+  const last = await adminDb.workItem.findFirst({
+    where: { projectId: fx.projectId },
+    orderBy: { position: 'desc' },
+    select: { position: true },
+  });
+  let position: string | null = last?.position ?? null;
+  await adminDb.workItem.createMany({
+    data: Array.from({ length: n }, (_, i) => ({
+      workspaceId: fx.workspaceId,
+      projectId: fx.projectId,
+      kind: 'task' as const,
+      key: from + i,
+      identifier: `${project.identifier}-${from + i}`,
+      title: `Extra ${i}`,
+      status,
+      reporterId: fx.ctx.userId,
+      position: (position = keyForAppend(position)),
+    })),
+  });
+}
+
+function laneOf(board: BoardProjectionDto, statusKey: string): BoardColumnDto {
+  return board.columns.find((c) => c.statusKeys[0] === statusKey)!;
+}
+
+/** Every card title of one lane, first page then every next page to the end. */
+async function pageThrough(
+  fx: Fixture,
+  board: BoardProjectionDto,
+  statusKey: string,
+): Promise<string[]> {
+  const lane = laneOf(board, statusKey);
+  const titles = lane.cards.map((c) => c.title);
+  let cursor = lane.cursor;
+  while (cursor) {
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      lane.id,
+      cursor,
+    );
+    expect(page.cards.length).toBeLessThanOrEqual(BOARD_PAGE_SIZE);
+    titles.push(...page.cards.map((c) => c.title));
+    cursor = page.cursor;
+  }
+  return titles;
+}
+
 describe('boardsService.getBoard — projection', () => {
   it('groups cards into the right columns in workflow order, with per-column counts', async () => {
     const fx = await makeFixture('proj-group@example.com');
@@ -153,70 +209,135 @@ describe('boardsService.getBoard — projection', () => {
     expect(board.columns.flatMap((c) => c.statusKeys)).not.toContain('needs_triage');
   });
 
-  it('loads the WHOLE bounded column set at once — no cursor, no "Load more" (3.8.2)', async () => {
-    const fx = await makeFixture('proj-wholeset@example.com');
-    await bulkCards(fx, 'todo', 120); // well past the old 50-card page size
+  it("loads each lane's FIRST PAGE with a cursor and the full count (MOTIR-10535)", async () => {
+    const fx = await makeFixture('proj-firstpage@example.com');
+    await bulkCards(fx, 'todo', 25);
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
-    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
-    // The whole bounded set loads — not a 50-card first page — and there is no
-    // cursor (the per-column paging is retired; the client virtualizes).
-    expect(todo.totalCount).toBe(120);
-    expect(todo.cards).toHaveLength(120);
-    expect(todo.cursor).toBeNull();
-    // A normal-sized board is not truncated.
-    expect(board.truncated).toBe(false);
-    expect(board.cap).toBe(BOARD_ISSUE_CAP);
+    const todo = laneOf(board, 'todo');
+    expect(todo.totalCount).toBe(25);
+    expect(todo.cards).toHaveLength(BOARD_PAGE_SIZE);
+    expect(todo.cards.map((c) => c.title)).toEqual(
+      Array.from({ length: BOARD_PAGE_SIZE }, (_, i) => `Bulk ${i}`),
+    );
+    expect(todo.cursor).not.toBeNull();
+    // A lane that fits in one page has no cursor.
+    expect(laneOf(board, 'blocked').cursor).toBeNull();
   });
 
-  it('caps the load at BOARD_ISSUE_CAP and sets truncated when the board exceeds it (3.8.2)', async () => {
-    const fx = await makeFixture('proj-cap@example.com');
-    await bulkCards(fx, 'todo', BOARD_ISSUE_CAP + 1); // one over the cap
+  it('pages an open lane to its end in position order — no repeat, no skip', async () => {
+    const fx = await makeFixture('proj-pagethrough@example.com');
+    await bulkCards(fx, 'todo', 23);
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
-    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
-    // Full count is surfaced (the denominator), but the load is bounded by the cap.
-    expect(todo.totalCount).toBe(BOARD_ISSUE_CAP + 1);
-    expect(todo.cards).toHaveLength(BOARD_ISSUE_CAP);
-    // Board total exceeds the cap → truncated (the 3.8.4 over-cap banner shows).
-    expect(board.truncated).toBe(true);
-    expect(board.cap).toBe(BOARD_ISSUE_CAP);
-  }, 60_000);
+    const titles = await pageThrough(fx, board, 'todo');
+    expect(titles).toEqual(Array.from({ length: 23 }, (_, i) => `Bulk ${i}`));
+  });
 
-  it('windows a terminal (done) column to the Done-age window; old done items are excluded but still counted (3.8.2)', async () => {
-    const fx = await makeFixture('proj-doneage@example.com');
-    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
-    let donePosition: string | null = null;
-    const mkDone = async (key: number, title: string) =>
-      adminDb.workItem.create({
-        data: {
-          workspaceId: fx.workspaceId,
-          projectId: fx.projectId,
-          kind: 'task',
-          key,
-          identifier: `${project.identifier}-${key}`,
-          title,
-          status: 'done',
-          reporterId: fx.ctx.userId,
-          position: (donePosition = keyForAppend(donePosition)),
-        },
-      });
-    const recent = await mkDone(3001, 'recent done');
-    const old = await mkDone(3002, 'old done');
-    // Backdate the old card past the Done-age window. `updatedAt` is @updatedAt
-    // (auto-managed), so it can only be moved via raw SQL — and through the ADMIN
-    // client (MOTIR-2792): this is a fixture mutation, not the behaviour under test.
+  it('pages a Done lane by recency, and no longer windows old done cards out', async () => {
+    const fx = await makeFixture('proj-donepaging@example.com');
+    await bulkCards(fx, 'done', 14);
+    // Spread updatedAt so the recency order is the REVERSE of insertion, and put
+    // one card months in the past — the retired Done-age window would have
+    // dropped it; paging keeps it, last.
     await adminDb.$executeRaw`
       UPDATE "work_item"
-         SET "updatedAt" = now() - (${DONE_AGE_WINDOW_DAYS + 6} || ' days')::interval
-       WHERE "id" = ${old.id}`;
+         SET "updatedAt" = now() - (("key" - 1000) || ' minutes')::interval
+       WHERE "projectId" = ${fx.projectId}`;
+    await adminDb.$executeRaw`
+      UPDATE "work_item" SET "updatedAt" = now() - interval '120 days'
+       WHERE "projectId" = ${fx.projectId} AND "key" = 1013`;
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
-    const done = board.columns.find((c) => c.statusKeys[0] === 'done')!;
-    // The full count includes the old card (the denominator is unwindowed)...
-    expect(done.totalCount).toBe(2);
-    // ...but only the in-window card is loaded.
-    expect(done.cards.map((c) => c.id)).toEqual([recent.id]);
+    const done = laneOf(board, 'done');
+    expect(done.totalCount).toBe(14);
+    expect(done.cards).toHaveLength(BOARD_PAGE_SIZE);
+    const titles = await pageThrough(fx, board, 'done');
+    expect(titles).toEqual(Array.from({ length: 14 }, (_, i) => `Bulk ${i}`));
+  });
+
+  it('breaks an updatedAt tie on the Done lane by key, across a page boundary', async () => {
+    const fx = await makeFixture('proj-donetie@example.com');
+    await bulkCards(fx, 'cancelled', 12);
+    await adminDb.$executeRaw`
+      UPDATE "work_item" SET "updatedAt" = '2026-01-01T00:00:00.000Z'
+       WHERE "projectId" = ${fx.projectId}`;
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const titles = await pageThrough(fx, board, 'cancelled');
+    expect(titles).toEqual(Array.from({ length: 12 }, (_, i) => `Bulk ${i}`));
+  });
+
+  it('pages a lane that maps SEVERAL statuses as one ordered lane', async () => {
+    const fx = await makeFixture('proj-multistatus@example.com');
+    await bulkCards(fx, 'todo', 7);
+    await bulkCardsAt(fx, 'blocked', 7, 2000);
+    // Re-map `blocked` onto the To Do column (a status sits in one column).
+    const board0 = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const todoCol = laneOf(board0, 'todo');
+    const blocked = await adminDb.workflowStatus.findFirstOrThrow({
+      where: { projectId: fx.projectId, key: 'blocked' },
+    });
+    await adminDb.boardColumnStatus.updateMany({
+      where: { boardId: board0.boardId, statusId: blocked.id },
+      data: { columnId: todoCol.id },
+    });
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const lane = board.columns.find((c) => c.id === todoCol.id)!;
+    expect(lane.statusKeys).toEqual(['todo', 'blocked']); // workflow position order
+    expect(lane.totalCount).toBe(14);
+    const titles = await pageThrough(fx, board, 'todo');
+    expect(titles).toEqual([
+      ...Array.from({ length: 7 }, (_, i) => `Bulk ${i}`),
+      ...Array.from({ length: 7 }, (_, i) => `Extra ${i}`),
+    ]);
+  });
+
+  it('refuses a cursor the lane did not mint, and a lane that is not on the board', async () => {
+    const fx = await makeFixture('proj-badcursor@example.com');
+    await bulkCards(fx, 'todo', 12);
+    await bulkCardsAt(fx, 'done', 12, 2000);
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const todo = laneOf(board, 'todo');
+    const done = laneOf(board, 'done');
+
+    await expect(
+      boardsService.getColumnPage(fx.projectId, fx.ctx, board.boardId, todo.id, 'not-a-cursor'),
+    ).rejects.toBeInstanceOf(InvalidBoardCursorError);
+    // A position cursor handed to a recency lane is not that lane's cursor.
+    await expect(
+      boardsService.getColumnPage(fx.projectId, fx.ctx, board.boardId, done.id, todo.cursor!),
+    ).rejects.toBeInstanceOf(InvalidBoardCursorError);
+    await expect(
+      boardsService.getColumnPage(
+        fx.projectId,
+        fx.ctx,
+        board.boardId,
+        'no-such-lane',
+        todo.cursor!,
+      ),
+    ).rejects.toBeInstanceOf(BoardColumnNotFoundError);
+  });
+
+  it("a page answers the lane's CURRENT count when cards moved after the first page", async () => {
+    const fx = await makeFixture('proj-livecount@example.com');
+    await bulkCards(fx, 'todo', 15);
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    const todo = laneOf(board, 'todo');
+    await bulkCardsAt(fx, 'todo', 3, 3000);
+
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      todo.id,
+      todo.cursor!,
+    );
+    expect(page.columnId).toBe(todo.id);
+    expect(page.totalCount).toBe(18);
+    expect(page.cards).toHaveLength(8);
+    expect(page.cursor).toBeNull();
   });
 
   it('orders a terminal (done) column by recency, not rank', async () => {

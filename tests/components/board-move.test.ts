@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardCardDto, BoardColumnDto } from '@/lib/dto/boards';
 import {
+  appendColumnPage,
   cardIndex,
   columnOfOverId,
   findCard,
@@ -209,5 +210,52 @@ describe('reconcileCard', () => {
   it('is a no-op when the card id is absent', () => {
     const cols = board();
     expect(reconcileCard(cols, card({ id: 'ghost', key: 9 }))).toBe(cols);
+  });
+});
+
+describe("appendColumnPage — a lane's next page (MOTIR-10535)", () => {
+  const board = () => [
+    column({
+      id: 'todo',
+      name: 'To Do',
+      cards: [card({ id: 'w1', key: 1 }), card({ id: 'w2', key: 2 })],
+      totalCount: 5,
+      cursor: 'CUR-1',
+    }),
+    column({ id: 'doing', name: 'In Progress', cards: [card({ id: 'w4', key: 4 })] }),
+  ];
+
+  it('appends the page and takes its cursor and current count', () => {
+    const cols = board();
+    const next = appendColumnPage(cols, {
+      columnId: 'todo',
+      cards: [card({ id: 'w3', key: 3 }), card({ id: 'w5', key: 5 })],
+      cursor: null,
+      totalCount: 4,
+    });
+    const todo = next.find((c) => c.id === 'todo')!;
+    expect(todo.cards.map((c) => c.id)).toEqual(['w1', 'w2', 'w3', 'w5']);
+    expect(todo.cursor).toBeNull();
+    expect(todo.totalCount).toBe(4);
+    // Other lanes are untouched (the same object).
+    expect(next[1]).toBe(cols[1]);
+  });
+
+  it('drops a card the board already shows anywhere — it moved between page reads', () => {
+    const next = appendColumnPage(board(), {
+      columnId: 'todo',
+      cards: [card({ id: 'w4', key: 4 }), card({ id: 'w2', key: 2 }), card({ id: 'w6', key: 6 })],
+      cursor: 'CUR-2',
+      totalCount: 6,
+    });
+    expect(next.flatMap((c) => c.cards.map((x) => x.id))).toEqual(['w1', 'w2', 'w6', 'w4']);
+    expect(next[0]!.cursor).toBe('CUR-2');
+  });
+
+  it('ignores a page for a lane the board no longer has', () => {
+    const cols = board();
+    expect(
+      appendColumnPage(cols, { columnId: 'gone', cards: [], cursor: null, totalCount: 0 }),
+    ).toBe(cols);
   });
 });

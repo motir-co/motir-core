@@ -1,7 +1,13 @@
 import { Prisma, BoardSwimlaneGroupBy, BoardType } from '@/generated/prisma/client';
 import { reviewStateService } from '@/lib/services/reviewStateService';
 import type { CardReviewMap } from '@/lib/dto/reviewState';
-import type { BoardColumn, WorkItem } from '@/generated/prisma/client';
+import type { Board, BoardColumn, Sprint, WorkItem } from '@/generated/prisma/client';
+import {
+  cursorAfter,
+  decodeColumnCursor,
+  type ColumnCursor,
+  type ColumnOrder,
+} from '@/lib/boards/columnCursor';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
@@ -38,8 +44,10 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type {
+  BoardCardDto,
   BoardColumnConfigDto,
   BoardColumnDto,
+  BoardColumnPageDto,
   BoardColumnStatusDto,
   BoardDto,
   BoardFilterInput,
@@ -66,6 +74,7 @@ import {
   BoardNotFoundError,
   ColumnNotEmptyError,
   IllegalBoardMoveError,
+  InvalidBoardCursorError,
   InvalidBoardNameError,
   InvalidBoardTypeError,
   InvalidColumnNameError,
@@ -242,26 +251,32 @@ export const boardsService = {
   },
 
   /**
-   * The board READ projection (Subtask 3.1.4, load model corrected by 3.8.2) —
-   * turn a project's default board + workflow + issues into the column-of-cards
-   * shape the 3.2 UI renders, the **mirror-faithful** way: the board loads the
-   * **whole bounded set** (NOT a per-column first page + cursor), bounded by a
-   * **board-level cap** (`BOARD_ISSUE_CAP`) with a **Done-age window** trimming
-   * terminal columns, and the client virtualizes the render. This is still
-   * BOUNDED (the cap is the bound; never "load every row", finding #57) — it just
-   * drops the per-column "Load more" the mirror product (Jira) never had
-   * (`notes.html` mistake #33).
+   * The board READ projection (Subtask 3.1.4; load model PAGED PER LANE by
+   * MOTIR-10535) — turn a board + its workflow + its issues into the
+   * column-of-cards shape the 3.2 UI renders.
    *
-   * For each column it returns the column meta, its mapped status keys, the FULL
-   * card count (`totalCount`, the denominator — unaffected by the Done-age
-   * window), and the column's bounded card set (ranked by `position`, or by
-   * recency + windowed to the last ~14 days for a terminal/done column). At the
-   * board level it returns `cap` (the bound) and `truncated` — true exactly when
-   * the board's total card count exceeds the cap, so the 3.8.4 UI shows the
-   * "refine the filter" banner. Plus a top-level `unmappedStatuses` — every
-   * project status mapped to NO column (Jira's behaviour: surfaced, never
-   * dropped). Read-only: no transaction; the explicit `workspaceId` gate
-   * (finding #26) is carried into every repo read.
+   * **Each lane (column) loads its FIRST PAGE** of {@link BOARD_PAGE_SIZE} cards
+   * in its own order — `position`, or recency for a done-category lane — plus a
+   * keyset `cursor` when it has more, and its FULL `totalCount` from a count
+   * query (the header's denominator: "10 of 2,830"). The next page is
+   * {@link boardsService.getColumnPage}, called as the user scrolls a lane to its
+   * bottom. Done and Cancelled lanes page exactly like the others — no lane is
+   * windowed, skipped or emptied.
+   *
+   * Every per-card batch — readiness, the pending decision marker, the review
+   * state, the plan hold, the swimlane key and the To fix tag — runs over the
+   * LOADED cards only, so the board's cost is bounded by lanes × page size and
+   * not by how many cards the project holds. This REVERSES 3.8.2's
+   * "whole bounded set" model (`notes.html` mistake #33): a 2,830-card board
+   * ran its review-state read over every card in one transaction and overran
+   * Prisma's 5 s budget (P2028), so the board answered 500. The cap
+   * (`BOARD_ISSUE_CAP`), its `truncated` banner and the Done-age window went
+   * with that model — paging is the bound now.
+   *
+   * Plus a top-level `unmappedStatuses` — every project status mapped to NO
+   * column (Jira's behaviour: surfaced, never dropped) — and the swimlane lanes,
+   * which stay a bounded aggregate over the whole (filtered) set, so a lane's
+   * count and order do not depend on which pages are loaded.
    *
    * Board SELECTION (Subtask 3.7.5): `boardId` picks WHICH of the project's
    * boards to project. Absent → the project's DEFAULT board (`isDefault`, the
@@ -282,115 +297,22 @@ export const boardsService = {
     boardId?: string,
     filter?: BoardFilterInput,
   ): Promise<BoardProjectionDto> {
-    // Project access gate (6.4.3): the board projection is a read of the
-    // project — a non-browser (a non-member of a private project) gets a 404,
-    // never the board. Runs first so a hidden project never leaks its board.
-    // A VISITOR (MOTIR-6644) is gated to their one public project and reads every
-    // column, count and lane with the private-epic descendants withheld; a
-    // member's read carries no exclusion, byte for byte as before.
-    const member = isVisitorContext(ctx) ? null : ctx;
-    const excludeIds = member
-      ? undefined
-      : openVisitorRead(projectId, ctx as VisitorReadContext).excludeIds;
-    if (member) await projectAccessService.assertCanBrowse(projectId, member);
-    // Every read below binds the PROJECT's workspace and nothing about the actor.
-    const readCtx = {
-      workspaceId: member ? member.workspaceId : (ctx as VisitorReadContext).project.workspaceId,
-      userId: member ? member.userId : null,
-    };
-
-    const board = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-      boardId
-        ? boardRepository.findById(boardId, readCtx.workspaceId, tx)
-        : boardRepository.findDefaultForProject(projectId, readCtx.workspaceId, tx),
-    );
-    // A selected board must live in the active project (the workspace gate is
-    // already in the repo read); the default lookup is project-scoped by query.
-    if (!board || board.projectId !== projectId) {
-      throw new BoardNotFoundError(boardId ?? `default board for project ${projectId}`);
-    }
-
-    // The advanced board filter (Story 6.15.2). Resolved ONCE here — an inline
-    // AST is validated (bad condition → typed 422), a saved-filter id resolves
-    // through the 6.2 access gate (unknown/unauthorized → SavedFilterNotFound →
-    // 404 at the 6.15.3 route). `undefined` when no filter narrows the board, in
-    // which case every read below is byte-for-byte the unfiltered projection.
-    // Resolved before the scrum no-sprint early return so an invalid filter is
-    // rejected consistently regardless of the board's sprint state.
-    // A saved filter is its owner's; a Visitor's board takes an inline filter only.
-    const boardFilter = member
-      ? await resolveBoardFilter(projectId, filter, member)
-      : filter && !filter.savedFilterId
-        ? await resolveBoardFilter(projectId, filter, readCtx)
-        : undefined;
-
-    // The board's own two reads share ONE bound transaction; the workflow LIST is
-    // a service call and opens its own (the call-into-another-service clause in
-    // the transaction-shape ADR).
-    const { columns, mappings } = await withWorkspaceServiceContext(
-      readCtx.workspaceId,
-      async (tx) => ({
-        columns: await boardColumnRepository.findByBoard(board.id, readCtx.workspaceId, tx),
-        mappings: await boardColumnStatusRepository.findByBoard(board.id, readCtx.workspaceId, tx),
-      }),
-    );
-    const statuses = await workflowsService.listStatusesByProject(projectId, readCtx.workspaceId);
-
-    const statusById = new Map(statuses.map((s) => [s.id, s]));
-    const terminalKeys = terminalKeySet(statuses);
-    // Status KEY → its CATEGORY, for the CI badge's done-category rule
-    // (MOTIR-5474). Built from the workflow this projection already loaded, so it
-    // costs no read: the badge rule is keyed on the CATEGORY rather than on the
-    // column, because a board maps statuses to columns many-to-one.
-    const categoryByStatusKey = new Map(statuses.map((s) => [s.key, s.category]));
-
-    // column id → its mapped LIVE statuses; plus the set of all mapped status
-    // ids (any status NOT in it is unmapped). A mapping to a deleted status is
-    // skipped (no live key) but does not make the status "unmapped".
-    const liveByColumn = new Map<string, WorkflowStatusDto[]>();
-    const mappedStatusIds = new Set<string>();
-    for (const m of mappings) {
-      mappedStatusIds.add(m.statusId);
-      const s = statusById.get(m.statusId);
-      if (!s) continue;
-      const list = liveByColumn.get(m.columnId) ?? [];
-      list.push(s);
-      liveByColumn.set(m.columnId, list);
-    }
-
-    // The board's group-by (Subtask 3.3.4) — declared here because the scrum
-    // no-active-sprint early return below needs it too.
+    const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
+    const { board, columns, liveByColumn, mappedStatusIds, statuses, readCtx } = frame;
     const groupBy = board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
-
-    // SPRINT SCOPE (Subtask 4.5.2). A SCRUM board renders only its project's
-    // ACTIVE sprint. The sprint is PROJECT-scoped, not board-scoped (schema rung
-    // 2: there is no `board.sprintId`; the `sprint_one_active_per_project`
-    // partial-unique index makes "the board's active sprint" unambiguous — the
-    // 4.5.2 card's "per-board" wording predates that decision). A `kanban` board
-    // is unscoped — `sprintScopeId` stays `undefined`, so every bounded read
-    // below is byte-for-byte the 3.1.4 projection.
-    const activeSprint =
-      board.type === BoardType.scrum
-        ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-            sprintRepository.findActiveByProject(projectId, readCtx.workspaceId, tx),
-          )
-        : null;
 
     // A scrum board with NO active sprint: empty columns + `sprint: null`, so the
     // 4.5.3 UI shows the "No active sprint" empty state in place of the board. We
     // NEVER fall back to the unscoped board (that would masquerade the backlog as
     // a sprint). The column meta (name / statusKeys / wipLimit) is still returned
     // so the shape is honest, but every column is empty and nothing is counted.
-    if (board.type === BoardType.scrum && !activeSprint) {
+    if (board.type === BoardType.scrum && !frame.activeSprint) {
       const emptyColumns: BoardColumnDto[] = columns.map((col) => ({
         id: col.id,
         name: col.name,
         position: col.position.toString(),
         wipLimit: col.wipLimit,
-        statusKeys: (liveByColumn.get(col.id) ?? [])
-          .slice()
-          .sort(byPosition)
-          .map((s) => s.key),
+        statusKeys: columnStatusKeys(liveByColumn, col.id),
         cards: [],
         totalCount: 0,
         cursor: null,
@@ -403,220 +325,127 @@ export const boardsService = {
         columns: emptyColumns,
         swimlanes: [],
         unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
-        cap: resolveBoardIssueCap(),
-        truncated: false,
         sprint: null,
         planHolds: {},
       };
     }
 
-    // The active-sprint id threaded through every bounded read so the scrum
-    // board's columns / counts / lanes all scope to the sprint; `undefined` on a
-    // kanban board (no scope).
-    const sprintScopeId = activeSprint?.id;
-
-    // Build each column's full count + bounded card set (per-column, NOT per-card
-    // — bounded by the board cap, so no N+1 over cards). Terminal columns are
-    // windowed to issues touched within the Done-age window (3.8.2).
-    // Resolve the load-model bounds ONCE at the service boundary (Subtask
-    // 3.5.1's test seam over 3.8.2): the same `cap` bounds every column's load
-    // AND is the `truncated` denominator below, and the same `doneSince` windows
-    // every terminal column — so a test override is consistent across the whole
-    // projection.
-    const cap = resolveBoardIssueCap();
-    const doneSince = doneAgeCutoff();
+    // Each lane's first page + its full count (one bound transaction per lane —
+    // see `buildColumnPage`). The query count is per LANE, never per card.
     const built = await Promise.all(
-      columns.map((col) => {
-        const live = (liveByColumn.get(col.id) ?? []).slice().sort(byPosition);
-        const statusKeys = live.map((s) => s.key);
-        const terminal = isTerminalColumn(statusKeys, terminalKeys);
-        return buildColumnCards(
-          projectId,
-          col,
-          statusKeys,
-          terminal,
-          doneSince,
-          cap,
-          readCtx,
-          sprintScopeId,
-          boardFilter,
-          excludeIds,
-        );
-      }),
+      columns.map((col) => buildColumnPage(projectId, col, frame, undefined)),
     );
 
-    // Batch readiness across EVERY card on the board in ONE pass (finding #21
-    // without an N+1).
-    const allRows = built.flatMap((b) => b.rows);
-    const readyById = await workItemsService.getReadinessForItems(
-      allRows.map((r) => r.id),
-      readCtx,
-    );
-
-    // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
-    // an awaiting gate, and whether it is this reader's. ONE gate query over every
-    // card on the board, beside the readiness batch — never a lookup per card. It
-    // REPLACED the "Awaiting acceptance" batch (MOTIR-1636, retired by MOTIR-5877):
-    // every pending receipt raises an `acceptance_result` gate, so this read already
-    // knows it, and the board's query count is what it was before the marker.
-    // A Visitor decides nothing, so no card is waiting on them — the marker
-    // names the reader's own gates, and a Visitor has none.
-    const pendingById: Awaited<ReturnType<typeof approvalGatesService.pendingDecisionsFor>> = member
-      ? await approvalGatesService.pendingDecisionsFor(
-          { projectId, workItemIds: allRows.map((r) => r.id) },
-          member,
-        )
-      : new Map();
-    // THE REVIEW MARKERS AND THE REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341): the
-    // review state read model's ONE batch over every card on the board — a fixed number of
-    // queries, never one per card. Per-reader like the marker above (who a marker is loud
-    // for), so a Visitor's board reads none.
-    const reviewById: CardReviewMap = member
-      ? await reviewStateService.cardReviewsFor(
-          projectId,
-          allRows.map((r) => r.id),
-          member,
-        )
-      : {};
-
-    // The PLAN HOLD, up front (Story MOTIR-6017 · MOTIR-6268): which loaded cards an
-    // undecided plan holds at Planning, and per holding plan its label and held
-    // count. ONE batched lease read over the `planning` cards only (no read at all
-    // when the board holds none), through the same `planHoldFor` the move's refusal
-    // applies — the board draws the hold before anyone drags.
-    const planHoldRead = await planTargetLockService.readBoardPlanHolds(
+    // Every per-card batch, over the loaded pages only (MOTIR-10535).
+    const decorated = await decorateBoardRows(
       projectId,
-      allRows,
-      readCtx,
+      built.flatMap((b) => b.rows),
+      frame,
     );
-    // Keyed by `planHoldKey`: the plan's id, or `session:<id>` for an OPEN session's
-    // hold (AMENDMENT 23 §5; MOTIR-7640).
-    const planHolds: Record<string, BoardPlanHoldSummaryDto> = {};
-    for (const [key, plan] of planHoldRead.plans) {
-      planHolds[key] = {
-        kind: plan.kind,
-        planId: plan.planId,
-        sessionId: plan.sessionId,
-        anchorKey: plan.anchorKey,
-        title: plan.title,
-        heldCount: plan.heldCount,
-      };
-    }
 
     // Swimlanes (Subtask 3.3.4). The union of the board's mapped column statuses
-    // IS the board's card population, so lane membership (per loaded card) and
-    // the lane list are both resolved over that set — a bounded aggregate, never
-    // a load-all (finding #57). For the flat `none` board both are no-ops: an
-    // empty `swimlanes` and no per-card `swimlaneKey` (so the projection is
-    // byte-for-byte the 3.1.4 shape). The board TOTAL (over the same status
-    // union) is the truncation denominator: `truncated` when it exceeds the cap.
-    // The sprint scope (4.5.2) composes with the lanes + the total exactly as it
-    // does with the columns — lanes are computed over the scoped issue set.
+    // IS the board's card population, so the lane list is resolved over that set
+    // — a bounded aggregate, never a load-all (finding #57) — and so a lane's
+    // count does not move as pages load. For the flat `none` board it is a no-op:
+    // an empty `swimlanes`. The sprint scope (4.5.2) composes with the lanes
+    // exactly as it does with the columns.
     const boardStatusKeys = [...new Set(built.flatMap((b) => b.statusKeys))];
-    // MOTIR-3077 — bucket B (peer reads), left on `Promise.all` deliberately.
-    // The board read is already gated, and all three arms are bounded reads
-    // over a row set resolved above — none of them refuses.
-    const [swimlaneKeyByCard, swimlanes, boardTotal] = await Promise.all([
-      resolveSwimlaneKeys(groupBy, allRows, readCtx),
-      buildSwimlanes(
-        groupBy,
-        projectId,
-        boardStatusKeys,
-        readCtx,
-        sprintScopeId,
-        boardFilter,
-        excludeIds,
-        !member,
-      ),
-      boardStatusKeys.length
-        ? withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-            workItemRepository.countProjectIssues(
-              projectId,
-              readCtx.workspaceId,
-              {
-                statuses: boardStatusKeys,
-                ...(sprintScopeId ? { sprintId: sprintScopeId } : {}),
-                // 6.15.2 — the truncation denominator counts the FILTERED set, so
-                // a filter that brings the board under the cap clears `truncated`.
-                ...(boardFilter
-                  ? { ast: boardFilter.ast, filterReferents: boardFilter.referents }
-                  : {}),
-                ...(excludeIds ? { excludeIds } : {}),
-              },
-              tx,
-            ),
-          )
-        : Promise.resolve(0),
-    ]);
+    const swimlanes = await buildSwimlanes(
+      groupBy,
+      projectId,
+      boardStatusKeys,
+      readCtx,
+      frame.activeSprint?.id,
+      frame.boardFilter,
+      frame.excludeIds,
+      !frame.member,
+    );
 
     // The active-sprint summary that drives the 4.5.3 sprint header (Subtask
     // 4.5.2) — present only on a scrum board with an active sprint. The points
     // come from the estimation domain (the SUM lives in ONE place — 4.3.3); this
     // service folds in the per-column breakdown via the column→status layout.
+    // An aggregate over the sprint, never a sum over the loaded pages.
     let sprint: SprintSummaryDto | null = null;
-    if (activeSprint) {
+    if (frame.activeSprint) {
       const { points, columnPoints } = await estimationService.sprintBoardPoints(
-        activeSprint.id,
+        frame.activeSprint.id,
         built.map((b) => ({ id: b.col.id, statusKeys: b.statusKeys })),
         readCtx,
-        excludeIds,
+        frame.excludeIds,
       );
-      sprint = toSprintSummaryDto(activeSprint, points, columnPoints, new Date());
+      sprint = toSprintSummaryDto(frame.activeSprint, points, columnPoints, new Date());
     }
-
-    // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309): read only for
-    // the cards showing a reason, and never for a Visitor — a head key names another card.
-    const fixTags = member
-      ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
-          fixTagFactsFor(
-            readCtx.workspaceId,
-            built.flatMap((b) => b.rows.filter((r) => r.fixReason !== null).map((r) => r.id)),
-            tx,
-          ),
-        )
-      : NO_FIX_TAG_FACTS;
-
-    const columnsDto: BoardColumnDto[] = built.map((b) => ({
-      id: b.col.id,
-      name: b.col.name,
-      position: b.col.position.toString(),
-      wipLimit: b.col.wipLimit,
-      statusKeys: b.statusKeys,
-      cards: b.rows.map((r) => {
-        const card = toBoardCardDto(r, {
-          ready: readyById.get(r.id) ?? true,
-          pendingDecision: pendingById.get(r.id) ?? null,
-          review: reviewById[r.id] ?? null,
-          planHold: planHoldRead.byItemId.get(r.id) ?? null,
-          swimlaneKey: swimlaneKeyByCard.get(r.id),
-          statusCategory: categoryByStatusKey.get(r.status) ?? null,
-        });
-        Object.assign(card, fixTagFieldsOf(r.id, fixTags));
-        // A Visitor's PRIVATE epic card wears "Not public" (MOTIR-6648;
-        // `epic-privacy.md` §4) — a member's card is unchanged.
-        return !member && r.kind === 'epic' && r.publicChildrenHidden
-          ? { ...card, childrenHidden: true as const }
-          : card;
-      }),
-      totalCount: b.totalCount,
-      // Retired in 3.8.2: the board loads the whole bounded set, never a paged
-      // window, so there is no "next page". The field stays (always null) until
-      // 3.8.3 / 3.8.5 strip it with the UI's load-more plumbing.
-      cursor: null,
-    }));
 
     return {
       boardId: board.id,
       name: board.name,
       type: board.type as BoardTypeDto,
       swimlaneGroupBy: groupBy,
-      columns: columnsDto,
+      columns: built.map((b) => ({
+        id: b.col.id,
+        name: b.col.name,
+        position: b.col.position.toString(),
+        wipLimit: b.col.wipLimit,
+        statusKeys: b.statusKeys,
+        cards: b.rows.map(decorated.toCard),
+        totalCount: b.totalCount,
+        cursor: b.cursor,
+      })),
       swimlanes,
       unmappedStatuses: statuses.filter((s) => !mappedStatusIds.has(s.id)),
-      cap,
-      truncated: boardTotal > cap,
       sprint,
-      planHolds,
+      planHolds: decorated.planHolds,
+    };
+  },
+
+  /**
+   * The NEXT PAGE of one board lane (MOTIR-10535) — the read the board makes when
+   * the user scrolls a lane to its bottom. `cursor` is the lane's own cursor from
+   * the projection (or from the previous page); the page is the
+   * {@link BOARD_PAGE_SIZE} cards strictly after it, in the lane's order, with a
+   * cursor of its own when more remain. Every gate of {@link getBoard} applies
+   * unchanged — the project-access check, the board's tenancy, the Visitor's
+   * private-epic exclusion, the board filter and the scrum sprint scope — so a
+   * page can only ever hold cards the full board would show.
+   *
+   * The page carries the lane's CURRENT `totalCount` (cards may have moved since
+   * the first page) and the `planHolds` its cards name, both decorated by the
+   * same per-card batches as the first page — over this page's cards only.
+   *
+   * Throws `BoardNotFoundError` / `BoardColumnNotFoundError` (404) for a board or
+   * lane the caller cannot see, and `InvalidBoardCursorError` (400) for a cursor
+   * this lane did not mint.
+   */
+  async getColumnPage(
+    projectId: string,
+    ctx: ServiceContext | VisitorReadContext,
+    boardId: string,
+    columnId: string,
+    cursor: string,
+    filter?: BoardFilterInput,
+  ): Promise<BoardColumnPageDto> {
+    const frame = await loadBoardFrame(projectId, ctx, boardId, filter);
+    const col = frame.columns.find((c) => c.id === columnId);
+    if (!col) throw new BoardColumnNotFoundError(columnId);
+    const order = columnOrder(columnStatusKeys(frame.liveByColumn, col.id), frame.terminalKeys);
+    const after = decodeColumnCursor(cursor, order);
+    if (!after) throw new InvalidBoardCursorError();
+
+    // A scrum board with no active sprint shows no cards at all, so it has no
+    // next page either — the same rule as the projection's early return.
+    if (frame.board.type === BoardType.scrum && !frame.activeSprint) {
+      return { columnId, cards: [], totalCount: 0, cursor: null, planHolds: {} };
+    }
+
+    const page = await buildColumnPage(projectId, col, frame, after);
+    const decorated = await decorateBoardRows(projectId, page.rows, frame);
+    return {
+      columnId,
+      cards: page.rows.map(decorated.toCard),
+      totalCount: page.totalCount,
+      cursor: page.cursor,
+      planHolds: decorated.planHolds,
     };
   },
 
@@ -785,9 +614,31 @@ export const boardsService = {
         // carrying legacy/invalid `position` keys (a tenant not yet reseeded —
         // PR #1020) would otherwise make `keyBetween` throw and 500 the move.
         // `keyBetweenSafe` always returns a valid key for both cases.
-        const prev = await resolveNeighbourPosition(target.beforeId, board.projectId, ctx, tx);
-        const next = await resolveNeighbourPosition(target.afterId, board.projectId, ctx, tx);
-        const position = keyBetweenSafe(prev, next);
+        const prev = await resolveNeighbour(target.beforeId, board.projectId, ctx, tx);
+        let next = (await resolveNeighbour(target.afterId, board.projectId, ctx, tx))?.position;
+        // A PAGED lane's bottom is not the lane's end (MOTIR-10535). A drop under
+        // the last LOADED card arrives with no `afterId` while the lane may hold
+        // unloaded cards below it; bracketing with the open end would rank the
+        // card after ALL of them, so it would jump to the lane's very end on the
+        // next read. The real lower neighbour is the card that follows `prev` in
+        // the lane's rank, which this transaction can read. (A done-category lane
+        // is ordered by recency, not rank, so it needs no such neighbour.)
+        if (prev && !target.afterId && !mappedStatuses.every((s) => s.category === 'done')) {
+          const [successor] = await workItemRepository.findColumnCards(
+            board.projectId,
+            ctx.workspaceId,
+            [...mappedKeys],
+            'position',
+            {
+              limit: 1,
+              after: { order: 'position', position: prev.position, key: prev.key },
+              excludeIds: [workItemId],
+            },
+            tx,
+          );
+          next = successor?.position;
+        }
+        const position = keyBetweenSafe(prev?.position ?? null, next ?? null);
         const row = await workItemRepository.update(workItemId, { position }, tx);
 
         return {
@@ -1583,61 +1434,12 @@ function isValidWipLimit(limit: number | null): boolean {
 }
 
 /**
- * The board-level issue cap (Subtask 3.8.2) — the GENEROUS bound the board loads
- * up to, the mirror-faithful replacement for per-column "Load more" (Jira loads
- * its whole saved-filter set up to 5,000 Software / 3,000 Business; this is the
- * Software figure). It is the bound, NOT a page size: there is no "next page",
- * the board loads up to the cap and stops, and `truncated` flags the rare board
- * that exceeds it (the 3.8.4 over-cap banner then points at the Epic-6 filter
- * seam). A real team's active board fits comfortably under it. Still
- * finding-#57-bounded (the cap IS the bound), the opposite of "load all rows".
+ * The board's lane PAGE SIZE (MOTIR-10535) — how many cards a lane loads at a
+ * time: the projection's first page, and every page the lane's scroll-to-bottom
+ * asks for after it. It is what bounds a board read (lanes × this, never the
+ * project's card count), so every per-card batch on the board is sized by it.
  */
-export const BOARD_ISSUE_CAP = 5000;
-
-/**
- * Done-age window (Subtask 3.8.2) — terminal (done / cancelled) columns load
- * only issues touched within the last ~14 days, the age-based shape Jira uses
- * (it hides done issues older than ~14 days). Lacking a `completedAt` column we
- * window by `updatedAt`; the FULL count is still surfaced (`totalCount`), so the
- * header denominator is unchanged. This refines 3.2.5's count-based window to
- * the age-based behaviour.
- */
-export const DONE_AGE_WINDOW_DAYS = 14;
-
-/**
- * Test-only seam (Subtask 3.5.1) over the two board load-model bounds. When the
- * matching override env is set to a POSITIVE INTEGER it REPLACES the shipped
- * constant; unset (or non-positive / non-numeric — production), the shipped
- * constant is used byte-for-byte. The override is wired ONLY into the test
- * `webServer` env (`playwright.config.ts`) and the vitest setup, so the at-scale
- * states — the over-cap "refine your filter" banner and the Done-age trim — are
- * reachable with TENS of rows instead of the 5,000 / 14-day production scale.
- * A unit test asserts the unset-env default equals the shipped constants, so
- * this is a test seam, NOT a behaviour change: production is untouched.
- */
-function envPositiveInt(name: string): number | null {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return null;
-  const v = Number(raw);
-  return Number.isInteger(v) && v > 0 ? v : null;
-}
-
-/** The board issue cap in effect: the {@link BOARD_ISSUE_CAP_OVERRIDE} env when a
- * positive integer, else the shipped {@link BOARD_ISSUE_CAP}. */
-export function resolveBoardIssueCap(): number {
-  return envPositiveInt('BOARD_ISSUE_CAP_OVERRIDE') ?? BOARD_ISSUE_CAP;
-}
-
-/** The Done-age window (days) in effect: the {@link DONE_AGE_WINDOW_DAYS_OVERRIDE}
- * env when a positive integer, else the shipped {@link DONE_AGE_WINDOW_DAYS}. */
-export function resolveDoneAgeWindowDays(): number {
-  return envPositiveInt('DONE_AGE_WINDOW_DAYS_OVERRIDE') ?? DONE_AGE_WINDOW_DAYS;
-}
-
-/** The cutoff instant for the Done-age window: now minus the resolved window. */
-function doneAgeCutoff(): Date {
-  return new Date(Date.now() - resolveDoneAgeWindowDays() * 24 * 60 * 60 * 1000);
-}
+export const BOARD_PAGE_SIZE = 10;
 
 /** The per-project terminal-status key set (category `done`) — the finding-#21
  * terminal generalization, reused for both readiness and terminal-column order. */
@@ -1649,6 +1451,20 @@ function terminalKeySet(statuses: WorkflowStatusDto[]): Set<string> {
  * status is terminal (the Done / Cancelled columns). */
 function isTerminalColumn(statusKeys: string[], terminalKeys: Set<string>): boolean {
   return statusKeys.length > 0 && statusKeys.every((k) => terminalKeys.has(k));
+}
+
+/** A lane's card order: recency for a done-category (terminal) lane, the board
+ * rank for every other. The cursor carries it, so the two never cross. */
+function columnOrder(statusKeys: string[], terminalKeys: Set<string>): ColumnOrder {
+  return isTerminalColumn(statusKeys, terminalKeys) ? 'recent' : 'position';
+}
+
+/** A column's mapped LIVE status keys, in workflow `position` order. */
+function columnStatusKeys(liveByColumn: Map<string, WorkflowStatusDto[]>, columnId: string) {
+  return (liveByColumn.get(columnId) ?? [])
+    .slice()
+    .sort(byPosition)
+    .map((s) => s.key);
 }
 
 /** Sort `WorkflowStatusDto`s by their fractional-index `position` (lexicographic). */
@@ -1721,50 +1537,174 @@ async function resolveBoardFilter(
 }
 
 /**
- * Build one column's projection (Subtask 3.8.2): its FULL card count + the
- * column's bounded card set (terminal columns ordered by recency and windowed to
- * the Done-age cutoff; others ranked by `position`), capped at the board-level
- * cap. No cursor — the whole bounded set loads at once (the client virtualizes).
- * `totalCount` is the full count (NOT windowed), so the header denominator is
- * unchanged. A column mapping no live status is an empty column.
- *
- * `sprintId` (Subtask 4.5.2) is the optional SCRUM scope: when set, BOTH the
- * count and the card load are filtered to the active sprint's issues, so the
- * scrum column shows only that sprint's cards (and its `totalCount` denominator
- * is the sprint-scoped count). `undefined` on a kanban board (unscoped, 3.1.4).
+ * Everything a board read resolves before it reads a single card (shared by
+ * `getBoard` and `getColumnPage`, MOTIR-10535): the reader, the board, its
+ * filter, its columns + status mapping, the workflow and the scrum sprint.
  */
-async function buildColumnCards(
+type BoardFrame = {
+  /** The member reading, or null for a Visitor (MOTIR-6644). */
+  member: ServiceContext | null;
+  /** A Visitor's private-epic exclusion; `undefined` for a member. */
+  excludeIds: readonly string[] | undefined;
+  /** The binding every read runs under: the PROJECT's workspace. */
+  readCtx: { workspaceId: string; userId: string | null };
+  board: Board;
+  boardFilter: ResolvedBoardFilter | undefined;
+  columns: BoardColumn[];
+  liveByColumn: Map<string, WorkflowStatusDto[]>;
+  mappedStatusIds: Set<string>;
+  statuses: WorkflowStatusDto[];
+  terminalKeys: Set<string>;
+  categoryByStatusKey: Map<string, WorkflowStatusDto['category']>;
+  /** The active sprint on a scrum board (Subtask 4.5.2); null on kanban. */
+  activeSprint: Sprint | null;
+};
+
+async function loadBoardFrame(
+  projectId: string,
+  ctx: ServiceContext | VisitorReadContext,
+  boardId: string | undefined,
+  filter: BoardFilterInput | undefined,
+): Promise<BoardFrame> {
+  // Project access gate (6.4.3): the board projection is a read of the
+  // project — a non-browser (a non-member of a private project) gets a 404,
+  // never the board. Runs first so a hidden project never leaks its board.
+  // A VISITOR (MOTIR-6644) is gated to their one public project and reads every
+  // column, count and lane with the private-epic descendants withheld; a
+  // member's read carries no exclusion, byte for byte as before.
+  const member = isVisitorContext(ctx) ? null : ctx;
+  const excludeIds = member
+    ? undefined
+    : openVisitorRead(projectId, ctx as VisitorReadContext).excludeIds;
+  if (member) await projectAccessService.assertCanBrowse(projectId, member);
+  // Every read below binds the PROJECT's workspace and nothing about the actor.
+  const readCtx = {
+    workspaceId: member ? member.workspaceId : (ctx as VisitorReadContext).project.workspaceId,
+    userId: member ? member.userId : null,
+  };
+
+  const board = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
+    boardId
+      ? boardRepository.findById(boardId, readCtx.workspaceId, tx)
+      : boardRepository.findDefaultForProject(projectId, readCtx.workspaceId, tx),
+  );
+  // A selected board must live in the active project (the workspace gate is
+  // already in the repo read); the default lookup is project-scoped by query.
+  if (!board || board.projectId !== projectId) {
+    throw new BoardNotFoundError(boardId ?? `default board for project ${projectId}`);
+  }
+
+  // The advanced board filter (Story 6.15.2). Resolved ONCE here — an inline
+  // AST is validated (bad condition → typed 422), a saved-filter id resolves
+  // through the 6.2 access gate (unknown/unauthorized → SavedFilterNotFound →
+  // 404 at the 6.15.3 route). `undefined` when no filter narrows the board, in
+  // which case every read below is byte-for-byte the unfiltered projection.
+  // Resolved before the scrum no-sprint early return so an invalid filter is
+  // rejected consistently regardless of the board's sprint state.
+  // A saved filter is its owner's; a Visitor's board takes an inline filter only.
+  const boardFilter = member
+    ? await resolveBoardFilter(projectId, filter, member)
+    : filter && !filter.savedFilterId
+      ? await resolveBoardFilter(projectId, filter, readCtx)
+      : undefined;
+
+  // The board's own two reads share ONE bound transaction; the workflow LIST is
+  // a service call and opens its own (the call-into-another-service clause in
+  // the transaction-shape ADR).
+  const { columns, mappings } = await withWorkspaceServiceContext(
+    readCtx.workspaceId,
+    async (tx) => ({
+      columns: await boardColumnRepository.findByBoard(board.id, readCtx.workspaceId, tx),
+      mappings: await boardColumnStatusRepository.findByBoard(board.id, readCtx.workspaceId, tx),
+    }),
+  );
+  const statuses = await workflowsService.listStatusesByProject(projectId, readCtx.workspaceId);
+  const statusById = new Map(statuses.map((s) => [s.id, s]));
+
+  // column id → its mapped LIVE statuses; plus the set of all mapped status
+  // ids (any status NOT in it is unmapped). A mapping to a deleted status is
+  // skipped (no live key) but does not make the status "unmapped".
+  const liveByColumn = new Map<string, WorkflowStatusDto[]>();
+  const mappedStatusIds = new Set<string>();
+  for (const m of mappings) {
+    mappedStatusIds.add(m.statusId);
+    const s = statusById.get(m.statusId);
+    if (!s) continue;
+    const list = liveByColumn.get(m.columnId) ?? [];
+    list.push(s);
+    liveByColumn.set(m.columnId, list);
+  }
+
+  // SPRINT SCOPE (Subtask 4.5.2). A SCRUM board renders only its project's
+  // ACTIVE sprint. The sprint is PROJECT-scoped, not board-scoped (schema rung
+  // 2: there is no `board.sprintId`; the `sprint_one_active_per_project`
+  // partial-unique index makes "the board's active sprint" unambiguous). A
+  // `kanban` board is unscoped.
+  const activeSprint =
+    board.type === BoardType.scrum
+      ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
+          sprintRepository.findActiveByProject(projectId, readCtx.workspaceId, tx),
+        )
+      : null;
+
+  return {
+    member,
+    excludeIds,
+    readCtx,
+    board,
+    boardFilter,
+    columns,
+    liveByColumn,
+    mappedStatusIds,
+    statuses,
+    terminalKeys: terminalKeySet(statuses),
+    // Status KEY → its CATEGORY, for the CI badge's done-category rule
+    // (MOTIR-5474). The badge rule is keyed on the CATEGORY rather than on the
+    // column, because a board maps statuses to columns many-to-one.
+    categoryByStatusKey: new Map(statuses.map((s) => [s.key, s.category])),
+    activeSprint,
+  };
+}
+
+/**
+ * Build one PAGE of a lane (MOTIR-10535): its FULL card count + up to
+ * {@link BOARD_PAGE_SIZE} cards strictly after `after` (the first page when
+ * absent), in the lane's order, and the cursor naming the page's last card when
+ * more remain. It reads one row past the page to learn that, so no second count
+ * is needed. A column mapping no live status is an empty lane.
+ *
+ * The board's scrum sprint scope (Subtask 4.5.2), its filter (6.15.2) and a
+ * Visitor's private-epic exclusion (MOTIR-6644) narrow the count AND the cards
+ * alike, so the header denominator is always the set the lane pages through.
+ */
+async function buildColumnPage(
   projectId: string,
   col: BoardColumn,
-  statusKeys: string[],
-  terminal: boolean,
-  doneSince: Date,
-  cap: number,
-  ctx: Pick<ServiceContext, 'workspaceId'>,
-  sprintId?: string,
-  filter?: ResolvedBoardFilter,
-  // A Visitor's private-epic exclusion (MOTIR-6644) — the count AND the cards.
-  excludeIds?: readonly string[],
+  frame: BoardFrame,
+  after: ColumnCursor | undefined,
 ): Promise<{
   col: BoardColumn;
   statusKeys: string[];
   rows: WorkItem[];
   totalCount: number;
+  cursor: string | null;
 }> {
+  const statusKeys = columnStatusKeys(frame.liveByColumn, col.id);
   if (statusKeys.length === 0) {
-    return { col, statusKeys, rows: [], totalCount: 0 };
+    return { col, statusKeys, rows: [], totalCount: 0, cursor: null };
   }
-  // 6.15.2 — the same compiled filter AND-ed into BOTH the count denominator
-  // and the card load, so the column shows only matching cards and its
-  // `totalCount` header reflects the filtered set. `undefined` → byte-for-byte
-  // the unfiltered column read.
-  // The column's cards and its own denominator, in ONE bound transaction: two
+  const order = columnOrder(statusKeys, frame.terminalKeys);
+  const { workspaceId } = frame.readCtx;
+  const sprintId = frame.activeSprint?.id;
+  const filter = frame.boardFilter;
+  const excludeIds = frame.excludeIds;
+  // The lane's cards and its own denominator, in ONE bound transaction: two
   // reads of the same predicate rendered as one column header, so a write
   // landing between them cannot make "12 of 9" appear.
-  const { totalCount, rows } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+  const { totalCount, fetched } = await withWorkspaceServiceContext(workspaceId, async (tx) => ({
     totalCount: await workItemRepository.countProjectIssues(
       projectId,
-      ctx.workspaceId,
+      workspaceId,
       {
         statuses: statusKeys,
         ...(sprintId ? { sprintId } : {}),
@@ -1773,14 +1713,14 @@ async function buildColumnCards(
       },
       tx,
     ),
-    rows: await workItemRepository.findColumnCards(
+    fetched: await workItemRepository.findColumnCards(
       projectId,
-      ctx.workspaceId,
+      workspaceId,
       statusKeys,
-      terminal ? 'recent' : 'position',
+      order,
       {
-        limit: cap,
-        updatedSince: terminal ? doneSince : undefined,
+        limit: BOARD_PAGE_SIZE + 1,
+        ...(after ? { after } : {}),
         sprintId,
         ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
         ...(excludeIds ? { excludeIds } : {}),
@@ -1788,20 +1728,114 @@ async function buildColumnCards(
       tx,
     ),
   }));
-  return { col, statusKeys, rows, totalCount };
+  const rows = fetched.slice(0, BOARD_PAGE_SIZE);
+  const last = rows[rows.length - 1];
+  const cursor = fetched.length > BOARD_PAGE_SIZE && last ? cursorAfter(order, last) : null;
+  return { col, statusKeys, rows, totalCount, cursor };
 }
 
 /**
- * Resolve a rank-neighbour id to its `position`, or null when no neighbour is
+ * Every per-card batch of a board read, over the LOADED rows only (MOTIR-10535):
+ * readiness, the decision-waiting marker, the review state, the plan hold, the
+ * swimlane key and the To fix tag. Each is ONE batched read over `rows` — a
+ * fixed number of queries per page, never one per card — so a page costs the
+ * same on a 30-card board as on a 3,000-card one. Answers the card mapper and
+ * the plans that hold any of the rows.
+ */
+async function decorateBoardRows(
+  projectId: string,
+  rows: WorkItem[],
+  frame: BoardFrame,
+): Promise<{
+  toCard: (row: WorkItem) => BoardCardDto;
+  planHolds: Record<string, BoardPlanHoldSummaryDto>;
+}> {
+  const { member, readCtx } = frame;
+  const ids = rows.map((r) => r.id);
+  const groupBy = frame.board.swimlaneGroupBy as BoardSwimlaneGroupByDto;
+
+  // Readiness (finding #21), one pass over the loaded cards.
+  const readyById = await workItemsService.getReadinessForItems(ids, readCtx);
+
+  // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
+  // an awaiting gate, and whether it is this reader's — ONE gate query. A Visitor
+  // decides nothing, so no card is waiting on them.
+  const pendingById: Awaited<ReturnType<typeof approvalGatesService.pendingDecisionsFor>> = member
+    ? await approvalGatesService.pendingDecisionsFor({ projectId, workItemIds: ids }, member)
+    : new Map();
+
+  // THE REVIEW MARKERS AND THE REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341): the
+  // review state read model's ONE batch. Per-reader like the marker above, so a
+  // Visitor's board reads none. Sized by the page — the whole-board version of
+  // this read is what overran the transaction budget (MOTIR-10535).
+  const reviewById: CardReviewMap = member
+    ? await reviewStateService.cardReviewsFor(projectId, ids, member)
+    : {};
+
+  // The PLAN HOLD (Story MOTIR-6017 · MOTIR-6268): which loaded cards an undecided
+  // plan holds at Planning, and per holding plan its label and held count (the
+  // count is the plan's own, server-side — not the loaded cards'). No read at all
+  // when no loaded card is at Planning.
+  const planHoldRead = await planTargetLockService.readBoardPlanHolds(projectId, rows, readCtx);
+  // Keyed by `planHoldKey`: the plan's id, or `session:<id>` for an OPEN session's
+  // hold (AMENDMENT 23 §5; MOTIR-7640).
+  const planHolds: Record<string, BoardPlanHoldSummaryDto> = {};
+  for (const [key, plan] of planHoldRead.plans) {
+    planHolds[key] = {
+      kind: plan.kind,
+      planId: plan.planId,
+      sessionId: plan.sessionId,
+      anchorKey: plan.anchorKey,
+      title: plan.title,
+      heldCount: plan.heldCount,
+    };
+  }
+
+  // Swimlane membership (Subtask 3.3.4) — per loaded card; a no-op on `none`.
+  const swimlaneKeyByCard = await resolveSwimlaneKeys(groupBy, rows, readCtx);
+
+  // The To fix tag's *· with {head}* (MOTIR-7589) and Fixing (MOTIR-10309): read only for
+  // the cards showing a reason, and never for a Visitor — a head key names another card.
+  const fixTags = member
+    ? await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
+        fixTagFactsFor(
+          readCtx.workspaceId,
+          rows.filter((r) => r.fixReason !== null).map((r) => r.id),
+          tx,
+        ),
+      )
+    : NO_FIX_TAG_FACTS;
+
+  const toCard = (r: WorkItem): BoardCardDto => {
+    const card = toBoardCardDto(r, {
+      ready: readyById.get(r.id) ?? true,
+      pendingDecision: pendingById.get(r.id) ?? null,
+      review: reviewById[r.id] ?? null,
+      planHold: planHoldRead.byItemId.get(r.id) ?? null,
+      swimlaneKey: swimlaneKeyByCard.get(r.id),
+      statusCategory: frame.categoryByStatusKey.get(r.status) ?? null,
+    });
+    Object.assign(card, fixTagFieldsOf(r.id, fixTags));
+    // A Visitor's PRIVATE epic card wears "Not public" (MOTIR-6648;
+    // `epic-privacy.md` §4) — a member's card is unchanged.
+    return !member && r.kind === 'epic' && r.publicChildrenHidden
+      ? { ...card, childrenHidden: true as const }
+      : card;
+  };
+  return { toCard, planHolds };
+}
+
+/**
+ * Resolve a rank-neighbour id to its `position` and `key`, or null when no neighbour is
  * given (the open end of the column). A neighbour must exist and be in the same
  * workspace + project as the board; otherwise it's a 404 (no cross-tenant leak).
  */
-async function resolveNeighbourPosition(
+async function resolveNeighbour(
   neighbourId: string | undefined,
   projectId: string,
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
-): Promise<string | null> {
+): Promise<{ position: string; key: number } | null> {
   if (!neighbourId) return null;
   const neighbour = await workItemRepository.findById(neighbourId, tx);
   if (
@@ -1811,7 +1845,7 @@ async function resolveNeighbourPosition(
   ) {
     throw new WorkItemNotFoundError(neighbourId);
   }
-  return neighbour.position;
+  return { position: neighbour.position, key: neighbour.key };
 }
 
 /** Lane order for the `priority` group-by — Jira shows highest severity first;
