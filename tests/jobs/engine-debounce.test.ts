@@ -273,11 +273,15 @@ describe('the CLAIM closes the window', () => {
 
     await expect(
       withSystemContext((tx) =>
-        jobQueueRepository.rescheduleAt(first!.id, new Date(Date.now() + 1_000), tx, {
-          lastError: { message: 'transient' },
-        }),
+        jobQueueRepository.rescheduleAt(
+          first!.id,
+          'worker-under-test',
+          new Date(Date.now() + 1_000),
+          tx,
+          { lastError: { message: 'transient' } },
+        ),
       ),
-    ).resolves.toMatchObject({ state: 'pending' });
+    ).resolves.toBe(true);
 
     const pending = (await rowsFor(DEBOUNCED_ID)).filter((r) => r.state === 'pending');
     expect(pending).toHaveLength(2);
