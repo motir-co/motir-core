@@ -103,6 +103,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'assistant',
   'audit',
   'author',
+  'clause_list',
   'code_graph',
   'comparables',
   'contextual_context',
@@ -350,6 +351,13 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
    *  A rail row naming the limit is a design question, outside this card. */
   lay_stopped: {
     quiet: 'a limit stopped a part-laid level — the rethrown error is the run’s error state',
+  },
+  /** planningEngine: the numbered clause list taken from the requirement and its page
+   *  before the first level is laid (MOTIR-10479). The list is persisted on the job
+   *  and printed in section 1 of the plan's briefing, which is where a person reads it;
+   *  each level's lay judges its cards against it. */
+  clause_list: {
+    quiet: 'the clause list taken before the first level — the briefing’s section 1 shows it',
   },
 };
 
