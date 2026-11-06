@@ -155,6 +155,7 @@ describe('record_planner_finding — tools/list', () => {
         'hostedCell',
         'planpyCell',
         'fixDirection',
+        'rule',
         'authorModel',
         'authorSessionKey',
         'baseline',
@@ -168,7 +169,6 @@ describe('record_planner_finding — tools/list', () => {
       'source',
       'status',
       'fingerprint',
-      'rule',
       'jobId',
       'lessonId',
       'bugKey',
@@ -180,13 +180,16 @@ describe('record_planner_finding — tools/list', () => {
 });
 
 describe('record_planner_finding — refusals before the service', () => {
-  it.each(['source', 'status', 'rule'])('refuses an unknown key `%s` by name', async (key) => {
-    const res = await call({ ...VALID, [key]: 'in_loop' });
+  it.each(['source', 'status', 'fingerprint'])(
+    'refuses an unknown key `%s` by name',
+    async (key) => {
+      const res = await call({ ...VALID, [key]: 'in_loop' });
 
-    expect(res.isError).toBe(true);
-    expect(textOf(res)).toContain(key);
-    expect(recordFinding).toHaveBeenCalledTimes(0);
-  });
+      expect(res.isError).toBe(true);
+      expect(textOf(res)).toContain(key);
+      expect(recordFinding).toHaveBeenCalledTimes(0);
+    },
+  );
 
   it.each([
     ['planner', 'gpt'],

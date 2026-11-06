@@ -2862,7 +2862,12 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         type: 'string',
         minLength: 1,
         description:
-          'WHERE the defect is — the card and the part of it (a criterion, an edge, a field). Repeats of one defect are grouped by site and attribution, so name it the same way each time.',
+          "WHERE the defect is — the card and the part of it (a criterion, an edge, a field), for a reader of the finding. When `rule` is given the site is not part of the grouping key, so it may name this plan's card freely; without a rule, repeats group by site and attribution.",
+      },
+      rule: {
+        type: 'string',
+        description:
+          'The planner RULE or CODE SITE the defect breaks, as a repo-relative `path:line` on the default branch — e.g. `prompts/plan-rules/phase-author.md:410` or `src/jobs/planningEngine.ts:3090`. Repeats of one defect are grouped by this rule and the attribution, across checks and plans, so name the same `path:line` for the same defect every time; the prose around it and a range end are ignored.',
       },
       prediction: {
         type: 'string',
