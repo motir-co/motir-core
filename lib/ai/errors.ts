@@ -251,6 +251,17 @@ export class PlatformLessonNotFoundError extends MotirAiError {
   }
 }
 
+// `GET` / `PATCH /v1/admin/planner-findings/:id` answered `not_found` — no
+// finding with that id in motir-ai's store (MOTIR-10516). Its own class, as a
+// lesson's is, so the console can render a not-found page rather than an outage.
+export class PlannerFindingNotFoundError extends MotirAiError {
+  readonly code = 'PLANNER_FINDING_NOT_FOUND' as const;
+  constructor(readonly findingId: string) {
+    super(`no planner finding "${findingId}"`);
+    this.name = 'PlannerFindingNotFoundError';
+  }
+}
+
 // A staff credit ADJUSTMENT would take the org's balance below zero
 // (`POST /v1/admin/credits` → 409 `conflict` with a detail starting
 // `insufficient_balance:`; MOTIR-747). A detail PREFIX, not a code — the §5 union

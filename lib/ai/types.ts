@@ -859,6 +859,46 @@ export interface ResultEnvelope {
   // `unknown` for the same reason as `authoredBug`: untrusted model output, read
   // only through `parseTranslations` (lib/ai/translate.ts).
   translations?: unknown;
+  // The plan's dry-run spend as its own lines (Story MOTIR-10352 · motir-ai
+  // MOTIR-10475): one `review` line and one `repair` line, present only when
+  // the stage ran and spent something. A BREAKDOWN beside `usage`, never a
+  // replacement; absent (not `[]`) on a job that predates the lines or ran no
+  // dry run, which a reader must keep apart from "cost nothing" (MOTIR-10516).
+  stageUsage?: StageUsageLine[];
+  // The dry run's outcome and counts — `counts.fixed` is the fix count the
+  // planner-findings console shows beside the cost. Typed NARROWLY: motir-ai's
+  // `DryRunStageResult` carries far more, and results are read loosely here.
+  dryRun?: PlannerDryRunSummary;
+}
+
+/** One dry-run stage's spend, as motir-ai's `StageUsageLine` (`src/jobs/stageUsage.ts`). */
+export interface StageUsageLine {
+  stage: 'review' | 'repair';
+  /** The first session model on the line. */
+  model: string | null;
+  inputTokens: number;
+  outputTokens: number;
+  /** Present only when some session reported a cache split. */
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  /** How many sessions were folded into the line. */
+  sessions: number;
+  /** micro-USD; `null` when any session on the line is unpriced. */
+  costMicroUsd: number | null;
+}
+
+/** motir-ai's `DryRunCounts` — the members the console reads. */
+export interface PlannerDryRunCounts {
+  findingsAccepted: number;
+  fixed: number;
+  reported: number;
+  fixFailed: number;
+}
+
+/** The narrow view of motir-ai's `DryRunStageResult` a core reader relies on. */
+export interface PlannerDryRunSummary {
+  outcome: 'ran' | 'skipped';
+  counts: PlannerDryRunCounts;
 }
 
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'canceled';

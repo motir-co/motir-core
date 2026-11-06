@@ -36,6 +36,7 @@ import {
   MotirAiInsufficientBalanceError,
   MotirAiUnavailableError,
   PlatformLessonNotFoundError,
+  PlannerFindingNotFoundError,
   PlannerModelListEntryInUseError,
   PlannerModelListFallbackError,
   PlannerModelListRefusedError,
@@ -2574,6 +2575,42 @@ export type PlannerFindingPlanner = 'hosted' | 'plan_py';
 export type PlannerFindingPrediction = 'STOPS' | 'SETTLES' | 'THRU';
 export type PlannerFindingOutcome = 'fixed' | 'reported' | 'fix_failed';
 export type PlannerFindingAttribution = 'code' | 'corpus' | 'model' | 'unattributed';
+export type PlannerFindingSource = 'in_loop' | 'check_plan';
+export type PlannerFindingStatus = 'new' | 'promoted_to_lesson' | 'filed_as_bug' | 'dismissed';
+
+// The same vocabularies as runtime value sets (MOTIR-10516), member for member
+// motir-ai's `prisma/schema.prisma` enums, so a filter or a triage control can
+// enumerate them and a reader can check a value it was handed.
+export const PLANNER_FINDING_SOURCES = [
+  'in_loop',
+  'check_plan',
+] as const satisfies readonly PlannerFindingSource[];
+export const PLANNER_FINDING_PLANNERS = [
+  'hosted',
+  'plan_py',
+] as const satisfies readonly PlannerFindingPlanner[];
+export const PLANNER_FINDING_PREDICTIONS = [
+  'STOPS',
+  'SETTLES',
+  'THRU',
+] as const satisfies readonly PlannerFindingPrediction[];
+export const PLANNER_FINDING_OUTCOMES = [
+  'fixed',
+  'reported',
+  'fix_failed',
+] as const satisfies readonly PlannerFindingOutcome[];
+export const PLANNER_FINDING_ATTRIBUTIONS = [
+  'code',
+  'corpus',
+  'model',
+  'unattributed',
+] as const satisfies readonly PlannerFindingAttribution[];
+export const PLANNER_FINDING_STATUSES = [
+  'new',
+  'promoted_to_lesson',
+  'filed_as_bug',
+  'dismissed',
+] as const satisfies readonly PlannerFindingStatus[];
 
 export interface CreatePlannerFindingRequest {
   coreOrganizationId: string;
@@ -2602,40 +2639,48 @@ export interface CreatePlannerFindingRequest {
   fixDirection?: string;
 }
 
-/** One stored finding as the create route answers it (motir-ai `model PlannerFinding`). */
+/**
+ * One stored finding — the whole motir-ai `PlannerFinding` row, as every finding
+ * route answers it (`toDto` spreads the row). Dates are ISO strings: they cross
+ * the wire as JSON and nothing here parses them.
+ */
 export interface RawPlannerFinding {
   id: string;
-  source: string;
-  planner: string;
+  coreOrganizationId: string;
+  coreWorkspaceId: string;
+  coreProjectId: string;
+  aiProjectId: string;
+  planId: string;
+  jobId: string | null;
+  planTitle: string | null;
+  cardRef: string | null;
+  source: PlannerFindingSource;
+  planner: PlannerFindingPlanner;
+  authorModel: string | null;
+  authorSessionKey: string | null;
+  baselineBranch: string | null;
+  baselineCommit: string | null;
   site: string;
+  prediction: PlannerFindingPrediction;
+  whatHappened: string;
+  evidence: string;
+  correction: string | null;
+  outcome: PlannerFindingOutcome;
+  rule: string | null;
+  attribution: PlannerFindingAttribution | null;
+  why: string | null;
+  hostedCell: string | null;
+  planpyCell: string | null;
+  fixDirection: string | null;
   fingerprint: string;
-  status: string;
-  coreOrganizationId?: string;
-  coreWorkspaceId?: string;
-  coreProjectId?: string;
-  planId?: string;
-  prediction?: string;
-  whatHappened?: string;
-  evidence?: string;
-  outcome?: string;
-  jobId?: string | null;
-  planTitle?: string | null;
-  cardRef?: string | null;
-  authorModel?: string | null;
-  authorSessionKey?: string | null;
-  baselineBranch?: string | null;
-  baselineCommit?: string | null;
-  correction?: string | null;
-  rule?: string | null;
-  attribution?: string | null;
-  why?: string | null;
-  hostedCell?: string | null;
-  planpyCell?: string | null;
-  fixDirection?: string | null;
-  lessonId?: string | null;
-  bugKey?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
+  status: PlannerFindingStatus;
+  lessonId: string | null;
+  bugKey: string | null;
+  triageNote: string | null;
+  triagedBy: string | null;
+  triagedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /** The optional members, in wire order. Each is sent only when the caller supplied it. */
@@ -3867,6 +3912,238 @@ export function promotePlatformLesson(
   actorCoreUserId: string,
 ): Promise<RawPlatformLessonWrite> {
   return platformLessonWrite(lessonId, '/promote', 'POST', { to, actorCoreUserId });
+}
+
+// ── Planner findings — the platform admin console's reads and triage ─────────
+//
+// `/v1/admin/planner-findings` (Story MOTIR-10348 · MOTIR-10514): every
+// finding the hosted planner's review and the check-plan skill stored, across
+// tenants and after their plans are gone. Same `config()` / `aiFetch` / problem
+// mapping as the platform-lesson calls above.
+//
+// ⚠️ A 200 THAT IS NOT THE EXPECTED SHAPE IS AN UNAVAILABLE UPSTREAM, NEVER AN
+// EMPTY LIST: an unreadable motir-ai must not look like "no findings".
+//
+// ⚠️ motir-ai WRITES NO AUDIT ROW, as for lessons: the triage write answers the
+// from → to record and core appends it to its own platform log. `audit: null`
+// is a write that changed nothing.
+
+/** The admin read's retention window, as both list routes answer it. */
+export interface RawPlannerFindingRetention {
+  days: number;
+  /** ISO string; `null` when the caller named its own dates. */
+  cutoff: string | null;
+}
+
+export interface RawPlannerFindingPage {
+  findings: RawPlannerFinding[];
+  nextCursor: string | null;
+  retention: RawPlannerFindingRetention;
+}
+
+/** One entry per fingerprint: how many rows, which plans, and the newest row. */
+export interface RawPlannerFindingGroup {
+  fingerprint: string;
+  count: number;
+  planIds: string[];
+  latest: RawPlannerFinding;
+}
+
+export interface RawPlannerFindingGroupPage {
+  groups: RawPlannerFindingGroup[];
+  nextCursor: string | null;
+  retention: RawPlannerFindingRetention;
+}
+
+/** What one triage write changed — `before` / `after` carry ONLY the changed fields. */
+export interface RawPlannerFindingAudit {
+  action: 'ai.planner_finding.triage';
+  findingId: string;
+  actorCoreUserId: string;
+  at: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+}
+
+export interface RawPlannerFindingTriageResult {
+  finding: RawPlannerFinding;
+  audit: RawPlannerFindingAudit | null;
+}
+
+/** The list filters, field for field motir-ai's `ListFindingsInput`. Every one optional. */
+export interface PlannerFindingListQuery {
+  planner?: PlannerFindingPlanner;
+  source?: PlannerFindingSource;
+  site?: string;
+  prediction?: PlannerFindingPrediction;
+  outcome?: PlannerFindingOutcome;
+  attribution?: PlannerFindingAttribution;
+  status?: PlannerFindingStatus;
+  /** A status to leave out, AND-ed with `status` (MOTIR-10514). */
+  excludeStatus?: PlannerFindingStatus;
+  /** An exact fingerprint — how a group opens to its findings (MOTIR-10514). */
+  fingerprint?: string;
+  /** ISO 8601. Either date replaces the retention window. */
+  createdFrom?: string;
+  createdTo?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+/**
+ * One triage write. motir-ai owns which ids a status carries (`lessonId` with
+ * `promoted_to_lesson`, `bugKey` with `filed_as_bug`, `note` with `dismissed`)
+ * and answers 400 otherwise; this transport does not repeat the rule.
+ */
+export interface PlannerFindingTriagePatch {
+  attribution?: PlannerFindingAttribution;
+  why?: string;
+  hostedCell?: string;
+  planpyCell?: string;
+  fixDirection?: string;
+  status?: PlannerFindingStatus;
+  lessonId?: string;
+  bugKey?: string;
+  note?: string;
+}
+
+const PLANNER_FINDING_QUERY_KEYS = [
+  'planner',
+  'source',
+  'site',
+  'prediction',
+  'outcome',
+  'attribution',
+  'status',
+  'excludeStatus',
+  'fingerprint',
+  'createdFrom',
+  'createdTo',
+  'cursor',
+  'limit',
+] as const satisfies readonly (keyof PlannerFindingListQuery)[];
+
+const PLANNER_FINDING_TRIAGE_KEYS = [
+  'attribution',
+  'why',
+  'hostedCell',
+  'planpyCell',
+  'fixDirection',
+  'status',
+  'lessonId',
+  'bugKey',
+  'note',
+] as const satisfies readonly (keyof PlannerFindingTriagePatch)[];
+
+// An absent or empty filter adds no parameter, so no `key=` is ever sent.
+function plannerFindingQueryString(query: PlannerFindingListQuery): string {
+  const params = new URLSearchParams();
+  for (const key of PLANNER_FINDING_QUERY_KEYS) {
+    const value = query[key];
+    if (value !== undefined && value !== '') params.set(key, String(value));
+  }
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
+// A missing or malformed retention block reads as no window, as the lesson
+// page's `retentionDays` falls back to 0; the rows themselves are never repaired.
+function plannerFindingRetention(raw: unknown): RawPlannerFindingRetention {
+  const r = raw as Partial<RawPlannerFindingRetention> | null | undefined;
+  if (!r || typeof r.days !== 'number') return { days: 0, cutoff: null };
+  return { days: r.days, cutoff: typeof r.cutoff === 'string' ? r.cutoff : null };
+}
+
+/** A non-2xx from an id-addressed finding route, with `not_found` given its own class. */
+async function plannerFindingError(res: Response, findingId: string): Promise<Error> {
+  const problem = await readProblem(res);
+  if (problem.code === 'not_found') return new PlannerFindingNotFoundError(findingId);
+  return errorFromProblem(problem);
+}
+
+async function plannerFindingGet(path: string): Promise<Response> {
+  const { url, serviceToken } = config();
+  return aiFetch(`${url}/v1/admin/planner-findings${path}`, {
+    headers: authHeaders(serviceToken),
+  });
+}
+
+// GET /v1/admin/planner-findings — one cursor page, newest first, windowed.
+export async function listPlannerFindings(
+  query: PlannerFindingListQuery = {},
+): Promise<RawPlannerFindingPage> {
+  const res = await plannerFindingGet(plannerFindingQueryString(query));
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as Partial<RawPlannerFindingPage> | null;
+  if (!body || !Array.isArray(body.findings)) {
+    throw new MotirAiUnavailableError('planner findings response missing `findings`');
+  }
+  return {
+    findings: body.findings,
+    nextCursor: body.nextCursor ?? null,
+    retention: plannerFindingRetention(body.retention),
+  };
+}
+
+// GET /v1/admin/planner-findings/groups — one entry per fingerprint, windowed.
+export async function listPlannerFindingGroups(
+  query: PlannerFindingListQuery = {},
+): Promise<RawPlannerFindingGroupPage> {
+  const res = await plannerFindingGet(`/groups${plannerFindingQueryString(query)}`);
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json().catch(() => null)) as Partial<RawPlannerFindingGroupPage> | null;
+  if (!body || !Array.isArray(body.groups)) {
+    throw new MotirAiUnavailableError('planner finding groups response missing `groups`');
+  }
+  return {
+    groups: body.groups,
+    nextCursor: body.nextCursor ?? null,
+    retention: plannerFindingRetention(body.retention),
+  };
+}
+
+// GET /v1/admin/planner-findings/:id — one finding, not windowed.
+export async function getPlannerFinding(findingId: string): Promise<RawPlannerFinding> {
+  const res = await plannerFindingGet(`/${encodeURIComponent(findingId)}`);
+  if (!res.ok) throw await plannerFindingError(res, findingId);
+  const body = (await res.json().catch(() => null)) as RawPlannerFinding | null;
+  if (!body || typeof body.id !== 'string') {
+    throw new MotirAiUnavailableError('planner finding response is not a finding');
+  }
+  return body;
+}
+
+// PATCH /v1/admin/planner-findings/:id — set the attribution, or record what was
+// done with the finding. The body holds only the fields given, plus the actor.
+export async function triagePlannerFinding(
+  findingId: string,
+  patch: PlannerFindingTriagePatch,
+  actorCoreUserId: string,
+): Promise<RawPlannerFindingTriageResult> {
+  const { url, serviceToken } = config();
+  const payload: Record<string, string> = {};
+  for (const key of PLANNER_FINDING_TRIAGE_KEYS) {
+    const value = patch[key];
+    if (value !== undefined) payload[key] = value;
+  }
+  payload.actorCoreUserId = actorCoreUserId;
+  const res = await aiFetch(`${url}/v1/admin/planner-findings/${encodeURIComponent(findingId)}`, {
+    method: 'PATCH',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw await plannerFindingError(res, findingId);
+  const body = (await res.json().catch(() => null)) as RawPlannerFindingTriageResult | null;
+  if (
+    !body ||
+    typeof body.finding !== 'object' ||
+    body.finding === null ||
+    typeof body.finding.id !== 'string' ||
+    body.audit === undefined
+  ) {
+    throw new MotirAiUnavailableError('planner finding triage answered no `{ finding, audit }`');
+  }
+  return body;
 }
 
 // ── The lesson-retirement window N (MOTIR-1463) ────────────────────────────────
