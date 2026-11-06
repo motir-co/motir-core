@@ -63,6 +63,18 @@ import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';
 // the absence of a teal tint, the only choice that keeps the chip set mutually
 // distinct.
 //
+// ── Not only the canvas any more (MOTIR-10534) ──────────────────────────────
+// The "two recipes" above were two surfaces' recipes. Since MOTIR-10534 this
+// chip is THE work item's status chip wherever the item's state is shown as a
+// tag: the roadmap canvas card, the /boards card, the quick view header, the
+// item page's eyebrow and its rail's read-only status, all through
+// `components/workItems/WorkItemStateTags.tsx`. The `color-mix` recipe stays on
+// the surfaces that EDIT a status (the item page's `StatusPicker`) and on the
+// list rows' `StatusPill`, which that card left alone. The name stays
+// `canvasStatusMeta` because the canvas is where the language is specified
+// (`design/roadmap/design-notes.md`); a rename would touch every import for no
+// reader's benefit.
+//
 // ── Not colour alone ────────────────────────────────────────────────────────
 // Finding #35: every node state is icon + label + tint. `implemented` carries
 // the SAME `CircleEllipsis` the shipped `StatusPill` gives it (and the CI pill
