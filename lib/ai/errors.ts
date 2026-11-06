@@ -52,8 +52,11 @@ export class MotirAiBadRequestError extends MotirAiError {
   // hand. It lets a caller tell "the request CONTENT was refused" (400/413/422)
   // from a 4xx that is about the caller or the moment (401/403/429), which this
   // class otherwise collapses — see {@link isPerInputRejection}.
+  // `detail` is the problem's own sentence, kept apart from the message so a
+  // caller that shows it (a near-duplicate lesson names the existing one) need
+  // not parse it back out.
   constructor(
-    detail: string,
+    readonly detail: string,
     readonly httpStatus?: number,
   ) {
     super(`motir-ai rejected the request: ${detail}`);
