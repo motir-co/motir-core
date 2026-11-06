@@ -4315,6 +4315,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
         description:
           'The card’s ORDERED STEPS, written as its to-do list. ARRAY ORDER IS LIST ORDER — the sequence they are performed in — and approving the plan writes one real to-do row per element, none ticked. A `manual` card’s steps belong HERE, not only in the description: the reviewer reads the list they will tick before they approve it, and the created card carries it from birth. Leaf kinds only — a container’s steps are its children. REPLACES the list whole — a list has no sparse edit — so send the set you want; `[]` or `null` clears it, and omitting it leaves the proposal’s list alone.',
       },
+      authorFinished: {
+        anyOf: [{ type: 'boolean', const: true }, { type: 'null' }],
+        description:
+          'Planner state, sent ONLY by a planner DRIVER: `true` records that an author session finished writing this card, `null` clears it, and omitting it leaves the state as it is. It is not a field of the card and never reaches the work item. A write naming it — `null` included — is taken at its word; a write omitting it whose body goes beyond its boundary while no planner session is live is marked finished by Motir itself. Do not send it when writing a card by hand.',
+      },
       revision: {
         type: 'boolean',
         description:
