@@ -508,10 +508,13 @@ describe('the repositories — the reads nothing else happened to exercise', () 
     const at = new Date(Date.now() + 60_000);
 
     await withSystemContext(async (tx) => {
-      const back = await jobQueueRepository.rescheduleAt(row.id, at, tx, {
-        refundAttempt: true,
-        lastError: { message: 'transient' },
-      });
+      expect(
+        await jobQueueRepository.rescheduleAt(row.id, 'w', at, tx, {
+          refundAttempt: true,
+          lastError: { message: 'transient' },
+        }),
+      ).toBe(true);
+      const back = await tx.jobQueueRun.findUniqueOrThrow({ where: { id: row.id } });
       expect(back.state).toBe('pending');
       expect(back.runAt.getTime()).toBe(at.getTime());
       // A sleep is not a failure, so the attempt goes back.
