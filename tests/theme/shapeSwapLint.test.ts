@@ -219,6 +219,9 @@ describe('shape-swap lint — no surface shapes its radius past the token layer'
       // escaped, and there is no role token for "the inside of a segment".
       'packages/design-system/src/components/theme/AppearancePickers.tsx → rounded-[calc(var(--radius-btn)-2px)]',
       'packages/design-system/src/components/ui/Segmented.tsx → rounded-[calc(var(--radius-btn)-2px)]',
+      // The planner-findings view switch is the same segmented track, drawn as
+      // a radiogroup of LINKS (each view is a URL), which `Segmented` cannot render.
+      'app/(admin)/admin/planner-findings/_components/FindingsViewSwitch.tsx → rounded-[calc(var(--radius-btn)-2px)]',
     ];
 
     const offenders = inertRadiusOffenders().filter(
@@ -334,6 +337,8 @@ const OWN_BOX_ALLOWED: Record<string, string> = {
     'Fixed-size tile, skeleton placeholder or layout block (not a control height), so no height step fits.',
   'app/(admin)/admin/page.tsx → p-0.5':
     'Nested inset: the 2px inset inside a segmented track is concentric with the track radius, and the button/input role has no padding steps.',
+  'app/(admin)/admin/planner-findings/_components/FindingsViewSwitch.tsx → p-0.5':
+    'Nested inset: the 2px inset inside the view switch track is concentric with the segment radius derived from --radius-btn, and the button role has no padding steps.',
   'app/(auth)/reset-password/new/page.tsx → px-6':
     'Full-width call-to-action with 24px side padding; the button role has no steps and --spacing-btn-x is 18px.',
   'app/(auth)/reset-password/page.tsx → px-6':

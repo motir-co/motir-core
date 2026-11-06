@@ -52,8 +52,11 @@ export class MotirAiBadRequestError extends MotirAiError {
   // hand. It lets a caller tell "the request CONTENT was refused" (400/413/422)
   // from a 4xx that is about the caller or the moment (401/403/429), which this
   // class otherwise collapses — see {@link isPerInputRejection}.
+  // `detail` is the problem's own sentence, kept apart from the message so a
+  // caller that shows it (a near-duplicate lesson names the existing one) need
+  // not parse it back out.
   constructor(
-    detail: string,
+    readonly detail: string,
     readonly httpStatus?: number,
   ) {
     super(`motir-ai rejected the request: ${detail}`);
@@ -248,6 +251,17 @@ export class PlatformLessonNotFoundError extends MotirAiError {
   constructor(readonly lessonId: string) {
     super(`no lesson "${lessonId}"`);
     this.name = 'PlatformLessonNotFoundError';
+  }
+}
+
+// `GET` / `PATCH /v1/admin/planner-findings/:id` answered `not_found` — no
+// finding with that id in motir-ai's store (MOTIR-10516). Its own class, as a
+// lesson's is, so the console can render a not-found page rather than an outage.
+export class PlannerFindingNotFoundError extends MotirAiError {
+  readonly code = 'PLANNER_FINDING_NOT_FOUND' as const;
+  constructor(readonly findingId: string) {
+    super(`no planner finding "${findingId}"`);
+    this.name = 'PlannerFindingNotFoundError';
   }
 }
 

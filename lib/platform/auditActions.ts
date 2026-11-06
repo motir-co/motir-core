@@ -264,6 +264,20 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'ai.lesson.retention_set': { kind: 'write', reason: 'required' },
   /**
+   * A planner finding was TRIAGED from the planner-findings console (Story
+   * MOTIR-10353 · MOTIR-10517): an attribution set, promoted to a lesson, a bug
+   * key recorded, dismissed or restored. motir-ai stores the finding and writes
+   * NO audit row; it answers the from → to record and core appends this one.
+   * Target is `platform` with the finding id as `targetId` (a finding is not a
+   * core entity — the lesson precedent), the finding's `coreOrganizationId` as
+   * the entry's `organizationId`, and `metadata` carries
+   * `{ findingId, before, after }`, the changed fields only. `inherited`: the
+   * console's triage controls carry no per-action reason field (approved design
+   * MOTIR-10362), so the triage service writes a default reason — still held to
+   * the non-blank bar `reasonSatisfied` sets for every write.
+   */
+  'planner_finding.triage': { kind: 'write', reason: 'inherited' },
+  /**
    * One organisation's fleet containers were STOPPED by a platform admin (Story
    * MOTIR-6905 · MOTIR-7317): its GitHub Actions runs cancelled and its CI
    * containers destroyed, its hosted-agent runs ended, its agent instances

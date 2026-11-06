@@ -441,6 +441,15 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     // bar labelled "Translation" under the title, with "into {language}" beside it.
     'itemTranslation.translate':
       'button verb in the item translation bar — "Translate" + "into {language}" beside it',
+    // The planner-findings console (Story MOTIR-10353 · MOTIR-10515), a platform-admin
+    // page that renders no work-item type chip. `Code` is one member of the closed
+    // ATTRIBUTION set (Code · Corpus · Model · Unattributed) — whose fault a planner
+    // defect was — and `Review` is the review STAGE's line in the dry-run cost strip,
+    // beside `Repair`; each sibling set fixes the sense.
+    'platformAdmin.plannerFindings.attribution.code':
+      'attribution value (Code · Corpus · Model · Unattributed) on the planner-findings console — no type chip',
+    'platformAdmin.plannerFindings.cost.review':
+      'review STAGE line in the dry-run cost strip, beside Repair — no type chip',
 
     // The approval frame's BAND-1 KIND for a decision gate (MOTIR-5678; design
     // `design/github` §27). The same sense as the type — it names the DECISION card's
@@ -486,6 +495,8 @@ const TYPE_LABEL_COLLISION_ALLOWLIST: Record<'en' | 'zh', Record<string, string>
     'codeHealth.convention.defaultRepo': 'repo fallback name on Code health',
     'onboarding.generation.designLabel': 'field label in the onboarding baseline card',
     'issueViews.provenanceSourceManual': 'provenance ORIGIN chip, framed by its FieldCard label',
+    'platformAdmin.plannerFindings.attribution.code':
+      'attribution value on the planner-findings console (MOTIR-10515), the en twin above',
 
     'approvalGate.decision.kindLabel': 'band-1 gate KIND in the approval frame (§27)',
     'approvalGate.choice.kindLabel': 'band-1 gate KIND — the choice card’s own question',

@@ -361,6 +361,9 @@ describe('(5b) every `Textarea` caller in the tree is pinned by name', () => {
     'app/(admin)/admin/ideas/[slug]/_components/DeleteIdeaDialog.tsx',
     'app/(admin)/admin/ideas/[slug]/_components/IdeaEditForm.tsx',
     'app/(admin)/admin/ideas/[slug]/_components/RetireIdeaDialog.tsx',
+    // The planner findings console's triage editors — attribution why, dismiss
+    // note, promote why / how-to-apply (MOTIR-10525): fixed editors.
+    'app/(admin)/admin/planner-findings/_components/FindingTriageControls.tsx',
     // The platform lessons console's why / how-to-apply editors (MOTIR-1411).
     'app/(admin)/admin/planning-lessons/_components/LessonCurate.tsx',
     // The starter library's retire reason and promote reason (MOTIR-712): fixed

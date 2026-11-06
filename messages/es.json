@@ -10613,6 +10613,7 @@
       "exitToApp": "Salir a la app",
       "navAiPlanning": "Planificación con IA",
       "navPlanningLessons": "Lecciones de planificación",
+      "navPlannerFindings": "Hallazgos del planificador",
       "navIdeas": "Ideas",
       "navRunModels": "Modelos de ejecuciones alojadas",
       "navFleetSettings": "Ajustes de la flota",
@@ -10847,6 +10848,9 @@
           "seed_registry": {
             "promote": "Promovió un repositorio a plantilla inicial",
             "retire": "Retiró una plantilla inicial"
+          },
+          "planner_finding": {
+            "triage": "Clasificó un hallazgo del planificador"
           }
         }
       }
@@ -11757,6 +11761,236 @@
         "confirm": "Cambiar periodo",
         "saved": "Periodo de retirada cambiado.",
         "savedBody": "Los planificadores usan {days} días a partir de su siguiente trabajo de planificación."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Operaciones · Hallazgos del planificador",
+      "title": "Hallazgos del planificador",
+      "subtitle": "Lo que la ejecución de prueba del planificador alojado y la skill check plan encontraron mal en los planes, conservado después de que esos planes se cierren o eliminen. Vea qué defectos se repiten y luego indique de quién fue la culpa de cada uno, conviértalo en lección, registre el bug que creó o descártelo.",
+      "infoLead": "Los hallazgos citan planes de clientes.",
+      "infoBody": "Solo los administradores de la plataforma pueden ver esta página, y cada cambio que haga aquí se escribe en el registro de auditoría.",
+      "view": {
+        "label": "Vista",
+        "grouped": "Agrupada",
+        "all": "Todos los hallazgos"
+      },
+      "card": {
+        "title": "Hallazgos",
+        "subtitleGrouped": "Una fila por defecto, con cuántos hallazgos y planes afectó, los vistos más recientemente primero.",
+        "subtitleAll": "Cada hallazgo conservado, los más recientes primero."
+      },
+      "filter": {
+        "label": "Filtrar hallazgos",
+        "source": "Origen",
+        "sourceAny": "Cualquier origen",
+        "planner": "Planificador",
+        "plannerAny": "Cualquier planificador",
+        "outcome": "Resultado",
+        "outcomeAny": "Cualquier resultado",
+        "attribution": "Atribución",
+        "attributionAny": "Cualquier atribución",
+        "state": "Estado de clasificación",
+        "stateDefault": "No descartados",
+        "stateAll": "Todos, incluidos los descartados",
+        "apply": "Aplicar",
+        "count": "{n, plural, one {# filtro} other {# filtros}}",
+        "clearAll": "Borrar todo",
+        "remove": "Quitar {filter}",
+        "sheetButton": "Filtros",
+        "sheetTitle": "Filtrar hallazgos",
+        "sheetDone": "Listo"
+      },
+      "source": {
+        "in_loop": "Revisión alojada",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Planificador alojado",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Corregido",
+        "reported": "Notificado",
+        "fix_failed": "Corrección fallida"
+      },
+      "attribution": {
+        "code": "Código",
+        "corpus": "Corpus",
+        "model": "Modelo",
+        "unattributed": "Sin atribuir"
+      },
+      "prediction": {
+        "STOPS": "Una ejecución se detendría aquí",
+        "SETTLES": "Una ejecución lo resolvería con una desviación",
+        "THRU": "Una ejecución lo construiría de todos modos"
+      },
+      "status": {
+        "new": "Nuevo",
+        "promoted_to_lesson": "Lección",
+        "filed_as_bug": "Bug registrado",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Descartado"
+      },
+      "col": {
+        "defect": "Defecto",
+        "findings": "Hallazgos",
+        "plans": "Planes",
+        "lastSeen": "Visto por última vez",
+        "site": "Ubicación",
+        "source": "Origen",
+        "planner": "Planificador",
+        "outcome": "Resultado",
+        "workItem": "Elemento de trabajo",
+        "plan": "Plan",
+        "attribution": "Atribución",
+        "state": "Estado",
+        "date": "Fecha"
+      },
+      "row": {
+        "findings": "{n, plural, one {# hallazgo} other {# hallazgos}}",
+        "plans": "{n, plural, one {# plan} other {# planes}}",
+        "open": "Abrir {site}",
+        "untitledPlan": "Plan sin título",
+        "noPlan": "Sin plan"
+      },
+      "pager": {
+        "label": "Más recientes primero · {n} por página",
+        "page": "Página {n}",
+        "previous": "Anterior",
+        "next": "Siguiente"
+      },
+      "noMatch": {
+        "title": "Ningún hallazgo coincide con estos filtros",
+        "body": "Los hallazgos descartados se ocultan salvo que los pida. Quite un filtro o bórrelos todos.",
+        "action": "Borrar filtros"
+      },
+      "empty": {
+        "title": "Aún no hay hallazgos",
+        "body": "Los hallazgos aparecen aquí después de que la ejecución de prueba del planificador alojado revise un plan, o después de que alguien ejecute la skill check plan. Todavía no se ha conservado ninguno."
+      },
+      "unavailable": {
+        "title": "No se pudieron cargar los hallazgos",
+        "body": "El servicio de planificación (motir-ai) no respondió, así que no se muestra ningún hallazgo. Es un error de carga: no ha cambiado nada y no significa que no haya hallazgos.",
+        "retry": "Reintentar"
+      },
+      "loading": {
+        "label": "Cargando hallazgos"
+      },
+      "group": {
+        "back": "Hallazgos del planificador",
+        "title": "Defecto repetido",
+        "summary": "{findings, plural, one {# hallazgo} other {# hallazgos}} en {plans, plural, one {# plan} other {# planes}}",
+        "findingsHeading": "Hallazgos de este grupo",
+        "empty": "Ningún hallazgo de este grupo coincide con los filtros actuales."
+      },
+      "detail": {
+        "back": "Hallazgos del planificador",
+        "backToGroup": "Volver al grupo",
+        "what": "Qué pasó",
+        "evidence": "Evidencia",
+        "correction": "Corrección",
+        "fixDirection": "Dirección de la solución",
+        "why": "Por qué esta atribución",
+        "none": "No se registró nada.",
+        "cellsTitle": "Celdas del planificador afectadas",
+        "cellHosted": "Planificador alojado",
+        "cellPlanpy": "plan.py",
+        "noCells": "No hay ninguna celda del planificador registrada para este hallazgo.",
+        "provenance": "Procedencia",
+        "site": "Ubicación",
+        "prediction": "Predicción",
+        "source": "Origen",
+        "planner": "Planificador",
+        "outcome": "Resultado",
+        "attribution": "Atribución",
+        "plan": "Plan",
+        "planId": "ID del plan",
+        "planGone": "Este plan ya no existe. El hallazgo se conserva.",
+        "workItem": "Elemento de trabajo",
+        "authorModel": "Modelo autor",
+        "baseline": "Base del código",
+        "recorded": "Registrado",
+        "triagedBy": "Clasificado por última vez por {who} · {when}",
+        "lessonLink": "Abrir la lección en Lecciones de planificación"
+      },
+      "cost": {
+        "title": "Coste de revisión y reparación",
+        "made": "Hallazgos generados",
+        "fixed": "Hallazgos corregidos",
+        "review": "Revisión",
+        "repair": "Reparación",
+        "amount": "{amount}",
+        "tokens": "{input} tokens de entrada · {output} tokens de salida",
+        "sessions": "{n, plural, one {# sesión} other {# sesiones}}",
+        "unpriced": "Coste desconocido: un modelo de esta línea no tiene precio",
+        "notMetered": "Sin medición",
+        "notMeteredBody": "Este hallazgo proviene de una ejecución de check plan, que no tiene trabajo de planificación ni líneas de uso."
+      },
+      "triage": {
+        "title": "Clasificación",
+        "groupScope": "Se aplica a {count, plural, one {# hallazgo abierto} other {# hallazgos abiertos}} de este grupo, cada uno registrado por separado.",
+        "cancel": "Cancelar",
+        "saving": "Guardando…",
+        "retry": "Intentar de nuevo"
+      },
+      "attr": {
+        "open": "Definir atribución",
+        "label": "Atribución",
+        "hint": "De quién fue la culpa: el código del planificador, su corpus de reglas, el modelo de planificación o se desconoce.",
+        "save": "Guardar atribución",
+        "saved": "Atribución definida como {attribution}.",
+        "regroupNote": "Cambiar la atribución puede mover este hallazgo a otro grupo."
+      },
+      "promote": {
+        "open": "Convertir en lección",
+        "title": "Convertir este hallazgo en lección",
+        "intro": "El formulario se rellena a partir del hallazgo. Edítelo antes de crear la lección.",
+        "fieldTitle": "Título",
+        "fieldWhy": "Por qué importa",
+        "fieldHow": "Cómo aplicarla",
+        "fieldType": "Tipo",
+        "blank": "Este campo no puede estar vacío.",
+        "review": "Revisar lección",
+        "confirmTitle": "¿Crear esta lección?",
+        "confirmBody": "La lección se crea en el proyecto de este hallazgo, y el planificador de ese proyecto la lee a partir de su próximo trabajo de planificación. Para hacerla global, promuévala después desde Lecciones de planificación.",
+        "confirm": "Crear lección",
+        "saved": "Lección creada y vinculada a este hallazgo.",
+        "duplicate": "Ya existe una lección parecida. Ábrala en Lecciones de planificación en lugar de crear una segunda."
+      },
+      "bug": {
+        "open": "Registrar clave del bug",
+        "label": "Clave del bug de planificación",
+        "hint": "La clave del bug de planificación que creó a mano. Desde esta página no se crea nada.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Introduzca una clave como MOTIR-123.",
+        "save": "Registrar clave",
+        "saved": "Bug {key} registrado."
+      },
+      "dismiss": {
+        "open": "Descartar",
+        "title": "¿Descartar este hallazgo?",
+        "body": "Sale de la lista predeterminada y queda en Descartados. Puede restaurarlo en cualquier momento.",
+        "reasonLabel": "Motivo (opcional, se escribe en el registro de auditoría)",
+        "reasonPlaceholder": "¿Por qué no merece la pena actuar?",
+        "confirm": "Descartar",
+        "saved": "Hallazgo descartado.",
+        "restore": "Restaurar",
+        "restored": "Hallazgo restaurado."
+      },
+      "refused": {
+        "failed": "No se guardó: algo salió mal. No se escribió nada. Sus datos se conservan; inténtelo de nuevo.",
+        "unavailable": "No se guardó: el servicio de planificación no respondió. No se escribió nada y no existe ninguna fila de auditoría. Sus datos se conservan; inténtelo de nuevo.",
+        "notPermitted": "No se guardó: solo un administrador de la plataforma puede clasificar hallazgos.",
+        "gone": "No se guardó: este hallazgo ya no existe. No se escribió nada.",
+        "invalid": "No se guardó: el servicio de planificación rechazó este cambio.",
+        "lessonNotLinked": "La lección se creó, pero este hallazgo no pudo registrarla. Búsquela en Lecciones de planificación y no la cree de nuevo."
+      },
+      "noop": "Ya está al día. Alguien cambió este hallazgo hace un momento, así que no había nada que cambiar y no se registró nada.",
+      "a11y": {
+        "viewGroup": "Mostrar los hallazgos agrupados por defecto o uno por uno",
+        "captionGroups": "Hallazgos agrupados por defecto",
+        "captionAll": "Todos los hallazgos",
+        "detailRegion": "Detalle del hallazgo"
       }
     },
     "usage": {

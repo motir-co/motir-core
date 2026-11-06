@@ -10613,6 +10613,7 @@
       "exitToApp": "Zur App",
       "navAiPlanning": "AI-Planung",
       "navPlanningLessons": "Planungslektionen",
+      "navPlannerFindings": "Planer-Befunde",
       "navIdeas": "Ideen",
       "navRunModels": "Modelle für gehostete Läufe",
       "navFleetSettings": "Flotteneinstellungen",
@@ -10847,6 +10848,9 @@
           "seed_registry": {
             "promote": "Repository zur Startvorlage befördert",
             "retire": "Startvorlage ausgemustert"
+          },
+          "planner_finding": {
+            "triage": "Planer-Befund triagiert"
           }
         }
       }
@@ -11757,6 +11761,236 @@
         "confirm": "Zeitraum ändern",
         "saved": "Ausmusterungszeitraum geändert.",
         "savedBody": "Planer verwenden ab ihrem nächsten Planungsjob {days} Tage."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Betrieb · Planer-Befunde",
+      "title": "Planer-Befunde",
+      "subtitle": "Was der Probelauf des gehosteten Planers und der Skill „check plan“ in Plänen als fehlerhaft erkannt haben – auch nachdem diese Pläne geschlossen oder gelöscht wurden. Sehen Sie, welche Fehler sich wiederholen, und legen Sie dann fest, wessen Fehler es war, machen Sie einen Befund zur Lektion, erfassen Sie den angelegten Bug oder blenden Sie ihn aus.",
+      "infoLead": "Befunde zitieren Pläne von Kunden.",
+      "infoBody": "Nur Plattform-Admins sehen diese Seite, und jede Änderung, die Sie hier vornehmen, wird ins Audit-Log geschrieben.",
+      "view": {
+        "label": "Ansicht",
+        "grouped": "Gruppiert",
+        "all": "Alle Befunde"
+      },
+      "card": {
+        "title": "Befunde",
+        "subtitleGrouped": "Eine Zeile pro Fehler, mit der Anzahl der betroffenen Befunde und Pläne, zuletzt gesehene zuerst.",
+        "subtitleAll": "Jeder aufbewahrte Befund, neueste zuerst."
+      },
+      "filter": {
+        "label": "Befunde filtern",
+        "source": "Quelle",
+        "sourceAny": "Jede Quelle",
+        "planner": "Planer",
+        "plannerAny": "Jeder Planer",
+        "outcome": "Ergebnis",
+        "outcomeAny": "Jedes Ergebnis",
+        "attribution": "Zuordnung",
+        "attributionAny": "Jede Zuordnung",
+        "state": "Triage-Status",
+        "stateDefault": "Nicht ausgeblendet",
+        "stateAll": "Alle, ausgeblendete eingeschlossen",
+        "apply": "Anwenden",
+        "count": "{n, plural, one {# Filter} other {# Filter}}",
+        "clearAll": "Alle löschen",
+        "remove": "{filter} entfernen",
+        "sheetButton": "Filter",
+        "sheetTitle": "Befunde filtern",
+        "sheetDone": "Fertig"
+      },
+      "source": {
+        "in_loop": "Gehostete Prüfung",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Gehosteter Planer",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Behoben",
+        "reported": "Gemeldet",
+        "fix_failed": "Behebung fehlgeschlagen"
+      },
+      "attribution": {
+        "code": "Code",
+        "corpus": "Korpus",
+        "model": "Modell",
+        "unattributed": "Nicht zugeordnet"
+      },
+      "prediction": {
+        "STOPS": "Ein Lauf würde hier anhalten",
+        "SETTLES": "Ein Lauf würde es mit einer Abweichung abschließen",
+        "THRU": "Ein Lauf würde es durchbauen"
+      },
+      "status": {
+        "new": "Neu",
+        "promoted_to_lesson": "Lektion",
+        "filed_as_bug": "Bug erfasst",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Ausgeblendet"
+      },
+      "col": {
+        "defect": "Fehler",
+        "findings": "Befunde",
+        "plans": "Pläne",
+        "lastSeen": "Zuletzt gesehen",
+        "site": "Stelle",
+        "source": "Quelle",
+        "planner": "Planer",
+        "outcome": "Ergebnis",
+        "workItem": "Arbeitselement",
+        "plan": "Plan",
+        "attribution": "Zuordnung",
+        "state": "Status",
+        "date": "Datum"
+      },
+      "row": {
+        "findings": "{n, plural, one {# Befund} other {# Befunde}}",
+        "plans": "{n, plural, one {# Plan} other {# Pläne}}",
+        "open": "{site} öffnen",
+        "untitledPlan": "Unbenannter Plan",
+        "noPlan": "Kein Plan"
+      },
+      "pager": {
+        "label": "Neueste zuerst · {n} pro Seite",
+        "page": "Seite {n}",
+        "previous": "Zurück",
+        "next": "Weiter"
+      },
+      "noMatch": {
+        "title": "Keine Befunde entsprechen diesen Filtern",
+        "body": "Ausgeblendete Befunde werden nur angezeigt, wenn Sie danach fragen. Entfernen Sie einen Filter oder löschen Sie alle.",
+        "action": "Filter löschen"
+      },
+      "empty": {
+        "title": "Noch keine Befunde",
+        "body": "Befunde erscheinen hier, nachdem der Probelauf des gehosteten Planers einen Plan geprüft hat oder jemand den Skill „check plan“ ausgeführt hat. Bisher wurde keiner aufbewahrt."
+      },
+      "unavailable": {
+        "title": "Die Befunde konnten nicht geladen werden",
+        "body": "Der Planungsdienst (motir-ai) hat nicht geantwortet, daher wird kein Befund angezeigt. Das ist ein Ladefehler – nichts wurde geändert, und es bedeutet nicht, dass es keine Befunde gibt.",
+        "retry": "Erneut versuchen"
+      },
+      "loading": {
+        "label": "Befunde werden geladen"
+      },
+      "group": {
+        "back": "Planer-Befunde",
+        "title": "Wiederholter Fehler",
+        "summary": "{findings, plural, one {# Befund} other {# Befunde}} in {plans, plural, one {# Plan} other {# Plänen}}",
+        "findingsHeading": "Befunde in dieser Gruppe",
+        "empty": "Kein Befund in dieser Gruppe entspricht den aktuellen Filtern."
+      },
+      "detail": {
+        "back": "Planer-Befunde",
+        "backToGroup": "Zurück zur Gruppe",
+        "what": "Was passiert ist",
+        "evidence": "Nachweis",
+        "correction": "Korrektur",
+        "fixDirection": "Lösungsrichtung",
+        "why": "Warum diese Zuordnung",
+        "none": "Nichts erfasst.",
+        "cellsTitle": "Betroffene Planer-Zellen",
+        "cellHosted": "Gehosteter Planer",
+        "cellPlanpy": "plan.py",
+        "noCells": "Für diesen Befund ist keine Planer-Zelle erfasst.",
+        "provenance": "Herkunft",
+        "site": "Stelle",
+        "prediction": "Vorhersage",
+        "source": "Quelle",
+        "planner": "Planer",
+        "outcome": "Ergebnis",
+        "attribution": "Zuordnung",
+        "plan": "Plan",
+        "planId": "Plan-ID",
+        "planGone": "Dieser Plan existiert nicht mehr. Der Befund bleibt erhalten.",
+        "workItem": "Arbeitselement",
+        "authorModel": "Autorenmodell",
+        "baseline": "Code-Stand",
+        "recorded": "Erfasst",
+        "triagedBy": "Zuletzt triagiert von {who} · {when}",
+        "lessonLink": "Lektion in Planungslektionen öffnen"
+      },
+      "cost": {
+        "title": "Kosten für Prüfung und Reparatur",
+        "made": "Erstellte Befunde",
+        "fixed": "Behobene Befunde",
+        "review": "Prüfung",
+        "repair": "Reparatur",
+        "amount": "{amount}",
+        "tokens": "{input} Tokens Eingabe · {output} Tokens Ausgabe",
+        "sessions": "{n, plural, one {# Sitzung} other {# Sitzungen}}",
+        "unpriced": "Kosten unbekannt – ein Modell in dieser Zeile hat keinen Preis",
+        "notMetered": "Nicht gemessen",
+        "notMeteredBody": "Dieser Befund stammt aus einem „check plan“-Lauf, der keinen Planungsjob und keine Nutzungszeilen hat."
+      },
+      "triage": {
+        "title": "Triage",
+        "groupScope": "Gilt für {count, plural, one {# offenen Befund} other {# offene Befunde}} in dieser Gruppe, jeder wird einzeln erfasst.",
+        "cancel": "Abbrechen",
+        "saving": "Wird gespeichert…",
+        "retry": "Erneut versuchen"
+      },
+      "attr": {
+        "open": "Zuordnung festlegen",
+        "label": "Zuordnung",
+        "hint": "Wessen Fehler es war: der Code des Planers, sein Regelkorpus, das Planungsmodell oder unbekannt.",
+        "save": "Zuordnung speichern",
+        "saved": "Zuordnung auf {attribution} gesetzt.",
+        "regroupNote": "Eine geänderte Zuordnung kann diesen Befund in eine andere Gruppe verschieben."
+      },
+      "promote": {
+        "open": "Zur Lektion machen",
+        "title": "Diesen Befund zur Lektion machen",
+        "intro": "Das Formular ist aus dem Befund vorausgefüllt. Bearbeiten Sie es, bevor Sie die Lektion erstellen.",
+        "fieldTitle": "Titel",
+        "fieldWhy": "Warum es wichtig ist",
+        "fieldHow": "Wie es anzuwenden ist",
+        "fieldType": "Typ",
+        "blank": "Dieses Feld darf nicht leer sein.",
+        "review": "Lektion prüfen",
+        "confirmTitle": "Diese Lektion erstellen?",
+        "confirmBody": "Die Lektion wird im Projekt dieses Befunds erstellt, und der Planer dieses Projekts liest sie ab seinem nächsten Planungsjob. Um sie global zu machen, stufen Sie sie anschließend in den Planungslektionen hoch.",
+        "confirm": "Lektion erstellen",
+        "saved": "Lektion erstellt und mit diesem Befund verknüpft.",
+        "duplicate": "Eine ähnliche Lektion existiert bereits. Öffnen Sie sie in den Planungslektionen, statt eine zweite zu erstellen."
+      },
+      "bug": {
+        "open": "Bug-Schlüssel erfassen",
+        "label": "Schlüssel des Planungs-Bugs",
+        "hint": "Der Schlüssel des Planungs-Bugs, den Sie selbst angelegt haben. Von dieser Seite wird nichts angelegt.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Geben Sie einen Schlüssel wie MOTIR-123 ein.",
+        "save": "Schlüssel erfassen",
+        "saved": "Bug {key} erfasst."
+      },
+      "dismiss": {
+        "open": "Ausblenden",
+        "title": "Diesen Befund ausblenden?",
+        "body": "Er verschwindet aus der Standardliste und bleibt unter „Ausgeblendet“. Sie können ihn jederzeit wiederherstellen.",
+        "reasonLabel": "Grund (optional, wird ins Audit-Log geschrieben)",
+        "reasonPlaceholder": "Warum lohnt es sich nicht, hier zu handeln?",
+        "confirm": "Ausblenden",
+        "saved": "Befund ausgeblendet.",
+        "restore": "Wiederherstellen",
+        "restored": "Befund wiederhergestellt."
+      },
+      "refused": {
+        "failed": "Nicht gespeichert – etwas ist schiefgegangen. Nichts wurde geschrieben. Ihre Eingaben bleiben erhalten; versuchen Sie es erneut.",
+        "unavailable": "Nicht gespeichert – der Planungsdienst hat nicht geantwortet. Nichts wurde geschrieben, und es gibt keinen Audit-Eintrag. Ihre Eingaben bleiben erhalten; versuchen Sie es erneut.",
+        "notPermitted": "Nicht gespeichert – nur ein Plattform-Admin kann Befunde triagieren.",
+        "gone": "Nicht gespeichert – dieser Befund existiert nicht mehr. Nichts wurde geschrieben.",
+        "invalid": "Nicht gespeichert – der Planungsdienst hat diese Änderung abgelehnt.",
+        "lessonNotLinked": "Die Lektion wurde erstellt, aber dieser Befund konnte sie nicht erfassen. Suchen Sie sie in den Planungslektionen und erstellen Sie sie nicht noch einmal."
+      },
+      "noop": "Bereits aktuell. Jemand hat diesen Befund gerade geändert, daher gab es nichts zu ändern und nichts wurde protokolliert.",
+      "a11y": {
+        "viewGroup": "Befunde nach Fehler gruppiert oder einzeln anzeigen",
+        "captionGroups": "Befunde nach Fehler gruppiert",
+        "captionAll": "Alle Befunde",
+        "detailRegion": "Befunddetails"
       }
     },
     "usage": {

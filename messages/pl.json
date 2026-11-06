@@ -10613,6 +10613,7 @@
       "exitToApp": "Wróć do aplikacji",
       "navAiPlanning": "Planowanie z AI",
       "navPlanningLessons": "Lekcje planowania",
+      "navPlannerFindings": "Ustalenia planisty",
       "navIdeas": "Pomysły",
       "navRunModels": "Modele hostowanych uruchomień",
       "navFleetSettings": "Ustawienia floty",
@@ -10847,6 +10848,9 @@
           "seed_registry": {
             "promote": "Awansowano repozytorium na szablon startowy",
             "retire": "Wycofano szablon startowy"
+          },
+          "planner_finding": {
+            "triage": "Przeprowadził triaż ustalenia planisty"
           }
         }
       }
@@ -11757,6 +11761,236 @@
         "confirm": "Zmień okres",
         "saved": "Zmieniono okres wycofywania.",
         "savedBody": "Planiści używają {days} dni od następnego zadania planowania."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Operacje · Ustalenia planisty",
+      "title": "Ustalenia planisty",
+      "subtitle": "To, co przebieg próbny hostowanego planisty i skill check plan wykryły jako błędne w planach, zachowane także po zamknięciu lub usunięciu tych planów. Zobacz, które defekty się powtarzają, a następnie ustal, czyja to była wina, zamień ustalenie w lekcję, zapisz utworzony bug lub je odrzuć.",
+      "infoLead": "Ustalenia cytują plany klientów.",
+      "infoBody": "Tę stronę widzą tylko administratorzy platformy, a każda wprowadzona tu zmiana jest zapisywana w dzienniku audytu.",
+      "view": {
+        "label": "Widok",
+        "grouped": "Pogrupowane",
+        "all": "Wszystkie ustalenia"
+      },
+      "card": {
+        "title": "Ustalenia",
+        "subtitleGrouped": "Jeden wiersz na defekt, z liczbą ustaleń i planów, których dotyczył, ostatnio widziane najpierw.",
+        "subtitleAll": "Każde zachowane ustalenie, najnowsze najpierw."
+      },
+      "filter": {
+        "label": "Filtruj ustalenia",
+        "source": "Źródło",
+        "sourceAny": "Dowolne źródło",
+        "planner": "Planista",
+        "plannerAny": "Dowolny planista",
+        "outcome": "Wynik",
+        "outcomeAny": "Dowolny wynik",
+        "attribution": "Przypisanie",
+        "attributionAny": "Dowolne przypisanie",
+        "state": "Stan triażu",
+        "stateDefault": "Nieodrzucone",
+        "stateAll": "Wszystkie, łącznie z odrzuconymi",
+        "apply": "Zastosuj",
+        "count": "{n, plural, one {# filtr} few {# filtry} many {# filtrów} other {# filtra}}",
+        "clearAll": "Wyczyść wszystko",
+        "remove": "Usuń {filter}",
+        "sheetButton": "Filtry",
+        "sheetTitle": "Filtruj ustalenia",
+        "sheetDone": "Gotowe"
+      },
+      "source": {
+        "in_loop": "Hostowany przegląd",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Hostowany planista",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Naprawione",
+        "reported": "Zgłoszone",
+        "fix_failed": "Naprawa nieudana"
+      },
+      "attribution": {
+        "code": "Kod",
+        "corpus": "Korpus",
+        "model": "Model",
+        "unattributed": "Nieprzypisane"
+      },
+      "prediction": {
+        "STOPS": "Przebieg zatrzymałby się tutaj",
+        "SETTLES": "Przebieg rozstrzygnąłby to z odchyleniem",
+        "THRU": "Przebieg zbudowałby to mimo wszystko"
+      },
+      "status": {
+        "new": "Nowe",
+        "promoted_to_lesson": "Lekcja",
+        "filed_as_bug": "Bug zapisany",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Odrzucone"
+      },
+      "col": {
+        "defect": "Defekt",
+        "findings": "Ustalenia",
+        "plans": "Plany",
+        "lastSeen": "Ostatnio widziane",
+        "site": "Miejsce",
+        "source": "Źródło",
+        "planner": "Planista",
+        "outcome": "Wynik",
+        "workItem": "Element pracy",
+        "plan": "Plan",
+        "attribution": "Przypisanie",
+        "state": "Stan",
+        "date": "Data"
+      },
+      "row": {
+        "findings": "{n, plural, one {# ustalenie} few {# ustalenia} many {# ustaleń} other {# ustalenia}}",
+        "plans": "{n, plural, one {# plan} few {# plany} many {# planów} other {# planu}}",
+        "open": "Otwórz {site}",
+        "untitledPlan": "Plan bez tytułu",
+        "noPlan": "Brak planu"
+      },
+      "pager": {
+        "label": "Najnowsze najpierw · {n} na stronę",
+        "page": "Strona {n}",
+        "previous": "Poprzednia",
+        "next": "Następna"
+      },
+      "noMatch": {
+        "title": "Żadne ustalenie nie pasuje do tych filtrów",
+        "body": "Odrzucone ustalenia są ukryte, chyba że wybierzesz ich pokazanie. Usuń filtr lub wyczyść wszystkie.",
+        "action": "Wyczyść filtry"
+      },
+      "empty": {
+        "title": "Brak ustaleń",
+        "body": "Ustalenia pojawiają się tutaj, gdy przebieg próbny hostowanego planisty przejrzy plan lub gdy ktoś uruchomi skill check plan. Żadne nie zostało jeszcze zachowane."
+      },
+      "unavailable": {
+        "title": "Nie udało się wczytać ustaleń",
+        "body": "Usługa planowania (motir-ai) nie odpowiedziała, więc żadne ustalenie nie jest pokazane. To błąd wczytywania — nic się nie zmieniło i nie oznacza to, że ustaleń nie ma.",
+        "retry": "Ponów"
+      },
+      "loading": {
+        "label": "Wczytywanie ustaleń"
+      },
+      "group": {
+        "back": "Ustalenia planisty",
+        "title": "Powtarzający się defekt",
+        "summary": "{findings, plural, one {# ustalenie} few {# ustalenia} many {# ustaleń} other {# ustalenia}} w {plans, plural, one {# planie} few {# planach} many {# planach} other {# planu}}",
+        "findingsHeading": "Ustalenia w tej grupie",
+        "empty": "Żadne ustalenie w tej grupie nie pasuje do bieżących filtrów."
+      },
+      "detail": {
+        "back": "Ustalenia planisty",
+        "backToGroup": "Wróć do grupy",
+        "what": "Co się stało",
+        "evidence": "Dowód",
+        "correction": "Korekta",
+        "fixDirection": "Kierunek naprawy",
+        "why": "Dlaczego to przypisanie",
+        "none": "Nic nie zapisano.",
+        "cellsTitle": "Dotknięte komórki planisty",
+        "cellHosted": "Hostowany planista",
+        "cellPlanpy": "plan.py",
+        "noCells": "Dla tego ustalenia nie zapisano żadnej komórki planisty.",
+        "provenance": "Pochodzenie",
+        "site": "Miejsce",
+        "prediction": "Przewidywanie",
+        "source": "Źródło",
+        "planner": "Planista",
+        "outcome": "Wynik",
+        "attribution": "Przypisanie",
+        "plan": "Plan",
+        "planId": "ID planu",
+        "planGone": "Ten plan już nie istnieje. Ustalenie zostaje zachowane.",
+        "workItem": "Element pracy",
+        "authorModel": "Model autora",
+        "baseline": "Baza kodu",
+        "recorded": "Zapisano",
+        "triagedBy": "Ostatni triaż: {who} · {when}",
+        "lessonLink": "Otwórz lekcję w Lekcjach planowania"
+      },
+      "cost": {
+        "title": "Koszt przeglądu i naprawy",
+        "made": "Utworzone ustalenia",
+        "fixed": "Naprawione ustalenia",
+        "review": "Przegląd",
+        "repair": "Naprawa",
+        "amount": "{amount}",
+        "tokens": "{input} tokenów wejściowych · {output} tokenów wyjściowych",
+        "sessions": "{n, plural, one {# sesja} few {# sesje} many {# sesji} other {# sesji}}",
+        "unpriced": "Koszt nieznany — model w tym wierszu nie ma ceny",
+        "notMetered": "Nie mierzono",
+        "notMeteredBody": "To ustalenie pochodzi z przebiegu check plan, który nie ma zadania planowania ani wierszy użycia."
+      },
+      "triage": {
+        "title": "Triaż",
+        "groupScope": "Dotyczy {count, plural, one {# otwartego ustalenia} few {# otwartych ustaleń} many {# otwartych ustaleń} other {# otwartego ustalenia}} w tej grupie, każde zapisywane osobno.",
+        "cancel": "Anuluj",
+        "saving": "Zapisywanie…",
+        "retry": "Spróbuj ponownie"
+      },
+      "attr": {
+        "open": "Ustaw przypisanie",
+        "label": "Przypisanie",
+        "hint": "Czyja to była wina: kodu planisty, jego korpusu reguł, modelu planowania, czy nieznana.",
+        "save": "Zapisz przypisanie",
+        "saved": "Ustawiono przypisanie: {attribution}.",
+        "regroupNote": "Zmiana przypisania może przenieść to ustalenie do innej grupy."
+      },
+      "promote": {
+        "open": "Zamień w lekcję",
+        "title": "Zamień to ustalenie w lekcję",
+        "intro": "Formularz jest wypełniony na podstawie ustalenia. Popraw go przed utworzeniem lekcji.",
+        "fieldTitle": "Tytuł",
+        "fieldWhy": "Dlaczego to ważne",
+        "fieldHow": "Jak to stosować",
+        "fieldType": "Typ",
+        "blank": "To pole nie może być puste.",
+        "review": "Przejrzyj lekcję",
+        "confirmTitle": "Utworzyć tę lekcję?",
+        "confirmBody": "Lekcja zostanie utworzona w projekcie tego ustalenia, a planista tego projektu będzie ją czytał od następnego zadania planowania. Aby była globalna, awansuj ją potem w Lekcjach planowania.",
+        "confirm": "Utwórz lekcję",
+        "saved": "Lekcja utworzona i powiązana z tym ustaleniem.",
+        "duplicate": "Podobna lekcja już istnieje. Otwórz ją w Lekcjach planowania zamiast tworzyć drugą."
+      },
+      "bug": {
+        "open": "Zapisz klucz buga",
+        "label": "Klucz buga planowania",
+        "hint": "Klucz buga planowania, który utworzyłeś ręcznie. Z tej strony nic nie jest tworzone.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Wpisz klucz, na przykład MOTIR-123.",
+        "save": "Zapisz klucz",
+        "saved": "Zapisano bug {key}."
+      },
+      "dismiss": {
+        "open": "Odrzuć",
+        "title": "Odrzucić to ustalenie?",
+        "body": "Zniknie z domyślnej listy i pozostanie w odrzuconych. Możesz je przywrócić w dowolnej chwili.",
+        "reasonLabel": "Powód (opcjonalny, zapisywany w dzienniku audytu)",
+        "reasonPlaceholder": "Dlaczego nie warto się tym zajmować?",
+        "confirm": "Odrzuć",
+        "saved": "Ustalenie odrzucone.",
+        "restore": "Przywróć",
+        "restored": "Ustalenie przywrócone."
+      },
+      "refused": {
+        "failed": "Nie zapisano — coś poszło nie tak. Nic nie zostało zapisane. Wprowadzone dane zostały zachowane; spróbuj ponownie.",
+        "unavailable": "Nie zapisano — usługa planowania nie odpowiedziała. Nic nie zostało zapisane i nie istnieje żaden wiersz audytu. Wprowadzone dane zostały zachowane; spróbuj ponownie.",
+        "notPermitted": "Nie zapisano — tylko administrator platformy może przeprowadzać triaż ustaleń.",
+        "gone": "Nie zapisano — to ustalenie już nie istnieje. Nic nie zostało zapisane.",
+        "invalid": "Nie zapisano — usługa planowania odrzuciła tę zmianę.",
+        "lessonNotLinked": "Lekcja została utworzona, ale to ustalenie nie mogło jej zapisać. Znajdź ją w Lekcjach planowania i nie twórz jej ponownie."
+      },
+      "noop": "Już aktualne. Ktoś przed chwilą zmienił to ustalenie, więc nie było nic do zmiany i nic nie zostało zalogowane.",
+      "a11y": {
+        "viewGroup": "Pokaż ustalenia pogrupowane według defektu lub pojedynczo",
+        "captionGroups": "Ustalenia pogrupowane według defektu",
+        "captionAll": "Wszystkie ustalenia",
+        "detailRegion": "Szczegóły ustalenia"
       }
     },
     "usage": {

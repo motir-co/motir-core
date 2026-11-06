@@ -578,6 +578,15 @@ rather than introducing a second one.
 > platform-wide lesson-retirement window N, with `lesson-retention` as `targetId` and
 > `{ before: { days }, after: { days } }` as metadata.
 >
+> **⚠️ AMENDED 2026-11-06 (Story MOTIR-10353 · MOTIR-10517).** The planner-findings console adds
+> one write, `planner_finding.triage`, with `reason: 'inherited'`: set an attribution, promote to a
+> lesson, record a bug key, dismiss or restore. Its controls carry no per-action reason field, so
+> the triage service writes a default reason, which `reasonSatisfied` still holds to the non-blank
+> bar. The finding lives in motir-ai, which writes no audit row: it answers the from → to audit
+> record and core writes the row from it, with `targetKind: 'platform'`, the finding id as
+> `targetId`, the finding's organization as `organizationId`, and `{ findingId, before, after }`
+> (changed fields only) as metadata.
+>
 > **⚠️ AMENDED 2026-10-03 (Story 10.3 · MOTIR-747) — credit & plan ops.** The "Credit grants, plan /
 > tier assignment" row ships as `platformCreditOpsService` (`grantCredits` / `adjustCredits` /
 > `setPlan` / `getLedger`) over motir-ai's `POST /v1/admin/credits`, `POST /v1/admin/tier` and

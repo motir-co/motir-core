@@ -655,3 +655,52 @@ export class FleetOrgCiCodeScanningError extends Error {
     this.name = 'FleetOrgCiCodeScanningError';
   }
 }
+
+/**
+ * A planner-finding triage write that changed nothing (Story MOTIR-10353 ·
+ * MOTIR-10519): motir-ai answered `audit: null` — someone already set that
+ * value — or a promote of a finding that is already a lesson. Thrown INSIDE the
+ * audited transaction, so no `planner_finding.triage` row is left for it.
+ */
+export class PlannerFindingUnchangedError extends Error {
+  readonly code = 'PLANNER_FINDING_UNCHANGED';
+
+  constructor(readonly findingId: string) {
+    super(`Planner finding "${findingId}" already holds that value — nothing to change`);
+    this.name = 'PlannerFindingUnchangedError';
+  }
+}
+
+/** A triage input refused before any motir-ai call; `field` names the offending input. */
+export class PlannerFindingInvalidError extends Error {
+  readonly code = 'PLANNER_FINDING_INVALID';
+
+  constructor(
+    readonly detail: string,
+    readonly field?: string,
+  ) {
+    super(detail);
+    this.name = 'PlannerFindingInvalidError';
+  }
+}
+
+/**
+ * A promote created the lesson but could not record it on the finding. The
+ * lesson EXISTS: the caller must say so and must not create it again — the
+ * service neither retries the create nor deletes the lesson.
+ */
+export class PlannerFindingLessonNotLinkedError extends Error {
+  readonly code = 'PLANNER_FINDING_LESSON_NOT_LINKED';
+
+  constructor(
+    readonly findingId: string,
+    readonly lessonId: string,
+    options?: { cause?: unknown },
+  ) {
+    super(
+      `Lesson "${lessonId}" was created but planner finding "${findingId}" does not link it`,
+      options,
+    );
+    this.name = 'PlannerFindingLessonNotLinkedError';
+  }
+}

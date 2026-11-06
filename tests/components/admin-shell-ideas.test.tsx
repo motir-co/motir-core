@@ -31,6 +31,7 @@ const LABELS = {
   navCapacity: 'Provider capacity',
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
+  navPlannerFindings: 'Planner findings',
   navIdeas: en.platformAdmin.shell.navIdeas,
   navStarters: en.platformAdmin.shell.navStarters,
   navRunModels: 'Hosted-run models',
@@ -85,5 +86,41 @@ describe('the Ideas row', () => {
         name: 'Audit log',
       }),
     ).toBeTruthy();
+  });
+});
+
+describe('the Planner findings row (MOTIR-10353 · MOTIR-10522)', () => {
+  it.each(['support', 'operator', 'superadmin'] as const)(
+    'is on the rail for %s, directly after Planning lessons',
+    (role) => {
+      const rail = renderShell(role, '/admin');
+      const row = within(rail).getByRole('link', { name: LABELS.navPlannerFindings });
+      expect(row.getAttribute('href')).toBe('/admin/planner-findings');
+      expect(row.getAttribute('aria-current')).toBeNull();
+      const names = within(rail)
+        .getAllByRole('link')
+        .map((link) => link.textContent);
+      expect(names.indexOf(LABELS.navPlannerFindings)).toBe(
+        names.indexOf(LABELS.navPlanningLessons) + 1,
+      );
+    },
+  );
+
+  it('is lit on the list and on a finding, and not on Planning lessons', () => {
+    for (const at of ['/admin/planner-findings', '/admin/planner-findings/abc']) {
+      const rail = renderShell('support', at);
+      expect(
+        within(rail)
+          .getByRole('link', { name: LABELS.navPlannerFindings })
+          .getAttribute('aria-current'),
+      ).toBe('page');
+      cleanup();
+    }
+    const rail = renderShell('support', '/admin/planning-lessons');
+    expect(
+      within(rail)
+        .getByRole('link', { name: LABELS.navPlannerFindings })
+        .getAttribute('aria-current'),
+    ).toBeNull();
   });
 });

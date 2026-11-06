@@ -70,6 +70,7 @@ const hostedRun = vi.hoisted(() => ({ installHostedRunMock: vi.fn() }));
 const cimd = vi.hoisted(() => ({ installClientMetadataDocumentMock: vi.fn() }));
 const plannerModel = vi.hoisted(() => ({ installPlannerModelBoundaryMock: vi.fn() }));
 const platformLessons = vi.hoisted(() => ({ installPlatformLessonsBoundaryMock: vi.fn() }));
+const plannerFindings = vi.hoisted(() => ({ installPlannerFindingsBoundaryMock: vi.fn() }));
 
 vi.mock('@/lib/test-mock-agent', () => ({ installSharedMockAgent }));
 vi.mock('@/lib/test-oauth-mock', () => oauth);
@@ -93,6 +94,7 @@ vi.mock('@/lib/test-hosted-run-mock', () => hostedRun);
 vi.mock('@/lib/test-cimd-mock', () => cimd);
 vi.mock('@/lib/test-planner-model-mock', () => plannerModel);
 vi.mock('@/lib/test-platform-lessons-mock', () => platformLessons);
+vi.mock('@/lib/test-planner-findings-mock', () => plannerFindings);
 
 /** Which installers each flag owns — the assertion that the RIGHT seam ran. */
 const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
@@ -151,6 +153,8 @@ const INSTALLERS: Record<string, ReturnType<typeof vi.fn>[]> = {
   E2E_TEST_PLANNER_MODEL: [plannerModel.installPlannerModelBoundaryMock],
   // MOTIR-1413 — the console's planning-lessons seam.
   E2E_TEST_PLATFORM_LESSONS: [platformLessons.installPlatformLessonsBoundaryMock],
+  // MOTIR-10529 — the console's planner-findings seam.
+  E2E_TEST_PLANNER_FINDINGS: [plannerFindings.installPlannerFindingsBoundaryMock],
 };
 
 const ALL_INSTALLERS = Object.values(INSTALLERS).flat();

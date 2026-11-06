@@ -31,6 +31,7 @@ const LABELS = {
   navCapacity: 'Provider capacity',
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
+  navPlannerFindings: 'Planner findings',
   navIdeas: en.platformAdmin.shell.navIdeas,
   navStarters: en.platformAdmin.shell.navStarters,
   navRunModels: 'Hosted-run models',

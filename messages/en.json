@@ -10610,6 +10610,7 @@
       "exitToApp": "Exit to app",
       "navAiPlanning": "AI planning",
       "navPlanningLessons": "Planning lessons",
+      "navPlannerFindings": "Planner findings",
       "navIdeas": "Ideas",
       "navRunModels": "Hosted-run models",
       "navFleetSettings": "Fleet settings",
@@ -10844,6 +10845,9 @@
           "seed_registry": {
             "promote": "Promoted a repository to a starter",
             "retire": "Retired a starter"
+          },
+          "planner_finding": {
+            "triage": "Triaged a planner finding"
           }
         }
       }
@@ -11754,6 +11758,236 @@
         "confirm": "Change window",
         "saved": "Retirement window changed.",
         "savedBody": "Planners use {days} days from their next planning job."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Operations · Planner findings",
+      "title": "Planner findings",
+      "subtitle": "What the hosted planner’s dry run and the check plan skill found wrong in plans, kept after those plans are closed or deleted. See which defects repeat, then set whose fault each was, promote one to a lesson, record the bug you filed, or dismiss it.",
+      "infoLead": "Findings quote customers’ plans.",
+      "infoBody": "Only platform admins can see this page, and every change you make here is written to the audit log.",
+      "view": {
+        "label": "View",
+        "grouped": "Grouped",
+        "all": "All findings"
+      },
+      "card": {
+        "title": "Findings",
+        "subtitleGrouped": "One row per defect, with how many findings and plans it touched, most recently seen first.",
+        "subtitleAll": "Every finding that is kept, newest first."
+      },
+      "filter": {
+        "label": "Filter findings",
+        "source": "Source",
+        "sourceAny": "Any source",
+        "planner": "Planner",
+        "plannerAny": "Any planner",
+        "outcome": "Outcome",
+        "outcomeAny": "Any outcome",
+        "attribution": "Attribution",
+        "attributionAny": "Any attribution",
+        "state": "Triage state",
+        "stateDefault": "Not dismissed",
+        "stateAll": "All, dismissed included",
+        "apply": "Apply",
+        "count": "{n, plural, one {# filter} other {# filters}}",
+        "clearAll": "Clear all",
+        "remove": "Remove {filter}",
+        "sheetButton": "Filters",
+        "sheetTitle": "Filter findings",
+        "sheetDone": "Done"
+      },
+      "source": {
+        "in_loop": "Hosted review",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Hosted planner",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Fixed",
+        "reported": "Reported",
+        "fix_failed": "Fix failed"
+      },
+      "attribution": {
+        "code": "Code",
+        "corpus": "Corpus",
+        "model": "Model",
+        "unattributed": "Unattributed"
+      },
+      "prediction": {
+        "STOPS": "A run would stop here",
+        "SETTLES": "A run would settle it with a deviation",
+        "THRU": "A run would build through it"
+      },
+      "status": {
+        "new": "New",
+        "promoted_to_lesson": "Lesson",
+        "filed_as_bug": "Bug recorded",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Dismissed"
+      },
+      "col": {
+        "defect": "Defect",
+        "findings": "Findings",
+        "plans": "Plans",
+        "lastSeen": "Last seen",
+        "site": "Site",
+        "source": "Source",
+        "planner": "Planner",
+        "outcome": "Outcome",
+        "workItem": "Work item",
+        "plan": "Plan",
+        "attribution": "Attribution",
+        "state": "State",
+        "date": "Date"
+      },
+      "row": {
+        "findings": "{n, plural, one {# finding} other {# findings}}",
+        "plans": "{n, plural, one {# plan} other {# plans}}",
+        "open": "Open {site}",
+        "untitledPlan": "Untitled plan",
+        "noPlan": "No plan"
+      },
+      "pager": {
+        "label": "Newest first · {n} a page",
+        "page": "Page {n}",
+        "previous": "Previous",
+        "next": "Next"
+      },
+      "noMatch": {
+        "title": "No findings match these filters",
+        "body": "Dismissed findings are hidden unless you ask for them. Remove a filter, or clear them all.",
+        "action": "Clear filters"
+      },
+      "empty": {
+        "title": "No findings yet",
+        "body": "Findings appear here after the hosted planner’s dry run reviews a plan, or after someone runs the check plan skill. None has been kept yet."
+      },
+      "unavailable": {
+        "title": "Couldn’t load the findings",
+        "body": "The planning service (motir-ai) didn’t respond, so no finding is shown. This is a fetch error — nothing has changed, and it does not mean there are no findings.",
+        "retry": "Retry"
+      },
+      "loading": {
+        "label": "Loading findings"
+      },
+      "group": {
+        "back": "Planner findings",
+        "title": "Repeated defect",
+        "summary": "{findings, plural, one {# finding} other {# findings}} across {plans, plural, one {# plan} other {# plans}}",
+        "findingsHeading": "Findings in this group",
+        "empty": "No finding in this group matches the current filters."
+      },
+      "detail": {
+        "back": "Planner findings",
+        "backToGroup": "Back to the group",
+        "what": "What happened",
+        "evidence": "Evidence",
+        "correction": "Correction",
+        "fixDirection": "Fix direction",
+        "why": "Why this attribution",
+        "none": "None recorded.",
+        "cellsTitle": "Affected planner cells",
+        "cellHosted": "Hosted planner",
+        "cellPlanpy": "plan.py",
+        "noCells": "No planner cell is recorded for this finding.",
+        "provenance": "Provenance",
+        "site": "Site",
+        "prediction": "Prediction",
+        "source": "Source",
+        "planner": "Planner",
+        "outcome": "Outcome",
+        "attribution": "Attribution",
+        "plan": "Plan",
+        "planId": "Plan id",
+        "planGone": "This plan no longer exists. The finding is kept.",
+        "workItem": "Work item",
+        "authorModel": "Author model",
+        "baseline": "Code baseline",
+        "recorded": "Recorded",
+        "triagedBy": "Last triaged by {who} · {when}",
+        "lessonLink": "Open the lesson in Planning lessons"
+      },
+      "cost": {
+        "title": "Review and repair cost",
+        "made": "Findings made",
+        "fixed": "Findings fixed",
+        "review": "Review",
+        "repair": "Repair",
+        "amount": "{amount}",
+        "tokens": "{input} tokens in · {output} tokens out",
+        "sessions": "{n, plural, one {# session} other {# sessions}}",
+        "unpriced": "Cost unknown — a model on this line has no price",
+        "notMetered": "Not metered",
+        "notMeteredBody": "This finding came from a check plan run, which has no plan job and no usage lines."
+      },
+      "triage": {
+        "title": "Triage",
+        "groupScope": "Applies to {count, plural, one {# open finding} other {# open findings}} in this group, each recorded on its own.",
+        "cancel": "Cancel",
+        "saving": "Saving…",
+        "retry": "Try again"
+      },
+      "attr": {
+        "open": "Set attribution",
+        "label": "Attribution",
+        "hint": "Whose fault it was: the planner’s code, its corpus of rules, the planning model, or not known.",
+        "save": "Save attribution",
+        "saved": "Attribution set to {attribution}.",
+        "regroupNote": "Changing the attribution can move this finding to a different group."
+      },
+      "promote": {
+        "open": "Promote to lesson",
+        "title": "Promote this finding to a lesson",
+        "intro": "The form is filled in from the finding. Edit it before you create the lesson.",
+        "fieldTitle": "Title",
+        "fieldWhy": "Why it matters",
+        "fieldHow": "How to apply",
+        "fieldType": "Type",
+        "blank": "This field can’t be blank.",
+        "review": "Review lesson",
+        "confirmTitle": "Create this lesson?",
+        "confirmBody": "The lesson is created in this finding’s project, and that project’s planner reads it from its next planning job. To make it global, promote it from Planning lessons afterwards.",
+        "confirm": "Create lesson",
+        "saved": "Lesson created and linked to this finding.",
+        "duplicate": "A lesson like this already exists. Open it in Planning lessons instead of creating a second one."
+      },
+      "bug": {
+        "open": "Record bug key",
+        "label": "Planning bug key",
+        "hint": "The key of the planning bug you filed by hand. Nothing is filed from this page.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Enter a key such as MOTIR-123.",
+        "save": "Record key",
+        "saved": "Recorded bug {key}."
+      },
+      "dismiss": {
+        "open": "Dismiss",
+        "title": "Dismiss this finding?",
+        "body": "It leaves the default list and stays under Dismissed. You can restore it at any time.",
+        "reasonLabel": "Reason (optional, written to the audit log)",
+        "reasonPlaceholder": "Why is this not worth acting on?",
+        "confirm": "Dismiss",
+        "saved": "Finding dismissed.",
+        "restore": "Restore",
+        "restored": "Finding restored."
+      },
+      "refused": {
+        "failed": "Not saved — something went wrong. Nothing was written. Your entries are kept; try again.",
+        "unavailable": "Not saved — the planning service didn’t answer. Nothing was written and no audit row exists. Your entries are kept; try again.",
+        "notPermitted": "Not saved — only a platform admin can triage findings.",
+        "gone": "Not saved — this finding no longer exists. Nothing was written.",
+        "invalid": "Not saved — the planning service refused this change.",
+        "lessonNotLinked": "The lesson was created, but this finding could not record it. Find it in Planning lessons and do not create it again."
+      },
+      "noop": "Already up to date. Someone changed this finding a moment ago, so there was nothing to change and nothing was logged.",
+      "a11y": {
+        "viewGroup": "Show findings grouped by defect or one by one",
+        "captionGroups": "Findings grouped by defect",
+        "captionAll": "All findings",
+        "detailRegion": "Finding detail"
       }
     },
     "usage": {

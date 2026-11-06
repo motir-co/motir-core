@@ -53,27 +53,106 @@ const JOBS_STATUS = ['platformAdmin.jobs.status.label', 'platformAdmin.jobs.colu
 // field the way those languages spell them too: German « Domain », « Name »;
 // French and Dutch « Type ».
 const DNS_TYPE = 'settings.customDomains.records.type';
+// The planner-findings console (Story MOTIR-10353 · MOTIR-10521) names two
+// things that are proper names in every language — the `check plan` skill and
+// the `plan.py` planner — shows a work-item key as its placeholder, and labels a
+// bug with its key ("Bug {key}", the glossary's own `bug` term in the Latin-script
+// catalogues). Each locale's list below adds the words that language spells as
+// English does (« Source », « Plan », « Code », « Corpus », « Model », « Type »…).
+const FINDINGS_NAMES = [
+  'platformAdmin.plannerFindings.source.check_plan',
+  'platformAdmin.plannerFindings.planner.plan_py',
+  'platformAdmin.plannerFindings.detail.cellPlanpy',
+  'platformAdmin.plannerFindings.bug.placeholder',
+];
+const FINDINGS_BUG_KEY = 'platformAdmin.plannerFindings.status.bugWithKey';
 const SAME_WORD: Record<string, string[]> = {
+  zh: [...FINDINGS_NAMES],
+  ko: [...FINDINGS_NAMES],
+  ja: [...FINDINGS_NAMES],
+  it: [...FINDINGS_NAMES, FINDINGS_BUG_KEY, 'platformAdmin.plannerFindings.attribution.corpus'],
   fr: [
     'reports.workload.tableTotal', // « Total »
     'platformAdmin.jobs.pageLabel', // « Page {page} »
     DNS_TYPE,
     'settings.customDomains.dialog.appLabel', // « Application »
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.filter.source',
+    'platformAdmin.plannerFindings.filter.attribution',
+    'platformAdmin.plannerFindings.attribution.code',
+    'platformAdmin.plannerFindings.attribution.corpus',
+    'platformAdmin.plannerFindings.col.plans',
+    'platformAdmin.plannerFindings.col.source',
+    'platformAdmin.plannerFindings.col.plan',
+    'platformAdmin.plannerFindings.col.attribution',
+    'platformAdmin.plannerFindings.col.date',
+    'platformAdmin.plannerFindings.row.plans',
+    'platformAdmin.plannerFindings.pager.page',
+    'platformAdmin.plannerFindings.detail.correction',
+    'platformAdmin.plannerFindings.detail.provenance',
+    'platformAdmin.plannerFindings.detail.source',
+    'platformAdmin.plannerFindings.detail.attribution',
+    'platformAdmin.plannerFindings.detail.plan',
+    'platformAdmin.plannerFindings.cost.sessions',
+    'platformAdmin.plannerFindings.attr.label',
+    'platformAdmin.plannerFindings.promote.fieldType',
   ],
-  es: ['reports.workload.tableTotal', 'reports.cvr.seriesLabel'], // « Total », « Series »
+  es: [
+    'reports.workload.tableTotal', // « Total »
+    'reports.cvr.seriesLabel', // « Series »
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.attribution.corpus',
+    'platformAdmin.plannerFindings.col.plan',
+    'platformAdmin.plannerFindings.detail.plan',
+  ],
   pt: [
     'reports.workload.tableTotal', // « Total »
     'platformAdmin.shell.navJobs',
     'platformAdmin.jobs.title',
     ...JOBS_STATUS,
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.attribution.corpus',
   ],
   de: [
     ...JOBS_STATUS,
     'settings.customDomains.dialog.label',
     'settings.customDomains.records.name',
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.attribution.code',
+    'platformAdmin.plannerFindings.col.plan',
+    'platformAdmin.plannerFindings.detail.plan',
+    'platformAdmin.plannerFindings.triage.title',
   ],
-  nl: [...JOBS_STATUS, DNS_TYPE],
-  pl: JOBS_STATUS,
+  nl: [
+    ...JOBS_STATUS,
+    DNS_TYPE,
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.filter.planner',
+    'platformAdmin.plannerFindings.filter.count',
+    'platformAdmin.plannerFindings.filter.sheetButton',
+    'platformAdmin.plannerFindings.attribution.code',
+    'platformAdmin.plannerFindings.attribution.corpus',
+    'platformAdmin.plannerFindings.attribution.model',
+    'platformAdmin.plannerFindings.col.planner',
+    'platformAdmin.plannerFindings.col.plan',
+    'platformAdmin.plannerFindings.detail.planner',
+    'platformAdmin.plannerFindings.detail.plan',
+    'platformAdmin.plannerFindings.cost.review',
+    'platformAdmin.plannerFindings.promote.fieldType',
+  ],
+  pl: [
+    ...JOBS_STATUS,
+    ...FINDINGS_NAMES,
+    FINDINGS_BUG_KEY,
+    'platformAdmin.plannerFindings.attribution.model',
+    'platformAdmin.plannerFindings.col.plan',
+    'platformAdmin.plannerFindings.detail.plan',
+  ],
 };
 
 /** A value with no words of its own: only placeholders and punctuation. */

@@ -143,4 +143,65 @@ describe('the motir-ai jobs protocol belongs to ONE seam', () => {
     const { lessons } = readJson(lessonsFixture) as unknown as { lessons: { id: string }[] };
     expect(lessons).toHaveLength(1);
   });
+
+  it('the PLANNER-FINDINGS seam claims only the plan jobs its fixture names (MOTIR-10529)', async () => {
+    const findingsFixture = join(jobsFixture, '..', 'planner-findings.json');
+    writeFileSync(
+      findingsFixture,
+      JSON.stringify({
+        findings: [],
+        jobs: {
+          job_plan_7: {
+            result: {
+              stageUsage: [
+                {
+                  stage: 'review',
+                  model: 'm',
+                  inputTokens: 10,
+                  outputTokens: 2,
+                  sessions: 1,
+                  costMicroUsd: 1500,
+                },
+              ],
+              dryRun: {
+                outcome: 'ran',
+                counts: { findingsAccepted: 2, fixed: 1, reported: 1, fixFailed: 0 },
+              },
+            },
+          },
+        },
+      }),
+    );
+    vi.stubEnv('MOTIR_AI_PLANNER_FINDINGS_FIXTURE_PATH', findingsFixture);
+    vi.stubEnv('E2E_TEST_PLANNER_FINDINGS', '1');
+    vi.stubEnv('E2E_TEST_AI_JOBS', '1');
+    // The shipped order: the planner-findings row sits BEFORE the jobs row.
+    const { installPlannerFindingsBoundaryMock } = await import('@/lib/test-planner-findings-mock');
+    installPlannerFindingsBoundaryMock(agent);
+    const { installAiJobsBoundaryMock } = await import('@/lib/test-ai-jobs-mock');
+    installAiJobsBoundaryMock(agent);
+
+    // A job the findings fixture names is answered from it, usage lines and all.
+    const named = await fetch(`${ORIGIN}/v1/jobs/job_plan_7?coreProjectId=proj_1`);
+    const plan = (await named.json()) as {
+      jobId: string;
+      status: string;
+      result: { stageUsage?: unknown[]; dryRun?: { counts: { fixed: number } } };
+    };
+    expect(plan).toMatchObject({ jobId: 'job_plan_7', status: 'succeeded' });
+    expect(plan.result.stageUsage).toHaveLength(1);
+    expect(plan.result.dryRun?.counts.fixed).toBe(1);
+
+    // Every other job still belongs to the jobs seam: a submit's kind-carrying id
+    // settles with the jobs fixture's outcome.
+    const submitted = await fetch(`${ORIGIN}/v1/jobs`, {
+      method: 'POST',
+      body: JSON.stringify({ jobKind: 'ask_project' }),
+    });
+    const { jobId } = (await submitted.json()) as { jobId: string };
+    expect(jobId).toBe('e2e-ask_project-0');
+    const settled = await fetch(`${ORIGIN}/v1/jobs/${jobId}`);
+    const body = (await settled.json()) as { result?: { ask?: { answer?: string } } };
+    expect(body.result?.ask?.answer).toBe('Two are waiting.');
+  });
 });

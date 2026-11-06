@@ -32,6 +32,7 @@ const LABELS = {
   navCapacity: shell.navCapacity,
   navAiPlanning: shell.navAiPlanning,
   navPlanningLessons: shell.navPlanningLessons,
+  navPlannerFindings: 'Planner findings',
   navIdeas: shell.navIdeas,
   navStarters: shell.navStarters,
   navRunModels: shell.navRunModels,

@@ -10613,6 +10613,7 @@
       "exitToApp": "Terug naar de app",
       "navAiPlanning": "AI-planning",
       "navPlanningLessons": "Planningslessen",
+      "navPlannerFindings": "Plannerbevindingen",
       "navIdeas": "Ideeën",
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen",
@@ -10847,6 +10848,9 @@
           "seed_registry": {
             "promote": "Repository gepromoveerd tot starter",
             "retire": "Starter uit gebruik genomen"
+          },
+          "planner_finding": {
+            "triage": "Heeft een plannerbevinding beoordeeld"
           }
         }
       }
@@ -11757,6 +11761,236 @@
         "confirm": "Termijn wijzigen",
         "saved": "Rusttermijn gewijzigd.",
         "savedBody": "Planners gebruiken {days} dagen vanaf hun volgende planningstaak."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Beheer · Plannerbevindingen",
+      "title": "Plannerbevindingen",
+      "subtitle": "Wat de proefrun van de gehoste planner en de skill check plan fout vonden in plannen, bewaard nadat die plannen zijn gesloten of verwijderd. Zie welke fouten terugkomen, en leg dan vast wiens fout elke was, maak er een les van, leg de bug vast die u hebt aangemaakt, of negeer hem.",
+      "infoLead": "Bevindingen citeren plannen van klanten.",
+      "infoBody": "Alleen platformbeheerders kunnen deze pagina zien, en elke wijziging die u hier maakt, wordt in het auditlogboek geschreven.",
+      "view": {
+        "label": "Weergave",
+        "grouped": "Gegroepeerd",
+        "all": "Alle bevindingen"
+      },
+      "card": {
+        "title": "Bevindingen",
+        "subtitleGrouped": "Eén rij per fout, met hoeveel bevindingen en plannen deze raakte, meest recent gezien eerst.",
+        "subtitleAll": "Elke bewaarde bevinding, nieuwste eerst."
+      },
+      "filter": {
+        "label": "Bevindingen filteren",
+        "source": "Bron",
+        "sourceAny": "Elke bron",
+        "planner": "Planner",
+        "plannerAny": "Elke planner",
+        "outcome": "Uitkomst",
+        "outcomeAny": "Elke uitkomst",
+        "attribution": "Toewijzing",
+        "attributionAny": "Elke toewijzing",
+        "state": "Beoordelingsstatus",
+        "stateDefault": "Niet genegeerd",
+        "stateAll": "Alle, genegeerde inbegrepen",
+        "apply": "Toepassen",
+        "count": "{n, plural, one {# filter} other {# filters}}",
+        "clearAll": "Alles wissen",
+        "remove": "{filter} verwijderen",
+        "sheetButton": "Filters",
+        "sheetTitle": "Bevindingen filteren",
+        "sheetDone": "Klaar"
+      },
+      "source": {
+        "in_loop": "Gehoste review",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Gehoste planner",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Opgelost",
+        "reported": "Gerapporteerd",
+        "fix_failed": "Oplossen mislukt"
+      },
+      "attribution": {
+        "code": "Code",
+        "corpus": "Corpus",
+        "model": "Model",
+        "unattributed": "Niet toegewezen"
+      },
+      "prediction": {
+        "STOPS": "Een run zou hier stoppen",
+        "SETTLES": "Een run zou het afhandelen met een afwijking",
+        "THRU": "Een run zou er doorheen bouwen"
+      },
+      "status": {
+        "new": "Nieuw",
+        "promoted_to_lesson": "Les",
+        "filed_as_bug": "Bug vastgelegd",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Genegeerd"
+      },
+      "col": {
+        "defect": "Fout",
+        "findings": "Bevindingen",
+        "plans": "Plannen",
+        "lastSeen": "Laatst gezien",
+        "site": "Plek",
+        "source": "Bron",
+        "planner": "Planner",
+        "outcome": "Uitkomst",
+        "workItem": "Werkitem",
+        "plan": "Plan",
+        "attribution": "Toewijzing",
+        "state": "Status",
+        "date": "Datum"
+      },
+      "row": {
+        "findings": "{n, plural, one {# bevinding} other {# bevindingen}}",
+        "plans": "{n, plural, one {# plan} other {# plannen}}",
+        "open": "{site} openen",
+        "untitledPlan": "Naamloos plan",
+        "noPlan": "Geen plan"
+      },
+      "pager": {
+        "label": "Nieuwste eerst · {n} per pagina",
+        "page": "Pagina {n}",
+        "previous": "Vorige",
+        "next": "Volgende"
+      },
+      "noMatch": {
+        "title": "Geen bevindingen komen overeen met deze filters",
+        "body": "Genegeerde bevindingen zijn verborgen tenzij u ze laat tonen. Verwijder een filter, of wis ze allemaal.",
+        "action": "Filters wissen"
+      },
+      "empty": {
+        "title": "Nog geen bevindingen",
+        "body": "Bevindingen verschijnen hier nadat de proefrun van de gehoste planner een plan heeft beoordeeld, of nadat iemand de skill check plan heeft uitgevoerd. Er is er nog geen bewaard."
+      },
+      "unavailable": {
+        "title": "Kan de bevindingen niet laden",
+        "body": "De planningsdienst (motir-ai) reageerde niet, dus er wordt geen bevinding getoond. Dit is een laadfout — er is niets gewijzigd, en het betekent niet dat er geen bevindingen zijn.",
+        "retry": "Opnieuw proberen"
+      },
+      "loading": {
+        "label": "Bevindingen laden"
+      },
+      "group": {
+        "back": "Plannerbevindingen",
+        "title": "Herhaalde fout",
+        "summary": "{findings, plural, one {# bevinding} other {# bevindingen}} in {plans, plural, one {# plan} other {# plannen}}",
+        "findingsHeading": "Bevindingen in deze groep",
+        "empty": "Geen bevinding in deze groep komt overeen met de huidige filters."
+      },
+      "detail": {
+        "back": "Plannerbevindingen",
+        "backToGroup": "Terug naar de groep",
+        "what": "Wat er gebeurde",
+        "evidence": "Bewijs",
+        "correction": "Correctie",
+        "fixDirection": "Oplossingsrichting",
+        "why": "Waarom deze toewijzing",
+        "none": "Niets vastgelegd.",
+        "cellsTitle": "Getroffen plannercellen",
+        "cellHosted": "Gehoste planner",
+        "cellPlanpy": "plan.py",
+        "noCells": "Voor deze bevinding is geen plannercel vastgelegd.",
+        "provenance": "Herkomst",
+        "site": "Plek",
+        "prediction": "Voorspelling",
+        "source": "Bron",
+        "planner": "Planner",
+        "outcome": "Uitkomst",
+        "attribution": "Toewijzing",
+        "plan": "Plan",
+        "planId": "Plan-id",
+        "planGone": "Dit plan bestaat niet meer. De bevinding blijft bewaard.",
+        "workItem": "Werkitem",
+        "authorModel": "Auteursmodel",
+        "baseline": "Codebasis",
+        "recorded": "Vastgelegd",
+        "triagedBy": "Laatst beoordeeld door {who} · {when}",
+        "lessonLink": "De les openen in Planningslessen"
+      },
+      "cost": {
+        "title": "Kosten van review en reparatie",
+        "made": "Gemaakte bevindingen",
+        "fixed": "Opgeloste bevindingen",
+        "review": "Review",
+        "repair": "Reparatie",
+        "amount": "{amount}",
+        "tokens": "{input} tokens in · {output} tokens uit",
+        "sessions": "{n, plural, one {# sessie} other {# sessies}}",
+        "unpriced": "Kosten onbekend — een model op deze regel heeft geen prijs",
+        "notMetered": "Niet gemeten",
+        "notMeteredBody": "Deze bevinding komt van een check plan-run, die geen planningsjob en geen gebruiksregels heeft."
+      },
+      "triage": {
+        "title": "Beoordeling",
+        "groupScope": "Geldt voor {count, plural, one {# open bevinding} other {# open bevindingen}} in deze groep, elk afzonderlijk vastgelegd.",
+        "cancel": "Annuleren",
+        "saving": "Opslaan…",
+        "retry": "Opnieuw proberen"
+      },
+      "attr": {
+        "open": "Toewijzing instellen",
+        "label": "Toewijzing",
+        "hint": "Wiens fout het was: de code van de planner, zijn corpus van regels, het planningsmodel, of onbekend.",
+        "save": "Toewijzing opslaan",
+        "saved": "Toewijzing ingesteld op {attribution}.",
+        "regroupNote": "Een andere toewijzing kan deze bevinding naar een andere groep verplaatsen."
+      },
+      "promote": {
+        "open": "Tot les maken",
+        "title": "Deze bevinding tot les maken",
+        "intro": "Het formulier is ingevuld vanuit de bevinding. Pas het aan voordat u de les maakt.",
+        "fieldTitle": "Titel",
+        "fieldWhy": "Waarom het ertoe doet",
+        "fieldHow": "Hoe toe te passen",
+        "fieldType": "Type",
+        "blank": "Dit veld mag niet leeg zijn.",
+        "review": "Les controleren",
+        "confirmTitle": "Deze les maken?",
+        "confirmBody": "De les wordt gemaakt in het project van deze bevinding, en de planner van dat project leest haar vanaf zijn volgende planningsjob. Om haar globaal te maken, promoveert u haar daarna vanuit Planningslessen.",
+        "confirm": "Les maken",
+        "saved": "Les gemaakt en gekoppeld aan deze bevinding.",
+        "duplicate": "Er bestaat al een vergelijkbare les. Open die in Planningslessen in plaats van een tweede te maken."
+      },
+      "bug": {
+        "open": "Bugsleutel vastleggen",
+        "label": "Sleutel van de planningsbug",
+        "hint": "De sleutel van de planningsbug die u zelf hebt aangemaakt. Vanaf deze pagina wordt niets aangemaakt.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Voer een sleutel in zoals MOTIR-123.",
+        "save": "Sleutel vastleggen",
+        "saved": "Bug {key} vastgelegd."
+      },
+      "dismiss": {
+        "open": "Negeren",
+        "title": "Deze bevinding negeren?",
+        "body": "Ze verdwijnt uit de standaardlijst en blijft onder Genegeerd. U kunt haar op elk moment herstellen.",
+        "reasonLabel": "Reden (optioneel, wordt in het auditlogboek geschreven)",
+        "reasonPlaceholder": "Waarom is dit het niet waard om op te handelen?",
+        "confirm": "Negeren",
+        "saved": "Bevinding genegeerd.",
+        "restore": "Herstellen",
+        "restored": "Bevinding hersteld."
+      },
+      "refused": {
+        "failed": "Niet opgeslagen — er ging iets mis. Er is niets geschreven. Uw invoer blijft behouden; probeer het opnieuw.",
+        "unavailable": "Niet opgeslagen — de planningsdienst antwoordde niet. Er is niets geschreven en er bestaat geen auditregel. Uw invoer blijft behouden; probeer het opnieuw.",
+        "notPermitted": "Niet opgeslagen — alleen een platformbeheerder kan bevindingen beoordelen.",
+        "gone": "Niet opgeslagen — deze bevinding bestaat niet meer. Er is niets geschreven.",
+        "invalid": "Niet opgeslagen — de planningsdienst weigerde deze wijziging.",
+        "lessonNotLinked": "De les is gemaakt, maar deze bevinding kon haar niet vastleggen. Zoek haar op in Planningslessen en maak haar niet opnieuw."
+      },
+      "noop": "Al bijgewerkt. Iemand heeft deze bevinding zojuist gewijzigd, dus er was niets te wijzigen en er is niets gelogd.",
+      "a11y": {
+        "viewGroup": "Bevindingen gegroepeerd per fout of één voor één tonen",
+        "captionGroups": "Bevindingen gegroepeerd per fout",
+        "captionAll": "Alle bevindingen",
+        "detailRegion": "Details van de bevinding"
       }
     },
     "usage": {
