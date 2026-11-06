@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { BoardSwimlaneGroupBy } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { boardsService } from '@/lib/services/boardsService';
+import { boardsService, BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -195,7 +195,7 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
     expect(board.swimlanes[board.swimlanes.length - 1]!.key).toBe(BOARD_SWIMLANE_NO_VALUE);
   });
 
-  it('buckets the whole bounded set under a group-by while the lane count is the full aggregate (no load-all, 3.8.2)', async () => {
+  it('pages a lane under a group-by while the swimlane count stays the full aggregate (MOTIR-10535)', async () => {
     const fx = await makeFixture('swl-bound@example.com');
     const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     // 120 unassigned todo cards — well past the old 50-card page size.
@@ -224,15 +224,26 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
     const todo = todoColumn(board);
-    // 3.8.2: the whole bounded set loads (no per-column page); no cursor.
+    // MOTIR-10535: the lane opens on its first page, with a cursor for the rest.
     expect(todo.totalCount).toBe(120);
-    expect(todo.cards).toHaveLength(120);
-    expect(todo.cursor).toBeNull();
-    // the lane list is the AGGREGATE over all 120 (a bounded distinct query, not
-    // derived from the loaded cards) and every loaded card carries its lane key
+    expect(todo.cards).toHaveLength(BOARD_PAGE_SIZE);
+    expect(todo.cursor).not.toBeNull();
+    // the swimlane list is the AGGREGATE over all 120 (a bounded distinct query,
+    // never derived from the loaded page) and every loaded card carries its key
     const catchAll = board.swimlanes.find((l) => l.key === BOARD_SWIMLANE_NO_VALUE)!;
     expect(catchAll.count).toBe(120);
     expect(todo.cards.every((c) => c.swimlaneKey === BOARD_SWIMLANE_NO_VALUE)).toBe(true);
+
+    // A next page carries its cards' swimlane keys too.
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      todo.id,
+      todo.cursor!,
+    );
+    expect(page.cards).toHaveLength(BOARD_PAGE_SIZE);
+    expect(page.cards.every((c) => c.swimlaneKey === BOARD_SWIMLANE_NO_VALUE)).toBe(true);
   });
 
   it('lane aggregates + epic-ancestor lookup short-circuit empty input without a query', async () => {

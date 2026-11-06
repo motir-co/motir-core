@@ -15,7 +15,6 @@ import { buildBoardFilterHref } from '@/lib/boards/boardFilterHref';
 import { IssueFilterBar } from '../../items/_components/IssueFilterBar';
 import { IssueAdvancedFilter } from '../../items/_components/IssueAdvancedFilter';
 import { SavedFilterDropdown } from '../../items/_components/SavedFilterDropdown';
-import { useBoardFilterUi } from './BoardFilterUiContext';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // The board toolbar's filter affordances (Story 6.15 · Subtask 6.15.3), per
@@ -33,9 +32,9 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 // would consume them — they're passed as the canonical defaults purely to
 // satisfy the shared prop contract.
 //
-// The quick `[Filter]` popover's open state is lifted to BoardFilterUiContext so
-// the over-cap banner's "Refine filter" CTA (rendered inside BoardContainer) can
-// open it; the `[Advanced]` + `[Saved]` popovers keep their own open state
+// The quick `[Filter]` popover keeps its own internal open state (the over-cap
+// banner whose "Refine filter" CTA opened it from outside went with the board
+// cap, MOTIR-10535); the `[Advanced]` + `[Saved]` popovers keep theirs
 // (AdvancedFilterProvider / the saved-filter session), exactly as on /items.
 
 export interface BoardFilterControlsProps {
@@ -68,7 +67,6 @@ export function BoardFilterControls({
   viewer,
 }: BoardFilterControlsProps) {
   const routes = useReaderRoutes();
-  const ui = useBoardFilterUi();
   const buildHref = useCallback(
     (next: IssueFilter) =>
       routes.view(buildBoardFilterHref({ boardId: selectedBoardId, filter: next })),
@@ -85,8 +83,6 @@ export function BoardFilterControls({
         sort={DEFAULT_SORT}
         ast={ast}
         buildHref={buildHref}
-        open={ui?.filterOpen}
-        onOpenChange={ui?.setFilterOpen}
       />
       <IssueAdvancedFilter
         filter={filter}

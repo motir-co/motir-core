@@ -142,9 +142,9 @@ export interface IssueFilterBarProps {
    * injects `buildBoardFilterHref`. Defaults to the /items `buildIssueListHref`
    * (view + sort preserved). */
   buildHref?: (filter: IssueFilter) => string;
-  /** Controlled open (Subtask 6.15.3): the board's over-cap banner "Refine
-   * filter" CTA opens this popover from outside the toolbar. Uncontrolled
-   * (internal state) on /items. */
+  /** Controlled open, for a host that must open this popover from outside the
+   * toolbar (Subtask 6.15.3 added it for the board's over-cap banner, retired
+   * by MOTIR-10535). Uncontrolled (internal state) when omitted. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }

@@ -10,8 +10,9 @@ import { truncateAuthTables } from '../helpers/db';
 import { encodeFilterParam, facetFilterToAst, type FilterAst } from '@/lib/filters/ast';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
 import type { ProjectContext } from '@/lib/projects';
-import type { BoardProjectionDto } from '@/lib/dto/boards';
+import type { BoardColumnPageDto, BoardProjectionDto } from '@/lib/dto/boards';
 import { spyOnJobDispatch } from '../helpers/jobs';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 
 // Board API routes (Story 3.1 · Subtask 3.1.6). Real Postgres; we stub only the
 // two session/context resolvers the test env can't supply via cookies
@@ -30,6 +31,7 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 const { GET: boardGET, PATCH: boardPATCH } = await import('@/app/api/board/route');
 const { PATCH: columnPATCH } = await import('@/app/api/board/columns/[columnId]/route');
 const { POST: movePOST } = await import('@/app/api/board/move/route');
+const { GET: pageGET } = await import('@/app/api/board/columns/[columnId]/cards/route');
 
 const BASE = 'http://localhost:3000';
 
@@ -370,5 +372,143 @@ describe('board config API routes (Subtask 3.3.3)', () => {
     const res = await columnPatchReq('col_does_not_exist', { wipLimit: 2 });
     expect(res.status).toBe(404);
     expect(((await res.json()) as { code: string }).code).toBe('BOARD_COLUMN_NOT_FOUND');
+  });
+});
+
+// GET /api/board/columns/[columnId]/cards (MOTIR-10535) — the next page of one
+// lane. The paging itself is tests/boards/projection.test.ts's; here, the
+// transport: the required params, the typed refusals and the filter thread.
+describe("GET /api/board/columns/[columnId]/cards — a lane's next page", () => {
+  function pageReq(columnId: string, query: Record<string, string>) {
+    const qs = new URLSearchParams(query).toString();
+    return pageGET(new Request(`${BASE}/api/board/columns/${columnId}/cards?${qs}`), {
+      params: Promise.resolve({ columnId }),
+    });
+  }
+
+  async function pagedTodo(n: number, kind: 'task' | 'bug' = 'task') {
+    const fx = await makeFixture();
+    for (let i = 0; i < n; i++) {
+      await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: i % 2 === 0 ? kind : 'task', title: `card ${i}` },
+        { userId: fx.userId, workspaceId: fx.workspaceId },
+      );
+    }
+    const board = (await (await boardGetReq()).json()) as BoardProjectionDto;
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    return { fx, board, todo };
+  }
+
+  it('→ 401 without a session', async () => {
+    const res = await pageReq('col_x', { boardId: 'b', cursor: 'c' });
+    expect(res.status).toBe(401);
+  });
+
+  it('→ 200 with the page after the cursor', async () => {
+    const { board, todo } = await pagedTodo(12);
+    expect(todo.cards).toHaveLength(10);
+    const res = await pageReq(todo.id, { boardId: board.boardId, cursor: todo.cursor! });
+    expect(res.status).toBe(200);
+    const page = (await res.json()) as BoardColumnPageDto;
+    expect(page.columnId).toBe(todo.id);
+    expect(page.cards.map((c) => c.title)).toEqual(['card 10', 'card 11']);
+    expect(page.totalCount).toBe(12);
+    expect(page.cursor).toBeNull();
+  });
+
+  it("→ 400 when `boardId` or `cursor` is missing, or the cursor is not the lane's", async () => {
+    const { board, todo } = await pagedTodo(11);
+    const partial: Array<Record<string, string>> = [
+      { boardId: board.boardId },
+      { cursor: todo.cursor! },
+    ];
+    for (const query of partial) {
+      const res = await pageReq(todo.id, query);
+      expect(res.status).toBe(400);
+      expect(((await res.json()) as { code: string }).code).toBe('BAD_REQUEST');
+    }
+    const bad = await pageReq(todo.id, { boardId: board.boardId, cursor: 'forged' });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { code: string }).code).toBe('INVALID_BOARD_CURSOR');
+  });
+
+  it('→ 404 for a lane or a board the active project does not have', async () => {
+    const { board, todo } = await pagedTodo(11);
+    const noLane = await pageReq('col_does_not_exist', {
+      boardId: board.boardId,
+      cursor: todo.cursor!,
+    });
+    expect(noLane.status).toBe(404);
+    expect(((await noLane.json()) as { code: string }).code).toBe('BOARD_COLUMN_NOT_FOUND');
+    const noBoard = await pageReq(todo.id, { boardId: 'brd_not_real', cursor: todo.cursor! });
+    expect(noBoard.status).toBe(404);
+    expect(((await noBoard.json()) as { code: string }).code).toBe('BOARD_NOT_FOUND');
+  });
+
+  it('threads `?filter=` into the page, and 422s an invalid one', async () => {
+    const { fx } = await pagedTodo(0);
+    for (let i = 0; i < 12; i++) {
+      await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'bug', title: `bug ${i}` },
+        { userId: fx.userId, workspaceId: fx.workspaceId },
+      );
+      await workItemsService.createWorkItem(
+        { projectId: fx.projectId, kind: 'task', title: `task ${i}` },
+        { userId: fx.userId, workspaceId: fx.workspaceId },
+      );
+    }
+    const filter = encodeFilterParam(facetFilterToAst({ ...EMPTY_FILTER, kinds: ['bug'] }));
+    const board = (await (
+      await boardGetReq(`?filter=${encodeURIComponent(filter)}`)
+    ).json()) as BoardProjectionDto;
+    const todo = board.columns.find((c) => c.statusKeys[0] === 'todo')!;
+    expect(todo.totalCount).toBe(12);
+
+    const res = await pageReq(todo.id, { boardId: board.boardId, cursor: todo.cursor!, filter });
+    const page = (await res.json()) as BoardColumnPageDto;
+    expect(page.cards.map((c) => c.title)).toEqual(['bug 10', 'bug 11']);
+    expect(page.totalCount).toBe(12);
+
+    const badAst = {
+      combinator: 'and',
+      conditions: [{ field: 'not_a_field', operator: 'is_any_of', value: ['x'] }],
+    } as unknown as FilterAst;
+    const bad = await pageReq(todo.id, {
+      boardId: board.boardId,
+      cursor: todo.cursor!,
+      filter: encodeFilterParam(badAst),
+    });
+    expect(bad.status).toBe(422);
+  });
+
+  it('→ 404 BOARD_NOT_FOUND when the project gate refuses, and rethrows an untyped failure', async () => {
+    await makeFixture();
+    const spy = vi.spyOn(boardsService, 'getColumnPage');
+    spy.mockRejectedValueOnce(new ProjectNotFoundError('p'));
+    const gated = await pageReq('col_x', { boardId: 'b', cursor: 'c' });
+    expect(gated.status).toBe(404);
+    expect(((await gated.json()) as { code: string }).code).toBe('BOARD_NOT_FOUND');
+
+    spy.mockRejectedValueOnce(new Error('boom'));
+    await expect(pageReq('col_x', { boardId: 'b', cursor: 'c' })).rejects.toThrow('boom');
+  });
+
+  it('a malformed `?filter=` degrades to the unfiltered lane, as on the projection', async () => {
+    const { board, todo } = await pagedTodo(12);
+    const res = await pageReq(todo.id, {
+      boardId: board.boardId,
+      cursor: todo.cursor!,
+      filter: 'not-a-valid-param',
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as BoardColumnPageDto).cards).toHaveLength(2);
+  });
+
+  it('→ 400 when there is no active project', async () => {
+    await makeFixture();
+    activeCtx.current = null;
+    const res = await pageReq('col_x', { boardId: 'b', cursor: 'c' });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe('NO_ACTIVE_PROJECT');
   });
 });

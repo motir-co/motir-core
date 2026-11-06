@@ -32,7 +32,7 @@ import type {
   BoardProjectionDto,
   BoardSwimlaneGroupByDto,
 } from '@/lib/dto/boards';
-import type { MoveCardResultDto } from '@/lib/dto/boards';
+import type { BoardColumnPageDto, MoveCardResultDto } from '@/lib/dto/boards';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import { useCreateIssue } from '../../_components/CreateIssueProvider';
@@ -44,9 +44,7 @@ import { BoardColumnPager, useActiveColumnIndex } from './BoardColumnPager';
 import { BoardEmptyState } from './BoardEmptyState';
 import { BoardFilteredEmptyState } from './BoardFilteredEmptyState';
 import { BoardSkeleton } from './BoardSkeleton';
-import { useBoardFilterUi } from './BoardFilterUiContext';
 import { NoActiveSprintState } from './NoActiveSprintState';
-import { OverCapBanner } from './OverCapBanner';
 import { SprintHeader } from './SprintHeader';
 import { SwimlaneBoard } from './SwimlaneBoard';
 import { BoardHeldRefusalProvider, planHoldName, type BoardHeldRefusal } from './BoardHeldRefusal';
@@ -56,7 +54,9 @@ import type { WorkItemObsolescenceDto } from '@/lib/dto/workItems';
 import type { ApprovalGatePendingPayloadDTO } from '@/lib/dto/approvalGate';
 import { planHoldKey, type PlanHoldDTO } from '@/lib/dto/plans';
 import { UnmappedStatusesTray } from './UnmappedStatusesTray';
+import type { LaneLoadState } from './LanePager';
 import {
+  appendColumnPage,
   cardIndex,
   columnOfOverId,
   findCard,
@@ -131,7 +131,7 @@ export function BoardContainer({
    * The compiled board filter (Story 6.15.3) — the merged toolbar facets +
    * advanced AST, encoded as the `?filter=v1:` codec param (empty string when no
    * filter narrows the board). Rides the projection fetch so the server read
-   * (6.15.2) re-projects every column + the cap/`truncated` count to the
+   * (6.15.2) re-projects every column (its count and every page) to the
    * matching set; a change refetches (it's in the fetch query → the effect dep).
    */
   filterParam?: string;
@@ -181,10 +181,6 @@ export function BoardContainer({
     return qs ? `?${qs}` : '';
   }, [selectedBoardId, filterParam]);
   const { toast } = useToast();
-  // The quick-`[Filter]` open state (Subtask 6.15.3) — the over-cap banner's
-  // "Refine filter" CTA opens the board filter through it. Null outside the
-  // board page's provider (isolated tests) → the CTA stays a disabled seam.
-  const boardFilterUi = useBoardFilterUi();
   // The group-by control lives in the PAGE HEADER toolbar row (beside the board
   // switcher), per design/boards/multi-board.mock.html — but its value + change
   // handler live HERE (in the projection state). page.tsx renders an empty
@@ -354,11 +350,6 @@ export function BoardContainer({
     );
   }
 
-  // The over-cap banner (Subtask 3.8.4) is a board-level signal, so it sits
-  // ABOVE both layouts in the container (like the unmapped tray) and shows for
-  // the flat AND swimlane board — rendered exactly when the 3.8.2 projection's
-  // bounded load hit the cap (`truncated`). An over-cap board always has cards,
-  // so this never coincides with the empty state.
   return (
     <div className="flex min-w-0 flex-col gap-3">
       {/* SCRUM sprint header (Subtask 4.5.3) — the one net-new surface, above the
@@ -397,12 +388,6 @@ export function BoardContainer({
           {tpa('readOnlyBoardBanner')}
         </div>
       ) : null}
-      {board.truncated ? (
-        <OverCapBanner
-          cap={board.cap}
-          onRefine={boardFilterUi ? () => boardFilterUi.setFilterOpen(true) : undefined}
-        />
-      ) : null}
       {hasUnmapped ? (
         <UnmappedStatusesTray statuses={board.unmappedStatuses} boardId={board.boardId} />
       ) : null}
@@ -431,6 +416,7 @@ export function BoardContainer({
           canEdit={canEdit}
           columnPoints={columnPoints}
           projectName={projectName}
+          filterParam={filterParam}
         />
       )}
     </div>
@@ -502,6 +488,7 @@ function BoardDnd({
   canEdit,
   columnPoints,
   projectName = '',
+  filterParam = '',
 }: {
   board: BoardProjectionDto;
   assigneeNameById: Map<string, string>;
@@ -514,6 +501,9 @@ function BoardDnd({
   columnPoints: Record<string, number> | null;
   /** The plan footer's last naming fallback (MOTIR-6268's `{name}` rule). */
   projectName?: string;
+  /** The compiled board filter the projection was read with (Story 6.15.3) — a
+   *  lane's next page is read with the same one (MOTIR-10535). */
+  filterParam?: string;
 }) {
   const t = useTranslations('boards');
   const { toast } = useToast();
@@ -522,6 +512,12 @@ function BoardDnd({
   const swimlaned = groupBy !== 'none';
 
   const [columns, setColumns] = useState<BoardColumnDto[]>(board.columns);
+  // Every plan that holds a loaded card (MOTIR-6268): the projection's, plus each
+  // lane page's as it arrives (MOTIR-10535).
+  const [planHolds, setPlanHolds] = useState(board.planHolds);
+  // Each lane's paging state (MOTIR-10535) — `loading` while its next page is in
+  // flight, `error` when the last one failed (the lane then offers a retry).
+  const [loadStates, setLoadStates] = useState<Record<string, LaneLoadState>>({});
   const [activeCard, setActiveCard] = useState<BoardCardDto | null>(null);
   // The lane currently under the drag (swimlane mode) — drives the target-lane
   // ring/tint (paired with the cell `isOver` outline; never colour-alone, #35).
@@ -569,7 +565,7 @@ function BoardDnd({
   const showPlanHeld = useCallback(
     (card: BoardCardDto, plan: PlanHoldDTO, loaded: BoardColumnDto[]) => {
       const key = planHoldKey(plan);
-      const summary = board.planHolds[key];
+      const summary = planHolds[key];
       const siblings = summary
         ? Math.max(summary.heldCount - 1, 0)
         : loaded
@@ -577,7 +573,7 @@ function BoardDnd({
             .filter((c) => c.id !== card.id && c.planHold && planHoldKey(c.planHold) === key)
             .length;
       setHeld({ kind: 'plan', workItemId: card.id, itemKey: plan.itemKey, plan, siblings });
-      const { name } = planHoldName(plan, board.planHolds, projectName);
+      const { name } = planHoldName(plan, planHolds, projectName);
       // An open SESSION's hold (MOTIR-7640) reads its own sentences.
       if (plan.kind === 'session') {
         const line = [
@@ -607,7 +603,7 @@ function BoardDnd({
         }),
       );
     },
-    [board.planHolds, projectName, t, tHeld],
+    [planHolds, projectName, t, tHeld],
   );
   // Focus lands on Review & approve when the line carries one, else stays on the
   // returned card (design panel 2b, keyboard).
@@ -638,6 +634,40 @@ function BoardDnd({
     columnsRef.current = columns;
   }, [columns]);
   const snapshotRef = useRef<BoardColumnDto[] | null>(null);
+
+  // A lane's NEXT PAGE (MOTIR-10535) — asked for by the lane's scroll-to-load
+  // sentinel. One page in flight per lane (the ref, read synchronously, so a
+  // second sentinel report in the same frame cannot double-fetch). The page is
+  // read with the board's own filter, so it holds only cards the filtered lane
+  // shows. A card already on the board — one dragged into this lane after its
+  // first page loaded, or one already shown in another lane — is skipped: the
+  // local position of a moved card is authoritative until the next projection.
+  const inFlightRef = useRef(new Set<string>());
+  const loadMore = useCallback(
+    async (columnId: string) => {
+      const col = columnsRef.current.find((c) => c.id === columnId);
+      if (!col?.cursor || inFlightRef.current.has(columnId)) return;
+      inFlightRef.current.add(columnId);
+      setLoadStates((prev) => ({ ...prev, [columnId]: 'loading' }));
+      const params = new URLSearchParams({ boardId: board.boardId, cursor: col.cursor });
+      if (filterParam) params.set('filter', filterParam);
+      try {
+        const res = await fetch(`/api/board/columns/${columnId}/cards?${params.toString()}`, {
+          headers: { accept: 'application/json' },
+        });
+        if (!res.ok) throw new Error(`page ${res.status}`);
+        const page = (await res.json()) as BoardColumnPageDto;
+        setColumns((prev) => appendColumnPage(prev, page));
+        setPlanHolds((prev) => ({ ...prev, ...page.planHolds }));
+        setLoadStates((prev) => ({ ...prev, [columnId]: 'idle' }));
+      } catch {
+        setLoadStates((prev) => ({ ...prev, [columnId]: 'error' }));
+      } finally {
+        inFlightRef.current.delete(columnId);
+      }
+    },
+    [board.boardId, filterParam],
+  );
 
   // Horizontal edge auto-scroll for the flat board (bug-board-cannot-drag-from-
   // in-review-to-done). The flat board is a horizontally-scrolling column row
@@ -1232,7 +1262,7 @@ function BoardDnd({
       value={{
         held,
         close: closeHeld,
-        planHolds: board.planHolds,
+        planHolds,
         projectName,
         highlightedPlanId,
         onPlanFooterHover: setHoverPlanId,
@@ -1278,6 +1308,8 @@ function BoardDnd({
             activeCardId={activeCard?.id ?? null}
             overLaneKey={overLaneKey}
             columnPoints={columnPoints}
+            loadStates={loadStates}
+            onLoadMore={loadMore}
           />
         ) : (
           <div className="flex min-w-0 flex-col gap-2">
@@ -1309,6 +1341,8 @@ function BoardDnd({
                     activeCardId={activeCard?.id ?? null}
                     onSetWipLimit={setColumnWip}
                     points={columnPoints?.[column.id] ?? null}
+                    loadState={loadStates[column.id] ?? 'idle'}
+                    onLoadMore={loadMore}
                   />
                 </div>
               ))}

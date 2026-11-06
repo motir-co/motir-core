@@ -313,6 +313,34 @@ describe('moveCard — in-column reorder = pure rank change', () => {
     expect(result.card).toMatchObject({ statusLabel: 'To Do', ready: true, readyToStart: true });
   });
 
+  it("a drop under the LAST LOADED card lands right after it, not at the lane's far end (MOTIR-10535)", async () => {
+    // A paged lane: the client holds only A (the first page); B and C are on a
+    // page it has not loaded. Dropping D under A sends `beforeId: A` and no
+    // `afterId` — D must rank between A and its true successor B, exactly
+    // where the user saw it land, not after C at the end of the whole lane.
+    const fx = await makeFixture();
+    const a = await makeItem(fx, 'A');
+    const b = await makeItem(fx, 'B');
+    const c = await makeItem(fx, 'C');
+    const d = await makeItem(fx, 'D');
+    await adminDb.workItem.update({ where: { id: d }, data: { status: 'in_progress' } });
+
+    await boardsService.moveCard(
+      fx.boardId,
+      d,
+      { toColumnId: fx.columns['todo']!, beforeId: a },
+      fx.ctx,
+    );
+
+    const pa = await positionOf(a);
+    const pb = await positionOf(b);
+    const pc = await positionOf(c);
+    const pd = await positionOf(d);
+    expect(pd > pa).toBe(true);
+    expect(pd < pb).toBe(true);
+    expect(pb < pc).toBe(true);
+  });
+
   it('a missing rank neighbour id → WorkItemNotFoundError', async () => {
     const fx = await makeFixture();
     const id = await makeItem(fx);

@@ -3,15 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { BoardColumn } from '@/app/(authed)/boards/_components/BoardColumn';
+import type { LaneLoadState } from '@/app/(authed)/boards/_components/LanePager';
 import type { BoardCardDto, BoardColumnDto } from '@/lib/dto/boards';
 
 // BoardColumn (Subtask 3.2.3 · scale 3.2.5 · WIP 3.3.6 · load model 3.8.3): a column
 // header (name + per-column total count + the WIP chip + the `[⋯]` actions menu)
-// over a card stack, with the designed empty-column state. The 3.8.3 load-model
-// CORRECTION (`notes.html` mistake #33) renders the WHOLE bounded 3.8.2 set with NO
-// "Load more" affordance at all — no button, no scroll-to-load sentinel, no
-// in-flight spinner, no inline retry — exactly as a Jira board behaves; the stack
-// still virtualizes via `useRowWindow` so a tall column stays DOM-bounded. Rendered
+// over a card stack, with the designed empty-column state. MOTIR-10535 pages the
+// lane: with a cursor the column renders the scroll-to-load footer of
+// `board.mock.html` panel 4 (a sentinel, the in-flight spinner, a focusable inline
+// retry — never a "Load more" button) and its header reads "{loaded} of {total}";
+// the stack still virtualizes via `useRowWindow` so a tall column stays
+// DOM-bounded. Rendered
 // with the real `en` catalog. Under happy-dom there is no measurable scroll
 // viewport, so the windowing degrades to render-all (no absolute positioning).
 
@@ -65,6 +67,8 @@ function renderColumn(
     onOpenQuickView: (id: string) => void;
     activeCardId: string | null;
     onSetWipLimit: (columnId: string, limit: number | null) => void;
+    loadState: LaneLoadState;
+    onLoadMore: (columnId: string) => void;
   }> = {},
 ) {
   return render(
@@ -75,6 +79,8 @@ function renderColumn(
       onOpenQuickView={extra.onOpenQuickView ?? noop}
       activeCardId={extra.activeCardId ?? null}
       onSetWipLimit={extra.onSetWipLimit ?? noop}
+      loadState={extra.loadState}
+      onLoadMore={extra.onLoadMore}
     />,
   );
 }
@@ -117,33 +123,62 @@ describe('BoardColumn', () => {
     expect(screen.getByTitle('Assigned to Bea Lin')).toBeTruthy();
   });
 
-  // 3.8.3 — the load-model CORRECTION (`notes.html` mistake #33): the column loads
-  // the WHOLE bounded 3.8.2 set, so EVERY "Load more" affordance is gone — no
-  // button, no scroll-to-load sentinel, no in-flight spinner, no inline retry. Even
-  // a (now-permanently-null) cursor + a big total surfaces none of them; the cards
-  // render directly and the header count stays the full denominator.
-  it('renders NO load-more affordance at all — no button, spinner, or retry (3.8.3)', () => {
-    renderColumn(
-      column({
-        id: 'c1',
-        name: 'To Do',
-        totalCount: 60,
-        // `cursor` is permanently null post-3.8.2; even a stray non-null value must
-        // not resurrect a load-more affordance — the flat board no longer reads it.
-        cursor: '50',
-        cards: [card({ id: 'w1', key: 1 }), card({ id: 'w2', key: 2 })],
-      }),
-    );
-    // None of the retired affordances may render.
-    expect(screen.queryByTestId('board-load-more-c1')).toBeNull();
-    expect(screen.queryByTestId('board-load-more-retry-c1')).toBeNull();
-    expect(screen.queryByTestId('board-loading-more-c1')).toBeNull();
+  // MOTIR-10535 — the lane pages: a cursor + a pager means a scroll-to-load
+  // footer (panel 4 of board.mock.html), never a "Load more" button.
+  const paged = () =>
+    column({
+      id: 'c1',
+      name: 'To Do',
+      totalCount: 60,
+      cursor: 'CUR',
+      cards: [card({ id: 'w1', key: 1 }), card({ id: 'w2', key: 2 })],
+    });
+
+  it('renders the scroll sentinel and "{loaded} of {total}" when the lane has more (MOTIR-10535)', () => {
+    renderColumn(paged(), { onLoadMore: vi.fn() });
+    expect(screen.getByTestId('board-lane-sentinel-c1').getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('2 of 60');
     expect(screen.queryByText('Load more')).toBeNull();
-    expect(screen.queryByText('Loading…')).toBeNull();
-    // The whole bounded set renders directly; the header count is the full total.
+    expect(screen.queryByTestId('board-lane-loading-c1')).toBeNull();
+    expect(screen.queryByTestId('board-lane-retry-c1')).toBeNull();
+  });
+
+  it('shows the in-flight spinner while loading, and a retry that asks again on error', () => {
+    const onLoadMore = vi.fn();
+    const { rerender } = renderColumn(paged(), { onLoadMore, loadState: 'loading' });
+    expect(screen.getByTestId('board-lane-loading-c1').textContent).toContain('Loading…');
+
+    rerender(
+      <BoardColumn
+        column={paged()}
+        boardId="b1"
+        assigneeNameById={new Map()}
+        onOpenQuickView={noop}
+        activeCardId={null}
+        onSetWipLimit={noop}
+        loadState="error"
+        onLoadMore={onLoadMore}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('board-lane-retry-c1'));
+    expect(onLoadMore).toHaveBeenCalledWith('c1');
+  });
+
+  it('renders no footer when every card is loaded, or when nothing pages the lane', () => {
+    renderColumn({ ...paged(), cursor: null }, { onLoadMore: vi.fn() });
+    expect(screen.queryByTestId('board-lane-footer-c1')).toBeNull();
+    cleanup();
+    // A host that wires no pager (an isolated render) shows no footer either.
+    renderColumn(paged());
+    expect(screen.queryByTestId('board-lane-footer-c1')).toBeNull();
     expect(screen.getByTestId('board-card-PROD-1')).toBeTruthy();
-    expect(screen.getByTestId('board-card-PROD-2')).toBeTruthy();
-    expect(screen.getByTestId('board-count-c1').textContent).toBe('60');
+  });
+
+  it('keeps the footer under an EMPTY first page that still has a cursor', () => {
+    // A filtered lane can hold no card on screen yet still have more (every
+    // loaded card moved away): the footer must stay so the lane can page on.
+    renderColumn({ ...paged(), cards: [] }, { onLoadMore: vi.fn() });
+    expect(screen.getByTestId('board-lane-sentinel-c1')).toBeTruthy();
   });
 
   it('keeps a tall column DOM-bounded by windowing once a scroll viewport is measurable (3.8.3)', () => {
@@ -168,7 +203,7 @@ describe('BoardColumn', () => {
       expect(mounted.length).toBeGreaterThan(0);
       expect(mounted.length).toBeLessThan(1000);
       // The header still surfaces the FULL count (the denominator), not the window.
-      expect(screen.getByTestId('board-count-c1').textContent).toBe('1000');
+      expect(screen.getByTestId('board-count-c1').textContent).toBe('1,000');
     } finally {
       if (prior) Object.defineProperty(HTMLElement.prototype, 'clientHeight', prior);
       else delete (HTMLElement.prototype as { clientHeight?: unknown }).clientHeight;

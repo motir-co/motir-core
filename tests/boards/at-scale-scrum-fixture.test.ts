@@ -1,13 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { BoardSwimlaneGroupBy } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import {
-  boardsService,
-  BOARD_ISSUE_CAP,
-  DONE_AGE_WINDOW_DAYS,
-  resolveBoardIssueCap,
-  resolveDoneAgeWindowDays,
-} from '@/lib/services/boardsService';
+import { boardsService, BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
+import type { BoardColumnDto, BoardProjectionDto } from '@/lib/dto/boards';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
@@ -29,9 +24,9 @@ import { truncateAuthTables } from '../helpers/db';
 // scrum scope mechanics (4.5.2's own scrum-projection.test.ts) — here the seed
 // composes those into one at-scale fixture, reached with TENS of rows.
 //
-// It also re-affirms (a single assertion) that the cap/Done-age env seam this
-// fixture REUSES (3.5.1) still falls back to the shipped constants when unset —
-// the headline "no production behaviour change" guarantee.
+// MOTIR-10535 pages the board per lane and retired the cap/Done-age env seam
+// this file used to re-affirm; a lane's cards are read here by paging it to its
+// end, so an assertion about "the board" holds over every page.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -111,16 +106,23 @@ async function seed(fx: Fixture) {
   );
 }
 
-describe('cap/Done-age env seam reuse (4.7.1 reuses 3.5.1)', () => {
-  it('falls back to the shipped constants when the override env is unset', () => {
-    // The scrum fixture introduces NO new seam — it rides the 3.5.1 one over the
-    // SAME getBoard the scrum scope composes. Production behaviour is unchanged.
-    expect(resolveBoardIssueCap()).toBe(BOARD_ISSUE_CAP);
-    expect(resolveDoneAgeWindowDays()).toBe(DONE_AGE_WINDOW_DAYS);
-    expect(BOARD_ISSUE_CAP).toBe(5000);
-    expect(DONE_AGE_WINDOW_DAYS).toBe(14);
-  });
-});
+/** Every card id of one lane: its first page, then every next page. */
+async function laneIds(fx: Fixture, board: BoardProjectionDto, col: BoardColumnDto) {
+  const ids = new Set(col.cards.map((c) => c.id));
+  let cursor = col.cursor;
+  while (cursor) {
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      col.id,
+      cursor,
+    );
+    for (const c of page.cards) ids.add(c.id);
+    cursor = page.cursor;
+  }
+  return ids;
+}
 
 describe('sprint-shaped large seed distribution (4.7.1)', () => {
   it('flips the board to scrum and creates a large active sprint + a planned carry-over target', async () => {
@@ -178,7 +180,11 @@ describe('sprint-shaped large seed distribution (4.7.1)', () => {
     const sprintIssue = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: fx.projectId, sprintId: m.activeSprintId },
     });
-    const onBoard = new Set(projection.columns.flatMap((c) => c.cards.map((card) => card.id)));
+    const onBoard = new Set<string>();
+    for (const col of projection.columns) {
+      for (const id of await laneIds(fx, projection, col)) onBoard.add(id);
+    }
+    expect(onBoard.size).toBe(m.sprintIssueCount);
     expect(onBoard.has(sprintIssue.id), 'in-sprint issue rendered').toBe(true);
     expect(onBoard.has(backlogIssue.id), 'out-of-sprint issue absent').toBe(false);
   });
@@ -208,7 +214,7 @@ describe('sprint-shaped large seed distribution (4.7.1)', () => {
     expect(board.swimlanes.some((l) => l.key === BOARD_SWIMLANE_NO_VALUE)).toBe(true);
   });
 
-  it('seeds a Done-age spread the sprint-scoped projection visibly trims (rendered < full total)', async () => {
+  it('seeds a Done-age spread whose aged-out sprint cards still page in (MOTIR-10535)', async () => {
     const fx = await makeFixture();
     const m = await seed(fx);
     expect(m.terminalAgedOut).toBeGreaterThan(0);
@@ -219,13 +225,14 @@ describe('sprint-shaped large seed distribution (4.7.1)', () => {
       c.statusKeys.some((k) => m.terminalStatusKeys.includes(k)),
     );
     expect(terminalCols.length).toBeGreaterThan(0);
-    // At least one terminal column renders fewer cards than its full sprint-scoped
-    // total — the aged-out (backdated) in-sprint cards trimmed by the window.
-    const trimmed = terminalCols.filter((c) => c.cards.length < c.totalCount);
-    expect(
-      trimmed.length,
-      'a terminal column is Done-age trimmed under sprint scope',
-    ).toBeGreaterThan(0);
+    // No Done-age window trims a terminal lane any more: its first page is at
+    // most BOARD_PAGE_SIZE, and paging reaches its full sprint-scoped count.
+    for (const col of terminalCols) {
+      expect(col.cards.length).toBeLessThanOrEqual(BOARD_PAGE_SIZE);
+      expect((await laneIds(fx, board, col)).size, `${col.name} pages in full`).toBe(
+        col.totalCount,
+      );
+    }
   });
 
   it('gives the sprint a story-point spread (some estimated, some NULL) the header aggregates surface', async () => {

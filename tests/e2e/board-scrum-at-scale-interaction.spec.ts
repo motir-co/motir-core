@@ -5,20 +5,18 @@
 // interaction), run against the 4.7.1 SPRINT-shaped large seed so every
 // interaction exercises a genuinely at-scale, SPRINT-SCOPED board: a large
 // `active` sprint spread across tall virtualized columns and many populated
-// lanes, bounded with NO per-column "Load more" anywhere — and closed out by a
+// lanes, paged in as they scroll with never a "Load more" button — and closed out by a
 // complete-sprint whose carry-over moves a LARGE unfinished set.
 //
 // Lives in its OWN file (the load-model + scope + header half, 4.7.2, owns
 // `board-scrum-at-scale.spec.ts`); both carry the `board-scrum-at-scale`
 // describe tag, so the 4.7.2 CI step (`pnpm test:e2e --grep
-// "board(-scrum)?-at-scale"`, run with the 3.5.1 cap/Done-age seam
-// `BOARD_ISSUE_CAP_OVERRIDE=40` / `DONE_AGE_WINDOW_DAYS_OVERRIDE=7`) runs this
-// spec too — which is why the seed below stays UNDER 40 cards and backdates
-// NOTHING out of the Done-age window. Splitting the file avoids two parallel
-// subtasks colliding on one new path — the exact 3.5.2/3.5.3 split. (Until the
-// 4.7.2 lane lands, the tag doesn't match the `board-at-scale` lane regex, so
-// this spec runs in the main E2E step under the shipped constants — correct in
-// both orders.)
+// "board(-scrum)?-at-scale"`) runs this spec too. Splitting the file avoids two
+// parallel subtasks colliding on one new path — the exact 3.5.2/3.5.3 split.
+//
+// The board pages per lane (MOTIR-10535), so a membership assertion reads the
+// board through `getFullBoard` (every lane paged to its end over the lane route)
+// rather than the first-page projection.
 //
 // Proves the 3.2/3.3 interaction contracts and the 4.4 lifecycle STILL HOLD on
 // top of the 3.8 load model COMPOSED WITH the 4.5.2 sprint scope, which no
@@ -68,7 +66,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import {
-  getBoard,
+  getFullBoard,
   columnByStatus,
   cardIdsIn,
   expectNoLoadMore,
@@ -103,12 +101,9 @@ const CATCH_ALL = BOARD_SWIMLANE_NO_VALUE;
 // virtualizes, the bulk associated with the large `active` sprint (every 7th
 // left OUTSIDE in the backlog — the scope slice), a story-point spread (every
 // 4th unestimated), and a `planned` carry-over target. The numbers stay tiny
-// (fast per-card service-routed seed) AND deliberately UNDER the cap-40 the
-// at-scale CI lanes run with (3.5.2's precedent) — the interaction + complete
-// journey needs virtualization + lanes + a large carry-over, never the
-// over-cap banner (that is 4.7.2's load-model concern). Done-age spread is off
-// — the Done-age window is also 4.7.2's concern, and the complete journey
-// needs every terminal card RENDERED, not trimmed.
+// (fast per-card service-routed seed) — the interaction + complete journey
+// needs virtualization + lanes + a large carry-over, not volume. Done-age
+// spread is off — paging a Done lane is 4.7.2's load-model concern.
 const SCRUM_OPTS = {
   epics: 2,
   storiesPerEpic: 3,
@@ -301,7 +296,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     const scale = await seedScrumAtScale(page);
     await openScrumBoard(page);
 
-    const board = await getBoard(page.request);
+    const board = await getFullBoard(page.request);
     expectActiveSprintScope(board);
     const inProg = columnByStatus(board, 'in_progress'); // the tall, virtualized column
     const inReview = columnByStatus(board, 'in_review'); // in_progress → in_review is legal
@@ -328,12 +323,12 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
 
     // The move reconciled to a real workflow transition…
     await expect
-      .poll(async () => cardIdsIn(await getBoard(page.request), 'in_review').includes(deepId), {
+      .poll(async () => cardIdsIn(await getFullBoard(page.request), 'in_review').includes(deepId), {
         message: 'the deep card transitioned to in_review',
         timeout: 10_000,
       })
       .toBe(true);
-    const after = await getBoard(page.request);
+    const after = await getFullBoard(page.request);
     expect(cardIdsIn(after, 'in_progress')).not.toContain(deepId);
     expect(columnByStatus(after, 'in_review').totalCount).toBe(inReview.totalCount + 1);
     expect(columnByStatus(after, 'in_progress').totalCount).toBe(inProg.totalCount - 1);
@@ -364,7 +359,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     const scale = await seedScrumAtScale(page);
     await openScrumBoard(page);
 
-    const board = await getBoard(page.request);
+    const board = await getFullBoard(page.request);
     // Done → Cancelled has NO workflow transition, and Cancelled is the column
     // immediately RIGHT of Done — the ADJACENT illegal pair (3.5.3's rationale:
     // a 2-column drag latches onto the legal column between). Both columns hold
@@ -391,7 +386,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     // The rejection is surfaced (a toast) and the status + sprint are untouched
     // on re-fetch — the snap-back was visual only.
     await expect(page.getByText('Move not allowed', { exact: true })).toBeVisible();
-    const after = await getBoard(page.request);
+    const after = await getFullBoard(page.request);
     expect(cardIdsIn(after, 'done')).toContain(doomedId);
     expect(cardIdsIn(after, 'cancelled')).not.toContain(doomedId);
     const row = await db.workItem.findUnique({ where: { id: doomedId! } });
@@ -412,7 +407,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
 
     // Flat at scale: sprint-scoped (the outsider is absent), NO "Load more"
     // anywhere (the retired cursor paging, 3.8.3).
-    expectActiveSprintScope(await getBoard(page.request), { absent: outsider.id });
+    expectActiveSprintScope(await getFullBoard(page.request), { absent: outsider.id });
     await expectNoLoadMore(page);
 
     // Group by Assignee → one lane per assignee-with-cards plus the catch-all
@@ -429,7 +424,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
       .evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
     expect(laneHeadIds.at(-1), 'the catch-all lane sorts last').toBe(`swimlane-head-${CATCH_ALL}`);
     await expectNoLoadMore(page);
-    expectActiveSprintScope(await getBoard(page.request), { absent: outsider.id });
+    expectActiveSprintScope(await getFullBoard(page.request), { absent: outsider.id });
 
     // Epic / Priority / None all re-lay (server-side group-by) without a paging
     // affordance ever appearing, sprint scope intact throughout.
@@ -440,7 +435,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     await setGroupBy(page, 'Priority');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
     await expectNoLoadMore(page);
-    expectActiveSprintScope(await getBoard(page.request), { absent: outsider.id });
+    expectActiveSprintScope(await getFullBoard(page.request), { absent: outsider.id });
     await setGroupBy(page, 'None');
     await expect(page.getByTestId('board')).toBeVisible();
     await expect(page.getByTestId('swimlane-board')).toHaveCount(0);
@@ -498,7 +493,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
 
-    const board0 = await getBoard(page.request);
+    const board0 = await getFullBoard(page.request);
     const todoColId = columnByStatus(board0, 'todo').id;
     const inProgColId = columnByStatus(board0, 'in_progress').id;
     const crossSrcKey = identifierOf(board0, crossSrc);
@@ -529,7 +524,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
 
     // Neither gesture touched the SPRINT: both markers still belong to the
     // active sprint (and so still render on the sprint-scoped board).
-    const after = await getBoard(page.request);
+    const after = await getFullBoard(page.request);
     expectActiveSprintScope(after, { present: crossSrc });
     expectActiveSprintScope(after, { present: diagSrc });
     for (const id of [crossSrc, diagSrc]) {
@@ -544,7 +539,7 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     await seedScrumAtScale(page);
     await openScrumBoard(page);
 
-    const board0 = await getBoard(page.request);
+    const board0 = await getFullBoard(page.request);
     // The tall column's count is SPRINT-SCOPED (the 4.5.2 projection) — the WIP
     // predicate runs over the sprint counts, not the whole-project backlog.
     const inProg = columnByStatus(board0, 'in_progress');
@@ -576,10 +571,13 @@ test.describe('board-scrum-at-scale — interaction + complete (4.7.3)', () => {
     );
     expect(res.status(), 'the soft over-limit drop is accepted, never blocked').toBe(200);
     await expect
-      .poll(async () => columnByStatus(await getBoard(page.request), 'in_progress').totalCount, {
-        message: 'the dragged card landed in the over-limit column (soft)',
-        timeout: 10_000,
-      })
+      .poll(
+        async () => columnByStatus(await getFullBoard(page.request), 'in_progress').totalCount,
+        {
+          message: 'the dragged card landed in the over-limit column (soft)',
+          timeout: 10_000,
+        },
+      )
       .toBe(n + 1);
     await expect(wipBadge).toHaveAttribute('data-over', 'true');
     await expect(wipBadge).toContainText(`${n + 1}/${n - 1}`);

@@ -1,45 +1,36 @@
-// E2E: the board LOAD MODEL — the Jira-faithful correction Story 3.8 ships
-// (Subtask 3.8.6, the Story closer). Drives the REAL stack (Next + Postgres)
-// through the /boards surface and proves, end-to-end, the renderable behaviours
-// the corrected load model guarantees (notes.html mistake #33). Three are proven
-// here as browser E2E (1, 2, 4); the fourth — the over-cap banner — is proven at
-// the cheaper unit/component tier instead (see the NOTE at the foot for why):
+// E2E: the board LOAD MODEL — paged per lane (MOTIR-10535, reversing the 3.8
+// "whole bounded set" model whose review-state read overran its transaction on a
+// 2,830-card board and answered 500). Drives the REAL stack (Next + Postgres)
+// through the /boards surface and proves, end to end, the behaviours the
+// scroll-to-load grammar of `design/boards/board.mock.html` panel 4 guarantees:
 //
-//   1. NO per-column "Load more" — the board renders the WHOLE bounded set the
-//      3.8.2 projection returns (Jira never pages a board); the only affordance
-//      is the column's own scroll.
-//   2. A tall column stays DOM-bounded — virtualization (the 2.5.15
-//      `useRowWindow`, kept) mounts only the cards in/near the scroll viewport,
-//      so a 200-card column never mounts 200 nodes.
-//   3. The over-cap "refine the filter" banner (3.8.4) renders when the board
-//      exceeds `BOARD_ISSUE_CAP` (the mirror of Jira's "maximum number of
-//      viewable issues exceeded" warning) and is ABSENT on a normal-sized board.
-//   4. The Done-age window (3.8.2) — a terminal column loads only recently-
-//      resolved issues (~14 days), the full count still surfaced; older done
-//      items are not loaded.
+//   1. Each lane opens on its first page, its header reading "{loaded} of
+//      {total}", and loads the next page as the user SCROLLS it — no "Load
+//      more" button — until the header reads the bare total.
+//   2. A tall lane stays DOM-bounded — virtualization (the 2.5.15
+//      `useRowWindow`) mounts only the cards in/near the scroll viewport.
+//   3. A Done lane pages like any other: an old done card is no longer windowed
+//      out — it loads, after the recent ones.
+//   4. A failed page leaves a focusable inline retry that loads it.
 //
 // Setup mirrors board-config.spec.ts (3.6.4): sign up through the real UI, then
 // seed the project + work items SERVER-SIDE — projectsService for the project
 // (the one sanctioned cross-layer reach for E2E setup) and a fast bulk
 // `createMany` for the at-scale card sets (the same shape projection.test.ts's
-// `bulkCards` uses; the projection grouping/terminal-window/RLS internals are
-// covered by the 3.8.2 Vitest suite against a real DB, so this spec inserts
-// rows directly to reach scale cheaply and asserts only the cross-cutting
-// end-to-end journey). The combined at-scale journey stays in Story 3.5; this
-// file owns the board LOAD-MODEL coverage and supersedes the retired per-column
-// "Load more"/cursor assertions (none remain — 3.8.3/3.8.5 removed the
-// affordance, board-column.test.tsx asserts its absence at the unit level).
+// `bulkCards` uses; the paging internals — keyset order, no repeats or skips,
+// filter and Visitor scoping, a query count independent of the board's size —
+// are covered by the Vitest suites against a real DB).
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
-import { getBoard, columnByStatus } from './_helpers/board';
+import { getBoard, columnByStatus, columnScroller, scrollLaneToEnd } from './_helpers/board';
 import { projectsService } from '@/lib/services/projectsService';
-import { DONE_AGE_WINDOW_DAYS } from '@/lib/services/boardsService';
+import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
 import { keyForAppend } from '@/lib/workItems/positioning';
 
-// The over-cap case loads the full cap (5,000) over real HTTP + renders it
-// (virtualized), so give the suite generous headroom.
+// Paging a lane to its end is many page reads over real HTTP, so give the suite
+// generous headroom.
 test.describe.configure({ timeout: 120_000 });
 
 // A VALID fractional-index `position` per seeded card, chained in insertion
@@ -121,45 +112,49 @@ async function bulkSeed(
 }
 
 // The board container testid flips from `board-skeleton` to `board` once the
-// projection fetch resolves; waiting on it means "the board has loaded". The
-// over-cap case ships the full cap (5,000 cards) over the wire, so its load is
-// inherently heavier — callers pass a larger budget for it.
+// projection fetch resolves; waiting on it means "the board has loaded".
 async function gotoLoadedBoard(page: Page, loadTimeout = 30_000): Promise<void> {
   await page.goto('/boards');
   await expect(page.getByTestId('board')).toBeVisible({ timeout: loadTimeout });
 }
 
 test.describe('board-load @smoke', () => {
-  test('renders the whole bounded set with NO "Load more", and no over-cap banner on a normal board', async ({
+  test('a lane opens on its first page and loads the rest as it scrolls — no "Load more"', async ({
     page,
   }) => {
     const seed = await seedActiveProject(page, 'e2e-board-load-normal@example.com', 'BLN');
-    // A column comfortably past the OLD 50-card per-column page, plus a couple of
-    // other columns — the whole set must load with no paging affordance.
     await bulkSeed(seed, 'todo', 64, 1);
     await bulkSeed(seed, 'in_progress', 4, 1001);
 
     await gotoLoadedBoard(page);
 
-    // (1) NO "Load more" anywhere — neither a button nor a footer/sentinel.
-    await expect(page.getByText(/load more/i)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
-
-    // (3-absent) A normal-sized board is NOT truncated → no over-cap banner.
-    await expect(page.getByTestId('board-overcap-banner')).toHaveCount(0);
-
-    // The per-column count badge shows the full total, and cards actually render.
+    // The projection answers ONE page per lane, with the full count and a cursor.
     const board = await getBoard(page.request);
     const todo = columnByStatus(board, 'todo');
     expect(todo.totalCount).toBe(64);
-    await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText('64');
-    const todoCol = page.getByTestId(`board-column-${todo.id}`);
-    await expect(todoCol.locator('[data-testid^="board-card-"]').first()).toBeVisible();
+    expect(todo.cards).toHaveLength(BOARD_PAGE_SIZE);
+    expect(todo.cursor).not.toBeNull();
+
+    // The header reads "{loaded} of 64" while the lane has more; a lane that fits
+    // in one page reads its bare total.
+    const inProgress = columnByStatus(board, 'in_progress');
+    await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText(/^\d+ of 64$/);
+    await expect(page.getByRole('main').getByTestId(`board-count-${inProgress.id}`)).toHaveText(
+      '4',
+    );
+
+    // (1) NO "Load more" button — scrolling the lane is the only affordance.
+    await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
+
+    // Scrolling the lane to its bottom pages it in, to the last card.
+    await scrollLaneToEnd(page, todo.id, 64);
+    await expect(page.getByTestId(`board-lane-footer-${todo.id}`)).toHaveCount(0);
+    await expect(
+      page.getByRole('main').getByTestId(`board-card-${seed.identifier}-64`),
+    ).toBeAttached();
   });
 
-  test('keeps a tall column DOM-bounded — virtualized, not every card mounted', async ({
-    page,
-  }) => {
+  test('keeps a tall lane DOM-bounded — virtualized, not every card mounted', async ({ page }) => {
     const seed = await seedActiveProject(page, 'e2e-board-load-tall@example.com', 'BLT');
     const TALL = 200;
     await bulkSeed(seed, 'todo', TALL, 1);
@@ -170,58 +165,73 @@ test.describe('board-load @smoke', () => {
     const todo = columnByStatus(board, 'todo');
     expect(todo.totalCount).toBe(TALL);
     // The header denominator is the FULL count...
-    await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText(String(TALL));
+    await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText(/ of 200$/);
 
-    // ...but the column windows: only the cards in/near the scroll viewport
-    // mount, so the mounted node count is far below the full set (DOM-bounded).
-    const todoCol = page.getByTestId(`board-column-${todo.id}`);
-    const mounted = todoCol.locator('[data-testid^="board-card-"]');
+    // ...and, paged all the way in, the column still windows: only the cards
+    // in/near the scroll viewport mount, far below the full set.
+    await scrollLaneToEnd(page, todo.id, TALL);
+    const mounted = page
+      .getByTestId(`board-column-${todo.id}`)
+      .locator('[data-testid^="board-card-"]');
     await expect(mounted.first()).toBeVisible();
     const mountedCount = await mounted.count();
     expect(mountedCount).toBeGreaterThan(0);
-    expect(mountedCount).toBeLessThan(TALL); // virtualized — not all 200 mount
-    expect(mountedCount).toBeLessThan(80); // and genuinely DOM-bounded, not "most"
+    expect(mountedCount).toBeLessThan(80); // genuinely DOM-bounded, not "most"
   });
 
-  test('windows a Done column to the recent set — old done items are not loaded, full count kept', async ({
+  test('a Done lane pages like any other — an old done card loads, after the recent ones', async ({
     page,
   }) => {
     const seed = await seedActiveProject(page, 'e2e-board-load-doneage@example.com', 'BLD');
     const [recentId, oldId] = await bulkSeed(seed, 'done', 2, 1);
-    // Backdate the OLD done card past the ~14-day window. `updatedAt` is
-    // @updatedAt (auto-managed), so it can only be moved via raw SQL — the same
-    // technique projection.test.ts's Done-age case uses.
+    // Backdate the OLD done card a month: the retired Done-age window would have
+    // dropped it from the board. `updatedAt` is @updatedAt (auto-managed), so it
+    // can only be moved via raw SQL.
     await db.$executeRaw`
       UPDATE "work_item"
-         SET "updatedAt" = now() - (${DONE_AGE_WINDOW_DAYS + 6} || ' days')::interval
+         SET "updatedAt" = now() - interval '30 days'
        WHERE "identifier" = ${oldId!} AND "projectId" = ${seed.projectId}`;
 
     await gotoLoadedBoard(page);
 
     const board = await getBoard(page.request);
     const done = columnByStatus(board, 'done');
+    expect(done.cards.map((c) => c.identifier)).toEqual([recentId, oldId]);
     const doneCol = page.getByTestId(`board-column-${done.id}`);
-    // The recent done card is loaded + rendered...
     await expect(doneCol.getByTestId(`board-card-${recentId}`)).toBeVisible();
-    // ...the old one is windowed OUT (not in the DOM at all)...
-    await expect(page.getByTestId(`board-card-${oldId}`)).toHaveCount(0);
-    // ...but the header count still surfaces the FULL, unwindowed denominator.
-    expect(done.totalCount).toBe(2);
+    await expect(doneCol.getByTestId(`board-card-${oldId}`)).toBeVisible();
     await expect(page.getByTestId(`board-count-${done.id}`)).toHaveText('2');
   });
 
-  // NOTE — the over-cap "refine the filter" banner (behaviour 3) is deliberately
-  // NOT re-proven here as a browser E2E. Triggering it through the real stack
-  // requires a board PAST the cap (BOARD_ISSUE_CAP = 5,000), and the projection
-  // then loads the full cap; rendering 5,000 cards through the dev server is the
-  // heavy "combined at-scale journey" Story 3.5 owns, not a robust per-PR check
-  // (it cannot complete within a sane E2E budget). The banner's correctness is
-  // already proven, end-to-enough, at the two cheaper non-flaky tiers:
-  //   • the PREDICATE (projection sets `truncated` exactly when board total >
-  //     cap, false under it, full count still surfaced) — tests/boards/
-  //     projection.test.ts, against real Postgres with BOARD_ISSUE_CAP + 1 rows;
-  //   • the BANNER (renders iff `truncated`, names the cap, sits above BOTH the
-  //     flat and swimlane layouts, disabled Epic-6 filter seam) — tests/
-  //     components/board-completeness.test.tsx.
-  // So behaviour 3 is covered; only its 5,000-card browser render is left to 3.5.
+  test('a failed page leaves a focusable inline retry that loads it', async ({ page }) => {
+    const seed = await seedActiveProject(page, 'e2e-board-load-retry@example.com', 'BLR');
+    await bulkSeed(seed, 'todo', 14, 1);
+
+    // The first page read fails; every later one goes through.
+    let failed = false;
+    await page.route('**/api/board/columns/*/cards?*', async (route) => {
+      if (!failed) {
+        failed = true;
+        await route.fulfill({ status: 500, body: '{}' });
+        return;
+      }
+      await route.continue();
+    });
+
+    await gotoLoadedBoard(page);
+    const todo = columnByStatus(await getBoard(page.request), 'todo');
+    await columnScroller(page, todo.id).evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+
+    const retry = page.getByRole('main').getByTestId(`board-lane-retry-${todo.id}`);
+    await expect(retry).toBeVisible();
+    await expect(page.getByRole('main').getByTestId(`board-count-${todo.id}`)).toHaveText(
+      '10 of 14',
+    );
+    await retry.focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('main').getByTestId(`board-count-${todo.id}`)).toHaveText('14');
+    await expect(retry).toHaveCount(0);
+  });
 });

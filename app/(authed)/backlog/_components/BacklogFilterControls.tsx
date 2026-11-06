@@ -30,9 +30,8 @@ import { SavedFilterDropdown } from '../../items/_components/SavedFilterDropdown
 // `view`/`sort` are inert here (the backlog has neither): with `buildHref`
 // injected, the components never reach their `buildIssueListHref` fallback that
 // would consume them — they're passed as the canonical defaults purely to satisfy
-// the shared prop contract. Unlike the board there is no over-cap "Refine filter"
-// CTA (the backlog is cursor-paginated, not capped), so the quick `[Filter]`
-// popover keeps its own internal open state, exactly as on /items.
+// the shared prop contract. The quick `[Filter]` popover keeps its own internal
+// open state, exactly as on /items and the board.
 
 export interface BacklogFilterControlsProps {
   filter: IssueFilter;

@@ -143,8 +143,6 @@ const projection: BoardProjectionDto = {
   swimlaneGroupBy: 'none',
   swimlanes: [],
   unmappedStatuses: [],
-  cap: 5000,
-  truncated: false,
   sprint: null,
   planHolds: {
     pln_a: {

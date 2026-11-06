@@ -10,6 +10,7 @@ import { BoardCard } from './BoardCard';
 import { ColumnActionsMenu } from './ColumnActionsMenu';
 import { ColumnPointsBadge } from './ColumnPointsBadge';
 import { ColumnWipBadge } from './ColumnWipBadge';
+import { LaneCountBadge, LaneLoadFooter, useLaneSentinel, type LaneLoadState } from './LanePager';
 
 // BoardColumn (Subtask 3.2.3 · drop 3.2.4 · scale 3.2.5 · load model 3.8.3) — one
 // board column per `design/boards/board-scale.mock.html` (panel 0, the corrected
@@ -27,20 +28,21 @@ import { ColumnWipBadge } from './ColumnWipBadge';
 // vertical `SortableContext`; while a card is dragged over, the accent ring +
 // lavender tint mark it (paired cues, finding #35).
 //
-// LOAD MODEL (3.8.3, the mirror-faithful CORRECTION of 3.2.5 / 3.2.8 — `notes.html`
-// mistake #33): the column renders the WHOLE bounded set the 3.8.2 projection
-// returns (the board loads up to `BOARD_ISSUE_CAP`, never a per-column page) — so
-// there is NO "Load more" button, NO scroll-to-load sentinel, and NO in-flight
-// spinner / inline-retry footer; the only affordance is the column's own scroll,
-// exactly as a Jira board behaves. The stack still VIRTUALIZES — only the cards in
-// (or near) the column's own scroll viewport mount, via `useRowWindow` (the hand-
-// rolled 2.5.15 windowing generalized to variable-height cards; no second lib) — so
-// a tall column stays DOM-bounded. The `SortableContext` `items` list stays the
-// FULL ordered set so dnd-kit knows every card's rank even when only a window is
-// mounted, and the actively-dragged card (+ its neighbours) is force-mounted so a
-// drag never detaches mid-flight. The per-column total badge in the header stays
-// the denominator. Still bounded, never "load every row" (finding #57: the cap is
-// the bound). Colour strictly `--el-*`, shape via element tokens.
+// LOAD MODEL (paged per lane by MOTIR-10535, reversing 3.8.3): the column renders
+// the cards LOADED so far — the projection's first page, then each page its
+// scroll-to-bottom asks for — per `design/boards/board.mock.html` panel 4 (3.2.8):
+// NO "Load more" button; an IntersectionObserver sentinel at the bottom of the
+// column body calls `onLoadMore` while the lane has a `cursor`, a small Spinner +
+// "Loading…" shows while a page is in flight, and a failed page leaves a
+// focusable inline retry (`LanePager`). The header count reads "{loaded} of
+// {total}" while more remain, and the full total once the lane is loaded. The
+// stack still VIRTUALIZES — only the cards in (or near) the column's own scroll
+// viewport mount, via `useRowWindow` (the 2.5.15 windowing generalized to
+// variable-height cards; no second lib) — so a lane scrolled deep stays
+// DOM-bounded. The `SortableContext` `items` list stays the FULL loaded set so
+// dnd-kit knows every card's rank even when only a window is mounted, and the
+// actively-dragged card (+ its neighbours) is force-mounted so a drag never
+// detaches mid-flight. Colour strictly `--el-*`, shape via element tokens.
 
 // Estimated card height (px) used before a card's real height is measured; the
 // title clamps to 1–2 lines so true heights vary — `useRowWindow` measures each.
@@ -58,6 +60,8 @@ export function BoardColumn({
   activeCardId,
   onSetWipLimit,
   points = null,
+  loadState = 'idle',
+  onLoadMore,
 }: {
   column: BoardColumnDto;
   /** The board being viewed — threaded to the `[⋯]` Board-settings link (3.7.8). */
@@ -69,6 +73,11 @@ export function BoardColumn({
   /** This column's sprint point total (Subtask 4.5.3), or `null` on a kanban
    *  board / unestimated sprint — renders the "N pts" pill after the count badge. */
   points?: number | null;
+  /** Where this lane's paging stands (MOTIR-10535). */
+  loadState?: LaneLoadState;
+  /** Ask for the lane's next page — called when its sentinel scrolls into view
+   *  (or its retry is pressed) while it has a `cursor`. Absent = no paging. */
+  onLoadMore?: (columnId: string) => void;
 }) {
   const t = useTranslations('boards');
   // The whole column is the droppable, so a drop anywhere in it (incl. the empty
@@ -87,6 +96,15 @@ export function BoardColumn({
     gap: CARD_GAP_PX,
     getScrollElement,
   });
+
+  // Scroll-to-load (MOTIR-10535): the sentinel at the bottom of the body asks for
+  // the next page while the lane has a cursor and no page is in flight. The
+  // observer is rebuilt per loaded-card count, so a page too short to fill the
+  // column asks for the one after it.
+  const hasMore = column.cursor !== null && onLoadMore !== undefined;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const loadMore = useCallback(() => onLoadMore?.(column.id), [onLoadMore, column.id]);
+  useLaneSentinel(sentinelRef, bodyRef, hasMore && loadState === 'idle', cards.length, loadMore);
 
   // The card indices to mount: the window, plus the dragged card and its
   // neighbours (so a drag never detaches). Whole list when not windowing.
@@ -153,12 +171,12 @@ export function BoardColumn({
     >
       <header className="flex items-center gap-2 border-b border-(--el-border) px-3 py-2.5">
         <h2 className="text-[13px] font-semibold text-(--el-text-strong)">{column.name}</h2>
-        <span
-          className="inline-flex h-5 min-w-[22px] items-center justify-center rounded-(--radius-badge) bg-(--el-count-bg) px-(--spacing-chip-x) text-xs font-semibold text-(--el-count-text)"
-          data-testid={`board-count-${column.id}`}
-        >
-          {column.totalCount}
-        </span>
+        <LaneCountBadge
+          columnId={column.id}
+          loaded={cards.length}
+          total={column.totalCount}
+          hasMore={column.cursor !== null}
+        />
         {/* Per-column sprint point total (4.5.3) — sits with the count on the left
             (both describe the column's contents); absent on a kanban board. */}
         <ColumnPointsBadge columnId={column.id} points={points} />
@@ -186,10 +204,19 @@ export function BoardColumn({
         // from-in-review-to-done — the empty-column backstop). The `<section>`
         // is the dnd-kit droppable, so a drop anywhere in this region resolves
         // to this column.
+        // A lane whose LOADED cards were all dragged away can still hold unloaded
+        // ones (MOTIR-10535): its footer keeps paging, so they arrive here too.
         <div className="min-h-0 flex-1 p-2.5">
           <p className="flex min-h-[120px] w-full items-center justify-center rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-card-padding-8) py-(--spacing-card-padding-16) text-center text-xs text-(--el-text-secondary)">
             {t('emptyColumn')}
           </p>
+          <LaneLoadFooter
+            columnId={column.id}
+            hasMore={hasMore}
+            state={loadState}
+            sentinelRef={sentinelRef}
+            onRetry={loadMore}
+          />
         </div>
       ) : (
         <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-2.5">
@@ -232,6 +259,13 @@ export function BoardColumn({
               })}
             </div>
           </SortableContext>
+          <LaneLoadFooter
+            columnId={column.id}
+            hasMore={hasMore}
+            state={loadState}
+            sentinelRef={sentinelRef}
+            onRetry={loadMore}
+          />
         </div>
       )}
     </section>

@@ -2,15 +2,17 @@
 // 3.5 · Subtask 3.5.3). The combined drag + swimlane + WIP journey every
 // per-surface board test explicitly defers here (3.2.7 / 3.3.7 / 4.5.4), run
 // against the 3.5.1 board-shaped large seed so each interaction exercises a
-// genuinely AT-SCALE board: tall virtualized columns, many populated lanes, the
-// whole thing bounded with NO per-column "Load more" anywhere.
+// genuinely AT-SCALE board: tall virtualized columns paged in as they scroll,
+// many populated lanes, and never a "Load more" button anywhere.
 //
 // Lives in its OWN file (the load-model half, 3.5.2, owns
 // `board-at-scale.spec.ts`); both carry the `board-at-scale` describe tag, so
-// 3.5.2's CI step (`pnpm test:e2e --grep "board-at-scale"`, run with the 3.5.1
-// cap/Done-age seam `BOARD_ISSUE_CAP_OVERRIDE=40`) runs this spec too — which is
-// why the seed below stays UNDER 40 cards (no truncation under the lane's cap).
+// 3.5.2's CI step (`pnpm test:e2e --grep "board-at-scale"`) runs this spec too.
 // Splitting the file avoids two parallel subtasks colliding on one new path.
+//
+// The board pages per lane (MOTIR-10535), so a membership assertion reads the
+// board through `getFullBoard` (every lane paged to its end over the lane route)
+// rather than the first-page projection.
 //
 // Proves the 3.2/3.3 interaction contracts STILL HOLD on top of the 3.8 load
 // model (bounded load + virtualization), which the single-surface 3.2.7 / 3.3.7
@@ -50,7 +52,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import {
-  getBoard,
+  getFullBoard,
   columnByStatus,
   cardIdsIn,
   expectNoLoadMore,
@@ -77,14 +79,10 @@ const CATCH_ALL = BOARD_SWIMLANE_NO_VALUE;
 
 // A small-but-board-SHAPED distribution: ~34 cards spread across every column +
 // assignee/epic/priority lane, with a tall `in_progress` column (24 extras) that
-// virtualizes so a card can be dragged from DEEP below the initial window. The
-// numbers stay tiny (fast per-card service-routed seed) AND deliberately UNDER
-// the CI `board-at-scale` lane's `BOARD_ISSUE_CAP_OVERRIDE=40` (3.5.2's ci.yml
-// step runs every `board-at-scale`-tagged spec with the 3.5.1 seam) — so the
-// board is never truncated out from under the interaction assertions. The
-// interaction journey needs virtualization + lanes + WIP, not the over-cap
-// banner (that is 3.5.2's load-model concern), so this stays comfortably below
-// the cap. Done-age spread is off — the Done-age window is also 3.5.2's concern.
+// virtualizes and pages, so a card can be dragged from DEEP below the initial
+// window. The numbers stay tiny (fast per-card service-routed seed): the
+// interaction journey needs virtualization + lanes + WIP, not volume. Done-age
+// spread is off — paging a Done lane is 3.5.2's load-model concern.
 const BOARD_OPTS = {
   epics: 2,
   storiesPerEpic: 3,
@@ -203,7 +201,7 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     const scale = await seedBoardAtScale(page);
     await openBoard(page);
 
-    const board = await getBoard(page.request);
+    const board = await getFullBoard(page.request);
     const inProg = columnByStatus(board, 'in_progress'); // the tall, virtualized column
     const inReview = columnByStatus(board, 'in_review'); // in_progress → in_review is legal
     expect(inProg.totalCount, 'the tall column is at scale').toBeGreaterThan(15);
@@ -226,12 +224,12 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     // The move reconciled to a real workflow transition: the deep card now lives in
     // In Review, gone from In Progress — proving the drag survived virtualization.
     await expect
-      .poll(async () => cardIdsIn(await getBoard(page.request), 'in_review').includes(deepId), {
+      .poll(async () => cardIdsIn(await getFullBoard(page.request), 'in_review').includes(deepId), {
         message: 'the deep card transitioned to in_review',
         timeout: 10_000,
       })
       .toBe(true);
-    const after = await getBoard(page.request);
+    const after = await getFullBoard(page.request);
     expect(cardIdsIn(after, 'in_progress')).not.toContain(deepId);
     expect(columnByStatus(after, 'in_review').totalCount).toBe(inReview.totalCount + 1);
     expect(columnByStatus(after, 'in_progress').totalCount).toBe(inProg.totalCount - 1);
@@ -244,7 +242,7 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     await seedBoardAtScale(page);
     await openBoard(page);
 
-    const board = await getBoard(page.request);
+    const board = await getFullBoard(page.request);
     // Done → Cancelled has NO workflow transition, and Cancelled is the column
     // immediately RIGHT of Done — an ADJACENT illegal pair, so the pointer drop is
     // unambiguous (In Progress has no illegal neighbour: both Blocked and In Review
@@ -271,7 +269,7 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     // The rejection is surfaced (a toast) and the status is untouched on re-fetch —
     // the snap-back was visual only.
     await expect(page.getByText('Move not allowed', { exact: true })).toBeVisible();
-    const after = await getBoard(page.request);
+    const after = await getFullBoard(page.request);
     expect(cardIdsIn(after, 'done')).toContain(doomedId);
     expect(cardIdsIn(after, 'cancelled')).not.toContain(doomedId);
   });
@@ -369,7 +367,7 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     await setGroupBy(page, 'Assignee');
     await expect(page.getByTestId('swimlane-board')).toBeVisible();
 
-    const board0 = await getBoard(page.request);
+    const board0 = await getFullBoard(page.request);
     const todoColId = columnByStatus(board0, 'todo').id;
     const inProgColId = columnByStatus(board0, 'in_progress').id;
     const crossSrcKey = identifierOf(board0, crossSrc);
@@ -408,7 +406,7 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     const scale = await seedBoardAtScale(page);
     await openBoard(page);
 
-    const board0 = await getBoard(page.request);
+    const board0 = await getFullBoard(page.request);
     const inProg = columnByStatus(board0, 'in_progress'); // the tall column, at scale
     const n = inProg.totalCount;
     expect(n, 'the WIP column is at scale').toBeGreaterThan(15);
@@ -438,10 +436,13 @@ test.describe('board-at-scale — interaction (3.5.3)', () => {
     );
     expect(res.status(), 'the soft over-limit drop is accepted, never blocked').toBe(200);
     await expect
-      .poll(async () => columnByStatus(await getBoard(page.request), 'in_progress').totalCount, {
-        message: 'the dragged card landed in the over-limit column (soft)',
-        timeout: 10_000,
-      })
+      .poll(
+        async () => columnByStatus(await getFullBoard(page.request), 'in_progress').totalCount,
+        {
+          message: 'the dragged card landed in the over-limit column (soft)',
+          timeout: 10_000,
+        },
+      )
       .toBe(n + 1);
     await expect(wipBadge).toHaveAttribute('data-over', 'true');
     await expect(wipBadge).toContainText(`${n + 1}/${n - 1}`);

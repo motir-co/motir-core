@@ -46,8 +46,7 @@
  * other workspace's data. Refuses to run under NODE_ENV=production.
  *
  * CAP-PARAMETERISED: every dimension is an env knob (SEED_COLLAB_*) so the CI
- * lane can run reduced (the board-at-scale cap-40 / BOARD_ISSUE_CAP_OVERRIDE
- * precedent) while local runs go full-size. `resolveCollabSeedSizes()` is the
+ * lane can run reduced while local runs go full-size. `resolveCollabSeedSizes()` is the
  * ONE resolver — the seed, its self-check, and the E2E helpers
  * (tests/e2e/_helpers/collab.ts) all read the same numbers.
  */

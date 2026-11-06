@@ -11,9 +11,8 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 // The board filter UI (Story 6.15 · Subtask 6.15.3) under happy-dom. It REUSES
 // the /items filter components verbatim — the value this suite adds over
 // issue-filter-bar.test.tsx is the BOARD wiring: the injected board-scoped
-// buildHref (every facet toggle preserves `?board=`, never drops it), the
-// over-cap "Refine filter" → open-the-filter context path, and the
-// filtered-empty / over-cap CTA states. We stub next/navigation and assert URLs
+// buildHref (every facet toggle preserves `?board=`, never drops it) and the
+// filtered-empty CTA state. We stub next/navigation and assert URLs
 // + behaviour, the same shape the issue-filter-bar suite uses.
 
 const push = vi.fn();
@@ -23,11 +22,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { BoardFilterControls } from '@/app/(authed)/boards/_components/BoardFilterControls';
-import {
-  BoardFilterUiProvider,
-  useBoardFilterUi,
-} from '@/app/(authed)/boards/_components/BoardFilterUiContext';
-import { OverCapBanner } from '@/app/(authed)/boards/_components/OverCapBanner';
 import { BoardFilteredEmptyState } from '@/app/(authed)/boards/_components/BoardFilteredEmptyState';
 
 beforeAll(() => {
@@ -83,7 +77,7 @@ const MEMBERS: WorkspaceMemberDTO[] = [
 
 const VIEWER: Viewer = { userId: 'u-alice', canBrowse: true, canShare: true, canManageAny: false };
 
-function renderControls(opts: { boardId?: string; filter?: IssueFilter; withUi?: boolean } = {}) {
+function renderControls(opts: { boardId?: string; filter?: IssueFilter } = {}) {
   const controls = (
     <BoardFilterControls
       selectedBoardId={opts.boardId}
@@ -99,8 +93,7 @@ function renderControls(opts: { boardId?: string; filter?: IssueFilter; withUi?:
       viewer={VIEWER}
     />
   );
-  const tree = opts.withUi ? <BoardFilterUiProvider>{controls}</BoardFilterUiProvider> : controls;
-  return renderWithIntl(<ToastProvider>{tree}</ToastProvider>);
+  return renderWithIntl(<ToastProvider>{controls}</ToastProvider>);
 }
 
 describe('BoardFilterControls — reuses the /items primitives on the board toolbar', () => {
@@ -127,65 +120,6 @@ describe('BoardFilterControls — reuses the /items primitives on the board tool
     const statusList = screen.getByRole('listbox', { name: 'Status' });
     fireEvent.click(within(statusList).getByRole('option', { name: 'In Progress' }));
     expect(push).toHaveBeenCalledWith('/boards?status=in_progress');
-  });
-});
-
-// The over-cap banner's "Refine filter" CTA opens the board filter through the
-// BoardFilterUiContext (the CTA used to point at a dead seam). A probe stands in
-// for BoardContainer's wiring: it sets `filterOpen`, exactly as the CTA does.
-function OpenFilterProbe() {
-  const ui = useBoardFilterUi();
-  return (
-    <button type="button" onClick={() => ui?.setFilterOpen(true)}>
-      probe-open
-    </button>
-  );
-}
-
-describe('BoardFilterUiContext — the over-cap "Refine" path opens the quick filter', () => {
-  it('setting filterOpen via the context opens the Filter popover', () => {
-    renderWithIntl(
-      <ToastProvider>
-        <BoardFilterUiProvider>
-          <BoardFilterControls
-            filter={EMPTY_FILTER}
-            ast={null}
-            statuses={STATUSES}
-            members={MEMBERS}
-            sprints={[]}
-            customFields={[]}
-            components={[]}
-            referencedLabels={[]}
-            projectKey="BRD"
-            viewer={VIEWER}
-          />
-          <OpenFilterProbe />
-        </BoardFilterUiProvider>
-      </ToastProvider>,
-    );
-    // Closed initially — the popover's facet listboxes are not mounted.
-    expect(screen.queryByRole('listbox', { name: 'Kind' })).toBeNull();
-    fireEvent.click(screen.getByText('probe-open'));
-    // The context flip opened the quick-filter popover (its Kind facet is now in
-    // the tree) — exactly what the over-cap "Refine filter" CTA triggers.
-    expect(screen.getByRole('listbox', { name: 'Kind' })).toBeTruthy();
-  });
-});
-
-describe('OverCapBanner — the CTA opens the filter (was a dead seam)', () => {
-  it('calls onRefine and is enabled when wired', () => {
-    const onRefine = vi.fn();
-    renderWithIntl(<OverCapBanner cap={500} onRefine={onRefine} />);
-    const btn = screen.getByTestId('board-overcap-filter') as HTMLButtonElement;
-    expect(btn.disabled).toBe(false);
-    fireEvent.click(btn);
-    expect(onRefine).toHaveBeenCalledTimes(1);
-  });
-
-  it('falls back to the disabled seam when no onRefine is wired', () => {
-    renderWithIntl(<OverCapBanner cap={500} />);
-    const btn = screen.getByTestId('board-overcap-filter') as HTMLButtonElement;
-    expect(btn.disabled).toBe(true);
   });
 });
 

@@ -18,9 +18,9 @@ import { truncateAuthTables } from '../helpers/db';
 // projection now accepts an optional advanced filter (an inline FilterAst built
 // from the board's quick filter, OR a saved-filter id resolved through the 6.2
 // access gate). The same compiled predicate is AND-ed into every column's card
-// read + its `totalCount`, into the board-level `truncated`/cap denominator,
-// and into the swimlane lane aggregates — so a filtered board shows ONLY
-// matching cards everywhere, and a filter under the cap clears `truncated`. The
+// read + its `totalCount`, into every next page of a lane (MOTIR-10535), and
+// into the swimlane lane aggregates — so a filtered board shows ONLY matching
+// cards everywhere, however far a lane is paged. The
 // 4.5 Scrum sprint scope composes WITH it (narrow within the sprint). Real
 // Postgres (no mocks), per CLAUDE.md; `createTestProject` auto-seeds the default
 // kanban board (one column per workflow status), so no manual board rows.
@@ -158,36 +158,35 @@ describe('getBoard — filtered projection (6.15.2)', () => {
 
     expect(shape(undefinedFilter)).toEqual(shape(base));
     expect(shape(emptyAst)).toEqual(shape(base));
-    expect(base.truncated).toBe(false);
   });
 
-  it('computes truncated over the FILTERED set — a filter under the cap clears it', async () => {
-    const fx = await makeFixture('filter-cap@example.com');
-    // Shrink the board cap to 3 so a handful of rows can exceed it.
-    const prior = process.env.BOARD_ISSUE_CAP_OVERRIDE;
-    process.env.BOARD_ISSUE_CAP_OVERRIDE = '3';
-    try {
-      for (let i = 0; i < 5; i++) {
-        await card(fx, { kind: 'task', status: 'todo', title: `Task ${i}` });
-      }
-      await card(fx, { kind: 'bug', status: 'todo', title: 'Bug 0' });
-      await card(fx, { kind: 'bug', status: 'todo', title: 'Bug 1' });
-
-      const unfiltered = await boardsService.getBoard(fx.projectId, fx.ctx);
-      expect(unfiltered.cap).toBe(3);
-      expect(unfiltered.truncated).toBe(true); // 7 cards > cap 3
-
-      const filtered = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, {
-        ast: kindAst('bug'),
-      });
-      expect(filtered.cap).toBe(3);
-      expect(filtered.truncated).toBe(false); // 2 bugs <= cap 3
-      const todo = columnByStatus(filtered, 'todo');
-      expect(todo.cards.map((c) => c.title).sort()).toEqual(['Bug 0', 'Bug 1']);
-    } finally {
-      if (prior === undefined) delete process.env.BOARD_ISSUE_CAP_OVERRIDE;
-      else process.env.BOARD_ISSUE_CAP_OVERRIDE = prior;
+  it('pages a FILTERED lane through matching cards only, with the filtered count (MOTIR-10535)', async () => {
+    const fx = await makeFixture('filter-paging@example.com');
+    // Interleave so every page boundary falls between non-matching rows too.
+    for (let i = 0; i < 13; i++) {
+      await card(fx, { kind: 'bug', status: 'todo', title: `Bug ${i}` });
+      await card(fx, { kind: 'task', status: 'todo', title: `Task ${i}` });
     }
+    const filter = { ast: kindAst('bug') };
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx, undefined, filter);
+    const todo = columnByStatus(board, 'todo');
+    expect(todo.totalCount).toBe(13);
+    expect(todo.cards).toHaveLength(10);
+    expect(todo.cursor).not.toBeNull();
+
+    const page = await boardsService.getColumnPage(
+      fx.projectId,
+      fx.ctx,
+      board.boardId,
+      todo.id,
+      todo.cursor!,
+      filter,
+    );
+    expect(page.totalCount).toBe(13);
+    expect(page.cursor).toBeNull();
+    const titles = [...todo.cards, ...page.cards].map((c) => c.title);
+    expect(titles).toEqual(Array.from({ length: 13 }, (_, i) => `Bug ${i}`));
   });
 
   it('composes with the Scrum sprint scope — narrows WITHIN the sprint, never widening', async () => {

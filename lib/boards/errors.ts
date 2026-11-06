@@ -142,6 +142,20 @@ export class BoardColumnNotFoundError extends Error {
   }
 }
 
+/**
+ * A lane page was asked for with a `cursor` this board did not mint for that
+ * lane (MOTIR-10535): malformed, or minted for the other lane order (a cursor
+ * from an open lane sent to a done-category lane, or the reverse). The board
+ * never guesses where a page starts, so the read is refused. → 400.
+ */
+export class InvalidBoardCursorError extends Error {
+  readonly code = 'INVALID_BOARD_CURSOR' as const;
+  constructor() {
+    super('The board page cursor is not valid for this column.');
+    this.name = 'InvalidBoardCursorError';
+  }
+}
+
 // ── Board CONFIG writes (Subtask 3.3.3) — set swimlane group-by + per-column
 // WIP limit. The validation + authorization errors the config write path
 // raises, mapped to status codes by the PATCH routes.

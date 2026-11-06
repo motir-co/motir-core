@@ -6,7 +6,8 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 
 // Board completeness (Subtask 3.2.6) — the empty-board state, the
-// unmapped-statuses tray (present/absent), and the mobile pager. Like the
+// unmapped-statuses tray (present/absent), the mobile pager, and (MOTIR-10535)
+// the per-lane scroll-to-load paging that replaced 3.8.4's over-cap banner. Like the
 // 3.2.2/3.2.4 board tests this drives the real BoardContainer under happy-dom
 // (DB-free): stub next/navigation (the usePeekOpen push) + global fetch, wrap in
 // ToastProvider (the dnd-kit container reads it). The empty-state CTA reuses the
@@ -38,6 +39,7 @@ import { BoardContainer } from '@/app/(authed)/boards/_components/BoardContainer
 import type {
   BoardCardDto,
   BoardColumnDto,
+  BoardColumnPageDto,
   BoardProjectionDto,
   BoardSwimlaneDto,
 } from '@/lib/dto/boards';
@@ -107,8 +109,6 @@ function projection(over: Partial<BoardProjectionDto> = {}): BoardProjectionDto 
     swimlaneGroupBy: 'none',
     swimlanes: [],
     unmappedStatuses: [],
-    cap: 5000,
-    truncated: false,
     sprint: null,
     planHolds: {},
     columns: [column({ id: 'c1', name: 'To Do' }), column({ id: 'c2', name: 'In Progress' })],
@@ -295,81 +295,258 @@ describe('board completeness (3.2.6)', () => {
   });
 });
 
-describe('over-cap warning banner (3.8.4)', () => {
-  const SWIMLANES: BoardSwimlaneDto[] = [
-    { key: 'u1', label: 'Ana Ruiz', kind: 'assignee', count: 1 },
-  ];
+// ── Per-lane paging (MOTIR-10535) ──────────────────────────────────────────
+// happy-dom has no layout, so the lane sentinel's IntersectionObserver is a
+// controllable fake: `scrollIntoView(columnId)` reports the newest LIVE observer
+// watching that lane's sentinel as intersecting — what the browser does when the
+// user scrolls the lane to its bottom.
 
-  it('renders the over-cap banner with the cap in the copy when the board is truncated', async () => {
-    // The 3.8.2 projection signals `truncated` when the bounded load hit the
-    // cap (board total > BOARD_ISSUE_CAP) — the banner mirrors Jira's "maximum
-    // viewable issues exceeded — refine your filter" warning and names the cap.
-    vi.stubGlobal(
-      'fetch',
-      mockFetchOk(
-        projection({
-          truncated: true,
-          cap: 5000,
-          columns: [column({ id: 'c1', name: 'To Do', totalCount: 7321 })],
-        }),
-      ),
+interface FakeObserver {
+  callback: IntersectionObserverCallback;
+  targets: Element[];
+  live: boolean;
+  root: Element | Document | null;
+}
+const observers: FakeObserver[] = [];
+
+class FakeIntersectionObserver {
+  private readonly self: FakeObserver;
+  constructor(callback: IntersectionObserverCallback, init?: IntersectionObserverInit) {
+    this.self = { callback, targets: [], live: true, root: init?.root ?? null };
+    observers.push(this.self);
+  }
+  observe(el: Element) {
+    this.self.targets.push(el);
+  }
+  unobserve() {}
+  disconnect() {
+    this.self.live = false;
+  }
+  takeRecords() {
+    return [];
+  }
+}
+
+function liveObserverFor(columnId: string): FakeObserver | undefined {
+  return [...observers]
+    .reverse()
+    .find(
+      (o) =>
+        o.live &&
+        o.targets.some(
+          (t) => (t as HTMLElement).dataset['testid'] === `board-lane-sentinel-${columnId}`,
+        ),
     );
-    render(<BoardContainer />);
+}
 
-    const banner = await screen.findByTestId('board-overcap-banner');
-    // The cap is interpolated through the catalog's `{cap, number}` (grouped).
-    expect(banner.textContent).toContain('5,000');
-    expect(banner.textContent).toContain('refine the board filter');
-    // role="status" so the warning is announced when it appears after a fetch.
-    expect(banner.getAttribute('role')).toBe('status');
-    // The affordance is the disabled Epic-6 filter seam (not an invented control).
-    const seam = screen.getByTestId('board-overcap-filter');
-    expect((seam as HTMLButtonElement).disabled).toBe(true);
+function scrollIntoView(columnId: string) {
+  const o = liveObserverFor(columnId);
+  if (!o) throw new Error(`no live sentinel observer for ${columnId}`);
+  o.callback([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+}
+
+function cardsFrom(from: number, n: number, over: Partial<BoardCardDto> = {}): BoardCardDto[] {
+  return Array.from({ length: n }, (_, i) => card({ id: `w${from + i}`, key: from + i, ...over }));
+}
+
+/** A fetch that answers the board read with `board` and each page read from
+ * `pages` in turn (a `Response`-like `{ ok: false }` entry is a failed page). */
+function routedFetch(board: BoardProjectionDto, pages: Array<BoardColumnPageDto | { ok: false }>) {
+  return vi.fn(async (url: string) => {
+    if (String(url).startsWith('/api/board/columns/')) {
+      const next = pages.shift();
+      if (!next || 'ok' in next) return { ok: false, status: 500, json: async () => ({}) };
+      return { ok: true, status: 200, json: async () => next };
+    }
+    return { ok: true, status: 200, json: async () => board };
+  });
+}
+
+describe('per-lane scroll-to-load paging (MOTIR-10535)', () => {
+  beforeEach(() => {
+    observers.length = 0;
+    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
   });
 
-  it('omits the over-cap banner when the board is not truncated', async () => {
-    vi.stubGlobal(
-      'fetch',
-      mockFetchOk(
-        projection({
-          truncated: false,
-          columns: [column({ id: 'c1', name: 'To Do', totalCount: 12 })],
+  const pagedBoard = () =>
+    projection({
+      columns: [
+        column({
+          id: 'c1',
+          name: 'To Do',
+          totalCount: 2830,
+          cursor: 'CUR-1',
+          cards: cardsFrom(1, 10),
         }),
-      ),
-    );
+        column({ id: 'c2', name: 'In Progress', totalCount: 2, cards: cardsFrom(100, 2) }),
+      ],
+    });
+
+  it('reads "{loaded} of {total}" on a lane with more, and the plain total on a complete one', async () => {
+    vi.stubGlobal('fetch', routedFetch(pagedBoard(), []));
     render(<BoardContainer />);
 
-    await waitFor(() => expect(screen.getByTestId('board')).toBeTruthy());
-    expect(screen.queryByTestId('board-overcap-banner')).toBeNull();
+    const badge = await screen.findByTestId('board-count-c1');
+    expect(badge.textContent).toBe('10 of 2,830');
+    expect(screen.getByTestId('board-count-c2').textContent).toBe('2');
+    // Only the lane with a cursor has a footer + sentinel; no "Load more" button.
+    expect(screen.getByTestId('board-lane-sentinel-c1')).toBeTruthy();
+    expect(screen.queryByTestId('board-lane-footer-c2')).toBeNull();
+    expect(screen.queryByRole('button', { name: /load more/i })).toBeNull();
   });
 
-  it('shows the banner above the swimlane layout too (it sits in the container, not a layout)', async () => {
-    // The banner is a board-level signal mounted above BoardDnd, so it shows
-    // for the swimlane board (group-by ≠ none) exactly as for the flat one.
+  it('loads the next page when the sentinel scrolls into view, then stops at the last page', async () => {
+    const fetchMock = routedFetch(pagedBoard(), [
+      { columnId: 'c1', cards: cardsFrom(11, 10), totalCount: 25, cursor: 'CUR-2', planHolds: {} },
+      { columnId: 'c1', cards: cardsFrom(21, 5), totalCount: 25, cursor: null, planHolds: {} },
+    ]);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<BoardContainer />);
+    await screen.findByTestId('board-count-c1');
+
+    scrollIntoView('c1');
+    await waitFor(() => expect(screen.getByTestId('board-count-c1').textContent).toBe('20 of 25'));
+    const pageUrl = String(fetchMock.mock.calls[1]![0]);
+    expect(pageUrl).toBe('/api/board/columns/c1/cards?boardId=b1&cursor=CUR-1');
+    expect(screen.getByText('Card 20')).toBeTruthy();
+
+    // The observer is rebuilt for the new generation — the next report asks for
+    // the page after CUR-2.
+    scrollIntoView('c1');
+    await waitFor(() => expect(screen.getByTestId('board-count-c1').textContent).toBe('25'));
+    expect(String(fetchMock.mock.calls[2]![0])).toContain('cursor=CUR-2');
+    // Every card is loaded: the footer (and its sentinel) is gone, so nothing
+    // can ask for another page.
+    expect(screen.queryByTestId('board-lane-footer-c1')).toBeNull();
+    expect(liveObserverFor('c1')).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('shows the in-flight spinner while a page loads, and stops watching until it lands', async () => {
+    let resolvePage!: (v: unknown) => void;
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).startsWith('/api/board/columns/')) {
+        return new Promise((r) => {
+          resolvePage = r;
+        });
+      }
+      return { ok: true, status: 200, json: async () => pagedBoard() };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    render(<BoardContainer />);
+    await screen.findByTestId('board-count-c1');
+
+    scrollIntoView('c1');
+    const spinner = await screen.findByTestId('board-lane-loading-c1');
+    expect(spinner.getAttribute('role')).toBe('status');
+    expect(spinner.textContent).toContain('Loading…');
+    // While the page is in flight the lane watches nothing, so a scroll cannot
+    // ask for the same page twice.
+    expect(liveObserverFor('c1')).toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    resolvePage({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        columnId: 'c1',
+        cards: cardsFrom(11, 3),
+        totalCount: 13,
+        cursor: null,
+        planHolds: {},
+      }),
+    });
+    await waitFor(() => expect(screen.getByTestId('board-count-c1').textContent).toBe('13'));
+    expect(screen.queryByTestId('board-lane-loading-c1')).toBeNull();
+  });
+
+  it('leaves a focusable inline retry when a page fails, and retrying loads it', async () => {
     vi.stubGlobal(
       'fetch',
-      mockFetchOk(
-        projection({
-          truncated: true,
-          cap: 5000,
-          swimlaneGroupBy: 'assignee',
-          swimlanes: SWIMLANES,
-          columns: [
-            column({
-              id: 'c1',
-              name: 'To Do',
-              totalCount: 9001,
-              cards: [card({ id: 'w1', key: 1, swimlaneKey: 'u1', assigneeId: 'u1' })],
-            }),
-          ],
+      routedFetch(pagedBoard(), [
+        { ok: false },
+        { columnId: 'c1', cards: cardsFrom(11, 2), totalCount: 12, cursor: null, planHolds: {} },
+      ]),
+    );
+    render(<BoardContainer />);
+    await screen.findByTestId('board-count-c1');
+
+    scrollIntoView('c1');
+    const retry = (await screen.findByTestId('board-lane-retry-c1')) as HTMLButtonElement;
+    expect(retry.tagName).toBe('BUTTON');
+    expect(retry.textContent).toContain('Retry');
+    // The cards already loaded stay put.
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('10 of 2,830');
+
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByTestId('board-count-c1').textContent).toBe('12'));
+    expect(screen.queryByTestId('board-lane-retry-c1')).toBeNull();
+  });
+
+  it('never renders a card twice when a page repeats one already on the board', async () => {
+    // w100 sits in In Progress; it moved into To Do between two page reads, so
+    // the next To Do page holds it too. The board keeps its one copy.
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(pagedBoard(), [
+        {
+          columnId: 'c1',
+          cards: [card({ id: 'w100', key: 100 }), ...cardsFrom(11, 1)],
+          totalCount: 12,
+          cursor: null,
+          planHolds: {},
+        },
+      ]),
+    );
+    render(<BoardContainer />);
+    await screen.findByTestId('board-count-c1');
+
+    scrollIntoView('c1');
+    await waitFor(() => expect(screen.getByText('Card 11')).toBeTruthy());
+    expect(screen.getAllByText('Card 100')).toHaveLength(1);
+  });
+
+  it('pages a lane of the swimlane board from its footer row, against the viewport', async () => {
+    const SWIMLANES: BoardSwimlaneDto[] = [
+      { key: 'u1', label: 'Ana Ruiz', kind: 'assignee', count: 11 },
+    ];
+    const board = projection({
+      swimlaneGroupBy: 'assignee',
+      swimlanes: SWIMLANES,
+      columns: [
+        column({
+          id: 'c1',
+          name: 'To Do',
+          totalCount: 11,
+          cursor: 'CUR-1',
+          cards: cardsFrom(1, 10, { swimlaneKey: 'u1', assigneeId: 'u1' }),
         }),
-      ),
+        column({ id: 'c2', name: 'In Progress' }),
+      ],
+    });
+    vi.stubGlobal(
+      'fetch',
+      routedFetch(board, [
+        {
+          columnId: 'c1',
+          cards: cardsFrom(11, 1, { swimlaneKey: 'u1', assigneeId: 'u1' }),
+          totalCount: 11,
+          cursor: null,
+          planHolds: {},
+        },
+      ]),
     );
     render(<BoardContainer />);
 
-    // The swimlane board rendered (the lane label is present)…
     await waitFor(() => expect(screen.getByText('Ana Ruiz')).toBeTruthy());
-    // …and the over-cap banner sits above it.
-    expect(screen.getByTestId('board-overcap-banner')).toBeTruthy();
+    expect(screen.getByTestId('swimlane-load-row')).toBeTruthy();
+    expect(screen.getByTestId('board-count-c1').textContent).toBe('10 of 11');
+    // The swimlane board scrolls as a whole, so the lane sentinel's root is the
+    // viewport (null), not a column body.
+    expect(liveObserverFor('c1')!.root).toBeNull();
+
+    scrollIntoView('c1');
+    await waitFor(() => expect(screen.getByTestId('board-count-c1').textContent).toBe('11'));
+    expect(screen.getByText('Card 11')).toBeTruthy();
   });
 });
