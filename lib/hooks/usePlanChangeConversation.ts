@@ -53,6 +53,7 @@ import {
 } from '@/lib/planning/planChangeThread';
 import { isOpenUnclear, pauseOf, MAILBOX_POLL_MS } from '@/lib/planning/runPause';
 import { useRunPause } from '@/lib/hooks/useRunPause';
+import { isJobOver } from '@/lib/planning/jobStatusClient';
 import { carriesWaitingPlan } from '@/lib/planning/sessionCarry';
 import {
   PlanAgainNotAvailableClientError,
@@ -1258,6 +1259,9 @@ export function usePlanChangeConversation({
   // plan adopts the job below, and the adopted stream reads `target_settled` itself;
   // a replay beside it would be a second subscription to the same job.
   const reopenedJob = reopenedPlanJobId(state) ?? null;
+  // The job a status read found already ENDED (MOTIR-10453). It is not adopted, so the
+  // replay below reads it instead, as for any run this screen does not adopt.
+  const [overJob, setOverJob] = useState<string | null>(null);
   const adoptableJob =
     reopenedJob !== null &&
     !state.readOnly &&
@@ -1271,7 +1275,10 @@ export function usePlanChangeConversation({
     // So is a run whose planner turn is already on the thread: that turn is written from
     // the job's RESULT, which a running job does not have. Adopting it would replay a
     // finished run, and a turn typed meanwhile would take the mid-run door.
-    !state.session.turns.some((t) => t.role === 'assistant' && t.jobId === reopenedJob)
+    !state.session.turns.some((t) => t.role === 'assistant' && t.jobId === reopenedJob) &&
+    // And a job its status read says has ENDED: the turn above is missing whenever the
+    // screen that ran it closed before its settle recorded it.
+    reopenedJob !== overJob
       ? reopenedJob
       : null;
   const unsettledReopenedJob =
@@ -2242,21 +2249,41 @@ export function usePlanChangeConversation({
   const adoptedJobRef = useRef<string | null>(null);
   useEffect(() => {
     if (!adoptableJob || adoptedJobRef.current === adoptableJob || abortRef.current) return;
-    const { session, liveReview } = stateRef.current;
-    if (!session) return;
+    if (!stateRef.current.session) return;
     adoptedJobRef.current = adoptableJob;
-    const anchor =
-      lastAnchorRef.current ??
-      (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
-    void runRef.current?.(
-      anchor,
-      async () => ({
-        jobId: adoptableJob,
-        ...(liveReview ? { planId: liveReview.id } : {}),
-        session,
-      }),
-      { adopted: true },
-    );
+    // ⚠️ ASK WHETHER THE JOB IS STILL RUNNING FIRST (MOTIR-10453). A plan reads
+    // `generating` after its job has ended with nothing proposed, until the abandoned-plan
+    // sweep closes it, and a finished job's stream replays the whole run: adopting it
+    // would hold the screen in `streaming` for that replay, and a turn sent meanwhile
+    // would take the mid-run door. An unreadable status adopts, as before the read.
+    const check = new AbortController();
+    void (async () => {
+      const over = await isJobOver(adoptableJob, check.signal);
+      if (check.signal.aborted || !mountedRef.current) {
+        if (adoptedJobRef.current === adoptableJob) adoptedJobRef.current = null;
+        return;
+      }
+      if (over === true) {
+        setOverJob(adoptableJob);
+        return;
+      }
+      if (abortRef.current) return;
+      const { session, liveReview } = stateRef.current;
+      if (!session) return;
+      const anchor =
+        lastAnchorRef.current ??
+        (anchorRef.current ? { anchorId: anchorRef.current, targetKeys: [] } : null);
+      void runRef.current?.(
+        anchor,
+        async () => ({
+          jobId: adoptableJob,
+          ...(liveReview ? { planId: liveReview.id } : {}),
+          session,
+        }),
+        { adopted: true },
+      );
+    })();
+    return () => check.abort();
   }, [adoptableJob]);
 
   /**

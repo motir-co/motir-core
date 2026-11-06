@@ -23,6 +23,7 @@ const {
   settleAsk,
   streamAsk,
   streamAnchored,
+  jobOver,
 } = vi.hoisted(() => ({
   open: vi.fn(),
   getSession: vi.fn(),
@@ -34,7 +35,12 @@ const {
   settleAsk: vi.fn(),
   streamAsk: vi.fn(),
   streamAnchored: vi.fn(),
+  jobOver: vi.fn(),
 }));
+
+// The job-status read the adoption asks first (MOTIR-10453). Unreadable (`null`) unless
+// a case says otherwise, which adopts as before the read existed.
+vi.mock('@/lib/planning/jobStatusClient', () => ({ isJobOver: jobOver }));
 
 vi.mock('@/lib/planning/planChangeClient', () => ({
   findResumableSession: async (...a: unknown[]) => ({
@@ -135,6 +141,7 @@ function heldStream() {
 }
 
 beforeEach(() => {
+  jobOver.mockReset().mockResolvedValue(null);
   open.mockResolvedValue(session());
   record.mockResolvedValue(session());
   fetchReview.mockResolvedValue(null);
@@ -325,6 +332,33 @@ describe('a REOPENED overlay mid-run', () => {
     expect(hook.result.current.state.phase).toBe('idle');
     expect(hook.result.current.state.jobId).toBeNull();
     expect(record).not.toHaveBeenCalled();
+  });
+
+  it('a job its status read says has ENDED is not adopted: the screen replays it instead', async () => {
+    jobOver.mockResolvedValue(true);
+    const replay = heldStream();
+    stream.mockImplementation(replay.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(jobOver).toHaveBeenCalledWith('job-1', expect.anything()));
+    // Not adopted: no run, so a turn sent now takes the ordinary door.
+    await waitFor(() => expect(replay.impl).toHaveBeenCalled());
+    expect(hook.result.current.state.phase).toBe('idle');
+    expect(hook.result.current.state.jobId).toBeNull();
+    // The replay is the read-only one: it reads `target_settled` and settles nothing.
+    replay.emit('target_settled', { seq: 1 });
+    expect(hook.result.current.state.settledJobId).toBe('job-1');
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('a job still RUNNING by its status read is adopted', async () => {
+    jobOver.mockResolvedValue(false);
+    const adopted = heldStream();
+    stream.mockImplementation(adopted.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    expect(hook.result.current.state.jobId).toBe('job-1');
   });
 
   it('a planner turn from an EARLIER job does not stop the running one being adopted', async () => {
