@@ -9,6 +9,7 @@ import { Modal } from '@/components/ui/Modal';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { SurfaceTitle } from '@/components/workItems/titleTranslation/SurfaceTitleTranslation';
 import type { PlanBlockReasonDto, PlanBlockerDto } from '@/lib/dto/plannability';
+import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 
 // THE CAN'T-PLAN ALERT (MOTIR-10544; design MOTIR-10543 panels 4, 5, 7 and 8,
 // `design/roadmap/roadmap--plan-check-alert.mock.html`).
@@ -122,6 +123,7 @@ function ReasonLine({
   reasonText: string;
   onPlan: () => void;
 }) {
+  const routes = useReaderRoutes();
   return (
     <li
       data-reason={kind}
@@ -130,7 +132,7 @@ function ReasonLine({
       <IssueTypeIcon type="story" className="mt-0.5 size-4 shrink-0" />
       <div className="min-w-0 flex-1">
         <Link
-          href={`/items/${blocker.identifier}`}
+          href={routes.item(blocker.identifier)}
           className="text-sm leading-snug font-medium text-(--el-link) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           <span className="font-mono text-xs font-semibold">{blocker.identifier}</span>{' '}
