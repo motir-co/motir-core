@@ -314,6 +314,18 @@ describe('2 · every table in LIVE_SIGNAL_TABLES is heard end to end', () => {
     const r = reader.userId;
     const mine = await card('Mine');
     const watched = await membersCard('To be watched');
+    // An approve-and-merge row on the reader's To approve, and the pull request its review
+    // rows hang off (Bug MOTIR-10504) — set up before the stream opens. None of
+    // `github_installation`, `github_repo` or `github_pull_request` is heard.
+    const merging = await card('Awaiting its merge');
+    const installation = rawId('gi');
+    const repo = rawId('gr');
+    const pr = rawId('gpr');
+    const record = rawId('rvr');
+    await adminDb.$executeRaw`INSERT INTO "approval_gate" ("id","workspace_id","project_id","work_item_id","kind","subject_id","subject_version","updated_at") VALUES (${rawId('ag')},${w},${p},${merging.id},'pull_request_approval',${merging.id},'moooon/acme#1@sha-a',now())`;
+    await adminDb.$executeRaw`INSERT INTO "github_installation" ("id","installation_id","workspace_id","account_login","account_type","updated_at") VALUES (${installation},${rawId('inst')},${w},'moooon','Organization',now())`;
+    await adminDb.$executeRaw`INSERT INTO "github_repo" ("id","installation_id","workspace_id","organization_id","repo_id","owner","name","default_branch","updated_at") SELECT ${repo},${installation},ws."id",ws."organizationId",${rawId('repo')},'moooon','acme','main',now() FROM "workspace" ws WHERE ws."id" = ${w}`;
+    await adminDb.$executeRaw`INSERT INTO "github_pull_request" ("id","repo_id","number","state","head_ref","updated_at") VALUES (${pr},${repo},1,'open','subtask/merging',now())`;
 
     // One raw write per table, each with the frame it must produce.
     const writes: Record<
@@ -366,6 +378,28 @@ describe('2 · every table in LIVE_SIGNAL_TABLES is heard end to end', () => {
         run: () =>
           adminDb.$executeRaw`INSERT INTO "plan_narration" ("id","plan_id","session_key","seq","body") VALUES (${rawId('pn')},${planG},'s1',1,'Laying the plan')`,
         frame: planFrameFor(planG),
+      },
+      // The review rows behind the To approve row (Bug MOTIR-10504), each heard on the
+      // tab the row is on.
+      review_verdict_record: {
+        run: () =>
+          adminDb.$executeRaw`INSERT INTO "review_verdict_record" ("id","workspace_id","project_id","work_item_id","subject_version","verdict","outcome","harness","model") VALUES (${record},${w},${p},${merging.id},'moooon/acme#1@sha-a','changes_requested','recorded','Claude Code','claude-opus-5-5')`,
+        frame: movedTab('approvals'),
+      },
+      review_dismissal: {
+        run: () =>
+          adminDb.$executeRaw`INSERT INTO "review_dismissal" ("id","workspace_id","project_id","work_item_id","review_verdict_record_id","subject_version","reason_md") VALUES (${rawId('rd')},${w},${p},${merging.id},${record},'moooon/acme#1@sha-a','Reviewed by hand.')`,
+        frame: movedTab('approvals'),
+      },
+      work_item_delivery: {
+        run: () =>
+          adminDb.$executeRaw`INSERT INTO "work_item_delivery" ("id","workspace_id","work_item_id","github_pull_request_id","repo_id") VALUES (${rawId('wid')},${w},${merging.id},${pr},${repo})`,
+        frame: movedTab('approvals'),
+      },
+      github_pull_request_review: {
+        run: () =>
+          adminDb.$executeRaw`INSERT INTO "github_pull_request_review" ("id","github_review_id","github_pull_request_id","reviewer_github_user_id","reviewer_login","reviewer_type","state","commit_sha","reviewer_permission","submitted_at","updated_at") VALUES (${rawId('gprr')},${rawId('review')},${pr},'77','octo','User','approved','sha-a','write',now(),now())`,
+        frame: movedTab('approvals'),
       },
       plan_narration_session: {
         run: () =>

@@ -141,7 +141,10 @@ describe('All tab — a verdict link to an entry past the first page (MOTIR-1046
     const findings = await screen.findByTestId('agent-verdict-findings');
     expect(findings.textContent).toContain('The export button still does nothing on Safari.');
     expect(document.getElementById('agent-verdict-rec-old')).not.toBeNull();
-    expect(scrolled).toHaveBeenCalledWith({ block: 'start' });
+    // The row lands itself in an effect AFTER the walked page commits, so the findings can be
+    // on the page before the scroll has run: wait for the call rather than reading it once
+    // (MOTIR-10510 — read synchronously, this flaked on a loaded CI worker).
+    await waitFor(() => expect(scrolled).toHaveBeenCalledWith({ block: 'start' }));
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
       '/api/work-items/wi-1/activity/all?order=desc&cursor=cursor-1',
       '/api/work-items/wi-1/activity/all?order=desc&cursor=cursor-2',

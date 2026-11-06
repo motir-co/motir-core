@@ -111,13 +111,15 @@ export interface FixDetailDto {
   /** How many open pull requests deliver the card — the row says "N of M" when > 1. */
   total: number;
   /**
-   * FIXING (Story MOTIR-10305 · MOTIR-10307): a fix was pushed and CI is running on it.
-   * The reason and every other field are the ones stored BEFORE the push, kept unchanged
+   * FIXING (Story MOTIR-10305 · MOTIR-10307 · MOTIR-10506): a repair is under way.
+   * The reason and every other field are the ones the card would hold without it, kept
    * so the row stays on To fix and names what was wrong; the surface draws the Fixing tag
-   * beside it. Set only when nothing is red and at least one open member is running at a
-   * head other than the one {@link FixDetailDto.raisedHeads} recorded for it. Always
-   * `false` on `run_died`. Stored independently of any hosted repair: a row that has both
-   * still carries the hosted line's data, and the surface decides which line wins.
+   * beside it. Set while a `fix` run is ALIVE on the card (a claimed `motir fix`, a hosted
+   * or agent repair) — and, as the reconcile, when nothing is red and at least one open
+   * member is running at a head other than the one {@link FixDetailDto.raisedHeads}
+   * recorded for it (after the run closed, or for a push no tracked run made). Always
+   * `false` on `run_died`. A row Fixing under a hosted repair still carries the hosted
+   * line's data, and the surface decides which line wins.
    */
   fixing: boolean;
   /**

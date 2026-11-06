@@ -186,6 +186,67 @@ export const reviewStateRepository = {
     );
   },
 
+  /**
+   * THE REVIEW READING OF A SET OF CARDS (Bug MOTIR-10504) — how many review rows the
+   * cards' review state is derived from, and the most recent moment one was written, in
+   * ONE query. The Workbench folds it into the To approve tab's watermark, so a review
+   * that writes no `approval_gate` row — a gate-off pass, a GitHub approval at the head —
+   * still moves the tab and the open row re-reads its review line and badge.
+   *
+   * ⚠️ THE SAME ROWS THE READ MODEL DERIVES FROM, over the same subtree. `readReviewStates`
+   * answers a card from its whole subtree in its own project (`listSubtrees`: a container's
+   * badge counts its children's reviews), from these tables: the verdict records, the
+   * dismissals, the deliveries and the GitHub reviews of the delivered pull requests. A
+   * reading over fewer tables, or over the root alone, is a row that goes stale on exactly
+   * the write it left out — with nothing red, because a reload still draws it right.
+   *
+   * ⚠️ AND IT IS A SIGNAL, NEVER CONTENT: a count and an instant, no ids. The count is what
+   * catches an insert whatever two clocks stamped it (a verdict's `created_at` is the
+   * database's, a gate's `updated_at` the app's); the instant catches a GitHub review
+   * edited in place. Every table here carries a `trg_live_signal_*` trigger
+   * (`lib/live/liveSignalTables.ts`), which is what wakes the stream to take this reading.
+   *
+   * Required `tx`, bound to the reader's workspace: every table is RLS-gated, and an
+   * unbound read answers zero rows — which reads as *nothing reviewed*.
+   */
+  async watermarkReviewsOfSubtrees(
+    rootIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<{ count: number; latest: Date | null }> {
+    if (rootIds.length === 0) return { count: 0, latest: null };
+    const [row] = await tx.$queryRaw<{ count: number; latest: Date | null }[]>`
+      WITH RECURSIVE subtree AS (
+        SELECT w."id", w."projectId"
+          FROM "work_item" w
+          WHERE w."id" = ANY(${[...rootIds]}::text[])
+        UNION
+        SELECT c."id", c."projectId"
+          FROM "work_item" c
+          JOIN subtree s ON c."parentId" = s."id" AND c."projectId" = s."projectId"
+      ),
+      reviewed AS (
+        SELECT r."created_at" AS "at"
+          FROM "review_verdict_record" r
+          WHERE r."work_item_id" IN (SELECT "id" FROM subtree)
+        UNION ALL
+        SELECT d."created_at"
+          FROM "review_dismissal" d
+          WHERE d."work_item_id" IN (SELECT "id" FROM subtree)
+        UNION ALL
+        SELECT del."created_at"
+          FROM "work_item_delivery" del
+          WHERE del."work_item_id" IN (SELECT "id" FROM subtree)
+        UNION ALL
+        SELECT g."updated_at"
+          FROM "github_pull_request_review" g
+          JOIN "work_item_delivery" gd ON gd."github_pull_request_id" = g."github_pull_request_id"
+          WHERE gd."work_item_id" IN (SELECT "id" FROM subtree)
+      )
+      SELECT count(*)::int AS "count", max("at") AS "latest" FROM reviewed`;
+    /* v8 ignore next -- an aggregate with no GROUP BY always answers exactly one row. */
+    return { count: row?.count ?? 0, latest: row?.latest ?? null };
+  },
+
   /** The people, with their linked GitHub user id (never their token). */
   async listPeople(
     userIds: readonly string[],

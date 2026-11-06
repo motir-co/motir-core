@@ -4671,6 +4671,13 @@ model JobQueueRun {
   /// rather than stuck (MOTIR-3421).
   claimedBy           String?     @map("claimed_by")
   leaseExpiresAt      DateTime?   @map("lease_expires_at")
+  /// THE FENCING TOKEN of the current claim (MOTIR-10500). `claimDueRuns` bumps
+  /// it on EVERY claim and nothing ever lowers it — not a reclaim, a release or a
+  /// refunded attempt — so two claims of one row never share a value, even when
+  /// the same worker made both. Every settle write matches it, so a pass whose
+  /// claim was reclaimed writes nothing over the claim that replaced it.
+  /// `docs/decisions/job-queue-foundation.md` §18.8 is the decision.
+  claimToken          Int         @default(0) @map("claim_token")
   lastError           Json?       @map("last_error")
   /// EVENT-LEVEL DEDUP KEY (MOTIR-3459), resolved from `defineJob`'s
   /// `idempotency` template at ENQUEUE and denormalised here — the only moment
