@@ -59,14 +59,17 @@
  *   - `rounded` (MOTIR-10554)   — Nunito THROUGHOUT (headlines + body/UI); a
  *     soft, friendly rounded sans that reads cleanly as UI text, so it re-types
  *     the whole UI like `grotesk`.
+ *   - `slab` (MOTIR-10555)      — Roboto Slab headlines over the Inter body;
+ *     sturdy and print-like. Display-only, like `editorial`: heavy slab serifs
+ *     crowd UI text, so only the headline role is re-typed.
  *
  * ── Whole-UI re-typing (Yue, 2026-06-19) ────────────────────────────────
  * A type pairing re-types the WHOLE app, chrome included (nav, header, buttons),
  * not just headlines: a pairing whose signature face reads as a UI sans/mono
  * (`grotesk`, `motir-mono`, `mono-technical`, `rounded`) ALSO re-points the
  * body/UI role (`--font-sans`) in its `[data-type]` block. The display-serif
- * `editorial`, the display-only `marker` and the all-Inter `motir` / `motir-sans`
- * keep the Inter body for legibility.
+ * `editorial` and `slab`, the display-only `marker` and the all-Inter `motir` /
+ * `motir-sans` keep the Inter body for legibility.
  * Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block (its
  * face loaded in `app/layout.tsx`) + its `docs/typography/<id>.md`.
  */
@@ -150,6 +153,13 @@ export const TYPE_REGISTRY = {
     tagline: 'A soft rounded sans across the whole UI — friendly and approachable.',
     faces: 'Nunito headlines + body/UI · JetBrains Mono meta.',
     designDoc: 'docs/typography/rounded.md',
+  },
+  slab: {
+    id: 'slab',
+    name: 'Slab',
+    tagline: 'Sturdy slab-serif headlines over a clean sans body — confident, print-like.',
+    faces: 'Roboto Slab headlines · Inter body · JetBrains Mono meta.',
+    designDoc: 'docs/typography/slab.md',
   },
 } satisfies Record<string, TypographyDefinition>;
 

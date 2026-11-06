@@ -75,6 +75,7 @@ describe('typography registry', () => {
       'mono-technical',
       'marker',
       'rounded',
+      'slab',
     ]);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
@@ -84,6 +85,7 @@ describe('typography registry', () => {
     expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
     expect(TYPE_REGISTRY['marker'].name).toBe('Marker');
     expect(TYPE_REGISTRY['rounded'].name).toBe('Rounded');
+    expect(TYPE_REGISTRY['slab'].name).toBe('Slab');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {
@@ -124,6 +126,7 @@ describe('isTypeId / resolveType', () => {
     expect(isTypeId('editorial')).toBe(true); // registered in 7.3.55
     expect(isTypeId('marker')).toBe(true); // registered in MOTIR-10553
     expect(isTypeId('rounded')).toBe(true); // registered in MOTIR-10554
+    expect(isTypeId('slab')).toBe(true); // registered in MOTIR-10555
     expect(isTypeId('serif-tech')).toBe(false); // not a registered pairing
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
@@ -218,6 +221,23 @@ describe('runtime contract in globals.css', () => {
     expect(roleDeclarations(body, 'mono')).toEqual(
       roleDeclarations(typeBlockBody('grotesk'), 'mono'),
     );
+  });
+
+  it('re-points the Slab serif role at the LOADED Roboto Slab -source face, headlines only', () => {
+    // MOTIR-10555 — display-only, like editorial: the headline chain drives off
+    // `--font-slab-source` (next/font's Roboto Slab in app/fonts.ts); the body /
+    // meta chains equal the Editorial block's (Inter body, JetBrains meta).
+    const body = typeBlockBody('slab');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-slab-source/);
+    expect(FONTS_TS).toContain("variable: '--font-slab-source'");
+    expect(FONTS_TS).toContain('Roboto_Slab');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*robotoSlab\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    for (const role of ['sans', 'mono'] as const) {
+      expect(roleDeclarations(body, role)).toEqual(
+        roleDeclarations(typeBlockBody('editorial'), role),
+      );
+    }
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

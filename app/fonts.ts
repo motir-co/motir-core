@@ -16,6 +16,7 @@ import {
   Noto_Serif_SC,
   Noto_Serif_TC,
   Nunito,
+  Roboto_Slab,
   Source_Serif_4,
   Space_Grotesk,
 } from 'next/font/google';
@@ -99,6 +100,17 @@ const caveat = Caveat({
 const nunito = Nunito({
   subsets: ['latin'],
   variable: '--font-rounded-source',
+  display: 'swap',
+});
+
+// The Slab type pairing's display face (MOTIR-10555) — Roboto Slab. Not a base
+// role: it feeds ONLY the `[data-type='slab']` headline override in theme.css via
+// `--font-slab-source`, re-pointing the `--font-serif` role while body (Inter)
+// and meta (JetBrains) keep the base roles. Loaded as the variable font, so it
+// only pays its weight when a user picks Slab.
+const robotoSlab = Roboto_Slab({
+  subsets: ['latin'],
+  variable: '--font-slab-source',
   display: 'swap',
 });
 
@@ -218,6 +230,7 @@ export const fontVariables = [
   fraunces.variable,
   caveat.variable,
   nunito.variable,
+  robotoSlab.variable,
   notoSansSC.variable,
   notoSerifSC.variable,
   lxgwWenKaiTC.variable,
