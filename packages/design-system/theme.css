@@ -6296,6 +6296,30 @@
   --font-mono-tail: monospace;
 }
 
+[data-type='humanist'] {
+  /* Humanist (MOTIR-10556) — a warm humanist sans across headlines AND body/UI.
+     Re-point BOTH the headline (serif) role AND the body/UI (sans) role at Fira
+     Sans (loaded in app/fonts.ts as --font-humanist-source), so the WHOLE app
+     (nav, header, buttons, content) re-types — Fira Sans was drawn as a screen UI
+     face (Yue, 2026-06-19: the type axis must re-type the whole UI, chrome
+     included). Meta stays JetBrains Mono (--font-mono). The pairing chains name
+     no generic keyword, so the FONT SETS rule below slots the CJK face behind
+     Fira Sans. ONLY font tokens here (the disjointness guard): no colour
+     (--el / --color) or shape token. */
+  --font-serif-pairing: var(--font-humanist-source), 'Fira Sans';
+  --font-serif-tail: ui-sans-serif, system-ui, sans-serif;
+  --font-sans-pairing: var(--font-humanist-source), 'Fira Sans';
+  --font-sans-tail: ui-sans-serif, system-ui, sans-serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    FONT SETS — the script face behind the pairing (Story MOTIR-7733 · MOTIR-7845)
    A Type pairing (the [data-type] blocks above) decides each role's LATIN

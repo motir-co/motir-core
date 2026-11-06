@@ -58,6 +58,7 @@ export const PAIRING_FACES: Record<string, Record<FontSetRole, string>> = {
   marker: { sans: 'Inter', serif: 'Caveat', mono: 'JetBrains Mono' },
   rounded: { sans: 'Nunito', serif: 'Nunito', mono: 'JetBrains Mono' },
   slab: { sans: 'Inter', serif: 'Roboto Slab', mono: 'JetBrains Mono' },
+  humanist: { sans: 'Fira Sans', serif: 'Fira Sans', mono: 'JetBrains Mono' },
 };
 export const PAIRING_NAMES: Record<string, string> = {
   motir: 'Motir',
@@ -69,6 +70,7 @@ export const PAIRING_NAMES: Record<string, string> = {
   marker: 'Marker',
   rounded: 'Rounded',
   slab: 'Slab',
+  humanist: 'Humanist',
 };
 export const DEFAULT_PAIRING = PAIRING_FACES.motir!;
 /** Every Latin face any pairing loads (every page preloads them all). */

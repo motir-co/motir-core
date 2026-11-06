@@ -1,5 +1,6 @@
 import {
   Caveat,
+  Fira_Sans,
   Fraunces,
   IBM_Plex_Mono,
   Inter,
@@ -111,6 +112,18 @@ const nunito = Nunito({
 const robotoSlab = Roboto_Slab({
   subsets: ['latin'],
   variable: '--font-slab-source',
+  display: 'swap',
+});
+
+// The Humanist type pairing's face (MOTIR-10556) — Fira Sans, a humanist UI
+// sans. Not a base role: it feeds ONLY the `[data-type='humanist']` override in
+// theme.css via `--font-humanist-source`, which re-points both the headline and
+// body/UI roles. A static family, so next/font needs its weights listed: the four
+// the UI uses (regular, medium, semibold, bold).
+const firaSans = Fira_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-humanist-source',
   display: 'swap',
 });
 
@@ -231,6 +244,7 @@ export const fontVariables = [
   caveat.variable,
   nunito.variable,
   robotoSlab.variable,
+  firaSans.variable,
   notoSansSC.variable,
   notoSerifSC.variable,
   lxgwWenKaiTC.variable,

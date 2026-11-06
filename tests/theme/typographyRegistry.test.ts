@@ -65,7 +65,7 @@ function pairingGenerics(body: string): string[] {
 }
 
 describe('typography registry', () => {
-  it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Editorial 7.3.55, Mono-Technical 7.3.56)', () => {
+  it('registers the v1 base trio + the new-typeface pairings (7.3.54–56, then Marker / Rounded / Slab / Humanist, MOTIR-10548)', () => {
     expect(TYPE_IDS).toEqual([
       'motir',
       'motir-sans',
@@ -76,6 +76,7 @@ describe('typography registry', () => {
       'marker',
       'rounded',
       'slab',
+      'humanist',
     ]);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
@@ -86,6 +87,7 @@ describe('typography registry', () => {
     expect(TYPE_REGISTRY['marker'].name).toBe('Marker');
     expect(TYPE_REGISTRY['rounded'].name).toBe('Rounded');
     expect(TYPE_REGISTRY['slab'].name).toBe('Slab');
+    expect(TYPE_REGISTRY['humanist'].name).toBe('Humanist');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {
@@ -127,6 +129,7 @@ describe('isTypeId / resolveType', () => {
     expect(isTypeId('marker')).toBe(true); // registered in MOTIR-10553
     expect(isTypeId('rounded')).toBe(true); // registered in MOTIR-10554
     expect(isTypeId('slab')).toBe(true); // registered in MOTIR-10555
+    expect(isTypeId('humanist')).toBe(true); // registered in MOTIR-10556
     expect(isTypeId('serif-tech')).toBe(false); // not a registered pairing
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
@@ -238,6 +241,22 @@ describe('runtime contract in globals.css', () => {
         roleDeclarations(typeBlockBody('editorial'), role),
       );
     }
+  });
+
+  it('re-points the Humanist headline AND body roles at the LOADED Fira Sans -source face', () => {
+    // MOTIR-10556 — whole-UI, like grotesk: both the serif and sans chains drive
+    // off `--font-humanist-source`, the variable next/font binds to Fira Sans in
+    // app/fonts.ts; meta keeps the grotesk block's JetBrains chain.
+    const body = typeBlockBody('humanist');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-humanist-source/);
+    expect(body).toMatch(/--font-sans-pairing:[^;]*--font-humanist-source/);
+    expect(FONTS_TS).toContain("variable: '--font-humanist-source'");
+    expect(FONTS_TS).toContain('Fira_Sans');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*firaSans\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    expect(roleDeclarations(body, 'mono')).toEqual(
+      roleDeclarations(typeBlockBody('grotesk'), 'mono'),
+    );
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

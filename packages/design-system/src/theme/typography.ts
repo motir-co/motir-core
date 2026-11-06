@@ -62,14 +62,17 @@
  *   - `slab` (MOTIR-10555)      — Roboto Slab headlines over the Inter body;
  *     sturdy and print-like. Display-only, like `editorial`: heavy slab serifs
  *     crowd UI text, so only the headline role is re-typed.
+ *   - `humanist` (MOTIR-10556)  — Fira Sans THROUGHOUT (headlines + body/UI); a
+ *     warm humanist sans drawn as a screen UI face, so it re-types the whole UI
+ *     like `grotesk`.
  *
  * ── Whole-UI re-typing (Yue, 2026-06-19) ────────────────────────────────
  * A type pairing re-types the WHOLE app, chrome included (nav, header, buttons),
  * not just headlines: a pairing whose signature face reads as a UI sans/mono
- * (`grotesk`, `motir-mono`, `mono-technical`, `rounded`) ALSO re-points the
- * body/UI role (`--font-sans`) in its `[data-type]` block. The display-serif
- * `editorial` and `slab`, the display-only `marker` and the all-Inter `motir` /
- * `motir-sans` keep the Inter body for legibility.
+ * (`grotesk`, `motir-mono`, `mono-technical`, `rounded`, `humanist`) ALSO
+ * re-points the body/UI role (`--font-sans`) in its `[data-type]` block. The
+ * display-serif `editorial` and `slab`, the display-only `marker` and the
+ * all-Inter `motir` / `motir-sans` keep the Inter body for legibility.
  * Each later "Type: …" subtask ADDS its entry here + a `[data-type]` block (its
  * face loaded in `app/layout.tsx`) + its `docs/typography/<id>.md`.
  */
@@ -160,6 +163,13 @@ export const TYPE_REGISTRY = {
     tagline: 'Sturdy slab-serif headlines over a clean sans body — confident, print-like.',
     faces: 'Roboto Slab headlines · Inter body · JetBrains Mono meta.',
     designDoc: 'docs/typography/slab.md',
+  },
+  humanist: {
+    id: 'humanist',
+    name: 'Humanist',
+    tagline: 'A warm humanist sans across the whole UI — open and readable.',
+    faces: 'Fira Sans headlines + body/UI · JetBrains Mono meta.',
+    designDoc: 'docs/typography/humanist.md',
   },
 } satisfies Record<string, TypographyDefinition>;
 
