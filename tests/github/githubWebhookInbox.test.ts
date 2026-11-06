@@ -63,7 +63,11 @@ import { linkPrByIdentifier } from '../helpers/prLink';
 //      re-rendered from the recorded set;
 //   6. on the REAL worker, a burst of CI deliveries waiting on the gate leaves the
 //      pool free for an unrelated job, and still ends with every delivery processed
-//      and the roll-up terminal (Bug MOTIR-10457).
+//      and the roll-up terminal (Bug MOTIR-10457);
+//   7. a drain that releases deliveries parked on the gate never processes them in
+//      the draining process: their inbox rows stay `received` and their queue rows
+//      as the release wrote them, and the next worker processes each once (Bug
+//      MOTIR-10462).
 
 const SECRET = 'test-webhook-secret';
 const PASSWORD = 'hunter2hunter2';
@@ -548,6 +552,87 @@ describe('the end-of-workflow burst (the observed loss)', () => {
   });
 });
 
+const CHECKS = Array.from({ length: 12 }, (_, i) => `job ${String(i + 1).padStart(2, '0')}`);
+
+/** Poll an authoritative read until it holds — never a fixed sleep. */
+async function until(predicate: () => Promise<boolean>, what: string, timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await predicate()) return;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error(`timed out waiting for: ${what}`);
+}
+
+/**
+ * Fill the real CI-feedback gate with three deliveries from elsewhere that cannot
+ * finish until `open()` — the three a burst leaves inside it.
+ */
+function holdCiGateShut(): { open: () => Promise<void> } {
+  let release!: () => void;
+  const shut = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const holders = [1, 2, 3].map((n) =>
+    applyCiStatusFeedback(
+      {
+        providerRepoId: REPO_PROVIDER_ID,
+        commitSha: SHA,
+        conclusion: 'success' as const,
+        prNumbers: [],
+        headBranch: null,
+        suiteId: CI_SUITE,
+        context: `holder ${n}`,
+      },
+      async (): Promise<CiFeedbackContextResolution> => {
+        await shut;
+        return { kind: 'unknown_repo' };
+      },
+    ),
+  );
+  return {
+    open: async () => {
+      release();
+      await Promise.all(holders);
+    },
+  };
+}
+
+/** Post every check's completion, then the suite's, through the route; answer the queued runs. */
+async function postCompletionBurst(): Promise<{ id: string }[]> {
+  for (const name of CHECKS) {
+    const res = await postDelivery('check_run', checkRunPayload(name, 'completed', 'success'));
+    expect(res.status).toBe(202);
+  }
+  expect(
+    (await postDelivery('check_suite', checkSuitePayload('completed', 'success'))).status,
+  ).toBe(202);
+  const deliveries = await adminDb.jobQueueRun.findMany({
+    where: { jobId: 'system.github-webhook-delivery' },
+    select: { id: true },
+  });
+  expect(deliveries).toHaveLength(CHECKS.length + 1);
+  return deliveries;
+}
+
+/** A real worker running each claimed run through the ledger, as `scripts/worker.ts` does. */
+function deliveryWorker(
+  workerId: string,
+  timings: ConstructorParameters<typeof JobWorker>[0]['timings'] = {},
+): JobWorker {
+  return new JobWorker({
+    workerId,
+    logger: { info: () => {}, warn: () => {}, error: () => {} },
+    timings: { idleMaxMs: 200, ...timings },
+    execute: async (run) => {
+      const event = run.eventId
+        ? await adminDb.jobEvent.findUnique({ where: { id: run.eventId } })
+        : null;
+      await executeWithLedger(run, event?.data ?? {});
+    },
+  });
+}
+
 describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => {
   // Every delivery is a `system.github-webhook-delivery` run, and a CI one waits on
   // the three-slot CI-feedback gate. A run waiting there used to hold one of the
@@ -555,17 +640,6 @@ describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => 
   // unrelated job — `email.send`, a scheduled fire, a supervisor step — waited for
   // the whole backlog. Here the gate is held shut from outside while more CI
   // deliveries than the pool has slots are queued, then one unrelated run.
-  const CHECKS = Array.from({ length: 12 }, (_, i) => `job ${String(i + 1).padStart(2, '0')}`);
-
-  /** Poll an authoritative read until it holds — never a fixed sleep. */
-  async function until(predicate: () => Promise<boolean>, what: string, timeoutMs = 10_000) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      if (await predicate()) return;
-      await new Promise((r) => setTimeout(r, 20));
-    }
-    throw new Error(`timed out waiting for: ${what}`);
-  }
 
   it('an unrelated job is claimed while the burst waits, and every delivery is processed', async () => {
     const s = await makeScenario('inbox-worker-burst@example.com');
@@ -576,43 +650,12 @@ describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => 
     }
 
     // The gate is full: three CI deliveries from elsewhere that cannot finish yet.
-    let open!: () => void;
-    const shut = new Promise<void>((resolve) => {
-      open = resolve;
-    });
-    const holders = [1, 2, 3].map((n) =>
-      applyCiStatusFeedback(
-        {
-          providerRepoId: REPO_PROVIDER_ID,
-          commitSha: SHA,
-          conclusion: 'success' as const,
-          prNumbers: [],
-          headBranch: null,
-          suiteId: CI_SUITE,
-          context: `holder ${n}`,
-        },
-        async (): Promise<CiFeedbackContextResolution> => {
-          await shut;
-          return { kind: 'unknown_repo' };
-        },
-      ),
-    );
+    const gate = holdCiGateShut();
 
     // The burst — every check's completion, then the suite's — through the route,
     // so each becomes a queued delivery run; then one unrelated job, due after all
     // of them, which the claim (by `run_at`) reaches last.
-    for (const name of CHECKS) {
-      const res = await postDelivery('check_run', checkRunPayload(name, 'completed', 'success'));
-      expect(res.status).toBe(202);
-    }
-    expect(
-      (await postDelivery('check_suite', checkSuitePayload('completed', 'success'))).status,
-    ).toBe(202);
-    const deliveries = await adminDb.jobQueueRun.findMany({
-      where: { jobId: 'system.github-webhook-delivery' },
-      select: { id: true },
-    });
-    expect(deliveries).toHaveLength(CHECKS.length + 1);
+    const deliveries = await postCompletionBurst();
 
     const unrelatedJob = defineJob({ id: 'test.inbox-unrelated' as never }, () => ({ sent: true }));
     const unrelated = await adminDb.jobQueueRun.create({
@@ -624,17 +667,7 @@ describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => 
       },
     });
 
-    const worker = new JobWorker({
-      workerId: 'inbox-burst-worker',
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
-      timings: { idleMaxMs: 200 },
-      execute: async (run) => {
-        const event = run.eventId
-          ? await adminDb.jobEvent.findUnique({ where: { id: run.eventId } })
-          : null;
-        await executeWithLedger(run, event?.data ?? {});
-      },
-    });
+    const worker = deliveryWorker('inbox-burst-worker');
     worker.start();
     try {
       // AC 1 — the unrelated job is claimed and finished while every delivery of
@@ -652,8 +685,7 @@ describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => 
           0,
         );
       } finally {
-        open();
-        await Promise.all(holders);
+        await gate.open();
       }
 
       // AC 2 — the burst ends with every delivery processed and the roll-up terminal.
@@ -669,6 +701,77 @@ describe('a burst of CI deliveries on the real worker (Bug MOTIR-10457)', () => 
     }
     expect(await adminDb.githubWebhookDelivery.count({ where: { state: 'processed' } })).toBe(
       CHECKS.length + 1,
+    );
+    expect(await checkRows()).toEqual([
+      { checkName: 'github-actions', conclusion: 'success', suiteAggregate: true },
+      ...CHECKS.map((checkName) => ({ checkName, conclusion: 'success', suiteAggregate: false })),
+    ]);
+    expect(await statusOf(card.id)).toBe('in_review');
+  });
+});
+
+describe('a drain that releases deliveries parked on the gate (Bug MOTIR-10462)', () => {
+  // A deploy during a burst: the drain times out with deliveries parked in the CI
+  // gate's line, and releases them so another machine can take them at once. Before
+  // the fix the gate later admitted them HERE, so their `handleEvent` ran in the
+  // draining process while the rows were claimable elsewhere, and a check's
+  // `in_progress` could land after its `completed` and pull the row back.
+  it('leaves their rows as the release wrote them, and the next worker processes each once', async () => {
+    const s = await makeScenario('inbox-drain-parked@example.com');
+    const card = await cardWithPr(s);
+    await githubWebhookService.handleEvent('check_suite', checkSuitePayload('in_progress'));
+    for (const name of CHECKS) {
+      await githubWebhookService.handleEvent('check_run', checkRunPayload(name, 'in_progress'));
+    }
+    const pendingRows = await checkRows();
+    const gate = holdCiGateShut();
+    const deliveries = await postCompletionBurst();
+    const ids = deliveries.map((d) => d.id);
+
+    const draining = deliveryWorker('inbox-drain-old', { drainTimeoutMs: 100 });
+    draining.start();
+    try {
+      await until(
+        async () => draining.parkedCount === deliveries.length,
+        'every delivery of the burst to park on the CI gate',
+      );
+      await draining.shutdown(); // times out on the parked deliveries and releases them
+    } finally {
+      // The gate frees after the release — the draining process is still alive.
+      await gate.open();
+    }
+    await draining.settled();
+
+    // AC 1 — nothing was processed in the draining process…
+    const inbox = await adminDb.githubWebhookDelivery.findMany({
+      select: { state: true, lastError: true },
+    });
+    expect(inbox).toHaveLength(deliveries.length);
+    expect(inbox.every((row) => row.state === 'received' && row.lastError === null)).toBe(true);
+    expect(await checkRows()).toEqual(pendingRows);
+    // AC 2 — …and the queue rows are as the release wrote them.
+    const queued = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(queued.map((r) => [r.state, r.claimedBy, r.attempts])).toEqual(
+      ids.map(() => ['pending', null, 0]),
+    );
+
+    // The next claimant processes each delivery once, and the roll-up ends terminal.
+    const next = deliveryWorker('inbox-drain-next');
+    next.start();
+    try {
+      await until(
+        async () =>
+          (await adminDb.jobQueueRun.count({ where: { id: { in: ids }, state: 'succeeded' } })) ===
+          ids.length,
+        'the next worker to process every released delivery',
+      );
+    } finally {
+      await next.shutdown();
+    }
+    const settledRuns = await adminDb.jobQueueRun.findMany({ where: { id: { in: ids } } });
+    expect(settledRuns.every((r) => r.attempts === 1)).toBe(true);
+    expect(await adminDb.githubWebhookDelivery.count({ where: { state: 'processed' } })).toBe(
+      deliveries.length,
     );
     expect(await checkRows()).toEqual([
       { checkName: 'github-actions', conclusion: 'success', suiteAggregate: true },

@@ -1834,7 +1834,8 @@ all** while the gate is held. Its wait is bounded only by the backlog.
 A settle runs inside a wait scope (`lib/async/waitScope.ts`). A wait reported idle — the gate's line
 reports itself so — moves the run to `parked` for exactly the wait. `freeCapacity` counts BUSY runs
 against `POOL_SIZE`; every claim held, parked or not, is capped at `POOL_SIZE + PARK_HEADROOM` (500).
-A parked run keeps its claim and its lease, and the drain treats it like any in-flight run.
+A parked run keeps its claim and its lease, and the drain treats it like any in-flight run — until
+the release, which first withdraws it from its gate's line (§18.6).
 
 **§14.1 is untouched, by §15.2's test:** `DefineJobOptions` gains no member and `claimDueRuns` gains no
 predicate. Nothing chooses which job runs; the claim is still by `run_at`.
@@ -1874,6 +1875,55 @@ predicate. Nothing chooses which job runs; the claim is still by `run_at`.
   holds nothing may report itself the same way (`awaitAsIdle`); a wait that holds a connection or a
   lock must not.
 
+### §18.6 — The drain WITHDRAWS a parked run before it releases it (MOTIR-10462)
+
+**Amendment, 2026-11-05.** **Evidence pinned at:** `motir-core` `origin/main` @ `250d4f3`.
+**Consumed by:** [MOTIR-10462].
+
+**The defect.** §18.2 let a parked run keep its claim, and the drain treated it "like any in-flight
+run": it waited `DRAIN_TIMEOUT_MS` for the whole set, then released every claim. Behind the three-slot
+CI gate, a deploy during a burst nearly always times out with parked deliveries, and the release made
+their rows claimable by another machine while they still stood in this process's gate line. When the
+gate freed, it admitted them here. Reproduced on `250d4f3`
+(`tests/jobs/worker-drain-parked-release.test.ts`): five runs parked, released `pending` with
+`claimed_by` null and the attempt refunded; once the gate opened all five ran in the draining process
+and their settles then wrote `succeeded` over the released rows. Through the real delivery job
+(`tests/github/githubWebhookInbox.test.ts`) the released deliveries were processed in the draining
+process. Two machines then run one delivery, in no kept order, and a check's late `in_progress` can
+pull its `github_check_run` row back to `pending` (§18.3's second bullet).
+
+**The window, measured against the code.** `scripts/worker.ts` exits as soon as `shutdown()` resolves,
+unless a monitor credential refresh is still in flight (it waits for that, up to
+`MONITOR_REFRESH_LEASE_MS`), so the exposure is the drain's tail rather than all of `kill_timeout`.
+It is still real: the three runs inside the gate are busy when they are released, each one that ends
+hands its slot to the next parked run at once, and a released run that reaches a gate later is in the
+same position.
+
+**The decision.** The wait scope carries an `AbortSignal` (`lib/async/waitScope.ts`). On a timed-out
+drain the worker aborts every in-flight run's signal BEFORE `releaseClaims`:
+
+- a waiter leaves its gate's line synchronously and its wait rejects with `WaitWithdrawnError`, so
+  no parked run can be admitted between the withdrawal and the release;
+- the gate refuses withdrawn work at the door and again once admitted (`throwIfWithdrawn`), and a
+  slot that reached a withdrawn unit is handed straight on, so the gate's count stays exact;
+- the worker's settle treats a withdrawn wait as `withdrawn`: it writes NOTHING, so the queue row is
+  exactly what the release wrote, and the next claimant runs it once;
+- `githubWebhookInboxService.processDelivery` rethrows a withdrawal without marking the inbox row
+  `failed`, so the row stays `received` for the next claimant.
+
+A drain that does not time out withdraws nothing: a parked run admitted before the deadline finishes
+and settles as before.
+
+**What it does not change.** Work already past every gate when the drain releases it is not
+interrupted. It holds what it holds, as the worker's _Graceful shutdown_ header always said, and its
+next claimant resumes it from the step ledger; only a NEW wait it reaches after the release is refused. Whether that busy run's own
+settle should still write over a row it no longer holds is not decided here: it does today, and
+[MOTIR-10466] is that defect.
+
+**Refused: documenting it as a cost under §18.4.** The card offered it. Two machines processing one
+delivery break the arrival order §18.3 refused a defer to protect, and the fix needs no new mechanism
+beyond the scope §18.2 already threads through.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
@@ -1908,3 +1958,5 @@ predicate. Nothing chooses which job runs; the claim is still by `run_at`.
 [MOTIR-3459]: https://app.motir.co/items/MOTIR-3459
 [MOTIR-10425]: https://app.motir.co/items/MOTIR-10425
 [MOTIR-10457]: https://app.motir.co/items/MOTIR-10457
+[MOTIR-10462]: https://app.motir.co/items/MOTIR-10462
+[MOTIR-10466]: https://app.motir.co/items/MOTIR-10466

@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { isWaitWithdrawn } from '@/lib/async/waitScope';
 import type { GithubWebhookDeliveryDTO } from '@/lib/dto/github';
 import { toGithubWebhookDeliveryDTO } from '@/lib/mappers/githubMappers';
 import { dispatchSystemEvent } from '@/lib/jobs/sendEvent';
@@ -170,7 +171,9 @@ export const githubWebhookInboxService = {
   /**
    * Process one stored delivery — the job's body. Runs `handleEvent` on the stored
    * body, records its answer and clears the body; a throw is recorded on the row and
-   * RETHROWN, so the job runner retries the run.
+   * RETHROWN, so the job runner retries the run. A run WITHDRAWN while it waited on
+   * the CI gate (a drain released it, MOTIR-10462) is rethrown unrecorded: it did no
+   * work, and the row is still `received` for the next claimant.
    */
   async processDelivery(
     ref: GithubWebhookDeliveryRef,
@@ -185,6 +188,11 @@ export const githubWebhookInboxService = {
     try {
       result = await githubWebhookService.handleEvent(row.event, row.payload, row.deliveryId);
     } catch (err) {
+      // RELEASED WHILE IT WAITED ON THE CI GATE (MOTIR-10462): the worker's drain
+      // gave this run's claim back before the gate admitted it, so nothing was
+      // handled and the row still owes its work to the next claimant. Recording a
+      // failure would be false, and the row must stay as it was.
+      if (isWaitWithdrawn(err)) throw err;
       const message = err instanceof Error ? err.message : String(err);
       await withSystemContext((tx) =>
         githubWebhookDeliveryRepository.markFailed(row.id, message.slice(0, 2000), tx),
