@@ -4469,6 +4469,14 @@ model JobRun {
   // `running`. Status-first, because `running` is a tiny minority of the table
   // (29 of ~203 000 when the defect was measured).
   @@index([status, startedAt])
+  // The code-graph LEDGER reads (MOTIR-10545): `resolveCodeState` asks for one
+  // workspace's runs of ONE or TWO code-graph functions in given statuses, four
+  // times in one interactive transaction. No index above names `function_id`, and
+  // under FORCE RLS `status = …` is not leakproof, so the planner read the whole
+  // workspace's history (~120k rows, or the whole table) for a few dozen rows.
+  // Here `(workspace_id, function_id)` is the index condition the runtime role
+  // can use; `status` serves the owner role's reads too.
+  @@index([workspaceId, functionId, status])
   @@map("job_run")
 }
 
