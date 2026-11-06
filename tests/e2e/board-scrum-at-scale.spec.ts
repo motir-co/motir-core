@@ -444,7 +444,7 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     await scrollLaneToEnd(page, tall.id, tall.totalCount);
     const full = await getFullBoard(page.request);
     const lastId = columnByStatus(full, big.manifest.tallStatusKey).cards.at(-1)!.identifier;
-    await expect(page.getByTestId(`board-card-${lastId}`)).toBeVisible();
+    await expect(page.getByRole('main').getByTestId(`board-card-${lastId}`)).toBeVisible();
     await expectColumnVirtualized(page, tall.id, tall.totalCount);
     await expectNoLoadMore(page);
   });
@@ -575,12 +575,15 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     const board = await getBoard(page.request);
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    await expect(page.getByTestId('swimlane-load-row')).toBeAttached();
-    const badge = page.getByTestId(`board-count-${tall.id}`);
+    await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
+    const badge = page.getByRole('main').getByTestId(`board-count-${tall.id}`);
     await expect
       .poll(
         async () => {
-          await page.getByTestId(`board-lane-sentinel-${tall.id}`).scrollIntoViewIfNeeded();
+          await page
+            .getByRole('main')
+            .getByTestId(`board-lane-sentinel-${tall.id}`)
+            .scrollIntoViewIfNeeded();
           return (await badge.textContent())?.trim();
         },
         { message: 'the swimlane sprint lane pages to its full total', timeout: 60_000 },

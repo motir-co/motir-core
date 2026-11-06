@@ -139,7 +139,9 @@ test.describe('board-load @smoke', () => {
     // in one page reads its bare total.
     const inProgress = columnByStatus(board, 'in_progress');
     await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText(/^\d+ of 64$/);
-    await expect(page.getByTestId(`board-count-${inProgress.id}`)).toHaveText('4');
+    await expect(page.getByRole('main').getByTestId(`board-count-${inProgress.id}`)).toHaveText(
+      '4',
+    );
 
     // (1) NO "Load more" button — scrolling the lane is the only affordance.
     await expect(page.getByRole('button', { name: /load more/i })).toHaveCount(0);
@@ -147,7 +149,9 @@ test.describe('board-load @smoke', () => {
     // Scrolling the lane to its bottom pages it in, to the last card.
     await scrollLaneToEnd(page, todo.id, 64);
     await expect(page.getByTestId(`board-lane-footer-${todo.id}`)).toHaveCount(0);
-    await expect(page.getByTestId(`board-card-${seed.identifier}-64`)).toBeAttached();
+    await expect(
+      page.getByRole('main').getByTestId(`board-card-${seed.identifier}-64`),
+    ).toBeAttached();
   });
 
   test('keeps a tall lane DOM-bounded — virtualized, not every card mounted', async ({ page }) => {
@@ -220,12 +224,14 @@ test.describe('board-load @smoke', () => {
       el.scrollTop = el.scrollHeight;
     });
 
-    const retry = page.getByTestId(`board-lane-retry-${todo.id}`);
+    const retry = page.getByRole('main').getByTestId(`board-lane-retry-${todo.id}`);
     await expect(retry).toBeVisible();
-    await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText('10 of 14');
+    await expect(page.getByRole('main').getByTestId(`board-count-${todo.id}`)).toHaveText(
+      '10 of 14',
+    );
     await retry.focus();
     await page.keyboard.press('Enter');
-    await expect(page.getByTestId(`board-count-${todo.id}`)).toHaveText('14');
+    await expect(page.getByRole('main').getByTestId(`board-count-${todo.id}`)).toHaveText('14');
     await expect(retry).toHaveCount(0);
   });
 });

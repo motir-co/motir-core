@@ -159,7 +159,7 @@ export async function columnTotalBadge(page: Page, columnId: string): Promise<nu
  *  scroll is what the user does; each arrival at the bottom brings the
  *  sentinel into view and the next page in. */
 export async function scrollLaneToEnd(page: Page, columnId: string, total: number): Promise<void> {
-  const badge = page.getByTestId(`board-count-${columnId}`);
+  const badge = page.getByRole('main').getByTestId(`board-count-${columnId}`);
   const scroller = columnScroller(page, columnId);
   await expect
     .poll(

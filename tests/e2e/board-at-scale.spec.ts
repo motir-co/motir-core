@@ -236,7 +236,7 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
 
     // …the last card of the lane is reachable, and the column still windows.
     const ids = await laneIdentifiers(page, board, tall.id);
-    await expect(page.getByTestId(`board-card-${ids.at(-1)!}`)).toBeVisible();
+    await expect(page.getByRole('main').getByTestId(`board-card-${ids.at(-1)!}`)).toBeVisible();
     await expectColumnVirtualized(page, tall.id, tall.totalCount);
     await expectNoLoadMore(page);
   });
@@ -250,12 +250,15 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
     const board = await getBoard(page.request);
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
-    await expect(page.getByTestId('swimlane-load-row')).toBeAttached();
-    const badge = page.getByTestId(`board-count-${tall.id}`);
+    await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
+    const badge = page.getByRole('main').getByTestId(`board-count-${tall.id}`);
     await expect
       .poll(
         async () => {
-          await page.getByTestId(`board-lane-sentinel-${tall.id}`).scrollIntoViewIfNeeded();
+          await page
+            .getByRole('main')
+            .getByTestId(`board-lane-sentinel-${tall.id}`)
+            .scrollIntoViewIfNeeded();
           return (await badge.textContent())?.trim();
         },
         { message: 'the swimlane lane pages to its full total', timeout: 60_000 },
