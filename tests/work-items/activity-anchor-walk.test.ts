@@ -43,6 +43,7 @@ function verdictEntry(id: string, recordId: string): ActivityAllEntryDto {
       findingsExcerpt: 'Fix it',
       checklist: [],
       notified: null,
+      checklist: [],
     },
   ]);
 }

@@ -239,6 +239,15 @@ RUN pnpm build:deploy-check
 # (`scripts/build-breach.mjs`).
 RUN pnpm build:breach
 
+# ── the data-script bundle (MOTIR-10465) ────────────────────────────────────
+# `node /app/data/data-script.mjs <script> [flags]` runs the data scripts that
+# change production rows (the board, CI-state and fix-reason backfills and the
+# un-landed-card convergence). After the AWS cutover production's database admits
+# only core's tasks, so they run in a core worker task over ECS Exec
+# (docs/runbooks/production-data-scripts.md); bundled the fleet-admin way
+# (`scripts/build-data-script.mjs`).
+RUN pnpm build:data-script
+
 
 # ── assert the standalone output stayed small — the prune's successor ────────
 # ⚠️ THIS STEP USED TO PRUNE. It does not any more, because there is nothing
@@ -424,6 +433,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/.deploy-check/deploy-check.mjs.ma
 # an error names a source line.
 COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs ./breach/breach.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/.breach/breach.mjs.map ./breach/breach.mjs.map
+
+# ── /app/data — the production data scripts (MOTIR-10465) ───────────────────
+# Run by hand in a core worker task over ECS Exec, never by a process group. Its
+# unresolved imports resolve upward into `/app/node_modules`, as the worker's do;
+# the map is copied so a failed sweep's stack names a source line.
+COPY --from=builder --chown=nextjs:nodejs /app/.data-script/data-script.mjs ./data/data-script.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/.data-script/data-script.mjs.map ./data/data-script.mjs.map
 
 # ── the RUNNING process must be able to name its own build (MOTIR-3760) ─────
 # ⚠️ THE BUILDER STAGE'S `MOTIR_RELEASE` DOES NOT REACH HERE, AND FOR MONTHS

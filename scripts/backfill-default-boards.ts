@@ -4,10 +4,11 @@
  * but no board). One-off operator tooling: the seed reseeds the `moooon` tenant
  * wholesale, but real projects created before this Story have no board.
  *
- * IDEMPOTENT + SAFE TO RE-RUN: it sweeps only board-LESS projects
- * (`boards: { none: {} }`), and `boardsService.backfillDefaultBoard` re-checks
- * for an existing board before seeding, so a project that gained a board
- * between the sweep query and the seed is a no-op. Every project's board is
+ * IDEMPOTENT + SAFE TO RE-RUN: it walks every project and
+ * `boardsService.backfillDefaultBoard` probes each one for a board under its own
+ * workspace before seeding, so a project that has one is a no-op. (It used to
+ * filter `boards: { none: {} }` up front, unbound — which found nothing at all
+ * as the non-bypass application role a production run uses, MOTIR-10465.) Every project's board is
  * persisted through the shipped repositories under its workspace context (no
  * raw inserts) — the same path `createProject` uses.
  *
@@ -18,45 +19,26 @@
  * the path is production-correct.)
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
-import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
-import { db } from '@/lib/db';
+// Run through `scripts/data-script-main.ts` (MOTIR-10465): the entry loads `.env`,
+// composes `DATABASE_URL` in a Fargate task, and ends the pool after `main` answers.
 import { boardsService } from '@/lib/services/boardsService';
 
-async function resolveActorUserId(workspaceId: string): Promise<string | null> {
-  // The workspace's stand-in MANAGER — the rule
-  // `workspaceMembershipRepository.findStandInManagerByWorkspace` applies (MOTIR-6462).
-  const owner = await db.workspaceMembership.findFirst({
-    where: {
-      workspaceId,
-      workspaceRole: 'manager',
-    },
-    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-  });
-  if (owner) return owner.userId;
-  // No Manager (older workspaces predating the owner tier) — any member can
-  // bind the GUC; the board writes gate on workspace_id, not user_id.
-  const member = await db.workspaceMembership.findFirst({
-    where: { workspaceId },
-    orderBy: { createdAt: 'asc' },
-  });
-  return member?.userId ?? null;
-}
+/** Seeds the default board on every board-less project; takes no arguments, answers 0. */
+export async function main(argv: readonly string[]): Promise<number> {
+  if (argv.length > 0) throw new Error(`[backfill-boards] unknown argument: ${argv[0]}`);
+  // Every project, read under the system context, and each one probed for its board
+  // under its own workspace (`boardsService.listBoardBackfillCandidates`): the
+  // application role a production run uses sees no row of either table unbound.
+  const projects = await boardsService.listBoardBackfillCandidates();
 
-async function main() {
-  const projects = await db.project.findMany({
-    where: { boards: { none: {} } },
-    select: { id: true, name: true, workspaceId: true },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  console.log(`[backfill-boards] ${projects.length} board-less project(s) to consider.`);
+  console.log(`[backfill-boards] ${projects.length} project(s) to consider.`);
 
   let created = 0;
   let skipped = 0;
   let unresolved = 0;
 
   for (const project of projects) {
-    const actorUserId = await resolveActorUserId(project.workspaceId);
+    const actorUserId = await boardsService.resolveBoardBackfillActor(project.workspaceId);
     if (!actorUserId) {
       unresolved += 1;
       console.warn(
@@ -77,11 +59,5 @@ async function main() {
     `[backfill-boards] done — ${created} seeded, ${skipped} already had a board, ` +
       `${unresolved} unresolved.`,
   );
+  return 0;
 }
-
-main()
-  .catch((err) => {
-    console.error('[backfill-boards] failed:', err);
-    process.exitCode = 1;
-  })
-  .finally(() => db.$disconnect());
