@@ -1,10 +1,10 @@
 /**
  * The data-script ENTRY (MOTIR-10465) — what `pnpm db:backfill:boards`,
- * `pnpm db:backfill:ci-state`, `pnpm db:backfill:fix-reason` and
- * `pnpm db:converge:unlanded-cards` run from a checkout, and what the bundle
- * `node /app/data/data-script.mjs <script> [flags]` runs inside a task of the core
- * image. docs/runbooks/production-data-scripts.md is how to run one against
- * production.
+ * `pnpm db:backfill:ci-state`, `pnpm db:backfill:fix-reason`,
+ * `pnpm db:backfill:author-finished` and `pnpm db:converge:unlanded-cards` run
+ * from a checkout, and what the bundle `node /app/data/data-script.mjs <script>
+ * [flags]` runs inside a task of the core image.
+ * docs/runbooks/production-data-scripts.md is how to run one against production.
  *
  * WHY IT EXISTS. After the AWS cutover, production's database admits only core's
  * service security group, so a GitHub runner cannot reach it, and the image
@@ -65,6 +65,7 @@ export const DATA_SCRIPTS = {
   'backfill-boards': () => import('./backfill-default-boards'),
   'backfill-ci-state': () => import('./backfill-work-item-ci-state'),
   'backfill-fix-reason': () => import('./backfill-fix-reason'),
+  'backfill-author-finished': () => import('./backfill-plan-author-finished'),
   'converge-unlanded-cards': () => import('./converge-ejected-cards'),
 } satisfies Record<string, () => Promise<DataScript>>;
 

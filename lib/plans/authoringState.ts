@@ -93,6 +93,18 @@ export function proposalRef(item: Pick<PlanItemDto, 'id' | 'op' | 'workItemId'>)
 const filled = (v: unknown): boolean =>
   v !== null && v !== undefined && !(typeof v === 'string' && v.trim().length === 0);
 
+/** How {@link proposalComplete} judges a card. Every field is optional. */
+export interface ProposalCompleteOptions {
+  /**
+   * Whether the card owes an explanation (MOTIR-10491). Defaults to `true`, the
+   * rule every reader applied before the option existed. A caller that knows the
+   * plan's rule passes `requireExplanationFor`'s answer (`lib/plans/planProgress.ts`):
+   * a hosted plan on a project with explanations off never writes one, so the
+   * default would read every one of its cards as unfinished.
+   */
+  requireExplanation?: boolean;
+}
+
 /**
  * Is this proposal complete — would neither planner open an author session on it?
  * `findingRefs` is the set of items `validate_plan`'s `sectionFindings` names.
@@ -101,12 +113,15 @@ export function proposalComplete(
   item: PlanItemDto,
   items: readonly PlanItemDto[],
   findingRefs: ReadonlySet<string>,
+  opts: ProposalCompleteOptions = {},
 ): boolean {
   if (item.op === 'modify') return true;
   if (item.op !== 'add') return false;
   const ref = `planItem:${item.id}`;
   const f = (item.proposedFields ?? {}) as Record<string, unknown>;
-  if (!filled(f.descriptionMd) || !filled(f.explanationMd)) return false;
+  const requireExplanation = opts.requireExplanation ?? true;
+  if (!filled(f.descriptionMd)) return false;
+  if (requireExplanation && !filled(f.explanationMd)) return false;
   if (findingRefs.has(ref)) return false;
   const kind = typeof f.kind === 'string' ? f.kind : 'task';
   const childless = !items.some((other) => other.op === 'add' && other.parentRef === ref);

@@ -854,7 +854,7 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
       patch: { authorFinished: 'yes' },
     });
     expect(cleared.status).toBe(200);
-    expect(await read()).not.toHaveProperty('authorFinished');
+    expect(await read()).toHaveProperty('authorFinished', null);
 
     // …and `true` on the correction sets it again.
     const reset = await patch(fx, itemId, {

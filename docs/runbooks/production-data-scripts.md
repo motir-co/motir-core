@@ -1,25 +1,26 @@
 # Running a data script against production
 
-motir-core has four data scripts that change production rows. Each is an
+motir-core has five data scripts that change production rows. Each is an
 explicit operator action, idempotent and safe to re-run, and each defaults to a
 rehearsal where it has one:
 
-| script                    | `pnpm` command (from a checkout)  | what it does                                                             | flags                           |
-| ------------------------- | --------------------------------- | ------------------------------------------------------------------------ | ------------------------------- |
-| `backfill-boards`         | `pnpm db:backfill:boards`         | seeds the default board on every project that has none                   | none (no dry run: it only adds) |
-| `backfill-ci-state`       | `pnpm db:backfill:ci-state`       | recomputes `WorkItem.ciState` on every card with pull requests           | `--dry-run`, `--workspace=<id>` |
-| `backfill-fix-reason`     | `pnpm db:backfill:fix-reason`     | recomputes `WorkItem.fixReason` on every live card                       | `--dry-run`, `--workspace=<id>` |
-| `converge-unlanded-cards` | `pnpm db:converge:unlanded-cards` | puts cards the old merge rules stranded where the current rules put them | `--dry-run`                     |
+| script                     | `pnpm` command (from a checkout)   | what it does                                                                    | flags                           |
+| -------------------------- | ---------------------------------- | ------------------------------------------------------------------------------- | ------------------------------- |
+| `backfill-boards`          | `pnpm db:backfill:boards`          | seeds the default board on every project that has none                          | none (no dry run: it only adds) |
+| `backfill-ci-state`        | `pnpm db:backfill:ci-state`        | recomputes `WorkItem.ciState` on every card with pull requests                  | `--dry-run`, `--workspace=<id>` |
+| `backfill-fix-reason`      | `pnpm db:backfill:fix-reason`      | recomputes `WorkItem.fixReason` on every live card                              | `--dry-run`, `--workspace=<id>` |
+| `backfill-author-finished` | `pnpm db:backfill:author-finished` | records `authorFinished` on the finished cards of every open plan (MOTIR-10491) | `--dry-run`, `--workspace=<id>` |
+| `converge-unlanded-cards`  | `pnpm db:converge:unlanded-cards`  | puts cards the old merge rules stranded where the current rules put them        | `--dry-run`                     |
 
 Each `pnpm` command runs `scripts/data-script-main.ts <script>`. The same entry
 ships in the core image as `/app/data/data-script.mjs` (MOTIR-10465).
 
 ## Where production is, and so where the script runs
 
-| production database                    | route                                                                                                                                                                                                           |
-| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Neon** (before the AWS cutover's go) | the `workflow_dispatch` workflows (`backfill-boards.yml`, `backfill-ci-state.yml`, `backfill-fix-reason.yml`, `converge-ejected-cards.yml`), with `DATABASE_URL` from the repository secret `SEED_DATABASE_URL` |
-| **RDS** (after go)                     | **inside a core worker task, over ECS Exec** — this page                                                                                                                                                        |
+| production database                    | route                                                                                                                                                                                                                                                |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Neon** (before the AWS cutover's go) | the `workflow_dispatch` workflows (`backfill-boards.yml`, `backfill-ci-state.yml`, `backfill-fix-reason.yml`, `backfill-plan-author-finished.yml`, `converge-ejected-cards.yml`), with `DATABASE_URL` from the repository secret `SEED_DATABASE_URL` |
+| **RDS** (after go)                     | **inside a core worker task, over ECS Exec** — this page                                                                                                                                                                                             |
 
 After go, RDS admits only core's service security group, so no GitHub runner
 reaches it, and motir-infra deletes `SEED_DATABASE_URL` (motir-infra
@@ -102,9 +103,10 @@ sudo dnf install -y https://s3.amazonaws.com/session-manager-downloads/plugin/la
 ## What to know before a long sweep
 
 - **A deploy can end the run.** A rolling deploy replaces the worker task, which
-  stops the session. The CI-state and fix-reason sweeps stop between cards on
-  `SIGTERM` and print a partial report, and every script resumes cheaply on a
-  re-run, because a card that is already right is a no-op. Re-pick the task
+  stops the session. The CI-state and fix-reason sweeps stop between cards, and
+  the author-finished sweep between plans, on `SIGTERM` and print a partial
+  report, and every script resumes cheaply on a re-run, because a card that is
+  already right is a no-op. Re-pick the task
   (step 1) and run it again.
 - **It shares the worker's CPU and memory.** The sweeps take one card per
   transaction, so they are light, but run a long one outside a busy hour.

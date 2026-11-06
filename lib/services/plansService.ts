@@ -1159,11 +1159,12 @@ function mergeProposedFields(
   if (input.todos !== undefined) next.todos = input.todos;
   // Whether an author session finished the card (MOTIR-10490) — sparse like
   // every key above: absent leaves the stored state alone, `true` sets it and
-  // an explicit `null` clears it (absent and `null` both read not written, so
-  // the cleared state stores no key at all).
+  // an explicit `null` clears it. Absent and `null` both read not written, but
+  // the cleared state is STORED as `null` (MOTIR-10491): a driver's word is
+  // kept as a fact, so the one-time carry-over (`carryOverVerdict`) can tell a
+  // card a driver cleared from one nobody ever stated, and leaves it alone.
   if (input.authorFinished !== undefined) {
-    if (input.authorFinished === true) next.authorFinished = true;
-    else delete next.authorFinished;
+    next.authorFinished = input.authorFinished === true ? true : null;
   }
   // The LANGUAGES (MOTIR-8743) — per key, and a field this input rewrites
   // without naming its language drops that field's key, so a person's edit (the

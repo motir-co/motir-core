@@ -5619,7 +5619,12 @@ subjectVersion = "plan.v1." + hex(sha256(canonicalJson({
   different proposal). The full digest is the 64-character hex string.
 - **Excluded, deliberately:** `createdAt`, `workspaceId` and `planId` (they
   cannot change or say nothing about what is decided), and the plan's `title`,
-  `summary` and `status`.
+  `summary` and `status`. **Also excluded (MOTIR-10491): the `authorFinished` key
+  inside a row's `proposedFields`, whatever its value** — it records whether an
+  author session finished the card, never reaches the work item a reviewer
+  approves, and would otherwise move a `planned` plan's version (and refuse an
+  open reader as stale) on a write no card shows; a row without the key hashes
+  as it always did, so no `plan.v2.` is owed.
 - **DEVIATION from the card, with its reason.** The card asked for _"each
   proposal's id and revision, plus the plan's status"_. **`PlanItem` has no
   revision column.** `baseRevision` is the revision of the TARGET work item a
