@@ -201,8 +201,14 @@ describe('seam 2 — fix → green → In Review', () => {
 
     const claim = await workItemRepairService.claimRepair(s.project.id, card.identifier, s.ctx);
     expect(claim.outcome).toBe('claimed');
-    // The claim itself wrote NOTHING to the card.
-    expect(await cardSnapshot(card.id)).toEqual(before);
+    // The claim wrote no status, assignee or revision to the card. Its one write is the
+    // stored To fix answer turning Fixing while the repair is live (MOTIR-10506).
+    const { updatedAt: _beforeAt, ...unchanged } = before;
+    const { updatedAt: _afterAt, ...afterClaim } = await cardSnapshot(card.id);
+    expect(afterClaim).toEqual(unchanged);
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).fixDetail,
+    ).toMatchObject({ fixing: true });
 
     // The agent pushed; CI goes green on the new head.
     const res = await ci('success', 'sha-102-fixed', 102);

@@ -220,7 +220,9 @@ describe('a push to the base withdraws the question over a member it put in conf
     const { repo, members } = await inReview();
     const reader = { ...fx.ctx, projectId: fx.projectId };
     const before = await workbenchWatermarkService.read(reader);
-    expect(before.tabs.approvals.count).toBe(1);
+    // The watermark is a change detector, not the strip's count (MOTIR-10504): it counts the
+    // one awaiting gate AND the review rows of the card it names — here its two deliveries.
+    expect(before.tabs.approvals.count).toBe(3);
     stubHost({
       7: [{ mergeable: false, mergeableState: 'dirty', headSha: members[7]!.head }],
       12: [{ mergeable: true, mergeableState: 'clean', headSha: members[12]!.head }],

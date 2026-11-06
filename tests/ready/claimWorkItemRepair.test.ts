@@ -82,7 +82,7 @@ describe('claimRepair — the claim', () => {
     const { card, repo, pr } = await redCard(fx);
     // Settle the stored To fix reason the way the CI event would have in production
     // (the fixture writes the checks directly). Opening the repair run recomputes it
-    // (MOTIR-6881), and an up-to-date card is left exactly as it was.
+    // (MOTIR-6881): the only write is the live repair's Fixing flag (MOTIR-10506).
     await withWorkspaceContext({ userId: fx.ownerId, workspaceId: fx.workspaceId }, (tx) =>
       recomputeWorkItemFixReason(card.id, tx),
     );
@@ -120,9 +120,13 @@ describe('claimRepair — the claim', () => {
     const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(after.status).toBe('implemented');
     expect(after.assigneeId).toBe(before.assigneeId);
-    expect(after.updatedAt).toEqual(before.updatedAt);
-    // Still To fix while the repair runs: a running repair is not a repair made.
+    // Still To fix while the repair runs — a running repair is not a repair made — and
+    // the same reason now reads Fixing, everything else on it as it was (MOTIR-10506).
     expect(after.fixReason).toBe('ci_failed');
+    expect(after.fixDetail).toEqual({
+      ...(before.fixDetail as Record<string, unknown>),
+      fixing: true,
+    });
 
     const runs = await fixRuns(card.id);
     expect(runs).toHaveLength(1);

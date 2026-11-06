@@ -114,7 +114,12 @@ async function move(id: string, ...keys: string[]): Promise<void> {
 }
 
 /** One card carrying one awaiting gate, routed by the columns §2 reads. */
-async function gateOn(opts: { title: string; assigneeId?: string | null; reporterId?: string }) {
+async function gateOn(opts: {
+  title: string;
+  assigneeId?: string | null;
+  reporterId?: string;
+  kind?: 'design_result' | 'pull_request_approval';
+}) {
   const item = await workItemsService.createWorkItem(
     { projectId: fx.projectId, kind: 'subtask', parentId: storyId, title: opts.title },
     fx.ctx,
@@ -132,7 +137,7 @@ async function gateOn(opts: { title: string; assigneeId?: string | null; reporte
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
         workItemId: item.id,
-        kind: 'design_result',
+        kind: opts.kind ?? 'design_result',
         subjectId: `evidence-${item.id}`,
       },
       tx,
@@ -523,7 +528,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
     'one documented exception — `watcher` carries no `updatedAt`, so its freshness lives ' +
     'across a relation Prisma cannot `_max` through.';
 
-  it('is ONE transaction of eighteen statements, and the shape is the point', async () => {
+  it('is ONE transaction of nineteen statements, and the shape is the point', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
     await gateOn({ title: 'Decide me', assigneeId: fx.ownerId });
 
@@ -570,16 +575,39 @@ describe('COST — this read runs once a second per open Workbench', () => {
       'planChangeSession.aggregate',
       // …and the sessions that ended `failed` before MOTIR-7905 yet hold a waiting plan (MOTIR-7939).
       'planChangeSession.aggregate',
+      // …and the REVIEW of the approve-and-merge rows (Bug MOTIR-10504): which of the
+      // approvals are approve-and-merge rows, on the gate's own predicate. A review that
+      // writes no gate (a gate-off pass, a GitHub approval at the head) changes those rows'
+      // review line and badge, and the approvals aggregate cannot see it. With no such
+      // row — this fixture's gate is a design result — the review reading itself is
+      // skipped, so the steady-state cost is this one statement.
+      'approvalGate.findMany',
     ]);
   });
 
-  it('costs ONE statement more than the count read the strip already does — the control', async () => {
+  it('an approve-and-merge row costs ONE more: the review reading over its subtree', async () => {
+    await gateOn({ title: 'Merge me', assigneeId: fx.ownerId, kind: 'pull_request_approval' });
+
+    const seen = await statementsOf(() => workbenchWatermarkService.read(ctx()));
+
+    // ⚠️ TWO statements for the review, never one per row: the cards come from one
+    // `findMany` on the gate predicate, and their verdict records, dismissals, deliveries
+    // and GitHub reviews from ONE recursive raw query over their subtrees (MOTIR-10504).
+    expect(seen.slice(-2), REMEDY).toEqual(['approvalGate.findMany', '$queryRaw']);
+    expect(seen).toHaveLength(20);
+
+    // A second row adds no statement.
+    await gateOn({ title: 'Merge me too', assigneeId: fx.ownerId, kind: 'pull_request_approval' });
+    expect(await statementsOf(() => workbenchWatermarkService.read(ctx()))).toHaveLength(20);
+  });
+
+  it('costs TWO statements more than the count read the strip already does — the control', async () => {
     for (let i = 0; i < 10; i += 1) await card(`Bulk ${i}`);
 
     const watermark = await statementsOf(() => workbenchWatermarkService.read(ctx()));
     const counts = await statementsOf(() => homeService.tabCounts(ctx()));
 
-    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Eighteen statements is
+    // ⚠️ THE CONTROL IS WHAT MAKES THE NUMBER MEAN ANYTHING. Nineteen statements is
     // not obviously cheap or expensive in the abstract; what settles it is that
     // the strip ALREADY issues seventeen to render its badges for the tabs this
     // read covers, and this read answers strictly more — every tab's freshness as
@@ -591,7 +619,10 @@ describe('COST — this read runs once a second per open Workbench', () => {
     // `plan.count` is not a statement this read could share.
     expect(counts.filter((s) => s === 'plan.count')).toHaveLength(1);
     const comparable = counts.filter((s) => s !== 'plan.count');
-    expect(watermark.length - comparable.length).toBe(1);
+    // …and one more again for the approve-and-merge rows' REVIEW (Bug MOTIR-10504): which
+    // approvals are merge rows. The strip counts rows and draws no review, so it has no
+    // statement to share; the review reading itself is skipped while no such row waits.
+    expect(watermark.length - comparable.length).toBe(2);
   });
 
   it('is bounded by the PROJECT, not by its size', async () => {
@@ -600,7 +631,7 @@ describe('COST — this read runs once a second per open Workbench', () => {
       if (i % 3 === 0) await watch(row.id, fx.ownerId);
     }
     const big = await statementsOf(() => workbenchWatermarkService.read(ctx()));
-    expect(big).toHaveLength(18);
+    expect(big).toHaveLength(19);
   });
 
   it('runs on indexes that are actually present', async () => {

@@ -1,7 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { WorkItemFixReason } from '@/generated/prisma/client';
+import { Prisma, WorkItemFixReason } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dispatchRunService } from '@/lib/services/dispatchRunService';
+import { fixTagFactsFor } from '@/lib/services/fixGroupService';
 import { deriveFixReason, recomputeWorkItemFixReason } from '@/lib/services/fixReasonService';
 import { homeService } from '@/lib/services/homeService';
 import { workItemFixReasonBackfillService } from '@/lib/services/workItemFixReasonBackfillService';
@@ -13,6 +14,8 @@ import {
   FIX_REASON_PRIORITY,
   deadRunReasonOf,
   fixingReasonOf,
+  fixingWhileRepairing,
+  priorWhileRepairing,
   notePreviewOf,
   raisedHeadsOf,
   REVIEW_AGENT_REVIEWER_NAME,
@@ -632,11 +635,17 @@ describe('agreement with `motir fix` — the repair claim’s own matrix', () =>
 
     if (claim.outcome === 'claimed') {
       expect(PR_REASONS).toContain(value.fixReason);
+      // The claim opened a live `fix` run, and its open recomputed the card: the same
+      // reason, now Fixing (MOTIR-10506).
+      expect(await stored(id)).toEqual({
+        fixReason: value.fixReason,
+        fixDetail: { ...value.fixDetail, fixing: true },
+      });
     } else {
       expect(claim.outcome).toBe('not_repairable');
       expect(value).toEqual({ fixReason: null, fixDetail: null });
+      expect(await stored(id)).toEqual(value);
     }
-    expect(await stored(id)).toEqual(value);
   });
 });
 
@@ -1487,5 +1496,233 @@ describe('Fixing — a pushed fix while its CI runs', () => {
 
     const again = await workItemFixReasonBackfillService.backfillFixReason({ dryRun: false });
     expect(again).toMatchObject({ fixing: 1, changed: [], unchanged: 1 });
+  });
+});
+
+// ── A LIVE REPAIR IS FIXING (MOTIR-10506) ─────────────────────────────────────────────
+// A `fix` run alive on the card sets Fixing the moment it opens — a claimed `motir fix`, a
+// hosted repair — keeping the reason, its heads and the To fix count. Its close recomputes
+// the card; the moved-head rule is only the reconcile after it.
+
+describe('Fixing while repairing — the pure half', () => {
+  const reason = {
+    fixReason: 'ci_failed' as const,
+    fixDetail: {
+      groupKey: 'prs:abc',
+      repair: 'fix' as const,
+      check: 'Vitest',
+      queueReason: null,
+      base: null,
+      reviewerName: null,
+      notePreview: null,
+      gate: null,
+      ...NO_DEAD_RUN,
+      affected: 1,
+      total: 1,
+      fixing: false,
+      raisedHeads: { pr1: HEAD },
+    },
+  };
+
+  it('a reason reads Fixing, everything else on it unchanged', () => {
+    expect(fixingWhileRepairing(reason)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...reason.fixDetail, fixing: true },
+    });
+    expect(priorWhileRepairing(reason)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...reason.fixDetail, fixing: true },
+    });
+  });
+
+  it('nothing to fix stays nothing, and run_died is never Fixing', () => {
+    const died = { ...reason, fixReason: 'run_died' as const };
+    expect(fixingWhileRepairing({ fixReason: null, fixDetail: null })).toEqual({
+      fixReason: null,
+      fixDetail: null,
+    });
+    expect(fixingWhileRepairing(died)).toBe(died);
+    expect(fixingWhileRepairing({ fixReason: 'ci_failed', fixDetail: null })).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: null,
+    });
+    for (const p of [died, { fixReason: null, fixDetail: null }, { ...reason, fixDetail: null }]) {
+      expect(priorWhileRepairing(p)).toBeNull();
+    }
+  });
+});
+
+describe('Fixing while repairing — a live `fix` run on the card', () => {
+  async function redCard(fx: WorkItemFixture) {
+    const made = await cardWith(fx, 'implemented', { Vitest: 'failure' });
+    const before = await recompute(fx, made.card.id);
+    expect(before).toMatchObject({ fixReason: 'ci_failed', fixDetail: { fixing: false } });
+    return { ...made, before };
+  }
+
+  const tagFacts = (fx: WorkItemFixture, id: string) =>
+    withWorkspaceContext({ userId: fx.ownerId, workspaceId: fx.workspaceId }, (tx) =>
+      fixTagFactsFor(fx.workspaceId, [id], tx),
+    );
+
+  it('claiming `motir fix` stores Fixing at once — reason, heads and To fix count unchanged — and the row tag reads it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, before } = await redCard(fx);
+    expect((await tagFacts(fx, card.id)).fixingIds.has(card.id)).toBe(false);
+    const countBefore = (await homeService.tabCounts(hctx(fx))).toFix;
+
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+    expect(claim.outcome).toBe('claimed');
+
+    // No recompute by the test: the run's open wrote it.
+    expect(await stored(card.id)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...before.fixDetail, fixing: true },
+    });
+    expect((await tagFacts(fx, card.id)).fixingIds.has(card.id)).toBe(true);
+    const [page, counts] = await Promise.all([
+      homeService.listToFix(hctx(fx)),
+      homeService.tabCounts(hctx(fx)),
+    ]);
+    expect(page.items.map((i) => i.id)).toEqual([card.id]);
+    expect(counts.toFix).toBe(countBefore);
+    // A recompute on any other event while the run is live holds it, writing nothing.
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    expect((await recompute(fx, card.id)).fixDetail?.fixing).toBe(true);
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } })).updatedAt,
+    ).toEqual(row.updatedAt);
+  });
+
+  it('closing the repair with nothing pushed clears Fixing and shows the earlier reason unchanged', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, before } = await redCard(fx);
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+    expect((await stored(card.id)).fixDetail).toMatchObject({ fixing: true });
+
+    await workItemRepairService.closeRepair(
+      fx.projectId,
+      card.identifier,
+      claim.runId!,
+      'gave_up',
+      fx.ctx,
+    );
+
+    expect(await stored(card.id)).toEqual(before);
+    expect((await tagFacts(fx, card.id)).fixingIds.has(card.id)).toBe(false);
+  });
+
+  it('a hosted repair is Fixing from the moment it opens', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, before } = await redCard(fx);
+
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx, {
+      opening: {
+        origin: 'hosted',
+        agent: 'opencode',
+        model: 'test-model',
+        idempotencyKey: `fix-${randomToken(8)}`,
+      },
+    });
+    expect(claim.outcome).toBe('claimed');
+
+    expect(await stored(card.id)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...before.fixDetail, fixing: true },
+    });
+  });
+
+  it('a live repair keeps the prior reason Fixing while CI re-runs at the recorded head — and its close then clears it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr, before } = await redCard(fx);
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+    // The repair re-runs the same commit: nothing red, a member running, no head moved.
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id },
+      data: { conclusion: 'pending' },
+    });
+
+    expect(await recompute(fx, card.id)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...before.fixDetail, fixing: true },
+    });
+
+    await workItemRepairService.closeRepair(
+      fx.projectId,
+      card.identifier,
+      claim.runId!,
+      'gave_up',
+      fx.ctx,
+    );
+    // No run, no moved head: the moved-head rule does not hold it, as before MOTIR-10506.
+    expect(await stored(card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('a live repair with CI running keeps nothing to keep when the card stored no reason', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+    await adminDb.workItem.update({
+      where: { id: card.id },
+      data: { fixReason: null, fixDetail: Prisma.DbNull },
+    });
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id },
+      data: { conclusion: 'pending' },
+    });
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('after the repair pushed and closed, the moved-head rule is the reconcile that keeps Fixing until CI decides', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr, before } = await redCard(fx);
+    const claim = await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: PUSHED } });
+    const check = await ciStarts(pr.id);
+
+    await workItemRepairService.closeRepair(
+      fx.projectId,
+      card.identifier,
+      claim.runId!,
+      'halted',
+      fx.ctx,
+    );
+    expect(await stored(card.id)).toEqual({
+      fixReason: 'ci_failed',
+      fixDetail: { ...before.fixDetail, fixing: true },
+    });
+
+    await finishes(check.id, 'success');
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('green CI while the repair is still open leaves nothing to fix — a live run keeps no fixed card listed', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    await workItemRepairService.claimRepair(fx.projectId, card.identifier, fx.ctx);
+    await adminDb.githubCheckRun.updateMany({
+      where: { pullRequestId: pr.id },
+      data: { conclusion: 'success' },
+    });
+
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+  });
+
+  it('a local repair whose heartbeat has lapsed is not live — Fixing clears before the reap closes it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, before } = await redCard(fx);
+    const claim = await workItemRepairService.claimRepairAsAgent(
+      fx.projectId,
+      card.identifier,
+      fx.ctx,
+    );
+    expect((await stored(card.id)).fixDetail).toMatchObject({ fixing: true });
+    await adminDb.dispatchRun.update({
+      where: { id: claim.runId! },
+      data: { lastHeartbeatAt: new Date(Date.now() - 10 * 60_000) },
+    });
+
+    expect(await recompute(fx, card.id)).toEqual(before);
   });
 });
