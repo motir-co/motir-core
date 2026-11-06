@@ -221,6 +221,12 @@ export async function PATCH(
     ...('languages' in patch
       ? { languages: patch.languages as UpdateProposalInput['languages'] }
       : {}),
+    // Whether the author session finished the card (MOTIR-10490), by PRESENCE:
+    // `true` sets it, and any other value present — `null` included — clears it.
+    // Carried by a deepen and by `mode: 'correct'` alike, since both read `patch`.
+    ...('authorFinished' in patch
+      ? { authorFinished: patch.authorFinished === true ? (true as const) : null }
+      : {}),
   };
 
   try {
