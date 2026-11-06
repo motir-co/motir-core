@@ -195,8 +195,9 @@ export async function fixHeadKeysFor(
 export interface FixTagFacts {
   /** The head each carried card names (`fixHeadKeysFor`). */
   headKeys: Map<string, string>;
-  /** The cards whose stored detail says FIXING (MOTIR-10309) — a fix pushed, its checks
-   *  running. Read from the stored `fixDetail.fixing` only, never re-derived. */
+  /** The cards whose stored detail says FIXING (MOTIR-10309 · MOTIR-10506) — a repair
+   *  live on the card, or a fix pushed and its checks running. Read from the stored
+   *  `fixDetail.fixing` only, never re-derived: the derivation already read the run. */
   fixingIds: Set<string>;
 }
 
