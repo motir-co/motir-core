@@ -722,6 +722,9 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     // The language each text field above was written in (MOTIR-8743) — every
     // field it names is rewritten here, so the merge keeps all four keys.
     languages: { title: 'zh', description: 'zh', explanation: 'ko', todos: 'zh' },
+    // Whether the author session finished the card (MOTIR-10490) — planner
+    // state the route carries by PRESENCE, asserted stored as sent.
+    authorFinished: true,
   } satisfies Record<Exclude<UpdateProposalKey, 'sections'>, unknown>;
 
   /** Each STRUCTURAL key → where the correction lands it, or `null` for a key
@@ -816,6 +819,51 @@ describe('PATCH — `mode: "correct"` reaches the correction door', () => {
     expect(stored.blockedByRefs).toEqual([`planItem:${peer}`]);
     expect(stored.edgeReasons).toEqual({ [`planItem:${peer}`]: 'consumes: the peer task' });
     expect(stored.supersedesRefs).toEqual([`planItem:${firstId}`]);
+  });
+
+  // ── MOTIR-10490 · `authorFinished` rides `patch` by PRESENCE, on both modes ──
+  //
+  // `true` sets it, and any other value PRESENT — `null`, `false`, a string — is
+  // read as `null`, which clears it. An absent key leaves the state alone.
+  it('`authorFinished` reaches the proposal on the deepen and the correct modes, a non-true value clearing it', async () => {
+    const fx = await makeWorkItemFixture();
+    const { itemId } = await generatingPlan(fx, 'job-author-finished');
+    const read = async () =>
+      (await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } }))
+        .proposedFields as Record<string, unknown>;
+
+    const set = await patch(fx, itemId, {
+      jobId: 'job-author-finished',
+      patch: { authorFinished: true },
+    });
+    expect(set.status).toBe(200);
+    expect((await read())['authorFinished']).toBe(true);
+
+    // A deepen that names no state leaves it as it was.
+    const untouched = await patch(fx, itemId, {
+      jobId: 'job-author-finished',
+      patch: { priority: 'low' },
+    });
+    expect(untouched.status).toBe(200);
+    expect((await read())['authorFinished']).toBe(true);
+
+    // A correction carrying a NON-true value clears it — read as `null`.
+    const cleared = await patch(fx, itemId, {
+      jobId: 'job-author-finished',
+      mode: 'correct',
+      patch: { authorFinished: 'yes' },
+    });
+    expect(cleared.status).toBe(200);
+    expect(await read()).not.toHaveProperty('authorFinished');
+
+    // …and `true` on the correction sets it again.
+    const reset = await patch(fx, itemId, {
+      jobId: 'job-author-finished',
+      mode: 'correct',
+      patch: { authorFinished: true },
+    });
+    expect(reset.status).toBe(200);
+    expect((await read())['authorFinished']).toBe(true);
   });
 
   // ── MOTIR-9030 · the `sections` key SURVIVES the parser, on both modes ───────
