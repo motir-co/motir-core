@@ -10597,6 +10597,7 @@
       "exitToApp": "앱으로 나가기",
       "navAiPlanning": "AI 계획",
       "navPlanningLessons": "계획 교훈",
+      "navPlannerFindings": "계획 도구 발견 사항",
       "navIdeas": "아이디어",
       "navRunModels": "호스팅 실행 모델",
       "navFleetSettings": "플릿 설정",
@@ -10831,6 +10832,9 @@
           "seed_registry": {
             "promote": "저장소를 스타터로 승격함",
             "retire": "스타터를 폐기함"
+          },
+          "planner_finding": {
+            "triage": "계획 도구 발견 사항을 분류함"
           }
         }
       }
@@ -11741,6 +11745,236 @@
         "confirm": "기간 변경",
         "saved": "폐기 기간이 변경되었습니다.",
         "savedBody": "계획 도구는 다음 계획 작업부터 {days}일을 사용합니다."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "운영 · 계획 도구 발견 사항",
+      "title": "계획 도구 발견 사항",
+      "subtitle": "호스팅된 계획 도구의 시험 실행과 check plan 스킬이 계획에서 찾아낸 잘못된 점으로, 해당 계획이 닫히거나 삭제된 뒤에도 보관됩니다. 어떤 결함이 반복되는지 확인한 다음 각각 누구의 잘못인지 지정하거나, 교훈으로 승격하거나, 등록한 버그를 기록하거나, 무시하십시오.",
+      "infoLead": "발견 사항에는 고객의 계획이 인용됩니다.",
+      "infoBody": "이 페이지는 플랫폼 관리자만 볼 수 있으며, 여기서 하는 모든 변경은 감사 로그에 기록됩니다.",
+      "view": {
+        "label": "보기",
+        "grouped": "그룹별",
+        "all": "모든 발견 사항"
+      },
+      "card": {
+        "title": "발견 사항",
+        "subtitleGrouped": "결함당 한 행으로, 관련된 발견 사항과 계획의 수를 보여 주며 최근에 확인된 순서로 표시합니다.",
+        "subtitleAll": "보관된 모든 발견 사항(최신순)."
+      },
+      "filter": {
+        "label": "발견 사항 필터",
+        "source": "출처",
+        "sourceAny": "모든 출처",
+        "planner": "계획 도구",
+        "plannerAny": "모든 계획 도구",
+        "outcome": "결과",
+        "outcomeAny": "모든 결과",
+        "attribution": "귀속",
+        "attributionAny": "모든 귀속",
+        "state": "분류 상태",
+        "stateDefault": "무시되지 않음",
+        "stateAll": "모두(무시된 항목 포함)",
+        "apply": "적용",
+        "count": "{n, plural, other {필터 #개}}",
+        "clearAll": "모두 지우기",
+        "remove": "{filter} 제거",
+        "sheetButton": "필터",
+        "sheetTitle": "발견 사항 필터",
+        "sheetDone": "완료"
+      },
+      "source": {
+        "in_loop": "호스팅 검토",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "호스팅된 계획 도구",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "수정됨",
+        "reported": "보고됨",
+        "fix_failed": "수정 실패"
+      },
+      "attribution": {
+        "code": "코드",
+        "corpus": "코퍼스",
+        "model": "모델",
+        "unattributed": "귀속 없음"
+      },
+      "prediction": {
+        "STOPS": "실행이 여기서 멈춥니다",
+        "SETTLES": "실행이 편차를 기록하고 처리합니다",
+        "THRU": "실행이 그대로 진행합니다"
+      },
+      "status": {
+        "new": "새로 만듦",
+        "promoted_to_lesson": "교훈",
+        "filed_as_bug": "버그 기록됨",
+        "bugWithKey": "버그 {key}",
+        "dismissed": "무시됨"
+      },
+      "col": {
+        "defect": "결함",
+        "findings": "발견 사항",
+        "plans": "계획",
+        "lastSeen": "마지막 확인",
+        "site": "위치",
+        "source": "출처",
+        "planner": "계획 도구",
+        "outcome": "결과",
+        "workItem": "작업 항목",
+        "plan": "계획",
+        "attribution": "귀속",
+        "state": "상태",
+        "date": "날짜"
+      },
+      "row": {
+        "findings": "{n, plural, other {발견 사항 #개}}",
+        "plans": "{n, plural, other {계획 #개}}",
+        "open": "{site} 열기",
+        "untitledPlan": "제목 없는 계획",
+        "noPlan": "계획 없음"
+      },
+      "pager": {
+        "label": "최신순 · 페이지당 {n}개",
+        "page": "{n}페이지",
+        "previous": "이전",
+        "next": "다음"
+      },
+      "noMatch": {
+        "title": "이 필터와 일치하는 발견 사항이 없습니다",
+        "body": "무시된 발견 사항은 표시를 선택하지 않으면 숨겨집니다. 필터를 하나 제거하거나 모두 지우십시오.",
+        "action": "필터 지우기"
+      },
+      "empty": {
+        "title": "아직 발견 사항이 없습니다",
+        "body": "호스팅된 계획 도구의 시험 실행이 계획을 검토하거나 누군가 check plan 스킬을 실행하면 여기에 발견 사항이 표시됩니다. 아직 보관된 항목이 없습니다."
+      },
+      "unavailable": {
+        "title": "발견 사항을 불러올 수 없습니다",
+        "body": "계획 서비스(motir-ai)가 응답하지 않아 발견 사항을 표시하지 않습니다. 불러오기 오류이며, 아무것도 변경되지 않았고 발견 사항이 없다는 뜻도 아닙니다.",
+        "retry": "다시 시도"
+      },
+      "loading": {
+        "label": "발견 사항 불러오는 중"
+      },
+      "group": {
+        "back": "계획 도구 발견 사항",
+        "title": "반복되는 결함",
+        "summary": "{plans, plural, other {계획 #개}}에 걸친 {findings, plural, other {발견 사항 #개}}",
+        "findingsHeading": "이 그룹의 발견 사항",
+        "empty": "이 그룹에는 현재 필터와 일치하는 발견 사항이 없습니다."
+      },
+      "detail": {
+        "back": "계획 도구 발견 사항",
+        "backToGroup": "그룹으로 돌아가기",
+        "what": "일어난 일",
+        "evidence": "근거",
+        "correction": "수정 내용",
+        "fixDirection": "수정 방향",
+        "why": "이 귀속의 이유",
+        "none": "기록된 내용이 없습니다.",
+        "cellsTitle": "영향을 받는 계획 도구 셀",
+        "cellHosted": "호스팅된 계획 도구",
+        "cellPlanpy": "plan.py",
+        "noCells": "이 발견 사항에는 계획 도구 셀이 기록되지 않았습니다.",
+        "provenance": "출처 정보",
+        "site": "위치",
+        "prediction": "예측",
+        "source": "출처",
+        "planner": "계획 도구",
+        "outcome": "결과",
+        "attribution": "귀속",
+        "plan": "계획",
+        "planId": "계획 ID",
+        "planGone": "이 계획은 더 이상 존재하지 않습니다. 발견 사항은 보관됩니다.",
+        "workItem": "작업 항목",
+        "authorModel": "작성 모델",
+        "baseline": "코드 기준점",
+        "recorded": "기록됨",
+        "triagedBy": "마지막 분류: {who} · {when}",
+        "lessonLink": "계획 교훈에서 교훈 열기"
+      },
+      "cost": {
+        "title": "검토 및 수리 비용",
+        "made": "생성된 발견 사항",
+        "fixed": "수정된 발견 사항",
+        "review": "검토",
+        "repair": "수리",
+        "amount": "{amount}",
+        "tokens": "입력 토큰 {input}개 · 출력 토큰 {output}개",
+        "sessions": "{n, plural, other {세션 #개}}",
+        "unpriced": "비용 알 수 없음 — 이 줄의 모델에 가격이 없습니다",
+        "notMetered": "측정되지 않음",
+        "notMeteredBody": "이 발견 사항은 check plan 실행에서 나왔으며, 계획 작업과 사용량 줄이 없습니다."
+      },
+      "triage": {
+        "title": "분류",
+        "groupScope": "이 그룹의 {count, plural, other {열린 발견 사항 #개}}에 적용되며, 각각 따로 기록됩니다.",
+        "cancel": "취소",
+        "saving": "저장 중…",
+        "retry": "다시 시도"
+      },
+      "attr": {
+        "open": "귀속 지정",
+        "label": "귀속",
+        "hint": "누구의 잘못인지: 계획 도구의 코드, 규칙 코퍼스, 계획 모델, 또는 알 수 없음.",
+        "save": "귀속 저장",
+        "saved": "귀속을 {attribution}(으)로 설정했습니다.",
+        "regroupNote": "귀속을 바꾸면 이 발견 사항이 다른 그룹으로 이동할 수 있습니다."
+      },
+      "promote": {
+        "open": "교훈으로 승격",
+        "title": "이 발견 사항을 교훈으로 승격",
+        "intro": "양식은 발견 사항으로 미리 채워져 있습니다. 교훈을 만들기 전에 편집하십시오.",
+        "fieldTitle": "제목",
+        "fieldWhy": "중요한 이유",
+        "fieldHow": "적용 방법",
+        "fieldType": "유형",
+        "blank": "이 필드는 비워 둘 수 없습니다.",
+        "review": "교훈 검토",
+        "confirmTitle": "이 교훈을 만드시겠습니까?",
+        "confirmBody": "교훈은 이 발견 사항의 프로젝트에 만들어지며, 해당 프로젝트의 계획 도구는 다음 계획 작업부터 이를 읽습니다. 전역으로 만들려면 나중에 계획 교훈에서 승격하십시오.",
+        "confirm": "교훈 만들기",
+        "saved": "교훈을 만들고 이 발견 사항에 연결했습니다.",
+        "duplicate": "비슷한 교훈이 이미 있습니다. 두 번째 교훈을 만들지 말고 계획 교훈에서 여십시오."
+      },
+      "bug": {
+        "open": "버그 키 기록",
+        "label": "계획 버그 키",
+        "hint": "직접 등록한 계획 버그의 키입니다. 이 페이지에서는 아무것도 등록하지 않습니다.",
+        "placeholder": "MOTIR-123",
+        "invalid": "MOTIR-123 같은 키를 입력하십시오.",
+        "save": "키 기록",
+        "saved": "버그 {key}을(를) 기록했습니다."
+      },
+      "dismiss": {
+        "open": "무시",
+        "title": "이 발견 사항을 무시하시겠습니까?",
+        "body": "기본 목록에서 빠지고 무시됨 아래에 남습니다. 언제든지 복원할 수 있습니다.",
+        "reasonLabel": "사유(선택, 감사 로그에 기록됨)",
+        "reasonPlaceholder": "조치할 가치가 없는 이유는 무엇입니까?",
+        "confirm": "무시",
+        "saved": "발견 사항을 무시했습니다.",
+        "restore": "복원",
+        "restored": "발견 사항을 복원했습니다."
+      },
+      "refused": {
+        "failed": "저장되지 않음 — 문제가 발생했습니다. 아무것도 기록되지 않았습니다. 입력한 내용은 유지됩니다. 다시 시도하십시오.",
+        "unavailable": "저장되지 않음 — 계획 서비스가 응답하지 않았습니다. 아무것도 기록되지 않았고 감사 행도 없습니다. 입력한 내용은 유지됩니다. 다시 시도하십시오.",
+        "notPermitted": "저장되지 않음 — 플랫폼 관리자만 발견 사항을 분류할 수 있습니다.",
+        "gone": "저장되지 않음 — 이 발견 사항은 더 이상 존재하지 않습니다. 아무것도 기록되지 않았습니다.",
+        "invalid": "저장되지 않음 — 계획 서비스가 이 변경을 거부했습니다.",
+        "lessonNotLinked": "교훈은 만들어졌지만 이 발견 사항에 기록하지 못했습니다. 계획 교훈에서 찾고 다시 만들지 마십시오."
+      },
+      "noop": "이미 최신 상태입니다. 방금 누군가 이 발견 사항을 변경해 바꿀 내용이 없었고 아무것도 기록되지 않았습니다.",
+      "a11y": {
+        "viewGroup": "발견 사항을 결함별로 묶거나 하나씩 표시",
+        "captionGroups": "결함별로 묶은 발견 사항",
+        "captionAll": "모든 발견 사항",
+        "detailRegion": "발견 사항 세부 정보"
       }
     },
     "usage": {

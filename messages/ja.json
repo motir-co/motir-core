@@ -10600,6 +10600,7 @@
       "exitToApp": "アプリに戻る",
       "navAiPlanning": "AI による計画",
       "navPlanningLessons": "計画の教訓",
+      "navPlannerFindings": "プランナーの指摘",
       "navIdeas": "アイデア",
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
@@ -10834,6 +10835,9 @@
           "seed_registry": {
             "promote": "リポジトリをスターターに昇格",
             "retire": "スターターを廃止"
+          },
+          "planner_finding": {
+            "triage": "プランナーの指摘をトリアージしました"
           }
         }
       }
@@ -11744,6 +11748,236 @@
         "confirm": "期間を変更",
         "saved": "廃止期間を変更しました。",
         "savedBody": "プランナーは次回の計画ジョブから {days} 日を使用します。"
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "運用 · プランナーの指摘",
+      "title": "プランナーの指摘",
+      "subtitle": "ホスト型プランナーのドライランと check plan スキルが計画の中で見つけた誤り。計画がクローズまたは削除された後も保持されます。どの欠陥が繰り返されているかを確認し、それぞれ誰の責任かを設定するか、教訓に昇格するか、作成した バグを記録するか、無視してください。",
+      "infoLead": "指摘には顧客の計画が引用されています。",
+      "infoBody": "このページはプラットフォーム管理者だけが閲覧でき、ここで行ったすべての変更は監査ログに書き込まれます。",
+      "view": {
+        "label": "表示",
+        "grouped": "グループ別",
+        "all": "すべての指摘"
+      },
+      "card": {
+        "title": "指摘",
+        "subtitleGrouped": "欠陥ごとに 1 行。関係した指摘と計画の数を示し、最近見られた順に並べます。",
+        "subtitleAll": "保持されているすべての指摘(新しい順)。"
+      },
+      "filter": {
+        "label": "指摘を絞り込む",
+        "source": "ソース",
+        "sourceAny": "すべてのソース",
+        "planner": "プランナー",
+        "plannerAny": "すべてのプランナー",
+        "outcome": "結果",
+        "outcomeAny": "すべての結果",
+        "attribution": "帰属",
+        "attributionAny": "すべての帰属",
+        "state": "トリアージの状態",
+        "stateDefault": "無視されていないもの",
+        "stateAll": "すべて(無視済みを含む)",
+        "apply": "適用",
+        "count": "{n, plural, other {# 個のフィルター}}",
+        "clearAll": "すべてクリア",
+        "remove": "{filter}を削除",
+        "sheetButton": "フィルター",
+        "sheetTitle": "指摘を絞り込む",
+        "sheetDone": "完了"
+      },
+      "source": {
+        "in_loop": "ホスト型レビュー",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "ホスト型プランナー",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "修正済み",
+        "reported": "報告済み",
+        "fix_failed": "修正失敗"
+      },
+      "attribution": {
+        "code": "コード",
+        "corpus": "コーパス",
+        "model": "モデル",
+        "unattributed": "未帰属"
+      },
+      "prediction": {
+        "STOPS": "実行はここで停止します",
+        "SETTLES": "実行は逸脱を記録して解決します",
+        "THRU": "実行はそのまま構築を続けます"
+      },
+      "status": {
+        "new": "新規",
+        "promoted_to_lesson": "教訓",
+        "filed_as_bug": "バグ記録済み",
+        "bugWithKey": "バグ{key}",
+        "dismissed": "無視済み"
+      },
+      "col": {
+        "defect": "欠陥",
+        "findings": "指摘",
+        "plans": "計画",
+        "lastSeen": "最終確認",
+        "site": "箇所",
+        "source": "ソース",
+        "planner": "プランナー",
+        "outcome": "結果",
+        "workItem": "作業項目",
+        "plan": "計画",
+        "attribution": "帰属",
+        "state": "状態",
+        "date": "日付"
+      },
+      "row": {
+        "findings": "{n, plural, other {# 件の指摘}}",
+        "plans": "{n, plural, other {# 件の計画}}",
+        "open": "{site}を開く",
+        "untitledPlan": "無題の計画",
+        "noPlan": "計画なし"
+      },
+      "pager": {
+        "label": "新しい順・1 ページあたり{n}件",
+        "page": "{n}ページ",
+        "previous": "前へ",
+        "next": "次へ"
+      },
+      "noMatch": {
+        "title": "これらのフィルターに一致する指摘はありません",
+        "body": "無視済みの指摘は、表示を選ばない限り非表示です。フィルターを外すか、すべてクリアしてください。",
+        "action": "フィルターをクリア"
+      },
+      "empty": {
+        "title": "まだ指摘はありません",
+        "body": "ホスト型プランナーのドライランが計画をレビューした後、または誰かが check plan スキルを実行した後に、ここに指摘が表示されます。まだ保持されている指摘はありません。"
+      },
+      "unavailable": {
+        "title": "指摘を読み込めませんでした",
+        "body": "計画サービス(motir-ai)が応答しなかったため、指摘は表示されません。これは読み込みエラーです。何も変更されておらず、指摘がないという意味ではありません。",
+        "retry": "再試行"
+      },
+      "loading": {
+        "label": "指摘を読み込み中"
+      },
+      "group": {
+        "back": "プランナーの指摘",
+        "title": "繰り返される欠陥",
+        "summary": "{plans, plural, other {# 件の計画}}にわたる{findings, plural, other {# 件の指摘}}",
+        "findingsHeading": "このグループの指摘",
+        "empty": "このグループには現在のフィルターに一致する指摘はありません。"
+      },
+      "detail": {
+        "back": "プランナーの指摘",
+        "backToGroup": "グループに戻る",
+        "what": "何が起きたか",
+        "evidence": "根拠",
+        "correction": "修正内容",
+        "fixDirection": "修正の方向性",
+        "why": "この帰属の理由",
+        "none": "記録なし。",
+        "cellsTitle": "影響を受けるプランナーのセル",
+        "cellHosted": "ホスト型プランナー",
+        "cellPlanpy": "plan.py",
+        "noCells": "この指摘にはプランナーのセルが記録されていません。",
+        "provenance": "出所",
+        "site": "箇所",
+        "prediction": "予測",
+        "source": "ソース",
+        "planner": "プランナー",
+        "outcome": "結果",
+        "attribution": "帰属",
+        "plan": "計画",
+        "planId": "計画 ID",
+        "planGone": "この計画はもう存在しません。指摘は保持されます。",
+        "workItem": "作業項目",
+        "authorModel": "作成モデル",
+        "baseline": "コードのベースライン",
+        "recorded": "記録日時",
+        "triagedBy": "最終トリアージ：{who}（{when}）",
+        "lessonLink": "計画の教訓で教訓を開く"
+      },
+      "cost": {
+        "title": "レビューと修復のコスト",
+        "made": "作成された指摘",
+        "fixed": "修正された指摘",
+        "review": "レビュー",
+        "repair": "修復",
+        "amount": "{amount}",
+        "tokens": "入力{input}トークン・出力{output}トークン",
+        "sessions": "{n, plural, other {# セッション}}",
+        "unpriced": "コスト不明 — この行のモデルに価格がありません",
+        "notMetered": "計測なし",
+        "notMeteredBody": "この指摘は check plan の実行によるもので、計画ジョブも使用量の行もありません。"
+      },
+      "triage": {
+        "title": "トリアージ",
+        "groupScope": "このグループの{count, plural, other {# 件の未対応の指摘}}に適用され、それぞれ個別に記録されます。",
+        "cancel": "キャンセル",
+        "saving": "保存中…",
+        "retry": "もう一度試す"
+      },
+      "attr": {
+        "open": "帰属を設定",
+        "label": "帰属",
+        "hint": "誰の責任か: プランナーのコード、そのルールのコーパス、計画モデル、または不明。",
+        "save": "帰属を保存",
+        "saved": "帰属を{attribution}に設定しました。",
+        "regroupNote": "帰属を変更すると、この指摘が別のグループに移ることがあります。"
+      },
+      "promote": {
+        "open": "教訓に昇格",
+        "title": "この指摘を教訓に昇格",
+        "intro": "フォームには指摘の内容があらかじめ入力されています。教訓を作成する前に編集してください。",
+        "fieldTitle": "タイトル",
+        "fieldWhy": "重要な理由",
+        "fieldHow": "適用方法",
+        "fieldType": "種類",
+        "blank": "この項目は空にできません。",
+        "review": "教訓を確認",
+        "confirmTitle": "この教訓を作成しますか?",
+        "confirmBody": "教訓はこの指摘のプロジェクトに作成され、そのプロジェクトのプランナーは次の計画ジョブからこれを読み込みます。グローバルにするには、後で計画の教訓から昇格してください。",
+        "confirm": "教訓を作成",
+        "saved": "教訓を作成し、この指摘にリンクしました。",
+        "duplicate": "同様の教訓がすでに存在します。2 つ目を作成せず、計画の教訓で開いてください。"
+      },
+      "bug": {
+        "open": "バグキーを記録",
+        "label": "計画 バグのキー",
+        "hint": "手動で作成した計画 バグのキー。このページからは何も作成されません。",
+        "placeholder": "MOTIR-123",
+        "invalid": "MOTIR-123 のようなキーを入力してください。",
+        "save": "キーを記録",
+        "saved": "バグ{key}を記録しました。"
+      },
+      "dismiss": {
+        "open": "無視",
+        "title": "この指摘を無視しますか?",
+        "body": "既定の一覧から外れ、「無視済み」に残ります。いつでも復元できます。",
+        "reasonLabel": "理由(任意、監査ログに書き込まれます)",
+        "reasonPlaceholder": "対応する価値がないのはなぜですか?",
+        "confirm": "無視",
+        "saved": "指摘を無視しました。",
+        "restore": "復元",
+        "restored": "指摘を復元しました。"
+      },
+      "refused": {
+        "failed": "保存されませんでした — 問題が発生しました。何も書き込まれていません。入力内容は保持されています。もう一度お試しください。",
+        "unavailable": "保存されませんでした — 計画サービスが応答しませんでした。何も書き込まれておらず、監査行もありません。入力内容は保持されています。もう一度お試しください。",
+        "notPermitted": "保存されませんでした — 指摘をトリアージできるのはプラットフォーム管理者だけです。",
+        "gone": "保存されませんでした — この指摘はもう存在しません。何も書き込まれていません。",
+        "invalid": "保存されませんでした — 計画サービスがこの変更を拒否しました。",
+        "lessonNotLinked": "教訓は作成されましたが、この指摘に記録できませんでした。計画の教訓で探し、もう一度作成しないでください。"
+      },
+      "noop": "すでに最新です。少し前に誰かがこの指摘を変更したため、変更する内容はなく、何も記録されませんでした。",
+      "a11y": {
+        "viewGroup": "指摘を欠陥ごとにまとめて、または 1 件ずつ表示",
+        "captionGroups": "欠陥ごとにまとめた指摘",
+        "captionAll": "すべての指摘",
+        "detailRegion": "指摘の詳細"
       }
     },
     "usage": {

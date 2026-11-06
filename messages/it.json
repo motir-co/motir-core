@@ -10603,6 +10603,7 @@
       "exitToApp": "Torna all’app",
       "navAiPlanning": "Pianificazione con l’AI",
       "navPlanningLessons": "Lezioni di pianificazione",
+      "navPlannerFindings": "Rilievi del pianificatore",
       "navIdeas": "Idee",
       "navRunModels": "Modelli delle esecuzioni ospitate",
       "navFleetSettings": "Impostazioni della flotta",
@@ -10837,6 +10838,9 @@
           "seed_registry": {
             "promote": "Ha promosso un repository a modello iniziale",
             "retire": "Ha ritirato un modello iniziale"
+          },
+          "planner_finding": {
+            "triage": "Ha classificato un rilievo del pianificatore"
           }
         }
       }
@@ -11747,6 +11751,236 @@
         "confirm": "Modifica periodo",
         "saved": "Periodo di ritiro modificato.",
         "savedBody": "I pianificatori usano {days} giorni dal loro prossimo job di pianificazione."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Operazioni · Rilievi del pianificatore",
+      "title": "Rilievi del pianificatore",
+      "subtitle": "Ciò che l’esecuzione di prova del pianificatore ospitato e la skill check plan hanno trovato di sbagliato nei piani, conservato anche dopo che quei piani sono stati chiusi o eliminati. Guarda quali difetti si ripetono, poi indica di chi è stata la colpa, trasforma un rilievo in lezione, registra il bug che hai aperto o ignoralo.",
+      "infoLead": "I rilievi citano i piani dei clienti.",
+      "infoBody": "Solo gli amministratori della piattaforma possono vedere questa pagina, e ogni modifica che fai qui viene scritta nel registro di audit.",
+      "view": {
+        "label": "Vista",
+        "grouped": "Raggruppata",
+        "all": "Tutti i rilievi"
+      },
+      "card": {
+        "title": "Rilievi",
+        "subtitleGrouped": "Una riga per difetto, con quanti rilievi e piani ha toccato, i visti più di recente per primi.",
+        "subtitleAll": "Ogni rilievo conservato, i più recenti per primi."
+      },
+      "filter": {
+        "label": "Filtra i rilievi",
+        "source": "Origine",
+        "sourceAny": "Qualsiasi origine",
+        "planner": "Pianificatore",
+        "plannerAny": "Qualsiasi pianificatore",
+        "outcome": "Esito",
+        "outcomeAny": "Qualsiasi esito",
+        "attribution": "Attribuzione",
+        "attributionAny": "Qualsiasi attribuzione",
+        "state": "Stato di smistamento",
+        "stateDefault": "Non ignorati",
+        "stateAll": "Tutti, ignorati compresi",
+        "apply": "Applica",
+        "count": "{n, plural, one {# filtro} other {# filtri}}",
+        "clearAll": "Cancella tutto",
+        "remove": "Rimuovi {filter}",
+        "sheetButton": "Filtri",
+        "sheetTitle": "Filtra i rilievi",
+        "sheetDone": "Fatto"
+      },
+      "source": {
+        "in_loop": "Revisione ospitata",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Pianificatore ospitato",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Corretto",
+        "reported": "Riportato",
+        "fix_failed": "Correzione non riuscita"
+      },
+      "attribution": {
+        "code": "Codice",
+        "corpus": "Corpus",
+        "model": "Modello",
+        "unattributed": "Non attribuito"
+      },
+      "prediction": {
+        "STOPS": "Un’esecuzione si fermerebbe qui",
+        "SETTLES": "Un’esecuzione lo risolverebbe con una deviazione",
+        "THRU": "Un’esecuzione lo supererebbe comunque"
+      },
+      "status": {
+        "new": "Nuovo",
+        "promoted_to_lesson": "Lezione",
+        "filed_as_bug": "Bug registrato",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Ignorato"
+      },
+      "col": {
+        "defect": "Difetto",
+        "findings": "Rilievi",
+        "plans": "Piani",
+        "lastSeen": "Visto l’ultima volta",
+        "site": "Posizione",
+        "source": "Origine",
+        "planner": "Pianificatore",
+        "outcome": "Esito",
+        "workItem": "Elemento di lavoro",
+        "plan": "Piano",
+        "attribution": "Attribuzione",
+        "state": "Stato",
+        "date": "Data"
+      },
+      "row": {
+        "findings": "{n, plural, one {# rilievo} other {# rilievi}}",
+        "plans": "{n, plural, one {# piano} other {# piani}}",
+        "open": "Apri {site}",
+        "untitledPlan": "Piano senza titolo",
+        "noPlan": "Nessun piano"
+      },
+      "pager": {
+        "label": "Più recenti per primi · {n} per pagina",
+        "page": "Pagina {n}",
+        "previous": "Precedente",
+        "next": "Successiva"
+      },
+      "noMatch": {
+        "title": "Nessun rilievo corrisponde a questi filtri",
+        "body": "I rilievi ignorati sono nascosti a meno che tu non scelga di mostrarli. Rimuovi un filtro o cancellali tutti.",
+        "action": "Cancella i filtri"
+      },
+      "empty": {
+        "title": "Ancora nessun rilievo",
+        "body": "I rilievi compaiono qui dopo che l’esecuzione di prova del pianificatore ospitato ha esaminato un piano, o dopo che qualcuno ha eseguito la skill check plan. Finora non ne è stato conservato nessuno."
+      },
+      "unavailable": {
+        "title": "Impossibile caricare i rilievi",
+        "body": "Il servizio di pianificazione (motir-ai) non ha risposto, quindi non viene mostrato alcun rilievo. È un errore di caricamento: non è cambiato nulla, e non significa che non ci siano rilievi.",
+        "retry": "Riprova"
+      },
+      "loading": {
+        "label": "Caricamento dei rilievi"
+      },
+      "group": {
+        "back": "Rilievi del pianificatore",
+        "title": "Difetto ripetuto",
+        "summary": "{findings, plural, one {# rilievo} other {# rilievi}} in {plans, plural, one {# piano} other {# piani}}",
+        "findingsHeading": "Rilievi di questo gruppo",
+        "empty": "Nessun rilievo di questo gruppo corrisponde ai filtri attuali."
+      },
+      "detail": {
+        "back": "Rilievi del pianificatore",
+        "backToGroup": "Torna al gruppo",
+        "what": "Cosa è successo",
+        "evidence": "Prova",
+        "correction": "Correzione",
+        "fixDirection": "Direzione della correzione",
+        "why": "Perché questa attribuzione",
+        "none": "Nulla di registrato.",
+        "cellsTitle": "Celle del pianificatore interessate",
+        "cellHosted": "Pianificatore ospitato",
+        "cellPlanpy": "plan.py",
+        "noCells": "Nessuna cella del pianificatore è registrata per questo rilievo.",
+        "provenance": "Provenienza",
+        "site": "Posizione",
+        "prediction": "Previsione",
+        "source": "Origine",
+        "planner": "Pianificatore",
+        "outcome": "Esito",
+        "attribution": "Attribuzione",
+        "plan": "Piano",
+        "planId": "ID del piano",
+        "planGone": "Questo piano non esiste più. Il rilievo è conservato.",
+        "workItem": "Elemento di lavoro",
+        "authorModel": "Modello autore",
+        "baseline": "Base del codice",
+        "recorded": "Registrato",
+        "triagedBy": "Ultimo smistamento di {who} · {when}",
+        "lessonLink": "Apri la lezione in Lezioni di pianificazione"
+      },
+      "cost": {
+        "title": "Costo di revisione e riparazione",
+        "made": "Rilievi prodotti",
+        "fixed": "Rilievi corretti",
+        "review": "Revisione",
+        "repair": "Riparazione",
+        "amount": "{amount}",
+        "tokens": "{input} token in ingresso · {output} token in uscita",
+        "sessions": "{n, plural, one {# sessione} other {# sessioni}}",
+        "unpriced": "Costo sconosciuto: un modello di questa riga non ha prezzo",
+        "notMetered": "Non misurato",
+        "notMeteredBody": "Questo rilievo viene da un’esecuzione di check plan, che non ha un job di pianificazione né righe di utilizzo."
+      },
+      "triage": {
+        "title": "Smistamento",
+        "groupScope": "Si applica a {count, plural, one {# rilievo aperto} other {# rilievi aperti}} di questo gruppo, ciascuno registrato separatamente.",
+        "cancel": "Annulla",
+        "saving": "Salvataggio…",
+        "retry": "Riprova"
+      },
+      "attr": {
+        "open": "Imposta l’attribuzione",
+        "label": "Attribuzione",
+        "hint": "Di chi è stata la colpa: il codice del pianificatore, il suo corpus di regole, il modello di pianificazione, o non si sa.",
+        "save": "Salva l’attribuzione",
+        "saved": "Attribuzione impostata su {attribution}.",
+        "regroupNote": "Cambiare l’attribuzione può spostare questo rilievo in un altro gruppo."
+      },
+      "promote": {
+        "open": "Trasforma in lezione",
+        "title": "Trasforma questo rilievo in lezione",
+        "intro": "Il modulo è precompilato dal rilievo. Modificalo prima di creare la lezione.",
+        "fieldTitle": "Titolo",
+        "fieldWhy": "Perché è importante",
+        "fieldHow": "Come applicarla",
+        "fieldType": "Tipo",
+        "blank": "Questo campo non può essere vuoto.",
+        "review": "Rivedi la lezione",
+        "confirmTitle": "Creare questa lezione?",
+        "confirmBody": "La lezione viene creata nel progetto di questo rilievo, e il pianificatore di quel progetto la legge dal suo prossimo job di pianificazione. Per renderla globale, promuovila poi da Lezioni di pianificazione.",
+        "confirm": "Crea la lezione",
+        "saved": "Lezione creata e collegata a questo rilievo.",
+        "duplicate": "Esiste già una lezione simile. Aprila in Lezioni di pianificazione invece di crearne una seconda."
+      },
+      "bug": {
+        "open": "Registra la chiave del bug",
+        "label": "Chiave del bug di pianificazione",
+        "hint": "La chiave del bug di pianificazione che hai aperto a mano. Da questa pagina non viene aperto nulla.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Inserisci una chiave come MOTIR-123.",
+        "save": "Registra la chiave",
+        "saved": "Bug {key} registrato."
+      },
+      "dismiss": {
+        "open": "Ignora",
+        "title": "Ignorare questo rilievo?",
+        "body": "Esce dall’elenco predefinito e resta tra gli ignorati. Puoi ripristinarlo in qualsiasi momento.",
+        "reasonLabel": "Motivo (facoltativo, scritto nel registro di audit)",
+        "reasonPlaceholder": "Perché non vale la pena intervenire?",
+        "confirm": "Ignora",
+        "saved": "Rilievo ignorato.",
+        "restore": "Ripristina",
+        "restored": "Rilievo ripristinato."
+      },
+      "refused": {
+        "failed": "Non salvato: qualcosa è andato storto. Non è stato scritto nulla. I dati inseriti sono conservati; riprova.",
+        "unavailable": "Non salvato: il servizio di pianificazione non ha risposto. Non è stato scritto nulla e non esiste alcuna riga di audit. I dati inseriti sono conservati; riprova.",
+        "notPermitted": "Non salvato: solo un amministratore della piattaforma può smistare i rilievi.",
+        "gone": "Non salvato: questo rilievo non esiste più. Non è stato scritto nulla.",
+        "invalid": "Non salvato: il servizio di pianificazione ha rifiutato questa modifica.",
+        "lessonNotLinked": "La lezione è stata creata, ma questo rilievo non è riuscito a registrarla. Cercala in Lezioni di pianificazione e non crearla di nuovo."
+      },
+      "noop": "Già aggiornato. Qualcuno ha appena modificato questo rilievo, quindi non c’era nulla da cambiare e non è stato registrato nulla.",
+      "a11y": {
+        "viewGroup": "Mostra i rilievi raggruppati per difetto o uno per uno",
+        "captionGroups": "Rilievi raggruppati per difetto",
+        "captionAll": "Tutti i rilievi",
+        "detailRegion": "Dettaglio del rilievo"
       }
     },
     "usage": {

@@ -10594,6 +10594,7 @@
       "exitToApp": "返回应用",
       "navAiPlanning": "AI 规划",
       "navPlanningLessons": "规划经验",
+      "navPlannerFindings": "规划器发现",
       "navIdeas": "创意",
       "navRunModels": "托管运行模型",
       "navFleetSettings": "集群设置",
@@ -10828,6 +10829,9 @@
           "seed_registry": {
             "promote": "将一个仓库提升为起始模板",
             "retire": "下架了一个起始模板"
+          },
+          "planner_finding": {
+            "triage": "已分诊一条规划器发现"
           }
         }
       }
@@ -11738,6 +11742,236 @@
         "confirm": "更改窗口",
         "saved": "休眠窗口已更改。",
         "savedBody": "规划器将从下一次规划任务起使用 {days} 天。"
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "运营 · 规划器发现",
+      "title": "规划器发现",
+      "subtitle": "托管规划器的试运行和 check plan 技能在计划中发现的错误，在这些计划关闭或删除后仍会保留。查看哪些错误反复出现，然后设定每条是谁的责任、将其提升为经验、记录已提交的缺陷，或将其忽略。",
+      "infoLead": "发现会引用客户的计划。",
+      "infoBody": "只有平台管理员可以查看此页面，在此所做的每项更改都会写入审计日志。",
+      "view": {
+        "label": "视图",
+        "grouped": "分组",
+        "all": "全部发现"
+      },
+      "card": {
+        "title": "发现",
+        "subtitleGrouped": "每个错误一行，显示涉及的发现数和计划数，最近出现的排在前面。",
+        "subtitleAll": "保留的每条发现，最新的排在前面。"
+      },
+      "filter": {
+        "label": "筛选发现",
+        "source": "来源",
+        "sourceAny": "任意来源",
+        "planner": "规划器",
+        "plannerAny": "任意规划器",
+        "outcome": "结果",
+        "outcomeAny": "任意结果",
+        "attribution": "归因",
+        "attributionAny": "任意归因",
+        "state": "分诊状态",
+        "stateDefault": "未忽略",
+        "stateAll": "全部（含已忽略）",
+        "apply": "应用",
+        "count": "{n, plural, other {#}} 个筛选条件",
+        "clearAll": "全部清除",
+        "remove": "移除 {filter}",
+        "sheetButton": "筛选",
+        "sheetTitle": "筛选发现",
+        "sheetDone": "完成"
+      },
+      "source": {
+        "in_loop": "托管审查",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "托管规划器",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "已修复",
+        "reported": "已报告",
+        "fix_failed": "修复失败"
+      },
+      "attribution": {
+        "code": "代码",
+        "corpus": "语料",
+        "model": "模型",
+        "unattributed": "未归因"
+      },
+      "prediction": {
+        "STOPS": "运行会在此停止",
+        "SETTLES": "运行会以偏差记录了结",
+        "THRU": "运行会照常构建通过"
+      },
+      "status": {
+        "new": "新",
+        "promoted_to_lesson": "经验",
+        "filed_as_bug": "已记录缺陷",
+        "bugWithKey": "缺陷 {key}",
+        "dismissed": "已忽略"
+      },
+      "col": {
+        "defect": "错误",
+        "findings": "发现",
+        "plans": "计划",
+        "lastSeen": "最近出现",
+        "site": "位置",
+        "source": "来源",
+        "planner": "规划器",
+        "outcome": "结果",
+        "workItem": "工作项",
+        "plan": "计划",
+        "attribution": "归因",
+        "state": "状态",
+        "date": "日期"
+      },
+      "row": {
+        "findings": "{n, plural, other {# 条发现}}",
+        "plans": "{n, plural, other {# 个计划}}",
+        "open": "打开 {site}",
+        "untitledPlan": "未命名计划",
+        "noPlan": "无计划"
+      },
+      "pager": {
+        "label": "最新在前 · 每页 {n} 条",
+        "page": "第 {n} 页",
+        "previous": "上一页",
+        "next": "下一页"
+      },
+      "noMatch": {
+        "title": "没有符合这些筛选条件的发现",
+        "body": "已忽略的发现默认隐藏，除非选择显示它们。请移除一个筛选条件，或全部清除。",
+        "action": "清除筛选条件"
+      },
+      "empty": {
+        "title": "暂无发现",
+        "body": "托管规划器的试运行审查计划后，或有人运行 check plan 技能后，发现会显示在这里。目前还没有保留任何发现。"
+      },
+      "unavailable": {
+        "title": "无法加载发现",
+        "body": "规划服务（motir-ai）没有响应，因此不显示任何发现。这是加载错误——没有任何更改，也不表示没有发现。",
+        "retry": "重试"
+      },
+      "loading": {
+        "label": "正在加载发现"
+      },
+      "group": {
+        "back": "规划器发现",
+        "title": "重复出现的错误",
+        "summary": "{findings, plural, other {# 条发现}}，涉及 {plans, plural, other {# 个计划}}",
+        "findingsHeading": "此组中的发现",
+        "empty": "此组中没有符合当前筛选条件的发现。"
+      },
+      "detail": {
+        "back": "规划器发现",
+        "backToGroup": "返回该组",
+        "what": "发生了什么",
+        "evidence": "证据",
+        "correction": "更正",
+        "fixDirection": "修复方向",
+        "why": "为何如此归因",
+        "none": "未记录。",
+        "cellsTitle": "受影响的规划器单元",
+        "cellHosted": "托管规划器",
+        "cellPlanpy": "plan.py",
+        "noCells": "此发现未记录任何规划器单元。",
+        "provenance": "出处",
+        "site": "位置",
+        "prediction": "预测",
+        "source": "来源",
+        "planner": "规划器",
+        "outcome": "结果",
+        "attribution": "归因",
+        "plan": "计划",
+        "planId": "计划 ID",
+        "planGone": "此计划已不存在。该发现仍会保留。",
+        "workItem": "工作项",
+        "authorModel": "作者模型",
+        "baseline": "代码基线",
+        "recorded": "记录时间",
+        "triagedBy": "最近分诊：{who} · {when}",
+        "lessonLink": "在规划经验中打开该经验"
+      },
+      "cost": {
+        "title": "审查与修复成本",
+        "made": "产生的发现",
+        "fixed": "已修复的发现",
+        "review": "审查",
+        "repair": "修复",
+        "amount": "{amount}",
+        "tokens": "输入 {input} 个令牌 · 输出 {output} 个令牌",
+        "sessions": "{n, plural, other {# 次会话}}",
+        "unpriced": "成本未知——此行有模型没有定价",
+        "notMetered": "未计量",
+        "notMeteredBody": "此发现来自 check plan 运行，没有规划作业，也没有用量行。"
+      },
+      "triage": {
+        "title": "分诊",
+        "groupScope": "适用于此组中的 {count, plural, other {# 条未处理的发现}}，每条单独记录。",
+        "cancel": "取消",
+        "saving": "正在保存…",
+        "retry": "再试一次"
+      },
+      "attr": {
+        "open": "设置归因",
+        "label": "归因",
+        "hint": "是谁的责任：规划器的代码、其规则语料、规划模型，或未知。",
+        "save": "保存归因",
+        "saved": "归因已设为 {attribution}。",
+        "regroupNote": "更改归因可能会将此发现移到另一个组。"
+      },
+      "promote": {
+        "open": "提升为经验",
+        "title": "将此发现提升为经验",
+        "intro": "表单已根据该发现预先填写。创建经验前请先编辑。",
+        "fieldTitle": "标题",
+        "fieldWhy": "为何重要",
+        "fieldHow": "如何应用",
+        "fieldType": "类型",
+        "blank": "此字段不能为空。",
+        "review": "检查经验",
+        "confirmTitle": "创建此经验？",
+        "confirmBody": "经验会创建在此发现所属的项目中，该项目的规划器从下一个规划作业起读取它。如需设为全局，请之后在规划经验中提升。",
+        "confirm": "创建经验",
+        "saved": "已创建经验并关联到此发现。",
+        "duplicate": "已存在类似的经验。请在规划经验中打开它，而不要再创建一个。"
+      },
+      "bug": {
+        "open": "记录缺陷编号",
+        "label": "规划缺陷编号",
+        "hint": "你手动提交的规划缺陷的编号。此页面不会提交任何内容。",
+        "placeholder": "MOTIR-123",
+        "invalid": "请输入类似 MOTIR-123 的编号。",
+        "save": "记录编号",
+        "saved": "已记录缺陷 {key}。"
+      },
+      "dismiss": {
+        "open": "忽略",
+        "title": "忽略此发现？",
+        "body": "它会离开默认列表并保留在“已忽略”下。你可以随时恢复它。",
+        "reasonLabel": "原因（可选，会写入审计日志）",
+        "reasonPlaceholder": "为什么不值得处理？",
+        "confirm": "忽略",
+        "saved": "已忽略该发现。",
+        "restore": "恢复",
+        "restored": "已恢复该发现。"
+      },
+      "refused": {
+        "failed": "未保存——出错了。未写入任何内容。你的输入已保留，请重试。",
+        "unavailable": "未保存——规划服务没有响应。未写入任何内容，也不存在审计记录。你的输入已保留，请重试。",
+        "notPermitted": "未保存——只有平台管理员可以分诊发现。",
+        "gone": "未保存——此发现已不存在。未写入任何内容。",
+        "invalid": "未保存——规划服务拒绝了此更改。",
+        "lessonNotLinked": "经验已创建，但此发现未能记录它。请在规划经验中找到它，不要再次创建。"
+      },
+      "noop": "已是最新。有人刚刚更改了此发现，因此没有需要更改的内容，也没有记录任何内容。",
+      "a11y": {
+        "viewGroup": "按错误分组或逐条显示发现",
+        "captionGroups": "按错误分组的发现",
+        "captionAll": "全部发现",
+        "detailRegion": "发现详情"
       }
     },
     "usage": {

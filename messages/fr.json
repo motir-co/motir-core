@@ -10603,6 +10603,7 @@
       "exitToApp": "Retour à l'application",
       "navAiPlanning": "Planification par IA",
       "navPlanningLessons": "Leçons de planification",
+      "navPlannerFindings": "Constats du planificateur",
       "navIdeas": "Idées",
       "navRunModels": "Modèles des exécutions hébergées",
       "navFleetSettings": "Paramètres de la flotte",
@@ -10837,6 +10838,9 @@
           "seed_registry": {
             "promote": "A promu un dépôt en modèle de départ",
             "retire": "A retiré un modèle de départ"
+          },
+          "planner_finding": {
+            "triage": "A trié un constat du planificateur"
           }
         }
       }
@@ -11747,6 +11751,236 @@
         "confirm": "Modifier la fenêtre",
         "saved": "Fenêtre de retrait modifiée.",
         "savedBody": "Les planificateurs utilisent {days} jours à partir de leur prochaine tâche de planification."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Opérations · Constats du planificateur",
+      "title": "Constats du planificateur",
+      "subtitle": "Ce que l’exécution à blanc du planificateur hébergé et la skill check plan ont trouvé d’erroné dans les plans, conservé après la fermeture ou la suppression de ces plans. Voyez quels défauts se répètent, puis indiquez à qui revient chaque faute, transformez-en un en leçon, enregistrez le bug que vous avez créé ou ignorez-le.",
+      "infoLead": "Les constats citent les plans des clients.",
+      "infoBody": "Seuls les administrateurs de la plateforme peuvent voir cette page, et chaque modification que vous faites ici est écrite dans le journal d’audit.",
+      "view": {
+        "label": "Vue",
+        "grouped": "Groupée",
+        "all": "Tous les constats"
+      },
+      "card": {
+        "title": "Constats",
+        "subtitleGrouped": "Une ligne par défaut, avec le nombre de constats et de plans concernés, les plus récemment vus d’abord.",
+        "subtitleAll": "Chaque constat conservé, les plus récents d’abord."
+      },
+      "filter": {
+        "label": "Filtrer les constats",
+        "source": "Source",
+        "sourceAny": "Toute source",
+        "planner": "Planificateur",
+        "plannerAny": "Tout planificateur",
+        "outcome": "Résultat",
+        "outcomeAny": "Tout résultat",
+        "attribution": "Attribution",
+        "attributionAny": "Toute attribution",
+        "state": "État du tri",
+        "stateDefault": "Non ignorés",
+        "stateAll": "Tous, ignorés compris",
+        "apply": "Appliquer",
+        "count": "{n, plural, one {# filtre} other {# filtres}}",
+        "clearAll": "Tout effacer",
+        "remove": "Retirer {filter}",
+        "sheetButton": "Filtres",
+        "sheetTitle": "Filtrer les constats",
+        "sheetDone": "Terminé"
+      },
+      "source": {
+        "in_loop": "Revue hébergée",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Planificateur hébergé",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Corrigé",
+        "reported": "Signalé",
+        "fix_failed": "Échec de la correction"
+      },
+      "attribution": {
+        "code": "Code",
+        "corpus": "Corpus",
+        "model": "Modèle",
+        "unattributed": "Non attribué"
+      },
+      "prediction": {
+        "STOPS": "Une exécution s’arrêterait ici",
+        "SETTLES": "Une exécution le réglerait avec un écart",
+        "THRU": "Une exécution passerait outre"
+      },
+      "status": {
+        "new": "Nouveau",
+        "promoted_to_lesson": "Leçon",
+        "filed_as_bug": "Bug enregistré",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Ignoré"
+      },
+      "col": {
+        "defect": "Défaut",
+        "findings": "Constats",
+        "plans": "Plans",
+        "lastSeen": "Vu pour la dernière fois",
+        "site": "Emplacement",
+        "source": "Source",
+        "planner": "Planificateur",
+        "outcome": "Résultat",
+        "workItem": "Élément de travail",
+        "plan": "Plan",
+        "attribution": "Attribution",
+        "state": "État",
+        "date": "Date"
+      },
+      "row": {
+        "findings": "{n, plural, one {# constat} other {# constats}}",
+        "plans": "{n, plural, one {# plan} other {# plans}}",
+        "open": "Ouvrir {site}",
+        "untitledPlan": "Plan sans titre",
+        "noPlan": "Aucun plan"
+      },
+      "pager": {
+        "label": "Les plus récents d’abord · {n} par page",
+        "page": "Page {n}",
+        "previous": "Précédent",
+        "next": "Suivant"
+      },
+      "noMatch": {
+        "title": "Aucun constat ne correspond à ces filtres",
+        "body": "Les constats ignorés sont masqués sauf si vous choisissez de les afficher. Retirez un filtre ou effacez-les tous.",
+        "action": "Effacer les filtres"
+      },
+      "empty": {
+        "title": "Aucun constat pour l’instant",
+        "body": "Les constats apparaissent ici après que l’exécution à blanc du planificateur hébergé a examiné un plan, ou après que quelqu’un a lancé la skill check plan. Aucun n’a encore été conservé."
+      },
+      "unavailable": {
+        "title": "Impossible de charger les constats",
+        "body": "Le service de planification (motir-ai) n’a pas répondu, aucun constat n’est donc affiché. C’est une erreur de chargement : rien n’a changé, et cela ne signifie pas qu’il n’y a aucun constat.",
+        "retry": "Réessayer"
+      },
+      "loading": {
+        "label": "Chargement des constats"
+      },
+      "group": {
+        "back": "Constats du planificateur",
+        "title": "Défaut répété",
+        "summary": "{findings, plural, one {# constat} other {# constats}} dans {plans, plural, one {# plan} other {# plans}}",
+        "findingsHeading": "Constats de ce groupe",
+        "empty": "Aucun constat de ce groupe ne correspond aux filtres actuels."
+      },
+      "detail": {
+        "back": "Constats du planificateur",
+        "backToGroup": "Retour au groupe",
+        "what": "Ce qui s’est passé",
+        "evidence": "Preuve",
+        "correction": "Correction",
+        "fixDirection": "Piste de correction",
+        "why": "Pourquoi cette attribution",
+        "none": "Rien d’enregistré.",
+        "cellsTitle": "Cellules du planificateur concernées",
+        "cellHosted": "Planificateur hébergé",
+        "cellPlanpy": "plan.py",
+        "noCells": "Aucune cellule du planificateur n’est enregistrée pour ce constat.",
+        "provenance": "Provenance",
+        "site": "Emplacement",
+        "prediction": "Prédiction",
+        "source": "Source",
+        "planner": "Planificateur",
+        "outcome": "Résultat",
+        "attribution": "Attribution",
+        "plan": "Plan",
+        "planId": "ID du plan",
+        "planGone": "Ce plan n’existe plus. Le constat est conservé.",
+        "workItem": "Élément de travail",
+        "authorModel": "Modèle auteur",
+        "baseline": "Base de code",
+        "recorded": "Enregistré",
+        "triagedBy": "Dernier tri par {who} · {when}",
+        "lessonLink": "Ouvrir la leçon dans Leçons de planification"
+      },
+      "cost": {
+        "title": "Coût de revue et de réparation",
+        "made": "Constats produits",
+        "fixed": "Constats corrigés",
+        "review": "Revue",
+        "repair": "Réparation",
+        "amount": "{amount}",
+        "tokens": "{input} jetons en entrée · {output} jetons en sortie",
+        "sessions": "{n, plural, one {# session} other {# sessions}}",
+        "unpriced": "Coût inconnu — un modèle de cette ligne n’a pas de prix",
+        "notMetered": "Non mesuré",
+        "notMeteredBody": "Ce constat provient d’une exécution de check plan, qui n’a ni tâche de planification ni lignes d’utilisation."
+      },
+      "triage": {
+        "title": "Tri",
+        "groupScope": "S’applique à {count, plural, one {# constat ouvert} other {# constats ouverts}} de ce groupe, chacun enregistré séparément.",
+        "cancel": "Annuler",
+        "saving": "Enregistrement…",
+        "retry": "Réessayer"
+      },
+      "attr": {
+        "open": "Définir l’attribution",
+        "label": "Attribution",
+        "hint": "À qui revient la faute : le code du planificateur, son corpus de règles, le modèle de planification, ou inconnu.",
+        "save": "Enregistrer l’attribution",
+        "saved": "Attribution définie sur {attribution}.",
+        "regroupNote": "Changer l’attribution peut déplacer ce constat dans un autre groupe."
+      },
+      "promote": {
+        "open": "Transformer en leçon",
+        "title": "Transformer ce constat en leçon",
+        "intro": "Le formulaire est prérempli à partir du constat. Modifiez-le avant de créer la leçon.",
+        "fieldTitle": "Titre",
+        "fieldWhy": "Pourquoi c’est important",
+        "fieldHow": "Comment l’appliquer",
+        "fieldType": "Type",
+        "blank": "Ce champ ne peut pas être vide.",
+        "review": "Vérifier la leçon",
+        "confirmTitle": "Créer cette leçon ?",
+        "confirmBody": "La leçon est créée dans le projet de ce constat, et le planificateur de ce projet la lit dès sa prochaine tâche de planification. Pour la rendre globale, promouvez-la ensuite depuis Leçons de planification.",
+        "confirm": "Créer la leçon",
+        "saved": "Leçon créée et liée à ce constat.",
+        "duplicate": "Une leçon similaire existe déjà. Ouvrez-la dans Leçons de planification au lieu d’en créer une deuxième."
+      },
+      "bug": {
+        "open": "Enregistrer la clé du bug",
+        "label": "Clé du bug de planification",
+        "hint": "La clé du bug de planification que vous avez créé à la main. Rien n’est créé depuis cette page.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Saisissez une clé comme MOTIR-123.",
+        "save": "Enregistrer la clé",
+        "saved": "Bug {key} enregistré."
+      },
+      "dismiss": {
+        "open": "Ignorer",
+        "title": "Ignorer ce constat ?",
+        "body": "Il quitte la liste par défaut et reste sous Ignorés. Vous pouvez le restaurer à tout moment.",
+        "reasonLabel": "Motif (facultatif, écrit dans le journal d’audit)",
+        "reasonPlaceholder": "Pourquoi ne vaut-il pas la peine d’agir ?",
+        "confirm": "Ignorer",
+        "saved": "Constat ignoré.",
+        "restore": "Restaurer",
+        "restored": "Constat restauré."
+      },
+      "refused": {
+        "failed": "Non enregistré — une erreur s’est produite. Rien n’a été écrit. Vos saisies sont conservées ; réessayez.",
+        "unavailable": "Non enregistré — le service de planification n’a pas répondu. Rien n’a été écrit et aucune ligne d’audit n’existe. Vos saisies sont conservées ; réessayez.",
+        "notPermitted": "Non enregistré — seul un administrateur de la plateforme peut trier les constats.",
+        "gone": "Non enregistré — ce constat n’existe plus. Rien n’a été écrit.",
+        "invalid": "Non enregistré — le service de planification a refusé cette modification.",
+        "lessonNotLinked": "La leçon a été créée, mais ce constat n’a pas pu l’enregistrer. Retrouvez-la dans Leçons de planification et ne la créez pas une seconde fois."
+      },
+      "noop": "Déjà à jour. Quelqu’un a modifié ce constat à l’instant, il n’y avait donc rien à changer et rien n’a été journalisé.",
+      "a11y": {
+        "viewGroup": "Afficher les constats groupés par défaut ou un par un",
+        "captionGroups": "Constats groupés par défaut",
+        "captionAll": "Tous les constats",
+        "detailRegion": "Détail du constat"
       }
     },
     "usage": {

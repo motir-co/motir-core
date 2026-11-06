@@ -10603,6 +10603,7 @@
       "exitToApp": "Sair para o app",
       "navAiPlanning": "Planejamento com IA",
       "navPlanningLessons": "Lições de planejamento",
+      "navPlannerFindings": "Achados do planejador",
       "navIdeas": "Ideias",
       "navRunModels": "Modelos de execução hospedada",
       "navFleetSettings": "Configurações da frota",
@@ -10837,6 +10838,9 @@
           "seed_registry": {
             "promote": "Promoveu um repositório a modelo inicial",
             "retire": "Retirou um modelo inicial"
+          },
+          "planner_finding": {
+            "triage": "Fez a triagem de um achado do planejador"
           }
         }
       }
@@ -11747,6 +11751,236 @@
         "confirm": "Alterar prazo",
         "saved": "Prazo de aposentadoria alterado.",
         "savedBody": "Os planejadores usam {days} dias a partir do próximo job de planejamento."
+      }
+    },
+    "plannerFindings": {
+      "breadcrumb": "Operações · Achados do planejador",
+      "title": "Achados do planejador",
+      "subtitle": "O que a execução de teste do planejador hospedado e a skill check plan encontraram de errado nos planos, mantido depois que esses planos são fechados ou excluídos. Veja quais defeitos se repetem e depois defina de quem foi a culpa, transforme um achado em lição, registre o bug que você abriu ou dispense-o.",
+      "infoLead": "Os achados citam planos de clientes.",
+      "infoBody": "Somente administradores da plataforma podem ver esta página, e cada alteração feita aqui é gravada no log de auditoria.",
+      "view": {
+        "label": "Visualização",
+        "grouped": "Agrupada",
+        "all": "Todos os achados"
+      },
+      "card": {
+        "title": "Achados",
+        "subtitleGrouped": "Uma linha por defeito, com quantos achados e planos ele atingiu, os vistos mais recentemente primeiro.",
+        "subtitleAll": "Todos os achados mantidos, os mais recentes primeiro."
+      },
+      "filter": {
+        "label": "Filtrar achados",
+        "source": "Origem",
+        "sourceAny": "Qualquer origem",
+        "planner": "Planejador",
+        "plannerAny": "Qualquer planejador",
+        "outcome": "Resultado",
+        "outcomeAny": "Qualquer resultado",
+        "attribution": "Atribuição",
+        "attributionAny": "Qualquer atribuição",
+        "state": "Estado da triagem",
+        "stateDefault": "Não dispensados",
+        "stateAll": "Todos, incluindo os dispensados",
+        "apply": "Aplicar",
+        "count": "{n, plural, one {# filtro} other {# filtros}}",
+        "clearAll": "Limpar tudo",
+        "remove": "Remover {filter}",
+        "sheetButton": "Filtros",
+        "sheetTitle": "Filtrar achados",
+        "sheetDone": "Concluído"
+      },
+      "source": {
+        "in_loop": "Revisão hospedada",
+        "check_plan": "Check plan"
+      },
+      "planner": {
+        "hosted": "Planejador hospedado",
+        "plan_py": "plan.py"
+      },
+      "outcome": {
+        "fixed": "Corrigido",
+        "reported": "Relatado",
+        "fix_failed": "Falha na correção"
+      },
+      "attribution": {
+        "code": "Código",
+        "corpus": "Corpus",
+        "model": "Modelo",
+        "unattributed": "Sem atribuição"
+      },
+      "prediction": {
+        "STOPS": "Uma execução pararia aqui",
+        "SETTLES": "Uma execução resolveria com um desvio",
+        "THRU": "Uma execução seguiria adiante mesmo assim"
+      },
+      "status": {
+        "new": "Novo",
+        "promoted_to_lesson": "Lição",
+        "filed_as_bug": "Bug registrado",
+        "bugWithKey": "Bug {key}",
+        "dismissed": "Dispensado"
+      },
+      "col": {
+        "defect": "Defeito",
+        "findings": "Achados",
+        "plans": "Planos",
+        "lastSeen": "Visto por último",
+        "site": "Local",
+        "source": "Origem",
+        "planner": "Planejador",
+        "outcome": "Resultado",
+        "workItem": "Item de trabalho",
+        "plan": "Plano",
+        "attribution": "Atribuição",
+        "state": "Estado",
+        "date": "Data"
+      },
+      "row": {
+        "findings": "{n, plural, one {# achado} other {# achados}}",
+        "plans": "{n, plural, one {# plano} other {# planos}}",
+        "open": "Abrir {site}",
+        "untitledPlan": "Plano sem título",
+        "noPlan": "Sem plano"
+      },
+      "pager": {
+        "label": "Mais recentes primeiro · {n} por página",
+        "page": "Página {n}",
+        "previous": "Anterior",
+        "next": "Próxima"
+      },
+      "noMatch": {
+        "title": "Nenhum achado corresponde a estes filtros",
+        "body": "Os achados dispensados ficam ocultos, a menos que você peça para vê-los. Remova um filtro ou limpe todos.",
+        "action": "Limpar filtros"
+      },
+      "empty": {
+        "title": "Nenhum achado ainda",
+        "body": "Os achados aparecem aqui depois que a execução de teste do planejador hospedado revisa um plano, ou depois que alguém executa a skill check plan. Nenhum foi mantido ainda."
+      },
+      "unavailable": {
+        "title": "Não foi possível carregar os achados",
+        "body": "O serviço de planejamento (motir-ai) não respondeu, então nenhum achado é mostrado. É um erro de carregamento: nada mudou, e isso não significa que não haja achados.",
+        "retry": "Tentar novamente"
+      },
+      "loading": {
+        "label": "Carregando achados"
+      },
+      "group": {
+        "back": "Achados do planejador",
+        "title": "Defeito repetido",
+        "summary": "{findings, plural, one {# achado} other {# achados}} em {plans, plural, one {# plano} other {# planos}}",
+        "findingsHeading": "Achados deste grupo",
+        "empty": "Nenhum achado deste grupo corresponde aos filtros atuais."
+      },
+      "detail": {
+        "back": "Achados do planejador",
+        "backToGroup": "Voltar ao grupo",
+        "what": "O que aconteceu",
+        "evidence": "Evidência",
+        "correction": "Correção",
+        "fixDirection": "Direção da correção",
+        "why": "Por que esta atribuição",
+        "none": "Nada registrado.",
+        "cellsTitle": "Células do planejador afetadas",
+        "cellHosted": "Planejador hospedado",
+        "cellPlanpy": "plan.py",
+        "noCells": "Nenhuma célula do planejador está registrada para este achado.",
+        "provenance": "Procedência",
+        "site": "Local",
+        "prediction": "Previsão",
+        "source": "Origem",
+        "planner": "Planejador",
+        "outcome": "Resultado",
+        "attribution": "Atribuição",
+        "plan": "Plano",
+        "planId": "ID do plano",
+        "planGone": "Este plano não existe mais. O achado é mantido.",
+        "workItem": "Item de trabalho",
+        "authorModel": "Modelo autor",
+        "baseline": "Base do código",
+        "recorded": "Registrado",
+        "triagedBy": "Última triagem por {who} · {when}",
+        "lessonLink": "Abrir a lição em Lições de planejamento"
+      },
+      "cost": {
+        "title": "Custo de revisão e reparo",
+        "made": "Achados gerados",
+        "fixed": "Achados corrigidos",
+        "review": "Revisão",
+        "repair": "Reparo",
+        "amount": "{amount}",
+        "tokens": "{input} tokens de entrada · {output} tokens de saída",
+        "sessions": "{n, plural, one {# sessão} other {# sessões}}",
+        "unpriced": "Custo desconhecido — um modelo nesta linha não tem preço",
+        "notMetered": "Não medido",
+        "notMeteredBody": "Este achado veio de uma execução de check plan, que não tem job de planejamento nem linhas de uso."
+      },
+      "triage": {
+        "title": "Triagem",
+        "groupScope": "Aplica-se a {count, plural, one {# achado aberto} other {# achados abertos}} neste grupo, cada um registrado separadamente.",
+        "cancel": "Cancelar",
+        "saving": "Salvando…",
+        "retry": "Tentar novamente"
+      },
+      "attr": {
+        "open": "Definir atribuição",
+        "label": "Atribuição",
+        "hint": "De quem foi a culpa: o código do planejador, seu corpus de regras, o modelo de planejamento, ou não se sabe.",
+        "save": "Salvar atribuição",
+        "saved": "Atribuição definida como {attribution}.",
+        "regroupNote": "Mudar a atribuição pode mover este achado para outro grupo."
+      },
+      "promote": {
+        "open": "Transformar em lição",
+        "title": "Transformar este achado em lição",
+        "intro": "O formulário é preenchido a partir do achado. Edite-o antes de criar a lição.",
+        "fieldTitle": "Título",
+        "fieldWhy": "Por que importa",
+        "fieldHow": "Como aplicar",
+        "fieldType": "Tipo",
+        "blank": "Este campo não pode ficar em branco.",
+        "review": "Revisar lição",
+        "confirmTitle": "Criar esta lição?",
+        "confirmBody": "A lição é criada no projeto deste achado, e o planejador desse projeto passa a lê-la a partir do próximo job de planejamento. Para torná-la global, promova-a depois em Lições de planejamento.",
+        "confirm": "Criar lição",
+        "saved": "Lição criada e vinculada a este achado.",
+        "duplicate": "Já existe uma lição parecida. Abra-a em Lições de planejamento em vez de criar uma segunda."
+      },
+      "bug": {
+        "open": "Registrar chave do bug",
+        "label": "Chave do bug de planejamento",
+        "hint": "A chave do bug de planejamento que você abriu manualmente. Nada é aberto a partir desta página.",
+        "placeholder": "MOTIR-123",
+        "invalid": "Informe uma chave como MOTIR-123.",
+        "save": "Registrar chave",
+        "saved": "Bug {key} registrado."
+      },
+      "dismiss": {
+        "open": "Dispensar",
+        "title": "Dispensar este achado?",
+        "body": "Ele sai da lista padrão e fica em Dispensados. Você pode restaurá-lo a qualquer momento.",
+        "reasonLabel": "Motivo (opcional, gravado no log de auditoria)",
+        "reasonPlaceholder": "Por que não vale a pena agir?",
+        "confirm": "Dispensar",
+        "saved": "Achado dispensado.",
+        "restore": "Restaurar",
+        "restored": "Achado restaurado."
+      },
+      "refused": {
+        "failed": "Não salvo — algo deu errado. Nada foi gravado. Seus dados foram mantidos; tente novamente.",
+        "unavailable": "Não salvo — o serviço de planejamento não respondeu. Nada foi gravado e não existe linha de auditoria. Seus dados foram mantidos; tente novamente.",
+        "notPermitted": "Não salvo — somente um administrador da plataforma pode fazer a triagem de achados.",
+        "gone": "Não salvo — este achado não existe mais. Nada foi gravado.",
+        "invalid": "Não salvo — o serviço de planejamento recusou esta alteração.",
+        "lessonNotLinked": "A lição foi criada, mas este achado não conseguiu registrá-la. Encontre-a em Lições de planejamento e não a crie de novo."
+      },
+      "noop": "Já está atualizado. Alguém alterou este achado agora há pouco, então não havia nada a mudar e nada foi registrado.",
+      "a11y": {
+        "viewGroup": "Mostrar achados agrupados por defeito ou um a um",
+        "captionGroups": "Achados agrupados por defeito",
+        "captionAll": "Todos os achados",
+        "detailRegion": "Detalhe do achado"
       }
     },
     "usage": {
