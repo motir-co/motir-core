@@ -98,6 +98,10 @@ const NOT_A_CARD_FIELD: Readonly<Record<string, string>> = {
     'MOTIR-8743 — the language each text field was WRITTEN in, a statement ABOUT the ' +
     'title / bodies / steps beside it. Approve records it on their language columns; the ' +
     'story adds no review surface for it (it detects and translates nothing).',
+  authorFinished:
+    'MOTIR-10490 — whether an AUTHOR SESSION finished writing the card: planner state ' +
+    'ABOUT the card, set by a driver or by the hand-written stamp. Approve carries nothing ' +
+    'of it to the work item, so there is nothing for a reviewer to decide on.',
 };
 
 describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {

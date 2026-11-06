@@ -4746,11 +4746,11 @@ applies each `modify` in sequence. Three things upstream do:
 forbids the strategy Motir's own generator uses, so this tool is the other half —
 **write the tree's SHAPE first, then fill each card in.**
 
-| Input                                                                                                                                      | Type   | Required | Notes                                                       |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ------ | -------- | ----------------------------------------------------------- |
-| `planId`                                                                                                                                   | string | yes      | The id `create_plan` returned.                              |
-| `planItemId`                                                                                                                               | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
-| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes`, `difficulty`, `todos` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
+| Input                                                                                                                                                        | Type   | Required | Notes                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ | -------- | ----------------------------------------------------------- |
+| `planId`                                                                                                                                                     | string | yes      | The id `create_plan` returned.                              |
+| `planItemId`                                                                                                                                                 | string | yes      | One of the ids `add_plan_items` returned in `planItemIds`.  |
+| `title`, `kind`, `descriptionMd`, `explanationMd`, `type`, `priority`, `executor`, `storyPoints`, `estimateMinutes`, `difficulty`, `todos`, `authorFinished` | —      | no       | The sparse patch. Everything except `title` accepts `null`. |
 
 **The patch is SPARSE, and absent is not the same as `null`.** A field you omit is
 left exactly as it was; an explicit `null` clears it. So a deepen turn sends only
@@ -4761,6 +4761,18 @@ the card is to REASON about, not how big it is. It is leaf-only and judged on th
 MERGED kind: a deepen that sets one on an `epic` / `story`, or re-kinds a leaf that
 carries one into a container, is refused with `INVALID_PROPOSAL` naming
 `difficulty`. `null` clears it.
+
+**`authorFinished`** (MOTIR-10490) is planner state, not a field of the card:
+`true` records that an author session finished writing this proposal, `null`
+clears it, and omitting it leaves the stored state as it is — any other value is
+refused by the schema. **Only a planner driver sends it**, because only the driver
+knows its session finished; `add_plan_items` and `update_plan_proposal` do not
+take it. A write that names it, `null` included, is taken at its word. A write
+that omits it is judged by Motir instead: when its body goes beyond its
+`Scope BOUNDARY` and no planner session is live on the plan, the card was written
+by hand and Motir sets the state itself. The state stays on the plan — `get_plan`
+returns it in `proposedFields`, approve carries nothing of it to the work item —
+and a write carrying only this key records no `edited` row on the timeline.
 
 **`todos` is the one member that is sparse at the KEY and whole at the VALUE.**
 It is the card's ordered steps (the shape and the caps are under

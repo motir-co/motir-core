@@ -42,7 +42,6 @@ function verdictEntry(id: string, recordId: string): ActivityAllEntryDto {
       subjectVersion: 'acme/web#1@abcdef0',
       findingsExcerpt: 'Fix it',
       notified: null,
-      checklist: [],
     },
   ]);
 }
