@@ -1328,6 +1328,36 @@ export const approvalGateRepository = {
   },
 
   /**
+   * THE CARDS OF THE APPROVE-AND-MERGE ROWS ON THIS READER'S TO APPROVE (Bug MOTIR-10504) —
+   * the work item of every awaiting `pull_request_approval` gate routed to them, the set
+   * whose review line and Reviewed badge the tab draws (`withRowReviews`).
+   *
+   * ⚠️ THE ROUTING PREDICATE IS CALLED, NOT RESTATED — `awaitingRoutedToWhere`, narrowed
+   * to the merge kind exactly as {@link findAwaitingRoutedPlanIds} narrows it to plans. The
+   * tab's review reading is taken over these cards and no others, so a review written on a
+   * card the reader has no row for cannot move their tab.
+   *
+   * Required `tx`, for {@link watermarkAwaitingRoutedTo}'s reason: unbound, this answers
+   * `[]` and the review reading would read as *nothing reviewed*.
+   */
+  async findAwaitingRoutedMergeWorkItemIds(
+    scope: AwaitingRoutingScope,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.approvalGate.findMany({
+      where: {
+        AND: [
+          awaitingRoutedToWhere(scope),
+          { kind: 'pull_request_approval', workItemId: { not: null } },
+        ],
+      },
+      select: { workItemId: true },
+      distinct: ['workItemId'],
+    });
+    return rows.map((row) => row.workItemId).filter((id): id is string => id !== null);
+  },
+
+  /**
    * EVERY `awaiting` gate on a SET of work items — the decision-waiting marker's
    * read (Story MOTIR-4908 · MOTIR-5876), one query whatever the set's size.
    *

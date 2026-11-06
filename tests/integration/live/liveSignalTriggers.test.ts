@@ -37,6 +37,24 @@ beforeEach(async () => {
   listener = new Client({ connectionString: currentWorkerAdminUrl() });
   writer = new Client({ connectionString: currentWorkerAdminUrl() });
   await Promise.all([listener.connect(), writer.connect()]);
+  // The pull request a delivery links and a GitHub review hangs off (Bug MOTIR-10504).
+  // Neither `github_installation`, `github_repo` nor `github_pull_request` is heard, so
+  // this set-up emits nothing into the case below.
+  await writer.query(
+    `INSERT INTO "github_installation" ("id","installation_id","workspace_id","account_login","account_type","updated_at")
+     VALUES ('gi-ls-1','inst-ls-1',$1,'moooon','Organization',now())`,
+    [fx.workspaceId],
+  );
+  await writer.query(
+    `INSERT INTO "github_repo" ("id","installation_id","workspace_id","organization_id","repo_id","owner","name","default_branch","updated_at")
+     SELECT 'gr-ls-1','gi-ls-1',w."id",w."organizationId",'9001','moooon','acme','main',now()
+       FROM "workspace" w WHERE w."id" = $1`,
+    [fx.workspaceId],
+  );
+  await writer.query(
+    `INSERT INTO "github_pull_request" ("id","repo_id","number","state","head_ref","updated_at")
+     VALUES ('gpr-ls-1','gr-ls-1',1,'open','subtask/PROD-9001',now())`,
+  );
   received = [];
   listener.on('notification', (msg) => {
     if (msg.channel === LIVE_SIGNAL_CHANNEL) received.push(msg.payload ?? '');
@@ -128,6 +146,46 @@ function rowSpecs(f: WorkItemFixture) {
         [w, p],
       ),
       expected: signal(w, p, 'pl-ls-1'),
+    },
+    // The review rows behind a To approve row's review line (Bug MOTIR-10504).
+    {
+      table: 'review_verdict_record',
+      id: 'rvr-ls-1',
+      insert: sql(
+        `INSERT INTO "review_verdict_record" ("id","workspace_id","project_id","work_item_id","subject_version","verdict","outcome","harness","model")
+         VALUES ('rvr-ls-1',$1,$2,'wi-ls-1','moooon/acme#1@sha-a','changes_requested','recorded','Claude Code','claude-opus-5-5')`,
+        [w, p],
+      ),
+      expected: signal(w, p, null),
+    },
+    {
+      table: 'review_dismissal',
+      id: 'rd-ls-1',
+      insert: sql(
+        `INSERT INTO "review_dismissal" ("id","workspace_id","project_id","work_item_id","review_verdict_record_id","subject_version","reason_md")
+         VALUES ('rd-ls-1',$1,$2,'wi-ls-1','rvr-ls-1','moooon/acme#1@sha-a','Reviewed by hand.')`,
+        [w, p],
+      ),
+      expected: signal(w, p, null),
+    },
+    {
+      table: 'work_item_delivery',
+      id: 'wid-ls-1',
+      insert: sql(
+        `INSERT INTO "work_item_delivery" ("id","workspace_id","work_item_id","github_pull_request_id","repo_id")
+         VALUES ('wid-ls-1',$1,'wi-ls-1','gpr-ls-1','gr-ls-1')`,
+        [w],
+      ),
+      expected: signal(w, p, null),
+    },
+    {
+      table: 'github_pull_request_review',
+      id: 'gprr-ls-1',
+      insert: sql(
+        `INSERT INTO "github_pull_request_review" ("id","github_review_id","github_pull_request_id","reviewer_github_user_id","reviewer_login","reviewer_type","state","commit_sha","reviewer_permission","submitted_at","updated_at")
+         VALUES ('gprr-ls-1','9001','gpr-ls-1','77','octo','User','approved','sha-a','write',now(),now())`,
+      ),
+      expected: signal(w, p, null),
     },
     {
       table: 'plan_item',
@@ -239,6 +297,63 @@ describe('live-signal triggers', () => {
       expect(out.sort()).toEqual(
         [signal(fx.workspaceId, other.id, null), signal(fx.workspaceId, fx.projectId, null)].sort(),
       );
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'tell every project whose card delivers a pull request about its GitHub review, and nobody when no card does',
+    async () => {
+      const specs = rowSpecs(fx);
+      const byTable = (table: string) => specs.find((spec) => spec.table === table)!;
+      await emittedBy(byTable('work_item').insert);
+
+      // No card delivers the pull request yet: the review reaches no row, so it emits nothing…
+      expect(await emittedBy(byTable('github_pull_request_review').insert)).toEqual([]);
+
+      // …and the link that makes a row draw it is heard on its own.
+      expect(await emittedBy(byTable('work_item_delivery').insert)).toEqual([
+        signal(fx.workspaceId, fx.projectId, null),
+      ]);
+
+      // A second project's card delivers the same pull request: an edit of the review is
+      // heard by both projects, once each.
+      const other = await createTestProject({
+        workspaceId: fx.workspaceId,
+        actorUserId: fx.ownerId,
+        identifier: 'REVW',
+      });
+      await emittedBy(
+        sql(
+          `INSERT INTO "work_item" ("id","workspaceId","projectId","kind","key","identifier","title","reporterId","position","updatedAt")
+           VALUES ('wi-ls-2',$1,$2,'task',1,'REVW-1','Second delivery',$3,'a0',now())`,
+          [fx.workspaceId, other.id, fx.ownerId],
+        ),
+      );
+      await emittedBy(
+        sql(
+          `INSERT INTO "work_item_delivery" ("id","workspace_id","work_item_id","github_pull_request_id","repo_id")
+           VALUES ('wid-ls-2',$1,'wi-ls-2','gpr-ls-1','gr-ls-1')`,
+          [fx.workspaceId],
+        ),
+      );
+      const edit = await emittedBy(
+        sql(
+          `UPDATE "github_pull_request_review" SET "state" = 'dismissed', "updated_at" = now() WHERE "id" = 'gprr-ls-1'`,
+        ),
+      );
+      expect(edit.sort()).toEqual(
+        [signal(fx.workspaceId, fx.projectId, null), signal(fx.workspaceId, other.id, null)].sort(),
+      );
+
+      // A card deleted with its deliveries still never breaks the write: the cascade's
+      // delivery rows read no project and wake the workspace instead.
+      const itemDelete = await emittedBy(sql(`DELETE FROM "work_item" WHERE "id" = 'wi-ls-2'`));
+      expect(itemDelete).toContain(signal(fx.workspaceId, other.id, null));
+      const left = await writer.query(
+        `SELECT count(*)::int AS n FROM "work_item_delivery" WHERE "work_item_id" = 'wi-ls-2'`,
+      );
+      expect(left.rows[0].n).toBe(0);
     },
     DB_TEST_TIMEOUT_MS,
   );
