@@ -143,7 +143,10 @@ test.describe('a done design is final until a person reopens it', () => {
       await page.keyboard.press('Escape');
       await expect(dialog).toBeHidden();
       await expect(page.getByRole('main').getByText('Approved', { exact: true })).toBeVisible();
-      await expect(page.getByRole('main').getByText('Done', { exact: true })).toBeVisible();
+      // The rail's value — the header eyebrow's Done stamp says it too (MOTIR-10534).
+      await expect(
+        page.getByRole('complementary').getByText('Done', { exact: true }),
+      ).toBeVisible();
       await expect
         .poll(async () => (await designItem(seed)).status, { message: 'the approval commits' })
         .toBe('done');
