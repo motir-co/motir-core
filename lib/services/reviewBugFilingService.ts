@@ -12,7 +12,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // A HOSTED REVIEW LOGS A BUG (MOTIR-10513; `hosted-agent-run.md` §8.7, `approval-gates.md`
-// §12.14). A review that finds a defect its verdict cannot carry — in code the pull requests
+// §12.17). A review that finds a defect its verdict cannot carry — in code the pull requests
 // did not touch, or one that belongs to another card — hands it to Motir on the SAME verdict
 // body (`bugs`), and Motir files it here. The review agent holds no Motir credential at all
 // (`packages/cli/src/hostedAgent.ts`), and the run token stays bound to the one reviewed
