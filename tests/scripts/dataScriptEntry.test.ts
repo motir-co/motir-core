@@ -19,6 +19,7 @@ import {
 import { main as backfillBoards } from '@/scripts/backfill-default-boards';
 import { main as backfillCiState } from '@/scripts/backfill-work-item-ci-state';
 import { main as backfillFixReason } from '@/scripts/backfill-fix-reason';
+import { main as backfillAuthorFinished } from '@/scripts/backfill-plan-author-finished';
 import { main as convergeUnlanded } from '@/scripts/converge-ejected-cards';
 import { adminDb } from '../helpers/adminDb';
 
@@ -193,11 +194,12 @@ describe('runDataScriptEntry', () => {
 });
 
 describe('the script registry', () => {
-  it('names exactly the four production data scripts', () => {
+  it('names exactly the five production data scripts', () => {
     expect(Object.keys(DATA_SCRIPTS)).toEqual([
       'backfill-boards',
       'backfill-ci-state',
       'backfill-fix-reason',
+      'backfill-author-finished',
       'converge-unlanded-cards',
     ]);
     expect(isDataScriptName('backfill-boards')).toBe(true);
@@ -213,6 +215,7 @@ describe('the script registry', () => {
     expect(pkg.scripts['db:backfill:boards']).toBe(`${entry} backfill-boards`);
     expect(pkg.scripts['db:backfill:ci-state']).toBe(`${entry} backfill-ci-state`);
     expect(pkg.scripts['db:backfill:fix-reason']).toBe(`${entry} backfill-fix-reason`);
+    expect(pkg.scripts['db:backfill:author-finished']).toBe(`${entry} backfill-author-finished`);
     expect(pkg.scripts['db:converge:unlanded-cards']).toBe(`${entry} converge-unlanded-cards`);
     expect(pkg.scripts['db:converge:ejected-cards']).toBe(`${entry} converge-unlanded-cards`);
     expect(pkg.scripts['build:data-script']).toBe('node scripts/build-data-script.mjs');
@@ -242,6 +245,7 @@ describe('the data scripts, run through loadDataScript', () => {
     expect((await DATA_SCRIPTS['backfill-boards']()).main).toBe(backfillBoards);
     expect((await DATA_SCRIPTS['backfill-ci-state']()).main).toBe(backfillCiState);
     expect((await DATA_SCRIPTS['backfill-fix-reason']()).main).toBe(backfillFixReason);
+    expect((await DATA_SCRIPTS['backfill-author-finished']()).main).toBe(backfillAuthorFinished);
     expect((await DATA_SCRIPTS['converge-unlanded-cards']()).main).toBe(convergeUnlanded);
   });
 
@@ -249,6 +253,7 @@ describe('the data scripts, run through loadDataScript', () => {
     ['backfill-ci-state', '[backfill-ci-state] done — 0 of 0 card(s) with pull requests scanned'],
     ['backfill-fix-reason', '[backfill-fix-reason] done — 0 of 0 candidate card(s) scanned'],
     ['converge-unlanded-cards', '[converge-unlanded-cards] done — scanned 0'],
+    ['backfill-author-finished', '[backfill-author-finished] done. Re-run without --dry-run'],
   ] as const)('%s --dry-run sweeps an empty database and answers 0', async (name, done) => {
     capture();
     const script = await loadDataScript(name);
@@ -257,22 +262,29 @@ describe('the data scripts, run through loadDataScript', () => {
     expect(logged.join('\n')).toContain('DRY RUN');
   });
 
-  it.each(['backfill-ci-state', 'backfill-fix-reason', 'converge-unlanded-cards'] as const)(
-    '%s refuses an unknown flag by throwing',
-    async (name) => {
-      const script = await loadDataScript(name);
-      await expect(script.main(['--apply'])).rejects.toThrow('unknown argument: --apply');
-    },
-  );
+  it.each([
+    'backfill-ci-state',
+    'backfill-fix-reason',
+    'backfill-author-finished',
+    'converge-unlanded-cards',
+  ] as const)('%s refuses an unknown flag by throwing', async (name) => {
+    const script = await loadDataScript(name);
+    await expect(script.main(['--apply'])).rejects.toThrow('unknown argument: --apply');
+  });
 
-  it('backfill-ci-state and backfill-fix-reason accept a workspace scope', async () => {
+  it('backfill-ci-state, backfill-fix-reason and backfill-author-finished accept a workspace scope', async () => {
     capture();
-    for (const name of ['backfill-ci-state', 'backfill-fix-reason'] as const) {
+    for (const name of [
+      'backfill-ci-state',
+      'backfill-fix-reason',
+      'backfill-author-finished',
+    ] as const) {
       const script = await loadDataScript(name);
       expect(await script.main(['--dry-run', '--workspace=ws-none'])).toBe(0);
     }
     expect(logged).toContain('[backfill-ci-state] scope: workspace ws-none.');
     expect(logged).toContain('[backfill-fix-reason] scope: workspace ws-none.');
+    expect(logged).toContain('[backfill-author-finished] scope: workspace ws-none.');
   });
 
   it('backfill-boards seeds the board a project lost, and takes no flag', async () => {

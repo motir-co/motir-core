@@ -24,6 +24,14 @@ import { planItemRepository } from '@/lib/repositories/planItemRepository';
 // that replaces it must move the version — and omitting it when empty keeps every
 // digest computed before the column existed byte-identical, so no `plan.v2.` is owed.
 //
+// ⚠️ ONE EXCLUDED KEY (MOTIR-10491): `authorFinished` inside an `add`'s
+// `proposedFields`, whatever its value. It is planner state — whether an author
+// session finished the card — and never reaches the work item a reviewer approves
+// (`NOT_A_CARD_FIELD`). Hashing it would move a `planned` plan's version on a
+// write no card shows, and a reader pressing Approve would be refused
+// `APPROVAL_GATE_STALE_SUBJECT` for nothing. A row with no such key hashes exactly
+// as it did before, so — as for `supersedesRefs` — no `plan.v2.` is owed.
+//
 // ⚠️ DERIVED, NEVER STORED. A revision leaves the plan `planned` and the gate `awaiting`
 // (§11.5c), so the version moves IN PLACE: it is recomputed each time it is asked for.
 
@@ -69,6 +77,20 @@ function byBytes(a: string, b: string): number {
   return Buffer.compare(Buffer.from(a, 'utf8'), Buffer.from(b, 'utf8'));
 }
 
+/** The key the digest leaves out of every row's `proposedFields` (see the header). */
+const DIGEST_EXCLUDED_PROPOSED_FIELDS = ['authorFinished'] as const;
+
+/** `proposedFields` as the digest reads it: the stored object minus the excluded keys. */
+function digestProposedFields(fields: PlanDigestRow['proposedFields']): unknown {
+  if (fields === null || fields === undefined) return null;
+  if (typeof fields !== 'object' || Array.isArray(fields)) return fields;
+  const source = fields as Record<string, unknown>;
+  if (!DIGEST_EXCLUDED_PROPOSED_FIELDS.some((k) => Object.hasOwn(source, k))) return fields;
+  const out: Record<string, unknown> = { ...source };
+  for (const key of DIGEST_EXCLUDED_PROPOSED_FIELDS) delete out[key];
+  return out;
+}
+
 /** THE DIGEST of one plan's proposal set — pure, so a golden fixture can pin it. */
 export function planProposalDigest(rows: readonly PlanDigestRow[]): string {
   const proposals = [...rows]
@@ -79,7 +101,7 @@ export function planProposalDigest(rows: readonly PlanDigestRow[]): string {
       workItemId: row.workItemId ?? null,
       parentRef: row.parentRef ?? null,
       blockedByRefs: row.blockedByRefs,
-      proposedFields: row.proposedFields ?? null,
+      proposedFields: digestProposedFields(row.proposedFields),
       patch: row.patch ?? null,
       baseRevision: row.baseRevision ?? null,
       ...(row.supersedesRefs && row.supersedesRefs.length > 0

@@ -154,7 +154,7 @@ describe('the stored fact — update_plan_item sets, clears and keeps it', () =>
       planItemId: itemId,
       authorFinished: null,
     });
-    expect(await fieldsOf(itemId)).not.toHaveProperty('authorFinished');
+    expect(await fieldsOf(itemId)).toHaveProperty('authorFinished', null);
 
     // Any other value is refused by the tool's schema, and nothing is stored.
     const refused = await call(client, 'update_plan_item', {
@@ -163,7 +163,7 @@ describe('the stored fact — update_plan_item sets, clears and keeps it', () =>
       authorFinished: false,
     });
     expect(refused.isError).toBe(true);
-    expect(await fieldsOf(itemId)).not.toHaveProperty('authorFinished');
+    expect(await fieldsOf(itemId)).toHaveProperty('authorFinished', null);
 
     await plansService.markPlanned(plan.id, ctx);
     const revised = await call(client, 'update_plan_item', {
@@ -180,7 +180,7 @@ describe('the stored fact — update_plan_item sets, clears and keeps it', () =>
       revision: true,
       authorFinished: null,
     });
-    expect(await fieldsOf(itemId)).not.toHaveProperty('authorFinished');
+    expect(await fieldsOf(itemId)).toHaveProperty('authorFinished', null);
     await client.close();
   });
 
@@ -479,14 +479,14 @@ describe('the stamp — a card written by hand is marked written as its body lan
       { descriptionMd: WRITTEN, authorFinished: null },
       fx.ctx,
     );
-    expect(await fieldsOf(itemId)).not.toHaveProperty('authorFinished');
+    expect(await fieldsOf(itemId)).toHaveProperty('authorFinished', null);
     await plansService.correctProposal(
       plan.id,
       itemId,
       { descriptionMd: `${WRITTEN}\n\nMore.`, authorFinished: null },
       fx.ctx,
     );
-    expect(await fieldsOf(itemId)).not.toHaveProperty('authorFinished');
+    expect(await fieldsOf(itemId)).toHaveProperty('authorFinished', null);
 
     // Set, then shortened to its boundary by a write naming no state: kept.
     await plansService.deepenProposal(plan.id, itemId, { authorFinished: true }, fx.ctx);
@@ -542,7 +542,7 @@ describe('the state stays on the plan', () => {
     });
     await plansService.deepenProposal(plan.id, plain, { authorFinished: null }, fx.ctx);
     expect((await fieldsOf(stamped))['authorFinished']).toBe(true);
-    expect(await fieldsOf(plain)).not.toHaveProperty('authorFinished');
+    expect(await fieldsOf(plain)).toHaveProperty('authorFinished', null);
 
     // `get_plan` reads `proposedFields` through `toPlanItemDto`, so a fresh read
     // gives the same answer.

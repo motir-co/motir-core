@@ -583,6 +583,32 @@ export const planRepository = {
     });
   },
 
+  /**
+   * Every UNDECIDED plan — `generating`, `planned` or `stale` — oldest id first:
+   * the authorFinished CARRY-OVER's candidate scan (MOTIR-10491). Narrowed to one
+   * workspace when `workspaceId` is given.
+   *
+   * `stale` is in the set because a stale plan is live, not decided: it returns
+   * to `planned` on its own when its drift reverses, which can happen after the
+   * sweep has passed. Cross-workspace, so it runs under `withSystemContext`
+   * against the plan policy's `FOR SELECT` system arm (`plan_system_read`), as
+   * {@link listPlannedForGateBackfill} does. It selects on STATUS only; which
+   * cards to stamp is decided per plan under that plan's workspace binding.
+   */
+  async listOpenForAuthorFinishedBackfill(
+    scope: { workspaceId?: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<Pick<Plan, 'id' | 'workspaceId' | 'projectId' | 'status'>>> {
+    return tx.plan.findMany({
+      where: {
+        status: { in: [...UNDECIDED_PLAN_STATUSES] },
+        ...(scope.workspaceId ? { workspaceId: scope.workspaceId } : {}),
+      },
+      select: { id: true, workspaceId: true, projectId: true, status: true },
+      orderBy: { id: 'asc' },
+    });
+  },
+
   async create(data: Prisma.PlanUncheckedCreateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.create({ data });
   },

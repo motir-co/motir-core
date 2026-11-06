@@ -185,6 +185,36 @@ describe('the DIGEST — exactly §11.3’s inputs, one function', () => {
     expect(planProposalDigest(withEdge)).not.toBe(planProposalDigest(rows));
   });
 
+  it('an add’s `authorFinished` (MOTIR-10491) never moves it — absent, true or null', () => {
+    const withState = (value: true | null) =>
+      rows.map((row) =>
+        row.id === 'a-item'
+          ? { ...row, proposedFields: { ...(row.proposedFields as object), authorFinished: value } }
+          : row,
+      );
+    // Absent is the golden digest above, computed before the key existed.
+    expect(planProposalDigest(withState(true))).toBe(planProposalDigest(rows));
+    expect(planProposalDigest(withState(null))).toBe(planProposalDigest(rows));
+    // A row whose only key is the state hashes as an empty object, never as null.
+    const onlyState = rows.map((row) =>
+      row.id === 'a-item' ? { ...row, proposedFields: { authorFinished: true } } : row,
+    );
+    const empty = rows.map((row) => (row.id === 'a-item' ? { ...row, proposedFields: {} } : row));
+    expect(planProposalDigest(onlyState)).toBe(planProposalDigest(empty));
+    // Every OTHER key of the fields still moves it.
+    const retitled = rows.map((row) =>
+      row.id === 'a-item' ? { ...row, proposedFields: { title: 'Renamed', kind: 'task' } } : row,
+    );
+    expect(planProposalDigest(retitled)).not.toBe(planProposalDigest(rows));
+    // The input row is never mutated by the exclusion.
+    const stated = withState(true);
+    planProposalDigest(stated);
+    expect(stated.find((r) => r.id === 'a-item')!.proposedFields).toHaveProperty(
+      'authorFinished',
+      true,
+    );
+  });
+
   it('the stamp inputs carry only the digest — no companion, no card body', () => {
     expect(planGateStampInputs('plan.v1.x')).toEqual({
       subjectVersion: 'plan.v1.x',
