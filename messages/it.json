@@ -7787,7 +7787,16 @@
         "ready": "Pronto",
         "notInSprint": "non nello Sprint",
         "blockedElsewhere": "bloccato altrove",
-        "blockerNotInSprint": "elemento bloccante non nello Sprint"
+        "blockerNotInSprint": "elemento bloccante non nello Sprint",
+        "toPlan": "Da pianificare",
+        "blockedShort": "bloccato",
+        "action": {
+          "copyAria": "Copia {command}",
+          "copyTooltip": "Copia <cmd>{command}</cmd>",
+          "copyTooltipCiFailed": "CI non riuscita — copia <cmd>{command}</cmd>",
+          "copyTooltipChangesRequested": "Modifiche richieste — copia <cmd>{command}</cmd>",
+          "planTooltip": "Apri la pianificazione con {key} come obiettivo"
+        }
       },
       "anchor": {
         "defaultTitle": "Bloccato tra Storie diverse",

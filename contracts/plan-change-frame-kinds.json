@@ -8,6 +8,7 @@
     "assistant",
     "audit",
     "author",
+    "clause_list",
     "code_graph",
     "comparables",
     "contextual_context",

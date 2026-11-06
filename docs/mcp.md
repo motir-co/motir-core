@@ -2287,13 +2287,14 @@ nothing.
 
 **It has no `source` argument and always writes `check_plan`**, so a caller cannot
 write an `in_loop` row — those are the hosted planner's own review stage. It also
-has no `status`, `fingerprint`, `rule`, `lessonId`, `bugKey`, triage or batch
+has no `status`, `fingerprint`, `lessonId`, `bugKey`, triage or batch
 argument. The schema is strict, so naming any of them is refused by name rather
 than dropped.
 
 ⚠️ **A repeat call writes a second row.** The tool is not idempotent: a finding
 has no event key to replay against, and the admin view groups repeats by
-fingerprint (site and attribution). Call it once per defect, and do not retry a
+fingerprint — the `rule` and attribution when a `rule` is given, the site and
+attribution otherwise. Call it once per defect, and do not retry a
 failure blindly — a refusal names the field or the upstream reason, so fix that
 first.
 
@@ -2304,7 +2305,7 @@ first.
 | `planTitle`        | string | no       | The plan's title, as text.                                                                                               |
 | `cardRef`          | string | no       | The card the defect sits on, as text — a plan item id (`planItem:…`) or a work-item key.                                 |
 | `planner`          | enum   | yes      | `hosted` · `plan_py` — which planner wrote the plan.                                                                     |
-| `site`             | string | yes      | Where the defect is: the card and the part of it. Repeats group by site, so name it the same way each time.              |
+| `site`             | string | yes      | Where the defect is: the card and the part of it, for a reader. It is the grouping key only when no `rule` is given.     |
 | `prediction`       | enum   | yes      | `STOPS` · `SETTLES` · `THRU` — what the runner would do at the site.                                                     |
 | `whatHappened`     | string | yes      | What is wrong, in a sentence or two.                                                                                     |
 | `evidence`         | string | yes      | What shows it — a `path:line` at a commit, a quoted criterion, a command and its output.                                 |
@@ -2315,6 +2316,7 @@ first.
 | `hostedCell`       | string | no       | Where in the hosted planner the defect comes from.                                                                       |
 | `planpyCell`       | string | no       | Where in plan.py the defect comes from.                                                                                  |
 | `fixDirection`     | string | no       | Which way a fix to the planner should go.                                                                                |
+| `rule`             | string | no       | The planner rule or code site broken, as `path:line`. Repeats group by rule and attribution, across checks and plans.    |
 | `authorModel`      | string | no       | The model that wrote the plan.                                                                                           |
 | `authorSessionKey` | string | no       | The planning session that wrote the plan.                                                                                |
 | `baseline`         | object | no       | `{ branch?, commit? }` — the branch and commit the code was read at. One argument here; stored as a branch and a commit. |

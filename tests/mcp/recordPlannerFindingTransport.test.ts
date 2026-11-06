@@ -61,6 +61,7 @@ const OPTIONAL_WIRE_KEYS = [
   'fixDirection',
   'authorModel',
   'authorSessionKey',
+  'rule',
 ] as const;
 
 function storedRow(over: Record<string, unknown> = {}): Record<string, unknown> {
@@ -196,6 +197,7 @@ describe('record_planner_finding over the real transport — tools/list', () => 
         'hostedCell',
         'planpyCell',
         'fixDirection',
+        'rule',
         'authorModel',
         'authorSessionKey',
         'baseline',
@@ -208,7 +210,6 @@ describe('record_planner_finding over the real transport — tools/list', () => 
       'source',
       'status',
       'fingerprint',
-      'rule',
       'jobId',
       'lessonId',
       'bugKey',
@@ -290,6 +291,21 @@ describe('record_planner_finding over the real transport — a valid call', () =
     }
     expect(Object.values(bareBody)).not.toContain(null);
     expect(Object.values(bareBody)).not.toContain('');
+  });
+
+  it('sends the rule the check names, trimmed, as the key motir-ai groups on (MOTIR-10468)', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await clientFor(fx);
+    const upstream = stubUpstream(() => jsonResponse(storedRow(), 201));
+
+    const result = await call(client, {
+      projectKey: fx.projectIdentifier,
+      ...REQUIRED,
+      rule: ' src/jobs/planningEngine.ts:3090 ',
+    });
+
+    expect(result.isError, textOf(result)).toBeFalsy();
+    expect(bodyOf(upstream)['rule']).toBe('src/jobs/planningEngine.ts:3090');
   });
 
   it('sends the no-plan marker when planId is omitted', async () => {

@@ -1,5 +1,6 @@
 'use client';
 
+import type { CardNextActionsOption } from '@/components/planning/WorkItemNode';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
@@ -87,6 +88,11 @@ export interface WorkItemRoadmapProps {
    * `includeOrigin` note in `loadLevel`.
    */
   showPlanningOrigin?: boolean;
+  /** The card's hover next-action button (MOTIR-10509; design MOTIR-10508): copy
+   *  `motir run` / `review` / `fix`, or open planning on a To plan story. Absent or
+   *  `null` draws no button — a Visitor's canvas, and every surface that is not the
+   *  roadmap page. */
+  nextActions?: CardNextActionsOption | null;
   positions?: Record<string, { x: number; y: number }>;
   onNodeMove?: (id: string, x: number, y: number) => void;
   onResetPositions?: (nodeIds: string[]) => void;
@@ -168,6 +174,7 @@ export function WorkItemRoadmap({
   projectKey,
   scope = 'project',
   showPlanningOrigin = false,
+  nextActions = null,
   positions,
   onNodeMove,
   onResetPositions,
@@ -398,7 +405,7 @@ export function WorkItemRoadmap({
               edges: root.edges.filter((e) => rowIds.has(e.blockedId)),
               offLevelBlockers: root.offLevelBlockers,
             },
-            { markActive: true, scope },
+            { markActive: true, scope, nextActions },
           );
         }
         // A FOLDER'S LEVEL (Bug MOTIR-5710 · MOTIR-5741) — a real read, addressed by
@@ -429,6 +436,7 @@ export function WorkItemRoadmap({
             markActive: true,
             scope,
             levelTotal: wi.levelTotal,
+            nextActions,
           });
         }
         // THE SUBTREE ROOT (MOTIR-2287) — the canvas's own root level (`parentId`
@@ -490,6 +498,7 @@ export function WorkItemRoadmap({
           groupNonEpicRoots: atRoot && !rooted,
           groupCrumbLabel: t('group.title'),
           levelTotal: wi.levelTotal,
+          nextActions,
         });
       } finally {
         // A refresh-triggered load has completed → let the caller clear its loading
@@ -516,6 +525,7 @@ export function WorkItemRoadmap({
       subtreeRootId,
       readRootLevel,
       foldersOn,
+      nextActions,
       t,
       tierLabel,
     ],

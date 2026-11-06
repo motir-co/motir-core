@@ -59,10 +59,12 @@ const workItem: WorkItemNodeData = {
   assigneeName: 'Yue',
 };
 
-describe('PlanItemNode — the title clamps at two lines', () => {
-  it.each(['add', 'remove'] as const)('a long `%s` title is a two-line -webkit-box', (op) => {
+describe('PlanItemNode — the title clamps inside the box', () => {
+  // The title-only body (MOTIR-10508) clamps at THREE lines when the card has no
+  // footer — the room the old identifier line used to take.
+  it.each(['add', 'remove'] as const)('a long `%s` title is a three-line -webkit-box', (op) => {
     renderWithIntl(<PlanItemNode item={planReviewItem({ op, title: LONG_TITLE })} />);
-    expect(clampOf(screen.getByText(LONG_TITLE))).toEqual({ display: '-webkit-box', lines: '2' });
+    expect(clampOf(screen.getByText(LONG_TITLE))).toEqual({ display: '-webkit-box', lines: '3' });
   });
 
   // MOTIR-5310 spends the bottom slot on a folder placement and drops the title

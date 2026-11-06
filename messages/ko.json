@@ -7781,7 +7781,16 @@
         "ready": "준비됨",
         "notInSprint": "Sprint에 없음",
         "blockedElsewhere": "다른 곳에서 차단됨",
-        "blockerNotInSprint": "차단 항목이 Sprint에 없음"
+        "blockerNotInSprint": "차단 항목이 Sprint에 없음",
+        "toPlan": "계획 필요",
+        "blockedShort": "차단됨",
+        "action": {
+          "copyAria": "{command} 복사",
+          "copyTooltip": "<cmd>{command}</cmd> 복사",
+          "copyTooltipCiFailed": "CI 실패 — <cmd>{command}</cmd> 복사",
+          "copyTooltipChangesRequested": "변경 요청됨 — <cmd>{command}</cmd> 복사",
+          "planTooltip": "{key}을(를) 대상으로 계획 열기"
+        }
       },
       "anchor": {
         "defaultTitle": "스토리 간 차단",

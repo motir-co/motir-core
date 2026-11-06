@@ -110,7 +110,6 @@ const STORED: RawPlannerFinding = {
 const FORBIDDEN_REQUEST_KEYS = [
   'status',
   'fingerprint',
-  'rule',
   'jobId',
   'lessonId',
   'bugKey',
@@ -310,7 +309,6 @@ describe('recordFinding — the request shape', () => {
       source: 'in_loop',
       status: 'triaged',
       fingerprint: 'forged',
-      rule: 'forged',
       jobId: 'forged',
       lessonId: 'forged',
       bugKey: 'MOTIR-1',
@@ -369,6 +367,7 @@ describe('recordFinding — the request shape', () => {
       hostedCell: blank,
       planpyCell: blank,
       fixDirection: blank,
+      rule: blank,
       baseline: { branch: blank, commit: blank },
     });
 
@@ -390,6 +389,7 @@ describe('recordFinding — the request shape', () => {
       'hostedCell',
       'planpyCell',
       'fixDirection',
+      'rule',
       'baselineBranch',
       'baselineCommit',
     ]) {

@@ -81,8 +81,10 @@ export interface PlannerFindingBaseline {
 
 /**
  * One finding as a caller supplies it. No `source` (always `check_plan`), no
- * `status`, `fingerprint`, `rule`, `jobId`, `lessonId`, `bugKey` or `aiProjectId`,
- * and no project identity: the project is the one `projectKey` resolves to.
+ * `status`, `fingerprint`, `jobId`, `lessonId`, `bugKey` or `aiProjectId`, and
+ * no project identity: the project is the one `projectKey` resolves to. `rule`
+ * is the planner rule or code site broken, the key motir-ai groups repeats on
+ * (MOTIR-10468).
  */
 export interface RecordPlannerFindingInput {
   planner: CreatePlannerFindingRequest['planner'];
@@ -103,6 +105,7 @@ export interface RecordPlannerFindingInput {
   hostedCell?: string;
   planpyCell?: string;
   fixDirection?: string;
+  rule?: string;
 }
 
 /** The optional text members forwarded under their own name. */
@@ -116,6 +119,7 @@ const OPTIONAL_TEXT_FIELDS = [
   'hostedCell',
   'planpyCell',
   'fixDirection',
+  'rule',
 ] as const satisfies readonly (keyof RecordPlannerFindingInput &
   keyof CreatePlannerFindingRequest)[];
 

@@ -7787,7 +7787,16 @@
         "ready": "Gereed",
         "notInSprint": "niet in Sprint",
         "blockedElsewhere": "elders geblokkeerd",
-        "blockerNotInSprint": "blokkerend item niet in Sprint"
+        "blockerNotInSprint": "blokkerend item niet in Sprint",
+        "toPlan": "Te plannen",
+        "blockedShort": "geblokkeerd",
+        "action": {
+          "copyAria": "{command} kopiëren",
+          "copyTooltip": "<cmd>{command}</cmd> kopiëren",
+          "copyTooltipCiFailed": "CI mislukt — <cmd>{command}</cmd> kopiëren",
+          "copyTooltipChangesRequested": "Wijzigingen gevraagd — <cmd>{command}</cmd> kopiëren",
+          "planTooltip": "Planning openen met {key} als doel"
+        }
       },
       "anchor": {
         "defaultTitle": "Geblokkeerd over Stories heen",

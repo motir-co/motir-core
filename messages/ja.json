@@ -7784,7 +7784,16 @@
         "ready": "着手可能",
         "notInSprint": "Sprint 外",
         "blockedElsewhere": "別の場所でブロック中",
-        "blockerNotInSprint": "ブロッカーが Sprint 外"
+        "blockerNotInSprint": "ブロッカーが Sprint 外",
+        "toPlan": "計画待ち",
+        "blockedShort": "ブロック中",
+        "action": {
+          "copyAria": "{command} をコピー",
+          "copyTooltip": "<cmd>{command}</cmd> をコピー",
+          "copyTooltipCiFailed": "CI 失敗 — <cmd>{command}</cmd> をコピー",
+          "copyTooltipChangesRequested": "変更依頼あり — <cmd>{command}</cmd> をコピー",
+          "planTooltip": "{key} を対象に計画を開く"
+        }
       },
       "anchor": {
         "defaultTitle": "ストーリーをまたいでブロック中",

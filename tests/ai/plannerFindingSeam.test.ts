@@ -19,8 +19,8 @@ import {
 //   1. The field names cross a repo boundary as strings, so the test asserts the
 //      SERIALIZED body, key by key.
 //   2. An omitted optional is ABSENT from the JSON (motir-ai's `optional()`
-//      refuses a present blank), and nothing outside the request type — `rule`,
-//      `jobId`, `status`, `fingerprint`, `aiProjectId`… — ever reaches the wire.
+//      refuses a present blank), and nothing outside the request type — `jobId`,
+//      `status`, `fingerprint`, `aiProjectId`… — ever reaches the wire.
 //   3. ONE request per call. The route is not idempotent, so a retry could store
 //      a duplicate row: asserted as the `fetch` mock's CALL COUNT on a failure.
 
@@ -54,13 +54,13 @@ const OPTIONALS = {
   hostedCell: 'author/criteria',
   planpyCell: 'author:subtask',
   fixDirection: 'Add a rule to kind-container.md.',
+  rule: 'plan-rules/kind-container.md:12',
 } satisfies Partial<CreatePlannerFindingRequest>;
 
 const FORBIDDEN_KEYS = [
   'aiProjectId',
   'status',
   'fingerprint',
-  'rule',
   'jobId',
   'lessonId',
   'bugKey',

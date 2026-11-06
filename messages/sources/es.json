@@ -12976,5 +12976,14 @@
   "previewGate.notFound.pill": "Not available",
   "previewGate.notFound.title": "There is no preview here",
   "previewGate.notFound.body": "This address doesn't belong to a running preview. It may have been shut down, or the link may be mistyped.",
-  "previewGate.notFound.home": "Go to Motir"
+  "previewGate.notFound.home": "Go to Motir",
+  "approvalGate.reviewPath.activity.dismissed": "<actor></actor> dismissed the agent's review at {commits}",
+  "approvalGate.reviewPath.activity.dismissedReason": "Reason: {reason}",
+  "roadmap.canvas.node.toPlan": "To plan",
+  "roadmap.canvas.node.blockedShort": "blocked",
+  "roadmap.canvas.node.action.copyAria": "Copy {command}",
+  "roadmap.canvas.node.action.copyTooltip": "Copy <cmd>{command}</cmd>",
+  "roadmap.canvas.node.action.copyTooltipCiFailed": "CI failed — copy <cmd>{command}</cmd>",
+  "roadmap.canvas.node.action.copyTooltipChangesRequested": "Changes requested — copy <cmd>{command}</cmd>",
+  "roadmap.canvas.node.action.planTooltip": "Open planning with {key} as the target"
 }

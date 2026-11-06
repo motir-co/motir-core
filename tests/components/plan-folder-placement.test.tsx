@@ -70,12 +70,12 @@ describe('panel 1 — a filed add on the canvas', () => {
   // filed add AMONG THE ROOTS with a placement line, because no canvas level was a
   // folder. Both planning canvases now draw it ON its folder's level, where the
   // breadcrumb says where the reader stands — so the node spends no slot on it and
-  // keeps its two-line title. The line's own contract (path, collapse, copy) still
+  // keeps its full title (three lines with no footer since MOTIR-10508). The line's own contract (path, collapse, copy) still
   // ships, on `PlacementLine`, and is asserted there below.
-  it('spends NO bottom slot on its folder — the breadcrumb says where it is — and keeps the two-line title', () => {
+  it('spends NO bottom slot on its folder — the breadcrumb says where it is — and keeps the three-line title', () => {
     renderWithIntl(<PlanItemNode item={filedAdd()} />);
     expect(screen.queryByTestId('placement-line')).toBeNull();
-    expect(screen.getByText('Importer retries with backoff').className).toContain('line-clamp-2');
+    expect(screen.getByText('Importer retries with backoff').className).toContain('line-clamp-3');
   });
 
   it('PlacementLine names the folder a card is filed in, destination last', () => {
@@ -91,10 +91,10 @@ describe('panel 1 — a filed add on the canvas', () => {
     expect(segments.at(-1)?.className).toContain('text-(--el-text)');
   });
 
-  it('draws no line for a root add with no folder, and keeps the two-line title', () => {
+  it('draws no line for a root add with no folder, and keeps the three-line title', () => {
     renderWithIntl(<PlanItemNode item={planReviewItem({ title: 'An unfiled root' })} />);
     expect(screen.queryByTestId('placement-line')).toBeNull();
-    expect(screen.getByText('An unfiled root').className).toContain('line-clamp-2');
+    expect(screen.getByText('An unfiled root').className).toContain('line-clamp-3');
   });
 
   it('collapses a five-segment path to first ▸ … ▸ last and still reads it whole (panel 5)', () => {

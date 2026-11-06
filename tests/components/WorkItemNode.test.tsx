@@ -48,7 +48,9 @@ describe('WorkItemNode', () => {
   it('flags an off-level blocked node "blocked elsewhere"', () => {
     render(<WorkItemNode item={item} crossBlocked />);
     const flag = screen.getByTestId('cross-blocked-flag');
-    expect(flag.textContent).toContain('blocked elsewhere');
+    // The tag row shows the short label (MOTIR-10508); the sentence rides the name.
+    expect(flag.textContent).toBe('blocked');
+    expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
   });
 
   it('SPRINT scope: the cross-blocked flag names the blocker ("blocker not in sprint"), not the card (MOTIR-1582)', () => {
@@ -56,7 +58,8 @@ describe('WorkItemNode', () => {
     const flag = screen.getByTestId('cross-blocked-flag');
     // Names the out-of-sprint blocker — distinct from the neutral node-membership
     // tag ("not in sprint"), which describes the card itself.
-    expect(flag.textContent).toContain('blocker not in sprint');
+    expect(flag.getAttribute('aria-label')).toBe('blocker not in sprint');
+    expect(flag.getAttribute('title')).toBe('blocker not in sprint');
   });
 
   // MOTIR-1362 — the card sits on the canvas's near-identical `--el-surface-soft`
@@ -65,7 +68,7 @@ describe('WorkItemNode', () => {
   // dark mode). Lock that so a future tweak can't quietly drop the contrast.
   it('renders the card with a crisp border + card shadow for canvas contrast', () => {
     const { container } = render(<WorkItemNode item={item} />);
-    const card = container.firstChild as HTMLElement;
+    const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.className).toContain('border-(--el-border)');
     expect(card.className).not.toContain('border-(--el-border-soft)');
     expect(card.className).toContain('shadow-(--shadow-card)');
@@ -120,7 +123,7 @@ describe('WorkItemNode', () => {
     expect(screen.getByText('You are here')).toBeTruthy();
     // The status pill is REPLACED (not shown alongside) on the active node.
     expect(screen.queryByText('In Progress')).toBeNull();
-    const card = container.firstChild as HTMLElement;
+    const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('aria-current')).toBe('step');
     expect(card.className).toContain('border-(--el-accent)');
   });
@@ -129,14 +132,16 @@ describe('WorkItemNode', () => {
     const { container } = render(<WorkItemNode item={item} />);
     expect(screen.getByText('In Progress')).toBeTruthy();
     expect(screen.queryByText('You are here')).toBeNull();
-    expect((container.firstChild as HTMLElement).getAttribute('aria-current')).toBeNull();
+    expect(
+      (container.querySelector('[data-node-state]') as HTMLElement).getAttribute('aria-current'),
+    ).toBeNull();
   });
 
   // MOTIR-1422 — distinct, zoom-out-legible DONE + READY card styles (both carried in
   // the card body, not a 3px edge).
   it('styles a READY node with the whole-card mint wash + the "Ready" pill', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
-    const card = container.firstChild as HTMLElement;
+    const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('ready');
     expect(card.className).toContain('bg-(--el-tint-mint)');
     expect(screen.getByTestId('ready-pill')).toBeTruthy();
@@ -145,7 +150,7 @@ describe('WorkItemNode', () => {
 
   it('styles a DONE node as a distinct sky-tint card + struck title + dark "Done" stamp', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
-    const card = container.firstChild as HTMLElement;
+    const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('done');
     // a distinct palette-tint fill (--el-tint-sky), clearly different from white todo + mint ready
     expect(card.className).toContain('bg-(--el-tint-sky)');
@@ -160,8 +165,8 @@ describe('WorkItemNode', () => {
   it('keeps done and ready DISTINCT (mint vs sky)', () => {
     const { container: r } = render(<WorkItemNode item={{ ...item, status: 'todo' }} ready />);
     const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
-    const ready = r.firstChild as HTMLElement;
-    const done = d.firstChild as HTMLElement;
+    const ready = r.querySelector('[data-node-state]') as HTMLElement;
+    const done = d.querySelector('[data-node-state]') as HTMLElement;
     expect(ready.getAttribute('data-node-state')).not.toBe(done.getAttribute('data-node-state'));
     expect(ready.className).toContain('bg-(--el-tint-mint)'); // ready advances (mint)
     expect(done.className).toContain('bg-(--el-tint-sky)'); // done is a distinct tint
@@ -170,8 +175,8 @@ describe('WorkItemNode', () => {
   it('keeps done DISTINCT from a plain todo card (sky tint vs white surface)', () => {
     const { container: t } = render(<WorkItemNode item={{ ...item, status: 'todo' }} />);
     const { container: d } = render(<WorkItemNode item={{ ...item, status: 'done' }} />);
-    const todo = t.firstChild as HTMLElement;
-    const done = d.firstChild as HTMLElement;
+    const todo = t.querySelector('[data-node-state]') as HTMLElement;
+    const done = d.querySelector('[data-node-state]') as HTMLElement;
     expect(todo.className).toContain('bg-(--el-surface)'); // raised white card
     expect(done.className).toContain('bg-(--el-tint-sky)'); // a distinct tint, not white
     expect(done.className).not.toContain('bg-(--el-surface)'); // not the same fill as todo
@@ -179,7 +184,7 @@ describe('WorkItemNode', () => {
 
   it('the accent "you are here" frontier wins over the done style', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} here />);
-    const card = container.firstChild as HTMLElement;
+    const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('here');
     expect(screen.getByText('You are here')).toBeTruthy();
     expect(screen.queryByTestId('done-pill')).toBeNull();
@@ -188,7 +193,7 @@ describe('WorkItemNode', () => {
 
   it('the red cross-blocked flag wins over the done style', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} crossBlocked />);
-    const card = container.firstChild as HTMLElement;
+    const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
     expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
     expect(card.className).not.toContain('bg-(--el-tint-sky)');
@@ -266,10 +271,10 @@ describe('GhostAnchor', () => {
 });
 
 // MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36) — a human-gated node carries
-// a "Manual" chip (the shipped WorkItemTypeChip) on the body id line; an agent node
-// does not. The gate is the shipped `isManualReadyItem` predicate
-// (`executor === 'human' || type === 'manual'`). The chip sits in the body, so it
-// composes with every node state without touching the status row.
+// a "Manual" chip (the shipped WorkItemTypeChip) on the tag row, after the status
+// slot (MOTIR-10508 moved it there from the body id line); an agent node does not.
+// The gate is the shipped `isManualReadyItem` predicate
+// (`executor === 'human' || type === 'manual'`).
 describe('WorkItemNode — manual / human work-type chip (MOTIR-1642)', () => {
   it('renders the Manual chip for a type:manual node', () => {
     render(<WorkItemNode item={{ ...item, type: 'manual', executor: 'human' }} />);

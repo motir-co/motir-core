@@ -62,7 +62,6 @@ const FORBIDDEN = [
   'source',
   'status',
   'fingerprint',
-  'rule',
   'jobId',
   'lessonId',
   'bugKey',
@@ -194,7 +193,6 @@ describe('recordFinding — the request it builds', () => {
       source: 'in_loop',
       status: 'dismissed',
       fingerprint: 'x',
-      rule: 'x',
       jobId: 'x',
       lessonId: 'x',
       bugKey: 'x',
@@ -283,6 +281,7 @@ describe('recordFinding — the request it builds', () => {
       hostedCell: ' author/criteria ',
       planpyCell: ' author:subtask ',
       fixDirection: ' Add a rule. ',
+      rule: ' prompts/plan-rules/phase-author.md:410 ',
       attribution: 'corpus',
     });
 
@@ -296,6 +295,7 @@ describe('recordFinding — the request it builds', () => {
       hostedCell: 'author/criteria',
       planpyCell: 'author:subtask',
       fixDirection: 'Add a rule.',
+      rule: 'prompts/plan-rules/phase-author.md:410',
       attribution: 'corpus',
     });
   });
@@ -311,6 +311,7 @@ describe('recordFinding — the request it builds', () => {
       hostedCell: '',
       planpyCell: ' ',
       fixDirection: '',
+      rule: '  ',
     };
 
     await plannerFindingsService.recordFinding('MOTIR', ctx, { ...REQUIRED, ...blanks });

@@ -2637,6 +2637,12 @@ export interface CreatePlannerFindingRequest {
   hostedCell?: string;
   planpyCell?: string;
   fixDirection?: string;
+  /**
+   * The planner rule or code site the defect breaks (`path:line`). motir-ai
+   * fingerprints a `check_plan` row that carries one on the rule and attribution
+   * alone, so repeats group across checks and plans (MOTIR-10468).
+   */
+  rule?: string;
 }
 
 /**
@@ -2697,6 +2703,7 @@ const PLANNER_FINDING_OPTIONAL_FIELDS = [
   'hostedCell',
   'planpyCell',
   'fixDirection',
+  'rule',
 ] as const satisfies readonly (keyof CreatePlannerFindingRequest)[];
 
 function plannerFindingBody(input: CreatePlannerFindingRequest): Record<string, string> {
