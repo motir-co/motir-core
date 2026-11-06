@@ -1924,6 +1924,48 @@ settle should still write over a row it no longer holds is not decided here: it 
 delivery break the arrival order §18.3 refused a defer to protect, and the fix needs no new mechanism
 beyond the scope §18.2 already threads through.
 
+### §18.7 — A settle writes only over a row it still holds (MOTIR-10466)
+
+**Amendment, 2026-11-06.** **Evidence pinned at:** `motir-core` `origin/main` @ `bee0c9d`.
+**Consumed by:** [MOTIR-10466].
+
+**The defect.** §18.6 left one case open on purpose: a run BUSY — past every gate — when a timed-out
+drain releases it keeps executing in the draining process, and its settle wrote `succeeded`, a
+reschedule or `failed` keyed on the row's id alone. Reproduced on `bee0c9d`
+(`tests/jobs/worker-drain-busy-release.test.ts`) for every way a pass ends — success, a `step.sleep`
+yield, a defer, a retryable failure and a terminal one: worker A is released, worker B claims the row
+(`running` / `probe-b`), and A's late settle then wrote over it — `succeeded` / `failed` with no
+claimant while B was still executing, or `pending` for a third claimant. A terminal failure also ran
+the dead-letter hook for a run its next claimant would retry.
+
+**The decision.** `markSucceeded`, `markFailed` and `rescheduleAt` are fenced on
+`state = 'running' AND claimed_by = <the settling worker>` — the scope `renewLeases` and
+`releaseClaims` have always had — and answer whether they wrote. A fenced-out write writes NOTHING and
+the pass is reported `released` (a new `onOutcome` value, logged once at `warn`). The terminal-failure
+hook runs only while the claim is still held (`isHeldBy`); a release landing between that check and the
+mark is still caught by the mark's fence, and the cost of that narrow window is a dead-letter record for
+a run that was released, never a row written over another worker's claim.
+
+**A released run's completed work is NOT recorded, even when nobody has re-claimed the row.** The card
+asked this to be decided here. The released row stays `pending`, unclaimed, attempt refunded, and its
+next claimant runs it — resuming from the step ledger, which is the contract the worker's _Graceful
+shutdown_ header and §18.6 already rely on for every run a drain releases mid-execution. Refused:
+
+- **Record the outcome when the row is still `pending` and unclaimed.** After the release, "nobody has
+  touched it" and "another worker claimed it and handed it back" (its own yield, defer or retry) look
+  identical in `state` / `claimed_by` / `attempts`, so the write can still land over another claim's
+  result. Telling them apart needs a per-claim fencing token, which this queue does not carry
+  (MOTIR-10500 is where one would land). The saving — one re-run of a pass whose steps are memoized —
+  does not justify making the drain the one path that writes a row nobody holds.
+- **Keep the write unfenced and only report it.** That is the defect.
+
+This is what established Postgres-backed queues do: a completion from a worker whose claim lapsed is
+dropped and the job is retried (at-least-once delivery), rather than trusted.
+
+**What it does not settle.** A worker that re-claims its OWN run after its lease was reclaimed passes a
+worker-id fence, and its in-flight bookkeeping is keyed on the run id: [MOTIR-10500], reproduced while
+building this.
+
 [MOTIR-3417]: https://app.motir.co/items/MOTIR-3417
 [MOTIR-3418]: https://app.motir.co/items/MOTIR-3418
 [MOTIR-3484]: https://app.motir.co/items/MOTIR-3484
@@ -1960,3 +2002,4 @@ beyond the scope §18.2 already threads through.
 [MOTIR-10457]: https://app.motir.co/items/MOTIR-10457
 [MOTIR-10462]: https://app.motir.co/items/MOTIR-10462
 [MOTIR-10466]: https://app.motir.co/items/MOTIR-10466
+[MOTIR-10500]: https://app.motir.co/items/MOTIR-10500

@@ -32,8 +32,8 @@
  * stop between two cards and print the PARTIAL report, marked INTERRUPTED.
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
-import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
-import { db } from '@/lib/db';
+// Run through `scripts/data-script-main.ts` (MOTIR-10465): the entry loads `.env`,
+// composes `DATABASE_URL` in a Fargate task, and ends the pool after `main` answers.
 import { workItemFixReasonBackfillService } from '@/lib/services/workItemFixReasonBackfillService';
 import type {
   FixReasonBackfillProgress,
@@ -47,7 +47,7 @@ interface Args {
   workspaceId: string | undefined;
 }
 
-function parseArgs(argv: string[]): Args {
+function parseArgs(argv: readonly string[]): Args {
   let dryRun = false;
   let workspaceId: string | undefined;
 
@@ -106,8 +106,9 @@ function printReport(report: FixReasonBackfillReport): void {
   }
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+/** Runs the backfill on `argv`; answers the exit code (1 on an interrupted or failed card). */
+export async function main(argv: readonly string[]): Promise<number> {
+  const args = parseArgs(argv);
 
   if (args.dryRun) console.log(`${TAG} DRY RUN — deriving only, nothing will be written.`);
   console.log(
@@ -145,8 +146,7 @@ async function main() {
         `${report.skippedArchived} archived (skipped), ` +
         `${report.failed.length} failed. The rest were NOT examined.`,
     );
-    process.exitCode = 1;
-    return;
+    return 1;
   }
 
   console.log(
@@ -163,13 +163,7 @@ async function main() {
   // reason" as success.
   if (report.failed.length > 0) {
     console.error(`${TAG} ${report.failed.length} card(s) failed — see above.`);
-    process.exitCode = 1;
+    return 1;
   }
+  return 0;
 }
-
-main()
-  .catch((err) => {
-    console.error(`${TAG} failed:`, err);
-    process.exitCode = 1;
-  })
-  .finally(() => db.$disconnect());

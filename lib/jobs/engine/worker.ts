@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { JobQueueRun } from '@/generated/prisma/client';
+import type { JobQueueRun, Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { isWaitWithdrawn, runObservingWaits } from '@/lib/async/waitScope';
@@ -208,6 +208,23 @@ import { isJobRunDefer } from './defer';
 // state it leaves, and the next claimant runs it once. Work already past every
 // gate is not interrupted: it holds what it holds, as before, and its next
 // claimant resumes it from the step ledger.
+//
+// ⚠️ A SETTLE WRITES ONLY OVER A ROW IT STILL HOLDS (MOTIR-10466). Work already
+// past every gate keeps executing after the release, and its settle used to write
+// `succeeded` / a reschedule / `failed` keyed on the row's id alone — over a row
+// another worker may have claimed since, which then read `succeeded` with no
+// claimant while it was still executing. Every settle write is now fenced on
+// `state = 'running' AND claimed_by = <this worker>`, the scope the heartbeat and
+// the release have always had, and a write that is fenced out writes NOTHING: the
+// pass is reported `released`, and the row is whatever its current holder or the
+// release made it. A released row nobody has re-claimed stays `pending`, so its
+// next claimant runs it — resuming from the step ledger — rather than a draining
+// process recording work over a row it gave back. The terminal-failure hook is
+// asked only while the claim is still held, so a released run is not dead-lettered
+// either. The same fence covers a lease reclaimed from a worker that missed its
+// heartbeats and then claimed by ANOTHER worker; a worker that re-claims its OWN
+// reclaimed run is not told apart by a worker-id fence (MOTIR-10500).
+// `docs/decisions/job-queue-foundation.md` §18.7 is the decision.
 
 /** How long a claim is held before another worker may reclaim it. */
 export const LEASE_MS = 60_000;
@@ -300,7 +317,14 @@ export interface JobWorkerOptions {
    */
   onOutcome?: (
     run: JobQueueRun,
-    outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded' | 'deferred' | 'withdrawn',
+    outcome:
+      | 'succeeded'
+      | 'failed'
+      | 'retrying'
+      | 'yielded'
+      | 'deferred'
+      | 'withdrawn'
+      | 'released',
   ) => void;
   /**
    * ⚠️ THE AFTER-ALL-RETRIES-EXHAUSTED HOOK — the engine's `onFailure`
@@ -616,8 +640,9 @@ export class JobWorker {
         },
         () => this.execute(run),
       );
-      await withSystemContext((tx) => jobQueueRepository.markSucceeded(run.id, tx));
-      this.onOutcome(run, 'succeeded');
+      await this.record(run, 'succeeded', (tx) =>
+        jobQueueRepository.markSucceeded(run.id, this.workerId, tx),
+      );
     } catch (err) {
       if (withdrawal.signal.aborted && isWaitWithdrawn(err)) {
         // RELEASED WHILE IT WAITED (MOTIR-10462). The drain gave the row back —
@@ -631,10 +656,11 @@ export class JobWorker {
       if (isJobStepYield(err)) {
         // A durable sleep. NOT a failure: the attempt is refunded and the run is
         // re-enqueued at the deadline the step recorded.
-        await withSystemContext((tx) =>
-          jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx, { refundAttempt: true }),
+        await this.record(run, 'yielded', (tx) =>
+          jobQueueRepository.rescheduleAt(run.id, this.workerId, err.resumeAt, tx, {
+            refundAttempt: true,
+          }),
         );
-        this.onOutcome(run, 'yielded');
         return;
       }
 
@@ -650,10 +676,11 @@ export class JobWorker {
         // attempt on a suspension, and on `system.ci-runner-boot`
         // (`retryPolicy: 'none'`, a budget of exactly one) the second poll would
         // dead-letter a CI job that was fine.
-        await withSystemContext((tx) =>
-          jobQueueRepository.rescheduleAt(run.id, err.resumeAt, tx, { refundAttempt: true }),
+        await this.record(run, 'deferred', (tx) =>
+          jobQueueRepository.rescheduleAt(run.id, this.workerId, err.resumeAt, tx, {
+            refundAttempt: true,
+          }),
         );
-        this.onOutcome(run, 'deferred');
         return;
       }
 
@@ -663,39 +690,85 @@ export class JobWorker {
       // spent provider quota is the case: retrying minutes apart only asks an
       // exhausted quota again (MOTIR-5873).
       if (run.attempts >= run.maxAttempts || isNonRetryableFailure(err)) {
-        // The budget is spent. Write the ledger + DLQ rows BEFORE marking the
-        // queue row failed, so an operator never sees a `failed` run with no
-        // record of why.
-        if (this.onTerminalFailure) {
-          try {
-            await this.onTerminalFailure(run, err);
-          } catch (hookErr) {
-            // A bookkeeping failure must not strand the run. Log it and still
-            // settle the row: `running` with no live claimant is strictly worse
-            // than a missing dashboard entry.
-            this.log.error('[job-worker] terminal-failure hook threw', hookErr);
-          }
-        }
-        await withSystemContext((tx) => jobQueueRepository.markFailed(run.id, failure, tx));
-        this.log.error(
-          `[job-worker] ${run.jobId} run ${run.id} FAILED terminally`,
-          failure.message,
-        );
-        this.onOutcome(run, 'failed');
+        await this.failTerminally(run, err, failure);
         return;
       }
 
       const backoff = retryBackoffMs(run.attempts);
-      await withSystemContext((tx) =>
-        jobQueueRepository.rescheduleAt(run.id, new Date(Date.now() + backoff), tx, {
+      await this.record(run, 'retrying', (tx) =>
+        jobQueueRepository.rescheduleAt(run.id, this.workerId, new Date(Date.now() + backoff), tx, {
           lastError: failure,
         }),
       );
-      this.onOutcome(run, 'retrying');
     } finally {
       this.parked.delete(run.id);
       this.inFlight.delete(run.id);
       this.withdrawals.delete(run.id);
+    }
+  }
+
+  /**
+   * Write one settle's row change and report the pass — or, when the write was
+   * FENCED OUT because this worker no longer holds the row, report it `released`
+   * and write nothing (MOTIR-10466). The header's *a settle writes only over a row
+   * it still holds* is the contract. Answers whether the write landed.
+   */
+  private async record(
+    run: JobQueueRun,
+    outcome: 'succeeded' | 'failed' | 'retrying' | 'yielded' | 'deferred',
+    write: (tx: Prisma.TransactionClient) => Promise<boolean>,
+  ): Promise<boolean> {
+    if (await withSystemContext(write)) {
+      this.onOutcome(run, outcome);
+      return true;
+    }
+    this.reportReleased(run, outcome);
+    return false;
+  }
+
+  /** A pass whose claim was released before it settled: nothing written, said so once. */
+  private reportReleased(run: JobQueueRun, would: string): void {
+    this.log.warn(
+      `[job-worker] ${run.jobId} run ${run.id} is no longer held by ${this.workerId}; ` +
+        `its ${would} pass wrote nothing and the row is its next claimant's`,
+    );
+    this.onOutcome(run, 'released');
+  }
+
+  /**
+   * The budget is spent (or the failure declared itself hopeless). Write the ledger
+   * + DLQ rows BEFORE marking the queue row failed, so an operator never sees a
+   * `failed` run with no record of why — and only while this worker still holds
+   * the row, so a run released mid-execution is not dead-lettered by a worker that
+   * gave it back (MOTIR-10466). Its next claimant has the refunded attempt.
+   */
+  private async failTerminally(
+    run: JobQueueRun,
+    err: unknown,
+    failure: { message: string; stack?: string },
+  ): Promise<void> {
+    const holds = await withSystemContext((tx) =>
+      jobQueueRepository.isHeldBy(run.id, this.workerId, tx),
+    );
+    if (!holds) {
+      this.reportReleased(run, 'failed');
+      return;
+    }
+    if (this.onTerminalFailure) {
+      try {
+        await this.onTerminalFailure(run, err);
+      } catch (hookErr) {
+        // A bookkeeping failure must not strand the run. Log it and still
+        // settle the row: `running` with no live claimant is strictly worse
+        // than a missing dashboard entry.
+        this.log.error('[job-worker] terminal-failure hook threw', hookErr);
+      }
+    }
+    const marked = await this.record(run, 'failed', (tx) =>
+      jobQueueRepository.markFailed(run.id, this.workerId, failure, tx),
+    );
+    if (marked) {
+      this.log.error(`[job-worker] ${run.jobId} run ${run.id} FAILED terminally`, failure.message);
     }
   }
 
