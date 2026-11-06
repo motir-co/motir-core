@@ -1,6 +1,6 @@
 'use client';
 
-import { forwardRef, useRef, type ReactNode } from 'react';
+import { forwardRef, useId, useRef, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cva, type VariantProps } from 'class-variance-authority';
@@ -124,6 +124,28 @@ export interface ModalProps extends VariantProps<typeof contentVariants> {
    * `document.body`.
    */
   container?: Element | null;
+  /**
+   * More element ids that DESCRIBE the dialog, added to its `aria-describedby`
+   * after the `description`'s own id (MOTIR-10544; design MOTIR-10543's
+   * can't-plan alert). For a dialog whose meaning lives in its BODY as well as
+   * its one-line description — a list of reasons — so assistive tech reads the
+   * body with the title rather than only when the reader tabs into it. A
+   * space-separated id list, as `aria-describedby` takes it.
+   */
+  describedBy?: string;
+  /**
+   * Where focus goes when the dialog opens — Radix's `onOpenAutoFocus`. Call
+   * `event.preventDefault()` and focus an element yourself to land on a control
+   * other than the first focusable one (an alert lands on its safe action).
+   */
+  onOpenAutoFocus?: (event: Event) => void;
+  /**
+   * Where focus goes when the dialog closes — Radix's `onCloseAutoFocus`. A
+   * dialog opened WITHOUT a `Modal.Trigger` has nothing for Radix to return
+   * focus to, so a consumer that opened it from a control calls
+   * `event.preventDefault()` and focuses that control here.
+   */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 function ModalRoot({
@@ -141,6 +163,9 @@ function ModalRoot({
   closeLabel = 'Close',
   dialogLabel = 'Dialog',
   container,
+  describedBy,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
 }: ModalProps) {
   // The dialog's own content: a full-screen element inside it (a `<video>`'s
   // native full-screen button) must not pull the dialog into itself (MOTIR-8560).
@@ -148,6 +173,12 @@ function ModalRoot({
   const fullscreenContainer = usePortalContainer(contentRef);
   // `undefined` lets Radix fall back to `document.body`.
   const portalContainer = container === undefined ? (fullscreenContainer ?? undefined) : container;
+  // With `describedBy` the description's id is OURS, so the content can name it
+  // beside the extra ids; without it Radix wires its own id (unchanged).
+  const descriptionId = useId();
+  const describedByIds = describedBy
+    ? [description ? descriptionId : null, describedBy].filter(Boolean).join(' ')
+    : null;
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal container={portalContainer}>
@@ -181,7 +212,13 @@ function ModalRoot({
           // Only opt out when there's no description. When `description` is
           // set we omit the prop entirely so Radix keeps auto-wiring
           // aria-describedby to the rendered Dialog.Description's id.
-          {...(description ? {} : { 'aria-describedby': undefined })}
+          {...(describedByIds
+            ? { 'aria-describedby': describedByIds }
+            : description
+              ? {}
+              : { 'aria-describedby': undefined })}
+          {...(onOpenAutoFocus ? { onOpenAutoFocus } : {})}
+          {...(onCloseAutoFocus ? { onCloseAutoFocus } : {})}
         >
           {title || description ? (
             <div className="mb-(--spacing-md) shrink-0">
@@ -191,7 +228,10 @@ function ModalRoot({
                 </Dialog.Title>
               ) : null}
               {description ? (
-                <Dialog.Description className="text-(--el-text-subtitle) mt-1 font-sans text-sm">
+                <Dialog.Description
+                  {...(describedByIds ? { id: descriptionId } : {})}
+                  className="text-(--el-text-subtitle) mt-1 font-sans text-sm"
+                >
                   {description}
                 </Dialog.Description>
               ) : null}
