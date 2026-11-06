@@ -7789,6 +7789,7 @@
         "blockedShort": "ブロック中",
         "action": {
           "copyAria": "{command} をコピー",
+          "copyFailed": "コピーできませんでした。コマンドを選択して手動でコピーしてください。",
           "copyTooltip": "<cmd>{command}</cmd> をコピー",
           "copyTooltipCiFailed": "CI 失敗 — <cmd>{command}</cmd> をコピー",
           "copyTooltipChangesRequested": "変更依頼あり — <cmd>{command}</cmd> をコピー",
