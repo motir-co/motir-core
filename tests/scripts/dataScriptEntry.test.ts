@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -21,6 +21,7 @@ import { main as backfillCiState } from '@/scripts/backfill-work-item-ci-state';
 import { main as backfillFixReason } from '@/scripts/backfill-fix-reason';
 import { main as convergeUnlanded } from '@/scripts/converge-ejected-cards';
 import { adminDb } from '../helpers/adminDb';
+import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-10465 — the data scripts reach production after the AWS cutover by running
 // INSIDE a core worker task over ECS Exec, from a bundle in the image. The task holds
@@ -236,6 +237,12 @@ describe('the data scripts, run through loadDataScript', () => {
     vi.spyOn(console, 'error').mockImplementation(push);
     vi.spyOn(console, 'warn').mockImplementation(push);
   };
+  // The per-worker database is reused across files, and every suite truncates at
+  // its own start rather than its end, so an earlier file's rows are still here.
+  // The dry-run cases below assert an EMPTY sweep ("0 of 0"), so establish it.
+  beforeEach(async () => {
+    await truncateAuthTables();
+  });
   afterEach(() => vi.restoreAllMocks());
 
   it('loads the real modules: each one is the main the registry names', async () => {
