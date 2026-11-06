@@ -44,14 +44,14 @@
  * is its own task (MOTIR-5810), after the release that carries the re-ask is live.
  */
 /* eslint-disable no-console -- a CLI operator script: console IS its output surface */
-import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
-import { db } from '@/lib/db';
+// Run through `scripts/data-script-main.ts` (MOTIR-10465): the entry loads `.env`,
+// composes `DATABASE_URL` in a Fargate task, and ends the pool after `main` answers.
 import { ejectedCardConvergenceService } from '@/lib/services/ejectedCardConvergenceService';
 import type { ConvergeReport } from '@/lib/services/ejectedCardConvergenceService';
 
 const TAG = '[converge-unlanded-cards]';
 
-function parseArgs(argv: string[]): { dryRun: boolean } {
+function parseArgs(argv: readonly string[]): { dryRun: boolean } {
   let dryRun = false;
   for (const arg of argv) {
     if (arg === '--dry-run') dryRun = true;
@@ -94,18 +94,12 @@ function printReport(report: ConvergeReport): void {
   );
 }
 
-async function main() {
-  const args = parseArgs(process.argv.slice(2));
+/** Runs the convergence on `argv`; answers the exit code (1 when a card failed). */
+export async function main(argv: readonly string[]): Promise<number> {
+  const args = parseArgs(argv);
   if (args.dryRun) console.log(`${TAG} DRY RUN — classifying only, nothing will be written.`);
   const report = await ejectedCardConvergenceService.converge({ dryRun: args.dryRun });
   printReport(report);
   // A failed card is a NON-ZERO exit even though the sweep completed.
-  if (report.failed.length > 0) process.exitCode = 1;
+  return report.failed.length > 0 ? 1 : 0;
 }
-
-main()
-  .catch((err) => {
-    console.error(`${TAG} failed:`, err);
-    process.exitCode = 1;
-  })
-  .finally(() => db.$disconnect());
