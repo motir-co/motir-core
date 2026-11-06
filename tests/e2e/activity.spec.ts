@@ -185,7 +185,10 @@ test('@smoke history journey: manufactured trail → designed sentences, noise p
   const statusWritten = actionWrite(page, fx.issue.identifier, 'toStatusKey');
   await page.getByRole('option', { name: 'In Progress' }).click();
   expect((await statusWritten).status()).toBe(200);
-  await expect(page.getByText('In Progress', { exact: true })).toBeVisible();
+  // The rail's value — the header eyebrow names the status too (MOTIR-10534).
+  await expect(
+    page.getByRole('complementary').getByText('In Progress', { exact: true }),
+  ).toBeVisible();
 
   // Link the blocker (the default Blocked-by relationship). The picker is
   // query-driven (Subtask 6.9.2 — closes finding #98): TYPE to load candidates,

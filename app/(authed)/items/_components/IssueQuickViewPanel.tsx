@@ -44,6 +44,9 @@ import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPr
 import { QuickViewCloseButton } from './QuickViewCloseButton';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { ToFixTag } from '@/components/workItems/ToFixTag';
+import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
+import { WorkItemBlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
+import { isReadyToStart } from '@/lib/workItems/statusSlot';
 import { StatusHeldNotice } from '@/components/issues/StatusHeldNotice';
 import { useStatusHeld } from '@/components/issues/useStatusHeld';
 import { AssigneePicker } from '@/components/issues/AssigneePicker';
@@ -724,6 +727,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 m: proposal.settableRailFields.length,
               },
             );
+  // The header's blocked flag (MOTIR-10534): readiness says the item is blocked.
+  // Never on a proposal peek — see the status slot below.
+  const headerBlocked = !proposal && data.readiness != null && !data.readiness.ready;
   const peek = (
     // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
     // Only three pages mount `EstimationConfigProvider` and none of them wraps
@@ -765,13 +771,23 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             header reads *what the plan does* → *where it is now*. An `add` has
             no status at all, so the two never crowd. */}
         {proposal ? <ProposalOpChip op={proposal.op} outcome={proposalOutcome ?? null} /> : null}
+        {/* THE STATUS SLOT AND THE MANUAL CHIP (MOTIR-10534) — the canvas card's tag
+            row, shared, so the peek names the item's state the way the roadmap card
+            and the board card do: Done › To plan › Ready › the status chip, then
+            Manual, then the blocked flag when readiness says so. A proposal peek
+            draws its committed target's slot after the op chip with no readiness:
+            *can I start this?* is moot for a change nobody has approved, the same
+            reason the readiness banner below is suppressed (Part XIV §5). */}
         {proposal && proposal.identifier == null ? null : (
-          <StatusValue
-            statusKey={data.status}
-            category={data.statusCategory}
-            label={data.statusLabel}
+          <WorkItemStateTags
+            item={data}
+            ready={!proposal && isReadyToStart(data.statusCategory, data.readiness?.ready === true)}
+            blocked={headerBlocked}
           />
         )}
+        {headerBlocked ? <WorkItemBlockedTag /> : null}
+        {/* A Visitor's PRIVATE epic (MOTIR-10534) — the shipped public marker. */}
+        {data.childrenHidden ? <EpicNotPublicPill /> : null}
         {/* THE TO FIX TAG (MOTIR-6610; design MOTIR-6608 panel 4) — the label,
             right after the status pill it qualifies. A proposal peek carries no
             reason, so it draws nothing there. */}

@@ -3783,6 +3783,27 @@ export const workItemRepository = {
   },
 
   /**
+   * Which of `parentIds` have at least one LIVE child, in ONE round-trip — the
+   * board card's `hasChildren` (MOTIR-10534), the bit the To plan pill reads. Live
+   * is the roadmap level's own `hasChildren` probe: not archived and not in
+   * triage. `workspaceId`-gated; empty `parentIds` short-circuits to an empty set.
+   */
+  async findParentIdsWithLiveChildren(
+    parentIds: string[],
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Set<string>> {
+    if (parentIds.length === 0) return new Set();
+    const client = tx ?? dbRead;
+    const rows = await client.workItem.findMany({
+      where: { parentId: { in: parentIds }, workspaceId, archivedAt: null, triagedAt: null },
+      select: { parentId: true },
+      distinct: ['parentId'],
+    });
+    return new Set(rows.map((r) => r.parentId as string));
+  },
+
+  /**
    * The DIRECT children of a set of parents with each child's KIND, in ONE
    * round-trip — what a plan `modify` that RE-KINDS its target is judged against
    * (bug MOTIR-8192): the new kind must legally parent every child the target
@@ -6883,24 +6904,6 @@ function distributionGroupBySql(groupBy: DistributionGroupBy): {
 }
 
 /**
- * The single, total "not in triage" exclusion (Subtask 6.11.3, per
- * docs/decisions/triage-model.md §2). A submission is born a `work_item`
- * carrying a `triagedAt` marker that hides it from EVERY normal read until it
- * graduates (accept/promote clear the marker); decline/merge KEEP the marker so
- * a parentless cancelled submission can never resurface as a tree root (ADR §5).
- * So "is this item part of the planned workspace?" reduces to this one
- * predicate — `triagedAt IS NULL` — with no status/`cancelled` special-casing.
- *
- * Defined ONCE here and ANDed into every normal read OUTSIDE any user-supplied
- * FilterAST (so no filter can opt back in to triage items): the tree forest +
- * lazy tree level (+ their counts), the flat List (+ count), each board column
- * + every swimlane lane aggregate, the ready set, quick search, and the report
- * aggregates. The triage-queue read (`findTriageQueue`) is the ONLY read that
- * inverts it. The `alias` is a fixed internal literal (never user input), as in
- * `buildIssueFilterSql`. The Prisma-builder reads (`findColumnCards`, the lane
- * `groupBy`s) express the same predicate as `{ triagedAt: null }`.
- */
-/**
  * The board lane's keyset predicate (MOTIR-10535) in the Prisma builder's terms —
  * the rows strictly AFTER `after` in its order (`position ASC, key ASC`, or
  * `updatedAt DESC, key ASC`). The raw-SQL twin in `findColumnCards` states the
@@ -6941,6 +6944,24 @@ function treeLevelPredicate(
   return Prisma.sql`${parentPred} AND w."folderId" IS NULL${band}`;
 }
 
+/**
+ * The single, total "not in triage" exclusion (Subtask 6.11.3, per
+ * docs/decisions/triage-model.md §2). A submission is born a `work_item`
+ * carrying a `triagedAt` marker that hides it from EVERY normal read until it
+ * graduates (accept/promote clear the marker); decline/merge KEEP the marker so
+ * a parentless cancelled submission can never resurface as a tree root (ADR §5).
+ * So "is this item part of the planned workspace?" reduces to this one
+ * predicate — `triagedAt IS NULL` — with no status/`cancelled` special-casing.
+ *
+ * Defined ONCE here and ANDed into every normal read OUTSIDE any user-supplied
+ * FilterAST (so no filter can opt back in to triage items): the tree forest +
+ * lazy tree level (+ their counts), the flat List (+ count), each board column
+ * + every swimlane lane aggregate, the ready set, quick search, and the report
+ * aggregates. The triage-queue read (`findTriageQueue`) is the ONLY read that
+ * inverts it. The `alias` is a fixed internal literal (never user input), as in
+ * `buildIssueFilterSql`. The Prisma-builder reads (`findColumnCards`, the lane
+ * `groupBy`s) express the same predicate as `{ triagedAt: null }`.
+ */
 function notInTriageSql(alias: string): Prisma.Sql {
   return Prisma.sql`${Prisma.raw(alias)}."triagedAt" IS NULL`;
 }

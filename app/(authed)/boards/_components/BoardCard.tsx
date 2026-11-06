@@ -11,9 +11,9 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CircleAlert, GripVertical, Hash, Sparkles } from 'lucide-react';
+import { GripVertical, Hash, Sparkles } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { Pill } from '@/components/ui/Pill';
+import { WorkItemBlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
 import { CiStateBadge } from '@/components/github/CiStateBadge';
 import { ObsolescenceBadge } from '@/components/issues/ObsolescenceBadge';
 import { DecisionWaitingMarker } from '@/components/approvals/DecisionWaitingMarker';
@@ -185,6 +185,11 @@ export function BoardCardView({
           decision-waiting marker + `Checks running`) takes a second line and the
           card grows by one 22px line plus the 6px gap, only in that case. */}
       <span className="flex flex-wrap items-center gap-1.5">
+        {/* THE STATUS SLOT AND THE MANUAL CHIP (MOTIR-10534) — the canvas card's tag
+            row, shared: Done › To plan › Ready › the status chip, then Manual. They
+            come FIRST, so the row reads *what state it is in* before *what waits on
+            it*. A blocked card never wears the Done stamp; its flag is louder. */}
+        <WorkItemStateTags item={card} ready={card.readyToStart} blocked={!card.ready} />
         {/* THE EXCLUSIVE SLOT, in the design's precedence (MOTIR-5875 § *The board
             card's exclusive slot*): a decision waiting on YOU › `Blocked` › a
             decision waiting on someone else › the priority chip. Yours beats
@@ -202,10 +207,9 @@ export function BoardCardView({
             routedToName={routedToName}
           />
         ) : !card.ready ? (
-          <Pill severity="warning">
-            <CircleAlert className="h-3 w-3" aria-hidden />
-            {t('blocked')}
-          </Pill>
+          // The canvas card's blocked flag (MOTIR-10534), in the slot the warning
+          // `Blocked` pill held: one flag for one fact on every surface.
+          <WorkItemBlockedTag />
         ) : card.review?.marker ? (
           // THE REVIEW MARKER (MOTIR-10341; § 32.1, M2–M4) — in the decision marker's
           // slot, at its size and precedence. No copy button here: the card is one button.

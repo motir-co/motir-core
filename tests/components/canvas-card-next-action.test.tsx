@@ -24,6 +24,7 @@ vi.mock('@/lib/navigation/shallowUrl', async (importOriginal) => ({
 const { WorkItemNode, WorkItemCardShell, cardNextAction, isToPlanStory } =
   await import('@/components/planning/WorkItemNode');
 const { ToastProvider } = await import('@/components/ui/Toast');
+const { ProjectRoadmapCanvas } = await import('@/components/planning/ProjectRoadmapCanvas');
 const { withPlanningOverlay } = await import('@/lib/planning/launcher');
 type WorkItemNodeData = import('@/components/planning/WorkItemNode').WorkItemNodeData;
 
@@ -485,6 +486,98 @@ describe('the next-action button', () => {
     expect(cls).toContain('group-focus-within/node:opacity-100');
     expect(cls).toContain('[[data-node-id]:focus-visible_&]:opacity-100');
     expect(cls).toContain('[@media(hover:none)]:opacity-100');
-    expect(cls).toContain('translate-y-1/2');
+  });
+
+  // MOTIR-10536: it hangs on the card's TOP edge, so it never shares the bottom edge
+  // the selected card's action slot (View / Open) hangs on.
+  it('hangs on the card top edge, right-aligned — never the bottom edge', () => {
+    render(<WorkItemNode item={leaf} ready nextActions={ON} />);
+    const cls = classes(nextAction()!);
+    expect(hungEdge(cls)).toBe('top');
+    expect(cls).toContain('right-3');
+  });
+
+  it('the To plan Plan button hangs on the same top edge', () => {
+    render(<WorkItemNode item={story} nextActions={ON} />);
+    expect(nextAction()!.dataset.action).toBe('plan');
+    expect(hungEdge(classes(nextAction()!))).toBe('top');
+  });
+});
+
+/** The element's class tokens. */
+function classes(el: Element): string[] {
+  return el.className.split(/\s+/).filter(Boolean);
+}
+
+/**
+ * Which edge of its containing box an absolutely-positioned control HANGS across,
+ * read from its Tailwind utilities: anchored `top-*` and lifted by a negative
+ * translate (or a negative `-top-*` inset) ⇒ `top`; anchored `bottom-*` and dropped
+ * by a positive translate (or a negative `-bottom-*` inset) ⇒ `bottom`. happy-dom
+ * lays nothing out, so the classes ARE the geometry this suite can read.
+ */
+function hungEdge(cls: string[]): 'top' | 'bottom' | null {
+  const top = cls.some((c) => /^-?top-/.test(c));
+  const bottom = cls.some((c) => /^-?bottom-/.test(c));
+  if (top && !bottom) return 'top';
+  if (bottom && !top) return 'bottom';
+  return null;
+}
+
+// MOTIR-10536 — the collision itself. On the roadmap a SELECTED card draws its
+// action slot (View · planning target · Open) centred across the bottom edge; on a
+// 280px card View + Open reach into the right corner, where the next-action button
+// used to hang, and the slot (drawn after the card) painted over it.
+describe('the next-action button on a SELECTED roadmap card (MOTIR-10536)', () => {
+  async function selectedCard(item: WorkItemNodeData, ready: boolean) {
+    const level = {
+      nodes: [
+        {
+          id: item.id,
+          parentId: null,
+          searchText: item.title,
+          crumbLabel: item.identifier,
+          drillable: true,
+          viewable: true,
+          content: <WorkItemNode item={item} ready={ready} nextActions={ON} />,
+        },
+      ],
+      deps: [],
+    };
+    render(
+      <ToastProvider>
+        <ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} onView={vi.fn()} />
+      </ToastProvider>,
+    );
+    await screen.findByText(item.title);
+    const node = document.querySelector(`[data-node-id="${item.id}"]`) as HTMLElement;
+    fireEvent.keyDown(node, { key: 'Enter' });
+    const view = await screen.findByTestId('view-button');
+    expect(screen.getByTestId('drill-button')).toBeTruthy();
+    return { slot: view.parentElement as HTMLElement, button: nextAction()! };
+  }
+
+  it.each([
+    ['a ready leaf (motir run)', leaf, true],
+    ['a To plan story (Plan)', story, false],
+  ] as const)(
+    'on %s the button and the View / Open slot hang on different edges',
+    async (_label, item, ready) => {
+      const { slot, button } = await selectedCard(item, ready);
+      // Both present at once — the slot did not replace the button.
+      expect(slot.contains(button)).toBe(false);
+      expect(hungEdge(classes(slot))).toBe('bottom');
+      expect(hungEdge(classes(button))).toBe('top');
+    },
+  );
+
+  it('pressing the button on the selected card still reaches neither the node nor the slot', async () => {
+    const { button } = await selectedCard(leaf, true);
+    fireEvent.click(button, { button: 0 });
+    await act(async () => {});
+    expect(writeText).toHaveBeenCalledWith('motir run MOTIR-10509');
+    // Still selected: the press neither drilled (the slot would be gone with the
+    // level) nor re-selected.
+    expect(screen.getByTestId('view-button')).toBeTruthy();
   });
 });

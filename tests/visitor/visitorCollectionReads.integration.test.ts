@@ -209,11 +209,37 @@ describe('the board', () => {
 
     // MOTIR-6648 — the private epic's card is marked for the Visitor, never for a member.
     expect(cards.find((c) => c.id === t.privateEpic.id)?.childrenHidden).toBe(true);
+    // …and reads childless, as the roadmap root does (MOTIR-10534).
+    expect(cards.find((c) => c.id === t.privateEpic.id)?.hasChildren).toBe(false);
     const memberBoard = await boardsService.getBoard(t.fx.projectId, t.fx.ctx);
     expect(memberBoard.columns.flatMap((c) => c.cards).some((c) => 'childrenHidden' in c)).toBe(
       false,
     );
     expect(ids(memberBoard.columns.flatMap((c) => c.cards))).toEqual([...t.allIds].sort());
+    expect(
+      memberBoard.columns.flatMap((c) => c.cards).find((c) => c.id === t.privateEpic.id)
+        ?.hasChildren,
+    ).toBe(true);
+  });
+});
+
+describe('the quick view', () => {
+  it("the Visitor's peek of the private epic is marked Not public; a member's is not (MOTIR-10534)", async () => {
+    const t = await publicFixture();
+    const peek = await workItemsService.getVisitorQuickView(
+      t.privateEpic.identifier,
+      t.visitor,
+      'en',
+    );
+    expect(peek.childrenHidden).toBe(true);
+    const memberPeek = await workItemsService.getQuickView(
+      t.fx.projectId,
+      t.privateEpic.identifier,
+      'workspace',
+      t.fx.ctx,
+      'en',
+    );
+    expect('childrenHidden' in memberPeek).toBe(false);
   });
 });
 

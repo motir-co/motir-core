@@ -57,6 +57,7 @@ import {
 } from './_components/LateSections';
 import { IssueExplanation } from './_components/IssueExplanation';
 import { PlacementBreadcrumb } from './_components/PlacementBreadcrumb';
+import { ItemHeaderStateTags } from './_components/ItemHeaderStateTags';
 import { DecisionWaitingHeaderLink } from './_components/DecisionWaitingHeaderLink';
 import {
   OptimisticMarkProvider,
@@ -571,8 +572,9 @@ export default async function ItemView({
               <div className="flex flex-col gap-6">
                 {/* Header — type icon · identifier · parent breadcrumb · title +
           Edit link. The breadcrumb (2.4.3) renders the ancestor chain right
-          after the identifier, per the detail.png eyebrow. (Status lives in the
-          core-fields rail's StatusPicker, not the eyebrow — 2.4.13.) */}
+          after the identifier, per the detail.png eyebrow. The STATUS is read in the
+          eyebrow again (MOTIR-10534, the canvas tag row) and still CHANGED in the
+          core-fields rail's StatusPicker. */}
                 <header className="flex flex-col gap-2">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                     <IssueTypeIcon type={item.kind as IssueType} className="h-5 w-5 shrink-0" />
@@ -585,6 +587,21 @@ export default async function ItemView({
                     >
                       {item.identifier}
                     </span>
+                    {/* THE STATE TAGS (MOTIR-10534): the canvas card's status slot and
+              Manual chip, then the blocked flag when readiness says so — right after
+              the identifier, before the breadcrumb. The rail's StatusPicker is still
+              where status is CHANGED. */}
+                    <ItemHeaderStateTags
+                      item={{
+                        kind: item.kind,
+                        status: item.status,
+                        type: item.type,
+                        executor: item.executor,
+                      }}
+                      statuses={detail.workflow.statuses}
+                      hasChildren={detail.children.length > 0}
+                      unblocked={detail.readiness.ready}
+                    />
                     {/* bug-issue-detail-eyebrow-overflows-viewport: the breadcrumb sits in
               a `min-w-0 flex-1` cell so it has a BOUNDED track to truncate against
               — its inner `<span className="truncate">` (ParentBreadcrumb) only
@@ -602,7 +619,7 @@ export default async function ItemView({
                       {/* 2.9.6: the always-visible "Archived" chip follows the breadcrumb
                 so the archived state stays legible when the page is scrolled past
                 the banner. Neutral register (NOT a colored Pill tone) — the only
-                eyebrow tag (the status Pill was removed in 2.4.13). */}
+                eyebrow tag besides the state tags after the identifier. */}
                       {isArchived ? (
                         <Pill className="shrink-0 border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)">
                           <Archive className="size-3 text-(--el-text-muted)" aria-hidden />

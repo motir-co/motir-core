@@ -10037,3 +10037,24 @@ live-page join (MOTIR-9203), and embedded cards (the embed story).
 - **Activity** gains pass, send-back, late and second-review entries (M12).
 
 The full element spec, tokens, accessibility contract and the en / zh copy keys are in **`design/github/design-notes.md` § 32**, which is the one source; this section only indexes the surface.
+
+## The status slot in the quick view header and on the item page (MOTIR-10534, DATED 2026-11-06)
+
+Amends the quick view header (`quick-view.mock.html`, the `StatusValue` after the identifier) and the item page eyebrow and core-fields rail (`detail.png` / `detail.pen`, legacy records). No new mock: the drawing is the roadmap canvas card's tag row, design **MOTIR-10508**, rendered through the one shared component `components/workItems/WorkItemStateTags.tsx`; the precedence is `lib/workItems/statusSlot.ts`'s. The board card adopts the same row (`design/boards/design-notes.md` § _The card's tag row_).
+
+**The quick view header**, left to right after the identifier:
+
+1. a proposal's **op chip**, first, as before (a review surface asks _what will the plan do_);
+2. **the status slot** — Done › To plan › Ready › the status chip — in place of `StatusValue`. Ready needs a `todo`-category status AND `readiness.ready`. A **proposal peek** draws its committed target's slot with no Ready and no blocked flag (readiness is moot for an unapproved change — the same reason its readiness banner is suppressed), and an **`add`** draws no status at all;
+3. the **Manual** chip for a human-gated item;
+4. the **blocked flag** (`--el-danger-surface` / `--el-danger-on-surface`, `Flag`, visible _blocked_, the sentence **Blocked** on `title` / `aria-label`) when the item's readiness says blocked;
+5. **Not public** for a Visitor's private epic (the shipped `EpicNotPublicPill`; the peek now carries `childrenHidden`);
+6. **To fix**, then **Archived**, unchanged.
+
+The rail's Status field is unchanged (it is the editor).
+
+**The item page eyebrow** gains, right after the identifier and before the breadcrumb: the status slot, the Manual chip, and the blocked flag when readiness says blocked. The slot follows the page's status channel, so a decision taken on the page or a status picked in the rail repaints it in the same frame.
+
+**The core-fields rail's read-only Status** (a viewer who cannot transition) draws the same status chip outside the slot (`WorkItemStatusPill`, the canvas tint by key, else category, else neutral) instead of the `StatusPill` mix recipe. `StatusPicker`, the editor, is unchanged.
+
+What stays on the canvas alone: You are here, not in sprint, the drill chevron, a run's disposition and the card washes. No new token.

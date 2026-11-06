@@ -175,7 +175,10 @@ export const NODE_W = 280;
 export const NODE_H = 124;
 const GAP_X = 80;
 const GAP_Y = 72;
-const COLS = 3;
+// How many cards a row of the LOOSE band holds (MOTIR-10537: 5, was 3). The
+// plan-review canvas's arrival predicate is derived from this width —
+// `ARRIVAL_LEVEL_MAX_NODES` in `planView.ts` — so a change here re-derives it.
+export const LOOSE_BAND_COLS = 5;
 const ORIGIN = 40;
 // Clear vertical separation between the dependency FLOW and the loose-item band.
 const BAND_GAP = 96;
@@ -299,7 +302,8 @@ export function computeLevel(
  *    that share a layer into rows. So every dependency edge travels left→right and
  *    no edge has to thread between siblings — the chain reads as a flowing road.
  *  - **Loose** nodes (in no edge — e.g. a standalone bug) drop into their OWN grid
- *    band BELOW the flow, so a dependency line never crosses an unrelated card.
+ *    band BELOW the flow, so a dependency line never crosses an unrelated card. The
+ *    band is {@link LOOSE_BAND_COLS} cards wide and fills row by row in node order.
  * Same input → same positions (no `Math.random`, no `Date.now`); a node's explicit
  * position (fixed stations / a saved drag) overrides this per node.
  */
@@ -337,12 +341,12 @@ export function deterministicLayout(
     });
   }
 
-  // the loose band: a simple grid (rows of COLS) below the flow.
+  // the loose band: a simple grid (rows of LOOSE_BAND_COLS) below the flow.
   const flowBottom = ORIGIN + Math.max(0, maxRows - 1) * (NODE_H + GAP_Y) + NODE_H;
   const bandY = connected.length > 0 ? flowBottom + BAND_GAP : ORIGIN;
   loose.forEach((id, i) => {
-    const row = Math.floor(i / COLS);
-    const col = i % COLS;
+    const row = Math.floor(i / LOOSE_BAND_COLS);
+    const col = i % LOOSE_BAND_COLS;
     pos[id] = { x: ORIGIN + col * (NODE_W + GAP_X), y: bandY + row * (NODE_H + GAP_Y) };
   });
   return pos;

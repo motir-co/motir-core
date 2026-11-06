@@ -151,7 +151,8 @@ describe('the context path, from the layout’s props to both hosts (MOTIR-2558)
       // MOTIR-4799 — the tile points at the LANDING now; selector composed
       // from the owner constant rather than re-typed.
       const brand = container.querySelector(`a[href="${AUTHED_LANDING_PATH}"]`)!;
-      expect(brand.className).toContain('bg-(--el-surface)');
+      // MOTIR-8932 — the tile is motir.co's logo tile, drawn inside the Link.
+      expect(brand.querySelector('rect')!.getAttribute('class')).toBe('fill-(--el-logo-tile)');
     });
   });
 

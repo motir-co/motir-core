@@ -468,7 +468,10 @@ test('@smoke inline status: a legal transition persists; illegal targets are not
     expect((await getItem(page, item.id)).status).toBe('in_progress');
   }).toPass();
   await page.reload();
-  await expect(page.getByText('In Progress')).toBeVisible();
+  // The rail reads it back, and so does the header eyebrow's status slot, which
+  // names the same status since MOTIR-10534.
+  await expect(page.getByRole('complementary').getByText('In Progress')).toBeVisible();
+  await expect(page.locator('[data-status="in_progress"]')).toHaveCount(2);
 });
 
 test('@smoke inline assignee: assign then unassign, both persist across reload', async ({

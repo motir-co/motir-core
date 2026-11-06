@@ -116,10 +116,13 @@ export const ARRIVAL_MIN_SCALE = 0.8;
  * **The centring is PER AXIS**, and that clause is what stops the result looking
  * wrong (`design-notes.md`, same section). On an axis where the level FITS at the
  * floor, the level's BOUNDS are centred; on an axis where it does not, the FOCAL
- * rect is. The project root is 800 px wide at the floor inside a 1136 px canvas,
- * so it is centred horizontally while only the vertical follows the frontier —
- * centring the focal card on both axes parks a first-column card in the middle and
- * leaves a third of the canvas empty.
+ * rect is. A level that fits across at the floor — up to three cards wide, 1000 px
+ * world, 800 px at the floor inside a 1136 px canvas — is centred horizontally
+ * while only the vertical follows the frontier; centring the focal card on both
+ * axes would park a first-column card in the middle and leave a third of the
+ * canvas empty. A full 5-column loose band (MOTIR-10537) is 1720 px of world, 1376
+ * px at the floor, so it overflows that canvas and the frontier is followed on
+ * both axes.
  *
  * `focal` absent → the bounds' centre is used on both axes, which is what a level
  * with no actionable card should do.

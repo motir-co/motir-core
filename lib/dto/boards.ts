@@ -14,9 +14,11 @@
 import type { CardReviewDTO } from '@/lib/dto/reviewState';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import type {
+  ExecutorDto,
   WorkItemKindDto,
   WorkItemObsolescenceDto,
   WorkItemPriorityDto,
+  WorkItemTypeDto,
 } from '@/lib/dto/workItems';
 import type { StatusCategoryDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { SprintPointsDto } from '@/lib/dto/estimation';
@@ -171,8 +173,29 @@ export interface BoardCardDto {
    *  `estimationStatistic`. `null` renders no chip. */
   storyPoints: number | null;
   position: string;
-  /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21). */
+  /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21).
+   *  The readiness CASCADE — own blockers done and every ancestor ready. The card
+   *  draws the blocked flag off it (MOTIR-10534). */
   ready: boolean;
+  /**
+   * THE CANVAS'S READY (MOTIR-10534): in a startable (`todo`-category) status AND
+   * {@link ready} — the rule the roadmap read writes into `RoadmapNodeDto.ready`
+   * (`isReadyToStart`), so the card's status slot shows the Ready pill on exactly
+   * the items the canvas does. `ready` alone says only that nothing blocks the
+   * card, which is true of a card in progress too.
+   */
+  readyToStart: boolean;
+  /** The status's DISPLAY LABEL from the project's workflow (MOTIR-10534), for the
+   *  status chip of a project's custom status. Falls back to the raw key for a row
+   *  whose status the workflow no longer holds. */
+  statusLabel: string;
+  /** Has at least one live (non-archived, non-triage) child — with the kind and
+   *  the category it decides the To plan pill (MOTIR-10534). */
+  hasChildren: boolean;
+  /** The work TYPE — with `executor`, decides the Manual chip (MOTIR-10534). */
+  type: WorkItemTypeDto | null;
+  /** WHO executes the work — `human` (or `type: 'manual'`) is Manual. */
+  executor: ExecutorDto | null;
   /**
    * Whether a decision is waiting on this card, and whether it is the READER's
    * (Story MOTIR-4908 · MOTIR-5876) — `approvalGatesService.pendingDecisionsFor`,

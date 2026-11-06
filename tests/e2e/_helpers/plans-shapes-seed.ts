@@ -106,8 +106,8 @@ export interface ShapeThree {
 /**
  * SHAPE FOUR — a plan proposing into a CROWDED container (MOTIR-4026).
  *
- * Sixteen committed siblings under one epic, plus two proposals: ONE container,
- * so Part IX §3's arm says canvas — and eighteen nodes, so Part XIII §6's
+ * Thirty-four committed siblings under one epic, plus two proposals: ONE
+ * container, so Part IX §3's arm says canvas — and thirty-six nodes, so Part XIII §6's
  * legibility arm says LIST. It is the shape the widened default exists for, and
  * it is deliberately indistinguishable from shape TWO to the reader who only
  * counts containers.
@@ -340,13 +340,13 @@ export async function seedPlanShapes(email: string): Promise<PlansShapesSeed> {
   await plansService.markPlanned(threePlan.id, ctx);
 
   // ── SHAPE FOUR ────────────────────────────────────────────────────────────
-  // Sixteen committed siblings and two proposals under ONE epic: the container
-  // count says canvas, the level's SIZE says list (Part XIII §6). Sixteen is
-  // chosen against the threshold rather than for roundness — 18 nodes is the
-  // first level past `ARRIVAL_LEVEL_MAX_NODES` that still reads as an ordinary
-  // epic rather than a stress fixture.
+  // Thirty-four committed siblings and two proposals under ONE epic: the
+  // container count says canvas, the level's SIZE says list (Part XIII §6).
+  // Thirty-four is chosen against the threshold rather than for roundness — 36
+  // nodes is the first level past `ARRIVAL_LEVEL_MAX_NODES` (35 on the 5-column
+  // band, MOTIR-10537), so the level crosses it by exactly one card.
   const fourEpic = await commit('epic', 'Notifications platform');
-  const FOUR_COMMITTED = 16;
+  const FOUR_COMMITTED = 34;
   for (let i = 0; i < FOUR_COMMITTED; i += 1) {
     await commit('story', `Notification channel ${i + 1}`, fourEpic.id);
   }

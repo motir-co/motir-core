@@ -5,17 +5,14 @@ import { EpicNotPublicPill } from '@/components/issues/EpicNotPublicPill';
 import {
   ArrowUpRight,
   Check,
-  CheckCircle2,
   ChevronRight,
   CircleDashed,
-  CirclePlay,
   Copy,
   Flag,
   Folder,
   FolderOpen,
   FolderPen,
   Layers,
-  ListPlus,
   MapPin,
   Sparkles,
 } from 'lucide-react';
@@ -37,7 +34,6 @@ import { useToast } from '@/components/ui/Toast';
 import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
-import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { RunTonePill } from '@/components/runs/RunTonePill';
 import type { RunTone } from '@/lib/runs/timeline';
 import { isManualReadyItem } from '@/lib/dto/ready';
@@ -46,7 +42,8 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import { FolderPathLabel } from '@/components/planning/FolderPlacement';
-import { canvasStatusLabel, canvasStatusMeta } from '@/lib/workflows/canvasStatusMeta';
+import { BlockedTag, SlotPill, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
+import { isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
 // MOTIR-1194) — the card the reusable `ProjectRoadmapCanvas` renders for an epic /
@@ -142,56 +139,12 @@ export const KIND_TINT: Record<IssueType, string> = {
   subtask: 'bg-(--el-tint-lavender)',
 };
 
-/**
- * ONE workflow status as a canvas chip. The KEY is whatever the project's
- * workflow defines; `label` / `category` are the status's own identity as the
- * level read carried them (bug MOTIR-3170). A key with no per-key treatment
- * takes its category's tone, and one with neither takes the neutral chip — it
- * never impersonates To Do.
- */
-export function WorkItemStatusPill({
-  status,
-  label = null,
-  category = null,
-  slot = false,
-  glyphOnly = false,
-}: {
-  status: string;
-  label?: string | null;
-  category?: StatusCategoryDto | null;
-  /** The committed card's TAG-ROW status slot (MOTIR-10508): `min-w-0`, the name
-   *  on `title`, the label truncating last. Absent, the shipped `shrink-0` chip
-   *  (a proposal's top row keeps it). */
-  slot?: boolean;
-  /** The give-way rule's glyph-only chip: the name rides `aria-label` (`role="img"`)
-   *  and `title`. Only with `slot`. */
-  glyphOnly?: boolean;
-}) {
-  const meta = canvasStatusMeta(status, category);
-  const Icon = meta.icon;
-  const tStatus = useTranslations('labels.defaultStatus');
-  const name = canvasStatusLabel(status, label, tStatus);
-  if (slot) {
-    return (
-      <SlotPill
-        data-status={status}
-        label={name}
-        glyphOnly={glyphOnly}
-        className={`${meta.tint} ${meta.text}`}
-        icon={<Icon className="size-3 shrink-0" aria-hidden="true" />}
-      />
-    );
-  }
-  return (
-    <span
-      data-status={status}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium ${meta.tint} ${meta.text}`}
-    >
-      <Icon className="size-3" aria-hidden="true" />
-      {name}
-    </span>
-  );
-}
+// The status chip, the slot pills (Done / To plan / Ready) and the Manual chip
+// moved to `components/workItems/WorkItemStateTags.tsx` (MOTIR-10534), so the
+// /boards card, the quick view and the item page draw an item's state the way this
+// card does. They are re-exported here for the callers that already import them.
+export { WorkItemStatusPill } from '@/components/workItems/WorkItemStateTags';
+export { isToPlanStory } from '@/lib/workItems/statusSlot';
 
 /** One work item's disposition in a dispatch RUN, already resolved to a tone and
  *  a localized label by the consumer (MOTIR-3895). */
@@ -220,24 +173,6 @@ export type CardNextAction =
 
 /** The fix reasons the card offers `motir fix` for, and whose tooltip names them. */
 export type CopyActionReason = 'ci_failed' | 'changes_requested';
-
-/**
- * A TO PLAN story (design MOTIR-10508 § "The To plan story"): a story with no
- * children whose status category is `todo`. A childless story already In Progress
- * is not To plan (someone holds it), and a childless Done story is Done.
- *
- * `hasChildren` must be KNOWN to be false: a node built without it (an onboarding
- * preview, a run's canvas fed an older read) never claims the story is unplanned.
- */
-export function isToPlanStory(
-  item: Pick<WorkItemNodeData, 'kind' | 'status' | 'statusCategory' | 'hasChildren'>,
-): boolean {
-  if (item.kind !== 'story' || item.hasChildren !== false) return false;
-  // The category is the rule; a node built without it falls back to the default
-  // workflow's own `todo` key rather than guessing from a custom one.
-  const category = item.statusCategory ?? (item.status === 'todo' ? 'todo' : null);
-  return category === 'todo';
-}
 
 /**
  * The state → action mapping (design MOTIR-10508 § "The next-action button"), the
@@ -347,23 +282,23 @@ export function WorkItemNode({
   const isManual = isManualReadyItem({ type: item.type ?? null, executor: item.executor ?? null });
   const showMeter = progress !== null && progress.total > 0;
   const pct = showMeter ? Math.round((progress.done / progress.total) * 100) : 0;
-  // The ready treatment is suppressed on the "you are here" frontier (its accent
-  // treatment is the louder, must-not-miss signal) — MOTIR-1417.
-  const showReady = ready && !here;
   // DONE + READY card styles (MOTIR-1422) — both carried IN THE CARD body so they
   // survive zoom-out (the old 3px ready bar vanished) and read as opposites:
   // READY = a whole-card mint wash; DONE = a distinct `--el-tint-sky` card + struck title.
   // The accent "you are here" and the red cross-blocked flag are louder than both.
-  const showDone = item.status === 'done' && !here && !crossBlocked;
+  // The slot's precedence is the shared rule (`statusSlotOf`, MOTIR-10534), so the
+  // frame below and the tag row's pill can never disagree.
+  const slot = statusSlotOf(item, { ready, blocked: crossBlocked, here });
+  const showDone = slot === 'done';
   // TO PLAN (MOTIR-10508): a childless `todo` story. Precedence — blocked elsewhere
   // > You are here > Done > To plan > Ready > not in sprint > normal. Blocked and
   // Here win the FRAME; under blocked the To plan pill keeps the status slot (as its
   // glyph, by the give-way rule below), and Here takes the slot. A `todo` story is
   // never Done, so the Done arm cannot meet it; it is listed for the order's sake.
   const toPlan = isToPlanStory(item);
-  const showToPlanPill = toPlan && !here && !showDone;
+  const showToPlanPill = slot === 'to-plan';
   const showToPlanWash = showToPlanPill && !crossBlocked;
-  const showReadyPill = showReady && !showToPlanPill;
+  const showReadyPill = slot === 'ready';
   const showReadyWash = showReadyPill && !crossBlocked;
   // NOT-IN-SPRINT chrome (MOTIR-1379 follow-up) — an informational, NON-error
   // signal, deliberately never the red cross-blocked chrome. The louder
@@ -454,33 +389,17 @@ export function WorkItemNode({
       // right, Not public, not in sprint, the blocked flag or the drill chevron.
       statusRow={
         <>
-          {here ? (
-            <HerePill glyphOnly={glyphOnly} />
-          ) : showDone ? (
-            <DonePill glyphOnly={glyphOnly} />
-          ) : showToPlanPill ? (
-            <ToPlanPill glyphOnly={glyphOnly} />
-          ) : showReadyPill ? (
-            <ReadyPill glyphOnly={glyphOnly} />
-          ) : (
-            <WorkItemStatusPill
-              status={item.status}
-              label={item.statusLabel ?? null}
-              category={item.statusCategory ?? null}
-              slot
-              glyphOnly={glyphOnly}
-            />
-          )}
-          {/* The Manual chip rides the tag row now (MOTIR-10508), a hairline
-              `--el-border` lifting it off every node fill. Composed from the
-              shipped WorkItemTypeChip; manual-only by design. */}
-          {isManual ? (
-            <WorkItemTypeChip
-              type="manual"
-              glyphOnly={glyphOnly}
-              className="shrink-0 gap-1 border-(--el-border) px-(--spacing-chip-x-4) py-0 text-[10.5px]"
-            />
-          ) : null}
+          {/* The status slot and the Manual chip, through the shared tag row
+              (MOTIR-10534): the board, the quick view and the item page draw the
+              same two. The Manual chip rides a hairline `--el-border` lifting it off
+              every node fill. You are here takes the slot on the canvas alone. */}
+          <WorkItemStateTags
+            item={item}
+            ready={ready}
+            blocked={crossBlocked}
+            glyphOnly={glyphOnly}
+            slotOverride={here ? <HerePill glyphOnly={glyphOnly} /> : null}
+          />
           {/* The run DISPOSITION (MOTIR-3895), beside the work item's own status and
               never instead of it: they are different facts. The status is what the
               work item IS; the disposition is what THIS RUN did with it, and a run
@@ -596,7 +515,7 @@ export function WorkItemNode({
  * identifier, a footer (the progress meter, the assignee, a proposal's bottom slot),
  * an `overlay` — absolutely-positioned decoration drawn over the card (a proposal's
  * outcome spine, the `locked` hatch) — and an `action`: the next-action button,
- * drawn OUTSIDE the overflow-hidden frame so it can hang on the card's bottom edge
+ * drawn OUTSIDE the overflow-hidden frame so it can hang on the card's top edge
  * without clipping. That is the compose-don't-redraw seam `PlanningTargetNode`
  * already uses, one level down: a proposal is a LAYER over this shell, never a
  * second card.
@@ -719,38 +638,6 @@ export function WorkItemCardShell({
   );
 }
 
-/**
- * One pill in the tag row's STATUS SLOT (MOTIR-10508): the tag row's one chip size
- * (11px text, a 12px glyph, `chip-x-6`), `min-w-0` so a long label is the last
- * thing to give way (it truncates, its glyph stays), and its name on `title`. With
- * `glyphOnly` (the give-way rule) the label goes and the name rides `aria-label`
- * on a `role="img"`, so it is still read out and shown on hover.
- */
-function SlotPill({
-  label,
-  icon,
-  glyphOnly,
-  className,
-  ...rest
-}: {
-  label: string;
-  icon: ReactNode;
-  glyphOnly: boolean;
-  className: string;
-} & Omit<HTMLAttributes<HTMLSpanElement>, 'className' | 'title' | 'children'>) {
-  return (
-    <span
-      {...rest}
-      {...(glyphOnly ? { role: 'img', 'aria-label': label } : {})}
-      title={label}
-      className={`inline-flex min-w-0 items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium ${className}`}
-    >
-      {icon}
-      {glyphOnly ? null : <span className="truncate">{label}</span>}
-    </span>
-  );
-}
-
 /** The "You are here" current-position pill (Subtask 7.20.6 / MOTIR-1013) — an
  *  accent map-pin chip in the StationCard's active-state language; it takes the
  *  status pill's slot on the active node. */
@@ -762,57 +649,6 @@ function HerePill({ glyphOnly }: { glyphOnly: boolean }) {
       glyphOnly={glyphOnly}
       className="bg-(--el-accent) text-(--el-accent-text)"
       icon={<MapPin className="size-3 shrink-0" aria-hidden="true" />}
-    />
-  );
-}
-
-/** The "Ready" pill (MOTIR-1417) — a white chip on the mint card wash
- *  (MOTIR-1422): the success icon carries the "go" hue; the chip surface lifts off
- *  the tint for contrast. Replaces the dim "To do" pill. */
-function ReadyPill({ glyphOnly }: { glyphOnly: boolean }) {
-  const t = useTranslations('roadmap.canvas.node');
-  return (
-    <SlotPill
-      data-testid="ready-pill"
-      label={t('ready')}
-      glyphOnly={glyphOnly}
-      className="border border-(--el-border) bg-(--el-page-bg) text-(--el-text-strong)"
-      icon={<CirclePlay className="size-3 shrink-0 text-(--el-success)" aria-hidden="true" />}
-    />
-  );
-}
-
-/** The "To plan" pill (MOTIR-10508) — the Ready pill's white chip with a
- *  `ListPlus` glyph, on the yellow To plan wash. */
-function ToPlanPill({ glyphOnly }: { glyphOnly: boolean }) {
-  const t = useTranslations('roadmap.canvas.node');
-  return (
-    <SlotPill
-      data-testid="to-plan-pill"
-      label={t('toPlan')}
-      glyphOnly={glyphOnly}
-      className="border border-(--el-border) bg-(--el-page-bg) text-(--el-text-strong)"
-      icon={<ListPlus className="size-3 shrink-0 text-(--el-text-secondary)" aria-hidden="true" />}
-    />
-  );
-}
-
-/** The "Done" stamp (MOTIR-1422) — a SOLID DARK chip. Deliberately NOT
- *  success-green (so it can't be confused with the ready highlight) AND far heavier
- *  than the light "To do" chip (so done can't be confused with todo — the redo). The
- *  card itself takes a distinct `--el-tint-sky` fill + a struck title, so done
- *  reads as the opposite of ready's mint-forward wash. */
-function DonePill({ glyphOnly }: { glyphOnly: boolean }) {
-  const tStatus = useTranslations('labels.defaultStatus');
-  return (
-    <SlotPill
-      data-testid="done-pill"
-      label={tStatus('done')}
-      glyphOnly={glyphOnly}
-      className="bg-(--el-text-secondary) text-(--el-text-inverted)"
-      icon={
-        <CheckCircle2 className="size-3 shrink-0 text-(--el-text-inverted)" aria-hidden="true" />
-      }
     />
   );
 }
@@ -840,20 +676,9 @@ export function CrossBlockedFlag({
 }) {
   const t = useTranslations('roadmap.canvas.node');
   const sentence = t(sprint ? 'blockerNotInSprint' : 'blockedElsewhere');
-  if (short) {
-    return (
-      <span
-        data-testid="cross-blocked-flag"
-        role="img"
-        title={sentence}
-        aria-label={sentence}
-        className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-danger-on-surface)"
-      >
-        <Flag className="size-3" aria-hidden="true" />
-        <span aria-hidden="true">{t('blockedShort')}</span>
-      </span>
-    );
-  }
+  // The short form is the shared tag (MOTIR-10534) — the board, the quick view and
+  // the item page draw the same flag, with the readiness sentence instead.
+  if (short) return <BlockedTag sentence={sentence} />;
   return (
     <span
       data-testid="cross-blocked-flag"
@@ -868,12 +693,19 @@ export function CrossBlockedFlag({
 /**
  * The next-action button's shared face (MOTIR-10508 § "The next-action button"):
  * the shipped `Button` `secondary` `sm`, on `--el-page-bg` with `--shadow-elevated`
- * so it lifts off any wash, hung on the card's bottom edge, right-aligned. Shown on
+ * so it lifts off any wash, hung on the card's TOP edge, right-aligned. Shown on
  * the card's hover and on focus-within — the button's own focus, or keyboard focus
  * on the canvas node that holds the card — and always on a device with no hover.
+ *
+ * The TOP edge, not the bottom the design first drew (MOTIR-10536): a SELECTED
+ * roadmap card hangs its action slot (View · planning target · Open) centred on the
+ * bottom edge (`ProjectRoadmapCanvas`), and on a 280px card that slot reaches into
+ * the right corner and paints over the button — on exactly the card the reader just
+ * picked. Nothing else hangs on the top edge, and the 72px row gap leaves the
+ * button's 16px overhang well clear of the row above.
  */
 const NEXT_ACTION_CLASS =
-  'absolute right-3 bottom-0 translate-y-1/2 gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
+  'absolute top-0 right-3 -translate-y-1/2 gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
 
 /**
  * The canvas node wrapper (`[data-node-id]`, `PlanningCanvas`) owns pointerdown (a

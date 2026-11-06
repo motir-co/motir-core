@@ -19,24 +19,39 @@ import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 export type PlanViewDto = 'canvas' | 'list';
 
 /**
- * The largest ARRIVAL LEVEL the canvas can still open legibly — **twelve nodes**,
- * four rows of the shipped 3-column `deterministicLayout` (MOTIR-4024, design
- * Part XIII §6).
+ * The largest ARRIVAL LEVEL the canvas can still open as well as it can open
+ * anything — **thirty-five nodes**, seven rows of the shipped 5-column
+ * `deterministicLayout` loose band (`LOOSE_BAND_COLS`).
  *
- * ⚠️ THIS NUMBER IS THE DESIGN'S, NOT THIS FILE'S, and it is derived rather than
- * chosen. Measured in Chromium across six level sizes and four viewports, against
- * the closed form `min((W-96)/bw, (H-96)/bh)` over `NODE_W`/`NODE_H` = 280x124
- * with the layout's 80/72 gaps: 12 is the largest count still at the canvas's own
- * width-bound CEILING at the tightest viewport (1366x768) once the pane fills the
- * fold, and it costs nothing at 1920x1080, where 12 nodes arrive at 1.130. Above
- * it the fall is steep and measured — 18 nodes arrive at 0.364 at 1366x768, and
- * 30 are clamped to `MIN_SCALE` at three of the four viewports, where a card is
- * 84px wide and its title renders at 4.2px.
+ * ⚠️ THE RULE IS THE DESIGN'S (MOTIR-4024, design Part XIII §6); THE NUMBER IS
+ * THAT RULE RE-RUN FOR FIVE COLUMNS (MOTIR-10537). Part XIII §6 fitted a closed
+ * form to 24 arrival scales measured in Chromium — `min((W-96)/bw, (H-96)/bh)`
+ * over `NODE_W`/`NODE_H` = 280x124 with the layout's 80/72 gaps — and set the
+ * predicate to the largest level still at the canvas's own WIDTH-bound CEILING at
+ * the tightest viewport (1366x768, a 708x589 canvas once the pane fills the
+ * fold). It drew 12 from a 3-column band: a 1000px world box, a 0.612 ceiling,
+ * and a fifth row (`bh` 908) falling to 0.543.
+ *
+ * The band is 5 columns now, so the world box of any level of five or more is
+ * 1720px wide and the ceiling at 1366x768 is `612 / 1720` = 0.356. A row costs
+ * 196px of height against that much smaller ceiling, so the height term stays
+ * above it through SEVEN rows (`bh` 1300: 0.379) and falls under it at eight
+ * (`bh` 1496: 0.330). Seven rows of five is 35. The same form puts the ceiling at
+ * 0.306 / 0.399 / 0.678 at 1280x800 / 1440x900 / 1920x1080, where it holds for
+ * nine, eight and six rows. `tests/planning/planView.test.ts` re-runs the closed
+ * form against `LOOSE_BAND_COLS`, so a change to the band fails there NAMING this
+ * derivation rather than leaving a stale number behind.
+ *
+ * What the wider band costs is the CEILING, not this threshold: a six-node level
+ * arrives at 0.356 at 1366x768 where it arrived at 0.612 on three columns, and a
+ * list does not make that level any more legible. Sending 13–35-node levels to
+ * the list would only hide a canvas that draws them exactly as well as it draws
+ * six.
  *
  * A legibility threshold picked in code is a guess wearing a constant's
- * authority; this one is a decision the plan holds.
+ * authority; this one is the design's rule, re-run.
  */
-export const ARRIVAL_LEVEL_MAX_NODES = 12;
+export const ARRIVAL_LEVEL_MAX_NODES = 35;
 
 /** The query parameter that carries the chosen view. */
 export const PLAN_VIEW_PARAM = 'view';
@@ -83,20 +98,22 @@ export function defaultPlanView(review: PlanReviewDto): PlanViewDto {
   // than illegible: it is absent while looking complete.
   if (review.arrivalLevelTotal > TREE_LEVEL_MAX_TAKE) return 'list';
 
-  // ⚠️ THE LEGIBILITY ARM, AND ITS NUMBER IS THE DESIGN'S — do not re-derive it,
-  // exactly as `canvasGeometry.ts` does not re-derive `ARRIVAL_MIN_SCALE`.
+  // ⚠️ THE LEGIBILITY ARM, AND ITS RULE IS THE DESIGN'S — do not pick a new one,
+  // exactly as `canvasGeometry.ts` does not re-derive `ARRIVAL_MIN_SCALE`. The
+  // number is that rule re-run for the 5-column band (MOTIR-10537); see
+  // `ARRIVAL_LEVEL_MAX_NODES`.
   //
   // Part XIII §6 measured 24 arrival scales in Chromium, six level sizes across
   // four viewports, against a closed form that reproduces every one of them. The
   // finding that decides this line is that `ARRIVAL_MIN_SCALE = 0.80` is NOT
   // REACHABLE on this surface: the plan detail's canvas is the `1fr` of a
   // `grid-cols-[1fr_22rem]`, so the rail takes 352px and the canvas is 782px wide
-  // at 1440x900 against a 1000px world box at three columns — a width term of
-  // 0.686 before the level's height is considered at all, and 0.526 at 1280x800.
-  // A SIX-node level already misses the floor. So the predicate cannot be "does
+  // at 1440x900 against a 1720px world box at five columns — a width term of
+  // 0.399 before the level's height is considered at all, and 0.306 at 1280x800.
+  // A THREE-node level already misses the floor. So the predicate cannot be "does
   // it arrive above the floor" (that answers *two nodes* and sends every plan to
   // the list); it is the largest level still at the canvas's OWN ceiling at the
-  // tightest viewport, which is four rows of the shipped 3-column layout.
+  // tightest viewport, which is seven rows of the shipped 5-column layout.
   //
   // ⚠️ AND THE `grid-cols-[1fr_22rem]` ABOVE IS THE PLAN DETAIL'S FRAME, WHICH IS
   // STILL FIXED — read it as a premise about THAT host, not about every planning

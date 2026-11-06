@@ -13,6 +13,13 @@ import { TREE_LEVEL_MAX_TAKE } from '@/lib/planning/levelCaps';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import { planContainerCount } from '@/lib/planning/planShape';
 import { planReview, planReviewItem } from '../helpers/planReview';
+import {
+  LOOSE_BAND_COLS,
+  NODE_H,
+  NODE_W,
+  deterministicLayout,
+} from '@/lib/planning/projectCanvasModel';
+import { fitView, nodesBounds } from '@/lib/planning/canvasGeometry';
 
 // MOTIR-3239 / MOTIR-3262 — the plan-detail view vocabulary, its URL parsing,
 // and the DERIVED default.
@@ -150,13 +157,14 @@ describe('the parameter name', () => {
 // worse, because the cards are somewhere on the level rather than honestly
 // absent.
 //
-// ⚠️ THE NUMBER IS THE DESIGN'S. Part XIII §6 measured 24 arrival scales in
+// ⚠️ THE RULE IS THE DESIGN'S. Part XIII §6 measured 24 arrival scales in
 // Chromium and found that `ARRIVAL_MIN_SCALE = 0.80` is NOT REACHABLE on this
-// surface at three of four viewports — the 22rem rail leaves the canvas 782px
-// wide at 1440x900 against a 1000px world box, so a SIX-node level already
-// arrives at 0.686. A predicate asking "does it clear the floor" answers *two
-// nodes* and sends every plan to the list. 12 is the largest level still at the
-// canvas's own ceiling at the tightest viewport.
+// surface — the 22rem rail leaves the canvas 782px wide at 1440x900 against a
+// world box 1000px wide on the 3-column band it measured, and 1720px on the
+// 5-column band that ships now (MOTIR-10537). A predicate asking "does it clear
+// the floor" answers *two nodes* and sends every plan to the list. The number is
+// the largest level still at the canvas's own ceiling at the tightest viewport —
+// 12 on three columns, 35 on five, and the block below re-runs that rule.
 describe('the ARRIVAL LEVEL’s size decides the default too (MOTIR-4024)', () => {
   const level = (size: number, over: Partial<PlanReviewDto> = {}) =>
     planReview([planReviewItem({ planItemId: 'a1', parentNodeId: 'epic-1' })], {
@@ -165,7 +173,32 @@ describe('the ARRIVAL LEVEL’s size decides the default too (MOTIR-4024)', () =
       ...over,
     });
 
-  it('opens on the CANVAS at the boundary — twelve nodes is still legible', () => {
+  it('is the largest level still at the canvas’s own ceiling at 1366x768, re-run on the SHIPPED layout (MOTIR-10537)', () => {
+    // Part XIII §6's rule, measured through the shipped layout and fit rather than
+    // a copy of their arithmetic: the canvas box at the tightest viewport once the
+    // pane fills the fold (§2), and the CEILING is the scale of a level one full
+    // band row wide — no level of that width or more can arrive any larger.
+    const box = { w: 708, h: 589 };
+    const arrival = (n: number) => {
+      const ids = Array.from({ length: n }, (_, i) => `n${i}`);
+      const pos = deterministicLayout(ids, []);
+      return fitView(
+        nodesBounds(ids.map((id) => ({ x: pos[id]!.x, y: pos[id]!.y, w: NODE_W, h: NODE_H }))),
+        box,
+      ).scale;
+    };
+    const ceiling = arrival(LOOSE_BAND_COLS);
+    let largest = LOOSE_BAND_COLS;
+    while (arrival(largest + 1) >= ceiling) largest += 1;
+    expect(ceiling).toBeCloseTo(0.3558, 4);
+    expect(largest).toBe(ARRIVAL_LEVEL_MAX_NODES);
+    // …and the boundary is a ROW boundary: one card more opens a row the height
+    // term can no longer pay for.
+    expect(ARRIVAL_LEVEL_MAX_NODES % LOOSE_BAND_COLS).toBe(0);
+    expect(arrival(ARRIVAL_LEVEL_MAX_NODES + 1)).toBeLessThan(ceiling);
+  });
+
+  it('opens on the CANVAS at the boundary — thirty-five nodes is still at the ceiling', () => {
     expect(defaultPlanView(level(ARRIVAL_LEVEL_MAX_NODES))).toBe('canvas');
   });
 

@@ -72,8 +72,8 @@ import type { WorkItemDeliveryDto } from '@/lib/dto/github';
 import { LabelsCard } from './LabelsCard';
 import { ComponentsCard } from './ComponentsCard';
 import { ProvenanceSection } from './ProvenanceSection';
-import { StatusPill } from '@/components/issues/StatusPill';
-import { useDisplayedStatus } from './OptimisticStatusProvider';
+import { WorkItemStatusPill } from '@/components/workItems/WorkItemStateTags';
+import { useDisplayedStatus, useOptimisticStatusWriter } from './OptimisticStatusProvider';
 import { usePlacement, usePlacementReporter } from './PlacementProvider';
 import { QuickViewFolderControl } from '../../_components/QuickViewFolderField';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
@@ -188,10 +188,11 @@ function ExecutorIndicator({ executor }: { executor: ExecutorDto }) {
   );
 }
 
-// The status chip's tone + glyph live in `components/issues/StatusPill`
-// (MOTIR-3103). This file used to keep its own copy of the category map —
-// one of five — which is how `implemented` could share a chip with three
-// other statuses in every one of them at once.
+// The status chip's tone + glyph live in `lib/workflows/canvasStatusMeta.ts`,
+// drawn by the shared `WorkItemStatusPill` (MOTIR-10534 — the canvas card's chip,
+// used on every surface that shows one item). This file used to keep its own copy
+// of the category map — one of five — which is how `implemented` could share a
+// chip with three other statuses in every one of them at once (MOTIR-3103).
 
 /** No resolved refs — a host with no item read (a test, a story) passes none. */
 const NO_REFS: WorkItemRefMap = {};
@@ -267,6 +268,7 @@ export function CoreFieldsPanel({
   // MOTIR-5118 measured being intermittently lost. Outside the provider (unit
   // call sites, the peek) it is `item.status` unchanged.
   const pageStatus = useDisplayedStatus(item.status);
+  const { applyOptimisticStatus } = useOptimisticStatusWriter();
   // ⚠️ PRECEDENCE: this reader's OWN inline edit outranks the page channel, and
   // the order is the whole rule. Someone who has just picked a status by hand is
   // looking at the cell they picked it in — case 1 of the page-state contract,
@@ -444,6 +446,9 @@ export function CoreFieldsPanel({
       if (res.ok) {
         setUpdatedAt(res.updatedAt);
         statusHeld.onMoved(toStatusKey);
+        // The page's status channel (MOTIR-10534): the eyebrow's state tags draw
+        // the status too, and this edit refreshes nothing — so tell the page.
+        applyOptimisticStatus(toStatusKey);
       } else if (res.code === 'APPROVAL_GATE_PENDING' && res.gate) {
         // A hold that arrived after render (MOTIR-5528): revert, and say so ON the
         // status control with its door — not in a toast that points nowhere.
@@ -526,14 +531,15 @@ export function CoreFieldsPanel({
               disabled={isPending || readOnly}
               held={statusHeld.held}
             />
-          ) : statusMeta ? (
-            <StatusPill
-              statusKey={statusMeta.key}
-              category={statusMeta.category}
-              label={statusMeta.label}
-            />
           ) : (
-            <Pill tone="neutral">{eff.status}</Pill>
+            // The canvas card's status chip (MOTIR-10534), so the rail names the
+            // status the way the eyebrow, the board and the roadmap do. A key the
+            // workflow no longer holds takes the neutral chip with its raw key.
+            <WorkItemStatusPill
+              status={eff.status}
+              label={statusMeta?.label ?? null}
+              category={statusMeta?.category ?? null}
+            />
           )}
           {/* The held message sits UNDER the value and stays visible whether or not
               the picker is open (design § The status control says so). */}

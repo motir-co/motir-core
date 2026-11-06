@@ -268,7 +268,10 @@ test.describe('a published design waits, the control clears it, and the work it 
       // looking at, which is what pressing Approve actually does.
       // At rest the status is a `StatusPill`, not a combobox — the picker only
       // exists while that field is being edited.
-      await expect(page.getByText('Done', { exact: true })).toBeVisible();
+      // The rail's value — the header eyebrow's Done stamp says it too (MOTIR-10534).
+      await expect(
+        page.getByRole('complementary').getByText('Done', { exact: true }),
+      ).toBeVisible();
       // The approval pinned the bytes it was about, so the record can still say
       // WHAT was approved rather than only that something was.
       await expect(page.getByText('Files kept')).toBeVisible();

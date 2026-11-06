@@ -24,6 +24,7 @@ import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
 import type { FilterAst } from '@/lib/filters/ast';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
+import { isReadyToStart } from '@/lib/workItems/statusSlot';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import {
@@ -649,6 +650,8 @@ export const boardsService = {
           // caller holds only a status key; the moved card's DTO needs it for the
           // CI badge's done-category rule.
           appliedStatusCategory: statuses.find((st) => st.key === appliedStatus)?.category ?? null,
+          // …and its LABEL, for the status slot's chip (MOTIR-10534).
+          appliedStatusLabel: statuses.find((st) => st.key === appliedStatus)?.label ?? null,
           transition,
           columnName: column.name,
           swimlaneGroupBy: board.swimlaneGroupBy,
@@ -678,8 +681,15 @@ export const boardsService = {
       }
       throw err;
     }
-    const { row, appliedStatus, appliedStatusCategory, transition, columnName, swimlaneGroupBy } =
-      moved;
+    const {
+      row,
+      appliedStatus,
+      appliedStatusCategory,
+      appliedStatusLabel,
+      transition,
+      columnName,
+      swimlaneGroupBy,
+    } = moved;
 
     // A cross-column move IS a status transition — emit the same
     // `work-item/transitioned` event the direct updateStatus path emits
@@ -727,9 +737,17 @@ export const boardsService = {
       [row],
       ctx,
     );
+    // The moved card's status slot (MOTIR-10534): a move never changes its
+    // children, so one probe of the card's own id answers `hasChildren`.
+    const withChildren = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findParentIdsWithLiveChildren([row.id], ctx.workspaceId, tx),
+    );
     return {
       card: toBoardCardDto(row, {
         ready,
+        readyToStart: isReadyToStart(appliedStatusCategory, ready),
+        statusLabel: appliedStatusLabel,
+        hasChildren: withChildren.has(row.id),
         pendingDecision: pendingById.get(row.id) ?? null,
         review: reviewById[row.id] ?? null,
         planHold: planHoldById.get(row.id) ?? null,
@@ -1556,6 +1574,7 @@ type BoardFrame = {
   statuses: WorkflowStatusDto[];
   terminalKeys: Set<string>;
   categoryByStatusKey: Map<string, WorkflowStatusDto['category']>;
+  labelByStatusKey: Map<string, string>;
   /** The active sprint on a scrum board (Subtask 4.5.2); null on kanban. */
   activeSprint: Sprint | null;
 };
@@ -1662,6 +1681,8 @@ async function loadBoardFrame(
     // (MOTIR-5474). The badge rule is keyed on the CATEGORY rather than on the
     // column, because a board maps statuses to columns many-to-one.
     categoryByStatusKey: new Map(statuses.map((s) => [s.key, s.category])),
+    // Status KEY → its LABEL, for the status slot's chip (MOTIR-10534).
+    labelByStatusKey: new Map(statuses.map((s) => [s.key, s.label])),
     activeSprint,
   };
 }
@@ -1756,6 +1777,11 @@ async function decorateBoardRows(
 
   // Readiness (finding #21), one pass over the loaded cards.
   const readyById = await workItemsService.getReadinessForItems(ids, readCtx);
+  // THE STATUS SLOT'S FACTS (MOTIR-10534): which loaded cards have live children —
+  // the To plan pill reads it — in ONE read, beside the readiness batch.
+  const withChildren = await withWorkspaceServiceContext(readCtx.workspaceId, (tx) =>
+    workItemRepository.findParentIdsWithLiveChildren(ids, readCtx.workspaceId, tx),
+  );
 
   // The decision-waiting marker (Story MOTIR-4908 · MOTIR-5876): which cards have
   // an awaiting gate, and whether it is this reader's — ONE gate query. A Visitor
@@ -1807,20 +1833,26 @@ async function decorateBoardRows(
     : NO_FIX_TAG_FACTS;
 
   const toCard = (r: WorkItem): BoardCardDto => {
+    const ready = readyById.get(r.id) ?? true;
+    const statusCategory = frame.categoryByStatusKey.get(r.status) ?? null;
+    const childrenHidden = !member && r.kind === 'epic' && r.publicChildrenHidden;
     const card = toBoardCardDto(r, {
-      ready: readyById.get(r.id) ?? true,
+      ready,
+      readyToStart: isReadyToStart(statusCategory, ready),
+      statusLabel: frame.labelByStatusKey.get(r.status) ?? null,
+      // A Visitor's private epic reads childless, as the roadmap's root does:
+      // the card must not say what the Visitor may not see.
+      hasChildren: childrenHidden ? false : withChildren.has(r.id),
       pendingDecision: pendingById.get(r.id) ?? null,
       review: reviewById[r.id] ?? null,
       planHold: planHoldRead.byItemId.get(r.id) ?? null,
       swimlaneKey: swimlaneKeyByCard.get(r.id),
-      statusCategory: frame.categoryByStatusKey.get(r.status) ?? null,
+      statusCategory,
     });
     Object.assign(card, fixTagFieldsOf(r.id, fixTags));
     // A Visitor's PRIVATE epic card wears "Not public" (MOTIR-6648;
     // `epic-privacy.md` §4) — a member's card is unchanged.
-    return !member && r.kind === 'epic' && r.publicChildrenHidden
-      ? { ...card, childrenHidden: true as const }
-      : card;
+    return childrenHidden ? { ...card, childrenHidden: true as const } : card;
   };
   return { toCard, planHolds };
 }
