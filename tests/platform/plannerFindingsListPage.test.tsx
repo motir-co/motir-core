@@ -113,8 +113,10 @@ function decode(html: string): string {
     .replace(/&amp;/g, '&');
 }
 
+// The flat list is `view=all`; the grouped default is the grouped view's suite.
 async function render(params: Record<string, string | string[]> = {}): Promise<string> {
-  return decode(await renderToHtml(await Page({ searchParams: Promise.resolve(params) })));
+  const searchParams = Promise.resolve({ view: 'all', ...params });
+  return decode(await renderToHtml(await Page({ searchParams })));
 }
 
 beforeEach(() => {

@@ -6,17 +6,18 @@ import { FilterX, Info, ScanSearch } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { MotirAiError } from '@/lib/ai/errors';
-import type { PlannerFindingListDTO } from '@/lib/dto/plannerFindings';
+import type { PlannerFindingGroupListDTO, PlannerFindingListDTO } from '@/lib/dto/plannerFindings';
 import type { PlatformPrincipal } from '@/lib/platform/auth';
 import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import { plannerFindingsService } from '@/lib/services/plannerFindingsService';
 import { FindingFilters } from './_components/FindingFilters';
 import { FindingsSkeleton } from './_components/FindingsSkeleton';
 import { FindingsTable } from './_components/FindingsTable';
-import { FindingsPager } from './_components/FindingsPager';
+import { FindingsPager, pagerPosition } from './_components/FindingsPager';
 import { FindingsUnavailable } from './_components/FindingsUnavailable';
 import { FindingsViewSwitch } from './_components/FindingsViewSwitch';
-import { hasFindingFilter, oneParam } from './_components/filterKeys';
+import { findingsView, hasFindingFilter } from './_components/filterKeys';
+import { GroupsTable } from './_components/GroupsTable';
 import { toListFilters } from './_components/listFilters';
 
 /**
@@ -88,10 +89,19 @@ async function FindingsSection({
   params: SearchParams;
 }) {
   const t = await getTranslations('platformAdmin.plannerFindings');
+  const view = findingsView(params);
+  const filters = toListFilters(params);
 
-  let list: PlannerFindingListDTO;
+  // Both views read with the SAME filters, so they cannot disagree about the
+  // default that hides dismissed findings (the service owns it).
+  let read:
+    | { view: 'grouped'; data: PlannerFindingGroupListDTO }
+    | { view: 'all'; data: PlannerFindingListDTO };
   try {
-    list = await plannerFindingsService.list(principal, toListFilters(params));
+    read =
+      view === 'grouped'
+        ? { view, data: await plannerFindingsService.listGroups(principal, filters) }
+        : { view, data: await plannerFindingsService.list(principal, filters) };
   } catch (err) {
     // Any motir-ai failure is the unavailable state; anything else is a bug.
     if (!(err instanceof MotirAiError)) throw err;
@@ -99,13 +109,20 @@ async function FindingsSection({
     return <FindingsUnavailable />;
   }
 
-  const trail = (oneParam(params['trail']) ?? '').split(',').filter(Boolean);
-  const cursor = oneParam(params['cursor']);
-  const pageNumber = cursor ? trail.length + 2 : 1;
+  const rows = read.view === 'grouped' ? read.data.groups.length : read.data.findings.length;
+  const nextCursor = read.data.nextCursor;
+  const table =
+    read.view === 'grouped' ? (
+      <GroupsTable groups={read.data.groups} params={params} />
+    ) : (
+      <FindingsTable rows={read.data.findings} />
+    );
+
+  const { cursor, trail, pageNumber } = pagerPosition(params);
 
   let body: React.ReactNode;
-  if (list.findings.length > 0) {
-    body = <FindingsTable rows={list.findings} />;
+  if (rows > 0) {
+    body = table;
   } else if (hasFindingFilter(params) || cursor) {
     body = (
       <EmptyState
@@ -134,7 +151,7 @@ async function FindingsSection({
     );
   }
 
-  const showPager = pageNumber > 1 || list.nextCursor !== null;
+  const showPager = pageNumber > 1 || nextCursor !== null;
 
   return (
     <Card
@@ -153,8 +170,7 @@ async function FindingsSection({
                 {t('card.title')}
               </h2>
               <p className="font-sans text-xs text-(--el-text-secondary)">
-                {/* Grouped falls through to the flat list until the grouped body ships. */}
-                {t('card.subtitleAll')}
+                {view === 'grouped' ? t('card.subtitleGrouped') : t('card.subtitleAll')}
               </p>
             </div>
           </div>
@@ -167,11 +183,13 @@ async function FindingsSection({
         {body}
         {showPager ? (
           <FindingsPager
+            basePath={BASE}
             params={params}
+            keep={{ view }}
             pageNumber={pageNumber}
             trail={trail}
             cursor={cursor}
-            nextCursor={list.nextCursor}
+            nextCursor={nextCursor}
           />
         ) : null}
       </div>

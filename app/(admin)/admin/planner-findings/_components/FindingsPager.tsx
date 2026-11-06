@@ -2,23 +2,27 @@ import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { FINDING_FILTER_KEYS, FINDINGS_PAGE_SIZE, oneParam } from './filterKeys';
 
-const BASE = '/admin/planner-findings';
-
 type SearchParams = Record<string, string | string[] | undefined>;
 
 /**
- * The cursor pager — the lessons console's, unchanged. Next carries the answered
- * cursor and pushes the current one onto `trail`; Previous pops it. Both keep
- * every filter and the view. Shared by the grouped view.
+ * The cursor pager — the lessons console's, unchanged, shared by the list, the
+ * grouped view and a group's page. There is no total: Next carries the answered
+ * cursor and pushes the current one onto `trail`; Previous pops it, so every
+ * page a walk left is reachable again. Every link keeps the filter keys and the
+ * `keep` params (the view), in that order, and lands on `basePath`.
  */
 export async function FindingsPager({
+  basePath,
   params,
+  keep = {},
   pageNumber,
   trail,
   cursor,
   nextCursor,
 }: {
+  basePath: string;
   params: SearchParams;
+  keep?: Record<string, string>;
   pageNumber: number;
   trail: string[];
   cursor: string | undefined;
@@ -31,12 +35,11 @@ export async function FindingsPager({
       const value = oneParam(params[key]);
       if (value) url.set(key, value);
     }
-    const view = oneParam(params['view']);
-    if (view) url.set('view', view);
+    for (const [key, value] of Object.entries(keep)) url.set(key, value);
     if (nextCursorValue) url.set('cursor', nextCursorValue);
     if (nextCursorValue && nextTrail.length > 0) url.set('trail', nextTrail.join(','));
     const qs = url.toString();
-    return qs ? `${BASE}?${qs}` : BASE;
+    return qs ? `${basePath}?${qs}` : basePath;
   };
   const previous = pageNumber > 1 ? href(trail[trail.length - 1], trail.slice(0, -1)) : null;
   const next = nextCursor ? href(nextCursor, cursor ? [...trail, cursor] : trail) : null;
@@ -64,4 +67,15 @@ export async function FindingsPager({
       </div>
     </nav>
   );
+}
+
+/** The page number and trail a URL carries: page 1 without a cursor. */
+export function pagerPosition(params: SearchParams): {
+  cursor: string | undefined;
+  trail: string[];
+  pageNumber: number;
+} {
+  const trail = (oneParam(params['trail']) ?? '').split(',').filter(Boolean);
+  const cursor = oneParam(params['cursor']);
+  return { cursor, trail, pageNumber: cursor ? trail.length + 2 : 1 };
 }
