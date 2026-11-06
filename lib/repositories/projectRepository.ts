@@ -223,6 +223,21 @@ export const projectRepository = {
   },
 
   /**
+   * Every project, archived included, in creation order — the population a
+   * cross-workspace operator sweep walks (the board backfill, MOTIR-10465). The
+   * caller binds `withSystemContext`, whose `system_admin` arm on `project` is
+   * what makes the read see every workspace.
+   */
+  async listAllForSweep(
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; name: string; workspaceId: string }>> {
+    return tx.project.findMany({
+      select: { id: true, name: true, workspaceId: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
+  /**
    * Non-archived projects in a workspace, ordered by createdAt asc so the
    * first-created project lands first in any list surface. Optionally takes
    * `tx` so the read happens inside withWorkspaceContext when the caller

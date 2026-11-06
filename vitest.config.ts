@@ -1801,6 +1801,11 @@ export default defineConfig({
         // four (the process-entry block is v8-ignored, as fleet-admin's is). Pinned at
         // the floor.
         'scripts/hosting-deploy-check-main.ts',
+        // MOTIR-10465 — the data-script bundle's entry (the production data scripts in a
+        // core worker task over ECS Exec). MEASURED against
+        // `tests/scripts/dataScriptEntry.test.ts`: 100 on all four (the process-entry
+        // block is v8-ignored, as fleet-admin's is). Pinned at the floor.
+        'scripts/data-script-main.ts',
         // Story MOTIR-9367 · MOTIR-9564 — the platform Pools read and its section on
         // /admin/monitoring. MEASURED on this branch against `poolsStoryIntegration`,
         // `poolsSection` and `platformFleetPoolsService`: the service 100 on all four,
