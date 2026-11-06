@@ -2,7 +2,9 @@ import type { EdgeDisposition } from '@/lib/workItems/edgeDisposition';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { FIX_REASON_PRIORITY } from '@/lib/workItems/fixReason';
 
 // Client read of ONE LEVEL of the project roadmap (Subtask 7.20.2 / MOTIR-1194)
 // from the per-level endpoint (`GET /api/projects/[key]/roadmap?parentId=`,
@@ -65,6 +67,10 @@ export interface RoadmapLevelItem {
    *  "not in sprint" node treatment. Optional client-side: an older / project-scope
    *  read that omits it degrades to "in sprint" (no signal). */
   inActiveSprint?: boolean;
+  /** Why the card is stuck until something is repaired (MOTIR-6600) — drives the
+   *  card's `motir fix` next action (MOTIR-10509). Optional client-side: a read
+   *  that omits it (an older server, a Visitor's read) degrades to "nothing to fix". */
+  fixReason?: WorkItemFixReasonDto | null;
 }
 
 export interface RoadmapEdge {
@@ -162,6 +168,7 @@ interface RoadmapNode {
   progress?: { done: number; total: number } | null;
   ready?: boolean;
   inActiveSprint?: boolean;
+  fixReason?: string | null;
 }
 
 // The hand-copied STATUS literal that used to stand here is GONE (bug
@@ -207,6 +214,12 @@ const KNOWN_STATUS_CATEGORIES: ReadonlySet<StatusCategoryDto> = new Set([
 // than extended.
 const KNOWN_TYPES: ReadonlySet<WorkItemTypeDto> = new Set(WORK_ITEM_TYPES);
 
+// The fix REASONS (MOTIR-6600) — a closed taxonomy, guarded like `kind` / `type`
+// and READ from `FIX_REASON_PRIORITY` rather than re-stated: an unrecognised wire
+// value degrades to `null` (no `motir fix` action) rather than offering a command
+// for a reason this client does not know (MOTIR-10509).
+const KNOWN_FIX_REASONS: ReadonlySet<WorkItemFixReasonDto> = new Set(FIX_REASON_PRIORITY);
+
 /** Map one raw `RoadmapNode` wire row to a `RoadmapLevelItem` — exported for the
  *  unit test (the fallback behaviour matters and is otherwise internal). */
 export function toItem(n: RoadmapNode): RoadmapLevelItem {
@@ -229,6 +242,9 @@ export function toItem(n: RoadmapNode): RoadmapLevelItem {
     progress: n.progress ?? null,
     ready: n.ready ?? false,
     inActiveSprint: n.inActiveSprint ?? false,
+    fixReason: KNOWN_FIX_REASONS.has(n.fixReason as WorkItemFixReasonDto)
+      ? (n.fixReason as WorkItemFixReasonDto)
+      : null,
   };
 }
 

@@ -240,6 +240,31 @@ describe('the roadmap', () => {
     );
     expect(memberLevel.levelTotal).toBe(2);
   });
+
+  // The card's `motir fix` action reads each node's fix reason (MOTIR-10509). A
+  // member's read carries it; a Visitor has no command to copy, so theirs never does.
+  it('a member sees each node’s fix reason; a Visitor never does', async () => {
+    const t = await publicFixture();
+    await adminDb.workItem.update({
+      where: { id: t.openStory.id },
+      data: { status: 'in_review', fixReason: 'changes_requested' },
+    });
+    const member = await workItemsService.getProjectRoadmap(
+      t.fx.projectId,
+      t.openEpic.id,
+      t.fx.ctx,
+    );
+    expect(member.nodes.find((n) => n.id === t.openStory.id)!.fixReason).toBe('changes_requested');
+    const visitor = await workItemsService.getProjectRoadmap(
+      t.fx.projectId,
+      t.openEpic.id,
+      t.visitor,
+    );
+    expect(visitor.nodes.find((n) => n.id === t.openStory.id)!.fixReason).toBeNull();
+    // A node with nothing to fix carries `null` on the member read too.
+    const root = await workItemsService.getProjectRoadmap(t.fx.projectId, null, t.fx.ctx);
+    expect(root.nodes.find((n) => n.id === t.openEpic.id)!.fixReason).toBeNull();
+  });
 });
 
 describe('the Ready set', () => {

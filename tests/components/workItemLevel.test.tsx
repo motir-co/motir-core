@@ -234,6 +234,8 @@ function levelWithOffBlocker(stub: {
     ],
   };
 }
+// The flag's NAME is its sentence; the committed card shows the short `blocked`
+// label (MOTIR-10508), so the assertions read `aria-label`, not the text.
 const A1_FLAG = 'cross-blocked-flag';
 
 describe('buildWorkItemLevel — off-level dependency signal', () => {
@@ -242,7 +244,7 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
     expect(nodes.some((n) => n.id === 'X')).toBe(true); // ghost anchor
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
+    expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain('blocked elsewhere');
   });
 
   it('the ghost anchor is VIEWABLE so the off-level blocker is peekable (MOTIR-1586)', () => {
@@ -271,7 +273,9 @@ describe('buildWorkItemLevel — off-level dependency signal', () => {
     // MOTIR-1582: the red flag names the BLOCKER, not the card. The distinguishing
     // "blocker" token must be present — the bare "not in sprint" membership string
     // (the buggy reuse) would fail this.
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocker not in sprint');
+    expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain(
+      'blocker not in sprint',
+    );
   });
 
   it('SPRINT scope: a DONE off-level blocker is satisfied — no edge, no anchor, no flag', () => {
@@ -415,7 +419,9 @@ describe('buildWorkItemLevel — not-in-sprint node signal (MOTIR-1379)', () => 
       { scope: 'sprint' },
     );
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocker not in sprint');
+    expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain(
+      'blocker not in sprint',
+    );
     expect(screen.queryByTestId(NOT_IN_SPRINT_TAG)).toBeNull();
   });
 
@@ -433,7 +439,7 @@ describe('buildWorkItemLevel — not-in-sprint node signal (MOTIR-1379)', () => 
 
     // The flag on the (in-sprint) blocked card: blocker-oriented copy.
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    const flagText = screen.getByTestId(A1_FLAG).textContent ?? '';
+    const flagText = screen.getByTestId(A1_FLAG).getAttribute('aria-label') ?? '';
     expect(flagText).toContain('blocker not in sprint');
     cleanup();
 
@@ -578,7 +584,7 @@ describe('buildWorkItemLevel — an edge belongs to the level its BLOCKED end is
     expect(screen.getByText('PROD-9')).toBeTruthy();
     cleanup();
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
+    expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain('blocked elsewhere');
   });
 });
 
@@ -636,7 +642,9 @@ describe('buildWorkItemLevel — a cap-dropped level MEMBER (MOTIR-5043)', () =>
     // field: it is applied to the blocked node's `content`, so the node element
     // the builder returned is where it has to be read.
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.queryByTestId(A1_FLAG)?.textContent ?? '').not.toContain('blocked elsewhere');
+    expect(screen.queryByTestId(A1_FLAG)?.getAttribute('aria-label') ?? '').not.toContain(
+      'blocked elsewhere',
+    );
   });
 
   it('leaves the GENUINE cross-parent blocker on the same level untouched', () => {
@@ -647,7 +655,7 @@ describe('buildWorkItemLevel — a cap-dropped level MEMBER (MOTIR-5043)', () =>
     expect(deps).toContainEqual({ from: 'S', to: 'A1', variant: 'cross' });
     expect(nodes.some((n) => n.id === 'S')).toBe(true);
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocked elsewhere');
+    expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain('blocked elsewhere');
   });
 
   it('draws a FIRM within-level variant when the dropped member is done', () => {
@@ -686,7 +694,9 @@ describe('buildWorkItemLevel — a cap-dropped level MEMBER (MOTIR-5043)', () =>
     expect(deps).toContainEqual({ from: 'X', to: 'A1', variant: 'cross' });
     expect(nodes.some((n) => n.id === 'X')).toBe(true);
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
-    expect(screen.getByTestId(A1_FLAG).textContent).toContain('blocker not in sprint');
+    expect(screen.getByTestId(A1_FLAG).getAttribute('aria-label')).toContain(
+      'blocker not in sprint',
+    );
   });
 
   it('an ABSENT member list is the pre-MOTIR-5043 behaviour, not a crash', () => {
@@ -727,7 +737,7 @@ describe('buildWorkItemLevel — off-level edge disposition (MOTIR-6359)', () =>
 
   function flagText(nodes: ReturnType<typeof buildWorkItemLevel>['nodes'], id: string) {
     render(<>{nodes.find((n) => n.id === id)!.content}</>);
-    const text = screen.queryByTestId(A1_FLAG)?.textContent ?? '';
+    const text = screen.queryByTestId(A1_FLAG)?.getAttribute('aria-label') ?? '';
     cleanup();
     return text;
   }

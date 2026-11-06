@@ -117,6 +117,27 @@ describe('roadmapClient.toItem — the status key (bug MOTIR-3170)', () => {
   });
 });
 
+describe('roadmapClient.toItem — the fix reason (MOTIR-10509)', () => {
+  it('carries each fix reason the level read sends', () => {
+    for (const reason of [
+      'run_died',
+      'queue_failed',
+      'conflicted',
+      'out_of_date',
+      'ci_failed',
+      'changes_requested',
+    ]) {
+      expect(toItem(wire({ fixReason: reason })).fixReason).toBe(reason);
+    }
+  });
+
+  it('degrades an absent or unknown reason to null — never a `motir fix` for a reason it does not know', () => {
+    expect(toItem(wire()).fixReason).toBeNull();
+    expect(toItem(wire({ fixReason: null })).fixReason).toBeNull();
+    expect(toItem(wire({ fixReason: 'not-a-reason' })).fixReason).toBeNull();
+  });
+});
+
 // ── FOLDERS on the level read (Bug MOTIR-5710 · MOTIR-5740) ──────────────────
 describe('fetchRoadmapLevel — the folder request', () => {
   afterEach(() => vi.unstubAllGlobals());

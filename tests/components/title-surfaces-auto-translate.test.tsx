@@ -153,7 +153,8 @@ describe('roadmap node', () => {
     const { container } = await inProvider(<WorkItemNode item={node} />);
     expect((container.firstChild as HTMLElement).style.height).toBe('124px');
     const title = container.querySelector('[data-node-title]') as HTMLElement;
-    expect(title.className).toContain('line-clamp-2');
+    // No footer → the three-line clamp (MOTIR-10508).
+    expect(title.className).toContain('line-clamp-3');
     expect(title.textContent).toContain('로드맵 출시');
   });
 

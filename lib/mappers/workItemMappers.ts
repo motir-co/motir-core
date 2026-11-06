@@ -350,6 +350,7 @@ export function toRoadmapNodeDto(
     progress,
     ready,
     inActiveSprint,
+    fixReason: row.fixReason,
   };
 }
 

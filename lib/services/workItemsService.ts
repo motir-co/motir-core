@@ -5574,6 +5574,9 @@ export const workItemsService = {
         sprintId != null && r.sprintId === sprintId,
         statusByKey.get(r.status) ?? null,
       );
+      // A Visitor has no command to copy, so the fix reason that drives the card's
+      // `motir fix` button (MOTIR-10509) never reaches their read.
+      if (opened.visitor) node.fixReason = null;
       // A Visitor's private epic keeps its node, marked, with no drill (§4).
       return opened.visitor && r.kind === 'epic' && r.publicChildrenHidden
         ? { ...node, hasChildren: false, progress: null, childrenHidden: true as const }

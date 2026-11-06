@@ -10,6 +10,7 @@ import {
   LevelGroupNode,
   LevelTruncationTile,
   WorkItemNode,
+  type CardNextActionsOption,
   type RunLegBadge,
 } from '@/components/planning/WorkItemNode';
 import {
@@ -86,6 +87,10 @@ export function isNotInEpicRow(item: { parentId: string | null; kind: string }):
 export interface BuildWorkItemLevelOptions {
   /** Mark the in-progress frontier node "you are here" (the roadmap consumer). */
   markActive?: boolean;
+  /** The cards' hover next-action button (MOTIR-10509) — the roadmap page's, and a
+   *  member's only. Absent / `null` draws none: every other canvas that builds a
+   *  level (onboarding, a run's pane, the plan review) keeps its cards as they were. */
+  nextActions?: CardNextActionsOption | null;
   /** Pin the planning-origin cluster at the road's start (the ROOT level only). */
   includeOrigin?: boolean;
   /**
@@ -626,6 +631,10 @@ export function buildWorkItemLevel(
             statusCategory: item.statusCategory ?? null,
             type: item.type ?? null,
             executor: item.executor ?? null,
+            // The To plan state (a childless story) and the `motir fix` action read
+            // these two (MOTIR-10509).
+            hasChildren: item.hasChildren,
+            fixReason: item.fixReason ?? null,
           }}
           drillable={item.hasChildren}
           crossBlocked={crossBlocked.has(item.id)}
@@ -636,6 +645,7 @@ export function buildWorkItemLevel(
           here={item.id === activeId}
           ready={item.ready ?? false}
           runLeg={opts.runLegs?.get(item.id) ?? null}
+          nextActions={opts.nextActions ?? null}
         />
       ),
     };

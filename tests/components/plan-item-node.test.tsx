@@ -257,7 +257,12 @@ describe('PlanItemNode', () => {
       />,
     );
     const onNode = node.container.querySelector('[data-status="implemented"]') as HTMLElement;
-    expect(onNode.className).toBe(chipClass);
+    // The committed card wears the TAG-ROW form of the chip (MOTIR-10508: `min-w-0`,
+    // a truncating label); the resolver's fill and ink are the same on both.
+    const tone = (cls: string) =>
+      cls.split(/\s+/).filter((c) => c.startsWith('bg-(') || c.startsWith('text-('));
+    expect(tone(onNode.className)).toEqual(tone(chipClass));
+    expect(tone(onNode.className)).toEqual(['bg-(--el-tint-rose)', 'text-(--el-text-strong)']);
     expect(onNode.textContent).toBe(chipText);
   });
 

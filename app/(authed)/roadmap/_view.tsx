@@ -234,6 +234,9 @@ export default async function RoadmapPageView({
         // milestones assert a planning journey only a truly-onboarded project has,
         // so a never-onboarded project (null marker) omits them.
         showPlanningOrigin={ctx.project.onboardingRanAt != null}
+        // The card's next-action button (MOTIR-10509): a member's commands only —
+        // a Visitor has nothing to copy and may not plan (design MOTIR-6641 panel 3).
+        nextActions={ctx.visitor ? null : { plan: aiConfigured }}
       />
     </SurfaceTitleTranslationProvider>
   );

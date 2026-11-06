@@ -857,7 +857,7 @@ describe('MOTIR-6301 · one card on every surface', () => {
     expect(node(touched.id)!.querySelector('[data-testid="plan-item-lock-hatch"]')).not.toBeNull();
     // The CARD is compared — the canvas's own per-node wrapper carries surface
     // state (a selection's dim, the emphasis ring) that is not the card's.
-    const card = () => node(tree.D)!.firstElementChild!.firstElementChild!;
+    const card = () => node(tree.D)!.querySelector('[data-node-state]')!;
     expect(card().getAttribute('data-node-state')).toBe('done');
     const onPane = card().outerHTML;
     cleanup();

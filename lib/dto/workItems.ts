@@ -958,6 +958,11 @@ export interface RoadmapNodeDto {
    *  member; `false` for a non-member descendant. In PROJECT scope no sprint is
    *  resolved, so this is always `false` (the whole-project view ignores it). */
   inActiveSprint: boolean;
+  /** Why the card is stuck until something is repaired (`WorkItem.fixReason`,
+   *  MOTIR-6600) — the canvas card's next-action button offers `motir fix` on a
+   *  `ci_failed` / `changes_requested` card (MOTIR-10509, design MOTIR-10508).
+   *  Always `null` on a Visitor's read: a visitor has no command to copy. */
+  fixReason: WorkItemFixReasonDto | null;
 }
 
 /**
