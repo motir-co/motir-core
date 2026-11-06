@@ -32,6 +32,7 @@ import {
   AcceptanceReceiptProvenance,
 } from '@/components/acceptance/AcceptanceReceiptPlayer';
 import { DevelopmentSectionBody } from '@/components/github/DevelopmentSection';
+import { GateReviewPathPort } from '@/components/approvals/GateReviewPath';
 import {
   approveAndMergeAction,
   decideApprovalGateAction,
@@ -1098,6 +1099,20 @@ export function ApprovalOverlay() {
             }
             port={
               <div className="flex flex-col gap-(--spacing-sm)">
+                {/* THE REVIEW PATH ABOVE THE RECEIPT (Bug MOTIR-10533; design § 32.4, § 32.6,
+                    § 32.8). A story run's acceptance merges the story's delivery set, so the
+                    reader deciding it is owed the same review line, author note and gate-off
+                    send-back the approve-and-merge frame draws — read at the set's CURRENT
+                    version, never the recording's. A story with no pull requests has no
+                    version, so its line is null and nothing draws. */}
+                <GateReviewPathPort
+                  reviewPath={read.reviewPath ?? null}
+                  awaiting={gate.state === 'awaiting' && !decidedState}
+                  identifier={identifier}
+                  // The overlay's own re-read, exactly as the Development frame's dismissal
+                  // runs inside the overlay (no route refresh on a live path, MOTIR-8578).
+                  onDismissed={() => setReread((n) => n + 1)}
+                />
                 {/* The port is height-bounded here, so the recording fits it (MOTIR-6042). */}
                 <AcceptanceReceiptPlayer evidence={subject.evidence} fit="viewport" />
                 <AcceptanceReceiptProvenance evidence={subject.evidence} />

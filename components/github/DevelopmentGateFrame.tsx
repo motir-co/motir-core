@@ -45,9 +45,7 @@ import { withdrawnMergeCopy, type WithdrawnMessage } from './withdrawnMergeCopy'
 import type { DecisionDocumentViewDTO } from '@/lib/dto/decisionDocument';
 import type { AgentReviewViewDto } from '@/lib/dto/agentReview';
 import type { ApprovedReviewDTO, GateReviewPathDTO } from '@/lib/dto/reviewState';
-import { AuthorNote } from '@/components/approvals/AuthorNote';
-import { DismissReviewControl } from '@/components/approvals/DismissReview';
-import { ReviewLine } from '@/components/approvals/ReviewLine';
+import { GateReviewSentBack, GateReviewSummary } from '@/components/approvals/GateReviewPath';
 import { ApprovalReviewLine } from '@/components/approvals/ApprovalReviewLine';
 import {
   CouldNotRunBand,
@@ -904,51 +902,40 @@ export function DevelopmentGateFrame({
   // A GATE-OFF SEND-BACK is a review RECORD, not a gate: the shipped Sent back band draws it
   // here too (G5), with Dismiss the review under it for the routed person. With the gate ON
   // the send-back is the `agent_review` gate, drawn above, and its override is *Continue
-  // without the review* — so this never draws over an agent-review frame.
-  const recordSentBack = !isAgentReview ? (reviewPath?.sentBackRecord ?? null) : null;
+  // without the review* — so this never draws over an agent-review frame. ⚠️ Null, never an
+  // element that renders nothing: the band slot below tests it for presence.
   const recordSentBackBand: ReactNode =
-    recordSentBack && reviewPath ? (
-      <>
-        <SentBackBand
-          findingsMd={recordSentBack.findingsMd}
-          findingsRefs={agentReview?.findingsRefs ?? {}}
-          run={null}
-          decidedAt={recordSentBack.at}
-          count={count}
-        />
-        {reviewPath.viewerIsRouted && reviewPath.currentVersion ? (
-          <div className="border-b border-(--el-border) px-3.5 py-2.5">
-            <DismissReviewControl
-              identifier={itemIdentifier}
-              subjectVersion={reviewPath.currentVersion}
-              onDismissed={() => (onShowCurrentVersion ?? (() => router.refresh()))()}
-            />
-          </div>
-        ) : null}
-      </>
+    !isAgentReview && reviewPath?.sentBackRecord ? (
+      <GateReviewSentBack
+        reviewPath={reviewPath}
+        identifier={itemIdentifier}
+        findingsRefs={agentReview?.findingsRefs ?? {}}
+        count={count}
+        onDismissed={() => (onShowCurrentVersion ?? (() => router.refresh()))()}
+      />
     ) : null;
-  // THE REVIEW LINE (G1–G3, G7) — on the AWAITING approve-and-merge frame, read at the
-  // frame's own version (a frame over older commits is about to be withdrawn, and the
-  // line would describe commits it does not ask about). The AUTHOR NOTE (G4) under it.
+  // THE REVIEW LINE (G1–G3, G7) — on an AWAITING frame in front of the card's merge, read at
+  // the version of the commits that frame asks about (a frame over older commits is about to
+  // be withdrawn, and the line would describe commits it does not ask about). The AUTHOR
+  // NOTE (G4) under it. On the approve-and-merge gate that is its own version; when a story
+  // run's ACCEPTANCE leads the frame (Bug MOTIR-10533) it is the merge gate's — the members
+  // the press merges — because the acceptance gate's own version names its recording.
+  const frameSetVersion =
+    gate.kind === 'pull_request_approval'
+      ? gate.subjectVersion
+      : gate.kind === 'acceptance_result'
+        ? (read.mergeSubjectVersion ?? null)
+        : null;
   const lineHere =
     reviewPath?.line &&
-    gate.kind === 'pull_request_approval' &&
     gate.state === 'awaiting' &&
-    gate.subjectVersion !== null &&
-    gate.subjectVersion === reviewPath.currentVersion
+    frameSetVersion !== null &&
+    frameSetVersion === reviewPath.currentVersion
       ? reviewPath.line
       : null;
   const reviewSummary: ReactNode =
     lineHere && reviewPath ? (
-      <div className="mb-3 flex flex-col gap-2" data-review-summary="">
-        <ReviewLine
-          size="frame"
-          line={lineHere}
-          identifier={itemIdentifier}
-          recordRef={reviewPath.recordRef}
-        />
-        {reviewPath.viewerIsRouted && reviewPath.authorOfEveryPr ? <AuthorNote /> : null}
-      </div>
+      <GateReviewSummary line={lineHere} reviewPath={reviewPath} identifier={itemIdentifier} />
     ) : null;
   const reviewBand: ReactNode = isAgentReview ? (
     gate.state === 'awaiting' ? (

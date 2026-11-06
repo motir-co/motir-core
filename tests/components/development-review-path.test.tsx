@@ -155,3 +155,136 @@ describe('the gate-off send-back and Dismiss the review', () => {
     expect(screen.queryByTestId('dismiss-review')).toBeNull();
   });
 });
+
+// ── A STORY RUN'S ACCEPTANCE LEADING THE FRAME (Bug MOTIR-10533) ────────────────────────
+//
+// While the acceptance awaits beside the merge question it LEADS the frame, and its press
+// merges the same set — so the line draws there too, compared against the MERGE gate's
+// version (`mergeSubjectVersion`, the members the press merges), never the acceptance gate's
+// own `subjectVersion`, which names its recording.
+
+describe('the review line on a story run’s acceptance frame (MOTIR-10533)', () => {
+  const RECORDING = 'acceptance-evidence-7';
+  const ACCEPTANCE: ApprovalGateDTO = {
+    ...AWAITING_MERGE_GATE,
+    id: 'gate-acceptance-1',
+    kind: 'acceptance_result',
+    subjectId: RECORDING,
+    subjectVersion: RECORDING,
+  };
+
+  it.each([
+    ['not_reviewed', NOT_REVIEWED],
+    [
+      'reviewed_by_agent',
+      {
+        ...NOT_REVIEWED,
+        value: 'reviewed_by_agent',
+        command: null,
+        reviewer: { kind: 'hosted', model: null },
+        at: '2026-11-05T10:00:00.000Z',
+      },
+    ],
+    [
+      'review_skipped',
+      {
+        ...NOT_REVIEWED,
+        value: 'review_skipped',
+        command: null,
+        actor: { id: 'user-2', name: 'Mara S.' },
+        reason: 'Docs only.',
+      },
+    ],
+    [
+      'review_dismissed',
+      {
+        ...NOT_REVIEWED,
+        value: 'review_dismissed',
+        command: null,
+        actor: { id: 'user-2', name: 'Mara S.' },
+        reason: 'Out of scope.',
+      },
+    ],
+  ] as [string, ReviewLineDTO][])(
+    'draws the %s line at the merge gate’s version',
+    (value, reviewLine) => {
+      renderFrame({
+        gate: ACCEPTANCE,
+        mergeSubjectVersion: VERSION,
+        reviewPath: path({ line: reviewLine }),
+      });
+      expect(line()?.getAttribute('data-review-line')).toBe(value);
+    },
+  );
+
+  it('offers the copyable command, and the author note for the routed author', () => {
+    renderFrame({
+      gate: ACCEPTANCE,
+      mergeSubjectVersion: VERSION,
+      reviewPath: path({ viewerIsRouted: true, authorOfEveryPr: true }),
+    });
+    expect(
+      screen.getByRole('button', {
+        name: en.approvalGate.reviewPath.command.copy.replace('{key}', 'ACME-12'),
+      }),
+    ).toBeTruthy();
+    expect(screen.getByRole('note').textContent).toContain(authorNote.title);
+  });
+
+  it('never compares against the acceptance gate’s own version — the recording', () => {
+    // The read model's version happens to be the recording's: still the wrong commits.
+    renderFrame({
+      gate: ACCEPTANCE,
+      mergeSubjectVersion: VERSION,
+      reviewPath: path({ currentVersion: RECORDING }),
+    });
+    expect(line()).toBeNull();
+    cleanup();
+    // No merge question beside it: no set to compare against, so no line in the frame.
+    renderFrame({ gate: ACCEPTANCE, reviewPath: path() });
+    expect(line()).toBeNull();
+  });
+
+  it('no line when the story has no delivery set, or once the acceptance is decided', () => {
+    renderFrame({
+      gate: ACCEPTANCE,
+      mergeSubjectVersion: VERSION,
+      reviewPath: path({ currentVersion: null, line: null }),
+    });
+    expect(line()).toBeNull();
+    cleanup();
+    renderFrame({
+      gate: { ...ACCEPTANCE, state: 'approved', decidedAt: '2026-11-05T11:00:00.000Z' },
+      mergeSubjectVersion: VERSION,
+      reviewPath: path(),
+    });
+    expect(line()).toBeNull();
+  });
+
+  it('draws the gate-off send-back with Dismiss on the acceptance frame too', () => {
+    renderFrame({
+      gate: ACCEPTANCE,
+      mergeSubjectVersion: VERSION,
+      reviewPath: path({
+        viewerIsRouted: true,
+        line: null,
+        sentBackRecord: {
+          recordId: 'rec-1',
+          findingsMd: '- `lib/export.ts:12` drops the header row.',
+          at: '2026-11-05T10:00:00.000Z',
+        },
+      }),
+    });
+    expect(screen.getByText('drops the header row.', { exact: false })).toBeTruthy();
+    expect(screen.getByRole('button', { name: dismiss.button })).toBeTruthy();
+  });
+
+  it('a design gate leading the frame draws no line', () => {
+    renderFrame({
+      gate: { ...ACCEPTANCE, kind: 'design_result', subjectVersion: 'abc1234' },
+      mergeSubjectVersion: VERSION,
+      reviewPath: path(),
+    });
+    expect(line()).toBeNull();
+  });
+});

@@ -965,7 +965,9 @@ export interface ApprovalQueueRowDto {
   /**
    * THE AGENT REVIEW of an approve-and-merge row (Story MOTIR-10327 · MOTIR-10342; design
    * notes § 32.3–32.4) — its review line and Reviewed badge at the card's current version.
-   * Absent on every other kind, and for a card the read model answered nothing about.
+   * A story run's acceptance row carries the same, since its press merges that set (Bug
+   * MOTIR-10533; `carriesReviewPath`). Absent on every other kind, and for a card the read
+   * model answered nothing about.
    */
   review?: ApprovalRowReviewDTO | null;
 }
