@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { JobQueueRun, Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
-import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
+import { jobQueueRepository, type JobQueueClaim } from '@/lib/repositories/jobQueueRepository';
 import { isWaitWithdrawn, runObservingWaits } from '@/lib/async/waitScope';
 import { isJobStepYield } from './step';
 import { isJobRunDefer } from './defer';
@@ -222,9 +222,28 @@ import { isJobRunDefer } from './defer';
 // process recording work over a row it gave back. The terminal-failure hook is
 // asked only while the claim is still held, so a released run is not dead-lettered
 // either. The same fence covers a lease reclaimed from a worker that missed its
-// heartbeats and then claimed by ANOTHER worker; a worker that re-claims its OWN
-// reclaimed run is not told apart by a worker-id fence (MOTIR-10500).
+// heartbeats and then claimed by ANOTHER worker.
 // `docs/decisions/job-queue-foundation.md` §18.7 is the decision.
+//
+// ⚠️ THE FENCE IS THE CLAIM, NOT THE WORKER (MOTIR-10500). A live worker that
+// misses its heartbeats long enough (an event-loop stall, a slow database) has its
+// lease reclaimed by its OWN next tick, which can then claim the very run it is
+// still executing. Both passes carry this worker's id, so a worker-id fence let the
+// first pass's settle write `succeeded` over the row the second was executing. So:
+//
+//   * every claim carries a FENCING TOKEN (`job_queue.claim_token`), bumped by
+//     `claimDueRuns` and never lowered, and every settle write matches the token
+//     its own claim returned — a pass whose claim was reclaimed writes nothing and
+//     is reported `released`, whoever re-claimed the row;
+//   * the in-flight bookkeeping — `inFlight`, `parked`, `withdrawals`, `settling` —
+//     is keyed on the PASS (run id + token), not the run id, so the first pass's
+//     `finally` cannot drop the second from the set the pool, the drain and its
+//     withdrawal all read. Both passes count until each settles.
+//
+// Two passes of one run in one process is still possible — the lease lapsed, and
+// at-least-once delivery is the contract — and the step ledger is what makes the
+// second resume rather than repeat. What the token guarantees is that only the
+// LIVE claim's outcome is recorded. §18.8 is the decision.
 
 /** How long a claim is held before another worker may reclaim it. */
 export const LEASE_MS = 60_000;
@@ -397,6 +416,15 @@ export function isNonRetryableFailure(err: unknown): boolean {
   );
 }
 
+/**
+ * The in-flight key of ONE PASS — one claim of one run (MOTIR-10500). The run id
+ * alone is not unique: a worker whose lease lapsed can claim its own run again
+ * while the first pass is still executing, and the fencing token is what differs.
+ */
+export function passKeyOf(run: Pick<JobQueueRun, 'id' | 'claimToken'>): string {
+  return `${run.id}#${run.claimToken}`;
+}
+
 /** Serialize an unknown thrown value for `job_queue.last_error`. Mirrors `defineJob`'s `serializeFailure`. */
 export function serializeWorkerFailure(err: unknown): { message: string; stack?: string } {
   if (err instanceof Error) {
@@ -432,7 +460,11 @@ export class JobWorker {
   private running = false;
   private idleDelay: number;
   private heartbeat: NodeJS.Timeout | undefined;
-  /** Runs this worker has claimed and not yet settled. The drain waits on these. */
+  /**
+   * PASSES this worker has claimed and not yet settled, by {@link passKeyOf}. The
+   * drain waits on these. Keyed on the pass, not the run id, because one run can
+   * be claimed twice by this worker when its lease lapses (MOTIR-10500).
+   */
   private readonly inFlight = new Set<string>();
   /**
    * The in-flight runs that are only WAITING on an in-process gate right now
@@ -554,7 +586,8 @@ export class JobWorker {
     if (claimed.length === 0) return 0;
 
     for (const run of claimed) {
-      this.inFlight.add(run.id);
+      const pass = passKeyOf(run);
+      this.inFlight.add(pass);
       // Executed OUTSIDE the claiming transaction — see the header. DETACHED, so
       // one slow run does not hold the tick, and one run's failure cannot abort
       // its batch-mates.
@@ -564,15 +597,15 @@ export class JobWorker {
       // an unhandled rejection on a detached promise — which takes the process
       // down, where before it merely failed the tick. `settle()`'s own `finally`
       // has already released the in-flight slot by the time this runs.
-      const settling = this.settle(run)
+      const settling = this.settle(run, pass)
         .catch((err: unknown) => {
           this.log.error(`[job-worker] settle threw for run ${run.id}`, err);
         })
         .finally(() => {
-          this.settling.delete(run.id);
+          this.settling.delete(pass);
           this.releaseSlot();
         });
-      this.settling.set(run.id, settling);
+      this.settling.set(pass, settling);
     }
     return claimed.length;
   }
@@ -628,21 +661,25 @@ export class JobWorker {
   }
 
   /** Run one claimed row and record its terminal state. Never throws — a failure is an outcome, not an exception the loop should die on. */
-  private async settle(run: JobQueueRun): Promise<void> {
+  private async settle(run: JobQueueRun, pass: string): Promise<void> {
     const withdrawal = new AbortController();
-    this.withdrawals.set(run.id, withdrawal);
+    this.withdrawals.set(pass, withdrawal);
+    // The claim this pass holds — what every settle write below is fenced on.
+    const claim: JobQueueClaim = {
+      id: run.id,
+      workerId: this.workerId,
+      claimToken: run.claimToken,
+    };
     try {
       await runObservingWaits(
         {
-          onWaitStart: () => this.park(run.id),
-          onWaitEnd: () => this.parked.delete(run.id),
+          onWaitStart: () => this.park(pass),
+          onWaitEnd: () => this.parked.delete(pass),
           signal: withdrawal.signal,
         },
         () => this.execute(run),
       );
-      await this.record(run, 'succeeded', (tx) =>
-        jobQueueRepository.markSucceeded(run.id, this.workerId, tx),
-      );
+      await this.record(run, 'succeeded', (tx) => jobQueueRepository.markSucceeded(claim, tx));
     } catch (err) {
       if (withdrawal.signal.aborted && isWaitWithdrawn(err)) {
         // RELEASED WHILE IT WAITED (MOTIR-10462). The drain gave the row back —
@@ -657,7 +694,7 @@ export class JobWorker {
         // A durable sleep. NOT a failure: the attempt is refunded and the run is
         // re-enqueued at the deadline the step recorded.
         await this.record(run, 'yielded', (tx) =>
-          jobQueueRepository.rescheduleAt(run.id, this.workerId, err.resumeAt, tx, {
+          jobQueueRepository.rescheduleAt(claim, err.resumeAt, tx, {
             refundAttempt: true,
           }),
         );
@@ -677,7 +714,7 @@ export class JobWorker {
         // (`retryPolicy: 'none'`, a budget of exactly one) the second poll would
         // dead-letter a CI job that was fine.
         await this.record(run, 'deferred', (tx) =>
-          jobQueueRepository.rescheduleAt(run.id, this.workerId, err.resumeAt, tx, {
+          jobQueueRepository.rescheduleAt(claim, err.resumeAt, tx, {
             refundAttempt: true,
           }),
         );
@@ -690,20 +727,20 @@ export class JobWorker {
       // spent provider quota is the case: retrying minutes apart only asks an
       // exhausted quota again (MOTIR-5873).
       if (run.attempts >= run.maxAttempts || isNonRetryableFailure(err)) {
-        await this.failTerminally(run, err, failure);
+        await this.failTerminally(run, claim, err, failure);
         return;
       }
 
       const backoff = retryBackoffMs(run.attempts);
       await this.record(run, 'retrying', (tx) =>
-        jobQueueRepository.rescheduleAt(run.id, this.workerId, new Date(Date.now() + backoff), tx, {
+        jobQueueRepository.rescheduleAt(claim, new Date(Date.now() + backoff), tx, {
           lastError: failure,
         }),
       );
     } finally {
-      this.parked.delete(run.id);
-      this.inFlight.delete(run.id);
-      this.withdrawals.delete(run.id);
+      this.parked.delete(pass);
+      this.inFlight.delete(pass);
+      this.withdrawals.delete(pass);
     }
   }
 
@@ -729,7 +766,7 @@ export class JobWorker {
   /** A pass whose claim was released before it settled: nothing written, said so once. */
   private reportReleased(run: JobQueueRun, would: string): void {
     this.log.warn(
-      `[job-worker] ${run.jobId} run ${run.id} is no longer held by ${this.workerId}; ` +
+      `[job-worker] ${run.jobId} run ${run.id} (claim ${run.claimToken}) is no longer held by ${this.workerId}; ` +
         `its ${would} pass wrote nothing and the row is its next claimant's`,
     );
     this.onOutcome(run, 'released');
@@ -744,12 +781,11 @@ export class JobWorker {
    */
   private async failTerminally(
     run: JobQueueRun,
+    claim: JobQueueClaim,
     err: unknown,
     failure: { message: string; stack?: string },
   ): Promise<void> {
-    const holds = await withSystemContext((tx) =>
-      jobQueueRepository.isHeldBy(run.id, this.workerId, tx),
-    );
+    const holds = await withSystemContext((tx) => jobQueueRepository.isHeldBy(claim, tx));
     if (!holds) {
       this.reportReleased(run, 'failed');
       return;
@@ -765,7 +801,7 @@ export class JobWorker {
       }
     }
     const marked = await this.record(run, 'failed', (tx) =>
-      jobQueueRepository.markFailed(run.id, this.workerId, failure, tx),
+      jobQueueRepository.markFailed(claim, failure, tx),
     );
     if (marked) {
       this.log.error(`[job-worker] ${run.jobId} run ${run.id} FAILED terminally`, failure.message);
@@ -776,12 +812,12 @@ export class JobWorker {
    * A run began waiting on an in-process gate: it leaves the busy count, and a
    * loop waiting for a slot is woken to claim into it (MOTIR-10457).
    */
-  private park(runId: string): void {
+  private park(pass: string): void {
     /* v8 ignore next -- defensive: `settle` is the only scope that reports, and
-       it reports only while `runId` is in flight. A wait that outlives the settle
-       (work the handler left running detached) must not park a run that is gone. */
-    if (!this.inFlight.has(runId)) return;
-    this.parked.add(runId);
+       it reports only while `pass` is in flight. A wait that outlives the settle
+       (work the handler left running detached) must not park a pass that is gone. */
+    if (!this.inFlight.has(pass)) return;
+    this.parked.add(pass);
     this.releaseSlot();
   }
 
