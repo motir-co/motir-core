@@ -44,6 +44,14 @@ function typeBlockBody(id: string): string {
 const GENERIC_FAMILY =
   /^(serif|sans-serif|cursive|fantasy|monospace|system-ui|ui-[a-z-]+|math|emoji|fangsong)$/i;
 
+/** A block's `--font-<role>-pairing` / `-tail` declarations, trimmed, in order. */
+function roleDeclarations(body: string, role: 'sans' | 'serif' | 'mono'): string[] {
+  return body
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => d.startsWith(`--font-${role}-`));
+}
+
 /** Every generic keyword found in a block's three `-pairing` values. */
 function pairingGenerics(body: string): string[] {
   const out: string[] = [];
@@ -66,6 +74,7 @@ describe('typography registry', () => {
       'editorial',
       'mono-technical',
       'marker',
+      'rounded',
     ]);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
@@ -74,6 +83,7 @@ describe('typography registry', () => {
     expect(TYPE_REGISTRY['editorial'].name).toBe('Editorial');
     expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
     expect(TYPE_REGISTRY['marker'].name).toBe('Marker');
+    expect(TYPE_REGISTRY['rounded'].name).toBe('Rounded');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {
@@ -113,6 +123,7 @@ describe('isTypeId / resolveType', () => {
     expect(isTypeId('grotesk')).toBe(true); // registered in 7.3.54
     expect(isTypeId('editorial')).toBe(true); // registered in 7.3.55
     expect(isTypeId('marker')).toBe(true); // registered in MOTIR-10553
+    expect(isTypeId('rounded')).toBe(true); // registered in MOTIR-10554
     expect(isTypeId('serif-tech')).toBe(false); // not a registered pairing
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
@@ -186,12 +197,27 @@ describe('runtime contract in globals.css', () => {
     expect(FONTS_TS).toContain('Caveat');
     expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*caveat\.variable/);
     expect(pairingGenerics(body)).toEqual([]);
-    const baseRoles = (b: string) =>
-      b
-        .split(';')
-        .map((d) => d.trim())
-        .filter((d) => /^--font-(sans|mono)-/.test(d));
-    expect(baseRoles(body)).toEqual(baseRoles(typeBlockBody('editorial')));
+    for (const role of ['sans', 'mono'] as const) {
+      expect(roleDeclarations(body, role)).toEqual(
+        roleDeclarations(typeBlockBody('editorial'), role),
+      );
+    }
+  });
+
+  it('re-points the Rounded headline AND body roles at the LOADED Nunito -source face', () => {
+    // MOTIR-10554 — whole-UI, like grotesk: both the serif and sans chains drive
+    // off `--font-rounded-source`, the variable next/font binds to Nunito in
+    // app/fonts.ts; meta keeps the grotesk block's JetBrains chain.
+    const body = typeBlockBody('rounded');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-rounded-source/);
+    expect(body).toMatch(/--font-sans-pairing:[^;]*--font-rounded-source/);
+    expect(FONTS_TS).toContain("variable: '--font-rounded-source'");
+    expect(FONTS_TS).toContain('Nunito');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*nunito\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    expect(roleDeclarations(body, 'mono')).toEqual(
+      roleDeclarations(typeBlockBody('grotesk'), 'mono'),
+    );
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {

@@ -15,6 +15,7 @@ import {
   Noto_Serif_KR,
   Noto_Serif_SC,
   Noto_Serif_TC,
+  Nunito,
   Source_Serif_4,
   Space_Grotesk,
 } from 'next/font/google';
@@ -87,6 +88,17 @@ const fraunces = Fraunces({
 const caveat = Caveat({
   subsets: ['latin'],
   variable: '--font-marker-source',
+  display: 'swap',
+});
+
+// The Rounded type pairing's face (MOTIR-10554) — Nunito, a rounded-terminal
+// sans. Not a base role: it feeds ONLY the `[data-type='rounded']` override in
+// theme.css via `--font-rounded-source`, which re-points both the headline and
+// body/UI roles; the base roles stay Inter / Source Serif / mono when the pairing
+// is not selected, so this adds payload only for that pairing.
+const nunito = Nunito({
+  subsets: ['latin'],
+  variable: '--font-rounded-source',
   display: 'swap',
 });
 
@@ -205,6 +217,7 @@ export const fontVariables = [
   spaceGrotesk.variable,
   fraunces.variable,
   caveat.variable,
+  nunito.variable,
   notoSansSC.variable,
   notoSerifSC.variable,
   lxgwWenKaiTC.variable,
