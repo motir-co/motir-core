@@ -6,6 +6,7 @@ import { BookOpen, ChevronLeft } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { MotirAiError, PlannerFindingNotFoundError } from '@/lib/ai/errors';
 import type { PlannerFindingDetailDTO } from '@/lib/dto/plannerFindings';
+import { platformRoleAtLeast } from '@/lib/platform/auth';
 import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
 import {
   PLANNER_FINDING_NO_PLAN_ID,
@@ -15,6 +16,7 @@ import {
 import { TriageChip } from '../_components/FindingChips';
 import { FindingCostStrip } from '../_components/FindingCostStrip';
 import { FindingsUnavailable } from '../_components/FindingsUnavailable';
+import { FindingTriageControls } from '../_components/FindingTriageControls';
 import { findingLabel, type FindingLabelGroup } from '../_components/findingLabels';
 
 /**
@@ -28,7 +30,8 @@ import { findingLabel, type FindingLabelGroup } from '../_components/findingLabe
  *
  * Nothing is looked up in motir-core: the plan is the id and title motir-ai
  * stored, so a finding whose plan was deleted still opens. The triage STATE is
- * shown here read-only; the controls that change it sit beneath the header.
+ * shown here read-only; the controls that change it sit beneath the header and
+ * render none of it.
  */
 
 export const metadata: Metadata = { title: 'Planner finding' };
@@ -83,7 +86,11 @@ export default async function AdminPlannerFindingPage({
         </div>
         <TriageState detail={detail} triagedByName={triagedByName} />
       </header>
-      {/* The triage controls render here, beneath the header (MOTIR-10525). */}
+      {/* Below operator the controls render nothing: the writes need operator (MOTIR-10525). */}
+      <FindingTriageControls
+        detail={detail}
+        canTriage={platformRoleAtLeast(principal.role, 'operator')}
+      />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         <Narrative detail={detail} />
         <div className="flex flex-col gap-4">
