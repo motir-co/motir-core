@@ -585,9 +585,11 @@ export async function seedSprintRoadmap(email: string): Promise<SprintRoadmapSee
  * arrival floor (Story MOTIR-3833 · MOTIR-3841).
  *
  * The arrival rule only bites on a level that cannot be drawn legibly whole, so a
- * fixture with two epics cannot see it at all. Eighteen root epics put the level's
- * world box at roughly 1000×1324 under the shipped 3-column `deterministicLayout`,
- * which fits at ~0.30 in a laptop-sized canvas — well under the 0.80 floor. One of
+ * fixture with two epics cannot see it at all. Eighteen root epics put the
+ * level's world box at roughly 1720×712 under the shipped
+ * 5-column `deterministicLayout` band (MOTIR-10537), which fits at ~0.60 in a
+ * laptop-sized canvas — under the 0.80 floor, and too tall at the floor to fit, so
+ * the arrival still follows the frontier vertically. One of
  * them is the in-progress FRONTIER (the card the arrival centres on) and one is a
  * drillable STORY-bearing epic, so the same fixture serves the drill / URL / Back
  * walk without a second seed.

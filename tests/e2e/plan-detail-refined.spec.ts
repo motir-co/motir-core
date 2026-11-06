@@ -278,7 +278,7 @@ test('the plan detail, refined — the story’s verification recipe', async ({
 
   // ── LEG 7 · recipe step 7 — the LIST opens when the canvas cannot hold them ─
   await chapter('A plan buried in a crowded container opens as a LIST', async () => {
-    // ONE container, so the shipped container-count rule says canvas; eighteen
+    // ONE container, so the shipped container-count rule says canvas; thirty-six
     // nodes, so the level cannot arrive legibly and the widened rule says list.
     // Indistinguishable from shape TWO to a reader who only counts containers.
     const overlay = await openUndecidedPlan(page, seed.four.planId);

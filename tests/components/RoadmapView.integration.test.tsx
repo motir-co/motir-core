@@ -399,7 +399,7 @@ describe('MOTIR-3833 — the assembled roadmap seams', () => {
     const box = { w: 1136, h: 620 }; // the measured canvas box at 1440x900
 
     expect(fitView(bounds, box).scale).toBeLessThan(ARRIVAL_MIN_SCALE);
-    const here = rects[6]!; // the in-progress frontier, third row
+    const here = rects[6]!; // the in-progress frontier, second row of the 5-column band
     const v = arrivalView(bounds, box, ARRIVAL_MIN_SCALE, here);
 
     expect(v.scale).toBe(ARRIVAL_MIN_SCALE);
@@ -408,7 +408,10 @@ describe('MOTIR-3833 — the assembled roadmap seams', () => {
   });
 
   it('THE ARRIVAL SEAM — a real SMALL level still arrives exactly as fitView frames it', () => {
-    const ids = ['S1', 'S2', 'S3', 'S4', 'S5'];
+    // Three cards, one band row 1000px wide — the widest loose level that still
+    // fits this box at the floor. On the 5-column band (MOTIR-10537) a fourth card
+    // in the row makes it 1360px, which already arrives AT the floor.
+    const ids = ['S1', 'S2', 'S3'];
     const pos = deterministicLayout(ids, []);
     const bounds = nodesBounds(
       ids.map((id) => ({ x: pos[id]!.x, y: pos[id]!.y, w: NODE_W, h: NODE_H })),

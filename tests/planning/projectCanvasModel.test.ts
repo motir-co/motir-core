@@ -5,6 +5,7 @@ import {
   childrenOf,
   computeLevel,
   deterministicLayout,
+  LOOSE_BAND_COLS,
   focalNode,
   hasChildren,
   levelOf,
@@ -153,9 +154,39 @@ describe('deterministicLayout', () => {
     expect(pos['loose']!.y).toBeGreaterThan(pos['a']!.y);
     expect(pos['loose']!.y).toBeGreaterThan(pos['b']!.y);
   });
+  it('lays an all-loose level FIVE to a row; the sixth card starts the second row (MOTIR-10537)', () => {
+    expect(LOOSE_BAND_COLS).toBe(5);
+    const ids = ['n0', 'n1', 'n2', 'n3', 'n4', 'n5'];
+    const pos = deterministicLayout(ids, []);
+    // Row one: five cards side by side at the origin row, one column step apart.
+    for (let i = 0; i < 5; i += 1) {
+      expect(pos[ids[i]!]).toEqual({ x: 40 + i * 360, y: 40 });
+    }
+    // The sixth wraps to the first column of the next row.
+    expect(pos['n5']).toEqual({ x: 40, y: 40 + 196 });
+  });
+  it('keeps the dependency FLOW as it was, with the five-wide band below it (MOTIR-10537)', () => {
+    const loose = ['l0', 'l1', 'l2', 'l3', 'l4', 'l5', 'l6'];
+    const pos = deterministicLayout(
+      ['a', ...loose, 'b', 'c'],
+      [
+        { from: 'a', to: 'b' },
+        { from: 'a', to: 'c' },
+      ],
+    );
+    // The flow: `a` in layer 0, `b` and `c` stacked in layer 1 — two rows tall.
+    expect(pos['a']).toEqual({ x: 40, y: 40 });
+    expect(pos['b']).toEqual({ x: 400, y: 40 });
+    expect(pos['c']).toEqual({ x: 400, y: 236 });
+    // The band starts BAND_GAP (96) below the flow's bottom edge (236 + 124).
+    const bandY = 236 + 124 + 96;
+    loose.slice(0, 5).forEach((id, i) => expect(pos[id]).toEqual({ x: 40 + i * 360, y: bandY }));
+    expect(pos['l5']).toEqual({ x: 40, y: bandY + 196 });
+    expect(pos['l6']).toEqual({ x: 400, y: bandY + 196 });
+  });
   it('lays an all-loose level as a plain grid that keeps nodes apart', () => {
-    const pos = deterministicLayout(['n0', 'n1', 'n2', 'n3'], []);
-    expect(pos['n3']!.y).toBeGreaterThan(pos['n0']!.y);
+    const pos = deterministicLayout(['n0', 'n1', 'n2', 'n3', 'n4', 'n5'], []);
+    expect(pos['n5']!.y).toBeGreaterThan(pos['n0']!.y);
     expect(Math.abs(pos['n0']!.x - pos['n1']!.x)).toBeGreaterThanOrEqual(NODE_W);
   });
 });

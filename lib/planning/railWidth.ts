@@ -36,9 +36,10 @@ export const RAIL_DEFAULT_FRACTION = 1 / 3;
  * The conversation's CEILING as a fraction of the split container.
  *
  * Deliberately NOT a canvas pixel floor: `lib/planning/canvasGeometry.ts` puts a
- * three-column level at 800px wide at the `ARRIVAL_MIN_SCALE` legibility floor,
- * which with `arrivalView`'s 48px padding wants an 896px canvas — and the shipped
- * surface is already below that at ordinary sizes, so a canvas pixel floor would
+ * full five-column level (MOTIR-10537) at 1376px wide at the `ARRIVAL_MIN_SCALE`
+ * legibility floor, which with `arrivalView`'s 48px padding wants a 1472px canvas
+ * — and the shipped surface is already below that at ordinary sizes, so a canvas
+ * pixel floor would
  * be one the product does not honour today. What does not recover past half is the
  * MODEL — *the canvas IS the roadmap; the chat is a right rail* — because the
  * canvas's legibility is recoverable by pan and zoom and the model is not.
