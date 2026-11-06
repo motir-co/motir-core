@@ -31,6 +31,7 @@ import type {
 } from '@/lib/dto/approvalGate';
 import { APPROVAL_GATE_REFUSAL_VERDICTS } from '@/lib/dto/approvalGate';
 import {
+  carriesReviewPath,
   toApprovalRowReviewDto,
   toGateReviewPathDto,
   type GateReviewPathDTO,
@@ -416,8 +417,9 @@ export interface WorkItemGateRead {
   approvedReview?: ApprovedReviewDTO | null;
   /**
    * THE REVIEW PATH (MOTIR-10342) — what the approve-and-merge frame draws of the agent
-   * review at the card's current version. Read ONLY for a `pull_request_approval` read by a
-   * member; absent on every other read.
+   * review at the card's current version. Read ONLY for a `pull_request_approval` or
+   * `acceptance_result` read by a member (Bug MOTIR-10533: a story run's acceptance merges
+   * the same set); absent on every other read.
    */
   reviewPath?: GateReviewPathDTO | null;
   /**
@@ -1130,10 +1132,14 @@ export const approvalGatesService = {
         : null;
       // THE REVIEW PATH ON THE GATE FRAME (MOTIR-10342; design § 32.4, § 32.6, § 32.8) — the
       // review line, a gate-off send-back to dismiss and the author fact, at the card's
-      // CURRENT version. Only the approve-and-merge read pays for it, and never a Visitor's
-      // (who the answers are for is a member's question).
+      // CURRENT version. Only the reads of a gate in front of the merge pay for it — the
+      // approve-and-merge gate, and a story run's acceptance, whose press merges the same
+      // set (Bug MOTIR-10533) — and never a Visitor's (who the answers are for is a
+      // member's question). ⚠️ The version is the DELIVERY SET's, read by the read model
+      // from the card's deliveries: an acceptance gate's own `subjectVersion` names its
+      // recording, which no review is ever about.
       const reviewState =
-        input.kind === 'pull_request_approval' && !isVisitorActor(ctx)
+        carriesReviewPath(input.kind) && !isVisitorActor(ctx)
           ? ((await readReviewStates(item.projectId, [input.workItemId], ctx, tx)).get(
               input.workItemId,
             ) ?? null)
@@ -2026,14 +2032,15 @@ export const approvalGatesService = {
         ),
       );
 
-      // THE AGENT REVIEW of each pending approve-and-merge record (MOTIR-10342; § 32.4) — the
-      // read model's ONE batch over the page, in this transaction. A Visitor reads none.
+      // THE AGENT REVIEW of each pending approve-and-merge record (MOTIR-10342; § 32.4) — and
+      // of a story run's acceptance, which merges the same set (Bug MOTIR-10533) — the read
+      // model's ONE batch over the page, in this transaction. A Visitor reads none.
       const mergeCardIds = visitor
         ? []
         : [
             ...new Set(
               awaitingItems.flatMap((row) =>
-                row.kind === 'pull_request_approval' && row.workItem ? [row.workItem.id] : [],
+                carriesReviewPath(row.kind) && row.workItem ? [row.workItem.id] : [],
               ),
             ),
           ];
@@ -2043,7 +2050,7 @@ export const approvalGatesService = {
           : new Map<string, ReviewStateDTO>();
       const awaitingWithReview = awaitingItems.map((row) => {
         const state =
-          row.kind === 'pull_request_approval' && row.workItem
+          carriesReviewPath(row.kind) && row.workItem
             ? reviewStates.get(row.workItem.id)
             : undefined;
         const review = state ? toApprovalRowReviewDto(state) : null;
@@ -3056,7 +3063,7 @@ async function withRowReviews(
   const mergeCards = [
     ...new Set(
       queue.items.flatMap((row) =>
-        row.kind === 'pull_request_approval' && row.workItem ? [row.workItem.id] : [],
+        carriesReviewPath(row.kind) && row.workItem ? [row.workItem.id] : [],
       ),
     ),
   ];
@@ -3069,7 +3076,7 @@ async function withRowReviews(
   return {
     ...queue,
     items: queue.items.map((row) => {
-      if (row.kind !== 'pull_request_approval' || !row.workItem) return row;
+      if (!carriesReviewPath(row.kind) || !row.workItem) return row;
       const state = states.get(row.workItem.id);
       const review = state ? toApprovalRowReviewDto(state) : null;
       return review ? { ...row, review } : row;

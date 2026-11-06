@@ -1426,3 +1426,201 @@ describe('a CHOICE in the overlay (Story MOTIR-4914 · MOTIR-5896)', () => {
     expect(screen.getByRole('radiogroup')).toBeTruthy();
   });
 });
+
+// ── A STORY RUN'S ACCEPTANCE CARRIES ITS SET'S REVIEW PATH (Bug MOTIR-10533) ─────────────
+//
+// Approving a story run's acceptance is what lets its pull requests merge, so the overlay
+// draws the same review line, author note and gate-off send-back the approve-and-merge frame
+// does: in the Development block when the acceptance leads it beside an awaiting merge
+// question, and above the receipt when it is the port alone.
+describe('the review path on a story run’s acceptance (MOTIR-10533)', () => {
+  const SET = 'moooon/motir-core#131@3f2a91c0,moooon/motir-gateway#57@aa11bb20';
+  const ACCEPTANCE: ApprovalGateDTO = {
+    ...GATE,
+    id: 'gate-acc',
+    kind: 'acceptance_result',
+    subjectId: 'ae-1',
+    subjectVersion: 'c0ffee1234567890',
+  };
+  const RECEIPT = {
+    id: 'ae-1',
+    workItemId: 'wi-1',
+    status: 'pending',
+    videoUrl: 'https://blob.example/run.webm',
+    mimeType: 'video/webm',
+    sizeBytes: 1024,
+    traceUrl: null,
+    chapters: [{ label: 'Open the story', tSeconds: 0 }],
+    commitSha: 'c0ffee1234567890',
+    ciRunUrl: null,
+    producedByKey: 'GATE-24',
+    approvedById: null,
+    approvedAt: null,
+    createdAt: '2026-09-19T14:40:00.000Z',
+  };
+  const NOT_REVIEWED = {
+    value: 'not_reviewed' as const,
+    actor: null,
+    reason: null,
+    reviewer: null,
+    at: null,
+    githubApprovals: [],
+    lastReviewedVersion: null,
+    lastReviewedRef: null,
+    command: 'motir review GATE-1',
+  };
+  const reviewPath = (over: Record<string, unknown> = {}) => ({
+    identifier: 'GATE-1',
+    currentVersion: SET,
+    line: NOT_REVIEWED,
+    recordRef: null,
+    viewerIsRouted: false,
+    authorOfEveryPr: false,
+    sentBackRecord: null,
+    ...over,
+  });
+  const line = () => document.querySelector('[data-review-line]');
+
+  async function openReceiptPort(over: Partial<ApprovalGateOverlayReadDTO> = {}) {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: ACCEPTANCE,
+        subject: { state: 'resolved', kind: 'acceptance_result', evidence: RECEIPT } as never,
+        ...over,
+      }),
+    );
+    await renderOverlay();
+    return screen.getByRole('dialog');
+  }
+
+  it('the receipt port draws the line and the command above the recording', async () => {
+    const dialog = await openReceiptPort({ reviewPath: reviewPath() as never });
+    const el = line();
+    expect(el?.getAttribute('data-review-line')).toBe('not_reviewed');
+    expect(within(dialog).getByRole('button', { name: 'Copy motir review GATE-1' })).toBeTruthy();
+    // ABOVE the receipt: the line precedes the recording's chapter control.
+    const chapter = within(dialog).getByRole('button', { name: /Open the story/ });
+    expect(el!.compareDocumentPosition(chapter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it.each(['reviewed_by_agent', 'review_skipped', 'review_dismissed'] as const)(
+    'the receipt port draws the %s line',
+    async (value) => {
+      await openReceiptPort({
+        reviewPath: reviewPath({
+          line: {
+            ...NOT_REVIEWED,
+            value,
+            command: null,
+            actor: { id: 'user-2', name: 'Riley Reviewer' },
+            reason: 'A reason.',
+            reviewer: { kind: 'hosted', model: null },
+          },
+        }) as never,
+      });
+      expect(line()?.getAttribute('data-review-line')).toBe(value);
+    },
+  );
+
+  it('the author note for the routed author, and the gate-off send-back with Dismiss', async () => {
+    const dialog = await openReceiptPort({
+      reviewPath: reviewPath({
+        viewerIsRouted: true,
+        authorOfEveryPr: true,
+        sentBackRecord: {
+          recordId: 'rec-1',
+          findingsMd: '- `lib/export.ts:12` drops the header row.',
+          at: '2026-11-05T10:00:00.000Z',
+        },
+      }) as never,
+    });
+    expect(within(dialog).getByRole('note').textContent).toContain(
+      en.approvalGate.reviewPath.authorNote.title,
+    );
+    expect(within(dialog).getByText('drops the header row.', { exact: false })).toBeTruthy();
+    expect(
+      within(dialog).getByRole('button', { name: en.approvalGate.reviewPath.dismiss.button }),
+    ).toBeTruthy();
+  });
+
+  it('a dismissal from the receipt port re-reads the overlay and the page behind it', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const dialog = await openReceiptPort({
+      reviewPath: reviewPath({
+        viewerIsRouted: true,
+        line: null,
+        sentBackRecord: {
+          recordId: 'rec-1',
+          findingsMd: '- `lib/export.ts:12` drops the header row.',
+          at: '2026-11-05T10:00:00.000Z',
+        },
+      }) as never,
+    });
+    const reads = fetchApprovalGateOverlay.mock.calls.length;
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: en.approvalGate.reviewPath.dismiss.button }),
+    );
+    const reason = screen.getByRole('textbox', {
+      name: en.approvalGate.reviewPath.dismiss.reasonLabel,
+    });
+    fireEvent.change(reason, { target: { value: 'Out of scope.' } });
+    await act(async () => {
+      fireEvent.submit(reason.closest('form')!);
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/work-items/GATE-1/review-dismissal',
+      expect.objectContaining({
+        body: JSON.stringify({ subjectVersion: SET, reason: 'Out of scope.' }),
+      }),
+    );
+    expect(refresh).toHaveBeenCalled();
+    expect(fetchApprovalGateOverlay.mock.calls.length).toBeGreaterThan(reads);
+    vi.unstubAllGlobals();
+  });
+
+  it('no line for a story with no pull requests, nor on a decided acceptance', async () => {
+    await openReceiptPort({
+      reviewPath: reviewPath({ currentVersion: null, line: null }) as never,
+    });
+    expect(line()).toBeNull();
+    expect(document.querySelector('[data-review-path-port]')).toBeNull();
+    cleanup();
+    await openReceiptPort({
+      gate: { ...ACCEPTANCE, state: 'approved', decidedAt: '2026-09-19T15:02:00.000Z' },
+      canDecide: false,
+      reviewPath: reviewPath() as never,
+    });
+    expect(line()).toBeNull();
+    cleanup();
+    await openReceiptPort({ reviewPath: null });
+    expect(line()).toBeNull();
+  });
+
+  it('leading the Development block beside the merge question, the line is read at the MERGE gate’s version', async () => {
+    openAt('GATE-1', 'acceptance_result');
+    fetchApprovalGateOverlay.mockResolvedValue(
+      readOf({
+        gate: ACCEPTANCE,
+        reviewPath: reviewPath() as never,
+        subject: {
+          state: 'resolved',
+          kind: 'pull_request_approval',
+          pullRequests: [CORE_PR, GATEWAY_PR],
+          repoDelivery: [],
+          deliveries: [],
+          howToTest: recordDto(),
+          designEvidence: null,
+          acceptanceEvidence: RECEIPT,
+          acceptanceGate: ACCEPTANCE,
+          isDesignCard: false,
+          members: [],
+          mergeSubjectVersion: SET,
+        } as never,
+      }),
+    );
+    await renderOverlay();
+    expect(line()?.getAttribute('data-review-line')).toBe('not_reviewed');
+  });
+});
