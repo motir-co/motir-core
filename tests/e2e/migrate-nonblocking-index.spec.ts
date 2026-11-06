@@ -252,10 +252,20 @@ test('a failed index reads failed with a retry, and Enter Motir stays enabled', 
   const resp = await retried;
   expect(resp.status()).toBe(200);
   expect(await resp.json()).toEqual({ repoRef: indexRepoRef(BILLING_API), status: 'queued' });
-  // The read the retry triggers is the one it is recorded against.
+  // The read the retry triggers is the one it is recorded against. It proves the
+  // retry RE-ENQUEUED the index: the repository has left `failed`. Which of the
+  // two in-flight states it reads is a race this spec does not own (MOTIR-10532):
+  // the e2e lane runs a live job worker, and when it claims the enqueued job
+  // before this read, the claim is already `running` and the read says
+  // `indexing`. The retry's own answer above stays exactly `queued` — that is
+  // the route's contract, written before any worker can see the job.
+  const RE_ENQUEUED = ['queued', 'indexing'];
   const after = (await (await nextRead).json()) as MigrateIndexStatusDto;
-  expect(repoStatus(after, BILLING_API)).toBe('queued');
-  await expect(detailRow(page, 'en', BILLING_API)).toHaveAttribute('data-status', 'queued');
+  expect(RE_ENQUEUED).toContain(repoStatus(after, BILLING_API));
+  await expect(detailRow(page, 'en', BILLING_API)).toHaveAttribute(
+    'data-status',
+    new RegExp(`^(${RE_ENQUEUED.join('|')})$`),
+  );
   await expect(enterButton(page, 'en')).toBeEnabled();
 });
 
