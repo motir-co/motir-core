@@ -1,3 +1,4 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { allSettledOrThrow } from '@/lib/async/allSettledOrThrow';
 import { planRevisionHoldService } from '@/lib/services/planRevisionHoldService';
 import { withWorkspaceContext } from '@/lib/workspaces';
@@ -11,7 +12,11 @@ import {
 } from '@/lib/repositories/workItemRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
-import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
+import {
+  approvalGateRepository,
+  type AwaitingRoutingScope,
+} from '@/lib/repositories/approvalGateRepository';
+import { reviewStateRepository } from '@/lib/repositories/reviewStateRepository';
 import {
   finishedWindowStart,
   resolveActiveProjectScope,
@@ -61,6 +66,23 @@ import {
 // answer at all — with the repositories underneath it (the 4-layer rule).
 
 /**
+ * THE REVIEW HALF OF THE TO APPROVE READING (Bug MOTIR-10504) — the review rows behind the
+ * approve-and-merge rows routed to this reader: the cards first, from the gate's own routing
+ * predicate, then one reading over their subtrees.
+ *
+ * ⚠️ ONE ARM, TWO STATEMENTS IN SEQUENCE, AWAITED HERE. The second needs the first's ids,
+ * and both run on the caller's transaction — so the arm is a single promise the fan-out
+ * settles, never a read started inside the fan-out's argument list (Bug MOTIR-8284).
+ */
+async function reviewsOnApprovalRows(
+  scope: AwaitingRoutingScope,
+  tx: Prisma.TransactionClient,
+): Promise<{ count: number; latest: Date | null }> {
+  const mergeCardIds = await approvalGateRepository.findAwaitingRoutedMergeWorkItemIds(scope, tx);
+  return reviewStateRepository.watermarkReviewsOfSubtrees(mergeCardIds, tx);
+}
+
+/**
  * The reading for every tab, taken inside ONE workspace context.
  *
  * ⚠️ SIX STATEMENTS, NOT TWELVE. Each work tab's size and freshness come back from
@@ -100,6 +122,12 @@ async function readTabs(
     // it failed, the transaction rolled back under all of them. Settling every
     // arm first means no read outlives the transaction it runs on, and a failure
     // surfaces once, as the read's own error.
+    const approvalsScope: AwaitingRoutingScope = {
+      projectIds,
+      userId: ctx.userId,
+      awaitingSessionIds,
+      heldPlanIds,
+    };
     const [
       toDo,
       inProgress,
@@ -110,6 +138,7 @@ async function readTabs(
       watching,
       failedSessions,
       endedSessions,
+      approvalReviews,
     ] = await allSettledOrThrow([
       workItemRepository.watermarkByAssigneeOrReporterInWorkspace(
         ctx.userId,
@@ -159,15 +188,7 @@ async function readTabs(
       // the scope is built here the same way `homeService.tabCounts` builds it
       // for the badge — the browsable project ids, which are `[]` for a reader
       // who may not browse their active project, and the reader.
-      approvalGateRepository.watermarkAwaitingRoutedTo(
-        {
-          projectIds,
-          userId: ctx.userId,
-          awaitingSessionIds,
-          heldPlanIds,
-        },
-        tx,
-      ),
+      approvalGateRepository.watermarkAwaitingRoutedTo(approvalsScope, tx),
       watcherRepository.watermarkByUser(ctx.userId, ctx.workspaceId, projectScopes, tx),
       // …and the reader's FAILED PLANNING SESSIONS, which To resume now lists and counts
       // (MOTIR-7914): one aggregate over the list's own predicate, merged into the tab's pair
@@ -182,6 +203,10 @@ async function readTabs(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectIds },
         tx,
       ),
+      // …and the REVIEW of the approve-and-merge rows (Bug MOTIR-10504): a review that
+      // writes no gate — a gate-off pass, a GitHub approval at the head — changes a row's
+      // review line and Reviewed badge, so it must move the tab the row is on.
+      reviewsOnApprovalRows(approvalsScope, tx),
     ]);
     const pair = (reading: { count: number; latest: Date | null }): WorkbenchTabWatermarkDto => ({
       count: reading.count,
@@ -199,7 +224,13 @@ async function readTabs(
         ),
       }),
       recentlyFinished: pair(recentlyFinished),
-      approvals: pair(approvals),
+      // The gates and the review rows behind them, merged as To resume merges its three
+      // reads: the pair is a change detector, and the strip's count comes from
+      // `homeService.tabCounts`, never from here.
+      approvals: pair({
+        count: approvals.count + approvalReviews.count,
+        latest: latestDate(approvals.latest, approvalReviews.latest),
+      }),
       watching: pair(watching),
     };
   });
