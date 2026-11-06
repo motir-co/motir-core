@@ -148,6 +148,7 @@ export function toPlanCodeReadDto(row: PlanCodeRead): PlanCodeReadDto {
     endLine: row.endLine,
     askedRef: row.askedRef,
     query: row.query,
+    regex: row.regex,
     commits: Array.isArray(row.commits) ? (row.commits as PlanCodeReadDto['commits']) : [],
     outcome: row.outcome,
     lines: row.lines,
