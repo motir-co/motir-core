@@ -7792,6 +7792,7 @@
         "blockedShort": "bloqueado",
         "action": {
           "copyAria": "Copiar {command}",
+          "copyFailed": "Não foi possível copiar — selecione o comando e copie-o manualmente.",
           "copyTooltip": "Copiar <cmd>{command}</cmd>",
           "copyTooltipCiFailed": "CI falhou — copiar <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Alterações solicitadas — copiar <cmd>{command}</cmd>",

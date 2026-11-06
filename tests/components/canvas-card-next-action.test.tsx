@@ -280,6 +280,9 @@ describe('the tag row and the give-way rule', () => {
     expect(flag.getAttribute('aria-label')).toBe('blocked elsewhere');
     expect(flag.getAttribute('title')).toBe('blocked elsewhere');
     expect(flag.className).toContain('px-(--spacing-chip-x-6)');
+    // The visible label is aria-hidden, so the sentence must be a name a screen
+    // reader reads: `aria-label` on a generic span is prohibited, on role=img it is not.
+    expect(screen.getByRole('img', { name: 'blocked elsewhere' })).toBe(flag);
   });
 
   it('the right cluster is rendered only when it holds something', () => {
@@ -341,6 +344,24 @@ describe('the next-action button', () => {
     await act(async () => {
       vi.advanceTimersByTime(2000);
     });
+    expect(button.getAttribute('data-copied')).toBeNull();
+  });
+
+  it('a refused clipboard shows the copy-failed toast, and no success or Check', async () => {
+    writeText.mockRejectedValueOnce(new Error('NotAllowedError'));
+    render(
+      <ToastProvider>
+        <WorkItemNode item={leaf} ready nextActions={ON} />
+      </ToastProvider>,
+    );
+    const button = nextAction()!;
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(
+      screen.getByText("Couldn't copy — select the command and copy it manually."),
+    ).toBeTruthy();
+    expect(screen.queryByText('Copied')).toBeNull();
     expect(button.getAttribute('data-copied')).toBeNull();
   });
 

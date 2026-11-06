@@ -7792,6 +7792,7 @@
         "blockedShort": "geblokkeerd",
         "action": {
           "copyAria": "{command} kopiëren",
+          "copyFailed": "Kopiëren mislukt — selecteer de opdracht en kopieer hem handmatig.",
           "copyTooltip": "<cmd>{command}</cmd> kopiëren",
           "copyTooltipCiFailed": "CI mislukt — <cmd>{command}</cmd> kopiëren",
           "copyTooltipChangesRequested": "Wijzigingen gevraagd — <cmd>{command}</cmd> kopiëren",

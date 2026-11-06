@@ -7783,6 +7783,7 @@
         "blockedShort": "受阻",
         "action": {
           "copyAria": "复制 {command}",
+          "copyFailed": "复制失败——请手动选中并复制该命令。",
           "copyTooltip": "复制 <cmd>{command}</cmd>",
           "copyTooltipCiFailed": "CI 未通过 — 复制 <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "已要求修改 — 复制 <cmd>{command}</cmd>",
