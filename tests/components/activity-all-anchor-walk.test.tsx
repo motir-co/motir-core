@@ -73,6 +73,7 @@ const verdict = (recordId: string) =>
       model: '',
       subjectVersion: 'moooon/acme#88@3f2a9c1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       findingsExcerpt: 'The export button still does nothing on Safari.',
+      checklist: [],
       notified: null,
     },
   ]);
