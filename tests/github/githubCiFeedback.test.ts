@@ -1254,4 +1254,156 @@ describe('githubWebhookService — late terminal deliveries (MOTIR-10461)', () =
     expect(again).toMatchObject({ outcome: 'verified' });
     expect(await ciStateOf(item.id)).toBe('passing');
   });
+
+  // ── MOTIR-10467 — and never overwrites a re-run that has already FINISHED ──
+  //
+  // The block above refuses the first run's late verdict while the re-run RUNS.
+  // When the re-run has already settled by the time that late delivery is
+  // processed, the row is terminal again — and a terminal row used to be
+  // overwritten unguarded, so the 10:04 failure replaced the 10:13 green. Terminal
+  // over terminal is now ordered by the finish too: strictly older is refused, the
+  // same finish (a redelivery) and a later one (a re-run's verdict) are written.
+  describe('a re-run that has already finished (MOTIR-10467)', () => {
+    /** `rerunInFlight`, then the re-run's own completion at RERUN_FINISH. */
+    async function rerunFinished(email: string, conclusion: 'success' | 'failure') {
+      const { s, item } = await rerunInFlight(email);
+      const settled = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion, startedAt: RERUN_START, completedAt: RERUN_FINISH }),
+      );
+      expect(settled).toMatchObject({ outcome: conclusion === 'success' ? 'verified' : 'failed' });
+      return { s, item };
+    }
+
+    it('the first run’s late FAILURE leaves the re-run’s green row, ciState and comment alone (the card’s reproduction)', async () => {
+      const { item } = await rerunFinished('finished-late-red@example.com', 'success');
+      const before = await adminDb.githubCheckRun.findFirstOrThrow();
+      const commentsBefore = await commentsOn(item.id);
+      expect(commentsBefore).toHaveLength(1);
+
+      const late = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'failure', startedAt: FIRST_START, completedAt: FIRST_FINISH }),
+      );
+      expect(late).toEqual({ event: 'ci', outcome: 'stale_terminal', workItemId: item.id });
+      const rows = await adminDb.githubCheckRun.findMany();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        conclusion: 'success',
+        conclusionAt: new Date(RERUN_FINISH),
+      });
+      expect(rows[0]!.updatedAt).toEqual(before.updatedAt); // nothing was written
+      expect(await ciStateOf(item.id)).toBe('passing');
+      // The comment the re-run wrote is neither rewritten nor joined by another.
+      const commentsAfter = await commentsOn(item.id);
+      expect(commentsAfter).toHaveLength(1);
+      expect(commentsAfter[0]!.bodyMd).toBe(commentsBefore[0]!.bodyMd);
+      expect(commentsAfter[0]!.updatedAt).toEqual(commentsBefore[0]!.updatedAt);
+      expect(await feedbackRecords('sha1')).toHaveLength(1);
+    });
+
+    it('the first run’s late GREEN over a finished red re-run promotes nothing and keeps the card failing', async () => {
+      const { item } = await rerunInFlight('finished-late-green@example.com');
+      await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'implemented' } });
+      await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'failure', startedAt: RERUN_START, completedAt: RERUN_FINISH }),
+      );
+      expect(await ciStateOf(item.id)).toBe('failing');
+
+      const late = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'success', startedAt: FIRST_START, completedAt: FIRST_FINISH }),
+      );
+      expect(late).toEqual({ event: 'ci', outcome: 'stale_terminal', workItemId: item.id });
+      expect(late).not.toHaveProperty('promoted');
+      expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+        { conclusion: 'failure', conclusionAt: new Date(RERUN_FINISH) },
+      ]);
+      expect(await ciStateOf(item.id)).toBe('failing');
+      expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).status).toBe(
+        'implemented',
+      );
+    });
+
+    it('a redelivery of the re-run’s own conclusion still converges, as today', async () => {
+      const { item } = await rerunFinished('finished-redelivery@example.com', 'success');
+      const again = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'success', startedAt: RERUN_START, completedAt: RERUN_FINISH }),
+      );
+      expect(again).toMatchObject({ outcome: 'noop', workItemId: item.id, ciState: 'passing' });
+      expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+        { conclusion: 'success', conclusionAt: new Date(RERUN_FINISH) },
+      ]);
+      expect(await commentsOn(item.id)).toHaveLength(1);
+    });
+
+    it('a different conclusion at the SAME finish is a redelivery, and is written', async () => {
+      // Equal finish times cannot be ordered against each other, so the tie keeps
+      // last-write-wins — the behaviour the row had before this card.
+      const { item } = await rerunFinished('finished-tie@example.com', 'success');
+      const res = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'failure', startedAt: RERUN_START, completedAt: RERUN_FINISH }),
+      );
+      expect(res).toMatchObject({ outcome: 'failed', ciState: 'failing' });
+      expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+        { conclusion: 'failure', conclusionAt: new Date(RERUN_FINISH) },
+      ]);
+      expect(await ciStateOf(item.id)).toBe('failing');
+      expect(await commentsOn(item.id)).toHaveLength(1); // updated in place
+    });
+
+    it('a terminal row with no recorded time cannot be ordered, and keeps last-write-wins', async () => {
+      const { item } = await rerunFinished('finished-untimed-row@example.com', 'success');
+      // A row written before `conclusion_at` existed.
+      await adminDb.githubCheckRun.updateMany({ data: { conclusionAt: null } });
+      const res = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'failure', startedAt: FIRST_START, completedAt: FIRST_FINISH }),
+      );
+      expect(res).toMatchObject({ outcome: 'failed' });
+      expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+        { conclusion: 'failure', conclusionAt: new Date(FIRST_FINISH) },
+      ]);
+      expect(await ciStateOf(item.id)).toBe('failing');
+    });
+
+    it('a terminal delivery with no time of its own over a finished row keeps last-write-wins', async () => {
+      const { item } = await rerunFinished('finished-untimed-delivery@example.com', 'success');
+      const res = await githubWebhookService.handleEvent(
+        'check_run',
+        run({ conclusion: 'failure', startedAt: FIRST_START }),
+      );
+      expect(res).toMatchObject({ outcome: 'failed' });
+      expect(await adminDb.githubCheckRun.findMany()).toMatchObject([
+        { conclusion: 'failure', conclusionAt: null },
+      ]);
+      expect(await ciStateOf(item.id)).toBe('failing');
+    });
+
+    it('a check_suite’s late `completed` is ordered by updated_at the same way', async () => {
+      const s = await makeScenario('finished-suite@example.com');
+      const item = await workItemsService.createWorkItem(
+        { projectId: s.project.id, kind: 'task', title: 'A change' },
+        s.ctx,
+      );
+      await openPr(item.identifier, 7);
+      const suite = (o: { conclusion: string; updatedAt: string }) =>
+        checkSuitePayload({ headSha: 'sha1', prNumbers: [7], suiteId: SUITE, ...o });
+      const green = await githubWebhookService.handleEvent(
+        'check_suite',
+        suite({ conclusion: 'success', updatedAt: RERUN_FINISH }),
+      );
+      expect(green).toMatchObject({ outcome: 'verified' });
+
+      const late = await githubWebhookService.handleEvent(
+        'check_suite',
+        suite({ conclusion: 'failure', updatedAt: FIRST_FINISH }),
+      );
+      expect(late).toMatchObject({ outcome: 'stale_terminal', workItemId: item.id });
+      expect(await ciStateOf(item.id)).toBe('passing');
+    });
+  });
 });
