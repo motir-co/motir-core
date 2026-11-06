@@ -237,10 +237,12 @@ describe('the data scripts, run through loadDataScript', () => {
     vi.spyOn(console, 'error').mockImplementation(push);
     vi.spyOn(console, 'warn').mockImplementation(push);
   };
-  // The dry runs below assert a sweep of an EMPTY database ("0 of 0"). A Vitest
-  // worker's database still holds whatever the suite it ran before left there,
-  // so clear the workspace cascade first rather than inherit a shard-mate's cards.
-  beforeEach(() => truncateAuthTables());
+  // The per-worker database is reused across files, and every suite truncates at
+  // its own start rather than its end, so an earlier file's rows are still here.
+  // The dry-run cases below assert an EMPTY sweep ("0 of 0"), so establish it.
+  beforeEach(async () => {
+    await truncateAuthTables();
+  });
   afterEach(() => vi.restoreAllMocks());
 
   it('loads the real modules: each one is the main the registry names', async () => {

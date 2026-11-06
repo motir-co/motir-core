@@ -237,29 +237,31 @@ describe('a BUSY run released by a timed-out drain (the reported defect)', () =>
 });
 
 describe('the settle writes are fenced on the claim (jobQueueRepository)', () => {
-  async function claimed(by: string): Promise<string> {
+  async function claimed(by: string): Promise<{ id: string; claimToken: number }> {
     const id = await enqueue(`fence.${by}`);
-    await withSystemContext((tx) => jobQueueRepository.claimDueRuns(by, 1, 60_000, tx));
-    return id;
+    const [run] = await withSystemContext((tx) =>
+      jobQueueRepository.claimDueRuns(by, 1, 60_000, tx),
+    );
+    return { id, claimToken: run!.claimToken };
   }
 
   it('writes over a row this worker holds', async () => {
     const a = await claimed('w-a');
-    expect(await withSystemContext((tx) => jobQueueRepository.markSucceeded(a, 'w-a', tx))).toBe(
-      true,
-    );
-    expect(await rowOf(a)).toEqual(['succeeded', null, 1]);
+    const claim = { id: a.id, workerId: 'w-a', claimToken: a.claimToken };
+    expect(await withSystemContext((tx) => jobQueueRepository.markSucceeded(claim, tx))).toBe(true);
+    expect(await rowOf(a.id)).toEqual(['succeeded', null, 1]);
   });
 
   it('writes nothing over a row another worker holds, or one no worker holds', async () => {
-    const id = await claimed('w-other');
+    const { id, claimToken } = await claimed('w-other');
     const at = new Date(Date.now() + 60_000);
+    const mine = { id, workerId: 'w-me', claimToken };
     await withSystemContext(async (tx) => {
-      expect(await jobQueueRepository.markSucceeded(id, 'w-me', tx)).toBe(false);
-      expect(await jobQueueRepository.markFailed(id, 'w-me', { message: 'x' }, tx)).toBe(false);
-      expect(
-        await jobQueueRepository.rescheduleAt(id, 'w-me', at, tx, { refundAttempt: true }),
-      ).toBe(false);
+      expect(await jobQueueRepository.markSucceeded(mine, tx)).toBe(false);
+      expect(await jobQueueRepository.markFailed(mine, { message: 'x' }, tx)).toBe(false);
+      expect(await jobQueueRepository.rescheduleAt(mine, at, tx, { refundAttempt: true })).toBe(
+        false,
+      );
     });
     expect(await rowOf(id)).toEqual(['running', 'w-other', 1]);
 
@@ -267,7 +269,9 @@ describe('the settle writes are fenced on the claim (jobQueueRepository)', () =>
     await withSystemContext(async (tx) => {
       // Released: `claimed_by` is null and the state `pending`, so even its former
       // holder no longer writes over it.
-      expect(await jobQueueRepository.markSucceeded(id, 'w-other', tx)).toBe(false);
+      expect(
+        await jobQueueRepository.markSucceeded({ id, workerId: 'w-other', claimToken }, tx),
+      ).toBe(false);
     });
     expect(await rowOf(id)).toEqual(['pending', null, 0]);
   });
