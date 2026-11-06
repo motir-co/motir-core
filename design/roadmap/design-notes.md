@@ -39,6 +39,7 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `roadmap-arrival.png`                     | its full-page export (`scripts/render-design-mock.mjs`, light, `deviceScaleFactor 2`, 1200px)                                                           |
 | `roadmap--folder-node.mock.html`          | a **FOLDER on the canvas** (MOTIR-5713): the folder card, the folder level, and the navigable folder crumb — a delta                                    |
 | `edges--covered-by-parent.mock.html`      | **covered cross-parent edges** (MOTIR-6353): when _blocked elsewhere_ shows, the covered and exempt cases, the legend copy — a delta                    |
+| `roadmap--canvas-card-tag-row.mock.html`  | the **canvas card, re-laid** (MOTIR-10508): the tag row, the title-only body, the _To plan_ story and the hover next-action button — a delta            |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -2344,3 +2345,171 @@ Planning chips warm slightly; and a drilled level, where only the Bug tile's pea
 You-are-here pill, the Ready wash, the Done card, the green meters and every edge are unchanged. The
 citrine Design hue does not reach the roadmap, because a node draws a kind icon rather than a
 work-type chip.
+
+## The canvas card, re-laid: tag row, title-only body, To plan, next action (MOTIR-10508)
+
+**Amends** the work-item node drawn in `design/roadmap/roadmap.mock.html`, the Ready and Done
+treatments in `design/roadmap/done-ready.mock.html`, and the Manual chip's placement in
+`design/roadmap/node-worktype.mock.html`. Delta mock:
+`design/roadmap/roadmap--canvas-card-tag-row.mock.html`. Those older mocks stay as records; panel 1
+of the delta renders what `main` ships today, so the change reads against the real card.
+
+**Design-system verdict:** no new token and no new primitive. Every colour is an existing `--el-*`
+token, every shape an existing element-semantic token. The card stays `NODE_W` × `NODE_H`
+(280 × 124); the shell (`WorkItemCardShell`) changes its inner layout and gains one slot.
+
+### What the panels show
+
+1. As shipped today, for comparison.
+2. Anatomy: one card with every slot filled, numbered.
+3. Every state at rest, light: normal (leaf with assignee, story with meter), Ready, In Review, CI
+   failed, changes requested, To plan, Done with meter, Manual, You are here, blocked elsewhere,
+   not in sprint.
+4. The same, dark.
+5. The next-action button hovered, with its tooltip, light: run, review, fix (CI failed), fix
+   (changes requested), Plan, and the three cards that get no button.
+6. The same, dark.
+7. After a copy: the Check glyph and the shipped success toast, light and dark.
+8. Every state hovered, light, so the button is seen in place on each card.
+9. The same, dark.
+10. When the tag row overflows `NODE_W`: what gives way.
+11. To plan against the other states: which wins, light and dark.
+12. The proposal card (`PlanItemNode`) through the new shell: add, modify, remove, light and dark.
+13. Chinese (zh): the hovered states, the tooltips, the Plan face and the toast.
+
+### Anatomy
+
+- **Tag row** (`flex min-w-0 shrink-0 items-center gap-1.5`), left to right: the kind tile (24px,
+  `--radius-control`, the kind's `KIND_TINT`, `IssueTypeIcon` at 14px in its `--el-type-*` hue); the
+  identifier (mono `text-xs`, `--el-text-secondary`, never shrinks); the **status slot** (the status
+  pill, or the Here / To plan / Ready / Done pill that replaces it); the Manual chip; then, pushed
+  right (`ml-auto`), Not public, not in sprint, the blocked flag, or the drill chevron. The right
+  cluster is rendered only when it holds something.
+- **One chip size on the tag row:** every chip is 11px text, a 12px glyph,
+  `px-(--spacing-chip-x-6) py-(--spacing-chip-y)`, `--radius-badge`. The shipped blocked flag
+  (`text-xs`, `--spacing-chip-x`) comes down to it, so the row reads as one line of tags.
+- **Body:** the title alone, `text-sm font-semibold leading-snug`, full width under the tag row
+  (`mt-2 min-h-0 flex-1 overflow-hidden`). It clamps at three lines with no footer and two with one,
+  so it always ends inside the 124px box (measured: the title's last line ends at 103px at most, the
+  footer at 111px). A proposal with a diff line keeps its shipped single-line title.
+- **Footer:** unchanged — the progress meter and the verified count on a container, the assignee on
+  a leaf.
+
+### When the tag row overflows — what gives way
+
+The tag row has 254px. The identifier, the kind tile and the right-hand tags never shrink. In order:
+
+1. **A right-hand text tag is present** (Not public, not in sprint, or blocked): the status slot and
+   the Manual chip both drop to their glyph. The full name rides the chip's `title` and
+   `aria-label` (`role="img"`), so it is still read out and shown on hover. This is a fixed rule,
+   not a measurement: with a five-digit key, any status label plus any right-hand tag does not fit.
+2. **The blocked flag shows a short label**, `blocked` (`roadmap.canvas.node.blockedShort`, new),
+   with its glyph; its full sentence (`blockedElsewhere`, or `blockerNotInSprint`) rides `title` and
+   `aria-label`. The danger frame already says the card is blocked; the flag names it, the tooltip
+   explains it.
+3. **No right-hand text tag:** everything shows in full. A long custom status is the last thing to
+   give way: its label truncates with an ellipsis (`min-w-0`, `truncate`), its glyph stays, its name
+   rides `title`.
+
+Every case is measured in the mock: no tag row overflows its card.
+
+### The To plan story
+
+- **When:** a story with no children whose status category is `todo`. A childless story already In
+  Progress is not To plan (someone holds it); a childless Done story is Done.
+- **Colour:** the card takes `--el-tint-yellow` as its wash, with `--shadow-card`. It is the tint the
+  `planning` status chip already wears (`lib/workflows/canvasStatusMeta.ts`), so "needs planning"
+  reads the same on the chip and on the card. It is distinct from Ready (`--el-tint-mint`), Done
+  (`--el-tint-sky`), You are here (the `--el-accent` border), blocked (the `--el-danger` border) and
+  not in sprint (the dotted `--el-border-strong` edge on `--el-muted`).
+- **The To plan pill** takes the status slot: the Ready pill's white chip (`--el-page-bg`,
+  `--el-border`, `--el-text-strong`) with a `ListPlus` glyph in `--el-text-secondary`, and the label
+  `To plan` / `待规划` (`roadmap.canvas.node.toPlan`, new).
+- **Precedence:** blocked elsewhere > You are here > Done > **To plan** > Ready > not in sprint >
+  normal. Blocked and Here win the frame, and the To plan pill keeps the status slot under blocked
+  (as its glyph, per the give-way rule); Here takes the slot. Not in sprint keeps its dotted edge
+  over the yellow wash and drops the shadow, as it does over the Ready wash today. The Plan button
+  appears in every one of these, because the card still needs planning.
+
+### The next-action button
+
+| Card                                                | Button                     | Does                                                    |
+| --------------------------------------------------- | -------------------------- | ------------------------------------------------------- |
+| To plan                                             | Sparkles + `Plan` (`规划`) | opens the planning overlay with this card as the target |
+| fix reason `ci_failed` or `changes_requested`       | Copy + `motir fix`         | copies `motir fix <KEY>`                                |
+| In Review                                           | Copy + `motir review`      | copies `motir review <KEY>`                             |
+| Ready, and not manual                               | Copy + `motir run`         | copies `motir run <KEY>`                                |
+| anything else, a manual Ready card, a proposal card | none                       | —                                                       |
+
+The rows are checked top to bottom: a fix reason wins over In Review, so a card whose review asked
+for changes copies `motir fix`. The fix reason is not on the roadmap node today; MOTIR-10509 adds it.
+
+- **Face:** the shipped `Button` `secondary` `sm` (`h-(--height-btn-sm)`, `--radius-btn`,
+  `--el-button-border`), on `--el-page-bg` with `--shadow-elevated` so it lifts off any wash. A copy
+  button shows the Copy glyph and the command's verb in mono (`motir run`); the key is in the tooltip
+  and the copied text, not on the face. The Plan button uses `WorkItemPlanEntrance`'s face: the
+  Sparkles glyph, `Plan`, `border-(--el-accent)` and `text-(--el-accent-on-surface)`.
+- **Placement:** hung on the card's bottom edge, right-aligned (`absolute right-3 bottom-0
+translate-y-1/2`), drawn **outside** the overflow-hidden frame, so it never clips and never moves
+  the card's contents. While shown it may cover the right end of the footer; that is acceptable for a
+  transient affordance.
+- **When it shows:** on the card's hover and on `:focus-within` (keyboard focus on the node or the
+  button). On a device with no hover (`@media (hover: none)`), it is always shown.
+- **Tooltip:** the shipped `Tooltip`. `Copy <cmd>motir run MOTIR-10509</cmd>`; for a fix, the reason
+  leads: `CI failed — copy …` / `Changes requested — copy …`; and for Plan,
+  `Open planning with {key} as the target`.
+- **After a copy:** the glyph turns to Check for two seconds and the shipped success toast confirms
+  it (`Copied` / `Paste motir run MOTIR-10509 into your terminal.`) — `CommandChip`'s behaviour,
+  reused.
+
+### Implementation notes for MOTIR-10509
+
+- The shell gains an `action` slot rendered as a sibling of the frame inside a `relative` wrapper
+  of the same size, so it sits outside `overflow-hidden`. The id line's `identifierTrailing` content
+  (the Manual chip) moves into the tag row after the status slot.
+- The canvas node wrapper (`[data-node-id]`) owns pointerdown (a node gesture), click (select) and
+  Enter/Space (drill). The button stops propagation on `pointerdown`, `click` and its key events, so
+  pressing it neither drags, selects nor drills.
+- The node carries `data-node-state="to-plan"` in the To plan state, beside the existing values.
+- The button's accessible name is `Copy motir run MOTIR-10509` (`action.copyAria`) or the Plan
+  entrance's `Plan {item}`.
+
+### Copy
+
+| key (`roadmap.canvas.node.*`)            | en                                              | zh                                       |
+| ---------------------------------------- | ----------------------------------------------- | ---------------------------------------- |
+| `toPlan`                                 | To plan                                         | 待规划                                   |
+| `blockedShort`                           | blocked                                         | 受阻                                     |
+| `action.copyAria`                        | Copy {command}                                  | 复制 {command}                           |
+| `action.copyTooltip`                     | Copy `<cmd>{command}</cmd>`                     | 复制 `<cmd>{command}</cmd>`              |
+| `action.copyTooltipCiFailed`             | CI failed — copy `<cmd>{command}</cmd>`         | CI 未通过 — 复制 `<cmd>{command}</cmd>`  |
+| `action.copyTooltipChangesRequested`     | Changes requested — copy `<cmd>{command}</cmd>` | 已要求修改 — 复制 `<cmd>{command}</cmd>` |
+| `action.planTooltip`                     | Open planning with {key} as the target          | 打开规划，以 {key} 为目标                |
+| `action.toastTitle` / `action.toastBody` | Copied / Paste {command} into your terminal.    | 已复制 / 请将 {command} 粘贴到终端。     |
+
+The toast pair is the shipped `ready.toast` copy; the build may reuse those keys rather than add new
+ones. The Plan label and its aria are `WorkItemPlanEntrance`'s shipped strings. The other nine
+locales follow the repository's locale-parity rule when MOTIR-10509 lands the keys.
+
+### Tokens and accessibility
+
+- Text on the washes is `--el-text` (title) and `--el-text-secondary` (identifier, To plan glyph),
+  both AA on every tint in both themes. No `--el-text-muted` text sits on a tinted or surface fill;
+  the drill chevron keeps its shipped `--el-text-muted` as a decorative, `aria-hidden` glyph.
+- Each state is a glyph and a label plus a colour, never colour alone (finding #35). A chip reduced
+  to its glyph keeps its name in `aria-label` and `title`.
+- The button is a real `<button>` with a visible focus ring (`--focus-ring-color`), reachable by Tab
+  from the node.
+
+### Out of scope
+
+The folder node and the grouped-level node draw their own cards and are left as they are; MOTIR-10509
+should not move them onto the new shell without a design of their own.
+
+### How the asset was produced
+
+Every card in the mock is the shipped `WorkItemNode` / `PlanItemNode` markup rendered headless in a
+throwaway Vitest spec that swapped `WorkItemCardShell` for the proposed shell, through the repo's
+`renderMock`, with the stylesheet Tailwind's real output over `packages/design-system/theme.css`. The
+spec was deleted before the commit; the tooltip and the toast are static drawings of the shipped
+`Tooltip` and success toast.
