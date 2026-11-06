@@ -76,11 +76,9 @@ async function generatingPlan(fx: WorkItemFixture, committedId: string, title = 
 const planInputs = async (ids: string[]) =>
   (await adminDb.plan.findMany({ where: { id: { in: ids } } })).map((p) => ({
     id: p.id,
-    projectId: p.projectId,
     status: p.status,
     createdAt: p.createdAt,
     lastActivityAt: p.lastActivityAt,
-    authorSource: p.authorSource,
     sessionId: p.sessionId,
   }));
 
@@ -98,67 +96,73 @@ async function countQueries(fn: () => Promise<unknown>): Promise<number> {
   }
 }
 
-describe('findProgressRowsByPlanIds — flags, never bodies', () => {
-  it('returns one row per ADD with flags matching its proposedFields, and no body text', async () => {
+/** Store `authorFinished` exactly as given — the driver's word, read back by the flag. */
+async function storeAuthorFinished(itemId: string, value: unknown): Promise<void> {
+  const row = await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } });
+  await adminDb.planItem.update({
+    where: { id: itemId },
+    data: {
+      proposedFields: { ...(row.proposedFields as Record<string, unknown>), authorFinished: value },
+    } as never,
+  });
+}
+
+describe('findProgressRowsByPlanIds — the stored written state, never bodies', () => {
+  it('returns one row per ADD whose authorFinished is exactly `true`, and no body text', async () => {
     const fx = await makeWorkItemFixture();
     const committed = await createTestWorkItem(fx, { title: 'Committed', kind: 'task' });
     const plan = await plansService.createPlan(fx.projectId, { title: 'Flags' }, fx.ctx);
-    await plansService.addProposals(
+    // A live session while the cards are appended, so core stamps none of them
+    // by hand and each row carries only what this test stores.
+    await plansService.recordPlanStep(
+      plan.id,
+      { sessionKey: 'walk', kind: 'lay', targetRef: null },
+      fx.ctx,
+    );
+    const appended = await plansService.addProposals(
       plan.id,
       [
         {
           op: 'add',
           proposedFields: {
-            title: 'Full',
+            title: 'Stamped',
             kind: 'task',
             descriptionMd: 'Body',
             explanationMd: 'Why',
             ...SIZED,
           },
         },
-        {
-          op: 'add',
-          proposedFields: {
-            title: 'Blank',
-            kind: 'story',
-            descriptionMd: '   \n  ',
-            explanationMd: null,
-            storyPoints: null,
-          },
-        },
+        { op: 'add', proposedFields: { title: 'String', kind: 'story', descriptionMd: 'Body' } },
+        { op: 'add', proposedFields: { title: 'Cleared', kind: 'task' } },
+        { op: 'add', proposedFields: { title: 'Absent', kind: 'task', descriptionMd: 'Body' } },
         { op: 'modify', workItemId: committed.id, patch: { title: 'Not an add' } },
       ],
       fx.ctx,
     );
+    const [stamped, asString, cleared] = appended.appendedItemIds;
+    await storeAuthorFinished(stamped!, true);
+    await storeAuthorFinished(asString!, 'true');
+    await storeAuthorFinished(cleared!, null);
 
     const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       planItemRepository.findProgressRowsByPlanIds([plan.id], tx),
     );
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(4);
     const byTitle = new Map(rows.map((r) => [r.title, r]));
-    expect(byTitle.get('Full')).toMatchObject({
+    expect(byTitle.get('Stamped')).toEqual({
       planId: plan.id,
+      id: stamped,
       kind: 'task',
+      title: 'Stamped',
       workItemId: null,
       parentRef: null,
-      hasDescription: true,
-      hasExplanation: true,
-      hasType: true,
-      hasExecutor: true,
-      hasStoryPoints: true,
-      hasEstimate: true,
-      hasDifficulty: true,
+      authorFinished: true,
     });
-    expect(byTitle.get('Blank')).toMatchObject({
-      kind: 'story',
-      hasDescription: false,
-      hasExplanation: false,
-      hasType: false,
-      hasExecutor: false,
-      hasStoryPoints: false,
-      hasEstimate: false,
-      hasDifficulty: false,
-    });
+    // A stored STRING is not the flag — the SQL compares JSON, exactly as the
+    // predicate compares `=== true`.
+    expect(byTitle.get('String')).toMatchObject({ kind: 'story', authorFinished: false });
+    expect(byTitle.get('Cleared')).toMatchObject({ authorFinished: false });
+    expect(byTitle.get('Absent')).toMatchObject({ authorFinished: false });
     for (const row of rows) {
       expect(Object.keys(row)).not.toContain('descriptionMd');
       expect(Object.keys(row)).not.toContain('explanationMd');
@@ -187,8 +191,8 @@ describe('snapshotsForPlans — one entry per generating plan, batched', () => {
     expect(map.has(ids[3]!)).toBe(false);
     for (const id of ids.slice(0, 3)) {
       const snap = map.get(id)!;
-      // The modify is in neither number; the bare task is unauthored. A plan with
-      // no author source on a project with explanations OFF does not owe them.
+      // The modify is in neither number; the bare task is unauthored, and the
+      // body written by hand with no session live is stamped (MOTIR-10490).
       expect(snap).toMatchObject({ authored: 1, proposed: 2 });
       expect(snap.steps).toEqual([
         expect.objectContaining({

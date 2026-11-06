@@ -46,58 +46,100 @@ const remove = (id: string, workItemId: string) =>
 const stateOf = (rows: ReturnType<typeof deriveAuthoringStates>, ref: string) =>
   rows.find((r) => r.ref === ref)?.state;
 
+// MOTIR-10496 — an `add` reads written from its stored `authorFinished` and
+// nothing else: no ended session, no body, no section finding moves it.
+const BOUNDARY_ONLY = '## Scope BOUNDARY\n\nStarts at the door and ends at the store.';
+
 describe('the three states', () => {
-  const items = [add('a', { title: 'Title only', kind: 'subtask' }), add('b', COMPLETE_LEAF)];
+  const items = [
+    add('a', { title: 'Title only', kind: 'subtask' }),
+    add('b', { ...COMPLETE_LEAF, authorFinished: true }),
+  ];
 
-  it('a LIVE author step makes the card `authoring`, whatever its body', () => {
-    const rows = deriveAuthoringStates(
-      items,
-      [{ kind: 'author', targetRef: 'planItem:a' }],
-      [{ kind: 'author', targetRef: 'planItem:a' }],
-      [],
-    );
+  it('a LIVE author step makes the card `authoring`, whatever its body or stamp', () => {
+    const rows = deriveAuthoringStates(items, [
+      { kind: 'author', targetRef: 'planItem:a' },
+      { kind: 'author', targetRef: 'planItem:b' },
+    ]);
     expect(stateOf(rows, 'planItem:a')).toBe('authoring');
+    expect(stateOf(rows, 'planItem:b')).toBe('authoring');
   });
 
-  it('an ENDED author session makes the card `authored`, even when its body is still partial', () => {
+  it('a stamped card with no live step is `authored`', () => {
+    expect(stateOf(deriveAuthoringStates(items, []), 'planItem:b')).toBe('authored');
+  });
+
+  it('a stamped card reads `authored` whatever its body says — a one-line body included', () => {
     const rows = deriveAuthoringStates(
-      items,
-      [],
-      [{ kind: 'author', targetRef: 'planItem:a' }],
-      [],
-    );
-    expect(stateOf(rows, 'planItem:a')).toBe('authored');
-  });
-
-  it('a card added COMPLETE with no session is `authored`, never `not_started`', () => {
-    const rows = deriveAuthoringStates(items, [], [], []);
-    expect(stateOf(rows, 'planItem:b')).toBe('authored');
-  });
-
-  it('an incomplete card with no session, live or ended, is `not_started`', () => {
-    const rows = deriveAuthoringStates(items, [], [], []);
-    expect(stateOf(rows, 'planItem:a')).toBe('not_started');
-  });
-
-  it('a `lay` step or a session on ANOTHER card does not start this one', () => {
-    const rows = deriveAuthoringStates(
-      items,
-      [{ kind: 'lay', targetRef: 'planItem:a' }],
       [
-        { kind: 'lay', targetRef: 'planItem:a' },
-        { kind: 'author', targetRef: 'planItem:b' },
+        add('c', {
+          title: 'Short',
+          kind: 'subtask',
+          descriptionMd: 'One line.',
+          authorFinished: true,
+        }),
       ],
       [],
     );
+    expect(stateOf(rows, 'planItem:c')).toBe('authored');
+  });
+
+  it('a card with no stamp is `not_started`, however complete its body', () => {
+    const rows = deriveAuthoringStates(
+      [
+        add('a', { title: 'Title only', kind: 'subtask' }),
+        add('full', COMPLETE_LEAF),
+        add('boundary', { title: 'Laid', kind: 'subtask', descriptionMd: BOUNDARY_ONLY }),
+      ],
+      [],
+    );
+    expect(rows.map((r) => [r.ref, r.state])).toEqual([
+      ['planItem:a', 'not_started'],
+      ['planItem:full', 'not_started'],
+      ['planItem:boundary', 'not_started'],
+    ]);
+  });
+
+  it('only EXACTLY `true` is the stamp — `null`, `false` and the string "true" are not', () => {
+    const rows = deriveAuthoringStates(
+      [
+        add('n', { ...COMPLETE_LEAF, authorFinished: null }),
+        add('f', { ...COMPLETE_LEAF, authorFinished: false }),
+        add('s', { ...COMPLETE_LEAF, authorFinished: 'true' }),
+      ],
+      [],
+    );
+    expect(rows.map((r) => r.state)).toEqual(['not_started', 'not_started', 'not_started']);
+  });
+
+  it('a `lay` step or a session on ANOTHER card does not start this one', () => {
+    const rows = deriveAuthoringStates(items, [
+      { kind: 'lay', targetRef: 'planItem:a' },
+      { kind: 'author', targetRef: 'planItem:b' },
+    ]);
     expect(stateOf(rows, 'planItem:a')).toBe('not_started');
+  });
+
+  it('`proposals` holds the `add`s alone: a `modify` is a committed card, a `remove` is never authored', () => {
+    const rows = deriveAuthoringStates(
+      [add('a', { title: 'T', kind: 'subtask' }), modify('m', 'wi_1'), remove('r', 'wi_2')],
+      [],
+    );
+    expect(rows.map((r) => r.ref)).toEqual(['planItem:a']);
   });
 });
 
-describe('what counts as COMPLETE', () => {
-  it('a section finding on the card makes it incomplete, so it reads `not_started`', () => {
+// `proposalComplete` is no longer a written-state test; it is kept for the
+// carry-over (MOTIR-10491) and still answers "is the body complete?".
+describe('what counts as COMPLETE (the carry-over test, not the written state)', () => {
+  it('a complete leaf is complete', () => {
     const items = [add('b', COMPLETE_LEAF)];
-    const rows = deriveAuthoringStates(items, [], [], [{ item: 'planItem:b' }]);
-    expect(stateOf(rows, 'planItem:b')).toBe('not_started');
+    expect(proposalComplete(items[0]!, items, new Set())).toBe(true);
+  });
+
+  it('a section finding on the card makes it incomplete', () => {
+    const items = [add('b', COMPLETE_LEAF)];
+    expect(proposalComplete(items[0]!, items, new Set(['planItem:b']))).toBe(false);
   });
 
   it('a body with no explanation is incomplete', () => {
@@ -127,16 +169,6 @@ describe('what counts as COMPLETE', () => {
     const items = [story, parentTask, child];
     expect(proposalComplete(story, items, new Set())).toBe(true);
     expect(proposalComplete(parentTask, items, new Set())).toBe(true);
-  });
-
-  it('`proposals` holds the `add`s alone: a `modify` is a committed card, a `remove` is never authored', () => {
-    const rows = deriveAuthoringStates(
-      [add('a', { title: 'T', kind: 'subtask' }), modify('m', 'wi_1'), remove('r', 'wi_2')],
-      [],
-      [],
-      [],
-    );
-    expect(rows.map((r) => r.ref)).toEqual(['planItem:a']);
   });
 });
 

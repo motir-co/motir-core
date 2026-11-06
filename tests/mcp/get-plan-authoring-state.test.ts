@@ -10,6 +10,7 @@ import {
   ADD_PLAN_ITEMS_TOOL_NAME,
   CREATE_PLAN_TOOL_NAME,
   REPORT_PLAN_STEP_TOOL_NAME,
+  UPDATE_PLAN_ITEM_TOOL_NAME,
   UPDATE_PLAN_TOOL_NAME,
 } from '@/lib/mcp/tools/authorPlan';
 import { GET_PLAN_AUTHORING_STATE_TOOL_NAME } from '@/lib/mcp/tools/getPlanAuthoringState';
@@ -26,9 +27,11 @@ import { truncateAuthTables } from '../helpers/db';
 //
 //   1. THE TOOL EXISTS, as a free `project:browse` read.
 //   2. A card whose `author` step is LIVE reads `authoring`; once its session
-//      `end`s it reads `authored` — the narration-session row outlives the step.
-//   3. A title-only card nobody has opened reads `not_started`, and a card the
-//      append landed COMPLETE reads `authored` with no session at all.
+//      `end`s it reads `not_started` again until its driver STAMPS it
+//      (`authorFinished: true` through `update_plan_item`), then `authored`
+//      (MOTIR-10496 — an ended session is not the written state).
+//   3. A title-only card nobody has opened reads `not_started`, and a card
+//      written by hand with no session live reads `authored` — core stamped it.
 //   4. (MOTIR-10001) A COMMITTED card the lay listed — by a title `modify`, or in
 //      the plan's `plannerRecord.walkListed` — reads its authoring state; one the
 //      plan does not author, named in `workItems` by key, reads `not_in_walk`.
@@ -75,7 +78,7 @@ describe('the tool is registered, permissioned and free', () => {
 });
 
 describe('driven through the real transport', () => {
-  it('reads not_started, then authoring while the step is live, then authored after `end`', async () => {
+  it('reads not_started, then authoring while the step is live, then authored once STAMPED', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);
     const created = await call(client, CREATE_PLAN_TOOL_NAME, {
@@ -100,15 +103,14 @@ describe('driven through the real transport', () => {
       ],
     });
     expect(appended.isError).toBeFalsy();
-    const [picker, list, whole] = (
-      appended.structuredContent as unknown as { planItemIds: string[] }
-    ).planItemIds.map((id) => `planItem:${id}`);
+    const ids = (appended.structuredContent as unknown as { planItemIds: string[] }).planItemIds;
+    const [picker, list, whole] = ids.map((id) => `planItem:${id}`);
 
     const before = await read(client, planId);
     expect(before.get(picker!)).toBe('not_started');
     expect(before.get(list!)).toBe('not_started');
-    // A card the append landed COMPLETE never gets an author session, and reads
-    // `authored` all the same — read sessions-only it would be `not_started` for ever.
+    // Written by hand with no session working on the plan: core stamped it
+    // (MOTIR-10490), so it reads `authored` with no author session at all.
     expect(before.get(whole!)).toBe('authored');
 
     await call(client, REPORT_PLAN_STEP_TOOL_NAME, {
@@ -126,9 +128,19 @@ describe('driven through the real transport', () => {
       sessionKey: 'author-picker',
       step: 'end',
     });
+    // The session ended with no stamp — a failed session reads exactly this — so
+    // the card is NOT written: an ended session alone says nothing (MOTIR-10496).
+    const ended = await read(client, planId);
+    expect(ended.get(picker!)).toBe('not_started');
+
+    const stamped = await call(client, UPDATE_PLAN_ITEM_TOOL_NAME, {
+      planId,
+      planItemId: ids[0],
+      authorFinished: true,
+    });
+    expect(stamped.isError).toBeFalsy();
     const after = await read(client, planId);
-    // The session ended with the card still title-only — it is AUTHORED all the same:
-    // nobody will open a second session on it, so it never reads a boundary again.
+    // Stamped, still title-only: the stored fact decides, not the body.
     expect(after.get(picker!)).toBe('authored');
     expect(after.get(list!)).toBe('not_started');
   });

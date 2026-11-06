@@ -18,7 +18,8 @@ export type PlanItemUpdateInput = Prisma.PlanItemUncheckedUpdateInput;
 
 /**
  * One row of {@link planItemRepository.findProgressRowsByPlanIds}: an `add`'s
- * identity plus the authored-test FLAGS, never its bodies (MOTIR-7825).
+ * identity plus whether it is written (`authorFinished`), never its bodies
+ * (MOTIR-7825, MOTIR-10496).
  */
 export type PlanProgressRow = PlanProgressAddRow & { planId: string };
 
@@ -344,11 +345,11 @@ export const planItemRepository = {
   /**
    * The `add` rows of many plans, as the PROGRESS derivation reads them (Story
    * MOTIR-7820 · MOTIR-7825) — ONE query for a whole page of generating plans.
-   * Every authored-test flag is computed from `proposed_fields` IN SQL, so no
-   * description or explanation body crosses the wire for a list. The flags are
-   * the SQL twin of `progressRowOfAdd` (`lib/plans/planProgress.ts`): a body
-   * counts when it is a string with a non-whitespace character; a sizing field
-   * counts when it is present, not JSON null and not `''`.
+   * Whether each is WRITTEN is computed from `proposed_fields` IN SQL, so no
+   * description or explanation body crosses the wire for a list. The flag is the
+   * SQL twin of `progressRowOfAdd` / `isProposalWritten` (MOTIR-10496): an EXACT
+   * JSON comparison with `true`, so absent, JSON `null` and a string `"true"` all
+   * read false here exactly as they do in TypeScript.
    */
   async findProgressRowsByPlanIds(
     planIds: readonly string[],
@@ -364,20 +365,7 @@ export const planItemRepository = {
         pi."parent_ref"    AS "parentRef",
         pi."proposed_fields"->>'kind'                AS "kind",
         COALESCE(pi."proposed_fields"->>'title', '')  AS "title",
-        (jsonb_typeof(pi."proposed_fields"->'descriptionMd') = 'string'
-          AND (pi."proposed_fields"->>'descriptionMd') ~ '\\S') IS TRUE AS "hasDescription",
-        (jsonb_typeof(pi."proposed_fields"->'explanationMd') = 'string'
-          AND (pi."proposed_fields"->>'explanationMd') ~ '\\S') IS TRUE AS "hasExplanation",
-        (jsonb_typeof(pi."proposed_fields"->'type') <> 'null'
-          AND (pi."proposed_fields"->>'type') <> '') IS TRUE AS "hasType",
-        (jsonb_typeof(pi."proposed_fields"->'executor') <> 'null'
-          AND (pi."proposed_fields"->>'executor') <> '') IS TRUE AS "hasExecutor",
-        (jsonb_typeof(pi."proposed_fields"->'storyPoints') <> 'null'
-          AND (pi."proposed_fields"->>'storyPoints') <> '') IS TRUE AS "hasStoryPoints",
-        (jsonb_typeof(pi."proposed_fields"->'estimateMinutes') <> 'null'
-          AND (pi."proposed_fields"->>'estimateMinutes') <> '') IS TRUE AS "hasEstimate",
-        (jsonb_typeof(pi."proposed_fields"->'difficulty') <> 'null'
-          AND (pi."proposed_fields"->>'difficulty') <> '') IS TRUE AS "hasDifficulty"
+        (pi."proposed_fields"->'authorFinished' = 'true'::jsonb) IS TRUE AS "authorFinished"
       FROM "plan_item" pi
       WHERE pi."plan_id" = ANY(${[...planIds]}::text[])
         AND pi."op" = 'add'

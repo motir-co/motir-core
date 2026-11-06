@@ -53,6 +53,7 @@
 // neither make a live plan read stalled nor a stalled one read live.
 
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
+import { isProposalWritten } from '@/lib/plans/proposalWritten';
 import type { PlanStepDto, PlanStepKindDto, PlanStepProviderWaitDto } from '@/lib/dto/plans';
 
 /**
@@ -140,7 +141,7 @@ export interface PlanProgressSnapshot {
   lastActivityAt: string;
   /** The SERVER instant this snapshot was built at (ISO) — `serverNow`'s anchor. */
   observedAt: string;
-  /** N — the `add`s that pass the authored test ({@link countAuthored}). */
+  /** N — the `add`s that are WRITTEN ({@link countAuthored}). */
   authored: number;
   /** M — the plan's `add`s. */
   proposed: number;
@@ -184,10 +185,10 @@ export interface PlanProgressReading {
 }
 
 /**
- * What the derivation needs from ONE `add` row — flags, never bodies. The SAME
- * shape `planItemRepository.findProgressRowsByPlanIds` computes in SQL and
- * {@link progressRowOfAdd} computes from an in-memory plan item, so both paths
- * feed one predicate.
+ * What the derivation needs from ONE `add` row — its identity and whether it is
+ * WRITTEN, never its body. The SAME shape `planItemRepository.findProgressRowsByPlanIds`
+ * computes in SQL and {@link progressRowOfAdd} computes from an in-memory plan
+ * item, so both paths hand over the one flag and cannot disagree.
  */
 export interface PlanProgressAddRow {
   id: string;
@@ -195,84 +196,40 @@ export interface PlanProgressAddRow {
   parentRef: string | null;
   kind: string | null;
   title: string;
-  hasDescription: boolean;
-  hasExplanation: boolean;
-  hasType: boolean;
-  hasExecutor: boolean;
-  hasStoryPoints: boolean;
-  hasEstimate: boolean;
-  hasDifficulty: boolean;
+  /** The stored `authorFinished` read through `isProposalWritten` — the SQL path's exact twin. */
+  authorFinished: boolean;
 }
 
 // ── The authored test ─────────────────────────────────────────────────────────
 //
-// MIRRORED, NOT IMPORTED, from motir-ai `src/llm/walkCompleteness.ts`
-// (`isLeafSized`, `AUTHOR_REQUIRED_ALWAYS`, `AUTHOR_REQUIRED_ON_LEAF`, and the
-// ADR §5 amendment MOTIR-3975: `explanationMd` is required exactly when the pass
-// was asked for explanations). motir-ai is a separate, closed repository, so the
-// predicate is restated here; a change there is a change here.
-//
-// ⚠️ DELIBERATELY OMITTED: the `## Scope BOUNDARY` heading check
-// (`AUTHOR_REQUIRED_ON_LEAF_BOUNDARY`) and the `manual` leaf's `todos`. "N
-// authored" answers *has its author session written it*, not *is it
-// walk-complete*: an item missing only its boundary heading HAS been through
-// authoring, and counting it as unauthored would freeze N below M on a finished
-// plan.
-
-/** Container kinds — never leaf-sized however empty (motir-ai `CONTAINER_KINDS`). */
-const CONTAINER_KINDS: ReadonlySet<string> = new Set(['epic', 'story']);
-
-/** motir-ai's `isLeafSized`: not a container, and nothing proposed beneath it.
- *  CHILDLESS, not the word `subtask`. */
-function isLeafSized(kind: string | null, hasProposedChildren: boolean): boolean {
-  if (kind !== null && CONTAINER_KINDS.has(kind)) return false;
-  return !hasProposedChildren;
-}
+// "N authored" answers *has its author session finished writing it?* (Story
+// MOTIR-10413 · MOTIR-10496), and the answer is the stored fact, `authorFinished`
+// on the proposal — the same one `get_plan_authoring_state` and `validate_plan`'s
+// `notYetWritten` read. It used to be a body test mirrored from motir-ai's walk
+// completeness (a description, an explanation when the pass owed one, and on a
+// leaf its sizing); a boundary-only card then read authored wherever explanations
+// were off, and a body a failed session left read authored everywhere. The
+// project's explanation setting therefore no longer matters to this number.
 
 /**
  * N of M. **M** = the plan's `add` rows (pass ONLY adds — a `modify` / `remove`
- * is in neither number). **N** = those with a non-empty `descriptionMd`, a
- * non-empty `explanationMd` when `requireExplanation`, and — when LEAF-SIZED —
- * a non-null `type`, `executor`, `storyPoints`, `estimateMinutes` and
- * `difficulty`.
+ * is in neither number). **N** = those that are written (`authorFinished`).
  */
-export function countAuthored(
-  addRows: readonly PlanProgressAddRow[],
-  requireExplanation: boolean,
-): { authored: number; proposed: number } {
-  const parents = new Set<string>();
-  for (const row of addRows) {
-    if (row.parentRef?.startsWith(TEMP_REF_PREFIX)) {
-      parents.add(row.parentRef.slice(TEMP_REF_PREFIX.length));
-    }
-  }
+export function countAuthored(addRows: readonly PlanProgressAddRow[]): {
+  authored: number;
+  proposed: number;
+} {
   let authored = 0;
-  for (const row of addRows) {
-    if (!row.hasDescription) continue;
-    if (requireExplanation && !row.hasExplanation) continue;
-    if (
-      isLeafSized(row.kind, parents.has(row.id)) &&
-      !(
-        row.hasType &&
-        row.hasExecutor &&
-        row.hasStoryPoints &&
-        row.hasEstimate &&
-        row.hasDifficulty
-      )
-    ) {
-      continue;
-    }
-    authored += 1;
-  }
+  for (const row of addRows) if (row.authorFinished) authored += 1;
   return { authored, proposed: addRows.length };
 }
 
 /**
- * Whether an `add` owes `explanationMd` to count as authored. `mcp` → always
- * (its runbook owes both bodies); every other source — `native`, a cadence plan,
- * `null` — → the project's `aiGenerateExplanations`. Without this a hosted plan
- * on a project with explanations OFF (the schema default) would read "0 of 7
- * authored" forever.
+ * Whether an `add` owes `explanationMd` to be COMPLETE. `mcp` → always (its
+ * runbook owes both bodies); every other source — `native`, a cadence plan,
+ * `null` — → the project's `aiGenerateExplanations`. Read by the one-time
+ * `authorFinished` carry-over (MOTIR-10491), which judged an open plan's cards
+ * complete under the plan's own rule; the count no longer reads it.
  */
 export function requireExplanationFor(args: {
   authorSource: string | null;
@@ -281,14 +238,9 @@ export function requireExplanationFor(args: {
   return args.authorSource === 'mcp' ? true : args.projectAiGenerateExplanations;
 }
 
-const nonEmptyString = (v: unknown): boolean => typeof v === 'string' && v.trim().length > 0;
-/** motir-ai's leaf-field test: `undefined`, `null` and `''` are missing. */
-const present = (v: unknown): boolean => v !== undefined && v !== null && v !== '';
-
 /**
  * The in-memory twin of `findProgressRowsByPlanIds`'s SQL — the review read
- * already holds the plan's items, so it derives the same flags without a query.
- * Kept beside the predicate so the two stay one definition.
+ * already holds the plan's items, so it derives the same flag without a query.
  */
 export function progressRowOfAdd(item: {
   id: string;
@@ -303,13 +255,7 @@ export function progressRowOfAdd(item: {
     parentRef: item.parentRef,
     kind: typeof f.kind === 'string' ? f.kind : null,
     title: typeof f.title === 'string' ? f.title : '',
-    hasDescription: nonEmptyString(f.descriptionMd),
-    hasExplanation: nonEmptyString(f.explanationMd),
-    hasType: present(f.type),
-    hasExecutor: present(f.executor),
-    hasStoryPoints: present(f.storyPoints),
-    hasEstimate: present(f.estimateMinutes),
-    hasDifficulty: present(f.difficulty),
+    authorFinished: isProposalWritten(f),
   };
 }
 
@@ -339,7 +285,6 @@ export function buildPlanProgressSnapshot(args: {
   steps: readonly PlanStepDto[];
   addRows: readonly PlanProgressAddRow[];
   committedTitles: ReadonlyMap<string, string>;
-  requireExplanation: boolean;
   observedAt: string | Date;
   autoResume?: { at: string | Date; count: number } | null;
 }): PlanProgressSnapshot {
@@ -389,7 +334,7 @@ export function buildPlanProgressSnapshot(args: {
     if (d !== 0) return d;
     return a.sessionKey < b.sessionKey ? -1 : a.sessionKey > b.sessionKey ? 1 : 0;
   });
-  const { authored, proposed } = countAuthored(args.addRows, args.requireExplanation);
+  const { authored, proposed } = countAuthored(args.addRows);
   return {
     startedAt: iso(args.plan.createdAt),
     lastActivityAt: iso(args.plan.lastActivityAt),
