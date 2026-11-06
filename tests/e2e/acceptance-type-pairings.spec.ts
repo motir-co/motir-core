@@ -59,6 +59,13 @@ const appearanceHeadline = (page: Page): Locator =>
     .getByRole('main')
     .getByRole('heading', { name: msg('en', 'settings.appearance.heading'), exact: true });
 
+/**
+ * The onboarding Design step's root `section[data-testid="design-page"]`, reached by its
+ * region role so the accessibility tree scopes it to the live copy, not a streamed one.
+ */
+const designRegion = (page: Page): Locator =>
+  page.getByRole('region', { name: msg('en', 'onboarding.design.title'), exact: true });
+
 /** The raw server document's `<html …>` opening tag — what the first byte carries. */
 async function serverHtmlTag(request: APIRequestContext, path: string): Promise<string> {
   const res = await request.get(path);
@@ -256,7 +263,7 @@ test.describe('four new type pairings', () => {
       await stubCompletedPreplan(page);
       await page.goto('/onboarding/discovery');
       await page.getByRole('button', { name: 'Design your look' }).last().click();
-      const designPage = page.getByTestId('design-page');
+      const designPage = designRegion(page);
       await expect(designPage).toBeVisible({ timeout: FIRST_PAINT_MS });
       const radios = typePicker(designPage).getByRole('radio');
       await expect(radios).toHaveCount(10);
@@ -269,7 +276,7 @@ test.describe('four new type pairings', () => {
 
     for (const typeId of NEW_PAIRINGS) {
       await chapter(`Design step: ${PAIRING_NAMES[typeId]} re-types the example`, async () => {
-        const designPage = page.getByTestId('design-page');
+        const designPage = designRegion(page);
         const before = await html(page).getAttribute('data-type');
         await typePicker(designPage)
           .getByRole('radio', { name: PAIRING_NAMES[typeId], exact: true })
