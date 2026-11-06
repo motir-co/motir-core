@@ -7790,6 +7790,7 @@
           "copyTooltip": "<cmd>{command}</cmd> 복사",
           "copyTooltipCiFailed": "CI 실패 — <cmd>{command}</cmd> 복사",
           "copyTooltipChangesRequested": "변경 요청됨 — <cmd>{command}</cmd> 복사",
+          "copyTooltipGuide": "사람이 해야 하는 작업 — <cmd>{command}</cmd> 복사",
           "planTooltip": "{key}을(를) 대상으로 계획 열기"
         }
       },
