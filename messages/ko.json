@@ -7786,6 +7786,7 @@
         "blockedShort": "차단됨",
         "action": {
           "copyAria": "{command} 복사",
+          "copyFailed": "복사하지 못했습니다 — 명령을 선택해 직접 복사하세요.",
           "copyTooltip": "<cmd>{command}</cmd> 복사",
           "copyTooltipCiFailed": "CI 실패 — <cmd>{command}</cmd> 복사",
           "copyTooltipChangesRequested": "변경 요청됨 — <cmd>{command}</cmd> 복사",

@@ -12802,6 +12802,7 @@
   "roadmap.canvas.node.toPlan": "To plan",
   "roadmap.canvas.node.blockedShort": "blocked",
   "roadmap.canvas.node.action.copyAria": "Copy {command}",
+  "roadmap.canvas.node.action.copyFailed": "Couldn't copy — select the command and copy it manually.",
   "roadmap.canvas.node.action.copyTooltip": "Copy <cmd>{command}</cmd>",
   "roadmap.canvas.node.action.copyTooltipCiFailed": "CI failed — copy <cmd>{command}</cmd>",
   "roadmap.canvas.node.action.copyTooltipChangesRequested": "Changes requested — copy <cmd>{command}</cmd>",

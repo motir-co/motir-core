@@ -844,6 +844,7 @@ export function CrossBlockedFlag({
     return (
       <span
         data-testid="cross-blocked-flag"
+        role="img"
         title={sentence}
         aria-label={sentence}
         className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-danger-on-surface)"
@@ -915,7 +916,14 @@ function CopyNextAction({
     async (e: MouseEvent<HTMLButtonElement>) => {
       e.preventDefault();
       e.stopPropagation();
-      await navigator.clipboard.writeText(command);
+      try {
+        await navigator.clipboard.writeText(command);
+      } catch {
+        // A refused clipboard (insecure context, denied permission) says so
+        // rather than failing silently; nothing was copied, so no Check glyph.
+        toast({ variant: 'error', title: t('copyFailed') });
+        return;
+      }
       toast({
         variant: 'success',
         title: tToast('title'),
@@ -925,7 +933,7 @@ function CopyNextAction({
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), COPIED_MS);
     },
-    [command, tToast, toast],
+    [command, t, tToast, toast],
   );
   const rich = {
     command,
