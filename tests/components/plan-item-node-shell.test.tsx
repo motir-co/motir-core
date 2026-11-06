@@ -136,7 +136,8 @@ describe('ONE CARD — the shell both nodes render through', () => {
         }}
       />,
     );
-    const committed = shellOf(container.firstElementChild as HTMLElement);
+    // The FRAME, not the wrapper the next-action button hangs from (MOTIR-10508).
+    const committed = shellOf(container.querySelector('[data-node-state]') as HTMLElement);
     expect(committed).toEqual({
       width: '280px',
       height: '124px',

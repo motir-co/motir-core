@@ -9,15 +9,33 @@ import {
   ChevronRight,
   CircleDashed,
   CirclePlay,
+  Copy,
   Flag,
   Folder,
   FolderOpen,
   FolderPen,
   Layers,
+  ListPlus,
   MapPin,
+  Sparkles,
 } from 'lucide-react';
-import type { HTMLAttributes, ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type HTMLAttributes,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/Button';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { useToast } from '@/components/ui/Toast';
+import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
+import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WorkItemTypeChip } from '@/components/issues/WorkItemTypeChip';
 import { RunTonePill } from '@/components/runs/RunTonePill';
@@ -92,6 +110,13 @@ export interface WorkItemNodeData {
    *  human-gated, so it carries the Manual chip. Optional (see `type`). */
   executor?: ExecutorDto | null;
   assigneeName?: string | null;
+  /** Has children (the level read's `hasChildren`). Together with the kind and the
+   *  status category it decides TO PLAN (MOTIR-10508): a story KNOWN to have no
+   *  children. Optional: a node built without it never claims To plan. */
+  hasChildren?: boolean;
+  /** Why the card is stuck until something is repaired (MOTIR-6600) — a
+   *  `ci_failed` / `changes_requested` card offers `motir fix` (MOTIR-10509). */
+  fixReason?: WorkItemFixReasonDto | null;
 }
 
 // The per-status treatment map that used to live here now lives in
@@ -128,21 +153,42 @@ export function WorkItemStatusPill({
   status,
   label = null,
   category = null,
+  slot = false,
+  glyphOnly = false,
 }: {
   status: string;
   label?: string | null;
   category?: StatusCategoryDto | null;
+  /** The committed card's TAG-ROW status slot (MOTIR-10508): `min-w-0`, the name
+   *  on `title`, the label truncating last. Absent, the shipped `shrink-0` chip
+   *  (a proposal's top row keeps it). */
+  slot?: boolean;
+  /** The give-way rule's glyph-only chip: the name rides `aria-label` (`role="img"`)
+   *  and `title`. Only with `slot`. */
+  glyphOnly?: boolean;
 }) {
   const meta = canvasStatusMeta(status, category);
   const Icon = meta.icon;
   const tStatus = useTranslations('labels.defaultStatus');
+  const name = canvasStatusLabel(status, label, tStatus);
+  if (slot) {
+    return (
+      <SlotPill
+        data-status={status}
+        label={name}
+        glyphOnly={glyphOnly}
+        className={`${meta.tint} ${meta.text}`}
+        icon={<Icon className="size-3 shrink-0" aria-hidden="true" />}
+      />
+    );
+  }
   return (
     <span
       data-status={status}
       className={`inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium ${meta.tint} ${meta.text}`}
     >
       <Icon className="size-3" aria-hidden="true" />
-      {canvasStatusLabel(status, label, tStatus)}
+      {name}
     </span>
   );
 }
@@ -152,6 +198,76 @@ export function WorkItemStatusPill({
 export interface RunLegBadge {
   tone: RunTone;
   label: string;
+}
+
+/**
+ * The card's NEXT-ACTION button, opted into by a consumer (MOTIR-10509; design
+ * MOTIR-10508 § "The next-action button"). Only the roadmap page passes it, and
+ * never for a Visitor: the button copies an agent command or opens planning, and
+ * a reader with no commands to run must not be offered either.
+ */
+export interface CardNextActionsOption {
+  /** May the reader open the planning overlay (the project's AI is configured and
+   *  the reader is a member)? `false` draws no Plan button on a To plan card. */
+  plan: boolean;
+}
+
+/** WHAT the next-action button does on one card (design table, checked top to
+ *  bottom). `null` draws no button. */
+export type CardNextAction =
+  | { kind: 'plan' }
+  | { kind: 'copy'; verb: 'run' | 'review' | 'fix'; reason: CopyActionReason | null };
+
+/** The fix reasons the card offers `motir fix` for, and whose tooltip names them. */
+export type CopyActionReason = 'ci_failed' | 'changes_requested';
+
+/**
+ * A TO PLAN story (design MOTIR-10508 § "The To plan story"): a story with no
+ * children whose status category is `todo`. A childless story already In Progress
+ * is not To plan (someone holds it), and a childless Done story is Done.
+ *
+ * `hasChildren` must be KNOWN to be false: a node built without it (an onboarding
+ * preview, a run's canvas fed an older read) never claims the story is unplanned.
+ */
+export function isToPlanStory(
+  item: Pick<WorkItemNodeData, 'kind' | 'status' | 'statusCategory' | 'hasChildren'>,
+): boolean {
+  if (item.kind !== 'story' || item.hasChildren !== false) return false;
+  // The category is the rule; a node built without it falls back to the default
+  // workflow's own `todo` key rather than guessing from a custom one.
+  const category = item.statusCategory ?? (item.status === 'todo' ? 'todo' : null);
+  return category === 'todo';
+}
+
+/**
+ * The state → action mapping (design MOTIR-10508 § "The next-action button"), the
+ * rows checked top to bottom so a fix reason wins over In Review:
+ *
+ * | card                                          | button               |
+ * | --------------------------------------------- | -------------------- |
+ * | To plan                                       | Plan (the overlay)   |
+ * | fix reason `ci_failed` / `changes_requested`  | copy `motir fix`     |
+ * | In Review                                     | copy `motir review`  |
+ * | Ready, and not manual                         | copy `motir run`     |
+ * | anything else                                 | none                 |
+ */
+export function cardNextAction(input: {
+  toPlan: boolean;
+  fixReason: WorkItemFixReasonDto | null | undefined;
+  status: string;
+  ready: boolean;
+  manual: boolean;
+  options: CardNextActionsOption | null | undefined;
+}): CardNextAction | null {
+  const { options } = input;
+  if (!options) return null;
+  if (input.toPlan) return options.plan ? { kind: 'plan' } : null;
+  if (input.fixReason === 'ci_failed' || input.fixReason === 'changes_requested') {
+    return { kind: 'copy', verb: 'fix', reason: input.fixReason };
+  }
+  if (input.status === 'in_review') return { kind: 'copy', verb: 'review', reason: null };
+  if (input.ready && !input.manual) return { kind: 'copy', verb: 'run', reason: null };
+  return null;
 }
 
 export function WorkItemNode({
@@ -165,6 +281,7 @@ export function WorkItemNode({
   ready = false,
   runLeg = null,
   notPublic = false,
+  nextActions = null,
 }: {
   item: WorkItemNodeData;
   /** Has children — clicking DRILLS in; show the affordance. */
@@ -216,15 +333,17 @@ export function WorkItemNode({
   /** A Visitor's PRIVATE epic (MOTIR-6170 · MOTIR-6648; design MOTIR-6641): the
    *  node wears the "Not public" pill. Its level is withheld, so it never drills. */
   notPublic?: boolean;
+  /** The hover next-action button (MOTIR-10509). Absent / `null` draws none. */
+  nextActions?: CardNextActionsOption | null;
 }) {
   const t = useTranslations('roadmap.canvas');
   // MANUAL / HUMAN work-type chip (MOTIR-1642 / 8.8.36): a human-gated node — the
   // SHIPPED `executor === 'human' || type === 'manual'` predicate the ready-list
   // *Show instruction* keys on (8.8.10) — carries a "Manual" chip so a person
   // scanning the roadmap spots what needs THEM. Reuses the shipped `WorkItemTypeChip`
-  // (no new visual) on the BODY identifier line, so it never crowds the status row or
-  // fights a state chrome (design/roadmap/node-worktype.*, MOTIR-1641). Nodes built
-  // without type/executor (onboarding / plan preview) show no chip.
+  // (no new visual). It rides the TAG ROW after the status slot (MOTIR-10508 —
+  // it used to ride the body's identifier line, which the title-only body removed).
+  // Nodes built without type/executor (onboarding / plan preview) show no chip.
   const isManual = isManualReadyItem({ type: item.type ?? null, executor: item.executor ?? null });
   const showMeter = progress !== null && progress.total > 0;
   const pct = showMeter ? Math.round((progress.done / progress.total) * 100) : 0;
@@ -236,7 +355,16 @@ export function WorkItemNode({
   // READY = a whole-card mint wash; DONE = a distinct `--el-tint-sky` card + struck title.
   // The accent "you are here" and the red cross-blocked flag are louder than both.
   const showDone = item.status === 'done' && !here && !crossBlocked;
-  const showReadyWash = showReady && !crossBlocked;
+  // TO PLAN (MOTIR-10508): a childless `todo` story. Precedence — blocked elsewhere
+  // > You are here > Done > To plan > Ready > not in sprint > normal. Blocked and
+  // Here win the FRAME; under blocked the To plan pill keeps the status slot (as its
+  // glyph, by the give-way rule below), and Here takes the slot. A `todo` story is
+  // never Done, so the Done arm cannot meet it; it is listed for the order's sake.
+  const toPlan = isToPlanStory(item);
+  const showToPlanPill = toPlan && !here && !showDone;
+  const showToPlanWash = showToPlanPill && !crossBlocked;
+  const showReadyPill = showReady && !showToPlanPill;
+  const showReadyWash = showReadyPill && !crossBlocked;
   // NOT-IN-SPRINT chrome (MOTIR-1379 follow-up) — an informational, NON-error
   // signal, deliberately never the red cross-blocked chrome. The louder
   // `crossBlocked` (a real dependency problem) and `here` (the frontier) own the
@@ -245,17 +373,32 @@ export function WorkItemNode({
   // flag suppresses it, to avoid a double tag).
   const notInSprintChrome = notInSprint && !crossBlocked && !here;
   const showNotInSprintTag = notInSprint && !crossBlocked;
+  // THE GIVE-WAY RULE (MOTIR-10508 § "When the tag row overflows"): a right-hand
+  // TEXT tag (Not public, not in sprint, the blocked flag) drops the status slot and
+  // the Manual chip to their glyphs. A fixed rule, not a measurement: with a
+  // five-digit key, any status label plus any right-hand tag does not fit 254px.
+  const glyphOnly = notPublic || showNotInSprintTag || crossBlocked;
   const nodeState = crossBlocked
     ? 'cross-blocked'
     : here
       ? 'here'
       : showDone
         ? 'done'
-        : showReadyWash
-          ? 'ready'
-          : notInSprintChrome
-            ? 'not-in-sprint'
-            : 'normal';
+        : showToPlanWash
+          ? 'to-plan'
+          : showReadyWash
+            ? 'ready'
+            : notInSprintChrome
+              ? 'not-in-sprint'
+              : 'normal';
+  const action = cardNextAction({
+    toPlan,
+    fixReason: item.fixReason,
+    status: item.status,
+    ready,
+    manual: isManual,
+    options: nextActions,
+  });
   return (
     <WorkItemCardShell
       // The current-position node carries `aria-current="step"` (the design's
@@ -263,7 +406,8 @@ export function WorkItemNode({
       // active waypoint, not just a visual ring.
       aria-current={here ? 'step' : undefined}
       // A stable state hook for the canvas + E2E (MOTIR-1422): cross-blocked / here /
-      // done / ready / not-in-sprint / normal — the card's authoritative visual state.
+      // done / to-plan / ready / not-in-sprint / normal — the card's authoritative
+      // visual state.
       data-node-state={nodeState}
       // A raised `--el-surface` tile on the recessed `--el-canvas` board (the canvas
       // background, MOTIR-1362): the fill is clearly lighter than the board, and the
@@ -271,7 +415,9 @@ export function WorkItemNode({
       // here" node takes an accent border; a cross-story tangle wins the border (the
       // louder signal). MOTIR-1422 adds the card-level DONE (`--el-tint-sky`) + READY
       // (mint wash) fills — distinct palette tints, legible zoomed out, unlike the old
-      // 3px ready edge.
+      // 3px ready edge. MOTIR-10508 adds TO PLAN's `--el-tint-yellow` — the tint the
+      // `planning` status chip already wears, so "needs planning" reads the same on
+      // the chip and on the card.
       // NOT-IN-SPRINT (MOTIR-1379 follow-up): a DOTTED border (the "provisional, not
       // committed" edge) + a receded `--el-muted` fill + the "not in sprint" tag, and
       // crucially NO shadow. The shadow is dropped because the active `data-style`
@@ -290,34 +436,51 @@ export function WorkItemNode({
               ? notInSprintChrome
                 ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-sky)'
                 : 'border-(--el-border) bg-(--el-tint-sky) shadow-(--shadow-subtle)'
-              : showReadyWash
+              : showToPlanWash
                 ? notInSprintChrome
-                  ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-mint)'
-                  : 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
-                : notInSprintChrome
-                  ? 'border-dotted border-(--el-border-strong) bg-(--el-muted)'
-                  : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
+                  ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-yellow)'
+                  : 'border-(--el-border) bg-(--el-tint-yellow) shadow-(--shadow-card)'
+                : showReadyWash
+                  ? notInSprintChrome
+                    ? 'border-dotted border-(--el-border-strong) bg-(--el-tint-mint)'
+                    : 'border-(--el-border) bg-(--el-tint-mint) shadow-(--shadow-card)'
+                  : notInSprintChrome
+                    ? 'border-dotted border-(--el-border-strong) bg-(--el-muted)'
+                    : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }
-      // TOP ROW — the compact STATUS chip (top-left) — REPLACED by the accent
-      // "You are here" pill on the current-position node, the success "Ready" pill
-      // on a ready-to-start node, or the neutral "Done" pill on a done node — and
-      // the cross-link tag (or the has-children hint) pushed to the right. The
-      // READY treatment is now the whole-card mint wash (MOTIR-1422), not a 3px bar.
+      // THE TAG ROW's contents after the kind tile and the identifier (MOTIR-10508):
+      // the STATUS SLOT — the status pill, or the Here / Done / To plan / Ready pill
+      // that replaces it — then the Manual chip and the run disposition; then, pushed
+      // right, Not public, not in sprint, the blocked flag or the drill chevron.
       statusRow={
         <>
           {here ? (
-            <HerePill />
-          ) : showReady ? (
-            <ReadyPill />
+            <HerePill glyphOnly={glyphOnly} />
           ) : showDone ? (
-            <DonePill />
+            <DonePill glyphOnly={glyphOnly} />
+          ) : showToPlanPill ? (
+            <ToPlanPill glyphOnly={glyphOnly} />
+          ) : showReadyPill ? (
+            <ReadyPill glyphOnly={glyphOnly} />
           ) : (
             <WorkItemStatusPill
               status={item.status}
               label={item.statusLabel ?? null}
               category={item.statusCategory ?? null}
+              slot
+              glyphOnly={glyphOnly}
             />
           )}
+          {/* The Manual chip rides the tag row now (MOTIR-10508), a hairline
+              `--el-border` lifting it off every node fill. Composed from the
+              shipped WorkItemTypeChip; manual-only by design. */}
+          {isManual ? (
+            <WorkItemTypeChip
+              type="manual"
+              glyphOnly={glyphOnly}
+              className="shrink-0 gap-1 border-(--el-border) px-(--spacing-chip-x-4) py-0 text-[10.5px]"
+            />
+          ) : null}
           {/* The run DISPOSITION (MOTIR-3895), beside the work item's own status and
               never instead of it: they are different facts. The status is what the
               work item IS; the disposition is what THIS RUN did with it, and a run
@@ -327,50 +490,42 @@ export function WorkItemNode({
               {runLeg.label}
             </RunTonePill>
           ) : null}
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            {notPublic ? <EpicNotPublicPill /> : null}
-            {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
-                NOT the red cross-blocked flag: this node is simply outside the
-                committed sprint, not a broken dependency. Suppressed when the card is
-                cross-blocked (its own flag already reads "not in sprint" in sprint
-                scope), so the card never carries two tags. */}
-            {showNotInSprintTag ? (
-              <span
-                data-testid="not-in-sprint-tag"
-                // A plain neutral chip (no border) — a bordered tag would read as an
-                // extra border on the card, and a border style would fight the active
-                // `data-style`. The card's muted fill + this tag carry the signal.
-                className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium text-(--el-text-secondary)"
-              >
-                <CircleDashed className="size-3" aria-hidden="true" />
-                {t('node.notInSprint')}
-              </span>
-            ) : null}
-            {crossBlocked ? (
-              <CrossBlockedFlag sprint={crossBlockedSprint} />
-            ) : drillable ? (
-              <ChevronRight
-                className="size-4 shrink-0 text-(--el-text-muted)"
-                aria-hidden="true"
-                data-testid="drill-affordance"
-              />
-            ) : null}
-          </div>
+          {notPublic || showNotInSprintTag || crossBlocked || drillable ? (
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              {notPublic ? <EpicNotPublicPill /> : null}
+              {/* The "not in sprint" tag (MOTIR-1379 follow-up) — a QUIET neutral chip,
+                  NOT the red cross-blocked flag: this node is simply outside the
+                  committed sprint, not a broken dependency. Suppressed when the card is
+                  cross-blocked (its own flag already reads "not in sprint" in sprint
+                  scope), so the card never carries two tags. */}
+              {showNotInSprintTag ? (
+                <span
+                  data-testid="not-in-sprint-tag"
+                  // A plain neutral chip (no border) — a bordered tag would read as an
+                  // extra border on the card, and a border style would fight the active
+                  // `data-style`. The card's muted fill + this tag carry the signal.
+                  // The tag row's one chip size (MOTIR-10508): 11px, chip-x-6.
+                  className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-text-secondary)"
+                >
+                  <CircleDashed className="size-3" aria-hidden="true" />
+                  {t('node.notInSprint')}
+                </span>
+              ) : null}
+              {crossBlocked ? (
+                <CrossBlockedFlag sprint={crossBlockedSprint} short />
+              ) : drillable ? (
+                <ChevronRight
+                  className="size-4 shrink-0 text-(--el-text-muted)"
+                  aria-hidden="true"
+                  data-testid="drill-affordance"
+                />
+              ) : null}
+            </div>
+          ) : null}
         </>
       }
       kind={item.kind}
       identifier={item.identifier}
-      // The Manual chip rides the id line (right-aligned), NOT the crowded status
-      // row — a hairline `--el-border` lifts it off every node fill. Composed from
-      // the shipped WorkItemTypeChip; manual-only by design.
-      identifierTrailing={
-        isManual ? (
-          <WorkItemTypeChip
-            type="manual"
-            className="ml-auto shrink-0 gap-1 border-(--el-border) px-1.5 py-0 text-[10.5px]"
-          />
-        ) : null
-      }
       title={item.title}
       titleItemId={item.id}
       titleStruck={showDone}
@@ -415,28 +570,38 @@ export function WorkItemNode({
           </span>
         ) : null
       }
+      action={
+        action === null ? null : action.kind === 'plan' ? (
+          <PlanNextAction itemKey={item.identifier} />
+        ) : (
+          <CopyNextAction itemKey={item.identifier} verb={action.verb} reason={action.reason} />
+        )
+      }
     />
   );
 }
 
 /**
- * THE CARD SHELL (MOTIR-6296 · design Part XXIII §23.4) — the ONE drawing of a
- * canvas card, shared by a committed work item (`WorkItemNode`) and a proposal
- * (`PlanItemNode`). It owns everything the two must agree on: the fixed
- * `NODE_W × NODE_H` footprint (the deterministic layout spaces rows by NODE_H, so
- * a long title can never grow the card into the row below), the `--radius-card`
- * radius, the 1px border weight, the `--spacing-card-padding-12` padding, the status row, the kind
- * tile (through the one {@link KIND_TINT}), the identifier line and the title.
+ * THE CARD SHELL (MOTIR-6296 · design Part XXIII §23.4; re-laid by MOTIR-10508) —
+ * the ONE drawing of a canvas card, shared by a committed work item
+ * (`WorkItemNode`) and a proposal (`PlanItemNode`). It owns everything the two must
+ * agree on: the fixed `NODE_W × NODE_H` footprint (the deterministic layout spaces
+ * rows by NODE_H, so a long title can never grow the card into the row below), the
+ * `--radius-card` radius, the 1px border weight, the `--spacing-card-padding-12`
+ * padding, the TAG ROW (the kind tile through the one {@link KIND_TINT}, the
+ * identifier, then the caller's tags) and the title-only body.
  *
  * A caller contributes only what its STATE means: `frameClassName` (border
- * style + colour, fill, shadow, any ring), the status row's contents, a footer
- * (the progress meter, the assignee, a proposal's bottom slot) and an `overlay`
- * — absolutely-positioned decoration drawn over the card (a proposal's outcome
- * spine, the `locked` hatch). That is the compose-don't-redraw seam
- * `PlanningTargetNode` already uses, one level down: a proposal is a LAYER over
- * this shell, never a second card.
+ * style + colour, fill, shadow, any ring), the tag row's contents after the
+ * identifier, a footer (the progress meter, the assignee, a proposal's bottom slot),
+ * an `overlay` — absolutely-positioned decoration drawn over the card (a proposal's
+ * outcome spine, the `locked` hatch) — and an `action`: the next-action button,
+ * drawn OUTSIDE the overflow-hidden frame so it can hang on the card's bottom edge
+ * without clipping. That is the compose-don't-redraw seam `PlanningTargetNode`
+ * already uses, one level down: a proposal is a LAYER over this shell, never a
+ * second card.
  *
- * Everything else (`data-*`, `aria-*`) is spread onto the root, so each caller
+ * Everything else (`data-*`, `aria-*`) is spread onto the FRAME, so each caller
  * keeps its own state hooks.
  */
 export function WorkItemCardShell({
@@ -444,24 +609,23 @@ export function WorkItemCardShell({
   statusRow,
   kind,
   identifier,
-  identifierTrailing = null,
   title,
   titleItemId,
   titleStruck = false,
   titleSingleLine = false,
   footer = null,
   overlay = null,
+  action = null,
   ...rootProps
 }: {
   /** The state's border style + colour, fill, shadow (and any ring). The shell
    *  adds the shared `border` weight, radius and padding itself. */
   frameClassName: string;
-  /** The top row's CONTENTS — the shell draws the row. */
+  /** The tag row's contents AFTER the kind tile and the identifier — the shell
+   *  draws the row, the tile and the key. */
   statusRow: ReactNode;
   kind: IssueType;
   identifier: ReactNode;
-  /** Right of the identifier on its line (the Manual chip). */
-  identifierTrailing?: ReactNode;
   title: string;
   /** The work item behind the title, when it is a REAL one: a surface that has
    *  mounted a title-translation provider then shows the reader's language (Story
@@ -469,12 +633,14 @@ export function WorkItemCardShell({
   titleItemId?: string;
   /** The struck, secondary-ink title — a done card, a proposed removal. */
   titleStruck?: boolean;
-  /** One clean ellipsis instead of the two-line clamp, for a card whose footer
-   *  spends the bottom slot (Part XVII §17.2); the full title then rides `title`. */
+  /** One clean ellipsis instead of the clamp, for a card whose footer spends the
+   *  bottom slot (Part XVII §17.2); the full title then rides `title`. */
   titleSingleLine?: boolean;
   footer?: ReactNode;
   /** Absolutely-positioned decoration over the card (spine, hatch). */
   overlay?: ReactNode;
+  /** The next-action button (MOTIR-10509), a sibling of the frame. */
+  action?: ReactNode;
 } & Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'style' | 'title' | 'children'>) {
   // Tagged so a decorator that WRAPS this node (the plan-change diff frame's
   // `remove` state) can strike the title without redrawing the card — the same
@@ -483,41 +649,50 @@ export function WorkItemCardShell({
     'data-node-title': '',
     title: titleSingleLine ? title : undefined,
   };
-  // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-2`:
+  // The title clamps at THREE lines with no footer and TWO with one, so it always
+  // ends inside the 124px box (MOTIR-10508: measured, the title's last line ends at
+  // 103px at most, the footer at 111px).
+  // MOTIR-5459 — `block` rides WITH `truncate`, never beside `line-clamp-*`:
   // `truncate` needs a block box for its ellipsis, while `.block` is emitted
-  // after `.line-clamp-2` and would take `display` back from its
-  // `-webkit-box`, leaving the two-line clamp inert.
-  const titleClassName = `mt-0.5 ${titleSingleLine ? 'block truncate' : 'line-clamp-2'} text-sm leading-snug font-semibold ${
+  // after `.line-clamp-*` and would take `display` back from its
+  // `-webkit-box`, leaving the clamp inert.
+  const clamp = titleSingleLine ? 'block truncate' : footer ? 'line-clamp-2' : 'line-clamp-3';
+  const titleClassName = `${clamp} text-sm leading-snug font-semibold ${
     // `--el-text-secondary`, never `--el-text-muted`, for the struck title
     // (MOTIR-4260): a proposed removal paints `bg-(--el-muted)`, where the muted
     // ink is 4.12:1 and secondary 6.18:1.
     titleStruck ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
   }`;
   return (
-    <div
-      {...rootProps}
-      // Fixed height (= the layout's NODE_H) so a long, two-line title can never
-      // grow the card into the row below it — the deterministic layout spaces rows
-      // by NODE_H, so the card must honour it exactly. Compact: tight padding + a
-      // small status chip, no wasted space (MOTIR-1194 review).
-      style={{ width: NODE_W, height: NODE_H }}
-      className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-(--spacing-card-padding-12) ${frameClassName}`}
-    >
-      <div className="flex shrink-0 items-center gap-2">{statusRow}</div>
+    // The wrapper is the frame's own size, `relative`, and NOT overflow-hidden, so
+    // the next-action button can hang half outside the card (MOTIR-10508). It is
+    // the `group/node` the button's hover / focus-within reveal reads.
+    <div className="group/node relative" style={{ width: NODE_W, height: NODE_H }}>
+      <div
+        {...rootProps}
+        // Fixed height (= the layout's NODE_H) so a long title can never grow the
+        // card into the row below it — the deterministic layout spaces rows by
+        // NODE_H, so the card must honour it exactly.
+        style={{ width: NODE_W, height: NODE_H }}
+        className={`relative flex flex-col overflow-hidden rounded-(--radius-card) border p-(--spacing-card-padding-12) ${frameClassName}`}
+      >
+        {/* THE TAG ROW (MOTIR-10508) — the kind tile, the identifier (which never
+            shrinks), then the caller's tags. */}
+        <div className="flex min-w-0 shrink-0 items-center gap-1.5">
+          <span
+            className={`flex size-6 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[kind]}`}
+            aria-hidden="true"
+          >
+            <IssueTypeIcon type={kind} className="size-3.5" />
+          </span>
+          <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
+            {identifier}
+          </span>
+          {statusRow}
+        </div>
 
-      {/* BODY — the kind tile + identifier + title; the title gets the room. */}
-      <div className="mt-1.5 flex min-h-0 flex-1 items-start gap-2 overflow-hidden">
-        <span
-          className={`flex size-7 shrink-0 items-center justify-center rounded-(--radius-control) ${KIND_TINT[kind]}`}
-          aria-hidden="true"
-        >
-          <IssueTypeIcon type={kind} className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-(--el-text-secondary)">{identifier}</span>
-            {identifierTrailing}
-          </div>
+        {/* BODY — the title alone, full width under the tag row. */}
+        <div className="mt-2 min-h-0 flex-1 overflow-hidden">
           {titleItemId ? (
             // The same span, drawn by the title-translation kit so a surface that
             // mounted its provider shows the reader's language (MOTIR-8833); the
@@ -535,42 +710,90 @@ export function WorkItemCardShell({
             </span>
           )}
         </div>
-      </div>
 
-      {footer}
-      {overlay}
+        {footer}
+        {overlay}
+      </div>
+      {action}
     </div>
+  );
+}
+
+/**
+ * One pill in the tag row's STATUS SLOT (MOTIR-10508): the tag row's one chip size
+ * (11px text, a 12px glyph, `chip-x-6`), `min-w-0` so a long label is the last
+ * thing to give way (it truncates, its glyph stays), and its name on `title`. With
+ * `glyphOnly` (the give-way rule) the label goes and the name rides `aria-label`
+ * on a `role="img"`, so it is still read out and shown on hover.
+ */
+function SlotPill({
+  label,
+  icon,
+  glyphOnly,
+  className,
+  ...rest
+}: {
+  label: string;
+  icon: ReactNode;
+  glyphOnly: boolean;
+  className: string;
+} & Omit<HTMLAttributes<HTMLSpanElement>, 'className' | 'title' | 'children'>) {
+  return (
+    <span
+      {...rest}
+      {...(glyphOnly ? { role: 'img', 'aria-label': label } : {})}
+      title={label}
+      className={`inline-flex min-w-0 items-center gap-1 rounded-(--radius-badge) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium ${className}`}
+    >
+      {icon}
+      {glyphOnly ? null : <span className="truncate">{label}</span>}
+    </span>
   );
 }
 
 /** The "You are here" current-position pill (Subtask 7.20.6 / MOTIR-1013) — an
  *  accent map-pin chip in the StationCard's active-state language; it takes the
  *  status pill's slot on the active node. */
-function HerePill() {
+function HerePill({ glyphOnly }: { glyphOnly: boolean }) {
   const t = useTranslations('roadmap.canvas.node');
   return (
-    <span className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-accent-text)">
-      <MapPin className="size-3" aria-hidden="true" />
-      {t('here')}
-    </span>
+    <SlotPill
+      label={t('here')}
+      glyphOnly={glyphOnly}
+      className="bg-(--el-accent) text-(--el-accent-text)"
+      icon={<MapPin className="size-3 shrink-0" aria-hidden="true" />}
+    />
   );
 }
 
-/** The "Ready" pill (MOTIR-1417) — a success-toned chip in the status slot for a
- *  ready-to-start node (a to-do whose blockers are all done). Replaces the dim
- *  "To do" pill; the card also gets a `--el-success` left accent bar. */
-function ReadyPill() {
+/** The "Ready" pill (MOTIR-1417) — a white chip on the mint card wash
+ *  (MOTIR-1422): the success icon carries the "go" hue; the chip surface lifts off
+ *  the tint for contrast. Replaces the dim "To do" pill. */
+function ReadyPill({ glyphOnly }: { glyphOnly: boolean }) {
   const t = useTranslations('roadmap.canvas.node');
   return (
-    <span
+    <SlotPill
       data-testid="ready-pill"
-      // A white chip on the mint card wash (MOTIR-1422) — the success icon carries
-      // the "go" hue; the chip surface lifts off the tint for contrast.
-      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-text-strong)"
-    >
-      <CirclePlay className="size-3 text-(--el-success)" aria-hidden="true" />
-      {t('ready')}
-    </span>
+      label={t('ready')}
+      glyphOnly={glyphOnly}
+      className="border border-(--el-border) bg-(--el-page-bg) text-(--el-text-strong)"
+      icon={<CirclePlay className="size-3 shrink-0 text-(--el-success)" aria-hidden="true" />}
+    />
+  );
+}
+
+/** The "To plan" pill (MOTIR-10508) — the Ready pill's white chip with a
+ *  `ListPlus` glyph, on the yellow To plan wash. */
+function ToPlanPill({ glyphOnly }: { glyphOnly: boolean }) {
+  const t = useTranslations('roadmap.canvas.node');
+  return (
+    <SlotPill
+      data-testid="to-plan-pill"
+      label={t('toPlan')}
+      glyphOnly={glyphOnly}
+      className="border border-(--el-border) bg-(--el-page-bg) text-(--el-text-strong)"
+      icon={<ListPlus className="size-3 shrink-0 text-(--el-text-secondary)" aria-hidden="true" />}
+    />
   );
 }
 
@@ -579,16 +802,18 @@ function ReadyPill() {
  *  than the light "To do" chip (so done can't be confused with todo — the redo). The
  *  card itself takes a distinct `--el-tint-sky` fill + a struck title, so done
  *  reads as the opposite of ready's mint-forward wash. */
-function DonePill() {
+function DonePill({ glyphOnly }: { glyphOnly: boolean }) {
   const tStatus = useTranslations('labels.defaultStatus');
   return (
-    <span
+    <SlotPill
       data-testid="done-pill"
-      className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-text-secondary) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-medium text-(--el-text-inverted)"
-    >
-      <CheckCircle2 className="size-3 text-(--el-text-inverted)" aria-hidden="true" />
-      {tStatus('done')}
-    </span>
+      label={tStatus('done')}
+      glyphOnly={glyphOnly}
+      className="bg-(--el-text-secondary) text-(--el-text-inverted)"
+      icon={
+        <CheckCircle2 className="size-3 shrink-0 text-(--el-text-inverted)" aria-hidden="true" />
+      }
+    />
   );
 }
 
@@ -601,17 +826,165 @@ function DonePill() {
  * the plan-review canvas (`PlanItemNode`). The chip is a reserved canvas
  * language, and two copies of it would be two things a reader has to recognise
  * as one.
+ *
+ * `short` (MOTIR-10508, the committed card's tag row): the visible label is
+ * `blocked`, and the full sentence rides `title` and `aria-label`. The danger
+ * frame already says the card is blocked; the flag names it, the tooltip explains.
  */
-export function CrossBlockedFlag({ sprint = false }: { sprint?: boolean }) {
+export function CrossBlockedFlag({
+  sprint = false,
+  short = false,
+}: {
+  sprint?: boolean;
+  short?: boolean;
+}) {
   const t = useTranslations('roadmap.canvas.node');
+  const sentence = t(sprint ? 'blockerNotInSprint' : 'blockedElsewhere');
+  if (short) {
+    return (
+      <span
+        data-testid="cross-blocked-flag"
+        title={sentence}
+        aria-label={sentence}
+        className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x-6) py-(--spacing-chip-y) text-[11px] font-semibold text-(--el-danger-on-surface)"
+      >
+        <Flag className="size-3" aria-hidden="true" />
+        <span aria-hidden="true">{t('blockedShort')}</span>
+      </span>
+    );
+  }
   return (
     <span
       data-testid="cross-blocked-flag"
       className="inline-flex shrink-0 items-center gap-1 rounded-(--radius-badge) bg-(--el-danger-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-semibold text-(--el-danger-on-surface)"
     >
       <Flag className="size-3" aria-hidden="true" />
-      {t(sprint ? 'blockerNotInSprint' : 'blockedElsewhere')}
+      {sentence}
     </span>
+  );
+}
+
+/**
+ * The next-action button's shared face (MOTIR-10508 § "The next-action button"):
+ * the shipped `Button` `secondary` `sm`, on `--el-page-bg` with `--shadow-elevated`
+ * so it lifts off any wash, hung on the card's bottom edge, right-aligned. Shown on
+ * the card's hover and on focus-within — the button's own focus, or keyboard focus
+ * on the canvas node that holds the card — and always on a device with no hover.
+ */
+const NEXT_ACTION_CLASS =
+  'absolute right-3 bottom-0 translate-y-1/2 gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
+
+/**
+ * The canvas node wrapper (`[data-node-id]`, `PlanningCanvas`) owns pointerdown (a
+ * node gesture: drag or select), click and Enter / Space (drill). The button stops
+ * each of them, so pressing it neither drags, selects, drills nor opens the quick
+ * view (MOTIR-10509 AC 3).
+ */
+const stopCanvasGesture = {
+  onPointerDown: (e: PointerEvent<HTMLElement>) => e.stopPropagation(),
+  onKeyDown: (e: KeyboardEvent<HTMLElement>) => e.stopPropagation(),
+  onKeyUp: (e: KeyboardEvent<HTMLElement>) => e.stopPropagation(),
+};
+
+const COPIED_MS = 2000;
+
+/** Copy `motir run|review|fix <KEY>` — the ready list's copy action, as a button
+ *  with its verb on the face (the key rides the tooltip and the copied text). */
+function CopyNextAction({
+  itemKey,
+  verb,
+  reason,
+}: {
+  itemKey: string;
+  verb: 'run' | 'review' | 'fix';
+  reason: CopyActionReason | null;
+}) {
+  const t = useTranslations('roadmap.canvas.node.action');
+  const tToast = useTranslations('ready.toast');
+  const { toast } = useToast();
+  const [copied, setCopied] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+    },
+    [],
+  );
+  const command = `motir ${verb} ${itemKey}`;
+  const copy = useCallback(
+    async (e: MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      await navigator.clipboard.writeText(command);
+      toast({
+        variant: 'success',
+        title: tToast('title'),
+        description: tToast('body', { command }),
+      });
+      setCopied(true);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), COPIED_MS);
+    },
+    [command, tToast, toast],
+  );
+  const rich = {
+    command,
+    cmd: (chunks: ReactNode) => <code className="font-mono">{chunks}</code>,
+  };
+  const tooltip =
+    reason === 'ci_failed'
+      ? t.rich('copyTooltipCiFailed', rich)
+      : reason === 'changes_requested'
+        ? t.rich('copyTooltipChangesRequested', rich)
+        : t.rich('copyTooltip', rich);
+  const Glyph = copied ? Check : Copy;
+  return (
+    <Tooltip content={tooltip}>
+      <Button
+        variant="secondary"
+        size="sm"
+        aria-label={t('copyAria', { command })}
+        data-testid="node-next-action"
+        data-action={verb}
+        data-copied={copied ? 'true' : undefined}
+        className={`${NEXT_ACTION_CLASS} font-mono`}
+        leftIcon={<Glyph className="size-3.5 shrink-0 text-(--el-text-secondary)" />}
+        onClick={copy}
+        {...stopCanvasGesture}
+      >
+        {`motir ${verb}`}
+      </Button>
+    </Tooltip>
+  );
+}
+
+/** Open the planning overlay with this card as the target — the work-item context
+ *  of the shipped launcher (`useOpenPlanningWorkspace` → `lib/planning/launcher.ts`),
+ *  the same door `WorkItemPlanEntrance` opens, wearing its Plan face. A To plan
+ *  story has no children, so there is no plan to re-plan (`hasPlan: false`). */
+function PlanNextAction({ itemKey }: { itemKey: string }) {
+  const t = useTranslations('roadmap.canvas.node.action');
+  const tEntrance = useTranslations('aiPlanning.entrance');
+  const { open } = useOpenPlanningWorkspace({ kind: 'work-item', itemKey, hasPlan: false });
+  return (
+    <Tooltip content={t('planTooltip', { key: itemKey })}>
+      <Button
+        variant="secondary"
+        size="sm"
+        aria-label={tEntrance('planAria', { item: itemKey })}
+        data-testid="node-next-action"
+        data-action="plan"
+        className={`${NEXT_ACTION_CLASS} border-(--el-accent) font-sans font-semibold text-(--el-accent-on-surface)`}
+        leftIcon={<Sparkles className="size-3.5 shrink-0" />}
+        onClick={(e) => {
+          e.stopPropagation();
+          open(e);
+        }}
+        {...stopCanvasGesture}
+      >
+        {tEntrance('plan')}
+      </Button>
+    </Tooltip>
   );
 }
 

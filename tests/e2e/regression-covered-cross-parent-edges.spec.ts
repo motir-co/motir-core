@@ -167,7 +167,7 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
   await chapter('The stories do not wait on each other — X is flagged', async () => {
     await openRoadmapLevel(page, storyB);
     await expect(node(page, x.id)).toBeVisible();
-    await expect(pillOn(page, x.id)).toHaveText('blocked elsewhere');
+    await expect(pillOn(page, x.id)).toHaveAttribute('aria-label', 'blocked elsewhere');
     // The ghost anchor names the blocker, and the story it lives in.
     await expect(node(page, y.id)).toContainText(y.identifier);
     await expect(node(page, y.id)).toContainText('in Payments API');
@@ -240,7 +240,7 @@ test('a cross-story blocker is flagged until the stories carry the edge — on t
       await epicLevel;
       await expect(node(page, storyB.id)).toBeVisible({ timeout: FIRST_PAINT_MS });
       await drillInto(page, storyB);
-      await expect(pillOn(page, x.id)).toHaveText('blocked elsewhere');
+      await expect(pillOn(page, x.id)).toHaveAttribute('aria-label', 'blocked elsewhere');
       await expect(node(page, y.id)).toContainText(y.identifier);
       await beat();
     },

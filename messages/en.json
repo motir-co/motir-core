@@ -7784,7 +7784,16 @@
         "ready": "Ready",
         "notInSprint": "not in sprint",
         "blockedElsewhere": "blocked elsewhere",
-        "blockerNotInSprint": "blocker not in sprint"
+        "blockerNotInSprint": "blocker not in sprint",
+        "toPlan": "To plan",
+        "blockedShort": "blocked",
+        "action": {
+          "copyAria": "Copy {command}",
+          "copyTooltip": "Copy <cmd>{command}</cmd>",
+          "copyTooltipCiFailed": "CI failed — copy <cmd>{command}</cmd>",
+          "copyTooltipChangesRequested": "Changes requested — copy <cmd>{command}</cmd>",
+          "planTooltip": "Open planning with {key} as the target"
+        }
       },
       "anchor": {
         "defaultTitle": "Blocked across stories",

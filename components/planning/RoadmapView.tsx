@@ -1,5 +1,6 @@
 'use client';
 
+import type { CardNextActionsOption } from '@/components/planning/WorkItemNode';
 import {
   SurfaceShowOriginalSwitch,
   SurfaceTitlesNotice,
@@ -61,6 +62,9 @@ export interface RoadmapViewProps {
    *  project's onboarding-ran marker (MOTIR-1264); forwarded to the canvas, which
    *  draws it in the WHOLE-PROJECT scope only (it is the project road's origin). */
   showPlanningOrigin: boolean;
+  /** The canvas card's next-action button (MOTIR-10509) — forwarded to the canvas.
+   *  `null` (a Visitor) draws no button. */
+  nextActions?: CardNextActionsOption | null;
   /**
    * The ARRIVAL LEVEL, resolved from `?item=` by the server page (MOTIR-3836) —
    * `ancestors ++ [the item]`, so its LAST crumb is the level the canvas opens on.
@@ -92,6 +96,7 @@ export function RoadmapView({
   sprintName,
   sprintGoal,
   showPlanningOrigin,
+  nextActions = null,
   initialTrail = [],
 }: RoadmapViewProps) {
   const t = useTranslations('roadmap');
@@ -336,6 +341,7 @@ export function RoadmapView({
             projectKey={projectKey}
             scope={scope}
             showPlanningOrigin={showPlanningOrigin}
+            nextActions={nextActions}
             ariaLabel={ariaLabel}
             refreshSignal={refreshSignal}
             onRefreshSettled={handleRefreshSettled}

@@ -7787,7 +7787,16 @@
         "ready": "Gotowe do pracy",
         "notInSprint": "poza Sprintem",
         "blockedElsewhere": "zablokowane gdzie indziej",
-        "blockerNotInSprint": "blokujący element poza Sprintem"
+        "blockerNotInSprint": "blokujący element poza Sprintem",
+        "toPlan": "Do zaplanowania",
+        "blockedShort": "zablokowane",
+        "action": {
+          "copyAria": "Kopiuj {command}",
+          "copyTooltip": "Kopiuj <cmd>{command}</cmd>",
+          "copyTooltipCiFailed": "CI nie przeszło — kopiuj <cmd>{command}</cmd>",
+          "copyTooltipChangesRequested": "Poproszono o zmiany — kopiuj <cmd>{command}</cmd>",
+          "planTooltip": "Otwórz planowanie z {key} jako celem"
+        }
       },
       "anchor": {
         "defaultTitle": "Zablokowane między Historiami",

@@ -7778,7 +7778,16 @@
         "ready": "就绪",
         "notInSprint": "不在Sprint中",
         "blockedElsewhere": "受阻于别处",
-        "blockerNotInSprint": "阻塞项不在Sprint中"
+        "blockerNotInSprint": "阻塞项不在Sprint中",
+        "toPlan": "待规划",
+        "blockedShort": "受阻",
+        "action": {
+          "copyAria": "复制 {command}",
+          "copyTooltip": "复制 <cmd>{command}</cmd>",
+          "copyTooltipCiFailed": "CI 未通过 — 复制 <cmd>{command}</cmd>",
+          "copyTooltipChangesRequested": "已要求修改 — 复制 <cmd>{command}</cmd>",
+          "planTooltip": "打开规划，以 {key} 为目标"
+        }
       },
       "anchor": {
         "defaultTitle": "被其他故事阻塞",

@@ -19,12 +19,18 @@ import { cn } from '@/lib/utils/cn';
 export interface WorkItemTypeChipProps {
   type: WorkItemTypeDto;
   className?: string;
+  /** The glyph alone (the roadmap card's give-way rule, MOTIR-10508): the type's
+   *  name rides `title` and `aria-label` on a `role="img"`, so it is still read out
+   *  and shown on hover. */
+  glyphOnly?: boolean;
 }
 
-export function WorkItemTypeChip({ type, className }: WorkItemTypeChipProps) {
+export function WorkItemTypeChip({ type, className, glyphOnly = false }: WorkItemTypeChipProps) {
   const tl = useTranslations('labels');
+  const name = tl(`workItemType.${type}`);
   return (
     <span
+      {...(glyphOnly ? { title: name, 'aria-label': name, role: 'img' } : {})}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)',
         className,
@@ -32,7 +38,7 @@ export function WorkItemTypeChip({ type, className }: WorkItemTypeChipProps) {
       style={{ backgroundColor: workItemTypeChipBackground(type) }}
     >
       <WorkItemTypeIcon type={type} className="h-3.5 w-3.5" />
-      {tl(`workItemType.${type}`)}
+      {glyphOnly ? null : name}
     </span>
   );
 }

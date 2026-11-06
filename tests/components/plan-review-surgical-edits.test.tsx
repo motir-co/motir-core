@@ -102,10 +102,11 @@ describe('a remove’s REASON (§19.5)', () => {
     expect(row.querySelector('dd')?.className).not.toContain('truncate');
   });
 
-  it('no reason ⇒ nothing drawn, and the title keeps its two lines', () => {
+  // MOTIR-10508: with no footer, the title-only body clamps at three lines.
+  it('no reason ⇒ nothing drawn, and the title keeps its three lines', () => {
     renderWithIntl(<PlanItemNode item={removal(null)} />);
     expect(screen.queryByTestId('remove-reason')).toBeNull();
-    expect(screen.getByText('Legacy CSV export').className).toContain('line-clamp-2');
+    expect(screen.getByText('Legacy CSV export').className).toContain('line-clamp-3');
     cleanup();
     renderWithIntl(<PlanProposalList items={[removal(null)]} outcome={null} />);
     expect(screen.queryByTestId('remove-reason')).toBeNull();
