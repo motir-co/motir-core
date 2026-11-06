@@ -587,6 +587,21 @@ const APP_SERVER_ENV = {
     'out',
     'e2e-platform-lessons-fixture.json',
   ),
+  // The console's planner-findings pages (Story MOTIR-10353 · MOTIR-10529): the
+  // `/v1/admin/planner-findings…` intercept, the promote's lesson create and the
+  // plan jobs the fixture names, from the files the spec seeds and reads
+  // (`tests/e2e/_helpers/planner-findings-fixture.ts`).
+  E2E_TEST_PLANNER_FINDINGS: '1',
+  MOTIR_AI_PLANNER_FINDINGS_FIXTURE_PATH: path.join(
+    __dirname,
+    'out',
+    'e2e-planner-findings-fixture.json',
+  ),
+  MOTIR_AI_PLANNER_FINDINGS_JOURNAL_PATH: path.join(
+    __dirname,
+    'out',
+    'e2e-planner-findings-journal.jsonl',
+  ),
   // The Sharpen seam (MOTIR-1101 · MOTIR-8179) — installed BEFORE the jobs seam
   // by `lib/test-mock-seams.ts`. An ending turn makes core's REAL write-back,
   // `PUT /api/internal/ai/plan-sharpening`, under `CORE_CALLBACK_SECRET` below.

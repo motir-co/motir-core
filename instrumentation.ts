@@ -45,6 +45,12 @@
 //     /v1/admin/lesson-retention…) and answers from a JSON fixture, so the
 //     console's SERVER-rendered planning-lessons pages (MOTIR-1413) can be
 //     driven with no motir-ai instance.
+//   - E2E_TEST_PLANNER_FINDINGS=1 → lib/test-planner-findings-mock intercepts the
+//     motir-ai PLANNER-FINDINGS admin routes (/v1/admin/planner-findings…), the
+//     promote's POST /v1/lessons and GET /v1/jobs/:id for the plan jobs its
+//     fixture names, and answers from a JSON fixture with a request journal, so
+//     the console's SERVER-rendered planner-findings pages (MOTIR-10353) can be
+//     driven with no motir-ai instance.
 //   - E2E_TEST_AI_JOBS=1 → lib/test-ai-jobs-mock intercepts the motir-ai JOBS
 //     seam (the MOTIR_AI_URL origin's POST /v1/jobs, GET /v1/jobs/:id and its
 //     /stream). The ask journey crosses that seam three times and only the

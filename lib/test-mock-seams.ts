@@ -204,6 +204,24 @@ export const E2E_MOCK_SEAMS: readonly MockSeam[] = [
     },
   },
   {
+    // Story MOTIR-10353 · MOTIR-10529 — the console's planner-findings pages: the
+    // list, the groups, one finding, the triage PATCH, the promote's lesson create
+    // and the plan job a finding's cost is read from. Server rendered or Server
+    // Actions, so `page.route` reaches none of them.
+    // ⚠️ BEFORE `E2E_TEST_LESSONS`, `E2E_TEST_SHARPEN` and `E2E_TEST_AI_JOBS`, and
+    // the order is load-bearing: undici tries intercepts in registration order,
+    // the lesson-library seam answers `POST /v1/lessons` and the jobs seam answers
+    // every `GET /v1/jobs/:id`, while this one claims only the job ids its fixture
+    // names and falls through for every other.
+    flag: 'E2E_TEST_PLANNER_FINDINGS',
+    message: 'motir-ai planner-findings seam mocked.',
+    install: async (agent) => {
+      const { installPlannerFindingsBoundaryMock } =
+        await import('@/lib/test-planner-findings-mock');
+      installPlannerFindingsBoundaryMock(agent);
+    },
+  },
+  {
     flag: 'E2E_TEST_LESSONS',
     message: 'motir-ai lesson-library seam mocked.',
     install: async (agent) => {
