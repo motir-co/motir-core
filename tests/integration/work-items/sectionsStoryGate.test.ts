@@ -229,7 +229,11 @@ describe('seam 1 — a section written through a door is the section every reade
       expect(readView.signals, label).toEqual([]);
     }
     await client.close();
-  });
+    // ⏱️ TIMEOUT BUDGET: two doors and two reads per kind × type cell over one MCP
+    // client, so the runtime grows with the section registry. On a loaded CI shard it
+    // went over vitest's 15s default three times (MOTIR-10512). The budget is the
+    // repo's 60s precedent for loops over a whole registry, not a retry.
+  }, 60_000);
 
   it('an epic with valid sections has no acceptance-criteria span', async () => {
     const fx = await makeWorkItemFixture();
