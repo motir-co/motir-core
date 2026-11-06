@@ -310,8 +310,24 @@ export function toGateReviewPathDto(state: ReviewStateDTO): GateReviewPathDTO {
 }
 
 /**
+ * THE GATE KINDS THAT STAND IN FRONT OF THE CARD'S MERGE, and so carry its review path
+ * (MOTIR-10342 · Bug MOTIR-10533). The approve-and-merge gate asks about the delivery set
+ * itself; a story run's ACCEPTANCE gate leads the same frame while it awaits, and one press
+ * on it merges that same set (`approval-gates.md` §1, the MOTIR-5787 amendment) — so a
+ * reader deciding it is owed the same review line, read at the card's current delivery-set
+ * version, never the recording's. Design, decision and manual gates carry none. A card with
+ * no delivery set has no version, so its line is null whatever the kind.
+ */
+export function carriesReviewPath(
+  kind: string,
+): kind is 'pull_request_approval' | 'acceptance_result' {
+  return kind === 'pull_request_approval' || kind === 'acceptance_result';
+}
+
+/**
  * WHAT AN APPROVE-AND-MERGE ROW ON TO APPROVE DRAWS OF THE REVIEW (MOTIR-10342; § 32.3,
- * § 32.4) — the review line, and the Reviewed badge when an agent pass stands.
+ * § 32.4) — the review line, and the Reviewed badge when an agent pass stands. A story
+ * run's acceptance row carries the same (Bug MOTIR-10533; {@link carriesReviewPath}).
  */
 export interface ApprovalRowReviewDTO {
   line: ReviewLineDTO;

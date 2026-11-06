@@ -55,6 +55,7 @@ import type {
   PullRequestApprovalSubjectSummaryDTO,
 } from '@/lib/dto/approvalGate';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
+import { carriesReviewPath } from '@/lib/dto/reviewState';
 
 // THE APPROVALS ROW — the ONE row both approval lists render: the Workbench's
 // To-approve tab (Story MOTIR-4879 · MOTIR-4794) and the Approval records room
@@ -779,9 +780,11 @@ export function ApprovalRow({
   // agent review it stood on, on a line of its own under the sentence.
   const reviewLine = record.section === 'decided' ? (record.row.review ?? null) : null;
   // THE AGENT REVIEW OF A LIVE MERGE QUESTION (MOTIR-10342; mock A1) — its review line as the
-  // row's second grid row, and the Reviewed badge after the key.
+  // row's second grid row, and the Reviewed badge after the key. A story run's ACCEPTANCE row
+  // carries it too, since its press merges that same set (Bug MOTIR-10533); the server hands
+  // a row a `review` only when the card has one at its current delivery-set version.
   const liveReview =
-    record.section !== 'decided' && row.kind === 'pull_request_approval'
+    record.section !== 'decided' && carriesReviewPath(row.kind)
       ? (record.row.review ?? null)
       : null;
   const twoLines = reviewLine !== null || liveReview !== null;

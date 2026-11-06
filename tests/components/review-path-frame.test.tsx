@@ -580,3 +580,94 @@ describe('ApprovalRow — an approve-and-merge row wears its review', () => {
     expect(document.querySelector('[data-review-line]')).toBeNull();
   });
 });
+
+// A STORY RUN'S ACCEPTANCE ROW (Bug MOTIR-10533) — its press merges the story's delivery set,
+// so it wears the same review line and badge the approve-and-merge row does; the server hands
+// it a `review` only when the story has pull requests. Other kinds still draw none.
+describe('ApprovalRow — a story run’s acceptance row wears its review too (MOTIR-10533)', () => {
+  const acceptanceRow = (over: Partial<ApprovalQueueRowDto> = {}): ApprovalQueueRowDto =>
+    ({
+      gateId: 'gate-a',
+      kind: 'acceptance_result',
+      state: 'awaiting',
+      canDecide: true,
+      routedToName: 'Yue',
+      waitingSince: new Date(Date.now() - 3_600_000).toISOString(),
+      workItem: {
+        id: 'wi-2',
+        key: 62,
+        identifier: 'ACME-62',
+        title: 'Accept the export story',
+        kind: 'story',
+        type: null,
+      },
+      subject: {
+        kind: 'acceptance_result',
+        acceptanceEvidenceId: 'ae',
+        producedByKey: null,
+        commitSha: '000042cd',
+        chapterCount: 3,
+      },
+      ...over,
+    }) as ApprovalQueueRowDto;
+
+  it.each([
+    lineOf({ value: 'not_reviewed', command: 'motir review ACME-62' }),
+    lineOf({ value: 'reviewed_by_agent', reviewer: { kind: 'hosted', model: null } }),
+    lineOf({ value: 'review_skipped', actor: ANA, reason: 'Docs only.' }),
+    lineOf({ value: 'review_dismissed', actor: ANA, reason: 'Out of scope.' }),
+  ])('draws the $value line as its second row', (line) => {
+    render(
+      <ApprovalRow
+        record={{
+          section: 'awaiting',
+          row: acceptanceRow({ review: { line, recordRef: null, badge: null } }),
+        }}
+      />,
+    );
+    expect(lineEl().getAttribute('data-review-line')).toBe(line.value);
+  });
+
+  it('offers the copyable command on a not-reviewed acceptance', () => {
+    render(
+      <ApprovalRow
+        record={{
+          section: 'awaiting',
+          row: acceptanceRow({
+            review: {
+              line: lineOf({ value: 'not_reviewed', command: 'motir review ACME-62' }),
+              recordRef: null,
+              badge: null,
+            },
+          }),
+        }}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Copy motir review ACME-62' })).toBeTruthy();
+  });
+
+  it('an acceptance with no delivery set has no review, and draws no line', () => {
+    render(<ApprovalRow record={{ section: 'awaiting', row: acceptanceRow() }} />);
+    expect(document.querySelector('[data-review-line]')).toBeNull();
+  });
+
+  it('a design row draws no line even if handed one', () => {
+    render(
+      <ApprovalRow
+        record={{
+          section: 'awaiting',
+          row: acceptanceRow({
+            kind: 'design_result',
+            subject: null,
+            review: {
+              line: lineOf({ value: 'not_reviewed', command: 'motir review ACME-62' }),
+              recordRef: null,
+              badge: null,
+            },
+          }),
+        }}
+      />,
+    );
+    expect(document.querySelector('[data-review-line]')).toBeNull();
+  });
+});
