@@ -596,7 +596,7 @@ export function WorkItemNode({
  * identifier, a footer (the progress meter, the assignee, a proposal's bottom slot),
  * an `overlay` — absolutely-positioned decoration drawn over the card (a proposal's
  * outcome spine, the `locked` hatch) — and an `action`: the next-action button,
- * drawn OUTSIDE the overflow-hidden frame so it can hang on the card's bottom edge
+ * drawn OUTSIDE the overflow-hidden frame so it can hang on the card's top edge
  * without clipping. That is the compose-don't-redraw seam `PlanningTargetNode`
  * already uses, one level down: a proposal is a LAYER over this shell, never a
  * second card.
@@ -868,12 +868,19 @@ export function CrossBlockedFlag({
 /**
  * The next-action button's shared face (MOTIR-10508 § "The next-action button"):
  * the shipped `Button` `secondary` `sm`, on `--el-page-bg` with `--shadow-elevated`
- * so it lifts off any wash, hung on the card's bottom edge, right-aligned. Shown on
+ * so it lifts off any wash, hung on the card's TOP edge, right-aligned. Shown on
  * the card's hover and on focus-within — the button's own focus, or keyboard focus
  * on the canvas node that holds the card — and always on a device with no hover.
+ *
+ * The TOP edge, not the bottom the design first drew (MOTIR-10536): a SELECTED
+ * roadmap card hangs its action slot (View · planning target · Open) centred on the
+ * bottom edge (`ProjectRoadmapCanvas`), and on a 280px card that slot reaches into
+ * the right corner and paints over the button — on exactly the card the reader just
+ * picked. Nothing else hangs on the top edge, and the 72px row gap leaves the
+ * button's 16px overhang well clear of the row above.
  */
 const NEXT_ACTION_CLASS =
-  'absolute right-3 bottom-0 translate-y-1/2 gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
+  'absolute top-0 right-3 -translate-y-1/2 gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
 
 /**
  * The canvas node wrapper (`[data-node-id]`, `PlanningCanvas`) owns pointerdown (a
