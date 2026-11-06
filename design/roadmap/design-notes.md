@@ -40,6 +40,7 @@ arrangement (still pannable / zoomable; nodes still draggable from there).
 | `roadmap--folder-node.mock.html`          | a **FOLDER on the canvas** (MOTIR-5713): the folder card, the folder level, and the navigable folder crumb — a delta                                    |
 | `edges--covered-by-parent.mock.html`      | **covered cross-parent edges** (MOTIR-6353): when _blocked elsewhere_ shows, the covered and exempt cases, the legend copy — a delta                    |
 | `roadmap--canvas-card-tag-row.mock.html`  | the **canvas card, re-laid** (MOTIR-10508): the tag row, the title-only body, the _To plan_ story and the hover next-action button — a delta            |
+| `roadmap--plan-check-alert.mock.html`     | the canvas card's **Plan button checks first** (MOTIR-10543): the checking state, the _can't-plan_ alert and the check-failed toast — a delta           |
 
 The `roadmap` mock is a **multi-panel review board** — six sheets (5 spec + the
 multi-level drill-down sheet, below), every panel inspected (the multi-panel
@@ -2513,3 +2514,181 @@ throwaway Vitest spec that swapped `WorkItemCardShell` for the proposed shell, t
 `renderMock`, with the stylesheet Tailwind's real output over `packages/design-system/theme.css`. The
 spec was deleted before the commit; the tooltip and the toast are static drawings of the shipped
 `Tooltip` and success toast.
+
+## The Plan button checks first, and says why a card can't be planned (MOTIR-10543)
+
+**Amends** § _The canvas card, re-laid: tag row, title-only body, To plan, next action
+(MOTIR-10508)_ above, and its delta mock `design/roadmap/roadmap--canvas-card-tag-row.mock.html`.
+Delta mock: `design/roadmap/roadmap--plan-check-alert.mock.html`. It adds what happens on a click of
+the To plan card's **Plan** button. It does not redraw the card, its tag row or the button, and it
+does not change when the button appears: that stays MOTIR-10508's rule.
+
+**Design-system verdict.** motir-core is on Motir Design: its `package.json` depends on
+`@motir/design-system` and `app/globals.css` imports `@motir/design-system/theme.css`. The mock is
+built with the package's `renderMock` at the app's axes (`warm-editorial` · `motir` · `motir`,
+`data-theme` light, with a nested dark scope for panel 8). **No new token and no new part.** Every
+colour is an existing `--el-*` token and every shape an existing element-semantic token. One
+**proposed addition to `@motir/design-system`** is listed under _Accessibility_ (a describedby
+pass-through on `Modal`).
+
+### What the panels show
+
+1. **Idle.** The Plan button as MOTIR-10508 ships it, on a hovered To plan card (MOTIR-10552) beside
+   the story it waits on (MOTIR-10550). Nothing on the card says it can't be planned: the check runs
+   on the click, not on render or hover.
+2. **Checking.** The state between the click and the answer.
+3. **Can plan.** The click carries on to the planning overlay, as today. Nothing new is drawn.
+4. **Can't plan, one blocker with no subtasks.** The can't-plan alert over the canvas.
+5. **Can't plan, several blockers with no subtasks.** One reason line per blocker, in key order.
+6. **Check failed.** The shipped error toast, with Retry.
+7. **Narrow width.** The alert at 375px.
+8. **Dark.** The alert with one reason line.
+
+### How the panels were drawn (reuse)
+
+- The cards are the **shipped `WorkItemNode`**, rendered headless from its own source in the To plan
+  state (a childless `todo` story).
+- The Plan button is **MOTIR-10508's shipped `PlanNextAction`** face: the shipped `Button`
+  `secondary` `sm`, the Sparkles glyph, `Plan`, `border-(--el-accent)`,
+  `text-(--el-accent-on-surface)`, `bg-(--el-page-bg)`, `shadow-(--shadow-elevated)`, hung on the
+  card's top edge. The mock draws it in its hovered state (the `opacity-0` that hover lifts is left
+  off), and draws the checking state with the shipped `Button`'s own `loading` prop.
+- The alert is the **shipped `components/ui/Modal.tsx`** (the design-system `Modal`): its content
+  panel's classes (`rounded-(--radius-modal)`, `bg-(--el-page-bg)`, `border-(--el-border)`,
+  `shadow-(--shadow-modal)`, `p-(--spacing-card-padding)`), its title and description markup, the
+  real `Modal.Body` and `Modal.Footer`, and the `--el-overlay-scrim` backdrop. A Radix portal renders
+  nothing headless, so the panel is drawn in place; the build uses `<Modal>` itself.
+- The check-failed message is the **shipped toast** (`useToast`, `variant: 'error'`, with an
+  `action`), drawn in place for the same reason.
+
+### Elements
+
+**Checking state** (of the Plan button)
+
+- On click, the button takes the shipped `Button` `loading` state: the `Spinner` replaces the
+  Sparkles glyph, the label stays `Plan`, and the button is `disabled` with `aria-busy="true"`. A
+  second click does nothing.
+- The button stays shown for as long as it is checking, even when the pointer leaves the card or
+  focus moves, so the state does not vanish mid-check.
+- The canvas stays interactive: pan, zoom, select and drill all still work. Only this button waits.
+- When the answer comes back the button returns to idle, then one of three things happens: the
+  overlay opens (can plan), the alert opens (can't plan) or the toast shows (check failed).
+
+**Can't-plan alert**
+
+- The shipped `Modal`, `size="md"` (the 28rem cap; 90vw below it), `role="alertdialog"`, with
+  `hideClose`: the footer's Close is the one dismiss, so there are not two controls that do the same
+  thing.
+- **Title** names the card the reader clicked. **Lead line** (the Modal `description`) says how many
+  stories it waits on. Then the **reason list**, then the footer.
+- **Reason lines are a list** (`<ul>`, one `<li>` per reason, each `data-reason="<rule>"`). A later
+  reason (another rule) is one more line in the same list, with no layout change. When there are
+  several kinds of reason, the lead line becomes the generic one in _Copy_.
+- **No plan-anyway action.** The alert explains why planning would not get anywhere. It is not a
+  confirmation. Until the blocker has subtasks, a planning run on this card would stop at its
+  blocker, so offering to plan anyway would only start a run that stalls. The way forward is on
+  each reason line instead.
+- It is shown once per click: closing it and clicking Plan again runs the check again.
+
+**Reason line: blocker has no subtasks**
+
+- A bordered row (`border-(--el-border)`, `--radius-control`,
+  `px-(--spacing-control-x-12) py-(--spacing-control-y-8)`), on the modal's white page.
+- Left: the story kind glyph (`IssueTypeIcon`, `--el-type-story`, decorative, `aria-hidden`).
+- Middle: **one link** to the blocking story's page (`/items/{key}`), holding the key (mono
+  `text-xs font-semibold`) and the title (`text-sm font-medium`), both in `--el-link`, underlined on
+  hover, with the focus ring on keyboard focus. Under it, the reason in `text-xs`
+  `--el-text-secondary`.
+- Right: the **alert action**, when there is one (below).
+- **Order:** by the blocker's key number, ascending. It does not depend on how the check returned
+  them, so the same card shows the same list every time.
+
+**Alert action** (drawn, per line)
+
+- **Decision:** the second action is drawn **per reason line**, not in the footer: a `Button`
+  `ghost` `sm` with the Sparkles glyph and `Plan`, in `--el-accent-on-surface`, at the end of the
+  line. It shows only when that blocker is itself **To plan** (MOTIR-10508's rule: a childless
+  story in a `todo` status) and the reader may plan. Pressing it closes the alert and opens the
+  planning overlay with **the blocker** as the target, through the same click path as the card's
+  Plan button, so the blocker is checked too.
+- A blocker that is not To plan (panel 5's MOTIR-10548, already In Progress) gets no action. Its
+  line still names it and links to it, and still says what it needs.
+- Why per line: with several blockers, one footer button cannot say which blocker it plans, and a
+  per-line action keeps the single and several cases one layout.
+
+**Check failed**
+
+- When the check cannot be answered (network error, server error, timeout), the overlay does not
+  open and no alert opens. The button returns to idle, and the shipped error toast shows with a
+  **Retry** action, which runs the check again (and goes on as a normal click would). Dismissing the
+  toast changes nothing.
+- A toast, not an inline error, because the card is a fixed 280 × 124 box with no room for an error
+  line, and the toast is the app's shipped surface for a failed action.
+
+### Copy (en)
+
+| Element                              | Copy                                                              |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| Alert title                          | `{key} can't be planned yet`                                      |
+| Lead line, one blocker               | `It waits on a story that has no subtasks yet.`                   |
+| Lead line, several blockers          | `It waits on {count} stories that have no subtasks yet.`          |
+| Lead line, mixed reasons (later)     | `Fix these first, then plan it again.`                            |
+| Reason line (under the blocker link) | `Has no subtasks yet. It needs them before {key} can be planned.` |
+| Alert action (per line)              | `Plan` — accessible name `Plan {blockerKey}`                      |
+| Dismiss                              | `Close`                                                           |
+| Check failed, toast title            | `Couldn't check {key}`                                            |
+| Check failed, toast body             | `Planning didn't open. Check your connection and try again.`      |
+| Check failed, toast action           | `Retry`                                                           |
+| Checking (the button)                | `Plan`, unchanged; `aria-busy` says it is working                 |
+
+`{key}` is the card the reader clicked. The blocker's key and title are its own. The copy never uses
+the planner's own words (lay, author, hold, leaf). The `Plan` label and its `Plan {item}` aria are
+the shipped `aiPlanning.entrance.plan` / `planAria` strings, and `Close` is `common.close`. The new
+keys sit beside MOTIR-10508's under `roadmap.canvas.node.action.*`; the other locales follow the
+repository's locale-parity rule when MOTIR-10544 lands them.
+
+### Accessibility contract
+
+- The alert has `role="alertdialog"`, so assistive tech announces it as an interruption.
+- **Labelled** by its title (`aria-labelledby`). **Described** by the lead line **and** the reason
+  list (`aria-describedby="<lead id> <list id>"`), so the reasons are read with the title, not only
+  when the reader tabs into them. The shipped `Modal` wires `aria-describedby` only to its string
+  `description`. **Proposed addition to `@motir/design-system`:** a `describedBy` prop on `Modal`
+  that adds ids to the content's `aria-describedby`, so the build stays on the shipped `Modal`
+  instead of forking it.
+- **Focus moves into the alert when it opens, onto Close** (the safe action; Enter then just
+  closes). Tab order: each blocker link, then that line's Plan when it has one, line by line, then
+  Close. Focus is trapped while it is open (Radix).
+- **Focus returns to the card's Plan button when it closes**, whether by Close, Escape or a click on
+  the scrim. Radix returns it to the trigger; because the button sits on a node that only shows it
+  on hover or `:focus-within`, keeping focus on it keeps it visible.
+- **Escape closes it**, and so does a click on the scrim. Neither does anything else.
+- Pressing a line's **Plan** closes the alert and moves focus into the planning overlay, as the
+  card's Plan button does today.
+- **Checking:** the button is `aria-busy="true"` and disabled while checking; when the check fails,
+  the toast is announced through the shipped toast's live region.
+
+### Tokens
+
+- Title `--el-text`; lead line `--el-text-subtitle` (the Modal's own); links `--el-link`; reason line
+  and the decorative glyph colour as above; per-line Plan `--el-accent-on-surface`; Close the shipped
+  `secondary` button. All of them sit on `--el-page-bg` (the modal's page), where each clears AA in
+  both themes; no `--el-text-muted` or `--el-text-faint` text sits on a surface fill. The toast's
+  body keeps the shipped toast's `--el-text-muted`, on its own `--el-page-bg`.
+- Colour is never the only signal: the reason is written out, and the link is underlined on hover
+  and carries the focus ring.
+
+### For the code card (MOTIR-10544)
+
+Names to refer to: **Checking state**, **Can't-plan alert**, **Reason line: blocker has no
+subtasks**, **Alert action**, **Check failed**. How the check is computed and where it runs are the
+code card's to decide; this design only needs the answer to carry, per reason, the blocker's key,
+title and whether it is To plan.
+
+### How the asset was produced
+
+The mock was rendered with the repository's `renderMock`, from a throwaway Vitest spec that
+rendered the shipped `WorkItemNode`, `Button`, `IssueTypeIcon`, `Modal.Body` and `Modal.Footer` with
+the real `en` catalogue. The spec was deleted before the commit. The modal panel, the hovered Plan
+button and the toast are drawn in place from the shipped components' markup, because a portal and a
+hover state do not render headless.
