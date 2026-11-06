@@ -1267,7 +1267,11 @@ export function usePlanChangeConversation({
     // A run that asked is OVER, and the person's next turn is its answer (MOTIR-10453):
     // adopting it would send that answer through the mid-run door for as long as the
     // finished job's replay lasts, and no new run would start.
-    pendingQuestion(state.session.turns) === null
+    pendingQuestion(state.session.turns) === null &&
+    // So is a run whose planner turn is already on the thread: that turn is written from
+    // the job's RESULT, which a running job does not have. Adopting it would replay a
+    // finished run, and a turn typed meanwhile would take the mid-run door.
+    !state.session.turns.some((t) => t.role === 'assistant' && t.jobId === reopenedJob)
       ? reopenedJob
       : null;
   const unsettledReopenedJob =

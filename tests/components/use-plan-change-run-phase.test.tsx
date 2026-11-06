@@ -305,6 +305,48 @@ describe('a REOPENED overlay mid-run', () => {
     expect(record).not.toHaveBeenCalled();
   });
 
+  it('a run whose planner turn is already on the thread is over, so it is not adopted', async () => {
+    getSession.mockResolvedValue(
+      session({
+        pendingPlanId: 'plan-1',
+        lastJobId: 'job-1',
+        turns: [
+          turn('user', 'plan this'),
+          turn('assistant', 'Planning that now.', { jobId: 'job-1' }),
+        ],
+      }),
+    );
+    const replay = heldStream();
+    stream.mockImplementation(replay.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.liveReview?.status).toBe('generating'));
+    await act(async () => {});
+    expect(hook.result.current.state.phase).toBe('idle');
+    expect(hook.result.current.state.jobId).toBeNull();
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('a planner turn from an EARLIER job does not stop the running one being adopted', async () => {
+    getSession.mockResolvedValue(
+      session({
+        pendingPlanId: 'plan-1',
+        lastJobId: 'job-1',
+        turns: [
+          turn('user', 'plan this'),
+          turn('assistant', 'Done with the last one.', { jobId: 'job-0' }),
+          turn('user', 'and this'),
+        ],
+      }),
+    );
+    const adopted = heldStream();
+    stream.mockImplementation(adopted.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('streaming'));
+    expect(hook.result.current.state.jobId).toBe('job-1');
+  });
+
   it('an adopted run that turns out to be over goes back to watching the plan', async () => {
     const adopted = heldStream();
     stream.mockImplementation(adopted.impl);
