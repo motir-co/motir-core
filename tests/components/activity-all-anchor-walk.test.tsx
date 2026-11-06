@@ -141,7 +141,9 @@ describe('All tab — a verdict link to an entry past the first page (MOTIR-1046
     const findings = await screen.findByTestId('agent-verdict-findings');
     expect(findings.textContent).toContain('The export button still does nothing on Safari.');
     expect(document.getElementById('agent-verdict-rec-old')).not.toBeNull();
-    expect(scrolled).toHaveBeenCalledWith({ block: 'start' });
+    // The row scrolls itself in a passive effect, which can flush after the findings are
+    // drawn on a loaded runner — wait for it rather than read it on the same tick.
+    await waitFor(() => expect(scrolled).toHaveBeenCalledWith({ block: 'start' }));
     expect(vi.mocked(fetch).mock.calls.map(([url]) => url)).toEqual([
       '/api/work-items/wi-1/activity/all?order=desc&cursor=cursor-1',
       '/api/work-items/wi-1/activity/all?order=desc&cursor=cursor-2',
