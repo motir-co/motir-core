@@ -6616,6 +6616,37 @@ only place its rules live.
   one agent never decides both gates.
 - **GitHub only.** GitLab's half is MOTIR-5593's.
 
+#### 12.17 A review LOGS A BUG for a defect its verdict cannot carry — MOTIR-10513 (2026-11-06), both doors
+
+A review was read-only apart from its verdict, and the hosted prompt said _code the
+pull request did not touch is never a finding_, so a defect a reviewer saw outside
+the change was recorded nowhere. Both review doors now log it.
+
+- **A defect in the code the card DELIVERS is a FINDING of the verdict**, exactly as
+  §12.4 says: `changes_requested`, To fix, `motir fix`. It is **never also** logged
+  as a bug.
+- **A defect the verdict cannot carry is LOGGED AS A BUG** in the card's project — a
+  bug in code the pull requests did not touch, or a defect that belongs to another
+  card. It is filed the way `motir log bug` files one: root-caused, checked against
+  the bugs already filed, placed in the project's bug destination (it blocks nothing:
+  a defect that blocked the reviewed card would be a finding), and linked
+  `relates_to` the reviewed card where it was found.
+- **Logging a bug never changes the verdict rule.** A bug never sends the card back
+  and does not count as a finding; the review still submits **exactly one verdict
+  per run target** (§12.11, `hosted-agent-run.md` §8.4).
+- **The review's report, and its verdict summary, name every bug it logged.**
+- **The two doors carry it differently, and state the same rule:**
+  - **The hosted review** (`hosted-agent-run.md` §8.7) has no Motir credential, so a
+    bug rides its one verdict body as a `bugs` entry (at most 5) and the server files
+    it as Motir. The keys are appended to the recorded findings, so the gate's note,
+    the verdict record and the bot post (§12.16) carry them.
+  - **Your own review** (the `motir-review` skill, §12.10–§12.11) files each bug
+    itself through the MCP, by `motir log bug`'s procedure, before it submits the
+    verdict, and names the keys in `summaryMd`.
+- **What this amends:** the hosted prompt's READ-ONLY section and its _never a
+  finding_ line (`lib/dispatch/reviewPromptTemplate.ts`), `hosted-agent-run.md` §8.3,
+  and the skill's _What this skill never does_.
+
 #### 12.9 What this section does NOT decide
 
 - **The review RUN** — its command, mode, attribution, billing, credential,

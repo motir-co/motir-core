@@ -17,6 +17,10 @@ import { splitPlanBody } from '@/lib/markdown/planBody';
 //     is ONE review over both.
 //   · THE LIMITS — read-only: push nothing, post nothing to GitHub (§8.3).
 //   · THE ANSWER — ONE verdict, in an exact shape, through the verdict route (§8.4).
+//   · THE BUGS IT FOUND (MOTIR-10513, §8.7) — a defect in the code the card delivers is a
+//     FINDING; a defect the verdict cannot carry (code the change did not touch, another
+//     card's defect) rides the SAME verdict body as a `bugs` entry, and Motir files it.
+//     The not-done bugs already filed against the card are listed, so it is not filed twice.
 //
 //   · THE CONVENTIONS (MOTIR-6904, §8.5) — per delivery-set repository, Motir's derived
 //     coding convention when there is one, capped; else one line saying that repository is
@@ -40,6 +44,19 @@ export const REVIEW_SUMMARY_MAX_LENGTH = 500;
  * runaway agent cannot write megabytes onto a gate row every surface renders.
  */
 export const REVIEW_FINDINGS_MAX_LENGTH = 65_536;
+
+/**
+ * The most bugs ONE review may log (MOTIR-10513, `hosted-agent-run.md` §8.7). A review that
+ * finds more defects outside its card than this has found a code path worth a card of its
+ * own, not a pile of bugs; the bound also keeps a runaway agent from flooding the project.
+ */
+export const REVIEW_BUGS_MAX = 5;
+/** A logged bug's title bound — the one-line summary a board row shows. */
+export const REVIEW_BUG_TITLE_MAX_LENGTH = 200;
+/** A logged bug's description bound — root cause, reproduction, evidence, fix direction. */
+export const REVIEW_BUG_DESCRIPTION_MAX_LENGTH = 20_000;
+/** How many already-filed bugs the prompt lists, newest link first. */
+export const REVIEW_OPEN_BUGS_LISTED_MAX = 50;
 
 /**
  * The per-repository cap on a convention's text in the prompt (§8.5: "capped to a bounded
@@ -110,6 +127,13 @@ export interface ReviewCriteriaGroupForPrompt {
   criteria: readonly string[];
 }
 
+/** A not-done bug already filed against the card under review (MOTIR-10513). */
+export interface ReviewOpenBugForPrompt {
+  key: string;
+  title: string;
+  status: string;
+}
+
 export interface ReviewPromptInput {
   key: string;
   title: string;
@@ -134,6 +158,11 @@ export interface ReviewPromptInput {
    * the single-card ACCEPTANCE CRITERIA listing, exactly as before.
    */
   criteriaTree?: readonly ReviewCriteriaGroupForPrompt[];
+  /**
+   * The not-done bugs already linked `relates_to` the card (MOTIR-10513), at most
+   * {@link REVIEW_OPEN_BUGS_LISTED_MAX}. Omitted or empty ⇒ the section says none is filed.
+   */
+  openBugs?: readonly ReviewOpenBugForPrompt[];
 }
 
 export interface AssembledReviewPrompt {
@@ -182,7 +211,8 @@ function conventionSectionLines(conventions: readonly ReviewConventionForPrompt[
     '    A finding that relies on one QUOTES the rule it breaks.',
     '  - Where the card’s acceptance criteria explicitly require something a convention',
     '    forbids, the card wins: say so in your summary rather than sending it back.',
-    '  - Code the pull request did not touch is never a finding.',
+    '  - Code the pull request did not touch is never a finding. A defect you see there is',
+    '    a bug to log (A DEFECT THE VERDICT CANNOT CARRY, below).',
     '  - If a repository’s checkout has a CLAUDE.md or AGENTS.md at its root, read it as',
     '    the same kind of standard. If it has neither, that is not a finding and is not',
     '    mentioned.',
@@ -229,6 +259,39 @@ function criteriaSectionLines(
     '  The run target’s acceptance rests on what the cards under it delivered, so every',
     '  card’s criteria are checked here, grouped by card, the run target first.',
     ...tree.flatMap(criteriaGroupLines),
+  ]);
+}
+
+/** The BUGS section (MOTIR-10513, §8.7): which defect is a finding, which is a bug, and how
+ *  a bug leaves — in the verdict body, filed by Motir. */
+function bugSectionLines(openBugs: readonly ReviewOpenBugForPrompt[]): string[] {
+  return section('A DEFECT THE VERDICT CANNOT CARRY — log it as a bug', [
+    '  - A defect in the code the card DELIVERS is a FINDING in your verdict, exactly as',
+    '    HOW TO REVIEW says. It is never also logged as a bug: `changes_requested` sends the',
+    '    card back, and its repair fixes it.',
+    '  - A defect the verdict cannot carry is LOGGED AS A BUG instead: one in code the pull',
+    '    requests did not touch, or one that belongs to another card. Do not drop it.',
+    '  - Log it the way `motir log bug` files one:',
+    '      · ROOT-CAUSE IT FIRST. Read the code; reproduce it where you can (run only the one',
+    '        test file it touches). Write what is wrong, where (file and line), how to make',
+    '        it happen, the evidence (the command and its output, or the line you read), and',
+    '        the direction of the fix. A defect you cannot establish is not logged.',
+    '      · CHECK THE BUGS ALREADY FILED below. A defect one of them already describes is',
+    '        not logged again: name that bug in your summary instead.',
+    '      · The title is the one-line summary alone — no key, no prefix of your own.',
+    `  - Each bug is an entry of the verdict’s \`bugs\` list — at most ${REVIEW_BUGS_MAX}. Motir files it`,
+    '    in this project’s bug destination, links it `relates_to` this card, and opens its',
+    '    description with the line saying it was found while reviewing this card. A title',
+    '    that matches a not-done bug in the project is not filed twice: Motir names that bug.',
+    '  - Logging a bug NEVER changes the verdict rule: a bug never sends this card back, and',
+    '    it does not count as a finding. You still submit exactly ONE verdict.',
+    '  - Name every bug you log, by its title, in `summaryMd`. Motir adds each one’s key to',
+    '    the findings it records.',
+    '',
+    '  BUGS ALREADY FILED against this card (not done):',
+    ...(openBugs.length > 0
+      ? openBugs.map((b) => `    - ${b.key} — ${b.title} (${b.status})`)
+      : ['    (None.)']),
   ]);
 }
 
@@ -290,10 +353,12 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '    criterion or written standard asks for are not findings.',
       '  - If a finding relies on a written standard, QUOTE the rule it breaks.',
     ]),
+    ...bugSectionLines(input.openBugs ?? []),
     ...section('YOU ARE READ-ONLY', [
       '  - Push NOTHING. Do not commit, amend, rebase or push to any branch.',
       '  - Post NOTHING to GitHub — no review, no comment, no check, no label.',
-      '  - Change no status and write nothing else in Motir. Your verdict is your only output.',
+      '  - Change no status and write nothing else in Motir. Your verdict — with the bugs it',
+      '    carries — is your only output.',
     ]),
     ...section('YOUR VERDICT — submit exactly ONE', [
       `  POST /api/v1/work-items/${input.key}/agent-review`,
@@ -302,7 +367,8 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       `    "subjectVersion": "${input.subjectVersion}",`,
       '    "verdict": "pass" | "changes_requested",',
       `    "summaryMd": "<at most ${REVIEW_SUMMARY_MAX_LENGTH} characters: what you concluded>",`,
-      '    "findingsMd": "<Markdown findings>"',
+      '    "findingsMd": "<Markdown findings>",',
+      '    "bugs": [ { "title": "<one line>", "descriptionMd": "<root cause, reproduction, evidence, fix>" } ]',
       '  }',
       '',
       '  - `subjectVersion` is EXACTLY the string above: the version you reviewed.',
@@ -316,6 +382,9 @@ export function assembleReviewPrompt(input: ReviewPromptInput): AssembledReviewP
       '  - `pass` — otherwise. `findingsMd` then holds the checklist and minor notes only.',
       '  - Put the checklist at the TOP of `findingsMd`, on either verdict, as a Markdown',
       '    table — | criterion | status | evidence | — ahead of the findings.',
+      '  - `bugs` is optional: leave it out, or `[]`, when the review found nothing to log.',
+      `    At most ${REVIEW_BUGS_MAX}; a title of at most ${REVIEW_BUG_TITLE_MAX_LENGTH} characters, a description of at most`,
+      `    ${REVIEW_BUG_DESCRIPTION_MAX_LENGTH} — both required and non-empty.`,
       '  - One verdict per review. A second is refused. If the code moved while you were',
       '    reviewing, your verdict is recorded and decides nothing — that is expected.',
     ]),

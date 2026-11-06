@@ -61,11 +61,39 @@ HOW TO REVIEW
     criterion or written standard asks for are not findings.
   - If a finding relies on a written standard, QUOTE the rule it breaks.
 
+A DEFECT THE VERDICT CANNOT CARRY — log it as a bug
+
+  - A defect in the code the card DELIVERS is a FINDING in your verdict, exactly as
+    HOW TO REVIEW says. It is never also logged as a bug: \`changes_requested\` sends the
+    card back, and its repair fixes it.
+  - A defect the verdict cannot carry is LOGGED AS A BUG instead: one in code the pull
+    requests did not touch, or one that belongs to another card. Do not drop it.
+  - Log it the way \`motir log bug\` files one:
+      · ROOT-CAUSE IT FIRST. Read the code; reproduce it where you can (run only the one
+        test file it touches). Write what is wrong, where (file and line), how to make
+        it happen, the evidence (the command and its output, or the line you read), and
+        the direction of the fix. A defect you cannot establish is not logged.
+      · CHECK THE BUGS ALREADY FILED below. A defect one of them already describes is
+        not logged again: name that bug in your summary instead.
+      · The title is the one-line summary alone — no key, no prefix of your own.
+  - Each bug is an entry of the verdict’s \`bugs\` list — at most 5. Motir files it
+    in this project’s bug destination, links it \`relates_to\` this card, and opens its
+    description with the line saying it was found while reviewing this card. A title
+    that matches a not-done bug in the project is not filed twice: Motir names that bug.
+  - Logging a bug NEVER changes the verdict rule: a bug never sends this card back, and
+    it does not count as a finding. You still submit exactly ONE verdict.
+  - Name every bug you log, by its title, in \`summaryMd\`. Motir adds each one’s key to
+    the findings it records.
+
+  BUGS ALREADY FILED against this card (not done):
+    (None.)
+
 YOU ARE READ-ONLY
 
   - Push NOTHING. Do not commit, amend, rebase or push to any branch.
   - Post NOTHING to GitHub — no review, no comment, no check, no label.
-  - Change no status and write nothing else in Motir. Your verdict is your only output.
+  - Change no status and write nothing else in Motir. Your verdict — with the bugs it
+    carries — is your only output.
 
 YOUR VERDICT — submit exactly ONE
 
@@ -75,7 +103,8 @@ YOUR VERDICT — submit exactly ONE
     "subjectVersion": "moooon/acme-api#12@aaa111,moooon/acme-web#34@bbb222",
     "verdict": "pass" | "changes_requested",
     "summaryMd": "<at most 500 characters: what you concluded>",
-    "findingsMd": "<Markdown findings>"
+    "findingsMd": "<Markdown findings>",
+    "bugs": [ { "title": "<one line>", "descriptionMd": "<root cause, reproduction, evidence, fix>" } ]
   }
 
   - \`subjectVersion\` is EXACTLY the string above: the version you reviewed.
@@ -89,6 +118,9 @@ YOUR VERDICT — submit exactly ONE
   - \`pass\` — otherwise. \`findingsMd\` then holds the checklist and minor notes only.
   - Put the checklist at the TOP of \`findingsMd\`, on either verdict, as a Markdown
     table — | criterion | status | evidence | — ahead of the findings.
+  - \`bugs\` is optional: leave it out, or \`[]\`, when the review found nothing to log.
+    At most 5; a title of at most 200 characters, a description of at most
+    20000 — both required and non-empty.
   - One verdict per review. A second is refused. If the code moved while you were
     reviewing, your verdict is recorded and decides nothing — that is expected.
 "
@@ -146,7 +178,8 @@ CODING CONVENTIONS
     A finding that relies on one QUOTES the rule it breaks.
   - Where the card’s acceptance criteria explicitly require something a convention
     forbids, the card wins: say so in your summary rather than sending it back.
-  - Code the pull request did not touch is never a finding.
+  - Code the pull request did not touch is never a finding. A defect you see there is
+    a bug to log (A DEFECT THE VERDICT CANNOT CARRY, below).
   - If a repository’s checkout has a CLAUDE.md or AGENTS.md at its root, read it as
     the same kind of standard. If it has neither, that is not a finding and is not
     mentioned.
@@ -178,11 +211,39 @@ HOW TO REVIEW
     criterion or written standard asks for are not findings.
   - If a finding relies on a written standard, QUOTE the rule it breaks.
 
+A DEFECT THE VERDICT CANNOT CARRY — log it as a bug
+
+  - A defect in the code the card DELIVERS is a FINDING in your verdict, exactly as
+    HOW TO REVIEW says. It is never also logged as a bug: \`changes_requested\` sends the
+    card back, and its repair fixes it.
+  - A defect the verdict cannot carry is LOGGED AS A BUG instead: one in code the pull
+    requests did not touch, or one that belongs to another card. Do not drop it.
+  - Log it the way \`motir log bug\` files one:
+      · ROOT-CAUSE IT FIRST. Read the code; reproduce it where you can (run only the one
+        test file it touches). Write what is wrong, where (file and line), how to make
+        it happen, the evidence (the command and its output, or the line you read), and
+        the direction of the fix. A defect you cannot establish is not logged.
+      · CHECK THE BUGS ALREADY FILED below. A defect one of them already describes is
+        not logged again: name that bug in your summary instead.
+      · The title is the one-line summary alone — no key, no prefix of your own.
+  - Each bug is an entry of the verdict’s \`bugs\` list — at most 5. Motir files it
+    in this project’s bug destination, links it \`relates_to\` this card, and opens its
+    description with the line saying it was found while reviewing this card. A title
+    that matches a not-done bug in the project is not filed twice: Motir names that bug.
+  - Logging a bug NEVER changes the verdict rule: a bug never sends this card back, and
+    it does not count as a finding. You still submit exactly ONE verdict.
+  - Name every bug you log, by its title, in \`summaryMd\`. Motir adds each one’s key to
+    the findings it records.
+
+  BUGS ALREADY FILED against this card (not done):
+    (None.)
+
 YOU ARE READ-ONLY
 
   - Push NOTHING. Do not commit, amend, rebase or push to any branch.
   - Post NOTHING to GitHub — no review, no comment, no check, no label.
-  - Change no status and write nothing else in Motir. Your verdict is your only output.
+  - Change no status and write nothing else in Motir. Your verdict — with the bugs it
+    carries — is your only output.
 
 YOUR VERDICT — submit exactly ONE
 
@@ -192,7 +253,8 @@ YOUR VERDICT — submit exactly ONE
     "subjectVersion": "moooon/acme-api#12@aaa111,moooon/acme-web#34@bbb222",
     "verdict": "pass" | "changes_requested",
     "summaryMd": "<at most 500 characters: what you concluded>",
-    "findingsMd": "<Markdown findings>"
+    "findingsMd": "<Markdown findings>",
+    "bugs": [ { "title": "<one line>", "descriptionMd": "<root cause, reproduction, evidence, fix>" } ]
   }
 
   - \`subjectVersion\` is EXACTLY the string above: the version you reviewed.
@@ -206,6 +268,9 @@ YOUR VERDICT — submit exactly ONE
   - \`pass\` — otherwise. \`findingsMd\` then holds the checklist and minor notes only.
   - Put the checklist at the TOP of \`findingsMd\`, on either verdict, as a Markdown
     table — | criterion | status | evidence | — ahead of the findings.
+  - \`bugs\` is optional: leave it out, or \`[]\`, when the review found nothing to log.
+    At most 5; a title of at most 200 characters, a description of at most
+    20000 — both required and non-empty.
   - One verdict per review. A second is refused. If the code moved while you were
     reviewing, your verdict is recorded and decides nothing — that is expected.
 "
@@ -287,11 +352,39 @@ HOW TO REVIEW
     criterion or written standard asks for are not findings.
   - If a finding relies on a written standard, QUOTE the rule it breaks.
 
+A DEFECT THE VERDICT CANNOT CARRY — log it as a bug
+
+  - A defect in the code the card DELIVERS is a FINDING in your verdict, exactly as
+    HOW TO REVIEW says. It is never also logged as a bug: \`changes_requested\` sends the
+    card back, and its repair fixes it.
+  - A defect the verdict cannot carry is LOGGED AS A BUG instead: one in code the pull
+    requests did not touch, or one that belongs to another card. Do not drop it.
+  - Log it the way \`motir log bug\` files one:
+      · ROOT-CAUSE IT FIRST. Read the code; reproduce it where you can (run only the one
+        test file it touches). Write what is wrong, where (file and line), how to make
+        it happen, the evidence (the command and its output, or the line you read), and
+        the direction of the fix. A defect you cannot establish is not logged.
+      · CHECK THE BUGS ALREADY FILED below. A defect one of them already describes is
+        not logged again: name that bug in your summary instead.
+      · The title is the one-line summary alone — no key, no prefix of your own.
+  - Each bug is an entry of the verdict’s \`bugs\` list — at most 5. Motir files it
+    in this project’s bug destination, links it \`relates_to\` this card, and opens its
+    description with the line saying it was found while reviewing this card. A title
+    that matches a not-done bug in the project is not filed twice: Motir names that bug.
+  - Logging a bug NEVER changes the verdict rule: a bug never sends this card back, and
+    it does not count as a finding. You still submit exactly ONE verdict.
+  - Name every bug you log, by its title, in \`summaryMd\`. Motir adds each one’s key to
+    the findings it records.
+
+  BUGS ALREADY FILED against this card (not done):
+    (None.)
+
 YOU ARE READ-ONLY
 
   - Push NOTHING. Do not commit, amend, rebase or push to any branch.
   - Post NOTHING to GitHub — no review, no comment, no check, no label.
-  - Change no status and write nothing else in Motir. Your verdict is your only output.
+  - Change no status and write nothing else in Motir. Your verdict — with the bugs it
+    carries — is your only output.
 
 YOUR VERDICT — submit exactly ONE
 
@@ -301,7 +394,8 @@ YOUR VERDICT — submit exactly ONE
     "subjectVersion": "moooon/acme-api#12@aaa111,moooon/acme-web#34@bbb222",
     "verdict": "pass" | "changes_requested",
     "summaryMd": "<at most 500 characters: what you concluded>",
-    "findingsMd": "<Markdown findings>"
+    "findingsMd": "<Markdown findings>",
+    "bugs": [ { "title": "<one line>", "descriptionMd": "<root cause, reproduction, evidence, fix>" } ]
   }
 
   - \`subjectVersion\` is EXACTLY the string above: the version you reviewed.
@@ -315,6 +409,9 @@ YOUR VERDICT — submit exactly ONE
   - \`pass\` — otherwise. \`findingsMd\` then holds the checklist and minor notes only.
   - Put the checklist at the TOP of \`findingsMd\`, on either verdict, as a Markdown
     table — | criterion | status | evidence | — ahead of the findings.
+  - \`bugs\` is optional: leave it out, or \`[]\`, when the review found nothing to log.
+    At most 5; a title of at most 200 characters, a description of at most
+    20000 — both required and non-empty.
   - One verdict per review. A second is refused. If the code moved while you were
     reviewing, your verdict is recorded and decides nothing — that is expected.
 "

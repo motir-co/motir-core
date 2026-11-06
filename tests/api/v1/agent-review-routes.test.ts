@@ -30,6 +30,8 @@ const { githubInstallationService } = await import('@/lib/services/githubInstall
 const { githubWebhookService } = await import('@/lib/services/githubWebhookService');
 const { runCredentialService } = await import('@/lib/services/runCredentialService');
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
+const { seedSystemPrincipal } = await import('@/scripts/plan-seed/systemPrincipal');
+const { MOTIR_SYSTEM_USER_EMAIL } = await import('@/lib/ai/systemPrincipal');
 
 const BASE = 'http://localhost:3000/api/v1';
 const INSTALLATION_ID = 'inst-review-routes';
@@ -679,6 +681,183 @@ describe('POST …/agent-review — the ONE verdict', () => {
     );
     expect(await verdictEvents(build.runId)).toHaveLength(0);
     expect(await verdictEvents(otherReview.runId)).toHaveLength(0);
+  });
+});
+
+describe('POST …/agent-review — the BUGS a verdict logs (MOTIR-10513, `hosted-agent-run.md` §8.7)', () => {
+  /** The bugs of the project that relate to `workItemId`, as stored. */
+  const bugsRelatedTo = async (workItemId: string) =>
+    (
+      await adminDb.workItemLink.findMany({
+        where: { kind: 'relates_to', OR: [{ fromId: workItemId }, { toId: workItemId }] },
+        include: { fromItem: true, toItem: true },
+      })
+    )
+      .map((l) => (l.fromId === workItemId ? l.toItem : l.fromItem))
+      .filter((w) => w.kind === 'bug');
+
+  it('files each bug as Motir in the bug destination, linked to the card, and names its key on the gate, the event and the record', async () => {
+    const s = await makeScenario('bugs-filed');
+    const { userId: motirId } = await seedSystemPrincipal({
+      workspaceId: s.workspace.id,
+      projectId: s.project.id,
+    });
+    const { item, review } = await reviewedCard(s, 81);
+    const { runId, headers } = await runFor(s, item, 'review');
+    const findings = '- `app/header.tsx:12` — a zero blanks. Change it to `count ?? 0`.';
+
+    const res = await submit(headers, item.identifier, {
+      subjectVersion: version(81, 'sha-a'),
+      verdict: 'changes_requested',
+      summaryMd: 'A zero renders blank. Logged 1 bug: The footer clock drifts.',
+      findingsMd: findings,
+      bugs: [
+        {
+          title: '  The footer clock drifts  ',
+          descriptionMd:
+            '`app/footer.tsx:40` uses `setInterval(1000)`; it drifts. Use the wall clock.',
+        },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const body = await bodyOf(res);
+    const logged = body['bugs'] as Array<{ key: string; title: string; outcome: string }>;
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ title: 'The footer clock drifts', outcome: 'filed' });
+
+    const [bug] = await bugsRelatedTo(item.id);
+    expect(bug, 'the bug relates to the reviewed card').toBeDefined();
+    expect(bug!.identifier).toBe(logged[0]!.key);
+    expect(bug!.reporterId).toBe(motirId);
+    expect(bug!.parentId).toBeNull();
+    const destination = await adminDb.project.findUniqueOrThrow({ where: { id: s.project.id } });
+    expect(bug!.folderId).toBe(destination.bugDestinationFolderId);
+    // The card's key is written as its link, as every key in a body is.
+    expect(bug!.descriptionMd).toMatch(
+      new RegExp(
+        `^\\*\\*Found while:\\*\\* reviewing \\[${item.identifier}\\]\\(motir:${item.id}\\) at `,
+      ),
+    );
+    expect(bug!.descriptionMd).toContain('uses `setInterval(1000)`');
+    // The verdict rule is untouched: a refusal with ONE gate decided.
+    const decided = await adminDb.approvalGate.findUniqueOrThrow({ where: { id: review.id } });
+    expect(decided.state).toBe('changes_requested');
+    expect(decided.noteMd).toContain(findings);
+    expect(decided.noteMd).toContain('### Bugs logged by this review');
+    expect(decided.noteMd).toContain(`[${bug!.identifier}](`);
+    const [event] = await verdictEvents(runId);
+    expect((event!.data as Record<string, unknown>)['bugKeys']).toEqual([bug!.identifier]);
+    const [record] = await adminDb.reviewVerdictRecord.findMany({ where: { workItemId: item.id } });
+    expect(record!.findingsMd).toContain(`[${bug!.identifier}](`);
+  });
+
+  it('a title matching a not-done bug of the project, or an earlier entry, is answered already_filed and filed once', async () => {
+    const s = await makeScenario('bugs-dupe');
+    await seedSystemPrincipal({ workspaceId: s.workspace.id, projectId: s.project.id });
+    const known = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'bug', title: 'The Footer Clock Drifts' },
+      s.ctx,
+    );
+    const { item } = await reviewedCard(s, 82);
+    const { headers } = await runFor(s, item, 'review');
+    const before = await adminDb.workItem.count({ where: { kind: 'bug' } });
+
+    const res = await submit(headers, item.identifier, {
+      subjectVersion: version(82, 'sha-a'),
+      verdict: 'pass',
+      summaryMd: 'Meets both criteria.',
+      bugs: [
+        { title: 'the footer clock drifts', descriptionMd: 'Already known.' },
+        { title: 'The sidebar flickers', descriptionMd: 'New.' },
+        { title: 'THE SIDEBAR FLICKERS', descriptionMd: 'The same, twice.' },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const logged = (await bodyOf(res))['bugs'] as Array<{ key: string; outcome: string }>;
+    expect(logged.map((b) => b.outcome)).toEqual(['already_filed', 'filed', 'already_filed']);
+    expect(logged[0]!.key).toBe(known.identifier);
+    expect(logged[2]!.key).toBe(logged[1]!.key);
+    expect(await adminDb.workItem.count({ where: { kind: 'bug' } })).toBe(before + 1);
+    // A pass's note is its summary, with the bugs named after it.
+    const [gate] = await gatesOf(item.id, REVIEW);
+    expect(gate!.noteMd).toMatch(/^Meets both criteria\.\n\n### Bugs logged by this review/);
+    expect(gate!.noteMd).toContain('(already filed; not logged twice)');
+  });
+
+  it('a LATE verdict still files its bugs and the REVIEW_STALE message names them', async () => {
+    const s = await makeScenario('bugs-late');
+    await seedSystemPrincipal({ workspaceId: s.workspace.id, projectId: s.project.id });
+    const { item, review } = await reviewedCard(s, 83);
+    const { headers } = await runFor(s, item, 'review');
+
+    const res = await submit(headers, item.identifier, {
+      subjectVersion: version(83, 'sha-old'),
+      verdict: 'pass',
+      bugs: [{ title: 'The export button is dead', descriptionMd: 'Root cause here.' }],
+    });
+    expect(res.status).toBe(409);
+    const body = await bodyOf(res);
+    expect(body['code']).toBe('REVIEW_STALE');
+    const [bug] = await bugsRelatedTo(item.id);
+    expect(bug).toBeDefined();
+    expect(String(body['error'])).toContain(`The bugs it logged stand: ${bug!.identifier}.`);
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: review.id } })).state).toBe(
+      'awaiting',
+    );
+  });
+
+  it('422 for a bug with no title, an unknown key, or more than five — nothing filed, nothing decided', async () => {
+    const s = await makeScenario('bugs-invalid');
+    const { item, review } = await reviewedCard(s, 84);
+    const { headers } = await runFor(s, item, 'review');
+    const base = { subjectVersion: version(84, 'sha-a'), verdict: 'pass' as const };
+    const one = { title: 'A bug', descriptionMd: 'Why.' };
+    for (const bugs of [
+      [{ title: '  ', descriptionMd: 'Why.' }],
+      [{ ...one, kind: 'bug' }],
+      Array.from({ length: 6 }, (_, i) => ({ ...one, title: `Bug ${i}` })),
+    ]) {
+      const res = await submit(headers, item.identifier, { ...base, bugs });
+      expect(res.status).toBe(422);
+    }
+    expect(await adminDb.workItem.count({ where: { kind: 'bug' } })).toBe(0);
+    expect((await adminDb.approvalGate.findUniqueOrThrow({ where: { id: review.id } })).state).toBe(
+      'awaiting',
+    );
+    // The system account was never needed: nothing reached the filing.
+    expect(await adminDb.user.count({ where: { email: MOTIR_SYSTEM_USER_EMAIL } })).toBe(0);
+  });
+
+  it('the prompt lists the not-done bugs already linked to the card, and says how to log one', async () => {
+    const s = await makeScenario('bugs-prompt');
+    const { item } = await reviewedCard(s, 85);
+    const open = await workItemsService.createWorkItem(
+      {
+        projectId: s.project.id,
+        kind: 'bug',
+        title: 'The header overflows',
+        links: [{ targetId: item.id, relationship: 'relates_to' }],
+      },
+      s.ctx,
+    );
+    const closed = await workItemsService.createWorkItem(
+      {
+        projectId: s.project.id,
+        kind: 'bug',
+        title: 'An old fixed bug',
+        links: [{ targetId: item.id, relationship: 'relates_to' }],
+      },
+      s.ctx,
+    );
+    await workItemsService.updateStatus(closed.id, 'cancelled', s.ctx);
+    const { headers } = await runFor(s, item, 'review');
+
+    const res = await readPrompt(headers, item.identifier);
+    expect(res.status).toBe(200);
+    const prompt = String((await bodyOf(res))['prompt']);
+    expect(prompt).toContain('A DEFECT THE VERDICT CANNOT CARRY — log it as a bug');
+    expect(prompt).toContain(`    - ${open.identifier} — The header overflows (`);
+    expect(prompt).not.toContain('An old fixed bug');
   });
 });
 

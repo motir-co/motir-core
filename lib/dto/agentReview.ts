@@ -27,6 +27,16 @@ export interface ReviewPromptDto {
   prompt: string;
 }
 
+/** A bug a review verdict carried, as Motir landed it (MOTIR-10513): `filed` new, or
+ *  `already_filed` — a not-done bug of the project with the same title, which is named
+ *  instead of filed twice. */
+export interface ReviewLoggedBugDto {
+  key: string;
+  id: string;
+  title: string;
+  outcome: 'filed' | 'already_filed';
+}
+
 /** What the verdict route did with an ACCEPTED verdict. */
 export interface AgentReviewVerdictResultDto {
   key: string;
@@ -36,6 +46,8 @@ export interface AgentReviewVerdictResultDto {
   state: 'approved' | 'changes_requested';
   subjectVersion: string;
   decidedAt: string;
+  /** Every bug the verdict carried, in its order; `[]` when it carried none. */
+  bugs: ReviewLoggedBugDto[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

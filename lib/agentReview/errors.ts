@@ -68,13 +68,16 @@ export class ReviewStaleError extends Error {
   constructor(
     readonly staleCause: ReviewStaleCause,
     readonly subjectVersion: string,
+    /** The bugs the late verdict still logged (MOTIR-10513) — a bug outlives a moved head. */
+    readonly loggedBugKeys: readonly string[] = [],
   ) {
     super(
-      staleCause === 'superseded'
+      (staleCause === 'superseded'
         ? 'The review was withdrawn before this verdict arrived; it was recorded on the run and decided nothing.'
         : staleCause === 'already_decided'
           ? 'The review was already decided; this verdict was recorded on the run and decided nothing.'
-          : 'This verdict is about a version the review is no longer asking about; it was recorded on the run and decided nothing.',
+          : 'This verdict is about a version the review is no longer asking about; it was recorded on the run and decided nothing.') +
+        (loggedBugKeys.length > 0 ? ` The bugs it logged stand: ${loggedBugKeys.join(', ')}.` : ''),
     );
     this.name = 'ReviewStaleError';
   }

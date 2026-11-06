@@ -1331,6 +1331,33 @@ export const workItemRepository = {
     return rows.map((row) => row.id);
   },
 
+  /**
+   * The unarchived BUGS of one project whose title equals one of `titles`, compared
+   * case-insensitively, and whose status is not in `excludedStatuses` (the project's done
+   * category) — what a review's logged bug is checked against before it is filed twice
+   * (MOTIR-10513). Oldest first, so the bug a title names is the first one filed. Empty
+   * input short-circuits to `[]`. Workspace-scoped through the caller's bound `tx`.
+   */
+  async findOpenBugsByTitles(
+    projectId: string,
+    titles: readonly string[],
+    excludedStatuses: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; identifier: string; title: string }>> {
+    if (titles.length === 0) return [];
+    return tx.workItem.findMany({
+      where: {
+        projectId,
+        kind: 'bug',
+        archivedAt: null,
+        status: { notIn: [...excludedStatuses] },
+        OR: titles.map((title) => ({ title: { equals: title, mode: 'insensitive' as const } })),
+      },
+      select: { id: true, identifier: true, title: true },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  },
+
   async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
     const client = tx ?? dbRead;

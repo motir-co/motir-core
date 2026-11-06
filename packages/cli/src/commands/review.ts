@@ -41,10 +41,12 @@ import { hostedCheckoutPreparer } from './dispatch.js';
 //      run for means the code moved: exit clean, the newer version has its own review;
 //   4. check out every pull request, detached at its reviewed head, in every repository;
 //   5. run OpenCode on the served prompt plus the verdict-file contract (`hostedReview.ts`);
-//   6. read the verdict file and POST it ONCE to `agent-review` (§8.4); exit.
+//   6. read the verdict file and POST it ONCE to `agent-review` (§8.4) — with the bugs it
+//      carries, which the server files (MOTIR-10513, §8.7) — and name each one; exit.
 //
 // ── Only the verdict leaves the container ────────────────────────────────────
-// No step here pushes, opens or comments on a pull request, or calls `gh`. A missing or
+// The bugs the review logs leave INSIDE it: the agent cannot reach Motir, so a defect its
+// verdict cannot carry is a `bugs` entry of the same file, filed by the server. No step here pushes, opens or comments on a pull request, or calls `gh`. A missing or
 // malformed verdict is NOT posted: the run closes failed, the process exits non-zero,
 // and the server records the review as one that could not run. A LATE verdict
 // (`REVIEW_STALE`) was recorded by the server and decided nothing — the code moved,
@@ -274,7 +276,16 @@ async function reviewHosted(input: {
         `${key}: verdict submitted — ${decided.verdict === 'pass' ? 'pass' : 'changes requested'} ` +
           `at ${decided.subjectVersion}.`,
       );
-      settle('implemented', { verdict: decided.verdict, state: decided.state });
+      for (const bug of decided.bugs) {
+        info(
+          `  ${bug.outcome === 'filed' ? 'bug logged' : 'bug already filed'}: ${bug.key} — ${bug.title}`,
+        );
+      }
+      settle('implemented', {
+        verdict: decided.verdict,
+        state: decided.state,
+        ...(decided.bugs.length > 0 ? { bugs: decided.bugs.map((b) => b.key) } : {}),
+      });
     } catch (err) {
       if (!(err instanceof ReviewStaleError)) throw err;
       // The server RECORDED it on the run and decided nothing: the code moved.

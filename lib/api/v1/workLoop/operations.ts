@@ -1301,8 +1301,12 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'card is To fix. `subjectVersion` must be the version the review prompt named. ONE ' +
       'verdict per run (`REVIEW_VERDICT_ALREADY_SUBMITTED`, 409). A verdict for a version ' +
       'the gate no longer asks about, or a gate already superseded or decided, is RECORDED ' +
-      'on the run and decides nothing (`REVIEW_STALE`, 409). Accepts ONLY the credential of ' +
-      'a `review` dispatch run, for that run’s own card.',
+      'on the run and decides nothing (`REVIEW_STALE`, 409). `bugs` (optional, at most 5) ' +
+      'are the defects the verdict cannot carry — code the change did not touch, another ' +
+      'card’s defect: Motir files each as a bug in the project’s bug destination, linked ' +
+      '`relates_to` the card, and names each one’s key in the recorded findings; a title ' +
+      'matching a not-done bug of the project is answered `already_filed` and not filed ' +
+      'twice. Accepts ONLY the credential of a `review` dispatch run, for that run’s own card.',
     permission: 'work_item:edit',
     parameters: [
       {
@@ -1315,12 +1319,13 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     ],
     requestBody: {
       schema: agentReviewBodySchema,
-      description: 'The reviewed version, the verdict, a short summary and the findings.',
+      description:
+        'The reviewed version, the verdict, a short summary, the findings and the bugs to log.',
     },
     response: {
       status: 200,
       body: { kind: 'object', schema: agentReviewResultSchema },
-      description: 'The gate the verdict decided and its new state.',
+      description: 'The gate the verdict decided, its new state, and every bug it logged.',
     },
     // 403 for a caller that is not this card's review run; 404 for an unknown item or a
     // card with no review; 409 for a second or late verdict; 422 for a malformed body.
