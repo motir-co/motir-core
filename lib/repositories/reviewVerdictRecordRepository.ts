@@ -99,6 +99,22 @@ export const reviewVerdictRecordRepository = {
     });
   },
 
+  /**
+   * The checklists of the named verdicts that belong to `workItemId` — the activity feed's
+   * one batched read for a page of `agent_verdict` entries (MOTIR-10460).
+   */
+  async findChecklistsForWorkItem(
+    workItemId: string,
+    ids: string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<Pick<ReviewVerdictRecord, 'id' | 'checklist'>[]> {
+    if (ids.length === 0) return [];
+    return tx.reviewVerdictRecord.findMany({
+      where: { workItemId, id: { in: ids } },
+      select: { id: true, checklist: true },
+    });
+  },
+
   /** One verdict by id, or null (absent, or another workspace's under RLS). */
   async findById(id: string, tx: Prisma.TransactionClient): Promise<ReviewVerdictRecord | null> {
     return tx.reviewVerdictRecord.findUnique({ where: { id } });

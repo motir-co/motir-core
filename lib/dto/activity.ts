@@ -6,6 +6,7 @@
 // discriminated value forms — so the UI owns wording via next-intl and the
 // 5.5.3 design owns the row grammar.
 
+import type { ReviewChecklistRowDto } from '@/lib/dto/agentReview';
 import type { CommentThreadDTO } from '@/lib/dto/comments';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
@@ -71,6 +72,11 @@ export interface ActivityAgentVerdictPartDto {
   findingsExcerpt: string | null;
   /** The assignee a send-back notified, or null. */
   notified: ActivityValueDto | null;
+  /**
+   * The record's stored checklist rows (MOTIR-10460; `design/workbench/design-notes.md`
+   * § 42.5), read from the record at read time — the trail's snapshot does not carry them.
+   */
+  checklist: ReviewChecklistRowDto[];
 }
 
 /**

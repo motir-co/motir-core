@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Bot, Check } from 'lucide-react';
 import { Pill } from '@/components/ui/Pill';
+import { useInPlaceFindings } from '@/components/approvals/ReviewFindingsInPlace';
 import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { cn } from '@/lib/utils/cn';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
@@ -61,6 +62,10 @@ function ReviewedCardBody({
   const format = useFormatter();
   const routes = useReaderRoutes();
   const when = new Date(at);
+  // ON THE WORKBENCH the card's link opens the review IN PLACE (MOTIR-10460; § 42.3, F8). The
+  // card closes as focus leaves it, so focus returns to the badge that opened it.
+  const inPlace = useInPlaceFindings();
+  const recordRef = review.recordRef;
   const findingsHref = findingsHrefOf(routes.item(review.identifier), review.recordRef);
   return (
     <>
@@ -93,6 +98,19 @@ function ReviewedCardBody({
       {findingsHref ? (
         <Link
           href={findingsHref}
+          aria-haspopup={inPlace ? 'dialog' : undefined}
+          onClick={
+            inPlace && recordRef
+              ? (e) =>
+                  inPlace(
+                    e,
+                    { identifier: review.identifier, title: null, ref: recordRef, earlier: false },
+                    e.currentTarget
+                      .closest('[data-reviewed-host]')
+                      ?.querySelector<HTMLElement>('[data-reviewed-badge]') ?? null,
+                  )
+              : undefined
+          }
           className="mt-1 inline-block text-(--el-link) underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {t('link')}
@@ -124,6 +142,7 @@ function WithReviewedCard({
   };
   return (
     <span
+      data-reviewed-host=""
       className="relative inline-flex min-w-0 shrink-0"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}

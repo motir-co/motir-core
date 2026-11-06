@@ -40,6 +40,7 @@ function entry(part: Partial<ActivityAgentVerdictPartDto> = {}): {
     subjectVersion: V,
     findingsExcerpt: null,
     notified: null,
+    checklist: [],
     ...part,
   };
   return {

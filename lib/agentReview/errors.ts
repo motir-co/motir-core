@@ -311,3 +311,16 @@ export class ReviewSendBackAlreadyDismissedError extends Error {
     this.name = 'ReviewSendBackAlreadyDismissedError';
   }
 }
+
+/**
+ * 404 — the review a *Findings and checklist* link names is not one of this card's: no
+ * such verdict record or `agent_review` gate, or one on another card or in another
+ * workspace. The same answer as a card the reader cannot see, so it leaks nothing.
+ */
+export class ReviewFindingsNotFoundError extends Error {
+  readonly code = 'REVIEW_FINDINGS_NOT_FOUND';
+  constructor(readonly workItemKey: string) {
+    super(`${workItemKey} has no such review.`);
+    this.name = 'ReviewFindingsNotFoundError';
+  }
+}

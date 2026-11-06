@@ -25,6 +25,7 @@ const resolvers: DisplayResolvers = {
   sprint: (id) => ({ type: 'sprint', sprintId: id, name: `sprint:${id}` }),
   issue: (id) => ({ type: 'issue', workItemId: id, identifier: `PROD-${id}` }),
   folder: (id) => ({ type: 'text', text: `folder:${id}` }),
+  reviewChecklist: () => [],
 };
 
 function parts(changeKind: string, diff: unknown) {
@@ -286,6 +287,7 @@ describe('the agentVerdict snapshot', () => {
         subjectVersion: 'moooon/acme#1@abc',
         findingsExcerpt: 'The finding.',
         notified: { type: 'user', userId: 'u-2', name: 'user:u-2', image: null },
+        checklist: [],
       },
     ]);
     const refs = emptyDiffRefs();

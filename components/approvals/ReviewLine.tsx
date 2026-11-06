@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { CircleDashed, SkipForward, Undo2, User } from 'lucide-react';
 import { ReviewCommand } from '@/components/approvals/ReviewCommand';
 import { ReviewedGlyph } from '@/components/approvals/ReviewedBadge';
+import { useInPlaceFindings } from '@/components/approvals/ReviewFindingsInPlace';
 import { cn } from '@/lib/utils/cn';
 import { findingsHrefOf } from '@/lib/agentReview/verdictActivity';
 import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
@@ -34,11 +35,14 @@ export function ReviewLine({
   line,
   identifier,
   recordRef,
+  title = null,
   size = 'row',
   className,
 }: {
   line: ReviewLineDTO;
   identifier: string;
+  /** The card's title — the in-place view's subtitle while its read loads. */
+  title?: string | null;
   /** The answering pass — what *Findings and checklist* opens. */
   recordRef: ReviewRecordRefDTO | null;
   /** `row` on a To approve row (`text-xs`), `frame` in the gate frame (its META size). */
@@ -52,6 +56,19 @@ export function ReviewLine({
   const itemHref = routes.item(identifier);
   const b = (chunks: ReactNode) => <b className="font-semibold text-(--el-text)">{chunks}</b>;
   const nameOf = (person: { name: string | null } | null) => person?.name ?? tGate('theAssignee');
+  // ON THE WORKBENCH the two findings links open the review IN PLACE (MOTIR-10460; § 42.3):
+  // a plain primary click opens the view, any other click keeps the card link.
+  const inPlace = useInPlaceFindings();
+  const findingsLink = (href: string, ref: ReviewRecordRefDTO, earlier: boolean, label: string) => (
+    <Link
+      href={href}
+      className={LINK}
+      aria-haspopup={inPlace ? 'dialog' : undefined}
+      onClick={inPlace ? (e) => inPlace(e, { identifier, title, ref, earlier }) : undefined}
+    >
+      {label}
+    </Link>
+  );
 
   let glyph: ReactNode;
   let body: ReactNode;
@@ -69,11 +86,7 @@ export function ReviewLine({
       body = (
         <>
           <span>{t.rich('reviewed', { b, who, when })}</span>
-          {findings ? (
-            <Link href={findings} className={LINK}>
-              {t('findings')}
-            </Link>
-          ) : null}
+          {findings && recordRef ? findingsLink(findings, recordRef, false, t('findings')) : null}
         </>
       );
       break;
@@ -100,11 +113,9 @@ export function ReviewLine({
       body = (
         <>
           <span>{t.rich('notReviewed', { b })}</span>
-          {earlier ? (
-            <Link href={earlier} className={LINK}>
-              {t('earlier')}
-            </Link>
-          ) : null}
+          {earlier && line.lastReviewedRef
+            ? findingsLink(earlier, line.lastReviewedRef, true, t('earlier'))
+            : null}
           {line.command ? (
             <span className="relative z-10">
               <ReviewCommand command={line.command} identifier={identifier} />
