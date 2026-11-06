@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -21,6 +21,7 @@ import { main as backfillCiState } from '@/scripts/backfill-work-item-ci-state';
 import { main as backfillFixReason } from '@/scripts/backfill-fix-reason';
 import { main as convergeUnlanded } from '@/scripts/converge-ejected-cards';
 import { adminDb } from '../helpers/adminDb';
+import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-10465 — the data scripts reach production after the AWS cutover by running
 // INSIDE a core worker task over ECS Exec, from a bundle in the image. The task holds
@@ -236,6 +237,10 @@ describe('the data scripts, run through loadDataScript', () => {
     vi.spyOn(console, 'error').mockImplementation(push);
     vi.spyOn(console, 'warn').mockImplementation(push);
   };
+  // The dry runs below assert a sweep of an EMPTY database ("0 of 0"). A Vitest
+  // worker's database still holds whatever the suite it ran before left there,
+  // so clear the workspace cascade first rather than inherit a shard-mate's cards.
+  beforeEach(() => truncateAuthTables());
   afterEach(() => vi.restoreAllMocks());
 
   it('loads the real modules: each one is the main the registry names', async () => {
