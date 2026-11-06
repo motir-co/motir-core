@@ -41,7 +41,6 @@ function verdictEntry(id: string, recordId: string): ActivityAllEntryDto {
       model: '',
       subjectVersion: 'acme/web#1@abcdef0',
       findingsExcerpt: 'Fix it',
-      checklist: [],
       notified: null,
       checklist: [],
     },
