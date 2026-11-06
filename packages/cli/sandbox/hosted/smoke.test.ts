@@ -847,6 +847,8 @@ async function startStub(): Promise<Stub> {
             state: b.verdict === 'pass' ? 'approved' : 'changes_requested',
             subjectVersion: b.subjectVersion,
             decidedAt: NOW,
+            // The bugs the verdict logged (MOTIR-10513): the stub's verdicts carry none.
+            bugs: [],
           });
         }
         if (method === 'GET' && sub === '/dispatch-prompt') {
