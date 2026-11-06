@@ -239,7 +239,7 @@ test.describe('four new type pairings', () => {
           page,
           (role) =>
             `<span data-run="latin">${role} Hamburgefonstiv</span> ` +
-            `<span data-run="ja">いろはにほへと 日本語の書体</span>`,
+            `<span data-run="ja">いろはにほへと日本語の書体</span>`,
         );
         for (const role of FONT_SET_ROLES) {
           const row = probe.locator(`[data-role="${role}"]`);
