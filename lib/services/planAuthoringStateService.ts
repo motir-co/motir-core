@@ -1,5 +1,4 @@
 import { plansService } from '@/lib/services/plansService';
-import { planValidityService } from '@/lib/services/planValidityService';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planNarrationRepository } from '@/lib/repositories/planNarrationRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -17,7 +16,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // The AUTHORING-STATE read (MOTIR-9821) — which of a plan's proposals are being
 // written right now, which are written, and which no author session has started.
 // The rule it serves and the three states are `lib/plans/authoringState.ts`'s; this
-// service only gathers the rows that derivation reads.
+// service only gathers the rows that derivation reads. A proposal's state comes from
+// its live author step and its stored `authorFinished` (MOTIR-10496), so no section
+// findings are read for it; the ended sessions still place COMMITTED cards.
 //
 // COMMITTED CARDS (MOTIR-10001) ride beside the proposals: every card the walk
 // re-authors, and every card the caller names in `workItems`, answered by id. The
@@ -59,12 +60,11 @@ export const planAuthoringStateService = {
     workItems: readonly string[] = [],
   ): Promise<PlanAuthoringStateDto> {
     const plan = await plansService.getPlanForReader(planId, ctx);
-    const [{ steps, sessions }, findings, record] = await Promise.all([
+    const [{ steps, sessions }, record] = await Promise.all([
       withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
         steps: await planStepRepository.listByPlan(planId, tx),
         sessions: await planNarrationRepository.listSessionsByPlan(planId, tx),
       })),
-      planValidityService.projectedPlanSectionFindings(planId, ctx, plan),
       plansService.getPlannerRecord(planId, ctx),
     ]);
     const sessionFacts = sessions.map((s) => ({ kind: s.stepKind, targetRef: s.targetRef }));
@@ -110,7 +110,7 @@ export const planAuthoringStateService = {
     return {
       planId,
       status: plan.status,
-      proposals: deriveAuthoringStates(plan.items, steps, sessionFacts, findings),
+      proposals: deriveAuthoringStates(plan.items, steps),
       committed: deriveCommittedStates(plan.items, steps, sessionFacts, listed, cards),
       unresolved,
     };

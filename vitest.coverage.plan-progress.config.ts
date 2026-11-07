@@ -181,13 +181,12 @@ export default defineConfig({
       //     `authenticateAndLimitJobRequest` (needs the rate-limit store itself to
       //     fail — the in-flight-code lane names the same arm), and the final
       //     `throw err` (an error no layer below types: a database outage).
-      //   · planProgress.ts: `proposedFields ?? {}` and the non-string `kind` /
-      //     `title` arms of `progressRowOfAdd` (an `add` is refused at the door
-      //     without a string title and kind), and the comparator's EQUAL
-      //     `sessionKey` arm (`(planId, sessionKey)` is the table's unique key, and
-      //     a snapshot holds one plan's steps).
-      //   · planProgressService.ts: `explanationsByProject.get(…) ?? false` (the
-      //     projects are read by the same plans' own project ids, in one bound tx).
+      //   · planProgress.ts: the comparator's EQUAL `sessionKey` arm
+      //     (`(planId, sessionKey)` is the table's unique key, and a snapshot holds
+      //     one plan's steps). `progressRowOfAdd`'s `proposedFields ?? {}` and
+      //     non-string `kind` / `title` arms are reached by its pure suite since
+      //     MOTIR-10496, and the explanations-setting read (and its `?? false`) is
+      //     gone from `planProgressService.ts` with it.
       //   · PlanningList.tsx: a failed outcome read finding an outcome ALREADY
       //     recorded (`requested` asks about a row once, ever). (MOTIR-8581 moved the
       //     read itself to the Workbench's one window read, so the poll's own

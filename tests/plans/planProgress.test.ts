@@ -29,13 +29,7 @@ function row(over: Partial<PlanProgressAddRow> & { id: string }): PlanProgressAd
     parentRef: null,
     kind: 'task',
     title: `Title ${over.id}`,
-    hasDescription: true,
-    hasExplanation: true,
-    hasType: true,
-    hasExecutor: true,
-    hasStoryPoints: true,
-    hasEstimate: true,
-    hasDifficulty: true,
+    authorFinished: true,
     ...over,
   };
 }
@@ -67,7 +61,6 @@ function build(args: {
     steps: args.steps,
     addRows: args.addRows ?? [],
     committedTitles: args.committedTitles ?? new Map(),
-    requireExplanation: true,
     observedAt: at(0),
   });
 }
@@ -162,9 +155,8 @@ describe('readPlanProgress — resuming after an automatic resume', () => {
       plan: { createdAt: at(0), lastActivityAt: over.lastActivityAt ?? at(T) },
       steps: over.steps ?? [],
       addRows:
-        over.proposed === 0 ? [] : [row({ id: 'p1' }), row({ id: 'p2', hasDescription: false })],
+        over.proposed === 0 ? [] : [row({ id: 'p1' }), row({ id: 'p2', authorFinished: false })],
       committedTitles: new Map(),
-      requireExplanation: true,
       observedAt: at(T),
       autoResume: { at: at(T), count: 1 },
     });
@@ -283,9 +275,8 @@ describe('buildPlanProgressSnapshot — the phrase table', () => {
     const s = buildPlanProgressSnapshot({
       plan: { createdAt: new Date(T0), lastActivityAt: at(30_000) },
       steps: [],
-      addRows: [row({ id: 'x' }), row({ id: 'y', hasDescription: false })],
+      addRows: [row({ id: 'x' }), row({ id: 'y', authorFinished: false })],
       committedTitles: new Map(),
-      requireExplanation: false,
       observedAt: new Date(T0 + 45_000),
     });
     expect(s).toMatchObject({
@@ -298,90 +289,72 @@ describe('buildPlanProgressSnapshot — the phrase table', () => {
   });
 });
 
-describe('countAuthored — the mirrored walk-completeness authored test', () => {
-  it('a childless task with both bodies and all five sizing fields counts', () => {
-    expect(countAuthored([row({ id: 't' })], true)).toEqual({ authored: 1, proposed: 1 });
-  });
-
-  it('the same task with one sizing field missing does not', () => {
-    for (const k of [
-      'hasType',
-      'hasExecutor',
-      'hasStoryPoints',
-      'hasEstimate',
-      'hasDifficulty',
-    ] as const) {
-      expect(countAuthored([row({ id: 't', [k]: false })], true).authored, k).toBe(0);
-    }
-  });
-
-  it('a container (story / epic) with both bodies and no sizing counts — never leaf-sized', () => {
-    const bare = {
-      hasType: false,
-      hasExecutor: false,
-      hasStoryPoints: false,
-      hasEstimate: false,
-      hasDifficulty: false,
-    };
+// MOTIR-10496 — "N authored" reads the stored `authorFinished` and nothing else:
+// no body, no sizing field and no project explanations setting moves it.
+describe('countAuthored — the stored written state', () => {
+  it('a stamped row counts, whatever its kind', () => {
     expect(
-      countAuthored(
-        [row({ id: 's', kind: 'story', ...bare }), row({ id: 'e', kind: 'epic', ...bare })],
-        true,
-      ),
-    ).toEqual({ authored: 2, proposed: 2 });
+      countAuthored([
+        row({ id: 't' }),
+        row({ id: 's', kind: 'story' }),
+        row({ id: 'e', kind: 'epic' }),
+      ]),
+    ).toEqual({ authored: 3, proposed: 3 });
   });
 
-  it('a task with a proposed child counts without sizing; its childless subtask owes sizing', () => {
-    const rows = [
-      row({ id: 'parent', kind: 'task', hasStoryPoints: false, hasDifficulty: false }),
-      row({ id: 'child', kind: 'subtask', parentRef: 'planItem:parent', hasEstimate: false }),
-    ];
-    expect(countAuthored(rows, true)).toEqual({ authored: 1, proposed: 2 });
-  });
-
-  it('requireExplanation: a row missing only explanationMd counts when false, not when true', () => {
-    const r = [row({ id: 'x', hasExplanation: false })];
-    expect(countAuthored(r, false).authored).toBe(1);
-    expect(countAuthored(r, true).authored).toBe(0);
+  it('an unstamped row does not count', () => {
+    expect(countAuthored([row({ id: 't', authorFinished: false })])).toEqual({
+      authored: 0,
+      proposed: 1,
+    });
   });
 
   it('a modify is in neither number (the caller passes adds only; progressRowOfAdd filters nothing)', () => {
     // M counts what is passed: the service passes ONLY `add` rows (SQL `op = 'add'`,
     // the review path filters `op === 'add'`), so a modify never reaches here.
-    expect(countAuthored([], true)).toEqual({ authored: 0, proposed: 0 });
+    expect(countAuthored([])).toEqual({ authored: 0, proposed: 0 });
   });
 
-  it('progressRowOfAdd mirrors the SQL flags', () => {
-    const r = progressRowOfAdd({
+  it('progressRowOfAdd reads only the stored flag — EXACTLY `true`, as the SQL compares JSON', () => {
+    const base = { id: 'p', workItemId: null, parentRef: null };
+    const complete = {
+      title: 'P',
+      kind: 'task',
+      descriptionMd: 'A whole body.',
+      explanationMd: 'why',
+      type: 'code',
+      executor: 'coding_agent',
+      storyPoints: 2,
+      estimateMinutes: 30,
+      difficulty: 'low',
+    };
+    expect(progressRowOfAdd({ ...base, proposedFields: complete })).toEqual({
       id: 'p',
       workItemId: null,
       parentRef: null,
-      proposedFields: {
-        title: 'P',
-        kind: 'task',
-        descriptionMd: '  \n ',
-        explanationMd: 'why',
-        type: '',
-        executor: 'coding_agent',
-        storyPoints: 0,
-        estimateMinutes: null,
-      },
-    });
-    expect(r).toMatchObject({
       kind: 'task',
       title: 'P',
-      hasDescription: false,
-      hasExplanation: true,
-      hasType: false,
-      hasExecutor: true,
-      hasStoryPoints: true,
-      hasEstimate: false,
-      hasDifficulty: false,
+      authorFinished: false,
+    });
+    expect(
+      progressRowOfAdd({ ...base, proposedFields: { title: 'S', authorFinished: true } }),
+    ).toMatchObject({ kind: null, title: 'S', authorFinished: true });
+    for (const value of [null, false, 'true', 1]) {
+      expect(
+        progressRowOfAdd({ ...base, proposedFields: { ...complete, authorFinished: value } })
+          .authorFinished,
+        String(value),
+      ).toBe(false);
+    }
+    expect(progressRowOfAdd({ ...base, proposedFields: null })).toMatchObject({
+      kind: null,
+      title: '',
+      authorFinished: false,
     });
   });
 });
 
-describe('requireExplanationFor', () => {
+describe('requireExplanationFor — kept for the carry-over, no longer read by the count', () => {
   it('mcp always owes it; native and null follow the project setting', () => {
     for (const setting of [true, false]) {
       expect(

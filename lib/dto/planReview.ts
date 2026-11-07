@@ -801,6 +801,15 @@ export interface PlanReviewItemDto {
    * pointing the other way.
    */
   explanationSource: string | null;
+  /**
+   * Whether this proposal's author session FINISHED writing it (MOTIR-10496) —
+   * `isProposalWritten` over the stored `authorFinished`, the one written-state
+   * answer the plan surface, the progress count and `get_plan_authoring_state`
+   * share. Add-ONLY: a `modify` / `remove` targets a committed card, which has
+   * no author session, so it is `false` there. Planner state ABOUT the card,
+   * not a field a reviewer decides on — approve carries nothing of it.
+   */
+  authorFinished?: boolean;
   storyPoints: number | null;
   estimateMinutes: number | null;
   /**

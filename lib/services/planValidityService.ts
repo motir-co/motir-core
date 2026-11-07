@@ -40,10 +40,12 @@ import type {
   WorkItemValidityDto,
 } from '@/lib/dto/workItems';
 import { isMislabelledLinkAdvisory } from '@/lib/dto/workItems';
-import type { PlanValidityDto, PlanWithItemsDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
+import type { NotYetWrittenDto, PlanValidityDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
 import { proposalRescopeWarningsService } from '@/lib/services/proposalRescopeWarningsService';
 import type { SectionFindingDto } from '@/lib/dto/workItems';
 import { sectionFindingsFor } from '@/lib/workItems/sections/validity';
+import { isProposalWritten } from '@/lib/plans/proposalWritten';
+import { UNDECIDED_PLAN_STATUSES } from '@/lib/planChange/sessionWaitingState';
 import type { SprintBlockerDto, SprintValidityDto } from '@/lib/dto/sprints';
 import { type ValidityCondition, DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 
@@ -731,6 +733,25 @@ function projectedCrossLevelEdges(
   });
 }
 
+const UNDECIDED_STATUSES: ReadonlySet<string> = new Set(UNDECIDED_PLAN_STATUSES);
+
+/**
+ * The `add`s of an UNDECIDED plan no author session has finished
+ * ({@link PlanValidityDto.notYetWritten}, MOTIR-10496), sorted by `item`. The
+ * stored `authorFinished` decides, through the one predicate; a decided plan
+ * lists none, because no session will ever write its cards.
+ */
+function notYetWrittenOf(proj: Projection): NotYetWrittenDto[] {
+  if (!UNDECIDED_STATUSES.has(proj.planStatus)) return [];
+  const rows: NotYetWrittenDto[] = [];
+  for (const [item, add] of proj.proposalByRef) {
+    if (isProposalWritten(add.proposedFields)) continue;
+    const title = (add.proposedFields as { title?: unknown } | null)?.title;
+    rows.push({ item, title: typeof title === 'string' ? title : null });
+  }
+  return rows.sort((a, b) => (a.item < b.item ? -1 : a.item > b.item ? 1 : 0));
+}
+
 export const planValidityService = {
   /**
    * Is the PROJECTED subtree of `targetKey` finishable, once `planId` materializes?
@@ -963,28 +984,8 @@ export const planValidityService = {
         [...memberIds].filter((id) => proj.proposalByRef.has(id) || proj.patchByWorkItemId.has(id)),
         ctx,
       ),
+      notYetWritten: notYetWrittenOf(proj),
     };
-  },
-
-  /**
-   * The SECTION findings alone (MOTIR-9821) — the `sectionFindings` half of
-   * {@link validateProjectedPlan}, over the same cards (every `add`, and every real
-   * card a `modify` patches), for the authoring-state read. That read asks only
-   * whether a proposal is complete, so it pays for the parse and none of the graph
-   * verdicts. `plan` is the plan the caller already read and admitted.
-   */
-  async projectedPlanSectionFindings(
-    planId: string,
-    ctx: ServiceContext,
-    plan?: PlanWithItemsDto,
-  ): Promise<SectionFindingDto[]> {
-    const proj = await buildProjection(planId, ctx, plan ? { plan } : {});
-    const proposed = [...proj.nodes.keys()].filter(
-      (id) =>
-        proj.nodes.get(id)!.projectId === proj.projectId &&
-        (proj.proposalByRef.has(id) || proj.patchByWorkItemId.has(id)),
-    );
-    return projectedSectionFindings(proj, proposed, ctx);
   },
 
   /**
