@@ -7787,6 +7787,7 @@
           "copyTooltip": "复制 <cmd>{command}</cmd>",
           "copyTooltipCiFailed": "CI 未通过 — 复制 <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "已要求修改 — 复制 <cmd>{command}</cmd>",
+          "copyTooltipGuide": "需要人来完成的工作 — 复制 <cmd>{command}</cmd>",
           "planTooltip": "打开规划，以 {key} 为目标"
         }
       },

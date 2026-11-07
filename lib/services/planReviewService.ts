@@ -88,6 +88,7 @@ import { visitorServiceContext, type VisitorReadContext } from '@/lib/visitor/co
 import { isVisitorContext, openVisitorRead } from '@/lib/visitor/readScope';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { PlanNotFoundError } from '@/lib/plans/errors';
+import { isProposalWritten } from '@/lib/plans/proposalWritten';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { folderRefId, isFolderRef, isTempRef, SUPERSEDES_PATCH_SITES } from '@/lib/plans/refs';
@@ -1785,6 +1786,8 @@ export const planReviewService = {
         // the old, which is the same class of false statement this bug is
         // about, pointing the other way.
         explanationSource: item.op === 'add' ? (proposed?.explanationSource ?? null) : null,
+        // Written state (MOTIR-10496): the stored fact only, never the body.
+        authorFinished: item.op === 'add' && isProposalWritten(proposed),
         // ⚠️ The target's points are a Prisma `Decimal`; `buildChanges` converts
         // the same column the same way, and the DTO is a number.
         storyPoints: proposedValue(
@@ -2203,11 +2206,9 @@ export const planReviewService = {
     const progress = await planProgressService.snapshotForReview(
       {
         id: plan.id,
-        projectId: plan.projectId,
         status: plan.status,
         createdAt: plan.createdAt,
         lastActivityAt,
-        authorSource: plan.authorSource,
         sessionId: plan.sessionId,
       },
       plan.items,

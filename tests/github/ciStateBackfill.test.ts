@@ -331,6 +331,139 @@ describe('workItemCiStateBackfillService (MOTIR-5472)', () => {
   });
 });
 
+// MOTIR-10542 — a card whose delivery set is EMPTY but which still stores a
+// verdict. Its last link was removed before the unlink doors recomputed (#2937),
+// so it kept the verdict of a pull request it no longer has. The two delivery
+// arms start from a member and this card has none, so before the third arm it
+// was never a candidate and its badge stayed wrong for ever.
+describe('workItemCiStateBackfillService — a stored verdict with no delivery left (MOTIR-10542)', () => {
+  /** The pre-#2937 unlink: the delivery row goes, and the stored verdict stays. */
+  async function unlinkWithoutRecompute(workItemId: string) {
+    await adminDb.workItemDelivery.deleteMany({ where: { workItemId } });
+  }
+
+  it('clears the verdict a removed link left behind, and a second run changes nothing', async () => {
+    const s = await makeScenario('orphan@example.com', 'ORPH');
+    const item = await makeCard(s, 'A card whose pull request was unlinked');
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme-orph',
+      number: 20,
+      headRef: `subtask/${item.identifier}-work`,
+      title: `A change (subtask/${item.identifier}-work)`,
+    });
+    await openPrIn(s, `subtask/${item.identifier}-work`, 20);
+    await ci(s, { conclusion: 'failure', headSha: 'sha-red', prNumbers: [20] });
+    expect(await ciStateOf(item.id)).toBe('failing');
+    await unlinkWithoutRecompute(item.id);
+    expect(await ciStateOf(item.id)).toBe('failing');
+
+    const first = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(first.changed).toEqual([
+      { workItemId: item.id, identifier: item.identifier, from: 'failing', to: null },
+    ]);
+    expect(first.failed).toEqual([]);
+    expect(await ciStateOf(item.id)).toBeNull();
+
+    // Converged: the card now stores `null`, so the third arm no longer reaches it.
+    const second = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(second.changed).toHaveLength(0);
+    expect(second.scanned).toBe(0);
+  });
+
+  it('clears a seeded `failing` on a card that never had a delivery row', async () => {
+    const s = await makeScenario('seeded@example.com', 'SEED');
+    const item = await makeCard(s, 'A card with a stale badge');
+    await setStoredCiState(item.id, 'failing');
+
+    const first = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(first.scanned).toBe(1);
+    expect(first.changed).toEqual([
+      { workItemId: item.id, identifier: item.identifier, from: 'failing', to: null },
+    ]);
+    expect(await ciStateOf(item.id)).toBeNull();
+
+    const second = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(second.changed).toHaveLength(0);
+  });
+
+  it('`--dry-run` predicts the `→ null` change and writes nothing', async () => {
+    const s = await makeScenario('dryorphan@example.com', 'DRYO');
+    const failing = await makeCard(s, 'A stale failing badge');
+    const passing = await makeCard(s, 'A stale passing badge');
+    await setStoredCiState(failing.id, 'failing');
+    await setStoredCiState(passing.id, 'passing');
+
+    const rehearsal = await workItemCiStateBackfillService.backfillCiState({ dryRun: true });
+    expect(rehearsal.changed).toHaveLength(2);
+    expect(rehearsal.changed).toEqual(
+      expect.arrayContaining([
+        { workItemId: failing.id, identifier: failing.identifier, from: 'failing', to: null },
+        { workItemId: passing.id, identifier: passing.identifier, from: 'passing', to: null },
+      ]),
+    );
+    expect(await ciStateOf(failing.id)).toBe('failing');
+    expect(await ciStateOf(passing.id)).toBe('passing');
+
+    const real = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(real.changed).toEqual(rehearsal.changed);
+    expect(await ciStateOf(failing.id)).toBeNull();
+    expect(await ciStateOf(passing.id)).toBeNull();
+  });
+
+  it('leaves an ARCHIVED card with a stale verdict and no delivery alone', async () => {
+    const s = await makeScenario('archorphan@example.com', 'ARCO');
+    const item = await makeCard(s, 'An archived card');
+    await setStoredCiState(item.id, 'failing');
+    await workItemsService.archiveWorkItem(item.id, s.ctx);
+
+    const report = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(report.scanned).toBe(0);
+    expect(report.changed).toEqual([]);
+    expect(await ciStateOf(item.id)).toBe('failing');
+  });
+
+  it('is one candidate when a card is reached by a delivery arm AND the stored-verdict arm', async () => {
+    const s = await makeScenario('both@example.com', 'BOTH');
+    const item = await makeCard(s, 'A linked card with a stale verdict');
+    await linkPrByIdentifier({
+      identifier: item.identifier,
+      owner: 'moooon',
+      name: 'acme-both',
+      number: 21,
+      headRef: `subtask/${item.identifier}-work`,
+      title: `A change (subtask/${item.identifier}-work)`,
+    });
+    await openPrIn(s, `subtask/${item.identifier}-work`, 21);
+    await ci(s, { conclusion: 'success', headSha: 'sha-green', prNumbers: [21] });
+    await setStoredCiState(item.id, 'failing');
+
+    const report = await workItemCiStateBackfillService.backfillCiState({ dryRun: false });
+    expect(report.total).toBe(1);
+    expect(report.changed).toEqual([
+      { workItemId: item.id, identifier: item.identifier, from: 'failing', to: 'passing' },
+    ]);
+  });
+
+  it('`--workspace=<id>` scopes the stored-verdict arm too', async () => {
+    const mine = await makeScenario('mineorphan@example.com', 'MINO');
+    const theirs = await makeScenario('theirsorphan@example.com', 'THRO');
+    const mineItem = await makeCard(mine, 'My stale badge');
+    const theirItem = await makeCard(theirs, 'Their stale badge');
+    await setStoredCiState(mineItem.id, 'failing');
+    await setStoredCiState(theirItem.id, 'failing');
+
+    const report = await workItemCiStateBackfillService.backfillCiState({
+      dryRun: false,
+      workspaceId: mine.workspace.id,
+    });
+    expect(report.changed.map((c) => c.workItemId)).toEqual([mineItem.id]);
+    expect(await ciStateOf(mineItem.id)).toBeNull();
+    expect(await ciStateOf(theirItem.id)).toBe('failing');
+  });
+});
+
 // MOTIR-5765 — the first PRODUCTION run (~1,957 candidates) was cancelled by its
 // 10-minute job timeout having printed NOTHING, because the report was only ever
 // written at the end. These pin the two halves of the repair at the service: a

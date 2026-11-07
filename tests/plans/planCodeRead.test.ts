@@ -38,6 +38,7 @@ describe('parsePlanCodeRead', () => {
       endLine: null,
       askedRef: 'main',
       query: `${'q'.repeat(PLAN_CODE_READ_FIELD_MAX.query - 1)}…`,
+      regex: null,
       commits: [{ sha: SHA.toLowerCase() }, { repo: 'web', sha: SHA.toLowerCase(), dirty: true }],
       outcome: 'found',
       lines: null,
@@ -53,12 +54,21 @@ describe('parsePlanCodeRead', () => {
     });
   });
 
+  it('keeps a code_grep read’s mode, true or false, and reads an absent or null one as null (MOTIR-10546)', () => {
+    const grep = { tool: 'code_grep', query: 'a|b', outcome: 'ok', hits: 0 };
+    expect(parsePlanCodeRead({ ...grep, regex: true }).regex).toBe(true);
+    expect(parsePlanCodeRead({ ...grep, regex: false }).regex).toBe(false);
+    expect(parsePlanCodeRead(grep).regex).toBeNull();
+    expect(parsePlanCodeRead({ ...grep, regex: null }).regex).toBeNull();
+  });
+
   it.each([
     ['a non-object read', 'nope', /must be an object\./],
     ['an array read', [], /must be an object\./],
     ['file text', { ...base, text: 'x' }, /never the code/],
     ['file content', { ...base, content: 'x' }, /never the code/],
     ['a non-string field', { ...base, path: 7 }, /\.path must be a string/],
+    ['a non-boolean regex', { ...base, regex: 'true' }, /\.regex must be a boolean/],
     ['a fractional count', { ...base, lines: 1.5 }, /\.lines must be an integer of at least 0/],
     [
       'a zero line number',
@@ -109,6 +119,7 @@ function dto(over: Partial<PlanCodeReadDto>): PlanCodeReadDto {
     endLine: null,
     askedRef: null,
     query: null,
+    regex: null,
     commits: [],
     outcome: 'ok',
     lines: null,
@@ -142,6 +153,24 @@ describe('summarizePlanCodeReads', () => {
     expect(text).toContain('Session s — lay:');
     expect(text).toContain('  #1 Read web a.ts:5- · at no commit resolved · ok');
     expect(text).toContain('  #2 Glob "**/*.ts" · at no commit resolved · ok (12 hits)');
+  });
+
+  it('names a code_grep read’s mode, and nothing for a read that recorded none (MOTIR-10546)', () => {
+    const text = summarizePlanCodeReads({
+      planId: 'p',
+      reads: [
+        dto({ tool: 'code_grep', path: 'tests', query: 'A|B', regex: false, hits: 0 }),
+        dto({ seq: 2, tool: 'code_grep', path: 'lib', query: 'A|B', regex: true, hits: 20 }),
+        dto({ seq: 3, tool: 'code_grep', query: 'A|B' }),
+      ],
+      sessions: [],
+      nextAfterSeq: null,
+    });
+    expect(text).toContain(
+      '#1 code_grep tests "A|B" (literal) · at no commit resolved · ok (0 hits)',
+    );
+    expect(text).toContain('#2 code_grep lib "A|B" (regex) · at no commit resolved · ok (20 hits)');
+    expect(text).toContain('#3 code_grep "A|B" · at no commit resolved · ok');
   });
 
   it('an empty middle page says "on this page"', () => {

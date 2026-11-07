@@ -1972,6 +1972,32 @@ export const workItemRepository = {
   },
 
   /**
+   * The ids of every NON-ARCHIVED card in one workspace that still STORES a CI
+   * verdict (`ciState` not null), whether or not anything delivers it — the
+   * CI-state backfill's third arm (MOTIR-10542).
+   *
+   * The two delivery arms reach a card only through a member of its delivery set.
+   * A card whose last link was removed before the unlink doors recomputed
+   * (MOTIR-5469, #2937) has NO member left, so it is exactly the card that needs
+   * `null` written and the one those arms can never reach. Reading the stored
+   * value is the only direction left to find it from.
+   *
+   * ⚠️ The caller must have BOUND the workspace — `work_item` has no
+   * `system_admin` arm, so an unbound read returns zero rows and raises nothing.
+   */
+  async listIdsWithStoredCiState(
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    const rows = await tx.workItem.findMany({
+      where: { workspaceId, archivedAt: null, ciState: { not: null } },
+      select: { id: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => r.id);
+  },
+
+  /**
    * The `fixReason` BACKFILL's candidates in one workspace (Story MOTIR-6588 ·
    * MOTIR-6603), ordered by id: every card whose status is in the `in_progress`
    * CATEGORY (archived ones INCLUDED, so the sweep can count its abstention), plus

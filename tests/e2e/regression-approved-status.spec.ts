@@ -348,7 +348,9 @@ test('a person moves a card to Approved, and the board, the counts and the paren
       // two places at once, that saying yes is not the same as shipping.
       const dependentCard = page.getByTestId(`board-card-${dependent.identifier}`);
       await expect(dependentCard).toBeVisible();
-      await expect(dependentCard.getByText('Blocked', { exact: true })).toBeVisible();
+      // The board's blocked flag (MOTIR-10534): its visible word is the short
+      // `blocked`, and its name, "Blocked", rides `aria-label` on `role="img"`.
+      await expect(dependentCard.getByRole('img', { name: 'Blocked', exact: true })).toBeVisible();
       await beat();
       await beat();
     },
@@ -380,9 +382,8 @@ test('a person moves a card to Approved, and the board, the counts and the paren
     await expectDerived(story.id, 'done', 'the parent story');
     await openBoard(page);
     await expect(page.getByTestId(`board-count-${approvedColumn.id}`)).toHaveText('0');
-    await expect(
-      page.getByTestId(`board-card-${dependent.identifier}`).getByText('Blocked', { exact: true }),
-    ).toHaveCount(0);
+    const unblockedCard = page.getByTestId(`board-card-${dependent.identifier}`);
+    await expect(unblockedCard.getByRole('img', { name: 'Blocked', exact: true })).toHaveCount(0);
     await beat();
     await beat();
   });

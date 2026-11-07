@@ -65,9 +65,6 @@ export interface UnreadableRunContext {
 
 export type RunContext = ReadableRunContext | UnreadableRunContext;
 
-const nonBlank = (v: string | null | undefined): boolean =>
-  typeof v === 'string' && v.trim().length > 0;
-
 /** The ref a node id carries on the wire: a proposal in this plan is
  *  `planItem:<id>`, anything else (a committed work item) is its identifier or id. */
 function refOfNode(
@@ -95,10 +92,10 @@ function toProposal(
     blockedByRefs: item.blockedByNodeIds.map((id) =>
       refOfNode(id, planItemIds, committedIdentifiers),
     ),
-    // "Has its body written": the same first test the progress counter applies.
-    // (The leaf-field refinement lives in `lib/plans/planProgress.ts`'s counter;
-    // the answering session only needs to tell a written item from a title.)
-    authored: item.op === 'add' && nonBlank(item.descriptionMd),
+    // "Written": the stored `authorFinished` alone (MOTIR-10496) — the same
+    // test the progress counter and `get_plan_authoring_state` apply, so the
+    // answering session cannot call a card written the plan surface does not.
+    authored: item.op === 'add' && item.authorFinished === true,
     descriptionMd: item.descriptionMd ?? null,
     explanationMd: item.explanationMd ?? null,
   };
