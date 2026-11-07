@@ -1342,6 +1342,13 @@ const reportPlanStepInputSchema = {
           .optional()
           .describe('The ref the call ASKED for (`main`) — a label, not what it was read at.'),
         query: z.string().optional().describe('A search’s query or pattern.'),
+        regex: z
+          .boolean()
+          .optional()
+          .describe(
+            'A `code_grep`’s mode: true when `query` was searched as a regular expression, ' +
+              'false when literally. Send it on every `code_grep` read.',
+          ),
         commits: z
           .array(
             z.object({

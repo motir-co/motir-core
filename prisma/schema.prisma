@@ -7998,6 +7998,10 @@ model PlanCodeRead {
   askedRef   String?  @map("asked_ref")
   /// A search's query or pattern.
   query      String?
+  /// A `code_grep`'s MODE: true searched `query` as a regular expression, false
+  /// literally (MOTIR-10546) — a literal zero and a regex zero are different
+  /// facts. NULL for every other tool, and for a row written before the field.
+  regex      Boolean?
   /// Every commit the read was made at, as `[{ repo?, sha, dirty? }]`: one for a
   /// file read, one per repository for a graph read across a set. `sha` is a
   /// resolved hex id, never a branch name; `dirty` marks a local checkout whose

@@ -5165,11 +5165,15 @@ report_plan_step({ planId, sessionKey: "author-3", narration: ["Splitting the ex
 **Record the session's code reads (MOTIR-10122).** Send `codeReads` (instead of
 `step`, and with no `target`) with the reads the session made, in the order it made
 them — at most 50 per call. Each is `{ tool, repo?, path?, startLine?, endLine?,
-askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+askedRef?, query?, regex?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
 detail? }`: what it asked, the commits it was read at, and how much came back,
 **never the code** (a read carrying `text` or `content` is refused, and every
 string is capped). `sha` is a RESOLVED commit id — 7 to 64 hex characters, never a
-branch name; a read whose ref resolved to nothing carries `commits: []`. A local
+branch name; a read whose ref resolved to nothing carries `commits: []`. A
+`code_grep` read sends `regex` — `true` when its pattern was searched as a regular
+expression, `false` when literally (MOTIR-10546): `code_grep` matches literally by
+default, so a literal `a|b` that found nothing says nothing about `a` or `b`, and
+only the mode lets a check tell that zero from a true absence. A local
 planner records its checkout's `HEAD` and marks `dirty: true` when the working
 tree had changes. Unlike narration, a code read needs NO step: plan.py's
 conversation session reads code before the plan exists, and posts its reads once
@@ -5441,14 +5445,16 @@ get_plan_code_reads({ planId, sessionKey?: "author-3", afterSeq?: 0, limit?: 500
 // → { planId,
 //     reads: [{ seq: 12, sessionKey: "author-3", tool: "read_file", repo: "acme/web",
 //               path: "lib/export.ts", startLine: 1, endLine: 80, askedRef: "main", query: null,
-//               commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
+//               regex: null, commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
 //               detail: null, createdAt: "…" }],
 //     sessions: [{ sessionKey: "author-3", stepKind: "author", targetRef: "planItem:…", targetTitle: "…" }],
 //     nextAfterSeq: null }
 ```
 
 `sessions` carries the step words of every session on the page (a session that
-never reported a step — plan.py's conversation — has none). Page with
+never reported a step — plan.py's conversation — has none). `regex` is a
+`code_grep` read's mode (`true` regex, `false` literal) and `null` for every other
+tool and for a read recorded before the field existed. Page with
 `afterSeq: nextAfterSeq` until it is `null`. `project:browse`, through the same
 reader gate as `get_plan`, on a plan in any status; read-only. Errors:
 `PLAN_NOT_FOUND` for an unknown or other-tenant plan.
