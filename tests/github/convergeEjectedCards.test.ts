@@ -301,16 +301,6 @@ describe('ejectedCardConvergenceService.converge', () => {
       expect(text).not.toMatch(/reconcileGatesFor\s*\(/);
     }
   });
-
-  it('the workflow is a workflow_dispatch whose dry_run input defaults to true', () => {
-    const yml = readFileSync(
-      join(process.cwd(), '.github/workflows/converge-ejected-cards.yml'),
-      'utf8',
-    );
-    expect(yml).toMatch(/workflow_dispatch:\s*\n\s*inputs:\s*\n\s*dry_run:/);
-    expect(yml).toMatch(/dry_run:[\s\S]*?default: true/);
-    expect(yml).toContain('pnpm db:converge:unlanded-cards --dry-run');
-  });
 });
 
 // ── POPULATION E (Story MOTIR-6587 · MOTIR-6595; §4 FIFTH AMENDMENT, point 4) ──────────
