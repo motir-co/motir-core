@@ -1227,10 +1227,32 @@ describe("an admitted index lands on an account of the INDEXER'S pool", () => {
     expect(await slotShard(fx, 'moooon/full')).toBeUndefined();
   });
 
-  it('no account at all with the switch on is also pool_full — never a Fly fallback', async () => {
+  it('no account at all with the switch on is no_index_account — an answer, never a Fly fallback (MOTIR-10600)', async () => {
     const verdict = await admit(await seedTenant(), 'moooon/empty');
-    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'pool_full' });
+    expect(verdict).toMatchObject({
+      outcome: 'deferred',
+      reason: 'no_index_account',
+      detail: expect.stringContaining('add-shard'),
+    });
     expect(await indexInFlight()).toBe(0);
+  });
+
+  it('an account still PROVISIONING is no account: no_index_account, nothing taken (MOTIR-10600)', async () => {
+    const pending = await account(4);
+    await adminDb.fleetShard.update({ where: { id: pending.id }, data: { state: 'provisioning' } });
+    const fx = await seedTenant();
+
+    const verdict = await admit(fx, 'moooon/provisioning');
+
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'no_index_account' });
+    expect(await indexInFlight()).toBe(0);
+    expect(await slotShard(fx, 'moooon/provisioning')).toBeUndefined();
+  });
+
+  it("another kind's live account does not count as the indexer's (MOTIR-10600)", async () => {
+    await account(4, 'ci_runner');
+    const verdict = await admit(await seedTenant(), 'moooon/other-kind');
+    expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'no_index_account' });
   });
 
   it("already_held answers the held slot's account; another dispatch waits", async () => {

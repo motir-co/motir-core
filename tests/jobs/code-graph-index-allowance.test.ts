@@ -179,7 +179,7 @@ describe('a HARD STOP pauses: nothing admitted, nothing booted, the reason recor
   ])(
     '%s → %s, as a SUCCEEDED no-op run',
     async (outcome, reason) => {
-      const admit = vi.spyOn(codeGraphIndexDispatchService, 'waitForAdmission');
+      const admit = vi.spyOn(codeGraphIndexDispatchService, 'admitIndexContainer');
       const { result, ctx } = await runIndex(`alw-${reason.slice(13, 20)}`, {
         checkOutcome: outcome,
       });

@@ -56,6 +56,7 @@ import {
 } from '@/lib/jobs/supervision/inProcessSteps';
 import {
   advanceSupervision,
+  deferQueuedAdmission,
   inMemorySupervisionStore,
   type SupervisionStore,
   type SupervisionTerminalReason,
@@ -946,6 +947,16 @@ function coreSpansOf(spans: Partial<Record<IndexCorePhase, number | undefined>>)
   return present.length === 0
     ? { phasesMs }
     : { phasesMs, totalMs: present.reduce((sum, ms) => sum + ms, 0) };
+}
+
+/**
+ * Is this admission refusal an ANSWER rather than a wait? No container finishing
+ * changes an organisation's plan (`ai_plan_required`, MOTIR-8235) or creates an
+ * indexer account (`no_index_account`, MOTIR-10600), so asking again changes
+ * nothing and the caller records a pause instead.
+ */
+function isAdmissionAnswer(reason: IndexAdmissionDeferralReason): boolean {
+  return reason === 'ai_plan_required' || reason === 'no_index_account';
 }
 
 function sleepFor(ms: number): Promise<void> {
@@ -2008,10 +2019,12 @@ export const codeGraphIndexDispatchService = {
    *     the boot from `job_step` and re-attaches to the same container — the
    *     property §13.2 records, bought exactly where it is bought today and
    *     nowhere twice.
-   *   • The ADMISSION BACKOFF is still INSIDE the admit step (§13.3(c)), not a
-   *     defer loop of its own. §16.6 decides that explicitly: a resume that
-   *     re-asked admission after the settle step had released the slot would be
-   *     granted a fresh one and never release it.
+   *   • The ADMISSION verdict is still ONE memoized step, `index-admit:`
+   *     (§13.3(c)'s ordering obligation). The BACKOFF inside it no longer
+   *     waits in process: each ask is memoized and the interval between asks
+   *     is a defer (`admitWithDurableBackoff`, MOTIR-10600, §16.6a), which
+   *     §16.6 had left in process until a measurement showed admission waits
+   *     contending the pool — 2026-11-07 is that measurement.
    *   • `indexPollWaitMs`, `INDEX_FLEET_TIME_BUDGETS` and
    *     `INDEX_ADMISSION_BUDGETS` are READ, never edited. The wait moves from an
    *     in-process `await` to a `run_at`; the numbers do not move at all.
@@ -2029,12 +2042,12 @@ export const codeGraphIndexDispatchService = {
     subject: string,
     options: IndexSupervisionOptions = {},
   ): Promise<IndexDispatchOutcome> {
-    const sleep = options.sleep ?? sleepFor;
     const steps = options.steps ?? INLINE_STEPS;
     const now = options.now ?? ((): Date => new Date());
 
     // ── 0 · QUEUE FOR ADMISSION — over the cap means WAIT, never drop ─────────
-    // ONE memoized step containing the whole backoff, unchanged (§13.3(c)).
+    // ONE memoized step holding the final verdict (§13.3(c)); the asks inside it
+    // are memoized one by one and the waits between them are defers (MOTIR-10600).
     //
     // ⚠️ THE TWO INSTANTS RIDE THE MEMO, AND THAT IS THE ONLY REASON THE SPAN
     // EXISTS (MOTIR-4413). `advanceIndexContainer` is re-entered from the top on
@@ -2046,14 +2059,21 @@ export const codeGraphIndexDispatchService = {
     // number. `session.bootedAt` is the shipped precedent for exactly this, and
     // this is the second instance of it rather than a new idea.
     //
-    // ⚠️ `waitForAdmission` ITSELF IS UNTOUCHED. The instants are taken around
-    // the call rather than inside it, because `IndexAdmissionVerdict` is the
-    // admission service's vocabulary and is asserted on by suites that have
-    // nothing to do with timing. The spread preserves `outcome`, `reason` and
-    // `admission`, so both branches below read exactly as they did.
+    // ⚠️ THE BACKOFF NO LONGER WAITS INSIDE THIS STEP (MOTIR-10600). Each ASK is
+    // its own memoized step and the interval between two asks is a `run_at`
+    // (`admitWithDurableBackoff`), so a queued run holds no worker slot while it
+    // waits. This step still memoizes the FINAL verdict, and that memo is what
+    // keeps §13.3(c)'s ordering: once it exists, every later pass replays it and
+    // never asks again, so a resume after the settle released the slot cannot be
+    // granted a fresh one. `requestedAt` is the FIRST ask's instant, read from
+    // its memo, so the span still measures the whole queue.
     const admitted = await steps.run(`index-admit:${subject}`, async () => {
-      const requestedAt = now().toISOString();
-      const verdict = await this.waitForAdmission(input, sleep, options);
+      const { verdict, requestedAt } = await this.admitWithDurableBackoff(
+        input,
+        subject,
+        steps,
+        options,
+      );
       return { ...verdict, requestedAt, admittedAt: now().toISOString() };
     });
     if (admitted.outcome === 'deferred') {
@@ -2240,24 +2260,6 @@ export const codeGraphIndexDispatchService = {
   },
 
   /**
-   * Ask for admission until it is granted or the waiting budget runs out — the
-   * IN-PROCESS half of "over the cap means WAIT, never drop" (MOTIR-1990).
-   *
-   * ⚠️ THERE IS NO LONGER A SECOND, STEPPED COPY OF THIS LOOP (MOTIR-3484). This
-   * comment used to say the production path was `lib/jobs/indexFleetSteps.ts`
-   * implementing the same loop with `ctx.step.sleep`, "which costs no
-   * invocation" — true of Vercel's `maxDuration = 300`, and true of nothing
-   * since MOTIR-2384. `admitWithBackoff` is gone from that file, and this loop is
-   * what every caller drives; {@link runIndexContainer} wraps the WHOLE of it in
-   * ONE memoized step, so a resumed run replays the granted admission rather than
-   * re-asking for it after its slot was released (MOTIR-3482 §13.3(c)).
-   *
-   * A `gate_unavailable` deferral is retried like any other: the gate failing
-   * closed is a transient it must be allowed to recover from, and refusing to
-   * wait on it would turn one bad read into a dropped index — the outcome the
-   * whole rule exists to forbid.
-   */
-  /**
    * After an admitted account refused the provision for capacity (or could not
    * be reached), pause it and admit again (MOTIR-9451). The pause is what makes
    * this finite: each refusal takes one account out of the choice for
@@ -2299,11 +2301,11 @@ export const codeGraphIndexDispatchService = {
         },
       };
     }
-    const verdict = await codeGraphIndexDispatchService.waitForAdmission(
-      input,
-      options.sleep ?? sleepFor,
-      options,
-    );
+    // ONE ask, never a wait (MOTIR-10600): this runs inside the `index-boot` step,
+    // where an in-process backoff would hold a worker slot for up to an hour. A
+    // deferral ends the boot as `admission_deferred`, which the index job records
+    // as a pause the catch-up sweep lifts once the pool has room.
+    const verdict = await codeGraphIndexDispatchService.admitIndexContainer(input, options);
     if (verdict.outcome === 'deferred') {
       return {
         phase: 'terminal',
@@ -2316,43 +2318,93 @@ export const codeGraphIndexDispatchService = {
     });
   },
 
-  async waitForAdmission(
+  /**
+   * Ask for admission until it is granted, refused for good, or the waiting
+   * budget runs out — "over the cap means WAIT, never drop" (MOTIR-1990), with
+   * the WAIT spent as a `run_at` rather than inside a worker slot (MOTIR-10600).
+   *
+   * ⚠️ EACH ASK IS ITS OWN MEMOIZED STEP, `index-admit-try:<subject>:<n>`, and
+   * the interval between two asks is {@link deferQueuedAdmission}. A pass
+   * replays the asks already answered — a replayed refusal was waited out, so
+   * it is simply the next attempt's cue — and makes at most ONE new ask. A fresh
+   * refusal with attempts left gives the run back to the queue at the instant
+   * `indexAdmissionWaitMs` names, so the budget (`INDEX_ADMISSION_BUDGETS`) and
+   * the cadence are unchanged; only WHERE the wait is spent moved. Until
+   * 2026-11-07 it was an in-process `sleep` inside `index-admit:`, about 57
+   * minutes, and ten queued refreshes held all ten of the worker's slots, so no
+   * other job and no cron fire ran (`docs/decisions/job-queue-foundation.md`
+   * §16.6a).
+   *
+   * ⚠️ IT RUNS INSIDE THE `index-admit:<subject>` STEP, and that is what keeps
+   * §13.3(c)'s ordering obligation: the outer memo is written only once this
+   * returns, after which no pass reaches here again. An ask that WAS granted is
+   * memoized too, so a crash between the grant and the outer memo replays the
+   * grant instead of asking again — and an ask repeated anyway is answered
+   * `already_held`, because the slot is owned by the dispatch.
+   *
+   * Two refusals are answers, not waits, and end the loop on the first ask:
+   * `ai_plan_required` (MOTIR-8235 — no container finishing changes an
+   * organisation's plan) and `no_index_account` (MOTIR-10600 — no container
+   * finishing creates an account). The caller records both as pauses that the
+   * catch-up sweep re-asks about. Every other deferral, `gate_unavailable` and
+   * `plan_unknown` included, is a transient that a later ask can clear.
+   *
+   * In-process callers ({@link runIndexContainer}) drive the defer as a wait
+   * through `driveSupervisionInProcess`, with their own `sleep` and `now`.
+   */
+  async admitWithDurableBackoff(
     input: IndexDispatchInput,
-    sleep: (ms: number) => Promise<void>,
+    subject: string,
+    steps: SupervisionSteps,
     options: IndexSupervisionOptions = {},
-  ): Promise<
-    | Extract<IndexAdmissionVerdict, { outcome: 'admitted' | 'already_held' }>
-    | Extract<IndexAdmissionVerdict, { outcome: 'deferred' }>
-  > {
+  ): Promise<{
+    verdict:
+      | Extract<IndexAdmissionVerdict, { outcome: 'admitted' | 'already_held' }>
+      | Extract<IndexAdmissionVerdict, { outcome: 'deferred' }>;
+    requestedAt: string;
+  }> {
+    const now = options.now ?? ((): Date => new Date());
     const attempts = Math.min(
       options.maxAdmissionAttempts ?? MAX_ADMISSION_ATTEMPTS,
       MAX_ADMISSION_ATTEMPTS,
     );
-    let last: Extract<IndexAdmissionVerdict, { outcome: 'deferred' }> = {
-      outcome: 'deferred',
-      reason: 'gate_unavailable',
-      detail: 'admission was never attempted',
-    };
-    for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const verdict = await this.admitIndexContainer(input, options);
-      if (verdict.outcome !== 'deferred') return verdict;
-      // ⚠️ `ai_plan_required` IS AN ANSWER, NOT A BUSY FLEET (MOTIR-8235). Every
-      // other deferral is a count that a finishing container changes, so waiting
-      // is how it clears. The org's plan is not: the gate read it and said no,
-      // and asking sixty more times over the next hour changes nothing — that
-      // wait used to end in an `IndexDispatchFailedError` the monitor filed as a
-      // production error. Returned on the first refusal; the caller turns it
-      // into a recorded pause, and the catch-up sweep asks again later.
-      // `plan_unknown` stays on the wait: an unreadable plan is a transient.
-      if (verdict.reason === 'ai_plan_required') return verdict;
-      last = verdict;
-      // No wait after the LAST attempt — nothing would observe it.
-      if (attempt < attempts) await sleep(indexAdmissionWaitMs(attempt, options));
+    let requestedAt: string | null = null;
+    for (let attempt = 1; ; attempt += 1) {
+      // Whether THIS pass made the ask, or replayed one an earlier pass made.
+      let askedNow = false;
+      const { askedAt, ...verdict } = await steps.run(
+        `index-admit-try:${subject}:${attempt}`,
+        async () => {
+          askedNow = true;
+          return {
+            ...(await this.admitIndexContainer(input, options)),
+            askedAt: now().toISOString(),
+          };
+        },
+      );
+      requestedAt ??= askedAt;
+      if (verdict.outcome !== 'deferred' || isAdmissionAnswer(verdict.reason)) {
+        return { verdict, requestedAt };
+      }
+      if (attempt >= attempts) {
+        return {
+          verdict: {
+            ...verdict,
+            detail: `index admission was refused for ${attempts} attempts (${verdict.reason}): ${verdict.detail}`,
+          },
+          requestedAt,
+        };
+      }
+      // A refusal THIS pass received ends the pass: the run goes back to the queue,
+      // due at the next attempt's instant. A REPLAYED refusal was already waited
+      // out (that is why this pass is running), so it is the cue for the next ask.
+      if (askedNow) {
+        deferQueuedAdmission(
+          new Date(Date.parse(askedAt) + indexAdmissionWaitMs(attempt, options)),
+          `index admission for ${input.repoRef} deferred (${verdict.reason}), attempt ${attempt} of ${attempts}`,
+        );
+      }
     }
-    return {
-      ...last,
-      detail: `index admission was refused for ${attempts} attempts (${last.reason}): ${last.detail}`,
-    };
   },
 };
 

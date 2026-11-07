@@ -914,6 +914,29 @@ describe('the in-process composition QUEUES for admission rather than dropping',
     expect(vi.mocked(codeGraphIndexAdmissionService.admit)).toHaveBeenCalledTimes(1);
   });
 
+  // MOTIR-10600: an organisation's plan is not the only thing waiting cannot
+  // change. With the indexer on its pool and no live account in it, no container
+  // finishing creates one — so it is answered on the first ask too.
+  it('returns a no_index_account refusal on the FIRST ask, without waiting', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValue({
+      outcome: 'deferred',
+      reason: 'no_index_account',
+      detail: 'the pool has no live code_graph_index account',
+    });
+    const sleep = vi.fn(async () => {});
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      sleep,
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'admission_deferred', reason: 'no_index_account' });
+    expect((outcome as { detail: string }).detail).not.toContain('refused for');
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
   it('backs the retry off, and never past its ceiling', () => {
     const opts = { admissionWaitMs: 5_000, maxAdmissionWaitMs: 60_000 };
     expect(indexAdmissionWaitMs(1, opts)).toBe(5_000);
@@ -2400,5 +2423,136 @@ describe('the sync/rebuild MODE survives a JobRunDefer (MOTIR-4945)', () => {
     expect(out).not.toHaveProperty('indexMode');
     // The spans beside it are unaffected — the two channels are independent.
     expect(out.coreTimings).toBeDefined();
+  });
+});
+
+// ── MOTIR-10600: the admission wait is a DEFER between asks, never a sleep ────
+
+describe('a queued admission waits as a run_at, not inside its worker slot (MOTIR-10600)', () => {
+  const CENSUS = {
+    total: 1,
+    byWorkload: { ci_runner: 0, code_graph_index: 1, hosted_agent: 0, agent_instance: 0 },
+  };
+  const CAP = {
+    outcome: 'deferred',
+    reason: 'index_cap',
+    detail: 'indexing is at its global cap (6/6)',
+  } as const;
+
+  /** One pass of the job: the handler, re-entered from the top with the run's memo. */
+  async function pass(memo: Map<string, unknown>, clock: { ms: number }, sleep = vi.fn()) {
+    return codeGraphIndexDispatchService.advanceIndexContainer('run-durable', INPUT, {
+      ...FAST,
+      admissionWaitMs: 5_000,
+      maxAdmissionWaitMs: 60_000,
+      steps: memoizingSeam(memo),
+      supervisionStore: inMemorySupervisionStore(),
+      now: () => new Date(clock.ms),
+      sleep,
+    });
+  }
+
+  it('a refusal gives the run back to the queue at the backoff instant, holding nothing', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValue(CAP);
+    const memo = new Map<string, unknown>();
+    const clock = { ms: Date.parse('2026-11-07T20:45:00.000Z') };
+    const sleep = vi.fn();
+
+    const err = await pass(memo, clock, sleep).catch((e: unknown) => e);
+
+    expect(isJobRunDefer(err)).toBe(true);
+    expect((err as { resumeAt: Date }).resumeAt.toISOString()).toBe('2026-11-07T20:45:05.000Z');
+    // It asked ONCE, slept NEVER, and memoized the ask — not a verdict.
+    expect(vi.mocked(codeGraphIndexAdmissionService.admit)).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+    expect([...memo.keys()]).toEqual(['index-admit-try:proj-1:1']);
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+  });
+
+  it('each later pass replays the refusals already given and asks exactly once more', async () => {
+    const admit = vi.mocked(codeGraphIndexAdmissionService.admit);
+    admit.mockResolvedValue(CAP);
+    const memo = new Map<string, unknown>();
+    const clock = { ms: Date.parse('2026-11-07T20:45:00.000Z') };
+
+    const resumes: string[] = [];
+    for (let n = 1; n <= 3; n += 1) {
+      const err = await pass(memo, clock).catch((e: unknown) => e);
+      expect(isJobRunDefer(err), `pass ${n} defers`).toBe(true);
+      expect(admit).toHaveBeenCalledTimes(n);
+      const resumeAt = (err as { resumeAt: Date }).resumeAt;
+      resumes.push(resumeAt.toISOString());
+      clock.ms = resumeAt.getTime();
+    }
+    // The shipped cadence, unchanged — 5 s, then 10 s, then 20 s.
+    expect(resumes).toEqual([
+      '2026-11-07T20:45:05.000Z',
+      '2026-11-07T20:45:15.000Z',
+      '2026-11-07T20:45:35.000Z',
+    ]);
+  });
+
+  it('a grant after refusals boots, and the queue span starts at the FIRST ask', async () => {
+    const admit = vi.mocked(codeGraphIndexAdmissionService.admit);
+    admit
+      .mockResolvedValueOnce(CAP)
+      .mockResolvedValueOnce(CAP)
+      .mockResolvedValue({ outcome: 'admitted', admission: ADMISSION, census: CENSUS });
+    const memo = new Map<string, unknown>();
+    const start = Date.parse('2026-11-07T20:45:00.000Z');
+    const clock = { ms: start };
+
+    for (let n = 0; n < 2; n += 1) {
+      const err = await pass(memo, clock).catch((e: unknown) => e);
+      clock.ms = (err as { resumeAt: Date }).resumeAt.getTime();
+    }
+    await pass(memo, clock).catch((e: unknown) => {
+      if (!isJobRunDefer(e)) throw e;
+    });
+
+    expect(admit).toHaveBeenCalledTimes(3);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+    const verdict = memo.get('index-admit:proj-1') as { requestedAt: string; admittedAt: string };
+    expect(verdict.requestedAt).toBe(new Date(start).toISOString());
+    expect(Date.parse(verdict.admittedAt) - start).toBe(15_000);
+  });
+
+  it('once the verdict is memoized no pass asks again — the ordering §13.3(c) needs', async () => {
+    const admit = vi.mocked(codeGraphIndexAdmissionService.admit);
+    admit.mockResolvedValue({ outcome: 'admitted', admission: ADMISSION, census: CENSUS });
+    const memo = new Map<string, unknown>();
+    const clock = { ms: Date.parse('2026-11-07T20:45:00.000Z') };
+
+    await pass(memo, clock).catch((e: unknown) => {
+      if (!isJobRunDefer(e)) throw e;
+    });
+    clock.ms += 60_000;
+    await pass(memo, clock).catch((e: unknown) => {
+      if (!isJobRunDefer(e)) throw e;
+    });
+
+    expect(admit).toHaveBeenCalledTimes(1);
+    expect(fakeOrchestrator.provisioned).toHaveLength(1);
+  });
+
+  it('in process, the defer becomes a sleep of exactly the backoff interval', async () => {
+    vi.mocked(codeGraphIndexAdmissionService.admit).mockResolvedValueOnce(CAP);
+    const clock = { ms: Date.parse('2026-11-07T20:45:00.000Z') };
+    const slept: number[] = [];
+
+    const outcome = await codeGraphIndexDispatchService.runIndexContainer(INPUT, {
+      ...FAST,
+      admissionWaitMs: 5_000,
+      maxAdmissionWaitMs: 60_000,
+      now: () => new Date(clock.ms),
+      sleep: async (ms: number) => {
+        slept.push(ms);
+        clock.ms += ms;
+        await completeWith(0)();
+      },
+    });
+
+    expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
+    expect(slept[0]).toBe(5_000);
   });
 });

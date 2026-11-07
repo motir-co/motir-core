@@ -553,16 +553,18 @@ export class JobWorker {
   async tick(): Promise<number> {
     if (this.draining) return 0;
 
-    // ⚠️ CAPACITY IS CHECKED FIRST, BEFORE THE SCHEDULER AND BEFORE THE RECLAIM.
-    // A tick that cannot claim should not spend two statements discovering it —
-    // and `claimDueRuns` must not be called with a non-positive limit, which is
-    // what "claiming into nothing" would mean.
-    const capacity = this.freeCapacity;
-    if (capacity <= 0) return 0;
-
     // The SCHEDULER, before anything else (MOTIR-3471): a cron fire it enqueues
     // is then claimed by the very same tick. Guarded because a scheduling failure
     // must not stop the worker claiming — see the option's own comment.
+    //
+    // ⚠️ AND BEFORE THE CAPACITY CHECK, BECAUSE A FULL POOL MUST NOT STOP THE
+    // CLOCK (MOTIR-10600). Writing a due fire is not claiming it: the fire waits
+    // in `job_queue` for a slot like any other row. With the check first, ten
+    // runs that held every slot also froze every cron job — the missed-close
+    // replay among them — for as long as they held it (2026-11-07, 36 minutes). A
+    // saturated loop re-ticks every `idleMaxMs` at most (`waitForSlot`), and a
+    // tick with nothing owed writes nothing (`scheduler.ts`), so this costs one
+    // bounded, idempotent pass per interval.
     if (this.onSchedulerTick) {
       try {
         await this.onSchedulerTick();
@@ -570,6 +572,13 @@ export class JobWorker {
         this.log.error('[job-worker] scheduler tick failed; continuing to claim', err);
       }
     }
+
+    // ⚠️ CAPACITY IS CHECKED BEFORE THE RECLAIM AND THE CLAIM. A tick that cannot
+    // claim should not spend two statements discovering it — and `claimDueRuns`
+    // must not be called with a non-positive limit, which is what "claiming into
+    // nothing" would mean.
+    const capacity = this.freeCapacity;
+    if (capacity <= 0) return 0;
 
     // Reclaim first: a run abandoned by a dead worker is due work, and doing
     // this before the claim means it is picked up in the SAME tick rather than

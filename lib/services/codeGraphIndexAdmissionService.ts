@@ -1,3 +1,4 @@
+import type { Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { fleetInFlightSlotRepository as slots } from '@/lib/repositories/fleetInFlightSlotRepository';
 import {
@@ -105,6 +106,10 @@ wireFleetKindSwitch(CODE_GRAPH_INDEX_WORKLOAD, indexFleetOnPool);
 const INDEX_POOL_FULL_DETAIL =
   "every account of the indexer's pool is full — the index waits for a container to finish";
 
+/** What a `no_index_account` deferral says. */
+const INDEX_NO_ACCOUNT_DETAIL =
+  'the indexer is switched onto its AWS pool, and the pool has no live code_graph_index account — add one with fleet-admin add-shard';
+
 /**
  * How much longer than the container's own hard kill the slot keeps counting.
  *
@@ -122,7 +127,7 @@ export type IndexAdmissionDeferralReason =
   /** The organisation has no paid AI plan, or it could not be read (MOTIR-6909).
    *  ⚠️ `ai_plan_required` is the ONE reason here that does not mean wait
    *  (MOTIR-8235): no container finishing changes an organisation's plan, so
-   *  `waitForAdmission` returns it on the first refusal and the index job
+   *  `admitWithDurableBackoff` returns it on the first refusal and the index job
    *  records it as a pause. `plan_unknown` is a transient and waits. */
   | 'ai_plan_required'
   | 'plan_unknown'
@@ -141,6 +146,13 @@ export type IndexAdmissionDeferralReason =
   /** The indexer is on its pool of accounts and every one of them is full,
    *  paused or empty (MOTIR-9445). The index waits; it is never sent to Fly. */
   | 'pool_full'
+  /** The indexer is on its pool and the pool has NO live account of the kind —
+   *  none created, or none past `provisioning` (MOTIR-10600). ⚠️ Like
+   *  `ai_plan_required`, NOT a wait: no container finishing creates an account,
+   *  so the dispatch returns it on the first refusal and the index job records
+   *  a capacity pause that the catch-up sweep lifts once an account can take
+   *  the index. */
+  | 'no_index_account'
   /** The operator's kill switch is engaged (`MOTIR_FLEET_MAX_IN_FLIGHT=0`). */
   | 'fleet_ceiling'
   /** The gate itself could not decide. FAIL-CLOSED: an unestablished count is
@@ -314,6 +326,22 @@ export function indexSlotRef(projectId: string, repoRef: string): string {
 
 export const codeGraphIndexAdmissionService = {
   /**
+   * Does the indexer pool hold ANY live (`active`) account of the kind — a
+   * primary, a spare or an organisation's own (MOTIR-10600)? Read only after the
+   * placement deferred, to tell a FULL pool (wait) from an EMPTY one (pause). A
+   * `provisioning` account is not live: it takes no index until `add-shard`
+   * marks it active, so a pool holding only that is empty for this question.
+   */
+  async poolHasLiveAccountInTx(tx: Prisma.TransactionClient): Promise<boolean> {
+    const live = await fleetShardRepository.listActiveForKindInTx(
+      CODE_GRAPH_INDEX_WORKLOAD,
+      ['primary', 'spare', 'org_owned'],
+      tx,
+    );
+    return live.length > 0;
+  },
+
+  /**
    * Decide whether ONE index container may boot, and TAKE its slot if so.
    *
    * The take is part of the decision rather than a step the caller performs
@@ -448,6 +476,19 @@ export const codeGraphIndexAdmissionService = {
           tx,
         );
         if ('deferred' in placement) {
+          // ⚠️ AN EMPTY POOL IS NOT A FULL ONE (MOTIR-10600). With no live
+          // account of the kind anywhere — shared, spare or org-owned — waiting
+          // cannot end in an admission, so it is named apart and never waited on.
+          if (
+            !placement.own &&
+            !(await codeGraphIndexAdmissionService.poolHasLiveAccountInTx(tx))
+          ) {
+            return {
+              outcome: 'deferred' as const,
+              reason: 'no_index_account' as const,
+              detail: INDEX_NO_ACCOUNT_DETAIL,
+            };
+          }
           return {
             outcome: 'deferred' as const,
             reason: 'pool_full' as const,

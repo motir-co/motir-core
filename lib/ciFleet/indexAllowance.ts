@@ -56,10 +56,27 @@ export const AI_PLAN_INDEX_PAUSE_REASON: IndexPauseReason = 'paused_index_ai_pla
  *  list it as a stopped organisation. The repository is waiting, not refused. */
 export const INDEX_POOL_FULL_PAUSE_REASON: IndexPauseReason = 'paused_index_pool_full';
 
-/** Is this recorded pause a full indexer pool rather than an allowance or plan
- *  stop? The one comparison — no caller compares the strings. */
-export function isPoolFullPause(reason: string | null | undefined): boolean {
-  return reason === INDEX_POOL_FULL_PAUSE_REASON;
+/** The pause recorded when the indexer is switched onto its pool and the pool
+ *  has NO live account of the kind at all (MOTIR-10600) — nothing to be full.
+ *  The same kind of state as {@link INDEX_POOL_FULL_PAUSE_REASON}: Motir's
+ *  capacity, not the organisation's stop, lifted by the catch-up sweep once an
+ *  account can take the index. Named apart so the row says WHY the pool has no
+ *  room: an account nobody has created yet is not a busy fleet. */
+export const INDEX_NO_ACCOUNT_PAUSE_REASON: IndexPauseReason = 'paused_index_no_indexer_account';
+
+/** Every pause that is Motir's indexer CAPACITY rather than the organisation's
+ *  allowance or plan — the set the allowance surfaces exclude and the catch-up
+ *  sweep lifts by reading the pool. */
+export const INDEX_CAPACITY_PAUSE_REASONS: readonly IndexPauseReason[] = [
+  INDEX_POOL_FULL_PAUSE_REASON,
+  INDEX_NO_ACCOUNT_PAUSE_REASON,
+];
+
+/** Is this recorded pause Motir's indexer capacity (a full pool, or a pool with
+ *  no account) rather than an allowance or plan stop? The one comparison — no
+ *  caller compares the strings. */
+export function isIndexCapacityPause(reason: string | null | undefined): boolean {
+  return reason != null && (INDEX_CAPACITY_PAUSE_REASONS as readonly string[]).includes(reason);
 }
 
 const HARD_STOP_PREFIX = 'hard_stop_';

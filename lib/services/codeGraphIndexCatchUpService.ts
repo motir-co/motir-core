@@ -2,7 +2,7 @@ import { checkIndexAllowance } from '@/lib/ai/motirAiClient';
 import { deriveCodeGraphIndexState, hasBuiltGraph } from '@/lib/codeGraph/indexState';
 import {
   isIndexHardStop,
-  isPoolFullPause,
+  isIndexCapacityPause,
   type IndexAllowanceVerdict,
 } from '@/lib/ciFleet/indexAllowance';
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
@@ -183,8 +183,8 @@ export const codeGraphIndexCatchUpService = {
     for (const [organizationId, repos] of byOrganization) {
       // ONE allowance ask, and only when a row of this organisation is paused by
       // the allowance; ONE pool read, only when a row is paused by a full pool.
-      const allowancePaused = repos.some((repo) => !isPoolFullPause(repo.indexPausedReason));
-      const poolPaused = repos.some((repo) => isPoolFullPause(repo.indexPausedReason));
+      const allowancePaused = repos.some((repo) => !isIndexCapacityPause(repo.indexPausedReason));
+      const poolPaused = repos.some((repo) => isIndexCapacityPause(repo.indexPausedReason));
 
       let blanket: IndexCatchUpOutcome | null = null;
       if (allowancePaused) {
@@ -214,7 +214,7 @@ export const codeGraphIndexCatchUpService = {
       for (const repo of repos) {
         const repoRef = `${repo.owner}/${repo.name}`;
         const outcome =
-          (isPoolFullPause(repo.indexPausedReason) ? poolBlanket : blanket) ??
+          (isIndexCapacityPause(repo.indexPausedReason) ? poolBlanket : blanket) ??
           catchUpActionFor(repo);
         const data: CodeGraphIndexData = {
           installationId: repo.hostInstallationId,
