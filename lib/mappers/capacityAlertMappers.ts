@@ -4,7 +4,11 @@ import {
   isCapacityLimitUnit,
   isCapacityProvider,
 } from '@/lib/capacity/alertKeys';
-import type { CapacityAlertShareDTO, CapacityRaisedAlertDTO } from '@/lib/dto/capacityAlerts';
+import type {
+  CapacityAlertShareDTO,
+  CapacityRaisedAlertDTO,
+  GatewaySaturationRaisedAlertDTO,
+} from '@/lib/dto/capacityAlerts';
 
 /** The stored setting (or none) → its DTO. `updatedByUserId` is never copied. */
 export function toCapacityAlertShareDTO(row: CapacityAlertSetting | null): CapacityAlertShareDTO {
@@ -28,6 +32,18 @@ export function toCapacityRaisedAlertDTO(row: CapacityRaisedAlert): CapacityRais
     provider: row.provider,
     model: row.model,
     limitUnit: row.limitUnit,
+    raisedAt: row.raisedAt,
+    observedValue: safeNumber(row.observedValue),
+    limitValue: safeNumber(row.limitValue),
+    alertSharePercent: row.alertSharePercent,
+  };
+}
+
+/** The gateway-saturation row → its DTO (MOTIR-9675). */
+export function toGatewaySaturationRaisedAlertDTO(
+  row: CapacityRaisedAlert,
+): GatewaySaturationRaisedAlertDTO {
+  return {
     raisedAt: row.raisedAt,
     observedValue: safeNumber(row.observedValue),
     limitValue: safeNumber(row.limitValue),

@@ -10,6 +10,15 @@ export interface CapacityAlertShareDTO {
   updatedAt: Date | null;
 }
 
+/** The raised gateway-saturation alert (MOTIR-9675): connections in use over
+ *  created machines × hard limit, as they stood when it was raised. */
+export interface GatewaySaturationRaisedAlertDTO {
+  raisedAt: Date;
+  observedValue: number;
+  limitValue: number;
+  alertSharePercent: number;
+}
+
 export interface CapacityRaisedAlertDTO {
   provider: CapacityProvider;
   model: string;

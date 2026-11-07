@@ -10,7 +10,13 @@ import {
 } from '@/app/(admin)/admin/capacity/_components/CapacityScreen';
 import { CAPACITY_SCREEN_REFRESH_MS } from '@/lib/capacity/screenRefresh';
 import type { PlatformCapacityViewDTO } from '@/lib/dto/platformCapacity';
-import { READ_AT, liveView, storeDownView } from '../../fixtures/capacityViewFixtures';
+import {
+  READ_AT,
+  liveView,
+  saturationNotConfigured,
+  saturationOver,
+  storeDownView,
+} from '../../fixtures/capacityViewFixtures';
 
 /**
  * The CAPACITY SCREEN island (MOTIR-9614, design `platform-admin` AMENDMENT
@@ -212,6 +218,42 @@ describe('the raised-alerts banner', () => {
     render(liveView());
     expect(screen.queryByTestId('capacity-raised-alerts')).toBeNull();
     expect(screen.queryByText(/over the alert share/)).toBeNull();
+  });
+});
+
+describe('the gateway-saturation row (MOTIR-9675)', () => {
+  it('with no source wired, reads unavailable: no figure, no share, and says why', () => {
+    render(liveView({ saturation: saturationNotConfigured() }));
+    const card = screen.getByTestId('capacity-gateway-saturation');
+    expect(card.textContent).toContain('Gateway saturation');
+    expect(card.textContent).toContain('Alerts at 70 %');
+    expect(card.textContent).toContain('No source for these numbers is connected yet');
+    expect(within(card).getByTestId('saturation-connections').textContent).toBe('Unavailable');
+    expect(within(card).getByTestId('saturation-machines').textContent).toBe('Unavailable');
+    expect(within(card).getByTestId('saturation-hard-limit').textContent).toBe('Unavailable');
+    expect(within(card).getByTestId('saturation-share').textContent).toBe('—');
+    expect(screen.queryByTestId('capacity-raised-alerts')).toBeNull();
+  });
+
+  it('shows connections, created machines, hard limit and the share of their product', () => {
+    render(liveView({ saturation: { ...saturationOver(), raised: null } }));
+    const card = screen.getByTestId('capacity-gateway-saturation');
+    expect(within(card).getByTestId('saturation-connections').textContent).toBe('6,300');
+    expect(within(card).getByTestId('saturation-machines').textContent).toBe('12');
+    expect(within(card).getByTestId('saturation-hard-limit').textContent).toBe('750');
+    expect(within(card).getByTestId('saturation-share').textContent).toContain('70 % of 9,000');
+    expect(card.textContent).toContain('Over alert share');
+    expect(card.textContent).not.toContain('No source');
+  });
+
+  it('a raised saturation alert is a line in the raised-alerts banner', () => {
+    render(liveView({ saturation: saturationOver() }));
+    const banner = screen.getByRole('alert');
+    expect(banner.textContent).toContain('1 limit is over the alert share');
+    expect(within(banner).getByTestId('capacity-raised-saturation').textContent).toContain(
+      'motir-gateway · connections — 70 % of created machines × hard limit',
+    );
+    expect(banner.textContent).toContain('raised since 11:58 UTC');
   });
 });
 

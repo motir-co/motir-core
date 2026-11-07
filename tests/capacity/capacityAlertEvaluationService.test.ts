@@ -213,3 +213,94 @@ describe('robustness and privacy', () => {
     vi.unstubAllEnvs();
   });
 });
+
+// THE GATEWAY-SATURATION SERIES (MOTIR-9675, design D6): judged from its own
+// reading beside the provider limits, raised and cleared under its one key.
+describe('gateway saturation', () => {
+  const reading = (connectionsInUse: number | null) =>
+    ({ outcome: 'answered', connectionsInUse, createdMachines: 12, hardLimit: 750 }) as const;
+  const notConfigured = { outcome: 'unavailable', reason: 'not_configured' } as const;
+  const read = answered([concurrency(10, 100)]);
+  const saturationRows = async () => (await rows()).filter((r) => r.provider === 'gateway');
+
+  it('raises once at 70 % with one fingerprinted alert, and does not re-alert while over', async () => {
+    const result = await service.evaluate({ read, saturation: reading(6300) });
+    expect(result.saturation.judgement.state).toBe('over_share');
+    expect(result.saturation.raised).toMatchObject({
+      observedValue: 6300,
+      limitValue: 9000,
+      alertSharePercent: 70,
+    });
+    expect(captureException).toHaveBeenCalledTimes(1);
+    const [error, context] = captureException.mock.calls[0] as [Error, Record<string, unknown>];
+    expect(context['fingerprint']).toEqual(['capacity-gateway-saturation']);
+    expect(error.message).toBe(
+      'motir-gateway: 6300 connections in use is 70% of 9000 (created machines × hard limit; alert at 70%)',
+    );
+    // Not a provider alert: the provider list and the gone-entry sweep never see it.
+    expect(result.raised).toEqual([]);
+
+    await service.evaluate({ read, saturation: reading(8000) });
+    expect(captureException).toHaveBeenCalledTimes(1);
+    expect(await saturationRows()).toHaveLength(1);
+  });
+
+  it('is cleared by a later normal or near-limit reading', async () => {
+    await service.evaluate({ read, saturation: reading(7000) });
+    const near = await service.evaluate({ read, saturation: reading(6000) });
+    expect(near.saturation.judgement.state).toBe('near_limit');
+    expect(near.saturation.raised).toBeNull();
+    expect(await saturationRows()).toHaveLength(0);
+
+    await service.evaluate({ read, saturation: reading(7000) });
+    await service.evaluate({ read, saturation: reading(700) });
+    expect(await saturationRows()).toHaveLength(0);
+    expect(captureException).toHaveBeenCalledTimes(2);
+  });
+
+  it('an unavailable reading neither raises nor clears', async () => {
+    await service.evaluate({ read, saturation: reading(7000) });
+    for (const saturation of [notConfigured, reading(null)] as const) {
+      const result = await service.evaluate({ read, saturation });
+      expect(result.saturation.judgement.state).toBe('unavailable');
+      expect(result.saturation.raised).not.toBeNull();
+    }
+    expect(await saturationRows()).toHaveLength(1);
+    expect(captureException).toHaveBeenCalledTimes(1);
+  });
+
+  it('is judged even when the capacity read is unavailable, and leaves provider alerts alone', async () => {
+    await service.evaluate({ read: answered([concurrency(90, 100)]), saturation: reading(100) });
+    const result = await service.evaluate({
+      read: { outcome: 'unavailable', reason: 'timeout' },
+      saturation: reading(6500),
+    });
+    expect(result.outcome).toBe('unavailable');
+    expect(result.saturation.judgement.state).toBe('over_share');
+    expect(result.raised).toHaveLength(1);
+    expect(await rows()).toHaveLength(2);
+  });
+
+  it('with the default reader, nothing is raised and the row is unavailable', async () => {
+    const result = await service.evaluate({ read });
+    expect(result.saturation.reading).toEqual(notConfigured);
+    expect(result.saturation.judgement.state).toBe('unavailable');
+    expect(await saturationRows()).toHaveLength(0);
+    expect(captureException).not.toHaveBeenCalled();
+  });
+
+  it('the store refuses a gateway provider under any other key', async () => {
+    await expect(
+      adminDb.capacityRaisedAlert.create({
+        data: {
+          provider: 'gateway',
+          model: 'connections',
+          limitUnit: 'rpm',
+          observedValue: BigInt(1),
+          limitValue: BigInt(1),
+          alertSharePercent: 70,
+        },
+      }),
+    ).rejects.toThrow();
+  });
+});

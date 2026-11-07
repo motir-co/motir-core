@@ -32,6 +32,34 @@ export interface CapacityAlertKey {
   limitUnit: CapacityLimitUnit;
 }
 
+/**
+ * The ONE key of the gateway-saturation series (MOTIR-9675, design D6), in the
+ * same raised-alert store as the provider limits. Not a provider model: the
+ * migration `gateway_saturation_alert_key` admits `gateway` and `saturation`
+ * only together, on this key.
+ */
+export const GATEWAY_SATURATION_ALERT_KEY = {
+  provider: 'gateway',
+  model: 'connections',
+  limitUnit: 'saturation',
+} as const;
+export type GatewaySaturationAlertKey = typeof GATEWAY_SATURATION_ALERT_KEY;
+
+/** Any key the raised-alert store holds. */
+export type CapacityStoreKey = CapacityAlertKey | GatewaySaturationAlertKey;
+
+export function isGatewaySaturationAlertKey(key: {
+  provider: unknown;
+  model: unknown;
+  limitUnit: unknown;
+}): key is GatewaySaturationAlertKey {
+  return (
+    key.provider === GATEWAY_SATURATION_ALERT_KEY.provider &&
+    key.model === GATEWAY_SATURATION_ALERT_KEY.model &&
+    key.limitUnit === GATEWAY_SATURATION_ALERT_KEY.limitUnit
+  );
+}
+
 export function isCapacityProvider(value: unknown): value is CapacityProvider {
   return (CAPACITY_PROVIDERS as readonly unknown[]).includes(value);
 }
