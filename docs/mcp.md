@@ -5165,11 +5165,15 @@ report_plan_step({ planId, sessionKey: "author-3", narration: ["Splitting the ex
 **Record the session's code reads (MOTIR-10122).** Send `codeReads` (instead of
 `step`, and with no `target`) with the reads the session made, in the order it made
 them — at most 50 per call. Each is `{ tool, repo?, path?, startLine?, endLine?,
-askedRef?, query?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
+askedRef?, query?, regex?, commits: [{ repo?, sha, dirty? }], outcome, lines?, hits?,
 detail? }`: what it asked, the commits it was read at, and how much came back,
 **never the code** (a read carrying `text` or `content` is refused, and every
 string is capped). `sha` is a RESOLVED commit id — 7 to 64 hex characters, never a
-branch name; a read whose ref resolved to nothing carries `commits: []`. A local
+branch name; a read whose ref resolved to nothing carries `commits: []`. A
+`code_grep` read sends `regex` — `true` when its pattern was searched as a regular
+expression, `false` when literally (MOTIR-10546): `code_grep` matches literally by
+default, so a literal `a|b` that found nothing says nothing about `a` or `b`, and
+only the mode lets a check tell that zero from a true absence. A local
 planner records its checkout's `HEAD` and marks `dirty: true` when the working
 tree had changes. Unlike narration, a code read needs NO step: plan.py's
 conversation session reads code before the plan exists, and posts its reads once
@@ -5388,6 +5392,16 @@ channel as on `validate_work_item`, over the cards the plan adds or modifies: th
 projected body parsed against the section registry, a missing required section
 named by `item`. An extra heading alone is not a finding (MOTIR-9835). It never changes `valid`.
 
+It also returns **`notYetWritten`** (MOTIR-10496): `{ item, title }` for every `add`
+whose author session has not finished, that is whose stored `authorFinished` is not
+`true`, sorted by `item`. It is filled only while the plan is undecided
+(`generating`, `planned`, `stale`) and is `[]` once it is decided. It is advisory
+and never changes `valid`; the text reply prints it before the section findings,
+because a finding or advisory naming one of those cards describes what is still to
+write, not a defect in a finished card. The list is the same answer
+`get_plan_authoring_state` gives: `notYetWritten.length` is the plan's `add`
+count minus its `authored` rows.
+
 ```jsonc
 validate_plan({ planId })
 // → { planId: "cm…", valid: false, blockers: [
@@ -5441,14 +5455,16 @@ get_plan_code_reads({ planId, sessionKey?: "author-3", afterSeq?: 0, limit?: 500
 // → { planId,
 //     reads: [{ seq: 12, sessionKey: "author-3", tool: "read_file", repo: "acme/web",
 //               path: "lib/export.ts", startLine: 1, endLine: 80, askedRef: "main", query: null,
-//               commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
+//               regex: null, commits: [{ sha: "9f86d08…" }], outcome: "found", lines: 80, hits: null,
 //               detail: null, createdAt: "…" }],
 //     sessions: [{ sessionKey: "author-3", stepKind: "author", targetRef: "planItem:…", targetTitle: "…" }],
 //     nextAfterSeq: null }
 ```
 
 `sessions` carries the step words of every session on the page (a session that
-never reported a step — plan.py's conversation — has none). Page with
+never reported a step — plan.py's conversation — has none). `regex` is a
+`code_grep` read's mode (`true` regex, `false` literal) and `null` for every other
+tool and for a read recorded before the field existed. Page with
 `afterSeq: nextAfterSeq` until it is `null`. `project:browse`, through the same
 reader gate as `get_plan`, on a plan in any status; read-only. Errors:
 `PLAN_NOT_FOUND` for an unknown or other-tenant plan.
@@ -5508,14 +5524,21 @@ get_plan_authoring_state({ planId, workItems: ["ACME-12"] })
 ```
 
 `authoring` — an `author` step reported through `report_plan_step` targets the
-card and has not ended. `authored` — an author session that targeted it has
-ended, or it was appended COMPLETE and never needed one.
-`not_started` — no author session, live or ended, and the card is still
-incomplete: a missing body or explanation, a `validate_plan` section finding, or,
-on a childless leaf, a missing type, executor, size or difficulty. "Complete" is
-plan.py's own `author_gaps` test, so a card the surgical add appended complete
-reads `authored` rather than `not_started` for ever. `project:browse`, read
-through the same reader gate as `get_plan`; it writes nothing.
+card and has not ended. `authored` — the card's author session FINISHED it: the
+proposal carries `authorFinished: true` (MOTIR-10490), which a planner's driver
+sends once an author session ended successfully and its card passed the driver's
+check, and which core stamps on a card written by hand over the MCP while no walk
+is writing the plan. `not_started` — every other `add`. The state reads the stored
+fact and nothing else (MOTIR-10496): a body no longer says whether a card is
+finished, because the lay saves each card with a `## Scope BOUNDARY` as its only
+section and no reading of a body can tell what a FAILED session left behind from
+a finished one. So a boundary-only card, a whole body nobody finished and a failed
+session's body all read `not_started`, an ended session does not by itself make a
+card `authored`, and a stamped card reads `authored` whatever its body says. A
+live step wins over the stamp. The plan surface's "N authored" count and
+`validate_plan`'s `notYetWritten` read the same field, so the three agree.
+`project:browse`, read through the same reader gate as `get_plan`; it writes
+nothing.
 
 **Committed cards (MOTIR-10001)** are answered in `committed`, by work-item id. A
 committed card the walk RE-AUTHORS races exactly as a proposal does, so it reads

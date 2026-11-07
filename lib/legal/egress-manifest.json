@@ -18,6 +18,11 @@
       "evidence": ["host api.resend.com"]
     },
     {
+      "vendor": "Amazon SES",
+      "basis": "repository-evidence",
+      "evidence": ["package @aws-sdk/client-sesv2"]
+    },
+    {
       "vendor": "Sentry",
       "basis": "repository-evidence",
       "evidence": ["package @sentry/nextjs", "host sentry.io"]

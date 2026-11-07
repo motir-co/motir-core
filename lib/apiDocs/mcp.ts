@@ -952,7 +952,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // SUMMARY REWRITTEN for MOTIR-10001: it now answers committed cards too, `not_in_walk` among them.
     summary:
       'Which proposals and committed cards are being written, which are written, which no author session has started, and which this plan never re-writes — read before wiring an edge onto another card.',
-    descriptionFingerprint: '00d2b8e7cb5a',
+    // Re-pinned for MOTIR-10496, summary re-read and UNCHANGED: "which are written" now reads
+    // the stored `authorFinished` alone, not an ended session or a complete body.
+    descriptionFingerprint: '3c90f5ed6520',
   },
   validate_plan: {
     // ⚠️ SUMMARY REWRITTEN, not merely re-pinned (MOTIR-3575). The old line —
@@ -990,7 +992,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // Re-pinned for MOTIR-10380, summary UNCHANGED: the RUNNER-STOP body advisories
     // (`leaf-no-description`, `leaf-no-criteria`) are more shape entries, never in it.
     // Re-pinned for MOTIR-10381, summary UNCHANGED: `leaf-multi-repo` joins them.
-    descriptionFingerprint: 'de062c69eb5a',
+    // Re-pinned for MOTIR-10496, summary UNCHANGED: `notYetWritten` (the adds no author
+    // session finished) is advisory, beside the verdict, never in it.
+    descriptionFingerprint: 'eeeca24f2f1d',
   },
   get_plan_status: {
     // Re-pinned for MOTIR-3064, summary UNCHANGED and deliberately so: the tool

@@ -171,14 +171,20 @@ export interface CardNextActionsOption {
  *  bottom). `null` draws no button. */
 export type CardNextAction =
   | { kind: 'plan' }
-  | { kind: 'copy'; verb: 'run' | 'review' | 'fix'; reason: CopyActionReason | null };
+  | { kind: 'copy'; verb: CopyActionVerb; reason: CopyActionReason | null };
+
+/** The agent commands a copy button can carry: `motir run|review|fix <KEY>` for the
+ *  coding agent, and `motir guide <KEY>` — the walk through a human card's steps —
+ *  for a ready card a person must do (MOTIR-10559). */
+export type CopyActionVerb = 'run' | 'review' | 'fix' | 'guide';
 
 /** The fix reasons the card offers `motir fix` for, and whose tooltip names them. */
 export type CopyActionReason = 'ci_failed' | 'changes_requested';
 
 /**
- * The state → action mapping (design MOTIR-10508 § "The next-action button"), the
- * rows checked top to bottom so a fix reason wins over In Review:
+ * The state → action mapping (design MOTIR-10508 § "The next-action button", with
+ * MOTIR-10559's guide row), the rows checked top to bottom so a fix reason wins
+ * over In Review, and both win over a ready card's run or guide:
  *
  * | card                                          | button               |
  * | --------------------------------------------- | -------------------- |
@@ -186,7 +192,12 @@ export type CopyActionReason = 'ci_failed' | 'changes_requested';
  * | fix reason `ci_failed` / `changes_requested`  | copy `motir fix`     |
  * | In Review                                     | copy `motir review`  |
  * | Ready, and not manual                         | copy `motir run`     |
+ * | Ready, and manual                             | copy `motir guide`   |
  * | anything else                                 | none                 |
+ *
+ * "Manual" is the shipped `executor === 'human' || type === 'manual'` predicate;
+ * `motir guide <KEY>` walks a person through such a card, as `motir run` hands a
+ * coding card to an agent.
  */
 export function cardNextAction(input: {
   toPlan: boolean;
@@ -203,7 +214,9 @@ export function cardNextAction(input: {
     return { kind: 'copy', verb: 'fix', reason: input.fixReason };
   }
   if (input.status === 'in_review') return { kind: 'copy', verb: 'review', reason: null };
-  if (input.ready && !input.manual) return { kind: 'copy', verb: 'run', reason: null };
+  if (input.ready) {
+    return { kind: 'copy', verb: input.manual ? 'guide' : 'run', reason: null };
+  }
   return null;
 }
 
@@ -729,15 +742,15 @@ const stopPortalledEvents = {
 
 const COPIED_MS = 2000;
 
-/** Copy `motir run|review|fix <KEY>` — the ready list's copy action, as a button
- *  with its verb on the face (the key rides the tooltip and the copied text). */
+/** Copy `motir run|review|fix|guide <KEY>` — the ready list's copy action, as a
+ *  button with its verb on the face (the key rides the tooltip and the copied text). */
 function CopyNextAction({
   itemKey,
   verb,
   reason,
 }: {
   itemKey: string;
-  verb: 'run' | 'review' | 'fix';
+  verb: CopyActionVerb;
   reason: CopyActionReason | null;
 }) {
   const t = useTranslations('roadmap.canvas.node.action');
@@ -784,7 +797,9 @@ function CopyNextAction({
       ? t.rich('copyTooltipCiFailed', rich)
       : reason === 'changes_requested'
         ? t.rich('copyTooltipChangesRequested', rich)
-        : t.rich('copyTooltip', rich);
+        : verb === 'guide'
+          ? t.rich('copyTooltipGuide', rich)
+          : t.rich('copyTooltip', rich);
   const Glyph = copied ? Check : Copy;
   return (
     <Tooltip content={tooltip}>

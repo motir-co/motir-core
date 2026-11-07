@@ -466,10 +466,18 @@ describe('B. the tab row and the plan surface show the SAME progress', () => {
     const { planId, addIds } = await mcpPlan(client, fx, [
       add('Authored one', { ...BODIES, ...SIZED }),
       add('Authored two', { ...BODIES, ...SIZED }),
-      // Missing only `difficulty` — the one field B6 fills.
+      // Missing only `difficulty`, and its author session has NOT finished it.
       add('Almost', { ...BODIES, ...SIZED, difficulty: undefined }),
       add('Bare'),
     ]);
+    // Appended by hand with no session live, every card with a body was stamped
+    // written (MOTIR-10490). "Almost" stands for a card whose session did not
+    // finish, so its driver's word clears the stamp (MOTIR-10496).
+    await ok(client, UPDATE_PLAN_ITEM_TOOL_NAME, {
+      planId,
+      planItemId: addIds[2],
+      authorFinished: null,
+    });
     await ok(client, REPORT_PLAN_STEP_TOOL_NAME, {
       planId,
       sessionKey: 'author-almost',
@@ -509,7 +517,7 @@ describe('B. the tab row and the plan surface show the SAME progress', () => {
     expect(onTab.liveSteps).toHaveLength(2);
   });
 
-  it('B6 — `update_plan_item` filling the last sizing field moves N on BOTH; a `modify` moves neither', async () => {
+  it('B6 — a sizing write moves N on neither; the driver’s `authorFinished` moves it on BOTH; a `modify` moves neither', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'PPF' });
     const client = await connectClient(fx.ctx);
     const { planId, addIds } = await halfAuthored(fx, client);
@@ -517,10 +525,19 @@ describe('B. the tab row and the plan surface show the SAME progress', () => {
     let { onReview, onTab } = await bothReadings(fx, planId);
     expect([onReview.authored, onTab.authored]).toEqual([2, 2]);
 
+    // Filling the last sizing field is not the written state (MOTIR-10496).
     await ok(client, UPDATE_PLAN_ITEM_TOOL_NAME, {
       planId,
       planItemId: addIds[2],
       difficulty: 'medium',
+    });
+    ({ onReview, onTab } = await bothReadings(fx, planId));
+    expect([onReview.authored, onTab.authored]).toEqual([2, 2]);
+
+    await ok(client, UPDATE_PLAN_ITEM_TOOL_NAME, {
+      planId,
+      planItemId: addIds[2],
+      authorFinished: true,
     });
     ({ onReview, onTab } = await bothReadings(fx, planId));
     expect([onReview.authored, onTab.authored]).toEqual([3, 3]);

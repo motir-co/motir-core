@@ -790,6 +790,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/openapi/v1.json`                          | GET                   | — none —                                                                                                                                                                                               | —          | no-gate  | R32 |
 | `/api/openapi/public.json`                      | GET                   | — none —                                                                                                                                                                                               | —          | no-gate  | R32 |
 | `/api/resend/webhook`                           | POST                  | — none —                                                                                                                                                                                               | —          | no-gate  | R6  |
+| `/api/ses/webhook`                              | POST                  | — none —                                                                                                                                                                                               | —          | no-gate  | R6  |
 
 ### `integration`
 

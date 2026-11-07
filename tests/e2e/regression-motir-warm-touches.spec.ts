@@ -32,7 +32,8 @@ const MOTIR = {
     ctaFill: 'rgb(26, 29, 33)', // --el-accent #1a1d21 (unchanged)
     link: 'rgb(21, 91, 196)', // --el-link #155bc4 (unchanged)
     focusRing: 'rgb(21, 91, 196)', // --focus-ring-color (unchanged)
-    // The brand glyph paints --el-accent-on-surface: #155bc4 in light (unchanged).
+    // The top-bar mark paints --el-logo-mark, Motir's --color-primary: #155bc4 in
+    // light (MOTIR-8932's logo tile; the same blue the glyph painted before).
     brand: [21, 91, 196] as const,
   },
   dark: {
@@ -43,8 +44,9 @@ const MOTIR = {
     ctaFill: 'rgb(237, 238, 240)', // #edeef0 (unchanged)
     link: 'rgb(125, 177, 255)', // #7db1ff (unchanged)
     focusRing: 'rgb(125, 177, 255)',
-    // color-mix(in srgb, #7db1ff 82%, #edeef0) — unchanged.
-    brand: [145, 188, 252] as const,
+    // --el-logo-mark is Motir's dark --color-primary #7db1ff (MOTIR-8932). The
+    // glyph it replaced painted color-mix(in srgb, #7db1ff 82%, #edeef0).
+    brand: [125, 177, 255] as const,
   },
 } as const;
 
@@ -67,9 +69,10 @@ const epicIcon = (page: Page, card: WarmTouchesCard): Locator =>
 const designIcon = (page: Page, card: WarmTouchesCard): Locator =>
   itemRow(page, card).locator('svg[class*="--el-type-design"]');
 
-/** The top nav's brand tile glyph (`.brand-glyph`), reached through its link's name. */
+/** The top nav's brand mark: the wave on its logo tile (MOTIR-8932), reached through
+ *  its link's name. It is filled with `--el-logo-mark`, not inked with `.brand-glyph`. */
 const brandGlyph = (page: Page): Locator =>
-  page.getByRole('link', { name: 'Motir — go home' }).locator('svg.brand-glyph');
+  page.getByRole('link', { name: 'Motir — go home' }).locator('svg path');
 
 /** The resolved-hue chip beside a token's name in the /tokens specimen. */
 const tokenChip = (page: Page, token: string): Locator =>
@@ -100,7 +103,7 @@ async function expectBrandGlyph(page: Page, rgb: readonly number[]): Promise<voi
   await expect(glyph).toBeVisible();
   await expect
     .poll(async () => {
-      const got = await paintedRgb(glyph, 'color');
+      const got = await paintedRgb(glyph, 'fill');
       return got.every((c, i) => Math.abs(c - rgb[i]!) <= 2);
     })
     .toBe(true);

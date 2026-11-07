@@ -196,6 +196,40 @@ describe('report_plan_step codeReads → get_plan_code_reads', () => {
     );
   });
 
+  it('the append door accepts a code_grep read’s regex flag and the read-back returns it (MOTIR-10546)', async () => {
+    const fx = await makeWorkItemFixture();
+    const client = await connectClient(fx.ctx);
+    const planId = await generatingPlan(client, fx);
+    const grep = { tool: 'code_grep', path: 'tests', query: 'A|B', commits: [], outcome: 'ok' };
+    const sent = await call(client, REPORT_PLAN_STEP_TOOL_NAME, {
+      planId,
+      sessionKey: 'author-2',
+      codeReads: [{ ...grep, regex: false, hits: 0 }, { ...grep, regex: true, hits: 20 }, fileRead],
+    });
+    expect(sent.isError, textOf(sent)).toBeFalsy();
+
+    const back = await call(client, GET_PLAN_CODE_READS_TOOL_NAME, { planId });
+    const page = back.structuredContent as unknown as PlanCodeReadPageDto;
+    expect(page.reads.map((r) => [r.tool, r.regex, r.hits])).toEqual([
+      ['code_grep', false, 0],
+      ['code_grep', true, 20],
+      ['read_file', null, null],
+    ]);
+    expect(textOf(back)).toContain(
+      '#1 code_grep tests "A|B" (literal) · at no commit resolved · ok (0 hits)',
+    );
+    expect(textOf(back)).toContain(
+      '#2 code_grep tests "A|B" (regex) · at no commit resolved · ok (20 hits)',
+    );
+
+    const bad = await call(client, REPORT_PLAN_STEP_TOOL_NAME, {
+      planId,
+      sessionKey: 'author-2',
+      codeReads: [{ ...grep, regex: 'yes' }],
+    });
+    expect(bad.isError).toBe(true);
+  });
+
   it('narrows to one session and pages with afterSeq until nextAfterSeq is null', async () => {
     const fx = await makeWorkItemFixture();
     const client = await connectClient(fx.ctx);

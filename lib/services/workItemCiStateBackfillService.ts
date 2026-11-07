@@ -3,6 +3,7 @@ import type { PrCiState } from '@/lib/github/prCiState';
 import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 import { workItemDeliveryRepository } from '@/lib/repositories/workItemDeliveryRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { classifyDeliveries, recomputeWorkItemCiState } from './deliveryVerdict';
 import { deliveryStateForCard, foldCardCiState } from '@/lib/workItems/deliverySet';
 
@@ -19,7 +20,10 @@ import { deliveryStateForCard, foldCardCiState } from '@/lib/workItems/deliveryS
 //   * a card delivered through a run's session branch, which the old writer never
 //     wrote at all and which is therefore `null` however red its build;
 //   * a card whose stale value is the verdict of whichever of its pull requests
-//     reported last.
+//     reported last;
+//   * a card whose LAST link was removed before the unlink doors recomputed
+//     (MOTIR-5469, #2937): it kept the verdict of a pull request it no longer
+//     has, and with no pull request left no event can ever reach it (MOTIR-10542).
 //
 // A badge and a filter read this column, so every one of those is a card a person
 // will look for and not find, or find and not need.
@@ -58,7 +62,8 @@ export interface CiStateBackfillFailure {
 
 export interface CiStateBackfillReport {
   dryRun: boolean;
-  /** Candidate cards examined — those with at least one delivery-set member. */
+  /** Candidate cards examined — those with at least one delivery-set member, and
+   *  every non-archived card still storing a verdict (MOTIR-10542). */
   scanned: number;
   changed: CiStateBackfillChange[];
   unchanged: number;
@@ -104,33 +109,63 @@ export interface CiStateBackfillOptions {
   signal?: AbortSignal;
 }
 
+/** The workspace each candidate card is bound under, keyed on the card. */
+type CandidateMap = Map<string, string>;
+
 /**
- * The candidate set: every non-archived card with at least one member
- * `collectDeliveries` would return, paired with the workspace to bind for it.
+ * The candidate set: every card with at least one member `collectDeliveries`
+ * would return, plus every non-archived card that still STORES a verdict, each
+ * paired with the workspace to bind for it.
  *
- * TWO ARMS, because the two ways a pull request reaches a card are reachable from
- * opposite directions (see each repository method's own header):
+ * THREE ARMS, because a card that needs recomputing is reachable from three
+ * different directions (see each repository method's own header):
  *   * a `work_item_delivery` row — read straight off the delivery table, which is
  *     armed for the system flag;
  *   * a `session_branch` equal to some pull request's head ref — read from the
  *     PULL REQUEST side, because `work_item` has no `system_admin` arm and a
- *     cross-tenant scan of it would be silently empty rather than refused.
+ *     cross-tenant scan of it would be silently empty rather than refused;
+ *   * a stored, non-null `ciState` with NO member left at all (MOTIR-10542) — a
+ *     card whose last link was removed before the unlink doors recomputed. The
+ *     first two arms can never reach it, because it has nothing left for them to
+ *     start from, and it is exactly the card whose badge is wrong for ever. Read
+ *     per workspace, bound, for the same no-system-arm reason.
  *
- * Deduplicated on the card: a card that is both linked AND on a session branch is
- * one candidate, since the recompute folds its whole set either way.
+ * Deduplicated on the card: a card reached by more than one arm is one
+ * candidate, since the recompute folds its whole set either way. The third arm
+ * adds candidates only; the verdict is still `recomputeWorkItemCiState`'s, which
+ * folds an empty set to `null`.
  */
 async function collectCandidates(
   opts: CiStateBackfillOptions,
 ): Promise<Array<{ workItemId: string; workspaceId: string }>> {
-  const byId = new Map<string, string>();
-
+  const byId: CandidateMap = new Map();
   const scope = opts.workspaceId ? { workspaceId: opts.workspaceId } : {};
 
+  await addDeliveredCandidates(byId, scope);
+  await addSessionBranchCandidates(byId, scope);
+  await addStoredVerdictCandidates(byId, scope);
+
+  return [...byId.entries()]
+    .map(([workItemId, workspaceId]) => ({ workItemId, workspaceId }))
+    .sort((a, b) => (a.workItemId < b.workItemId ? -1 : 1));
+}
+
+/** Arm one: every card a `work_item_delivery` row names. */
+async function addDeliveredCandidates(
+  byId: CandidateMap,
+  scope: { workspaceId?: string },
+): Promise<void> {
   const delivered = await withSystemContext((tx) =>
     workItemDeliveryRepository.listDeliveredWorkItemRefs(tx, scope),
   );
   for (const row of delivered) byId.set(row.workItemId, row.workspaceId);
+}
 
+/** Arm two: every non-archived card sitting on some pull request's head ref. */
+async function addSessionBranchCandidates(
+  byId: CandidateMap,
+  scope: { workspaceId?: string },
+): Promise<void> {
   const headRefs = await withSystemContext((tx) =>
     githubPullRequestRepository.listHeadRefsWithWorkspace(tx, scope),
   );
@@ -151,15 +186,32 @@ async function collectCandidates(
     });
     for (const id of ids) if (!byId.has(id)) byId.set(id, workspaceId);
   }
+}
 
-  return [...byId.entries()]
-    .map(([workItemId, workspaceId]) => ({ workItemId, workspaceId }))
-    .sort((a, b) => (a.workItemId < b.workItemId ? -1 : 1));
+/**
+ * Arm three (MOTIR-10542): every non-archived card that still stores a verdict,
+ * walked workspace by workspace. The workspace ids come off the `workspace` table
+ * under system context, so each tenant is bound from data, never from input.
+ */
+async function addStoredVerdictCandidates(
+  byId: CandidateMap,
+  scope: { workspaceId?: string },
+): Promise<void> {
+  const workspaceIds = await withSystemContext((tx) => workspaceRepository.listIds(tx, scope));
+  for (const workspaceId of workspaceIds) {
+    const ids = await withSystemContext(async (tx) => {
+      // ⚠️ Bound first, for the same reason as the session-branch arm.
+      await bindWorkspaceContext(tx, workspaceId);
+      return workItemRepository.listIdsWithStoredCiState(workspaceId, tx);
+    });
+    for (const id of ids) if (!byId.has(id)) byId.set(id, workspaceId);
+  }
 }
 
 export const workItemCiStateBackfillService = {
   /**
-   * Recompute `WorkItem.ciState` for every card that has pull requests.
+   * Recompute `WorkItem.ciState` for every card that has pull requests, and for
+   * every card that still stores a verdict with none left (MOTIR-10542).
    *
    * `dryRun` folds exactly what a real run would fold and reports the same
    * `from → to` pairs, writing nothing — it re-reads the card inside its own

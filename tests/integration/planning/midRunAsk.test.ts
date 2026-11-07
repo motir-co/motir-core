@@ -52,6 +52,9 @@ function reviewFor(projectId: string) {
         title: 'Payments epic',
         kind: 'epic',
         descriptionMd: 'Take card payments.',
+        // Its author session finished it (MOTIR-10496): the run context reads the
+        // stored state, not the body.
+        authorFinished: true,
       }),
       planReviewItem({
         planItemId: 'pi_2',

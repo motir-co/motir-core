@@ -7,12 +7,13 @@
 //
 // Two doors, one builder:
 //   - `snapshotsForPlans` — a PAGE of plans (the reader's plans-being-written
-//     read). FIVE batched reads, never one per plan.
+//     read). FOUR batched reads, never one per plan.
 //   - `snapshotForReview` — the plan review read (`GET /api/plans/[id]`, polled
 //     every 2.5 s while generating), built from the rows that read already holds;
-//     it adds at most a titles read for committed step targets it does not name,
-//     the project's explanations setting for a non-MCP plan, and the session's
-//     automatic-resume record for a plan that has a session (MOTIR-8309).
+//     it adds at most a titles read for committed step targets it does not name
+//     and the session's automatic-resume record for a plan that has a session
+//     (MOTIR-8309). "N authored" reads the stored `authorFinished` alone
+//     (MOTIR-10496), so neither door reads the project's explanations setting.
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { PlanItemDto, PlanStepDto } from '@/lib/dto/plans';
@@ -20,14 +21,12 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planStepRepository } from '@/lib/repositories/planStepRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { toPlanStepDto } from '@/lib/mappers/planMappers';
 import { isTempRef } from '@/lib/plans/refs';
 import {
   buildPlanProgressSnapshot,
   progressRowOfAdd,
-  requireExplanationFor,
   type PlanProgressAddRow,
   type PlanProgressSnapshot,
 } from '@/lib/plans/planProgress';
@@ -36,11 +35,9 @@ import {
  *  carrying these fields will do. */
 export interface PlanProgressPlanInput {
   id: string;
-  projectId: string;
   status: string;
   createdAt: string | Date;
   lastActivityAt: string | Date;
-  authorSource: string | null;
   /** The plan's planning session, whose automatic resumes decide `resuming`. */
   sessionId: string | null;
 }
@@ -63,10 +60,9 @@ function committedTargetIds(steps: readonly { targetRef: string | null }[]): str
 export const planProgressService = {
   /**
    * One snapshot per `generating` plan in `plans` (none for any other status),
-   * keyed by plan id. Five batched reads in one bound transaction — the steps,
-   * the `add` flags, the committed step targets' titles, the projects'
-   * `aiGenerateExplanations`, and the sessions' automatic resumes — so the cost is
-   * the same for 1 plan and for 10.
+   * keyed by plan id. Four batched reads in one bound transaction — the steps,
+   * the `add` flags, the committed step targets' titles and the sessions'
+   * automatic resumes — so the cost is the same for 1 plan and for 10.
    */
   async snapshotsForPlans(
     plans: readonly PlanProgressPlanInput[],
@@ -76,13 +72,13 @@ export const planProgressService = {
     const out = new Map<string, PlanProgressSnapshot>();
     if (generating.length === 0) return out;
     const planIds = generating.map((p) => p.id);
-    const projectIds = Array.from(new Set(generating.map((p) => p.projectId)));
     const sessionIds = Array.from(
       new Set(generating.map((p) => p.sessionId).filter((id): id is string => id !== null)),
     );
 
-    const { steps, rows, titles, explanationsByProject, resumes } =
-      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+    const { steps, rows, titles, resumes } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
         // Bound: `plan_step`'s policy joins to `plan`, so an unbound read is an
         // empty set that would read as "nobody is working on it".
         const steps = await planStepRepository.listByPlanIds(planIds, tx);
@@ -92,16 +88,15 @@ export const planProgressService = {
           ctx.workspaceId,
           tx,
         );
-        const projects = await projectRepository.findManyByIds(projectIds, tx);
         const resumes = await planChangeSessionRepository.findAutoResumesByIds(sessionIds, tx);
         return {
           steps,
           rows,
           titles,
-          explanationsByProject: new Map(projects.map((p) => [p.id, p.aiGenerateExplanations])),
           resumes: new Map(resumes.map((r) => [r.id, r])),
         };
-      });
+      },
+    );
     // The server instant the snapshots were built at — `serverNow`'s anchor.
     const observedAt = new Date();
     const committedTitles = new Map(titles.map((t) => [t.id, t.title]));
@@ -127,10 +122,6 @@ export const planProgressService = {
           steps: stepsByPlan.get(plan.id) ?? [],
           addRows: rowsByPlan.get(plan.id) ?? [],
           committedTitles,
-          requireExplanation: requireExplanationFor({
-            authorSource: plan.authorSource,
-            projectAiGenerateExplanations: explanationsByProject.get(plan.projectId) ?? false,
-          }),
           observedAt,
           autoResume: plan.sessionId ? autoResumeOf(resumes.get(plan.sessionId)) : null,
         }),
@@ -154,28 +145,20 @@ export const planProgressService = {
   ): Promise<PlanProgressSnapshot | null> {
     if (plan.status !== 'generating') return null;
     const missing = committedTargetIds(steps).filter((id) => !knownTitles.has(id));
-    const needsSetting = plan.authorSource !== 'mcp';
     const sessionId = plan.sessionId;
-    const { extraTitles, aiGenerateExplanations, autoResume } =
-      missing.length === 0 && !needsSetting && sessionId === null
-        ? { extraTitles: [], aiGenerateExplanations: false, autoResume: null }
+    const { extraTitles, autoResume } =
+      missing.length === 0 && sessionId === null
+        ? { extraTitles: [], autoResume: null }
         : await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
             const extraTitles = await workItemRepository.findTitlesByIds(
               missing,
               ctx.workspaceId,
               tx,
             );
-            const settings = needsSetting
-              ? await projectRepository.findAiSettings(plan.projectId, tx)
-              : null;
             const resumes = sessionId
               ? await planChangeSessionRepository.findAutoResumesByIds([sessionId], tx)
               : [];
-            return {
-              extraTitles,
-              aiGenerateExplanations: settings?.aiGenerateExplanations ?? false,
-              autoResume: autoResumeOf(resumes[0]),
-            };
+            return { extraTitles, autoResume: autoResumeOf(resumes[0]) };
           });
     const committedTitles = new Map(knownTitles);
     for (const t of extraTitles) committedTitles.set(t.id, t.title);
@@ -193,10 +176,6 @@ export const planProgressService = {
           }),
         ),
       committedTitles,
-      requireExplanation: requireExplanationFor({
-        authorSource: plan.authorSource,
-        projectAiGenerateExplanations: aiGenerateExplanations,
-      }),
       observedAt: new Date(),
       autoResume,
     });

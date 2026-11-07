@@ -225,8 +225,21 @@ describe('getNotificationDailyBudget', () => {
     expect(getNotificationDailyBudget()).toBeNull();
   });
 
+  it('applies to the resend arm only — ses and the dev providers never read it (MOTIR-10565)', async () => {
+    const { getNotificationDailyBudget } = await import('@/lib/email');
+    for (const provider of ['ses', 'console', 'file']) {
+      process.env['EMAIL_PROVIDER'] = provider;
+      process.env['EMAIL_NOTIFICATION_DAILY_BUDGET'] = '25';
+      expect(getNotificationDailyBudget()).toBeNull();
+      // Not read at all: a value that would fail a Resend boot does not fail this one.
+      process.env['EMAIL_NOTIFICATION_DAILY_BUDGET'] = 'sixty';
+      expect(getNotificationDailyBudget()).toBeNull();
+    }
+  });
+
   it('reads an integer, `none`, and refuses anything else by name', async () => {
     const { getNotificationDailyBudget } = await import('@/lib/email');
+    process.env['EMAIL_PROVIDER'] = 'resend';
     process.env['EMAIL_NOTIFICATION_DAILY_BUDGET'] = ' 25 ';
     expect(getNotificationDailyBudget()).toBe(25);
     process.env['EMAIL_NOTIFICATION_DAILY_BUDGET'] = 'NONE';

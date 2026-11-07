@@ -71,7 +71,7 @@ export type ResetExecutor = Pick<typeof db, '$executeRawUnsafe'>;
 // delivery of the same fixture GUID a `duplicate` that never runs.
 export async function truncateAuthTables(executor: ResetExecutor = db): Promise<void> {
   await executor.$executeRawUnsafe(
-    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "fleet_shard", "github_runner_call_event", "github_webhook_delivery", "user" RESTART IDENTITY CASCADE',
+    'TRUNCATE TABLE "organization_membership", "organization", "workspace_membership", "workspace", "session", "account", "github_identity", "import_source_identity", "verification", "email_change_request", "idea_draft", "public_hostname_reservation", "oauth_client", "platform_run_model", "platform_run_model_list", "idea", "idea_tag", "fleet_shard", "github_runner_call_event", "github_webhook_delivery", "email_suppression", "user" RESTART IDENTITY CASCADE',
   );
 }
 

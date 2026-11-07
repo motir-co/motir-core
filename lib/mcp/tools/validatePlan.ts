@@ -2,7 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { planValidityService } from '@/lib/services/planValidityService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { PlanValidityDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
+import type { NotYetWrittenDto, PlanValidityDto, ProposalRescopeWarningDto } from '@/lib/dto/plans';
 import {
   advisoryBlockLines,
   crossLevelEdgeLines,
@@ -86,6 +86,7 @@ function summarize(
       `Plan ${result.planId} is VALID — it would be ACCEPTED by approve, and every item in ` +
         'the projected forest can be finished once it materializes. No work item was created: ' +
         'approving the plan in Motir is still the only path from a proposal to a work item.',
+      ...notYetWrittenLines(result.notYetWritten),
       ...sectionFindingLines(result.sectionFindings, 'valid'),
       ...linkLines,
     ].join('\n');
@@ -123,10 +124,29 @@ function summarize(
 
   lines.push(...invalidEdgeLines(result.invalidEdges));
   lines.push(...crossLevelEdgeLines(result.crossLevelEdges));
+  lines.push(...notYetWrittenLines(result.notYetWritten));
   lines.push(...sectionFindingLines(result.sectionFindings, 'invalid'));
   lines.push(...linkLines);
 
   return lines.join('\n');
+}
+
+/**
+ * The proposals no author session has finished (MOTIR-10496), one line per card —
+ * `[]` when every `add` is written or the plan is decided. Printed BEFORE the
+ * section findings, because it is what reads them: a finding on a card nobody
+ * has written yet is the work still to do, not a defect in a written card.
+ */
+export function notYetWrittenLines(entries: readonly NotYetWrittenDto[] = []): string[] {
+  if (entries.length === 0) return [];
+  return [
+    '',
+    `NOT YET WRITTEN — ${entries.length} proposal(s) have no finished author session ` +
+      '(advisory; the verdict is unaffected):',
+    ...entries.map((e) => `  ${e.item}${e.title ? ` "${e.title}"` : ''}`),
+    'A section finding or advisory that names one of these describes what is still to WRITE ' +
+      'on it, not a defect in a finished card.',
+  ];
 }
 
 /**
@@ -229,8 +249,8 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'Review or Approved, which approve moves to To Do, Blocked or In Progress — naming the ' +
         'card, its status and the fields; keep each only if what the card delivers changes. ' +
         'Returns `{ planId, valid, rejections: [...], blockers: [...], invalidEdges: [...], ' +
-        'crossLevelEdges: [...], sectionFindings: [...], advisories: [...], ' +
-        'rescopeWarnings: [...] }`; an item named ' +
+        'crossLevelEdges: [...], sectionFindings: [...], notYetWritten: [...], ' +
+        'advisories: [...], rescopeWarnings: [...] }`; an item named ' +
         '`planItem:<id>` is a PROPOSAL in this plan, not a work item. ' +
         '`condition` defaults to `loose` (a done dependency outside the plan counts as ' +
         'satisfied); `tight` requires every dependency to be IN the projection. This is the ' +
@@ -238,7 +258,11 @@ export function registerValidatePlan(server: McpServer, resolveContext: McpConte
         'parsed against the section registry for its kind and type, misses a required section ' +
         '(`{ item, state, missing, invalid, otherHeadings, signals }`); they never change ' +
         '`valid`. An extra heading alone (an allowed `otherSections` entry, listed in ' +
-        '`otherHeadings`) is not a finding. This is the ' +
+        '`otherHeadings`) is not a finding. ADVISORY too, `notYetWritten` lists ' +
+        '`{ item, title }` for every `add` whose author session has not finished (its stored ' +
+        '`authorFinished` is not `true`), on a plan still `generating`, `planned` or `stale` — ' +
+        '`[]` once it is decided; a section finding or advisory naming one of those cards is ' +
+        'what is still to write, and it never changes `valid`. This is the ' +
         'WHOLE-plan verdict and takes no target — use `validate_work_item` with a `planId` for ' +
         'one subtree. Do NOT approximate it by looping that call per root: a blocked_by edge ' +
         'between two sibling roots is valid here and a false positive per-root, because both ' +

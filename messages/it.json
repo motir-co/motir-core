@@ -7796,6 +7796,7 @@
           "copyTooltip": "Copia <cmd>{command}</cmd>",
           "copyTooltipCiFailed": "CI non riuscita — copia <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Modifiche richieste — copia <cmd>{command}</cmd>",
+          "copyTooltipGuide": "Lavoro che svolge una persona — copia <cmd>{command}</cmd>",
           "planTooltip": "Apri la pianificazione con {key} come obiettivo",
           "cantPlanTitle": "{key} non può ancora essere pianificata",
           "cantPlanLead": "{count, plural, one {Attende una storia che non ha ancora sottoattività.} other {Attende # storie che non hanno ancora sottoattività.}}",

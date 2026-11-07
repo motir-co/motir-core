@@ -4469,6 +4469,14 @@ model JobRun {
   // `running`. Status-first, because `running` is a tiny minority of the table
   // (29 of ~203 000 when the defect was measured).
   @@index([status, startedAt])
+  // The code-graph LEDGER reads (MOTIR-10545): `resolveCodeState` asks for one
+  // workspace's runs of ONE or TWO code-graph functions in given statuses, four
+  // times in one interactive transaction. No index above names `function_id`, and
+  // under FORCE RLS `status = …` is not leakproof, so the planner read the whole
+  // workspace's history (~120k rows, or the whole table) for a few dozen rows.
+  // Here `(workspace_id, function_id)` is the index condition the runtime role
+  // can use; `status` serves the owner role's reads too.
+  @@index([workspaceId, functionId, status])
   @@map("job_run")
 }
 
@@ -5043,6 +5051,47 @@ enum EmailDeliveryState {
   delayed
 
   @@map("email_delivery_state")
+}
+
+/// An address Motir no longer sends to (MOTIR-10565): one row per address the
+/// provider reported as a PERMANENT bounce or a spam COMPLAINT. `emailService`
+/// reads it before every send, under every provider, and skips a suppressed
+/// recipient with a log line — repeated sends to a dead or complaining address
+/// are what get a sending account paused.
+///
+/// `address` is stored NORMALISED (trimmed, lower-cased) and is UNIQUE, so the
+/// send-path lookup is one index probe and a second event for the same address
+/// updates its row rather than adding one. A transient bounce never lands here.
+///
+/// Platform bookkeeping with no workspace: an address bounces for the provider
+/// account, not for a tenant, and the same person may be invited by many
+/// workspaces. RLS admits `app.system_admin` only, like
+/// `github_webhook_delivery`.
+model EmailSuppression {
+  id                String                 @id @default(cuid())
+  address           String                 @unique
+  reason            EmailSuppressionReason
+  /// Which provider reported it — `ses`.
+  provider          String
+  /// The provider's own classification, kept for an operator reading the row:
+  /// a bounce's `bounceSubType` (`General`, `NoEmail`, `Suppressed`, …), a
+  /// complaint's `complaintFeedbackType` (`abuse`, …) when the receiver sent one.
+  detail            String?
+  /// The provider's id of the message that bounced or was complained about —
+  /// the join back to its `email_delivery` row.
+  providerMessageId String?                @map("provider_message_id")
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+
+  @@map("email_suppression")
+}
+
+/// Why an address is suppressed. A bounce that is not PERMANENT is not a reason.
+enum EmailSuppressionReason {
+  bounce
+  complaint
+
+  @@map("email_suppression_reason")
 }
 
 /// Where an attachment row entered the system (Subtask 5.2.1). `editor` =
@@ -7998,6 +8047,10 @@ model PlanCodeRead {
   askedRef   String?  @map("asked_ref")
   /// A search's query or pattern.
   query      String?
+  /// A `code_grep`'s MODE: true searched `query` as a regular expression, false
+  /// literally (MOTIR-10546) — a literal zero and a regex zero are different
+  /// facts. NULL for every other tool, and for a row written before the field.
+  regex      Boolean?
   /// Every commit the read was made at, as `[{ repo?, sha, dirty? }]`: one for a
   /// file read, one per repository for a graph read across a set. `sha` is a
   /// resolved hex id, never a branch name; `dirty` marks a local checkout whose
