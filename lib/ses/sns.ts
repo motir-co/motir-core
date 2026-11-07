@@ -176,9 +176,11 @@ export function snsCertificatePath(raw: string, host: string): string | null {
 }
 
 async function fetchCertificate(host: string, path: string): Promise<string> {
-  // The literal `/` after the host keeps the message's path a PATH: nothing it
-  // holds can reach the authority (the path is also held to CERTIFICATE_PATH).
-  const url = `https://${host}/${path.slice(1)}`;
+  // The message's path is ONE segment (`CERTIFICATE_PATH` admits no `/`), and
+  // it is URI-encoded on its way into the URL so no character of it can reach
+  // the authority or walk the path. For a name CERTIFICATE_PATH admits the
+  // encoding is the identity; it is here as the guarantee, not a transform.
+  const url = `https://${host}/${encodeURIComponent(path.slice(1))}`;
   const cached = certificateCache.get(url);
   if (cached !== undefined) return cached;
   let res: Response;
