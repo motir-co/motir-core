@@ -73,7 +73,7 @@ export const PAIRING_NAMES: Record<string, string> = {
   humanist: 'Humanist',
 };
 export const DEFAULT_PAIRING = PAIRING_FACES.motir!;
-/** Every Latin face any pairing loads (every page preloads them all). */
+/** Every Latin face any pairing loads (a page may fetch any of them). */
 export const ALL_PAIRING_FACES = [...new Set(Object.values(PAIRING_FACES).flatMap(Object.values))];
 
 /**

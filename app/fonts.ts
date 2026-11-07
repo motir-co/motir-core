@@ -51,80 +51,92 @@ const jetbrainsMono = JetBrains_Mono({
 // Mono-Technical type pairing (7.3.56) — IBM Plex Mono dresses the headline +
 // meta/code roles; the Inter body is reused (one new face). Loaded here as its
 // own `-source` var so the `[data-type='mono-technical']` block can point the
-// `--font-serif` / `--font-mono` roles at it.
+// `--font-serif` / `--font-mono` roles at it. `preload: false`: fetched only
+// once a user picks Mono-Technical.
 const ibmPlexMono = IBM_Plex_Mono({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-mono-technical-source',
   display: 'swap',
+  preload: false,
 });
 
 // The Grotesk type pairing's display face (Subtask 7.3.54). Not a base role —
 // it feeds ONLY the `[data-type='grotesk']` headline override in globals.css
 // via `--font-grotesk-source`; the base roles stay Inter / Source Serif / mono
-// when the pairing is not selected, so this adds payload only for that pairing.
+// when the pairing is not selected, and `preload: false` keeps it off every
+// page's preload list, so this adds payload only for that pairing.
 const spaceGrotesk = Space_Grotesk({
   subsets: ['latin'],
   variable: '--font-grotesk-source',
   display: 'swap',
+  preload: false,
 });
 
 // The Editorial type pairing's display serif (Subtask 7.3.55) — Fraunces. Not a
 // base role: it feeds ONLY the `[data-type='editorial']` headline override in
 // globals.css via `--font-editorial-source`, re-pointing the `--font-serif` role
 // while body (Inter) and meta (JetBrains) keep the base roles. Loaded as the
-// variable font (optical sizing for display) so it only pays its weight when a
-// user picks Editorial.
+// variable font (optical sizing for display), with `preload: false` so it only
+// pays its weight when a user picks Editorial.
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-editorial-source',
   display: 'swap',
+  preload: false,
 });
 
 // The Marker type pairing's display face (MOTIR-10553) — Caveat, a casual
 // hand-lettered marker. Not a base role: it feeds ONLY the `[data-type='marker']`
 // headline override in theme.css via `--font-marker-source`, re-pointing the
 // `--font-serif` role while body (Inter) and meta (JetBrains) keep the base roles.
-// Loaded as the variable font, so it only pays its weight when a user picks
-// Marker (or Hand-Drawn / Indie, whose default it is).
+// `preload: false`: the face is fetched only when a page's CSS names it, so it
+// costs nothing until a user picks Marker (or Hand-Drawn / Indie, whose default
+// it is).
 const caveat = Caveat({
   subsets: ['latin'],
   variable: '--font-marker-source',
   display: 'swap',
+  preload: false,
 });
 
 // The Rounded type pairing's face (MOTIR-10554) — Nunito, a rounded-terminal
 // sans. Not a base role: it feeds ONLY the `[data-type='rounded']` override in
 // theme.css via `--font-rounded-source`, which re-points both the headline and
 // body/UI roles; the base roles stay Inter / Source Serif / mono when the pairing
-// is not selected, so this adds payload only for that pairing.
+// is not selected. `preload: false` keeps it out of every page's preload list,
+// so it is fetched only once a user picks Rounded.
 const nunito = Nunito({
   subsets: ['latin'],
   variable: '--font-rounded-source',
   display: 'swap',
+  preload: false,
 });
 
 // The Slab type pairing's display face (MOTIR-10555) — Roboto Slab. Not a base
 // role: it feeds ONLY the `[data-type='slab']` headline override in theme.css via
 // `--font-slab-source`, re-pointing the `--font-serif` role while body (Inter)
-// and meta (JetBrains) keep the base roles. Loaded as the variable font, so it
-// only pays its weight when a user picks Slab.
+// and meta (JetBrains) keep the base roles. `preload: false`: it is fetched only
+// once a user picks Slab.
 const robotoSlab = Roboto_Slab({
   subsets: ['latin'],
   variable: '--font-slab-source',
   display: 'swap',
+  preload: false,
 });
 
 // The Humanist type pairing's face (MOTIR-10556) — Fira Sans, a humanist UI
 // sans. Not a base role: it feeds ONLY the `[data-type='humanist']` override in
 // theme.css via `--font-humanist-source`, which re-points both the headline and
 // body/UI roles. A static family, so next/font needs its weights listed: the four
-// the UI uses (regular, medium, semibold, bold).
+// the UI uses (regular, medium, semibold, bold). `preload: false` keeps those
+// four files off every page; they are fetched only once a user picks Humanist.
 const firaSans = Fira_Sans({
   subsets: ['latin'],
   weight: ['400', '500', '600', '700'],
   variable: '--font-humanist-source',
   display: 'swap',
+  preload: false,
 });
 
 // ── Font sets (Story MOTIR-7733 · MOTIR-7847) ─────────────────────────────
