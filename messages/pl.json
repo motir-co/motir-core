@@ -7797,7 +7797,13 @@
           "copyTooltipCiFailed": "CI nie przeszło — kopiuj <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Poproszono o zmiany — kopiuj <cmd>{command}</cmd>",
           "copyTooltipGuide": "Praca wykonywana przez człowieka — kopiuj <cmd>{command}</cmd>",
-          "planTooltip": "Otwórz planowanie z {key} jako celem"
+          "planTooltip": "Otwórz planowanie z {key} jako celem",
+          "cantPlanTitle": "{key} nie można jeszcze zaplanować",
+          "cantPlanLead": "{count, plural, one {Czeka na historię, która nie ma jeszcze podzadań.} few {Czeka na # historie, które nie mają jeszcze podzadań.} many {Czeka na # historii, które nie mają jeszcze podzadań.} other {Czeka na # historii, które nie mają jeszcze podzadań.}}",
+          "cantPlanNoSubtasks": "Nie ma jeszcze podzadań. Potrzebuje ich, zanim będzie można zaplanować {key}.",
+          "checkFailedTitle": "Nie udało się sprawdzić {key}",
+          "checkFailedBody": "Planowanie się nie otworzyło. Sprawdź połączenie i spróbuj ponownie.",
+          "checkRetry": "Ponów"
         }
       },
       "anchor": {

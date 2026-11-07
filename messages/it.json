@@ -7797,7 +7797,13 @@
           "copyTooltipCiFailed": "CI non riuscita — copia <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Modifiche richieste — copia <cmd>{command}</cmd>",
           "copyTooltipGuide": "Lavoro che svolge una persona — copia <cmd>{command}</cmd>",
-          "planTooltip": "Apri la pianificazione con {key} come obiettivo"
+          "planTooltip": "Apri la pianificazione con {key} come obiettivo",
+          "cantPlanTitle": "{key} non può ancora essere pianificata",
+          "cantPlanLead": "{count, plural, one {Attende una storia che non ha ancora sottoattività.} other {Attende # storie che non hanno ancora sottoattività.}}",
+          "cantPlanNoSubtasks": "Non ha ancora sottoattività. Ne ha bisogno prima che {key} possa essere pianificata.",
+          "checkFailedTitle": "Impossibile verificare {key}",
+          "checkFailedBody": "La pianificazione non si è aperta. Controlla la connessione e riprova.",
+          "checkRetry": "Riprova"
         }
       },
       "anchor": {

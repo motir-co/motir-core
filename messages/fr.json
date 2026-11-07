@@ -7797,7 +7797,13 @@
           "copyTooltipCiFailed": "CI en échec — copier <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Modifications demandées — copier <cmd>{command}</cmd>",
           "copyTooltipGuide": "Travail réalisé par une personne — copier <cmd>{command}</cmd>",
-          "planTooltip": "Ouvrir la planification avec {key} pour cible"
+          "planTooltip": "Ouvrir la planification avec {key} pour cible",
+          "cantPlanTitle": "{key} ne peut pas encore être planifiée",
+          "cantPlanLead": "{count, plural, one {Elle attend une story qui n’a pas encore de sous-tâches.} other {Elle attend # stories qui n’ont pas encore de sous-tâches.}}",
+          "cantPlanNoSubtasks": "N’a pas encore de sous-tâches. Il lui en faut avant que {key} puisse être planifiée.",
+          "checkFailedTitle": "Impossible de vérifier {key}",
+          "checkFailedBody": "La planification ne s’est pas ouverte. Vérifiez votre connexion et réessayez.",
+          "checkRetry": "Réessayer"
         }
       },
       "anchor": {

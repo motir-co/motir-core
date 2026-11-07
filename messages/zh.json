@@ -7788,7 +7788,13 @@
           "copyTooltipCiFailed": "CI 未通过 — 复制 <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "已要求修改 — 复制 <cmd>{command}</cmd>",
           "copyTooltipGuide": "需要人来完成的工作 — 复制 <cmd>{command}</cmd>",
-          "planTooltip": "打开规划，以 {key} 为目标"
+          "planTooltip": "打开规划，以 {key} 为目标",
+          "cantPlanTitle": "{key} 暂时无法规划",
+          "cantPlanLead": "{count, plural, other {它在等待 # 个尚无子任务的故事。}}",
+          "cantPlanNoSubtasks": "尚无子任务。在规划 {key} 之前，它需要先有子任务。",
+          "checkFailedTitle": "无法检查 {key}",
+          "checkFailedBody": "规划未打开。请检查网络连接后重试。",
+          "checkRetry": "重试"
         }
       },
       "anchor": {

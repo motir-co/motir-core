@@ -527,13 +527,24 @@ describe('the next-action button', () => {
     expect(nextAction()).toBeNull();
   });
 
-  it('a To plan card opens the planning overlay with that card as the target', () => {
+  it('a To plan card opens the planning overlay with that card as the target', async () => {
+    // Since MOTIR-10544 the click CHECKS first (`GET /api/work-items/plannability`)
+    // and opens the overlay on a plannable answer; the alert and failure outcomes
+    // are `tests/components/canvas-card-plan-check.test.tsx`.
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ plannable: true, reasons: [] }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     render(<WorkItemNode item={story} nextActions={ON} />);
     const button = nextAction()!;
     expect(button.getAttribute('data-action')).toBe('plan');
     expect(button.getAttribute('aria-label')).toBe('Plan MOTIR-10520');
     expect(button.textContent).toBe('Plan');
-    fireEvent.click(button, { button: 0 });
+    await act(async () => {
+      fireEvent.click(button, { button: 0 });
+    });
+    vi.unstubAllGlobals();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(shallowPush).toHaveBeenCalledTimes(1);
     expect(shallowPush).toHaveBeenCalledWith(
       withPlanningOverlay('/roadmap?scope=project', {
@@ -571,7 +582,13 @@ describe('the next-action button', () => {
     expect(onKeyDown).not.toHaveBeenCalled();
   });
 
-  it('the Plan press does not reach the node either', () => {
+  it('the Plan press does not reach the node either', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ plannable: true, reasons: [] }), { status: 200 }),
+      ),
+    );
     const onClick = vi.fn();
     const onPointerDown = vi.fn();
     render(
@@ -581,7 +598,10 @@ describe('the next-action button', () => {
     );
     const button = nextAction()!;
     fireEvent.pointerDown(button);
-    fireEvent.click(button, { button: 0 });
+    await act(async () => {
+      fireEvent.click(button, { button: 0 });
+    });
+    vi.unstubAllGlobals();
     expect(onClick).not.toHaveBeenCalled();
     expect(onPointerDown).not.toHaveBeenCalled();
   });

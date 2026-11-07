@@ -7797,7 +7797,13 @@
           "copyTooltipCiFailed": "CI fehlgeschlagen — <cmd>{command}</cmd> kopieren",
           "copyTooltipChangesRequested": "Änderungen angefordert — <cmd>{command}</cmd> kopieren",
           "copyTooltipGuide": "Arbeit, die ein Mensch erledigt — <cmd>{command}</cmd> kopieren",
-          "planTooltip": "Planung mit {key} als Ziel öffnen"
+          "planTooltip": "Planung mit {key} als Ziel öffnen",
+          "cantPlanTitle": "{key} kann noch nicht geplant werden",
+          "cantPlanLead": "{count, plural, one {Sie wartet auf eine Story, die noch keine Unteraufgaben hat.} other {Sie wartet auf # Storys, die noch keine Unteraufgaben haben.}}",
+          "cantPlanNoSubtasks": "Hat noch keine Unteraufgaben. Sie braucht welche, bevor {key} geplant werden kann.",
+          "checkFailedTitle": "{key} konnte nicht geprüft werden",
+          "checkFailedBody": "Die Planung wurde nicht geöffnet. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+          "checkRetry": "Wiederholen"
         }
       },
       "anchor": {

@@ -7797,7 +7797,13 @@
           "copyTooltipCiFailed": "CI mislukt — <cmd>{command}</cmd> kopiëren",
           "copyTooltipChangesRequested": "Wijzigingen gevraagd — <cmd>{command}</cmd> kopiëren",
           "copyTooltipGuide": "Werk dat een mens doet — <cmd>{command}</cmd> kopiëren",
-          "planTooltip": "Planning openen met {key} als doel"
+          "planTooltip": "Planning openen met {key} als doel",
+          "cantPlanTitle": "{key} kan nog niet worden gepland",
+          "cantPlanLead": "{count, plural, one {Hij wacht op een story die nog geen subtaken heeft.} other {Hij wacht op # story’s die nog geen subtaken hebben.}}",
+          "cantPlanNoSubtasks": "Heeft nog geen subtaken. Die zijn nodig voordat {key} kan worden gepland.",
+          "checkFailedTitle": "{key} kon niet worden gecontroleerd",
+          "checkFailedBody": "De planning is niet geopend. Controleer je verbinding en probeer het opnieuw.",
+          "checkRetry": "Opnieuw"
         }
       },
       "anchor": {

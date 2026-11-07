@@ -97,6 +97,28 @@ export function useOpenPlanningWorkspace(context: PlanningLaunchContext): OpenPl
 }
 
 /**
+ * The same one opener for a door whose TARGET is decided at click time rather
+ * than at render (MOTIR-10544): the canvas card's Plan button opens the overlay
+ * only after its pre-check answers, and the can't-plan alert's per-line Plan
+ * opens it on a BLOCKER the button never knew about. It returns `open(context)`,
+ * which writes the launcher's address for that context onto the current page with
+ * `shallowPush` — exactly what {@link useOpenPlanningWorkspace}'s `open` writes —
+ * so a deferred open lands on the same overlay a direct one does. It is not a
+ * link, so there is no `href` and no modified click to let through.
+ */
+export function useOpenPlanningWorkspaceLater(): (context: PlanningLaunchContext) => void {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  return useCallback(
+    (context: PlanningLaunchContext) => {
+      const qs = searchParams.toString();
+      shallowPush(withPlanningOverlay(`${pathname}${qs ? `?${qs}` : ''}`, context));
+    },
+    [pathname, searchParams],
+  );
+}
+
+/**
  * THE GUIDE ME THROUGH DOOR (Story MOTIR-7459 · MOTIR-7466) — `openGuide(itemKey)`.
  *
  * The same one opener, aimed at the guide mode: it writes

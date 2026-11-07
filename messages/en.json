@@ -7794,7 +7794,13 @@
           "copyTooltipCiFailed": "CI failed — copy <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Changes requested — copy <cmd>{command}</cmd>",
           "copyTooltipGuide": "Work a person does — copy <cmd>{command}</cmd>",
-          "planTooltip": "Open planning with {key} as the target"
+          "planTooltip": "Open planning with {key} as the target",
+          "cantPlanTitle": "{key} can't be planned yet",
+          "cantPlanLead": "{count, plural, one {It waits on a story that has no subtasks yet.} other {It waits on # stories that have no subtasks yet.}}",
+          "cantPlanNoSubtasks": "Has no subtasks yet. It needs them before {key} can be planned.",
+          "checkFailedTitle": "Couldn't check {key}",
+          "checkFailedBody": "Planning didn't open. Check your connection and try again.",
+          "checkRetry": "Retry"
         }
       },
       "anchor": {
