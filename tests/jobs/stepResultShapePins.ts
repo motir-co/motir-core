@@ -755,10 +755,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // feature, and KEPT the id: bumping would re-send every email of a resumed run.
   // A memo already stored with the removed member replays a value nothing reads —
   // `template` is surfaced on `job_run.output` only and no code branches on it.
+  // MOTIR-10565 WIDENED `skipped` by one member (`recipient_suppressed`) and kept
+  // the id: every stored memo carries the older member or none, both still valid.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | "recipient_suppressed" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',

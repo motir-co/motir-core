@@ -49,7 +49,17 @@ const SERVERLESS_HOSTING = {
   ]),
 };
 
-const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING];
+/**
+ * The Amazon SES email transport (MOTIR-10565): `lib/email.ts`'s `ses` arm
+ * reaches SES through `lib/ses/sesClient.ts` and nothing else, so the SDK stays
+ * out of the provider logic and the provider logic stays testable offline.
+ */
+const EMAIL_TRANSPORT = {
+  dir: join('lib', 'ses'),
+  modules: new Set(['@aws-sdk/client-sesv2']),
+};
+
+const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING, EMAIL_TRANSPORT];
 
 const SDK_IMPORT =
   /(?:from\s+|import\s*\(\s*|require\s*\(\s*|^\s*import\s+)['"](@aws-sdk\/[^'"]+)['"]/gm;
