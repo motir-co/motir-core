@@ -56,6 +56,7 @@ export * from './components/ui/FormField';
 export * from './components/ui/Modal';
 export * from './components/ui/Pill';
 export * from './components/ui/Popover';
+export * from './components/ui/DatePicker';
 export * from './components/ui/Combobox';
 export * from './components/ui/SectionLabel';
 export * from './components/ui/Segmented';
