@@ -79,6 +79,15 @@ afterAll(async () => {
 
 let seq = 0;
 
+/**
+ * An instant that is due by the DATABASE's clock too. The claim compares
+ * `run_at <= now()` in Postgres, and a host clock even a few milliseconds ahead
+ * of the database's would make a row stamped `new Date()` not yet due.
+ */
+function dueNow(): Date {
+  return new Date(Date.now() - 1_000);
+}
+
 /** One `system.code-graph-refresh` row, due now, for a freshly seeded workspace. */
 async function queueRefresh(): Promise<{ runId: string; data: unknown }> {
   seq += 1;
@@ -125,7 +134,8 @@ function incidentWorker(
     },
     onSchedulerTick: async () => {
       if (!scheduled) return;
-      const fire = new Date(Math.floor(Date.now() / 60_000) * 60_000);
+      // A fixed instant in the past: always due, and one fire however often it ticks.
+      const fire = new Date(Date.UTC(2026, 10, 7, 20, 30, 0));
       const queued = await withSystemContext((tx) =>
         jobQueueRepository.enqueueScheduled(
           {
@@ -169,7 +179,7 @@ describe('the 2026-11-07 stall, reproduced (MOTIR-10600 AC 4)', () => {
         jobId: 'system.github-webhook-delivery',
         eventName: 'github.webhook.delivery',
         workspaceId: ws.workspaceId,
-        runAt: new Date(),
+        runAt: dueNow(),
         maxAttempts: 3,
       },
     });
@@ -229,7 +239,7 @@ describe('a queued admission is a defer between asks (MOTIR-10600 AC 1)', () => 
 
     const asks: number[] = [];
     for (let pass = 1; pass <= 3; pass += 1) {
-      await adminDb.jobQueueRun.update({ where: { id: runId }, data: { runAt: new Date() } });
+      await adminDb.jobQueueRun.update({ where: { id: runId }, data: { runAt: dueNow() } });
       expect(await worker.tick(), `pass ${pass} claims the run`).toBe(1);
       await worker.settled();
       const tries = await adminDb.jobStep.count({
