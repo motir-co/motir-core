@@ -87,6 +87,12 @@
  * worded manual steps, and an error's one-line message.
  */
 import { parseArgs } from 'node:util';
+// Wires every fleet kind's Fly↔AWS switch reader into `shardTargets`' registry
+// (MOTIR-10592). The registry fills only where this module is loaded, and an
+// unwired kind reads FLY — so without this import `pool-status`, the quota raise
+// and `add-spare`'s growth path answered Fly for every kind in this bundle while
+// the services, which import it through their admission code, read AWS.
+import '@/lib/ciFleet/fleetKindSwitches';
 import { FleetShardProvisioningRefusedError } from '@/lib/ciFleet/errors';
 import { FLEET_WORKLOAD_KINDS } from '@/lib/ciFleet/workloads';
 import { findShardProvisioningProvider } from '@/lib/fleetShards/provisioningProviders';

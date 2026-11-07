@@ -357,6 +357,35 @@ describe('the fleet-admin bundle in a Fargate-shaped process', () => {
     assertNoSecret(run);
   }, 60_000);
 
+  // MOTIR-10592 — the switches' readers are registered as an import side effect
+  // of `lib/ciFleet/fleetKindSwitches.ts`, and an unwired kind reads Fly. The
+  // services import it through their admission code; this bundle is a separate
+  // module graph, so only a run of the BUILT bundle can show it wired. On AWS
+  // production every kind printed `fly (no growth)` with the switches on `aws`.
+  it('reads the env-driven fleet switches: aws when set to aws, fly otherwise', async () => {
+    const onAws = await runBundle(
+      bundle,
+      ['pool-status'],
+      fargateEnv({ MOTIR_FLEET_CI_RUNNER_PROVIDER: 'aws', MOTIR_INDEX_FLEET_PROVIDER: 'aws' }),
+    );
+    expect(onAws.stderr).toBe('');
+    expect(onAws.code).toBe(0);
+    expect(onAws.stdout).toMatch(/^ci_runner: aws {2}growth /m);
+    expect(onAws.stdout).toMatch(/^code_graph_index: aws {2}growth /m);
+    expect(onAws.stdout).toContain('  shared accounts (granted vCPU as stored):');
+    expect(lastLine(onAws.stdout)).toBe('fleet-admin exit 0');
+    assertNoSecret(onAws);
+
+    const onFly = await runBundle(
+      bundle,
+      ['pool-status', '--kind', 'ci_runner'],
+      fargateEnv({ MOTIR_FLEET_CI_RUNNER_PROVIDER: 'fly', MOTIR_INDEX_FLEET_PROVIDER: '' }),
+    );
+    expect(onFly.code).toBe(0);
+    expect(onFly.stdout).toMatch(/^ci_runner: fly \(no growth\)$/m);
+    expect(onFly.stdout).not.toMatch(/^ci_runner: aws/m);
+  }, 60_000);
+
   it('answers a refusal as 1, to the caller and on the last line', async () => {
     const run = await runBundle(bundle, ['growth-events'], fargateEnv());
     expect(run.code).toBe(1);
