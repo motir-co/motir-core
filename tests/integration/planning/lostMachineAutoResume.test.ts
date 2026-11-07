@@ -220,11 +220,9 @@ async function progress(planId: string) {
       [
         {
           id: p.id,
-          projectId: p.projectId,
           status: p.status,
           createdAt: p.createdAt,
           lastActivityAt: p.lastActivityAt,
-          authorSource: p.authorSource,
           sessionId: p.sessionId,
         },
       ],

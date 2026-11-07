@@ -554,7 +554,19 @@ describe('the state stays on the plan', () => {
     const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
     const reviewed = review.items.filter((i) => i.title === 'Stamped' || i.title === 'Plain');
     expect(reviewed).toHaveLength(2);
-    for (const item of reviewed) expect(JSON.stringify(item)).not.toContain('authorFinished');
+    // The review reports the WRITTEN STATE read-only (MOTIR-10496) — the run
+    // context reads it there — and never as a change to the card: no change row,
+    // no field a reviewer decides on.
+    expect(reviewed.map((i) => [i.title, i.authorFinished])).toEqual(
+      expect.arrayContaining([
+        ['Stamped', true],
+        ['Plain', false],
+      ]),
+    );
+    for (const item of reviewed) {
+      const { authorFinished: _state, ...card } = item;
+      expect(JSON.stringify(card)).not.toContain('authorFinished');
+    }
     const strip = (i: (typeof reviewed)[number]) => {
       const { id: _id, title: _title, ...rest } = i as unknown as Record<string, unknown>;
       return Object.keys(rest).sort();

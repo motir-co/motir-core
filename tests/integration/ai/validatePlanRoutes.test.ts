@@ -360,6 +360,8 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The cards no author session has finished (MOTIR-10496); none in an empty plan.
+      notYetWritten: [],
       // The link advisories ride beside the verdict (MOTIR-9873); none here.
       advisories: [],
       // …and so do the `modify`s approve would re-open (MOTIR-10106); none here.
@@ -419,6 +421,9 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // A title-only add nobody finished is NOT YET WRITTEN (MOTIR-10496) —
+      // advisory, beside the verdict like the rest.
+      notYetWritten: [{ item: `planItem:${gatedId}`, title: 'Gated' }],
       // The shape advisories ride beside the verdict (MOTIR-9873, MOTIR-10087):
       // a bare `{ title, kind }` add is UNDER-AUTHORED, and says so.
       advisories: [

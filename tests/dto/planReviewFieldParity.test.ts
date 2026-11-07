@@ -101,7 +101,9 @@ const NOT_A_CARD_FIELD: Readonly<Record<string, string>> = {
   authorFinished:
     'MOTIR-10490 — whether an AUTHOR SESSION finished writing the card: planner state ' +
     'ABOUT the card, set by a driver or by the hand-written stamp. Approve carries nothing ' +
-    'of it to the work item, so there is nothing for a reviewer to decide on.',
+    'of it to the work item, so there is nothing for a reviewer to decide on. The review ' +
+    'model reports it read-only as the written state (MOTIR-10496), add-only, for the run ' +
+    'context and the plan surface — still not a field anyone decides.',
 };
 
 describe('PlanReviewItemDto ⟷ PlanItemProposedFields parity', () => {
