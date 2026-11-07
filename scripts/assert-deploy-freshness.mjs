@@ -5,7 +5,7 @@
  * Run it from a full-depth checkout of the repository:
  *
  *   node scripts/assert-deploy-freshness.mjs
- *   node scripts/assert-deploy-freshness.mjs --url https://motir-core.fly.dev/api/health/release
+ *   node scripts/assert-deploy-freshness.mjs --url https://app.motir.co/api/health/release
  *   node scripts/assert-deploy-freshness.mjs --max-age-minutes 30
  *
  * WHAT IT ASSERTS, and why the comparison is not done inside the app: see
@@ -39,7 +39,10 @@ import {
   parseReleaseBody,
 } from './deployFreshness.mjs';
 
-const DEFAULT_URL = 'https://motir-core.fly.dev/api/health/release';
+// Production's own domain, not a host's name for it: the AWS cutover moved
+// app.motir.co off Fly, and a host-named default went on reading the stopped
+// Fly app and timing out.
+const DEFAULT_URL = 'https://app.motir.co/api/health/release';
 
 function parseArgs(argv) {
   const args = {

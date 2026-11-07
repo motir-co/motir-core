@@ -23,6 +23,7 @@ const FLEET_VARS = [
   'FLY_FLEET_APP',
   'FLY_FLEET_REGION',
   'MOTIR_RUNNER_IMAGE',
+  'MOTIR_INDEX_FLEET_PROVIDER',
   INDEXER_IMAGE_ENV_VAR,
 ];
 
@@ -170,5 +171,47 @@ describe('indexFleetConfig — unconfigured must be LOUD', () => {
     expect(() => indexFleetConfig()).toThrow();
     configureCloudFleet();
     expect(() => indexFleetConfig()).not.toThrow();
+  });
+});
+
+describe('on the indexer pool (MOTIR_INDEX_FLEET_PROVIDER=aws), the Fly fleet is not required', () => {
+  // The AWS deployment's shape: indexing placed on its pool, the indexer image set,
+  // and no Fly fleet app. Every index job used to fail terminally here with
+  // "set FLY_FLEET_APP" before admission could defer it.
+  const IMAGE =
+    '944842271421.dkr.ecr.us-east-1.amazonaws.com/motir-indexer@sha256:' + 'e'.repeat(64);
+
+  function configurePoolDeployment(): void {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'aws');
+    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, IMAGE);
+  }
+
+  it('returns the image with no Fly fleet variable set', () => {
+    configurePoolDeployment();
+    expect(indexFleetConfig()).toEqual({ image: IMAGE, region: 'iad' });
+    expect(isIndexFleetConfigured()).toBe(true);
+  });
+
+  it('ignores FLY_FLEET_REGION — the admitted account supplies the region', () => {
+    configurePoolDeployment();
+    vi.stubEnv('FLY_FLEET_REGION', 'ams');
+    expect(indexFleetConfig().region).toBe('iad');
+  });
+
+  it('is still LOUD about the image, and names only the image', () => {
+    configurePoolDeployment();
+    vi.stubEnv(INDEXER_IMAGE_ENV_VAR, '');
+    expect(() => indexFleetConfig()).toThrow(
+      `The container orchestrator is not configured: set ${INDEXER_IMAGE_ENV_VAR}.`,
+    );
+    expect(isIndexFleetConfigured()).toBe(false);
+  });
+
+  it('still requires the Fly fleet when the switch reads fly', () => {
+    configurePoolDeployment();
+    vi.stubEnv('MOTIR_INDEX_FLEET_PROVIDER', 'fly');
+    expect(() => indexFleetConfig()).toThrow('FLY_FLEET_APP');
+    expect(isIndexFleetConfigured()).toBe(false);
   });
 });

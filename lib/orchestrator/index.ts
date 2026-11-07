@@ -52,6 +52,7 @@ import {
   shardHeldShared,
 } from '@/lib/orchestrator/shardFakeJournal';
 import { selectedOrchestratorProvider } from './provider';
+import { indexFleetOnPool } from '@/lib/ciFleet/limits';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
 import { observeHostingDestroyApp } from './hosting';
@@ -732,6 +733,9 @@ export interface IndexFleetConfig {
  */
 export function isIndexFleetConfigured(): boolean {
   if (selectedOrchestratorProvider() === 'fake') return true;
+  // On its pool, an index boots on an AWS account, not the Fly fleet: only the
+  // image is this deployment's to set (see `indexFleetConfig`).
+  if (indexFleetOnPool()) return isFlyIndexerImageConfigured();
   return isFlyFleetConfigured() && isFlyIndexerImageConfigured();
 }
 
@@ -763,6 +767,15 @@ export function isIndexFleetConfigured(): boolean {
  * sets both, and a self-hosted one sets neither — so the coupling is accepted and
  * named. Splitting the accessor belongs with the second adapter, alongside the
  * `defaultSpecDefaults()` the port boundary's own guard already anticipates.
+ *
+ * ⚠️ BUT ONLY WHEN THE INDEX IS PLACED ON FLY. With `MOTIR_INDEX_FLEET_PROVIDER=aws`
+ * the index boots on an indexer-pool account (MOTIR-9445), whose orchestrator,
+ * credential and region come from the account row — none of the Fly fleet's
+ * variables is read on that path. Requiring them anyway failed every index job
+ * terminally on a deployment with no Fly fleet ("set FLY_FLEET_APP") before
+ * admission could defer it with `pool_full`. So on the pool only the image is
+ * required, and the region is a placeholder the admitted account's own region
+ * replaces.
  */
 export function indexFleetConfig(): IndexFleetConfig {
   if (selectedOrchestratorProvider() === 'fake') {
@@ -773,13 +786,15 @@ export function indexFleetConfig(): IndexFleetConfig {
   }
   const missing: string[] = [];
   let region = 'iad';
-  try {
-    region = flyFleetConfig().region;
-  } catch (err) {
-    // Merge the fleet's own list of missing variables with this one's, and say
-    // `set …` once: read the refusal's `detail`, never its rendered message
-    // (MOTIR-6571). `flyFleetConfig` throws nothing but this refusal.
-    missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
+  if (!indexFleetOnPool()) {
+    try {
+      region = flyFleetConfig().region;
+    } catch (err) {
+      // Merge the fleet's own list of missing variables with this one's, and say
+      // `set …` once: read the refusal's `detail`, never its rendered message
+      // (MOTIR-6571). `flyFleetConfig` throws nothing but this refusal.
+      missing.push((err as OrchestratorNotConfiguredError).detail.replace(/^set /, ''));
+    }
   }
   const image = flyIndexerImage();
   if (!image) missing.push(INDEXER_IMAGE_ENV_VAR);
