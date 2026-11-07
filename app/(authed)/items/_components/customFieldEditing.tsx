@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import type { CustomFieldValueDto, CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { Input } from '@/components/ui/Input';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { setCustomFieldValueAction } from '../[key]/customFieldActions';
 

@@ -210,7 +210,7 @@ The design-system **date picker** — the replacement for the native
 `<input type="date">` calendar popup. The Due-date FIELD already uses the
 `Input` primitive, but the native browser _calendar_ is OS chrome and breaks the
 design system. This designs the in-system calendar so the 2.4.12 code subtask
-(`components/ui/DatePicker`) composes our own primitives instead of improvising
+(`packages/design-system/src/components/ui/DatePicker`, moved there by MOTIR-10551) composes our own primitives instead of improvising
 (the design gate — there is no calendar in the system today). Asset:
 `design/work-items/datepicker.mock.html`.
 

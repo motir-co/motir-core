@@ -64,7 +64,7 @@ import { DifficultyIndicator, DifficultyPicker } from '@/components/issues/Diffi
 import { ObsolescenceHeaderLink } from '@/components/issues/ObsolescenceBadge';
 import { ObsolescenceField } from '@/components/issues/ObsolescenceField';
 import { canCarryObsolescence } from '@/lib/issues/obsolescence';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
 import { QuickViewFolderControl } from './QuickViewFolderField';

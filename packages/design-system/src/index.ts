@@ -56,6 +56,7 @@ export * from './components/ui/FormField';
 export * from './components/ui/Modal';
 export * from './components/ui/Pill';
 export * from './components/ui/Popover';
+export * from './components/ui/DatePicker';
 export * from './components/ui/Combobox';
 export * from './components/ui/SectionLabel';
 export * from './components/ui/Segmented';
@@ -67,6 +68,10 @@ export * from './components/ui/EmptyState';
 export * from './components/ui/ErrorState';
 export * from './components/ui/MultiSelectPicker';
 export * from './components/ui/ColorSwatchPicker';
+// The DatePicker's date-format injection: the pure types/default/resolver
+// (server-safe) and the client provider + hook, each its own chunk.
+export * from './components/ui/datePickerFormat';
+export * from './components/ui/DatePickerFormatContext';
 
 // ── The isolation specimen (a live /tokens-style render) ─────────────────────
 export * from './specimen/TokensSpecimen';

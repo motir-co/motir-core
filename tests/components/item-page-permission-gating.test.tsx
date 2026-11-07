@@ -64,7 +64,7 @@ import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuick
 import { ProjectAccessProvider } from '@/app/(authed)/_components/ProjectAccessProvider';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { Combobox } from '@/components/ui/Combobox';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 
 const VIEWER: PermissionKey[] = [...BUILTIN_ROLE_PERMISSIONS.viewer];

@@ -19,7 +19,7 @@ beforeAll(() => {
   Element.prototype.releasePointerCapture ??= () => {};
 });
 
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 
 afterEach(() => {
   cleanup();

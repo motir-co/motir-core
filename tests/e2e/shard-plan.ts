@@ -554,6 +554,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'custom-fields.spec.ts': 20.6,
   'custom-roles.spec.ts': 16.0,
   'data-subject-request-journey.spec.ts': 8.5,
+  // MOTIR-10584 — new file, measured LOCALLY against a production build on
+  // 2026-11-07 (`npx playwright test -c playwright.config.ts
+  // tests/e2e/date-picker-surfaces.spec.ts --reporter=list,json`, per-test
+  // `duration` summed): 30.3 s over the five tests (8.2 + 5.4 + 6.2 + 4.9 + 5.6).
+  // Rounded UP to 31.0. Re-measure from the first green CI run that includes it.
+  'date-picker-surfaces.spec.ts': 31.0,
   'delivery-set.spec.ts': 12.0,
   'dashboards.spec.ts': 13.9,
   // MOTIR-5118. Measured LOCALLY (3.3 s + 1.5 s over the two tests, on this

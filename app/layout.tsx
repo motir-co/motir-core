@@ -18,6 +18,7 @@ import { AnalyticsScript } from '@/components/analytics/AnalyticsScript';
 import { ImmersiveTilt } from '@/components/theme/ImmersiveTilt';
 import { HandDrawnFilter } from '@/components/theme/HandDrawnFilter';
 import { ToastProvider } from '@/components/ui/Toast';
+import { DatePickerFormatAdapter } from '@/components/i18n/DatePickerFormatAdapter';
 import { localeDir, type Locale } from '@/lib/i18n/locales';
 import { fontVariables } from './fonts';
 import './globals.css';
@@ -179,16 +180,21 @@ export default async function RootLayout({
           both existed.
         */}
         <NextIntlClientProvider locale={locale} messages={messages}>
-          <ThemeProvider initialPreference={applied} signedIn={Boolean(session)}>
-            {/* Pointer-parallax engine for the 3D / Immersive style — inert for
-                every other style and under reduced motion (7.3.39). */}
-            <ImmersiveTilt />
-            {/* Hidden SVG roughen filter for the Hand-Drawn / Indie style —
-                referenced by globals.css only under that style, inert otherwise
-                (7.3.41). */}
-            <HandDrawnFilter />
-            <ToastProvider>{children}</ToastProvider>
-          </ThemeProvider>
+          {/* The one app-wide place the package DatePicker gets its locale and
+              formatter: the next-intl locale + motir-core's own formatDate
+              (MOTIR-10551). Inside the intl provider so it can read the locale. */}
+          <DatePickerFormatAdapter>
+            <ThemeProvider initialPreference={applied} signedIn={Boolean(session)}>
+              {/* Pointer-parallax engine for the 3D / Immersive style — inert for
+                  every other style and under reduced motion (7.3.39). */}
+              <ImmersiveTilt />
+              {/* Hidden SVG roughen filter for the Hand-Drawn / Indie style —
+                  referenced by globals.css only under that style, inert otherwise
+                  (7.3.41). */}
+              <HandDrawnFilter />
+              <ToastProvider>{children}</ToastProvider>
+            </ThemeProvider>
+          </DatePickerFormatAdapter>
         </NextIntlClientProvider>
       </body>
     </html>

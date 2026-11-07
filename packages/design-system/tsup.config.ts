@@ -1,4 +1,39 @@
-import { defineConfig } from 'tsup';
+import path from 'node:path';
+import { defineConfig, type Options } from 'tsup';
+
+type EsbuildPlugin = NonNullable<Options['esbuildPlugins']>[number];
+
+// Source modules whose module-level STATE must be one instance across chunks —
+// today the DatePicker's format context. With `splitting: false` (below) every
+// entry INLINES what it imports, so `DatePicker.js` would carry its own
+// `createContext()` and never see a `DatePickerFormatProvider` imported from the
+// barrel's `DatePickerFormatContext.js` chunk: the provider would silently do
+// nothing in the built package (MOTIR-10551). A relative import of one of these
+// from another entry is kept EXTERNAL and pointed at the module's own emitted
+// chunk instead. Add a module here when a second chunk needs its React context.
+const SINGLETON_MODULES = ['src/components/ui/DatePickerFormatContext.tsx'].map((f) =>
+  path.resolve(__dirname, f),
+);
+
+const stripExt = (f: string) => f.replace(/\.tsx?$/, '');
+
+const singletonModules: EsbuildPlugin = {
+  name: 'singleton-modules',
+  setup(build) {
+    build.onResolve({ filter: /^\.\.?\// }, (args) => {
+      // The module's OWN entry is built as usual; only imports of it go external.
+      if (args.kind === 'entry-point') return undefined;
+      const target = path.resolve(args.resolveDir, args.path);
+      const hit = SINGLETON_MODULES.find((m) => stripExt(m) === stripExt(target));
+      if (!hit || stripExt(args.importer) === stripExt(hit)) return undefined;
+      // dist mirrors src 1:1, so the path between the two sources is the path
+      // between their chunks.
+      let spec = path.relative(path.dirname(args.importer), stripExt(hit)) + '.js';
+      if (!spec.startsWith('.')) spec = `./${spec}`;
+      return { path: spec, external: true };
+    });
+  },
+};
 
 // Build config for @motir/design-system. Mirrors the @motir/cli precedent
 // (tsup + ESM + dts), with the differences a React component library needs:
@@ -31,6 +66,7 @@ export default defineConfig({
   sourcemap: true,
   treeshake: true,
   external: ['react', 'react-dom', 'react/jsx-runtime', 'next'],
+  esbuildPlugins: [singletonModules],
   // Post-build steps run HERE (not chained after `tsup` in the npm script) so
   // they are intrinsic to the build — a bare `tsup`, a `--watch` rebuild, or any
   // future caller ALL get the RSC-safe output by construction, never a raw bundle

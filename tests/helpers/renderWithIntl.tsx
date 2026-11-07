@@ -3,6 +3,7 @@ import { NextIntlClientProvider } from 'next-intl';
 import type { ReactElement, ReactNode } from 'react';
 import enMessages from '@/messages/en.json';
 import { defaultLocale } from '@/lib/i18n/locales';
+import { DatePickerFormatAdapter } from '@/components/i18n/DatePickerFormatAdapter';
 
 // Wraps a unit-rendered component in a NextIntlClientProvider seeded with the
 // real `en` catalog, so any component that calls useTranslations() renders the
@@ -10,6 +11,10 @@ import { defaultLocale } from '@/lib/i18n/locales';
 // `render` for components that read translations — assertions on English text
 // stay byte-identical to the catalog. Pass `messages`/`locale` to override (e.g.
 // to assert a zh render).
+//
+// It also mounts `DatePickerFormatAdapter` inside the intl provider, exactly as
+// `app/layout.tsx` does, so a package `DatePicker` rendered here formats its
+// date in the given locale (MOTIR-10551) — `locale: 'zh'` shows `2026年6月3日`.
 export function renderWithIntl(
   ui: ReactElement,
   {
@@ -29,7 +34,7 @@ export function renderWithIntl(
   function Wrapper({ children }: { children: ReactNode }) {
     return (
       <NextIntlClientProvider locale={locale} messages={messages} now={now}>
-        {children}
+        <DatePickerFormatAdapter>{children}</DatePickerFormatAdapter>
       </NextIntlClientProvider>
     );
   }

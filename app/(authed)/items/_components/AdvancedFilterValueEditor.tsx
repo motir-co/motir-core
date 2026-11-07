@@ -12,7 +12,7 @@ import {
   TriangleAlert,
   UserX,
 } from 'lucide-react';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { MultiSelectPicker, type MultiSelectOption } from '@/components/ui/MultiSelectPicker';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';

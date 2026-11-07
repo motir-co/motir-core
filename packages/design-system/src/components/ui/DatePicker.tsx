@@ -2,17 +2,24 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
-import { useLocale } from 'next-intl';
 import { Popover } from './Popover';
-import { formatDate } from '@/lib/utils/datetime';
-import { cn } from '@/lib/utils/cn';
-import type { Locale } from '@/lib/i18n/locales';
+import { cn } from '../../utils/cn';
+import type { DatePickerFormatter, DatePickerLocale } from './datePickerFormat';
+import { useDatePickerFormat } from './DatePickerFormatContext';
 
 /**
  * DatePicker — the design-system replacement for the native `<input type="date">`
  * calendar popup (Subtask 2.4.12, design `design/work-items/datepicker.mock.html`).
  * An `Input`-styled trigger field (selected date or placeholder + a Clear control)
  * opens an anchored `Popover` holding a month grid.
+ *
+ * Moved into `@motir/design-system` from motir-core's `components/ui/` (Story
+ * MOTIR-10551) so any app on the package can use it. It needs no i18n library:
+ * the trigger formats the selected date with an INJECTED locale + formatter —
+ * the `locale` / `formatDate` props, else the nearest `DatePickerFormatProvider`,
+ * else the default (locale `en`, a UTC formatter: `2026-06-03` → `Jun 3, 2026`),
+ * resolved per input. The calendar's own strings (month and weekday names,
+ * `Select a date`, `Clear date`, `Today`, `Clear`) stay English.
  *
  * Pure presentation: no queries, no Server Actions. The value crosses as an ISO
  * `YYYY-MM-DD` string (or null) — exactly what the issue forms already hold — so
@@ -128,6 +135,10 @@ export interface DatePickerProps {
    *  only for a dismiss-without-pick. */
   onClose?: () => void;
   className?: string;
+  /** Locale the trigger formats the date in. Beats a `DatePickerFormatProvider`'s. */
+  locale?: DatePickerLocale;
+  /** Formatter for the trigger date, `(isoDate, locale) => string`. Beats the provider's. */
+  formatDate?: DatePickerFormatter;
 }
 
 export function DatePicker({
@@ -140,6 +151,8 @@ export function DatePicker({
   autoOpen = false,
   onClose,
   className,
+  locale,
+  formatDate,
 }: DatePickerProps) {
   const selected = parseKey(value);
   // Disabled never opens, `autoOpen` included (MOTIR-6173 — the MOTIR-4822 path).
@@ -152,7 +165,8 @@ export function DatePicker({
   const [focusKey, setFocusKey] = useState<string>(() => toKey(selected ?? todayUTC()));
 
   const gridRef = useRef<HTMLDivElement>(null);
-  const locale = useLocale() as Locale;
+  // Prop → provider → default, per input (the precedence lives in the resolver).
+  const format = useDatePickerFormat({ locale, formatDate });
   const baseId = useId();
   const captionId = `${baseId}-caption`;
   const today = todayUTC();
@@ -243,7 +257,7 @@ export function DatePicker({
   }
 
   const cells = monthGrid(view.y, view.m);
-  const triggerLabel = selected && value ? formatDate(value, locale) : placeholder;
+  const triggerLabel = selected && value ? format.formatDate(value) : placeholder;
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>

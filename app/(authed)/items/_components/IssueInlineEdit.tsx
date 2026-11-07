@@ -22,7 +22,7 @@ import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { cn } from '@/lib/utils/cn';
 import { useToast } from '@/components/ui/Toast';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/StatusHeldNotice';
 import { heldLineFromRefusal, useDismissOnEscapeOrOutside } from '@/components/issues/heldRefusal';
