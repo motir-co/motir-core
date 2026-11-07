@@ -28,9 +28,23 @@ let page: Page;
 let workItemId: string | null = null;
 /** The run-stamped attachment, once the upload has answered. */
 let uploadedId: string | null = null;
+/**
+ * Every attachment id the page has requested a content route for, in order,
+ * from the context's first navigation on (MOTIR-10589). Recorded by a listener
+ * armed before anything loads, because the request that names an existing
+ * attachment usually comes from the item page's LOAD — an image card's
+ * thumbnail — and a later click then shows that same URL from the document's
+ * memory cache without asking the network again. A wait armed at the click
+ * therefore never resolves on exactly the page this walk checks.
+ */
+const requestedContentIds: string[] = [];
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   page = await (await browser.newContext()).newPage();
+  page.on('request', (req) => {
+    const id = CONTENT_PATH.exec(req.url())?.[1];
+    if (id && !requestedContentIds.includes(id)) requestedContentIds.push(id);
+  });
 });
 
 test.afterAll(async () => {
@@ -144,14 +158,27 @@ test('the work item renders with its comments and attachments', async () => {
 });
 
 test('an existing attachment reads back through a presigned GET on the private store', async () => {
-  // The first card's own button opens a preview or starts a download; either one
-  // requests the content route, which is how the attachment's id is learned
-  // without reading the database.
-  const requested = page.waitForRequest((req) => CONTENT_PATH.test(req.url()));
-  await fileList().getByRole('listitem').first().getByRole('button').first().click();
-  const attachmentId = CONTENT_PATH.exec((await requested).url())![1]!;
-  await page.keyboard.press('Escape');
+  // The attachment's id is learned from the content route the PAGE asked for,
+  // without reading the database. An image card asks for it on load; a card
+  // with no thumbnail asks only when it is opened (a preview or a download), so
+  // the click is made only when the load asked for nothing. The listener has
+  // been recording since before the first navigation, so a request that lands
+  // at any moment — before this test, or between the check and the click — is
+  // counted, and the poll below never waits on a request that already happened.
+  if (requestedContentIds.length === 0) {
+    await fileList().getByRole('listitem').first().getByRole('button').first().click();
+    await expect
+      .poll(() => requestedContentIds.length, {
+        message: 'opening the first attachment requested no /api/attachments/<id>/content',
+      })
+      .toBeGreaterThan(0);
+    await page.keyboard.press('Escape');
+  }
+  const attachmentId = requestedContentIds[0]!;
 
+  // The read itself goes through `page.request` — the page's cookies, and NO
+  // browser cache — so the 302 onto the private store and the presigned 200 are
+  // asked for afresh on every run, however often the page has shown the file.
   const followed = await readThroughPrivateStore(attachmentId);
   expect((await followed.body()).length, 'attachment body').toBeGreaterThan(0);
 });
