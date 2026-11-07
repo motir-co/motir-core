@@ -7,6 +7,7 @@ import {
   FONT_SET_REGISTRY,
   FONT_SET_ROLES,
   LOCALE_FONT_SET,
+  TYPE_IDS,
   fontSetMemberVar,
   type FontSetMember,
 } from '../src/index';
@@ -117,15 +118,19 @@ describe('theme.css font-set composition (MOTIR-7845)', () => {
         expect(generic, `${selectors.join(', ')} --font-${role}-pairing`).toEqual([]);
       }
     }
-    // The base plus the six [data-type] declarations, three roles each.
-    expect(checked).toBe(7 * 3);
+    // The `:root` base plus one declaration block per registered pairing (the
+    // `motir` base's own is `[data-appearance-scope][data-type='motir']`), three
+    // roles each — derived from the registry so a new pairing needs no edit here.
+    expect(checked).toBe((TYPE_IDS.length + 1) * 3);
   });
 
   it('sets the pairing chain and tail in every [data-type] block, never the role itself', () => {
     const typeBlocks = RULES.filter((r) =>
       r.selectors.some((s) => /\[data-type='[^']+'\]$/.test(s)),
     );
-    expect(typeBlocks.length).toBe(6);
+    // One block per registered pairing — the regex also matches the `motir`
+    // base's `[data-appearance-scope][data-type='motir']` rule.
+    expect(typeBlocks.length).toBe(TYPE_IDS.length);
     for (const r of typeBlocks) {
       const names = r.declarations.map(([n]) => n).sort();
       expect(names, r.selectors.join(', ')).toEqual(

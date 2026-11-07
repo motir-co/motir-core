@@ -1994,7 +1994,7 @@
    hover/press bounce. Colour stays the palette axis: the token block sets no
    `--color-` / `--el-` colour token (AA preserved), and the rough-border rule
    takes its ink from the palette (var(--el-border-strong)). Out-of-the-box type
-   is the characterful Editorial (Fraunces) pairing via `defaultTypeId`. See
+   is the hand-lettered Marker (Caveat) pairing via `defaultTypeId`. See
    docs/styles/hand-drawn-indie.md. */
 [data-style='hand-drawn-indie'] {
   /* Silhouette — WONKY hand-drawn corners. The slash splits horizontal /
@@ -6222,6 +6222,102 @@
   --font-mono-tail: monospace;
   --font-sans-pairing: var(--font-mono-technical-source, 'SF Mono'), 'SF Mono', Menlo;
   --font-sans-tail: monospace;
+}
+
+[data-type='marker'] {
+  /* Marker (MOTIR-10553) — hand-lettered marker headlines over the Inter body.
+     Adds one new face: Caveat, loaded in app/fonts.ts as --font-marker-source.
+     Re-point the headline (serif) role at it; body (Inter, --font-sans) and meta
+     (JetBrains, --font-mono) keep the base roles. Display-only, like editorial:
+     a marker hand is unreadable as UI or body text, so only headlines re-type.
+     The pairing chain names no generic keyword (the FONT SETS rule below slots
+     the CJK face between it and the `cursive` tail). ONLY --font-* role tokens
+     here (the disjointness guard): no colour (--el/--color) or shape
+     (--radius/--spacing/--shadow) token. */
+  --font-serif-pairing: var(--font-marker-source), 'Caveat';
+  --font-serif-tail: cursive;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
+}
+
+[data-type='rounded'] {
+  /* Rounded (MOTIR-10554) — a soft rounded sans across headlines AND body/UI.
+     Re-point BOTH the headline (serif) role AND the body/UI (sans) role at
+     Nunito (loaded in app/fonts.ts as --font-rounded-source), so the WHOLE app
+     (nav, header, buttons, content) re-types — Nunito reads cleanly as a UI sans
+     (Yue, 2026-06-19: the type axis must re-type the whole UI, chrome included).
+     Meta stays JetBrains Mono (--font-mono). The pairing chains name no generic
+     keyword, so the FONT SETS rule below slots the CJK face behind Nunito. ONLY
+     font tokens here (the disjointness guard): no colour (--el / --color) or
+     shape token. */
+  --font-serif-pairing: var(--font-rounded-source), 'Nunito';
+  --font-serif-tail: ui-sans-serif, system-ui, sans-serif;
+  --font-sans-pairing: var(--font-rounded-source), 'Nunito';
+  --font-sans-tail: ui-sans-serif, system-ui, sans-serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
+}
+
+[data-type='slab'] {
+  /* Slab (MOTIR-10555) — sturdy slab-serif headlines over the Inter body. Adds
+     one new face: Roboto Slab, loaded in app/fonts.ts as --font-slab-source.
+     Re-point the headline (serif) role at it; body (Inter, --font-sans) and meta
+     (JetBrains, --font-mono) keep the base roles. Display-only, like editorial:
+     heavy rectangular serifs crowd dense UI text at 12–14px, so only headlines
+     re-type. The pairing chain names no generic keyword (the FONT SETS rule
+     below slots the CJK face between it and the `serif` tail). ONLY --font-*
+     role tokens here (the disjointness guard): no colour (--el/--color) or shape
+     (--radius/--spacing/--shadow) token. */
+  --font-serif-pairing: var(--font-slab-source), 'Roboto Slab', Rockwell;
+  --font-serif-tail: serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-sans-pairing: var(--font-sans-source, 'Segoe UI'), 'Segoe UI', Roboto;
+  --font-sans-tail: -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
+}
+
+[data-type='humanist'] {
+  /* Humanist (MOTIR-10556) — a warm humanist sans across headlines AND body/UI.
+     Re-point BOTH the headline (serif) role AND the body/UI (sans) role at Fira
+     Sans (loaded in app/fonts.ts as --font-humanist-source), so the WHOLE app
+     (nav, header, buttons, content) re-types — Fira Sans was drawn as a screen UI
+     face (Yue, 2026-06-19: the type axis must re-type the whole UI, chrome
+     included). Meta stays JetBrains Mono (--font-mono). The pairing chains name
+     no generic keyword, so the FONT SETS rule below slots the CJK face behind
+     Fira Sans. ONLY font tokens here (the disjointness guard): no colour
+     (--el / --color) or shape token. */
+  --font-serif-pairing: var(--font-humanist-source), 'Fira Sans';
+  --font-serif-tail: ui-sans-serif, system-ui, sans-serif;
+  --font-sans-pairing: var(--font-humanist-source), 'Fira Sans';
+  --font-sans-tail: ui-sans-serif, system-ui, sans-serif;
+  /* Re-asserted at the BASE value, not omitted (MOTIR-3933). An omitted role
+       inherits the ANCESTOR's, which is invisible on `<html>` and wrong in a
+       nested scope: this pairing under a mono ancestor rendered mono. Unlike the
+       colour axis there is no `[data-appearance-scope]` layer to fall back
+       through — `--font-*` are role tokens, not `--el-*` — so every
+       `[data-type]` block must be TOTAL over the three roles. */
+  --font-mono-pairing: var(--font-mono-source, 'SF Mono'), 'SF Mono', Menlo;
+  --font-mono-tail: monospace;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

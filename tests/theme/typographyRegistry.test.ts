@@ -30,8 +30,42 @@ const GLOBALS_CSS =
 // root layout AND app/global-error.tsx both import (MOTIR-6855).
 const FONTS_TS = readFileSync(join(process.cwd(), 'app/fonts.ts'), 'utf8');
 
+// The declaration body of one `[data-type='<id>']` block, comments stripped.
+function typeBlockBody(id: string): string {
+  const css = GLOBALS_CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+  const m = css.match(new RegExp(`\\[data-type='${id}'\\]\\s*\\{([^}]*)\\}`));
+  const body = m?.[1];
+  if (body === undefined) throw new Error(`no [data-type='${id}'] block`);
+  return body;
+}
+
+// Generic family keywords a `-pairing` chain must not carry (they would pre-empt
+// the font set's CJK face — the FONT SETS section of theme.css).
+const GENERIC_FAMILY =
+  /^(serif|sans-serif|cursive|fantasy|monospace|system-ui|ui-[a-z-]+|math|emoji|fangsong)$/i;
+
+/** A block's `--font-<role>-pairing` / `-tail` declarations, trimmed, in order. */
+function roleDeclarations(body: string, role: 'sans' | 'serif' | 'mono'): string[] {
+  return body
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => d.startsWith(`--font-${role}-`));
+}
+
+/** Every generic keyword found in a block's three `-pairing` values. */
+function pairingGenerics(body: string): string[] {
+  const out: string[] = [];
+  for (const m of body.matchAll(/--font-(?:sans|serif|mono)-pairing:([^;]*);/g)) {
+    for (const family of (m[1] ?? '').replace(/var\([^)]*\)/g, '').split(',')) {
+      const f = family.trim().replace(/^['"]|['"]$/g, '');
+      if (f && GENERIC_FAMILY.test(f)) out.push(f);
+    }
+  }
+  return out;
+}
+
 describe('typography registry', () => {
-  it('registers the v1 base trio + the new-typeface pairings (Grotesk 7.3.54, Editorial 7.3.55, Mono-Technical 7.3.56)', () => {
+  it('registers the v1 base trio + the new-typeface pairings (7.3.54–56, then Marker / Rounded / Slab / Humanist, MOTIR-10548)', () => {
     expect(TYPE_IDS).toEqual([
       'motir',
       'motir-sans',
@@ -39,6 +73,10 @@ describe('typography registry', () => {
       'grotesk',
       'editorial',
       'mono-technical',
+      'marker',
+      'rounded',
+      'slab',
+      'humanist',
     ]);
     expect(TYPE_REGISTRY['motir'].name).toBe('Motir');
     expect(TYPE_REGISTRY['motir-sans'].name).toBe('Motir Sans');
@@ -46,6 +84,10 @@ describe('typography registry', () => {
     expect(TYPE_REGISTRY['grotesk'].name).toBe('Grotesk');
     expect(TYPE_REGISTRY['editorial'].name).toBe('Editorial');
     expect(TYPE_REGISTRY['mono-technical'].name).toBe('Mono-Technical');
+    expect(TYPE_REGISTRY['marker'].name).toBe('Marker');
+    expect(TYPE_REGISTRY['rounded'].name).toBe('Rounded');
+    expect(TYPE_REGISTRY['slab'].name).toBe('Slab');
+    expect(TYPE_REGISTRY['humanist'].name).toBe('Humanist');
   });
 
   it('keeps every entry self-consistent (key === id) and TYPE_IDS in sync', () => {
@@ -84,6 +126,10 @@ describe('isTypeId / resolveType', () => {
     expect(isTypeId('motir-sans')).toBe(true);
     expect(isTypeId('grotesk')).toBe(true); // registered in 7.3.54
     expect(isTypeId('editorial')).toBe(true); // registered in 7.3.55
+    expect(isTypeId('marker')).toBe(true); // registered in MOTIR-10553
+    expect(isTypeId('rounded')).toBe(true); // registered in MOTIR-10554
+    expect(isTypeId('slab')).toBe(true); // registered in MOTIR-10555
+    expect(isTypeId('humanist')).toBe(true); // registered in MOTIR-10556
     expect(isTypeId('serif-tech')).toBe(false); // not a registered pairing
     expect(isTypeId('')).toBe(false);
     expect(isTypeId(null)).toBe(false);
@@ -144,6 +190,73 @@ describe('runtime contract in globals.css', () => {
     );
     expect(FONTS_TS).toContain("variable: '--font-editorial-source'");
     expect(FONTS_TS).toContain('Fraunces');
+  });
+
+  it('re-points the Marker serif role at the LOADED Caveat -source face, headlines only', () => {
+    // MOTIR-10553 — the marker block drives the headline role off
+    // `--font-marker-source`, the variable next/font binds to Caveat in
+    // app/fonts.ts, and keeps the body / meta chains at the Editorial block's
+    // values (display-only: a marker hand is unreadable as UI text).
+    const body = typeBlockBody('marker');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-marker-source/);
+    expect(FONTS_TS).toContain("variable: '--font-marker-source'");
+    expect(FONTS_TS).toContain('Caveat');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*caveat\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    for (const role of ['sans', 'mono'] as const) {
+      expect(roleDeclarations(body, role)).toEqual(
+        roleDeclarations(typeBlockBody('editorial'), role),
+      );
+    }
+  });
+
+  it('re-points the Rounded headline AND body roles at the LOADED Nunito -source face', () => {
+    // MOTIR-10554 — whole-UI, like grotesk: both the serif and sans chains drive
+    // off `--font-rounded-source`, the variable next/font binds to Nunito in
+    // app/fonts.ts; meta keeps the grotesk block's JetBrains chain.
+    const body = typeBlockBody('rounded');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-rounded-source/);
+    expect(body).toMatch(/--font-sans-pairing:[^;]*--font-rounded-source/);
+    expect(FONTS_TS).toContain("variable: '--font-rounded-source'");
+    expect(FONTS_TS).toContain('Nunito');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*nunito\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    expect(roleDeclarations(body, 'mono')).toEqual(
+      roleDeclarations(typeBlockBody('grotesk'), 'mono'),
+    );
+  });
+
+  it('re-points the Slab serif role at the LOADED Roboto Slab -source face, headlines only', () => {
+    // MOTIR-10555 — display-only, like editorial: the headline chain drives off
+    // `--font-slab-source` (next/font's Roboto Slab in app/fonts.ts); the body /
+    // meta chains equal the Editorial block's (Inter body, JetBrains meta).
+    const body = typeBlockBody('slab');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-slab-source/);
+    expect(FONTS_TS).toContain("variable: '--font-slab-source'");
+    expect(FONTS_TS).toContain('Roboto_Slab');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*robotoSlab\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    for (const role of ['sans', 'mono'] as const) {
+      expect(roleDeclarations(body, role)).toEqual(
+        roleDeclarations(typeBlockBody('editorial'), role),
+      );
+    }
+  });
+
+  it('re-points the Humanist headline AND body roles at the LOADED Fira Sans -source face', () => {
+    // MOTIR-10556 — whole-UI, like grotesk: both the serif and sans chains drive
+    // off `--font-humanist-source`, the variable next/font binds to Fira Sans in
+    // app/fonts.ts; meta keeps the grotesk block's JetBrains chain.
+    const body = typeBlockBody('humanist');
+    expect(body).toMatch(/--font-serif-pairing:[^;]*--font-humanist-source/);
+    expect(body).toMatch(/--font-sans-pairing:[^;]*--font-humanist-source/);
+    expect(FONTS_TS).toContain("variable: '--font-humanist-source'");
+    expect(FONTS_TS).toContain('Fira_Sans');
+    expect(FONTS_TS).toMatch(/fontVariables = \[[^\]]*firaSans\.variable/);
+    expect(pairingGenerics(body)).toEqual([]);
+    expect(roleDeclarations(body, 'mono')).toEqual(
+      roleDeclarations(typeBlockBody('grotesk'), 'mono'),
+    );
   });
 
   it('keeps the type axis disjoint — a [data-type] block sets only font tokens, never colour or shape', () => {
