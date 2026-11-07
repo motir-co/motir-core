@@ -31,7 +31,12 @@ See the keystone decision: [`docs/decisions/design-system-package.md`](../../doc
   `PaletteId`, `TypeId`), the `cn` helper, the **theme provider** (`ThemeProvider`
   / `useTheme`), the axis **pickers** (`StylePicker` / `PalettePicker` /
   `TypePicker` / `ThemeSegmentedControl`, from `AppearancePickers`) + the
-  `StyleVignette` live preview, and the framework-agnostic **UI primitives**.
+  `StyleVignette` live preview, and the framework-agnostic **UI primitives** —
+  among them the **date picker** (`DatePicker` / `DatePickerProps`) and its
+  date-format injection exports (`DatePickerFormatProvider`,
+  `useDatePickerFormat`, `resolveDatePickerFormat`, `defaultDatePickerFormatter`,
+  `DEFAULT_DATE_PICKER_LOCALE`, and the `DatePickerLocale` / `DatePickerFormatter`
+  types); see [DatePicker](#datepicker).
 
 ## Usage
 
@@ -57,6 +62,145 @@ Use the primitives + provider as normal React components:
 ```tsx
 import { ThemeProvider, Button, Card } from '@motir/design-system';
 ```
+
+## DatePicker
+
+### What it is
+
+An accessible date field: a trigger that opens a month-grid calendar (the
+WAI-ARIA dialog + grid pattern, with roving tabindex and the full keyboard
+model). Its value is an ISO `YYYY-MM-DD` string or `null`, and `onChange`
+emits the same. All of its date maths is UTC-only, so no host timezone shifts a
+day. It is a `'use client'` module with no `next` or `next-intl` dependency.
+
+```tsx
+import { DatePicker } from '@motir/design-system';
+
+<DatePicker
+  value={dueDate} // 'YYYY-MM-DD' | null
+  onChange={setDueDate} // (next: string | null) => void
+  aria-label="Due date"
+  placeholder="Select a date"
+  disabled={false}
+  id="due-date"
+  autoOpen={false}
+  onClose={() => {}}
+  className="w-56"
+  locale="zh-CN" // optional — see below
+  formatDate={myFormatter} // optional — see below
+/>;
+```
+
+### Locale and formatter inputs
+
+The trigger shows the selected date formatted by two injected inputs:
+
+- **locale** — `DatePickerLocale`, an opaque BCP-47-style string such as `en`
+  or `zh-CN`. It is a plain `string`, not a closed union, so any app can pass its
+  own locale through unchanged.
+- **formatter** — `DatePickerFormatter`, the signature
+  `(isoDate, locale) => string`. The picker calls it with the selected value and
+  the resolved locale.
+
+`DatePicker` takes them as two optional props, `locale` and `formatDate`.
+
+### The default
+
+With no `locale`, no `formatDate` and no provider, the picker uses locale `en`
+(`DEFAULT_DATE_PICKER_LOCALE`) and `defaultDatePickerFormatter`, a UTC
+formatter. `2026-06-03` reads `Jun 3, 2026`, the same text motir-core's
+`formatDate('2026-06-03', 'en')` returns, because it calls the same Intl
+options:
+
+```ts
+new Date(isoDate).toLocaleString('en-US', {
+  timeZone: 'UTC',
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+```
+
+The default formatter maps bare `en` to `en-US` and passes every other locale
+to Intl unchanged. If Intl rejects a malformed tag, it falls back to the `en-US`
+output instead of throwing. Because both the parsing and the formatting are in
+UTC, a date near midnight UTC (`2026-01-01`, `2026-12-31`, `2024-02-29`) reads as
+its own calendar day on every host, west or east of Greenwich.
+
+### Setting it once with the provider
+
+Wrap a subtree in `DatePickerFormatProvider` to set either input for every
+picker below it:
+
+```tsx
+import { DatePickerFormatProvider } from '@motir/design-system';
+
+<DatePickerFormatProvider locale="zh-CN" formatDate={myFormatter}>
+  <App />
+</DatePickerFormatProvider>;
+```
+
+Two more exports serve code that formats a date outside the picker:
+`useDatePickerFormat(props?)` returns the resolved `{ locale, formatDate }` for a
+component (its `formatDate(iso)` is already bound to the locale), and the pure
+`resolveDatePickerFormat(props?, provider?)` does the same resolution with no
+React, so a Server Component can import it.
+
+### Precedence
+
+A prop beats the provider, and the provider beats the default. The locale and
+the formatter are resolved **separately**, so:
+
+- a provider that sets only one input keeps the default for the other (a
+  provider with only `locale="zh-CN"` keeps the default formatter, which then
+  formats in `zh-CN`);
+- a nested provider overrides only the fields it sets and inherits the rest
+  from the provider above it;
+- an `undefined` prop falls through to the provider, then to the default.
+
+| `locale` prop | provider `locale` | `formatDate` prop | provider `formatDate` | the trigger shows                          |
+| ------------- | ----------------- | ----------------- | --------------------- | ------------------------------------------ |
+| —             | —                 | —                 | —                     | `defaultDatePickerFormatter(iso, 'en')`    |
+| —             | `zh-CN`           | —                 | —                     | `defaultDatePickerFormatter(iso, 'zh-CN')` |
+| —             | `de-DE`           | —                 | `f`                   | `f(iso, 'de-DE')`                          |
+| `zh-CN`       | `de-DE`           | —                 | `f`                   | `f(iso, 'zh-CN')`                          |
+| `zh-CN`       | `de-DE`           | `g`               | `f`                   | `g(iso, 'zh-CN')`                          |
+
+### What stays English
+
+The locale and formatter change only the trigger's date text. The calendar's own
+strings are not translated by the locale input and stay English: the month and
+weekday names, `Select a date` (the default `placeholder`), `Clear date`,
+`Today`, `Clear`, `Previous month` and `Next month`. Pass your own `placeholder`
+and `aria-label` to localise those two.
+
+### Wiring an app's own i18n
+
+The package depends on no i18n library; the app maps its own locale and
+formatter onto the provider, in app code. For example, with an app hook
+`useAppLocale()` and the app's own date helper:
+
+```tsx
+'use client';
+
+import { DatePickerFormatProvider, type DatePickerFormatter } from '@motir/design-system';
+import { useAppLocale } from './i18n'; // your app's i18n library
+import { formatAppDate } from './dates'; // your app's own formatter
+
+// Module scope, so the provider gets the same function on every render.
+const appFormatter: DatePickerFormatter = (isoDate, locale) => formatAppDate(isoDate, locale);
+
+export function AppDatePickerFormat({ children }: { children: React.ReactNode }) {
+  return (
+    <DatePickerFormatProvider locale={useAppLocale()} formatDate={appFormatter}>
+      {children}
+    </DatePickerFormatProvider>
+  );
+}
+```
+
+Mount it once near the root, inside the app's i18n provider, and every
+`DatePicker` below it formats in the reader's language.
 
 ## Motion — the reduced-motion floor is the PACKAGE's, not the consumer's
 
@@ -101,11 +245,12 @@ here, per the ADR's explicit delegation to this subtask:
   `dialogLabel` / `retryLabel`) defaulting to the current English strings — so the
   package carries no `next-intl` dependency (§5 "framework-agnostic where it
   can"). motir-core will pass its translated labels when it consumes them (1527).
-- **`DatePicker`** is genuinely coupled to the app's i18n (`useLocale` +
-  `@/lib/i18n/locales` + locale-aware date formatting). Per the ADR §1 escape
+- **`DatePicker`** was coupled to the app's i18n (`useLocale` +
+  `@/lib/i18n/locales` + locale-aware date formatting), so per the ADR §1 escape
   hatch ("a primitive that turns out to have a domain import the audit missed
-  stays out"), it is **excluded** from this extraction; decoupling it (inject a
-  formatter/locale) is a follow-up for the consume/port work.
+  stays out") it stayed out of the first extraction. It is now in the package
+  with an injected locale and formatter (MOTIR-10551), and carries no
+  `next-intl` dependency; see [DatePicker](#datepicker).
 - The token CSS ships as **`theme.css`** (the ADR §2 name; the card's provisional
   `tokens.css` was reconciled to this).
 
