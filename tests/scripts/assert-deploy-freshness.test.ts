@@ -187,6 +187,14 @@ describe('the report names the gap on its first screen', () => {
   });
 });
 
+describe('the default endpoint is production', () => {
+  it("reads app.motir.co, whichever host serves it, not a host's own name", () => {
+    const script = readFileSync(join(process.cwd(), 'scripts/assert-deploy-freshness.mjs'), 'utf8');
+    expect(script).toContain("const DEFAULT_URL = 'https://app.motir.co/api/health/release';");
+    expect(script).not.toContain('fly.dev');
+  });
+});
+
 describe('the scheduled lane is wired to the script it claims to run', () => {
   // The `sandboxCi.test.ts` shape: a lane whose script is unit-tested here is
   // still worthless if the workflow calls something else, on a trigger that
