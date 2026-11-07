@@ -313,8 +313,14 @@ test('a plan is followed from the Workbench Planning tab back to its canvas, its
     );
     await hostedStep(run, 'author-1', 'end');
     await hostedStep(run, 'author-1', 'author', ref(ids[C]!));
-    // …and that session's writing lands: the third card is deepened.
-    await plansService.correctProposal(planId, ids[C]!, AUTHORED_LEAF, ctx);
+    // …and that session's writing lands: the third card is deepened and stamped
+    // finished, the one signal a card reads as authored by (MOTIR-10496).
+    await plansService.correctProposal(
+      planId,
+      ids[C]!,
+      { ...AUTHORED_LEAF, authorFinished: true },
+      ctx,
+    );
     await moved;
 
     await expect(node(page, A)).not.toHaveAttribute('data-cue');

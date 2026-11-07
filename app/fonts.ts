@@ -1,4 +1,6 @@
 import {
+  Caveat,
+  Fira_Sans,
   Fraunces,
   IBM_Plex_Mono,
   Inter,
@@ -14,6 +16,8 @@ import {
   Noto_Serif_KR,
   Noto_Serif_SC,
   Noto_Serif_TC,
+  Nunito,
+  Roboto_Slab,
   Source_Serif_4,
   Space_Grotesk,
 } from 'next/font/google';
@@ -74,6 +78,52 @@ const spaceGrotesk = Space_Grotesk({
 const fraunces = Fraunces({
   subsets: ['latin'],
   variable: '--font-editorial-source',
+  display: 'swap',
+});
+
+// The Marker type pairing's display face (MOTIR-10553) — Caveat, a casual
+// hand-lettered marker. Not a base role: it feeds ONLY the `[data-type='marker']`
+// headline override in theme.css via `--font-marker-source`, re-pointing the
+// `--font-serif` role while body (Inter) and meta (JetBrains) keep the base roles.
+// Loaded as the variable font, so it only pays its weight when a user picks
+// Marker (or Hand-Drawn / Indie, whose default it is).
+const caveat = Caveat({
+  subsets: ['latin'],
+  variable: '--font-marker-source',
+  display: 'swap',
+});
+
+// The Rounded type pairing's face (MOTIR-10554) — Nunito, a rounded-terminal
+// sans. Not a base role: it feeds ONLY the `[data-type='rounded']` override in
+// theme.css via `--font-rounded-source`, which re-points both the headline and
+// body/UI roles; the base roles stay Inter / Source Serif / mono when the pairing
+// is not selected, so this adds payload only for that pairing.
+const nunito = Nunito({
+  subsets: ['latin'],
+  variable: '--font-rounded-source',
+  display: 'swap',
+});
+
+// The Slab type pairing's display face (MOTIR-10555) — Roboto Slab. Not a base
+// role: it feeds ONLY the `[data-type='slab']` headline override in theme.css via
+// `--font-slab-source`, re-pointing the `--font-serif` role while body (Inter)
+// and meta (JetBrains) keep the base roles. Loaded as the variable font, so it
+// only pays its weight when a user picks Slab.
+const robotoSlab = Roboto_Slab({
+  subsets: ['latin'],
+  variable: '--font-slab-source',
+  display: 'swap',
+});
+
+// The Humanist type pairing's face (MOTIR-10556) — Fira Sans, a humanist UI
+// sans. Not a base role: it feeds ONLY the `[data-type='humanist']` override in
+// theme.css via `--font-humanist-source`, which re-points both the headline and
+// body/UI roles. A static family, so next/font needs its weights listed: the four
+// the UI uses (regular, medium, semibold, bold).
+const firaSans = Fira_Sans({
+  subsets: ['latin'],
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-humanist-source',
   display: 'swap',
 });
 
@@ -191,6 +241,10 @@ export const fontVariables = [
   ibmPlexMono.variable,
   spaceGrotesk.variable,
   fraunces.variable,
+  caveat.variable,
+  nunito.variable,
+  robotoSlab.variable,
+  firaSans.variable,
   notoSansSC.variable,
   notoSerifSC.variable,
   lxgwWenKaiTC.variable,

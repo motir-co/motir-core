@@ -311,7 +311,7 @@ test.describe('every pairing on a ja page', () => {
       name: msg('en', 'settings.appearance.type.name'),
       exact: true,
     });
-    // Two pairings are paced for the camera; the other four run at speed.
+    // Two pairings are paced for the camera; the rest run at speed.
     const onCamera = new Set(['motir', 'editorial']);
 
     for (const typeId of Object.keys(PAIRING_FACES)) {

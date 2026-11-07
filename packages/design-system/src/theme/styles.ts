@@ -373,7 +373,7 @@ export const STYLE_REGISTRY = {
     inspiration:
       'Indie / zine + hand-drawn web design — Excalidraw’s rough hand-sketched strokes and doodled notebook UIs: warm, imperfect, human.',
     designDoc: 'docs/styles/hand-drawn-indie.md',
-    defaultTypeId: 'editorial',
+    defaultTypeId: 'marker',
     dimensions: {
       silhouette:
         'Wonky hand-drawn corners — every surface gets a strongly asymmetric multi-value radius (one corner near-sharp, the opposite generously round, no two alike) so cards/buttons/inputs read as DRAWN boxes, never machined rectangles.',
@@ -388,7 +388,7 @@ export const STYLE_REGISTRY = {
       motion:
         'Springy and playful — gentle 200ms transitions with a bouncy hover lift (1.02) and a deeper press squish (0.97); the UI has a friendly wobble.',
       typography:
-        'Ships the Editorial pairing (Fraunces display headlines + Inter body) — the warmest, most characterful registered face, its soft optical wonk echoing the hand-drawn shapes; an actual marker/script face is a future data-type addition.',
+        'Ships the Marker pairing (Caveat hand-lettered marker headlines + Inter body) — the headlines read as if written with the same pen that inked the rough strokes, while the Inter body stays fully legible.',
       components:
         'Wonky-cornered buttons/inputs/cards/modals, irregular (non-pill) status chips, rough wavy-ink-bordered surfaces with soft hand-placed shadows.',
     },
