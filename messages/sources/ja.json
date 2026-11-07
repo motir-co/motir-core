@@ -6260,6 +6260,7 @@
   "roadmap.canvas.node.action.copyTooltip": "Copy <cmd>{command}</cmd>",
   "roadmap.canvas.node.action.copyTooltipCiFailed": "CI failed — copy <cmd>{command}</cmd>",
   "roadmap.canvas.node.action.copyTooltipChangesRequested": "Changes requested — copy <cmd>{command}</cmd>",
+  "roadmap.canvas.node.action.copyTooltipGuide": "Work a person does — copy <cmd>{command}</cmd>",
   "roadmap.canvas.node.action.planTooltip": "Open planning with {key} as the target",
   "roadmap.canvas.anchor.defaultTitle": "Blocked across stories",
   "roadmap.canvas.anchor.inParent": "in {parent} ↗",

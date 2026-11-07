@@ -7796,6 +7796,7 @@
           "copyTooltip": "Copier <cmd>{command}</cmd>",
           "copyTooltipCiFailed": "CI en échec — copier <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Modifications demandées — copier <cmd>{command}</cmd>",
+          "copyTooltipGuide": "Travail réalisé par une personne — copier <cmd>{command}</cmd>",
           "planTooltip": "Ouvrir la planification avec {key} pour cible"
         }
       },
