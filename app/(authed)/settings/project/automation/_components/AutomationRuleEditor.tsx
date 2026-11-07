@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, Filter, TriangleAlert, X, Zap } from 'lucide-re
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { Input } from '@/components/ui/Input';
 import { Switch } from '@/components/ui/Switch';
 import { astFromRows } from '@/lib/issues/issueListAdvancedFilter';

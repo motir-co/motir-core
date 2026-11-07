@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { uploadIssueAttachment } from '@/lib/blob/uploadClient';
 import { entitlementExceededMessage } from '@/lib/billing/entitlementCopy';
 import { cn } from '@/lib/utils/cn';

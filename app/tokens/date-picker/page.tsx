@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 
 /**

@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { AlertTriangle } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { useToast } from '@/components/ui/Toast';
 import type { SprintDto } from '@/lib/dto/sprints';
 

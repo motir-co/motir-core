@@ -5,7 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { AlarmClock } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Popover } from '@/components/ui/Popover';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 
 // The Snooze picker (Subtask 6.11.6, design panel 1d) — a Popover offering
 // Tomorrow / Next week (each showing the resolved date) / Pick a date…

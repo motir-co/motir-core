@@ -28,7 +28,7 @@ import type { SprintDto } from '@/lib/dto/sprints';
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { Locale } from '@/lib/i18n/locales';
 import { Input } from '@/components/ui/Input';
-import { DatePicker } from '@/components/ui/DatePicker';
+import { DatePicker } from '@motir/design-system';
 import { Pill } from '@/components/ui/Pill';
 import { useToast } from '@/components/ui/Toast';
 import { StatusPicker } from '@/components/issues/StatusPicker';
