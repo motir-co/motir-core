@@ -43,8 +43,12 @@ const SOURCE_FILES = SCAN_ROOTS.flatMap((root) => walk(join(REPO_ROOT, root)));
 /** A quoted literal whose value ends in /DatePicker(.ts|.tsx). */
 const OLD_PATH_LITERAL = /(['"`])([^'"`\n]*\/DatePicker(?:\.tsx?)?)\1/g;
 
-/** The old-path literals in one source text, comments ignored. */
+/** The old-path literals in one source text, comments ignored. A text with no
+ *  `/DatePicker` substring cannot hold one, so it skips the comment strip — the
+ *  strip over ~9,000 files is what made the sweep slow enough to time out on a
+ *  loaded CI leg. */
 function oldPathLiterals(source: string): string[] {
+  if (!source.includes('/DatePicker')) return [];
   return [...stripComments(source).matchAll(OLD_PATH_LITERAL)]
     .map((m) => m[2]!)
     .filter((literal) => !literal.includes('packages/design-system'));
@@ -69,6 +73,7 @@ describe('the app-bound DatePicker is gone', () => {
       (f) =>
         !f.startsWith('lib/') &&
         f.endsWith('.tsx') &&
+        read(f).includes('<DatePicker') &&
         /<DatePicker[\s/>]/.test(stripComments(read(f))),
     );
     expect(renderers.length).toBeGreaterThan(0);
