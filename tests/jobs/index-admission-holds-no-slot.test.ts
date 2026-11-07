@@ -18,7 +18,7 @@ import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { executeWithLedger, recordEngineTerminalFailure } from '@/lib/jobs/engine/ledger';
 import { JobWorker, POOL_SIZE } from '@/lib/jobs/engine/worker';
-import type { JobQueueRun } from '@/lib/repositories/jobQueueRepository';
+import type { JobQueueRun } from '@/generated/prisma/client';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import '@/lib/jobs/registry';
 import { INDEX_NO_ACCOUNT_PAUSE_REASON } from '@/lib/ciFleet/indexAllowance';
