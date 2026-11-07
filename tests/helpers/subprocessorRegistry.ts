@@ -76,6 +76,8 @@ export const VENDOR_SIGNATURES: readonly VendorSignature[] = [
   { vendor: 'Fly.io', hosts: ['fly.io', 'api.machines.dev'] },
   { vendor: 'Tigris', packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'] },
   { vendor: 'Resend', hosts: ['api.resend.com'] },
+  // MOTIR-10565: production email moves to Amazon SES (Story MOTIR-10562).
+  { vendor: 'Amazon SES', packages: ['@aws-sdk/client-sesv2'] },
   // ⚠️ THE HOST WAS ADDED BY MOTIR-5260, AND IT MOVED OUT OF `NOT_A_VENDOR_HOST`
   // TO GET HERE. `sentry.io` sat in the exclusion list with the reason
   // "operator link to Sentry's issue list; never requested by the server", which

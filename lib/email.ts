@@ -27,6 +27,13 @@
 //     point EMAIL_PROVIDER at their own arm) and nothing about their deploy
 //     changes.
 //
+// and its successor (MOTIR-10565):
+//   - 'ses'     — sends through Amazon SES (SESv2 `SendEmail`) with the SDK's
+//     default credential chain (the ECS task role), the region in AWS_REGION,
+//     the sender in EMAIL_FROM and the configuration set — which publishes the
+//     bounce and complaint events `POST /api/ses/webhook` suppresses — in
+//     SES_CONFIGURATION_SET. `resend` stays until production has switched.
+//
 // The provider is resolved eagerly at module-import time (see the
 // `sendEmail` export at the bottom). An unknown EMAIL_PROVIDER value —
 // or a 'resend' selection missing its credentials — therefore crashes the
@@ -36,6 +43,7 @@
 import { appendFile, readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { isE2EProdHarness } from '@/lib/e2eProdHarness';
+import { createSesTransport, type SesTransport } from '@/lib/ses/sesClient';
 
 export interface EmailMessage {
   to: string;
@@ -260,18 +268,31 @@ const RESEND_RETRYABLE_CONFLICTS = new Set(['concurrent_idempotent_requests']);
 const RESEND_QUOTA_EXHAUSTED = new Set(['daily_quota_exceeded', 'monthly_quota_exceeded']);
 
 /**
+ * Where to set each production arm's variables, for its boot refusal. Resend's
+ * secrets were Fly secrets on `motir-core`; SES runs on ECS, where the task
+ * definition's environment and secrets carry them.
+ */
+const PROVIDER_ENV_HINT: Record<'resend' | 'ses', (name: string) => string> = {
+  resend: (name) =>
+    `Set it on the deployment alongside RESEND_API_KEY and EMAIL_FROM ` +
+    `(on Fly: \`flyctl secrets set -a motir-core ${name}=…\`; locally: .env.local). `,
+  ses: () =>
+    `Set it on the deployment alongside AWS_REGION, EMAIL_FROM and SES_CONFIGURATION_SET ` +
+    `(on ECS: the task definition's environment; locally: .env.local). `,
+};
+
+/**
  * Read a required env var or throw a message that says what to set and where.
  * Called during provider RESOLUTION, which is module load (see `sendEmail`
- * below) — so a production deploy that selects `resend` without its
- * credentials fails at boot, loudly, instead of on the first password reset.
+ * below) — so a production deploy that selects `resend` or `ses` without its
+ * configuration fails at boot, loudly, instead of on the first password reset.
  */
-function requireEmailEnv(name: string): string {
+function requireEmailEnv(provider: 'resend' | 'ses', name: string): string {
   const value = process.env[name];
   if (value === undefined || value.trim() === '') {
     throw new Error(
-      `EMAIL_PROVIDER='resend' requires ${name}, which is unset or empty. ` +
-        `Set it on the deployment alongside RESEND_API_KEY and EMAIL_FROM ` +
-        `(on Fly: \`flyctl secrets set -a motir-core ${name}=…\`; locally: .env.local). ` +
+      `EMAIL_PROVIDER='${provider}' requires ${name}, which is unset or empty. ` +
+        PROVIDER_ENV_HINT[provider](name) +
         `Set EMAIL_PROVIDER=console for local dev if you don't want to send real email.`,
     );
   }
@@ -371,8 +392,8 @@ async function readResendMessageId(res: Response): Promise<string | null> {
 
 function resendProvider(): SendEmail {
   // Eager: both reads happen at resolution, so the boot fails, not the send.
-  const apiKey = requireEmailEnv('RESEND_API_KEY');
-  const from = requireEmailEnv('EMAIL_FROM');
+  const apiKey = requireEmailEnv('resend', 'RESEND_API_KEY');
+  const from = requireEmailEnv('resend', 'EMAIL_FROM');
 
   return async (msg) => {
     const idempotencyKey = resendIdempotencyKey(msg.idempotencyKey);
@@ -430,6 +451,144 @@ function resendProvider(): SendEmail {
         ...(providerErrorName === undefined ? {} : { providerErrorName }),
       },
     );
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// The Amazon SES provider (MOTIR-10565).
+//
+// Selected by EMAIL_PROVIDER=ses. The SDK call itself lives in
+// `lib/ses/sesClient.ts`, the only module allowed the SES SDK; everything that
+// decides what is sent and what a failure means lives here, beside Resend's, so
+// both production arms answer the job engine in one vocabulary.
+//
+// Three variables, all read at RESOLUTION so a deployment missing one fails its
+// boot naming it — the same contract as Resend's key:
+//   - AWS_REGION            — the SES region the sending identity is verified
+//                             in. ECS sets it on every task.
+//   - EMAIL_FROM            — the sender identity, a verified SES identity.
+//   - SES_CONFIGURATION_SET — the configuration set every message is sent
+//                             under. It is what publishes bounce and complaint
+//                             events to SNS, so a send without it is a send
+//                             whose bounces nobody hears about — which is why
+//                             it is required rather than optional.
+// Credentials are NOT a variable: the SDK's default chain resolves the task
+// role.
+//
+// ⚠️ NO IDEMPOTENCY KEY REACHES SES. SESv2 `SendEmail` takes none, so the
+// `idempotencyKey` a Resend send passes through is not used here; a job retry
+// of a send SES had already accepted delivers twice. The SDK makes one attempt
+// (`sesClient.ts`) so it adds no retries of its own on top.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * SES error names that mean the account's sending QUOTA is spent. Exceeding
+ * the 24-hour quota comes back as `LimitExceededException` ("Daily message
+ * quota exceeded"); it clears only when the rolling window does, so retrying
+ * minutes apart is just more requests against an exhausted quota.
+ */
+const SES_QUOTA_EXHAUSTED = new Set(['LimitExceededException']);
+
+/** SES error names a retry can clear: the send RATE, not the quota, was exceeded. */
+const SES_TRANSIENT = new Set(['TooManyRequestsException', 'ThrottlingException']);
+
+/** What the SDK's service exceptions carry, as much of it as we depend on. */
+interface SesErrorShape {
+  name?: unknown;
+  message?: unknown;
+  $fault?: unknown;
+  $metadata?: { httpStatusCode?: unknown } | null;
+}
+
+/**
+ * Classify an error the SES SDK threw. An error with no `$metadata` never got a
+ * response — DNS, TLS, socket, timeout, or a credential lookup that failed —
+ * and is always worth a retry. Then the quota, which must be checked before the
+ * throttle arm because both are limits: a message saying the daily quota is
+ * exceeded is a spent quota under any name. Then the send-rate throttle and
+ * every server-side fault. Everything else — an unverified sender, a rejected
+ * message, a configuration set that does not exist, a paused or suspended
+ * account — is a considered rejection of this request, and repeating it only
+ * delays the dead-letter.
+ */
+export function classifySesError(err: unknown): EmailFailureKind {
+  const shape = (err ?? {}) as SesErrorShape;
+  if (shape.$metadata === undefined || shape.$metadata === null) return 'transient';
+  const name = typeof shape.name === 'string' ? shape.name : '';
+  const message = typeof shape.message === 'string' ? shape.message : '';
+  if (SES_QUOTA_EXHAUSTED.has(name) || /daily message quota exceeded/i.test(message)) {
+    return 'quota_exhausted';
+  }
+  if (SES_TRANSIENT.has(name)) return 'transient';
+  const status = shape.$metadata.httpStatusCode;
+  if (shape.$fault === 'server' || (typeof status === 'number' && status >= 500)) {
+    return 'transient';
+  }
+  return 'permanent';
+}
+
+/** The `Content.Simple` body of a SESv2 send: subject, both parts, any headers. */
+function sesContent(msg: EmailMessage) {
+  const headers = Object.entries(msg.headers ?? {}).map(([Name, Value]) => ({ Name, Value }));
+  return {
+    Simple: {
+      Subject: { Data: msg.subject, Charset: 'UTF-8' },
+      Body: {
+        Html: { Data: msg.html, Charset: 'UTF-8' },
+        // Always a text part, for the reason Resend's arm sends one.
+        Text: { Data: msg.text ?? htmlToText(msg.html), Charset: 'UTF-8' },
+      },
+      // SES puts these on the MAIL — the follower digest's List-Unsubscribe pair.
+      ...(headers.length > 0 ? { Headers: headers } : {}),
+    },
+  };
+}
+
+/**
+ * The `ses` arm. `transport` is injectable so the send can be exercised without
+ * the network; production resolves the real one from AWS_REGION.
+ */
+export function sesProvider(
+  createTransport: (region: string) => SesTransport = createSesTransport,
+): SendEmail {
+  // Eager: every read happens at resolution, so the boot fails, not the send.
+  const region = requireEmailEnv('ses', 'AWS_REGION');
+  const from = requireEmailEnv('ses', 'EMAIL_FROM');
+  const configurationSetName = requireEmailEnv('ses', 'SES_CONFIGURATION_SET');
+  const transport = createTransport(region);
+
+  return async (msg) => {
+    let messageId: string | undefined;
+    try {
+      const out = await transport.sendEmail({
+        FromEmailAddress: from,
+        Destination: { ToAddresses: [msg.to] },
+        Content: sesContent(msg),
+        ConfigurationSetName: configurationSetName,
+      });
+      messageId = out.MessageId;
+    } catch (cause) {
+      const kind = classifySesError(cause);
+      const shape = (cause ?? {}) as SesErrorShape;
+      const providerErrorName = typeof shape.name === 'string' ? shape.name : undefined;
+      const status = shape.$metadata?.httpStatusCode;
+      const detail = cause instanceof Error ? cause.message : String(cause);
+      throw new EmailDeliveryError(
+        kind,
+        `SES send to '${msg.to}' ${FAILURE_PHRASE[kind]}` +
+          `${typeof status === 'number' ? ` with HTTP ${status}` : ''}` +
+          `${providerErrorName === undefined ? '' : ` (${providerErrorName})`}: ${detail}`,
+        {
+          cause,
+          ...(typeof status === 'number' ? { status } : {}),
+          ...(providerErrorName === undefined ? {} : { providerErrorName }),
+        },
+      );
+    }
+    // An accepted send with no id is still accepted — the same rule as Resend's.
+    return {
+      providerMessageId: typeof messageId === 'string' && messageId !== '' ? messageId : null,
+    };
   };
 }
 
@@ -556,12 +715,14 @@ export function getEmailProvider(): SendEmail {
       return fileProvider();
     case 'resend':
       return resendProvider();
+    case 'ses':
+      return sesProvider();
     case 'postmark':
       return unimplementedProvider('postmark');
     default:
       throw new Error(
         `Unknown EMAIL_PROVIDER='${provider}'. ` +
-          `Valid values: 'console' (default), 'file' (dev/test only), 'resend', 'postmark'. ` +
+          `Valid values: 'console' (default), 'file' (dev/test only), 'resend', 'ses', 'postmark'. ` +
           `See lib/email.ts for the abstraction.`,
       );
   }
@@ -579,8 +740,13 @@ export function getEmailProvider(): SendEmail {
 // notifications are skipped and the rest of the quota stays for the mail a
 // person is waiting on: password reset, email change, invites, sign-in codes.
 //
-// EMAIL_NOTIFICATION_DAILY_BUDGET:
-//   - unset      → 60 when EMAIL_PROVIDER=resend, otherwise no budget. 60 sits
+// ⚠️ IT APPLIES TO THE `resend` ARM ONLY (MOTIR-10565). The cap exists because
+// of Resend's FREE plan; Amazon SES has no free-plan cap, and its own quota is
+// raised by request rather than by plan. So under every other provider — `ses`,
+// and the dev providers — there is no budget and the variable is not read.
+//
+// EMAIL_NOTIFICATION_DAILY_BUDGET (read only when EMAIL_PROVIDER=resend):
+//   - unset      → 60. 60 sits
 //                  under the Resend FREE plan's 100/day — the only Resend plan
 //                  with a DAILY quota, which is what `daily_quota_exceeded`
 //                  proves production is on — leaving 40/day for essential
@@ -600,10 +766,9 @@ export const DEFAULT_RESEND_NOTIFICATION_DAILY_BUDGET = 60;
  * below so a malformed value fails the boot, not the first watcher email.
  */
 export function getNotificationDailyBudget(): number | null {
+  if (emailProviderName() !== 'resend') return null;
   const raw = process.env['EMAIL_NOTIFICATION_DAILY_BUDGET']?.trim();
-  if (raw === undefined || raw === '') {
-    return emailProviderName() === 'resend' ? DEFAULT_RESEND_NOTIFICATION_DAILY_BUDGET : null;
-  }
+  if (raw === undefined || raw === '') return DEFAULT_RESEND_NOTIFICATION_DAILY_BUDGET;
   if (raw.toLowerCase() === 'none') return null;
   if (!/^\d+$/.test(raw)) {
     throw new Error(

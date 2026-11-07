@@ -320,11 +320,17 @@ await sendEvent('email.send', {
 - **Notification budget.** Notification-class templates (watchers, mentions,
   subscriptions, digests, a failed automation) may use at most
   `EMAIL_NOTIFICATION_DAILY_BUDGET` accepted sends per rolling 24 hours — 60 by
-  default on Resend — counted from `email_delivery`. Past it the send is SKIPPED:
+  default — counted from `email_delivery`. The budget applies to the `resend`
+  provider only; under `ses` and the dev providers there is none. Past it the send is SKIPPED:
   the run succeeds with `skipped: 'notification_budget_exhausted'` on its output
   and nothing reaches the provider, so the rest of the quota stays for password
   reset, email change, invites and sign-in codes, which are never budgeted
   (`EMAIL_TEMPLATE_CLASS`, `lib/services/emailService.ts`).
+- **Suppression list.** Before the budget, every send checks the recipient
+  against `email_suppression` (MOTIR-10565): an address that bounced
+  permanently or complained, as reported by SES through `POST /api/ses/webhook`,
+  is SKIPPED under every provider and for every template, with a log line — the
+  run succeeds with `skipped: 'recipient_suppressed'` on its output.
 - **`workspaceId: null`** for password reset (cross-workspace); the invite path
   passes its real workspace id.
 

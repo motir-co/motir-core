@@ -6,6 +6,7 @@ import {
 } from '@/lib/email';
 import type { Locale } from '@/lib/i18n/locales';
 import { emailDeliveryService } from '@/lib/services/emailDeliveryService';
+import { emailSuppressionService } from '@/lib/services/emailSuppressionService';
 import {
   passwordResetEmail,
   type PasswordResetEmailProps,
@@ -225,13 +226,15 @@ export const NOTIFICATION_BUDGET_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 /**
  * What a send reports. `skipped` is set — and nothing reached the provider —
- * when a notification was held back by the budget. It is a deliberate policy
- * outcome, not a failure, so the job SUCCEEDS with it on its output rather
- * than dead-lettering: a dead letter asks an operator to act, and there is
- * nothing to do about a watcher email the budget chose not to send.
+ * when the recipient is on the suppression list (`recipient_suppressed`,
+ * MOTIR-10565) or a notification was held back by the budget
+ * (`notification_budget_exhausted`). Both are deliberate policy outcomes, not
+ * failures, so the job SUCCEEDS with them on its output rather than
+ * dead-lettering: a dead letter asks an operator to act, and a retry of a send
+ * to an address that bounced permanently would only bounce again.
  */
 export type EmailServiceSendResult = EmailSendResult & {
-  skipped?: 'notification_budget_exhausted';
+  skipped?: 'recipient_suppressed' | 'notification_budget_exhausted';
 };
 
 /**
@@ -274,6 +277,18 @@ export const emailService = {
    * already passing the whole `EmailSendData` payload, envelope included.
    */
   async send(message: SendableEmail): Promise<EmailServiceSendResult> {
+    // FIRST, under every provider and for every template: an address that
+    // bounced permanently or complained is never sent to again (MOTIR-10565).
+    // A password reset is not exempt — a reset to an address that does not
+    // exist reaches nobody, and each bounce counts against the sending
+    // account's reputation. The log line is how an operator finds the skip.
+    if (await emailSuppressionService.isSuppressed(message.to)) {
+      console.warn(
+        `[email] ${message.template} to '${message.to}' skipped: the address is on the ` +
+          `suppression list (a permanent bounce or a complaint).`,
+      );
+      return { providerMessageId: null, skipped: 'recipient_suppressed' };
+    }
     // Before rendering: a notification the budget holds back never reaches
     // the provider, so it cannot spend the quota the essential mail needs.
     if (await notificationBudgetExhausted(message.template)) {
