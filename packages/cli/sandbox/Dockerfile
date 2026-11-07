@@ -197,7 +197,8 @@ RUN apt-get update \
         "procps=${PROCPS_VERSION}" \
         "python3=${PYTHON_VERSION}" \
     && install -m 0755 -d /etc/apt/keyrings \
-    && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+    && curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        https://cli.github.com/packages/githubcli-archive-keyring.gpg \
         -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
     && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
@@ -276,7 +277,8 @@ ENV PGDATA=/var/lib/motir-postgres
 ENV DATABASE_URL=postgresql://prodect:prodect@localhost:5432/prodect
 ENV PATH=/usr/lib/postgresql/${PG_MAJOR}/bin:$PATH
 RUN set -eux; \
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+    curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
         -o /etc/apt/keyrings/pgdg.asc; \
     chmod go+r /etc/apt/keyrings/pgdg.asc; \
     echo "deb [signed-by=/etc/apt/keyrings/pgdg.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main" \
