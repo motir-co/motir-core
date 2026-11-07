@@ -206,13 +206,17 @@ test('date fields render the package picker, in English and in Chinese', async (
   await chapter('Setting sprint dates: Edit sprint dates, then Start sprint', async () => {
     const dayAtStart = todayKey();
     await page.goto('/backlog');
-    await expect(page.getByTestId('backlog-count')).toBeVisible({ timeout: FIRST_PAINT_MS });
+    await expect(page.getByRole('main').getByTestId('backlog-count')).toBeVisible({
+      timeout: FIRST_PAINT_MS,
+    });
 
     // ── Edit sprint dates on the planned main sprint ────────────────────────
     const main = sprintRegion(page, seed.mainSprintName);
     await expect(main.getByText('Not started')).toBeVisible();
-    await page.getByTestId(`sprint-actions-${seed.mainSprintId}`).click();
-    await page.getByTestId(`sprint-edit-dates-${seed.mainSprintId}`).click();
+    await page.getByRole('main').getByTestId(`sprint-actions-${seed.mainSprintId}`).click();
+    await page
+      .getByRole('menuitem', { name: msg('en', 'backlog.editSprintDatesFlow.menuItem') })
+      .click();
     const edit = page.getByRole('dialog', { name: 'Edit sprint dates' });
     await expect(edit).toBeVisible();
 

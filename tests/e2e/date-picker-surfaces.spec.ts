@@ -135,7 +135,7 @@ test('quick view: the rail’s Due date opens the picker inside the peek and sav
   const task = await mkTask(seed, 'Plan the quick-view date');
 
   await page.goto('/items');
-  const row = page.getByTestId(`issue-row-${task.identifier}`);
+  const row = page.getByRole('main').getByTestId(`issue-row-${task.identifier}`);
   await expect(row).toBeVisible({ timeout: 30_000 });
   const peekRead = page.waitForResponse(
     (r) => /\/api\/work-items\/peek\?/.test(r.url()) && r.request().method() === 'GET',
@@ -231,7 +231,7 @@ test('advanced filter: Due on or after a picked day keeps only the later item', 
   await adminDb.workItem.update({ where: { id: later.id }, data: { dueDate: midnight(10) } });
 
   await page.goto('/items?view=list');
-  await expect(page.getByTestId(`issue-row-${later.identifier}`)).toBeVisible({
+  await expect(page.getByRole('main').getByTestId(`issue-row-${later.identifier}`)).toBeVisible({
     timeout: 30_000,
   });
   await page.getByRole('button', { name: 'Advanced' }).click();
@@ -261,8 +261,10 @@ test('advanced filter: Due on or after a picked day keeps only the later item', 
   await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(
     '1 work item matches',
   );
-  await expect(page.getByTestId(`issue-row-${later.identifier}`)).toBeVisible();
-  await expect(page.getByTestId(`issue-row-${earlier.identifier}`)).toHaveCount(0);
+  await expect(page.getByRole('main').getByTestId(`issue-row-${later.identifier}`)).toBeVisible();
+  await expect(page.getByRole('main').getByTestId(`issue-row-${earlier.identifier}`)).toHaveCount(
+    0,
+  );
 });
 
 test('automation rule: Set field → Due date stores the day picked in the rule editor', async ({
