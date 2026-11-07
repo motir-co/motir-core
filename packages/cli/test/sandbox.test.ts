@@ -380,6 +380,21 @@ describe('sandbox Dockerfile', () => {
   });
 });
 
+describe('the build survives a dropped download', () => {
+  // Image cache (main) failed three builds in two days on one dropped connection to
+  // www.postgresql.org (`curl: (18) HTTP/2 stream 1 was not closed cleanly`). Exit 18
+  // is not in curl's transient set, so `--retry` alone would not retry it.
+  it('every curl the build runs retries, on every error', () => {
+    const calls = dockerfile
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n')
+      .match(/\bcurl -fsSL[^\n]*/g);
+    expect(calls).not.toBeNull();
+    for (const call of calls!) expect(call).toContain('--retry 5 --retry-all-errors');
+  });
+});
+
 describe('the per-agent layer seam', () => {
   it('handles the base default as a no-op', () => {
     expect(installAgent).toMatch(/^\s*base \| none\)/m);
