@@ -156,7 +156,10 @@ describe('a re-dispatchable exit boots a FRESH container within the same run', (
       // attempt 2 under ids — and a `job_supervision` subject — of its own.
       const own = indexStepIds(ctx).filter((id) => id.includes(`:${fx.projectId}`));
       expect(own).toEqual([
+        // MOTIR-10600: each admission ASK is its own step, called INSIDE the
+        // attempt's `index-admit:` step (this lists calls, in call order).
         `index-admit:${fx.projectId}`,
+        `index-admit-try:${fx.projectId}:1`,
         `index-boot:${fx.projectId}`,
         `index-settle:${fx.projectId}`,
         // MOTIR-7130: an `upload_failed` settle asks once, memoized, whether motir-ai
@@ -164,6 +167,7 @@ describe('a re-dispatchable exit boots a FRESH container within the same run', (
         // no verdict, so the answer is "no" and the re-dispatch proceeds.
         ...(code === 40 ? [`index-size-refusal:${fx.projectId}`] : []),
         `index-admit:${fx.projectId}:r2`,
+        `index-admit-try:${fx.projectId}:r2:1`,
         `index-boot:${fx.projectId}:r2`,
         `index-settle:${fx.projectId}:r2`,
       ]);

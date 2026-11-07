@@ -330,6 +330,26 @@ describe('the Stopped orgs list (AC 4) — server-paged, filtered, searched, lon
     );
     expect(dto.stopped.counts.all).toBe(1);
   });
+
+  it('an indexer pool with NO account is not a stopped org either (MOTIR-10600)', async () => {
+    await pause(
+      (await seedOrg('No account only')).repoIds[0]!,
+      'paused_index_no_indexer_account',
+      6,
+    );
+    const both = await seedOrg('Credit and no account', 2);
+    await pause(both.repoIds[0]!, 'paused_index_no_credit', 2);
+    // Older: it would win the stopped-since column if it were counted.
+    await pause(both.repoIds[1]!, 'paused_index_no_indexer_account', 9);
+
+    const dto = await enabled();
+    expect(dto.stopped.rows.map((r) => r.organizationName)).toEqual(['Credit and no account']);
+    expect(dto.stopped.rows[0]).toMatchObject({ reason: 'no_credit', pausedRepos: 1 });
+    expect(Date.now() - new Date(dto.stopped.rows[0]!.stoppedSince).getTime()).toBeLessThan(
+      3 * DAY,
+    );
+    expect(dto.stopped.counts.all).toBe(1);
+  });
 });
 
 describe('the ways this section can lie (AC 6)', () => {

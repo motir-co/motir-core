@@ -898,6 +898,61 @@ describe('the SCHEDULER rides this loop (MOTIR-3471)', () => {
     expect(executed).toEqual(['system.attachment-gc']);
   });
 
+  it('a FULL pool still ticks the scheduler: the due fire is written, and waits for a slot (MOTIR-10600)', async () => {
+    // On 2026-11-07 ten runs held every slot and the capacity check returned
+    // BEFORE the scheduler, so no cron fire was written for 36 minutes — the
+    // missed-close replay among them. Writing a fire is not claiming it.
+    const ws = await makeWorkspace();
+    await enqueue(ws);
+    const fire = new Date(Date.UTC(2026, 10, 7, 20, 30, 0));
+    let release!: () => void;
+    const held = new Promise<void>((r) => {
+      release = r;
+    });
+    let ticks = 0;
+    const w = new JobWorker({
+      workerId: 'full-pool-scheduler',
+      logger: silent,
+      timings: { poolSize: 1 },
+      execute: async () => {
+        await held;
+      },
+      onSchedulerTick: async () => {
+        ticks += 1;
+        if (ticks < 2) return;
+        await withSystemContext((tx) =>
+          jobQueueRepository.enqueueScheduled(
+            {
+              jobId: 'system.attachment-gc',
+              scheduledFor: fire,
+              eventName: 'scheduled.system.attachment-gc',
+              runAt: fire,
+              maxAttempts: 5,
+            },
+            tx,
+          ),
+        );
+      },
+    });
+
+    expect(await w.tick()).toBe(1);
+    expect(w.freeCapacity).toBe(0);
+
+    // The pool is full: this tick claims nothing — and still schedules.
+    expect(await w.tick()).toBe(0);
+    expect(ticks).toBe(2);
+    const written = await adminDb.jobQueueRun.findFirst({
+      where: { jobId: 'system.attachment-gc', scheduledFor: fire },
+    });
+    expect(written?.state).toBe('pending');
+
+    release();
+    await w.settled();
+    // A slot is free again, and the next tick claims the fire it wrote.
+    expect(await w.tick()).toBe(1);
+    await w.settled();
+  });
+
   it('a THROWING scheduler tick does not stop the worker CLAIMING', async () => {
     // The strictly more important half of the loop is the claim. A scheduling
     // failure is a latency problem for one job; a claim loop that dies takes the

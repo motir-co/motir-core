@@ -1,6 +1,7 @@
 import { fetchCodeGraphRunVerdict, type CodeGraphRunVerdict } from '@/lib/ai/motirAiClient';
 import {
   AI_PLAN_INDEX_PAUSE_REASON,
+  INDEX_NO_ACCOUNT_PAUSE_REASON,
   INDEX_POOL_FULL_PAUSE_REASON,
 } from '@/lib/ciFleet/indexAllowance';
 import { indexFleetConfig } from '@/lib/orchestrator';
@@ -352,6 +353,15 @@ export async function runIndexFleetSteps(
     await pauseIndexingRepo(target.repoRef, target.organizationId, INDEX_POOL_FULL_PAUSE_REASON);
     return { indexed: false, reason: INDEX_POOL_FULL_PAUSE_REASON };
   }
+  // ⚠️ AND A POOL WITH NO ACCOUNT AT ALL IS A PAUSE THAT SAYS SO (MOTIR-10600).
+  // Admission answered `no_index_account` on its first ask: the indexer is on its
+  // pool and nobody has created a live account of it yet. Waiting cannot fix that,
+  // so nothing waited — same no-op shape as the full pool above, with a reason
+  // that names the missing account rather than a busy fleet.
+  if ('noIndexAccount' in dispatched) {
+    await pauseIndexingRepo(target.repoRef, target.organizationId, INDEX_NO_ACCOUNT_PAUSE_REASON);
+    return { indexed: false, reason: INDEX_NO_ACCOUNT_PAUSE_REASON };
+  }
   const { coreTimings, indexModes } = dispatched;
 
   const result = await finishIndexRun(ctx, services, input, target, coreTimings, indexModes);
@@ -399,6 +409,8 @@ async function indexEveryProject(
   | { planRefused: true }
   /** Every indexer-pool account stayed full (MOTIR-9451) — see the caller. */
   | { poolFull: true }
+  /** The indexer pool has no live account at all (MOTIR-10600) — see the caller. */
+  | { noIndexAccount: true }
 > {
   const steps = stepSeam(ctx);
 
@@ -479,6 +491,11 @@ async function indexEveryProject(
     // ⚠️ NOR A FULL INDEXER POOL (MOTIR-9451): a wait, recorded by the caller.
     if (outcome.outcome === 'admission_deferred' && outcome.reason === 'pool_full') {
       return { poolFull: true };
+    }
+    // ⚠️ NOR AN INDEXER POOL WITH NO ACCOUNT (MOTIR-10600): an answer, recorded
+    // by the caller.
+    if (outcome.outcome === 'admission_deferred' && outcome.reason === 'no_index_account') {
+      return { noIndexAccount: true };
     }
     if (outcome.outcome !== 'settled' || !outcome.verdict.indexed) {
       // ⚠️ A SIZE REFUSAL IS RECORDED ON THE REPOSITORY BEFORE THE RUN FAILS

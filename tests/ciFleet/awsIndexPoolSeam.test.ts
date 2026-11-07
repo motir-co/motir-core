@@ -9,7 +9,10 @@ import type {
 import { db } from '@/lib/db';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
-import { INDEX_POOL_FULL_PAUSE_REASON } from '@/lib/ciFleet/indexAllowance';
+import {
+  INDEX_NO_ACCOUNT_PAUSE_REASON,
+  INDEX_POOL_FULL_PAUSE_REASON,
+} from '@/lib/ciFleet/indexAllowance';
 import { fleetKindOnPool, wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { codeGraphIndex } from '@/lib/jobs/definitions/codeGraphIndex';
 import type { CodeGraphIndexData } from '@/lib/jobs/types';
@@ -426,14 +429,16 @@ describe('an index never lands on another kind’s account', () => {
     ).toBe(otherSlotsBefore);
   }, 60_000);
 
-  it('with no indexer account at all, the other pools’ room is not borrowed: the index waits as pool_full', async () => {
+  it('with no indexer account at all, the other pools’ room is not borrowed: the index pauses as no indexer account', async () => {
     await otherKindsPools();
     const fx = await tenant('seam-guard-none');
 
     const { result, error } = await runIndex(fx, 'evt-seam-guard-none');
 
     expect(error).toBeUndefined();
-    expect(result).toEqual({ indexed: false, reason: INDEX_POOL_FULL_PAUSE_REASON });
+    // MOTIR-10600: an empty pool is an ANSWER on the first ask, not a wait.
+    expect(result).toEqual({ indexed: false, reason: INDEX_NO_ACCOUNT_PAUSE_REASON });
+    expect((await repoRow(fx.repoName)).indexPausedReason).toBe(INDEX_NO_ACCOUNT_PAUSE_REASON);
     for (const acct of fakes.ec2ByKeyId.values() as Iterable<Ec2Fake>) {
       expect(acct.instances.size).toBe(0);
     }

@@ -1708,6 +1708,41 @@ exactly one dead-letters on its second poll. That is a test against the real set
      A measurement showing admission waits contending the pool is the trigger to revisit; it is not
      what 2026-08-28 measured, and it is named in §16.8.
 
+#### ⚠️ §16.6a — AMENDED: the admission backoff DEFERS between asks (MOTIR-10600, 2026-11-07)
+
+§16.6 kept the admission backoff as an in-process loop inside `index-admit:<pid>` and named the
+trigger to revisit it: _a measurement showing admission waits contending the pool_. On 2026-11-07 that
+measurement arrived in production. The indexer had been switched onto its AWS pool, which had no live
+`code_graph_index` account, so every admission deferred as `pool_full`. Ten `system.code-graph-refresh`
+runs, queued between 19:46 and 20:12, each slept in `waitForAdmission` (up to 60 attempts, about 57
+minutes) and held all ten `POOL_SIZE` slots. Because `JobWorker.tick()` returned on a full pool before
+the scheduler, no cron fire was written either. 1 822 GitHub webhook deliveries queued behind them, a
+merged pull request's approval gate stayed open, and every deploy's drain handed the same ten rows (attempt
+refunded) to the next worker, which stalled within a minute.
+
+§16.6's third reason — _the freed slot could not have started another index anyway_ — was the false
+one: the slot was the whole background layer's, not the indexer's. The first reason still binds and is
+kept by construction:
+
+- **The VERDICT stays one memoized step, `index-admit:<subject>`.** Once it exists, every pass replays it
+  and never asks again, so a resume after the settle released the slot cannot be granted a fresh one.
+- **Each ASK is its own memoized step, `index-admit-try:<subject>:<n>`,** run inside the verdict's step.
+  A pass replays the asks already answered and makes at most one new one. A fresh refusal with attempts
+  left leaves the pass through `deferQueuedAdmission` at `askedAt + indexAdmissionWaitMs(n)` — the same
+  budget and the same cadence, spent as a `run_at`. A granted ask is memoized too, so a crash between the
+  grant and the verdict's memo replays the grant; an ask repeated anyway is `already_held`.
+- **An empty pool is an answer, not a wait.** Admission returns `no_index_account` when the kind is on
+  its pool and no live account of it exists (shared, spare or org-owned). Like `ai_plan_required`
+  (MOTIR-8235) it ends the loop on the first ask; the index job records `paused_index_no_indexer_account`,
+  a capacity pause the catch-up sweep lifts once `indexPoolHasRoom` answers yes.
+- **The readmission after an account refused a boot asks once** (it runs inside `index-boot`); a refusal
+  ends the boot as `admission_deferred`.
+- **The scheduler ticks before the capacity check** (`JobWorker.tick()`), so a full pool delays claims
+  but never stops cron fires being written.
+
+`tests/jobs/index-admission-holds-no-slot.test.ts` reproduces the incident on a real Postgres through
+the real worker; it fails on the pre-amendment code at its first tick.
+
 ### §16.7 — A chain that stops advancing is a NEW reachable state, and this story owes the sweep
 
 The in-process `finally` covers this today: whatever kills the loop, the same process tears the

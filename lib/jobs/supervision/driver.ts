@@ -425,6 +425,22 @@ export function deferSettledSupervision(at: Date, reason: string): never {
   deferRun(at, reason);
 }
 
+/**
+ * Give a run that is QUEUED FOR ADMISSION back to the queue, due at its next
+ * attempt (MOTIR-10600) — the wait between two admission asks spent as a
+ * `run_at` instead of an in-process sleep that holds one of the worker's
+ * `POOL_SIZE` slots.
+ *
+ * Nothing is supervised yet and nothing is held: the caller memoizes each ASK,
+ * so the next pass replays the refusals already given and asks once more. It is
+ * `deferRun`, named for this folder so a service never imports the engine
+ * (`eslint.config`'s `JOB_ENGINE_RESTRICTION`); in-process,
+ * `driveSupervisionInProcess` turns it back into a wait.
+ */
+export function deferQueuedAdmission(at: Date, reason: string): never {
+  deferRun(at, reason);
+}
+
 /** What a pass that SETTLED returns. A pass that suspended throws `JobRunDefer` instead and returns nothing. */
 export interface SupervisionSettled<O> {
   status: 'settled';

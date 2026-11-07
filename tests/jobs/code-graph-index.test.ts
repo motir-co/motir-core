@@ -1500,10 +1500,12 @@ describe('the step ledger a supervised run writes is a CONSTANT', () => {
     };
   }
 
-  it('writes THREE step rows however many times it polled', async () => {
+  it('writes FOUR step rows however many times it polled', async () => {
     const quick = await superviseCounting('cgf-steps-1', 1);
     expect(quick.outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
     expect(quick.stepIdsWritten).toEqual([
+      // MOTIR-10600: the one admission ask, memoized before the verdict's memo.
+      `index-admit-try:${quick.projectId}:1`,
       `index-admit:${quick.projectId}`,
       `index-boot:${quick.projectId}`,
       `index-settle:${quick.projectId}`,
@@ -1520,7 +1522,7 @@ describe('the step ledger a supervised run writes is a CONSTANT', () => {
     const long = await superviseCounting('cgf-steps-2', 8);
     expect(long.outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
     expect(long.polls).toBeGreaterThanOrEqual(8);
-    expect(long.stepIdsWritten).toHaveLength(3);
+    expect(long.stepIdsWritten).toHaveLength(4);
     expect(long.stepIdsWritten).toHaveLength(quick.stepIdsWritten.length);
     // And not one of them is a sleep checkpoint — the row kind the old shape
     // wrote once per poll.
