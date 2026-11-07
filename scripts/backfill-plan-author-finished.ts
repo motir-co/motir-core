@@ -37,10 +37,10 @@
  *
  * It needs only `DATABASE_URL` (no host calls). Do the dry run first, read the
  * per-workspace counts, and only then apply. RUNNING THIS ON PRODUCTION is its own
- * card (MOTIR-10495): before the AWS cutover's go through
- * `.github/workflows/backfill-plan-author-finished.yml`, after it as the data script
+ * card (MOTIR-10495). On production it runs as the data script
  * `backfill-author-finished` (`scripts/data-script-main.ts`,
- * `docs/runbooks/production-data-scripts.md`). The `pnpm` command runs that same
+ * `docs/runbooks/production-data-scripts.md`), inside a core worker task; the
+ * Neon-era workflow that ran it was retired (MOTIR-10573). The `pnpm` command runs that same
  * entry, which loads `.env` and composes the URL before this module loads.
  *
  * SIGINT / SIGTERM stop the sweep between two plans and print the PARTIAL report,
