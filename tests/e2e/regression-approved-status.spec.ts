@@ -382,11 +382,8 @@ test('a person moves a card to Approved, and the board, the counts and the paren
     await expectDerived(story.id, 'done', 'the parent story');
     await openBoard(page);
     await expect(page.getByTestId(`board-count-${approvedColumn.id}`)).toHaveText('0');
-    await expect(
-      page
-        .getByTestId(`board-card-${dependent.identifier}`)
-        .getByRole('img', { name: 'Blocked', exact: true }),
-    ).toHaveCount(0);
+    const unblockedCard = page.getByTestId(`board-card-${dependent.identifier}`);
+    await expect(unblockedCard.getByRole('img', { name: 'Blocked', exact: true })).toHaveCount(0);
     await beat();
     await beat();
   });
