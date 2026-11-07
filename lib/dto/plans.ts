@@ -871,6 +871,12 @@ export interface PlanCodeReadDto {
   /** The ref the call asked for — a label; what it was read AT is `commits`. */
   askedRef: string | null;
   query: string | null;
+  /**
+   * A `code_grep`'s mode: true searched `query` as a regular expression, false
+   * literally (MOTIR-10546). `null` for any other tool, and for a read recorded
+   * before the field existed.
+   */
+  regex: boolean | null;
   /** Every commit the read was made at: a resolved hex id, never a branch name. */
   commits: { repo?: string; sha: string; dirty?: boolean }[];
   outcome: string;
@@ -1856,6 +1862,28 @@ export interface PlanValidityDto {
    * Sorted by `item`.
    */
   sectionFindings: SectionFindingDto[];
+  /**
+   * Every `add` NOT YET WRITTEN (Story MOTIR-10413 · MOTIR-10496): no author
+   * session has finished it, so its proposal carries no `authorFinished`
+   * (`isProposalWritten`, `lib/plans/proposalWritten.ts`). A boundary-only card
+   * the lay saved is one, and so is a long body no author finished. A
+   * `sectionFindings` entry or a shape advisory naming one of these describes
+   * what is still to write, not a written card that lost its criteria.
+   *
+   * ADVISORY: never changes `valid` — a driver validates mid-walk, when unwritten
+   * cards are normal. Only an UNDECIDED plan (`generating`, `planned`, `stale`)
+   * lists any: no session will ever write a decided plan's cards. A `modify`
+   * never appears (a committed card has no stored state). Sorted by `item`.
+   */
+  notYetWritten: NotYetWrittenDto[];
+}
+
+/** One `add` {@link PlanValidityDto.notYetWritten} names. */
+export interface NotYetWrittenDto {
+  /** `planItem:<id>` — the `add` proposal's ref. */
+  item: string;
+  /** The proposal's title, `null` when it has none. */
+  title: string | null;
 }
 
 // --- Auto-plan PAUSE state (Story 7.13 · MOTIR-1740) ------------------------

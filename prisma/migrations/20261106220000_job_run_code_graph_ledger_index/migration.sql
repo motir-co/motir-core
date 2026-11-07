@@ -1,0 +1,23 @@
+-- Bug MOTIR-10545 — the code-graph LEDGER reads become index reads.
+--
+-- `resolveCodeState` (`lib/services/projectStateService.ts`) answers
+-- `get_project_state` and the migrate wizard's index status from four `job_run`
+-- reads in ONE interactive transaction, each filtering on `workspace_id`,
+-- `function_id` and `status`. No index named `function_id`, and under FORCE RLS
+-- the runtime role cannot use `status = …` (enum equality is not leakproof) as an
+-- index condition, so every read walked the workspace's whole job history — about
+-- 120k rows for the largest workspace, a parallel sequential scan of the ~507k-row
+-- table in production — to return a few dozen. One call held the transaction past
+-- Prisma's 5 s default and rolled back.
+--
+-- With this index `(workspace_id, function_id)` is the index condition the runtime
+-- role uses; `status` is the third column for the owner role's reads.
+-- `tests/jobs/code-graph-ledger-index.test.ts` proves all four repository reads
+-- use it, as `motir_app`, on a workspace of more than 100k rows.
+--
+-- A plain CREATE INDEX, not CONCURRENTLY: Prisma runs a migration inside a
+-- transaction. It blocks writes to `job_run` for the build, which is about a
+-- second on the production table's size.
+
+-- CreateIndex
+CREATE INDEX "job_run_workspace_id_function_id_status_idx" ON "job_run"("workspace_id", "function_id", "status");

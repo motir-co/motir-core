@@ -52,6 +52,8 @@ export interface PlanCodeReadFields {
   endLine: number | null;
   askedRef: string | null;
   query: string | null;
+  /** A `code_grep`'s mode — true a regular expression, false a literal; null when not said (MOTIR-10546). */
+  regex: boolean | null;
   commits: PlanCodeReadCommit[];
   outcome: string;
   lines: number | null;
@@ -93,6 +95,13 @@ function optionalCount(raw: Raw, key: string, at: string, min: number): number |
     throw new PlanCodeReadRefusal(`${at}.${key} must be an integer of at least ${min}.`);
   }
   return value as number;
+}
+
+function optionalFlag(raw: Raw, key: string, at: string): boolean | null {
+  const value = raw[key];
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'boolean') throw new PlanCodeReadRefusal(`${at}.${key} must be a boolean.`);
+  return value;
 }
 
 function parseCommit(raw: unknown, at: string): PlanCodeReadCommit {
@@ -159,6 +168,7 @@ export function parsePlanCodeRead(raw: unknown, at = 'codeReads[0]'): PlanCodeRe
     endLine,
     askedRef: optionalText(r, 'askedRef', at),
     query: optionalText(r, 'query', at),
+    regex: optionalFlag(r, 'regex', at),
     commits: parseCommits(r.commits, at),
     outcome: requiredText(r, 'outcome', OUTCOME, at),
     lines: optionalCount(r, 'lines', at, 0),

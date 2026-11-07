@@ -115,6 +115,47 @@ describe('recordPlanCodeReads — appends the session’s reads, in call order',
     expect(rows[0]!.askedRef).toBe('main');
   });
 
+  it('stores a code_grep read’s regex flag; an older row without one reads back null (MOTIR-10546)', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx);
+    const grep = { tool: 'code_grep', query: 'A|B', commits: [], outcome: 'ok', hits: 0 };
+    await plansService.recordPlanCodeReads(
+      planId,
+      {
+        sessionKey: 's',
+        codeReads: [{ ...grep, regex: false }, { ...grep, regex: true }, fileRead],
+      },
+      fx.ctx,
+    );
+    // A row written before the column existed: inserted with no `regex` at all.
+    await adminDb.$executeRaw`
+      INSERT INTO "plan_code_read" (id, plan_id, session_key, seq, tool, query, commits, outcome, hits)
+      VALUES ('older-row', ${planId}, 's', 4, 'code_grep', 'A|B', '[]'::jsonb, 'ok', 0)`;
+
+    const rows = await readsOf(planId);
+    expect(rows.map((r) => r.regex)).toEqual([false, true, null, null]);
+    const back = await plansService.listPlanCodeReads(planId, {}, fx.ctx);
+    expect(back.reads.map((r) => [r.seq, r.regex])).toEqual([
+      [1, false],
+      [2, true],
+      [3, null],
+      [4, null],
+    ]);
+  });
+
+  it('refuses a regex flag that is not a boolean, and records nothing', async () => {
+    const fx = await makeWorkItemFixture();
+    const planId = await generatingPlan(fx);
+    await expect(
+      plansService.recordPlanCodeReads(
+        planId,
+        { sessionKey: 's', codeReads: [fileRead, { ...fileRead, regex: 1 }] },
+        fx.ctx,
+      ),
+    ).rejects.toThrow(/codeReads\[1\]\.regex must be a boolean/);
+    expect(await readsOf(planId)).toEqual([]);
+  });
+
   it('needs NO step — a session that never reported one (plan.py’s PART 1) still records', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await generatingPlan(fx);

@@ -131,13 +131,42 @@ describe('cardNextAction — the state → action table (MOTIR-10508)', () => {
     });
   });
 
-  it('Ready copies motir run — never on a manual card', () => {
+  it('Ready copies motir run on a card that is not manual', () => {
     expect(cardNextAction({ ...base, ready: true })).toEqual({
       kind: 'copy',
       verb: 'run',
       reason: null,
     });
-    expect(cardNextAction({ ...base, ready: true, manual: true })).toBeNull();
+  });
+
+  // MOTIR-10559: a ready manual / human card copies `motir guide`, the walk through
+  // a human card's steps, where it used to draw no button.
+  it('Ready and manual copies motir guide', () => {
+    expect(cardNextAction({ ...base, ready: true, manual: true })).toEqual({
+      kind: 'copy',
+      verb: 'guide',
+      reason: null,
+    });
+  });
+
+  it('the fix and In Review rows still win over a ready manual card', () => {
+    expect(cardNextAction({ ...base, ready: true, manual: true, fixReason: 'ci_failed' })).toEqual({
+      kind: 'copy',
+      verb: 'fix',
+      reason: 'ci_failed',
+    });
+    expect(cardNextAction({ ...base, ready: true, manual: true, status: 'in_review' })).toEqual({
+      kind: 'copy',
+      verb: 'review',
+      reason: null,
+    });
+  });
+
+  it('a manual card that is not ready, or a canvas without the opt-in, draws no button', () => {
+    expect(cardNextAction({ ...base, manual: true })).toBeNull();
+    expect(cardNextAction({ ...base, manual: true, status: 'in_progress' })).toBeNull();
+    expect(cardNextAction({ ...base, ready: true, manual: true, options: null })).toBeNull();
+    expect(cardNextAction({ ...base, ready: true, manual: true, options: undefined })).toBeNull();
   });
 
   it('anything else draws no button', () => {
@@ -366,11 +395,90 @@ describe('the next-action button', () => {
     expect(button.getAttribute('data-copied')).toBeNull();
   });
 
-  it('a manual ready card gets no button', () => {
-    render(
-      <WorkItemNode item={{ ...leaf, type: 'manual', executor: 'human' }} ready nextActions={ON} />,
-    );
-    expect(nextAction()).toBeNull();
+  describe('a ready manual or human card copies motir guide (MOTIR-10559)', () => {
+    const manual = { ...leaf, type: 'manual', executor: 'human' } as const;
+
+    it.each([
+      ['type manual', { ...leaf, type: 'manual' }],
+      ['executor human', { ...leaf, executor: 'human' }],
+    ] as const)('on a %s card', async (_label, item) => {
+      render(
+        <ToastProvider>
+          <WorkItemNode item={item} ready nextActions={ON} />
+        </ToastProvider>,
+      );
+      const button = nextAction()!;
+      expect(button.getAttribute('data-action')).toBe('guide');
+      expect(button.textContent).toBe('motir guide');
+      expect(button.getAttribute('aria-label')).toBe('Copy motir guide MOTIR-10509');
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(writeText).toHaveBeenCalledWith('motir guide MOTIR-10509');
+    });
+
+    it('with the success toast and a Check for 2s, as the run button', async () => {
+      vi.useFakeTimers();
+      render(
+        <ToastProvider>
+          <WorkItemNode item={manual} ready nextActions={ON} />
+        </ToastProvider>,
+      );
+      const button = nextAction()!;
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(screen.getByText('Copied')).toBeTruthy();
+      expect(screen.getByText('Paste motir guide MOTIR-10509 into your terminal.')).toBeTruthy();
+      expect(button.getAttribute('data-copied')).toBe('true');
+      await act(async () => {
+        vi.advanceTimersByTime(2000);
+      });
+      expect(button.getAttribute('data-copied')).toBeNull();
+    });
+
+    it('a refused clipboard shows the same copy-failed toast', async () => {
+      writeText.mockRejectedValueOnce(new Error('NotAllowedError'));
+      render(
+        <ToastProvider>
+          <WorkItemNode item={manual} ready nextActions={ON} />
+        </ToastProvider>,
+      );
+      const button = nextAction()!;
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(
+        screen.getByText("Couldn't copy — select the command and copy it manually."),
+      ).toBeTruthy();
+      expect(button.getAttribute('data-copied')).toBeNull();
+    });
+
+    it('its tooltip says the card is work a person does and names the guide command', async () => {
+      render(<WorkItemNode item={manual} ready nextActions={ON} />);
+      fireEvent.focus(nextAction()!);
+      const tip = await screen.findByRole('tooltip', {}, { timeout: 3000 });
+      expect(tip.textContent).toBe('Work a person does — copy motir guide MOTIR-10509');
+    });
+
+    it('uses the same reveal: hover, focus-within, always on a no-hover device', () => {
+      render(<WorkItemNode item={manual} ready nextActions={ON} />);
+      const cls = nextAction()!.className;
+      expect(cls).toContain('opacity-0');
+      expect(cls).toContain('group-hover/node:opacity-100');
+      expect(cls).toContain('group-focus-within/node:opacity-100');
+      expect(cls).toContain('[@media(hover:none)]:opacity-100');
+    });
+
+    it('a manual card that is not ready gets no button', () => {
+      render(<WorkItemNode item={manual} nextActions={ON} />);
+      expect(nextAction()).toBeNull();
+    });
+
+    it('a canvas built without next-action options (onboarding, plan preview) gets none', () => {
+      render(<WorkItemNode item={manual} ready />);
+      expect(nextAction()).toBeNull();
+    });
   });
 
   it('an In Review card copies motir review', async () => {
@@ -419,13 +527,24 @@ describe('the next-action button', () => {
     expect(nextAction()).toBeNull();
   });
 
-  it('a To plan card opens the planning overlay with that card as the target', () => {
+  it('a To plan card opens the planning overlay with that card as the target', async () => {
+    // Since MOTIR-10544 the click CHECKS first (`GET /api/work-items/plannability`)
+    // and opens the overlay on a plannable answer; the alert and failure outcomes
+    // are `tests/components/canvas-card-plan-check.test.tsx`.
+    const fetchMock = vi.fn(
+      async () => new Response(JSON.stringify({ plannable: true, reasons: [] }), { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
     render(<WorkItemNode item={story} nextActions={ON} />);
     const button = nextAction()!;
     expect(button.getAttribute('data-action')).toBe('plan');
     expect(button.getAttribute('aria-label')).toBe('Plan MOTIR-10520');
     expect(button.textContent).toBe('Plan');
-    fireEvent.click(button, { button: 0 });
+    await act(async () => {
+      fireEvent.click(button, { button: 0 });
+    });
+    vi.unstubAllGlobals();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(shallowPush).toHaveBeenCalledTimes(1);
     expect(shallowPush).toHaveBeenCalledWith(
       withPlanningOverlay('/roadmap?scope=project', {
@@ -463,7 +582,13 @@ describe('the next-action button', () => {
     expect(onKeyDown).not.toHaveBeenCalled();
   });
 
-  it('the Plan press does not reach the node either', () => {
+  it('the Plan press does not reach the node either', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () => new Response(JSON.stringify({ plannable: true, reasons: [] }), { status: 200 }),
+      ),
+    );
     const onClick = vi.fn();
     const onPointerDown = vi.fn();
     render(
@@ -473,7 +598,10 @@ describe('the next-action button', () => {
     );
     const button = nextAction()!;
     fireEvent.pointerDown(button);
-    fireEvent.click(button, { button: 0 });
+    await act(async () => {
+      fireEvent.click(button, { button: 0 });
+    });
+    vi.unstubAllGlobals();
     expect(onClick).not.toHaveBeenCalled();
     expect(onPointerDown).not.toHaveBeenCalled();
   });

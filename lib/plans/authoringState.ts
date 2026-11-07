@@ -8,28 +8,34 @@
 // opens on is a snapshot that puts "running" and "not started" in one bucket, so
 // the session asks this read, live, before it wires the edge.
 //
-// The facts are already on the server: both planners report every author
-// session's start and end (`report_plan_step`).
+// THE THREE STATES OF AN `add` (Story MOTIR-10413 · MOTIR-10496):
 //
 //   - authoring    — a LIVE `PlanStep` row of kind `author` targets the card
 //                    (`end` deletes the row);
-//   - authored     — an ENDED author session targeted it (its
-//                    `PlanNarrationSession` row outlives `end`), or the card has
-//                    no session at all and is already COMPLETE: a card the
-//                    surgical add appends complete never gets an author session,
-//                    and read sessions-only it would read `not_started` for ever;
-//   - not_started  — no author session, live or ended, AND the card is still
-//                    incomplete.
+//   - authored     — the card is WRITTEN: its proposal carries the stored
+//                    `authorFinished` (`isProposalWritten`, `lib/plans/proposalWritten.ts`),
+//                    which a driver sends once an author session finished the
+//                    card and core stamps on a card written by hand;
+//   - not_started  — every other `add`.
 //
-// "Complete" is not "has a body": a failed session can leave a partial body, and a
-// `modify` always has one. The test is the one both planners use to decide whether
-// a card still needs its author session — plan.py's `author_gaps`: both bodies,
-// no `validate_plan` section finding for the card's kind × type, and, on a
-// childless leaf, its type, executor, sizing pair and difficulty.
+// ⚠️ NEITHER AN ENDED SESSION NOR A COMPLETE BODY MAKES A CARD AUTHORED ANY MORE.
+// Both used to (MOTIR-9821): an ended `PlanNarrationSession` row read authored, and
+// so did a card that passed `proposalComplete`. The first is false because the
+// ended-session record also covers an author that FAILED, after writing a whole
+// body or none; the second is false since the lay saves every card with its Scope
+// BOUNDARY as its only section, so a body stopped saying whether its author
+// finished. A failed session's card therefore reads `not_started`, which is true:
+// a resume writes it again, it may still be given an edge, and its next author
+// session will read that edge.
+//
+// `proposalComplete` stays, for the one-time carry-over that stamped the cards of
+// the plans already open when the state shipped (MOTIR-10491). It answers no
+// written-state question.
 //
 // COMMITTED CARDS (MOTIR-10001) are answered apart from the proposals, because the
-// question differs. A committed card the walk RE-AUTHORS — one the lay listed (a
-// `modify` that changes its title, or a card the driver recorded on the plan's
+// question differs, and keep their meaning: a committed card has no stored state.
+// A committed card the walk RE-AUTHORS — one the lay listed (a `modify` that
+// changes its title, or a card the driver recorded on the plan's
 // `plannerRecord.walkListed`), one a `modify` rewrote the body of, or one an author
 // step has targeted — races exactly as a proposal does and reads the same three
 // states. Every OTHER committed card is `not_in_walk`: no session of this plan will
@@ -37,10 +43,10 @@
 // already rests on the blocker — a rule the corpus states, not this read.
 //
 // PURE: no DB, no `tx`. The service hands in the plan's items, its step rows, its
-// narration-session rows, the section findings and the committed cards' identities.
+// narration-session rows (for the committed cards) and the committed cards' identities.
 
 import type { PlanItemDto } from '@/lib/dto/plans';
-import type { SectionFindingDto } from '@/lib/dto/workItems';
+import { isProposalWritten } from '@/lib/plans/proposalWritten';
 
 export type PlanAuthoringState = 'not_started' | 'authoring' | 'authored';
 
@@ -106,8 +112,14 @@ export interface ProposalCompleteOptions {
 }
 
 /**
- * Is this proposal complete — would neither planner open an author session on it?
- * `findingRefs` is the set of items `validate_plan`'s `sectionFindings` names.
+ * Is this proposal complete — both bodies, no `validate_plan` section finding, and,
+ * on a childless leaf, its type, executor, sizing pair and difficulty? `findingRefs`
+ * is the set of items `validate_plan`'s `sectionFindings` names.
+ *
+ * ⚠️ NOT a written-state test (MOTIR-10496): a card is written only when its
+ * proposal carries `authorFinished` ({@link deriveAuthoringStates}). This judgement
+ * survives for the one-time carry-over (MOTIR-10491), which stamped the finished
+ * cards of the plans already open when the state shipped.
  */
 export function proposalComplete(
   item: PlanItemDto,
@@ -144,16 +156,16 @@ function authorTargets(facts: readonly AuthorSessionFact[]): Set<string> {
  * Every `add` on the plan with its authoring state, in the plan's own order. A
  * `modify` targets a committed card and is answered by {@link deriveCommittedStates};
  * a `remove` is never authored.
+ *
+ * A live author step wins over the stored state: a stamped card being rewritten
+ * reads `authoring` for as long as that step lives (the "N authored" count still
+ * counts it, because it stays written while it is rewritten).
  */
 export function deriveAuthoringStates(
   items: readonly PlanItemDto[],
   liveSteps: readonly AuthorSessionFact[],
-  sessions: readonly AuthorSessionFact[],
-  findings: readonly Pick<SectionFindingDto, 'item'>[],
 ): PlanAuthoringStateRow[] {
   const live = authorTargets(liveSteps);
-  const ever = authorTargets(sessions);
-  const findingRefs = new Set(findings.map((f) => f.item));
 
   const rows: PlanAuthoringStateRow[] = [];
   for (const item of items) {
@@ -161,7 +173,7 @@ export function deriveAuthoringStates(
     const ref = `planItem:${item.id}`;
     const state: PlanAuthoringState = live.has(ref)
       ? 'authoring'
-      : ever.has(ref) || proposalComplete(item, items, findingRefs)
+      : isProposalWritten(item.proposedFields)
         ? 'authored'
         : 'not_started';
     const title = (item.proposedFields as { title?: unknown } | null)?.title;

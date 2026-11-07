@@ -7796,7 +7796,14 @@
           "copyTooltip": "Copiar <cmd>{command}</cmd>",
           "copyTooltipCiFailed": "CI falhou — copiar <cmd>{command}</cmd>",
           "copyTooltipChangesRequested": "Alterações solicitadas — copiar <cmd>{command}</cmd>",
-          "planTooltip": "Abrir o planejamento com {key} como alvo"
+          "copyTooltipGuide": "Trabalho feito por uma pessoa — copiar <cmd>{command}</cmd>",
+          "planTooltip": "Abrir o planejamento com {key} como alvo",
+          "cantPlanTitle": "{key} ainda não pode ser planejada",
+          "cantPlanLead": "{count, plural, one {Ela aguarda uma história que ainda não tem subtarefas.} other {Ela aguarda # histórias que ainda não têm subtarefas.}}",
+          "cantPlanNoSubtasks": "Ainda não tem subtarefas. Precisa delas antes que {key} possa ser planejada.",
+          "checkFailedTitle": "Não foi possível verificar {key}",
+          "checkFailedBody": "O planejamento não abriu. Verifique sua conexão e tente novamente.",
+          "checkRetry": "Tentar de novo"
         }
       },
       "anchor": {

@@ -1,6 +1,8 @@
 /**
  * `pnpm db:backfill:ci-state` — recompute `WorkItem.ciState` for every card that
- * has pull requests, through the shipped recompute (MOTIR-5472).
+ * has pull requests, through the shipped recompute (MOTIR-5472) — and for every
+ * non-archived card that still stores a verdict with no pull request left, which
+ * the recompute folds to `null` (MOTIR-10542).
  *
  * THE DEFECT. `WorkItem.ciState` had one writer, and it STAMPED the verdict of
  * whichever pull request's webhook was in hand onto every card that pull request

@@ -7793,7 +7793,14 @@
           "copyTooltip": "<cmd>{command}</cmd> をコピー",
           "copyTooltipCiFailed": "CI 失敗 — <cmd>{command}</cmd> をコピー",
           "copyTooltipChangesRequested": "変更依頼あり — <cmd>{command}</cmd> をコピー",
-          "planTooltip": "{key} を対象に計画を開く"
+          "copyTooltipGuide": "人が行う作業 — <cmd>{command}</cmd> をコピー",
+          "planTooltip": "{key} を対象に計画を開く",
+          "cantPlanTitle": "{key}はまだ計画できません",
+          "cantPlanLead": "{count, plural, other {サブタスクがまだないストーリー#件を待っています。}}",
+          "cantPlanNoSubtasks": "まだサブタスクがありません。{key}を計画する前に、サブタスクが必要です。",
+          "checkFailedTitle": "{key}を確認できませんでした",
+          "checkFailedBody": "計画が開きませんでした。接続を確認して、もう一度お試しください。",
+          "checkRetry": "再試行"
         }
       },
       "anchor": {

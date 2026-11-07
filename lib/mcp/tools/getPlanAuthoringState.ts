@@ -86,11 +86,13 @@ export function registerGetPlanAuthoringState(
         'onto a sibling. Returns `{ planId, status, proposals: [{ ref, op, title, state }], ' +
         'committed: [{ ref, key, title, inWalk, state }], unresolved }`. One `proposals` row per ' +
         '`add` (`ref` = `planItem:<id>`), with `state` one of: `authoring` — an `author` step ' +
-        'reported through `report_plan_step` targets it and has not ended; `authored` — an author ' +
-        'session that targeted it has ended, or it was appended COMPLETE and never needed one; ' +
-        '`not_started` — no author session, live or ended, and the card is still incomplete (a ' +
-        'missing body or explanation, a `validate_plan` section finding, or — on a childless leaf ' +
-        '— a missing type, executor, size or difficulty). One `committed` row (`ref` = the work ' +
+        'reported through `report_plan_step` targets it and has not ended; `authored` — its ' +
+        'author session FINISHED it: the proposal carries `authorFinished: true`, which a ' +
+        'planner’s driver sends once an author session ended successfully, and which a card ' +
+        'written by hand over the MCP while no walk writes the plan is stamped with; ' +
+        '`not_started` — every other `add`, whatever its body says: a `## Scope BOUNDARY`-only ' +
+        'card, a whole body nobody finished, and the body a FAILED session left behind all read ' +
+        '`not_started`. A live step wins over the stamp. One `committed` row (`ref` = the work ' +
         'item’s id) per committed card the walk RE-AUTHORS — one the lay listed (a `modify` that ' +
         'changes its title, or an id in the plan’s `plannerRecord.walkListed`), one a `modify` ' +
         'rewrote the body of, or one an author step targeted — read with the same three states ' +

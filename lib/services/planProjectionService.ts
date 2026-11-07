@@ -117,6 +117,8 @@ export interface ProjectedNode {
 /** The assembled projection: nodes + projected `blocked_by` adjacency. */
 export interface Projection {
   projectId: string;
+  /** The plan's own status — read by `validate_plan`'s not-yet-written list (MOTIR-10496). */
+  planStatus: string;
   /** id → node. Removed nodes are absent. */
   nodes: Map<string, ProjectedNode>;
   /** from-id → set of blocker (to) ids — the projected `is_blocked_by` edges. */
@@ -576,6 +578,7 @@ export async function buildProjection(
 
   return {
     projectId,
+    planStatus: plan.status,
     nodes,
     blockedBy,
     edgeReasons,

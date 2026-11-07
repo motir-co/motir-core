@@ -50,7 +50,9 @@ function asked(r: PlanCodeReadDto): string {
     r.startLine !== null ? `:${r.startLine}${r.endLine !== null ? `-${r.endLine}` : '-'}` : '';
   const target = [r.repo, r.path ? `${r.path}${range}` : null].filter(Boolean).join(' ');
   const query = r.query !== null ? ` ${JSON.stringify(r.query)}` : '';
-  return `${r.tool}${target ? ` ${target}` : ''}${query}`;
+  // A `code_grep`'s mode (MOTIR-10546): a literal zero and a regex zero are different facts.
+  const mode = r.regex === null ? '' : r.regex ? ' (regex)' : ' (literal)';
+  return `${r.tool}${target ? ` ${target}` : ''}${query}${mode}`;
 }
 
 /** Where a read was made: every commit, full sha, a dirty checkout marked. */

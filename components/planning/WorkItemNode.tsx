@@ -31,7 +31,9 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useToast } from '@/components/ui/Toast';
-import { useOpenPlanningWorkspace } from '@/lib/hooks/useOpenPlanningWorkspace';
+import { isPlainPrimaryClick } from '@/lib/hooks/useOpenPlanningWorkspace';
+import { usePlanCheck } from '@/lib/hooks/usePlanCheck';
+import { CantPlanAlert } from '@/components/planning/CantPlanAlert';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { RunTonePill } from '@/components/runs/RunTonePill';
@@ -169,14 +171,20 @@ export interface CardNextActionsOption {
  *  bottom). `null` draws no button. */
 export type CardNextAction =
   | { kind: 'plan' }
-  | { kind: 'copy'; verb: 'run' | 'review' | 'fix'; reason: CopyActionReason | null };
+  | { kind: 'copy'; verb: CopyActionVerb; reason: CopyActionReason | null };
+
+/** The agent commands a copy button can carry: `motir run|review|fix <KEY>` for the
+ *  coding agent, and `motir guide <KEY>` — the walk through a human card's steps —
+ *  for a ready card a person must do (MOTIR-10559). */
+export type CopyActionVerb = 'run' | 'review' | 'fix' | 'guide';
 
 /** The fix reasons the card offers `motir fix` for, and whose tooltip names them. */
 export type CopyActionReason = 'ci_failed' | 'changes_requested';
 
 /**
- * The state → action mapping (design MOTIR-10508 § "The next-action button"), the
- * rows checked top to bottom so a fix reason wins over In Review:
+ * The state → action mapping (design MOTIR-10508 § "The next-action button", with
+ * MOTIR-10559's guide row), the rows checked top to bottom so a fix reason wins
+ * over In Review, and both win over a ready card's run or guide:
  *
  * | card                                          | button               |
  * | --------------------------------------------- | -------------------- |
@@ -184,7 +192,12 @@ export type CopyActionReason = 'ci_failed' | 'changes_requested';
  * | fix reason `ci_failed` / `changes_requested`  | copy `motir fix`     |
  * | In Review                                     | copy `motir review`  |
  * | Ready, and not manual                         | copy `motir run`     |
+ * | Ready, and manual                             | copy `motir guide`   |
  * | anything else                                 | none                 |
+ *
+ * "Manual" is the shipped `executor === 'human' || type === 'manual'` predicate;
+ * `motir guide <KEY>` walks a person through such a card, as `motir run` hands a
+ * coding card to an agent.
  */
 export function cardNextAction(input: {
   toPlan: boolean;
@@ -201,7 +214,9 @@ export function cardNextAction(input: {
     return { kind: 'copy', verb: 'fix', reason: input.fixReason };
   }
   if (input.status === 'in_review') return { kind: 'copy', verb: 'review', reason: null };
-  if (input.ready && !input.manual) return { kind: 'copy', verb: 'run', reason: null };
+  if (input.ready) {
+    return { kind: 'copy', verb: input.manual ? 'guide' : 'run', reason: null };
+  }
   return null;
 }
 
@@ -719,17 +734,23 @@ const stopCanvasGesture = {
   onKeyUp: (e: KeyboardEvent<HTMLElement>) => e.stopPropagation(),
 };
 
+/** {@link stopCanvasGesture} plus the click, for a subtree that is not a button. */
+const stopPortalledEvents = {
+  ...stopCanvasGesture,
+  onClick: (e: MouseEvent<HTMLElement>) => e.stopPropagation(),
+};
+
 const COPIED_MS = 2000;
 
-/** Copy `motir run|review|fix <KEY>` — the ready list's copy action, as a button
- *  with its verb on the face (the key rides the tooltip and the copied text). */
+/** Copy `motir run|review|fix|guide <KEY>` — the ready list's copy action, as a
+ *  button with its verb on the face (the key rides the tooltip and the copied text). */
 function CopyNextAction({
   itemKey,
   verb,
   reason,
 }: {
   itemKey: string;
-  verb: 'run' | 'review' | 'fix';
+  verb: CopyActionVerb;
   reason: CopyActionReason | null;
 }) {
   const t = useTranslations('roadmap.canvas.node.action');
@@ -776,7 +797,9 @@ function CopyNextAction({
       ? t.rich('copyTooltipCiFailed', rich)
       : reason === 'changes_requested'
         ? t.rich('copyTooltipChangesRequested', rich)
-        : t.rich('copyTooltip', rich);
+        : verb === 'guide'
+          ? t.rich('copyTooltipGuide', rich)
+          : t.rich('copyTooltip', rich);
   const Glyph = copied ? Check : Copy;
   return (
     <Tooltip content={tooltip}>
@@ -799,32 +822,63 @@ function CopyNextAction({
 }
 
 /** Open the planning overlay with this card as the target — the work-item context
- *  of the shipped launcher (`useOpenPlanningWorkspace` → `lib/planning/launcher.ts`),
- *  the same door `WorkItemPlanEntrance` opens, wearing its Plan face. A To plan
- *  story has no children, so there is no plan to re-plan (`hasPlan: false`). */
+ *  of the shipped launcher (`lib/planning/launcher.ts`), the same door
+ *  `WorkItemPlanEntrance` opens, wearing its Plan face. A To plan story has no
+ *  children, so there is no plan to re-plan (`hasPlan: false`).
+ *
+ *  CHECKED FIRST (MOTIR-10544; design MOTIR-10543): the click asks the server
+ *  whether the card can be planned (`usePlanCheck`) and only then opens the
+ *  overlay — or the can't-plan alert, or the check-failed toast. While it asks,
+ *  the button wears the shipped `Button`'s `loading` face (the Checking state:
+ *  Spinner for Sparkles, label unchanged, disabled, `aria-busy`), and stays shown
+ *  even when the pointer leaves the card, so the state never vanishes mid-check.
+ *  A modified click (⌘ / ctrl / shift / alt) still does nothing, as before. */
 function PlanNextAction({ itemKey }: { itemKey: string }) {
   const t = useTranslations('roadmap.canvas.node.action');
   const tEntrance = useTranslations('aiPlanning.entrance');
-  const { open } = useOpenPlanningWorkspace({ kind: 'work-item', itemKey, hasPlan: false });
+  const { checking, alert, check, closeAlert } = usePlanCheck();
+  const buttonRef = useRef<HTMLButtonElement>(null);
   return (
-    <Tooltip content={t('planTooltip', { key: itemKey })}>
-      <Button
-        variant="secondary"
-        size="sm"
-        aria-label={tEntrance('planAria', { item: itemKey })}
-        data-testid="node-next-action"
-        data-action="plan"
-        className={`${NEXT_ACTION_CLASS} border-(--el-accent) font-sans font-semibold text-(--el-accent-on-surface)`}
-        leftIcon={<Sparkles className="size-3.5 shrink-0" />}
-        onClick={(e) => {
-          e.stopPropagation();
-          open(e);
-        }}
-        {...stopCanvasGesture}
-      >
-        {tEntrance('plan')}
-      </Button>
-    </Tooltip>
+    <>
+      <Tooltip content={t('planTooltip', { key: itemKey })}>
+        <Button
+          ref={buttonRef}
+          variant="secondary"
+          size="sm"
+          aria-label={tEntrance('planAria', { item: itemKey })}
+          data-testid="node-next-action"
+          data-action="plan"
+          data-checking={checking ? 'true' : undefined}
+          loading={checking}
+          className={`${NEXT_ACTION_CLASS} border-(--el-accent) font-sans font-semibold text-(--el-accent-on-surface)${checking || alert ? ' opacity-100' : ''}`}
+          leftIcon={<Sparkles className="size-3.5 shrink-0" />}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!isPlainPrimaryClick(e)) return;
+            e.preventDefault();
+            void check(itemKey);
+          }}
+          {...stopCanvasGesture}
+        >
+          {tEntrance('plan')}
+        </Button>
+      </Tooltip>
+      {/* The alert PORTALS to the body, but React still bubbles its events up
+          THIS tree — into the canvas node, whose click / Enter drills and whose
+          pointerdown drags. The wrapper stops them here (`contents`: no box). */}
+      <div className="contents" {...stopPortalledEvents}>
+        <CantPlanAlert
+          itemKey={alert?.key ?? null}
+          reasons={alert?.reasons ?? []}
+          onClose={closeAlert}
+          onPlanBlocker={(blockerKey) => {
+            closeAlert();
+            void check(blockerKey);
+          }}
+          returnFocusRef={buttonRef}
+        />
+      </div>
+    </>
   );
 }
 

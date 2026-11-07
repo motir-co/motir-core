@@ -12,6 +12,7 @@ export interface PlanCodeReadCreateRow {
   endLine: number | null;
   askedRef: string | null;
   query: string | null;
+  regex: boolean | null;
   commits: Prisma.InputJsonValue;
   outcome: string;
   lines: number | null;

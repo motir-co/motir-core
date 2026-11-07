@@ -562,6 +562,8 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       ],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The adds no author session finished (MOTIR-10496) — advisory, beside the verdict.
+      notYetWritten: expect.any(Array),
     });
 
     // The OTHER half: the same forest with epic B blocked_by epic A is VALID.
@@ -604,6 +606,8 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The adds no author session finished (MOTIR-10496) — advisory, beside the verdict.
+      notYetWritten: expect.any(Array),
     });
 
     // Proof of the defect the forest rule fixes: iterating the SINGLE-subtree
@@ -717,6 +721,8 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The adds no author session finished (MOTIR-10496) — advisory, beside the verdict.
+      notYetWritten: expect.any(Array),
     });
   });
 
@@ -734,6 +740,8 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The adds no author session finished (MOTIR-10496) — advisory, beside the verdict.
+      notYetWritten: expect.any(Array),
     });
   });
 
@@ -775,6 +783,8 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The adds no author session finished (MOTIR-10496) — advisory, beside the verdict.
+      notYetWritten: expect.any(Array),
     });
   });
 
@@ -1187,6 +1197,8 @@ describe('planValidityService.validateProjectedWorkItem — prose-vs-graph advis
       invalidEdges: [],
       crossLevelEdges: [],
       sectionFindings: expect.any(Array),
+      // The adds no author session finished (MOTIR-10496) — advisory, beside the verdict.
+      notYetWritten: expect.any(Array),
     });
   });
 });
