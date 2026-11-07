@@ -1,13 +1,22 @@
 import { SesNotificationsNotConfiguredError, SnsTopicNotAllowedError } from '@/lib/ses/errors';
-import { confirmSnsSubscription, type SnsMessage } from '@/lib/ses/sns';
+import {
+  confirmSnsSubscription,
+  snsHostForTopic,
+  verifySnsMessage,
+  type SnsMessage,
+} from '@/lib/ses/sns';
 import {
   emailSuppressionService,
   type SuppressAddressInput,
 } from '@/lib/services/emailSuppressionService';
 
-// The SES notification endpoint's business logic (MOTIR-10565). The route turns
-// the POST into a VERIFIED SNS message (`lib/ses/sns.ts`) and hands it here;
-// everything after the signature lives in this file (the 4-layer rule).
+// The SES notification endpoint's business logic (MOTIR-10565). The route parses
+// the POST into an SNS message (`lib/ses/sns.ts`) and hands it here; the topic
+// check, the signature check and what follows live in this file (the 4-layer
+// rule). The ORDER is the point: the topic is checked against the configured
+// one BEFORE anything is fetched, and every request — the certificate, the
+// confirmation — goes to the host derived from the CONFIGURED topic, never one
+// the message named.
 //
 // What arrives: SES publishes the configuration set's bounce and complaint
 // events to an SNS topic, and the topic delivers each one here, wrapped in an
@@ -74,11 +83,14 @@ function parseSesEvent(raw: string): SesEvent | null {
   }
 }
 
-/** The topic this deployment subscribes to, read at call time. */
-function allowedTopicArn(): string {
+/** The topic this deployment subscribes to and its SNS host, read at call time. */
+function allowedTopic(): { arn: string; host: string } {
   const arn = process.env.SES_NOTIFICATION_TOPIC_ARN?.trim();
   if (!arn) throw new SesNotificationsNotConfiguredError();
-  return arn;
+  const host = snsHostForTopic(arn);
+  // A value that is not an SNS topic ARN configures nothing we can verify against.
+  if (host === null) throw new SesNotificationsNotConfiguredError();
+  return { arn, host };
 }
 
 async function suppressAll(
@@ -106,20 +118,22 @@ async function suppressAll(
 
 export const sesNotificationService = {
   /**
-   * Act on one VERIFIED SNS message.
+   * Check, verify and act on one SNS message.
    *
-   * Throws {@link SesNotificationsNotConfiguredError} when no topic is
-   * configured, {@link SnsTopicNotAllowedError} when the message is from
-   * another topic, and `SnsSubscriptionConfirmError` when a confirmation GET
-   * fails. Every other branch, including the ones that change nothing, returns
+   * Throws {@link SesNotificationsNotConfiguredError} when no topic (or no
+   * valid topic ARN) is configured, {@link SnsTopicNotAllowedError} when the
+   * message is from another topic, `SnsSignatureError` when its signature does
+   * not verify, and `SnsSubscriptionConfirmError` when a confirmation fails. Every other branch, including the ones that change nothing, returns
    * an outcome the route answers 2xx: an error would only make SNS retry
    * something no retry can fix.
    */
   async handleMessage(message: SnsMessage): Promise<SesNotificationOutcome> {
-    if (message.TopicArn !== allowedTopicArn()) throw new SnsTopicNotAllowedError();
+    const topic = allowedTopic();
+    if (message.TopicArn !== topic.arn) throw new SnsTopicNotAllowedError();
+    await verifySnsMessage(message, topic.host);
 
     if (message.Type === 'SubscriptionConfirmation') {
-      await confirmSnsSubscription(message);
+      await confirmSnsSubscription(message, topic.arn, topic.host);
       console.warn(`[ses-notification] confirmed the subscription to ${message.TopicArn}`);
       return { outcome: 'subscription_confirmed' };
     }

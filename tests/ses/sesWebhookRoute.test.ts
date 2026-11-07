@@ -4,7 +4,8 @@ import { clearSnsCertificateCache, type SnsMessage } from '@/lib/ses/sns';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import {
-  SUBSCRIBE_URL,
+  CONFIRM_URL,
+  fetchedUrls,
   TOPIC_ARN,
   complaint,
   permanentBounce,
@@ -67,7 +68,7 @@ describe('POST /api/ses/webhook', () => {
       status: 200,
       json: { ok: true, result: { outcome: 'subscription_confirmed' } },
     });
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(SUBSCRIBE_URL);
+    expect(fetchedUrls(fetchMock)).toContain(CONFIRM_URL);
   });
 
   it('answers 502 when SNS refuses the confirmation', async () => {
@@ -202,7 +203,7 @@ describe('POST /api/ses/webhook', () => {
     const res = await call(signed({ Type: 'UnsubscribeConfirmation', Message: 'bye' }));
 
     expect(res.json['result']).toEqual({ outcome: 'ignored' });
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(SUBSCRIBE_URL);
+    expect(fetchedUrls(fetchMock)).not.toContain(CONFIRM_URL);
   });
 
   it('refuses 401 a forged signature, and writes nothing', async () => {
@@ -241,7 +242,8 @@ describe('POST /api/ses/webhook', () => {
     );
 
     expect(res).toEqual({ status: 403, json: { code: 'SES_NOTIFICATION_TOPIC_NOT_ALLOWED' } });
-    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(SUBSCRIBE_URL);
+    // Refused before ANY request — not even the certificate is fetched.
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('answers 500 when no topic is configured', async () => {
@@ -251,6 +253,19 @@ describe('POST /api/ses/webhook', () => {
 
     expect(res).toEqual({ status: 500, json: { code: 'SES_NOTIFICATIONS_NOT_CONFIGURED' } });
     expect(await suppressionRows()).toEqual([]);
+  });
+
+  it('answers 500 when the configured topic is not an SNS topic ARN, fetching nothing', async () => {
+    process.env['SES_NOTIFICATION_TOPIC_ARN'] = 'https://attacker.example/';
+
+    const res = await call(
+      sesNotification(permanentBounce(['k@example.com']), {
+        TopicArn: 'https://attacker.example/',
+      }),
+    );
+
+    expect(res).toEqual({ status: 500, json: { code: 'SES_NOTIFICATIONS_NOT_CONFIGURED' } });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('rethrows an error it does not map', async () => {

@@ -3,14 +3,23 @@ import { SnsSignatureError, SnsSubscriptionConfirmError } from '@/lib/ses/errors
 import {
   clearSnsCertificateCache,
   confirmSnsSubscription,
-  isSnsCertificateUrl,
-  isSnsUrl,
+  snsCertificatePath,
+  snsHostForTopic,
   parseSnsMessage,
   snsStringToSign,
   verifySnsMessage,
   type SnsMessage,
 } from '@/lib/ses/sns';
-import { CERT_URL, SUBSCRIBE_URL, signed, stubSnsFetch } from './snsFixtures';
+import {
+  CERT_URL,
+  CONFIRM_URL,
+  SNS_HOST,
+  SUBSCRIBE_URL,
+  TOPIC_ARN,
+  fetchedUrls,
+  signed,
+  stubSnsFetch,
+} from './snsFixtures';
 
 // The SNS signature check and subscription confirmation (MOTIR-10565), with a
 // real RSA key standing in for AWS's and global fetch serving its certificate.
@@ -30,7 +39,7 @@ describe('SNS message verification', () => {
       Subject: 'Amazon SES Email Event Notification',
       SignatureVersion: version,
     });
-    await expect(verifySnsMessage(message)).resolves.toBeUndefined();
+    await expect(verifySnsMessage(message, SNS_HOST)).resolves.toBeUndefined();
   });
 
   it('verifies a subscription confirmation, whose canonical string signs SubscribeURL and Token', async () => {
@@ -44,7 +53,7 @@ describe('SNS message verification', () => {
         `SubscribeURL\n${SUBSCRIBE_URL}\nTimestamp\n${message.Timestamp}\nToken\ntoken-1\n` +
         `TopicArn\n${message.TopicArn}\nType\nSubscriptionConfirmation\n`,
     );
-    await expect(verifySnsMessage(message)).resolves.toBeUndefined();
+    await expect(verifySnsMessage(message, SNS_HOST)).resolves.toBeUndefined();
   });
 
   it('omits an absent Subject from the signed string rather than signing it empty', () => {
@@ -56,40 +65,71 @@ describe('SNS message verification', () => {
     stubSnsFetch();
     const message = signed({ Type: 'Notification', Message: '{"eventType":"Complaint"}' });
     await expect(
-      verifySnsMessage({ ...message, Message: '{"eventType":"Bounce"}' }),
+      verifySnsMessage({ ...message, Message: '{"eventType":"Bounce"}' }, SNS_HOST),
     ).rejects.toBeInstanceOf(SnsSignatureError);
   });
 
   it('refuses a message signed with a key other than the certificate’s', async () => {
     stubSnsFetch();
     const message = signed({ Type: 'Notification', Message: 'm' }, { forge: true });
-    await expect(verifySnsMessage(message)).rejects.toBeInstanceOf(SnsSignatureError);
+    await expect(verifySnsMessage(message, SNS_HOST)).rejects.toBeInstanceOf(SnsSignatureError);
   });
 
   it.each([
     ['plain http', CERT_URL.replace('https:', 'http:')],
-    ['a host that is not SNS', 'https://attacker.example/cert.pem'],
-    ['an SNS lookalike suffix', 'https://sns.eu-west-1.amazonaws.com.attacker.example/cert.pem'],
-    ['credentials in the URL', 'https://user:pw@sns.eu-west-1.amazonaws.com/cert.pem'],
-    ['a port', 'https://sns.eu-west-1.amazonaws.com:8443/cert.pem'],
-    ['a path that is not a certificate', 'https://sns.eu-west-1.amazonaws.com/cert.txt'],
+    ['a host that is not SNS', 'https://attacker.example/SimpleNotificationService-a.pem'],
+    [
+      'an SNS lookalike suffix',
+      'https://sns.eu-west-1.amazonaws.com.attacker.example/SimpleNotificationService-a.pem',
+    ],
+    [
+      'another region’s SNS host',
+      'https://sns.us-east-1.amazonaws.com/SimpleNotificationService-a.pem',
+    ],
+    ['credentials in the URL', `https://user:pw@${SNS_HOST}/SimpleNotificationService-a.pem`],
+    ['a port', `https://${SNS_HOST}:8443/SimpleNotificationService-a.pem`],
+    ['a query', `https://${SNS_HOST}/SimpleNotificationService-a.pem?x=1`],
+    ['a fragment', `https://${SNS_HOST}/SimpleNotificationService-a.pem#x`],
+    ['a path that is not a certificate', `https://${SNS_HOST}/cert.pem`],
+    ['a path that walks', `https://${SNS_HOST}/../SimpleNotificationService-a.pem/x`],
     ['not a URL at all', 'not a url'],
   ])('refuses a signing certificate URL with %s, without fetching it', async (_, url) => {
     const fetchMock = stubSnsFetch();
     const message = signed({ Type: 'Notification', Message: 'm', SigningCertURL: url });
-    expect(isSnsCertificateUrl(url)).toBe(false);
-    await expect(verifySnsMessage(message)).rejects.toBeInstanceOf(SnsSignatureError);
+    expect(snsCertificatePath(url, SNS_HOST)).toBeNull();
+    await expect(verifySnsMessage(message, SNS_HOST)).rejects.toBeInstanceOf(SnsSignatureError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('accepts the China partition’s SNS host', () => {
-    expect(isSnsUrl('https://sns.cn-north-1.amazonaws.com.cn/x.pem')).toBe(true);
+  it('derives the SNS host from a topic ARN in every partition, and nothing else', () => {
+    expect(snsHostForTopic(TOPIC_ARN)).toBe(SNS_HOST);
+    expect(snsHostForTopic('arn:aws-cn:sns:cn-north-1:123456789012:t')).toBe(
+      'sns.cn-north-1.amazonaws.com.cn',
+    );
+    expect(snsHostForTopic('arn:aws-us-gov:sns:us-gov-west-1:123456789012:t')).toBe(
+      'sns.us-gov-west-1.amazonaws.com',
+    );
+    for (const bad of [
+      'not-an-arn',
+      'arn:aws:sqs:eu-west-1:123456789012:t',
+      'arn:aws:sns:attacker.example:123456789012:t',
+      'arn:aws:sns:eu-west-1:1234:t',
+      'arn:aws:sns:eu-west-1:123456789012:t/x',
+    ]) {
+      expect(snsHostForTopic(bad)).toBeNull();
+    }
+  });
+
+  it('fetches the certificate from the configured host and the message’s path only', async () => {
+    const fetchMock = stubSnsFetch();
+    await verifySnsMessage(signed({ Type: 'Notification', Message: 'm' }), SNS_HOST);
+    expect(fetchedUrls(fetchMock)).toEqual([CERT_URL]);
   });
 
   it('fetches a certificate once per URL and serves it from the cache after', async () => {
     const fetchMock = stubSnsFetch();
-    await verifySnsMessage(signed({ Type: 'Notification', Message: 'a' }));
-    await verifySnsMessage(signed({ Type: 'Notification', Message: 'b' }));
+    await verifySnsMessage(signed({ Type: 'Notification', Message: 'a' }), SNS_HOST);
+    await verifySnsMessage(signed({ Type: 'Notification', Message: 'b' }), SNS_HOST);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
@@ -98,14 +138,17 @@ describe('SNS message verification', () => {
     // Every URL below is a distinct SNS certificate URL that 404s — and one
     // that verifies, fetched again after the cache is cleared by the 17th.
     for (let i = 0; i < 16; i += 1) {
-      const url = `https://sns.eu-west-1.amazonaws.com/cert-${i}.pem`;
+      const url = `https://${SNS_HOST}/SimpleNotificationService-c${i}.pem`;
       fetchMock.mockImplementationOnce(async () => new Response('junk', { status: 200 }));
       await expect(
-        verifySnsMessage(signed({ Type: 'Notification', Message: 'm', SigningCertURL: url })),
+        verifySnsMessage(
+          signed({ Type: 'Notification', Message: 'm', SigningCertURL: url }),
+          SNS_HOST,
+        ),
       ).rejects.toBeInstanceOf(SnsSignatureError);
     }
     await expect(
-      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' })),
+      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' }), SNS_HOST),
     ).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledTimes(17);
   });
@@ -113,18 +156,18 @@ describe('SNS message verification', () => {
   it('refuses when the certificate cannot be fetched or is not served', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNRESET')));
     await expect(
-      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' })),
+      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' }), SNS_HOST),
     ).rejects.toBeInstanceOf(SnsSignatureError);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('gone', { status: 404 })));
     await expect(
-      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' })),
+      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' }), SNS_HOST),
     ).rejects.toBeInstanceOf(SnsSignatureError);
   });
 
   it('treats a certificate body that is not a key as a failed verification', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not a pem', { status: 200 })));
     await expect(
-      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' })),
+      verifySnsMessage(signed({ Type: 'Notification', Message: 'm' }), SNS_HOST),
     ).rejects.toBeInstanceOf(SnsSignatureError);
   });
 });
@@ -161,33 +204,38 @@ describe('confirmSnsSubscription', () => {
   const confirmation = (over: Partial<SnsMessage> = {}) =>
     signed({ Type: 'SubscriptionConfirmation', Message: 'm', ...over });
 
-  it('GETs the SubscribeURL', async () => {
+  it('calls ConfirmSubscription on our host for our topic with the message’s token', async () => {
     const fetchMock = stubSnsFetch();
-    await confirmSnsSubscription(confirmation());
+    await confirmSnsSubscription(confirmation(), TOPIC_ARN, SNS_HOST);
     expect(fetchMock).toHaveBeenCalledWith(
-      SUBSCRIBE_URL,
+      CONFIRM_URL,
       expect.objectContaining({ signal: expect.anything() }),
     );
   });
 
-  it('refuses a SubscribeURL that is not an SNS host, without requesting it', async () => {
+  it('never requests the SubscribeURL the message names', async () => {
+    const fetchMock = stubSnsFetch();
+    await confirmSnsSubscription(
+      confirmation({ SubscribeURL: 'https://169.254.169.254/latest/meta-data' }),
+      TOPIC_ARN,
+      SNS_HOST,
+    );
+    expect(fetchedUrls(fetchMock)).toEqual([CONFIRM_URL]);
+  });
+
+  it('refuses a confirmation with no token, without a request', async () => {
     const fetchMock = stubSnsFetch();
     await expect(
-      confirmSnsSubscription(
-        confirmation({ SubscribeURL: 'https://169.254.169.254/latest/meta-data' }),
-      ),
-    ).rejects.toBeInstanceOf(SnsSignatureError);
-    await expect(
-      confirmSnsSubscription(confirmation({ SubscribeURL: undefined })),
+      confirmSnsSubscription(confirmation({ Token: undefined }), TOPIC_ARN, SNS_HOST),
     ).rejects.toBeInstanceOf(SnsSignatureError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('throws a confirm error naming the status when SNS refuses', async () => {
     stubSnsFetch({ subscribeStatus: 403 });
-    await expect(confirmSnsSubscription(confirmation())).rejects.toThrow(
+    await expect(confirmSnsSubscription(confirmation(), TOPIC_ARN, SNS_HOST)).rejects.toThrow(
       new SnsSubscriptionConfirmError(
-        `Confirming the SNS subscription to ${confirmation().TopicArn} was answered HTTP 403.`,
+        `Confirming the SNS subscription to ${TOPIC_ARN} was answered HTTP 403.`,
       ),
     );
   });
@@ -195,7 +243,9 @@ describe('confirmSnsSubscription', () => {
   it('throws a confirm error carrying the cause when no answer came', async () => {
     const cause = new Error('ETIMEDOUT');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(cause));
-    const failure = await confirmSnsSubscription(confirmation()).catch((e: unknown) => e);
+    const failure = await confirmSnsSubscription(confirmation(), TOPIC_ARN, SNS_HOST).catch(
+      (e: unknown) => e,
+    );
     expect(failure).toBeInstanceOf(SnsSubscriptionConfirmError);
     expect((failure as Error).cause).toBe(cause);
     expect((failure as Error).message).toMatch(/failed before a response was received/);

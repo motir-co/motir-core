@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { parseSnsMessage, verifySnsMessage } from '@/lib/ses/sns';
+import { parseSnsMessage } from '@/lib/ses/sns';
 import {
   SesNotificationsNotConfiguredError,
   SnsSignatureError,
@@ -12,9 +12,9 @@ import { sesNotificationService } from '@/lib/services/sesNotificationService';
 // configuration set's bounce and complaint events. A permanent bounce or a
 // complaint adds the address to the suppression list every send reads first.
 //
-// HTTP-only (CLAUDE.md 4-layer): this route parses the body, verifies the SNS
-// signature and dispatches to ONE service method; ALL logic lives in
-// `sesNotificationService`. The status map is the sibling webhook's
+// HTTP-only (CLAUDE.md 4-layer): this route parses the body and dispatches to
+// ONE service method; ALL logic — the topic check, then the SNS signature, then
+// the suppression — lives in `sesNotificationService`. The status map is the sibling webhook's
 // (`app/api/resend/webhook/route.ts`) with the cases SNS adds:
 //
 //   malformed JSON → 400 · bad signature → 401 · another topic → 403 ·
@@ -37,7 +37,6 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   try {
     const message = parseSnsMessage(body);
-    await verifySnsMessage(message);
     const result = await sesNotificationService.handleMessage(message);
     return NextResponse.json({ ok: true, result }, { status: 200 });
   } catch (err) {

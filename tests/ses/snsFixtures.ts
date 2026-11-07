@@ -14,10 +14,21 @@ export const SIGNING_PUBLIC_PEM = keys.publicKey.export({ type: 'spki', format: 
 const forger = generateKeyPairSync('rsa', { modulusLength: 2048 });
 
 export const TOPIC_ARN = 'arn:aws:sns:eu-west-1:123456789012:motir-ses-events';
+export const SNS_HOST = 'sns.eu-west-1.amazonaws.com';
 export const CERT_URL =
   'https://sns.eu-west-1.amazonaws.com/SimpleNotificationService-0000000000000000000000.pem';
 export const SUBSCRIBE_URL =
   'https://sns.eu-west-1.amazonaws.com/?Action=ConfirmSubscription&TopicArn=x&Token=t';
+
+/** The confirmation request we build ourselves: ConfirmSubscription on our host. */
+export const CONFIRM_URL =
+  `https://${SNS_HOST}/?Action=ConfirmSubscription&TopicArn=` +
+  `${encodeURIComponent(TOPIC_ARN)}&Token=token-1`;
+
+/** The URLs a fetch mock was called with. */
+export function fetchedUrls(fetchMock: { mock: { calls: unknown[][] } }): string[] {
+  return fetchMock.mock.calls.map(([url]) => String(url));
+}
 
 let counter = 0;
 
@@ -80,7 +91,7 @@ export function stubSnsFetch({ subscribeStatus = 200 }: { subscribeStatus?: numb
   const fetchMock = vi.fn(async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === CERT_URL) return new Response(SIGNING_PUBLIC_PEM, { status: 200 });
-    if (url === SUBSCRIBE_URL)
+    if (url === CONFIRM_URL)
       return new Response('<ConfirmSubscriptionResponse/>', { status: subscribeStatus });
     return new Response('not found', { status: 404 });
   });
