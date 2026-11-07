@@ -5,6 +5,7 @@ import {
   seedGithubInstallation,
 } from './_helpers/github-seed';
 import { E2E_REPO, E2E_REPO_SECOND } from './_helpers/github-const';
+import { resetDatabase } from './_helpers/db-reset';
 import { linkPr } from './_helpers/pr-link';
 import { signUp } from './_helpers/shell-session';
 import { test, expect } from './_helpers/promoted-regression';
@@ -194,6 +195,12 @@ test('a card that ships in two repositories holds until BOTH have merged', async
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-2725');
+  // ISOLATION, as `repository-reference.spec.ts` does it. Every spec's
+  // `seedGithubInstallation` mirrors the SAME repositories, and a repository
+  // another organisation already owns is skipped by the reconcile — so without
+  // a reset this spec fails with `missing mirrored repository` whenever the
+  // shard partition puts a GitHub-seeding spec ahead of it in one database.
+  await resetDatabase();
 
   await signUp(page, EMAIL);
   const wsRes = await page.request.get('/api/workspaces/current');
