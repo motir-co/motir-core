@@ -24,6 +24,7 @@ import {
 } from '@/lib/planning/projectCanvasModel';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
+import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 
 // Turn one fetched roadmap LEVEL (items + blocked_by edges + off-level blocker
 // stubs) into the canvas's nodes + deps (Subtask 7.20.2 / MOTIR-1194 + the 1331
@@ -288,24 +289,36 @@ export function ghostAnchorNode(
 }
 
 /**
+ * The status KEYS a "you are here" row may carry: `in_progress`, and `planning`
+ * (MOTIR-10599) — a card the planner holds is being worked as surely as one a
+ * coding agent holds, and the default workflow already files it in the
+ * in-progress category. Deliberately a list of KEYS, not the `in_progress`
+ * CATEGORY: that category also holds `implemented`, `in_review` and `approved`,
+ * open statuses that are not where the work is, and they must never take the tag.
+ */
+const HERE_STATUS_KEYS: ReadonlySet<string> = new Set(['in_progress', PLANNING_STATUS_KEY]);
+
+/**
  * The "you are here" row of a level (bug MOTIR-10454): among the `in_progress`
- * rows, the one with the smallest longest-path depth over `deps` — the depth
- * `deterministicLayout` draws its column by — ties broken by `rows`' own order.
- * `longestPathLayers` ignores every dep with an end off `rows`, so an off-level
- * blocker's anchor arrow does not move the tag. No `in_progress` row → `null`.
+ * and `planning` rows (MOTIR-10599), the one with the smallest longest-path depth
+ * over `deps` — the depth `deterministicLayout` draws its column by — ties broken
+ * by `rows`' own order, so a planning card and an in-progress card are ranked
+ * together. `longestPathLayers` ignores every dep with an end off `rows`, so an
+ * off-level blocker's anchor arrow does not move the tag. No row in either
+ * status → `null`.
  */
 function pickHereId(
   rows: ReadonlyArray<{ id: string; status: string }>,
   deps: ReadonlyArray<ProjectCanvasDep>,
 ): string | null {
-  const inProgress = rows.filter((r) => r.status === 'in_progress');
-  if (inProgress.length === 0) return null;
+  const active = rows.filter((r) => HERE_STATUS_KEYS.has(r.status));
+  if (active.length === 0) return null;
   const { layer } = longestPathLayers(
     rows.map((r) => r.id),
     deps,
   );
-  let best = inProgress[0]!;
-  for (const r of inProgress) {
+  let best = active[0]!;
+  for (const r of active) {
     if ((layer.get(r.id) ?? 0) < (layer.get(best.id) ?? 0)) best = r;
   }
   return best.id;
@@ -567,15 +580,16 @@ export function buildWorkItemLevel(
     );
   }
 
-  // The current-position ("you are here") node = the in-progress item EARLIEST
-  // along the level's blocker order (bug MOTIR-10454): the one with the smallest
+  // The current-position ("you are here") node = the `in_progress` or `planning`
+  // item (MOTIR-10599) EARLIEST along the level's blocker order (bug MOTIR-10454):
+  // the one with the smallest
   // longest-path depth over the level's own edges — the same depth
   // `deterministicLayout` places its column by, read from the one helper, so the
   // tag can never sit a column right of an in-progress card that blocks it. Rows
   // at equal depth (and rows no edge reaches) keep the level's read order, key
   // ascending — at the root that's the active epic. Only edges with BOTH ends on
   // the level count: an off-level blocker is drawn as an anchor, not a card.
-  // None in progress → no marker.
+  // None in progress or in planning → no marker.
   const activeId = opts.markActive ? pickHereId(onLevel, deps) : null;
 
   const kindById = new Map(onLevel.map((item) => [item.id, item.kind]));
