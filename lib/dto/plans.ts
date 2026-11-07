@@ -871,6 +871,12 @@ export interface PlanCodeReadDto {
   /** The ref the call asked for — a label; what it was read AT is `commits`. */
   askedRef: string | null;
   query: string | null;
+  /**
+   * A `code_grep`'s mode: true searched `query` as a regular expression, false
+   * literally (MOTIR-10546). `null` for any other tool, and for a read recorded
+   * before the field existed.
+   */
+  regex: boolean | null;
   /** Every commit the read was made at: a resolved hex id, never a branch name. */
   commits: { repo?: string; sha: string; dirty?: boolean }[];
   outcome: string;

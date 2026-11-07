@@ -3179,6 +3179,11 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
                 'The ref the call ASKED for (`main`) — a label, not what it was read at.',
             },
             query: { type: 'string', description: 'A search’s query or pattern.' },
+            regex: {
+              type: 'boolean',
+              description:
+                'A `code_grep`’s mode: true when `query` was searched as a regular expression, false when literally. Send it on every `code_grep` read.',
+            },
             commits: {
               type: 'array',
               items: {
