@@ -60,6 +60,10 @@ export const WORK_CONTENT_RENDER_SITES: readonly RenderSite[] = [
   covered('app/(authed)/boards/_components/BoardCard.tsx', 'page host: /boards'),
   covered('components/ui/ReadinessBadge.tsx', 'follows whichever host the badge sits under'),
   covered('components/planning/WorkItemNode.tsx', 'page host: /roadmap'),
+  covered(
+    'components/planning/CantPlanAlert.tsx',
+    'page host: /roadmap (the alert renders under the canvas card)',
+  ),
   covered('components/approvals/ApprovalRow.tsx', 'hosts: /approvals, /workbench'),
 
   exempt(

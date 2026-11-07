@@ -239,6 +239,55 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * Every non-archived `is_blocked_by` blocker of `workItemId` with what the Plan
+   * button's pre-check needs to judge it (MOTIR-10544, `lib/planning/plannability.ts`):
+   * its key, title, kind, status and project, and how many LIVE (non-archived)
+   * children it has. The status is classified by the caller against the
+   * blocker's own project's workflow, as {@link findBlockerStates}' readiness
+   * consumers do. ARCHIVED blockers are excluded for the same reason as there
+   * (MOTIR-1328). ONE query: the child count is a filtered relation count.
+   */
+  async findBlockersWithLiveChildCounts(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<
+    Array<{
+      id: string;
+      identifier: string;
+      key: number;
+      title: string;
+      kind: string;
+      status: string;
+      projectId: string;
+      archivedAt: Date | null;
+      liveChildCount: number;
+    }>
+  > {
+    const rows = await tx.workItemLink.findMany({
+      where: { fromId: workItemId, kind: 'is_blocked_by', toItem: { archivedAt: null } },
+      select: {
+        toItem: {
+          select: {
+            id: true,
+            identifier: true,
+            key: true,
+            title: true,
+            kind: true,
+            status: true,
+            projectId: true,
+            archivedAt: true,
+            _count: { select: { children: { where: { archivedAt: null } } } },
+          },
+        },
+      },
+    });
+    return rows.map(({ toItem: { _count, ...item } }) => ({
+      ...item,
+      liveChildCount: _count.children,
+    }));
+  },
+
+  /**
    * The DEPENDENTS of a work item — every non-archived item carrying an
    * `is_blocked_by` edge TO it, with the `status` + `projectId` a caller needs to
    * classify each against its own project's terminal set. The reverse of
