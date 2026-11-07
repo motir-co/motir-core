@@ -1,9 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
+import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { buildWorkItemLevel, NOT_IN_EPIC_ID } from '@/components/planning/workItemLevel';
 import type { RoadmapLevelData, RoadmapLevelItem } from '@/lib/planning/roadmapClient';
+import { ProjectRoadmapCanvas } from '@/components/planning/ProjectRoadmapCanvas';
 
 // The roadmap LEVEL → canvas-node adapter, focused on the Subtask 7.20.6 /
 // MOTIR-1013 markers it adds for the persistent roadmap: the planning-origin
@@ -195,6 +197,101 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
       };
       expect(hereIds(data)).toEqual(['A']);
     });
+  });
+
+  // MOTIR-10599 — a card in `planning` is a "you are here" candidate exactly like
+  // an `in_progress` one: the planner holds it, so it is where the work is. Only
+  // those two status KEYS qualify, never the rest of the in-progress CATEGORY.
+  describe('"you are here" includes planning cards (MOTIR-10599)', () => {
+    function hereIds(data: RoadmapLevelData): string[] {
+      return buildWorkItemLevel(data, { markActive: true })
+        .nodes.filter((n) => n.here)
+        .map((n) => n.id);
+    }
+    const edge = (blockerId: string, blockedId: string) => ({ blockerId, blockedId });
+
+    it('tags the only active card when it is in planning, and renders the pill', () => {
+      const { nodes } = buildWorkItemLevel(
+        level([
+          item({ id: 'A', kind: 'task', status: 'done' }),
+          item({ id: 'P', kind: 'task', status: 'planning' }),
+          item({ id: 'T', kind: 'task', status: 'todo' }),
+        ]),
+        { markActive: true },
+      );
+      expect(nodes.filter((n) => n.here).map((n) => n.id)).toEqual(['P']);
+      render(<>{nodes.find((n) => n.id === 'P')!.content}</>);
+      expect(screen.getByText('You are here')).toBeTruthy();
+    });
+
+    it('locates the planning card before the ready nodes', async () => {
+      const { nodes, deps } = buildWorkItemLevel(
+        level([
+          item({ id: 'R', kind: 'task', status: 'todo', ready: true }),
+          item({ id: 'P', kind: 'task', status: 'planning' }),
+        ]),
+        { markActive: true },
+      );
+      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve({ nodes, deps })} locatable />);
+      await screen.findByText('Title P');
+      fireEvent.click(screen.getByTestId('locate-button'));
+      const highlighted = (id: string) =>
+        document.querySelector(`[data-node-id="${id}"]`)!.querySelector('[data-highlighted]');
+      expect(highlighted('P')).toBeTruthy();
+      expect(highlighted('R')).toBeNull();
+      // A single `here` target: no ready-node cycling hint.
+      expect(screen.queryByTestId('locate-hint')).toBeNull();
+    });
+
+    it('ranks planning and in-progress cards together by blocker depth', () => {
+      // I (in progress) blocks P (planning): I is earlier and takes the tag even
+      // though P comes first in read order.
+      expect(
+        hereIds({
+          items: [
+            item({ id: 'P', kind: 'subtask', status: 'planning' }),
+            item({ id: 'I', kind: 'subtask', status: 'in_progress' }),
+          ],
+          edges: [edge('I', 'P')],
+          offLevelBlockers: [],
+        }),
+      ).toEqual(['I']);
+      // P (planning) blocks I (in progress): now P is earlier.
+      expect(
+        hereIds({
+          items: [
+            item({ id: 'I', kind: 'subtask', status: 'in_progress' }),
+            item({ id: 'P', kind: 'subtask', status: 'planning' }),
+          ],
+          edges: [edge('P', 'I')],
+          offLevelBlockers: [],
+        }),
+      ).toEqual(['P']);
+    });
+
+    it('breaks an equal-depth tie between planning and in-progress by read order', () => {
+      const data = (first: string, second: string): RoadmapLevelData => ({
+        items: [
+          item({ id: first, kind: 'subtask', status: first === 'P' ? 'planning' : 'in_progress' }),
+          item({
+            id: second,
+            kind: 'subtask',
+            status: second === 'P' ? 'planning' : 'in_progress',
+          }),
+        ],
+        edges: [],
+        offLevelBlockers: [],
+      });
+      expect(hereIds(data('P', 'I'))).toEqual(['P']);
+      expect(hereIds(data('I', 'P'))).toEqual(['I']);
+    });
+
+    it.each(['in_review', 'approved', 'implemented', 'blocked', 'todo', 'done', 'cancelled'])(
+      'never tags a card in %s',
+      (status) => {
+        expect(hereIds(level([item({ id: 'X', kind: 'task', status })]))).toEqual([]);
+      },
+    );
   });
 
   it('does NOT mark "you are here" without markActive (e.g. onboarding)', () => {
