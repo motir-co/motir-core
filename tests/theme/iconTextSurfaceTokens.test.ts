@@ -235,7 +235,7 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
   });
 
   it('DatePicker calendar icon uses --el-icon-field', () => {
-    expect(read('components/ui/DatePicker.tsx')).toContain(
+    expect(read('packages/design-system/src/components/ui/DatePicker.tsx')).toContain(
       'h-4 w-4 shrink-0 text-(--el-icon-field)',
     );
   });
