@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { STYLE_IDS } from '../../packages/design-system/src/theme/styles';
-import { BASE_PALETTE_ID, PALETTE_IDS } from '../../packages/design-system/src/theme/palettes';
+import { STYLE_IDS } from '@/lib/theme/styles';
+import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { loadTokenLayer, resolveTokenInScope, type ScopeChain } from './paletteCascade';
 import { contrast, flattenColorMix } from './colorMetrics';
 
@@ -103,7 +103,8 @@ const HARD_INKS = [
 const MUTED_INK = '--el-text-muted';
 
 type Hook = 'canvas' | 'card' | 'popover' | 'modal' | 'input' | 'sidebar' | 'pill' | 'orb';
-const SURFACE_HOOKS: Hook[] = ['canvas', 'card', 'popover', 'modal', 'input', 'sidebar'];
+const SURFACE_HOOKS = ['canvas', 'card', 'popover', 'modal', 'input', 'sidebar'] as const;
+type SurfaceHook = (typeof SURFACE_HOOKS)[number];
 const HOOKS: Hook[] = [...SURFACE_HOOKS, 'pill', 'orb'];
 
 /** The exact selectors that ARE each hook. */
@@ -123,7 +124,7 @@ const HOOK_SELECTORS: Record<Hook, string[]> = {
  * `bg-(--el-card)`; `Popover`, `Modal` and `Input` are `bg-(--el-page-bg)`; the
  * rail is `bg-(--el-sidebar-bg)`; the shell canvas is the page ground.
  */
-const GROUND_TOKEN: Record<(typeof SURFACE_HOOKS)[number], string> = {
+const GROUND_TOKEN: Record<SurfaceHook, string> = {
   canvas: '--el-page-bg',
   card: '--el-card',
   popover: '--el-page-bg',
@@ -1349,7 +1350,7 @@ function hookDeclarations(style: string, hook: Hook): Record<string, string> {
 }
 
 /** The predicate the partition is built on. */
-function isRepainted(style: string, hook: (typeof SURFACE_HOOKS)[number]): boolean {
+function isRepainted(style: string, hook: SurfaceHook): boolean {
   const own = hookDeclarations(style, hook);
   if ('background-color' in own) return true;
   return hook === 'canvas' && 'background-image' in own;
@@ -1405,7 +1406,7 @@ function evaluate(expr: string): Rgba | undefined {
       .map(Number);
     return { r: parts[0]!, g: parts[1]!, b: parts[2]!, a: parts[3] ?? 1 };
   }
-  const mix = /^color-mix\(\s*in\s+srgb\s*,(.*)\)$/s.exec(value);
+  const mix = /^color-mix\(\s*in\s+srgb\s*,([\s\S]*)\)$/.exec(value);
   if (!mix) return undefined;
   const flat = flattenColorMix(value);
   if (flat !== value) return parseHex(flat);
@@ -1529,7 +1530,7 @@ function colourIn(ctx: Context, value: string, local?: Record<string, string>): 
 
 /** Split one gradient into its colour stops, dropping the direction / shape argument. */
 function gradientStops(gradient: string): string[] {
-  const inner = /^[a-z-]*gradient\((.*)\)$/s.exec(gradient.trim());
+  const inner = /^[a-z-]*gradient\(([\s\S]*)\)$/.exec(gradient.trim());
   if (!inner) return [];
   const args = topLevelSplit(inner[1]!);
   return args

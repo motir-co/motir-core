@@ -7,10 +7,10 @@ import {
   STYLE_IDS,
   STYLE_REGISTRY,
   resolveStyle,
-} from '../../packages/design-system/src/theme/styles';
-import { BASE_PALETTE_ID, PALETTE_IDS } from '../../packages/design-system/src/theme/palettes';
-import { TYPE_IDS } from '../../packages/design-system/src/theme/typography';
-import { resolveAxesToApplied } from '../../packages/design-system/src/theme/appearance-resolution';
+} from '@/lib/theme/styles';
+import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
+import { TYPE_IDS } from '@/lib/theme/typography';
+import { resolveAxesToApplied } from '@/lib/theme/appearance-resolution';
 import { loadTokenLayer } from './paletteCascade';
 
 // MOTIR-10675 — the integration gate for Eight new styles (MOTIR-10549).
