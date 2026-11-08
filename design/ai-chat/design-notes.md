@@ -7474,3 +7474,75 @@ left in.
 - **GIVES:** the overlay banner build — the three elements, the failure-wins precedence, the copy
   keys. **TAKES:** nothing; the shipped faces, their resuming and _again_ states are composed as
   they ship.
+
+## ⭐ Retrofuturism's pill bevel, re-measured across every palette (2026-11-08 · MOTIR-10708)
+
+**This amends § _The CSS, verbatim — copyable into `theme.css` (AC 3)_, row 11 of § _The eleven
+rows_, and nothing else.** Only the retrofuturism pill's `background-image` changes: the bevel's
+crown and base. Every other declaration in that block, and every other style's row, stands as
+written. `tests/theme/aiCtaStyleSeam.test.ts` reads that block and then every later copyable block
+that names `data-surface='ai-cta'`, in document order, so the block below replaces the pill fill it
+names and the shipped rule is held to it.
+
+### What changes, in one sentence
+
+The bevel moves the accent by **4% `white`** at the crown and **7% `black`** at the base, where row 11
+said **18%** and **16%**, because the label must clear 4.5:1 on both ends in every palette and both
+modes, not only in the default one.
+
+### Why the row's figures did not catch it
+
+Row 11 was measured in the default `motir` palette, where the accent is near-black (light) or
+near-white (dark) and its label clears 16:1, so an 18% lightness swing is invisible to the ratio.
+`tests/theme/stylePaletteModeContrast.test.ts` (MOTIR-10674) measures the same fill against all ten
+palettes in both modes, and the label is `--el-accent-text`, which each palette tunes against its
+BARE accent. Where that pair starts close to the floor, any lightness swing in the wrong direction
+breaks it:
+
+| palette · mode    | `--el-accent-text` on bare `--el-accent` | crown at +18% white | base at +16% black |
+| ----------------- | ---------------------------------------- | ------------------- | ------------------ |
+| amethyst · dark   | 4.99                                     | **3.58** ✗          | passes             |
+| cobalt · dark     | 5.28                                     | **3.72** ✗          | passes             |
+| evergreen · light | 5.36                                     | **3.81** ✗          | passes             |
+| spectrum · dark   | 5.62                                     | **3.93** ✗          | passes             |
+| amethyst · light  | 6.57                                     | **4.49** ✗          | passes             |
+| sienna · light    | 5.29 (dark ink)                          | passes              | **3.87** ✗         |
+
+A white label goes down as the crown lightens; sienna's dark label goes down as the base darkens.
+At **4% / 7%** the worst crown is **4.61:1** (amethyst dark) and the worst base is **4.61:1**
+(sienna light). The bevel BODY, `--el-accent` at 20%, is untouched, so § _The eleven rows_' default-
+palette figures for row 11 (6.76 / 5.16 on the accent-dominant region) stand. The figures here are
+the gate's own resolver (tokens resolved per palette and mode, `color-mix()` folded, WCAG 2.x
+relative luminance) at each gradient stop, not a painted-pixel read.
+
+The chrome still reads: the crown-confined specular streak, the `--el-accent-text` inset rim and
+the `--retro-glow` lift carry it, and none of them changes.
+
+### The CSS, as amended — copyable into `theme.css`
+
+```css
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image:
+      linear-gradient(
+        104deg,
+        transparent 30%,
+        color-mix(in srgb, var(--el-accent-text) var(--retro-spec), transparent) 46%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent) 96%, white) 0%,
+        var(--el-accent) 20%,
+        color-mix(in srgb, var(--el-accent) 93%, black) 100%
+      );
+  }
+}
+```
+
+### What this section does not change
+
+- No other style's pill or orb, and not retrofuturism's orb, its border or its shadows.
+- The ink: the label stays `--el-accent-text` in every row.
+- No mock. The pill's shape, copy and placement are as drawn; only two mix percentages move, and the
+  shipped component renders them on the card.
