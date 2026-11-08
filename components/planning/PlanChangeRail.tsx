@@ -507,6 +507,13 @@ export function PlanChangeRail({
   // so a failed start can give them back.
   // The claim it was taken under is the flag: `null` until a press.
   const [startClaim, setStartClaim] = useState<string | null>(null);
+  // The same press, readable inside one tick: two presses before a re-render
+  // must still let only one through.
+  const startPressRef = useRef(false);
+  // The press is over once the state says so (landed or failed).
+  useEffect(() => {
+    if (startClaim === null) startPressRef.current = false;
+  }, [startClaim]);
   const [startExtra, setStartExtra] = useState('');
   const [seenHeld, setSeenHeld] = useState(state.targetHeld ?? null);
   if ((state.targetHeld ?? null) !== seenHeld) {
@@ -706,12 +713,26 @@ export function PlanChangeRail({
         key: startPrompt.target.identifier,
       })
     : '';
+  // A press ENDS when its turn lands: the claim is given back, so a thread that
+  // later swaps onto an EMPTY session in place (Plan something new) draws the live
+  // prompt again rather than a press that finished long ago (review on #4034).
+  // The thread, not the claim, is what keeps a landed start from being re-offered.
+  if (startClaim !== null && userTurns.length > 0) {
+    releasePickAutoSend(startClaim);
+    setStartClaim(null);
+  }
+  // A claim held on this page by a rail that is GONE (a remount) is a press in
+  // flight only while the conversation is still working on it. Idle with no user
+  // turn, that send ended with the rail that made it — the workspace's own send is
+  // aborted with it — so the prompt is live and Start may take the claim over.
+  const orphanedStart = (spec: PlanStartPromptSpec) =>
+    !startPressRef.current && !busy && pickAutoSendClaimed(spec.claimKey);
   const startPhase =
     startPrompt && state.phase !== 'loading' && !state.readOnly && !state.targetHeld
       ? planStartPhase({
           userTurnBodies: userTurns.map((turn) => turn.body),
           startLine,
-          starting: startClaim !== null || pickAutoSendClaimed(startPrompt.claimKey),
+          starting: startClaim !== null || (busy && pickAutoSendClaimed(startPrompt.claimKey)),
         })
       : null;
   // The spec while the prompt is LIVE — the only state in which a press or a Send
@@ -721,13 +742,16 @@ export function PlanChangeRail({
   // whatever the person typed as extra conditions, through the rail's own send —
   // so Grill me, the paywall, a held target and every send error behave exactly as
   // for a typed first message. The claim makes it once per anchor per page.
-  const startFromPrompt = (spec: PlanStartPromptSpec, extra: string) => {
+  const startFromPrompt = (spec: PlanStartPromptSpec, extra: string): boolean => {
     // Two presses inside one tick both see a live button; the claim lets one through.
-    if (!claimPickAutoSend(spec.claimKey)) return;
+    if (orphanedStart(spec)) releasePickAutoSend(spec.claimKey);
+    if (!claimPickAutoSend(spec.claimKey)) return false;
+    startPressRef.current = true;
     setStartClaim(spec.claimKey);
     setStartExtra(extra.trim());
     setLastSent(extra.trim());
     onSend(composeStartTurn(startLine, extra));
+    return true;
   };
   const showStarters =
     userTurns.length === 0 &&
@@ -1270,9 +1294,9 @@ export function PlanChangeRail({
             phase={startPhase}
             typed={draft.trim() !== ''}
             onStart={() => {
-              const extra = draft;
-              setDraft('');
-              startFromPrompt(startPrompt, extra);
+              // The draft is cleared only for a start that went out: a refused
+              // press keeps what the person typed.
+              if (startFromPrompt(startPrompt, draft)) setDraft('');
             }}
           />
         ) : (

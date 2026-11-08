@@ -272,17 +272,51 @@ describe('Start sends the start turn once', () => {
     expect(field().value).toBe('Something newer.');
   });
 
-  it('a remount while the start is in flight sends nothing more', async () => {
+  it('a remount while the workspace is still sending shows the press in flight and sends nothing more', async () => {
     (await mount()).unmount();
+    sendStarts();
     await mount();
     fireEvent.click(startButton());
     cleanup();
     await mount(<StrictMode>{overlay()}</StrictMode>);
-    // The claim is held on this page: the remounted prompt shows the press in
-    // flight, and a second press is refused.
+    // The claim is held on this page and the conversation is still working on it.
     expect(prompt()?.dataset.state).toBe('starting');
     fireEvent.click(startButton());
     expect(sentTurns()).toEqual(['Plan ACME-14']);
+  });
+
+  it('a remount after the send ended with the rail is live again, and Start works', async () => {
+    await mount();
+    fireEvent.click(startButton());
+    cleanup();
+    // Idle with no user turn: the send went with the rail that made it, so the
+    // claim it left on this page is not a press in flight.
+    await mount();
+    expect(prompt()?.dataset.state).toBe('live');
+    expect(field().disabled).toBe(false);
+    fireEvent.click(startButton());
+    expect(sentTurns()).toEqual(['Plan ACME-14', 'Plan ACME-14']);
+  });
+
+  it('Plan something new onto an empty session draws the live prompt, composer enabled', async () => {
+    const { rerender } = await mount();
+    fireEvent.click(startButton());
+    conversation.state = { ...IDLE, phase: 'review', session: session(['Plan ACME-14']) };
+    rerender(overlay());
+    await act(async () => {});
+    expect(prompt()?.dataset.state).toBe('spent');
+    // The swap happens in place: the rail is not remounted.
+    conversation.state = {
+      ...IDLE,
+      session: { ...session([]), id: 's2' },
+      restartedFrom: 's1',
+    };
+    rerender(overlay());
+    await act(async () => {});
+    expect(prompt()?.dataset.state).toBe('live');
+    expect(field().disabled).toBe(false);
+    fireEvent.click(startButton());
+    expect(sentTurns()).toEqual(['Plan ACME-14', 'Plan ACME-14']);
   });
 
   it('once the turn lands, the prompt is spent: the question stays, the chip replaces Start', async () => {
