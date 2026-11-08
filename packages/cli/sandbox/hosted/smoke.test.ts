@@ -99,6 +99,18 @@ const BOTS: Record<string, { name: string; email: string }> = {
 // ── The fakes ──────────────────────────────────────────────────────────────
 
 /**
+ * The one large block a `FAKE:big-output` agent prints in a single write (MOTIR-10705) —
+ * a `prettier --write` listing in multi-byte text and one 20 KB line with no break, 60 KB
+ * in all, far over the server's 16 KiB event-body limit. One function, embedded in the
+ * fake agent by its source, so the test asserts against the very text the agent wrote.
+ */
+function bigAgentOutput(): string {
+  let out = '';
+  for (let i = 0; i < 600; i += 1) out += `€ prettier wrote src/feature-${i}/file.ts 😀\n`;
+  return out + 'x'.repeat(20_000) + '\n';
+}
+
+/**
  * The fake OpenCode. Its instructions come from the PROMPT (the one channel the
  * CLI forwards unchanged): `FAKE:closeout` is the close-out's How-to-test agent,
  * which does nothing; otherwise `FAKE:key=`, `FAKE:mode=pr|session|continue`
@@ -139,6 +151,7 @@ const options = JSON.parse(configText).provider.anthropic.options;
     body: JSON.stringify({ model: model.split('/')[1], max_tokens: 8, messages: [{ role: 'user', content: 'hi' }] }),
   });
   console.log('model call answered ' + res.status);
+  if (prompt.includes('FAKE:big-output')) process.stdout.write((${bigAgentOutput.toString()})());
   if (prompt.includes('FAKE:fail')) { console.error('boom: the fake agent failed on purpose'); process.exit(3); }
   const root = path.dirname(process.cwd());
   // A REPAIR (MOTIR-6929): commit in every checkout the review-fix prompt names, ON the
@@ -278,6 +291,8 @@ type Scenario = {
   /** The run's legs, in the run's own order. */
   legs: string[];
   cards: Record<string, Card>;
+  /** Extra markers the served prompt carries for the fake agent (`FAKE:big-output`). */
+  agentMarkers?: string;
   /** A `continue` run: what its claim decided, as `GET /dispatch-runs/{id}` answers it. */
   continues?: {
     fromRunId: string;
@@ -338,6 +353,21 @@ const SCENARIOS: Scenario[] = [
     cards: parentCards(),
   },
 ];
+
+/**
+ * A one-repository leaf whose agent prints {@link bigAgentOutput} in one write
+ * (MOTIR-10705): the hosted run that used to go silent after one refused batch and be
+ * ended as a stall fifteen minutes later.
+ */
+const BIG_OUTPUT_SCENARIO: Scenario = {
+  name: 'a one-repository leaf whose agent writes a 60 KB block',
+  runId: 'run_smoke_bigout',
+  key: 'ACME-9',
+  command: 'run',
+  legs: ['ACME-9'],
+  cards: { 'ACME-9': leafCard('ACME-9', ['app-a']) },
+  agentMarkers: 'FAKE:big-output',
+};
 
 function parentCards(): Record<string, Card> {
   return {
@@ -549,7 +579,9 @@ type Stub = {
   server: Server;
   url: string;
   requests: Recorded[];
-  events: { kind: string; workItemKey?: string }[];
+  events: { kind: string; workItemKey?: string; body?: string }[];
+  /** Every event batch the stub refused as the server does — 413, the whole batch. */
+  refusedBatches: number;
   closed: unknown[];
   scenario: Scenario | null;
   modelCalls: { apiKey: string | undefined }[];
@@ -687,7 +719,8 @@ function prompt(
     key,
     prompt:
       `Build ${key}. FAKE:key=${key} FAKE:mode=${mode} FAKE:repos=${card.repos.join(',')}` +
-      (sessionBranch ? ` FAKE:branch=${sessionBranch}` : ''),
+      (sessionBranch ? ` FAKE:branch=${sessionBranch}` : '') +
+      (s.agentMarkers ? ` ${s.agentMarkers}` : ''),
     parentKey: card.parentKey,
     targetRepo: card.repos[0] ?? null,
     targetRepoCloneUrl: card.repos[0] ? cloneUrl(card.repos[0]) : null,
@@ -710,6 +743,7 @@ async function startStub(): Promise<Stub> {
     url: '',
     requests: [],
     events: [],
+    refusedBatches: 0,
     closed: [],
     scenario: null,
     modelCalls: [],
@@ -717,9 +751,10 @@ async function startStub(): Promise<Stub> {
     verdicts: [],
   };
   stub.server = createServer((req, res) => {
-    let raw = '';
-    req.on('data', (c: Buffer) => (raw += c.toString('utf8')));
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
       const url = new URL(req.url ?? '/', 'http://stub');
       const path = url.pathname;
       const method = req.method ?? '';
@@ -762,7 +797,17 @@ async function startStub(): Promise<Stub> {
       }
       if (method === 'POST' && path === `/api/v1/dispatch-runs/${s.runId}/events`) {
         const events =
-          (body as { events?: { kind: string; workItemKey?: string }[] })?.events ?? [];
+          (body as { events?: { kind: string; workItemKey?: string; body?: string }[] })?.events ??
+          [];
+        // The server's own rule (`appendEventsWithin`, MOTIR-10705's root cause): a body over
+        // 16 KiB refuses the WHOLE batch with 413, and nothing in it lands.
+        if (events.some((e) => e.body !== undefined && Buffer.byteLength(e.body) > 16 * 1024)) {
+          stub.refusedBatches += 1;
+          return json(413, {
+            code: 'DISPATCH_RUN_BODY_TOO_LARGE',
+            error: 'An event body exceeds the 16384-byte limit.',
+          });
+        }
         stub.events.push(...events);
         return json(200, {
           runId: s.runId,
@@ -1124,6 +1169,7 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     stub.scenario = s;
     stub.requests.length = 0;
     stub.events.length = 0;
+    stub.refusedBatches = 0;
     stub.closed.length = 0;
     stub.modelCalls.length = 0;
     stub.misses.length = 0;
@@ -1202,6 +1248,29 @@ describe('the hosted image, as processes: the launcher runs the real CLI (MOTIR-
     expect(kinds.indexOf('agent_started')).toBeLessThan(kinds.indexOf('agent_exited'));
     expect(kinds).not.toContain('run_opened');
     expect(s.cards['ACME-7']!.status).toBe('implemented');
+  }, 120_000);
+
+  it('an agent that writes a block over 16 KiB keeps the run reporting to the end (MOTIR-10705)', async () => {
+    const s = BIG_OUTPUT_SCENARIO;
+    const world = arm(s);
+    const res = await launch(world.env);
+    expect(res.code, res.stderr + res.stdout).toBe(0);
+    expectAdoptedAndClosed(s);
+
+    // Nothing was refused: no body the CLI sent was over the server's limit, and none
+    // was over the tee's own 4 KiB ceiling, counted in UTF-8 bytes.
+    expect(stub.refusedBatches).toBe(0);
+    const logs = stub.events.filter((e) => e.kind === 'log');
+    expect(logs.length).toBeGreaterThan(1);
+    for (const e of logs) expect(Buffer.byteLength(e.body ?? '')).toBeLessThanOrEqual(4096);
+    // The block arrived WHOLE, in order, cut only on character boundaries.
+    expect(logs.map((e) => e.body).join('')).toContain(bigAgentOutput());
+    // …and reporting went on after it: the leg's exit and its settle still reached Motir,
+    // which is what keeps a hosted run from being read as stalled.
+    const kinds = stub.events.map((e) => e.kind);
+    expect(kinds.lastIndexOf('log')).toBeLessThan(kinds.indexOf('agent_exited'));
+    expect(kinds).toContain('card_settled');
+    expect(s.cards['ACME-9']!.status).toBe('implemented');
   }, 120_000);
 
   it('a leaf across two repositories: both cloned as siblings, one pull request in each, each as its own App', async () => {

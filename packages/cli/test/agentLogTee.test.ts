@@ -7,6 +7,7 @@ import {
   createLegLogTee,
   LOG_CHUNK_BYTES,
   LOG_FLUSH_MS,
+  splitLogBody,
 } from '../src/agentLogTee.js';
 import { createDispatchRunReporter, nullDispatchRunReporter } from '../src/dispatchRunReporter.js';
 // ⚠️ FROM `client.js`, WHICH IS WHERE IT LIVES. The reporter only IMPORTS this
@@ -80,14 +81,13 @@ describe('it BATCHES — one event per line would blow the reporter’s queue bo
     const bodies: string[] = [];
     const tee = createAgentLogTee({ emit: (b) => bodies.push(b), chunkBytes: 16 });
     for (let i = 0; i < 8; i += 1) tee.write('12345\n');
-    // EIGHT writes of six bytes at a 16-byte threshold emit TWO events (each
-    // carrying 18 bytes, since the buffer crosses the line rather than landing
-    // on it) and leave 12 bytes held. Not eight events, which is the whole
-    // point — and the remainder is not lost, it is waiting for the flush.
-    expect(bodies).toHaveLength(2);
-    expect(bodies.join('')).toBe('12345\n'.repeat(6));
+    // EIGHT writes of six bytes at a 16-byte threshold emit THREE events, each
+    // cut after the last whole line that fits (12 bytes — never the 18 the buffer
+    // reached, MOTIR-10705), and leave 12 bytes held. Not eight events, which is
+    // the whole point — and the remainder is not lost, it is waiting for the flush.
+    expect(bodies).toEqual(['12345\n12345\n', '12345\n12345\n', '12345\n12345\n']);
     tee.flush();
-    expect(bodies).toHaveLength(3);
+    expect(bodies).toHaveLength(4);
     expect(bodies.join('')).toBe('12345\n'.repeat(8));
   });
 
@@ -108,6 +108,109 @@ describe('it BATCHES — one event per line would blow the reporter’s queue bo
     tee.flush();
     tee.flush();
     expect(bodies).toEqual([]);
+  });
+});
+
+describe('no log body is ever over the ceiling, in UTF-8 bytes (MOTIR-10705)', () => {
+  const bytes = (b: string) => Buffer.byteLength(b, 'utf8');
+
+  it('one 40,000-byte write becomes ten bodies of at most 4096 bytes, and nothing is lost', () => {
+    // The card's reproduction: on main this emitted ONE 40,000-byte body, which the
+    // server refuses (16 KiB) together with the rest of its batch.
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b) });
+    tee.write('x'.repeat(40_000));
+    expect(bodies.map(bytes)).toEqual(Array(9).fill(LOG_CHUNK_BYTES));
+    tee.flush();
+    expect(bodies.map(bytes).at(-1)).toBe(40_000 - 9 * LOG_CHUNK_BYTES);
+    expect(bodies.join('')).toBe('x'.repeat(40_000));
+  });
+
+  it('measures BYTES, not UTF-16 code units — multi-byte text never overshoots', () => {
+    // 3-byte '€' and 4-byte (surrogate-pair) '😀': a code-unit count would let a
+    // 4096-unit buffer carry up to 12 KiB.
+    const text = '€😀a'.repeat(3_000);
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b) });
+    tee.write(text);
+    tee.flush();
+    expect(bodies.length).toBeGreaterThan(1);
+    for (const body of bodies) {
+      expect(bytes(body)).toBeLessThanOrEqual(LOG_CHUNK_BYTES);
+      // Every cut is on a code-point boundary: no piece carries half a surrogate pair.
+      expect(Buffer.from(body, 'utf8').toString('utf8')).toBe(body);
+    }
+    expect(bodies.join('')).toBe(text);
+  });
+
+  it('cuts after the last line break that fits, so a row in the log pane is a whole line', () => {
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b), chunkBytes: 10 });
+    tee.write('abc\ndefg\nhijk\n');
+    expect(bodies).toEqual(['abc\ndefg\n']);
+    tee.flush();
+    expect(bodies).toEqual(['abc\ndefg\n', 'hijk\n']);
+  });
+
+  it('the tail a size cut leaves behind is sent after the wait, like any short batch', () => {
+    vi.useFakeTimers();
+    try {
+      const bodies: string[] = [];
+      const tee = createAgentLogTee({ emit: (b) => bodies.push(b), chunkBytes: 4 });
+      tee.write('123456');
+      expect(bodies).toEqual(['1234']);
+      vi.advanceTimersByTime(LOG_FLUSH_MS);
+      expect(bodies).toEqual(['1234', '56']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('splitLogBody', () => {
+  it('a text of exactly the limit is one piece and no rest', () => {
+    expect(splitLogBody('abcd', 4)).toEqual({ pieces: ['abcd'], rest: '' });
+  });
+
+  it('a text under the limit is all rest', () => {
+    expect(splitLogBody('abc', 4)).toEqual({ pieces: [], rest: 'abc' });
+    expect(splitLogBody('', 4)).toEqual({ pieces: [], rest: '' });
+  });
+
+  it('a piece stops short rather than split a character that would not fit', () => {
+    // 'ab' is 2 bytes; '€' would make 5 at a limit of 4, so the piece is 'ab'.
+    expect(splitLogBody('ab€', 4)).toEqual({ pieces: ['ab'], rest: '€' });
+  });
+
+  it('counts each code point as UTF-8 does: 1, 2, 3 and 4 bytes, a lone surrogate as 3', () => {
+    for (const ch of ['a', 'é', '€', '😀', '\udc00']) {
+      const width = Buffer.byteLength(ch, 'utf8');
+      expect(splitLogBody(ch, width)).toEqual({ pieces: [ch], rest: '' });
+      expect(splitLogBody(ch, width + 1)).toEqual({ pieces: [], rest: ch });
+    }
+  });
+
+  it('a text ending on a HIGH surrogate keeps it in the rest — its other half is still to come', () => {
+    expect(splitLogBody('abcd\ud83d', 4)).toEqual({ pieces: ['abcd'], rest: '\ud83d' });
+    expect(splitLogBody('abc\ud83d', 3)).toEqual({ pieces: ['abc'], rest: '\ud83d' });
+    expect(splitLogBody('\ud83d', 1)).toEqual({ pieces: [], rest: '\ud83d' });
+  });
+
+  it('a surrogate pair split across two writes reaches the server as one character', () => {
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b), chunkBytes: 4 });
+    tee.write('abc\ud83d');
+    tee.write('\ude00z');
+    tee.flush();
+    expect(bodies).toEqual(['abc', '😀', 'z']);
+  });
+
+  it('a character wider than the limit still moves the cut forward — it never stalls', () => {
+    expect(splitLogBody('😀😀', 2)).toEqual({ pieces: ['😀', '😀'], rest: '' });
+  });
+
+  it('a piece without a later break is cut at the limit, after the last break when there is one', () => {
+    expect(splitLogBody('\nabcdef', 4)).toEqual({ pieces: ['\n', 'abcd'], rest: 'ef' });
   });
 });
 
@@ -151,7 +254,8 @@ describe('a streamed run’s first lines are not held back for a size they will 
     tee.write('x');
     tee.flush();
     vi.advanceTimersByTime(LOG_FLUSH_MS * 3);
-    expect(bodies).toEqual(['12345', 'x']);
+    // The size cut sends four bytes and keeps the fifth for the flush (MOTIR-10705).
+    expect(bodies).toEqual(['1234', '5', 'x']);
   });
 
   it('sends each batch to the server now — a log event otherwise waits for the minute-long heartbeat', async () => {
