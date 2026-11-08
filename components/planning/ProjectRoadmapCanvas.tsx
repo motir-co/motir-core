@@ -1382,6 +1382,9 @@ export function ProjectRoadmapCanvas({
     width: n.width ?? NODE_W,
     height: n.height ?? NODE_H,
     ...(n.changeKey !== undefined ? { changeKey: n.changeKey } : {}),
+    // The "here" card wears the You are here tab on its top-left edge
+    // (MOTIR-10630), so its top-side edges fan right of it.
+    ...(n.here ? { topTab: true } : {}),
   }));
   const canvasEdges: CanvasEdge[] = deps.map((d) => ({
     from: d.from,

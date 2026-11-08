@@ -231,6 +231,14 @@ function slotT(idx: number, n: number): number {
   return n <= 1 ? 0.5 : 0.28 + 0.44 * (idx / (n - 1));
 }
 
+/** The same, on the TOP side of a card that wears a TAB on its top-left edge (the
+ *  "You are here" tab, MOTIR-10630; design MOTIR-10629 § "Two or more edges"): the
+ *  band starts at the middle (t = 0.5) instead of 0.28, so every arrowhead lands
+ *  right of the widest tab. One edge still lands at the middle. */
+function tabbedTopSlotT(idx: number, n: number): number {
+  return n <= 1 ? 0.5 : 0.5 + 0.22 * (idx / (n - 1));
+}
+
 interface RouteItem {
   i: number;
   a: Rect;
@@ -251,11 +259,18 @@ interface RouteItem {
  * through the empty inter-row band. Siblings off one source (or into one target) fan
  * along that shared side. A horizontal edge spanning more than a neighbour ARCS so it
  * clears any card between the columns rather than hiding behind it.
+ *
+ * `tabbed` names the cards that wear a tab on their top-left edge (the "You are
+ * here" card): their TOP side fans its edges across t = 0.5–0.72 instead of the
+ * shared band, so no arrowhead lands under the tab. Every other side, and every
+ * card it does not name, keeps the shared band. Omitted → no card is tabbed.
  */
 export function routeEdges(
   edges: ReadonlyArray<{ from: string; to: string }>,
   rect: (id: string) => Rect | undefined,
+  tabbed?: (id: string) => boolean,
 ): Array<RoutedEdge | null> {
+  const isTabbed = tabbed ?? (() => false);
   const items: RouteItem[] = [];
   edges.forEach((e, i) => {
     const a = rect(e.from);
@@ -327,8 +342,11 @@ export function routeEdges(
       exitSide = dy >= 0 ? 'bottom' : 'top';
       entrySide = dy >= 0 ? 'top' : 'bottom';
     }
-    const A = sideAnchor(a, exitSide, slotT(it.outIdx, it.outN));
-    const B = sideAnchor(b, entrySide, slotT(it.inIdx, it.inN));
+    const edge = edges[it.i]!;
+    const exitT = exitSide === 'top' && isTabbed(edge.from) ? tabbedTopSlotT : slotT;
+    const entryT = entrySide === 'top' && isTabbed(edge.to) ? tabbedTopSlotT : slotT;
+    const A = sideAnchor(a, exitSide, exitT(it.outIdx, it.outN));
+    const B = sideAnchor(b, entrySide, entryT(it.inIdx, it.inN));
     const en = NORMALS[exitSide];
     const xn = NORMALS[entrySide];
     const k = Math.max(CTRL_MIN, Math.min(CTRL_MAX, Math.hypot(B.x - A.x, B.y - A.y) * CTRL_FRAC));

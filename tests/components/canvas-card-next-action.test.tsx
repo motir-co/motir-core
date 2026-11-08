@@ -235,11 +235,12 @@ describe('the To plan state and its precedence', () => {
     expect(pill.textContent).toBe('');
   });
 
-  it('You are here wins the frame AND the slot', () => {
+  it('You are here wins the frame; the To plan pill keeps the slot (MOTIR-10630)', () => {
     const { container } = render(<WorkItemNode item={story} here />);
     expect(frame(container).getAttribute('data-node-state')).toBe('here');
-    expect(screen.queryByTestId('to-plan-pill')).toBeNull();
-    expect(screen.getByText('You are here')).toBeTruthy();
+    expect(frame(container).className).not.toContain('bg-(--el-tint-yellow)');
+    expect(screen.getByTestId('to-plan-pill').textContent).toContain('To plan');
+    expect(screen.getByTestId('here-tab').textContent).toBe('You are here');
   });
 
   it('not in sprint keeps its dotted edge over the yellow wash and drops the shadow', () => {
@@ -263,6 +264,187 @@ describe('the To plan state and its precedence', () => {
       expect(nextAction()?.getAttribute('data-action')).toBe('plan');
       cleanup();
     }
+  });
+});
+
+// MOTIR-10630 (design MOTIR-10629): You are here is a TAB hung on the card's top
+// edge, left, outside the frame — it no longer takes the status slot, so the here
+// card's tag row reads exactly as any other card's in the same state.
+describe('the You are here tab', () => {
+  const tab = () => screen.getByTestId('here-tab');
+  const wrapperOf = (container: HTMLElement) => container.firstElementChild as HTMLElement;
+
+  it('hangs on the top edge, left, in the chip size and shape tokens, with no shadow', () => {
+    render(<WorkItemNode item={leaf} here />);
+    const cls = classes(tab());
+    for (const c of [
+      'absolute',
+      'bottom-[calc(100%-1px)]',
+      'left-3',
+      'z-10',
+      'h-5',
+      'text-[11px]',
+      'whitespace-nowrap',
+      'rounded-t-(--radius-badge)',
+      'px-(--spacing-chip-x-6)',
+      'bg-(--el-accent)',
+      'text-(--el-accent-text)',
+    ]) {
+      expect(cls).toContain(c);
+    }
+    expect(cls.some((c) => c.startsWith('shadow'))).toBe(false);
+  });
+
+  it('is a sibling rendered BEFORE the frame, outside its overflow-hidden and footprint', () => {
+    const { container } = render(<WorkItemNode item={leaf} here ready nextActions={ON} />);
+    const wrapper = wrapperOf(container);
+    expect(wrapper.style.height).toBe('124px');
+    expect(wrapper.style.width).toBe('280px');
+    const [first, second] = [...wrapper.children] as HTMLElement[];
+    expect(first).toBe(tab());
+    expect(second).toBe(frame(container));
+    expect(frame(container).style.height).toBe('124px');
+    expect(frame(container).contains(tab())).toBe(false);
+    // The hover next-action button keeps its top-right seam beside the tab.
+    expect(classes(nextAction()!)).toContain('right-3');
+  });
+
+  it('its words are read out: shown in full, not aria-hidden, the glyph decorative', () => {
+    render(<WorkItemNode item={leaf} here notInSprint />);
+    expect(tab().textContent).toBe('You are here');
+    expect(tab().getAttribute('aria-hidden')).toBeNull();
+    expect(tab().getAttribute('role')).toBeNull();
+    expect(tab().querySelector('svg')!.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('keeps the accent frame, data-node-state and aria-current on the frame', () => {
+    const { container } = render(<WorkItemNode item={leaf} here />);
+    const card = frame(container);
+    expect(card.getAttribute('data-node-state')).toBe('here');
+    expect(card.getAttribute('aria-current')).toBe('step');
+    expect(card.className).toContain('border-(--el-accent)');
+  });
+
+  it('is drawn on no other card', () => {
+    render(<WorkItemNode item={leaf} ready />);
+    expect(screen.queryByTestId('here-tab')).toBeNull();
+  });
+
+  it('the here card shows its own status pill, in full', () => {
+    render(
+      <WorkItemNode item={{ ...leaf, status: 'in_review', statusCategory: 'in_progress' }} here />,
+    );
+    const pill = document.querySelector('[data-status="in_review"]') as HTMLElement;
+    expect(pill.getAttribute('title')).toBe('In Review');
+    expect(pill.textContent).toContain('In Review');
+  });
+
+  it('here + ready: the Ready pill in the slot, no mint wash (here wins the frame)', () => {
+    const { container } = render(<WorkItemNode item={leaf} here ready />);
+    expect(screen.getByTestId('ready-pill')).toBeTruthy();
+    expect(frame(container).className).not.toContain('bg-(--el-tint-mint)');
+    expect(tab()).toBeTruthy();
+  });
+
+  it('here + blocked: the danger frame keeps the border, the tab stays accent', () => {
+    const { container } = render(<WorkItemNode item={leaf} here crossBlocked />);
+    const card = frame(container);
+    expect(card.getAttribute('data-node-state')).toBe('cross-blocked');
+    expect(card.className).toContain('border-(--el-danger)');
+    expect(classes(tab())).toContain('bg-(--el-accent)');
+    expect(screen.getByTestId('cross-blocked-flag')).toBeTruthy();
+    // The give-way rule still applies to the slot, exactly as on any blocked card.
+    expect(document.querySelector('[data-status="todo"]')!.getAttribute('role')).toBe('img');
+  });
+
+  it('here + not in sprint: the tag, the slot as its glyph, and the tab in full', () => {
+    render(<WorkItemNode item={leaf} here notInSprint />);
+    expect(screen.getByTestId('not-in-sprint-tag')).toBeTruthy();
+    expect(document.querySelector('[data-status="todo"]')!.getAttribute('role')).toBe('img');
+    expect(tab().textContent).toBe('You are here');
+  });
+
+  it('here + Manual: the status pill and the Manual chip both show, as on any card', () => {
+    const manual = { ...leaf, type: 'manual' as const, executor: 'human' as const };
+    const { container: a } = render(<WorkItemNode item={manual} here />);
+    const { container: b } = render(<WorkItemNode item={manual} />);
+    const tagRow = (c: HTMLElement) => frame(c).firstElementChild!.innerHTML;
+    expect(tagRow(a)).toBe(tagRow(b));
+    expect(screen.getAllByText('Manual')).toHaveLength(2);
+  });
+
+  it('here + a run disposition: the disposition rides the row beside the status', () => {
+    render(<WorkItemNode item={leaf} here runLeg={{ tone: 'running', label: 'Running' }} />);
+    expect(screen.getByText('Running')).toBeTruthy();
+    expect(document.querySelector('[data-status="todo"]')).toBeTruthy();
+    expect(tab()).toBeTruthy();
+  });
+
+  it('on the roadmap, edges entering the here card’s top land right of its tab', async () => {
+    const endX = (path: Element) =>
+      Number(
+        path
+          .getAttribute('d')!
+          .match(/-?[\d.]+/g)!
+          .at(-2),
+      );
+    const node = (id: string, x: number, y: number, here = false) => ({
+      id,
+      parentId: null,
+      searchText: id,
+      crumbLabel: id,
+      drillable: false,
+      viewable: true,
+      x,
+      y,
+      ...(here ? { here } : {}),
+      content: <WorkItemNode item={{ ...leaf, id, title: `card ${id}` }} here={here} />,
+    });
+    const draw = async (here: boolean) => {
+      const level = {
+        nodes: [node('A', 0, 0), node('B', 100, 0), node('T', 0, 400, here)],
+        deps: [
+          { from: 'A', to: 'T' },
+          { from: 'B', to: 'T' },
+        ],
+      };
+      render(
+        <ToastProvider>
+          <ProjectRoadmapCanvas loadLevel={() => Promise.resolve(level)} />
+        </ToastProvider>,
+      );
+      await screen.findByText('card T');
+      const xs = [...screen.getByTestId('canvas-edges').querySelectorAll('path')].map(endX);
+      cleanup();
+      return xs;
+    };
+    expect(await draw(false)).toEqual([78.4, 201.6]);
+    expect(await draw(true)).toEqual([140, 201.6]);
+  });
+
+  it('the shell draws a tab first and nothing in its place without one', () => {
+    const { container, rerender } = render(
+      <WorkItemCardShell
+        frameClassName="bg-(--el-surface)"
+        statusRow={null}
+        kind="task"
+        identifier="MOTIR-1"
+        title="t"
+        tab={<span>tab</span>}
+      />,
+    );
+    expect(wrapperOf(container).children).toHaveLength(2);
+    expect(wrapperOf(container).firstElementChild!.textContent).toBe('tab');
+    rerender(
+      <WorkItemCardShell
+        frameClassName="bg-(--el-surface)"
+        statusRow={null}
+        kind="task"
+        identifier="MOTIR-1"
+        title="t"
+      />,
+    );
+    expect(wrapperOf(container).children).toHaveLength(1);
   });
 });
 
