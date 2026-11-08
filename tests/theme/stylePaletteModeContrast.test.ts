@@ -165,88 +165,9 @@ const ORB_FALLBACK =
  */
 // One entry per measured pair, each carrying the ratio it measured and the bug
 // filed when it was recorded: MOTIR-10707 glassmorphism, MOTIR-10708
-// retrofuturism, MOTIR-10709 aurora, MOTIR-10710 cybercore-y2k.
+// retrofuturism, MOTIR-10710 cybercore-y2k. (MOTIR-10709's aurora rows were
+// fixed by lowering `--aurora-wash` and deleted.)
 const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
-  'aurora/amber/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.28',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/amethyst/dark · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.35',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/amethyst/dark · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.26',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.25',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.17',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-text-secondary on canvas (pattern stop 3)': {
-    ratio: '4.32',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-text-secondary on canvas (pattern stop 5)': {
-    ratio: '4.23',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/citrine/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.44',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/citrine/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.44',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/cobalt/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.35',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/cobalt/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.38',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/evergreen/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.42',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/evergreen/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.39',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/garnet/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.14',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/garnet/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.40',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/motir/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '3.98',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/motir/light · --el-text-secondary on canvas (pattern stop 1)': {
-    ratio: '4.25',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.30',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.26',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.06',
-    bug: 'MOTIR-10709',
-  },
   'cybercore-y2k/candy/light · label ink on pill (--plan-hero-fill stop 2)': {
     ratio: '3.49',
     bug: 'MOTIR-10710',
