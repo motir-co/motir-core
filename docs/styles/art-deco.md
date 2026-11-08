@@ -447,7 +447,7 @@ colour source. No hex literal appears in the layer.
     border-radius: var(--radius-btn);
     --plan-hero-fill: linear-gradient(
       var(--deco-light-angle),
-      color-mix(in srgb, var(--el-accent) 90%, var(--el-accent-text)) 0 50%,
+      color-mix(in srgb, var(--el-accent) 96%, var(--el-accent-text)) 0 50%,
       var(--el-accent) 50% 100%
     );
   }

@@ -3049,7 +3049,7 @@
   --shadow-modal: 0 4px 10px rgba(20, 20, 30, 0.08), 0 20px 48px -16px rgba(20, 20, 30, 0.2);
   --shadow-hero-mockup: 0 6px 14px rgba(20, 20, 30, 0.1), 0 26px 60px -18px rgba(20, 20, 30, 0.24);
   --tonal-step-2: 4%;
-  --tonal-step-3: 8%;
+  --tonal-step-3: 6%;
   --tonal-step-4: 12%;
 }
 [data-theme='dark'] [data-style='tonal-elevated'],
@@ -4272,7 +4272,7 @@
       circle at 33% 27%,
       color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
       var(--el-accent) 56%,
-      var(--el-text)
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-text))
     );
   }
 }
@@ -4301,7 +4301,7 @@
     border-radius: var(--radius-btn);
     --plan-hero-fill: linear-gradient(
       var(--deco-light-angle),
-      color-mix(in srgb, var(--el-accent) 90%, var(--el-accent-text)) 0 50%,
+      color-mix(in srgb, var(--el-accent) 96%, var(--el-accent-text)) 0 50%,
       var(--el-accent) 50% 100%
     );
   }
@@ -4334,7 +4334,7 @@
       135deg,
       var(--el-accent) 0%,
       var(--el-accent) 86%,
-      var(--el-highlight) 100%
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-highlight)) 100%
     );
     --plan-hero-shadow: 5px 5px 0 0 color-mix(in srgb, var(--el-text) 92%, transparent);
   }

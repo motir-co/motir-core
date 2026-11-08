@@ -175,7 +175,8 @@ through the seam the components read:
   paper-coloured label, the way a masthead block prints.
 - **Orb** — keeps its circle and takes a flat print gradient that **keeps the
   guarded first stop**: the glyph-colour mix through `--orb-lit-mix` at 33% / 27%,
-  the accent body to 56%, the palette ink at the rim. The mark is the palette's
+  the accent body to 56%, and a rim of the accent with 12% of the palette ink
+  (the bare ink at the rim fell to 1.0:1 against the glyph; MOTIR-10674's gate). The mark is the palette's
   accent ink, and `tests/theme/orb-glyph-contrast.test.ts` holds every palette ×
   theme to that first stop, so the print ink comes in only at the outer stop.
   **`--orb-lit-mix` must not be redeclared** in the style's rules.
@@ -203,7 +204,7 @@ through the seam the components read:
       circle at 33% 27%,
       color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
       var(--el-accent) 56%,
-      var(--el-text)
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-text))
     );
   }
 }

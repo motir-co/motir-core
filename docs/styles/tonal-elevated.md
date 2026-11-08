@@ -127,7 +127,7 @@ Shape and feel only. The base column is the Tier-0 `@theme` block of
 | `--transition-duration` / `--transition-slow`          | 150ms / 250ms         | 180ms / 260ms                                                                                          |
 | `--hover-scale` / `--active-scale`                     | 1 / 0.98              | 1.01 / 0.98                                                                                            |
 | `--shadow-*` (five roles)                              | the base shadows      | the light recipes below                                                                                |
-| `--tonal-step-2` / `--tonal-step-3` / `--tonal-step-4` | —                     | 4% / 8% / 12%                                                                                          |
+| `--tonal-step-2` / `--tonal-step-3` / `--tonal-step-4` | —                     | 4% / 6% / 12%                                                                                          |
 
 The three restated base values are deliberate no-ops: they write the rhythm down
 where a reader of the block looks for it. The three step scalars are the only
@@ -173,7 +173,7 @@ read it; it sets neutral rgba only.
   --shadow-modal: 0 4px 10px rgba(20, 20, 30, 0.08), 0 20px 48px -16px rgba(20, 20, 30, 0.2);
   --shadow-hero-mockup: 0 6px 14px rgba(20, 20, 30, 0.1), 0 26px 60px -18px rgba(20, 20, 30, 0.24);
   --tonal-step-2: 4%;
-  --tonal-step-3: 8%;
+  --tonal-step-3: 6%;
   --tonal-step-4: 12%;
 }
 [data-theme='dark'] [data-style='tonal-elevated'],

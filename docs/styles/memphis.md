@@ -274,7 +274,7 @@ overwrite the orb's recipe.
       135deg,
       var(--el-accent) 0%,
       var(--el-accent) 86%,
-      var(--el-highlight) 100%
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-highlight)) 100%
     );
     --plan-hero-shadow: 5px 5px 0 0 color-mix(in srgb, var(--el-text) 92%, transparent);
   }

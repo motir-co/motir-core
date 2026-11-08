@@ -257,16 +257,6 @@ const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] =
       "Tailwind v4's generated default `@theme` layer, written for the shipped `StyleVignette` " +
       "scrim's `bg-black/10`. Machine output, not an authored alias.",
   })),
-  // Claymorphism's three neutral shadow inks, the proposed block's own scalars
-  // (the `--neu-light` / `--neu-shadow` pattern Neumorphism ships in theme.css).
-  ...['--clay-light', '--clay-shade', '--clay-drop-ink'].map((property) => ({
-    file: 'design/styles/claymorphism.mock.html',
-    property,
-    why:
-      'Neutral shadow ink (white highlight, near-black shade), not a palette role: a shade ' +
-      'derived from a palette text token inverts in dark mode and the inflation collapses, so ' +
-      'the ink stays neutral and a dark-theme block rebalances it (docs/styles/claymorphism.md).',
-  })),
 ];
 
 // ── Inherited debt — a COUNT that has to reach zero, with a card ─────────────
