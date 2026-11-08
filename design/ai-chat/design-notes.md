@@ -959,6 +959,31 @@ is its depth, and the depth already ships.
 > nothing but a shadow. Every other style also moves a fill, a border or the
 > type, so its rule "worked" while its shadow silently did not.
 
+> **⚠️ AMENDED 2026-11-08 (MOTIR-10710) — row 6's pill and orb fills below were
+> re-measured across every palette, and three values changed.** The table above was
+> measured in the default `motir` palette only, taking the label ink as white, which holds in light only. Ten
+> palette × mode pairs paint a DARK `--el-accent-text` on the accent fill
+> (amber, candy, citrine and sienna in both modes; evergreen and motir dark), and for
+> those the mix toward `black` LOWERS the label's contrast instead of raising it.
+> `tests/theme/stylePaletteModeContrast.test.ts` (MOTIR-10674) measured the 2026-09
+> recipe at **3.18:1 in sienna light** (stop 2; stop 1 at 4.19:1) and **3.49:1 in
+> candy light**, and the orb's 22% highlight wash, composited over the lit first
+> stop, at **2.96:1 in cobalt dark** — under the 3:1 non-text floor.
+>
+> | Declaration | 2026-09                                                            | 2026-11-08                                                         |
+> | ----------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+> | pill stop 1 | `color-mix(--el-accent 88%, black)`                                | `color-mix(--el-accent 94%, black)`                                |
+> | pill stop 2 | `color-mix(color-mix(--el-accent 70%, --el-highlight) 78%, black)` | `color-mix(color-mix(--el-accent 86%, --el-highlight) 95%, black)` |
+> | orb wash    | `color-mix(--el-highlight 22%, transparent)`                       | `color-mix(--el-highlight 15%, transparent)`                       |
+>
+> The black share is bounded by sienna light, the tightest dark-ink pair: at
+> 6% / 5% black with the base fill's own 14% highlight share, every one of the 20
+> palette × mode pairs clears 4.5:1 on both stops, the lowest **4.62:1** (sienna
+> light, stop 2). The orb's lowest stop is now **3.04:1** (cobalt dark), with
+> `--orb-lit-mix` untouched. The block below carries the new values, and the
+> HUD character now rests on the neon border, the halo and the mono label more
+> than on the darkened fill.
+
 Paste with that translation. It follows the file's own `@scope` house form (the same one the
 glassmorphism, aurora, neumorphism and retrofuturism material layers use), reads
 only `--el-*` and the styles' own palette-agnostic scalars, and names no raw hex.
@@ -1068,15 +1093,15 @@ shape role.
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     background-image: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--el-accent) 88%, black),
-      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%, black)
+      color-mix(in srgb, var(--el-accent) 94%, black),
+      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight)) 95%, black)
     );
   }
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     background-image:
       linear-gradient(
         160deg,
-        color-mix(in srgb, var(--el-highlight) 22%, transparent),
+        color-mix(in srgb, var(--el-highlight) 15%, transparent),
         transparent 55%
       ),
       radial-gradient(
