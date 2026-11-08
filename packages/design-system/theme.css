@@ -547,6 +547,7 @@
   /* Softer, more diffused shadows */
   --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
   --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
 
   /* Roomier spacing */
@@ -605,6 +606,7 @@
   --shadow-subtle: none;
   --shadow-card: none;
   --shadow-elevated: none;
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: none;
   --shadow-hero-mockup: none;
 
@@ -672,6 +674,7 @@
   --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
   --shadow-card: 0 8px 32px -8px rgba(15, 15, 15, 0.18);
   --shadow-elevated: 0 16px 48px -12px rgba(15, 15, 15, 0.24);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 28px 70px -16px rgba(15, 15, 15, 0.34);
   --shadow-hero-mockup: 0 32px 80px -16px rgba(15, 15, 15, 0.38);
 
@@ -993,6 +996,7 @@
   --shadow-elevated:
     0 0 0 1px color-mix(in srgb, currentColor 16%, transparent),
     0 0 22px -4px color-mix(in srgb, currentColor 32%, transparent);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal:
     0 0 0 1px color-mix(in srgb, currentColor 20%, transparent),
     0 0 40px -6px color-mix(in srgb, currentColor 40%, transparent);
@@ -1089,6 +1093,7 @@
   --shadow-subtle: 0 1px 2px rgba(20, 20, 45, 0.05);
   --shadow-card: 0 8px 30px -12px rgba(20, 20, 45, 0.16);
   --shadow-elevated: 0 16px 44px -14px rgba(20, 20, 45, 0.22);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 26px 64px -18px rgba(20, 20, 45, 0.3);
   --shadow-hero-mockup: 0 32px 78px -18px rgba(20, 20, 45, 0.34);
 
@@ -1297,6 +1302,7 @@
   --shadow-elevated:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.65), 0 4px 8px rgba(15, 15, 15, 0.06),
     0 20px 40px -8px rgba(15, 15, 15, 0.22), 0 44px 80px -16px rgba(15, 15, 15, 0.38);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal:
     inset 0 1px 0 0 rgba(255, 255, 255, 0.7), 0 8px 16px rgba(15, 15, 15, 0.08),
     0 32px 64px -12px rgba(15, 15, 15, 0.28), 0 72px 120px -24px rgba(15, 15, 15, 0.46);
@@ -2027,6 +2033,7 @@
   --shadow-subtle: 1px 2px 4px -1px rgba(38, 30, 22, 0.1);
   --shadow-card: 2px 4px 9px -3px rgba(38, 30, 22, 0.14);
   --shadow-elevated: 3px 6px 16px -4px rgba(38, 30, 22, 0.17);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 5px 9px 30px -8px rgba(38, 30, 22, 0.22);
   --shadow-hero-mockup: 6px 12px 40px -10px rgba(38, 30, 22, 0.22);
 
@@ -2248,6 +2255,7 @@
   --shadow-subtle: 0 1px 2px rgba(20, 20, 30, 0.05);
   --shadow-card: 0 6px 18px -10px rgba(20, 20, 30, 0.14);
   --shadow-elevated: 0 12px 30px -14px rgba(20, 20, 30, 0.18);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 22px 50px -18px rgba(20, 20, 30, 0.24);
   --shadow-hero-mockup: 0 26px 60px -18px rgba(20, 20, 30, 0.28);
 
@@ -2444,6 +2452,7 @@
   --shadow-subtle: 0 1px 2px rgba(10, 12, 30, 0.06);
   --shadow-card: 0 10px 26px -12px rgba(10, 12, 30, 0.22);
   --shadow-elevated: 0 18px 40px -14px rgba(10, 12, 30, 0.28);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 28px 60px -18px rgba(10, 12, 30, 0.34);
   --shadow-hero-mockup: 0 34px 74px -18px rgba(10, 12, 30, 0.4);
 

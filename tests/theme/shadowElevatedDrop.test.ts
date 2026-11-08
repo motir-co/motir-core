@@ -73,13 +73,16 @@ describe('--spacing-shadow-elevated-drop restates --shadow-elevated (MOTIR-10631
     expect(solidDrop(tier0.get('--shadow-elevated') ?? '')).toBe(0);
   });
 
-  it.each(STYLE_IDS)('%s: the drop in effect matches its elevated shadow', (id) => {
+  // Each style DECLARES its own drop beside its shadow rather than inheriting
+  // one: a custom property inherits through the DOM, so a style block that left
+  // it out would pick up an ANCESTOR scope's drop (6px from a Neo-Brutalism page
+  // around a nested soft-shadow scope), not the `@theme` default.
+  it.each(STYLE_IDS)('%s: declares its drop, equal to its elevated shadow', (id) => {
     const own = block(`[data-style='${id}']`);
     const shadow = own.get('--shadow-elevated') ?? tier0.get('--shadow-elevated') ?? 'none';
-    const drop =
-      px(own.get('--spacing-shadow-elevated-drop')) ??
-      px(tier0.get('--spacing-shadow-elevated-drop'));
-    expect(drop).toBe(solidDrop(shadow));
+    const drop = own.get('--spacing-shadow-elevated-drop');
+    expect(drop).toBeDefined();
+    expect(px(drop)).toBe(solidDrop(shadow));
   });
 
   it('Neo-Brutalism, the hard-offset style, drops 6px', () => {
