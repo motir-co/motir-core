@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ApprovalGate } from '@/generated/prisma/client';
-import { answeredReviewRefusalFrom, headsInVersion } from '@/lib/approvalGates/reviewRefusal';
+import {
+  answeredReviewRefusalFrom,
+  headsInVersion,
+  provedGreenSince,
+} from '@/lib/approvalGates/reviewRefusal';
 
 // THE REVIEW REFUSAL A PUSH ANSWERED (Bug MOTIR-10733), over rows already read. The Fixing
 // rule keeps a sent-back card on To fix while CI runs on the pushed fix; when the stored prior
@@ -11,10 +15,34 @@ import { answeredReviewRefusalFrom, headsInVersion } from '@/lib/approvalGates/r
 const OLD = 'acme/web#1@aaaa';
 const NEW = 'acme/web#1@bbbb';
 
-const deliveries = [
-  { pullRequest: { id: 'pr-1', number: 1 }, repo: { owner: 'acme', name: 'web' } },
-  { pullRequest: { id: 'pr-2', number: 7 }, repo: { owner: 'acme', name: 'api' } },
-] as unknown as Parameters<typeof headsInVersion>[1];
+type Row = { commitSha: string; conclusion: string; createdAt: Date };
+const row = (commitSha: string, conclusion: string, at = '2026-11-08T19:50:00Z'): Row => ({
+  commitSha,
+  conclusion,
+  createdAt: new Date(at),
+});
+const deliveriesWith = (rows: Row[] = [], headSha = 'bbbb') =>
+  [
+    {
+      pullRequest: {
+        id: 'pr-1',
+        number: 1,
+        headSha,
+        checkRuns: rows.map((r, i) => ({
+          checkName: `check-${i}`,
+          checkSuiteId: '',
+          suiteAggregate: false,
+          ...r,
+        })),
+      },
+      repo: { owner: 'acme', name: 'web' },
+    },
+    {
+      pullRequest: { id: 'pr-2', number: 7, headSha: 'cccc', checkRuns: [] },
+      repo: { owner: 'acme', name: 'api' },
+    },
+  ] as unknown as Parameters<typeof headsInVersion>[1];
+const deliveries = deliveriesWith();
 
 function gate(over: Partial<ApprovalGate>): ApprovalGate {
   return {
@@ -124,6 +152,27 @@ describe('answeredReviewRefusalFrom', () => {
     expect(answeredReviewRefusalFrom(facts({ latest: gate({ subjectVersion: null }) }))).toBeNull();
   });
 
+  it('a decided gate of another kind after the send-back hides nothing: the record is still the word', () => {
+    const later = new Date('2026-11-08T19:50:00Z');
+    expect(
+      answeredReviewRefusalFrom(
+        facts({
+          latest: gate({ kind: 'design_result', state: 'approved', decidedAt: later }),
+          record: record(),
+        }),
+      ),
+    ).toMatchObject({ recordId: 'r1' });
+  });
+
+  it('a fix that already went green answers it for good: a later push finds nothing', () => {
+    // Reviewed at aaaa, the fix at dddd went green, the card is at bbbb now.
+    expect(
+      answeredReviewRefusalFrom(
+        facts({ latest: gate({}), deliveries: deliveriesWith([row('dddd', 'success')]) }),
+      ),
+    ).toBeNull();
+  });
+
   it('a set with no known head (current version null) still finds the refusal', () => {
     expect(
       answeredReviewRefusalFrom(facts({ latest: gate({}), currentVersion: null })),
@@ -141,5 +190,32 @@ describe('headsInVersion', () => {
 
   it('leaves out a delivery the version does not name, and a malformed member', () => {
     expect(headsInVersion('acme/web#7@cccc,acme/api#7', deliveries)).toEqual({});
+  });
+});
+
+describe('provedGreenSince', () => {
+  const decidedAt = new Date('2026-11-08T19:36:00Z');
+  const heads = { 'pr-1': 'aaaa' };
+  const at = (rows: Row[]) => provedGreenSince(decidedAt, heads, deliveriesWith(rows));
+
+  it('a commit first seen after the refusal, folding green, proves the fix', () => {
+    expect(at([row('dddd', 'success')])).toBe(true);
+  });
+
+  it('the reviewed head and the current head prove nothing, however green', () => {
+    expect(at([row('aaaa', 'success'), row('bbbb', 'success')])).toBe(false);
+  });
+
+  it('a commit from before the refusal proves nothing — the one CI passed before the review', () => {
+    expect(at([row('0000', 'success', '2026-11-08T19:00:00Z')])).toBe(false);
+  });
+
+  it('a commit after the refusal that is red or still running proves nothing', () => {
+    expect(at([row('dddd', 'failure')])).toBe(false);
+    expect(at([row('dddd', 'success'), row('dddd', 'pending')])).toBe(false);
+  });
+
+  it('a member the refusal did not name is not read', () => {
+    expect(provedGreenSince(decidedAt, {}, deliveriesWith([row('dddd', 'success')]))).toBe(false);
   });
 });

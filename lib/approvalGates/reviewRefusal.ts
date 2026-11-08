@@ -1,6 +1,9 @@
 import type { ApprovalGate, Prisma, ReviewVerdictRecord } from '@/generated/prisma/client';
 import { deliveryMemberVersion, deliverySetVersion } from '@/lib/approvalGates/deliverySetVersion';
 import { membersOf } from '@/lib/approvalGates/memberVersion';
+import { liveCheckRows } from '@/lib/github/checkSuites';
+import { foldHeadCheckRows } from '@/lib/github/prCiState';
+import { pullRequestHead } from '@/lib/github/pullRequestHead';
 import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeliveryRepository';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { reviewDismissalRepository } from '@/lib/repositories/reviewDismissalRepository';
@@ -220,11 +223,16 @@ export function answeredReviewRefusalFrom(facts: {
   deliveries: readonly Pick<WorkItemDeliveryWithChecks, 'pullRequest' | 'repo'>[];
 }): AnsweredReviewRefusal | null {
   const { latest, record, currentVersion } = facts;
-  // A gate-off send-back is the latest word unless a decided gate or a pass came after it.
-  const recordIsLatest =
+  // A gate-off send-back is the latest word unless a pass or a decided REVIEW gate came after
+  // it. A later gate of another kind (acceptance, design) is no review word, so it hides
+  // nothing — the standing read's rule (`standingReviewRefusalFrom`), not a second one.
+  const laterReviewGate =
+    latest !== null &&
+    isReviewKind(latest.kind) &&
+    latest.decidedAt !== null &&
     record !== null &&
-    !facts.passAfterRecord &&
-    !(latest?.decidedAt && latest.decidedAt > record.createdAt);
+    latest.decidedAt > record.createdAt;
+  const recordIsLatest = record !== null && !facts.passAfterRecord && !laterReviewGate;
   let word: StandingReviewRefusal | null = null;
   if (recordIsLatest) {
     if (facts.recordDismissed) return null;
@@ -241,7 +249,7 @@ export function answeredReviewRefusalFrom(facts: {
     };
   } else if (
     latest &&
-    (latest.kind === 'agent_review' || latest.kind === 'pull_request_approval') &&
+    isReviewKind(latest.kind) &&
     latest.state === 'changes_requested' &&
     !(facts.gateDismissed && latest.kind === 'agent_review')
   ) {
@@ -260,11 +268,52 @@ export function answeredReviewRefusalFrom(facts: {
   }
   // Still standing at the current version is the standing read's, not this one's.
   if (word?.subjectVersion == null || word.subjectVersion === currentVersion) return null;
-  return {
-    ...word,
-    subjectVersion: word.subjectVersion,
-    raisedHeads: headsInVersion(word.subjectVersion, facts.deliveries),
-  };
+  const raisedHeads = headsInVersion(word.subjectVersion, facts.deliveries);
+  // A fix that already PROVED GREEN answered it for good: a later push is not a fix for it.
+  if (provedGreenSince(word.decidedAt, raisedHeads, facts.deliveries)) return null;
+  return { ...word, subjectVersion: word.subjectVersion, raisedHeads };
+}
+
+const isReviewKind = (kind: ApprovalGate['kind']): kind is StandingReviewRefusal['kind'] =>
+  kind === 'agent_review' || kind === 'pull_request_approval';
+
+/**
+ * Whether CI already decided GREEN on a commit pushed after the refusal — a commit that is
+ * neither the head the refusal was about nor the head the member is at now.
+ *
+ * ⚠️ WHY (review of MOTIR-10733). The refusal stays the card's latest review word until a
+ * newer review lands, and its recorded heads are the REVIEWED ones, so without this bound
+ * every later push — a main merge, an *Update branch* — read as a moved head and put a card
+ * whose fix had already passed back on To fix, Fixing, with findings it had answered. The fix
+ * push is the one Fixing is for (MOTIR-10305); once its CI went green, the stored answer was
+ * rightly nothing, and a later push keeps it so. Check rows of older commits are kept, so the
+ * proof is read from them: a commit FIRST SEEN after the refusal was decided (a commit from
+ * before it — the one CI passed before the review — proves nothing), folding to passing.
+ *
+ * A commit that went green on a PARTIAL set of checks before the next push reads as proved:
+ * the same ambiguity the quick-green read itself has, and it errs toward no tag.
+ */
+export function provedGreenSince(
+  decidedAt: Date,
+  raisedHeads: Record<string, string>,
+  deliveries: readonly Pick<WorkItemDeliveryWithChecks, 'pullRequest'>[],
+): boolean {
+  for (const { pullRequest } of deliveries) {
+    const reviewed = raisedHeads[pullRequest.id];
+    if (reviewed === undefined) continue;
+    const head = pullRequestHead(pullRequest);
+    const byCommit = new Map<string, typeof pullRequest.checkRuns>();
+    for (const row of pullRequest.checkRuns) {
+      if (row.commitSha === reviewed || row.commitSha === head) continue;
+      byCommit.set(row.commitSha, [...(byCommit.get(row.commitSha) ?? []), row]);
+    }
+    for (const rows of byCommit.values()) {
+      const firstSeen = Math.min(...rows.map((r) => r.createdAt.getTime()));
+      if (firstSeen <= decidedAt.getTime()) continue;
+      if (foldHeadCheckRows(liveCheckRows(rows)) === 'passing') return true;
+    }
+  }
+  return false;
 }
 
 /**

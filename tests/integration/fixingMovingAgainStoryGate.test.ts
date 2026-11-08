@@ -544,6 +544,41 @@ describe('Fixing — a review AGENT sent it back (Bug MOTIR-10733)', () => {
     },
   );
 
+  // REVIEW OF MOTIR-10733: the refusal stays the latest review word until a newer review, so
+  // without a bound every later push — a main merge, an Update branch — read as a moved head.
+  // Once the fix push went green, a later push is not a fix for that refusal.
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 236 },
+    { label: 'the switch on', gateOn: true, number: 237 },
+  ])(
+    'with $label: a later push after the fix went green is not Fixing, in either check order',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-agent-later-push-${number}@example.com`);
+      if (gateOn) {
+        await adminDb.project.update({
+          where: { id: s.project.id },
+          data: { reviewAgentEnabled: true },
+        });
+      }
+      const { item, headRef } = await agentSentBack(s, number);
+
+      // The fix push: Fixing while its CI runs, cleared once it is green.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      await check(s, number, 'sha-b', 'vitest', null);
+      expect((await stored(item.id)).fixing).toBe(true);
+      await check(s, number, 'sha-b', 'vitest', 'success');
+      expect((await stored(item.id)).fixReason).toBeNull();
+
+      // A later push (a main merge): nothing to fix on the push, nor while its CI runs.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-c');
+      expect((await stored(item.id)).fixReason, 'on the push').toBeNull();
+      await check(s, number, 'sha-c', 'lint', 'success');
+      await check(s, number, 'sha-c', 'vitest', null);
+      expect((await stored(item.id)).fixReason, 'CI running at the later head').toBeNull();
+      expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+    },
+  );
+
   it('a person’s Request changes: a quick green at the new head, then a running check, reads Fixing again', async () => {
     const s = await makeScenario('fixing-person-early-green@example.com');
     const { item, heads } = await card(s, 'person sent back', [235]);
