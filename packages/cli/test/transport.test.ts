@@ -5,14 +5,17 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  ApiRefusalError,
   AuthError,
   CliError,
   ContainerHasOpenChildrenError,
   IncompatibleServerError,
+  NetworkError,
   NotFoundError,
   RateLimitError,
   ResponseShapeError,
   PermissionError,
+  ServerFailureError,
 } from '../src/errors.js';
 import {
   DEFAULT_RATE_LIMIT_MAX_WAIT_SECONDS,
@@ -382,6 +385,9 @@ describe('the status map', () => {
 
     expect((error as CliError).message).toContain('failed (500)');
     expect((error as CliError).message).toContain('req_abc');
+    // Typed, with its status, so the run reporter can retry it (MOTIR-10705).
+    expect(error).toBeInstanceOf(ServerFailureError);
+    expect((error as ServerFailureError).status).toBe(500);
   });
 
   it('a CONNECTION failure → CliError naming the server', async () => {
@@ -392,6 +398,7 @@ describe('the status map', () => {
       .catch((err: unknown) => err);
 
     expect(error).toBeInstanceOf(CliError);
+    expect(error).toBeInstanceOf(NetworkError);
     expect((error as CliError).message).toContain('Could not reach');
     expect((error as CliError).hint).toContain('motir doctor');
   });
@@ -408,6 +415,23 @@ describe('the status map', () => {
 
     expect((error as CliError).message).toBe('That cursor is not ours.');
     expect((error as CliError).hint).toBeUndefined();
+    // The status and the machine code ride as DATA (MOTIR-10705).
+    expect(error).toBeInstanceOf(ApiRefusalError);
+    expect((error as ApiRefusalError).status).toBe(422);
+    expect((error as ApiRefusalError).code).toBe('INVALID_CURSOR');
+  });
+
+  it('a 4xx with NO envelope is an ApiRefusalError naming the status, with a null code', async () => {
+    stub.queue({ status: 413, raw: 'Payload Too Large' });
+
+    const error = await transport()
+      .request('getProject', { path: { projectKey: 'MOTIR' } })
+      .catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ApiRefusalError);
+    expect((error as CliError).message).toContain('answered 413 for getProject');
+    expect((error as ApiRefusalError).status).toBe(413);
+    expect((error as ApiRefusalError).code).toBeNull();
   });
 
   it('a 422 `CONTAINER_HAS_OPEN_CHILDREN` is TYPED, so a run can continue from it', async () => {

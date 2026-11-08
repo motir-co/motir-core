@@ -1,4 +1,13 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
@@ -25,6 +34,7 @@ const unit = read('infra/ci-runner-aws/boot/motir-ci-runner.service');
 const parser = read('infra/ci-runner-aws/boot/parse-user-data.sh');
 const vmEntrypoint = read('infra/ci-runner-aws/boot/motir-vm-entrypoint.sh');
 const containerEntrypoint = read('infra/ci-runner-aws/boot/motir-container-entrypoint.sh');
+const reportExit = read('infra/ci-runner-aws/boot/motir-runner-report-exit.sh');
 const buildAmi = read('infra/ci-runner-aws/build-ami.sh');
 const readme = read('infra/ci-runner-aws/README.md');
 const workflowSource = read('.github/workflows/release-ci-runner-ami.yml');
@@ -436,6 +446,7 @@ const boot = {
   'motir-ci-runner.service': code(unit),
   'parse-user-data.sh': code(parser),
   'motir-vm-entrypoint.sh': code(vmEntrypoint),
+  'motir-runner-report-exit.sh': code(reportExit),
 };
 // Every boot file, the container entrypoint included (it pulls ONE image).
 const allBoot = { ...boot, 'motir-container-entrypoint.sh': code(containerEntrypoint) };
@@ -496,7 +507,19 @@ describe('the unit — one job, then the VM powers off', () => {
     // ExecStopPost runs after a clean exit, a failed exit and a failed
     // ExecStartPre alike; `--no-block` so the unit's own stop is not waited on.
     expect(unit).toMatch(/^ExecStopPost=\/usr\/bin\/systemctl --no-block poweroff$/m);
-    expect(unit).not.toMatch(/^ExecStopPost=-/m);
+    // The power-off is never `-`-prefixed: a failure to power off is a failure.
+    expect(unit).not.toMatch(/^ExecStopPost=-\/usr\/bin\/systemctl/m);
+  });
+
+  it('reports the exit first, and nothing it does can stand before the power-off (MOTIR-10706)', () => {
+    // systemd runs ExecStopPost lines in order and stops at the first that fails
+    // without a `-`. So the report is `-`-prefixed and comes FIRST, and the
+    // power-off is the LAST line: no report can ever keep the VM running.
+    const stopPost = unit.split('\n').filter((l) => l.startsWith('ExecStopPost='));
+    expect(stopPost).toEqual([
+      'ExecStopPost=-/usr/local/sbin/motir-runner-report-exit',
+      'ExecStopPost=/usr/bin/systemctl --no-block poweroff',
+    ]);
   });
 
   it('is enabled at boot, after cloud-init has read the datasource', () => {
@@ -702,5 +725,97 @@ describe('container mode (MOTIR-9419) — the same AMI runs ONE digest-pinned im
         /MOTIR_BOOT_MODE|motir-vm-entrypoint/,
       );
     }
+  });
+});
+
+describe('the exit report — a runner that took no job says so before the VM powers off (MOTIR-10706)', () => {
+  /** Run the report against a scratch /run with the result systemd passes to ExecStopPost. */
+  function report(state: { mode?: string; marker?: string }, exitStatus = '1'): string {
+    const run = mkdtempSync(join(tmpdir(), 'motir-report-exit-'));
+    if (state.mode !== undefined) {
+      mkdirSync(join(run, 'motir'));
+      writeFileSync(join(run, 'motir', 'mode'), `${state.mode}\n`);
+    }
+    if (state.marker !== undefined) {
+      mkdirSync(join(run, 'motir-ci-runner-job'));
+      writeFileSync(join(run, 'motir-ci-runner-job', 'started'), `${state.marker}\n`);
+    }
+    // execFileSync throws on a non-zero exit, so every call below also asserts
+    // the script's exit 0 on that path.
+    return execFileSync('bash', [join(AWS_DIR, 'boot/motir-runner-report-exit.sh')], {
+      // A bare environment, as systemd gives an ExecStopPost: only PATH and the
+      // three result variables, plus the scratch /run.
+      env: {
+        NODE_ENV: 'test',
+        PATH: process.env['PATH'] ?? '/usr/bin:/bin',
+        MOTIR_RUNNER_RUN_DIR: run,
+        SERVICE_RESULT: exitStatus === '0' ? 'success' : 'exit-code',
+        EXIT_CODE: 'exited',
+        EXIT_STATUS: exitStatus,
+      },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+  }
+
+  it('says FATAL, with the unit result, when a CI-mode runner exits without the job marker', () => {
+    const out = report({ mode: 'ci' });
+    expect(out).toContain(
+      '[motir-runner-exit] FATAL: the runner exited WITHOUT TAKING A JOB (result=exit-code exited=1); the GitHub job is still queued',
+    );
+    // The line the operator needs next: the deprecated-version case, and where its pin lives.
+    expect(out).toContain('"is deprecated and cannot receive messages"');
+    expect(out).toContain('RUNNER_VERSION in infra/ci-runner/Dockerfile');
+  });
+
+  it('says the runner took its job, with when, when the marker is there', () => {
+    const out = report({ mode: 'ci', marker: '2026-11-08T15:40:21Z' }, '0');
+    expect(out).toBe(
+      '[motir-runner-exit] the runner took its job at 2026-11-08T15:40:21Z and exited (result=success exited=0); powering off\n',
+    );
+  });
+
+  it('is not a runner report in container mode', () => {
+    const out = report({ mode: 'container' }, '0');
+    expect(out).toBe(
+      '[motir-runner-exit] boot mode container ended (result=success exited=0); powering off\n',
+    );
+  });
+
+  it('points at the prepare hook when the boot never chose a mode', () => {
+    expect(report({})).toContain(
+      'the boot ended before it chose a mode (result=exit-code exited=1) — see the motir-runner-prepare FATAL above',
+    );
+  });
+
+  it('the hook writes the marker into the directory the entrypoint makes for runner, and the report reads it', () => {
+    const fly = readFileSync(join(FLY_DIR, 'entrypoint.sh'), 'utf8');
+    const hook = readFileSync(join(FLY_DIR, 'job-started.sh'), 'utf8');
+    // Made as root, owned by `runner` (the hook's user), before the exec.
+    const mkdir = 'install -d -m 0755 -o runner -g runner /run/motir-ci-runner-job';
+    expect(code(fly)).toContain(mkdir);
+    expect(code(fly).indexOf(mkdir)).toBeLessThan(code(fly).indexOf('exec setpriv'));
+    // The hook is informational: its write can never fail a job.
+    expect(code(hook)).toContain(
+      'date -u +%Y-%m-%dT%H:%M:%SZ >/run/motir-ci-runner-job/started 2>/dev/null || true',
+    );
+    expect(code(hook).trim().split('\n').at(-1)).toBe('exit 0');
+    expect(code(reportExit)).toContain('JOB_MARKER="${RUN_DIR}/motir-ci-runner-job/started"');
+    expect(code(reportExit)).toContain('RUN_DIR="${MOTIR_RUNNER_RUN_DIR:-/run}"');
+  });
+
+  it('exits 0 on every path and never powers the VM off itself', () => {
+    expect(code(reportExit).trim().split('\n').at(-1)).toBe('exit 0');
+    expect(code(reportExit)).not.toMatch(/\bexit [1-9]|set -e\b|poweroff|shutdown|halt/);
+  });
+
+  it('is uploaded by the template, installed root-owned 0755, and shellchecked by the AMI lane', () => {
+    expect(template).toContain('source      = "${path.root}/../boot/motir-runner-report-exit.sh"');
+    expect(template).toContain('destination = "/tmp/motir-ci-runner/motir-runner-report-exit.sh"');
+    expect(provision).toContain(
+      'install -m 0755 -o root -g root "${STAGING}/motir-runner-report-exit.sh" /usr/local/sbin/motir-runner-report-exit',
+    );
+    expect(workflowSource).toContain('infra/ci-runner-aws/boot/motir-runner-report-exit.sh');
+    expect(readme).toContain('`boot/motir-runner-report-exit.sh`');
   });
 });

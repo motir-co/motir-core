@@ -273,12 +273,15 @@ describe('a proposal FORCED past the door is still caught before it can 500', ()
   });
 
   it('the materialize containment turns a real ORM validation failure into a typed 4xx', async () => {
-    // The LAST door, driven for real rather than constructed. `priority` is the
-    // honest vehicle: the tool schema closes it, `validatePlanProposals`
-    // deliberately does NOT re-check it, and materialize passes it straight to
-    // `prisma.workItem.create()`. So a row forced into this state reaches the ORM
-    // exactly the way `type: "migration"` used to — which is the whole class this
-    // containment exists for, not the one column this card fixed.
+    // The LAST door, driven for real rather than constructed. `explanationSource`
+    // is the honest vehicle: no model writes it (motir-ai sets it as a constant),
+    // `validatePlanProposals` does NOT re-check it, and materialize passes it
+    // straight to `prisma.workItem.create()` beside an explanation. So a row
+    // forced into this state reaches the ORM exactly the way `type: "migration"`
+    // used to — which is the whole class this containment exists for, not the one
+    // column this card fixed. (It was `priority` until MOTIR-10656 gave the gate
+    // an `unknown_priority` arm, then `executor` until MOTIR-10678 gave it
+    // `unknown_executor`; each now refuses its value before the ORM sees it.)
     //
     // Asserting it on a DIFFERENT column than the card's is deliberate: a
     // containment tested only through the value its own front door now refuses
@@ -295,7 +298,14 @@ describe('a proposal FORCED past the door is still caught before it can 500', ()
     const itemId = ids(added)[0]!;
     await adminDb.planItem.update({
       where: { id: itemId },
-      data: { proposedFields: { title: 'Cut the queue over', kind: 'task', priority: 'urgent' } },
+      data: {
+        proposedFields: {
+          title: 'Cut the queue over',
+          kind: 'task',
+          explanationMd: 'Why the queue moves.',
+          explanationSource: 'robot',
+        },
+      },
     });
 
     const before = await lastKey(fx.projectId);
@@ -310,7 +320,7 @@ describe('a proposal FORCED past the door is still caught before it can 500', ()
     // …and the FIELD, parsed from Prisma's message. Parsed, never asserted: a
     // null field with a real proposal id is still strictly better than a 500,
     // which is why the class allows it.
-    expect(rejected.field).toBe('priority');
+    expect(rejected.field).toBe('explanationSource');
     expect(rejected.message).toContain(itemId);
 
     // The transaction rolled back — same property as the `type` case above.

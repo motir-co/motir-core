@@ -118,11 +118,11 @@ describe('WorkItemNode', () => {
   });
 
   // Subtask 7.20.6 / MOTIR-1013 — the "you are here" current-position marker.
-  it('marks the active node "you are here": accent pill replaces status, aria-current=step', () => {
+  it('marks the active node "you are here": the tab, its own status, aria-current=step', () => {
     const { container } = render(<WorkItemNode item={item} here />);
-    expect(screen.getByText('You are here')).toBeTruthy();
-    // The status pill is REPLACED (not shown alongside) on the active node.
-    expect(screen.queryByText('In Progress')).toBeNull();
+    // MOTIR-10630: You are here is the card's TAB, so the status pill stays.
+    expect(screen.getByTestId('here-tab').textContent).toBe('You are here');
+    expect(screen.getByText('In Progress')).toBeTruthy();
     const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('aria-current')).toBe('step');
     expect(card.className).toContain('border-(--el-accent)');
@@ -182,13 +182,16 @@ describe('WorkItemNode', () => {
     expect(done.className).not.toContain('bg-(--el-surface)'); // not the same fill as todo
   });
 
-  it('the accent "you are here" frontier wins over the done style', () => {
+  it('the accent "you are here" frontier wins the done FRAME; the slot still says Done', () => {
     const { container } = render(<WorkItemNode item={{ ...item, status: 'done' }} here />);
     const card = container.querySelector('[data-node-state]') as HTMLElement;
     expect(card.getAttribute('data-node-state')).toBe('here');
-    expect(screen.getByText('You are here')).toBeTruthy();
-    expect(screen.queryByTestId('done-pill')).toBeNull();
+    expect(screen.getByTestId('here-tab')).toBeTruthy();
+    // MOTIR-10630: the slot is the item's own, so a done here card wears the stamp…
+    expect(screen.getByTestId('done-pill')).toBeTruthy();
+    // …while the frame (fill and the struck title) stays the here card's.
     expect(card.className).not.toContain('bg-(--el-tint-sky)');
+    expect(screen.getByText(item.title).className).not.toContain('line-through');
   });
 
   it('the red cross-blocked flag wins over the done style', () => {

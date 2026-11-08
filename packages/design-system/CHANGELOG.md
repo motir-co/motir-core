@@ -1,5 +1,17 @@
 # @motir/design-system
 
+## 0.21.1
+
+### Patch Changes
+
+- d7716c1: `theme.css` declares `--spacing-shadow-elevated-drop` in every style (MOTIR-10677), each beside its own `--shadow-elevated`. Before, only the `@theme` default, Warm Editorial and Neo-Brutalism declared it, so a `[data-style]` scope nested inside a Neo-Brutalism one inherited its 6px drop instead of 0px. No value changes for an un-nested style.
+
+## 0.21.0
+
+### Minor Changes
+
+- 4114081: `theme.css` adds `--spacing-shadow-elevated-drop` (MOTIR-10631): how far the solid edge of `--shadow-elevated` falls below the box that casts it. It is `0px` in every style whose elevated shadow is blurred, and `6px` in Neo-Brutalism, whose elevated shadow is a hard 6px offset block. A control hung over other content lifts itself by it, so its shadow clears what it floats above as its box does. No existing token changes.
+
 ## 0.20.0
 
 ### Minor Changes

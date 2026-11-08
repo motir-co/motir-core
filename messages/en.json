@@ -8604,7 +8604,13 @@
         "failedClosed": "That attempt didn't go through, so this session has closed. The work items it held are back where they were.",
         "revisionInFlight": "Motir AI is already revising this plan. Your message is kept — send it again once the new version lands.",
         "awaitingResume": "This session is waiting to be resumed, so it can't take a message yet. Resume it first — your message is kept.",
-        "unavailable": "Motir AI didn't answer in time. Your conversation is saved, and you won't be charged twice. Try again."
+        "unavailable": "Motir AI didn't answer in time. Your conversation is saved, and you won't be charged twice. Try again.",
+        "proposalRejected": "Motir couldn’t approve this plan: {hasItem, select, yes {the proposed work item “{item}”} other {one of the proposed work items}} has {fieldKind, select, repository {a repository that isn’t in this project} repositoryRole {a repository role Motir doesn’t recognise} named {a value Motir can’t save in its “{field}” field} other {a value Motir can’t save}}. Nothing was added — correct that work item in the plan, then approve again.",
+        "repoPinMoved": "The repository on {hasItem, select, yes {the proposed work item “{item}”} other {one of the proposed work items}} changed while this plan was being approved. Nothing was added — check that work item’s repository, then approve again.",
+        "linkRefused": "Motir couldn’t approve this plan: one of its dependencies would loop back on itself or repeat a link that already exists. Nothing was added — the plan’s dependencies need correcting before it can be approved.",
+        "notAuthorised": "You can’t decide this plan — approving or declining it needs a permission you don’t have in this project. Nothing was changed.",
+        "refused": "Motir refused this decision{hasItem, select, yes { about the proposed work item “{item}”} other {}}, so nothing was changed — pressing again won’t help on its own.",
+        "refusalReason": "Reason given: {reason}"
       },
       "answeredFrom": "{count, plural, =0 {Answered without citing anything} one {Answered from # work item} other {Answered from # work items}}",
       "correctToAsk": "Answer this instead",

@@ -123,7 +123,12 @@ To move one, update both, then let CI rebuild — `assert-image.sh` fails the
 build if a version stops being exact or a download stops being verified.
 
 - **Actions runner** — `RUNNER_VERSION` + `RUNNER_SHA256` from the release body
-  of <https://github.com/actions/runner/releases>.
+  of <https://github.com/actions/runner/releases>. This one is not optional
+  upkeep: the runner has self-update off, and GitHub stops serving jobs to a
+  runner still behind 30 days after a newer release (MOTIR-10706). The daily
+  health check's `runner-version-support` step fails 14 days before that, naming
+  the deadline; bump the pin, release `runner-v*` and `ci-runner-ami-v*`, and
+  pin both.
 - **Ubuntu** — `UBUNTU_DIGEST`. `ubuntu-latest` is what §8's parity target
   tracks, so move this when GitHub moves `ubuntu-latest`, not before.
 - **Node** — `NODE_VERSION` + `NODE_SHA256` from `nodejs.org/dist/v<x>/SHASUMS256.txt`.

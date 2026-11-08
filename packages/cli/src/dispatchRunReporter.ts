@@ -7,6 +7,13 @@ import type {
   MotirClient,
 } from './client.js';
 import type { AgentDecisionPoint, AgentStopReport } from './agentRun.js';
+import {
+  ApiRefusalError,
+  NetworkError,
+  RateLimitError,
+  ResponseShapeError,
+  ServerFailureError,
+} from './errors.js';
 
 // THE DISPATCH RUN REPORTER (Story MOTIR-1789 · MOTIR-1794) — what turns a local
 // run into a watchable object, built to `docs/decisions/dispatch-run-record.md`.
@@ -24,12 +31,25 @@ import type { AgentDecisionPoint, AgentStopReport } from './agentRun.js';
 // client-side. `tests/dispatchRunReporter.test.ts` drives it with a client that
 // throws on every call and asserts each method still resolves.
 //
-// ── OFFLINE IS A FIRST-CLASS STATE, NOT AN ERROR ──────────────────────────
-// On the FIRST failure the reporter prints ONE warning naming that run reporting
-// is off for this session and stops trying for the rest of the run. A warning
-// per event would bury the agent's own output — which is the thing the operator
-// is actually watching — under telemetry noise, and the second failure tells
-// them nothing the first did not.
+// ── OFFLINE IS A FIRST-CLASS STATE, NOT AN ERROR — AND ONLY A DEFINITIVE END
+//    TAKES THE REPORTER THERE (MOTIR-10705) ────────────────────────────────
+// When the server says reporting CANNOT continue — the credential is refused
+// (401/403), the run is closed or gone (409/404), the CLI and server disagree on
+// the contract — the reporter prints ONE warning naming that run reporting is
+// off for this session and stops trying for the rest of the run. A warning per
+// event would bury the agent's own output — which is the thing the operator is
+// actually watching — under telemetry noise.
+//
+// ⚠️ EVERY OTHER FAILURE KEEPS IT REPORTING, because silence is no longer free.
+// It used to go offline on the FIRST failure of any kind, on the premise that
+// "the run itself is unaffected". A HOSTED run disproves it: the server ends a
+// hosted run as a STALL when its newest event is fifteen minutes old
+// (`hostedRunService.stallDetail`), so a reporter that went quiet over one
+// refused batch killed a run whose agent was still working. Now a refused batch
+// (413/422) is narrowed to the event the server refuses, which alone is dropped;
+// a transient failure (5xx, network, timeout, an exhausted rate-limit wait) is
+// retried with backoff and, if it persists, left queued for the next flush.
+// {@link classifyReportingFailure} is the one place that sorts them.
 //
 // ── IT READS NOTHING (MOTIR-3204) ─────────────────────────────────────────
 // Every fact it sends is ALREADY in the process: the claim's answer, the frozen
@@ -74,10 +94,72 @@ export const FLUSH_ON_ENQUEUE: ReadonlySet<DispatchRunEventInput['kind']> = new 
   'checkout_ready',
 ]);
 
-/** The one warning, printed once per session on the first failure. */
+/** The one warning, printed once per session when reporting ends for good. */
 export const REPORTER_OFFLINE_WARNING =
   'motir: run reporting is unavailable — this run will not appear in Motir. ' +
   'The run itself is unaffected.';
+
+/** Printed once per session, the first time the server refuses an event it will never
+ *  take (an over-size body, a malformed event). Reporting carries on without it. */
+export const REPORTER_EVENT_REFUSED_WARNING =
+  'motir: Motir refused a run event, which was dropped. Reporting continues.';
+
+/** Printed once when the run reaches the server's event ceiling (422
+ *  `DISPATCH_RUN_EVENT_LIMIT`): no further event is recorded, the run can still close. */
+export const REPORTER_EVENT_LIMIT_WARNING =
+  'motir: this run reached Motir’s event limit — later output is not recorded. ' +
+  'The run itself is unaffected.';
+
+/**
+ * The waits between the attempts of ONE reporting call that failed TRANSIENTLY
+ * (MOTIR-10705): three retries, doubling, about seven seconds in all. Short on purpose —
+ * `close()` awaits a flush, and an outage longer than this is not waited out here:
+ * the batch stays queued and the next flush (at the latest the next heartbeat) tries
+ * again, which the queue bound keeps from growing.
+ */
+export const REPORTER_RETRY_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000];
+
+/**
+ * What a failed reporting call means for the reporter (MOTIR-10705):
+ *
+ * - `end` — reporting cannot continue this session: a refused credential (401/403), a
+ *   run the server has closed (409) or does not know (404), a client the server does not
+ *   speak to, or a failure this client's transport did not raise. The reporter goes
+ *   OFFLINE.
+ * - `capped` — the batch would cross the server's event ceiling. The events that still fit
+ *   are sent (the batch is halved, as a refused one is); after that no event can land, but
+ *   the run can still be closed, so only EVENTS stop.
+ * - `refused` — the server will never take THIS request (413, 422 and the other 4xx).
+ *   Sending it again is pointless; the next one may well be fine.
+ * - `delivered` — a 2xx whose body this client could not read. The server took the
+ *   request, so it must not be sent again.
+ * - `transient` — the request may succeed if repeated: a 5xx, a network failure or
+ *   timeout, a rate limit the transport stopped waiting out.
+ */
+export type ReportingFailure = 'end' | 'capped' | 'refused' | 'delivered' | 'transient';
+
+export function classifyReportingFailure(err: unknown): ReportingFailure {
+  if (err instanceof ApiRefusalError) {
+    if (err.code === 'DISPATCH_RUN_EVENT_LIMIT') return 'capped';
+    // A 409 on the reporter's calls is a run that is not open for them; the terminal
+    // case is already typed below, and any other conflict is no more recoverable.
+    if (err.status === 409) return 'end';
+    return 'refused';
+  }
+  if (
+    err instanceof NetworkError ||
+    err instanceof ServerFailureError ||
+    err instanceof RateLimitError
+  ) {
+    return 'transient';
+  }
+  if (err instanceof ResponseShapeError) return 'delivered';
+  // Everything else is a definitive answer: an auth or permission refusal, a run closed
+  // or not found, a contract the two sides do not share — and any failure the transport
+  // did not classify, which is a defect in this client rather than a state of the
+  // network, so repeating the call could not help.
+  return 'end';
+}
 
 /**
  * How often an open run tells the server it is alive (MOTIR-6530).
@@ -206,6 +288,18 @@ export interface DispatchRunReporterDeps {
    * leak, and there are dozens of them.
    */
   reportLogBodies?: boolean;
+  /** Waits between retries. A real timer in production; overridden only by the tests. */
+  sleep?: (ms: number) => Promise<void>;
+  /** The retry schedule. {@link REPORTER_RETRY_DELAYS_MS} in production. */
+  retryDelaysMs?: readonly number[];
+}
+
+/** A wait that never keeps a finished process alive. */
+function unrefSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref?.();
+  });
 }
 
 /**
@@ -229,16 +323,27 @@ export const nullDispatchRunReporter: DispatchRunReporter = {
 
 export function createDispatchRunReporter(deps: DispatchRunReporterDeps): DispatchRunReporter {
   const warn = deps.warn ?? ((message: string) => console.error(message));
+  const sleep = deps.sleep ?? unrefSleep;
+  const retryDelays = deps.retryDelaysMs ?? REPORTER_RETRY_DELAYS_MS;
   const queue: DispatchRunEventInput[] = [];
   let runId: string | null = null;
   /** The open call's own arguments, kept so `addCard` can re-issue it. */
   let opened: OpenDispatchRunInput | null = null;
   let offline = false;
+  /** Set when the run hit the server's event ceiling: events stop, the close does not. */
+  let eventsCapped = false;
+  /** Whether the one refused-event warning has been printed. */
+  let warnedRefused = false;
   /** Set by the first `close`; every later one is a no-op (an interrupt and the
    *  command's own close can both reach it). */
   let closed = false;
   /** Serialises flushes, so two callers cannot interleave a batch's order. */
   let inFlight: Promise<void> = Promise.resolve();
+  /** A flush queued behind the one in flight and not yet started. A later caller joins
+   *  it rather than chaining another: it drains whatever is queued WHEN it starts, so a
+   *  second one could add nothing, and a chatty agent on a slow link would otherwise
+   *  build an ever-longer chain of pending flushes. */
+  let pendingFlush: Promise<void> | null = null;
   let heartbeat: ReturnType<typeof setInterval> | null = null;
 
   function stopHeartbeat(): void {
@@ -311,20 +416,113 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
     warn(REPORTER_OFFLINE_WARNING);
   }
 
+  /** Stop sending events for the rest of the run, once, with one line. */
+  function capEvents(): void {
+    if (eventsCapped) return;
+    eventsCapped = true;
+    queue.length = 0;
+    warn(REPORTER_EVENT_LIMIT_WARNING);
+  }
+
   /**
-   * Run one reporting call, swallowing everything.
-   *
-   * ⚠️ THE `catch` IS THE FEATURE. Every failure mode a headless machine has —
-   * a 500, a timeout, an expired PAT, no network at all — arrives here, and all
-   * of them mean the same thing to the run: keep going.
+   * Make one reporting call, retrying a TRANSIENT failure on the backoff schedule, and
+   * answer how it ended. Never throws.
    */
-  async function attempt(fn: () => Promise<void>): Promise<void> {
-    if (offline) return;
-    try {
-      await fn();
-    } catch {
-      goOffline();
+  async function call(fn: () => Promise<unknown>): Promise<'ok' | ReportingFailure> {
+    for (let retry = 0; ; retry += 1) {
+      try {
+        await fn();
+        return 'ok';
+      } catch (err) {
+        const failure = classifyReportingFailure(err);
+        const wait = retryDelays[retry];
+        if (failure !== 'transient' || wait === undefined || offline) return failure;
+        await sleep(wait);
+      }
     }
+  }
+
+  /**
+   * Run one call that is not an event append — the open, a leg, the close — swallowing
+   * everything.
+   *
+   * ⚠️ THE SWALLOW IS THE FEATURE. Every failure mode a headless machine has — a 500, a
+   * timeout, an expired PAT, no network at all — arrives here, and none of them may
+   * reach the run. Only a DEFINITIVE end takes the reporter offline (`orOffline` widens
+   * that to any failure, for the open: a run that never opened has nothing to report
+   * into).
+   */
+  async function attempt(fn: () => Promise<unknown>, orOffline = false): Promise<void> {
+    if (offline) return;
+    const outcome = await call(fn);
+    // (For the open even a `delivered` is a failure: the run id is in the body it could
+    // not read.)
+    if (outcome === 'end' || (orOffline && outcome !== 'ok')) {
+      goOffline();
+    } else if (outcome === 'capped') {
+      capEvents();
+    }
+  }
+
+  /**
+   * Append ONE batch, and say what is left of it (MOTIR-10705).
+   *
+   * ⚠️ A REFUSED BATCH IS NARROWED, NEVER ABANDONED. The server refuses a batch WHOLE for
+   * one bad event — an over-size body, a malformed event — and the answer does not say
+   * which. So the batch is split in half and each half sent again, down to the single
+   * event the server will not take, which alone is dropped: one bad event costs about
+   * log₂(batch) extra requests, and every good event around it — `agent_exited` among
+   * them — still lands.
+   *
+   * `stop` ends this flush: the reporter went offline or hit the event ceiling, or a
+   * transient failure outlasted its retries. `unsent` is what to put back at the head of
+   * the queue in that last case, so the next flush tries it again.
+   */
+  async function sendBatch(
+    id: string,
+    batch: DispatchRunEventInput[],
+  ): Promise<{ stop: boolean; unsent: DispatchRunEventInput[] }> {
+    const outcome = await call(() =>
+      deps.client.appendDispatchRunEvents({ runId: id, events: batch }),
+    );
+    switch (outcome) {
+      case 'ok':
+      case 'delivered':
+        return { stop: false, unsent: [] };
+      case 'end':
+        goOffline();
+        return { stop: true, unsent: [] };
+      case 'transient':
+        return { stop: true, unsent: batch };
+      case 'capped':
+        // The ceiling refuses a batch that would cross it WHOLE, so the events that still
+        // fit are found the same way as a refused event: halve until one is refused.
+        if (batch.length === 1) {
+          capEvents();
+          return { stop: true, unsent: [] };
+        }
+        return sendHalves(id, batch);
+      case 'refused':
+        if (batch.length === 1) {
+          if (!warnedRefused) {
+            warnedRefused = true;
+            warn(REPORTER_EVENT_REFUSED_WARNING);
+          }
+          return { stop: false, unsent: [] };
+        }
+        return sendHalves(id, batch);
+    }
+  }
+
+  /** Send a batch the server refused as two halves, in order. */
+  async function sendHalves(
+    id: string,
+    batch: DispatchRunEventInput[],
+  ): Promise<{ stop: boolean; unsent: DispatchRunEventInput[] }> {
+    const half = Math.ceil(batch.length / 2);
+    const first = await sendBatch(id, batch.slice(0, half));
+    if (first.stop) return { stop: true, unsent: [...first.unsent, ...batch.slice(half)] };
+    return sendBatch(id, batch.slice(half));
   }
 
   /**
@@ -339,15 +537,26 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
    */
   function flushQueue(): Promise<void> {
     const id = runId;
-    if (offline || id === null) return Promise.resolve();
+    if (offline || eventsCapped || id === null) return Promise.resolve();
+    if (pendingFlush !== null) return pendingFlush;
     const send = inFlight.then(async () => {
-      while (!offline && queue.length > 0) {
+      pendingFlush = null;
+      while (!offline && !eventsCapped && queue.length > 0) {
         const batch = queue.splice(0, REPORTER_BATCH_LIMIT);
-        await attempt(() =>
-          deps.client.appendDispatchRunEvents({ runId: id, events: batch }).then(() => undefined),
-        );
+        const { stop, unsent } = await sendBatch(id, batch);
+        if (!stop) continue;
+        // Put a batch that could not be sent back at the HEAD — it is the oldest — and
+        // keep the bound: past it the oldest go first, exactly as `event` drops them.
+        if (!offline && !eventsCapped) {
+          queue.unshift(...unsent);
+          if (queue.length > REPORTER_QUEUE_LIMIT) {
+            queue.splice(0, queue.length - REPORTER_QUEUE_LIMIT);
+          }
+        }
+        break;
       }
     });
+    pendingFlush = send;
     inFlight = send;
     return send;
   }
@@ -385,7 +594,7 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
         });
         runId = result.runId;
         opened = input;
-      });
+      }, true);
       if (runId !== null) startHeartbeat(runId);
     },
 
@@ -421,7 +630,7 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
     },
 
     event(event) {
-      if (offline || runId === null) return;
+      if (offline || eventsCapped || runId === null) return;
       // The opt-in, enforced HERE rather than at each call site: a site that
       // forgot would leak, and there are dozens of them.
       const scrubbed: DispatchRunEventInput = deps.reportLogBodies

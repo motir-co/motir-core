@@ -17,6 +17,7 @@ import { CLI_VERSION } from './version.js';
  */
 export const CLIENT_VERSION_HEADER = 'x-motir-client-version';
 import {
+  ApiRefusalError,
   AuthError,
   CliError,
   ContainerHasOpenChildrenError,
@@ -24,10 +25,12 @@ import {
   ReviewStaleError,
   PlanNotDecidableError,
   IncompatibleServerError,
+  NetworkError,
   NotFoundError,
   RateLimitError,
   ResponseShapeError,
   PermissionError,
+  ServerFailureError,
   type RateLimitWaitNotice,
 } from './errors.js';
 
@@ -481,9 +484,9 @@ export class V1Transport {
         ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
       });
     } catch (err) {
-      throw new CliError(
+      throw new NetworkError(
         `Could not reach ${this.serverUrl}: ${err instanceof Error ? err.message : String(err)}.`,
-        { hint: 'Check the server URL and run `motir doctor`.' },
+        { hint: 'Check the server URL and run `motir doctor`.', cause: err },
       );
     }
 
@@ -535,8 +538,9 @@ export class V1Transport {
 
     if (response.status >= 500) {
       const requestId = response.headers.get('x-request-id') ?? 'none';
-      return new CliError(
+      return new ServerFailureError(
         `The Motir server failed (${response.status}). Request id: ${requestId}.`,
+        response.status,
         { hint: 'If it persists, quote the request id when reporting it.' },
       );
     }
@@ -594,9 +598,17 @@ export class V1Transport {
         return new ReviewStaleError(envelope.error);
       }
       const allowed = readAllowedTransitions(parsed);
-      return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);
+      return new ApiRefusalError(
+        allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error,
+        response.status,
+        envelope.code,
+      );
     }
-    return new CliError(`${this.serverUrl} answered ${response.status} for ${operationId}.`);
+    return new ApiRefusalError(
+      `${this.serverUrl} answered ${response.status} for ${operationId}.`,
+      response.status,
+      null,
+    );
   }
 
   /**

@@ -8607,7 +8607,13 @@
         "failedClosed": "Ese intento no se completó, así que esta sesión se cerró. Los elementos de trabajo que tenía volvieron a donde estaban.",
         "revisionInFlight": "Motir AI ya está revisando este plan. Tu mensaje se conserva: vuelve a enviarlo cuando llegue la nueva versión.",
         "awaitingResume": "Esta sesión espera a ser reanudada y todavía no puede recibir mensajes. Reanúdala primero: tu mensaje se conserva.",
-        "unavailable": "Motir AI no respondió a tiempo. Tu conversación está guardada y no se te cobrará dos veces. Vuelve a intentarlo."
+        "unavailable": "Motir AI no respondió a tiempo. Tu conversación está guardada y no se te cobrará dos veces. Vuelve a intentarlo.",
+        "proposalRejected": "Motir no pudo aprobar este plan: {hasItem, select, yes {el elemento de trabajo propuesto “{item}”} other {uno de los elementos de trabajo propuestos}} tiene {fieldKind, select, repository {un repositorio que no está en este proyecto} repositoryRole {un rol de repositorio que Motir no reconoce} named {un valor que Motir no puede guardar en su campo “{field}”} other {un valor que Motir no puede guardar}}. No se añadió nada: corrige ese elemento de trabajo en el plan y vuelve a aprobarlo.",
+        "repoPinMoved": "El repositorio de {hasItem, select, yes {el elemento de trabajo propuesto “{item}”} other {uno de los elementos de trabajo propuestos}} cambió mientras se aprobaba este plan. No se añadió nada: revisa el repositorio de ese elemento de trabajo y vuelve a aprobarlo.",
+        "linkRefused": "Motir no pudo aprobar este plan: una de sus dependencias formaría un ciclo o repetiría un vínculo que ya existe. No se añadió nada: hay que corregir las dependencias del plan antes de poder aprobarlo.",
+        "notAuthorised": "No puedes decidir sobre este plan: para aprobarlo o rechazarlo necesitas un permiso que no tienes en este proyecto. No se cambió nada.",
+        "refused": "Motir rechazó esta decisión{hasItem, select, yes { sobre el elemento de trabajo propuesto “{item}”} other {}}, así que no se cambió nada; volver a pulsar no servirá por sí solo.",
+        "refusalReason": "Motivo indicado: {reason}"
       },
       "answeredFrom": "{count, plural, =0 {Respondido sin citar nada} one {Respondido a partir de # elemento de trabajo} other {Respondido a partir de # elementos de trabajo}}",
       "correctToAsk": "Responder esto en su lugar",

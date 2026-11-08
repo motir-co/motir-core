@@ -22,8 +22,9 @@ export interface StatusSlotItem {
   hasChildren?: boolean;
 }
 
-/** What the slot draws. `here` is the canvas's current-position pill. */
-export type StatusSlotKind = 'here' | 'done' | 'to-plan' | 'ready' | 'status';
+/** What the slot draws. (The canvas's You are here is a tab on the card, not a
+ *  slot pill — MOTIR-10630.) */
+export type StatusSlotKind = 'done' | 'to-plan' | 'ready' | 'status';
 
 /**
  * A TO PLAN story (design MOTIR-10508 § "The To plan story"): a story with no
@@ -43,9 +44,9 @@ export function isToPlanStory(item: StatusSlotItem): boolean {
 
 /**
  * Which pill the status slot draws, in the canvas card's precedence
- * (MOTIR-10508): You are here › Done › To plan › Ready › the status chip.
+ * (MOTIR-10508): Done › To plan › Ready › the status chip — on every surface, the
+ * canvas's "here" card included (MOTIR-10630 moved You are here onto a tab).
  *
- * - `here` is the canvas's current-position node; no other surface has one.
  * - Done is the `done` KEY, and a BLOCKED item does not wear the Done stamp: its
  *   blocked flag is the louder signal, and the slot keeps the status chip.
  * - To plan never meets Done (a `todo` story is never done); it is checked after
@@ -55,10 +56,8 @@ export function isToPlanStory(item: StatusSlotItem): boolean {
  */
 export function statusSlotOf(
   item: StatusSlotItem,
-  state: { ready: boolean; blocked: boolean; here?: boolean },
+  state: { ready: boolean; blocked: boolean },
 ): StatusSlotKind {
-  const here = state.here === true;
-  if (here) return 'here';
   if (item.status === 'done' && !state.blocked) return 'done';
   if (isToPlanStory(item)) return 'to-plan';
   if (state.ready) return 'ready';

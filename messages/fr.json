@@ -8607,7 +8607,13 @@
         "failedClosed": "Cette tentative n'a pas abouti, cette session a donc été fermée. Les éléments de travail qu'elle contenait sont revenus à leur état précédent.",
         "revisionInFlight": "Motir AI révise déjà ce plan. Votre message est conservé — renvoyez-le une fois la nouvelle version prête.",
         "awaitingResume": "Cette session attend d’être reprise et ne peut pas encore recevoir de message. Reprenez-la d’abord — votre message est conservé.",
-        "unavailable": "Motir AI n'a pas répondu à temps. Votre conversation est enregistrée, et rien ne vous sera facturé deux fois. Réessayez."
+        "unavailable": "Motir AI n'a pas répondu à temps. Votre conversation est enregistrée, et rien ne vous sera facturé deux fois. Réessayez.",
+        "proposalRejected": "Motir n’a pas pu approuver ce plan : {hasItem, select, yes {l’élément de travail proposé « {item} »} other {l’un des éléments de travail proposés}} a {fieldKind, select, repository {un dépôt qui ne fait pas partie de ce projet} repositoryRole {un rôle de dépôt que Motir ne reconnaît pas} named {une valeur que Motir ne peut pas enregistrer dans son champ « {field} »} other {une valeur que Motir ne peut pas enregistrer}}. Rien n’a été ajouté — corrigez cet élément de travail dans le plan, puis approuvez-le à nouveau.",
+        "repoPinMoved": "Le dépôt de {hasItem, select, yes {l’élément de travail proposé « {item} »} other {l’un des éléments de travail proposés}} a changé pendant l’approbation de ce plan. Rien n’a été ajouté — vérifiez le dépôt de cet élément de travail, puis approuvez à nouveau.",
+        "linkRefused": "Motir n’a pas pu approuver ce plan : l’une de ses dépendances formerait une boucle ou répéterait un lien qui existe déjà. Rien n’a été ajouté — les dépendances du plan doivent être corrigées avant qu’il puisse être approuvé.",
+        "notAuthorised": "Vous ne pouvez pas décider de ce plan — l’approuver ou le refuser requiert une autorisation que vous n’avez pas dans ce projet. Rien n’a été modifié.",
+        "refused": "Motir a refusé cette décision{hasItem, select, yes { concernant l’élément de travail proposé « {item} »} other {}}, donc rien n’a été modifié — appuyer à nouveau ne suffira pas.",
+        "refusalReason": "Motif indiqué : {reason}"
       },
       "answeredFrom": "{count, plural, =0 {Répondu sans rien citer} one {Répondu à partir de # élément de travail} other {Répondu à partir de # éléments de travail}}",
       "correctToAsk": "Répondre plutôt à cette question",

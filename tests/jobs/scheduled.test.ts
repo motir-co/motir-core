@@ -20,6 +20,7 @@ import { generateKeyPairSync } from 'node:crypto';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
 import { fleetReadinessService } from '@/lib/services/fleetReadinessService';
 import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
+import { runnerVersionSupportProbeService } from '@/lib/services/runnerVersionSupportProbeService';
 
 // Scheduled-job primitive (Story 1.6 · Subtask 1.6.4) — the replacement for the
 // 1.6.2 system.ping smoke test. Drives the `system.daily-health-check` cron job
@@ -34,6 +35,18 @@ import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFres
 
 beforeEach(async () => {
   await truncateJobRuns();
+  // The runner-version probe (MOTIR-10706) reads GitHub's live release list.
+  // Every test here but its own block holds it at a fixed `supported`, so no
+  // test of another probe depends on GitHub answering, or on the day it runs.
+  vi.spyOn(runnerVersionSupportProbeService, 'check').mockResolvedValue({
+    verdict: 'supported',
+    checkedAt: '2026-11-08T09:00:00.000Z',
+    pinned: '2.338.2',
+    latest: { version: '2.338.2', publishedAt: '2026-10-26T12:00:00Z' },
+    supersededBy: null,
+    deadline: null,
+    daysLeft: null,
+  });
 });
 
 // ── Registry fixtures for the two pull paths (MOTIR-2030) ────────────────────
@@ -1207,6 +1220,110 @@ describe('the REBUILD-STREAK probe rides the same health check', () => {
       expect(result).toMatchObject({
         ok: true,
         runnerImageFreshness: { verdict: 'indeterminate', phase: 'registry' },
+      });
+    });
+  });
+
+  // ── The runner-version support probe (MOTIR-10706) ──────────────────────────
+  //
+  // The rule, the reads and the sentence are pinned in
+  // `tests/ciFleet/runnerVersionSupport.test.ts`; these assert the job surface:
+  // the verdict on the row, a pin GitHub refuses — or is about to — failing the
+  // run with the bump in its message, and a read that did not answer staying
+  // green but never `supported`.
+
+  describe('runner version support', () => {
+    const latest = { version: '2.338.2', publishedAt: '2026-10-26T12:00:00Z' };
+    const superseded = { version: '2.337.0', publishedAt: '2026-08-25T12:00:00Z' };
+
+    it('PASSES and records supported, with what it read', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, ctx } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        runnerVersionSupport: { verdict: 'supported', pinned: '2.338.2', latest },
+      });
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      expect(stepIds).toContain('runner-version-support');
+    });
+
+    it('FAILS on a pin past GitHub’s window — the 2026-11-08 outage — naming the bump', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerVersionSupportProbeService, 'check').mockResolvedValue({
+        verdict: 'unsupported',
+        checkedAt: '2026-11-08T09:00:00.000Z',
+        pinned: '2.336.0',
+        latest,
+        supersededBy: superseded,
+        deadline: '2026-09-24T12:00:00.000Z',
+        daysLeft: -45,
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result, error, ctx } = await engine.execute();
+
+      expect(result).toBeUndefined();
+      expect(error?.name).toBe('RunnerVersionUnsupportedError');
+      expect(error?.message).toContain(
+        "v2.336.0 (RUNNER_VERSION in infra/ci-runner/Dockerfile on the default branch), is past GitHub's support window since 2026-09-24",
+      );
+      expect(error?.message).toContain('Set RUNNER_VERSION and RUNNER_SHA256 to v2.338.2');
+      // Every other probe still ran first, the freshness probe included.
+      const stepIds = ctx.step.run.mock.calls.map((call) => call[0] as string);
+      expect(stepIds).toEqual(
+        expect.arrayContaining(['runner-image-freshness-v2', 'runner-version-support']),
+      );
+    });
+
+    it('FAILS while the cut-off is inside the margin, before any fleet runner is refused', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerVersionSupportProbeService, 'check').mockResolvedValue({
+        verdict: 'expiring',
+        checkedAt: '2026-11-12T09:00:00.000Z',
+        pinned: '2.337.0',
+        latest,
+        supersededBy: latest,
+        deadline: '2026-11-25T12:00:00.000Z',
+        daysLeft: 13,
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { error } = await engine.execute();
+
+      expect(error?.name).toBe('RunnerVersionUnsupportedError');
+      expect(error?.message).toContain("leaves GitHub's support window in 13 days, on 2026-11-25");
+    });
+
+    it('PASSES and records indeterminate when GitHub could not be read', async () => {
+      await seedHealthyJobSchedules();
+      greenExceptMonitorConfig();
+      vi.spyOn(runnerVersionSupportProbeService, 'check').mockResolvedValue({
+        verdict: 'indeterminate',
+        checkedAt: '2026-11-08T09:00:00.000Z',
+        phase: 'releases',
+        detail: "actions/runner's releases could not be read: GitHub refused the read (HTTP 403).",
+      });
+
+      const engine = new JobTestEngine({ function: dailyHealthCheck });
+      const { result } = await engine.execute();
+
+      expect(result).toMatchObject({
+        ok: true,
+        runnerVersionSupport: { verdict: 'indeterminate', phase: 'releases' },
+        indeterminateStreak: {
+          streaks: expect.arrayContaining([
+            expect.objectContaining({
+              probe: 'runnerVersionSupport',
+              step: 'runner-version-support',
+            }),
+          ]),
+        },
       });
     });
   });

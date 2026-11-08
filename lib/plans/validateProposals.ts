@@ -31,7 +31,13 @@ import {
   isIssueType,
   type IssueType,
 } from '@/lib/issues/parentRules';
-import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import {
+  isWorkItemExecutor,
+  isWorkItemType,
+  WORK_ITEM_EXECUTORS,
+  WORK_ITEM_TYPES,
+} from '@/lib/issues/executorDefaults';
+import { isWorkItemPriority, WORK_ITEM_PRIORITIES } from '@/lib/issues/priority';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
 import { isContainerKind, isModifyKindTarget } from '@/lib/plans/validateProposedKind';
@@ -91,6 +97,12 @@ export interface ProposalNode {
   proposedFields: {
     kind?: string | null;
     type?: string | null;
+    /** The proposed PRIORITY (MOTIR-10656) — membership-checked here
+     *  (`unknown_priority`), beside `kind` and `type`. */
+    priority?: string | null;
+    /** The proposed card-level EXECUTOR (MOTIR-10678) — membership-checked here
+     *  (`unknown_executor`), beside `priority`. */
+    executor?: string | null;
     title?: string | null;
     /** The SUBJECT coordinate (MOTIR-5065) — shape- and kind-checked here; its
      *  MEMBERSHIP is deliberately not this repository's to know. */
@@ -120,6 +132,9 @@ export interface ProposalNode {
     kind?: string | null;
     /** A re-type (read here only by the re-kind's leaf-field check). */
     type?: string | null;
+    /** A re-prioritisation (MOTIR-10656) — membership-checked here
+     *  (`unknown_priority`), as an `add`'s is. */
+    priority?: string | null;
     blockedByAdd?: string[] | null;
     blockedByRemove?: string[] | null;
     /** The obsolescence MARK and its note (MOTIR-6629) — membership is the
@@ -369,6 +384,63 @@ function assertProposedTypeKnown(item: ProposalNode): void {
     'unknown_type',
     item.id,
     `Proposal ${item.id} proposes type "${String(type)}", which is not a valid work type. Legal members: ${WORK_ITEM_TYPES.join(', ')}.`,
+  );
+}
+
+/**
+ * The proposed `priority` — an `add`'s `proposedFields.priority` or a `modify`'s
+ * `patch.priority` — checked against the five `WorkItemPriority` members, or a
+ * typed rejection (MOTIR-10656).
+ *
+ * The third closed-set column after `kind` and `type`, and owed by the same
+ * argument: the internal AI routes forward the planner's value as sent and the
+ * approved set can be edited between generation and approve, so the stored
+ * proposal is not trusted. Without this arm a model-written `"p2"` passed
+ * `validate_plan` as `valid: true` and was refused only by
+ * `prisma.workItem.create()` inside approve (`PLAN_ITEM_FIELD_REJECTED`).
+ *
+ * A null / absent priority is legal — an `add` left unset takes the column
+ * default, and a `modify` without one leaves the target's alone — so only a
+ * PRESENT non-member is a violation. The message lists the legal members, as
+ * the `type` arm's does.
+ */
+function assertProposedPriorityKnown(item: ProposalNode): void {
+  const priority = item.op === 'add' ? item.proposedFields?.priority : item.patch?.priority;
+  if (priority == null) return;
+  if (isWorkItemPriority(priority)) return;
+  throw new PlanGrammarError(
+    'unknown_priority',
+    item.id,
+    `Proposal ${item.id} proposes priority "${String(priority)}", which is not a valid priority. Legal members: ${WORK_ITEM_PRIORITIES.join(', ')}.`,
+  );
+}
+
+/**
+ * The proposed card-level `executor` of an `add` — checked against the two
+ * `Executor` members, or a typed rejection (MOTIR-10678).
+ *
+ * The same argument as the `priority` arm above: the internal AI routes forward
+ * the planner's value as sent and the approved set can be edited between
+ * generation and approve, so the stored proposal is not trusted. Without this
+ * arm a model-written `"agent"` passed `validate_plan` as `valid: true` and was
+ * refused only by `prisma.workItem.create()` inside approve
+ * (`PLAN_ITEM_FIELD_REJECTED`).
+ *
+ * Called for `add`s only (step 3's loop): a `modify` patch never carries an
+ * `executor` (it is the target's, and `validatePatchKeys` refuses the key at
+ * every write door), and `applyModify` never reads one. A null / absent executor
+ * is legal — `materialize` writes it as unassigned — so only a PRESENT non-member
+ * is a violation. Whether a CONTAINER may carry one at all is a separate rule
+ * (`leafFieldsOnContainer`).
+ */
+function assertProposedExecutorKnown(item: ProposalNode): void {
+  const executor = item.proposedFields?.executor;
+  if (executor == null) return;
+  if (isWorkItemExecutor(executor)) return;
+  throw new PlanGrammarError(
+    'unknown_executor',
+    item.id,
+    `Proposal ${item.id} proposes executor "${String(executor)}", which is not a valid executor. Legal members: ${WORK_ITEM_EXECUTORS.join(', ')}.`,
   );
 }
 
@@ -1927,6 +1999,13 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
   //     no level rule before it: `supersedes` orders nothing.
   assertSupersedesGraphAcyclic(items, liveById, existingSupersedesEdges);
 
+  // 2d. A `modify`'s re-prioritisation is a member of the schema enum
+  //     (MOTIR-10656) — a property of the patch alone, needing no graph; the
+  //     `add` half runs beside the `type` check in step 3.
+  for (const item of items) {
+    if (item.op === 'modify') assertProposedPriorityKnown(item);
+  }
+
   // 3. The kind-parent grammar — asked of `lib/issues/parentRules.ts`, the same
   //    matrix every human create/move is gated on. Independent of whatever the
   //    planner self-checked, and of any human edit through `updateProposal`.
@@ -1936,6 +2015,12 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     //     2: a malformed plan should fail with the most specific reason, and a
     //     bad `type` is a property of the proposal alone — it needs no graph.
     assertProposedTypeKnown(item);
+    // 3a-ter. The proposed `priority` is a member of the schema enum
+    //     (MOTIR-10656) — same tier and same argument as the `type` check above.
+    assertProposedPriorityKnown(item);
+    // 3a-quater. The proposed card-level `executor` is a member of the schema
+    //     enum (MOTIR-10678) — same tier and same argument as `priority`.
+    assertProposedExecutorKnown(item);
     // 3a-bis. The proposed `subject` is well-formed (MOTIR-5065; the container
     //     half retired by MOTIR-5607 — a subject is legal on every kind). Same
     //     tier and same argument as the `type` check above — a property of the

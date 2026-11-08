@@ -18,7 +18,8 @@ import {
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { ISSUE_TYPES, type IssueType } from '@/lib/issues/parentRules';
-import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { WORK_ITEM_EXECUTORS, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import { WORK_ITEM_PRIORITIES } from '@/lib/issues/priority';
 
 // Subtask 7.12.5 / MOTIR-911 — the confirmation gate's VERDICT, as pure logic
 // (no DB). The gate's job: an approved proposal set becomes rows ONLY after an
@@ -318,6 +319,117 @@ describe('validatePlanProposals — the proposed `type` is a closed set (MOTIR-3
     // list ending in an ellipsis.
     expect(WORK_ITEM_TYPES).toHaveLength(15);
     expect((WORK_ITEM_TYPES as readonly string[]).includes('migration')).toBe(false);
+  });
+});
+
+// MOTIR-10656 — the `priority` arm, the third closed-set column after `kind`
+// and `type`. The hosted planner wrote `priority: "p2"`; the internal AI route
+// forwarded it, this gate had no arm for it, `validate_plan` answered
+// `valid: true`, and only `prisma.workItem.create()` inside approve refused it.
+describe('validatePlanProposals — the proposed `priority` is a closed set (MOTIR-10656)', () => {
+  function rejectionOf(run: () => void): PlanGrammarError {
+    try {
+      run();
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      return err as PlanGrammarError;
+    }
+    return expect.unreachable('an out-of-enum priority must be rejected');
+  }
+
+  it('rejects an add proposing "p2", naming the proposal and listing the legal members', () => {
+    const err = rejectionOf(() =>
+      validate([add('p1', { proposedFields: { kind: 'task', priority: 'p2' } })]),
+    );
+    expect(err.reason).toBe('unknown_priority');
+    expect(err.planItemId).toBe('p1');
+    expect(err.message).toContain('"p2"');
+    expect(err.message).toContain('lowest, low, medium, high, highest');
+  });
+
+  it('rejects a modify patching in "p2"', () => {
+    const err = rejectionOf(() => validate([modify('m1', { patch: { priority: 'p2' } })]));
+    expect(err.reason).toBe('unknown_priority');
+    expect(err.planItemId).toBe('m1');
+  });
+
+  it('accepts every member of the shipped enum, on an add and on a modify', () => {
+    for (const priority of WORK_ITEM_PRIORITIES) {
+      expect(() =>
+        validate([add(`p-${priority}`, { proposedFields: { kind: 'task', priority } })]),
+      ).not.toThrow();
+      expect(() => validate([modify(`m-${priority}`, { patch: { priority } })])).not.toThrow();
+    }
+  });
+
+  it('accepts an absent or null priority — an unset add takes the column default', () => {
+    expect(() => validate([add('p1', { proposedFields: { kind: 'task' } })])).not.toThrow();
+    expect(() =>
+      validate([add('p2', { proposedFields: { kind: 'task', priority: null } })]),
+    ).not.toThrow();
+    expect(() => validate([modify('m1', { patch: { priority: null } })])).not.toThrow();
+  });
+
+  it('reports the PRIORITY before the parent grammar — a property of the proposal alone', () => {
+    const err = rejectionOf(() =>
+      validate([add('p1', { proposedFields: { kind: 'subtask', priority: 'urgent' } })]),
+    );
+    expect(err.reason).toBe('unknown_priority');
+  });
+});
+
+// MOTIR-10678 — the card-level `executor` arm, the same hole as `priority` one
+// column over. The internal AI routes forwarded a model-written `"agent"`, this
+// gate had no arm for it, `validate_plan` answered `valid: true`, and only
+// `prisma.workItem.create()` inside approve refused it.
+describe('validatePlanProposals — the proposed card `executor` is a closed set (MOTIR-10678)', () => {
+  function rejectionOf(run: () => void): PlanGrammarError {
+    try {
+      run();
+    } catch (err) {
+      expect(err).toBeInstanceOf(PlanGrammarError);
+      return err as PlanGrammarError;
+    }
+    return expect.unreachable('an out-of-enum executor must be rejected');
+  }
+
+  it('rejects an add proposing "agent", naming the proposal and listing the legal members', () => {
+    const err = rejectionOf(() =>
+      validate([add('p1', { proposedFields: { kind: 'task', executor: 'agent' } })]),
+    );
+    expect(err.reason).toBe('unknown_executor');
+    expect(err.planItemId).toBe('p1');
+    expect(err.message).toContain('"agent"');
+    expect(err.message).toContain('coding_agent, human');
+  });
+
+  it('accepts every member of the shipped enum on an add', () => {
+    for (const executor of WORK_ITEM_EXECUTORS) {
+      expect(() =>
+        validate([add(`p-${executor}`, { proposedFields: { kind: 'task', executor } })]),
+      ).not.toThrow();
+    }
+  });
+
+  it('accepts an absent or null executor — an unset add materializes unassigned', () => {
+    expect(() => validate([add('p1', { proposedFields: { kind: 'task' } })])).not.toThrow();
+    expect(() =>
+      validate([add('p2', { proposedFields: { kind: 'task', executor: null } })]),
+    ).not.toThrow();
+  });
+
+  it('does not judge a modify — its patch never carries the target’s executor', () => {
+    // A stray key on a stored patch is never read by `applyModify`, so it is not
+    // this arm's to refuse (`validatePatchKeys` refuses it at the write doors).
+    const stray = { priority: 'low', executor: 'agent' } as unknown as { priority: string };
+    expect(() => validate([modify('m1', { patch: stray })])).not.toThrow();
+  });
+
+  it('reports the EXECUTOR before the parent grammar — a property of the proposal alone', () => {
+    const err = rejectionOf(() =>
+      validate([add('p1', { proposedFields: { kind: 'subtask', executor: 'robot' } })]),
+    );
+    expect(err.reason).toBe('unknown_executor');
   });
 });
 

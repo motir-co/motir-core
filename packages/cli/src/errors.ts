@@ -258,3 +258,51 @@ export class AgentProfileCannotRunError extends CliError {
     this.profile = profile;
   }
 }
+
+// ── THE THREE FAILURES A CALLER MAY WANT TO TELL APART (MOTIR-10705) ────────
+//
+// They print and exit exactly as the plain `CliError` they replace — same message,
+// same hint — so no command's output changes. What they add is the CLASS, for the one
+// caller that has to answer "is this worth retrying?" without reading a sentence: the
+// run reporter. A hosted run is ended as a stall after fifteen minutes with no event,
+// so a reporter that answers a transient 5xx, a refused batch and a revoked credential
+// the same way — by going silent for the rest of the run — kills runs that are working.
+
+/**
+ * The request never got an answer: DNS, a refused connection, a reset, a timeout.
+ * TRANSIENT by nature — the same request may succeed a moment later.
+ */
+export class NetworkError extends CliError {
+  constructor(message: string, opts: { hint?: string; cause?: unknown } = {}) {
+    super(message, opts);
+    this.name = 'NetworkError';
+  }
+}
+
+/** A 5xx — the server failed. TRANSIENT: the request itself was not at fault. */
+export class ServerFailureError extends CliError {
+  readonly status: number;
+  constructor(message: string, status: number, opts: { hint?: string } = {}) {
+    super(message, opts);
+    this.name = 'ServerFailureError';
+    this.status = status;
+  }
+}
+
+/**
+ * Any other 4xx the server answered for THIS request — 402, 409, 412, 413, 422 and the
+ * rest the map has no dedicated type for. It carries the status and the envelope's
+ * machine `code` (`null` when the body had no envelope) as DATA, so a caller branches on
+ * fields, never on the sentence (`public-api-conventions.md` §8). The message is the
+ * server's own, verbatim, as before.
+ */
+export class ApiRefusalError extends CliError {
+  readonly status: number;
+  readonly code: string | null;
+  constructor(message: string, status: number, code: string | null) {
+    super(message);
+    this.name = 'ApiRefusalError';
+    this.status = status;
+    this.code = code;
+  }
+}

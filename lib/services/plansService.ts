@@ -133,6 +133,8 @@ import {
 import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
+import { validateProposedPriority } from '@/lib/plans/validateProposedPriority';
+import { validateProposedExecutor } from '@/lib/plans/validateProposedExecutor';
 import { applySectionsInput, hasSectionsInput } from '@/lib/plans/applySectionsInput';
 import {
   languageFor,
@@ -879,6 +881,19 @@ function validateProposal(p: ProposalInput): void {
       p.proposedFields.kind ?? DEFAULT_PROPOSED_KIND,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
+    // The PRIORITY (MOTIR-10656) — membership of the schema enum, through the ONE
+    // validator every proposal door shares. The internal AI append forwards the
+    // planner's value as sent, so this is the only check it meets before storage.
+    validateProposedPriority(
+      p.proposedFields.priority,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
+    // The card-level EXECUTOR (MOTIR-10678) — membership of the schema enum, the
+    // same way and for the same reason as the priority above.
+    validateProposedExecutor(
+      p.proposedFields.executor,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
     // The language each text field was written in (MOTIR-8743) — beside the
     // fields on the wire, or (an older producer's spelling) inside them.
     validateProposedLanguages(
@@ -940,6 +955,12 @@ function validateProposal(p: ProposalInput): void {
     validateProposedDifficulty(
       p.patch.difficulty,
       null,
+      proposalLabel({ op: p.op, workItemId: p.workItemId }),
+    );
+    // A `modify` may RE-PRIORITISE the target (MOTIR-10656) — the same membership
+    // check the `add` path applies, so `applyModify` never writes a non-member.
+    validateProposedPriority(
+      p.patch.priority,
       proposalLabel({ op: p.op, workItemId: p.workItemId }),
     );
     // The language of each text field the patch sets (MOTIR-8743).
@@ -5081,6 +5102,20 @@ async function applyAddProposalEdit(
     next.kind ?? DEFAULT_PROPOSED_KIND,
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
   );
+  // And the PRIORITY on the MERGED result (MOTIR-10656) — the deepen seam is
+  // where the hosted planner writes it, and its route forwards any string.
+  validateProposedPriority(
+    next.priority,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+    item.id,
+  );
+  // And the card-level EXECUTOR on the MERGED result (MOTIR-10678) — the deepen
+  // set gained it in AMENDMENT 4 D3a, and its route forwards any string too.
+  validateProposedExecutor(
+    next.executor,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+    item.id,
+  );
   // The bodies' malformed item links are WARNED on the edit's response, not
   // refused (bugs MOTIR-6494 · MOTIR-10104) — `editAddProposal`.
   // The links THIS edit writes must name a proposal on the plan (bug
@@ -7471,6 +7506,19 @@ export const plansService = {
             next.kind ?? DEFAULT_PROPOSED_KIND,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
           );
+          // The PRIORITY, on the MERGED result — the deepen's rule (MOTIR-10656).
+          validateProposedPriority(
+            next.priority,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+            item.id,
+          );
+          // The card-level EXECUTOR, on the MERGED result — the deepen's rule
+          // (MOTIR-10678).
+          validateProposedExecutor(
+            next.executor,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+            item.id,
+          );
           // A malformed item link is WARNED on the response (MOTIR-10104), and
           // the links the correction writes must name a proposal on the plan
           // (bug MOTIR-9175), judged on the bodies it writes (bug MOTIR-9836).
@@ -7598,6 +7646,13 @@ export const plansService = {
               input.patch ?? {},
               new Set(all.filter((i) => i.op === 'add').map((i) => i.id)),
               proposalLabel({ op: item.op, workItemId: item.workItemId }),
+            );
+            // The replacement patch's PRIORITY (MOTIR-10656) — membership, as the
+            // append's `modify` arm checks it.
+            validateProposedPriority(
+              input.patch?.priority,
+              proposalLabel({ op: item.op, workItemId: item.workItemId }),
+              item.id,
             );
             // The replacement patch's DIFFICULTY (MOTIR-6133), judged against the
             // TARGET's PROJECTED kind — the patch's re-kind when it carries one

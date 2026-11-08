@@ -168,8 +168,17 @@ LABEL org.opencontainers.image.title="motir-ci-runner" \
 
 # The GitHub Actions runner. Pinned version + the SHA256 GitHub publishes in the
 # release body, so a tampered or truncated download fails the BUILD.
-ARG RUNNER_VERSION=2.336.0
-ARG RUNNER_SHA256=04cf0be1aff4c3ec3554466c39124ca250e3effd8873bb7e8d68535aa9505d5d
+#
+# ⚠️ THIS PIN EXPIRES ON GITHUB'S SCHEDULE, NOT OURS. The runner runs with
+# self-update off, and GitHub serves no job to a runner that is still behind 30
+# days after a newer release came out: it connects, says "Runner version v<x> is
+# deprecated and cannot receive messages", and exits, and the VM powers off with
+# the job still queued (MOTIR-10706, v2.336.0). The daily health check's
+# `runner-version-support` step reads this line on the default branch and fails
+# 14 days before that cut-off (`lib/ciFleet/runnerVersionSupport.ts`); a bump
+# then ships as a `runner-v*` release and a `ci-runner-ami-v*` AMI, both pinned.
+ARG RUNNER_VERSION=2.338.2
+ARG RUNNER_SHA256=baebf204307bac6193480852732f0aba2ae97b6c5597c244f4d5558390147c40
 
 # Node 22 — the version every job's `setup-node@v4` asks for. Pinned to the
 # current v22 LTS line with nodejs.org's own SHASUMS256 entry.
