@@ -2913,6 +2913,7 @@
   --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.03);
   --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06);
   --shadow-elevated: 0 4px 8px -2px rgba(15, 15, 15, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 12px 32px -8px rgba(15, 15, 15, 0.16);
   --shadow-hero-mockup: 0 12px 24px -6px rgba(15, 15, 15, 0.16);
   --spacing-btn-x: 12px;
@@ -2965,6 +2966,7 @@
   --shadow-subtle: none;
   --shadow-card: none;
   --shadow-elevated: none;
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: none;
   --shadow-hero-mockup: none;
   --height-control: 44px;
@@ -3055,6 +3057,7 @@
   --shadow-subtle: 0 1px 2px rgba(20, 20, 30, 0.04);
   --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.05), 0 2px 6px -2px rgba(20, 20, 30, 0.07);
   --shadow-elevated: 0 2px 4px rgba(20, 20, 30, 0.06), 0 10px 24px -12px rgba(20, 20, 30, 0.12);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 4px 10px rgba(20, 20, 30, 0.08), 0 20px 48px -16px rgba(20, 20, 30, 0.2);
   --shadow-hero-mockup: 0 6px 14px rgba(20, 20, 30, 0.1), 0 26px 60px -18px rgba(20, 20, 30, 0.24);
   --tonal-step-2: 4%;
@@ -3165,6 +3168,7 @@
   --shadow-subtle: 0 1px 4px rgba(20, 20, 30, 0.06);
   --shadow-card: 0 2px 18px rgba(20, 20, 30, 0.1);
   --shadow-elevated: 0 6px 24px -4px rgba(20, 20, 30, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 12px 40px -8px rgba(20, 20, 30, 0.1);
   --shadow-hero-mockup: 0 18px 48px -12px rgba(20, 20, 30, 0.1);
   --spacing-btn-x: 20px;
@@ -3322,6 +3326,7 @@
   --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.03);
   --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.05);
   --shadow-elevated: 0 2px 6px rgba(15, 15, 15, 0.07);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 12px 32px -8px rgba(15, 15, 15, 0.16);
   --shadow-hero-mockup: 0 18px 40px -12px rgba(15, 15, 15, 0.18);
   --height-control: 38px;
@@ -3360,6 +3365,7 @@
   --shadow-subtle: none;
   --shadow-card: none;
   --shadow-elevated: none;
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: none;
   --shadow-hero-mockup: none;
   --spacing-btn-x: 16px;
@@ -3420,6 +3426,7 @@
   --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.04);
   --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06);
   --shadow-elevated: 0 3px 8px -2px rgba(15, 15, 15, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
   --shadow-modal: 0 20px 44px -20px rgba(15, 15, 15, 0.24);
   --spacing-btn-x: 20px;
   --spacing-btn-y: 10px;
