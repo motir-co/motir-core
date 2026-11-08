@@ -115,6 +115,15 @@ async function pickFile(): Promise<void> {
   }
 }
 
+/**
+ * The confirm popover the row's trash button opens (Radix renders it as
+ * `role="dialog"`), picked by the file name its question carries. A bare
+ * page-wide `Delete` also matches every comment's own Delete button on the
+ * fixture item, a strict-mode violation that left the upload behind
+ * (MOTIR-10590).
+ */
+const confirmDialog = () => page.getByRole('dialog').filter({ hasText: UPLOAD_NAME });
+
 /** Delete the run-stamped file through the panel's own control, awaiting the DELETE. */
 async function deleteUploadThroughPanel(): Promise<void> {
   await openItem();
@@ -124,7 +133,7 @@ async function deleteUploadThroughPanel(): Promise<void> {
     (res) =>
       res.request().method() === 'DELETE' && res.url().endsWith(`/api/attachments/${uploadedId}`),
   );
-  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await confirmDialog().getByRole('button', { name: 'Delete', exact: true }).click();
   expect((await deleted).ok(), `DELETE ${UPLOAD_NAME}`).toBe(true);
   uploadedId = null;
   if (workItemId) {
