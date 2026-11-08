@@ -61,7 +61,11 @@ import {
   PlanSessionPlanStaleClientError,
   type StalePlanFinishedCard,
 } from '@/lib/planning/planSessionClientErrors';
-import { FRAME_DISPOSITIONS, isKnownFrameKind } from '@/lib/planning/planChangeFrames';
+import {
+  conversationAckText,
+  FRAME_DISPOSITIONS,
+  isKnownFrameKind,
+} from '@/lib/planning/planChangeFrames';
 import { unavailableCodeOf, whileStartingUp } from '@/lib/planning/submitStartingUp';
 import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import {
@@ -286,6 +290,15 @@ export interface PlanChangeConversationState {
    * (a run that starts a NEW card). Optional so a state built by hand carries none.
    */
   settledTargetKey?: string | null;
+  /**
+   * The quick reply PART 1 wrote to what the person sent (MOTIR-10738), from the
+   * job's `conversation_ack` frame. Keyed by JOB like `settledJobId`, so a new run
+   * shows its own reply or none — never the last run's — without every start
+   * reducer resetting it. Read through `conversationAckFor`
+   * (`lib/planning/planRunPhase.ts`). Optional so a state built by hand is one with
+   * no reply.
+   */
+  conversationAck?: { jobId: string; text: string } | null;
   /** The last approve's result, so the rail can say what landed. */
   approved: PlanApproveSummary | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
@@ -565,6 +578,7 @@ const INITIAL: PlanChangeConversationState = {
   planId: null,
   settledJobId: null,
   settledTargetKey: null,
+  conversationAck: null,
   approved: null,
   errorCode: null,
   outOfCredits: false,
@@ -1328,9 +1342,17 @@ export function usePlanChangeConversation({
       () => {},
       () => {},
       (event, data) => {
-        if (event !== 'target_settled' || controller.signal.aborted) return;
+        if (controller.signal.aborted || !mountedRef.current) return;
+        // The quick reply PART 1 wrote (MOTIR-10738) arrives before the settle.
+        if (event === 'conversation_ack') {
+          const text = conversationAckText(data);
+          if (text !== null) {
+            setState((s) => ({ ...s, conversationAck: { jobId: unsettledReopenedJob, text } }));
+          }
+          return;
+        }
+        if (event !== 'target_settled') return;
         controller.abort();
-        if (!mountedRef.current) return;
         // The replay stops at the FIRST `target_settled`, which is the run's first
         // target — the one the surface follows (MOTIR-10739).
         const settledKey = settledFirstTargetKey(data);
@@ -1951,6 +1973,11 @@ export function usePlanChangeConversation({
                       ...(settledKey !== null ? { settledTargetKey: settledKey } : {}),
                     },
               );
+            }
+            // PART 1's quick reply to what the person sent (MOTIR-10738), kept by job.
+            if (event === 'conversation_ack') {
+              const text = conversationAckText(data);
+              if (text !== null) setState((s) => ({ ...s, conversationAck: { jobId, text } }));
             }
             // APPEND, REPLACE the live line, or MARK an earlier call — one update,
             // decided by `applyPlanFrame` (MOTIR-7976). A quiet frame changes

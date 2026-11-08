@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import { planReview } from '../helpers/planReview';
-import { planRunPhase } from '@/lib/planning/planRunPhase';
+import { conversationAckFor, planRunPhase } from '@/lib/planning/planRunPhase';
 
 // THE CONVERSATION PHASE ENDS AT `target_settled` (MOTIR-8203). A plan job carries
 // its plan id from the submit, but PART 1 — settling the target, the entry and the
@@ -200,6 +200,39 @@ describe('a LIVE plan run', () => {
     expect(planRunPhase(hook.result.current.state)).toBeNull();
   });
 
+  it('keeps the job’s `conversation_ack` while it converses, and drops it at `target_settled` (MOTIR-10738)', async () => {
+    const run = heldStream();
+    stream.mockImplementation(run.impl);
+    const hook = renderHook(() => usePlanChangeConversation());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+
+    let sent!: Promise<void>;
+    act(() => {
+      sent = hook.result.current.send('add payments');
+    });
+    await waitFor(() => expect(run.impl).toHaveBeenCalled());
+    expect(conversationAckFor(hook.result.current.state)).toBeNull();
+
+    // A frame with no usable text is ignored.
+    run.emit('conversation_ack', { seq: 1, text: '   ' });
+    expect(hook.result.current.state.conversationAck).toBeNull();
+
+    run.emit('conversation_ack', { seq: 2, text: '  You want payments. I’ll look first.  ' });
+    expect(hook.result.current.state.conversationAck).toEqual({
+      jobId: 'job-1',
+      text: 'You want payments. I’ll look first.',
+    });
+    expect(conversationAckFor(hook.result.current.state)).toBe(
+      'You want payments. I’ll look first.',
+    );
+
+    run.emit('target_settled', { seq: 3 });
+    expect(conversationAckFor(hook.result.current.state)).toBeNull();
+
+    await run.end();
+    await act(async () => sent);
+  });
+
   it('keeps the FIRST settled target when a run settles several, and none for a new card (MOTIR-10739)', async () => {
     const run = heldStream();
     stream.mockImplementation(run.impl);
@@ -309,6 +342,27 @@ describe('a REOPENED overlay mid-run', () => {
     const signal = replay.impl.mock.calls[0]![1] as AbortSignal;
     expect(signal.aborted).toBe(true);
     expect(replay.impl).toHaveBeenCalledTimes(1);
+  });
+
+  it('a read-only viewer reads the run’s `conversation_ack` from the same replay (MOTIR-10738)', async () => {
+    getSession.mockResolvedValue(
+      session({ pendingPlanId: 'plan-1', lastJobId: 'job-1', viewerCanPlan: false }),
+    );
+    const replay = heldStream();
+    stream.mockImplementation(replay.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(replay.impl).toHaveBeenCalled());
+    replay.emit('conversation_ack', { seq: 1, text: 42 });
+    expect(hook.result.current.state.conversationAck).toBeNull();
+    replay.emit('conversation_ack', { seq: 2, text: 'You want payments.' });
+    expect(conversationAckFor(hook.result.current.state)).toBe('You want payments.');
+    // The ack does not close the replay: it is still waiting for the settle.
+    const signal = replay.impl.mock.calls[0]![1] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    replay.emit('target_settled', { seq: 3 });
+    expect(signal.aborted).toBe(true);
+    expect(conversationAckFor(hook.result.current.state)).toBeNull();
   });
 
   it('a viewer who may plan ADOPTS the run, and the adopted stream settles its phase', async () => {

@@ -17,6 +17,7 @@ import {
   ApprovalGateAlreadyAwaitingError,
   ApprovalGateDecidedImmutableError,
 } from '@/lib/approvalGates/errors';
+import { REVIEW_CARRYING_GATE_KINDS } from '@/lib/dto/reviewState';
 
 // Single-op data access for the `approval_gate` table (Story MOTIR-4778 ·
 // Subtask MOTIR-4788; ADR docs/decisions/approval-gates.md). Writes require `tx`
@@ -1328,9 +1329,22 @@ export const approvalGateRepository = {
   },
 
   /**
-   * THE CARDS OF THE APPROVE-AND-MERGE ROWS ON THIS READER'S TO APPROVE (Bug MOTIR-10504) —
-   * the work item of every awaiting `pull_request_approval` gate routed to them, the set
-   * whose review line and Reviewed badge the tab draws (`withRowReviews`).
+   * THE CARDS OF THE ROWS ON THIS READER'S TO APPROVE THAT DRAW A REVIEW (Bug MOTIR-10504 ·
+   * Bug MOTIR-10734) — the work item of every awaiting gate routed to them whose kind
+   * carries the review path ({@link REVIEW_CARRYING_GATE_KINDS}, the list `withRowReviews`
+   * reads through `carriesReviewPath`): the approve-and-merge rows, and a story run's
+   * acceptance rows, whose review line and Reviewed badge the tab draws.
+   *
+   * ⚠️ THE KIND LIST IS IMPORTED, NEVER COPIED. A second copy is how MOTIR-10533's widening
+   * of the rows to acceptance missed this read, and the row went on reading *Not reviewed by
+   * an agent* until a reload. While a story run's review is owed, its gate set asks the
+   * acceptance and the agent review and NO merge gate (`resolveGateSet`), so the acceptance
+   * gate is the only routed row the card has.
+   *
+   * ⚠️ AN ACCEPTANCE ROW COUNTS ONLY ON A STORY RUN — a card that delivers pull requests of
+   * its own, the gate set's `storyRun`. A SUBTASK run's story delivers nothing, so its row
+   * has no delivery-set version and draws no review line; watching its subtree would move the
+   * tab on review writes the row never shows.
    *
    * ⚠️ THE ROUTING PREDICATE IS CALLED, NOT RESTATED — `awaitingRoutedToWhere`, narrowed
    * to the merge kind exactly as {@link findAwaitingRoutedPlanIds} narrows it to plans. The
@@ -1340,7 +1354,7 @@ export const approvalGateRepository = {
    * Required `tx`, for {@link watermarkAwaitingRoutedTo}'s reason: unbound, this answers
    * `[]` and the review reading would read as *nothing reviewed*.
    */
-  async findAwaitingRoutedMergeWorkItemIds(
+  async findAwaitingRoutedReviewCarryingWorkItemIds(
     scope: AwaitingRoutingScope,
     tx: Prisma.TransactionClient,
   ): Promise<string[]> {
@@ -1348,7 +1362,17 @@ export const approvalGateRepository = {
       where: {
         AND: [
           awaitingRoutedToWhere(scope),
-          { kind: 'pull_request_approval', workItemId: { not: null } },
+          { workItemId: { not: null } },
+          {
+            OR: [
+              {
+                kind: {
+                  in: REVIEW_CARRYING_GATE_KINDS.filter((kind) => kind !== 'acceptance_result'),
+                },
+              },
+              { kind: 'acceptance_result', workItem: { deliveries: { some: {} } } },
+            ],
+          },
         ],
       },
       select: { workItemId: true },

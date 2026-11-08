@@ -110,6 +110,7 @@ export const PLAN_CHANGE_FRAME_KINDS = [
   'contextual_scope',
   'convention',
   'conversation',
+  'conversation_ack',
   'discovery_doc',
   'empty_run_reply',
   'docs',
@@ -303,6 +304,13 @@ export const FRAME_DISPOSITIONS: Record<PlanChangeFrameKind, FrameDisposition> =
   contextual_scope: { quiet: NOT_AN_ACT },
   target_read: { quiet: NOT_AN_ACT },
   target_settled: { quiet: NOT_AN_ACT },
+  /** PART 1's quick reply to what the person sent (MOTIR-10738): one or two
+   *  sentences the model writes in the person's language. The hook keeps it by
+   *  job and the conversation bubble draws it in place of the keyed fallback, so
+   *  it is not an act line. Accepted here BEFORE motir-ai emits it. */
+  conversation_ack: {
+    quiet: 'drawn as the conversation-phase bubble, in place of its keyed line — not an act',
+  },
   /** The run planned nothing and its reply says why (MOTIR-10407): read by the settle. */
   empty_run_reply: { quiet: NOT_AN_ACT },
 
@@ -407,4 +415,23 @@ export const FRAME_KIND_SWEEP = {
 /** Is this a kind somebody has decided about? */
 export function isKnownFrameKind(event: string): event is PlanChangeFrameKind {
   return Object.prototype.hasOwnProperty.call(FRAME_DISPOSITIONS, event);
+}
+
+/** The longest quick reply the conversation bubble draws (MOTIR-10738). */
+export const CONVERSATION_ACK_MAX_CHARS = 400;
+
+/**
+ * The text of a `conversation_ack` frame (MOTIR-10738) — `{ text: string }` on the
+ * wire — trimmed and held to {@link CONVERSATION_ACK_MAX_CHARS}, or `null` when the
+ * frame carries no usable text. Model output: the caller renders it as plain text.
+ */
+export function conversationAckText(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const text = (data as Record<string, unknown>).text;
+  if (typeof text !== 'string') return null;
+  const trimmed = text.trim();
+  if (trimmed === '') return null;
+  return trimmed.length > CONVERSATION_ACK_MAX_CHARS
+    ? trimmed.slice(0, CONVERSATION_ACK_MAX_CHARS).trimEnd()
+    : trimmed;
 }
