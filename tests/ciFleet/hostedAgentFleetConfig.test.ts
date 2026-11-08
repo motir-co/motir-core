@@ -18,6 +18,7 @@ const FLEET_VARS = [
   'FLY_FLEET_API_TOKEN',
   'FLY_FLEET_APP',
   'FLY_FLEET_REGION',
+  'MOTIR_FLEET_AGENT_RUNNER_PROVIDER',
   HOSTED_AGENT_IMAGE_ENV_VAR,
 ];
 
@@ -80,6 +81,43 @@ describe('hostedAgentFleetConfig', () => {
     vi.stubEnv('FLY_FLEET_REGION', 'ams');
     vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, `  ${DIGEST_IMAGE}  `);
     expect(hostedAgentFleetConfig()).toEqual({ image: DIGEST_IMAGE, region: 'ams' });
+  });
+
+  // MOTIR-10626: on the agent-runner pool no Fly fleet variable is read — the
+  // admitted account supplies the region — so a deployment with no Fly fleet
+  // (production on AWS) is not refused for lacking one.
+  describe('with the agent runner on its AWS pool', () => {
+    beforeEach(() => {
+      vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+      vi.stubEnv('MOTIR_FLEET_AGENT_RUNNER_PROVIDER', 'aws');
+    });
+
+    it('returns the image with every Fly fleet variable unset', () => {
+      vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, DIGEST_IMAGE);
+      expect(hostedAgentFleetConfig()).toEqual({ image: DIGEST_IMAGE, region: 'iad' });
+    });
+
+    it('names only the image when it is unset — never a Fly variable', () => {
+      vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, undefined);
+      expect(() => hostedAgentFleetConfig()).toThrow(
+        `The container orchestrator is not configured: set ${HOSTED_AGENT_IMAGE_ENV_VAR}.`,
+      );
+    });
+
+    it('judges the image as an AWS VM pulls it: a registry.fly.io mirror is refused', () => {
+      vi.stubEnv(
+        HOSTED_AGENT_IMAGE_ENV_VAR,
+        'registry.fly.io/motir-hosted-agent@sha256:' + 'd'.repeat(64),
+      );
+      expect(() => hostedAgentFleetConfig()).toThrow(/pulls anonymously/);
+    });
+  });
+
+  it('still names the Fly fleet variables when the agent runner is on Fly', () => {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('MOTIR_FLEET_AGENT_RUNNER_PROVIDER', 'fly');
+    vi.stubEnv(HOSTED_AGENT_IMAGE_ENV_VAR, DIGEST_IMAGE);
+    expect(() => hostedAgentFleetConfig()).toThrow(/FLY_FLEET_APP/);
   });
 });
 
