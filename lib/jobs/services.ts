@@ -65,6 +65,7 @@ import { credentialExpiryService } from '@/lib/services/credentialExpiryService'
 import { hostedRunProbeService } from '@/lib/services/hostedRunProbeService';
 import { fleetImageCoverageProbeService } from '@/lib/services/fleetImageCoverageProbeService';
 import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
+import { runnerVersionSupportProbeService } from '@/lib/services/runnerVersionSupportProbeService';
 import { indeterminateStreakService } from '@/lib/services/indeterminateStreakService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
@@ -185,6 +186,9 @@ export const jobServices = {
   // The runner-image freshness probe (MOTIR-10393) — a merged change to the
   // runner image that was never released and pinned.
   runnerImageFreshness: runnerImageFreshnessProbeService,
+  // The runner-version support probe (MOTIR-10706) — the Actions runner the
+  // fleet is built with, about to leave or already out of GitHub's support window.
+  runnerVersionSupport: runnerVersionSupportProbeService,
   // The escalation over every probe above with an `indeterminate` arm
   // (MOTIR-10429) — the same probe unable to tell on the last N runs.
   indeterminateStreak: indeterminateStreakService,

@@ -238,6 +238,11 @@ build {
   }
 
   provisioner "file" {
+    source      = "${path.root}/../boot/motir-runner-report-exit.sh"
+    destination = "/tmp/motir-ci-runner/motir-runner-report-exit.sh"
+  }
+
+  provisioner "file" {
     source      = "${path.root}/../boot/motir-ci-runner.service"
     destination = "/tmp/motir-ci-runner/motir-ci-runner.service"
   }

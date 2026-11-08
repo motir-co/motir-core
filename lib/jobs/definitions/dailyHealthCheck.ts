@@ -12,6 +12,8 @@ import type {
   RunnerImageFreshnessVerdictDTO,
   RunnerImageUnreleasedChangeDTO,
 } from '@/lib/dto/runnerImageFreshness';
+import type { RunnerVersionSupportVerdictDTO } from '@/lib/dto/runnerVersionSupport';
+import { runnerVersionSentence } from '@/lib/ciFleet/runnerVersionSupport';
 import {
   PROBE_INDETERMINATE_STREAK_CODE,
   type IndeterminateStreakFailureData,
@@ -183,6 +185,19 @@ import type { IndeterminateProbeReading } from '@/lib/services/indeterminateStre
 // move the job off the fleet. A pinned image with no tool list is released again
 // from current motir-core and its digest pinned.
 //
+// As of MOTIR-10706 it carries the RUNNER-VERSION SUPPORT probe: the Actions
+// runner the fleet is built with (`ARG RUNNER_VERSION` in
+// `infra/ci-runner/Dockerfile` on the default branch) judged against GitHub's
+// releases. The runner runs with self-update off, and GitHub stops serving jobs
+// to such a runner 30 days after a newer release; on 2026-11-08 every AWS fleet
+// runner connected, was told "v2.336.0 is deprecated and cannot receive
+// messages", and powered off with its job still queued. The probe fails 14 days
+// before that cut-off and names it.
+//
+// ⚠️ WHAT AN OPERATOR DOES WHEN IT FIRES: set RUNNER_VERSION and RUNNER_SHA256 to
+// the release the message names, release `runner-v*` and `ci-runner-ami-v*`, and
+// pin MOTIR_RUNNER_IMAGE and MOTIR_AWS_RUNNER_AMI_ID to what they publish.
+//
 // As of MOTIR-10429 it carries an ESCALATION over every probe above that has an
 // `indeterminate` arm, and it is not a probe of anything outside this job: it
 // reads this job's own recent rows. One `indeterminate` stays quiet, as each
@@ -280,6 +295,11 @@ export interface DailyHealthCheckResult {
    *  read, and with the AMI's state, so `current` is distinguishable from
    *  `indeterminate` or `not_applicable`. */
   runnerImageFreshness: RunnerImageFreshnessVerdictDTO;
+  /** Whether the Actions runner the default branch pins is inside GitHub's
+   *  support window, and how many days it has left (MOTIR-10706) — recorded on
+   *  the healthy tick too, so `supported` with 20 days left is readable before
+   *  it turns `expiring`. */
+  runnerVersionSupport: RunnerVersionSupportVerdictDTO;
   /** How many runs in a row each probe has been `indeterminate` (MOTIR-10429) —
    *  recorded on the healthy tick too, so a probe two runs into a streak is
    *  readable before it fails the check on the third. */
@@ -759,6 +779,10 @@ export const DAILY_HEALTH_CHECK_PROBES: {
     step: 'runner-image-freshness-v2',
     describeIndeterminate: (v) => ({ phase: v.phase, detail: `${v.image}: ${v.detail}` }),
   },
+  runnerVersionSupport: {
+    step: 'runner-version-support',
+    describeIndeterminate: (v) => ({ phase: v.phase, detail: v.detail }),
+  },
 };
 
 /**
@@ -812,6 +836,25 @@ export function indeterminateReadings(
     },
   );
   return [...top, ...nested];
+}
+
+/**
+ * Thrown when the Actions runner the fleet is built with is past GitHub's
+ * support window, or inside the warning margin before it (MOTIR-10706). Its own
+ * error, because the fix is a PIN BUMP, not a release of what is already
+ * merged: the freshness errors send an operator to tag a release; this one sends
+ * them to the Dockerfile first.
+ */
+export class RunnerVersionUnsupportedError extends Error {
+  constructor(
+    readonly verdict: Extract<
+      RunnerVersionSupportVerdictDTO,
+      { verdict: 'expiring' | 'unsupported' }
+    >,
+  ) {
+    super(runnerVersionSentence(verdict));
+    this.name = 'RunnerVersionUnsupportedError';
+  }
 }
 
 /** The runner AMI is stale while the image is not (MOTIR-10395). */
@@ -872,6 +915,9 @@ export const dailyHealthCheck = defineJob(
     const runnerImageFreshness = await ctx.step.run('runner-image-freshness-v2', () =>
       services.runnerImageFreshness.check(),
     );
+    const runnerVersionSupport = await ctx.step.run('runner-version-support', () =>
+      services.runnerVersionSupport.check(),
+    );
     const verdicts = {
       schedules,
       fleet,
@@ -884,6 +930,7 @@ export const dailyHealthCheck = defineJob(
       hostedRuns,
       fleetImageCoverage,
       runnerImageFreshness,
+      runnerVersionSupport,
     };
     // The ESCALATION (MOTIR-10429), read after every probe and before any throw:
     // how many runs in a row each probe has been unable to tell.
@@ -990,6 +1037,17 @@ export const dailyHealthCheck = defineJob(
     // that runs no fleet. Both are on the row either way.
     if (fleetImageCoverage.verdict === 'gap') {
       throw new FleetImageCoverageGapError(fleetImageCoverage);
+    }
+
+    // The RUNNER-VERSION probe (MOTIR-10706), before freshness: a pin GitHub
+    // refuses is an outage of the whole fleet, and its fix (a pin bump) comes
+    // before any release. `expiring` is loud too — that is the point of the
+    // margin. `indeterminate` and `not_applicable` are on the row either way.
+    if (
+      runnerVersionSupport.verdict === 'unsupported' ||
+      runnerVersionSupport.verdict === 'expiring'
+    ) {
+      throw new RunnerVersionUnsupportedError(runnerVersionSupport);
     }
 
     // The FRESHNESS probe (MOTIR-10393). Only `stale` is loud: `indeterminate` is

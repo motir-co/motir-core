@@ -96,6 +96,15 @@ fi
 # `git config --global` dies on `EACCES … stat '/root/.gitconfig'` before the
 # job runs a line of its own (MOTIR-8820). The rest of the environment, `PATH`
 # included, is kept as is.
+# The job-started MARKER (MOTIR-10706). The job-started hook below writes it the
+# moment GitHub hands this runner a job, so whatever reads the machine after the
+# runner exits can tell "ran its job" from "exited without one" — a runner GitHub
+# refuses (a deprecated version, a spent or revoked JIT config) exits seconds
+# after "Listening for Jobs", and without the marker that exit looks exactly like
+# a finished job. `/run` is a fresh tmpfs per boot, so no marker survives from an
+# earlier one. Owned by `runner` because the hook runs as `runner`.
+install -d -m 0755 -o runner -g runner /run/motir-ci-runner-job
+
 log "exec run.sh (JIT config, one job, then de-register and exit)"
 exec setpriv --reuid=runner --regid=runner --init-groups \
   env -u ACTIONS_RUNNER_INPUT_JITCONFIG HOME=/home/runner USER=runner LOGNAME=runner \

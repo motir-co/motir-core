@@ -171,6 +171,8 @@ install_scripts() {
   install -m 0755 -o root -g root "${STAGING}/parse-user-data.sh" /usr/local/sbin/motir-parse-user-data
   install -m 0755 -o root -g root "${STAGING}/motir-vm-entrypoint.sh" /usr/local/bin/motir-vm-entrypoint
   install -m 0755 -o root -g root "${STAGING}/motir-container-entrypoint.sh" /usr/local/bin/motir-container-entrypoint
+  # The exit report (MOTIR-10706): the unit's first ExecStopPost.
+  install -m 0755 -o root -g root "${STAGING}/motir-runner-report-exit.sh" /usr/local/sbin/motir-runner-report-exit
   install -m 0644 "${STAGING}/motir-ci-runner.service" /etc/systemd/system/motir-ci-runner.service
   systemctl enable motir-ci-runner.service
   rm -rf "${STAGING}"

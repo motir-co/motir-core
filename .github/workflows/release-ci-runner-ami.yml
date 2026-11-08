@@ -79,7 +79,8 @@ jobs:
             infra/ci-runner-aws/boot/motir-runner-prepare.sh \
             infra/ci-runner-aws/boot/parse-user-data.sh \
             infra/ci-runner-aws/boot/motir-vm-entrypoint.sh \
-            infra/ci-runner-aws/boot/motir-container-entrypoint.sh
+            infra/ci-runner-aws/boot/motir-container-entrypoint.sh \
+            infra/ci-runner-aws/boot/motir-runner-report-exit.sh
 
   build:
     name: Build and publish the AMI
