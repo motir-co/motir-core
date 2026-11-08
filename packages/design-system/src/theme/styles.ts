@@ -474,6 +474,33 @@ export const STYLE_REGISTRY = {
         'Bordered rectangular buttons, inputs and chips at 44px or more, a 3px outline focus ring at a 2px offset on every focusable control, flat framed cards; the hero AI pill and orb become solid flat accent targets.',
     },
   },
+  'tonal-elevated': {
+    id: 'tonal-elevated',
+    name: 'Tonal / Elevated',
+    tagline: 'Depth by tone — surfaces step up a quiet ladder, seated by soft shadows.',
+    inspiration:
+      "Material Design 3's tonal elevation — each containment level a tone of the palette's own surface, a soft shadow seating it, so depth reads by tone first and shadow second.",
+    designDoc: 'docs/styles/tonal-elevated.md',
+    defaultTypeId: 'motir',
+    dimensions: {
+      silhouette:
+        'Softened, machined geometry — 10px buttons and inputs, 14px cards, 20px modals, 8px rows and menu items, 6px keyboard hints; status chips stay pills.',
+      stroke:
+        "Quiet — the palette's 1px hairline stays on every surface so structure never rests on tone or shadow alone, and turns solid under a stronger contrast preference.",
+      elevation:
+        "Depth as a ladder of tones: the page, then the palette's surface, then raised, overlay and hero rungs each 4% further toward the theme's ink, each seated by a soft neutral shadow that grows with the rung.",
+      surface:
+        "Opaque tonal steps of the palette's own surface — a mix of the palette's ink into its surface, never a tint of brand chroma — so a palette swap re-tints every rung.",
+      density:
+        'Comfortable, one notch calmer than the base: 38px controls, 12x7 row padding, 18x10 button padding and 24px card padding restated as the rhythm.',
+      motion:
+        'Calm, never springy — 180ms transitions, a 1% hover lift and a 0.98 press; tone never changes on hover, because tone is containment, not feedback.',
+      typography:
+        "The motir pairing — Source Serif headlines over Inter body and JetBrains Mono meta, the product's own editorial voice on a quieter, layered stage.",
+      components:
+        "Tonal cards, sidebar and top bar on the palette's surface, a popover one rung up, a modal two up, a recessed input on the page ground with an inset seat; the hero AI pill and orb sit on the top rung with an accent-led fill and a tonal rim.",
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

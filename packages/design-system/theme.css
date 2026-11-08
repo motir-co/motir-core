@@ -3015,6 +3015,104 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Tonal / Elevated (MOTIR-10668). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/tonal-elevated.md. ─────────────────────────────────────────────────────── */
+[data-style='tonal-elevated'] {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-btn: 10px;
+  --radius-input: 10px;
+  --radius-card: 14px;
+  --radius-modal: 20px;
+  --radius-badge: 9999px;
+  --radius-control: 8px;
+  --radius-kbd: 6px;
+  --spacing-btn-x: 18px;
+  --spacing-btn-y: 10px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+  --transition-duration: 180ms;
+  --transition-slow: 260ms;
+  --hover-scale: 1.01;
+  --active-scale: 0.98;
+  --shadow-subtle: 0 1px 2px rgba(20, 20, 30, 0.04);
+  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.05), 0 2px 6px -2px rgba(20, 20, 30, 0.07);
+  --shadow-elevated: 0 2px 4px rgba(20, 20, 30, 0.06), 0 10px 24px -12px rgba(20, 20, 30, 0.12);
+  --shadow-modal: 0 4px 10px rgba(20, 20, 30, 0.08), 0 20px 48px -16px rgba(20, 20, 30, 0.2);
+  --shadow-hero-mockup: 0 6px 14px rgba(20, 20, 30, 0.1), 0 26px 60px -18px rgba(20, 20, 30, 0.24);
+  --tonal-step-2: 4%;
+  --tonal-step-3: 8%;
+  --tonal-step-4: 12%;
+}
+[data-theme='dark'] [data-style='tonal-elevated'],
+[data-style='tonal-elevated'][data-theme='dark'] {
+  --shadow-subtle: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.36), 0 1px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 2px 4px rgba(0, 0, 0, 0.4), 0 6px 14px -8px rgba(0, 0, 0, 0.44);
+  --shadow-modal: 0 3px 8px rgba(0, 0, 0, 0.44), 0 12px 28px -12px rgba(0, 0, 0, 0.5);
+  --shadow-hero-mockup: 0 4px 10px rgba(0, 0, 0, 0.46), 0 16px 36px -14px rgba(0, 0, 0, 0.56);
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  :where([data-surface]:not([data-surface='page'], [data-surface='overlay'], [data-ai-cta])) {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='popover'] {
+    background-color: color-mix(in srgb, var(--el-text) var(--tonal-step-2), var(--el-surface));
+    box-shadow: var(--shadow-elevated);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: color-mix(in srgb, var(--el-text) var(--tonal-step-3), var(--el-surface));
+    box-shadow: var(--shadow-modal);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: var(--el-page-bg);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--el-text) 10%, transparent);
+  }
+}
+@media (prefers-contrast: more) {
+  @scope ([data-style='tonal-elevated']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='sidebar'],
+    [data-surface='header'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'] {
+      background-color: var(--el-surface);
+      border-color: var(--el-border-strong);
+    }
+  }
+}
+@media (forced-colors: active) {
+  @scope ([data-style='tonal-elevated']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='sidebar'],
+    [data-surface='header'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'] {
+      background-color: var(--el-surface);
+      border-color: var(--el-border-strong);
+      box-shadow: none;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -3429,6 +3527,37 @@
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     --plan-orb-fill: linear-gradient(var(--el-accent), var(--el-accent));
+  }
+}
+
+/* 14 · Tonal / Elevated — see docs/styles/tonal-elevated.md § the hero AI control. */
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-text) var(--tonal-step-4), var(--el-accent));
+    --plan-hero-shadow:
+      0 6px 14px -4px color-mix(in srgb, var(--el-accent) 30%, transparent),
+      0 22px 44px -18px color-mix(in srgb, var(--el-accent) 40%, transparent);
+    --plan-orb-shadow:
+      0 6px 14px -4px color-mix(in srgb, var(--el-accent) 30%, transparent),
+      0 22px 44px -18px color-mix(in srgb, var(--el-accent) 40%, transparent);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-accent) 92%, var(--el-surface)),
+      var(--el-accent)
+    );
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+      var(--el-accent) 60%
+    );
   }
 }
 

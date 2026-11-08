@@ -113,21 +113,21 @@ Shape and feel only. The base column is the Tier-0 `@theme` block of
 `packages/design-system/theme.css` (mirrored by its
 `[data-style='warm-editorial']` block).
 
-| token                                                  | base                  | Tonal / Elevated        |
-| ------------------------------------------------------ | --------------------- | ----------------------- |
-| `--radius-xs` / `-sm` / `-md` / `-lg` / `-xl`          | 4 / 6 / 8 / 12 / 16px | 4 / 6 / 10 / 14 / 18px  |
-| `--radius-btn` / `--radius-input`                      | 8px / 8px             | 10px / 10px             |
-| `--radius-card` / `--radius-modal`                     | 12px / 12px           | 14px / 20px             |
-| `--radius-control` / `--radius-kbd`                    | 6px / 4px             | 8px / 6px               |
-| `--radius-badge`                                       | 9999px                | left at the pill base   |
-| `--spacing-btn-x` / `--spacing-btn-y`                  | 18px / 10px           | 18px / 10px (restated)  |
-| `--spacing-card-padding`                               | 24px                  | 24px (restated)         |
-| `--spacing-control-x` / `--spacing-control-y`          | 10px / 6px            | 12px / 7px              |
-| `--height-control`                                     | 36px                  | 38px                    |
-| `--transition-duration` / `--transition-slow`          | 150ms / 250ms         | 180ms / 260ms           |
-| `--hover-scale` / `--active-scale`                     | 1 / 0.98              | 1.01 / 0.98             |
-| `--shadow-*` (five roles)                              | the base shadows      | the light recipes below |
-| `--tonal-step-2` / `--tonal-step-3` / `--tonal-step-4` | —                     | 4% / 8% / 12%           |
+| token                                                  | base                  | Tonal / Elevated                                                                                       |
+| ------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `--radius-xs` / `-sm` / `-md` / `-lg` / `-xl`          | 4 / 6 / 8 / 12 / 16px | 4 / 6 / 10 / 14 / 18px                                                                                 |
+| `--radius-btn` / `--radius-input`                      | 8px / 8px             | 10px / 10px                                                                                            |
+| `--radius-card` / `--radius-modal`                     | 12px / 12px           | 14px / 20px                                                                                            |
+| `--radius-control` / `--radius-kbd`                    | 6px / 4px             | 8px / 6px                                                                                              |
+| `--radius-badge`                                       | 9999px                | 9999px — the pill base, restated (the shape-swap lint requires every block to declare all seven roles) |
+| `--spacing-btn-x` / `--spacing-btn-y`                  | 18px / 10px           | 18px / 10px (restated)                                                                                 |
+| `--spacing-card-padding`                               | 24px                  | 24px (restated)                                                                                        |
+| `--spacing-control-x` / `--spacing-control-y`          | 10px / 6px            | 12px / 7px                                                                                             |
+| `--height-control`                                     | 36px                  | 38px                                                                                                   |
+| `--transition-duration` / `--transition-slow`          | 150ms / 250ms         | 180ms / 260ms                                                                                          |
+| `--hover-scale` / `--active-scale`                     | 1 / 0.98              | 1.01 / 0.98                                                                                            |
+| `--shadow-*` (five roles)                              | the base shadows      | the light recipes below                                                                                |
+| `--tonal-step-2` / `--tonal-step-3` / `--tonal-step-4` | —                     | 4% / 8% / 12%                                                                                          |
 
 The three restated base values are deliberate no-ops: they write the rhythm down
 where a reader of the block looks for it. The three step scalars are the only
@@ -154,6 +154,7 @@ read it; it sets neutral rgba only.
   --radius-input: 10px;
   --radius-card: 14px;
   --radius-modal: 20px;
+  --radius-badge: 9999px;
   --radius-control: 8px;
   --radius-kbd: 6px;
   --spacing-btn-x: 18px;

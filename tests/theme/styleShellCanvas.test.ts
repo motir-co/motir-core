@@ -274,6 +274,7 @@ describe('every style canvas reaches the signed-in shell (MOTIR-4234)', () => {
       'neo-brutalism',
       'soft-playful',
       'swiss-minimal-flat',
+      'tonal-elevated',
       'warm-editorial',
     ]);
 
