@@ -184,6 +184,16 @@ describe('POST /api/internal/ai/validate-plan', () => {
           blockerSprintId: null,
         },
       ],
+      // The blocker is a committed card still being worked, so the row is a WAIT
+      // too, though the plan drew it (MOTIR-10760).
+      waits: [
+        {
+          item: child.identifier,
+          blockedBy: outside.identifier,
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+        },
+      ],
       // The cross-parent half (MOTIR-6370), carried verbatim like the rest: the
       // child's parent does not block the outsider's, so the edge is uncovered.
       invalidEdges: [
@@ -410,6 +420,15 @@ describe('POST /api/internal/ai/validate-plan-forest', () => {
       // what makes reporting them separately worth doing (MOTIR-3575).
       rejections: [],
       blockers: [
+        {
+          item: `planItem:${gatedId}`,
+          blockedBy: qBlocker.identifier,
+          blockerStatus: 'todo',
+          blockerSprintId: null,
+        },
+      ],
+      // A committed, unfinished blocker: a WAIT, though the plan drew it (MOTIR-10760).
+      waits: [
         {
           item: `planItem:${gatedId}`,
           blockedBy: qBlocker.identifier,
