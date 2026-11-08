@@ -23,6 +23,10 @@
   it said about the kind of IPv4 the `motir-marketing` app holds.
   **Q1 and Q3's deploy step are SUPERSEDED 2026-10-27 by AMENDMENT 3: the site
   runs on Vercel.**
+  **§3's rejection of moving the `motir.co` zone to Cloudflare, and AMENDMENT 3's
+  placement of the site on Vercel, are SUPERSEDED 2026-11-08 by AMENDMENT 4 (Astro
+  on Cloudflare Workers, the zone at Cloudflare), and §3's rule against a second
+  `v=spf1` or `v=DMARC1` record still binds.**
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `application-hosting.md` / `production-service-stack.md`): a decision record is
@@ -570,3 +574,154 @@ it, and leaves no machine to be starved.
 - **Two build models** — the cost Q1 named. Accepted: the site is not the product.
 - **§3's apex** points at Vercel (`A 216.198.79.1` and `A 64.29.17.1`, `www` → `98ddd21bbcbedce4.vercel-dns-017.com`, as Vercel recommended on 2026-10-27);
   the `MX`, `TXT`, DKIM and `_dmarc` records §3 protects are untouched.
+
+---
+
+## AMENDMENT 4 — `motir.co` moves to Astro on Cloudflare Workers, and the zone to Cloudflare (2026-11-08)
+
+_Approved 2026-11-08 at MOTIR-10641's decision gate (decision page version 1),
+in epic MOTIR-10633. It overturns §3 (Q2)'s rejection of moving the `motir.co`
+zone to Cloudflare, and AMENDMENT 3's placement of the site on Vercel._
+
+`motir.co` is rebuilt in Astro and served from Cloudflare Workers with static
+assets.
+
+- **Static pages.** Every page except the live public surface is built at deploy
+  time in all 12 locales and served as a static asset. Those requests invoke no
+  Worker and cost nothing per request.
+- **Worker routes.** Only `/p/**`, `/explore`, `/explore/topic/*`, `/ideas`,
+  `/motir-builds-itself` and `/sitemap-projects.xml` run as Worker code. So do
+  the bare `/` (language detection) and unmatched paths (the 404/308
+  fallthrough).
+- **Plan.** The account is on **Workers Paid from the cut**.
+- **The zone.** The `motir.co` zone moves from Spaceship to Cloudflare. Every
+  record is recreated there and compared value for value before the nameservers
+  switch.
+- **Proxying.** Every record except the site's own apex and `www` is
+  **DNS-only**. The AWS services (motir-core, motir-ai, the gateway) and the
+  Spacemail mailbox are untouched, and the zone never holds a second `v=spf1` or
+  `v=DMARC1` record.
+- **One cut.** The move happens once, before launch, with no proxy phase and no
+  period on two hosts.
+- **Vercel** is removed entirely.
+- **No subprocessor row.** Cloudflare gets no row on the published subprocessor
+  list, for the reason AMENDMENT 3 gave for Vercel: it hosts the marketing site
+  and the DNS, and carries no customer data.
+
+### Why
+
+AMENDMENT 3's Vercel choice has been measured against Vercel Hobby's limits, and
+crawler traffic has gone past them. The Next.js proxy (`proxy.ts`) runs on every
+request, so every crawler hit is billed work:
+
+| reading (Vercel Hobby usage, and the request log AMENDMENT 3 cites) | value                                              |
+| ------------------------------------------------------------------- | -------------------------------------------------- |
+| Fast Origin Transfer                                                | **10.08 / 10 GB**, over the limit                  |
+| Active CPU                                                          | **3h56m / 4h**                                     |
+| Function invocations                                                | **759K**, because `proxy.ts` runs on every request |
+| ISR writes from crawlers                                            | **117K**                                           |
+| Requests per day, mostly crawlers on filter URLs                    | **130–175k**                                       |
+
+On Workers with static assets, requests to static assets are free and unlimited.
+Only requests that match `run_worker_first` invoke the Worker and are billed
+(Cloudflare,
+[Static assets: billing and limitations](https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/)).
+Crawler load on built pages therefore costs nothing, and only the small live
+surface is metered.
+
+**Serving the apex from a Worker needs the zone at Cloudflare.** A Workers Custom
+Domain requires _"an active Cloudflare zone"_ (Cloudflare,
+[Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/)).
+§3's reason for rejecting a zone move, that _nothing here needs one_, no longer
+holds. Serving the site this way needs exactly that.
+
+### What no longer binds
+
+- **§3 (Q2)'s rejection of moving the `motir.co` zone to Cloudflare** is
+  overturned. The zone moves. §3's concern, the mail records on a shared apex,
+  is answered by recreating every record and comparing it value for value before
+  the nameserver switch, and by the one-SPF/one-DMARC rule below.
+- **AMENDMENT 3's placement of the site on Vercel** is overturned. That covers
+  the Vercel project, the `vercel build` / `vercel deploy --prebuilt --prod`
+  deploy step, the `iad1` function pinning and the apex `A` records pointing at
+  Vercel. The site is an Astro build on Workers, deployed by `wrangler`.
+
+### What still binds
+
+- **§3's rule: the apex never carries a second `v=spf1` or `v=DMARC1` record.**
+  Two SPF records is a permanent `permerror`. Two DMARC records means receivers
+  see no DMARC policy at all. Every card that touches the zone at Cloudflare
+  reads MOTIR-2596's record table first, exactly as §3 says.
+- **MOTIR-8838's split** (a built site with one small live public surface) is
+  kept. Only its host changes.
+- **Q3's shape** stands: GitHub Actions in `motir-marketing` deploys on `main`,
+  behind the same gates, with `wrangler` as the deploy step.
+- **Q4 and AMENDMENT 3's subprocessor reasoning** stand. The published rows are
+  for the hosted service, and the marketing site carries no customer data.
+- **motir-core, motir-ai and the gateway stay on AWS.** Their records are
+  DNS-only at Cloudflare and point where they point today.
+- `motir.site`, `*.motir.site` and customer domains stay with the
+  hosted-applications epic, MOTIR-4527.
+
+### What it costs
+
+- **A zone migration**, the operation §3 refused, with silent mail loss as how it
+  fails. The one-time copy, the value-for-value comparison and the single
+  pre-launch cut are what pay for it.
+- **Workers Paid**, from the cut.
+- **A rewrite** from Next.js to Astro. The paths, canonicals, hreflang and
+  sitemaps stay as they are.
+- **Cloudflare becomes a vendor** for the marketing site and the DNS. Because it
+  carries no customer data, it is not a subprocessor row.
+
+### Alternatives considered
+
+| Alternative                                                          | Why not                                                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Stay on Vercel Hobby                                                 | Rejected. Its limits are already exceeded: Fast Origin Transfer 10.08/10 GB, Active CPU 3h56m/4h, 759K invocations because `proxy.ts` runs on every request, and 117K crawler ISR writes.                                                                                     |
+| Upgrade to Vercel Pro and keep Next.js                               | Rejected. Every request still invokes the proxy, so crawler load keeps costing per request.                                                                                                                                                                                   |
+| Workers free tier                                                    | Rejected. Past its request limit, Worker-matched requests get a 429 instead of falling back to static assets (Cloudflare's billing-and-limitations page), and crawler load on filter URLs is already 130–175k requests a day.                                                 |
+| Keep the zone at Spaceship and point the site at Cloudflare by CNAME | Not taken. The conversation chose the full zone move, and a Workers Custom Domain needs an active Cloudflare zone. §3's concern (mail records on a shared apex) is answered by the value-for-value comparison before the nameserver switch and by the one-SPF/one-DMARC rule. |
+
+### Consumed by
+
+- MOTIR-10634 (the Astro static pages) and MOTIR-10635 (the Worker routes),
+  which build to the static/Worker split above.
+- MOTIR-10637, CI deploying with `wrangler` behind the same gates in
+  `motir-marketing/.github/workflows/ci.yml`.
+- MOTIR-10636 (Cloudflare account and zone) and MOTIR-10638 (the cut), which
+  follow the DNS-only and one-SPF/one-DMARC rules.
+- MOTIR-10639 (Vercel leftovers in the repository) and MOTIR-10640 (deleting the
+  Vercel project), which remove the host AMENDMENT 3 chose.
+- MOTIR-10642, which copies this approved page into `marketing-site-hosting.md`
+  and marks §3's zone rejection and AMENDMENT 3 superseded in its header.
+- MOTIR-10564, which adds the SES records at whichever provider holds the zone.
+- MOTIR-10572 and the daily subprocessor seam, under which the published list
+  gains no Cloudflare row.
+- `marketing-site-hosting.md` §3 (Q2) and AMENDMENT 3, the sections this
+  overturns.
+
+### Supersedes
+
+MOTIR-2854, the original hosting record's card, already marked outdated.
+MOTIR-9704, whose decision page says motir-marketing stays on Fly. AMENDMENT 3
+had already overtaken it, this plan marks it deprecated, and epic MOTIR-10633
+supersedes it. Within the record: §3's rejection of moving the `motir.co` zone
+to Cloudflare, and AMENDMENT 3's placement of the site on Vercel.
+
+### What this does NOT decide
+
+- **The record-by-record contents of the Cloudflare zone.** MOTIR-10636 copies
+  the zone, and MOTIR-10638 re-checks it and does the cut. This page only binds
+  them to DNS-only and to one SPF and one DMARC record.
+- **The Astro site's internal structure, its Worker code, or the exact
+  `run_worker_first` patterns** beyond the paths named above. Those belong to
+  MOTIR-10634 and MOTIR-10635.
+- **Any change to the published subprocessor list.** It records only why
+  Cloudflare is not on it.
+- **Where `motir.site`, `*.motir.site` and customer domains are served.** That
+  stays with MOTIR-4527.
+- **Anything about motir-core, motir-ai or the gateway's hosting**, which stays
+  on AWS.
+- **The file edit itself.** Putting this text into `marketing-site-hosting.md`
+  is MOTIR-10642.
