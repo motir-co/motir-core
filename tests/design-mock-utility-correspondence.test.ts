@@ -859,6 +859,9 @@ export const UTILITY_PROPERTIES: Record<string, readonly string[]> = {
   ring: ['--tw-ring-color'],
   'ring-offset': ['--tw-ring-offset-color'],
   rounded: ['border-radius'],
+  // `rounded-t` came back with MOTIR-10629's "You are here" tab, whose bottom
+  // corners stay square where it joins the card's frame.
+  'rounded-t': ['border-top-left-radius', 'border-top-right-radius'],
   shadow: ['--tw-shadow'],
   size: ['width', 'height'],
   stroke: ['stroke'],

@@ -2344,3 +2344,168 @@ Planning chips warm slightly; and a drilled level, where only the Bug tile's pea
 You-are-here pill, the Ready wash, the Done card, the green meters and every edge are unchanged. The
 citrine Design hue does not reach the roadmap, because a node draws a kind icon rather than a
 work-type chip.
+
+## "You are here" moves off the tag row onto a tab (MOTIR-10629)
+
+**Amends** design **MOTIR-10508**: its notes section _The canvas card, re-laid: tag row, title-only
+body, To plan, next action (MOTIR-10508)_ and its delta mock `roadmap--canvas-card-tag-row.mock.html`
+(the "You are here" card in its panels 3, 4, 10 and 11), both as published on MOTIR-10508. Delta mock: `design/roadmap/roadmap--here-tab.mock.html`. Panel 1
+of the delta renders what `main` ships today, so the change reads against the real card.
+
+**Design system, checked first.** `package.json` depends on `@motir/design-system` (`workspace:*`,
+version 0.20.0) and `app/globals.css` imports `@motir/design-system/theme.css`, so the project is on
+Motir Design. Its axes come from `app/layout.tsx` (`data-style` / `data-palette` / `data-type` from the
+applied theme); the mock draws at `warm-editorial` · `motir` · `motir`, the defaults the app applies,
+and panels 4 and 5 re-scope every style. The mock is built with `renderMock` from
+`@motir/design-system/mock` (`boardWidth: 'full'`). No new token, no new design-system part. One new
+product-local piece: **`HereTab`**, a slot of `WorkItemCardShell` in
+`components/planning/WorkItemNode.tsx` (canvas-only, so it stays out of the package).
+
+### The problem it fixes
+
+`HerePill` is passed to `WorkItemStateTags` as `slotOverride`, so it takes the status slot: the here
+card never shows its status (In Progress, In Review…), and when a right-hand text tag is present the
+give-way rule cuts the pin and the Manual chip to glyphs. The card the reader most needs to read shows
+the fewest facts (panel 1).
+
+### What the panels show
+
+0. Where it sits: a slice of the roadmap canvas at 1×, two rows at the layout's real spacing, with a
+   selected card above (its View / Open slot in the gap), the here card hovered (tab and next-action
+   button together) and a row-wrap edge entering the here card's top.
+1. Was: the shipped `WorkItemNode`, every state the card asks for.
+2. Proposed, light: here; here + ready; here + blocked elsewhere; here + not in sprint; here + Manual;
+   here + run disposition; here + selected; here + hovered.
+3. The same, dark.
+4. Every `data-style`, light, the here card hovered.
+5. Every `data-style`, dark.
+6. Zoomed out: 100%, 60%, 45%, 30%.
+7. Alternatives weighed and rejected (the corner pin is drawn; the in-card row is measured, not drawn).
+8. The onboarding `StationCard`, unchanged.
+9. Chinese (zh), light and dark.
+10. Portuguese, the longest of the eleven strings, hovered, warm-editorial and neo-brutalism.
+
+### The tab
+
+- **Where:** hung on the card's **top edge, left**, as a sibling of the frame inside the shell's
+  `relative` wrapper (the same seam the next-action button uses, so it is outside `overflow-hidden`
+  and outside the fixed `NODE_W × NODE_H` footprint). It sits in the 72px row gap (`GAP_Y`), so
+  `NODE_H` and the layout are untouched.
+- **Classes:** `absolute bottom-[calc(100%-1px)] left-3 z-10 inline-flex h-5 items-center gap-1
+rounded-t-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) text-[11px] leading-none
+font-semibold whitespace-nowrap text-(--el-accent-text)`.
+  - `bottom-[calc(100%-1px)]`: the tab's bottom overlaps the frame's 1px top border, so on the accent
+    frame the tab and the border are one shape, a folder tab.
+  - `left-3` (12px): the mirror of the next-action button's `right-3`, and clear of the card's corner
+    radius in every style.
+  - `h-5` (20px — heights of 24px and under stay raw), `text-[11px]` and a 12px glyph: the tag row's
+    one chip size (MOTIR-10508).
+  - `rounded-t-(--radius-badge)` and `px-(--spacing-chip-x-6)`: the chip's own shape tokens, so a
+    style swap reshapes it (square under neo-brutalism and swiss-minimal-flat, round under
+    soft-playful). The bottom corners stay square because they join the frame.
+  - **No shadow.** Under neo-brutalism the card's hard offset shadow belongs to the frame; a second
+    offset block on a 20px tab reads as a loose chip, not part of the frame (panels 4, 5).
+- **Content:** `MapPin` (`size-3`, `aria-hidden`) and the shipped `roadmap.canvas.node.here` string.
+  No new copy. It never truncates and never drops to its glyph: the give-way rule no longer touches it.
+- **Colour:** `--el-accent` fill, `--el-accent-text` ink: the accent fill/ink pair the primary button
+  uses, so it is AA in all twenty palette × theme combinations by the palette author's own contract.
+
+### What stays as it is
+
+- The accent frame (`border-(--el-accent) bg-(--el-surface) shadow-(--shadow-card)`),
+  `aria-current="step"` on the frame and `data-node-state="here"`.
+- The frame precedence: blocked elsewhere > You are here > Done > To plan > Ready > not in sprint.
+  Under blocked, the danger frame keeps the border and the tab stays accent (panel 2): both facts are
+  true and both show.
+- The give-way rule, exactly as it reads: a right-hand text tag drops the status slot and the Manual
+  chip to glyphs. What changes is what sits in that slot.
+
+### What changes in the status slot
+
+The slot is the status again on the here card: `statusSlotOf(item, { ready, blocked })` with no
+`here` argument, so it answers status / Done / To plan / Ready by the shared rule
+(`lib/workItems/statusSlot.ts`, MOTIR-10534) like every other card. The `slotOverride` prop is no
+longer passed from `WorkItemNode`; `HerePill` is deleted. (`statusSlotOf`'s `here` parameter and the
+`'here'` member of `StatusSlotKind` then have no caller; MOTIR-10630 removes them with the pinned
+tests.) Under here + ready the slot shows the Ready pill; the Ready mint wash stays suppressed because
+here wins the frame.
+
+### Clearances, measured in the mock
+
+| between                                                | worst case                                                                                   | result        |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ------------- |
+| the tab and the hovered next-action button (same card) | pt `Você está aqui` (tab 12→118px) vs `motir review` under neo-brutalism (button from 133px) | 15px clear    |
+| the same, en                                           | tab 12→107px vs button from 133–135px                                                        | 25–29px clear |
+| the tab and the selected card above's View / Open slot | slot reaches 14px into the 72px gap; tab takes the top 20px                                  | 38px clear    |
+| the tab and a single edge entering the top             | the router lands one top entry at t = 0.5 (140px)                                            | clear         |
+
+`motir review` is the widest next-action face (the verb is mono and untranslated); Plan, `motir run`,
+`motir fix` and `motir guide` are narrower.
+
+**Two or more edges entering the here card's top.** `routeEdges` (`lib/planning/canvasGeometry.ts`)
+fans several entries on one side across t = 0.28–0.72, so the first lands at 78px, under the tab. For
+the here card's TOP side only, MOTIR-10630 starts that band at t = 0.5 (140px) instead, so every
+arrowhead stays clear of the widest tab (118px). Every other side and every other card keep the shipped
+band.
+
+### Selected
+
+The selection ring (`ring-2 ring-offset-2`, on the canvas node wrapper) passes under the tab, which is
+painted above it; the action slot stays centred on the bottom edge. Nothing on the top-left edge
+competes (panel 2).
+
+### Zoomed out
+
+The canvas has no level-of-detail switch: the world transform scales every card whole, from 2× down to
+`MIN_SCALE` 0.3 (`lib/planning/canvasGeometry.ts`). **The tab stays as it is and scales with the card.**
+Below about 60% its words stop being legible, as the status pill's do; what carries "here" then is the
+solid accent block on the card's top-left edge plus the accent frame, the only filled block in that
+position on any card, which still reads at 30% (panel 6). Collapsing to the pin glyph would need a
+zoom-dependent render the canvas has for no other element, and would save nothing at that size: the
+block is the signal, not the glyph inside it. Locate snaps to the here card at a readable zoom.
+
+### Alternatives weighed
+
+- **An extra top row inside the card — rejected.** The title's last line ends at 103px in the 124px
+  box (MOTIR-10508), so a 20px row inside the frame costs a title line (three lines become two), and
+  the layout spaces rows by `NODE_H`, so growing one card is not available.
+- **A pin badge on the top-left corner only — rejected** (drawn in panel 7). Legible zoomed out and
+  costs no width, but it is a glyph with no words, and "you are here" is the orientation cue for a
+  reader who has just arrived; it also sits on the card's corner, which every style draws differently.
+- **The tab — chosen.** It keeps the words, costs nothing inside the card, and frees the status slot.
+
+### The onboarding station card
+
+`StationCard` (`components/onboarding/StationNode.tsx`) **stays as it is.** Its You are here is a
+state pill in its own bottom-right footer row; it displaces nothing, because a station has no status
+slot and no fixed height. It already speaks the same language (map-pin, the words, the accent border
+on the card), so the two read as one cue (panel 8).
+
+### Accessibility
+
+- The tab is rendered **before** the frame in the DOM and is not `aria-hidden`, so its words are read
+  first, as the pill's were; `aria-current="step"` on the frame stays the semantic.
+- The state is never colour alone: the frame colour, the tab's glyph and its words.
+
+### Implementation notes for MOTIR-10630
+
+- `WorkItemCardShell` gains a `tab?: ReactNode` slot rendered as the first child of the
+  `group/node relative` wrapper. `WorkItemNode` passes `tab={here ? <HereTab /> : null}` and drops
+  `slotOverride`.
+- `PlanItemNode` passes no tab (a proposal is never "here"), so it renders exactly as before.
+- `routeEdges` takes the here card's id (or a per-rect flag) to start its top-side band at t = 0.5.
+- The tests that pin the old pill (`HerePill`, the here slot in `statusSlotOf`, the slot-override
+  path) move to the tab.
+
+### Out of scope
+
+The hovered next-action button already overlaps the tag row's chips by 1–3px in every style (more
+visibly under neo-brutalism's offset shadow); it predates this card and is filed as **MOTIR-10631**.
+
+### How the asset was produced
+
+Every card is the shipped `WorkItemNode` rendered headless through `renderMock`: panel 1 from `main`
+as it is, the other panels from a throwaway copy patched only as § _Implementation notes_ says. The
+generator was bundled with esbuild, run once and deleted before the commit; the selection slot and the
+canvas slice's edges are static drawings of `ProjectRoadmapCanvas`'s and `PlanningCanvas`'s own markup
+at the layout's real spacing.
