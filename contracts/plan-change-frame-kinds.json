@@ -15,6 +15,7 @@
     "contextual_scope",
     "convention",
     "conversation",
+    "conversation_ack",
     "discovery_doc",
     "docs",
     "done",
