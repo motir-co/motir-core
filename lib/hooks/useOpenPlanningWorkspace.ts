@@ -147,5 +147,7 @@ function contextValueKey(context: PlanningLaunchContext): string {
   const via = 'via' in context ? (context.via ?? '') : '';
   // …and so does a refused gate's id — `planGate` (MOTIR-6210).
   const gate = context.kind === 'refused-gate' ? context.gateId : '';
-  return `${context.kind}|${target}|${hasPlan}|${session}|${via}|${gate}`;
+  // …and so does the start prompt's ask — `planAsk` (MOTIR-10624).
+  const ask = context.kind === 'work-item' && context.confirmStart ? '1' : '';
+  return `${context.kind}|${target}|${hasPlan}|${session}|${via}|${gate}|${ask}`;
 }

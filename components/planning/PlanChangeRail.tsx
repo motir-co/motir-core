@@ -82,7 +82,17 @@ import { GuideOriginCard } from '@/components/planning/GuideOriginCard';
 import { PlanOffer, type PlanOfferProps } from '@/components/planning/PlanOffer';
 import { alreadyPlanning, offerAnswerable } from '@/lib/planning/planOfferRow';
 import { GUIDE_OFFER_CLOSED } from '@/lib/planning/guideOfferClosed';
-import { claimPickAutoSend } from '@/lib/planning/pickAutoSend';
+import {
+  claimPickAutoSend,
+  pickAutoSendClaimed,
+  releasePickAutoSend,
+} from '@/lib/planning/pickAutoSend';
+import {
+  composeStartTurn,
+  planStartPhase,
+  type PlanStartPromptSpec,
+} from '@/lib/planning/planStartPrompt';
+import { PlanStartPrompt } from '@/components/planning/PlanStartPrompt';
 import {
   dispositionMarkerFor,
   forwardOfferStale,
@@ -257,6 +267,14 @@ export interface PlanChangeRailProps {
    * guide* card say so. Composed from the pick's follow-up framing; absent otherwise.
    */
   guideOrigin?: PlanningSeedGuideDTO | null;
+  /**
+   * THE START PROMPT (MOTIR-10624; design MOTIR-10623): the overlay was opened from
+   * the card's Plan / Re-plan button and the card resolved. The rail draws the
+   * prompt IN PLACE OF the opener while the thread has no user turn — and as the
+   * spent record once its first user turn is the start turn — and sends the start
+   * turn only when the person presses Start or sends. Absent on every other door.
+   */
+  startPrompt?: PlanStartPromptSpec | null;
   state: PlanChangeConversationState;
   /** The indexed proposal — the rail MIRRORS the canvas bar's counts. */
   index: PlanChangeDiffIndex;
@@ -406,6 +424,7 @@ export function PlanChangeRail({
   initialDraftCaret,
   followUp = null,
   guideOrigin = null,
+  startPrompt = null,
   state,
   index,
   targets,
@@ -485,6 +504,19 @@ export function PlanChangeRail({
   // THE REFUSED SEND KEEPS ITS WORDS (MOTIR-7643): a send another holder's card
   // refused is put back in the — now disabled — field, so nothing typed is lost.
   const [lastSent, setLastSent] = useState<string | null>(null);
+  // THE START PROMPT'S PRESS (MOTIR-10624): set from Start (or a Send while the
+  // prompt is live) until the turn lands or fails, with the words the person typed,
+  // so a failed start can give them back.
+  // The claim it was taken under is the flag: `null` until a press.
+  const [startClaim, setStartClaim] = useState<string | null>(null);
+  // The same press, readable inside one tick: two presses before a re-render
+  // must still let only one through.
+  const startPressRef = useRef(false);
+  // The press is over once the state says so (landed or failed).
+  useEffect(() => {
+    if (startClaim === null) startPressRef.current = false;
+  }, [startClaim]);
+  const [startExtra, setStartExtra] = useState('');
   const [seenHeld, setSeenHeld] = useState(state.targetHeld ?? null);
   if ((state.targetHeld ?? null) !== seenHeld) {
     setSeenHeld(state.targetHeld ?? null);
@@ -629,6 +661,16 @@ export function PlanChangeRail({
       if (draft === '') setDraft(restore);
       setSeededSend(null);
     }
+    // A FAILED START (design MOTIR-10623, *Behaviour the build must keep*) returns
+    // the rail to the live prompt: the typed conditions go back in the composer and
+    // the claim is given back, so Start is a live button again rather than a dead
+    // one. Releasing is idempotent, so a StrictMode double render changes nothing.
+    if (state.errorCode && startClaim !== null && userTurns.length === 0) {
+      releasePickAutoSend(startClaim);
+      setStartClaim(null);
+      // A newer draft is the person's own and is left alone.
+      if (draft === '') setDraft(startExtra);
+    }
   }
   // THE PICK'S ONE-TIME SEND (MOTIR-6435). Fired once the conversation is idle
   // with no user turn — the first moment a send has a thread to land in. The ref
@@ -663,7 +705,63 @@ export function PlanChangeRail({
   // follow-up never shows them: its first turn is the start, sent for the person.
   const holdsSeed =
     (Boolean(initialDraft) && draft.trim() !== '') || followUp !== null || guideOrigin !== null;
-  const showStarters = userTurns.length === 0 && !busy && state.phase !== 'loading' && !holdsSeed;
+  // THE START PROMPT'S PHASE (MOTIR-10624), derived from the THREAD: live with no
+  // user turn, starting while a press is in flight on this page, spent once the
+  // first user turn is the start turn — and `null` (today's opener) for a thread
+  // begun some other way, an open still loading, a read-only viewer, or a card
+  // another holder's session has (the shipped `TargetRefusal` speaks instead).
+  const startLine = startPrompt
+    ? t(startPrompt.face === 'replan' ? 'startTurn.replan' : 'startTurn.plan', {
+        key: startPrompt.target.identifier,
+      })
+    : '';
+  // A press ENDS when its turn lands: the claim is given back, so a thread that
+  // later swaps onto an EMPTY session in place (Plan something new) draws the live
+  // prompt again rather than a press that finished long ago (review on #4034).
+  // The thread, not the claim, is what keeps a landed start from being re-offered.
+  if (startClaim !== null && userTurns.length > 0) {
+    releasePickAutoSend(startClaim);
+    setStartClaim(null);
+  }
+  // A claim held on this page by a rail that is GONE (a remount) is a press in
+  // flight only while the conversation is still working on it. Idle with no user
+  // turn, that send ended with the rail that made it — the workspace's own send is
+  // aborted with it — so the prompt is live and Start may take the claim over.
+  const orphanedStart = (spec: PlanStartPromptSpec) =>
+    !startPressRef.current && !busy && pickAutoSendClaimed(spec.claimKey);
+  const startPhase =
+    startPrompt && state.phase !== 'loading' && !state.readOnly && !state.targetHeld
+      ? planStartPhase({
+          userTurnBodies: userTurns.map((turn) => turn.body),
+          startLine,
+          starting: startClaim !== null || (busy && pickAutoSendClaimed(startPrompt.claimKey)),
+        })
+      : null;
+  // The spec while the prompt is LIVE — the only state in which a press or a Send
+  // may start it.
+  const liveStart = startPhase === 'live' ? startPrompt : null;
+  // Start and Send are ONE door (design panel 4): both send the start line, with
+  // whatever the person typed as extra conditions, through the rail's own send —
+  // so Grill me, the paywall, a held target and every send error behave exactly as
+  // for a typed first message. The claim makes it once per anchor per page.
+  const startFromPrompt = (spec: PlanStartPromptSpec, extra: string): boolean => {
+    // Two presses inside one tick both see a live button; the claim lets one through.
+    if (orphanedStart(spec)) releasePickAutoSend(spec.claimKey);
+    if (!claimPickAutoSend(spec.claimKey)) return false;
+    startPressRef.current = true;
+    setStartClaim(spec.claimKey);
+    setStartExtra(extra.trim());
+    setLastSent(extra.trim());
+    onSend(composeStartTurn(startLine, extra));
+    return true;
+  };
+  const showStarters =
+    userTurns.length === 0 &&
+    !busy &&
+    state.phase !== 'loading' &&
+    !holdsSeed &&
+    // The prompt is the one action this door is for; hints would compete with it.
+    startPhase === null;
   // An ITEM re-plan opens by ASKING (MOTIR-910 / design panels 2 + 4 + 5): the
   // composer is pre-focused and prompts for what's wrong, and what the user types
   // is the FIRST CHAT TURN — the reason itself, which MOTIR-908 classifies. There
@@ -927,11 +1025,17 @@ export function PlanChangeRail({
       ? tGrill(grillOwnWords ? 'ownWordsPlaceholder' : 'composerPlaceholder')
       : question || isOpenUnclear(runPause)
         ? tc('composerPlaceholderAnswer')
-        : askingForReason
-          ? tc('composerPlaceholderReplan')
-          : targets.length > 0
-            ? tc('composerPlaceholderTargets')
-            : tc('composerPlaceholder');
+        : startPhase === 'live' || startPhase === 'starting'
+          ? t(
+              startPrompt?.face === 'replan'
+                ? 'startPrompt.placeholderReplan'
+                : 'startPrompt.placeholderPlan',
+            )
+          : askingForReason
+            ? tc('composerPlaceholderReplan')
+            : targets.length > 0
+              ? tc('composerPlaceholderTargets')
+              : tc('composerPlaceholder');
 
   // What the THREAD is anchored at, per the server (`PlanChangeSessionDto`) —
   // not the local tray. A sent turn is scoped by the session it landed in, so
@@ -1182,28 +1286,50 @@ export function PlanChangeRail({
           </>
         ) : null}
 
-        {/* The opener — the canvas already shows the plan, so "empty" is never a
-            blank screen; only the conversation is empty (design panel 6). */}
-        <Bubble role="assistant">
-          <span>
-            {guideOrigin
-              ? t('guideSeed.lead', {
-                  target: launch.itemKey ?? '',
-                  guided: guideOrigin.guidedKey,
-                })
-              : followUp
-                ? launch.itemKey
-                  ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
-                  : t('lead.followUpProject', { choice: followUp.choiceKey, project: projectName })
-                : t(leadKey(launch), {
-                    project: projectName,
-                    item: launch.itemKey ?? '',
-                  })}
-          </span>{' '}
-          {guideOrigin ? null : (
-            <span>{followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}</span>
-          )}
-        </Bubble>
+        {/* THE START PROMPT (MOTIR-10624; design MOTIR-10623 panels 2–6) stands IN
+            PLACE OF the opener on the card's Plan / Re-plan door: the question is the
+            opening line, and after the start it stays as the record of what was asked. */}
+        {startPrompt && startPhase !== null ? (
+          <PlanStartPrompt
+            target={startPrompt.target}
+            face={startPrompt.face}
+            phase={startPhase}
+            typed={draft.trim() !== ''}
+            onStart={() => {
+              // The draft is cleared only for a start that went out: a refused
+              // press keeps what the person typed.
+              if (startFromPrompt(startPrompt, draft)) setDraft('');
+            }}
+          />
+        ) : (
+          /* The opener — the canvas already shows the plan, so "empty" is never a
+            blank screen; only the conversation is empty (design panel 6). */
+          <Bubble role="assistant">
+            <span>
+              {guideOrigin
+                ? t('guideSeed.lead', {
+                    target: launch.itemKey ?? '',
+                    guided: guideOrigin.guidedKey,
+                  })
+                : followUp
+                  ? launch.itemKey
+                    ? t('lead.followUp', { choice: followUp.choiceKey, item: launch.itemKey })
+                    : t('lead.followUpProject', {
+                        choice: followUp.choiceKey,
+                        project: projectName,
+                      })
+                  : t(leadKey(launch), {
+                      project: projectName,
+                      item: launch.itemKey ?? '',
+                    })}
+            </span>{' '}
+            {guideOrigin ? null : (
+              <span>
+                {followUp ? tc('openerFollowUp', { label: followUp.label }) : tc('opener')}
+              </span>
+            )}
+          </Bubble>
+        )}
         {followUp ? <FollowUpCard pick={followUp} /> : null}
         {guideOrigin ? <GuideOriginCard guide={guideOrigin} /> : null}
 
@@ -1879,6 +2005,13 @@ export function PlanChangeRail({
               return;
             }
             if (convHold === 'held') return;
+            // While the start prompt is live, Send IS Start (design panel 4): the
+            // typed text rides the start line as extra conditions, and the prompt
+            // is spent.
+            if (liveStart) {
+              startFromPrompt(liveStart, text);
+              return;
+            }
             if (initialDraft && userTurns.length === 0) setSeededSend(text);
             setLastSent(text);
             onSend(text);
@@ -1886,7 +2019,10 @@ export function PlanChangeRail({
           placeholder={composerPlaceholder}
           // A held message stays in the field (the send above reached nobody).
           clearOnSubmit={!(convHold === 'held' && !convQuestion)}
-          autoFocus={askingForReason || initialDraftCaret !== undefined}
+          // The start prompt focuses the composer, not the button (design
+          // § Accessibility): typing conditions is what a keyboard user can do at
+          // once, and Start is one Shift+Tab away.
+          autoFocus={askingForReason || initialDraftCaret !== undefined || liveStart !== null}
           {...(initialDraftCaret !== undefined ? { caretAt: initialDraftCaret } : {})}
           // ⚠️ NO LONGER `busy` (MOTIR-4274). The composer stays LIVE while a run
           // works — that is the whole point of the mailbox, and it is a BEHAVIOUR
@@ -1905,7 +2041,10 @@ export function PlanChangeRail({
             // A session waiting to resume takes no ordinary turn — the server refuses the
             // submit (MOTIR-7916), and Resume is the only thing that restarts the walk.
             awaitsResume ||
-            Boolean(state.stalePlan?.pressing)
+            Boolean(state.stalePlan?.pressing) ||
+            // A start in flight holds the field until the turn is accepted, so a
+            // press plus a Send cannot start twice (design panel 5).
+            startPhase === 'starting'
           }
           // The pending question travels to the composer, not to a header pill:
           // measured at the rail's real 22rem the header row is already full, and

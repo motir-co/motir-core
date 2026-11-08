@@ -625,6 +625,25 @@ describe('the next-action button', () => {
     expect(cls).toContain('right-3');
   });
 
+  // MOTIR-10631: centred on the edge (`top-0 -translate-y-1/2`), the 32px button
+  // reached 16px into the frame and sat 0.3–4.3px over the tag row's status chip
+  // in every style. Its BOTTOM is now anchored on the frame's top padding edge,
+  // lifted by the elevated shadow's hard drop, so neither the button nor its
+  // shadow reaches the chips whatever the style's density.
+  it.each([
+    ['the copy button', leaf, true],
+    ['the To plan Plan button', story, false],
+  ] as const)('%s keeps its bottom above the tag row', (_label, item, ready) => {
+    render(<WorkItemNode item={item} ready={ready} nextActions={ON} />);
+    const cls = classes(nextAction()!);
+    expect(cls).toContain(
+      'top-[calc(var(--spacing-card-padding-12)-var(--spacing-shadow-elevated-drop))]',
+    );
+    expect(cls).toContain('-translate-y-full');
+    expect(cls).not.toContain('-translate-y-1/2');
+    expect(cls).not.toContain('top-0');
+  });
+
   it('the To plan Plan button hangs on the same top edge', () => {
     render(<WorkItemNode item={story} nextActions={ON} />);
     expect(nextAction()!.dataset.action).toBe('plan');

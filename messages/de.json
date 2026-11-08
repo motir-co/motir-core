@@ -8488,7 +8488,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "{key} planen"
+      "plan": "{key} planen",
+      "replan": "{key} neu planen"
+    },
+    "startPrompt": {
+      "label": "Planung von {key} starten",
+      "labelReplan": "Neuplanung von {key} starten",
+      "askPlan": "Soll ich mit der Planung dieses Arbeitselements beginnen?",
+      "askReplan": "Soll ich mit der Neuplanung dieses Arbeitselements beginnen?",
+      "bodyPlan": "Ich plane es anhand seiner Beschreibung und des Codes, den es betrifft.",
+      "bodyReplan": "Ich prüfe seinen aktuellen Plan anhand seiner Beschreibung und des Codes.",
+      "startPlan": "Planung starten",
+      "startReplan": "Neuplanung starten",
+      "starting": "Wird gestartet…",
+      "helpEmpty": "Möchten Sie Bedingungen hinzufügen, etwa „nur die API, keine UI“? Geben Sie sie zuerst unten ein, dann gehen sie mit dem Start mit.",
+      "helpEmptyReplan": "Wissen Sie, was nicht stimmt? Geben Sie es zuerst unten ein, dann geht es mit dem Start mit.",
+      "helpTypedPlan": "Startet die Planung mit Ihrer Eingabe als zusätzlichen Bedingungen. Senden bewirkt dasselbe.",
+      "helpTypedReplan": "Startet die Neuplanung mit Ihrer Eingabe als zusätzlichen Bedingungen. Senden bewirkt dasselbe.",
+      "startedPlan": "Planung gestartet",
+      "startedReplan": "Neuplanung gestartet",
+      "placeholderPlan": "Bedingungen hinzufügen (optional)…",
+      "placeholderReplan": "Was stimmt nicht? (optional)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",
@@ -10794,6 +10814,9 @@
             "planner_model": {
               "set": "Planungsmodell geändert"
             },
+            "planner_review_model": {
+              "set": "Testlauf-Prüfmodell geändert"
+            },
             "planner_model_list": {
               "add": "Modell zur Planungsliste hinzugefügt",
               "remove": "Modell aus der Planungsliste entfernt"
@@ -11577,6 +11600,21 @@
         "notPermitted": "Nur ein Superadmin kann das Planungsmodell ändern.",
         "reasonRequired": "Ein Grund ist erforderlich.",
         "failed": "Die Änderung konnte nicht gespeichert werden. Es wurde nichts geändert."
+      },
+      "review": {
+        "name": "Testlauf-Prüfung",
+        "desc": "Die schreibgeschützte Prüfung jedes Plans, bevor er angezeigt wird",
+        "same": "Wie das Planungsmodell",
+        "sameDesc": "Jeder Planungsjob prüft mit dem Modell, mit dem er plant",
+        "defaultGroup": "Standard",
+        "pickerAria": "Modell der Testlauf-Prüfung",
+        "withdrawnBody": "Prüfungen laufen mit dem Planungsmodell des jeweiligen Jobs, bis Sie ein anderes wählen.",
+        "withdrawnBodyReadOnly": "Prüfungen laufen mit dem Planungsmodell des jeweiligen Jobs, bis ein Superadmin ein anderes wählt.",
+        "confirmTitle": "Modell der Testlauf-Prüfung ändern?",
+        "confirmBody": "{from} → {to}. Die Änderung gilt für den Testlauf des nächsten Planungsjobs jeder Organisation. Bereits laufende Jobs werden mit dem Modell abgeschlossen, mit dem sie gestartet sind.",
+        "savedTitle": "Prüfmodell geändert",
+        "savedBody": "Testlauf-Prüfungen laufen ab dem nächsten Planungsjob mit {model}.",
+        "unchanged": "Die Testlauf-Prüfung läuft bereits mit {model}."
       }
     },
     "lessons": {

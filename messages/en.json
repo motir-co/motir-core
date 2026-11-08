@@ -8485,7 +8485,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "Plan {key}"
+      "plan": "Plan {key}",
+      "replan": "Re-plan {key}"
+    },
+    "startPrompt": {
+      "label": "Start planning {key}",
+      "labelReplan": "Start re-planning {key}",
+      "askPlan": "Shall I start planning this work item?",
+      "askReplan": "Shall I start re-planning this work item?",
+      "bodyPlan": "I’ll plan it from its description and the code it touches.",
+      "bodyReplan": "I’ll check its current plan against its description and the code.",
+      "startPlan": "Start planning",
+      "startReplan": "Start re-planning",
+      "starting": "Starting…",
+      "helpEmpty": "Want to add conditions, like “keep it to the API, no UI”? Type them below first, and they go with the start.",
+      "helpEmptyReplan": "Know what’s wrong? Type it below first, and it goes with the start.",
+      "helpTypedPlan": "Starts planning with what you typed as extra conditions. Send does the same.",
+      "helpTypedReplan": "Starts re-planning with what you typed as extra conditions. Send does the same.",
+      "startedPlan": "Planning started",
+      "startedReplan": "Re-planning started",
+      "placeholderPlan": "Add conditions (optional)…",
+      "placeholderReplan": "What’s wrong? (optional)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",
@@ -10791,6 +10811,9 @@
             "planner_model": {
               "set": "Changed the planning model"
             },
+            "planner_review_model": {
+              "set": "Changed the dry-run review model"
+            },
             "planner_model_list": {
               "add": "Added a model to the planning list",
               "remove": "Removed a model from the planning list"
@@ -11574,6 +11597,21 @@
         "notPermitted": "Only a superadmin can change the planning model.",
         "reasonRequired": "A reason is required.",
         "failed": "The change could not be saved. Nothing was changed."
+      },
+      "review": {
+        "name": "Dry-run review",
+        "desc": "The read-only check of every plan before it is shown",
+        "same": "Same as the planning model",
+        "sameDesc": "Each plan job reviews on the model it plans with",
+        "defaultGroup": "Default",
+        "pickerAria": "Dry-run review model",
+        "withdrawnBody": "Reviews run on each job's planning model until you choose another.",
+        "withdrawnBodyReadOnly": "Reviews run on each job's planning model until a superadmin chooses another.",
+        "confirmTitle": "Change the dry-run review model?",
+        "confirmBody": "{from} → {to}. The change applies to the dry run of the next plan job for every organisation. Jobs already running finish on the model they started with.",
+        "savedTitle": "Review model changed",
+        "savedBody": "Dry-run reviews now run on {model} from the next plan job.",
+        "unchanged": "The dry-run review already runs on {model}."
       }
     },
     "lessons": {

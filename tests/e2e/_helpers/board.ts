@@ -174,6 +174,40 @@ export async function scrollLaneToEnd(page: Page, columnId: string, total: numbe
     .toBe(total.toLocaleString('en-US'));
 }
 
+/** The swimlane board's twin of {@link scrollLaneToEnd} (MOTIR-10655): bring one
+ *  column's sentinel in the board's footer row into view, again and again, until
+ *  the column's pinned badge reads the bare total. The swimlane grid scrolls as
+ *  one, against the page, so the sentinel itself is the scroll target.
+ *
+ *  The scroll is a plain `scrollIntoView` on whatever sentinel is there, NEVER a
+ *  Locator action on it: the sentinel exists only while its column has more
+ *  (`LaneLoadFooter` renders nothing once the cursor is spent), so it unmounts the
+ *  moment the LAST page lands. A `scrollIntoViewIfNeeded()` issued after that
+ *  waits for an element that will never come back, the poll times out holding the
+ *  badge it read one page earlier, and a lane that loaded in full reads
+ *  "60 of 64". */
+export async function scrollSwimlaneColumnToEnd(
+  page: Page,
+  columnId: string,
+  total: number,
+): Promise<void> {
+  const main = page.getByRole('main');
+  const badge = main.getByTestId(`board-count-${columnId}`);
+  await expect
+    .poll(
+      async () => {
+        await main.evaluate((el, id) => {
+          el.querySelector(`[data-testid="board-lane-sentinel-${id}"]`)?.scrollIntoView({
+            block: 'end',
+          });
+        }, columnId);
+        return (await badge.textContent())?.trim();
+      },
+      { message: `swimlane column ${columnId} pages to its full ${total}`, timeout: 60_000 },
+    )
+    .toBe(total.toLocaleString('en-US'));
+}
+
 /** Assert a column is DOM-bounded: its mounted card-node count is > 0 but well
  *  below its full total — i.e. it virtualized rather than mounting every row.
  *  `total` is the column's full `totalCount` (from the projection / count badge). */

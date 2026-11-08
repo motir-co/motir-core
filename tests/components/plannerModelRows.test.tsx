@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import type {
   PlatformPlannerModelRowDTO,
   PlatformPlannerModelSettingsDTO,
+  PlatformPlannerReviewModelRowDTO,
 } from '@/lib/dto/platformPlannerModel';
 
 /**
@@ -18,7 +19,13 @@ import type {
 const setPlannerModelAction = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ ok: true })),
 );
-vi.mock('@/app/(admin)/admin/ai-planning/actions', () => ({ setPlannerModelAction }));
+const setPlannerReviewModelAction = vi.hoisted(() =>
+  vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ ok: true })),
+);
+vi.mock('@/app/(admin)/admin/ai-planning/actions', () => ({
+  setPlannerModelAction,
+  setPlannerReviewModelAction,
+}));
 const refresh = vi.hoisted(() => vi.fn());
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh }) }));
 
@@ -28,6 +35,7 @@ const { PlannerModelRows } =
 afterEach(() => {
   cleanup();
   setPlannerModelAction.mockClear();
+  setPlannerReviewModelAction.mockClear();
   refresh.mockClear();
 });
 
@@ -62,8 +70,15 @@ function settings(
       { id: 'claude-opus-5-5', provider: 'anthropic' },
     ],
     canEdit: true,
+    review: null,
     ...over,
   };
+}
+
+function review(
+  over: Partial<PlatformPlannerReviewModelRowDTO> = {},
+): PlatformPlannerReviewModelRowDTO {
+  return { model: null, offered: null, updatedAt: null, updatedBy: null, seeded: true, ...over };
 }
 
 function renderRows(s: PlatformPlannerModelSettingsDTO) {
@@ -191,5 +206,127 @@ describe('PlannerModelRows', () => {
       'Seeded default · never changed',
     );
     expect(internalRow().textContent).toMatch(/Changed .* by Ops superadmin/);
+  });
+});
+
+describe('the dry-run review row (MOTIR-10632)', () => {
+  const reviewRow = () => screen.getByTestId('ai-planning-row-review');
+
+  function pickReview(name: RegExp) {
+    fireEvent.click(within(reviewRow()).getByRole('combobox', { name: 'Dry-run review model' }));
+    fireEvent.click(screen.getByRole('option', { name }));
+  }
+
+  async function confirmReview(reason: string) {
+    fireEvent.click(within(reviewRow()).getByRole('button', { name: 'Save' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: reason } });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Change model' }));
+    });
+    return dialog;
+  }
+
+  it('is absent when motir-ai serves no review setting', () => {
+    renderRows(settings());
+    expect(screen.queryByTestId('ai-planning-row-review')).toBeNull();
+  });
+
+  it('offers "Same as the planning model" first, then the planning list', () => {
+    renderRows(settings({ review: review() }));
+    expect(reviewRow().textContent).toContain('Dry-run review');
+    fireEvent.click(within(reviewRow()).getByRole('combobox', { name: 'Dry-run review model' }));
+    const options = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(options[0]).toMatch(/Same as the planning model/);
+    expect(options.slice(1).join(' ')).toMatch(/claude-opus-5-5.*claude-sonnet-5-5.*gpt-5/);
+  });
+
+  it('saves a list model, naming "same as planning" as the from side', async () => {
+    renderRows(settings({ review: review() }));
+    pickReview(/gpt-5/);
+    fireEvent.click(within(reviewRow()).getByRole('button', { name: 'Save' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(dialog.textContent).toContain('Same as the planning model → gpt-5');
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: ' cheaper ' } });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Change model' }));
+    });
+    expect(setPlannerReviewModelAction).toHaveBeenCalledWith('gpt-5', 'cheaper');
+    expect(setPlannerModelAction).not.toHaveBeenCalled();
+    expect(await screen.findByText('Review model changed')).toBeTruthy();
+  });
+
+  it('saves "same as the planning model" as null', async () => {
+    renderRows(
+      settings({
+        review: review({
+          model: 'gpt-5',
+          offered: true,
+          seeded: false,
+          updatedAt: '2026-11-08T09:00:00.000Z',
+          updatedBy: 'Ops superadmin',
+        }),
+      }),
+    );
+    expect(reviewRow().textContent).toMatch(/Changed .* by Ops superadmin/);
+    pickReview(/Same as the planning model/);
+    await confirmReview('follow planning');
+    expect(setPlannerReviewModelAction).toHaveBeenCalledWith(null, 'follow planning');
+  });
+
+  it('UNCHANGED and UNREACHABLE are said on the row', async () => {
+    setPlannerReviewModelAction.mockResolvedValueOnce({ ok: false, code: 'UNCHANGED' });
+    renderRows(settings({ review: review() }));
+    pickReview(/gpt-5/);
+    await confirmReview('x');
+    expect(within(reviewRow()).getByRole('alert').textContent).toBe(
+      'The dry-run review already runs on gpt-5.',
+    );
+    setPlannerReviewModelAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'UNREACHABLE',
+      reason: 'timed out',
+    });
+    pickReview(/claude-sonnet-5-5/);
+    await confirmReview('x');
+    expect(within(reviewRow()).getByRole('alert').textContent).toContain(
+      'could not reach claude-sonnet-5-5',
+    );
+  });
+
+  it.each(['NOT_OFFERED', 'NOT_PERMITTED', 'REASON_REQUIRED', 'UNAVAILABLE', 'FAILED'] as const)(
+    '%s is said on the review row, which keeps its stored value',
+    async (code) => {
+      setPlannerReviewModelAction.mockResolvedValueOnce({ ok: false, code });
+      renderRows(settings({ review: review() }));
+      pickReview(/gpt-5/);
+      await confirmReview('x');
+      expect(within(reviewRow()).getByRole('alert').textContent).not.toBe('');
+      expect(refresh).toHaveBeenCalledTimes(code === 'NOT_OFFERED' ? 1 : 0);
+    },
+  );
+
+  it('a withdrawn stored review model gets the chip and says reviews follow planning', () => {
+    renderRows(settings({ review: review({ model: 'claude-old-1', offered: false }) }));
+    const chip = within(reviewRow()).getByTestId('ai-planning-withdrawn');
+    expect(chip.textContent).toContain('No longer offered');
+    expect(chip.textContent).toContain("Reviews run on each job's planning model until you choose");
+  });
+
+  it('read-only: plain text, no picker — "same" when unset, the model when set', () => {
+    renderRows(settings({ canEdit: false, review: review() }));
+    expect(within(reviewRow()).queryAllByRole('combobox')).toHaveLength(0);
+    expect(reviewRow().textContent).toContain('Same as the planning model');
+    cleanup();
+    renderRows(
+      settings({ canEdit: false, review: review({ model: 'claude-old-1', offered: false }) }),
+    );
+    expect(reviewRow().textContent).toContain('claude-old-1');
+    expect(within(reviewRow()).getByTestId('ai-planning-withdrawn').textContent).toContain(
+      'until a superadmin chooses another',
+    );
+    cleanup();
+    renderRows(settings({ canEdit: false, review: review({ model: 'gpt-5', offered: true }) }));
+    expect(reviewRow().textContent).toContain('openai');
   });
 });

@@ -70,6 +70,12 @@ export type PlanningLaunchContext =
        *  turn — `/ready`'s *Expand* is the one that does. Written as `planStart=1`
        *  and only when no `sessionId` names a conversation to reopen. */
       startTurn?: boolean;
+      /** ASK BEFORE STARTING (MOTIR-10624; design MOTIR-10623): the card's Plan /
+       *  Re-plan button asks the overlay to open on a planner message that offers
+       *  **Start planning** — one click sends the start turn, nothing is sent
+       *  until then. Written as `planAsk=1`, only when no `sessionId` names a
+       *  conversation to reopen and `startTurn` is not asking to send outright. */
+      confirmStart?: boolean;
     }
   | { kind: 'roadmap' }
   | { kind: 'refused-gate'; gateId: string }
@@ -225,6 +231,9 @@ export interface PlanningLaunch {
   /** Send the start turn (`planStart`, MOTIR-7973) — present only for a `work-item`
    *  origin with an anchor and no named session. */
   startTurn?: boolean;
+  /** Ask before starting (`planAsk`, MOTIR-10624) — present only for a `work-item`
+   *  origin with an anchor, no named session and no `startTurn`. */
+  confirmStart?: boolean;
 }
 
 /** The default a missing / unknown `?mode=` falls back to (never an error). */
@@ -350,6 +359,17 @@ export const OVERLAY_PARAM_NAMES = {
    * guided card are read from the server, never carried in the URL.
    */
   guideOffer: 'planOffer',
+  /**
+   * ASK BEFORE STARTING (MOTIR-10624; design MOTIR-10623 § *Which launches show
+   * it*) — `planAsk=1` asks the overlay to open on the start prompt: a planner
+   * message naming the anchor, with **Start planning** / **Start re-planning**.
+   * Written ONLY by the card's Plan / Re-plan button, for a `work-item` origin
+   * with no `planSession` and no `planStart`, and read only there — so no other
+   * door can raise the prompt. Nothing is sent until the person presses Start or
+   * sends; the prompt's spent state is derived from the thread, so the address
+   * keeps it and a reload draws the same record.
+   */
+  ask: 'planAsk',
 } as const;
 
 /**
@@ -406,6 +426,16 @@ export function planningOverlaySearch(context: PlanningLaunchContext): URLSearch
   // ask to start a thread that already exists.
   if (context.kind === 'work-item' && context.startTurn && !context.sessionId) {
     params.set(OVERLAY_PARAM_NAMES.start, '1');
+  }
+  // ASKING rides the same fresh item conversation, and gives way to a START: a
+  // door that sends outright has nothing left to ask.
+  if (
+    context.kind === 'work-item' &&
+    context.confirmStart &&
+    !context.sessionId &&
+    !context.startTurn
+  ) {
+    params.set(OVERLAY_PARAM_NAMES.ask, '1');
   }
   return params;
 }
@@ -563,6 +593,12 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     itemKey !== null &&
     sessionId === null &&
     first(readParam(params, OVERLAY_PARAM_NAMES.start)) !== null;
+  // …and the ask by the same rule, giving way to a start as the write side does.
+  const confirmStart =
+    itemKey !== null &&
+    sessionId === null &&
+    !startTurn &&
+    first(readParam(params, OVERLAY_PARAM_NAMES.ask)) !== null;
   return {
     mode: parsePlanningMode(readParam(params, OVERLAY_PARAM_NAMES.mode)),
     from,
@@ -574,5 +610,6 @@ export function parsePlanningOverlay(params: PlanningOverlayParams): PlanningLau
     ...(gateId ? { gateId } : {}),
     ...(guideTurnId ? { guideTurnId } : {}),
     ...(startTurn ? { startTurn: true } : {}),
+    ...(confirmStart ? { confirmStart: true } : {}),
   };
 }

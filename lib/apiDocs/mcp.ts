@@ -931,7 +931,9 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
     // now scans the explanation too — still advisory, outside the verdict.
     // Re-pinned for MOTIR-10112, summary UNCHANGED: `likely-self-blocking-design`
     // now exempts `type: test` beside `type: design` — advisory channel only.
-    descriptionFingerprint: '2601f9f3a510',
+    // Re-pinned for MOTIR-10627, summary UNCHANGED: `crossLevelEdges` leaves out an
+    // edge onto a DONE blocker, which holds nothing; the three questions are the same.
+    descriptionFingerprint: '0a0889eee8cd',
   },
   get_plan_code_reads: {
     // MOTIR-10122: what each planner session read, at which commit — the evidence a check of a
