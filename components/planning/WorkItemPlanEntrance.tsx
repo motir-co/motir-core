@@ -154,6 +154,10 @@ export function WorkItemPlanEntrance({
     kind: 'work-item',
     itemKey,
     hasPlan: isReplan,
+    // ASK BEFORE STARTING (MOTIR-10624; design MOTIR-10623): this button is also
+    // how people open the planner to ASK about a card, so it opens on a question
+    // with one Start button rather than sending, or waiting for typing.
+    confirmStart: true,
   });
   if (face === null) return null;
 

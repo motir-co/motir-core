@@ -8488,7 +8488,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "Planifier {key}"
+      "plan": "Planifier {key}",
+      "replan": "Replanifier {key}"
+    },
+    "startPrompt": {
+      "label": "Lancer la planification de {key}",
+      "labelReplan": "Lancer la replanification de {key}",
+      "askPlan": "Dois-je commencer à planifier cet élément de travail ?",
+      "askReplan": "Dois-je commencer à replanifier cet élément de travail ?",
+      "bodyPlan": "Je le planifierai à partir de sa description et du code qu’il touche.",
+      "bodyReplan": "Je comparerai son plan actuel à sa description et au code.",
+      "startPlan": "Lancer la planification",
+      "startReplan": "Lancer la replanification",
+      "starting": "Lancement…",
+      "helpEmpty": "Vous voulez ajouter des conditions, comme « seulement l’API, pas d’UI » ? Saisissez-les d’abord ci-dessous, elles partiront avec le lancement.",
+      "helpEmptyReplan": "Vous savez ce qui ne va pas ? Saisissez-le d’abord ci-dessous, il partira avec le lancement.",
+      "helpTypedPlan": "Lance la planification avec votre saisie comme conditions supplémentaires. Envoyer fait de même.",
+      "helpTypedReplan": "Lance la replanification avec votre saisie comme conditions supplémentaires. Envoyer fait de même.",
+      "startedPlan": "Planification lancée",
+      "startedReplan": "Replanification lancée",
+      "placeholderPlan": "Ajouter des conditions (facultatif)…",
+      "placeholderReplan": "Qu’est-ce qui ne va pas ? (facultatif)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",

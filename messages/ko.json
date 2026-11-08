@@ -8482,7 +8482,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "{key} 계획"
+      "plan": "{key} 계획",
+      "replan": "{key} 다시 계획"
+    },
+    "startPrompt": {
+      "label": "{key} 계획 시작",
+      "labelReplan": "{key} 다시 계획 시작",
+      "askPlan": "이 작업 항목의 계획을 시작할까요?",
+      "askReplan": "이 작업 항목의 계획을 다시 시작할까요?",
+      "bodyPlan": "설명과 관련 코드를 바탕으로 계획합니다.",
+      "bodyReplan": "현재 계획을 설명 및 코드와 비교해 확인합니다.",
+      "startPlan": "계획 시작",
+      "startReplan": "다시 계획 시작",
+      "starting": "시작하는 중…",
+      "helpEmpty": "“API만, UI는 제외”처럼 조건을 추가하시겠습니까? 먼저 아래에 입력하면 시작할 때 함께 전달됩니다.",
+      "helpEmptyReplan": "무엇이 잘못되었는지 아시나요? 먼저 아래에 입력하면 시작할 때 함께 전달됩니다.",
+      "helpTypedPlan": "입력한 내용을 추가 조건으로 계획을 시작합니다. 보내기도 같은 동작을 합니다.",
+      "helpTypedReplan": "입력한 내용을 추가 조건으로 다시 계획을 시작합니다. 보내기도 같은 동작을 합니다.",
+      "startedPlan": "계획 시작됨",
+      "startedReplan": "다시 계획 시작됨",
+      "placeholderPlan": "조건 추가 (선택)…",
+      "placeholderReplan": "무엇이 잘못되었나요? (선택)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",

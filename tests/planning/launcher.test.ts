@@ -175,7 +175,9 @@ describe('the overlay address — the parameter NAMES are the design contract', 
   // `planSession` joined with MOTIR-6024 (MOTIR-6019's design, §19.8), and `planVia`
   // with MOTIR-6037 (MOTIR-6033's design, Part XXII §22.2), and `planGate` with
   // MOTIR-6210 (MOTIR-6206's design, § *The SEEDED re-plan* → *The ADDRESS*), and
-  // `planStart` with MOTIR-7973 (MOTIR-7875's design), `planOffer` with MOTIR-8693.
+  // `planStart` with MOTIR-7973 (MOTIR-7875's design), `planOffer` with MOTIR-8693,
+  // and `planAsk` with MOTIR-10624 (MOTIR-10623's design, § *The planner asks to
+  // start planning…* → *Which launches show it*).
   const DESIGN_NAMES = [
     'plan',
     'planFrom',
@@ -185,6 +187,7 @@ describe('the overlay address — the parameter NAMES are the design contract', 
     'planGate',
     'planStart',
     'planOffer',
+    'planAsk',
   ];
 
   it('emits exactly the names the design records, and no others', () => {
@@ -550,6 +553,61 @@ describe('planStart — Expand STARTS a conversation on its stub (MOTIR-7973)', 
   it('is stripped by Close with the rest of the overlay', () => {
     expect(withoutPlanningOverlay(withPlanningOverlay('/ready?lane=x', start))).toBe(
       '/ready?lane=x',
+    );
+  });
+});
+
+describe('planAsk — the Plan / Re-plan button ASKS before starting (MOTIR-10624)', () => {
+  const ask = { kind: 'work-item', itemKey: 'ACME-14', confirmStart: true } as const;
+
+  it('writes planAsk=1 beside the anchor and keeps the host query byte-identical', () => {
+    expect(withPlanningOverlay('/items?peek=ACME-14', ask)).toBe(
+      '/items?peek=ACME-14&plan=contextual&planFrom=work-item&planItem=ACME-14&planAsk=1',
+    );
+  });
+
+  it('round-trips through the parse, for both faces', () => {
+    expect(parsePlanningOverlay(planningOverlaySearch(ask))).toEqual({
+      mode: 'contextual',
+      from: 'work-item',
+      itemKey: 'ACME-14',
+      confirmStart: true,
+    });
+    expect(parsePlanningOverlay(planningOverlaySearch({ ...ask, hasPlan: true }))).toEqual({
+      mode: 'replan',
+      from: 'work-item',
+      itemKey: 'ACME-14',
+      confirmStart: true,
+    });
+  });
+
+  it('is not written beside a named session, beside a start, nor without confirmStart', () => {
+    expect(planningOverlaySearch({ ...ask, sessionId: 's-1' }).has('planAsk')).toBe(false);
+    const both = planningOverlaySearch({ ...ask, startTurn: true });
+    expect(both.has('planAsk')).toBe(false);
+    expect(both.get('planStart')).toBe('1');
+    expect(planningOverlaySearch({ kind: 'work-item', itemKey: 'ACME-14' }).has('planAsk')).toBe(
+      false,
+    );
+  });
+
+  it('is read only for a work-item origin with an anchor, no planSession and no planStart', () => {
+    for (const qs of [
+      'plan=project&planFrom=project&planAsk=1',
+      'plan=roadmap&planFrom=roadmap&planItem=ACME-14&planAsk=1',
+      'plan=replan&planFrom=refused-gate&planGate=g&planAsk=1',
+      'plan=contextual&planFrom=guide-offer&planOffer=t1&planAsk=1',
+      'plan=contextual&planFrom=work-item&planAsk=1',
+      'plan=contextual&planFrom=work-item&planItem=ACME-14&planSession=s-1&planAsk=1',
+      'plan=contextual&planFrom=work-item&planItem=ACME-14&planStart=1&planAsk=1',
+    ]) {
+      expect(parsePlanningOverlay(new URLSearchParams(qs))).not.toHaveProperty('confirmStart');
+    }
+  });
+
+  it('is stripped by Close with the rest of the overlay', () => {
+    expect(withoutPlanningOverlay(withPlanningOverlay('/items?peek=ACME-14', ask))).toBe(
+      '/items?peek=ACME-14',
     );
   });
 });

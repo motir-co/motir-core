@@ -8488,7 +8488,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "{key} planen"
+      "plan": "{key} planen",
+      "replan": "{key} neu planen"
+    },
+    "startPrompt": {
+      "label": "Planung von {key} starten",
+      "labelReplan": "Neuplanung von {key} starten",
+      "askPlan": "Soll ich mit der Planung dieses Arbeitselements beginnen?",
+      "askReplan": "Soll ich mit der Neuplanung dieses Arbeitselements beginnen?",
+      "bodyPlan": "Ich plane es anhand seiner Beschreibung und des Codes, den es betrifft.",
+      "bodyReplan": "Ich prüfe seinen aktuellen Plan anhand seiner Beschreibung und des Codes.",
+      "startPlan": "Planung starten",
+      "startReplan": "Neuplanung starten",
+      "starting": "Wird gestartet…",
+      "helpEmpty": "Möchten Sie Bedingungen hinzufügen, etwa „nur die API, keine UI“? Geben Sie sie zuerst unten ein, dann gehen sie mit dem Start mit.",
+      "helpEmptyReplan": "Wissen Sie, was nicht stimmt? Geben Sie es zuerst unten ein, dann geht es mit dem Start mit.",
+      "helpTypedPlan": "Startet die Planung mit Ihrer Eingabe als zusätzlichen Bedingungen. Senden bewirkt dasselbe.",
+      "helpTypedReplan": "Startet die Neuplanung mit Ihrer Eingabe als zusätzlichen Bedingungen. Senden bewirkt dasselbe.",
+      "startedPlan": "Planung gestartet",
+      "startedReplan": "Neuplanung gestartet",
+      "placeholderPlan": "Bedingungen hinzufügen (optional)…",
+      "placeholderReplan": "Was stimmt nicht? (optional)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",
