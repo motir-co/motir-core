@@ -1,12 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
+  REPORTER_EVENT_LIMIT_WARNING,
+  REPORTER_EVENT_REFUSED_WARNING,
   REPORTER_OFFLINE_WARNING,
   REPORTER_QUEUE_LIMIT,
+  REPORTER_RETRY_DELAYS_MS,
+  classifyReportingFailure,
   createDispatchRunReporter,
   nullDispatchRunReporter,
   type DispatchRunReporterDeps,
 } from '../src/dispatchRunReporter.js';
-import type { DispatchRunAppended, DispatchRunOpened, MotirClient } from '../src/client.js';
+import type {
+  DispatchRunAppended,
+  DispatchRunEventInput,
+  DispatchRunOpened,
+  MotirClient,
+} from '../src/client.js';
+import {
+  ApiRefusalError,
+  AuthError,
+  CliError,
+  DispatchRunClosedError,
+  IncompatibleServerError,
+  NetworkError,
+  NotFoundError,
+  PermissionError,
+  RateLimitError,
+  ResponseShapeError,
+  ServerFailureError,
+} from '../src/errors.js';
 
 // The DISPATCH RUN REPORTER (Story MOTIR-1789 · MOTIR-1794).
 //
@@ -189,7 +211,7 @@ describe('nothing here can break a run', () => {
     await expect(reporter.close('drained')).resolves.toBeUndefined();
   });
 
-  it('goes offline on the FIRST failure and warns exactly ONCE per session', async () => {
+  it('goes offline on the first DEFINITIVE failure and warns exactly ONCE per session', async () => {
     const warnings: string[] = [];
     let calls = 0;
     const reporter = createDispatchRunReporter({
@@ -438,5 +460,407 @@ describe('the run-found report (MOTIR-8698)', () => {
     const reporter = createDispatchRunReporter({ client });
     await reporter.reportUnbuildable!('PROD-1', 'why');
     expect(reported).toBe(0);
+  });
+});
+
+// ── MOTIR-10705 — a refused or failed append no longer silences the run ─────
+//
+// A hosted run is ended as a STALL when its newest event is fifteen minutes old, so a
+// reporter that went quiet over ONE refused batch killed a run whose agent was still
+// working. These drive the reporter against a client that refuses the way the server
+// does — the whole batch, typed by the transport — and assert reporting carries on.
+
+const tooLarge = () =>
+  new ApiRefusalError('An event body exceeds the limit.', 413, 'DISPATCH_RUN_BODY_TOO_LARGE');
+
+/** A client whose append refuses any batch holding an event `bad` picks out — WHOLE, as
+ *  the server refuses — and records what it accepted. */
+function refusingClient(bad: (e: DispatchRunEventInput) => boolean, refusal = tooLarge) {
+  const accepted: DispatchRunEventInput[] = [];
+  let calls = 0;
+  const { client, recorded } = fakeClient({
+    async appendDispatchRunEvents(args) {
+      calls += 1;
+      if (args.events.some(bad)) throw refusal();
+      accepted.push(...args.events);
+      return { runId: args.runId, appended: args.events.length, seq: accepted.length };
+    },
+  });
+  return { client, recorded, accepted, calls: () => calls };
+}
+
+const noSleep = async () => {};
+
+describe('a REFUSED batch is narrowed to the event the server will not take (MOTIR-10705)', () => {
+  it.each([
+    ['413', tooLarge],
+    ['422', () => new ApiRefusalError('Not a valid event.', 422, 'INVALID_BODY')],
+  ])('after a %s the reporter keeps sending, and agent_exited still lands', async (_s, refusal) => {
+    const warnings: string[] = [];
+    const { client, recorded, accepted } = refusingClient((e) => e.body === 'BAD', refusal);
+    const reporter = createDispatchRunReporter({
+      client,
+      reportLogBodies: true,
+      warn: (m) => warnings.push(m),
+    });
+    await reporter.open(OPEN);
+
+    reporter.event({ kind: 'log', workItemKey: 'PROD-1', body: 'first' });
+    reporter.event({ kind: 'log', workItemKey: 'PROD-1', body: 'BAD' });
+    reporter.event({ kind: 'log', workItemKey: 'PROD-1', body: 'third' });
+    await reporter.flush();
+    // LATER events — the ones a stall check reads — keep flowing.
+    reporter.event({ kind: 'agent_exited', workItemKey: 'PROD-1', exitCode: 0 });
+    await reporter.close('completed');
+
+    expect(accepted.map((e) => e.body ?? e.kind)).toEqual(['first', 'third', 'agent_exited']);
+    expect(reporter.offline).toBe(false);
+    expect(recorded.closes).toHaveLength(1);
+    // One line, once — not per dropped event.
+    expect(warnings).toEqual([REPORTER_EVENT_REFUSED_WARNING]);
+  });
+
+  it('bisects a full batch: one bad event among 200 costs a handful of requests, not 200', async () => {
+    const { client, accepted, calls } = refusingClient((e) => e.body === 'BAD');
+    const reporter = createDispatchRunReporter({ client, reportLogBodies: true, warn: () => {} });
+    await reporter.open(OPEN);
+    for (let i = 0; i < 200; i += 1) {
+      reporter.event({ kind: 'log', body: i === 137 ? 'BAD' : `line ${i}` });
+    }
+    await reporter.flush();
+
+    expect(accepted).toHaveLength(199);
+    expect(accepted.map((e) => e.body)).not.toContain('BAD');
+    // Order is kept: the halves are sent first-half first.
+    expect(accepted[136]?.body).toBe('line 136');
+    expect(accepted[137]?.body).toBe('line 138');
+    expect(calls()).toBeLessThanOrEqual(2 * Math.ceil(Math.log2(200)) + 1);
+  });
+
+  it('every event refused drops them all, still warns once, and stays online', async () => {
+    const warnings: string[] = [];
+    const { client, accepted } = refusingClient(() => true);
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    for (let i = 0; i < 5; i += 1) reporter.event({ kind: 'log' });
+    await reporter.flush();
+    expect(accepted).toEqual([]);
+    expect(reporter.offline).toBe(false);
+    expect(warnings).toEqual([REPORTER_EVENT_REFUSED_WARNING]);
+  });
+});
+
+describe('a TRANSIENT failure is retried and never stops reporting (MOTIR-10705)', () => {
+  it.each([
+    ['a 5xx', () => new ServerFailureError('The Motir server failed (503).', 503)],
+    ['a network failure', () => new NetworkError('Could not reach http://x: fetch failed.')],
+    ['an exhausted rate-limit wait', () => new RateLimitError(undefined)],
+  ])('%s is retried on the backoff schedule, and the batch lands', async (_name, failure) => {
+    const waits: number[] = [];
+    let failures = 2;
+    const { client, recorded } = fakeClient();
+    const append = client.appendDispatchRunEvents.bind(client);
+    client.appendDispatchRunEvents = async (args) => {
+      if (failures > 0) {
+        failures -= 1;
+        throw failure();
+      }
+      return append(args);
+    };
+    const reporter = createDispatchRunReporter({
+      client,
+      warn: () => {},
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+    });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'card_claimed', workItemKey: 'PROD-1' });
+    await reporter.flush();
+
+    expect(waits).toEqual(REPORTER_RETRY_DELAYS_MS.slice(0, 2));
+    expect(recorded.appends.flatMap((a) => a.events.map((e) => e.kind))).toEqual(['card_claimed']);
+    expect(reporter.offline).toBe(false);
+  });
+
+  it('without an injected sleep it waits on a REAL timer between retries', async () => {
+    let failures = 1;
+    const { client, recorded } = fakeClient();
+    const append = client.appendDispatchRunEvents.bind(client);
+    client.appendDispatchRunEvents = async (args) => {
+      if (failures-- > 0) throw new NetworkError('Could not reach http://x: ECONNRESET.');
+      return append(args);
+    };
+    const reporter = createDispatchRunReporter({ client, warn: () => {}, retryDelaysMs: [5] });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log' });
+    const started = Date.now();
+    await reporter.flush();
+    expect(Date.now() - started).toBeGreaterThanOrEqual(4);
+    expect(recorded.appends).toHaveLength(1);
+  });
+
+  it('a failure that outlasts the retries is KEPT for the next flush, never dropped', async () => {
+    let down = true;
+    const { client, recorded } = fakeClient();
+    const append = client.appendDispatchRunEvents.bind(client);
+    client.appendDispatchRunEvents = async (args) => {
+      if (down) throw new ServerFailureError('The Motir server failed (502).', 502);
+      return append(args);
+    };
+    const waits: number[] = [];
+    const reporter = createDispatchRunReporter({
+      client,
+      warn: () => {},
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+    });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log', data: { i: 0 } });
+    reporter.event({ kind: 'log', data: { i: 1 } });
+    await reporter.flush();
+    expect(waits).toEqual([...REPORTER_RETRY_DELAYS_MS]);
+    expect(recorded.appends).toHaveLength(0);
+
+    down = false;
+    reporter.event({ kind: 'log', data: { i: 2 } });
+    await reporter.flush();
+    expect(
+      recorded.appends.flatMap((a) => a.events.map((e) => (e.data as { i: number }).i)),
+    ).toEqual([0, 1, 2]);
+    expect(reporter.offline).toBe(false);
+  });
+
+  it('a batch put back keeps the queue bound, dropping the OLDEST', async () => {
+    let down = true;
+    let reporterRef: ReturnType<typeof createDispatchRunReporter> | null = null;
+    const { client, recorded } = fakeClient();
+    const append = client.appendDispatchRunEvents.bind(client);
+    client.appendDispatchRunEvents = async (args) => {
+      if (down) {
+        // More output arrives while the request is failing.
+        for (let i = 0; i < 100; i += 1) reporterRef!.event({ kind: 'log', data: { i: 1000 + i } });
+        throw new NetworkError('Could not reach http://x: ECONNRESET.');
+      }
+      return append(args);
+    };
+    const reporter = createDispatchRunReporter({ client, warn: () => {}, retryDelaysMs: [] });
+    reporterRef = reporter;
+    await reporter.open(OPEN);
+    for (let i = 0; i < 450; i += 1) reporter.event({ kind: 'log', data: { i } });
+    await reporter.flush();
+    down = false;
+    await reporter.flush();
+
+    const sent = recorded.appends.flatMap((a) => a.events.map((e) => (e.data as { i: number }).i));
+    expect(sent).toHaveLength(REPORTER_QUEUE_LIMIT);
+    // 200 put back + 250 still queued + 100 new = 550: the oldest 50 went.
+    expect(sent[0]).toBe(50);
+    expect(sent.at(-1)).toBe(1099);
+  });
+
+  it('the open, a leg and the close are retried too', async () => {
+    const failing = <T>(fn: (...a: never[]) => Promise<T>) => {
+      let first = true;
+      return async (...a: never[]) => {
+        if (first) {
+          first = false;
+          throw new NetworkError('Could not reach http://x: timeout.');
+        }
+        return fn(...a);
+      };
+    };
+    const { client, recorded } = fakeClient();
+    client.openDispatchRun = failing(client.openDispatchRun.bind(client) as never) as never;
+    client.closeDispatchRun = failing(client.closeDispatchRun.bind(client) as never) as never;
+    const reporter = createDispatchRunReporter({ client, warn: () => {}, sleep: noSleep });
+    await reporter.open(OPEN);
+    expect(reporter.runId).toBe('run_1');
+    client.openDispatchRun = failing(client.openDispatchRun.bind(client) as never) as never;
+    await reporter.addCard({ key: 'PROD-2', disposition: 'queued' });
+    await reporter.close('completed');
+    expect(recorded.opens).toHaveLength(2);
+    expect(recorded.closes).toHaveLength(1);
+    expect(reporter.offline).toBe(false);
+  });
+
+  it('a transient failure of the close that persists ends quietly, without going offline', async () => {
+    const { client } = fakeClient({
+      async closeDispatchRun() {
+        throw new ServerFailureError('The Motir server failed (500).', 500);
+      },
+    });
+    const warnings: string[] = [];
+    const reporter = createDispatchRunReporter({
+      client,
+      warn: (m) => warnings.push(m),
+      sleep: noSleep,
+    });
+    await reporter.open(OPEN);
+    await expect(reporter.close('completed')).resolves.toBeUndefined();
+    expect(reporter.offline).toBe(false);
+    expect(warnings).toEqual([]);
+  });
+
+  it('an open that never succeeds takes the reporter offline — there is no run to report into', async () => {
+    const warnings: string[] = [];
+    const { client, recorded } = fakeClient({
+      async openDispatchRun() {
+        throw new ServerFailureError('The Motir server failed (503).', 503);
+      },
+    });
+    const reporter = createDispatchRunReporter({
+      client,
+      warn: (m) => warnings.push(m),
+      sleep: noSleep,
+    });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    expect(reporter.offline).toBe(true);
+    expect(recorded.appends).toEqual([]);
+    expect(warnings).toEqual([REPORTER_OFFLINE_WARNING]);
+  });
+
+  it('flushes asked for while one is in flight JOIN the one queued behind it', async () => {
+    let release: () => void = () => {};
+    let held = true;
+    const { client, recorded } = fakeClient();
+    const append = client.appendDispatchRunEvents.bind(client);
+    client.appendDispatchRunEvents = async (args) => {
+      if (held) {
+        held = false;
+        await new Promise<void>((r) => (release = r));
+      }
+      return append(args);
+    };
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log', data: { i: 0 } });
+    const first = reporter.flush();
+    await Promise.resolve();
+    reporter.event({ kind: 'log', data: { i: 1 } });
+    const a = reporter.flush();
+    reporter.event({ kind: 'log', data: { i: 2 } });
+    const b = reporter.flush();
+    release();
+    await Promise.all([first, a, b]);
+    // Two requests, not three: the second and third flush were the same pending one.
+    expect(recorded.appends.map((x) => x.events.length)).toEqual([1, 2]);
+  });
+});
+
+describe('only a DEFINITIVE end takes reporting down (MOTIR-10705)', () => {
+  it.each([
+    ['a 401', () => new AuthError()],
+    ['a 403', () => new PermissionError('dispatch:report', 'appendDispatchRunEvents')],
+    ['a closed run (409)', () => new DispatchRunClosedError('Run is closed.')],
+    ['another 409', () => new ApiRefusalError('Conflict.', 409, 'SOMETHING_ELSE')],
+    ['a run that is gone (404)', () => new NotFoundError('No dispatch run run_1.')],
+  ])('%s goes offline with the one warning, and stops trying', async (_name, failure) => {
+    const warnings: string[] = [];
+    let appends = 0;
+    const { client } = fakeClient({
+      async appendDispatchRunEvents() {
+        appends += 1;
+        throw failure();
+      },
+    });
+    const reporter = createDispatchRunReporter({
+      client,
+      warn: (m) => warnings.push(m),
+      sleep: noSleep,
+    });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    expect(appends).toBe(1);
+    expect(reporter.offline).toBe(true);
+    expect(warnings).toEqual([REPORTER_OFFLINE_WARNING]);
+  });
+
+  it('the event CEILING stops events, but the run is still closed', async () => {
+    const warnings: string[] = [];
+    let appends = 0;
+    const { client, recorded } = fakeClient({
+      async appendDispatchRunEvents() {
+        appends += 1;
+        throw new ApiRefusalError('Limit reached.', 422, 'DISPATCH_RUN_EVENT_LIMIT');
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    await reporter.close('completed');
+    expect(appends).toBe(1);
+    expect(recorded.closes).toHaveLength(1);
+    expect(reporter.offline).toBe(false);
+    expect(warnings).toEqual([REPORTER_EVENT_LIMIT_WARNING]);
+  });
+
+  it('the ceiling met by a leg or the close caps events the same way', async () => {
+    const warnings: string[] = [];
+    const { client, recorded } = fakeClient();
+    const open = client.openDispatchRun.bind(client);
+    let opens = 0;
+    client.openDispatchRun = async (args) => {
+      opens += 1;
+      if (opens > 1) throw new ApiRefusalError('Limit reached.', 422, 'DISPATCH_RUN_EVENT_LIMIT');
+      return open(args);
+    };
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    await reporter.addCard({ key: 'PROD-2', disposition: 'queued' });
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    expect(recorded.appends).toEqual([]);
+    expect(warnings).toEqual([REPORTER_EVENT_LIMIT_WARNING]);
+  });
+
+  it('a 2xx it could not read is DELIVERED — never sent again', async () => {
+    let appends = 0;
+    const { client } = fakeClient({
+      async appendDispatchRunEvents() {
+        appends += 1;
+        throw new ResponseShapeError('http://x', 'appendDispatchRunEvents', 'seq', 'is required');
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: () => {} });
+    await reporter.open(OPEN);
+    reporter.event({ kind: 'log' });
+    reporter.event({ kind: 'log' });
+    await reporter.flush();
+    expect(appends).toBe(1);
+    expect(reporter.offline).toBe(false);
+  });
+});
+
+describe('classifyReportingFailure', () => {
+  it.each([
+    [new ApiRefusalError('x', 413, 'DISPATCH_RUN_BODY_TOO_LARGE'), 'refused'],
+    [new ApiRefusalError('x', 422, 'INVALID_BODY'), 'refused'],
+    [new ApiRefusalError('x', 400, null), 'refused'],
+    [new ApiRefusalError('x', 422, 'DISPATCH_RUN_EVENT_LIMIT'), 'capped'],
+    [new ApiRefusalError('x', 409, null), 'end'],
+    [new ServerFailureError('x', 500), 'transient'],
+    [new NetworkError('x'), 'transient'],
+    [new RateLimitError(undefined), 'transient'],
+    [new ResponseShapeError('u', 'op', 'f', 'd'), 'delivered'],
+    [new AuthError(), 'end'],
+    [new PermissionError('p', 'op'), 'end'],
+    [new DispatchRunClosedError('x'), 'end'],
+    [new NotFoundError('x'), 'end'],
+    [new IncompatibleServerError('x', 'h'), 'end'],
+    [new CliError('x'), 'end'],
+    [new Error('not from the transport'), 'end'],
+    ['a string', 'end'],
+  ] as const)('%o → %s', (err, expected) => {
+    expect(classifyReportingFailure(err)).toBe(expected);
   });
 });

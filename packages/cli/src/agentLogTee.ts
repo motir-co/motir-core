@@ -27,13 +27,68 @@ import type { DispatchRunReporter } from './dispatchRunReporter.js';
 // a size threshold keeps the same bound holding a useful amount of transcript.
 
 /**
- * Bytes of agent output that accumulate before one `log` event is queued.
+ * Bytes of agent output that accumulate before one `log` event is queued — and the
+ * LARGEST body one event ever carries (MOTIR-10705), measured in UTF-8 bytes, which is
+ * what the server measures.
  *
  * Sized against the reporter's own queue rather than against latency: the pane
  * that reads these updates on the reporter's FLUSH cadence, not on this
  * threshold, so making it smaller buys no liveness and costs queue slots.
+ *
+ * ⚠️ IT IS A CEILING, NOT ONLY A TRIGGER. The tee used to send the WHOLE buffer once it
+ * crossed this size, so one big write from the agent — a `prettier --write` file list, a
+ * `tsc` out-of-memory trace — became one body of tens of kilobytes. The server refuses a
+ * body over 16 KiB (`DISPATCH_RUN_EVENT_BODY_LIMIT_BYTES`) and the refusal rejects the
+ * whole batch; on a hosted run that ended in a stall kill fifteen minutes later. So a
+ * big buffer is now CUT into pieces of at most this many bytes.
  */
 export const LOG_CHUNK_BYTES = 4096;
+
+/** The UTF-8 length of one code point — the arithmetic `Buffer.byteLength` does, a lone
+ *  surrogate included (it is encoded as the three-byte replacement character). */
+function utf8Length(codePoint: number): number {
+  if (codePoint < 0x80) return 1;
+  if (codePoint < 0x800) return 2;
+  if (codePoint < 0x10000) return 3;
+  return 4;
+}
+
+/**
+ * Cut `text` into the pieces one `log` event may carry: every piece but the last is at
+ * most `limit` UTF-8 bytes, and `rest` — what is left once fewer than `limit` bytes
+ * remain — is returned for the caller to keep buffering (or to send, at a flush).
+ *
+ * Each cut lands on a CODE-POINT boundary, so no piece carries half a character, and —
+ * when the piece holds a line break — just after its LAST line break, because the run's
+ * log pane renders one row per event and a row that starts mid-line reads as garbage. A
+ * piece always holds at least one code point, so a limit smaller than a character cannot
+ * stall the loop.
+ */
+export function splitLogBody(text: string, limit: number): { pieces: string[]; rest: string } {
+  const pieces: string[] = [];
+  let start = 0;
+  for (;;) {
+    let bytes = 0;
+    let end = start;
+    let lastBreak = -1;
+    while (end < text.length) {
+      const codePoint = text.codePointAt(end)!;
+      const width = utf8Length(codePoint);
+      if (bytes + width > limit && end > start) break;
+      bytes += width;
+      end += codePoint > 0xffff ? 2 : 1;
+      if (codePoint === 0x0a) lastBreak = end;
+      if (bytes >= limit) break;
+    }
+    // The scan reached the end with fewer than `limit` bytes: that is the tail the caller
+    // keeps. (A scan that stopped EARLY, because the next character would not fit, is a
+    // full piece even when it is a byte or two short of the limit.)
+    if (end >= text.length && bytes < limit) return { pieces, rest: text.slice(start) };
+    const cut = lastBreak > start && lastBreak < end ? lastBreak : end;
+    pieces.push(text.slice(start, cut));
+    start = cut;
+  }
+}
 
 /**
  * The longest a line of agent output waits for company before it is queued anyway
@@ -87,30 +142,38 @@ export function createAgentLogTee(deps: AgentLogTeeDeps): AgentLogTee {
     }
   };
 
+  /** Send every whole piece the buffer holds, keeping the short tail buffered. */
+  const sendFull = (): void => {
+    const { pieces, rest } = splitLogBody(buffer, limit);
+    if (pieces.length === 0) return;
+    disarm();
+    buffer = rest;
+    for (const piece of pieces) send(piece);
+  };
+  /** Send everything, the tail included — every piece still within the ceiling. */
+  const sendAll = (): void => {
+    const { pieces, rest } = splitLogBody(buffer, limit);
+    buffer = '';
+    for (const piece of pieces) send(piece);
+    send(rest);
+  };
+
   return {
     write(chunk) {
       buffer += chunk;
-      if (buffer.length >= limit) {
-        disarm();
-        send(buffer);
-        buffer = '';
-        return;
-      }
+      sendFull();
+      // The tail a size cut leaves behind waits for company like any other short batch.
       if (timer !== null || buffer === '') return;
       timer = setTimeout(() => {
         timer = null;
-        const rest = buffer;
-        buffer = '';
-        send(rest);
+        sendAll();
       }, waitMs);
       // Never the thing that keeps a finished process alive.
       timer.unref?.();
     },
     flush() {
       disarm();
-      const rest = buffer;
-      buffer = '';
-      send(rest);
+      sendAll();
     },
   };
 }
