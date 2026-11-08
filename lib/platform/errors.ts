@@ -221,6 +221,21 @@ export class PlannerModelUnchangedError extends Error {
   }
 }
 
+/** A review-model save named the value already stored (MOTIR-10632). `model` null is
+ *  "same as the planning model". */
+export class PlannerReviewModelUnchangedError extends Error {
+  readonly code = 'PLANNER_REVIEW_MODEL_UNCHANGED';
+
+  constructor(readonly model: string | null) {
+    super(
+      model === null
+        ? 'The dry-run review already follows the planning model'
+        : `The dry-run review already runs on "${model}"`,
+    );
+    this.name = 'PlannerReviewModelUnchangedError';
+  }
+}
+
 /** A planner-model save named an audience that is not one of the three (MOTIR-7227). */
 export class PlannerAudienceUnknownError extends Error {
   readonly code = 'PLANNER_AUDIENCE_UNKNOWN';

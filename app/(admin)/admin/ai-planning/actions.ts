@@ -18,6 +18,7 @@ import {
   PlannerAudienceUnknownError,
   PlannerModelListModelMissingError,
   PlannerModelUnchangedError,
+  PlannerReviewModelUnchangedError,
 } from '@/lib/platform/errors';
 import { platformPlannerModelService } from '@/lib/services/platformPlannerModelService';
 
@@ -82,6 +83,38 @@ export async function setPlannerModelAction(
       return { ok: false, code: 'FAILED' };
     }
     console.error('[admin] planner-model action failed', { audience }, err);
+    return { ok: false, code: 'FAILED' };
+  }
+}
+
+/**
+ * The dry-run REVIEW-MODEL write (MOTIR-10632): `model` is a planning-list model,
+ * or `null` for "same as the planning model". The same transport shape and the
+ * same gate twice as `setPlannerModelAction`, and the same result codes, so the
+ * review row draws the audience rows' states.
+ */
+export async function setPlannerReviewModelAction(
+  model: string | null,
+  reason: string,
+): Promise<PlannerModelActionResult> {
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    await platformPlannerModelService.setReviewModel(principal, model, reason);
+    revalidatePath('/admin/ai-planning');
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof PlannerModelNotOfferedError) {
+      revalidatePath('/admin/ai-planning');
+      return { ok: false, code: 'NOT_OFFERED' };
+    }
+    if (err instanceof PlannerModelUnreachableError) {
+      return { ok: false, code: 'UNREACHABLE', reason: err.reason };
+    }
+    if (err instanceof PlannerReviewModelUnchangedError) return { ok: false, code: 'UNCHANGED' };
+    if (err instanceof MotirAiUnavailableError) return { ok: false, code: 'UNAVAILABLE' };
+    if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
+    if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
+    console.error('[admin] review-model action failed', err);
     return { ok: false, code: 'FAILED' };
   }
 }

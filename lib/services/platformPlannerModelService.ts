@@ -4,6 +4,7 @@ import {
   getPlannerModelList,
   getPlannerModelSettings,
   setPlannerModel,
+  setPlannerReviewModel,
   updatePlannerModelList,
 } from '@/lib/ai/motirAiClient';
 import { PLANNER_AUDIENCES, type PlannerAudience, type PlannerModelListRead } from '@/lib/ai/types';
@@ -11,11 +12,13 @@ import type {
   PlatformPlannerModelListDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerModelWriteDTO,
+  PlatformPlannerReviewModelWriteDTO,
 } from '@/lib/dto/platformPlannerModel';
 import {
   toPlatformPlannerModelListDTO,
   toPlatformPlannerModelSettingsDTO,
   toPlatformPlannerModelWriteDTO,
+  toPlatformPlannerReviewModelWriteDTO,
 } from '@/lib/mappers/platformPlannerModelMappers';
 import {
   platformRoleAtLeast,
@@ -27,7 +30,9 @@ import {
   PlannerAudienceUnknownError,
   PlannerModelListModelMissingError,
   PlannerModelUnchangedError,
+  PlannerReviewModelUnchangedError,
 } from '@/lib/platform/errors';
+import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { assertReasonSatisfied } from '@/lib/services/platformAuditService';
 
@@ -83,7 +88,10 @@ export const platformPlannerModelService = {
     const read = await getPlannerModelSettings();
     const changers = [
       ...new Set(
-        read.settings.map((s) => s.updatedByCoreUserId).filter((id): id is string => !!id),
+        [
+          ...read.settings.map((s) => s.updatedByCoreUserId),
+          read.review?.updatedByCoreUserId,
+        ].filter((id): id is string => !!id),
       ),
     ];
     const users = await userRepository.findByIds(changers);
@@ -172,6 +180,70 @@ export const platformPlannerModelService = {
         const { previousModel, model: toModel } = applied;
         console.error(
           `[platform-planner-model] motir-ai applied ${audience}: "${previousModel}" → ` +
+            `"${toModel}" by ${principal.userId}, but the audit row did not commit`,
+          err,
+        );
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Set the dry-run REVIEW model (MOTIR-10632): a model from the planning-model
+   * list, or `null` for "same as the planning model". `setModel`'s order, for its
+   * reasons — superadmin, the reason, the current value read through the client
+   * so the row says from → to, then the audited transaction with motir-ai's write
+   * inside it, so a refusal rolls the row back. The residual case and the
+   * concurrent-write warning are `setModel`'s too.
+   *
+   * @throws NotPlatformStaffError below `superadmin`.
+   * @throws MissingAuditReasonError for a blank reason.
+   * @throws PlannerReviewModelUnchangedError when `model` is already stored.
+   * @throws PlannerModelNotOfferedError / PlannerModelUnreachableError from motir-ai.
+   * @throws MotirAiUnavailableError when motir-ai serves no review setting (an
+   *   older release) — the write has nowhere to land.
+   */
+  async setReviewModel(
+    principal: PlatformPrincipal,
+    model: string | null,
+    reason: string,
+  ): Promise<PlatformPlannerReviewModelWriteDTO> {
+    await requirePlatformStaff('superadmin');
+    const base = {
+      action: 'ai.planner_review_model.set' as const,
+      targetKind: 'platform' as const,
+      targetId: 'review',
+      reason,
+    };
+    assertReasonSatisfied(base);
+
+    const current = await getPlannerModelSettings();
+    if (!current.review) {
+      throw new MotirAiUnavailableError('motir-ai serves no dry-run review-model setting');
+    }
+    const fromModel = current.review.model;
+    if (fromModel === model) throw new PlannerReviewModelUnchangedError(model);
+
+    const entry: PlatformAuditEntry = { ...base, metadata: { fromModel, toModel: model } };
+    let applied = null as { previousModel: string | null; model: string | null } | null;
+    try {
+      const result = await withPlatformRead(principal, entry, async () => {
+        const written = await setPlannerReviewModel({ model, actorCoreUserId: principal.userId });
+        applied = written;
+        return written;
+      });
+      if (result.previousModel !== fromModel) {
+        console.warn(
+          `[platform-planner-model] concurrent write on the review model: this save read ` +
+            `"${fromModel}" but replaced "${result.previousModel}" (now "${result.model}")`,
+        );
+      }
+      return toPlatformPlannerReviewModelWriteDTO(result, fromModel);
+    } catch (err) {
+      if (applied) {
+        const { previousModel, model: toModel } = applied;
+        console.error(
+          `[platform-planner-model] motir-ai applied the review model: "${previousModel}" → ` +
             `"${toModel}" by ${principal.userId}, but the audit row did not commit`,
           err,
         );

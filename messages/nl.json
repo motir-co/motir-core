@@ -10808,6 +10808,9 @@
             "planner_model": {
               "set": "Het planningsmodel gewijzigd"
             },
+            "planner_review_model": {
+              "set": "Het beoordelingsmodel van de proefrun gewijzigd"
+            },
             "planner_model_list": {
               "add": "Een model toegevoegd aan de planningslijst",
               "remove": "Een model verwijderd uit de planningslijst"
@@ -11591,6 +11594,21 @@
         "notPermitted": "Alleen een superadmin kan het planningsmodel wijzigen.",
         "reasonRequired": "Een reden is verplicht.",
         "failed": "De wijziging kon niet worden opgeslagen. Er is niets gewijzigd."
+      },
+      "review": {
+        "name": "Beoordeling van de proefrun",
+        "desc": "De alleen-lezen controle van elk plan voordat het wordt getoond",
+        "same": "Hetzelfde als het planningsmodel",
+        "sameDesc": "Elke planningstaak beoordeelt met het model waarmee hij plant",
+        "defaultGroup": "Standaard",
+        "pickerAria": "Beoordelingsmodel van de proefrun",
+        "withdrawnBody": "Beoordelingen draaien op het planningsmodel van elke taak totdat u een ander kiest.",
+        "withdrawnBodyReadOnly": "Beoordelingen draaien op het planningsmodel van elke taak totdat een superadmin een ander kiest.",
+        "confirmTitle": "Het beoordelingsmodel van de proefrun wijzigen?",
+        "confirmBody": "{from} → {to}. De wijziging geldt voor de proefrun van de volgende planningstaak van elke organisatie. Taken die al lopen, ronden af op het model waarmee ze zijn gestart.",
+        "savedTitle": "Beoordelingsmodel gewijzigd",
+        "savedBody": "Beoordelingen van de proefrun draaien vanaf de volgende planningstaak op {model}.",
+        "unchanged": "De beoordeling van de proefrun draait al op {model}."
       }
     },
     "lessons": {

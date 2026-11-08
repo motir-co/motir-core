@@ -5,12 +5,14 @@ import {
   type PlannerModelListRead,
   type PlannerModelSettingsRead,
   type PlannerModelWriteResult,
+  type PlannerReviewModelWriteResult,
 } from '@/lib/ai/types';
 import type {
   PlatformPlannerModelListDTO,
   PlatformPlannerModelRowDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerModelWriteDTO,
+  PlatformPlannerReviewModelWriteDTO,
 } from '@/lib/dto/platformPlannerModel';
 
 /**
@@ -43,11 +45,31 @@ export function toPlatformPlannerModelSettingsDTO(
       seeded: !s.updatedByCoreUserId,
     });
   }
+  const review = read.review
+    ? {
+        model: read.review.model ?? null,
+        offered: read.review.offered ?? null,
+        updatedAt: read.review.updatedAt ?? null,
+        updatedBy: read.review.updatedByCoreUserId
+          ? (nameById.get(read.review.updatedByCoreUserId) ?? null)
+          : null,
+        seeded: !read.review.updatedByCoreUserId,
+      }
+    : null;
   return {
     rows,
+    review,
     offered: read.offered.map((m) => ({ id: m.id, provider: m.provider })),
     canEdit,
   };
+}
+
+/** motir-ai's review-model write answer → the console DTO, with `fromModel` as core audited it. */
+export function toPlatformPlannerReviewModelWriteDTO(
+  result: PlannerReviewModelWriteResult,
+  fromModel: string | null,
+): PlatformPlannerReviewModelWriteDTO {
+  return { fromModel, toModel: result.model, updatedAt: result.updatedAt };
 }
 
 /** motir-ai's write answer → the console DTO, with `fromModel` as core audited it. */
