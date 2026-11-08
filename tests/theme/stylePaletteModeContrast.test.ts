@@ -165,7 +165,8 @@ const ORB_FALLBACK =
  */
 // One entry per measured pair, each carrying the ratio it measured and the bug
 // filed when it was recorded: MOTIR-10707 glassmorphism, MOTIR-10708
-// retrofuturism, MOTIR-10709 aurora, MOTIR-10710 cybercore-y2k.
+// retrofuturism, MOTIR-10709 aurora. (MOTIR-10710's cybercore-y2k entries are
+// fixed and gone.)
 const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
   'aurora/amber/light · --el-accent-on-surface on canvas (pattern stop 5)': {
     ratio: '4.28',
@@ -246,22 +247,6 @@ const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
   'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 5)': {
     ratio: '4.06',
     bug: 'MOTIR-10709',
-  },
-  'cybercore-y2k/candy/light · label ink on pill (--plan-hero-fill stop 2)': {
-    ratio: '3.49',
-    bug: 'MOTIR-10710',
-  },
-  'cybercore-y2k/cobalt/dark · label ink on orb (--plan-orb-fill stop 4)': {
-    ratio: '2.96',
-    bug: 'MOTIR-10710',
-  },
-  'cybercore-y2k/sienna/light · label ink on pill (--plan-hero-fill stop 1)': {
-    ratio: '4.19',
-    bug: 'MOTIR-10710',
-  },
-  'cybercore-y2k/sienna/light · label ink on pill (--plan-hero-fill stop 2)': {
-    ratio: '3.18',
-    bug: 'MOTIR-10710',
   },
   'glassmorphism/amber/dark · --el-accent-on-surface on canvas (pattern stop 1)': {
     ratio: '4.36',

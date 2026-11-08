@@ -3998,21 +3998,29 @@
     letter-spacing: 0.04em;
   }
 }
+/* The pill's black share is bounded by the palettes whose label ink is DARK
+   (sienna, candy, amber, citrine light; evergreen, motir dark): black lowers
+   their contrast instead of raising it. 6% / 5% black with the base 14%
+   highlight keeps every palette x mode at 4.5:1 or more; sienna light is the
+   tightest, at 4.62:1 (MOTIR-10710). */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     --plan-hero-fill: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--el-accent) 88%, black),
-      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%, black)
+      color-mix(in srgb, var(--el-accent) 94%, black),
+      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight)) 95%, black)
     );
   }
 }
+/* The orb's highlight wash is 15%, not 22%: over the lit first stop a 22% wash
+   took the glyph to 2.96:1 in cobalt dark, under the 3:1 non-text floor
+   (MOTIR-10710). `--orb-lit-mix` is the guarded stop and stays as it is. */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     --plan-orb-fill:
       linear-gradient(
         160deg,
-        color-mix(in srgb, var(--el-highlight) 22%, transparent),
+        color-mix(in srgb, var(--el-highlight) 15%, transparent),
         transparent 55%
       ),
       radial-gradient(
