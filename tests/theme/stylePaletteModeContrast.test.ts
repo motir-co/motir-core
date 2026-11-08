@@ -90,8 +90,8 @@ import { contrast, flattenColorMix } from './colorMetrics';
 // key. That map starts empty and is asserted by EQUALITY, so a fixed entry goes
 // red until it is deleted and a new failure cannot hide behind an old one.
 
-const TEXT_FLOOR = 4.5;
-const GLYPH_FLOOR = 3;
+const WCAG_TEXT_MIN = 4.5;
+const WCAG_GRAPHIC_MIN = 3;
 
 /** The four inks `theme.css` documents as AA on every surface. */
 const HARD_INKS = [
@@ -1691,7 +1691,7 @@ function buildMatrix(): { rows: Row[]; unresolved: string[]; expected: number } 
           continue;
         }
         const ratio = contrast(toHex(colour), ground.hex);
-        const floor = ground.hook === 'orb' ? GLYPH_FLOOR : TEXT_FLOOR;
+        const floor = ground.hook === 'orb' ? WCAG_GRAPHIC_MIN : WCAG_TEXT_MIN;
         const id = `${label(ctx)} · ${ink} on ${ground.hook} (${ground.name})`;
         rows.push({
           id,
