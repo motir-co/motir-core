@@ -849,6 +849,68 @@ describe('acceptanceRefusalHoldsMerge + resolveGateSet — MOTIR-6503: a story-r
   });
 });
 
+describe('resolveGateSet — a refused MERGE withholds a story run’s acceptance question', () => {
+  const RECEIPT = { id: 'ae_1', commitSha: 'c0ffee1' };
+  const VERSION = 'moooon/motir-core#10@aaa1';
+
+  it('Request changes on the merge gate at the current version asks NOTHING — neither the video nor the merge', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: GREEN_ONE,
+        latestMergeGate: decided(WORK_ITEM, VERSION, 'changes_requested'),
+      }),
+    );
+    expect(set).toEqual({ awaited: [], primary: null });
+  });
+
+  it('a push past the refused version asks both again, acceptance leading', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: GREEN_ONE,
+        latestMergeGate: decided(WORK_ITEM, 'moooon/motir-core#10@old0', 'changes_requested'),
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.kind)).toEqual([
+      'acceptance_result',
+      'pull_request_approval',
+    ]);
+    expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('a standing agent send-back at the version withholds the video too; a Dismiss asks both again', () => {
+    const sentBack = resolveGateSet(
+      input({ currentReceipt: RECEIPT, members: GREEN_ONE, agentSendBackVersion: VERSION }),
+    );
+    expect(sentBack).toEqual({ awaited: [], primary: null });
+
+    const dismissed = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: GREEN_ONE,
+        agentSendBackVersion: VERSION,
+        dismissedSendBackVersion: VERSION,
+      }),
+    );
+    expect(dismissed.awaited.map((gate) => gate.kind)).toEqual([
+      'acceptance_result',
+      'pull_request_approval',
+    ]);
+  });
+
+  it('a SUBTASK-RUN story is untouched — its video is not the merge gate', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        subtreeSettled: true,
+        agentSendBackVersion: VERSION,
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.kind)).toEqual(['acceptance_result']);
+  });
+});
+
 describe('resolveGateSet — MOTIR-6971: the merge question is asked ONLY at `in_review`', () => {
   // Green CI is not a finished run: any pull request can be linked to a card, and a
   // card left at `in_progress` is a DEAD run. MOTIR-6914 was asked to approve at

@@ -644,6 +644,34 @@ describe('gate OFF — the verdict is the record', () => {
     expect((await itemRow(item.id)).fixReason).toBeNull();
   });
 
+  it('changes_requested also withdraws a waiting story-run acceptance video beside the merge gate', async () => {
+    const { s, item, approval } = await deliveredGateOff('off-back-video', 86);
+    const video = await adminDb.approvalGate.create({
+      data: {
+        workspaceId: s.workspace.id,
+        projectId: s.project.id,
+        workItemId: item.id,
+        kind: 'acceptance_result',
+        subjectId: 'receipt-86',
+        subjectVersion: 'sha-a',
+        state: 'awaiting',
+      },
+    });
+
+    const dto = await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      sendBack(versionOf(86)),
+      s.ctx,
+    );
+
+    expect([...dto.withdrewApprovalGateIds].sort()).toEqual([approval.id, video.id].sort());
+    expect(await gateRow(video.id)).toMatchObject({
+      state: 'superseded',
+      supersededCause: 'agent_changes_requested',
+    });
+  });
+
   it('a second verdict at a recorded version is stored as second', async () => {
     const { s, item } = await deliveredGateOff('off-second', 83);
     await reviewVerdictService.submit(s.project.id, item.identifier, input(versionOf(83)), s.ctx);
