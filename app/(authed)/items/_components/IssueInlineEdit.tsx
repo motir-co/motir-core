@@ -11,18 +11,15 @@ import {
   useTransition,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { useLocale, useTranslations } from 'next-intl';
+import { useTranslations } from 'next-intl';
 import type { ReactNode } from 'react';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { WorkItemObsolescenceDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { PlanHoldDTO } from '@/lib/dto/plans';
-import type { Locale } from '@/lib/i18n/locales';
-import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import { cn } from '@/lib/utils/cn';
 import { useToast } from '@/components/ui/Toast';
-import { DatePicker } from '@motir/design-system';
 import { StatusPicker } from '@/components/issues/StatusPicker';
 import { StatusHeldNotice, type StatusHeldLine } from '@/components/issues/StatusHeldNotice';
 import { heldLineFromRefusal, useDismissOnEscapeOrOutside } from '@/components/issues/heldRefusal';
@@ -35,21 +32,18 @@ import {
   type UpdateIssueInput,
 } from '../[key]/edit/actions';
 import { serverActionRejectionKey } from '@/lib/utils/serverActionRejection';
-import {
-  StatusValue,
-  AssigneeValue,
-  PriorityValue,
-  DueValue,
-  EstimateValue,
-} from './issueCellPrimitives';
+import { StatusValue, AssigneeValue, PriorityValue, EstimateValue } from './issueCellPrimitives';
 import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import type { IssueRowData } from './issueRows';
 
 // Inline editing for the /items row cells (Subtask 2.5.5) — STATUS · ASSIGNEE ·
-// PRIORITY · DUE · ESTIMATE, the same set the detail page's `CoreFieldsPanel`
-// edits. A REUSE module, not new mutation work: STATUS opens the shared
+// PRIORITY · ESTIMATE, the fields the detail page's `CoreFieldsPanel` edits that
+// are also list/tree columns. (DUE is not one: the Due column was removed from
+// every view in MOTIR-1307, and its unrendered inline editor with it in
+// MOTIR-10591 — the due date is edited on the detail page's rail and in the quick
+// view.) A REUSE module, not new mutation work: STATUS opens the shared
 // `StatusPicker` → 2.4.4's gated `changeStatusAction` (→ 2.2.4 `updateStatus`);
-// the others open the shared `AssigneePicker` / `PriorityPicker` / `DatePicker` /
+// the others open the shared `AssigneePicker` / `PriorityPicker` /
 // a numeric field → `updateIssueAction` (→ the status-free `updateWorkItem`,
 // writes a revision) — the SAME components + Server Actions the detail page uses,
 // with identical workspace+membership gating (a forged cross-workspace id 404s).
@@ -90,7 +84,7 @@ import type { IssueRowData } from './issueRows';
 // display convergence — value resolution must keep comparing against the
 // row's actually-served `updatedAt`, otherwise a confirmed cell would yield
 // to the still-stale prop value immediately.
-type InlineFieldKey = 'status' | 'assigneeId' | 'priority' | 'dueDate' | 'estimateMinutes';
+type InlineFieldKey = 'status' | 'assigneeId' | 'priority' | 'estimateMinutes';
 
 interface ConfirmedFieldEntry {
   value: unknown;
@@ -241,7 +235,7 @@ function useConvergingOverride<T>(row: IssueRowData, field: InlineFieldKey, serv
 }
 
 // The shared commit path for the `updateIssueAction` fields (assignee / priority
-// / due / estimate). Optimistic: the caller begins a converging override, then
+// / estimate). Optimistic: the caller begins a converging override, then
 // `run` fires the gated action with the row's `expectedUpdatedAt`; on success
 // `onConfirm` receives the acknowledged `updatedAt` and the cell is done — no
 // refresh. Only a STALE conflict refreshes: the row genuinely needs re-reading
@@ -574,66 +568,6 @@ function InlinePriorityEditor({ row }: { row: IssueRowData }) {
   );
 }
 
-function InlineDueEditor({ row }: { row: IssueRowData }) {
-  const t = useTranslations('issueViews');
-  const locale = useLocale() as Locale;
-  const { run, pending } = useUpdateField(row);
-  const [editing, setEditing] = useState(false);
-  // Converging override over the ISO value (or null for a cleared date).
-  const due = useConvergingOverride(row, 'dueDate', row.dueDate);
-
-  const dueIso = due.value;
-  const label = dueIso ? formatDate(dueIso, locale) : null;
-
-  // The DatePicker yields a `YYYY-MM-DD` string (or null); commit it as the same
-  // UTC-midnight ISO the edit form writes, so an unchanged pick is a no-op.
-  function commit(next: string | null) {
-    setEditing(false);
-    const iso = next ? new Date(`${next}T00:00:00.000Z`).toISOString() : null;
-    if (iso === (dueIso ?? null)) return;
-    const token = due.begin(iso);
-    run(
-      { dueDate: iso },
-      {
-        onConfirm: (updatedAt) => due.confirm(token, updatedAt),
-        onFail: () => due.fail(token),
-      },
-    );
-  }
-
-  if (editing) {
-    return (
-      <EditSurface>
-        <DatePicker
-          aria-label={t('dueDate')}
-          value={dueIso ? dueIso.slice(0, 10) : null}
-          onChange={commit}
-          disabled={pending}
-          autoOpen
-          onClose={() => setEditing(false)}
-          // Match the other inline editors' control height: the DatePicker's
-          // default --height-input (44px) is TALLER than the Tree view's 40px
-          // rows (TreeTable ROW_PX), so on the last row it overflows and the
-          // card's overflow:hidden clips its bottom
-          // (bug-inline-edit-clipped-when-table-short). --height-control (36px)
-          // fits both the 40px tree row and the 44px list row.
-          className="h-(--height-control)"
-        />
-      </EditSurface>
-    );
-  }
-
-  return (
-    <EditTrigger
-      label={`${t('edit')} ${t('dueDate')}`}
-      onOpen={() => setEditing(true)}
-      disabled={pending}
-    >
-      <DueValue label={label} iso={dueIso} />
-    </EditTrigger>
-  );
-}
-
 function InlineEstimateEditor({ row }: { row: IssueRowData }) {
   const t = useTranslations('issueViews');
   const { run, pending } = useUpdateField(row);
@@ -747,13 +681,6 @@ export function InlinePriorityCell({ row }: { row: IssueRowData }) {
   const ctx = useIssueInlineEdit();
   if (!ctx) return <PriorityValue priority={row.priority} />;
   return <InlinePriorityEditor row={row} />;
-}
-
-/** DUE cell — inline-editable inside a provider, else the read-only date. */
-export function InlineDueCell({ row }: { row: IssueRowData }) {
-  const ctx = useIssueInlineEdit();
-  if (!ctx) return <DueValue label={row.dueLabel} iso={row.dueDate} />;
-  return <InlineDueEditor row={row} />;
 }
 
 /** ESTIMATE cell — inline-editable inside a provider, else the read-only value. */

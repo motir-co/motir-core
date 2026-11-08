@@ -15,11 +15,12 @@
 //
 // ── The inline list edit is not here, and why ────────────────────────────────
 // The recipe names a sixth surface, the items list's inline due-date edit
-// (`InlineDueCell` in `app/(authed)/items/_components/IssueInlineEdit.tsx`).
-// No view renders that cell: the Due column was removed from the List and both
-// Tree views (MOTIR-1307, the comment in `issueColumns.tsx`), so the editor is
+// (`InlineDueCell`, once in `app/(authed)/items/_components/IssueInlineEdit.tsx`).
+// No view rendered that cell: the Due column was removed from the List and both
+// Tree views (MOTIR-1307, the comment in `issueColumns.tsx`), so the editor was
 // unreachable in a browser and only its import moved to the package. The run
-// records that as a build-through rather than driving a surface nobody can see.
+// recorded that as a build-through rather than driving a surface nobody can see,
+// and MOTIR-10591 then deleted the unrendered editor.
 //
 // ── Waits (the coding convention § E2E) ──────────────────────────────────────
 // Every write is awaited on a response armed BEFORE the key or click that causes
