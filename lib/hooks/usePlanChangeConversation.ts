@@ -276,6 +276,16 @@ export interface PlanChangeConversationState {
    * state built by hand (every rail test) is an unsettled one.
    */
   settledJobId?: string | null;
+  /**
+   * The work item the planner SETTLED as the run's FIRST target, read off the
+   * `target_settled` frame's `key` at `index` 0 (MOTIR-10739). A project-launched
+   * surface has no target chip, so this is how it learns where the plan is going:
+   * the planning workspace moves its canvas inside it once (MOTIR-6161's
+   * follow-move). Kept across runs — the latest run that settles a first target
+   * replaces it — and `null` until one has, or when the planner settled no card
+   * (a run that starts a NEW card). Optional so a state built by hand carries none.
+   */
+  settledTargetKey?: string | null;
   /** The last approve's result, so the rail can say what landed. */
   approved: PlanApproveSummary | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
@@ -554,6 +564,7 @@ const INITIAL: PlanChangeConversationState = {
   jobId: null,
   planId: null,
   settledJobId: null,
+  settledTargetKey: null,
   approved: null,
   errorCode: null,
   outOfCredits: false,
@@ -660,6 +671,20 @@ function frameField(data: unknown, key: string): unknown {
   return typeof data === 'object' && data !== null
     ? (data as Record<string, unknown>)[key]
     : undefined;
+}
+
+/**
+ * The FIRST target a `target_settled` frame names, or `null` (MOTIR-10739). A run
+ * with several targets settles each just before its walk, `index` 0 first; only
+ * that one is the surface's to follow (the story's rule — with several targets the
+ * canvas is inside the FIRST). A frame with no `index` is a one-target run. A
+ * `null` key is a run that starts a new card, which has nowhere to move to.
+ */
+export function settledFirstTargetKey(data: unknown): string | null {
+  const index = frameField(data, 'index');
+  if (index !== undefined && index !== 0) return null;
+  const key = frameField(data, 'key');
+  return typeof key === 'string' && key.trim() !== '' ? key : null;
 }
 
 /** Consecutive lost connections (no frame between them) the run tail rides out before it
@@ -1302,11 +1327,18 @@ export function usePlanChangeConversation({
       controller.signal,
       () => {},
       () => {},
-      (event) => {
+      (event, data) => {
         if (event !== 'target_settled' || controller.signal.aborted) return;
         controller.abort();
         if (!mountedRef.current) return;
-        setState((s) => ({ ...s, settledJobId: unsettledReopenedJob }));
+        // The replay stops at the FIRST `target_settled`, which is the run's first
+        // target — the one the surface follows (MOTIR-10739).
+        const settledKey = settledFirstTargetKey(data);
+        setState((s) => ({
+          ...s,
+          settledJobId: unsettledReopenedJob,
+          ...(settledKey !== null ? { settledTargetKey: settledKey } : {}),
+        }));
       },
     );
     return () => controller.abort();
@@ -1908,7 +1940,17 @@ export function usePlanChangeConversation({
             // rail; it moves only the phase.
             if (event === 'empty_run_reply') emptyRunReplied = true;
             if (event === 'target_settled') {
-              setState((s) => (s.settledJobId === jobId ? s : { ...s, settledJobId: jobId }));
+              const settledKey = settledFirstTargetKey(data);
+              setState((s) =>
+                s.settledJobId === jobId &&
+                (settledKey === null || s.settledTargetKey === settledKey)
+                  ? s
+                  : {
+                      ...s,
+                      settledJobId: jobId,
+                      ...(settledKey !== null ? { settledTargetKey: settledKey } : {}),
+                    },
+              );
             }
             // APPEND, REPLACE the live line, or MARK an earlier call — one update,
             // decided by `applyPlanFrame` (MOTIR-7976). A quiet frame changes

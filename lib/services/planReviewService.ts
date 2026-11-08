@@ -624,6 +624,32 @@ function placementWord(
 }
 
 /**
+ * HOW MANY NODES the plan's arrival level draws (MOTIR-4024, Part XIII §6): the
+ * level's committed children plus the plan's own `add`s under the same parent.
+ * The plan's `add`s draw a node each and no committed row backs them; a `modify` /
+ * `remove` SHARES its node with the committed card it targets, so counting it
+ * again would double it.
+ *
+ * Only called for a plan WITH items (MOTIR-10739): for an empty plan
+ * `arrivalParentId` is `null` by absence, not because the plan is at the top level,
+ * and counting the root would describe a level the plan is not on.
+ */
+async function countArrivalLevel(
+  projectId: string,
+  arrivalParentId: string | null,
+  items: readonly PlanReviewItemDto[],
+  workspaceId: string,
+): Promise<number> {
+  const committed = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.countSiblingsInWorkspace(projectId, arrivalParentId, workspaceId, tx),
+  );
+  const proposed = items.filter(
+    (i) => i.op === 'add' && (i.parentNodeId ?? null) === arrivalParentId,
+  ).length;
+  return committed + proposed;
+}
+
+/**
  * When the plan's LATEST revision began, or null if it has never been revised.
  *
  * Walks backwards to the most recent `revision_started`, whether or not it has
@@ -2176,21 +2202,18 @@ export const planReviewService = {
     //
     // A container that is ITSELF a proposal has no committed children, and the
     // count comes back 0 without a special case: no work item carries that id.
+    //
+    // ⚠️ A PLAN WITH NO ITEMS HAS NO ARRIVAL LEVEL (MOTIR-10739). `fullestContainer`
+    // answers `null` for it, and `null` is also how the TOP level is spelled — so
+    // the count used to read the project ROOT, a level this plan is not on, and a
+    // large project's root sent every freshly started plan to the list. Both
+    // numbers are 0 for an empty plan, and the root is not read at all.
     const arrivalContainer = fullestContainer(items);
     const arrivalParentId = arrivalContainer?.parentNodeId ?? null;
     const arrivalLevelTotal =
-      (await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
-        workItemRepository.countSiblingsInWorkspace(
-          plan.projectId,
-          arrivalParentId,
-          ctx.workspaceId,
-          tx,
-        ),
-      )) +
-      // The plan's own `add`s draw a node each and no committed row backs them.
-      // A `modify` / `remove` SHARES its node with the committed card it targets,
-      // so counting it again would double it.
-      items.filter((i) => i.op === 'add' && (i.parentNodeId ?? null) === arrivalParentId).length;
+      items.length === 0
+        ? 0
+        : await countArrivalLevel(plan.projectId, arrivalParentId, items, ctx.workspaceId);
     // What the canvas will actually DRAW: the level read is capped, so a level
     // past the cap draws the cap, not its total. Both numbers are carried because
     // the two arms of the rule read different ones — the legibility arm reads what

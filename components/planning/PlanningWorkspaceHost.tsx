@@ -412,33 +412,8 @@ function PlanWorkspaceHost({
   // write in an effect body, which this is not.
   const [followFromTheTarget, setFollowFromTheTarget] = useState<FollowRequest | null>(null);
 
-  // TRIGGER 1 — the person added the first target. The trail needs the target's
-  // ANCESTORS, which only the anchor read has, so this is a fetch rather than a
-  // derivation from the chip.
-  const firstTarget = targets[0] ?? null;
-  const firstTargetKey =
-    startedWithNoTarget &&
-    firstTarget !== null &&
-    !pickedOnCanvas.has(firstTarget.identifier.toUpperCase())
-      ? firstTarget.identifier
-      : null;
-  useEffect(() => {
-    if (firstTargetKey === null) return;
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const found = await fetchPlanningAnchor(firstTargetKey, controller.signal);
-        if (controller.signal.aborted) return;
-        // A target the viewer cannot see degrades to nothing at all, never an
-        // error and never a move — the same silent contract the arrival keeps.
-        const next = followFromTarget(found);
-        if (next !== null) setFollowFromTheTarget(next);
-      } catch {
-        // An outage is not a reason to move the canvas, or to say anything.
-      }
-    })();
-    return () => controller.abort();
-  }, [firstTargetKey]);
+  // TRIGGER 1's effect sits below the conversation hook: it also reads the
+  // target the planner SETTLED, which only the hook's state carries (MOTIR-10739).
 
   // ── THE CLOSE, AND THE ONE QUESTION IT MAY ASK (MOTIR-4731) ───────────────
   //
@@ -547,6 +522,42 @@ function PlanWorkspaceHost({
     onGuideOfferConfirmed,
     onRestarted,
   });
+
+  // TRIGGER 1 — the FIRST target became known: the person added it, or, with no
+  // target chip, the planner SETTLED it (MOTIR-10739 — the run's `target_settled`
+  // frame at index 0, `state.settledTargetKey`). A project launch has no chip, and
+  // without the planner's key its canvas sat at the root while the plan was written
+  // under a card the reader could not see. The person's own chip outranks the
+  // planner's key: it is their act. The trail needs the target's ANCESTORS, which
+  // only the anchor read has, so this is a fetch rather than a derivation.
+  //
+  // MOTIR-6161's rule holds unchanged: the canvas DECLINES the move once the reader
+  // has navigated, and a target the viewer cannot see, or an outage, moves nothing
+  // and says nothing.
+  const firstTarget = targets[0] ?? null;
+  const firstChipKey =
+    firstTarget !== null && !pickedOnCanvas.has(firstTarget.identifier.toUpperCase())
+      ? firstTarget.identifier
+      : null;
+  const plannerTargetKey = firstTarget === null ? (state.settledTargetKey ?? null) : null;
+  const firstTargetKey = startedWithNoTarget ? (firstChipKey ?? plannerTargetKey) : null;
+  useEffect(() => {
+    if (firstTargetKey === null) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const found = await fetchPlanningAnchor(firstTargetKey, controller.signal);
+        if (controller.signal.aborted) return;
+        // A target the viewer cannot see degrades to nothing at all, never an
+        // error and never a move — the same silent contract the arrival keeps.
+        const next = followFromTarget(found);
+        if (next !== null) setFollowFromTheTarget(next);
+      } catch {
+        // An outage is not a reason to move the canvas, or to say anything.
+      }
+    })();
+    return () => controller.abort();
+  }, [firstTargetKey]);
 
   // THE START TURN HAS LANDED (MOTIR-7973): once the thread holds a user turn, the
   // address that asked to START it now names it instead — ONE replace, dropping
