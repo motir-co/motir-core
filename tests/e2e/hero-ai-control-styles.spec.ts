@@ -66,6 +66,7 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['high-contrast-accessible', 'High-Contrast / Accessible'],
   ['tonal-elevated', 'Tonal / Elevated'],
   ['claymorphism', 'Claymorphism'],
+  ['bento', 'Bento'],
 ] as const;
 
 const BASE_STYLE = 'warm-editorial';
@@ -233,7 +234,9 @@ test.describe('every registered style gives the hero control its own material', 
     // that legitimately paint a FLAT orb say so in their row: High-Contrast /
     // Accessible draws it as a one-colour accent plate (its glyph sits on
     // `--el-accent` itself, the pairing `--el-accent-text` is defined against).
-    const FLAT_ORB = new Set(['neumorphism', 'high-contrast-accessible']);
+    // Bento paints a flat accent tile (`--plan-orb-fill: none` over an accent
+    // background colour), so there is no sphere for it to compose over.
+    const FLAT_ORB = new Set(['neumorphism', 'high-contrast-accessible', 'bento']);
     for (const [id, name] of STYLES) {
       await setStyle(page, id, name);
       const orb = await readMaterial(page, 'orb');

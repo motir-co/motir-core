@@ -3259,6 +3259,43 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Bento (MOTIR-10670). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/bento.md. ─────────────────────────────────────────────────────── */
+[data-style='bento'] {
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-card: 20px;
+  --radius-modal: 20px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+  --radius-control: 10px;
+  --radius-badge: 10px;
+  --radius-kbd: 8px;
+  --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.03);
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.05);
+  --shadow-elevated: 0 2px 6px rgba(15, 15, 15, 0.07);
+  --shadow-modal: 0 12px 32px -8px rgba(15, 15, 15, 0.16);
+  --shadow-hero-mockup: 0 18px 40px -12px rgba(15, 15, 15, 0.18);
+  --height-control: 38px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 8px;
+  --spacing-chip-x: 12px;
+  --spacing-card-padding: 24px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --transition-duration: 180ms;
+  --transition-fast: 140ms;
+  --transition-slow: 260ms;
+  --active-scale: 0.99;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -3739,6 +3776,26 @@
       var(--el-accent) 55%,
       color-mix(in srgb, var(--el-accent) 90%, var(--el-text)) 100%
     );
+  }
+}
+
+/* 16 · Bento — see docs/styles/bento.md § the hero AI control. */
+@scope ([data-style='bento']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+  }
+}
+@scope ([data-style='bento']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+@scope ([data-style='bento']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: none;
+    background-color: var(--el-accent);
   }
 }
 

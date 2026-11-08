@@ -528,6 +528,34 @@ export const STYLE_REGISTRY = {
         'Claymorphism cards, popovers, modals, sidebar and inputs through the surface-material layer, a Claymorphism hero pill and orb through the seam variables, and chips, keyboard hints and tooltips carrying the drop only.',
     },
   },
+  bento: {
+    id: 'bento',
+    name: 'Bento',
+    tagline:
+      'Even, generous tiles — one radius, hairline gutters and a near-flat plate, so the work sits in calm compartments.',
+    inspiration:
+      "Apple's bento-grid product pages — compartments sharing one corner radius, separated by even gutters, each tile near-flat with a generous interior.",
+    designDoc: 'docs/styles/bento.md',
+    defaultTypeId: 'motir-sans',
+    dimensions: {
+      silhouette:
+        "One generous radius for tiles (20px), a tighter one for controls (12px) and one for chips (10px); no two tiles differ, and no tile shares a control's corner.",
+      stroke:
+        "Hairline edges divide the compartments; the shadow only decorates. No heavy outline, no drawn frame, no border doing decoration's work.",
+      elevation:
+        'A near-flat five-rung ladder — a whisper at the low rungs, with a real lift kept only for the modal and the hero mockup, so nothing competes with the content.',
+      surface:
+        "Opaque palette tiles — no tint, no texture, no translucency, and no canvas of the style's own; a tile is told apart by its radius, its gutter and its hairline.",
+      density:
+        '38px controls, 24px card padding and gutters wider than the tile radius, so tiles read as separate compartments; control padding 12 × 8, chip padding 12.',
+      motion:
+        '180ms transitions, no hover scale and a faint 0.99 press — the grid stays still and only the surface responds.',
+      typography:
+        'Ships the `motir-sans` pairing (Inter headlines, Inter body and UI) as its default; a pinned type always wins, and the style block sets no font token.',
+      components:
+        'Equal-radius tile cards, popovers and modals (20px), hairline-edged with the near-flat shadow; 12px controls and inputs, 10px chips; the hero pill and orb as flat accent plates.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */
