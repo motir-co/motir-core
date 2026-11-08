@@ -57,8 +57,9 @@ import { isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
 //
 // Subtask 7.20.6 / MOTIR-1013 adds two roadmap markers: a per-container PROGRESS
 // meter (the subtree done/total bar on an epic/story) and the "YOU ARE HERE"
-// current-position marker (the active node — its status pill is replaced by an
-// accent map-pin pill, the card gets an accent border, and `aria-current="step"`).
+// current-position marker (the active node — the card gets an accent border and
+// `aria-current="step"`, and since MOTIR-10630 it wears the "You are here" TAB on its
+// top edge, so its status pill stays in the slot).
 //
 // MOTIR-1379 (follow-up) adds the "NOT IN SPRINT" marker for the sprint-scoped
 // roadmap: drilling into a committed root reveals its WHOLE subtree, so a
