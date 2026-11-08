@@ -31,7 +31,12 @@ import {
   isIssueType,
   type IssueType,
 } from '@/lib/issues/parentRules';
-import { isWorkItemType, WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
+import {
+  isWorkItemExecutor,
+  isWorkItemType,
+  WORK_ITEM_EXECUTORS,
+  WORK_ITEM_TYPES,
+} from '@/lib/issues/executorDefaults';
 import { isWorkItemPriority, WORK_ITEM_PRIORITIES } from '@/lib/issues/priority';
 import { describeSubjectShape, isWellFormedSubject } from '@/lib/plans/subjectShape';
 import { isDifficultyRefusedOnKind } from '@/lib/plans/validateProposedDifficulty';
@@ -95,6 +100,9 @@ export interface ProposalNode {
     /** The proposed PRIORITY (MOTIR-10656) — membership-checked here
      *  (`unknown_priority`), beside `kind` and `type`. */
     priority?: string | null;
+    /** The proposed card-level EXECUTOR (MOTIR-10678) — membership-checked here
+     *  (`unknown_executor`), beside `priority`. */
+    executor?: string | null;
     title?: string | null;
     /** The SUBJECT coordinate (MOTIR-5065) — shape- and kind-checked here; its
      *  MEMBERSHIP is deliberately not this repository's to know. */
@@ -404,6 +412,35 @@ function assertProposedPriorityKnown(item: ProposalNode): void {
     'unknown_priority',
     item.id,
     `Proposal ${item.id} proposes priority "${String(priority)}", which is not a valid priority. Legal members: ${WORK_ITEM_PRIORITIES.join(', ')}.`,
+  );
+}
+
+/**
+ * The proposed card-level `executor` of an `add` — checked against the two
+ * `Executor` members, or a typed rejection (MOTIR-10678).
+ *
+ * The same argument as the `priority` arm above: the internal AI routes forward
+ * the planner's value as sent and the approved set can be edited between
+ * generation and approve, so the stored proposal is not trusted. Without this
+ * arm a model-written `"agent"` passed `validate_plan` as `valid: true` and was
+ * refused only by `prisma.workItem.create()` inside approve
+ * (`PLAN_ITEM_FIELD_REJECTED`).
+ *
+ * Called for `add`s only (step 3's loop): a `modify` patch never carries an
+ * `executor` (it is the target's, and `validatePatchKeys` refuses the key at
+ * every write door), and `applyModify` never reads one. A null / absent executor
+ * is legal — `materialize` writes it as unassigned — so only a PRESENT non-member
+ * is a violation. Whether a CONTAINER may carry one at all is a separate rule
+ * (`leafFieldsOnContainer`).
+ */
+function assertProposedExecutorKnown(item: ProposalNode): void {
+  const executor = item.proposedFields?.executor;
+  if (executor == null) return;
+  if (isWorkItemExecutor(executor)) return;
+  throw new PlanGrammarError(
+    'unknown_executor',
+    item.id,
+    `Proposal ${item.id} proposes executor "${String(executor)}", which is not a valid executor. Legal members: ${WORK_ITEM_EXECUTORS.join(', ')}.`,
   );
 }
 
@@ -1981,6 +2018,9 @@ export function validatePlanProposals(input: ValidatePlanProposalsInput): void {
     // 3a-ter. The proposed `priority` is a member of the schema enum
     //     (MOTIR-10656) — same tier and same argument as the `type` check above.
     assertProposedPriorityKnown(item);
+    // 3a-quater. The proposed card-level `executor` is a member of the schema
+    //     enum (MOTIR-10678) — same tier and same argument as `priority`.
+    assertProposedExecutorKnown(item);
     // 3a-bis. The proposed `subject` is well-formed (MOTIR-5065; the container
     //     half retired by MOTIR-5607 — a subject is legal on every kind). Same
     //     tier and same argument as the `type` check above — a property of the

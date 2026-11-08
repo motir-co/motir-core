@@ -134,6 +134,7 @@ import { folderRepository } from '@/lib/repositories/folderRepository';
 import { validateProposedTodos } from '@/lib/plans/validateProposedTodos';
 import { validateProposedDifficulty } from '@/lib/plans/validateProposedDifficulty';
 import { validateProposedPriority } from '@/lib/plans/validateProposedPriority';
+import { validateProposedExecutor } from '@/lib/plans/validateProposedExecutor';
 import { applySectionsInput, hasSectionsInput } from '@/lib/plans/applySectionsInput';
 import {
   languageFor,
@@ -885,6 +886,12 @@ function validateProposal(p: ProposalInput): void {
     // planner's value as sent, so this is the only check it meets before storage.
     validateProposedPriority(
       p.proposedFields.priority,
+      proposalLabel({ op: p.op, title: p.proposedFields.title }),
+    );
+    // The card-level EXECUTOR (MOTIR-10678) — membership of the schema enum, the
+    // same way and for the same reason as the priority above.
+    validateProposedExecutor(
+      p.proposedFields.executor,
       proposalLabel({ op: p.op, title: p.proposedFields.title }),
     );
     // The language each text field was written in (MOTIR-8743) — beside the
@@ -5102,6 +5109,13 @@ async function applyAddProposalEdit(
     proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
     item.id,
   );
+  // And the card-level EXECUTOR on the MERGED result (MOTIR-10678) — the deepen
+  // set gained it in AMENDMENT 4 D3a, and its route forwards any string too.
+  validateProposedExecutor(
+    next.executor,
+    proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+    item.id,
+  );
   // The bodies' malformed item links are WARNED on the edit's response, not
   // refused (bugs MOTIR-6494 · MOTIR-10104) — `editAddProposal`.
   // The links THIS edit writes must name a proposal on the plan (bug
@@ -7495,6 +7509,13 @@ export const plansService = {
           // The PRIORITY, on the MERGED result — the deepen's rule (MOTIR-10656).
           validateProposedPriority(
             next.priority,
+            proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
+            item.id,
+          );
+          // The card-level EXECUTOR, on the MERGED result — the deepen's rule
+          // (MOTIR-10678).
+          validateProposedExecutor(
+            next.executor,
             proposalLabel({ op: item.op, workItemId: item.workItemId, title: next.title }),
             item.id,
           );
