@@ -1480,19 +1480,45 @@ const CONTEXTS: Context[] = STYLE_IDS.flatMap((style) =>
 
 const label = (c: Context) => `${c.style}/${c.palette}/${c.theme}`;
 
+/**
+ * Replace every outermost `var(--name[, fallback])` in `value`. Scanned by paren
+ * depth rather than matched by a regex, so a nested fallback costs linear time.
+ */
+function replaceVars(
+  value: string,
+  replace: (name: string, fallback: string | undefined) => string,
+): string {
+  let out = '';
+  let i = 0;
+  while (i < value.length) {
+    const start = value.indexOf('var(', i);
+    if (start === -1) break;
+    out += value.slice(i, start);
+    let depth = 1;
+    let j = start + 4;
+    for (; j < value.length && depth > 0; j += 1) {
+      if (value[j] === '(') depth += 1;
+      else if (value[j] === ')') depth -= 1;
+    }
+    const inner = value.slice(start + 4, j - 1);
+    const comma = inner.indexOf(',');
+    const name = (comma === -1 ? inner : inner.slice(0, comma)).trim();
+    out += replace(name, comma === -1 ? undefined : inner.slice(comma + 1));
+    i = j;
+  }
+  return out + value.slice(i);
+}
+
 /** Resolve every `var()` in `value`: the rule's own custom properties first, then the root. */
 function resolveIn(ctx: Context, value: string, local: Record<string, string> = {}): string {
   let current = value;
   for (let depth = 0; depth < 16 && current.includes('var('); depth += 1) {
-    current = current.replace(
-      /var\(\s*(--[\w-]+)\s*(?:,\s*((?:[^()]|\([^()]*(?:\([^()]*\))*[^()]*\))*))?\)/g,
-      (_m, name: string, fallback?: string) => {
-        if (local[name] !== undefined) return local[name]!;
-        const { value: resolved, unresolved } = resolveTokenInScope(LAYER.rules, ctx.chain, name);
-        if (resolved && unresolved.length === 0) return resolved;
-        return fallback !== undefined ? fallback.trim() : `UNRESOLVED(${name})`;
-      },
-    );
+    current = replaceVars(current, (name, fallback) => {
+      if (local[name] !== undefined) return local[name]!;
+      const { value: resolved, unresolved } = resolveTokenInScope(LAYER.rules, ctx.chain, name);
+      if (resolved && unresolved.length === 0) return resolved;
+      return fallback !== undefined ? fallback.trim() : `UNRESOLVED(${name})`;
+    });
   }
   return current.replace(/\s+/g, ' ').trim();
 }
