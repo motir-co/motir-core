@@ -27,7 +27,7 @@ const GLOBALS_CSS =
   readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism + Dense / Pro + High-Contrast / Accessible + Tonal / Elevated + Claymorphism + Bento + Editorial Print / Newspaper)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism + Dense / Pro + High-Contrast / Accessible + Tonal / Elevated + Claymorphism + Bento + Editorial Print / Newspaper + Art Deco)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
@@ -46,6 +46,7 @@ describe('style registry', () => {
       'claymorphism',
       'bento',
       'editorial-print',
+      'art-deco',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
@@ -64,6 +65,7 @@ describe('style registry', () => {
     expect(STYLE_REGISTRY['claymorphism'].name).toBe('Claymorphism');
     expect(STYLE_REGISTRY['bento'].name).toBe('Bento');
     expect(STYLE_REGISTRY['editorial-print'].name).toBe('Editorial Print / Newspaper');
+    expect(STYLE_REGISTRY['art-deco'].name).toBe('Art Deco');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {

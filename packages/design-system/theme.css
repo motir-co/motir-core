@@ -3356,6 +3356,265 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Art Deco (MOTIR-10672). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/art-deco.md. ─────────────────────────────────────────────────────── */
+[data-style='art-deco'] {
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-btn: 2px;
+  --radius-input: 2px;
+  --radius-card: 2px;
+  --radius-modal: 4px;
+  --radius-control: 2px;
+  --radius-badge: 0px;
+  --radius-kbd: 2px;
+  --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.04);
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06);
+  --shadow-elevated: 0 3px 8px -2px rgba(15, 15, 15, 0.1);
+  --shadow-modal: 0 20px 44px -20px rgba(15, 15, 15, 0.24);
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 10px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+  --transition-duration: 140ms;
+  --transition-slow: 260ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --deco-rule-outer: 2px;
+  --deco-rule-inner: 1px;
+  --deco-rule-gap: 2px;
+  --deco-rule-entablature: 1px;
+  --deco-entablature-gap: 6px;
+  --deco-step: 8px;
+  --deco-step-modal: 12px;
+  --deco-light-angle: 115deg;
+  --deco-metal-light: 62%;
+  --deco-metal-shade: 34%;
+  --deco-edge-tint: 42%;
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='card'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    --deco-mark: color-mix(in srgb, var(--el-accent) 12%, var(--el-card));
+    --deco-band: calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner));
+    border-color: var(--deco-edge);
+    box-shadow:
+      inset 1px 1px 0 0 color-mix(in srgb, white var(--deco-metal-light), var(--deco-edge)),
+      inset -1px -1px 0 0 color-mix(in srgb, black var(--deco-metal-shade), var(--deco-edge)),
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-card),
+      inset 0 0 0 calc(var(--deco-band) - 1px) var(--deco-edge),
+      var(--shadow-card);
+    background-image:
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark));
+    background-repeat: no-repeat;
+    background-size:
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3),
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3),
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3),
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3);
+    background-position:
+      left var(--deco-band) top var(--deco-band),
+      left var(--deco-band) top var(--deco-band),
+      left var(--deco-band) top var(--deco-band),
+      right var(--deco-band) top var(--deco-band),
+      right var(--deco-band) top var(--deco-band),
+      right var(--deco-band) top var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='popover'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    border-color: var(--deco-edge);
+    box-shadow:
+      inset 0 0 0 var(--deco-rule-gap) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-gap) + var(--deco-rule-inner)) var(--deco-edge),
+      var(--shadow-elevated);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='modal'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    --deco-mark: color-mix(in srgb, var(--el-accent) 12%, var(--el-page-bg));
+    --deco-band: calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner));
+    border-color: var(--deco-edge);
+    box-shadow:
+      inset 1px 1px 0 0 color-mix(in srgb, white var(--deco-metal-light), var(--deco-edge)),
+      inset -1px -1px 0 0 color-mix(in srgb, black var(--deco-metal-shade), var(--deco-edge)),
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-band) - 1px) var(--deco-edge),
+      inset 0 calc(var(--deco-band) + var(--deco-entablature-gap) - 1px) 0 0 var(--el-page-bg),
+      inset 0
+        calc(var(--deco-band) + var(--deco-entablature-gap) + var(--deco-rule-entablature) - 1px) 0
+        0 var(--deco-edge),
+      var(--shadow-modal);
+    background-image:
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark));
+    background-repeat: no-repeat;
+    background-size:
+      calc(var(--deco-step-modal) * 3) var(--deco-step-modal),
+      calc(var(--deco-step-modal) * 2) calc(var(--deco-step-modal) * 2),
+      var(--deco-step-modal) calc(var(--deco-step-modal) * 3),
+      calc(var(--deco-step-modal) * 3) var(--deco-step-modal),
+      calc(var(--deco-step-modal) * 2) calc(var(--deco-step-modal) * 2),
+      var(--deco-step-modal) calc(var(--deco-step-modal) * 3);
+    background-position:
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-image: linear-gradient(
+      to left,
+      var(--el-sidebar-border) 0 var(--deco-rule-outer),
+      transparent var(--deco-rule-outer) calc(var(--deco-rule-outer) + var(--deco-rule-gap)),
+      var(--el-sidebar-border) calc(var(--deco-rule-outer) + var(--deco-rule-gap))
+        calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner)),
+      transparent calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner))
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='header'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    background-image: linear-gradient(
+      to top,
+      var(--deco-edge) 0 var(--deco-rule-outer),
+      transparent var(--deco-rule-outer) calc(var(--deco-rule-outer) + 3px),
+      var(--deco-edge) calc(var(--deco-rule-outer) + 3px)
+        calc(var(--deco-rule-outer) + 3px + var(--deco-rule-inner)),
+      transparent calc(var(--deco-rule-outer) + 3px + var(--deco-rule-inner))
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    border-color: var(--deco-edge);
+    box-shadow: inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input']:focus {
+    box-shadow:
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
+        var(--deco-edge);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input'][aria-invalid='true'] {
+    --deco-edge: var(--el-danger);
+    box-shadow:
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
+        var(--deco-edge);
+  }
+}
+@media (hover: hover) {
+  @scope ([data-style='art-deco']) to ([data-style]) {
+    :is([data-surface='card'], [data-surface='input']):hover {
+      --deco-edge: color-mix(in srgb, var(--el-accent) 58%, var(--el-border-strong));
+    }
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='card']:is(a, button, [role='button']):active {
+    --deco-edge: color-mix(in srgb, var(--el-accent) 74%, var(--el-border-strong));
+    --deco-rule-inner: 2px;
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  :is([aria-selected='true'], [aria-current='page']):not([data-surface]) {
+    background-color: color-mix(in srgb, var(--el-accent) 8%, var(--el-page-bg));
+    box-shadow: inset 2px 0 0 0 var(--el-accent);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  :is([data-surface='card'], [data-surface='modal'], [data-surface='popover'])
+    [data-surface='card'] {
+    background-image: none;
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='overlay'] {
+    background-color: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--el-border-strong) 60%, var(--el-page-bg)) 72%,
+      transparent
+    );
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -3882,6 +4141,56 @@
       var(--el-accent) 56%,
       var(--el-text)
     );
+  }
+}
+
+/* 18 · Art Deco — see docs/styles/art-deco.md § the hero AI control. */
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    --plan-hero-shadow:
+      inset 0 0 0 var(--deco-rule-outer) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap)) var(--el-accent),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner))
+        var(--deco-edge),
+      0 2px 0 0 color-mix(in srgb, var(--el-text) 60%, transparent);
+    --plan-orb-shadow:
+      inset 0 0 0 var(--deco-rule-outer) var(--deco-edge),
+      0 2px 0 0 color-mix(in srgb, var(--el-text) 60%, transparent);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    border-radius: var(--radius-btn);
+    --plan-hero-fill: linear-gradient(
+      var(--deco-light-angle),
+      color-mix(in srgb, var(--el-accent) 90%, var(--el-accent-text)) 0 50%,
+      var(--el-accent) 50% 100%
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)) 0%,
+      var(--el-accent) 55%,
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-text)) 55% 100%
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb']::after {
+    content: '';
+    position: absolute;
+    inset: calc(var(--deco-rule-outer) + var(--deco-rule-gap));
+    border-radius: 9999px;
+    border: var(--deco-rule-inner) solid var(--deco-edge);
+    pointer-events: none;
   }
 }
 

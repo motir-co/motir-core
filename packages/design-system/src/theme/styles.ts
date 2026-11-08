@@ -579,6 +579,34 @@ export const STYLE_REGISTRY = {
         'Square buttons, inputs, cards, modals and rectangular status chips, 2px ink-framed surfaces, hairline column rules.',
     },
   },
+  'art-deco': {
+    id: 'art-deco',
+    name: 'Art Deco',
+    tagline:
+      'Framed and geometric — double rules, stepped corners, and a metal edge drawn from your palette.',
+    inspiration:
+      "The Art Deco movement — the 1925 Paris Exposition's geometric ornament, ziggurat and stepped massing (the Chrysler Building's crown, 1930), and the double-rule frames of period posters and book jackets.",
+    designDoc: 'docs/styles/art-deco.md',
+    defaultTypeId: 'grotesk',
+    dimensions: {
+      silhouette:
+        'Squared plates — 2px buttons and cards, 4px modals, with a three-step corner cut into every panel. Geometric, symmetrical, machined.',
+      stroke:
+        'DOUBLE rules everywhere — a 2px metal edge, a 2px gap, then a 1px inner rule. The frame is the structure: a plate is drawn, never lifted.',
+      elevation:
+        'Flat-near-flat — plates sit on a tight neutral shadow and nothing glows or blocks; depth is the frame, not the lift.',
+      surface:
+        'Opaque, matte, untextured palette plates — no wash, no glass, no pattern. The identity is the two-rule frame and the stepped corners cut into it.',
+      density:
+        'Measured and symmetrical — 20x10 buttons, 24px card padding, 38px controls: generous enough that the frame never crowds its content.',
+      motion:
+        'Unhurried and mechanical — 140ms transitions and NO scale on hover or press; feedback is the edge stepping one tonal value.',
+      typography:
+        'Ships the grotesk pairing — wide geometric grotesque headlines over a sans body, the geometric display read of the period.',
+      components:
+        'Squared buttons, inputs, cards and modals; rectangular status chips; double-ruled plates with stepped corners; a ruled modal entablature; a double-rule lid on the header and a double vertical rule on the sidebar edge.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */
