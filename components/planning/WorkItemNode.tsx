@@ -44,7 +44,7 @@ import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { IssueType } from '@/lib/issues/parentRules';
 import { NODE_H, NODE_W } from '@/lib/planning/projectCanvasModel';
 import { FolderPathLabel } from '@/components/planning/FolderPlacement';
-import { BlockedTag, SlotPill, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
+import { BlockedTag, WorkItemStateTags } from '@/components/workItems/WorkItemStateTags';
 import { isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
 
 // The CONTENT of a WORK-ITEM node on the project roadmap (Subtask 7.20.2 /
@@ -57,8 +57,9 @@ import { isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
 //
 // Subtask 7.20.6 / MOTIR-1013 adds two roadmap markers: a per-container PROGRESS
 // meter (the subtree done/total bar on an epic/story) and the "YOU ARE HERE"
-// current-position marker (the active node — its status pill is replaced by an
-// accent map-pin pill, the card gets an accent border, and `aria-current="step"`).
+// current-position marker (the active node — the card gets an accent border and
+// `aria-current="step"`, and since MOTIR-10630 it wears the "You are here" TAB on its
+// top edge, so its status pill stays in the slot).
 //
 // MOTIR-1379 (follow-up) adds the "NOT IN SPRINT" marker for the sprint-scoped
 // roadmap: drilling into a committed root reveals its WHOLE subtree, so a
@@ -260,9 +261,10 @@ export function WorkItemNode({
    *  (Subtask 7.20.6 / MOTIR-1013). `null` (a leaf) or a `0`-total → no meter. */
   progress?: WorkItemProgress | null;
   /** The current-position node ("you are here", the active epic at the road's
-   *  start) — its status pill becomes an accent map-pin pill, the card gets an
-   *  accent border, and it carries `aria-current="step"` (Subtask 7.20.6 /
-   *  MOTIR-1013). */
+   *  start) — the card gets an accent border, carries `aria-current="step"`
+   *  (Subtask 7.20.6 / MOTIR-1013) and wears the "You are here" TAB on its top
+   *  edge (MOTIR-10630, design MOTIR-10629). Its status slot is the item's own,
+   *  exactly as on any other card in the same state. */
   here?: boolean;
   /** READY to start (MOTIR-1417) — a startable, fully-unblocked node. Its status
    *  pill becomes the success "Ready" pill and the card gets a whole-card
@@ -302,14 +304,16 @@ export function WorkItemNode({
   // READY = a whole-card mint wash; DONE = a distinct `--el-tint-sky` card + struck title.
   // The accent "you are here" and the red cross-blocked flag are louder than both.
   // The slot's precedence is the shared rule (`statusSlotOf`, MOTIR-10534), so the
-  // frame below and the tag row's pill can never disagree.
-  const slot = statusSlotOf(item, { ready, blocked: crossBlocked, here });
+  // frame below and the tag row's pill can never disagree. You are here is no part
+  // of it any more (MOTIR-10630): the here card's slot answers status / Done / To
+  // plan / Ready like every other card's, and "here" rides its own tab.
+  const slot = statusSlotOf(item, { ready, blocked: crossBlocked });
   const showDone = slot === 'done';
   // TO PLAN (MOTIR-10508): a childless `todo` story. Precedence — blocked elsewhere
   // > You are here > Done > To plan > Ready > not in sprint > normal. Blocked and
-  // Here win the FRAME; under blocked the To plan pill keeps the status slot (as its
-  // glyph, by the give-way rule below), and Here takes the slot. A `todo` story is
-  // never Done, so the Done arm cannot meet it; it is listed for the order's sake.
+  // Here win the FRAME; the status slot keeps its own pill under both (under
+  // blocked as its glyph, by the give-way rule below). A `todo` story is never
+  // Done, so the Done arm cannot meet it; it is listed for the order's sake.
   const toPlan = isToPlanStory(item);
   const showToPlanPill = slot === 'to-plan';
   const showToPlanWash = showToPlanPill && !crossBlocked;
@@ -399,21 +403,21 @@ export function WorkItemNode({
                     : 'border-(--el-border) bg-(--el-surface) shadow-(--shadow-card)'
       }
       // THE TAG ROW's contents after the kind tile and the identifier (MOTIR-10508):
-      // the STATUS SLOT — the status pill, or the Here / Done / To plan / Ready pill
-      // that replaces it — then the Manual chip and the run disposition; then, pushed
+      // the STATUS SLOT — the status pill, or the Done / To plan / Ready pill that
+      // replaces it — then the Manual chip and the run disposition; then, pushed
       // right, Not public, not in sprint, the blocked flag or the drill chevron.
       statusRow={
         <>
           {/* The status slot and the Manual chip, through the shared tag row
               (MOTIR-10534): the board, the quick view and the item page draw the
               same two. The Manual chip rides a hairline `--el-border` lifting it off
-              every node fill. You are here takes the slot on the canvas alone. */}
+              every node fill. You are here never takes the slot: it is the card's
+              tab (MOTIR-10630), so the here card shows its own status. */}
           <WorkItemStateTags
             item={item}
             ready={ready}
             blocked={crossBlocked}
             glyphOnly={glyphOnly}
-            slotOverride={here ? <HerePill glyphOnly={glyphOnly} /> : null}
           />
           {/* The run DISPOSITION (MOTIR-3895), beside the work item's own status and
               never instead of it: they are different facts. The status is what the
@@ -462,7 +466,10 @@ export function WorkItemNode({
       identifier={item.identifier}
       title={item.title}
       titleItemId={item.id}
-      titleStruck={showDone}
+      // The struck title is half of the Done CARD style (with the sky fill), so it
+      // follows the frame's precedence: the here card keeps its accent frame and an
+      // unstruck title, and says Done in its status slot.
+      titleStruck={showDone && !here}
       // PROGRESS METER (Subtask 7.20.6 / MOTIR-1013) — a thin done/total bar on a
       // container node: `--el-success` fill over the `--el-muted` track, with the
       // count beside it. Leaves (no `progress`) and `0`-total containers omit it.
@@ -504,6 +511,7 @@ export function WorkItemNode({
           </span>
         ) : null
       }
+      tab={here ? <HereTab /> : null}
       action={
         action === null ? null : action.kind === 'plan' ? (
           <PlanNextAction itemKey={item.identifier} />
@@ -549,6 +557,7 @@ export function WorkItemCardShell({
   titleSingleLine = false,
   footer = null,
   overlay = null,
+  tab = null,
   action = null,
   ...rootProps
 }: {
@@ -573,6 +582,10 @@ export function WorkItemCardShell({
   footer?: ReactNode;
   /** Absolutely-positioned decoration over the card (spine, hatch). */
   overlay?: ReactNode;
+  /** A TAB hung on the card's top edge (MOTIR-10630 — the "You are here" tab),
+   *  a sibling of the frame rendered BEFORE it, so it sits outside the
+   *  overflow-hidden frame and the `NODE_W × NODE_H` footprint and is read first. */
+  tab?: ReactNode;
   /** The next-action button (MOTIR-10509), a sibling of the frame. */
   action?: ReactNode;
 } & Omit<HTMLAttributes<HTMLDivElement>, 'className' | 'style' | 'title' | 'children'>) {
@@ -602,6 +615,7 @@ export function WorkItemCardShell({
     // the next-action button can hang half outside the card (MOTIR-10508). It is
     // the `group/node` the button's hover / focus-within reveal reads.
     <div className="group/node relative" style={{ width: NODE_W, height: NODE_H }}>
+      {tab}
       <div
         {...rootProps}
         // Fixed height (= the layout's NODE_H) so a long title can never grow the
@@ -653,18 +667,33 @@ export function WorkItemCardShell({
   );
 }
 
-/** The "You are here" current-position pill (Subtask 7.20.6 / MOTIR-1013) — an
- *  accent map-pin chip in the StationCard's active-state language; it takes the
- *  status pill's slot on the active node. */
-function HerePill({ glyphOnly }: { glyphOnly: boolean }) {
+/**
+ * The "You are here" TAB (MOTIR-10630; design MOTIR-10629 § "The tab") — the
+ * current-position cue, hung on the card's top edge, LEFT, in the 72px row gap, so
+ * it frees the status slot and changes neither `NODE_H` nor the layout.
+ *
+ * - `bottom-[calc(100%-1px)]` overlaps the frame's 1px top border, so on the accent
+ *   frame the tab and the border read as one shape, a folder tab.
+ * - `left-3` mirrors the next-action button's `right-3` and clears the card's
+ *   corner radius in every style.
+ * - The tag row's one chip size (`h-5`, 11px, a 12px glyph), and the chip's own
+ *   shape tokens (`--radius-badge` on the top corners, `chip-x-6`), so a style
+ *   swap reshapes it; the bottom corners stay square because they join the frame.
+ *   No shadow: under neo-brutalism the hard offset shadow belongs to the frame.
+ * - The accent fill / ink pair the primary button uses, AA in every palette.
+ * - Its words are always shown (never truncated, never cut to the glyph) and not
+ *   `aria-hidden`, so they are read out before the frame's content.
+ */
+function HereTab() {
   const t = useTranslations('roadmap.canvas.node');
   return (
-    <SlotPill
-      label={t('here')}
-      glyphOnly={glyphOnly}
-      className="bg-(--el-accent) text-(--el-accent-text)"
-      icon={<MapPin className="size-3 shrink-0" aria-hidden="true" />}
-    />
+    <span
+      data-testid="here-tab"
+      className="absolute bottom-[calc(100%-1px)] left-3 z-10 inline-flex h-5 items-center gap-1 rounded-t-(--radius-badge) bg-(--el-accent) px-(--spacing-chip-x-6) text-[11px] leading-none font-semibold whitespace-nowrap text-(--el-accent-text)"
+    >
+      <MapPin className="size-3 shrink-0" aria-hidden="true" />
+      {t('here')}
+    </span>
   );
 }
 

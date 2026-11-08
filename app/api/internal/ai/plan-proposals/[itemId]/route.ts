@@ -50,7 +50,9 @@ import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@
 //     PlanItemNotFoundError               → 404 (no plan/item for this job in the token's tenant)
 //   PlanNotInExpectedStatusError /
 //     PlanNotGeneratingError              → 409 (the plan already left `generating`)
-//   InvalidProposalError                  → 422 (empty title / editing a non-`add` / bad sizing)
+//   InvalidProposalError                  → 422 (empty title / editing a non-`add` / bad sizing /
+//                                           a `priority` outside the enum, MOTIR-10656 — with
+//                                           `planItemId` when the refusal names the proposal)
 //   ProjectNotFoundError / PermissionDeniedError
 //                                         → 404 / 403 naming the key — the plan
 //                                           gate (`ai:view_plan`), mapped by
@@ -277,7 +279,14 @@ export async function PATCH(
       // answered it as a tool error; this door answered it as a 500.
       err instanceof ConflictingTargetRepoInputError
     ) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+      // An `InvalidProposalError` raised over the PERSISTED proposal this route
+      // edits carries its id (MOTIR-10656 — an out-of-enum `priority`), so the
+      // 422 names the proposal by id as well as by the title in `error`.
+      const planItemId = err instanceof InvalidProposalError ? err.planItemId : null;
+      return NextResponse.json(
+        { code: err.code, error: err.message, ...(planItemId ? { planItemId } : {}) },
+        { status: 422 },
+      );
     }
     // A proposal set the plan gate refuses where it is written (MOTIR-5414) — an
     // unknown `folder:<id>` (`dangling`), another project's folder

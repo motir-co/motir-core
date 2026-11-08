@@ -46,6 +46,34 @@ describe('PlanningCanvas', () => {
     expect(screen.getByTestId('canvas-edges').querySelectorAll('path')).toHaveLength(2); // ghost edge skipped, no crash
   });
 
+  // MOTIR-10630: a node wearing a TAB on its top-left edge (the "You are here"
+  // tab) fans its top-side edges right of the tab; every other node is unchanged.
+  it('routes the top entries of a `topTab` node right of its tab', () => {
+    const endX = (path: Element) =>
+      Number(
+        path
+          .getAttribute('d')!
+          .match(/-?[\d.]+/g)!
+          .at(-2),
+      );
+    const stacked = (topTab: boolean): CanvasNode[] => [
+      { id: 'a', x: 0, y: 0, width: 280, height: 124 },
+      { id: 'b', x: 100, y: 0, width: 280, height: 124 },
+      { id: 't', x: 0, y: 400, width: 280, height: 124, ...(topTab ? { topTab } : {}) },
+    ];
+    const into: CanvasEdge[] = [
+      { from: 'a', to: 't' },
+      { from: 'b', to: 't' },
+    ];
+    render(<PlanningCanvas nodes={stacked(false)} edges={into} renderNode={renderNode} />);
+    const plain = [...screen.getByTestId('canvas-edges').querySelectorAll('path')].map(endX);
+    cleanup();
+    render(<PlanningCanvas nodes={stacked(true)} edges={into} renderNode={renderNode} />);
+    const tabbed = [...screen.getByTestId('canvas-edges').querySelectorAll('path')].map(endX);
+    expect(plain).toEqual([78.4, 201.6]);
+    expect(tabbed).toEqual([140, 201.6]);
+  });
+
   it('is a labelled, focusable region with focusable nodes', () => {
     render(
       <PlanningCanvas nodes={nodes} edges={edges} renderNode={renderNode} ariaLabel="Roadmap" />,

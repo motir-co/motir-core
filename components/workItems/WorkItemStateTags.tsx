@@ -23,8 +23,9 @@ import { statusSlotOf, type StatusSlotItem } from '@/lib/workItems/statusSlot';
 // The precedence rule is `lib/workItems/statusSlot.ts`'s, in a module with no
 // directive so server code shares it; this file is only the drawing.
 //
-// What stays on the canvas alone: You are here (passed in as `slotOverride`),
-// not in sprint, the drill chevron, the run disposition and the card washes.
+// What stays on the canvas alone: You are here (the card's own tab, never the
+// slot — MOTIR-10630), not in sprint, the drill chevron, the run disposition and
+// the card washes.
 
 /**
  * One pill in the tag row's STATUS SLOT (MOTIR-10508): the tag row's one chip size
@@ -172,15 +173,14 @@ export interface WorkItemStateItem extends StatusSlotItem {
 
 /**
  * THE STATUS SLOT (MOTIR-10508): the one pill `statusSlotOf` picks — Done ›
- * To plan › Ready › the status chip. `slotOverride` takes the slot outright; the
- * canvas's You are here pill is the only one, and no other surface passes it.
+ * To plan › Ready › the status chip. Every surface draws it by this one rule,
+ * the canvas's "here" card included (its You are here is a tab, MOTIR-10630).
  */
 export function WorkItemStatusSlot({
   item,
   ready,
   blocked,
   glyphOnly = false,
-  slotOverride = null,
 }: {
   item: WorkItemStateItem;
   /** Startable and fully unblocked (`isReadyToStart`). */
@@ -188,9 +188,7 @@ export function WorkItemStatusSlot({
   /** Blocked — a blocked item never wears the Done stamp (its flag is louder). */
   blocked: boolean;
   glyphOnly?: boolean;
-  slotOverride?: ReactNode;
 }) {
-  if (slotOverride) return <>{slotOverride}</>;
   const slot = statusSlotOf(item, { ready, blocked });
   if (slot === 'done') return <DonePill glyphOnly={glyphOnly} />;
   if (slot === 'to-plan') return <ToPlanPill glyphOnly={glyphOnly} />;
@@ -239,23 +237,15 @@ export function WorkItemStateTags({
   ready,
   blocked,
   glyphOnly = false,
-  slotOverride = null,
 }: {
   item: WorkItemStateItem;
   ready: boolean;
   blocked: boolean;
   glyphOnly?: boolean;
-  slotOverride?: ReactNode;
 }) {
   return (
     <>
-      <WorkItemStatusSlot
-        item={item}
-        ready={ready}
-        blocked={blocked}
-        glyphOnly={glyphOnly}
-        slotOverride={slotOverride}
-      />
+      <WorkItemStatusSlot item={item} ready={ready} blocked={blocked} glyphOnly={glyphOnly} />
       <WorkItemManualChip item={item} glyphOnly={glyphOnly} />
     </>
   );
