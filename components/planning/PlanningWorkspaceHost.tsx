@@ -56,6 +56,7 @@ import {
   type PlanningTarget,
 } from '@/lib/planning/planningTargets';
 import type { PlanningLaunch } from '@/lib/planning/launcher';
+import type { PlanStartPromptSpec } from '@/lib/planning/planStartPrompt';
 import type { PlanningSeedGuideDTO, PlanningSeedPickDTO } from '@/lib/dto/planningSeed';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { fetchPlanningAnchor } from '@/lib/planning/planningAnchorClient';
@@ -243,6 +244,10 @@ export interface PlanningWorkspaceHostProps {
   /** The choice a pick-seeded conversation follows up — the rail's follow-up
    *  framing (design MOTIR-6432). Set on a pick's first open AND its resume. */
   followUp?: PlanningSeedPickDTO | null;
+  /** THE START PROMPT (MOTIR-10624): a `planAsk` launch whose anchor resolved.
+   *  Passed to the rail, which draws it in place of the opener and sends nothing
+   *  until the person presses Start or sends. */
+  startPrompt?: PlanStartPromptSpec | null;
   /** `launch.sessionId` is the seed's `seededSessionId` — a RESUME of the
    *  viewer's own recent seeded conversation, not a Plans-row reopen, so the rail
    *  draws no reopened line (design MOTIR-6206 sheet 7). */
@@ -315,6 +320,7 @@ function PlanWorkspaceHost({
   autoSendTurn,
   autoSendKey,
   followUp = null,
+  startPrompt = null,
   sessionIsResume = false,
   seedGuideTurnId = null,
   guideOrigin = null,
@@ -1320,6 +1326,7 @@ function PlanWorkspaceHost({
             : {})}
           {...(followUp ? { followUp } : {})}
           {...(guideOrigin ? { guideOrigin } : {})}
+          {...(startPrompt ? { startPrompt } : {})}
           state={state}
           index={index}
           targets={targets}

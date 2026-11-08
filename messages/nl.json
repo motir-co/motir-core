@@ -8488,7 +8488,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "{key} plannen"
+      "plan": "{key} plannen",
+      "replan": "{key} opnieuw plannen"
+    },
+    "startPrompt": {
+      "label": "Planning van {key} starten",
+      "labelReplan": "Herplanning van {key} starten",
+      "askPlan": "Zal ik beginnen met het plannen van dit werkitem?",
+      "askReplan": "Zal ik beginnen met het opnieuw plannen van dit werkitem?",
+      "bodyPlan": "Ik plan het op basis van de beschrijving en de code die het raakt.",
+      "bodyReplan": "Ik toets het huidige plan aan de beschrijving en de code.",
+      "startPlan": "Planning starten",
+      "startReplan": "Herplanning starten",
+      "starting": "Bezig met starten…",
+      "helpEmpty": "Wil je voorwaarden toevoegen, zoals ‘alleen de API, geen UI’? Typ ze eerst hieronder, dan gaan ze mee met de start.",
+      "helpEmptyReplan": "Weet je wat er mis is? Typ het eerst hieronder, dan gaat het mee met de start.",
+      "helpTypedPlan": "Start de planning met wat je hebt getypt als extra voorwaarden. Verzenden doet hetzelfde.",
+      "helpTypedReplan": "Start de herplanning met wat je hebt getypt als extra voorwaarden. Verzenden doet hetzelfde.",
+      "startedPlan": "Planning gestart",
+      "startedReplan": "Herplanning gestart",
+      "placeholderPlan": "Voorwaarden toevoegen (optioneel)…",
+      "placeholderReplan": "Wat is er mis? (optioneel)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",

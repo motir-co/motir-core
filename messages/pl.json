@@ -8488,7 +8488,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "Zaplanuj {key}"
+      "plan": "Zaplanuj {key}",
+      "replan": "Zaplanuj ponownie {key}"
+    },
+    "startPrompt": {
+      "label": "Rozpocznij planowanie {key}",
+      "labelReplan": "Rozpocznij ponowne planowanie {key}",
+      "askPlan": "Czy mam zacząć planować ten element roboczy?",
+      "askReplan": "Czy mam zacząć ponownie planować ten element roboczy?",
+      "bodyPlan": "Zaplanuję go na podstawie opisu i kodu, którego dotyczy.",
+      "bodyReplan": "Porównam jego obecny plan z opisem i kodem.",
+      "startPlan": "Rozpocznij planowanie",
+      "startReplan": "Rozpocznij ponowne planowanie",
+      "starting": "Uruchamianie…",
+      "helpEmpty": "Chcesz dodać warunki, np. „tylko API, bez UI”? Wpisz je najpierw poniżej, a zostaną wysłane razem ze startem.",
+      "helpEmptyReplan": "Wiesz, co jest nie tak? Wpisz to najpierw poniżej, a zostanie wysłane razem ze startem.",
+      "helpTypedPlan": "Rozpoczyna planowanie z wpisanym tekstem jako dodatkowymi warunkami. Wyślij działa tak samo.",
+      "helpTypedReplan": "Rozpoczyna ponowne planowanie z wpisanym tekstem jako dodatkowymi warunkami. Wyślij działa tak samo.",
+      "startedPlan": "Planowanie rozpoczęte",
+      "startedReplan": "Ponowne planowanie rozpoczęte",
+      "placeholderPlan": "Dodaj warunki (opcjonalnie)…",
+      "placeholderReplan": "Co jest nie tak? (opcjonalnie)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",

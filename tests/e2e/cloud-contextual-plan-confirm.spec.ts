@@ -355,8 +355,13 @@ async function openWorkspaceFromItem(page: Page, itemKey: string, mode: 'plan' |
   // than at one call site: the stall lands on whichever test happens to be
   // running, which is exactly how it was found.
   await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
-  // The thread is scoped to the ITEM, and the rail says so.
-  await expect(rail(page).getByText(`Opened in the context of ${itemKey}.`)).toBeVisible();
+  // The thread is scoped to the ITEM, and the rail says so: the card's Plan /
+  // Re-plan button opens on the START PROMPT, which names the card (MOTIR-10624).
+  await expect(
+    rail(page).getByRole('region', {
+      name: `${mode === 'replan' ? 'Start re-planning' : 'Start planning'} ${itemKey}`,
+    }),
+  ).toBeVisible();
 }
 
 /**
@@ -713,8 +718,10 @@ test('re-planning the PARENT goes through the same confirm', async ({ page, acce
   await openWorkspaceFromItem(page, seed.authEpicKey, 'replan');
 
   // The RE-PLAN face opens by ASKING what's wrong (MOTIR-910): the first turn IS
-  // the reason — there is no separate reason field.
-  await expect(composer(page)).toHaveAccessibleName('What’s wrong? What should change?');
+  // the reason — there is no separate reason field. Since MOTIR-10624 the card's
+  // button opens on the start prompt, so the reason is optional and the composer
+  // says so; what is typed rides the start line as the reason.
+  await expect(composer(page)).toHaveAccessibleName('What’s wrong? (optional)…');
 
   await sendTurn(page, 'This epic is too vague — rename it and add account recovery.');
   await expect(confirmBar(page)).toContainText('1 added, 1 changed');

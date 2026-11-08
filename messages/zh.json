@@ -8479,7 +8479,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "规划 {key}"
+      "plan": "规划 {key}",
+      "replan": "重新规划 {key}"
+    },
+    "startPrompt": {
+      "label": "开始规划 {key}",
+      "labelReplan": "开始重新规划 {key}",
+      "askPlan": "要开始规划这个工作项吗？",
+      "askReplan": "要开始重新规划这个工作项吗？",
+      "bodyPlan": "将根据它的描述和涉及的代码来规划。",
+      "bodyReplan": "将对照它的描述和代码检查当前计划。",
+      "startPlan": "开始规划",
+      "startReplan": "开始重新规划",
+      "starting": "正在开始…",
+      "helpEmpty": "想加条件，比如“只做 API，不做 UI”？先在下方输入，开始时会一起发送。",
+      "helpEmptyReplan": "知道哪里不对？先在下方输入，开始时会一起发送。",
+      "helpTypedPlan": "以输入的内容作为附加条件开始规划。发送的效果相同。",
+      "helpTypedReplan": "以输入的内容作为附加条件开始重新规划。发送的效果相同。",
+      "startedPlan": "已开始规划",
+      "startedReplan": "已开始重新规划",
+      "placeholderPlan": "添加条件（可选）…",
+      "placeholderReplan": "哪里不对？（可选）…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",

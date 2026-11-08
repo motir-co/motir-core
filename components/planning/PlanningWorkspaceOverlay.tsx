@@ -35,6 +35,7 @@ import { useCoordinatedRefresh } from '@/lib/navigation/coordinatedRefresh';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import { surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
+import { planStartClaimKey, type PlanStartPromptSpec } from '@/lib/planning/planStartPrompt';
 import type { OnboardingSubstrate } from '@/lib/dto/onboardingSubstrate';
 import {
   ONBOARDING_ROUTING_REFUSAL,
@@ -723,6 +724,20 @@ export function PlanningWorkspaceOverlay({
           key: `start:${settled.target.identifier}`,
         }
       : null;
+  // ASK BEFORE STARTING (MOTIR-10624; design MOTIR-10623). A `planAsk` launch — the
+  // card's Plan / Re-plan button — opens on the START PROMPT, and only once its
+  // anchor RESOLVED for this viewer: a degraded launch is the project conversation,
+  // and a question about a card that is not on screen would be about nothing. The
+  // rail draws it only into a thread with no user turn (or as the spent record of
+  // one this prompt started), so a resumed conversation keeps today's opener.
+  const startPrompt: PlanStartPromptSpec | null =
+    workspaceLaunch?.confirmStart && settled?.target
+      ? {
+          target: settled.target,
+          face: workspaceLaunch.mode === 'replan' ? 'replan' : 'plan',
+          claimKey: planStartClaimKey(settled.target.identifier),
+        }
+      : null;
   // A GUIDE OFFER's request is SENT once for the person, exactly as a pick's is — and
   // only once its target RESOLVED for this viewer. A seed with a session is a named
   // reopen: it sends nothing, and the *from a guide* framing still shows.
@@ -864,6 +879,7 @@ export function PlanningWorkspaceOverlay({
               ? { autoSendTurn: seededSend.firstTurn, seedGateId: seededSend.gateId }
               : {})}
             {...(startSend ? { autoSendTurn: startSend.turn, autoSendKey: startSend.key } : {})}
+            {...(startPrompt ? { startPrompt } : {})}
             {...(guideSend
               ? {
                   autoSendTurn: guideSend.firstTurn,
@@ -904,6 +920,7 @@ function launchContext(launch: PlanningLaunch): PlanningLaunchContext {
       itemKey: launch.itemKey,
       hasPlan: launch.mode === 'replan',
       ...(launch.startTurn ? { startTurn: true } : {}),
+      ...(launch.confirmStart ? { confirmStart: true } : {}),
     };
   }
   if (launch.from === 'roadmap') return { kind: 'roadmap' };
