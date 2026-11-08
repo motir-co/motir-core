@@ -138,6 +138,8 @@ describe('the converted call sites keep their existing error policy', () => {
     vi.doMock('@/lib/orchestrator', async (importOriginal) => ({
       ...(await importOriginal<typeof import('@/lib/orchestrator')>()),
       isOrchestratorConfigured: () => true,
+      // The CI runner's own gate (MOTIR-10625), which `dispatchCiRunnerBoot` reads.
+      isCiFleetConfigured: async () => true,
     }));
     const send = vi.fn().mockRejectedValue(new Error('down'));
     vi.doMock('@/lib/jobs/engine/dispatcher', () => ({
