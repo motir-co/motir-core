@@ -112,7 +112,7 @@ import type {
   PlanChangeProgress,
   QueuedTurn,
 } from '@/lib/hooks/usePlanChangeConversation';
-import { planRunPhase, reopenedPlanJobId } from '@/lib/planning/planRunPhase';
+import { conversationAckFor, planRunPhase, reopenedPlanJobId } from '@/lib/planning/planRunPhase';
 import type { PlanChangeDiffIndex } from '@/lib/planning/planChangeDiff';
 import type { PlanningLaunch, PlanningMode } from '@/lib/planning/launcher';
 import type { PlanningTarget } from '@/lib/planning/planningTargets';
@@ -481,6 +481,7 @@ export function PlanChangeRail({
   const runPhase = planRunPhase(state);
   const writing = runPhase === 'planning';
   const conversing = runPhase === 'conversation';
+  const conversationAck = conversationAckFor(state);
   // …and it is REWRITING the plan in hand rather than writing a first one.
   const rewritingPlan = writing && Boolean(state.review) && !state.decided;
   const tc = useTranslations('planningWorkspace.conversation');
@@ -1549,9 +1550,13 @@ export function PlanChangeRail({
             {tGrillMarkers(grill.error === 'outOfCredits' ? 'handoffNoCredit' : 'handoffFailed')}
           </Bubble>
         ) : null}
+        {/* PART 1's QUICK REPLY (MOTIR-10738): once the run's `conversation_ack`
+            arrives, the bubble says back what the person asked for, in their
+            language. Model output, so it is drawn as plain text. Until it arrives,
+            and when it never does, the keyed line stands. */}
         {conversing ? (
           <Bubble role="assistant" testId="plan-conversation-phase">
-            {tp('handoff.conversing')}
+            {conversationAck ?? tp('handoff.conversing')}
           </Bubble>
         ) : null}
         {/* THE WORKING TURN IS ONE ROW (MOTIR-9213; design § _The Motir mark at
