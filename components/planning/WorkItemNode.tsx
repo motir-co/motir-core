@@ -716,11 +716,22 @@ export function CrossBlockedFlag({
  * roadmap card hangs its action slot (View · planning target · Open) centred on the
  * bottom edge (`ProjectRoadmapCanvas`), and on a 280px card that slot reaches into
  * the right corner and paints over the button — on exactly the card the reader just
- * picked. Nothing else hangs on the top edge, and the 72px row gap leaves the
- * button's 16px overhang well clear of the row above.
+ * picked. Nothing else hangs on the top edge.
+ *
+ * HOW FAR it hangs (MOTIR-10631): its BOTTOM sits at the frame's top padding
+ * edge, never half its height into the card. Centred on the edge, a 32px
+ * `Button sm` reached 16px into the frame while the tag row's chips start at the
+ * frame's 1–2px border + its `--spacing-card-padding-12` (10–14px by style) + the
+ * kind tile's centring, so the button sat 0.3–4.3px over the status chip in every
+ * style. Anchored on the padding edge it clears the tag row by at least the
+ * frame's border whatever the style's density. It lifts by
+ * `--spacing-shadow-elevated-drop` more, so a hard-offset shadow (Neo-Brutalism's
+ * solid 6px block) clears the chips too, as a blurred lift needs no room. The
+ * overhang that leaves (20px in Warm Editorial, 28px in Neo-Brutalism) stays
+ * well inside the 72px row gap and the canvas's 48px fit padding.
  */
 const NEXT_ACTION_CLASS =
-  'absolute top-0 right-3 -translate-y-1/2 gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
+  'absolute top-[calc(var(--spacing-card-padding-12)-var(--spacing-shadow-elevated-drop))] right-3 -translate-y-full gap-1.5 bg-(--el-page-bg) shadow-(--shadow-elevated) opacity-0 group-hover/node:opacity-100 group-focus-within/node:opacity-100 [[data-node-id]:focus-visible_&]:opacity-100 [@media(hover:none)]:opacity-100';
 
 /**
  * The canvas node wrapper (`[data-node-id]`, `PlanningCanvas`) owns pointerdown (a
