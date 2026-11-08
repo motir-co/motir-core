@@ -24,7 +24,6 @@ import {
 } from '@/lib/planning/projectCanvasModel';
 import type { RoadmapLevelData } from '@/lib/planning/roadmapClient';
 import type { DirectionDocKind } from '@/lib/onboarding/directionDoc';
-import { PLANNING_STATUS_KEY } from '@/lib/planChange/targetLock';
 
 // Turn one fetched roadmap LEVEL (items + blocked_by edges + off-level blocker
 // stubs) into the canvas's nodes + deps (Subtask 7.20.2 / MOTIR-1194 + the 1331
@@ -289,29 +288,28 @@ export function ghostAnchorNode(
 }
 
 /**
- * The status KEYS a "you are here" row may carry: `in_progress`, and `planning`
- * (MOTIR-10599) — a card the planner holds is being worked as surely as one a
- * coding agent holds, and the default workflow already files it in the
- * in-progress category. Deliberately a list of KEYS, not the `in_progress`
- * CATEGORY: that category also holds `implemented`, `in_review` and `approved`,
- * open statuses that are not where the work is, and they must never take the tag.
- */
-const HERE_STATUS_KEYS: ReadonlySet<string> = new Set(['in_progress', PLANNING_STATUS_KEY]);
-
-/**
- * The "you are here" row of a level (bug MOTIR-10454): among the `in_progress`
- * and `planning` rows (MOTIR-10599), the one with the smallest longest-path depth
- * over `deps` — the depth `deterministicLayout` draws its column by — ties broken
- * by `rows`' own order, so a planning card and an in-progress card are ranked
- * together. `longestPathLayers` ignores every dep with an end off `rows`, so an
- * off-level blocker's anchor arrow does not move the tag. No row in either
- * status → `null`.
+ * The "you are here" row of a level (bug MOTIR-10454): among the rows whose
+ * status sits in the `in_progress` CATEGORY, the one with the smallest
+ * longest-path depth over `deps` — the depth `deterministicLayout` draws its
+ * column by — ties broken by `rows`' own order, so cards in different
+ * in-progress statuses are ranked together. `longestPathLayers` ignores every
+ * dep with an end off `rows`, so an off-level blocker's anchor arrow does not
+ * move the tag. No in-progress-category row → `null`.
+ *
+ * ⚠️ The candidate test reads the status CATEGORY, never a list of status keys
+ * (MOTIR-10622). This deliberately reverses MOTIR-10599, which kept a key list
+ * (`in_progress` + `planning`) so that `implemented`, `in_review` and `approved`
+ * could not take the tag: a level whose only open work was in review then had no
+ * "here" at all. Every not-done status in the in-progress category — including a
+ * project's custom ones — is where the work is. The todo category (`todo`,
+ * `blocked`) and the done category (`done`, `cancelled`) never qualify, and a row
+ * whose category is unknown (`null`) is not a candidate.
  */
 function pickHereId(
-  rows: ReadonlyArray<{ id: string; status: string }>,
+  rows: ReadonlyArray<{ id: string; statusCategory?: string | null }>,
   deps: ReadonlyArray<ProjectCanvasDep>,
 ): string | null {
-  const active = rows.filter((r) => HERE_STATUS_KEYS.has(r.status));
+  const active = rows.filter((r) => r.statusCategory === 'in_progress');
   if (active.length === 0) return null;
   const { layer } = longestPathLayers(
     rows.map((r) => r.id),
@@ -580,8 +578,9 @@ export function buildWorkItemLevel(
     );
   }
 
-  // The current-position ("you are here") node = the `in_progress` or `planning`
-  // item (MOTIR-10599) EARLIEST along the level's blocker order (bug MOTIR-10454):
+  // The current-position ("you are here") node = the in-progress-CATEGORY item
+  // (any of its statuses, MOTIR-10622) EARLIEST along the level's blocker order
+  // (bug MOTIR-10454):
   // the one with the smallest
   // longest-path depth over the level's own edges — the same depth
   // `deterministicLayout` places its column by, read from the one helper, so the
@@ -589,7 +588,7 @@ export function buildWorkItemLevel(
   // at equal depth (and rows no edge reaches) keep the level's read order, key
   // ascending — at the root that's the active epic. Only edges with BOTH ends on
   // the level count: an off-level blocker is drawn as an anchor, not a card.
-  // None in progress or in planning → no marker.
+  // No row in the in-progress category → no marker.
   const activeId = opts.markActive ? pickHereId(onLevel, deps) : null;
 
   const kindById = new Map(onLevel.map((item) => [item.id, item.kind]));

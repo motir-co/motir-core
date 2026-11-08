@@ -53,9 +53,9 @@ import {
 } from '@/lib/orchestrator/shardFakeJournal';
 import { selectedOrchestratorProvider } from './provider';
 import { indexFleetOnPool } from '@/lib/ciFleet/limits';
-// Imported for its side effect too: it WIRES the CI runner's switch, so the gate
-// below reads the same reader admission does in every process that loads it.
-import '@/lib/ciFleet/fleetKindSwitches';
+// Also WIRES the CI runner's switch on import, so the CI gate below reads the same
+// reader admission does in every process that loads this module (MOTIR-10625).
+import { agentRunnerOnPool } from '@/lib/ciFleet/fleetKindSwitches';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
@@ -937,10 +937,23 @@ export function hostedAgentImage(provider: OrchestratorProvider): string {
  * fleet's region and {@link hostedAgentImage}'s image — or the typed
  * not-configured error naming every missing variable at once, like
  * {@link indexFleetConfig}. The digest rule lives in `hostedAgentImage` alone.
+ *
+ * ⚠️ BUT ONLY WHEN HOSTED RUNS ARE PLACED ON FLY. With
+ * `MOTIR_FLEET_AGENT_RUNNER_PROVIDER=aws` a run boots on an agent-runner pool
+ * account, whose image read (`hostedAgentImage(shard.provider)`) and region come
+ * from the admitted account — none of the Fly fleet's variables is read on that
+ * path. Requiring them anyway refused every Run hosted on a deployment with no
+ * Fly fleet ("set FLY_FLEET_APP", a 503 the browser shows as "isn't available
+ * right now") — MOTIR-10626, the defect `indexFleetConfig` already had fixed. So
+ * on the pool only the image is required, judged as an AWS VM pulls it, and the
+ * region is a placeholder the admitted account's own region replaces.
  */
 export function hostedAgentFleetConfig(): IndexFleetConfig {
   if (selectedOrchestratorProvider() === 'fake') {
     return { image: FAKE_HOSTED_AGENT_IMAGE, region: 'iad' };
+  }
+  if (agentRunnerOnPool()) {
+    return { image: hostedAgentImage('aws'), region: 'iad' };
   }
   const missing: string[] = [];
   let region = 'iad';
