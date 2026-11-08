@@ -144,7 +144,15 @@ function planDecisionRefusalCode(err: PlanRequestError): PlanDecisionRefusalCode
   if (err.code === 'PLAN_PROPOSAL_REPO_PIN_MOVED') return 'repoPinMoved';
   if (err.code !== null && PROPOSAL_REFUSALS.has(err.code)) return 'proposalRejected';
   if (err.code !== null && LINK_REFUSALS.has(err.code)) return 'linkRefused';
-  if (err.code === 'APPROVAL_GATE_NOT_AUTHORISED' || err.status === 403) return 'notAuthorised';
+  // Every 403 is a permission refusal EXCEPT the organisation's kill-switch (an AI
+  // feature switched off, or the organisation suspended), which no permission of the
+  // reader's would lift — that one reads as a plain refusal with the server's reason.
+  if (
+    err.code === 'APPROVAL_GATE_NOT_AUTHORISED' ||
+    (err.status === 403 && err.code !== 'ORG_FEATURE_DISABLED')
+  ) {
+    return 'notAuthorised';
+  }
   // Any other TYPED 4xx is a refusal the server explained. A 5xx, or a refusal with
   // no code, keeps the caller's recoverable fallback — retrying those is honest.
   if (err.code !== null && err.status >= 400 && err.status < 500) return 'refused';

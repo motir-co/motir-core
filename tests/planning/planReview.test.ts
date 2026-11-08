@@ -155,6 +155,7 @@ describe('planDecisionErrorCode', () => {
     ['DUPLICATE_LINK', 409, 'linkRefused'],
     ['APPROVAL_GATE_NOT_AUTHORISED', 403, 'notAuthorised'],
     ['PROJECT_ACCESS_DENIED', 403, 'notAuthorised'],
+    ['ORG_FEATURE_DISABLED', 403, 'refused'],
     ['PLAN_DECISION_STAMP_REQUIRED', 400, 'refused'],
     ['PLAN_HAS_NO_PROPOSALS', 409, 'refused'],
   ])('maps %s (%i) to %s, for approve and discard alike', (code, status, key) => {
