@@ -51,7 +51,8 @@ import type { CorrectProposalInput, PlanItemPatch, UpdateProposalInput } from '@
 //   PlanNotInExpectedStatusError /
 //     PlanNotGeneratingError              → 409 (the plan already left `generating`)
 //   InvalidProposalError                  → 422 (empty title / editing a non-`add` / bad sizing /
-//                                           a `priority` outside the enum, MOTIR-10656 — with
+//                                           a `priority` outside the enum, MOTIR-10656 / an
+//                                           `executor` outside it, MOTIR-10678 — with
 //                                           `planItemId` when the refusal names the proposal)
 //   ProjectNotFoundError / PermissionDeniedError
 //                                         → 404 / 403 naming the key — the plan
@@ -280,7 +281,8 @@ export async function PATCH(
       err instanceof ConflictingTargetRepoInputError
     ) {
       // An `InvalidProposalError` raised over the PERSISTED proposal this route
-      // edits carries its id (MOTIR-10656 — an out-of-enum `priority`), so the
+      // edits carries its id (MOTIR-10656 — an out-of-enum `priority`; MOTIR-10678
+      // — an out-of-enum `executor`), so the
       // 422 names the proposal by id as well as by the title in `error`.
       const planItemId = err instanceof InvalidProposalError ? err.planItemId : null;
       return NextResponse.json(

@@ -23,7 +23,36 @@
 // (DTO-typed presentation/logic constants) and lib/issues/parentRules.ts
 // (the pure rule module the service validates through).
 
+import type { Executor } from '@/generated/prisma/client';
+
 import type { ExecutorDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+
+/**
+ * Every `Executor` member — the closed set a card-level `executor` is checked
+ * against at every write door that does not pass through a Zod enum (MOTIR-10678:
+ * the plan path stored a model-written `"agent"` that only `materialize`
+ * refused, one column over from MOTIR-10656's `priority`).
+ */
+export const WORK_ITEM_EXECUTORS = [
+  'coding_agent',
+  'human',
+] as const satisfies readonly ExecutorDto[];
+
+// TOTALITY, both ways, at compile time (the `priority.ts` precedent): the list
+// covers every DTO member, and the DTO union is exactly the Prisma enum. The
+// Prisma import is TYPE-ONLY, so the client-side picker importing this module
+// does not pull the generated client into its graph.
+type ListedExecutor = (typeof WORK_ITEM_EXECUTORS)[number];
+type Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const _executorListCoversDto: Exactly<ListedExecutor, ExecutorDto> = true;
+const _executorDtoMatchesPrisma: Exactly<ExecutorDto, Executor> = true;
+void _executorListCoversDto;
+void _executorDtoMatchesPrisma;
+
+/** Narrowing guard: true when `value` is one of the {@link WORK_ITEM_EXECUTORS}. */
+export function isWorkItemExecutor(value: unknown): value is ExecutorDto {
+  return typeof value === 'string' && (WORK_ITEM_EXECUTORS as readonly string[]).includes(value);
+}
 
 /**
  * Every `WorkItemType` member, in the canonical order the 2.7.2 ADR froze and
