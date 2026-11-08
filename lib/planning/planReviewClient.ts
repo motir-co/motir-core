@@ -30,8 +30,14 @@ export class PlanRequestError extends Error {
      * (MOTIR-5418) — an approve refused by a folder deleted since the plan was
      * written carries `planItemId` and a message naming `folder:<id>`, which is
      * what lets the rail say which proposal rather than a generic error.
+     * `field` is the column a `PLAN_ITEM_FIELD_REJECTED` names (MOTIR-10657), when
+     * the server could read one off the ORM's refusal.
      */
-    readonly detail: { planItemId: string | null; message: string | null } = {
+    readonly detail: {
+      planItemId: string | null;
+      message: string | null;
+      field?: string | null;
+    } = {
       planItemId: null,
       message: null,
     },
@@ -50,18 +56,27 @@ async function readError(res: Response): Promise<string | null> {
   }
 }
 
-async function readErrorDetail(
-  res: Response,
-): Promise<{ code: string | null; planItemId: string | null; message: string | null }> {
+async function readErrorDetail(res: Response): Promise<{
+  code: string | null;
+  planItemId: string | null;
+  message: string | null;
+  field: string | null;
+}> {
   try {
-    const body = (await res.json()) as { code?: string; planItemId?: string; error?: string };
+    const body = (await res.json()) as {
+      code?: string;
+      planItemId?: string;
+      error?: string;
+      field?: string;
+    };
     return {
       code: body.code ?? null,
       planItemId: typeof body.planItemId === 'string' ? body.planItemId : null,
       message: typeof body.error === 'string' ? body.error : null,
+      field: typeof body.field === 'string' ? body.field : null,
     };
   } catch {
-    return { code: null, planItemId: null, message: null };
+    return { code: null, planItemId: null, message: null, field: null };
   }
 }
 
@@ -146,8 +161,8 @@ export async function approvePlanRequest(
 ): Promise<PlanWithItemsDto> {
   const res = await fetch(`/api/plans/${encodeURIComponent(planId)}/approve`, decisionInit(stamp));
   if (!res.ok) {
-    const { code, planItemId, message } = await readErrorDetail(res);
-    throw new PlanRequestError(res.status, code, { planItemId, message });
+    const { code, ...detail } = await readErrorDetail(res);
+    throw new PlanRequestError(res.status, code, detail);
   }
   return (await res.json()) as PlanWithItemsDto;
 }
@@ -163,7 +178,12 @@ export async function declinePlanRequest(
     `/api/plans/${encodeURIComponent(planId)}/decline`,
     decisionInit(stamp, noteMd),
   );
-  if (!res.ok) throw new PlanRequestError(res.status, await readError(res));
+  if (!res.ok) {
+    // The decline's refusal carries its sentence too (MOTIR-10657), so the rail can
+    // say why a discard was refused instead of offering a retry that cannot help.
+    const { code, ...detail } = await readErrorDetail(res);
+    throw new PlanRequestError(res.status, code, detail);
+  }
   return (await res.json()) as PlanDto;
 }
 

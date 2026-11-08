@@ -8578,7 +8578,13 @@
         "failedClosed": "这次尝试没有成功，此会话已关闭。它占用的工作项已恢复原状。",
         "revisionInFlight": "Motir AI 正在修订这个计划。你的消息已保留——新版本完成后请再发送一次。",
         "awaitingResume": "此会话正在等待继续，暂时无法接收消息。请先继续它——你的消息已保留。",
-        "unavailable": "Motir AI 未能及时响应。对话已保存，也不会重复扣费。请重试。"
+        "unavailable": "Motir AI 未能及时响应。对话已保存，也不会重复扣费。请重试。",
+        "proposalRejected": "Motir 无法批准这份计划：{hasItem, select, yes {提议的工作项“{item}”} other {其中一个提议的工作项}}包含{fieldKind, select, repository {不属于这个项目的仓库} repositoryRole {Motir 无法识别的仓库角色} named {无法保存到“{field}”字段的值} other {Motir 无法保存的值}}。没有添加任何内容 —— 请在计划中修正该工作项，然后再次批准。",
+        "repoPinMoved": "批准这份计划期间，{hasItem, select, yes {提议的工作项“{item}”} other {其中一个提议的工作项}}的仓库发生了变化。没有添加任何内容 —— 请检查该工作项的仓库，然后再次批准。",
+        "linkRefused": "Motir 无法批准这份计划：其中一个依赖会形成循环，或重复一条已存在的关联。没有添加任何内容 —— 需要先修正计划的依赖，才能批准。",
+        "notAuthorised": "你无法决定这份计划 —— 批准或拒绝它需要你在这个项目中没有的权限。没有任何改动。",
+        "refused": "Motir 拒绝了{hasItem, select, yes {关于提议的工作项“{item}”的} other {}}这项决定，因此没有任何改动 —— 仅再次点击无法解决。",
+        "refusalReason": "给出的原因：{reason}"
       },
       "answeredFrom": "{count, plural, =0 {回答未引用任何内容} other {依据 # 个工作项作答}}",
       "correctToAsk": "改为回答这个问题",

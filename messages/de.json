@@ -8587,7 +8587,13 @@
         "failedClosed": "Dieser Versuch hat nicht geklappt, daher wurde diese Sitzung geschlossen. Die Arbeitselemente, die sie enthielt, sind wieder an ihrem ursprünglichen Platz.",
         "revisionInFlight": "Motir AI überarbeitet diesen Plan bereits. Ihre Nachricht bleibt erhalten – senden Sie sie erneut, sobald die neue Version vorliegt.",
         "awaitingResume": "Diese Sitzung wartet darauf, fortgesetzt zu werden, und kann noch keine Nachricht annehmen. Setzen Sie sie zuerst fort – Ihre Nachricht bleibt erhalten.",
-        "unavailable": "Motir AI hat nicht rechtzeitig geantwortet. Ihr Gespräch ist gespeichert, und es wird Ihnen nichts doppelt berechnet. Versuchen Sie es erneut."
+        "unavailable": "Motir AI hat nicht rechtzeitig geantwortet. Ihr Gespräch ist gespeichert, und es wird Ihnen nichts doppelt berechnet. Versuchen Sie es erneut.",
+        "proposalRejected": "Motir konnte diesen Plan nicht genehmigen: {hasItem, select, yes {Das vorgeschlagene Arbeitselement „{item}“} other {Eines der vorgeschlagenen Arbeitselemente}} hat {fieldKind, select, repository {ein Repository, das nicht zu diesem Projekt gehört} repositoryRole {eine Repository-Rolle, die Motir nicht kennt} named {einen Wert, den Motir im Feld „{field}“ nicht speichern kann} other {einen Wert, den Motir nicht speichern kann}}. Es wurde nichts hinzugefügt – korrigieren Sie dieses Arbeitselement im Plan und genehmigen Sie ihn dann erneut.",
+        "repoPinMoved": "Das Repository von {hasItem, select, yes {dem vorgeschlagenen Arbeitselement „{item}“} other {einem der vorgeschlagenen Arbeitselemente}} hat sich während der Genehmigung dieses Plans geändert. Es wurde nichts hinzugefügt – prüfen Sie das Repository dieses Arbeitselements und genehmigen Sie dann erneut.",
+        "linkRefused": "Motir konnte diesen Plan nicht genehmigen: Eine seiner Abhängigkeiten würde einen Kreis bilden oder eine bereits vorhandene Verknüpfung wiederholen. Es wurde nichts hinzugefügt – die Abhängigkeiten des Plans müssen korrigiert werden, bevor er genehmigt werden kann.",
+        "notAuthorised": "Sie können über diesen Plan nicht entscheiden – zum Genehmigen oder Ablehnen fehlt Ihnen in diesem Projekt eine Berechtigung. Es wurde nichts geändert.",
+        "refused": "Motir hat diese Entscheidung{hasItem, select, yes { zum vorgeschlagenen Arbeitselement „{item}“} other {}} abgelehnt, daher wurde nichts geändert – erneutes Drücken allein hilft nicht.",
+        "refusalReason": "Angegebener Grund: {reason}"
       },
       "answeredFrom": "{count, plural, =0 {Ohne Quellenangabe beantwortet} one {Anhand von # Arbeitselement beantwortet} other {Anhand von # Arbeitselementen beantwortet}}",
       "correctToAsk": "Stattdessen beantworten",

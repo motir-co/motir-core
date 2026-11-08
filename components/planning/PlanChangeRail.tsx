@@ -70,6 +70,8 @@ import { CodeUnsearchableBanner } from '@/components/planning/CodeUnsearchableBa
 import { isOpenUnclear, pauseAnchorIndex, pauseOf, pauseOwnedIds } from '@/lib/planning/runPause';
 import { PlanStaleBand, SeeOnlyLine } from '@/components/planning/PlanChangeConfirmBar';
 import { PlanDeclineConfirm } from '@/components/planning/PlanDeclineConfirm';
+import { PlanDecisionRefusalText } from '@/components/planning/PlanDecisionRefusalText';
+import { isPlanDecisionRefusal } from '@/lib/planning/planReview';
 import {
   PlanApproveProgress,
   type PlanApproveProgressView,
@@ -1774,9 +1776,18 @@ export function PlanChangeRail({
               role="alert"
               className="rounded-(--radius-card) bg-(--el-tint-rose) px-(--spacing-card-padding-12) py-(--spacing-card-padding-8) text-sm text-(--el-text-strong)"
             >
-              {tc(errorKey(state.errorCode))}
+              {isPlanDecisionRefusal(state.errorCode) ? (
+                <PlanDecisionRefusalText
+                  code={state.errorCode}
+                  refusal={state.decisionRefusal ?? null}
+                />
+              ) : (
+                tc(errorKey(state.errorCode))
+              )}
             </p>
-            {isTurnRefusal(state.errorCode) ? null : (
+            {/* A refusal the server explained is not retried: pressing again sends the
+                same plan, and the sentence above says what must change first. */}
+            {isTurnRefusal(state.errorCode) || isPlanDecisionRefusal(state.errorCode) ? null : (
               <Button
                 variant="secondary"
                 size="sm"

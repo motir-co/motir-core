@@ -8587,7 +8587,13 @@
         "failedClosed": "Ta próba się nie powiodła, więc sesja została zamknięta. Elementy robocze, które w niej były, wróciły na swoje miejsce.",
         "revisionInFlight": "Motir AI już poprawia ten plan. Twoja wiadomość została zachowana — wyślij ją ponownie, gdy pojawi się nowa wersja.",
         "awaitingResume": "Ta sesja czeka na wznowienie i nie może jeszcze przyjąć wiadomości. Najpierw ją wznów — Twoja wiadomość została zachowana.",
-        "unavailable": "Motir AI nie odpowiedział na czas. Rozmowa jest zapisana i nie zostaniesz obciążony dwa razy. Spróbuj ponownie."
+        "unavailable": "Motir AI nie odpowiedział na czas. Rozmowa jest zapisana i nie zostaniesz obciążony dwa razy. Spróbuj ponownie.",
+        "proposalRejected": "Motir nie mógł zatwierdzić tego planu: {hasItem, select, yes {proponowany element roboczy „{item}”} other {jeden z proponowanych elementów roboczych}} ma {fieldKind, select, repository {repozytorium, które nie należy do tego projektu} repositoryRole {rolę repozytorium, której Motir nie rozpoznaje} named {wartość, której Motir nie może zapisać w polu „{field}”} other {wartość, której Motir nie może zapisać}}. Nic nie zostało dodane — popraw ten element roboczy w planie, a następnie zatwierdź ponownie.",
+        "repoPinMoved": "Repozytorium {hasItem, select, yes {proponowanego elementu roboczego „{item}”} other {jednego z proponowanych elementów roboczych}} zmieniło się podczas zatwierdzania tego planu. Nic nie zostało dodane — sprawdź repozytorium tego elementu roboczego, a następnie zatwierdź ponownie.",
+        "linkRefused": "Motir nie mógł zatwierdzić tego planu: jedna z jego zależności utworzyłaby pętlę lub powtórzyła istniejące już powiązanie. Nic nie zostało dodane — zależności planu trzeba poprawić, zanim będzie można go zatwierdzić.",
+        "notAuthorised": "Nie możesz decydować o tym planie — do zatwierdzenia lub odrzucenia potrzebne jest uprawnienie, którego nie masz w tym projekcie. Nic nie zostało zmienione.",
+        "refused": "Motir odrzucił tę decyzję{hasItem, select, yes { dotyczącą proponowanego elementu roboczego „{item}”} other {}}, więc nic nie zostało zmienione — samo ponowne kliknięcie nie pomoże.",
+        "refusalReason": "Podany powód: {reason}"
       },
       "answeredFrom": "{count, plural, =0 {Odpowiedź bez powoływania się na źródła} one {Odpowiedź na podstawie # elementu roboczego} few {Odpowiedź na podstawie # elementów roboczych} many {Odpowiedź na podstawie # elementów roboczych} other {Odpowiedź na podstawie # elementu roboczego}}",
       "correctToAsk": "Zamiast tego odpowiedz na to",

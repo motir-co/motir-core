@@ -1,7 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PlanRequestError } from '@/lib/planning/planReviewClient';
 import {
+  approvePlanRequest,
+  declinePlanRequest,
+  PlanRequestError,
+} from '@/lib/planning/planReviewClient';
+import {
+  isPlanDecisionRefusal,
   planDecisionErrorCode,
+  planDecisionRefusal,
   readPendingProposal,
   summarizePlanApproval,
 } from '@/lib/planning/planReview';
@@ -128,5 +134,147 @@ describe('planDecisionErrorCode', () => {
     expect(planDecisionErrorCode(new PlanRequestError(500, 'BOOM'))).toBe('APPROVE_ERROR');
     expect(planDecisionErrorCode(new Error('network'))).toBe('APPROVE_ERROR');
     expect(planDecisionErrorCode(new Error('network'), 'discard')).toBe('discard');
+    // A 4xx with no code is not a refusal the server explained.
+    expect(planDecisionErrorCode(new PlanRequestError(400, null))).toBe('APPROVE_ERROR');
+  });
+
+  // MOTIR-10657 — every refusal the approve route returns that the keys above do not
+  // name gets a decision-specific key, never the conversation's generic line.
+  it.each([
+    ['PLAN_ITEM_FIELD_REJECTED', 422, 'proposalRejected'],
+    ['INVALID_PROPOSAL', 422, 'proposalRejected'],
+    ['PLAN_ITEM_UNKNOWN_TARGET_REPO', 422, 'proposalRejected'],
+    ['PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE', 422, 'proposalRejected'],
+    ['PLAN_GRAMMAR_VIOLATION', 400, 'proposalRejected'],
+    ['INVALID_PLAN_REF_GRAPH', 400, 'proposalRejected'],
+    ['UNRESOLVED_PLAN_REF', 422, 'proposalRejected'],
+    ['PLAN_ITEM_TARGET_MISSING', 422, 'proposalRejected'],
+    ['PLAN_PROPOSAL_REPO_PIN_MOVED', 409, 'repoPinMoved'],
+    ['WORK_ITEM_LINK_CYCLE', 409, 'linkRefused'],
+    ['SELF_LINK', 409, 'linkRefused'],
+    ['DUPLICATE_LINK', 409, 'linkRefused'],
+    ['APPROVAL_GATE_NOT_AUTHORISED', 403, 'notAuthorised'],
+    ['PROJECT_ACCESS_DENIED', 403, 'notAuthorised'],
+    ['PLAN_DECISION_STAMP_REQUIRED', 400, 'refused'],
+    ['PLAN_HAS_NO_PROPOSALS', 409, 'refused'],
+  ])('maps %s (%i) to %s, for approve and discard alike', (code, status, key) => {
+    const err = new PlanRequestError(status, code);
+    expect(planDecisionErrorCode(err)).toBe(key);
+    expect(planDecisionErrorCode(err, 'discard')).toBe(key);
+    expect(isPlanDecisionRefusal(key)).toBe(true);
+  });
+
+  it('isPlanDecisionRefusal is false for the older keys and for no code', () => {
+    expect(isPlanDecisionRefusal('decided')).toBe(false);
+    expect(isPlanDecisionRefusal('APPROVE_ERROR')).toBe(false);
+    expect(isPlanDecisionRefusal(null)).toBe(false);
+  });
+});
+
+describe('planDecisionRefusal', () => {
+  const review = planReview([
+    planReviewItem({ planItemId: 'pi_1', identifier: null, title: 'Recurring invoices' }),
+    planReviewItem({ planItemId: 'pi_2', identifier: 'PAY-21', title: 'Dunning' }),
+  ]);
+
+  it('names the refused proposal by its title, and the column the server named', () => {
+    const err = new PlanRequestError(422, 'PLAN_ITEM_FIELD_REJECTED', {
+      planItemId: 'pi_1',
+      message: 'Proposal pi_1 has an invalid priority.',
+      field: 'priority',
+    });
+    expect(planDecisionRefusal(err, review)).toEqual({
+      item: 'Recurring invoices',
+      fieldKind: 'named',
+      field: 'priority',
+      reason: 'Proposal pi_1 has an invalid priority.',
+    });
+  });
+
+  it('labels a proposal about a committed work item with its key', () => {
+    const err = new PlanRequestError(409, 'PLAN_PROPOSAL_REPO_PIN_MOVED', {
+      planItemId: 'pi_2',
+      message: null,
+    });
+    expect(planDecisionRefusal(err, review)?.item).toBe('PAY-21 Dunning');
+  });
+
+  it('reads the field off the code for the two repository refusals', () => {
+    const repo = new PlanRequestError(422, 'PLAN_ITEM_UNKNOWN_TARGET_REPO', {
+      planItemId: 'pi_1',
+      message: 'unknown repo',
+    });
+    const role = new PlanRequestError(422, 'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE', {
+      planItemId: 'pi_1',
+      message: 'unknown role',
+    });
+    expect(planDecisionRefusal(repo, review)?.fieldKind).toBe('repository');
+    expect(planDecisionRefusal(role, review)?.fieldKind).toBe('repositoryRole');
+  });
+
+  it('names no proposal when the response carries none, or one the review does not hold', () => {
+    const none = new PlanRequestError(422, 'INVALID_PROPOSAL');
+    const unknown = new PlanRequestError(422, 'INVALID_PROPOSAL', {
+      planItemId: 'pi_gone',
+      message: 'x',
+    });
+    expect(planDecisionRefusal(none, review)).toEqual({
+      item: null,
+      fieldKind: 'other',
+      field: null,
+      reason: null,
+    });
+    expect(planDecisionRefusal(unknown, null)?.item).toBeNull();
+    expect(planDecisionRefusal(unknown, review)?.item).toBeNull();
+  });
+
+  it('is null for anything the older keys or the recoverable fallback answer', () => {
+    expect(planDecisionRefusal(new PlanRequestError(409, 'PLAN_TARGET_IMMUTABLE'), review)).toBe(
+      null,
+    );
+    expect(planDecisionRefusal(new PlanRequestError(500, 'BOOM'), review)).toBeNull();
+    expect(planDecisionRefusal(new Error('network'), review)).toBeNull();
+  });
+});
+
+// MOTIR-10657 — both decision calls carry the refusal's detail, the column included.
+describe('the decision calls read the refusal detail', () => {
+  it('approve carries planItemId, the sentence and the field', async () => {
+    respond(
+      {
+        code: 'PLAN_ITEM_FIELD_REJECTED',
+        planItemId: 'pi_1',
+        field: 'priority',
+        error: 'Proposal pi_1: priority is invalid.',
+      },
+      422,
+    );
+    const err = (await approvePlanRequest('plan_1').catch((e: unknown) => e)) as PlanRequestError;
+    expect(err.code).toBe('PLAN_ITEM_FIELD_REJECTED');
+    expect(err.detail).toEqual({
+      planItemId: 'pi_1',
+      message: 'Proposal pi_1: priority is invalid.',
+      field: 'priority',
+    });
+  });
+
+  it('decline carries the sentence, with no proposal or field when the body names none', async () => {
+    respond({ code: 'APPROVAL_GATE_NOT_AUTHORISED', error: 'Not yours to decide.' }, 403);
+    const err = (await declinePlanRequest('plan_1').catch((e: unknown) => e)) as PlanRequestError;
+    expect(err.status).toBe(403);
+    expect(err.detail).toEqual({ planItemId: null, message: 'Not yours to decide.', field: null });
+  });
+
+  it('a body that is not JSON leaves every detail null', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError('not json');
+      },
+    } as unknown as Response);
+    const err = (await declinePlanRequest('plan_1').catch((e: unknown) => e)) as PlanRequestError;
+    expect(err.code).toBeNull();
+    expect(err.detail).toEqual({ planItemId: null, message: null, field: null });
   });
 });

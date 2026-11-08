@@ -79,6 +79,8 @@ import {
 } from '@/lib/planning/planReviewClient';
 import {
   planDecisionErrorCode,
+  planDecisionRefusal,
+  type PlanDecisionRefusal,
   readPendingProposal,
   summarizePlanApproval,
   type PlanApproveSummary,
@@ -278,6 +280,13 @@ export interface PlanChangeConversationState {
   approved: PlanApproveSummary | null;
   /** A recoverable failure: `FAILED` / `EMPTY` / `immutable` / a typed code. */
   errorCode: string | null;
+  /**
+   * What a refused approve or discard said about itself — the proposal, the field and
+   * the server's sentence (MOTIR-10657). Read only while `errorCode` is one of
+   * `PLAN_DECISION_REFUSALS`, and written with it; optional so a state built by hand
+   * (every rail test) carries none.
+   */
+  decisionRefusal?: PlanDecisionRefusal | null;
   /** The metered-AI refusal — a distinct state, not an error (design panel 6). */
   outOfCredits: boolean;
   /**
@@ -3272,7 +3281,12 @@ export function usePlanChangeConversation({
       approvedCbRef.current?.(approved);
     } catch (err) {
       if (!mountedRef.current) return;
-      setState((s) => ({ ...s, phase: 'review', errorCode: planDecisionErrorCode(err) }));
+      setState((s) => ({
+        ...s,
+        phase: 'review',
+        errorCode: planDecisionErrorCode(err),
+        decisionRefusal: planDecisionRefusal(err, s.review),
+      }));
       await rereadAfterRefusal(planId, err);
     }
   }, [rereadAfterRefusal]);
@@ -3318,6 +3332,7 @@ export function usePlanChangeConversation({
           ...s,
           phase: 'review',
           errorCode: planDecisionErrorCode(err, 'discard'),
+          decisionRefusal: planDecisionRefusal(err, s.review),
         }));
         if (planId) await rereadAfterRefusal(planId, err);
       }

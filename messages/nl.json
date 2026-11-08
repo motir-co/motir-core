@@ -8587,7 +8587,13 @@
         "failedClosed": "Die poging is niet gelukt, dus deze sessie is gesloten. De werkitems die erin zaten, staan weer waar ze stonden.",
         "revisionInFlight": "Motir AI is dit plan al aan het herzien. Je bericht is bewaard — verstuur het opnieuw zodra de nieuwe versie er is.",
         "awaitingResume": "Deze sessie wacht op hervatting en kan nog geen bericht aannemen. Hervat haar eerst — je bericht is bewaard.",
-        "unavailable": "Motir AI heeft niet op tijd geantwoord. Je gesprek is opgeslagen en er wordt niets dubbel in rekening gebracht. Probeer het opnieuw."
+        "unavailable": "Motir AI heeft niet op tijd geantwoord. Je gesprek is opgeslagen en er wordt niets dubbel in rekening gebracht. Probeer het opnieuw.",
+        "proposalRejected": "Motir kon dit plan niet goedkeuren: {hasItem, select, yes {het voorgestelde werkitem ‘{item}’} other {een van de voorgestelde werkitems}} heeft {fieldKind, select, repository {een repository die niet bij dit project hoort} repositoryRole {een repositoryrol die Motir niet herkent} named {een waarde die Motir niet kan opslaan in het veld ‘{field}’} other {een waarde die Motir niet kan opslaan}}. Er is niets toegevoegd — corrigeer dat werkitem in het plan en keur het daarna opnieuw goed.",
+        "repoPinMoved": "De repository van {hasItem, select, yes {het voorgestelde werkitem ‘{item}’} other {een van de voorgestelde werkitems}} is gewijzigd terwijl dit plan werd goedgekeurd. Er is niets toegevoegd — controleer de repository van dat werkitem en keur daarna opnieuw goed.",
+        "linkRefused": "Motir kon dit plan niet goedkeuren: een van de afhankelijkheden zou een kringloop vormen of een bestaande koppeling herhalen. Er is niets toegevoegd — de afhankelijkheden van het plan moeten worden gecorrigeerd voordat het kan worden goedgekeurd.",
+        "notAuthorised": "Je kunt niet over dit plan beslissen — goedkeuren of afwijzen vereist een recht dat je in dit project niet hebt. Er is niets gewijzigd.",
+        "refused": "Motir heeft deze beslissing{hasItem, select, yes { over het voorgestelde werkitem ‘{item}’} other {}} geweigerd, dus er is niets gewijzigd — nogmaals drukken helpt op zichzelf niet.",
+        "refusalReason": "Opgegeven reden: {reason}"
       },
       "answeredFrom": "{count, plural, =0 {Beantwoord zonder iets aan te halen} one {Beantwoord op basis van # werkitem} other {Beantwoord op basis van # werkitems}}",
       "correctToAsk": "In plaats daarvan dit beantwoorden",
