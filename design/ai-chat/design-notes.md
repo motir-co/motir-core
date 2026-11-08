@@ -961,9 +961,9 @@ is its depth, and the depth already ships.
 
 > **⚠️ AMENDED 2026-11-08 (MOTIR-10710) — row 6's pill and orb fills below were
 > re-measured across every palette, and three values changed.** The table above was
-> measured in the default `motir` palette only, whose label ink is white. Six
+> measured in the default `motir` palette only, taking the label ink as white, which holds in light only. Ten
 > palette × mode pairs paint a DARK `--el-accent-text` on the accent fill
-> (amber, candy, citrine and sienna light; evergreen and motir dark), and for
+> (amber, candy, citrine and sienna in both modes; evergreen and motir dark), and for
 > those the mix toward `black` LOWERS the label's contrast instead of raising it.
 > `tests/theme/stylePaletteModeContrast.test.ts` (MOTIR-10674) measured the 2026-09
 > recipe at **3.18:1 in sienna light** (stop 2; stop 1 at 4.19:1) and **3.49:1 in
@@ -977,7 +977,7 @@ is its depth, and the depth already ships.
 > | orb wash    | `color-mix(--el-highlight 22%, transparent)`                       | `color-mix(--el-highlight 15%, transparent)`                       |
 >
 > The black share is bounded by sienna light, the tightest dark-ink pair: at
-> 6% / 5% black with the base fill's own 14% highlight share, every one of the 22
+> 6% / 5% black with the base fill's own 14% highlight share, every one of the 20
 > palette × mode pairs clears 4.5:1 on both stops, the lowest **4.62:1** (sienna
 > light, stop 2). The orb's lowest stop is now **3.04:1** (cobalt dark), with
 > `--orb-lit-mix` untouched. The block below carries the new values, and the

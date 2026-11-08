@@ -3999,10 +3999,10 @@
   }
 }
 /* The pill's black share is bounded by the palettes whose label ink is DARK
-   (sienna, candy, amber, citrine light; evergreen, motir dark): black lowers
-   their contrast instead of raising it. 6% / 5% black with the base 14%
-   highlight keeps every palette x mode at 4.5:1 or more; sienna light is the
-   tightest, at 4.62:1 (MOTIR-10710). */
+   (amber, candy, citrine and sienna in both modes; evergreen and motir dark):
+   black lowers their contrast instead of raising it. 6% / 5% black with the
+   base 14% highlight keeps all 20 palette x mode pairs at 4.5:1 or more;
+   sienna light is the tightest, at 4.62:1 (MOTIR-10710). */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     --plan-hero-fill: linear-gradient(
