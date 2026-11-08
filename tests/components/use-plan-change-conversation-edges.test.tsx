@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, screen, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
 // The story-level COVERAGE GATE's residual for the conversation state machine
@@ -104,6 +104,12 @@ import { useDecidedGateState } from '@/lib/approvals/decidedGates';
 import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
+import { PlanChangeRail } from '@/components/planning/PlanChangeRail';
+import { parsePlanningLaunch } from '@/lib/planning/launcher';
+import { indexPlanReview } from '@/lib/planning/planChangeDiff';
+import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConversation';
+import { renderWithIntl } from '../helpers/renderWithIntl';
+import deMessages from '@/messages/de.json';
 
 function session(bodies: string[]): PlanChangeSessionDto {
   return {
@@ -680,6 +686,187 @@ describe('usePlanChangeConversation — a failed SUBMIT keeps the prior proposal
   });
 });
 
+// ── MOTIR-10657 — a refused decision says what to correct ─────────────────────
+//
+// Each refusal is driven through the HOOK (the real `planDecisionErrorCode` and
+// `planDecisionRefusal`) and its state handed to the real RAIL, so the assertion is
+// the sentence a reviewer reads — not a key.
+
+const GENERIC =
+  "That didn't go through. Your conversation is saved — try again, or rephrase the change.";
+
+function renderRailFor(
+  state: PlanChangeConversationState,
+  intl?: Parameters<typeof renderWithIntl>[1],
+) {
+  return renderWithIntl(
+    <PlanChangeRail
+      launch={parsePlanningLaunch({ mode: 'replan', from: 'project' })}
+      projectName="PayFlow"
+      state={state}
+      index={indexPlanReview(state.review)}
+      targets={[]}
+      onSend={vi.fn()}
+      onRetry={vi.fn()}
+      onCorrectTurn={vi.fn()}
+      onApprove={vi.fn()}
+      onDiscard={vi.fn()}
+      onAddTarget={vi.fn()}
+      onRemoveTarget={vi.fn()}
+    />,
+    intl,
+  );
+}
+
+async function refusedApprove(err: unknown) {
+  approve.mockRejectedValue(err);
+  const hook = await mounted();
+  await act(async () => {
+    await hook.result.current.send('Add recurring invoices.');
+  });
+  await act(async () => {
+    await hook.result.current.approve();
+  });
+  return hook.result.current.state;
+}
+
+const REFUSED_ITEM = { planItemId: 'pi_1', message: 'Proposal pi_1: priority "p2" is not valid.' };
+
+describe('a refused approve names the proposal and what to correct (MOTIR-10657)', () => {
+  it.each([
+    [
+      'PLAN_ITEM_FIELD_REJECTED',
+      422,
+      { ...REFUSED_ITEM, field: 'priority' },
+      'Motir couldn’t approve this plan: the proposed work item “Recurring” has a value Motir can’t save in its “priority” field. Nothing was added — correct that work item in the plan, then approve again.',
+    ],
+    [
+      'INVALID_PROPOSAL',
+      422,
+      REFUSED_ITEM,
+      'Motir couldn’t approve this plan: the proposed work item “Recurring” has a value Motir can’t save. Nothing was added — correct that work item in the plan, then approve again.',
+    ],
+    [
+      'PLAN_ITEM_UNKNOWN_TARGET_REPO',
+      422,
+      REFUSED_ITEM,
+      'Motir couldn’t approve this plan: the proposed work item “Recurring” has a repository that isn’t in this project. Nothing was added — correct that work item in the plan, then approve again.',
+    ],
+    [
+      'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE',
+      422,
+      REFUSED_ITEM,
+      'Motir couldn’t approve this plan: the proposed work item “Recurring” has a repository role Motir doesn’t recognise. Nothing was added — correct that work item in the plan, then approve again.',
+    ],
+    [
+      'PLAN_PROPOSAL_REPO_PIN_MOVED',
+      409,
+      REFUSED_ITEM,
+      'The repository on the proposed work item “Recurring” changed while this plan was being approved. Nothing was added — check that work item’s repository, then approve again.',
+    ],
+    [
+      'WORK_ITEM_LINK_CYCLE',
+      409,
+      { planItemId: null, message: 'cycle' },
+      'Motir couldn’t approve this plan: one of its dependencies would loop back on itself or repeat a link that already exists. Nothing was added — the plan’s dependencies need correcting before it can be approved.',
+    ],
+    [
+      'APPROVAL_GATE_NOT_AUTHORISED',
+      403,
+      { planItemId: null, message: null },
+      'You can’t decide this plan — approving or declining it needs a permission you don’t have in this project. Nothing was changed.',
+    ],
+    [
+      'PLAN_DECISION_STAMP_REQUIRED',
+      400,
+      { planItemId: null, message: 'stamp required' },
+      'Motir refused this decision, so nothing was changed — pressing again won’t help on its own.',
+    ],
+    [
+      'PLAN_HAS_NO_PROPOSALS',
+      409,
+      REFUSED_ITEM,
+      'Motir refused this decision about the proposed work item “Recurring”, so nothing was changed — pressing again won’t help on its own.',
+    ],
+  ])(
+    '%s (%i) reads as its own sentence, with the server’s reason',
+    async (code, status, detail, sentence) => {
+      const state = await refusedApprove(new PlanRequestError(status, code, detail));
+      renderRailFor(state);
+
+      const alert = screen.getByRole('alert');
+      expect(alert.textContent).toContain(sentence);
+      expect(alert.textContent).not.toContain(GENERIC);
+      if (detail.message) {
+        expect(screen.getByTestId('plan-refusal-reason').textContent).toBe(
+          `Reason given: ${detail.message}`,
+        );
+      } else {
+        expect(screen.queryByTestId('plan-refusal-reason')).toBeNull();
+      }
+      // Pressing again sends the same plan, so the rail offers no Try again.
+      expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    },
+  );
+
+  it('names no proposal when the response carries none', async () => {
+    const state = await refusedApprove(
+      new PlanRequestError(422, 'PLAN_ITEM_FIELD_REJECTED', { planItemId: null, message: null }),
+    );
+    renderRailFor(state);
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Motir couldn’t approve this plan: one of the proposed work items has a value Motir can’t save.',
+    );
+  });
+
+  it('says it in every shipped locale — the German catalogue, rendered', async () => {
+    const state = await refusedApprove(
+      new PlanRequestError(422, 'PLAN_ITEM_FIELD_REJECTED', { ...REFUSED_ITEM, field: 'priority' }),
+    );
+    renderRailFor(state, { locale: 'de', messages: deMessages });
+    const text = screen.getByRole('alert').textContent ?? '';
+    expect(text).toContain('„Recurring“');
+    expect(text).toContain('„priority“');
+    expect(text).toContain('Angegebener Grund: Proposal pi_1');
+  });
+
+  it('a refused DISCARD carries its reason too', async () => {
+    decline.mockRejectedValue(
+      new PlanRequestError(403, 'APPROVAL_GATE_NOT_AUTHORISED', {
+        planItemId: null,
+        message: 'Not yours to decide.',
+      }),
+    );
+    const hook = await mounted();
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+    await act(async () => {
+      await hook.result.current.discard();
+    });
+    expect(hook.result.current.state.errorCode).toBe('notAuthorised');
+    renderRailFor(hook.result.current.state);
+    expect(screen.getByTestId('plan-refusal-reason').textContent).toBe(
+      'Reason given: Not yours to decide.',
+    );
+  });
+
+  it.each([
+    ['PLAN_TARGET_IMMUTABLE', 409, 'Some of those work items are already finished'],
+    ['PLAN_NOT_FOUND', 404, 'This proposal was already decided'],
+    ['PLAN_REVISION_IN_FLIGHT', 409, 'Motir is still rewriting this plan'],
+    ['PLAN_NOT_DECIDABLE_YET', 409, 'This plan can’t be decided yet'],
+    ['BOOM', 500, GENERIC],
+  ])('the mapped %s (%i) keeps its message, and a Try again', async (code, status, words) => {
+    const state = await refusedApprove(new PlanRequestError(status, code));
+    expect(state.decisionRefusal).toBeNull();
+    renderRailFor(state);
+    expect(screen.getByRole('alert').textContent).toContain(words);
+    expect(screen.queryByTestId('plan-refusal-reason')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
 describe('usePlanChangeConversation — approve edges', () => {
   it('does nothing when there is no proposal to approve', async () => {
     const { result } = await mounted();
@@ -720,8 +907,8 @@ describe('usePlanChangeConversation — approve edges', () => {
     expect(result.current.state.errorCode).toBe('APPROVE_ERROR');
   });
 
-  it('never puts a raw server code on screen — an unrecognized one reads as the generic failure', async () => {
-    approve.mockRejectedValue(new PlanRequestError(400, 'PLAN_GRAMMAR_VIOLATION'));
+  it('never puts a raw server code on screen — a 5xx reads as the generic recoverable failure', async () => {
+    approve.mockRejectedValue(new PlanRequestError(500, 'WORKSPACE_MISMATCH_LINK'));
     const { result } = await mounted();
     await act(async () => {
       await result.current.send('Add recurring invoices.');
@@ -730,9 +917,10 @@ describe('usePlanChangeConversation — approve edges', () => {
       await result.current.approve();
     });
 
-    // The two codes a reviewer can act on (`immutable` / `decided`) are named;
-    // everything else falls to the recoverable line rather than leaking a code.
+    // A typed 4xx is named (MOTIR-10657, below); a 5xx is the one failure a retry
+    // can honestly fix, so it keeps the recoverable line rather than leaking a code.
     expect(result.current.state.errorCode).toBe('APPROVE_ERROR');
+    expect(result.current.state.decisionRefusal).toBeNull();
   });
 
   it('reports a plan that vanished as already DECIDED, not as a failure to retry', async () => {

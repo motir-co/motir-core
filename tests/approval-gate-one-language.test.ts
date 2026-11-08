@@ -560,5 +560,8 @@ describe('REGISTRY TOTALITY — a NEW enum member fails the build (MOTIR-4796)',
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }
-  }, 60_000);
+    // A cold `tsc` over the registry's import graph takes ~59s on a CI Vitest
+    // leg, so 60s timed out on every other run (MOTIR-10657, PR #4038). The
+    // sibling probe in `approval-gate-registry.test.ts` already allows 180s.
+  }, 180_000);
 });

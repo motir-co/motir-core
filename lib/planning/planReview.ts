@@ -62,9 +62,10 @@ export function isProposedReview(review: PlanReviewDto): boolean {
 }
 
 /**
- * A failed decision, as a stable copy key the surface can explain. The two a
- * reviewer can actually hit are named; everything else falls to the generic
- * recoverable line, so a raw server code never reaches the screen.
+ * A failed decision, as a stable copy key the surface can explain. Every typed
+ * refusal is named — the ones below, and the rest through
+ * {@link PLAN_DECISION_REFUSALS}; only an untyped failure or a 5xx falls to the
+ * generic recoverable line, so a raw server code never reaches the screen.
  *  • `PLAN_TARGET_IMMUTABLE` — the persist gate refused: a target reached
  *    done/cancelled under the proposal (nothing was written).
  *  • `PLAN_NOT_IN_EXPECTED_STATUS` / a 404 — someone (or another tab) already
@@ -97,7 +98,106 @@ export function planDecisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'):
     return 'stale';
   }
   if (err.code === 'PLAN_NOT_DECIDABLE_YET') return 'notDecidable';
-  return fallback;
+  return planDecisionRefusalCode(err) ?? fallback;
+}
+
+/**
+ * The decide door's refusals no key above names (MOTIR-10657). Each says what the
+ * refusal is about — a proposal to correct, a dependency, a permission — because
+ * the generic line it fell to before ("try again, or rephrase the change") points
+ * at the conversation, and retrying cannot help any of them.
+ */
+export const PLAN_DECISION_REFUSALS = [
+  'proposalRejected',
+  'repoPinMoved',
+  'linkRefused',
+  'notAuthorised',
+  'refused',
+] as const;
+export type PlanDecisionRefusalCode = (typeof PLAN_DECISION_REFUSALS)[number];
+
+/** Is this rail error code one of {@link PLAN_DECISION_REFUSALS}? */
+export function isPlanDecisionRefusal(code: string | null): code is PlanDecisionRefusalCode {
+  return (PLAN_DECISION_REFUSALS as readonly string[]).includes(code ?? '');
+}
+
+/**
+ * A PROPOSAL the approve route refused before or inside `materialize`
+ * (`app/api/plans/[id]/approve/route.ts`): the reviewer's next move is to have
+ * that card corrected in the plan, then approve again.
+ */
+const PROPOSAL_REFUSALS = new Set([
+  'PLAN_ITEM_FIELD_REJECTED',
+  'INVALID_PROPOSAL',
+  'PLAN_ITEM_UNKNOWN_TARGET_REPO',
+  'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE',
+  'PLAN_GRAMMAR_VIOLATION',
+  'INVALID_PLAN_REF_GRAPH',
+  'UNRESOLVED_PLAN_REF',
+  'PLAN_ITEM_TARGET_MISSING',
+]);
+
+/** The `work_item_link` triggers' refusals an approve's `blocked_by` wiring can meet. */
+const LINK_REFUSALS = new Set(['WORK_ITEM_LINK_CYCLE', 'SELF_LINK', 'DUPLICATE_LINK']);
+
+function planDecisionRefusalCode(err: PlanRequestError): PlanDecisionRefusalCode | null {
+  if (err.code === 'PLAN_PROPOSAL_REPO_PIN_MOVED') return 'repoPinMoved';
+  if (err.code !== null && PROPOSAL_REFUSALS.has(err.code)) return 'proposalRejected';
+  if (err.code !== null && LINK_REFUSALS.has(err.code)) return 'linkRefused';
+  // Every 403 is a permission refusal EXCEPT the organisation's kill-switch (an AI
+  // feature switched off, or the organisation suspended), which no permission of the
+  // reader's would lift — that one reads as a plain refusal with the server's reason.
+  if (
+    err.code === 'APPROVAL_GATE_NOT_AUTHORISED' ||
+    (err.status === 403 && err.code !== 'ORG_FEATURE_DISABLED')
+  ) {
+    return 'notAuthorised';
+  }
+  // Any other TYPED 4xx is a refusal the server explained. A 5xx, or a refusal with
+  // no code, keeps the caller's recoverable fallback — retrying those is honest.
+  if (err.code !== null && err.status >= 400 && err.status < 500) return 'refused';
+  return null;
+}
+
+/** Which field a proposal refusal names, as the rail's copy selects on it. */
+export type PlanRefusalFieldKind = 'repository' | 'repositoryRole' | 'named' | 'other';
+
+/**
+ * What a decision refusal says about itself, read off the response, so the rail can
+ * name the proposal, the field and the server's own sentence (MOTIR-10657). `item`
+ * is the refused proposal's label from the review in hand — null when the response
+ * names none, or one the review does not hold.
+ */
+export interface PlanDecisionRefusal {
+  item: string | null;
+  fieldKind: PlanRefusalFieldKind;
+  field: string | null;
+  reason: string | null;
+}
+
+export function planDecisionRefusal(
+  err: unknown,
+  review: PlanReviewDto | null,
+): PlanDecisionRefusal | null {
+  if (!(err instanceof PlanRequestError) || !isPlanDecisionRefusal(planDecisionErrorCode(err))) {
+    return null;
+  }
+  const proposal = err.detail.planItemId
+    ? review?.items.find((i) => i.planItemId === err.detail.planItemId)
+    : undefined;
+  const field = err.detail.field ?? null;
+  return {
+    item: proposal ? [proposal.identifier, proposal.title].filter(Boolean).join(' ') : null,
+    fieldKind: refusalFieldKind(err.code, field),
+    field,
+    reason: err.detail.message,
+  };
+}
+
+function refusalFieldKind(code: string | null, field: string | null): PlanRefusalFieldKind {
+  if (code === 'PLAN_ITEM_UNKNOWN_TARGET_REPO') return 'repository';
+  if (code === 'PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE') return 'repositoryRole';
+  return field ? 'named' : 'other';
 }
 
 /** What an approve landed, so a surface can say it back. */

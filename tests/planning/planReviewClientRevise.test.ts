@@ -131,6 +131,8 @@ describe('the PRESS body — the stamp the reader was shown rides every decision
     expect((err as PlanRequestError).detail).toEqual({
       planItemId: 'pi_1',
       message: 'The plan moved.',
+      // The column a PLAN_ITEM_FIELD_REJECTED names (MOTIR-10657); this refusal names none.
+      field: null,
     });
   });
 
@@ -176,7 +178,11 @@ describe('the PRESS body — the stamp the reader was shown rides every decision
     respond({ planItemId: 42 }, 409);
     const approveErr = await approvePlanRequest('plan_1', 'stamp_1').catch((e: unknown) => e);
     expect((approveErr as PlanRequestError).code).toBeNull();
-    expect((approveErr as PlanRequestError).detail).toEqual({ planItemId: null, message: null });
+    expect((approveErr as PlanRequestError).detail).toEqual({
+      planItemId: null,
+      message: null,
+      field: null,
+    });
 
     respond({}, 409);
     const declineErr = await declinePlanRequest('plan_1', 'stamp_1').catch((e: unknown) => e);
