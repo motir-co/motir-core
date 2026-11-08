@@ -501,6 +501,33 @@ export const STYLE_REGISTRY = {
         "Tonal cards, sidebar and top bar on the palette's surface, a popover one rung up, a modal two up, a recessed input on the page ground with an inset seat; the hero AI pill and orb sit on the top rung with an accent-led fill and a tonal rim.",
     },
   },
+  claymorphism: {
+    id: 'claymorphism',
+    name: 'Claymorphism',
+    tagline: 'Soft, inflated tiles that look pressed from clay — friendly, tactile and calm.',
+    inspiration:
+      'Claymorphism, coined by Michal Malewicz in his 2021 Hype4 Academy write-up (hype4.academy/articles/design/claymorphism-in-user-interfaces) as the friendlier successor to neumorphism: oversized corners, two inner shadows and one soft outer drop.',
+    designDoc: 'docs/styles/claymorphism.md',
+    defaultTypeId: 'rounded',
+    dimensions: {
+      silhouette:
+        'Oversized soft corners — 16px buttons and inputs, 26px cards, 32px modals, 12px rows and menu items — with pills kept for chips.',
+      stroke:
+        'The hairline is kept at a palette border mix on every clay surface, because a soft shadow may never be the only carrier of structure.',
+      elevation:
+        'The three-part clay stack — a light band at the top inner edge, a shade band at the bottom inner edge and one soft outer drop — so a surface reads as pressed from clay rather than floating as glass.',
+      surface:
+        'Opaque palette surface; the clay volume is carried by shadow and radius and never by a tint of its own.',
+      density:
+        'Comfortable and roomy — 20x12 buttons, 28px card padding, 40px controls — so the inset band never crowds text.',
+      motion:
+        'Gentle 200ms with a 0.97 press squish and no hover scaling; nothing in the style layer animates.',
+      typography:
+        'Ships the Rounded pairing (Nunito headlines and body) as its default, overridable by any pinned type.',
+      components:
+        'Claymorphism cards, popovers, modals, sidebar and inputs through the surface-material layer, a Claymorphism hero pill and orb through the seam variables, and chips, keyboard hints and tooltips carrying the drop only.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

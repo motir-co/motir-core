@@ -268,6 +268,7 @@ describe('every style canvas reaches the signed-in shell (MOTIR-4234)', () => {
     // than a style: these five paint no page canvas, so nothing in the change
     // reaches them and the shell keeps the `--el-page-bg` fill it always had.
     expect(FLAT_STYLES, 'the styles that paint no canvas').toEqual([
+      'claymorphism',
       'dense-pro',
       'hand-drawn-indie',
       'high-contrast-accessible',

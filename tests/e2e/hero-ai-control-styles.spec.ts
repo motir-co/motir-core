@@ -65,6 +65,7 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['dense-pro', 'Dense / Pro'],
   ['high-contrast-accessible', 'High-Contrast / Accessible'],
   ['tonal-elevated', 'Tonal / Elevated'],
+  ['claymorphism', 'Claymorphism'],
 ] as const;
 
 const BASE_STYLE = 'warm-editorial';

@@ -3113,6 +3113,152 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Claymorphism (MOTIR-10669). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/claymorphism.md. ─────────────────────────────────────────────────────── */
+[data-style='claymorphism'] {
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 16px;
+  --radius-input: 16px;
+  --radius-card: 26px;
+  --radius-modal: 32px;
+  --radius-badge: 9999px;
+  --radius-control: 12px;
+  --radius-kbd: 8px;
+  --shadow-subtle: 0 1px 4px rgba(20, 20, 30, 0.06);
+  --shadow-card: 0 2px 18px rgba(20, 20, 30, 0.1);
+  --shadow-elevated: 0 6px 24px -4px rgba(20, 20, 30, 0.1);
+  --shadow-modal: 0 12px 40px -8px rgba(20, 20, 30, 0.1);
+  --shadow-hero-mockup: 0 18px 48px -12px rgba(20, 20, 30, 0.1);
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 12px;
+  --spacing-btn-x-sm: 16px;
+  --spacing-btn-y-sm: 8px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 12px;
+  --spacing-card-padding: 28px;
+  --spacing-control-x: 14px;
+  --spacing-control-y: 8px;
+  --spacing-chip-x: 12px;
+  --height-btn-sm: 36px;
+  --height-btn-md: 44px;
+  --height-btn-lg: 52px;
+  --height-input: 44px;
+  --height-control: 40px;
+  --transition-duration: 200ms;
+  --transition-slow: 300ms;
+  --hover-scale: 1;
+  --active-scale: 0.97;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --clay-inset: 3px;
+  --clay-inset-blur: 6px;
+  --clay-drop: 2px;
+  --clay-drop-blur: 18px;
+  --clay-light: rgba(255, 255, 255, 0.55);
+  --clay-shade: rgba(20, 20, 30, 0.16);
+  --clay-drop-ink: rgba(20, 20, 30, 0.1);
+}
+[data-theme='dark'] [data-style='claymorphism'],
+[data-style='claymorphism'][data-theme='dark'] {
+  --clay-light: rgba(255, 255, 255, 0.07);
+  --clay-shade: rgba(0, 0, 0, 0.42);
+  --clay-drop-ink: rgba(0, 0, 0, 0.46);
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-shade),
+      0 var(--clay-drop) var(--clay-drop-blur) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset 0 calc(var(--clay-inset) + 1px) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * (var(--clay-inset) + 1px)) var(--clay-inset-blur) var(--clay-shade),
+      0 calc(var(--clay-drop) * 4) calc(var(--clay-drop-blur) * 2) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset var(--clay-inset) 0 var(--clay-inset-blur) var(--clay-light),
+      inset calc(-1 * var(--clay-inset)) 0 var(--clay-inset-blur) var(--clay-shade),
+      var(--clay-drop) 0 var(--clay-drop-blur) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-shade),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-light);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card']:is(a, button, [role='button']):hover {
+    box-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-shade),
+      0 calc(var(--clay-drop) * 2) calc(var(--clay-drop-blur) + 6px) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card']:is(a, button, [role='button']):active {
+    box-shadow:
+      inset 0 calc(var(--clay-inset) * 2) var(--clay-inset-blur) var(--clay-shade),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-light);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input']:disabled,
+  [data-surface='card'][aria-disabled='true'] {
+    box-shadow: none;
+    border-color: var(--el-border);
+  }
+}
+@media (prefers-contrast: more) {
+  @scope ([data-style='claymorphism']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'],
+    [data-surface='sidebar'] {
+      border-color: var(--el-border-strong);
+      box-shadow: var(--shadow-card);
+    }
+  }
+}
+@media (forced-colors: active) {
+  @scope ([data-style='claymorphism']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'],
+    [data-surface='sidebar'] {
+      border-color: var(--el-border-strong);
+      box-shadow: none;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -3557,6 +3703,41 @@
       circle at 33% 27%,
       color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
       var(--el-accent) 60%
+    );
+  }
+}
+
+/* 15 · Claymorphism — see docs/styles/claymorphism.md § the hero AI control. */
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-accent) 70%, var(--el-text));
+    --plan-hero-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-shade),
+      0 var(--clay-drop) var(--clay-drop-blur) color-mix(in srgb, var(--el-accent) 30%, transparent);
+    --plan-orb-shadow:
+      inset 0 calc(var(--clay-inset) + 1px) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * (var(--clay-inset) + 1px)) var(--clay-inset-blur) var(--clay-shade),
+      0 calc(var(--clay-drop) * 2) var(--clay-drop-blur)
+        color-mix(in srgb, var(--el-accent) 34%, transparent);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-accent) 90%, var(--el-surface)),
+      var(--el-accent)
+    );
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)) 0%,
+      var(--el-accent) 55%,
+      color-mix(in srgb, var(--el-accent) 90%, var(--el-text)) 100%
     );
   }
 }
