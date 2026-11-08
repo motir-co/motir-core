@@ -50,6 +50,7 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['tonal-elevated', 'Tonal / Elevated'],
   ['claymorphism', 'Claymorphism'],
   ['bento', 'Bento'],
+  ['editorial-print', 'Editorial Print / Newspaper'],
 ] as const;
 
 const NAMES: Record<string, string> = Object.fromEntries(STYLES.map(([id, name]) => [id, name]));

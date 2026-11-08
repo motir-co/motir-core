@@ -271,6 +271,7 @@ describe('every style canvas reaches the signed-in shell (MOTIR-4234)', () => {
       'bento',
       'claymorphism',
       'dense-pro',
+      'editorial-print',
       'hand-drawn-indie',
       'high-contrast-accessible',
       'neo-brutalism',

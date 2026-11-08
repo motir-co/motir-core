@@ -3296,6 +3296,66 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Editorial Print / Newspaper (MOTIR-10671). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/editorial-print.md. ─────────────────────────────────────────────────────── */
+[data-style='editorial-print'] {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-btn: 0px;
+  --radius-input: 0px;
+  --radius-card: 0px;
+  --radius-modal: 0px;
+  --radius-badge: 0px;
+  --radius-control: 0px;
+  --radius-kbd: 0px;
+  --shadow-flat: none;
+  --shadow-subtle: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
+  --shadow-modal: none;
+  --shadow-hero-mockup: none;
+  --spacing-btn-x: 16px;
+  --spacing-btn-y: 8px;
+  --spacing-btn-x-sm: 10px;
+  --spacing-btn-y-sm: 6px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 10px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 8px;
+  --spacing-control-y: 4px;
+  --spacing-icon-btn: 2px;
+  --spacing-chip-x: 8px;
+  --spacing-chip-y: 2px;
+  --spacing-kbd-x: 6px;
+  --spacing-kbd-y: 2px;
+  --spacing-tooltip-x: 8px;
+  --spacing-tooltip-y: 4px;
+  --height-btn-sm: 28px;
+  --height-btn-md: 36px;
+  --height-btn-lg: 44px;
+  --height-input: 40px;
+  --height-control: 32px;
+  --transition-duration: 90ms;
+  --transition-fast: 70ms;
+  --transition-slow: 140ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+}
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  .border {
+    border-width: 2px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -3796,6 +3856,32 @@
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     --plan-orb-fill: none;
     background-color: var(--el-accent);
+  }
+}
+
+/* 17 · Editorial Print / Newspaper — see docs/styles/editorial-print.md § the hero AI control. */
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+    border: 2px solid var(--el-border);
+  }
+}
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-text);
+    color: var(--el-page-bg);
+  }
+}
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+      var(--el-accent) 56%,
+      var(--el-text)
+    );
   }
 }
 

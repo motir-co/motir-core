@@ -556,6 +556,29 @@ export const STYLE_REGISTRY = {
         'Equal-radius tile cards, popovers and modals (20px), hairline-edged with the near-flat shadow; 12px controls and inputs, 10px chips; the hero pill and orb as flat accent plates.',
     },
   },
+  'editorial-print': {
+    id: 'editorial-print',
+    name: 'Editorial Print / Newspaper',
+    tagline: 'Square corners, ink rules and no shadow — the calm authority of a printed column.',
+    inspiration:
+      'Editorial print / broadsheet layout — the Financial Times redesign lineage (a slab-serif family drawn for a six-column grid) and newspaper column rules, heavy section rules and square corners.',
+    designDoc: 'docs/styles/editorial-print.md',
+    defaultTypeId: 'slab',
+    dimensions: {
+      silhouette:
+        'Square, zero radius on every surface, pill left round for genuinely circular affordances.',
+      stroke:
+        "Structure drawn by a 2px ink section rule plus a 1px column rule, both in the palette's ink.",
+      elevation: 'None at any level, separation carried by rule weight and whitespace.',
+      surface: 'Opaque palette paper, no texture, no wash, no translucency.',
+      density: 'Tight print rhythm, buttons 16×8, controls 32px, inputs 40px, card padding 24px.',
+      motion: 'Near-instant 90ms transitions with no press-scale, the page is set, not animated.',
+      typography:
+        'The `slab` pairing (Roboto Slab headlines over Inter body), overridable by a pinned type.',
+      components:
+        'Square buttons, inputs, cards, modals and rectangular status chips, 2px ink-framed surfaces, hairline column rules.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */
