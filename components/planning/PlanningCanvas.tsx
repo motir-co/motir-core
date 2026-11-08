@@ -65,6 +65,12 @@ export interface CanvasNode {
    * cue (Part XXIII §23.4). Absent is a value like any other.
    */
   changeKey?: string;
+  /**
+   * The node wears a TAB on its top-left edge (the "You are here" tab, MOTIR-10630).
+   * Its top side then fans its edges right of the tab (`routeEdges`' `tabbed`).
+   * Absent → the shared band, so every other consumer routes exactly as before.
+   */
+  topTab?: boolean;
 }
 
 export interface CanvasEdge {
@@ -547,10 +553,14 @@ export function PlanningCanvas({
 
   // Route ALL edges together so the global lane pass keeps every connector on its
   // own track (one entry per edge, aligned to `edges`; null where a node is gone).
-  const routes = routeEdges(liveEdges, (id) => {
-    const n = nodeById.get(id);
-    return n ? rectOf(n) : undefined;
-  });
+  const routes = routeEdges(
+    liveEdges,
+    (id) => {
+      const n = nodeById.get(id);
+      return n ? rectOf(n) : undefined;
+    },
+    (id) => nodeById.get(id)?.topTab === true,
+  );
   // A retained edge fades on the route it HAD — its ends where they stood.
   const exitEdges = motion ? mo.exitEdges : [];
   const exitEnds = new Map(exitEdges.flatMap((x) => x.ends.map((n) => [n.id, n] as const)));
@@ -560,6 +570,7 @@ export function PlanningCanvas({
       const n = exitEnds.get(id);
       return n ? rectOf(n) : undefined;
     },
+    (id) => exitEnds.get(id)?.topTab === true,
   );
   const drawnNodes = motion ? withExits(liveNodes, mo.exitNodes) : liveNodes;
 

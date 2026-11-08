@@ -1,19 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { isReadyToStart, isToPlanStory, statusSlotOf } from '@/lib/workItems/statusSlot';
 
-// The status slot's precedence (MOTIR-10534; design MOTIR-10508): You are here ›
-// Done › To plan › Ready › the status chip — the one rule the canvas, the board,
-// the quick view and the item page all draw from.
+// The status slot's precedence (MOTIR-10534; design MOTIR-10508): Done › To plan ›
+// Ready › the status chip — the one rule the canvas, the board, the quick view and
+// the item page all draw from. The canvas's You are here is no part of it: since
+// MOTIR-10630 it is a tab on the card, and the here card's slot is its own.
 
 const task = { kind: 'task', status: 'in_progress', statusCategory: 'in_progress' as const };
 
 describe('statusSlotOf', () => {
-  it('You are here takes the slot outright', () => {
-    expect(
-      statusSlotOf({ ...task, status: 'done' }, { ready: true, blocked: false, here: true }),
-    ).toBe('here');
-  });
-
   it('Done is the done key, unless the item is blocked', () => {
     const done = { ...task, status: 'done', statusCategory: 'done' as const };
     expect(statusSlotOf(done, { ready: false, blocked: false })).toBe('done');

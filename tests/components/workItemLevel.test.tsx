@@ -653,15 +653,19 @@ describe('buildWorkItemLevel — ready highlight (MOTIR-1417 / MOTIR-1422)', () 
     expect(document.querySelector('[data-node-state="ready"]')).toBeNull();
   });
 
-  it('the "you are here" frontier suppresses the ready treatment', () => {
+  it('the "you are here" frontier wins the ready FRAME; its slot still says Ready', () => {
     const { nodes } = buildWorkItemLevel(
       level([item({ id: 'A1', kind: 'story', status: 'in_progress', ready: true })]),
       { markActive: true },
     );
     render(<>{nodes.find((n) => n.id === 'A1')!.content}</>);
     expect(screen.getByText('You are here')).toBeTruthy();
-    expect(screen.queryByTestId('ready-pill')).toBeNull();
+    // MOTIR-10630: You are here is the card's tab, so the slot is the item's own.
+    expect(screen.getByTestId('ready-pill')).toBeTruthy();
     expect(document.querySelector('[data-node-state="ready"]')).toBeNull();
+    expect(document.querySelector('[data-node-state="here"]')!.className).not.toContain(
+      'bg-(--el-tint-mint)',
+    );
   });
 
   it('a DONE node shows the neutral "Done" pill + the recessed/done card state (distinct from ready)', () => {
