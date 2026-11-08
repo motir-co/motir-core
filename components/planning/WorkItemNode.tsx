@@ -192,6 +192,7 @@ export type CopyActionReason = 'ci_failed' | 'changes_requested';
  * | To plan                                       | Plan (the overlay)   |
  * | fix reason `ci_failed` / `changes_requested`  | copy `motir fix`     |
  * | In Review                                     | copy `motir review`  |
+ * | Ready epic                                    | none                 |
  * | Ready, and not manual                         | copy `motir run`     |
  * | Ready, and manual                             | copy `motir guide`   |
  * | anything else                                 | none                 |
@@ -199,8 +200,14 @@ export type CopyActionReason = 'ci_failed' | 'changes_requested';
  * "Manual" is the shipped `executor === 'human' || type === 'manual'` predicate;
  * `motir guide <KEY>` walks a person through such a card, as `motir run` hands a
  * coding card to an agent.
+ *
+ * A ready EPIC draws no button (MOTIR-10741): an epic is not run with one
+ * command — its stories are — and it carries no executor or type, so neither
+ * `motir run` nor `motir guide` applies to it. Only the ready row looks at the
+ * kind: To plan, fix and In Review keep their rows for every kind.
  */
 export function cardNextAction(input: {
+  kind: IssueType;
   toPlan: boolean;
   fixReason: WorkItemFixReasonDto | null | undefined;
   status: string;
@@ -216,6 +223,7 @@ export function cardNextAction(input: {
   }
   if (input.status === 'in_review') return { kind: 'copy', verb: 'review', reason: null };
   if (input.ready) {
+    if (input.kind === 'epic') return null;
     return { kind: 'copy', verb: input.manual ? 'guide' : 'run', reason: null };
   }
   return null;
@@ -346,6 +354,7 @@ export function WorkItemNode({
               ? 'not-in-sprint'
               : 'normal';
   const action = cardNextAction({
+    kind: item.kind,
     toPlan,
     fixReason: item.fixReason,
     status: item.status,

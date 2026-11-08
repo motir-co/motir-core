@@ -15,20 +15,36 @@ import type { PlanChangeConversationState } from '@/lib/hooks/usePlanChangeConve
  */
 export type PlanRunPhase = 'conversation' | 'planning';
 
-export function planRunPhase(
-  state: Pick<
-    PlanChangeConversationState,
-    'phase' | 'planId' | 'jobId' | 'settledJobId' | 'liveReview' | 'session'
-  >,
-): PlanRunPhase | null {
-  const job =
-    state.phase === 'streaming'
-      ? state.planId !== null
-        ? state.jobId
-        : undefined
-      : reopenedPlanJobId(state);
+type PlanRunState = Pick<
+  PlanChangeConversationState,
+  'phase' | 'planId' | 'jobId' | 'settledJobId' | 'liveReview' | 'session'
+>;
+
+export function planRunPhase(state: PlanRunState): PlanRunPhase | null {
+  const job = planRunJobId(state);
   if (job === undefined) return null;
   return job !== null && (state.settledJobId ?? null) === job ? 'planning' : 'conversation';
+}
+
+/** The job the plan run on screen is — live or reopened — or `undefined` when none. */
+function planRunJobId(state: PlanRunState): string | null | undefined {
+  if (state.phase !== 'streaming') return reopenedPlanJobId(state);
+  return state.planId !== null ? state.jobId : undefined;
+}
+
+/**
+ * The quick reply the conversation-phase bubble draws (MOTIR-10738): the
+ * `conversation_ack` text of the run ON SCREEN, while that run is still in its
+ * conversation phase. `null` before the frame arrives, when it never does (an older
+ * job, a failed model call), when the stored reply belongs to another job, and once
+ * the run has settled — the bubble then falls back to its keyed line, or is gone.
+ */
+export function conversationAckFor(
+  state: PlanRunState & Pick<PlanChangeConversationState, 'conversationAck'>,
+): string | null {
+  const ack = state.conversationAck ?? null;
+  if (ack === null || planRunPhase(state) !== 'conversation') return null;
+  return planRunJobId(state) === ack.jobId ? ack.text : null;
 }
 
 /**
