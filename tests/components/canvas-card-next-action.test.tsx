@@ -733,6 +733,8 @@ describe('the next-action button', () => {
         kind: 'work-item',
         itemKey: 'MOTIR-10520',
         hasPlan: false,
+        // The card's Plan opens on the start prompt, as the item page's does (MOTIR-10711).
+        confirmStart: true,
       }),
     );
     expect(writeText).not.toHaveBeenCalled();
