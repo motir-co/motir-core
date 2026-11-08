@@ -479,14 +479,35 @@ describe('the shipped treatment is the DESIGN’s treatment (MOTIR-4743 AC 6)', 
   it('transcribes every declaration of the design’s verbatim CSS block', () => {
     const fence = /```css\n([\s\S]*?)```/g;
     const blocks = [...DESIGN_NOTES.matchAll(fence)].map((m) => m[1]!);
-    const heroBlock = blocks.find((b) => b.includes("data-surface='ai-cta'"));
+    // The first copyable block is § *The CSS, verbatim*. Every later block that
+    // names the hook is a dated AMENDMENT section (MOTIR-10708 re-tuned the
+    // retrofuturism pill's bevel), applied in document order: a declaration it
+    // names replaces the one before it, and nothing it omits changes.
+    const heroBlocks = blocks.filter((b) => b.includes("data-surface='ai-cta'"));
+    const heroBlock = heroBlocks[0];
     expect(heroBlock, 'the design must still carry its copyable hero CSS block').toBeTruthy();
 
-    const specified = declarationMap(
-      scopedRules(heroBlock!.replace(/\/\*[\s\S]*?\*\//g, '')).filter((r) =>
-        r.selector.includes("data-surface='ai-cta'"),
-      ),
-    );
+    const declarationsOf = (block: string) =>
+      declarationMap(
+        scopedRules(block.replace(/\/\*[\s\S]*?\*\//g, '')).filter((r) =>
+          r.selector.includes("data-surface='ai-cta'"),
+        ),
+      );
+    const specified = declarationsOf(heroBlock!);
+    const amended: string[] = [];
+    for (const block of heroBlocks.slice(1)) {
+      for (const [key, value] of declarationsOf(block)) {
+        expect(
+          specified.has(key),
+          `an amendment may only re-specify a declared value: ${key}`,
+        ).toBe(true);
+        specified.set(key, value);
+        amended.push(key);
+      }
+    }
+    expect(amended).toEqual([
+      "retrofuturism|[data-surface='ai-cta'][data-ai-cta='pill']|--plan-hero-fill",
+    ]);
     const shipped = declarationMap(HERO_RULES);
 
     expect(specified.size, 'the design block must yield declarations at all').toBeGreaterThan(20);

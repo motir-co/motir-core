@@ -189,9 +189,27 @@ re-shape and re-skin the entire UI without per-component edits.
 The style changes no colour token, so the active palette's AA contrast is
 preserved by construction (text/background pairs are untouched). The additions
 that _do_ paint pixels — the sky, horizon, grid, the chrome specular/bevel, the
-glow — sit behind content (the grid at `z-index: -1`) or on surface edges, never
-under text, and the surfaces stay opaque (the streak/bevel ride `background-image`
+glow — sit behind content (the grid at `z-index: -1`) or on surface edges, and
+the surfaces stay opaque (the streak/bevel ride `background-image`
 over the tuned `background-color`, so they never pull a surface far from its base
 tone). The scene is static (no animation), so there is nothing to gate behind
 `prefers-reduced-motion`. Verified across light + dark themes via the `/tokens`
 specimen + the StyleVignette preview.
+
+**The canvas is under text, so its washes are capped (MOTIR-10708).** The sky,
+horizon and ground are a fixed backdrop: every heading, caption and empty state
+that is not on a card scrolls across them. They first shipped at
+`--retro-sky: 24%` / `--retro-horizon: 72%` / `--retro-ground: 26%`, and
+`tests/theme/stylePaletteModeContrast.test.ts` measured the AA inks down to
+1.01:1 on the horizon band (in the motir palette the accent is the ink colour, so
+a 72% accent band is ink on ink). The ceiling across all 10 palettes × both modes
+is 15% for the `--el-link` sky, 16% for the `--el-accent` bands and 17% for the
+`--el-highlight` band, set by `--el-accent-on-surface` on the light grounds. The
+style now ships **12% / 14% / 14%** (worst row 4.72:1, sienna light), so the
+horizon is a tint rather than a stripe; the neon grid floor and the chrome carry
+the Outrun read.
+
+**The pill's bevel ends are capped by its label.** The plan-with-AI pill's label
+is `--el-accent-text`, which each palette tunes against its bare accent (only
+4.99:1 in amethyst dark). The bevel's crown and base therefore move the accent by
+4% `white` and 7% `black` (from 18% / 16%), which keeps the worst end at 4.61:1.
