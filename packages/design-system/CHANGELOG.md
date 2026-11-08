@@ -1,5 +1,11 @@
 # @motir/design-system
 
+## 0.21.1
+
+### Patch Changes
+
+- d7716c1: `theme.css` declares `--spacing-shadow-elevated-drop` in every style (MOTIR-10677), each beside its own `--shadow-elevated`. Before, only the `@theme` default, Warm Editorial and Neo-Brutalism declared it, so a `[data-style]` scope nested inside a Neo-Brutalism one inherited its 6px drop instead of 0px. No value changes for an un-nested style.
+
 ## 0.21.0
 
 ### Minor Changes
