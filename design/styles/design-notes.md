@@ -8,13 +8,16 @@ rail arithmetic and the hero AI-control treatment) lives in its
 `tests/theme/styleRegistry.test.ts` requires on disk. This file indexes the
 mocks and states what each one draws and from which parts.
 
-| style                      | mock                                                                       | design record                                                                            | card        |
-| -------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------- |
-| Dense / Pro                | [dense-pro.mock.html](./dense-pro.mock.html)                               | [docs/styles/dense-pro.md](../../docs/styles/dense-pro.md)                               | MOTIR-10658 |
-| High-Contrast / Accessible | [high-contrast-accessible.mock.html](./high-contrast-accessible.mock.html) | [docs/styles/high-contrast-accessible.md](../../docs/styles/high-contrast-accessible.md) | MOTIR-10659 |
-| Tonal / Elevated           | [tonal-elevated.mock.html](./tonal-elevated.mock.html)                     | [docs/styles/tonal-elevated.md](../../docs/styles/tonal-elevated.md)                     | MOTIR-10660 |
-| Claymorphism               | [claymorphism.mock.html](./claymorphism.mock.html)                         | [docs/styles/claymorphism.md](../../docs/styles/claymorphism.md)                         | MOTIR-10661 |
-| Bento                      | [bento.mock.html](./bento.mock.html)                                       | [docs/styles/bento.md](../../docs/styles/bento.md)                                       | MOTIR-10662 |
+| style                       | mock                                                                       | design record                                                                            | card        |
+| --------------------------- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------- |
+| Dense / Pro                 | [dense-pro.mock.html](./dense-pro.mock.html)                               | [docs/styles/dense-pro.md](../../docs/styles/dense-pro.md)                               | MOTIR-10658 |
+| High-Contrast / Accessible  | [high-contrast-accessible.mock.html](./high-contrast-accessible.mock.html) | [docs/styles/high-contrast-accessible.md](../../docs/styles/high-contrast-accessible.md) | MOTIR-10659 |
+| Tonal / Elevated            | [tonal-elevated.mock.html](./tonal-elevated.mock.html)                     | [docs/styles/tonal-elevated.md](../../docs/styles/tonal-elevated.md)                     | MOTIR-10660 |
+| Claymorphism                | [claymorphism.mock.html](./claymorphism.mock.html)                         | [docs/styles/claymorphism.md](../../docs/styles/claymorphism.md)                         | MOTIR-10661 |
+| Bento                       | [bento.mock.html](./bento.mock.html)                                       | [docs/styles/bento.md](../../docs/styles/bento.md)                                       | MOTIR-10662 |
+| Editorial Print / Newspaper | [editorial-print.mock.html](./editorial-print.mock.html)                   | [docs/styles/editorial-print.md](../../docs/styles/editorial-print.md)                   | MOTIR-10663 |
+| Art Deco                    | [art-deco.mock.html](./art-deco.mock.html)                                 | [docs/styles/art-deco.md](../../docs/styles/art-deco.md)                                 | MOTIR-10664 |
+| Memphis                     | [memphis.mock.html](./memphis.mock.html)                                   | [docs/styles/memphis.md](../../docs/styles/memphis.md)                                   | MOTIR-10665 |
 
 ## How every mock in this area is built
 
@@ -155,3 +158,50 @@ The proposed blocks and `@scope` rules are the record's CSS listings, verbatim.
 
 The proposed block and its three `@scope` hero rules are the record's CSS
 listings, verbatim.
+
+## Editorial Print / Newspaper (MOTIR-10663)
+
+[editorial-print.mock.html](./editorial-print.mock.html) · record:
+[docs/styles/editorial-print.md](../../docs/styles/editorial-print.md)
+
+- **Panel 1** — the vignette as a printed page: zero radius on every surface,
+  rectangular chips, no shadow anywhere, every framed surface ruled at 2px, the
+  tighter print rhythm (36px buttons, 32px rows), Roboto Slab headlines (the
+  `slab` default).
+- **Panels 2–3** — the rules re-ink with each palette; light and dark change no
+  geometry.
+- **Panel 4** — the pill becomes a solid ink block with a reversed-out
+  page-coloured label; the orb keeps its guarded lit crown with an ink rim; both
+  carry a 2px frame and no shadow.
+
+## Art Deco (MOTIR-10664)
+
+[art-deco.mock.html](./art-deco.mock.html) · record:
+[docs/styles/art-deco.md](../../docs/styles/art-deco.md)
+
+- **Panel 1** — squared plates: the card wears the 5px double-rule band with a
+  lit top-left and shaded bottom-right metal line and a three-step ziggurat in
+  each corner; the floating panel (a modal) adds the entablature rule under its
+  top edge and 12px steps on its bottom corners; the input carries one 2px rule;
+  the rail's edge is an inset double rule. Grotesk headlines.
+- **Panels 2–3** — the metal edge is the accent tinted into the border-strong
+  role, so it re-tints with each palette and mode.
+- **Panel 4** — the pill squares to 2px with a two-tone metal fill split at the
+  115° light angle, the band and a hard ink line; the orb keeps its circle with
+  an outer ring and a concentric inner ring.
+- **Noted for review** — the vignette's cards use a tighter padding step than
+  the default 24px, so the stepped corner reaches the first glyph's corner there.
+
+## Memphis (MOTIR-10665)
+
+[memphis.mock.html](./memphis.mock.html) · record:
+[docs/styles/memphis.md](../../docs/styles/memphis.md)
+
+- **Panel 1** — the dot-and-hatch canvas behind the vignette, 2px ink outlines,
+  the collage corners (6px / 22px alternating), the two hard offset blocks (ink
+  plus accent), the sharp 2px input beside the 10px buttons, Nunito type.
+- **Panels 2–3** — the canvas and the accent block re-tint with each palette.
+- **Noted for review** — in dark the near-black ink block nearly disappears and
+  the accent block carries the pasted-on read; the outlines keep every edge.
+- **Panel 4** — the pill keeps its accent-dominant fill with a 5px ink block; the
+  orb keeps its guarded lit crown with a 4px ink block.
