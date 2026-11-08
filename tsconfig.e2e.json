@@ -67,7 +67,12 @@
   // only an ESM `import` condition, which Playwright's CommonJS loader cannot
   // resolve. The module imports nothing, so it brings no closure with it.
   // (`files` is not filtered by `exclude`.)
-  "files": ["packages/design-system/src/theme/fontSets.ts"],
+  "files": [
+    "packages/design-system/src/theme/fontSets.ts",
+    "packages/design-system/src/theme/palettes.ts",
+    "packages/design-system/src/theme/styles.ts",
+    "packages/design-system/src/theme/typography.ts"
+  ],
   "exclude": ["node_modules", "packages", ".tsout"],
   // The app for `@/lib/…`, and the tests project for everything under `tests/`
   // — every helper, seed, reporter and global hook a spec or a config imports

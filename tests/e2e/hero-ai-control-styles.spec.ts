@@ -62,6 +62,14 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['neumorphism', 'Neumorphism'],
   ['hand-drawn-indie', 'Hand-Drawn / Indie'],
   ['retrofuturism', 'Retrofuturism'],
+  ['dense-pro', 'Dense / Pro'],
+  ['high-contrast-accessible', 'High-Contrast / Accessible'],
+  ['tonal-elevated', 'Tonal / Elevated'],
+  ['claymorphism', 'Claymorphism'],
+  ['bento', 'Bento'],
+  ['editorial-print', 'Editorial Print / Newspaper'],
+  ['art-deco', 'Art Deco'],
+  ['memphis', 'Memphis'],
 ] as const;
 
 const BASE_STYLE = 'warm-editorial';
@@ -225,9 +233,12 @@ test.describe('every registered style gives the hero control its own material', 
     // The rule the design states and then measures: a style ADDS its material as
     // a layer above the shipped radial gradient, never replacing it, so
     // `--orb-lit-mix` keeps deciding the glyph's contrast (MOTIR-3207, the 3:1
-    // floor `tests/theme/orb-glyph-contrast.test.ts` enforces). The two styles
-    // that legitimately paint a FLAT orb say so in their row.
-    const FLAT_ORB = new Set(['neumorphism']);
+    // floor `tests/theme/orb-glyph-contrast.test.ts` enforces). The styles
+    // that legitimately paint a FLAT orb say so in their row: High-Contrast /
+    // Accessible and Bento both turn the seam off (`--plan-orb-fill: none`)
+    // over an `--el-accent` background colour, so the glyph sits on the
+    // palette's own CTA pair and there is no sphere to compose over.
+    const FLAT_ORB = new Set(['neumorphism', 'high-contrast-accessible', 'bento']);
     for (const [id, name] of STYLES) {
       await setStyle(page, id, name);
       const orb = await readMaterial(page, 'orb');

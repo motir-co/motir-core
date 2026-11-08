@@ -420,6 +420,221 @@ export const STYLE_REGISTRY = {
         'Chrome-capsule buttons with a metallic glint, specular-streaked bevelled cards / popovers / modals / sidebar / inputs (the data-surface material layer), pill status chips — a synthwave horizon + neon grid behind it all.',
     },
   },
+  'dense-pro': {
+    id: 'dense-pro',
+    name: 'Dense / Pro',
+    tagline: 'Compact and information-dense — more rows, less chrome, a faster rhythm.',
+    inspiration:
+      "Pro-tool density — Material Design 3's density scale and a mail client's Compact inbox view: the same surfaces, drawn tighter, one 4px notch down the vertical rhythm.",
+    designDoc: 'docs/styles/dense-pro.md',
+    defaultTypeId: 'motir-sans',
+    dimensions: {
+      silhouette:
+        "Compact near-square corners — 4px buttons and inputs, 6px cards, 8px modals. Tighter than Warm Editorial without Swiss's hard right angles.",
+      stroke:
+        "Hairline 1px structure only. With elevation pulled back to a shadow so shallow it never reads as a frame, the palette's hairline rule becomes the only thing dividing a dense surface from its neighbour.",
+      elevation:
+        'Near-flat by design — a 1-2px shadow on resting surfaces instead of a soft bloom, so rows stay legible in long lists and nothing lifts off the page to compete with content. Only modals keep a real lift.',
+      surface:
+        'Opaque and untinted — panels are told apart by the hairline rule and the tighter rhythm, never by a wash, a tint or a floating shadow.',
+      density:
+        "The identity axis, and the tightest rhythm in the library: 12x6 button padding, 32px buttons and controls, 16px card padding, 6px row padding — one 4px density notch tighter than Warm Editorial's controls.",
+      motion:
+        'Quick and functional — 100ms transitions and a 1% press scale, so a click confirms itself without the control appearing to move.',
+      typography:
+        'All-sans — the motir-sans pairing puts Inter on headlines and body over JetBrains Mono meta, so a dense screen keeps one voice instead of two.',
+      components:
+        'Compact rectangular buttons and inputs (4px), near-rectangular 3px status chips, dense table and sidebar rows on a 32px rhythm, hairline-ruled flat cards; the hero AI pill and orb flatten to a hairline-rimmed accent chip.',
+    },
+  },
+  'high-contrast-accessible': {
+    id: 'high-contrast-accessible',
+    name: 'High-Contrast / Accessible',
+    tagline: 'Maximum legibility — heavier strokes, big targets, and focus you cannot miss.',
+    inspiration:
+      "Accessibility-first interface design — the WCAG 2.2 focus-appearance and target-size guidance, and operating-system high-contrast modes plus GitHub's high-contrast themes: structure drawn with borders rather than shadow, targets sized to the hand, and no meaning carried by depth.",
+    designDoc: 'docs/styles/high-contrast-accessible.md',
+    defaultTypeId: 'humanist',
+    dimensions: {
+      silhouette:
+        'Plain, near-square corners — 4px buttons, inputs and rows, 6px cards, 8px modals, 4px rectangular status chips. Shape never competes with content.',
+      stroke:
+        'Heavier strokes — every framed surface draws a 2px border in the colour its component already chose, so an edge is always a line you can see, never a shadow you have to infer.',
+      elevation:
+        'None. All six shadow roles resolve to none; depth is a drawn 2px edge against an opaque palette surface, so no control relies on shadow alone to show where it ends.',
+      surface:
+        'Opaque palette surfaces only — no tint, glass, wash or gradient — so text always sits on a colour the palette tuned for it.',
+      density:
+        'Roomy and reachable — 44px controls, 48px buttons and inputs, 20x12 button padding — plus a minimum-size floor that keeps every interactive control at least 44x44px at any density step.',
+      motion:
+        "Still — 0ms transitions, no hover growth, no press scale, and the hero's ambient shimmer and pulse stilled inside the style whatever the system's motion preference.",
+      typography:
+        'The humanist pairing — Fira Sans across headlines, body and UI over JetBrains Mono meta: open apertures and distinct letterforms that stay legible at small sizes and on washed-out screens.',
+      components:
+        'Bordered rectangular buttons, inputs and chips at 44px or more, a 3px outline focus ring at a 2px offset on every focusable control, flat framed cards; the hero AI pill and orb become solid flat accent targets.',
+    },
+  },
+  'tonal-elevated': {
+    id: 'tonal-elevated',
+    name: 'Tonal / Elevated',
+    tagline: 'Depth by tone — surfaces step up a quiet ladder, seated by soft shadows.',
+    inspiration:
+      "Material Design 3's tonal elevation — each containment level a tone of the palette's own surface, a soft shadow seating it, so depth reads by tone first and shadow second.",
+    designDoc: 'docs/styles/tonal-elevated.md',
+    defaultTypeId: 'motir',
+    dimensions: {
+      silhouette:
+        'Softened, machined geometry — 10px buttons and inputs, 14px cards, 20px modals, 8px rows and menu items, 6px keyboard hints; status chips stay pills.',
+      stroke:
+        "Quiet — the palette's 1px hairline stays on every surface so structure never rests on tone or shadow alone, and turns solid under a stronger contrast preference.",
+      elevation:
+        "Depth as a ladder of tones: the page, then the palette's surface, then raised, overlay and hero rungs each 4% further toward the theme's ink, each seated by a soft neutral shadow that grows with the rung.",
+      surface:
+        "Opaque tonal steps of the palette's own surface — a mix of the palette's ink into its surface, never a tint of brand chroma — so a palette swap re-tints every rung.",
+      density:
+        'Comfortable, one notch calmer than the base: 38px controls, 12x7 row padding, 18x10 button padding and 24px card padding restated as the rhythm.',
+      motion:
+        'Calm, never springy — 180ms transitions, a 1% hover lift and a 0.98 press; tone never changes on hover, because tone is containment, not feedback.',
+      typography:
+        "The motir pairing — Source Serif headlines over Inter body and JetBrains Mono meta, the product's own editorial voice on a quieter, layered stage.",
+      components:
+        "Tonal cards, sidebar and top bar on the palette's surface, a popover one rung up, a modal two up, a recessed input on the page ground with an inset seat; the hero AI pill and orb sit on the top rung with an accent-led fill and a tonal rim.",
+    },
+  },
+  claymorphism: {
+    id: 'claymorphism',
+    name: 'Claymorphism',
+    tagline: 'Soft, inflated tiles that look pressed from clay — friendly, tactile and calm.',
+    inspiration:
+      'Claymorphism, coined by Michal Malewicz in his 2021 Hype4 Academy write-up (hype4.academy/articles/design/claymorphism-in-user-interfaces) as the friendlier successor to neumorphism: oversized corners, two inner shadows and one soft outer drop.',
+    designDoc: 'docs/styles/claymorphism.md',
+    defaultTypeId: 'rounded',
+    dimensions: {
+      silhouette:
+        'Oversized soft corners — 16px buttons and inputs, 26px cards, 32px modals, 12px rows and menu items — with pills kept for chips.',
+      stroke:
+        'The hairline is kept at a palette border mix on every clay surface, because a soft shadow may never be the only carrier of structure.',
+      elevation:
+        'The three-part clay stack — a light band at the top inner edge, a shade band at the bottom inner edge and one soft outer drop — so a surface reads as pressed from clay rather than floating as glass.',
+      surface:
+        'Opaque palette surface; the clay volume is carried by shadow and radius and never by a tint of its own.',
+      density:
+        'Comfortable and roomy — 20x12 buttons, 28px card padding, 40px controls — so the inset band never crowds text.',
+      motion:
+        'Gentle 200ms with a 0.97 press squish and no hover scaling; nothing in the style layer animates.',
+      typography:
+        'Ships the Rounded pairing (Nunito headlines and body) as its default, overridable by any pinned type.',
+      components:
+        'Claymorphism cards, popovers, modals, sidebar and inputs through the surface-material layer, a Claymorphism hero pill and orb through the seam variables, and chips, keyboard hints and tooltips carrying the drop only.',
+    },
+  },
+  bento: {
+    id: 'bento',
+    name: 'Bento',
+    tagline:
+      'Even, generous tiles — one radius, hairline gutters and a near-flat plate, so the work sits in calm compartments.',
+    inspiration:
+      "Apple's bento-grid product pages — compartments sharing one corner radius, separated by even gutters, each tile near-flat with a generous interior.",
+    designDoc: 'docs/styles/bento.md',
+    defaultTypeId: 'motir-sans',
+    dimensions: {
+      silhouette:
+        "One generous radius for tiles (20px), a tighter one for controls (12px) and one for chips (10px); no two tiles differ, and no tile shares a control's corner.",
+      stroke:
+        "Hairline edges divide the compartments; the shadow only decorates. No heavy outline, no drawn frame, no border doing decoration's work.",
+      elevation:
+        'A near-flat five-rung ladder — a whisper at the low rungs, with a real lift kept only for the modal and the hero mockup, so nothing competes with the content.',
+      surface:
+        "Opaque palette tiles — no tint, no texture, no translucency, and no canvas of the style's own; a tile is told apart by its radius, its gutter and its hairline.",
+      density:
+        '38px controls, 24px card padding and gutters wider than the tile radius, so tiles read as separate compartments; control padding 12 × 8, chip padding 12.',
+      motion:
+        '180ms transitions, no hover scale and a faint 0.99 press — the grid stays still and only the surface responds.',
+      typography:
+        'Ships the `motir-sans` pairing (Inter headlines, Inter body and UI) as its default; a pinned type always wins, and the style block sets no font token.',
+      components:
+        'Equal-radius tile cards, popovers and modals (20px), hairline-edged with the near-flat shadow; 12px controls and inputs, 10px chips; the hero pill and orb as flat accent plates.',
+    },
+  },
+  'editorial-print': {
+    id: 'editorial-print',
+    name: 'Editorial Print / Newspaper',
+    tagline: 'Square corners, ink rules and no shadow — the calm authority of a printed column.',
+    inspiration:
+      'Editorial print / broadsheet layout — the Financial Times redesign lineage (a slab-serif family drawn for a six-column grid) and newspaper column rules, heavy section rules and square corners.',
+    designDoc: 'docs/styles/editorial-print.md',
+    defaultTypeId: 'slab',
+    dimensions: {
+      silhouette:
+        'Square, zero radius on every surface, pill left round for genuinely circular affordances.',
+      stroke:
+        "Structure drawn by a 2px ink section rule plus a 1px column rule, both in the palette's ink.",
+      elevation: 'None at any level, separation carried by rule weight and whitespace.',
+      surface: 'Opaque palette paper, no texture, no wash, no translucency.',
+      density: 'Tight print rhythm, buttons 16×8, controls 32px, inputs 40px, card padding 24px.',
+      motion: 'Near-instant 90ms transitions with no press-scale, the page is set, not animated.',
+      typography:
+        'The `slab` pairing (Roboto Slab headlines over Inter body), overridable by a pinned type.',
+      components:
+        'Square buttons, inputs, cards, modals and rectangular status chips, 2px ink-framed surfaces, hairline column rules.',
+    },
+  },
+  'art-deco': {
+    id: 'art-deco',
+    name: 'Art Deco',
+    tagline:
+      'Framed and geometric — double rules, stepped corners, and a metal edge drawn from your palette.',
+    inspiration:
+      "The Art Deco movement — the 1925 Paris Exposition's geometric ornament, ziggurat and stepped massing (the Chrysler Building's crown, 1930), and the double-rule frames of period posters and book jackets.",
+    designDoc: 'docs/styles/art-deco.md',
+    defaultTypeId: 'grotesk',
+    dimensions: {
+      silhouette:
+        'Squared plates — 2px buttons and cards, 4px modals, with a three-step corner cut into every panel. Geometric, symmetrical, machined.',
+      stroke:
+        'DOUBLE rules everywhere — a 2px metal edge, a 2px gap, then a 1px inner rule. The frame is the structure: a plate is drawn, never lifted.',
+      elevation:
+        'Flat-near-flat — plates sit on a tight neutral shadow and nothing glows or blocks; depth is the frame, not the lift.',
+      surface:
+        'Opaque, matte, untextured palette plates — no wash, no glass, no pattern. The identity is the two-rule frame and the stepped corners cut into it.',
+      density:
+        'Measured and symmetrical — 20x10 buttons, 24px card padding, 38px controls: generous enough that the frame never crowds its content.',
+      motion:
+        'Unhurried and mechanical — 140ms transitions and NO scale on hover or press; feedback is the edge stepping one tonal value.',
+      typography:
+        'Ships the grotesk pairing — wide geometric grotesque headlines over a sans body, the geometric display read of the period.',
+      components:
+        'Squared buttons, inputs, cards and modals; rectangular status chips; double-ruled plates with stepped corners; a ruled modal entablature; a double-rule lid on the header and a double vertical rule on the sidebar edge.',
+    },
+  },
+  memphis: {
+    id: 'memphis',
+    name: 'Memphis',
+    tagline:
+      'Playful, loud post-modern collage: mismatched corners, thick outlines and hard two-block shadows over a dot-and-hatch canvas.',
+    inspiration:
+      "The Memphis Group (Memphis Milano, Milan, 1980, Ettore Sottsass) — Sottsass's Bacterio squiggle-and-dot pattern, clashing geometry and laminate colour.",
+    designDoc: 'docs/styles/memphis.md',
+    defaultTypeId: 'rounded',
+    dimensions: {
+      silhouette:
+        'Deliberately mismatched radii: 10px buttons against 2px inputs, and cards and modals carrying one round corner pair and one near-square pair, so every panel reads as a collage rather than a machine-cut rectangle.',
+      stroke:
+        "Loud 2px solid outlines on every panel and input, drawn in the palette's own ink at strength; the edge, not the shadow, is what tells you where a surface stops.",
+      elevation:
+        "Hard-offset shadows with zero blur, in two blocks: a solid ink block nudged down-right plus a second block in the palette's accent, so a panel looks physically pasted onto the page.",
+      surface:
+        'Opaque palette panels over a palette-derived canvas of staggered dots and a diagonal hatch — the Bacterio rhythm held at low alpha, so it stays a texture and never a background.',
+      density:
+        'Comfortable-loud: 20x11 buttons, 26px card padding, 40px controls — roomy enough for the outline and the offset block to breathe.',
+      motion:
+        'Fast and physical: 140ms transitions, a 1.01 hover swell and a 0.97 press, with the canvas pattern static so the loudness never moves on its own.',
+      typography:
+        'Ships the `rounded` pairing (Nunito throughout) — a soft, friendly sans that lets the loud geometry do the shouting; a pinned type overrides it.',
+      components:
+        'Collage-cornered cards, popovers and modals, 2px-radii inputs, pill status chips, every panel outlined at 2px with the doubled hard shadow.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */
