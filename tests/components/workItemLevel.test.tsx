@@ -965,6 +965,81 @@ describe('buildWorkItemLevel — off-level edge disposition (MOTIR-6359)', () =>
     expect(deps).toEqual([{ from: 'Y', to: 'X', variant: 'cross' }]);
   });
 
+  // Bug MOTIR-10627: readiness calls a card ready once its blocker is done, so the
+  // flag whose visible word is "blocked" must not sit on it. The not-done half is
+  // the shipped treatment, unchanged.
+  it('CROSS-LEVEL onto a NOT-done blocker keeps the whole flagged treatment', () => {
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'cross_level' }],
+      offLevelBlockers: [{ ...Y, isDone: false }],
+    });
+    expect(deps).toEqual([{ from: 'Y', to: 'X', variant: 'cross' }]);
+    expect(flagText(nodes, 'X')).toContain('blocked elsewhere');
+    render(<>{nodes.find((n) => n.id === 'Y')!.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'danger',
+    );
+  });
+
+  it('CROSS-LEVEL onto a DONE blocker: a firm arrow from a NEUTRAL anchor, no flag (MOTIR-10627)', () => {
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'cross_level' }],
+      offLevelBlockers: [{ ...Y, isDone: true }],
+    });
+    expect(deps).toEqual([{ from: 'Y', to: 'X', variant: 'firm' }]);
+    expect(flagText(nodes, 'X')).not.toContain('blocked elsewhere');
+    render(<>{nodes.find((n) => n.id === 'X')!.content}</>);
+    expect(screen.queryByTestId(A1_FLAG)).toBeNull();
+    cleanup();
+    render(<>{nodes.find((n) => n.id === 'Y')!.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'neutral',
+    );
+  });
+
+  it('CROSS-LEVEL onto a blocker the read could not name keeps the flag', () => {
+    const { deps } = buildWorkItemLevel({
+      items: [X],
+      edges: [{ blockedId: 'X', blockerId: 'Q', coverage: 'cross_level' }],
+      offLevelBlockers: [],
+    });
+    expect(deps).toEqual([{ from: 'Q', to: 'X', variant: 'cross' }]);
+  });
+
+  it('a DONE cross-level blocker sharing an anchor with a flagged edge keeps it DANGER', () => {
+    const W = item({ id: 'W', kind: 'subtask', parentId: 'B' });
+    const { nodes, deps } = buildWorkItemLevel({
+      items: [X, W],
+      edges: [
+        { blockedId: 'X', blockerId: 'Y', coverage: 'cross_level' },
+        { blockedId: 'W', blockerId: 'Y', coverage: 'uncovered' },
+      ],
+      offLevelBlockers: [{ ...Y, isDone: true }],
+    });
+    expect(deps).toEqual([
+      { from: 'Y', to: 'X', variant: 'firm' },
+      { from: 'Y', to: 'W', variant: 'cross' },
+    ]);
+    render(<>{nodes.find((n) => n.id === 'Y')!.content}</>);
+    expect(document.querySelector('[data-anchor-tone]')?.getAttribute('data-anchor-tone')).toBe(
+      'danger',
+    );
+  });
+
+  it('SPRINT scope is unchanged for a done cross-level blocker — its own arm skips it', () => {
+    const { deps } = buildWorkItemLevel(
+      {
+        items: [X],
+        edges: [{ blockedId: 'X', blockerId: 'Y', coverage: 'cross_level' }],
+        offLevelBlockers: [{ ...Y, isDone: true, inActiveSprint: false }],
+      },
+      { scope: 'sprint' },
+    );
+    expect(deps).toEqual([]);
+  });
+
   it('EXEMPT: an ordinary arrow from a NEUTRAL anchor, and no flag (sheet 7)', () => {
     const R = item({ id: 'R', kind: 'task', parentId: null });
     const F = {

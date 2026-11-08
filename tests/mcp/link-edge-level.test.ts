@@ -264,6 +264,67 @@ describe('the MOTIR-6497 shape — a root folder-filed bug blocked_by a subtask 
   });
 });
 
+// Bug MOTIR-10627 — the same shape once its blocker is DONE. Readiness already
+// reads the edge as satisfied, so the verdict must not keep calling it "blocked
+// elsewhere", nor tell the reader it holds the card out of the ready set.
+describe('validate_work_item — a cross-level edge onto a DONE blocker is satisfied (MOTIR-10627)', () => {
+  it('the bug is ready, VALID, and neither list nor text names the edge', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    await seedBlockedBy(fx, t.b.id, t.y.id);
+    await adminDb.workItem.update({ where: { id: t.y.id }, data: { status: 'done' } });
+    const client = await connectClient(fx.ctx);
+
+    const read = (await call(client, 'get_work_item', { key: t.b.identifier }))
+      .structuredContent as { readiness: { ready: boolean; openBlockers: unknown[] } };
+    expect(read.readiness).toMatchObject({ ready: true, openBlockers: [] });
+
+    const res = await call(client, 'validate_work_item', { key: t.b.identifier });
+    expect(res.isError, text(res)).toBeFalsy();
+    expect(res.structuredContent).toMatchObject({ valid: true, crossLevelEdges: [] });
+    expect(text(res)).not.toContain('blocked elsewhere');
+    expect(text(res)).not.toContain('out of the ready set');
+    await client.close();
+  });
+
+  it('a NOT-done blocker is still reported, and the text says it holds the item until done', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    await seedBlockedBy(fx, t.b.id, t.y.id);
+    const client = await connectClient(fx.ctx);
+
+    const res = await call(client, 'validate_work_item', { key: t.b.identifier });
+    expect(res.structuredContent).toMatchObject({
+      valid: false,
+      crossLevelEdges: [
+        expect.objectContaining({ item: t.b.identifier, blockedBy: t.y.identifier }),
+      ],
+    });
+    expect(text(res)).toContain('blocked elsewhere');
+    expect(text(res)).toContain(
+      'Until its blocker is done, the edge holds the item out of the ready set.',
+    );
+    await client.close();
+  });
+
+  it('a done blocker drops out of a MIXED subtree while an open one stays', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await tree(fx);
+    // Both inside E1, both depth 2 → 1: Y waits on S1 (done), X1's chain is
+    // depth 3, so X1 → S (depth 1) is cross-level too and S stays open.
+    await seedBlockedBy(fx, t.y.id, t.s1.id);
+    await seedBlockedBy(fx, t.x1.id, t.s.id);
+    await adminDb.workItem.update({ where: { id: t.s1.id }, data: { status: 'done' } });
+    const client = await connectClient(fx.ctx);
+
+    const verdict = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
+      .structuredContent as { valid: boolean; crossLevelEdges: Array<{ item: string }> };
+    expect(verdict.valid).toBe(false);
+    expect(verdict.crossLevelEdges.map((e) => e.item)).toEqual([t.x1.identifier]);
+    await client.close();
+  });
+});
+
 describe('createWorkItem with links — the create path writes a cross-level edge too', () => {
   it('a new subtask under a task, created blocked_by a STORY, is created with its link', async () => {
     const fx = await makeWorkItemFixture();
