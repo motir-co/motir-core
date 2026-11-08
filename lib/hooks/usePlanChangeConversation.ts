@@ -68,6 +68,7 @@ import {
 } from '@/lib/planning/planChangeFrames';
 import { unavailableCodeOf, whileStartingUp } from '@/lib/planning/submitStartingUp';
 import { reopenedPlanJobId } from '@/lib/planning/planRunPhase';
+import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import {
   streamAskJob,
   streamAugmentJob,
@@ -693,12 +694,19 @@ function frameField(data: unknown, key: string): unknown {
  * that one is the surface's to follow (the story's rule — with several targets the
  * canvas is inside the FIRST). A frame with no `index` is a one-target run. A
  * `null` key is a run that starts a new card, which has nowhere to move to.
+ *
+ * A REVISE run can settle one of the plan's own PROPOSALS (motir-ai
+ * `revisePlan.ts`: `key: "planItem:<ref>"`, `proposal: true`). No work item
+ * carries that ref, so an anchor read for it could only be refused; it answers
+ * `null` here instead, and the plan's own landing (TRIGGER 2) places the canvas.
  */
 export function settledFirstTargetKey(data: unknown): string | null {
   const index = frameField(data, 'index');
   if (index !== undefined && index !== 0) return null;
+  if (frameField(data, 'proposal') === true) return null;
   const key = frameField(data, 'key');
-  return typeof key === 'string' && key.trim() !== '' ? key : null;
+  if (typeof key !== 'string' || key.trim() === '') return null;
+  return key.startsWith(TEMP_REF_PREFIX) ? null : key;
 }
 
 /** Consecutive lost connections (no frame between them) the run tail rides out before it

@@ -301,6 +301,16 @@ describe('settledFirstTargetKey — the card a `target_settled` frame hands the 
     expect(settledFirstTargetKey({})).toBeNull();
     expect(settledFirstTargetKey(null)).toBeNull();
   });
+
+  it('answers null for a revise run’s settled PROPOSAL — no work item carries its ref', () => {
+    // motir-ai's revise handler names a proposal target `planItem:<ref>` with
+    // `proposal: true`; an anchor read for it could only be refused.
+    expect(
+      settledFirstTargetKey({ key: 'planItem:pi_7', proposal: true, index: 0, of: 1 }),
+    ).toBeNull();
+    expect(settledFirstTargetKey({ key: 'planItem:pi_7', index: 0 })).toBeNull();
+    expect(settledFirstTargetKey({ key: 'ACME-3', proposal: true })).toBeNull();
+  });
 });
 
 describe('a REOPENED overlay mid-run', () => {
