@@ -447,6 +447,33 @@ export const STYLE_REGISTRY = {
         'Compact rectangular buttons and inputs (4px), near-rectangular 3px status chips, dense table and sidebar rows on a 32px rhythm, hairline-ruled flat cards; the hero AI pill and orb flatten to a hairline-rimmed accent chip.',
     },
   },
+  'high-contrast-accessible': {
+    id: 'high-contrast-accessible',
+    name: 'High-Contrast / Accessible',
+    tagline: 'Maximum legibility — heavier strokes, big targets, and focus you cannot miss.',
+    inspiration:
+      "Accessibility-first interface design — the WCAG 2.2 focus-appearance and target-size guidance, and operating-system high-contrast modes plus GitHub's high-contrast themes: structure drawn with borders rather than shadow, targets sized to the hand, and no meaning carried by depth.",
+    designDoc: 'docs/styles/high-contrast-accessible.md',
+    defaultTypeId: 'humanist',
+    dimensions: {
+      silhouette:
+        'Plain, near-square corners — 4px buttons, inputs and rows, 6px cards, 8px modals, 4px rectangular status chips. Shape never competes with content.',
+      stroke:
+        'Heavier strokes — every framed surface draws a 2px border in the colour its component already chose, so an edge is always a line you can see, never a shadow you have to infer.',
+      elevation:
+        'None. All six shadow roles resolve to none; depth is a drawn 2px edge against an opaque palette surface, so no control relies on shadow alone to show where it ends.',
+      surface:
+        'Opaque palette surfaces only — no tint, glass, wash or gradient — so text always sits on a colour the palette tuned for it.',
+      density:
+        'Roomy and reachable — 44px controls, 48px buttons and inputs, 20x12 button padding — plus a minimum-size floor that keeps every interactive control at least 44x44px at any density step.',
+      motion:
+        "Still — 0ms transitions, no hover growth, no press scale, and the hero's ambient shimmer and pulse stilled inside the style whatever the system's motion preference.",
+      typography:
+        'The humanist pairing — Fira Sans across headlines, body and UI over JetBrains Mono meta: open apertures and distinct letterforms that stay legible at small sizes and on washed-out screens.',
+      components:
+        'Bordered rectangular buttons, inputs and chips at 44px or more, a 3px outline focus ring at a 2px offset on every focusable control, flat framed cards; the hero AI pill and orb become solid flat accent targets.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

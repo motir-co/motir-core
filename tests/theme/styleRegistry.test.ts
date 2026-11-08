@@ -27,7 +27,7 @@ const GLOBALS_CSS =
   readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism + Dense / Pro)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism + Dense / Pro + High-Contrast / Accessible)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
@@ -41,6 +41,7 @@ describe('style registry', () => {
       'hand-drawn-indie',
       'retrofuturism',
       'dense-pro',
+      'high-contrast-accessible',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
@@ -54,6 +55,7 @@ describe('style registry', () => {
     expect(STYLE_REGISTRY['hand-drawn-indie'].name).toBe('Hand-Drawn / Indie');
     expect(STYLE_REGISTRY['retrofuturism'].name).toBe('Retrofuturism');
     expect(STYLE_REGISTRY['dense-pro'].name).toBe('Dense / Pro');
+    expect(STYLE_REGISTRY['high-contrast-accessible'].name).toBe('High-Contrast / Accessible');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {

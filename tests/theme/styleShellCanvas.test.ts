@@ -270,6 +270,7 @@ describe('every style canvas reaches the signed-in shell (MOTIR-4234)', () => {
     expect(FLAT_STYLES, 'the styles that paint no canvas').toEqual([
       'dense-pro',
       'hand-drawn-indie',
+      'high-contrast-accessible',
       'neo-brutalism',
       'soft-playful',
       'swiss-minimal-flat',

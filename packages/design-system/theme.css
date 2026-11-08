@@ -2934,6 +2934,87 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   High-Contrast / Accessible (MOTIR-10667). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/high-contrast-accessible.md. ─────────────────────────────────────────────────────── */
+[data-style='high-contrast-accessible'] {
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-btn: 4px;
+  --radius-input: 4px;
+  --radius-control: 4px;
+  --radius-kbd: 4px;
+  --radius-card: 6px;
+  --radius-modal: 8px;
+  --radius-badge: 4px;
+  --shadow-flat: none;
+  --shadow-subtle: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
+  --shadow-modal: none;
+  --shadow-hero-mockup: none;
+  --height-control: 44px;
+  --height-btn-sm: 44px;
+  --height-btn-md: 48px;
+  --height-btn-lg: 56px;
+  --height-input: 48px;
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 12px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 14px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 10px;
+  --spacing-card-padding: 24px;
+  --transition-duration: 0ms;
+  --transition-fast: 0ms;
+  --transition-slow: 0ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  .border {
+    border-width: 2px;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  :focus-visible:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  button,
+  [role='button'],
+  select,
+  summary,
+  textarea,
+  input:not([type='checkbox']):not([type='radio']) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  .plan-with-ai-shimmer,
+  .plan-with-ai-fab-pulse {
+    animation: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -3330,6 +3411,24 @@
       var(--el-accent) 45%,
       color-mix(in srgb, var(--el-accent) 88%, var(--el-page-bg)) 100%
     );
+  }
+}
+
+/* 13 · High-Contrast / Accessible — see docs/styles/high-contrast-accessible.md § the hero AI control. */
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(var(--el-accent), var(--el-accent));
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: linear-gradient(var(--el-accent), var(--el-accent));
   }
 }
 

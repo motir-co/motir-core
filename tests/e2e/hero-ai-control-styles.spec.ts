@@ -63,6 +63,7 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['hand-drawn-indie', 'Hand-Drawn / Indie'],
   ['retrofuturism', 'Retrofuturism'],
   ['dense-pro', 'Dense / Pro'],
+  ['high-contrast-accessible', 'High-Contrast / Accessible'],
 ] as const;
 
 const BASE_STYLE = 'warm-editorial';
@@ -226,14 +227,20 @@ test.describe('every registered style gives the hero control its own material', 
     // The rule the design states and then measures: a style ADDS its material as
     // a layer above the shipped radial gradient, never replacing it, so
     // `--orb-lit-mix` keeps deciding the glyph's contrast (MOTIR-3207, the 3:1
-    // floor `tests/theme/orb-glyph-contrast.test.ts` enforces). The two styles
-    // that legitimately paint a FLAT orb say so in their row.
-    const FLAT_ORB = new Set(['neumorphism']);
+    // floor `tests/theme/orb-glyph-contrast.test.ts` enforces). The styles
+    // that legitimately paint a FLAT orb say so in their row: High-Contrast /
+    // Accessible draws it as a one-colour accent plate (its glyph sits on
+    // `--el-accent` itself, the pairing `--el-accent-text` is defined against).
+    const FLAT_ORB = new Set(['neumorphism', 'high-contrast-accessible']);
     for (const [id, name] of STYLES) {
       await setStyle(page, id, name);
       const orb = await readMaterial(page, 'orb');
       if (FLAT_ORB.has(id)) {
-        expect(orb.backgroundImage, `${id} draws a flat orb by design`).toBe('none');
+        // `none` (neumorphism) or a one-colour gradient (high-contrast) — either
+        // way no lit sphere, which is the claim the row makes.
+        expect(orb.backgroundImage, `${id} draws a flat orb by design`).not.toContain(
+          'radial-gradient',
+        );
         continue;
       }
       expect(
