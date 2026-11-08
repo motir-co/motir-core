@@ -181,6 +181,85 @@ describe('routeEdges', () => {
     expect(points(r1!.d)[3]!.y).not.toBe(points(r2!.d)[3]!.y); // distinct entry heights on T's left
   });
 
+  // MOTIR-10630 (design MOTIR-10629 § "Two or more edges entering the here card's
+  // top"): a card with a TAB on its top-left edge fans its TOP side from t = 0.5.
+  describe('a tabbed card (the "You are here" tab)', () => {
+    const W = 280;
+    const H = 124;
+    const m: RMap = {
+      A: { x: 0, y: 0, w: W, h: H },
+      B: { x: 100, y: 0, w: W, h: H },
+      T: { x: 0, y: 400, w: W, h: H },
+      L: { x: -600, y: 400, w: W, h: H },
+    };
+    const twoIntoTop = [
+      { from: 'A', to: 'T' },
+      { from: 'B', to: 'T' },
+    ];
+
+    it('without the flag, two top entries fan across the shared band (t = 0.28–0.72)', () => {
+      const xs = routeEdges(twoIntoTop, lookup(m)).map((r) => points(r!.d)[3]!);
+      expect(xs.map((p) => p.y)).toEqual([400, 400]);
+      expect(xs.map((p) => p.x)).toEqual([78.4, 201.6]);
+    });
+
+    it('with the flag, the top band starts at the middle so every arrowhead clears the tab', () => {
+      const xs = routeEdges(twoIntoTop, lookup(m), (id) => id === 'T').map((r) => points(r!.d)[3]!);
+      expect(xs.map((p) => p.x)).toEqual([140, 201.6]);
+      // The widest tab ends at 118px from the card's left edge.
+      for (const p of xs) expect(p.x).toBeGreaterThan(118);
+    });
+
+    it('one top entry still lands at the middle', () => {
+      const [r] = routeEdges([{ from: 'A', to: 'T' }], lookup(m), (id) => id === 'T');
+      expect(points(r!.d)[3]!.x).toBe(140);
+    });
+
+    it('fans the tabbed card’s top EXITS right of the tab too', () => {
+      const xs = routeEdges(
+        [
+          { from: 'T', to: 'A' },
+          { from: 'T', to: 'B' },
+        ],
+        lookup(m),
+        (id) => id === 'T',
+      ).map((r) => points(r!.d)[0]!);
+      expect(xs.map((p) => p.y)).toEqual([400, 400]);
+      expect(xs.map((p) => p.x)).toEqual([140, 201.6]);
+    });
+
+    it('leaves every other side of the tabbed card, and every other card, on the shared band', () => {
+      const tabbed = (id: string) => id === 'T' || id === 'A';
+      // Two edges into T's LEFT side keep the shared band.
+      const m2: RMap = {
+        ...m,
+        P: { x: -600, y: 380, w: W, h: H },
+        Q: { x: -600, y: 420, w: W, h: H },
+      };
+      const left = routeEdges(
+        [
+          { from: 'P', to: 'T' },
+          { from: 'Q', to: 'T' },
+        ],
+        lookup(m2),
+        tabbed,
+      ).map((r) => points(r!.d)[3]!);
+      expect(left.map((p) => p.x)).toEqual([0, 0]);
+      expect(left.map((p) => p.y)).toEqual([400 + H * 0.28, 400 + H * 0.72]);
+      // A's BOTTOM exits (A is flagged, but the tab is on its top) keep the band.
+      const bottom = routeEdges(
+        [
+          { from: 'A', to: 'T' },
+          { from: 'A', to: 'L' },
+        ],
+        lookup(m),
+        tabbed,
+      ).map((r) => points(r!.d)[0]!);
+      expect(bottom.map((p) => p.y)).toEqual([H, H]);
+      expect(bottom.map((p) => p.x)).toEqual([201.6, 78.4]);
+    });
+  });
+
   it('fans two edges off one source to DISTINCT exit points', () => {
     const m: RMap = {
       S: { x: 0, y: 0, w: 100, h: 100 },
