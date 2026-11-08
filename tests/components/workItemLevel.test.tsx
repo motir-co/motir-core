@@ -16,13 +16,31 @@ import { ProjectRoadmapCanvas } from '@/components/planning/ProjectRoadmapCanvas
 
 afterEach(() => cleanup());
 
+// The default workflow's status → category map — the wire carries both, and the
+// "you are here" pick reads the CATEGORY (MOTIR-10622), so a fixture that names
+// only a status key gets the category the server would send beside it. A test
+// that needs a custom status (or an unknown category) passes `statusCategory`.
+const DEFAULT_CATEGORY: Record<string, RoadmapLevelItem['statusCategory']> = {
+  todo: 'todo',
+  blocked: 'todo',
+  in_progress: 'in_progress',
+  implemented: 'in_progress',
+  planning: 'in_progress',
+  in_review: 'in_progress',
+  approved: 'in_progress',
+  done: 'done',
+  cancelled: 'done',
+};
+
 function item(over: Partial<RoadmapLevelItem> & { id: string }): RoadmapLevelItem {
+  const status = over.status ?? 'todo';
   return {
     parentId: null,
     identifier: over.id,
     title: `Title ${over.id}`,
     kind: 'epic',
-    status: 'todo',
+    status,
+    statusCategory: DEFAULT_CATEGORY[status] ?? null,
     hasChildren: false,
     progress: null,
     ...over,
@@ -106,9 +124,13 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
     const edge = (blockerId: string, blockedId: string) => ({ blockerId, blockedId });
 
     it('tags the in-progress card EARLIEST along the blocker chain, not the lowest key', () => {
+      // The card's reproduction had 10449 at `implemented`; since MOTIR-10622 that
+      // status is a candidate too and, at depth 0, would take the tag itself. It is
+      // `done` here so the case keeps measuring what it was written for — the order
+      // among the in-progress cards — and the implemented-blocker case is below.
       const data: RoadmapLevelData = {
         items: [
-          item({ id: '10449', kind: 'subtask', status: 'implemented' }),
+          item({ id: '10449', kind: 'subtask', status: 'done' }),
           item({ id: '10450', kind: 'subtask', status: 'in_progress' }),
           item({ id: '10451', kind: 'subtask', status: 'in_progress' }),
           item({ id: '10452', kind: 'subtask', status: 'in_progress' }),
@@ -156,10 +178,10 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
       expect(hereIds(data)).toEqual(['P']);
     });
 
-    it('has no tag when nothing is in progress — an Implemented card does not qualify', () => {
+    it('has no tag when nothing is in the in-progress category', () => {
       const data: RoadmapLevelData = {
         items: [
-          item({ id: 'A', kind: 'subtask', status: 'implemented' }),
+          item({ id: 'A', kind: 'subtask', status: 'done' }),
           item({ id: 'B', kind: 'subtask', status: 'todo' }),
         ],
         edges: [edge('A', 'B')],
@@ -199,10 +221,11 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
     });
   });
 
-  // MOTIR-10599 — a card in `planning` is a "you are here" candidate exactly like
-  // an `in_progress` one: the planner holds it, so it is where the work is. Only
-  // those two status KEYS qualify, never the rest of the in-progress CATEGORY.
-  describe('"you are here" includes planning cards (MOTIR-10599)', () => {
+  // MOTIR-10599 made `planning` a "you are here" candidate beside `in_progress`;
+  // MOTIR-10622 generalises it: EVERY status in the in-progress CATEGORY is one —
+  // `implemented`, `in_review`, `approved` and a project's custom statuses too —
+  // read from the category on the row, never from a list of keys.
+  describe('"you are here" covers the whole in-progress category (MOTIR-10599, MOTIR-10622)', () => {
     function hereIds(data: RoadmapLevelData): string[] {
       return buildWorkItemLevel(data, { markActive: true })
         .nodes.filter((n) => n.here)
@@ -210,38 +233,57 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
     }
     const edge = (blockerId: string, blockedId: string) => ({ blockerId, blockedId });
 
-    it('tags the only active card when it is in planning, and renders the pill', () => {
-      const { nodes } = buildWorkItemLevel(
-        level([
-          item({ id: 'A', kind: 'task', status: 'done' }),
-          item({ id: 'P', kind: 'task', status: 'planning' }),
-          item({ id: 'T', kind: 'task', status: 'todo' }),
-        ]),
-        { markActive: true },
-      );
-      expect(nodes.filter((n) => n.here).map((n) => n.id)).toEqual(['P']);
-      render(<>{nodes.find((n) => n.id === 'P')!.content}</>);
-      expect(screen.getByText('You are here')).toBeTruthy();
+    it.each(['in_progress', 'planning', 'implemented', 'in_review', 'approved'])(
+      'tags the only active card when it is in %s, and renders the pill',
+      (status) => {
+        const { nodes } = buildWorkItemLevel(
+          level([
+            item({ id: 'A', kind: 'task', status: 'done' }),
+            item({ id: 'P', kind: 'task', status }),
+            item({ id: 'T', kind: 'task', status: 'todo' }),
+          ]),
+          { markActive: true },
+        );
+        expect(nodes.filter((n) => n.here).map((n) => n.id)).toEqual(['P']);
+        render(<>{nodes.find((n) => n.id === 'P')!.content}</>);
+        expect(screen.getByText('You are here')).toBeTruthy();
+      },
+    );
+
+    it('tags a CUSTOM status in the in-progress category', () => {
+      expect(
+        hereIds(
+          level([
+            item({ id: 'T', kind: 'task', status: 'todo' }),
+            item({ id: 'Q', kind: 'task', status: 'qa_signoff', statusCategory: 'in_progress' }),
+          ]),
+        ),
+      ).toEqual(['Q']);
     });
 
-    it('locates the planning card before the ready nodes', async () => {
-      const { nodes, deps } = buildWorkItemLevel(
-        level([
-          item({ id: 'R', kind: 'task', status: 'todo', ready: true }),
-          item({ id: 'P', kind: 'task', status: 'planning' }),
-        ]),
-        { markActive: true },
-      );
-      render(<ProjectRoadmapCanvas loadLevel={() => Promise.resolve({ nodes, deps })} locatable />);
-      await screen.findByText('Title P');
-      fireEvent.click(screen.getByTestId('locate-button'));
-      const highlighted = (id: string) =>
-        document.querySelector(`[data-node-id="${id}"]`)!.querySelector('[data-highlighted]');
-      expect(highlighted('P')).toBeTruthy();
-      expect(highlighted('R')).toBeNull();
-      // A single `here` target: no ready-node cycling hint.
-      expect(screen.queryByTestId('locate-hint')).toBeNull();
-    });
+    it.each(['planning', 'in_review', 'implemented'])(
+      'locates a %s card before the ready nodes',
+      async (status) => {
+        const { nodes, deps } = buildWorkItemLevel(
+          level([
+            item({ id: 'R', kind: 'task', status: 'todo', ready: true }),
+            item({ id: 'P', kind: 'task', status }),
+          ]),
+          { markActive: true },
+        );
+        render(
+          <ProjectRoadmapCanvas loadLevel={() => Promise.resolve({ nodes, deps })} locatable />,
+        );
+        await screen.findByText('Title P');
+        fireEvent.click(screen.getByTestId('locate-button'));
+        const highlighted = (id: string) =>
+          document.querySelector(`[data-node-id="${id}"]`)!.querySelector('[data-highlighted]');
+        expect(highlighted('P')).toBeTruthy();
+        expect(highlighted('R')).toBeNull();
+        // A single `here` target: no ready-node cycling hint.
+        expect(screen.queryByTestId('locate-hint')).toBeNull();
+      },
+    );
 
     it('ranks planning and in-progress cards together by blocker depth', () => {
       // I (in progress) blocks P (planning): I is earlier and takes the tag even
@@ -269,29 +311,65 @@ describe('buildWorkItemLevel — roadmap markers (MOTIR-1013)', () => {
       ).toEqual(['P']);
     });
 
-    it('breaks an equal-depth tie between planning and in-progress by read order', () => {
+    it('ranks every in-progress-category status together, earliest along the blocker order', () => {
+      // Read order puts the in-progress card first, but the in-review card blocks
+      // the implemented one, which blocks the in-progress one: in review is earliest.
+      expect(
+        hereIds({
+          items: [
+            item({ id: 'I', kind: 'subtask', status: 'in_progress' }),
+            item({ id: 'M', kind: 'subtask', status: 'implemented' }),
+            item({ id: 'V', kind: 'subtask', status: 'in_review' }),
+            item({ id: 'A', kind: 'subtask', status: 'approved' }),
+          ],
+          edges: [edge('V', 'M'), edge('M', 'I'), edge('M', 'A')],
+          offLevelBlockers: [],
+        }),
+      ).toEqual(['V']);
+      // An implemented card at the head of the chain takes the tag from the
+      // in-progress cards it blocks (the MOTIR-10454 reproduction's shape).
+      expect(
+        hereIds({
+          items: [
+            item({ id: '10449', kind: 'subtask', status: 'implemented' }),
+            item({ id: '10450', kind: 'subtask', status: 'in_progress' }),
+            item({ id: '10451', kind: 'subtask', status: 'in_progress' }),
+          ],
+          edges: [edge('10449', '10451'), edge('10449', '10450'), edge('10451', '10450')],
+          offLevelBlockers: [],
+        }),
+      ).toEqual(['10449']);
+    });
+
+    it('breaks an equal-depth tie across in-progress-category statuses by read order', () => {
       const data = (first: string, second: string): RoadmapLevelData => ({
         items: [
-          item({ id: first, kind: 'subtask', status: first === 'P' ? 'planning' : 'in_progress' }),
-          item({
-            id: second,
-            kind: 'subtask',
-            status: second === 'P' ? 'planning' : 'in_progress',
-          }),
+          item({ id: 'first', kind: 'subtask', status: first }),
+          item({ id: 'second', kind: 'subtask', status: second }),
         ],
         edges: [],
         offLevelBlockers: [],
       });
-      expect(hereIds(data('P', 'I'))).toEqual(['P']);
-      expect(hereIds(data('I', 'P'))).toEqual(['I']);
+      expect(hereIds(data('planning', 'in_progress'))).toEqual(['first']);
+      expect(hereIds(data('in_progress', 'planning'))).toEqual(['first']);
+      expect(hereIds(data('in_review', 'in_progress'))).toEqual(['first']);
+      expect(hereIds(data('approved', 'implemented'))).toEqual(['first']);
     });
 
-    it.each(['in_review', 'approved', 'implemented', 'blocked', 'todo', 'done', 'cancelled'])(
-      'never tags a card in %s',
-      (status) => {
-        expect(hereIds(level([item({ id: 'X', kind: 'task', status })]))).toEqual([]);
-      },
-    );
+    it.each(['todo', 'blocked', 'done', 'cancelled'])('never tags a card in %s', (status) => {
+      expect(hereIds(level([item({ id: 'X', kind: 'task', status })]))).toEqual([]);
+    });
+
+    it('never tags a row whose status category is unknown', () => {
+      expect(
+        hereIds(
+          level([
+            item({ id: 'X', kind: 'task', status: 'in_progress', statusCategory: null }),
+            item({ id: 'Y', kind: 'task', status: 'mystery', statusCategory: undefined }),
+          ]),
+        ),
+      ).toEqual([]);
+    });
   });
 
   it('does NOT mark "you are here" without markActive (e.g. onboarding)', () => {
