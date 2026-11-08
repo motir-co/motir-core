@@ -391,6 +391,24 @@ describe('it never boots more runners than uncovered jobs', () => {
 
     expect(await reconcile()).toEqual({ orgs: [], added: 0 });
   });
+
+  it('reconciles on the CI runner pool with no Fly fleet set (MOTIR-10625)', async () => {
+    // The gate follows the CI runner's switch: on its pool the AWS values a boot
+    // needs are what count, and the Fly fleet's three are not read.
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    vi.stubEnv('FLY_FLEET_APP', '');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'aws');
+    vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::944842271421:role/motir-add-shard');
+    const fx = await seedTenant();
+    await seedIntent(fx, { jobId: 1 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(1)];
+
+    expect((await reconcile()).added).toBe(1);
+    expect(bootEvents()).toHaveLength(1);
+  });
 });
 
 describe('it covers BOTH sides of the fleet', () => {

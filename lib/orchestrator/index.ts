@@ -53,6 +53,10 @@ import {
 } from '@/lib/orchestrator/shardFakeJournal';
 import { selectedOrchestratorProvider } from './provider';
 import { indexFleetOnPool } from '@/lib/ciFleet/limits';
+// Imported for its side effect too: it WIRES the CI runner's switch, so the gate
+// below reads the same reader admission does in every process that loads it.
+import '@/lib/ciFleet/fleetKindSwitches';
+import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
 import { ciPreviewUsageMeterService } from '@/lib/services/ciPreviewUsageMeterService';
 import { observeHostingDestroyApp } from './hosting';
@@ -169,11 +173,63 @@ export function getFleetInventory(): FleetInventory | null {
   return isFlyInventoryConfigured() ? flyFleetInventory : null;
 }
 
-/** Can this deployment provision containers at all? Never throws — the sweep
- *  uses it to stay inert on a self-hosted build rather than logging an error
- *  every minute. */
+/** Can this deployment provision containers on the PROCESS-WIDE fleet (the Fly
+ *  fleet app, or the fake)? Never throws. It answers for the `null` account only:
+ *  a container booted there, or one a reaper or reconciler must reach there. A
+ *  CI RUNNER boot is gated on {@link isCiFleetConfigured} instead, because on its
+ *  pool a CI job boots on an AWS account, not on this fleet (MOTIR-10625). */
 export function isOrchestratorConfigured(): boolean {
   return selectedOrchestratorProvider() === 'fake' || isFlyFleetConfigured();
+}
+
+// ── The CI RUNNER workload's configuration (MOTIR-10625) ─────────────────────
+//
+// The CI twin of `isIndexFleetConfigured()` below (MOTIR-10568). With
+// `MOTIR_FLEET_CI_RUNNER_PROVIDER=aws` a CI job boots on a `ci_runner` pool
+// account, whose orchestrator is built from the account row and the deployment's
+// AWS values (`awsOrchestratorForShard`): the management credential the runner
+// role is assumed through, and the runner AMI. None of the Fly fleet's three
+// variables is read on that path, so gating the boot on them kept every CI job
+// queued on an AWS deployment with no log at all.
+
+/**
+ * What this deployment still has to set before a CI runner can boot — `[]` when
+ * nothing. Never throws. Read on every call, like the switch it follows.
+ *
+ * - The `fake` adapter boots nothing and needs nothing.
+ * - On the CI runner's POOL — `fleetKindOnPool('ci_runner')`, the very reader
+ *   admission places the job by, so the gate and the placement cannot disagree:
+ *   the management credential and `MOTIR_AWS_RUNNER_AMI_ID`, exactly what
+ *   `awsShardClient` refuses a launch without — or nothing under the acceptance
+ *   lane's fake EC2, which needs neither. Which account boots, and whether one
+ *   has room, is admission's call per job, not configuration.
+ * - On Fly: the three Fly fleet variables, unchanged.
+ */
+export async function ciFleetMissingConfig(): Promise<string[]> {
+  if (selectedOrchestratorProvider() === 'fake') return [];
+  if (await fleetKindOnPool('ci_runner')) {
+    if (awsEc2Override()) return [];
+    const missing = awsManagementRequiredEnv(process.env).filter(
+      (name) => !process.env[name]?.trim(),
+    );
+    if (!process.env[AWS_RUNNER_AMI_ENV_VAR]?.trim()) missing.push(AWS_RUNNER_AMI_ENV_VAR);
+    return missing;
+  }
+  try {
+    flyFleetConfig();
+    return [];
+  } catch (err) {
+    // `flyFleetConfig` throws nothing but this refusal; read its `detail`, never
+    // its rendered message (MOTIR-6571).
+    return (err as OrchestratorNotConfiguredError).detail.replace(/^set /, '').split(', ');
+  }
+}
+
+/** Can this deployment boot a CI runner on the fleet its switch names? Never
+ *  rejects — the webhook's hot path, the provision sweep and the CI sweeps read it
+ *  to stay inert on a deployment that cannot boot one. */
+export async function isCiFleetConfigured(): Promise<boolean> {
+  return (await ciFleetMissingConfig()).length === 0;
 }
 
 // ── The INDEX workload's configuration (MOTIR-1981 · MOTIR-1989) ─────────────

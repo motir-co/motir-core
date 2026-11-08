@@ -1059,7 +1059,10 @@ describe('the pending-intent seam', () => {
     expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([older.id, newer.id]);
   });
 
-  it('is empty on a deployment with no orchestrator', async () => {
+  it('is empty on a deployment with no orchestrator — and SAYS so, naming what is missing', async () => {
+    // MOTIR-10625: this answered `[]` without a line, and an AWS deployment queued
+    // every CI job for good with nothing in its logs.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', '');
     vi.stubEnv('FLY_FLEET_APP', '');
@@ -1067,6 +1070,33 @@ describe('the pending-intent seam', () => {
     const fx = await seedTenant();
     await seedIntent(fx);
     expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]).toEqual([
+      '[ciRunnerBootService] CI runner intents are pending but the CI fleet is not configured',
+      { missing: ['FLY_FLEET_API_TOKEN', 'FLY_FLEET_APP', 'MOTIR_RUNNER_IMAGE'] },
+    ]);
+  });
+
+  it('names the AWS values on the CI runner pool, never the Fly fleet’s', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'aws');
+    vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', '');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::944842271421:role/motir-add-shard');
+    const fx = await seedTenant();
+    await seedIntent(fx);
+    expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([]);
+    expect(warn.mock.calls[0]?.[1]).toEqual({ missing: ['MOTIR_AWS_RUNNER_AMI_ID'] });
+  });
+
+  it('stays quiet when nothing is pending — a self-hosted build has nothing stuck', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    vi.stubEnv('FLY_FLEET_APP', '');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
+    expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 

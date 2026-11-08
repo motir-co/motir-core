@@ -49,6 +49,8 @@ import {
   fleetRunnerImage,
   fleetRunnerRegion,
   getOrchestrator,
+  ciFleetMissingConfig,
+  isCiFleetConfigured,
   isOrchestratorConfigured,
   recordContainerUsage,
 } from '@/lib/orchestrator';
@@ -910,6 +912,9 @@ export const ciRunnerBootService = {
     const resolved = await resolveReapAttribution(handle);
     if (!resolved) return false;
     const shardId = options.shardId !== undefined ? options.shardId : resolved.shardId;
+    // The PROCESS-WIDE fleet's gate, not the CI fleet's: only a container listed
+    // on that fleet (`shardId === null`) needs it, whichever way the CI runner's
+    // switch reads (MOTIR-10625).
     if (shardId === null && !isOrchestratorConfigured()) return false;
     const orchestrator = await fleetShardOrchestratorService.forShard(shardId);
     if (orchestrator.provider !== handle.provider) return false;
@@ -959,7 +964,7 @@ export const ciRunnerBootService = {
    * replaced the reaper's.
    */
   async sweepStaleClaims(options: { now?: () => Date } = {}): Promise<number> {
-    if (!isOrchestratorConfigured()) return 0;
+    if (!(await isCiFleetConfigured())) return 0;
     return sweepStaleClaims(options.now ?? (() => new Date()));
   },
 
@@ -972,7 +977,7 @@ export const ciRunnerBootService = {
    * its usage row. Runs on the reconciler's schedule; returns how many it settled.
    */
   async sweepVanishedInFlight(options: { now?: () => Date } = {}): Promise<number> {
-    if (!isOrchestratorConfigured()) return 0;
+    if (!(await isCiFleetConfigured())) return 0;
     return sweepVanishedInFlight(options.now ?? (() => new Date()));
   },
 
@@ -1041,9 +1046,25 @@ export const ciRunnerBootService = {
 
   /** The pending-intent sweep — the BACKSTOP trigger (see the module header: the
    *  hot path is the webhook's, and admission latency is the wake's). Returns what
-   *  it dispatched so the job can log it. */
+   *  it dispatched so the job can log it.
+   *
+   *  ⚠️ AN UNBOOTABLE DEPLOYMENT IS NEVER SILENT (MOTIR-10625). When the CI fleet
+   *  is not configured while intents wait, ONE warning per sweep names what is
+   *  missing — the gate used to answer `[]` without a line, and an AWS deployment
+   *  queued every CI job for good with nothing in its logs. Nothing pending means
+   *  nothing is stuck (a self-hosted build), so that sweep stays quiet. */
   async listRunnableIntentIds(limit = 25): Promise<string[]> {
-    if (!isOrchestratorConfigured()) return [];
+    const missing = await ciFleetMissingConfig();
+    if (missing.length > 0) {
+      const waiting = await withSystemContext((tx) => intents.listPending(1, tx));
+      if (waiting.length > 0) {
+        console.warn(
+          '[ciRunnerBootService] CI runner intents are pending but the CI fleet is not configured',
+          { missing },
+        );
+      }
+      return [];
+    }
     const pending = await withSystemContext((tx) => intents.listPending(limit, tx));
     return pending.map((intent) => intent.id);
   },
@@ -1080,7 +1101,7 @@ export const ciRunnerBootService = {
     // No project means no project queue to wake. The slot is the ORG's (MOTIR-6907),
     // so another project's job may now fit — the provisioning sweep picks it up.
     if (!projectId) return 'no_project';
-    if (!isOrchestratorConfigured()) return 'not_configured';
+    if (!(await isCiFleetConfigured())) return 'not_configured';
     try {
       const next = await withSystemContext((tx) =>
         intents.findNextPendingForProject(projectId, tx),
@@ -1115,7 +1136,7 @@ async function bootOnce(intentId: string, options: SupervisionOptions): Promise<
   const intent = await withSystemContext((tx) => intents.findById(intentId, tx));
   if (!intent) return terminal({ outcome: 'unknown_intent' });
 
-  if (!isOrchestratorConfigured()) return terminal({ outcome: 'not_configured' });
+  if (!(await isCiFleetConfigured())) return terminal({ outcome: 'not_configured' });
 
   // THE ADMISSION GATE, which also takes THE CLAIM (atomic `pending →
   // provisioning`; the loser simply stops — see `claimPending` for why the

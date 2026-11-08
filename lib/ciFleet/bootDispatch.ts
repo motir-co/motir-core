@@ -1,5 +1,5 @@
 import { dispatchSystemEvent } from '@/lib/jobs/sendEvent';
-import { isOrchestratorConfigured } from '@/lib/orchestrator';
+import { isCiFleetConfigured } from '@/lib/orchestrator';
 import type { CiRunnerBootData } from '@/lib/jobs/types';
 
 // THE `system.ci-runner-boot` DISPATCH (Story MOTIR-1916 · MOTIR-1996) — the one
@@ -82,9 +82,11 @@ const RECOVERY_BY_SOURCE: Record<CiRunnerBootDispatchSource, string> = {
  * or from the admission WAKE the moment a slot frees (MOTIR-2852).
  * NEVER THROWS — see the module header.
  *
- * Gated on `isOrchestratorConfigured()`, which is the SAME condition
+ * Gated on `isCiFleetConfigured()`, which is the SAME condition
  * `ciRunnerBootService.listRunnableIntentIds` applies before the sweep fans
- * anything out: a deployment that cannot provision a container (a self-hosted
+ * anything out — and which follows the CI runner's Fly↔AWS switch, so on its
+ * pool it reads the AWS values a pool boot needs, never the Fly fleet's
+ * (MOTIR-10625): a deployment that cannot boot a CI runner (a self-hosted
  * `motir-core`, or a cloud deploy whose fleet env vars are not set yet) should
  * not emit an event whose only possible outcome is `not_configured`. The intent
  * is still recorded, so nothing is lost — the moment the deployment IS
@@ -94,7 +96,7 @@ export async function dispatchCiRunnerBoot(
   intentId: string,
   source: CiRunnerBootDispatchSource = 'hot-path',
 ): Promise<CiRunnerBootDispatchOutcome> {
-  if (!isOrchestratorConfigured()) return 'not_configured';
+  if (!(await isCiFleetConfigured())) return 'not_configured';
   try {
     // `dispatchSystemEvent`, the STRICT door (MOTIR-3456): this function REPORTS
     // its outcome rather than only logging it, so it has to see the failure. The
