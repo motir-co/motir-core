@@ -4,7 +4,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
-import { isOrchestratorConfigured } from '@/lib/orchestrator';
+import { isCiFleetConfigured } from '@/lib/orchestrator';
 import { fleetQueueClient, type QueuedFleetJob } from '@/lib/github/fleetQueue';
 
 // THE GITHUB-SIDE RECONCILE (Bug MOTIR-8976).
@@ -59,7 +59,8 @@ export interface ReconcileOutcome {
 
 export const ciRunnerReconcileService = {
   async reconcile(options: { now?: () => Date } = {}): Promise<ReconcileOutcome> {
-    if (!isOrchestratorConfigured()) return { orgs: [], added: 0 };
+    // The CI fleet's own gate, which follows its Fly↔AWS switch (MOTIR-10625).
+    if (!(await isCiFleetConfigured())) return { orgs: [], added: 0 };
     const now = (options.now ?? (() => new Date()))();
 
     const latest = await withSystemContext((tx) =>

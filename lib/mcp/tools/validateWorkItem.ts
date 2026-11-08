@@ -441,9 +441,9 @@ export function crossLevelEdgeLines(
         `  ${e.item} (depth ${e.itemDepth}) is blocked by ${e.blockedBy} ` +
         `(depth ${e.blockedByDepth})`,
     ),
-    'The edge still holds the item out of the ready set. Re-wire it to the same-level item ' +
-      'really waited on (it may sit under another parent), or between the two containers ' +
-      'when the whole of one is needed.',
+    'Until its blocker is done, the edge holds the item out of the ready set. Re-wire it to ' +
+      'the same-level item really waited on (it may sit under another parent), or between ' +
+      'the two containers when the whole of one is needed.',
   ];
 }
 
@@ -617,8 +617,9 @@ export function registerValidateWorkItem(
         '`crossLevelEdges` naming each blocked_by FROM a subtree member to an item on ANOTHER ' +
         'LEVEL — a different depth below their nearest common ancestor, or an epic and a ' +
         'non-epic — as `{ item, blockedBy, itemDepth, blockedByDepth, reason: ' +
-        '"blocked_elsewhere", explanation }` (the link door writes such an edge and it still ' +
-        'holds the item out of the ready set; the plan gate refuses a PROPOSED one). ' +
+        '"blocked_elsewhere", explanation }` (the link door writes such an edge and it holds ' +
+        'the item out of the ready set until its blocker is done; an edge onto a DONE blocker ' +
+        'is satisfied and not reported; the plan gate refuses a PROPOSED one). ' +
         '`valid` is true only when ALL THREE are empty. `softBlocks` is NON-GATING: each open ' +
         'blocked_by of one of the target’s ANCESTORS, as `{ via: { key, title }, blockedBy: ' +
         '{ key, title }, blockerStatus }` — a block that reaches the target only through the ' +

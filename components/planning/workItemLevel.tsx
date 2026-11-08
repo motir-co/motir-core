@@ -533,11 +533,26 @@ export function buildWorkItemLevel(
     //  - EXEMPT: valid, but an end has no parent to carry it, so no level above
     //    draws it. The ordinary firm/pending arrow from a NEUTRAL anchor, and no
     //    flag (sheet 7).
+    //  - CROSS-LEVEL onto a DONE blocker (bug MOTIR-10627): SATISFIED, so drawn
+    //    like an exempt edge — a firm arrow from a NEUTRAL anchor, no flag. Below.
     //  - UNCOVERED / CROSS-LEVEL, or no disposition at all (a sprint read, an older
     //    server): the shipped bad-plan treatment below.
     // After the sprint arm, which asks a different question and is unchanged.
     if (scope !== 'sprint' && e.coverage === 'covered') continue;
-    const neutral = scope !== 'sprint' && e.coverage === 'exempt';
+    // A CROSS-LEVEL EDGE WHOSE BLOCKER IS DONE HOLDS NOTHING (bug MOTIR-10627).
+    // The flag's visible word is **blocked** — a READINESS word — and readiness
+    // calls the card ready the moment its blocker is done (`openBlockers: []`), so
+    // flagging it put the canvas's loudest verdict on a card that can be claimed.
+    // `validate_work_item` leaves the same edge out of `crossLevelEdges`, so the
+    // two still answer as one verdict. The arrow is KEPT, firm from a neutral
+    // anchor, rather than dropped as the sprint arm drops a satisfied blocker: the
+    // edge is still a fact about the work, and the roadmap is where a reader looks
+    // for it. `stub.isDone` is TERMINAL (it counts `cancelled`), which is the same
+    // predicate readiness and the validator judge a blocker by. A blocker the read
+    // could not name (`!stub`) cannot be shown to be done, so it keeps the flag.
+    const satisfiedCrossLevel =
+      scope !== 'sprint' && e.coverage === 'cross_level' && stub?.isDone === true;
+    const neutral = scope !== 'sprint' && (e.coverage === 'exempt' || satisfiedCrossLevel);
     if (neutral) {
       deps.push({
         from: e.blockerId,

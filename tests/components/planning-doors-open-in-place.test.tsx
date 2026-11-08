@@ -153,7 +153,8 @@ describe('the per-item Plan / Re-plan pill', () => {
     fireEvent.click(itemPill(), { button: 0 });
 
     expect(shallowPush).toHaveBeenCalledWith(
-      '/backlog?plan=contextual&planFrom=work-item&planItem=MOTIR-12',
+      // `planAsk=1` (MOTIR-10624): this button opens on the start prompt.
+      '/backlog?plan=contextual&planFrom=work-item&planItem=MOTIR-12&planAsk=1',
     );
     expect(push).not.toHaveBeenCalled();
   });
@@ -170,7 +171,7 @@ describe('the per-item Plan / Re-plan pill', () => {
     renderItemPill('MOTIR-12');
 
     expect(itemPill().getAttribute('href')).toBe(
-      '/items?peek=MOTIR-12&plan=contextual&planFrom=work-item&planItem=MOTIR-12',
+      '/items?peek=MOTIR-12&plan=contextual&planFrom=work-item&planItem=MOTIR-12&planAsk=1',
     );
 
     fireEvent.click(itemPill(), { button: 0 });

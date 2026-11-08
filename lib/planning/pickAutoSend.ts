@@ -29,6 +29,16 @@ export function pickAutoSendClaimed(gateId: string): boolean {
   return claimed.has(gateId);
 }
 
+/**
+ * Give a claim back. Only for a send the person can press AGAIN after it failed —
+ * the start prompt's Start (MOTIR-10624): a refused start returns the button to
+ * live, and a claim that outlived the failure would make it a dead control. An
+ * automatic send never releases: its failure puts the turn in the composer.
+ */
+export function releasePickAutoSend(gateId: string): void {
+  claimed.delete(gateId);
+}
+
 /** Tests only: forget every claim, so each test starts on a fresh page. */
 export function resetPickAutoSendClaimsForTests(): void {
   claimed.clear();

@@ -8482,7 +8482,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "{key} 계획"
+      "plan": "{key} 계획",
+      "replan": "{key} 다시 계획"
+    },
+    "startPrompt": {
+      "label": "{key} 계획 시작",
+      "labelReplan": "{key} 다시 계획 시작",
+      "askPlan": "이 작업 항목의 계획을 시작할까요?",
+      "askReplan": "이 작업 항목의 계획을 다시 시작할까요?",
+      "bodyPlan": "설명과 관련 코드를 바탕으로 계획합니다.",
+      "bodyReplan": "현재 계획을 설명 및 코드와 비교해 확인합니다.",
+      "startPlan": "계획 시작",
+      "startReplan": "다시 계획 시작",
+      "starting": "시작하는 중…",
+      "helpEmpty": "“API만, UI는 제외”처럼 조건을 추가하시겠습니까? 먼저 아래에 입력하면 시작할 때 함께 전달됩니다.",
+      "helpEmptyReplan": "무엇이 잘못되었는지 아시나요? 먼저 아래에 입력하면 시작할 때 함께 전달됩니다.",
+      "helpTypedPlan": "입력한 내용을 추가 조건으로 계획을 시작합니다. 보내기도 같은 동작을 합니다.",
+      "helpTypedReplan": "입력한 내용을 추가 조건으로 다시 계획을 시작합니다. 보내기도 같은 동작을 합니다.",
+      "startedPlan": "계획 시작됨",
+      "startedReplan": "다시 계획 시작됨",
+      "placeholderPlan": "조건 추가 (선택)…",
+      "placeholderReplan": "무엇이 잘못되었나요? (선택)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",
@@ -10782,6 +10802,9 @@
             "planner_model": {
               "set": "계획 모델 변경함"
             },
+            "planner_review_model": {
+              "set": "시험 실행 검토 모델 변경함"
+            },
             "planner_model_list": {
               "add": "계획 목록에 모델 추가함",
               "remove": "계획 목록에서 모델 제거함"
@@ -11565,6 +11588,21 @@
         "notPermitted": "최고 관리자만 계획 모델을 변경할 수 있습니다.",
         "reasonRequired": "사유가 필요합니다.",
         "failed": "변경 사항을 저장할 수 없습니다. 변경된 것은 없습니다."
+      },
+      "review": {
+        "name": "시험 실행 검토",
+        "desc": "표시하기 전에 모든 계획을 읽기 전용으로 확인하는 검사",
+        "same": "계획 모델과 동일",
+        "sameDesc": "각 계획 작업은 계획에 쓰는 모델로 검토합니다",
+        "defaultGroup": "기본값",
+        "pickerAria": "시험 실행 검토 모델",
+        "withdrawnBody": "다른 모델을 선택할 때까지 검토는 각 작업의 계획 모델로 실행됩니다.",
+        "withdrawnBodyReadOnly": "슈퍼 관리자가 다른 모델을 선택할 때까지 검토는 각 작업의 계획 모델로 실행됩니다.",
+        "confirmTitle": "시험 실행 검토 모델을 변경하시겠습니까?",
+        "confirmBody": "{from} → {to}. 변경 사항은 모든 조직의 다음 계획 작업의 시험 실행부터 적용됩니다. 이미 실행 중인 작업은 시작할 때의 모델로 끝까지 진행됩니다.",
+        "savedTitle": "검토 모델이 변경되었습니다",
+        "savedBody": "다음 계획 작업부터 시험 실행 검토는 {model}(으)로 실행됩니다.",
+        "unchanged": "시험 실행 검토는 이미 {model}(으)로 실행되고 있습니다."
       }
     },
     "lessons": {

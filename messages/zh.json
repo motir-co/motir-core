@@ -8479,7 +8479,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "规划 {key}"
+      "plan": "规划 {key}",
+      "replan": "重新规划 {key}"
+    },
+    "startPrompt": {
+      "label": "开始规划 {key}",
+      "labelReplan": "开始重新规划 {key}",
+      "askPlan": "要开始规划这个工作项吗？",
+      "askReplan": "要开始重新规划这个工作项吗？",
+      "bodyPlan": "将根据它的描述和涉及的代码来规划。",
+      "bodyReplan": "将对照它的描述和代码检查当前计划。",
+      "startPlan": "开始规划",
+      "startReplan": "开始重新规划",
+      "starting": "正在开始…",
+      "helpEmpty": "想加条件，比如“只做 API，不做 UI”？先在下方输入，开始时会一起发送。",
+      "helpEmptyReplan": "知道哪里不对？先在下方输入，开始时会一起发送。",
+      "helpTypedPlan": "以输入的内容作为附加条件开始规划。发送的效果相同。",
+      "helpTypedReplan": "以输入的内容作为附加条件开始重新规划。发送的效果相同。",
+      "startedPlan": "已开始规划",
+      "startedReplan": "已开始重新规划",
+      "placeholderPlan": "添加条件（可选）…",
+      "placeholderReplan": "哪里不对？（可选）…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",
@@ -10779,6 +10799,9 @@
             "planner_model": {
               "set": "已更改规划模型"
             },
+            "planner_review_model": {
+              "set": "已更改试运行审查模型"
+            },
             "planner_model_list": {
               "add": "向规划模型列表添加了模型",
               "remove": "从规划模型列表移除了模型"
@@ -11562,6 +11585,21 @@
         "notPermitted": "只有超级管理员可以更改规划模型。",
         "reasonRequired": "必须填写原因。",
         "failed": "无法保存更改。未做任何更改。"
+      },
+      "review": {
+        "name": "试运行审查",
+        "desc": "在展示前以只读方式检查每个计划",
+        "same": "与规划模型相同",
+        "sameDesc": "每个规划任务都使用其规划所用的模型进行审查",
+        "defaultGroup": "默认",
+        "pickerAria": "试运行审查模型",
+        "withdrawnBody": "在你选择其他模型之前，审查会使用每个任务的规划模型运行。",
+        "withdrawnBodyReadOnly": "在超级管理员选择其他模型之前，审查会使用每个任务的规划模型运行。",
+        "confirmTitle": "要更改试运行审查模型吗？",
+        "confirmBody": "{from} → {to}。更改将应用于每个组织下一个规划任务的试运行。正在运行的任务会在其开始时使用的模型上完成。",
+        "savedTitle": "审查模型已更改",
+        "savedBody": "从下一个规划任务起，试运行审查将使用 {model} 运行。",
+        "unchanged": "试运行审查已在使用 {model}。"
       }
     },
     "lessons": {

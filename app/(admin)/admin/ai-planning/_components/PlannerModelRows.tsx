@@ -16,8 +16,13 @@ import type {
   PlatformPlannerModelRowDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerOfferedModelDTO,
+  PlatformPlannerReviewModelRowDTO,
 } from '@/lib/dto/platformPlannerModel';
-import { setPlannerModelAction, type PlannerModelActionResult } from '../actions';
+import {
+  setPlannerModelAction,
+  setPlannerReviewModelAction,
+  type PlannerModelActionResult,
+} from '../actions';
 
 /**
  * The PLANNING-MODEL table — design `platform-admin/design-notes.md`
@@ -93,6 +98,14 @@ export function PlannerModelRows({ settings }: PlannerModelRowsProps) {
                   canEdit={settings.canEdit}
                 />
               ))}
+              {settings.review ? (
+                <PlannerReviewModelRow
+                  review={settings.review}
+                  offered={settings.offered}
+                  options={options}
+                  canEdit={settings.canEdit}
+                />
+              ) : null}
             </tbody>
           </table>
         </div>
@@ -128,7 +141,149 @@ interface PlannerModelRowProps {
   canEdit: boolean;
 }
 
+/** One AUDIENCE's row: its stored planning model, chips and per-row save. */
 function PlannerModelRow({ row, offered, options, canEdit }: PlannerModelRowProps) {
+  const t = useTranslations('platformAdmin.aiPlanning');
+  const audienceName = t(`audience.${row.audience}.name`);
+  const provider = offered.find((m) => m.id === row.model)?.provider ?? null;
+  return (
+    <ModelRow
+      testId={`ai-planning-row-${row.audience}`}
+      name={audienceName}
+      desc={t(`audience.${row.audience}.desc`)}
+      stored={row.model}
+      labelOf={(value) => value}
+      readOnly={<ModelText model={row.model} provider={provider} />}
+      pickerAria={t('pickerAria', { audience: audienceName })}
+      options={options}
+      canEdit={canEdit}
+      chips={<RowChips row={row} canEdit={canEdit} />}
+      changed={row}
+      confirmTitle={t('confirm.title', { audience: audienceName })}
+      confirmBody={(from, to) => t('confirm.body', { from, to })}
+      saved={(model) => ({
+        title: t('saved.title'),
+        description: t('saved.body', { audience: audienceName, model }),
+      })}
+      unchanged={(model) => t('error.unchanged', { model })}
+      save={(model, reason) => setPlannerModelAction(row.audience, model, reason)}
+    />
+  );
+}
+
+/**
+ * The dry-run REVIEW model's row (MOTIR-10632) — one platform-wide value beside
+ * the audiences, drawn in their grammar. Its picker leads with "Same as the
+ * planning model" (stored as null, the default) above the same offered models.
+ */
+function PlannerReviewModelRow({
+  review,
+  offered,
+  options,
+  canEdit,
+}: {
+  review: PlatformPlannerReviewModelRowDTO;
+  offered: PlatformPlannerOfferedModelDTO[];
+  options: ComboboxOption<string>[];
+  canEdit: boolean;
+}) {
+  const t = useTranslations('platformAdmin.aiPlanning');
+  const same = t('review.same');
+  const reviewOptions: ComboboxOption<string>[] = [
+    {
+      value: SAME_AS_PLANNING,
+      label: same,
+      description: t('review.sameDesc'),
+      group: t('review.defaultGroup'),
+    },
+    ...options,
+  ];
+  const labelOf = (value: string) => (value === SAME_AS_PLANNING ? same : value);
+  const provider = review.model
+    ? (offered.find((m) => m.id === review.model)?.provider ?? null)
+    : null;
+  return (
+    <ModelRow
+      testId="ai-planning-row-review"
+      name={t('review.name')}
+      desc={t('review.desc')}
+      stored={review.model ?? SAME_AS_PLANNING}
+      labelOf={labelOf}
+      readOnly={
+        review.model ? (
+          <ModelText model={review.model} provider={provider} />
+        ) : (
+          <span className="text-xs text-(--el-text)">{same}</span>
+        )
+      }
+      pickerAria={t('review.pickerAria')}
+      options={reviewOptions}
+      canEdit={canEdit}
+      chips={
+        review.offered === false ? (
+          <div className="flex flex-col items-start gap-1" data-testid="ai-planning-withdrawn">
+            <Pill severity="warning">{t('withdrawn.chip')}</Pill>
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              {t(canEdit ? 'review.withdrawnBody' : 'review.withdrawnBodyReadOnly')}
+            </p>
+          </div>
+        ) : null
+      }
+      changed={review}
+      confirmTitle={t('review.confirmTitle')}
+      confirmBody={(from, to) => t('review.confirmBody', { from, to })}
+      saved={(label) => ({
+        title: t('review.savedTitle'),
+        description: t('review.savedBody', { model: label }),
+      })}
+      unchanged={(label) => t('review.unchanged', { model: label })}
+      save={(value, reason) =>
+        setPlannerReviewModelAction(value === SAME_AS_PLANNING ? null : value, reason)
+      }
+    />
+  );
+}
+
+/** The picker value that stands for a review model stored as null. */
+const SAME_AS_PLANNING = '__same_as_planning__';
+
+function ModelText({ model, provider }: { model: string; provider: string | null }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="font-mono text-xs text-(--el-text)">{model}</span>
+      {provider ? <span className="text-xs text-(--el-text-identifier)">{provider}</span> : null}
+    </div>
+  );
+}
+
+interface ModelRowProps {
+  testId: string;
+  name: string;
+  desc: string;
+  /** The stored value, as a picker option value. */
+  stored: string;
+  /** A picker value as the confirm, toast and errors name it. */
+  labelOf: (value: string) => string;
+  /** What a reader without the picker sees in the Model cell. */
+  readOnly: React.ReactNode;
+  pickerAria: string;
+  options: ComboboxOption<string>[];
+  canEdit: boolean;
+  chips: React.ReactNode;
+  changed: { seeded: boolean; updatedAt: string | null; updatedBy: string | null };
+  confirmTitle: string;
+  confirmBody: (from: string, to: string) => string;
+  saved: (label: string) => { title: string; description: string };
+  unchanged: (label: string) => string;
+  save: (value: string, reason: string) => Promise<PlannerModelActionResult>;
+}
+
+/**
+ * One row of the table — the picker, chips, last-changed line, Save and the
+ * confirm-with-reason — shared by the audience rows and the review row.
+ */
+function ModelRow(props: ModelRowProps) {
+  const { stored, labelOf, canEdit } = props;
   const t = useTranslations('platformAdmin.aiPlanning');
   const format = useFormatter();
   const router = useRouter();
@@ -138,32 +293,27 @@ function PlannerModelRow({ row, offered, options, canEdit }: PlannerModelRowProp
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<RowError | null>(null);
-  // The model this tab last saved on this row. "Changed just now by you" holds
-  // only while the server still reports that same model.
+  // The value this tab last saved on this row. "Changed just now by you" holds
+  // only while the server still reports that same value.
   const [savedHere, setSavedHere] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const audienceName = t(`audience.${row.audience}.name`);
-  const selected = draft ?? row.model;
-  const dirty = selected !== row.model;
-  const provider = offered.find((m) => m.id === row.model)?.provider ?? null;
+  const selected = draft ?? stored;
+  const dirty = selected !== stored;
 
   function closeConfirm() {
     setConfirming(false);
     setReason('');
   }
 
-  function report(result: PlannerModelActionResult, model: string) {
+  function report(result: PlannerModelActionResult, value: string) {
     closeConfirm();
+    const model = labelOf(value);
     if (result.ok) {
       setDraft(null);
       setError(null);
-      setSavedHere(model);
-      toast({
-        variant: 'success',
-        title: t('saved.title'),
-        description: t('saved.body', { audience: audienceName, model }),
-      });
+      setSavedHere(value);
+      toast({ variant: 'success', ...props.saved(model) });
       return;
     }
     switch (result.code) {
@@ -180,7 +330,7 @@ function PlannerModelRow({ row, offered, options, canEdit }: PlannerModelRowProp
         return;
       case 'UNCHANGED':
         setDraft(null);
-        setError({ kind: 'other', message: t('error.unchanged', { model }) });
+        setError({ kind: 'other', message: props.unchanged(model) });
         return;
       case 'NOT_PERMITTED':
         setError({ kind: 'other', message: t('error.notPermitted') });
@@ -198,61 +348,52 @@ function PlannerModelRow({ row, offered, options, canEdit }: PlannerModelRowProp
   function submit() {
     const trimmed = reason.trim();
     if (!trimmed || !dirty) return;
-    const model = selected;
+    const value = selected;
     startTransition(async () => {
-      report(await setPlannerModelAction(row.audience, model, trimmed), model);
+      report(await props.save(value, trimmed), value);
     });
   }
 
+  const { changed } = props;
   const changedLine =
-    savedHere === row.model
+    savedHere === stored
       ? t('changed.justNowByYou')
-      : row.seeded
+      : changed.seeded || !changed.updatedAt
         ? t('changed.seeded')
-        : row.updatedBy
-          ? t('changed.by', { when: formatWhen(format, row.updatedAt), who: row.updatedBy })
-          : t('changed.byUnknown', { when: formatWhen(format, row.updatedAt) });
+        : changed.updatedBy
+          ? t('changed.by', { when: formatWhen(format, changed.updatedAt), who: changed.updatedBy })
+          : t('changed.byUnknown', { when: formatWhen(format, changed.updatedAt) });
 
   return (
-    <tr
-      data-testid={`ai-planning-row-${row.audience}`}
-      className="border-b border-(--el-border-soft) last:border-b-0"
-    >
+    <tr data-testid={props.testId} className="border-b border-(--el-border-soft) last:border-b-0">
       <Td>
         <div className="flex flex-col gap-0.5">
-          <span className="text-(--el-text)">{audienceName}</span>
-          <span className="text-xs text-(--el-text-secondary)">
-            {t(`audience.${row.audience}.desc`)}
-          </span>
+          <span className="text-(--el-text)">{props.name}</span>
+          <span className="text-xs text-(--el-text-secondary)">{props.desc}</span>
         </div>
       </Td>
       <Td className="w-[22rem]">
         <div className="flex flex-col gap-1.5">
           {canEdit ? (
             <Combobox
-              label={t('pickerAria', { audience: audienceName })}
-              options={options}
+              label={props.pickerAria}
+              options={props.options}
               // A withdrawn stored model is not among the options; the trigger
               // still names it, because that is what is stored (Panel 7).
               value={selected}
-              placeholder={row.model}
+              placeholder={labelOf(stored)}
               onChange={(value) => {
                 setError(null);
-                setDraft(value === row.model ? null : value);
+                setDraft(value === stored ? null : value);
               }}
               footer={
                 <p className="font-sans text-xs text-(--el-text-secondary)">{t('pickerFoot')}</p>
               }
             />
           ) : (
-            <div className="flex flex-col gap-0.5">
-              <span className="font-mono text-xs text-(--el-text)">{row.model}</span>
-              {provider ? (
-                <span className="text-xs text-(--el-text-identifier)">{provider}</span>
-              ) : null}
-            </div>
+            props.readOnly
           )}
-          <RowChips row={row} canEdit={canEdit} />
+          {props.chips}
           {error ? (
             <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
               {errorText(t, error)}
@@ -275,8 +416,8 @@ function PlannerModelRow({ row, offered, options, canEdit }: PlannerModelRowProp
             open={confirming}
             onOpenChange={(next) => (next ? undefined : closeConfirm())}
             role="alertdialog"
-            title={t('confirm.title', { audience: audienceName })}
-            description={t('confirm.body', { from: row.model, to: selected })}
+            title={props.confirmTitle}
+            description={props.confirmBody(labelOf(stored), labelOf(selected))}
             size="md"
           >
             <Modal.Body className="gap-4">

@@ -387,6 +387,49 @@ describe('a deployment that cannot boot anything dispatches nothing', () => {
   });
 });
 
+describe('on the CI runner pool, the Fly fleet is not what the gate reads (MOTIR-10625)', () => {
+  // The AWS deployment's shape: CI on its pool, the AWS values a pool boot needs
+  // set, and NONE of the Fly fleet's — no `FLY_FLEET_APP`, no
+  // `MOTIR_RUNNER_IMAGE`. Every CI job used to stay queued here with no log: the
+  // hot path answered `not_configured` and the sweep listed nothing.
+  function configureAwsPool(): void {
+    vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', '');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', '');
+    vi.stubEnv('FLY_FLEET_APP', '');
+    vi.stubEnv('MOTIR_RUNNER_IMAGE', '');
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'aws');
+    vi.stubEnv('MOTIR_AWS_RUNNER_AMI_ID', 'ami-0123456789abcdef0');
+    vi.stubEnv('AWS_ORG_ADMIN_ROLE_ARN', 'arn:aws:iam::944842271421:role/motir-add-shard');
+  }
+
+  it('dispatches the recorded intent from the webhook, and the sweep lists it', async () => {
+    configureAwsPool();
+    const fx = await seedTenant();
+
+    const result = await handle(delivery());
+
+    expect(result).toEqual({ event: 'workflow_job', outcome: 'recorded' });
+    const intent = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({
+      where: { workspaceId: fx.workspaceId },
+    });
+    expect(bootEvents(captured.events)).toEqual([ciRunnerBootEvent(intent.id)]);
+    expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([intent.id]);
+  });
+
+  it('with the switch back on Fly, the same deployment boots nothing', async () => {
+    configureAwsPool();
+    vi.stubEnv('MOTIR_FLEET_CI_RUNNER_PROVIDER', 'fly');
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    await seedTenant();
+
+    const result = await handle(delivery());
+
+    expect(result).toMatchObject({ outcome: 'recorded' });
+    expect(bootEvents(captured.events)).toHaveLength(0);
+    expect(await ciRunnerBootService.listRunnableIntentIds()).toEqual([]);
+  });
+});
+
 describe('the hot event and the sweep event race — and produce ONE container', () => {
   it('the loser gets `already_claimed`, and exactly one machine is ever booted', async () => {
     // The two triggers are designed to overlap; the claim's compare-and-set is

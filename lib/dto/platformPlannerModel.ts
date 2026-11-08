@@ -28,12 +28,38 @@ export interface PlatformPlannerOfferedModelDTO {
   provider: string;
 }
 
+/**
+ * The dry-run REVIEW model's row (MOTIR-10632) — platform-wide, beside the
+ * audience rows. `model` null is "same as the planning model", the default.
+ */
+export interface PlatformPlannerReviewModelRowDTO {
+  model: string | null;
+  /** False once a stored model is no longer offered — reviews then run on each
+   *  job's planning model. Null while unset. */
+  offered: boolean | null;
+  /** When it was last changed; null while nobody has set it. */
+  updatedAt: string | null;
+  /** The changer's display name, or null (never set, or an account since removed). */
+  updatedBy: string | null;
+  /** True while no operator has ever changed it. */
+  seeded: boolean;
+}
+
 /** The whole page: three rows in `customer`, `meta`, `internal` order. */
 export interface PlatformPlannerModelSettingsDTO {
   rows: PlatformPlannerModelRowDTO[];
+  /** The review row, or null when motir-ai did not answer one (an older release). */
+  review: PlatformPlannerReviewModelRowDTO | null;
   offered: PlatformPlannerOfferedModelDTO[];
   /** True only for a `superadmin`; every other staff role reads. */
   canEdit: boolean;
+}
+
+/** What a review-model save reports back; null is "same as the planning model". */
+export interface PlatformPlannerReviewModelWriteDTO {
+  fromModel: string | null;
+  toModel: string | null;
+  updatedAt: string;
 }
 
 /** What a save reports back. */

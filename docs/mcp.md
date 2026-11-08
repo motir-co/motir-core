@@ -2972,7 +2972,9 @@ collected by `create_work_item` / the create modal. The dependency is real, so
 the edge holds the blocked item out of the ready set and out of both claim doors
 like any other. `validate_work_item` then reports it INVALID in
 `crossLevelEdges` (_"blocked elsewhere"_), naming both keys and their depths,
-until somebody re-wires it to the same-level item really waited on. Only the plan
+until somebody re-wires it to the same-level item really waited on. Once its
+blocker is done the edge holds nothing, so the verdict leaves it out and the
+roadmap draws it as a plain arrow from a neutral anchor (MOTIR-10627). Only the plan
 gate refuses one (`INVALID_PLAN_REF_GRAPH` / `cross_level`): a planner may not
 author it. `relates_to`, `duplicates` and `clones` are never judged.
 

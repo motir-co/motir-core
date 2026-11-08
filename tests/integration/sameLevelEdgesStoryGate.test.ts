@@ -427,6 +427,37 @@ describe('a COMMITTED cross-level edge over a PROJECTION (MOTIR-6509)', () => {
     await client.close();
   });
 
+  it('a plan that re-wires the item end does NOT report the old edge once its blocker is DONE (MOTIR-10627)', async () => {
+    const fx = await makeWorkItemFixture();
+    const t = await seed(fx);
+    const x2 = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'subtask', title: 'X2', parentId: t.b.id },
+      fx.ctx,
+    );
+    await link(fx, t.x.id, t.a.id); // depth 2 → 1
+    await adminDb.workItem.update({ where: { id: t.a.id }, data: { status: 'done' } });
+    const client = await connectClient(fx.ctx);
+
+    const planId = await openPlan(client, fx);
+    const appended = await call(client, ADD_PLAN_ITEMS_TOOL_NAME, {
+      planId,
+      proposals: [{ op: 'modify', workItemId: t.x.id, patch: { blockedByAdd: [x2.id] } }],
+    });
+    expect(appended.isError, text(appended)).toBeFalsy();
+
+    const planVerdict = (await call(client, 'validate_plan', { planId }))
+      .structuredContent as unknown as Validity;
+    expect(planVerdict.crossLevelEdges).toEqual([]);
+    const subtree = (await call(client, 'validate_work_item', { key: t.e1.identifier, planId }))
+      .structuredContent as unknown as Validity;
+    expect(subtree.crossLevelEdges).toEqual([]);
+    // The committed verdict agrees: the edge onto a done blocker is satisfied.
+    const committed = (await call(client, 'validate_work_item', { key: t.e1.identifier }))
+      .structuredContent as unknown as Validity;
+    expect(committed.crossLevelEdges).toEqual([]);
+    await client.close();
+  });
+
   it("a title-only modify on the item end does NOT make the old edge the plan's", async () => {
     const fx = await makeWorkItemFixture();
     const t = await seed(fx);

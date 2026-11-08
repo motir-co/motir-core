@@ -8485,7 +8485,27 @@
   },
   "planningWorkspace": {
     "startTurn": {
-      "plan": "{key} を計画"
+      "plan": "{key} を計画",
+      "replan": "{key} を再計画"
+    },
+    "startPrompt": {
+      "label": "{key} の計画を開始",
+      "labelReplan": "{key} の再計画を開始",
+      "askPlan": "この作業項目の計画を始めますか?",
+      "askReplan": "この作業項目の再計画を始めますか?",
+      "bodyPlan": "説明と、関係するコードをもとに計画します。",
+      "bodyReplan": "現在の計画を、説明とコードに照らして確認します。",
+      "startPlan": "計画を開始",
+      "startReplan": "再計画を開始",
+      "starting": "開始しています…",
+      "helpEmpty": "「API だけ、UI は対象外」のような条件を加えますか? 先に下に入力すると、開始時に一緒に送られます。",
+      "helpEmptyReplan": "何が問題かわかっていますか? 先に下に入力すると、開始時に一緒に送られます。",
+      "helpTypedPlan": "入力した内容を追加の条件として計画を開始します。送信でも同じです。",
+      "helpTypedReplan": "入力した内容を追加の条件として再計画を開始します。送信でも同じです。",
+      "startedPlan": "計画を開始しました",
+      "startedReplan": "再計画を開始しました",
+      "placeholderPlan": "条件を追加 (任意)…",
+      "placeholderReplan": "何が問題ですか? (任意)…"
     },
     "refusalSeed": {
       "heading": "{key} · {title}",
@@ -10785,6 +10805,9 @@
             "planner_model": {
               "set": "計画モデルを変更"
             },
+            "planner_review_model": {
+              "set": "ドライランのレビューモデルを変更"
+            },
             "planner_model_list": {
               "add": "計画用リストにモデルを追加",
               "remove": "計画用リストからモデルを削除"
@@ -11568,6 +11591,21 @@
         "notPermitted": "計画モデルを変更できるのはスーパー管理者のみです。",
         "reasonRequired": "理由は必須です。",
         "failed": "変更を保存できませんでした。何も変更されていません。"
+      },
+      "review": {
+        "name": "ドライランのレビュー",
+        "desc": "表示前に各プランを読み取り専用で確認するチェック",
+        "same": "計画モデルと同じ",
+        "sameDesc": "各計画ジョブは、計画に使うモデルでレビューします",
+        "defaultGroup": "デフォルト",
+        "pickerAria": "ドライランのレビューモデル",
+        "withdrawnBody": "別のモデルを選ぶまで、レビューは各ジョブの計画モデルで実行されます。",
+        "withdrawnBodyReadOnly": "スーパー管理者が別のモデルを選ぶまで、レビューは各ジョブの計画モデルで実行されます。",
+        "confirmTitle": "ドライランのレビューモデルを変更しますか？",
+        "confirmBody": "{from} → {to}。変更は、すべての組織で次回の計画ジョブのドライランから適用されます。すでに実行中のジョブは、開始時のモデルで完了します。",
+        "savedTitle": "レビューモデルを変更しました",
+        "savedBody": "次回の計画ジョブから、ドライランのレビューは {model} で実行されます。",
+        "unchanged": "ドライランのレビューはすでに {model} で実行されています。"
       }
     },
     "lessons": {
