@@ -420,6 +420,33 @@ export const STYLE_REGISTRY = {
         'Chrome-capsule buttons with a metallic glint, specular-streaked bevelled cards / popovers / modals / sidebar / inputs (the data-surface material layer), pill status chips — a synthwave horizon + neon grid behind it all.',
     },
   },
+  'dense-pro': {
+    id: 'dense-pro',
+    name: 'Dense / Pro',
+    tagline: 'Compact and information-dense — more rows, less chrome, a faster rhythm.',
+    inspiration:
+      "Pro-tool density — Material Design 3's density scale and a mail client's Compact inbox view: the same surfaces, drawn tighter, one 4px notch down the vertical rhythm.",
+    designDoc: 'docs/styles/dense-pro.md',
+    defaultTypeId: 'motir-sans',
+    dimensions: {
+      silhouette:
+        "Compact near-square corners — 4px buttons and inputs, 6px cards, 8px modals. Tighter than Warm Editorial without Swiss's hard right angles.",
+      stroke:
+        "Hairline 1px structure only. With elevation pulled back to a shadow so shallow it never reads as a frame, the palette's hairline rule becomes the only thing dividing a dense surface from its neighbour.",
+      elevation:
+        'Near-flat by design — a 1-2px shadow on resting surfaces instead of a soft bloom, so rows stay legible in long lists and nothing lifts off the page to compete with content. Only modals keep a real lift.',
+      surface:
+        'Opaque and untinted — panels are told apart by the hairline rule and the tighter rhythm, never by a wash, a tint or a floating shadow.',
+      density:
+        "The identity axis, and the tightest rhythm in the library: 12x6 button padding, 32px buttons and controls, 16px card padding, 6px row padding — one 4px density notch tighter than Warm Editorial's controls.",
+      motion:
+        'Quick and functional — 100ms transitions and a 1% press scale, so a click confirms itself without the control appearing to move.',
+      typography:
+        'All-sans — the motir-sans pairing puts Inter on headlines and body over JetBrains Mono meta, so a dense screen keeps one voice instead of two.',
+      components:
+        'Compact rectangular buttons and inputs (4px), near-rectangular 3px status chips, dense table and sidebar rows on a 32px rhythm, hairline-ruled flat cards; the hero AI pill and orb flatten to a hairline-rimmed accent chip.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

@@ -62,6 +62,7 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['neumorphism', 'Neumorphism'],
   ['hand-drawn-indie', 'Hand-Drawn / Indie'],
   ['retrofuturism', 'Retrofuturism'],
+  ['dense-pro', 'Dense / Pro'],
 ] as const;
 
 const BASE_STYLE = 'warm-editorial';

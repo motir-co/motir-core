@@ -45,6 +45,7 @@ const STYLES: ReadonlyArray<readonly [id: string, name: string]> = [
   ['neumorphism', 'Neumorphism'],
   ['hand-drawn-indie', 'Hand-Drawn / Indie'],
   ['retrofuturism', 'Retrofuturism'],
+  ['dense-pro', 'Dense / Pro'],
 ] as const;
 
 const NAMES: Record<string, string> = Object.fromEntries(STYLES.map(([id, name]) => [id, name]));
