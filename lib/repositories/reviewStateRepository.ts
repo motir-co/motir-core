@@ -196,7 +196,8 @@ export const reviewStateRepository = {
    * ⚠️ THE SAME ROWS THE READ MODEL DERIVES FROM, over the same subtree. `readReviewStates`
    * answers a card from its whole subtree in its own project (`listSubtrees`: a container's
    * badge counts its children's reviews), from these tables: the verdict records, the
-   * dismissals, the deliveries and the GitHub reviews of the delivered pull requests. A
+   * dismissals, the deliveries, the `agent_review` gates and the GitHub reviews of the
+   * delivered pull requests. A
    * reading over fewer tables, or over the root alone, is a row that goes stale on exactly
    * the write it left out — with nothing red, because a reload still draws it right.
    *
@@ -205,6 +206,13 @@ export const reviewStateRepository = {
    * database's, a gate's `updated_at` the app's); the instant catches a GitHub review
    * edited in place. Every table here carries a `trg_live_signal_*` trigger
    * (`lib/live/liveSignalTables.ts`), which is what wakes the stream to take this reading.
+   *
+   * ⚠️ THE `agent_review` GATES ARE READ HERE, NOT ON THE APPROVALS READING (Bug
+   * MOTIR-10734). That reading excludes the kind — it asks the agent, not a person — so a
+   * person skipping the review moved nothing there. On an approve-and-merge row the merge
+   * gate the skip raises moves the count anyway; on a story run's acceptance row it is
+   * carried behind the acceptance primary and excluded too, and the decided review gate is
+   * the only write left to see.
    *
    * Required `tx`, bound to the reader's workspace: every table is RLS-gated, and an
    * unbound read answers zero rows — which reads as *nothing reviewed*.
@@ -236,6 +244,11 @@ export const reviewStateRepository = {
         SELECT del."created_at"
           FROM "work_item_delivery" del
           WHERE del."work_item_id" IN (SELECT "id" FROM subtree)
+        UNION ALL
+        SELECT a."updated_at"
+          FROM "approval_gate" a
+          WHERE a."work_item_id" IN (SELECT "id" FROM subtree)
+            AND a."kind" = 'agent_review'
         UNION ALL
         SELECT g."updated_at"
           FROM "github_pull_request_review" g

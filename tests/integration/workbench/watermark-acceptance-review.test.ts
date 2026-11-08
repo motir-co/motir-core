@@ -146,6 +146,32 @@ describe('a story run awaiting only its acceptance', () => {
   });
 });
 
+describe('a skip of the review on a story run', () => {
+  it('a person continuing without the review moves To approve', async () => {
+    const run = await story('A story run awaiting acceptance');
+    await deliver(run.id);
+    await gate(run.id, 'acceptance_result');
+    await gate(run.id, 'agent_review');
+
+    // The skip decides the `agent_review` gate as the person, and the merge gate it raises
+    // next is carried behind the acceptance primary — neither is on the approvals reading, so
+    // the decided review gate itself is what the review reading has to see.
+    const before = await workbenchWatermarkService.read(ctx());
+    await adminDb.approvalGate.updateMany({
+      where: { workItemId: run.id, kind: 'agent_review' },
+      data: {
+        state: 'approved',
+        decidedById: fx.ownerId,
+        decidedAt: new Date(),
+        noteMd: 'Reviewed by hand.',
+      },
+    });
+    const after = await workbenchWatermarkService.read(ctx(), before.cursor);
+
+    expect(after.moved).toContain('approvals');
+  });
+});
+
 describe('a review write on a card whose awaiting gate draws no review moves no tab', () => {
   it.each(['design_result', 'decision_approval', 'decision_confirmation'] as const)(
     '%s',
