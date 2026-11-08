@@ -119,6 +119,8 @@ function overlayFor(itemKey: string) {
     kind: 'work-item',
     itemKey,
     hasPlan: false,
+    // The card's Plan opens on the start prompt, as the item page's does (MOTIR-10624).
+    confirmStart: true,
   });
 }
 
@@ -130,6 +132,7 @@ describe('can plan → the planning overlay opens, as it does today', () => {
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/work-items/plannability?key=MOTIR-10552');
     expect(shallowPush).toHaveBeenCalledTimes(1);
     expect(shallowPush).toHaveBeenCalledWith(overlayFor('MOTIR-10552'));
+    expect(String(vi.mocked(shallowPush).mock.calls[0]![0])).toContain('planAsk=1');
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 

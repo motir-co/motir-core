@@ -57,7 +57,7 @@ export function usePlanCheck(): PlanCheck {
         try {
           const answer = await fetchPlannability(target);
           if (answer.plannable) {
-            openLater({ kind: 'work-item', itemKey: target, hasPlan: false });
+            openLater({ kind: 'work-item', itemKey: target, hasPlan: false, confirmStart: true });
           } else {
             setAlert({ key: target, reasons: answer.reasons });
           }
