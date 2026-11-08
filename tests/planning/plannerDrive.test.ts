@@ -3,6 +3,7 @@ import { stepLevel } from '@/lib/planning/livePane';
 import {
   drivenFollowRequest,
   drivenStepId,
+  followDestination,
   nextDrivenStep,
   type DrivenStep,
 } from '@/lib/planning/plannerDrive';
@@ -148,5 +149,96 @@ describe('drivenFollowRequest — keyed, one per transition', () => {
     expect(drivenFollowRequest(null, 0)).toBeNull();
     const top = nextDrivenStep(null, [step({ targetNodeId: 'po' })], items, 'New');
     expect(drivenFollowRequest(top, 0)?.trail).toEqual([]);
+  });
+});
+
+describe('followDestination — where a press of Follow the planner goes (MOTIR-10740)', () => {
+  const targetTrail = [
+    { id: 'wi_epic', label: 'MOTIR-1 · Epic' },
+    { id: 'wi_story', label: 'MOTIR-2 · Story' },
+  ];
+  const liveTask = step({ sessionKey: 'live', targetNodeId: 'pt' });
+  const heldStep: DrivenStep = { id: 'held', levelId: 'po', trail: [{ id: 'po', label: 'Po' }] };
+  const base = {
+    held: null,
+    liveSteps: [],
+    snapshotSteps: [],
+    items,
+    targetTrail,
+    proposedWord: 'New',
+  };
+
+  it('1 · a live step that resolves wins, exactly as nextDrivenStep drives it', () => {
+    const d = followDestination({ ...base, held: heldStep, liveSteps: [liveTask] });
+    expect(d.source).toBe('live');
+    expect(d.id).toBe(drivenStepId(liveTask));
+    expect(d.levelId).toBe('ps');
+  });
+
+  it('2 · no live step: the step held last', () => {
+    const unplaced = step({ sessionKey: 'u', targetNodeId: 'gone' });
+    const d = followDestination({ ...base, held: heldStep, liveSteps: [unplaced] });
+    expect(d).toEqual({ ...heldStep, source: 'held' });
+  });
+
+  it("3 · nothing held: the snapshot's most recently started step that resolves", () => {
+    const older = step({ sessionKey: 'a', targetNodeId: 'pt', startedAt: '2026-10-15T00:00:01Z' });
+    const newer = step({ sessionKey: 'b', targetNodeId: 'po', startedAt: '2026-10-15T00:00:09Z' });
+    const newest = step({
+      sessionKey: 'c',
+      targetNodeId: 'gone',
+      startedAt: '2026-10-15T00:00:10Z',
+    });
+    // `newest` names nothing on the plan, so the next most recent one is taken.
+    const d = followDestination({ ...base, snapshotSteps: [older, newer, newest] });
+    expect(d.source).toBe('snapshot');
+    expect(d.id).toBe(drivenStepId(newer));
+    expect(d.levelId).toBeNull();
+
+    // A tie on startedAt is broken by the snapshot's own order, read from its end.
+    const t1 = step({ sessionKey: 'a', targetNodeId: 'pt', startedAt: '2026-10-15T00:00:20Z' });
+    const t2 = step({ sessionKey: 'b', targetNodeId: 'po', startedAt: '2026-10-15T00:00:20Z' });
+    expect(followDestination({ ...base, snapshotSteps: [t1, t2] }).id).toBe(drivenStepId(t2));
+  });
+
+  it('4 · no step resolves: the level of the LAST written add, in append order', () => {
+    const unplaced = step({ targetNodeId: 'gone' });
+    const modify = planReviewItem({ planItemId: 'pm', nodeId: 'wi_x', op: 'modify' });
+    const d = followDestination({
+      ...base,
+      snapshotSteps: [unplaced],
+      items: [other, story, task, modify],
+    });
+    expect(d.source).toBe('proposal');
+    expect(d.id).toBe(JSON.stringify(['proposal', 'pt']));
+    expect(d.levelId).toBe('ps');
+    expect(d.trail.at(-1)?.id).toBe('ps');
+
+    // A root add sits on the top level, which is a real destination.
+    const root = followDestination({ ...base, items: [task, other] });
+    expect(root).toMatchObject({ source: 'proposal', levelId: null, trail: [] });
+  });
+
+  it("5 · no step and no proposal: the target's arrival trail", () => {
+    const d = followDestination({ ...base, items: [] });
+    expect(d).toEqual({
+      id: JSON.stringify(['target', 'wi_story']),
+      levelId: 'wi_story',
+      trail: targetTrail,
+      source: 'target',
+    });
+    expect(d.trail).not.toBe(targetTrail);
+  });
+
+  it('6 · no target (or one that arrives at the root): the project root', () => {
+    const root = { id: JSON.stringify(['root']), levelId: null, trail: [], source: 'root' };
+    expect(followDestination({ ...base, items: [], targetTrail: null })).toEqual(root);
+    expect(followDestination({ ...base, items: [], targetTrail: [] })).toEqual(root);
+  });
+
+  it('every destination gives a request, and a new epoch a new key', () => {
+    const d = followDestination({ ...base, items: [], targetTrail: null });
+    expect(drivenFollowRequest(d, 1)?.trail).toEqual([]);
+    expect(drivenFollowRequest(d, 2)?.key).not.toBe(drivenFollowRequest(d, 1)?.key);
   });
 });
