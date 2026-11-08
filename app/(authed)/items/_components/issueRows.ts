@@ -82,7 +82,9 @@ export interface IssueRowData {
   priority: WorkItemPriorityDto;
   /** Resolved reporter display name (a reporter is always set). */
   reporterName: string;
-  /** Raw due date (ISO-8601) or null — what the inline DatePicker edits (2.5.5). */
+  /** Raw due date (ISO-8601) or null. No list/tree view renders a Due column
+   *  (MOTIR-1307) and its inline editor is gone (MOTIR-10591); the row still
+   *  carries the value, for a Due column restored on purpose. */
   dueDate: string | null;
   /** Pre-formatted due date ("Jun 4, 2026"), or null when none. */
   dueLabel: string | null;
