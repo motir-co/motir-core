@@ -126,7 +126,8 @@ export const REPORTER_RETRY_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000]
  *   run the server has closed (409) or does not know (404), a client the server does not
  *   speak to, or a failure this client's transport did not raise. The reporter goes
  *   OFFLINE.
- * - `capped` — the run reached the server's event ceiling. No later event can land, but
+ * - `capped` — the batch would cross the server's event ceiling. The events that still fit
+ *   are sent (the batch is halved, as a refused one is); after that no event can land, but
  *   the run can still be closed, so only EVENTS stop.
  * - `refused` — the server will never take THIS request (413, 422 and the other 4xx).
  *   Sending it again is pointless; the next one may well be fine.
@@ -491,12 +492,17 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
       case 'end':
         goOffline();
         return { stop: true, unsent: [] };
-      case 'capped':
-        capEvents();
-        return { stop: true, unsent: [] };
       case 'transient':
         return { stop: true, unsent: batch };
-      case 'refused': {
+      case 'capped':
+        // The ceiling refuses a batch that would cross it WHOLE, so the events that still
+        // fit are found the same way as a refused event: halve until one is refused.
+        if (batch.length === 1) {
+          capEvents();
+          return { stop: true, unsent: [] };
+        }
+        return sendHalves(id, batch);
+      case 'refused':
         if (batch.length === 1) {
           if (!warnedRefused) {
             warnedRefused = true;
@@ -504,12 +510,19 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
           }
           return { stop: false, unsent: [] };
         }
-        const half = Math.ceil(batch.length / 2);
-        const first = await sendBatch(id, batch.slice(0, half));
-        if (first.stop) return { stop: true, unsent: [...first.unsent, ...batch.slice(half)] };
-        return sendBatch(id, batch.slice(half));
-      }
+        return sendHalves(id, batch);
     }
+  }
+
+  /** Send a batch the server refused as two halves, in order. */
+  async function sendHalves(
+    id: string,
+    batch: DispatchRunEventInput[],
+  ): Promise<{ stop: boolean; unsent: DispatchRunEventInput[] }> {
+    const half = Math.ceil(batch.length / 2);
+    const first = await sendBatch(id, batch.slice(0, half));
+    if (first.stop) return { stop: true, unsent: [...first.unsent, ...batch.slice(half)] };
+    return sendBatch(id, batch.slice(half));
   }
 
   /**

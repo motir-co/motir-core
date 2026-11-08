@@ -66,12 +66,16 @@ function utf8Length(codePoint: number): number {
  */
 export function splitLogBody(text: string, limit: number): { pieces: string[]; rest: string } {
   const pieces: string[] = [];
+  // A text ending on a HIGH surrogate has the other half of that character still to come in
+  // the next write; it stays in the rest, so no piece ends on half a character.
+  const last = text.charCodeAt(text.length - 1);
+  const scanEnd = last >= 0xd800 && last <= 0xdbff ? text.length - 1 : text.length;
   let start = 0;
   for (;;) {
     let bytes = 0;
     let end = start;
     let lastBreak = -1;
-    while (end < text.length) {
+    while (end < scanEnd) {
       const codePoint = text.codePointAt(end)!;
       const width = utf8Length(codePoint);
       if (bytes + width > limit && end > start) break;
@@ -83,7 +87,7 @@ export function splitLogBody(text: string, limit: number): { pieces: string[]; r
     // The scan reached the end with fewer than `limit` bytes: that is the tail the caller
     // keeps. (A scan that stopped EARLY, because the next character would not fit, is a
     // full piece even when it is a byte or two short of the limit.)
-    if (end >= text.length && bytes < limit) return { pieces, rest: text.slice(start) };
+    if (end >= scanEnd && bytes < limit) return { pieces, rest: text.slice(start) };
     const cut = lastBreak > start && lastBreak < end ? lastBreak : end;
     pieces.push(text.slice(start, cut));
     start = cut;

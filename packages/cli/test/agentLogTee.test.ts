@@ -183,11 +183,26 @@ describe('splitLogBody', () => {
   });
 
   it('counts each code point as UTF-8 does: 1, 2, 3 and 4 bytes, a lone surrogate as 3', () => {
-    for (const ch of ['a', 'é', '€', '😀', '\ud800']) {
+    for (const ch of ['a', 'é', '€', '😀', '\udc00']) {
       const width = Buffer.byteLength(ch, 'utf8');
       expect(splitLogBody(ch, width)).toEqual({ pieces: [ch], rest: '' });
       expect(splitLogBody(ch, width + 1)).toEqual({ pieces: [], rest: ch });
     }
+  });
+
+  it('a text ending on a HIGH surrogate keeps it in the rest — its other half is still to come', () => {
+    expect(splitLogBody('abcd\ud83d', 4)).toEqual({ pieces: ['abcd'], rest: '\ud83d' });
+    expect(splitLogBody('abc\ud83d', 3)).toEqual({ pieces: ['abc'], rest: '\ud83d' });
+    expect(splitLogBody('\ud83d', 1)).toEqual({ pieces: [], rest: '\ud83d' });
+  });
+
+  it('a surrogate pair split across two writes reaches the server as one character', () => {
+    const bodies: string[] = [];
+    const tee = createAgentLogTee({ emit: (b) => bodies.push(b), chunkBytes: 4 });
+    tee.write('abc\ud83d');
+    tee.write('\ude00z');
+    tee.flush();
+    expect(bodies).toEqual(['abc', '😀', 'z']);
   });
 
   it('a character wider than the limit still moves the cut forward — it never stalls', () => {

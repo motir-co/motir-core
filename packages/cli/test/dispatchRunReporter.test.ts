@@ -804,6 +804,33 @@ describe('only a DEFINITIVE end takes reporting down (MOTIR-10705)', () => {
     expect(warnings).toEqual([REPORTER_EVENT_LIMIT_WARNING]);
   });
 
+  it('a batch that would CROSS the ceiling still sends the events that fit, agent_exited among them', async () => {
+    // The server refuses a batch WHOLE when it would take the run past its ceiling.
+    const ceiling = 5;
+    const accepted: DispatchRunEventInput[] = [];
+    const warnings: string[] = [];
+    const { client } = fakeClient({
+      async appendDispatchRunEvents(args) {
+        if (accepted.length + args.events.length > ceiling) {
+          throw new ApiRefusalError('Limit reached.', 422, 'DISPATCH_RUN_EVENT_LIMIT');
+        }
+        accepted.push(...args.events);
+        return { runId: args.runId, appended: args.events.length, seq: accepted.length };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    for (let i = 0; i < 4; i += 1) reporter.event({ kind: 'log', data: { i } });
+    reporter.event({ kind: 'agent_exited', workItemKey: 'PROD-1', exitCode: 0 });
+    reporter.event({ kind: 'card_settled', workItemKey: 'PROD-1' });
+    reporter.event({ kind: 'log', data: { i: 99 } });
+    await reporter.flush();
+
+    expect(accepted.map((e) => e.kind)).toEqual(['log', 'log', 'log', 'log', 'agent_exited']);
+    expect(warnings).toEqual([REPORTER_EVENT_LIMIT_WARNING]);
+    expect(reporter.offline).toBe(false);
+  });
+
   it('the ceiling met by a leg or the close caps events the same way', async () => {
     const warnings: string[] = [];
     const { client, recorded } = fakeClient();
