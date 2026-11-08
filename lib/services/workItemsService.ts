@@ -9475,7 +9475,18 @@ async function computeWorkItemValidity(
     ctx,
   );
   const chains = await subtreeChains(root.id, membersById, edges, ctx);
-  const crossLevelEdges = computeCrossLevelEdges(edges, membersById, chains);
+  // A cross-level edge onto a DONE blocker holds nothing (bug MOTIR-10627):
+  // readiness already reads it as satisfied, and the roadmap draws it neutral, so
+  // the verdict leaves it out rather than tell the reader the edge still keeps the
+  // item out of the ready set. Done is the blocker's OWN project's terminal set,
+  // the predicate `blockers` above judges it by.
+  const crossLevelEdges = computeCrossLevelEdges(
+    edges.filter(
+      (e) => !(terminalByProject.get(e.blockerProjectId)?.has(e.blockerStatus) ?? false),
+    ),
+    membersById,
+    chains,
+  );
   const invalidEdges = await computeInvalidEdges(edges, membersById, chains, ctx);
   const coverage = await computeSubtreeCoverageAdvisories(notDone, members, ctx);
   const titleCoverage = await computeSubtreeTitleCoverageAdvisories(notDone, members, ctx);
