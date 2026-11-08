@@ -370,6 +370,12 @@ describe('every probe of the daily check is in the streak table', () => {
         targetsUnreadable: null,
       },
       runnerImageFreshness: indeterminateFreshness,
+      runnerVersionSupport: {
+        verdict: 'indeterminate',
+        checkedAt: '',
+        phase: 'releases',
+        detail: "actions/runner's releases could not be read",
+      },
     });
 
     expect(readings.map((r) => [r.probe, r.indeterminate])).toEqual([
@@ -384,6 +390,10 @@ describe('every probe of the daily check is in the streak table', () => {
           phase: 'github',
           detail: `${RUNNER_IMAGE}: GitHub answered 403 (rate limit) listing commits`,
         },
+      ],
+      [
+        'runnerVersionSupport',
+        { phase: 'releases', detail: "actions/runner's releases could not be read" },
       ],
       ['runnerImageFreshness.ami', null],
     ]);

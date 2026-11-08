@@ -8,6 +8,11 @@
 #
 # Informational only: it must never fail a job.
 
+# The marker `entrypoint.sh` made room for (MOTIR-10706): this runner took a job.
+# Read after the runner exits, so an exit with no marker is reported as one that
+# never took its job rather than passing for a finished one.
+date -u +%Y-%m-%dT%H:%M:%SZ >/run/motir-ci-runner-job/started 2>/dev/null || true
+
 cat /run/motir-ci-runner-docker-storage 2>/dev/null \
   || echo "dockerd storage: not started (MOTIR_RUNNER_SKIP_DOCKER or a pre-start boot)"
 # The disk a job starts with (MOTIR-8839): the rootfs and Docker's data root,

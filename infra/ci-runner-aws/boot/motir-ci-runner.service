@@ -14,7 +14,12 @@
 #   ExecStartPost  removes the env file. The entrypoint has its environment by
 #                  then (Type=exec waits for the exec), and the JIT config
 #                  should not outlive the moment it was needed on disk.
-#   ExecStopPost   powers the VM off however the entrypoint ended — success,
+#   ExecStopPost   first motir-runner-report-exit (MOTIR-10706): one console
+#                  line saying whether the runner took its job, so a runner
+#                  GitHub refused is not read as one that finished. `-`-prefixed
+#                  and always exit 0, so it can never hold up the next line.
+#                  Then the power-off, which ends the VM however the entrypoint
+#                  ended — success,
 #                  failure, or a prepare hook that failed before it started.
 #                  The adapter launches with InstanceInitiatedShutdownBehavior=
 #                  terminate, so the power-off ENDS the instance, as Fly's
@@ -45,6 +50,7 @@ Environment=LANG=C.UTF-8 LC_ALL=C.UTF-8
 WorkingDirectory=/home/runner/actions-runner
 ExecStart=/usr/local/bin/motir-vm-entrypoint
 ExecStartPost=/usr/bin/rm -f /run/motir-ci-runner/env
+ExecStopPost=-/usr/local/sbin/motir-runner-report-exit
 ExecStopPost=/usr/bin/systemctl --no-block poweroff
 Restart=no
 # Formatting the volume and the first IMDS reads fit well inside this.

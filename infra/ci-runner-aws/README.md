@@ -17,7 +17,8 @@ byte at build time. This directory adds only what a VM needs and a container doe
 | `boot/parse-user-data.sh`            | The user-data parser the hook calls: picks the boot mode and refuses anything that mode does not accept. Text in, files out, no network.                                                              |
 | `boot/motir-vm-entrypoint.sh`        | The unit's `ExecStart`: execs the CI entrypoint in CI mode, the container entrypoint in container mode.                                                                                               |
 | `boot/motir-container-entrypoint.sh` | Container mode: dockerd, pull ONE image by digest, run it once with the run's environment.                                                                                                            |
-| `boot/motir-ci-runner.service`       | The one unit: prepare, run the entrypoint, remove the env file, power off when the entrypoint exits.                                                                                                  |
+| `boot/motir-runner-report-exit.sh`   | The unit's first `ExecStopPost` (MOTIR-10706): one console line saying whether the runner took its job, so a runner GitHub refused is not read as one that finished. Never fails.                     |
+| `boot/motir-ci-runner.service`       | The one unit: prepare, run the entrypoint, remove the env file, report the exit, power off when the entrypoint exits.                                                                                 |
 | `build-ami.sh`                       | `validate` (no credentials) or `build`: reads the pins, runs Packer, prints the AMI id.                                                                                                               |
 
 ## Where the pins live

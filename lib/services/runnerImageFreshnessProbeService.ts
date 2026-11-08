@@ -80,8 +80,9 @@ const MAX_SHA_TAGS = 60;
 
 /** An installation token for the source repository's owner when this deployment
  *  has the provisioning App there, else null — the repository is public, and an
- *  anonymous read answers the same question. */
-async function sourceRepoToken(owner: string): Promise<string | null> {
+ *  anonymous read answers the same question. Also used by the runner-version
+ *  support probe (MOTIR-10706), which reads the same repository. */
+export async function sourceRepoToken(owner: string): Promise<string | null> {
   if (!isGithubAppConfigured('provisioning')) return null;
   try {
     const installation = await getOrgInstallation(owner, 'provisioning');
