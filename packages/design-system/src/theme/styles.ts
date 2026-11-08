@@ -607,6 +607,34 @@ export const STYLE_REGISTRY = {
         'Squared buttons, inputs, cards and modals; rectangular status chips; double-ruled plates with stepped corners; a ruled modal entablature; a double-rule lid on the header and a double vertical rule on the sidebar edge.',
     },
   },
+  memphis: {
+    id: 'memphis',
+    name: 'Memphis',
+    tagline:
+      'Playful, loud post-modern collage: mismatched corners, thick outlines and hard two-block shadows over a dot-and-hatch canvas.',
+    inspiration:
+      "The Memphis Group (Memphis Milano, Milan, 1980, Ettore Sottsass) — Sottsass's Bacterio squiggle-and-dot pattern, clashing geometry and laminate colour.",
+    designDoc: 'docs/styles/memphis.md',
+    defaultTypeId: 'rounded',
+    dimensions: {
+      silhouette:
+        'Deliberately mismatched radii: 10px buttons against 2px inputs, and cards and modals carrying one round corner pair and one near-square pair, so every panel reads as a collage rather than a machine-cut rectangle.',
+      stroke:
+        "Loud 2px solid outlines on every panel and input, drawn in the palette's own ink at strength; the edge, not the shadow, is what tells you where a surface stops.",
+      elevation:
+        "Hard-offset shadows with zero blur, in two blocks: a solid ink block nudged down-right plus a second block in the palette's accent, so a panel looks physically pasted onto the page.",
+      surface:
+        'Opaque palette panels over a palette-derived canvas of staggered dots and a diagonal hatch — the Bacterio rhythm held at low alpha, so it stays a texture and never a background.',
+      density:
+        'Comfortable-loud: 20x11 buttons, 26px card padding, 40px controls — roomy enough for the outline and the offset block to breathe.',
+      motion:
+        'Fast and physical: 140ms transitions, a 1.01 hover swell and a 0.97 press, with the canvas pattern static so the loudness never moves on its own.',
+      typography:
+        'Ships the `rounded` pairing (Nunito throughout) — a soft, friendly sans that lets the loud geometry do the shouting; a pinned type overrides it.',
+      components:
+        'Collage-cornered cards, popovers and modals, 2px-radii inputs, pill status chips, every panel outlined at 2px with the doubled hard shadow.',
+    },
+  },
 } satisfies Record<string, StyleDefinition>;
 
 /** The id of every registered style — `data-style` value space. */

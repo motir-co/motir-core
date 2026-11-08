@@ -66,6 +66,7 @@ no `--color-*`, `--el-*` or `--font-*` declaration belongs here.
   --shadow-subtle: 2px 2px 0 0 rgba(15, 15, 15, 0.92);
   --shadow-card: 5px 5px 0 0 rgba(15, 15, 15, 1);
   --shadow-elevated: 7px 7px 0 0 rgba(15, 15, 15, 1);
+  --spacing-shadow-elevated-drop: 7px; /* the Y offset of --shadow-elevated above */
   --shadow-modal: 9px 9px 0 0 rgba(15, 15, 15, 1);
   --shadow-hero-mockup: 7px 7px 0 0 rgba(15, 15, 15, 1);
   --spacing-btn-x: 20px;
