@@ -30,6 +30,7 @@ import {
   expectColumnVirtualized,
   expectNoLoadMore,
   scrollLaneToEnd,
+  scrollSwimlaneColumnToEnd,
   signInBoardSeedOwnerAndOpenBoard,
 } from './_helpers/board';
 import { BOARD_PAGE_SIZE } from '@/lib/services/boardsService';
@@ -251,19 +252,7 @@ test.describe('board-at-scale — load model (3.5.2)', () => {
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
     await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
-    const badge = page.getByRole('main').getByTestId(`board-count-${tall.id}`);
-    await expect
-      .poll(
-        async () => {
-          await page
-            .getByRole('main')
-            .getByTestId(`board-lane-sentinel-${tall.id}`)
-            .scrollIntoViewIfNeeded();
-          return (await badge.textContent())?.trim();
-        },
-        { message: 'the swimlane lane pages to its full total', timeout: 60_000 },
-      )
-      .toBe(tall.totalCount.toLocaleString('en-US'));
+    await scrollSwimlaneColumnToEnd(page, tall.id, tall.totalCount);
     await expectNoLoadMore(page);
   });
 

@@ -51,6 +51,7 @@ import {
   expectNoLoadMore,
   gotoLoadedBoard,
   scrollLaneToEnd,
+  scrollSwimlaneColumnToEnd,
   signInScrumSeedOwnerAndOpenScrumBoard,
 } from './_helpers/board';
 import { usersService } from '@/lib/services/usersService';
@@ -576,19 +577,7 @@ test.describe('board-scrum-at-scale — load model + scope + header (4.7.2)', ()
     const tall = columnByStatus(board, big.manifest.tallStatusKey);
 
     await expect(page.getByRole('main').getByTestId('swimlane-load-row')).toBeAttached();
-    const badge = page.getByRole('main').getByTestId(`board-count-${tall.id}`);
-    await expect
-      .poll(
-        async () => {
-          await page
-            .getByRole('main')
-            .getByTestId(`board-lane-sentinel-${tall.id}`)
-            .scrollIntoViewIfNeeded();
-          return (await badge.textContent())?.trim();
-        },
-        { message: 'the swimlane sprint lane pages to its full total', timeout: 60_000 },
-      )
-      .toBe(tall.totalCount.toLocaleString('en-US'));
+    await scrollSwimlaneColumnToEnd(page, tall.id, tall.totalCount);
     expect(pageReads.some((u) => u.includes(`/columns/${tall.id}/cards?`))).toBe(true);
     await expectNoLoadMore(page);
   });
