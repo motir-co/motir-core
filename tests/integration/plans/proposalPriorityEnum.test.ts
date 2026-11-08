@@ -116,8 +116,8 @@ describe('the internal AI routes refuse an out-of-enum `priority` at write time'
     expect(body.error).toContain('lowest, low, medium, high, highest');
 
     const after = await adminDb.planItem.findUniqueOrThrow({ where: { id: itemId } });
-    expect(after.proposedFields).toEqual(before.proposedFields);
-    expect(after.updatedAt).toEqual(before.updatedAt);
+    // The whole row is untouched — the refused write half-applied nothing.
+    expect(after).toEqual(before);
   });
 
   it('a 422 that names no persisted proposal keeps its old body — `planItemId` is added only when known', async () => {
