@@ -198,6 +198,8 @@ describe('the reason rule', () => {
     // The platform planning model per audience (Story MOTIR-7220 · MOTIR-7227) —
     // `superadmin` and `required`, like every billing-class row in ADR §7.
     'ai.planner_model.set': 'required',
+    // The dry-run review model (MOTIR-10632): a write, audited like the audience change.
+    'ai.planner_review_model.set': 'required',
     // The planning-model list (Story MOTIR-7521 · MOTIR-7524) — same degree.
     'ai.planner_model_list.add': 'required',
     'ai.planner_model_list.remove': 'required',

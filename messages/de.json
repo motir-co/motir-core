@@ -10788,6 +10788,9 @@
             "planner_model": {
               "set": "Planungsmodell geändert"
             },
+            "planner_review_model": {
+              "set": "Testlauf-Prüfmodell geändert"
+            },
             "planner_model_list": {
               "add": "Modell zur Planungsliste hinzugefügt",
               "remove": "Modell aus der Planungsliste entfernt"
@@ -11571,6 +11574,21 @@
         "notPermitted": "Nur ein Superadmin kann das Planungsmodell ändern.",
         "reasonRequired": "Ein Grund ist erforderlich.",
         "failed": "Die Änderung konnte nicht gespeichert werden. Es wurde nichts geändert."
+      },
+      "review": {
+        "name": "Testlauf-Prüfung",
+        "desc": "Die schreibgeschützte Prüfung jedes Plans, bevor er angezeigt wird",
+        "same": "Wie das Planungsmodell",
+        "sameDesc": "Jeder Planungsjob prüft mit dem Modell, mit dem er plant",
+        "defaultGroup": "Standard",
+        "pickerAria": "Modell der Testlauf-Prüfung",
+        "withdrawnBody": "Prüfungen laufen mit dem Planungsmodell des jeweiligen Jobs, bis Sie ein anderes wählen.",
+        "withdrawnBodyReadOnly": "Prüfungen laufen mit dem Planungsmodell des jeweiligen Jobs, bis ein Superadmin ein anderes wählt.",
+        "confirmTitle": "Modell der Testlauf-Prüfung ändern?",
+        "confirmBody": "{from} → {to}. Die Änderung gilt für den Testlauf des nächsten Planungsjobs jeder Organisation. Bereits laufende Jobs werden mit dem Modell abgeschlossen, mit dem sie gestartet sind.",
+        "savedTitle": "Prüfmodell geändert",
+        "savedBody": "Testlauf-Prüfungen laufen ab dem nächsten Planungsjob mit {model}.",
+        "unchanged": "Die Testlauf-Prüfung läuft bereits mit {model}."
       }
     },
     "lessons": {

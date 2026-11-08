@@ -107,6 +107,18 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'ai.planner_model.set': { kind: 'write', reason: 'required' },
   /**
+   * The platform dry-run REVIEW MODEL was changed (MOTIR-10632) — which model the
+   * plan job's read-only dry-run review sessions run on: "same as the planning
+   * model" (stored as null, the default) or one model from the planning-model list.
+   *
+   * `required`, at `superadmin`, for `ai.planner_model.set`'s reason: the review is
+   * part of every plan job, so the choice is what every organization's review is
+   * run WITH and charged for. Target is `platform` with `review` as `targetId`;
+   * `metadata` carries `{ fromModel, toModel }`, each a model id or null for
+   * "same as the planning model".
+   */
+  'ai.planner_review_model.set': { kind: 'write', reason: 'required' },
+  /**
    * A model was ADDED to, or REMOVED from, the platform PLANNING-MODEL LIST
    * (Story MOTIR-7521 · MOTIR-7524) — the set of models an audience may be set
    * to, stored in motir-ai.

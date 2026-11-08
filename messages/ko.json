@@ -10782,6 +10782,9 @@
             "planner_model": {
               "set": "계획 모델 변경함"
             },
+            "planner_review_model": {
+              "set": "시험 실행 검토 모델 변경함"
+            },
             "planner_model_list": {
               "add": "계획 목록에 모델 추가함",
               "remove": "계획 목록에서 모델 제거함"
@@ -11565,6 +11568,21 @@
         "notPermitted": "최고 관리자만 계획 모델을 변경할 수 있습니다.",
         "reasonRequired": "사유가 필요합니다.",
         "failed": "변경 사항을 저장할 수 없습니다. 변경된 것은 없습니다."
+      },
+      "review": {
+        "name": "시험 실행 검토",
+        "desc": "표시하기 전에 모든 계획을 읽기 전용으로 확인하는 검사",
+        "same": "계획 모델과 동일",
+        "sameDesc": "각 계획 작업은 계획에 쓰는 모델로 검토합니다",
+        "defaultGroup": "기본값",
+        "pickerAria": "시험 실행 검토 모델",
+        "withdrawnBody": "다른 모델을 선택할 때까지 검토는 각 작업의 계획 모델로 실행됩니다.",
+        "withdrawnBodyReadOnly": "슈퍼 관리자가 다른 모델을 선택할 때까지 검토는 각 작업의 계획 모델로 실행됩니다.",
+        "confirmTitle": "시험 실행 검토 모델을 변경하시겠습니까?",
+        "confirmBody": "{from} → {to}. 변경 사항은 모든 조직의 다음 계획 작업의 시험 실행부터 적용됩니다. 이미 실행 중인 작업은 시작할 때의 모델로 끝까지 진행됩니다.",
+        "savedTitle": "검토 모델이 변경되었습니다",
+        "savedBody": "다음 계획 작업부터 시험 실행 검토는 {model}(으)로 실행됩니다.",
+        "unchanged": "시험 실행 검토는 이미 {model}(으)로 실행되고 있습니다."
       }
     },
     "lessons": {

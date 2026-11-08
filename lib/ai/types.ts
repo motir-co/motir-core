@@ -1436,10 +1436,42 @@ export interface PlannerOfferedModel {
   provider: string;
 }
 
+/**
+ * The dry-run REVIEW model as motir-ai serves it (motir-ai MOTIR-10632) — one
+ * platform-wide value beside the audiences, not a fourth audience.
+ */
+export interface PlannerReviewModelRead {
+  /** The stored model, or null for "same as the planning model" (the default). */
+  model: string | null;
+  /** Whether a stored model is still offered; null while unset. False means jobs
+   *  review on their own planner model until it is changed. */
+  offered: boolean | null;
+  /** When it was last changed; null while nobody has set it. */
+  updatedAt: string | null;
+  updatedByCoreUserId: string | null;
+}
+
 /** The raw `GET /v1/planner-model-settings` body. */
 export interface PlannerModelSettingsRead {
   settings: PlannerModelSettingRead[];
+  /** Absent from a motir-ai that predates MOTIR-10632; the console then shows no
+   *  review row rather than a guessed one. */
+  review?: PlannerReviewModelRead;
   offered: PlannerOfferedModel[];
+}
+
+/** The `PUT /v1/planner-model-settings/review` body (motir-ai MOTIR-10632). */
+export interface PlannerReviewModelWriteInput {
+  /** A model offered for planning, or null for "same as the planning model". */
+  model: string | null;
+  actorCoreUserId: string;
+}
+
+/** The `PUT /v1/planner-model-settings/review` answer, `previousModel` read under motir-ai's row lock. */
+export interface PlannerReviewModelWriteResult {
+  previousModel: string | null;
+  model: string | null;
+  updatedAt: string;
 }
 
 /** The `PUT /v1/planner-model-settings` body. */

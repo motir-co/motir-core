@@ -10788,6 +10788,9 @@
             "planner_model": {
               "set": "Alterou o modelo de planejamento"
             },
+            "planner_review_model": {
+              "set": "Alterou o modelo de revisão da simulação"
+            },
             "planner_model_list": {
               "add": "Adicionou um modelo à lista de planejamento",
               "remove": "Removeu um modelo da lista de planejamento"
@@ -11571,6 +11574,21 @@
         "notPermitted": "Apenas um superadministrador pode alterar o modelo de planejamento.",
         "reasonRequired": "Um motivo é obrigatório.",
         "failed": "Não foi possível salvar a alteração. Nada foi alterado."
+      },
+      "review": {
+        "name": "Revisão da simulação",
+        "desc": "A verificação somente leitura de cada plano antes de ser exibido",
+        "same": "Igual ao modelo de planejamento",
+        "sameDesc": "Cada job de planejamento revisa com o modelo com que planeja",
+        "defaultGroup": "Padrão",
+        "pickerAria": "Modelo de revisão da simulação",
+        "withdrawnBody": "As revisões usam o modelo de planejamento de cada job até você escolher outro.",
+        "withdrawnBodyReadOnly": "As revisões usam o modelo de planejamento de cada job até um superadmin escolher outro.",
+        "confirmTitle": "Alterar o modelo de revisão da simulação?",
+        "confirmBody": "{from} → {to}. A alteração vale para a simulação do próximo job de planejamento de todas as organizações. Os jobs já em execução terminam no modelo com que começaram.",
+        "savedTitle": "Modelo de revisão alterado",
+        "savedBody": "As revisões da simulação usam {model} a partir do próximo job de planejamento.",
+        "unchanged": "A revisão da simulação já usa {model}."
       }
     },
     "lessons": {

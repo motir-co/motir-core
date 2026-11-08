@@ -10788,6 +10788,9 @@
             "planner_model": {
               "set": "A changé le modèle de planification"
             },
+            "planner_review_model": {
+              "set": "A changé le modèle de revue de la simulation"
+            },
             "planner_model_list": {
               "add": "A ajouté un modèle à la liste de planification",
               "remove": "A retiré un modèle de la liste de planification"
@@ -11571,6 +11574,21 @@
         "notPermitted": "Seul un superadministrateur peut changer le modèle de planification.",
         "reasonRequired": "Un motif est obligatoire.",
         "failed": "La modification n'a pas pu être enregistrée. Rien n'a été modifié."
+      },
+      "review": {
+        "name": "Revue de la simulation",
+        "desc": "La vérification en lecture seule de chaque plan avant son affichage",
+        "same": "Identique au modèle de planification",
+        "sameDesc": "Chaque tâche de planification fait sa revue avec le modèle qui planifie",
+        "defaultGroup": "Par défaut",
+        "pickerAria": "Modèle de revue de la simulation",
+        "withdrawnBody": "Les revues utilisent le modèle de planification de chaque tâche jusqu'à ce que vous en choisissiez un autre.",
+        "withdrawnBodyReadOnly": "Les revues utilisent le modèle de planification de chaque tâche jusqu'à ce qu'un superadmin en choisisse un autre.",
+        "confirmTitle": "Changer le modèle de revue de la simulation ?",
+        "confirmBody": "{from} → {to}. La modification s'applique à la simulation de la prochaine tâche de planification de chaque organisation. Les tâches déjà en cours se terminent avec le modèle avec lequel elles ont démarré.",
+        "savedTitle": "Modèle de revue modifié",
+        "savedBody": "Les revues de la simulation utilisent {model} dès la prochaine tâche de planification.",
+        "unchanged": "La revue de la simulation utilise déjà {model}."
       }
     },
     "lessons": {

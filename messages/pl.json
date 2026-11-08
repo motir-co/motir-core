@@ -10788,6 +10788,9 @@
             "planner_model": {
               "set": "Zmieniono model planowania"
             },
+            "planner_review_model": {
+              "set": "Zmieniono model przeglądu próby"
+            },
             "planner_model_list": {
               "add": "Dodano model do listy planowania",
               "remove": "Usunięto model z listy planowania"
@@ -11571,6 +11574,21 @@
         "notPermitted": "Tylko superadministrator może zmienić model planowania.",
         "reasonRequired": "Powód jest wymagany.",
         "failed": "Nie udało się zapisać zmiany. Nic nie zostało zmienione."
+      },
+      "review": {
+        "name": "Przegląd próby",
+        "desc": "Kontrola tylko do odczytu każdego planu, zanim zostanie pokazany",
+        "same": "Taki sam jak model planowania",
+        "sameDesc": "Każde zadanie planowania przegląda modelem, którym planuje",
+        "defaultGroup": "Domyślne",
+        "pickerAria": "Model przeglądu próby",
+        "withdrawnBody": "Przeglądy działają na modelu planowania danego zadania, dopóki nie wybierzesz innego.",
+        "withdrawnBodyReadOnly": "Przeglądy działają na modelu planowania danego zadania, dopóki superadministrator nie wybierze innego.",
+        "confirmTitle": "Zmienić model przeglądu próby?",
+        "confirmBody": "{from} → {to}. Zmiana obowiązuje od próby następnego zadania planowania w każdej organizacji. Zadania już uruchomione kończą się na modelu, z którym wystartowały.",
+        "savedTitle": "Zmieniono model przeglądu",
+        "savedBody": "Przeglądy próby działają na {model} od następnego zadania planowania.",
+        "unchanged": "Przegląd próby już działa na {model}."
       }
     },
     "lessons": {

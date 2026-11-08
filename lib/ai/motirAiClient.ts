@@ -74,6 +74,8 @@ import type {
   PlannerModelSettingsRead,
   PlannerModelWriteInput,
   PlannerModelWriteResult,
+  PlannerReviewModelWriteInput,
+  PlannerReviewModelWriteResult,
   PreplanStateQuery,
   Problem,
   RawBillingHistoryResponse,
@@ -3016,6 +3018,52 @@ export async function setPlannerModel(
   const body = (await res.json().catch(() => null)) as PlannerModelWriteResult | null;
   if (!body || typeof body.previousModel !== 'string' || typeof body.model !== 'string') {
     throw new MotirAiUnavailableError('motir-ai answered a body that is not a planner-model write');
+  }
+  return body;
+}
+
+/**
+ * PUT /v1/planner-model-settings/review — set the dry-run REVIEW model
+ * (motir-ai MOTIR-10632): a model offered for planning, or `null` for "same as
+ * the planning model".
+ *
+ * @throws PlannerModelNotOfferedError when motir-ai answers `validation_error`.
+ * @throws PlannerModelUnreachableError when its reachability probe failed.
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that
+ *   is not a review-model write; the §5 typed error for any other non-2xx.
+ */
+export async function setPlannerReviewModel(
+  input: PlannerReviewModelWriteInput,
+): Promise<PlannerReviewModelWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/planner-model-settings/review`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  const named = input.model ?? '';
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'validation_error') {
+      throw new PlannerModelNotOfferedError(named, problem.detail);
+    }
+    if (problem.code === 'model_unreachable') {
+      throw new PlannerModelUnreachableError(
+        named,
+        unreachableReason(problem.detail, problem.title),
+      );
+    }
+    throw errorFromProblem(problem);
+  }
+  const body = (await res.json().catch(() => null)) as PlannerReviewModelWriteResult | null;
+  const modelOrNull = (v: unknown) => v === null || typeof v === 'string';
+  if (
+    !body ||
+    !modelOrNull(body.previousModel) ||
+    !modelOrNull(body.model) ||
+    typeof body.updatedAt !== 'string'
+  ) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not a review-model write');
   }
   return body;
 }
