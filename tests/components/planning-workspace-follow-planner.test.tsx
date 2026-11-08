@@ -560,13 +560,22 @@ describe('follow the planner — a press with no live step still takes the perso
   });
 
   it('no target at all: the press goes to the root', async () => {
-    mountHost(live([]));
+    const next = mountHost(live([]));
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    const root = activeCrumb();
     await drillIntoEpic();
 
     fireEvent.click(followButton()!);
-    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
-    expect(activeCrumb()).not.toBe('MOTIR-2200 · The agent loop');
+    await waitFor(() => expect(activeCrumb()).toBe(root));
+    expect(node(EPIC_ID)).not.toBeNull();
     expect(followState()?.getAttribute('data-follow')).toBe('on');
+
+    // The root the press held is a fallback, not a step: once proposals land, the
+    // next press goes to the last one instead of the root again.
+    next(driving([P3, P1], []));
+    await drillIntoEpic();
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
   });
 
   it('a target the viewer cannot read degrades to the root', async () => {
@@ -578,7 +587,8 @@ describe('follow the planner — a press with no live step still takes the perso
     );
 
     fireEvent.click(followButton()!);
-    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    await waitFor(() => expect(activeCrumb()).not.toBe('MOTIR-2200 · The agent loop'));
+    expect(node(EPIC_ID)).not.toBeNull();
     expect(followState()?.getAttribute('data-follow')).toBe('on');
   });
 
@@ -589,7 +599,8 @@ describe('follow the planner — a press with no live step still takes the perso
     await waitFor(() => expect(fetchPlanningAnchor).toHaveBeenCalled());
 
     fireEvent.click(followButton()!);
-    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    await waitFor(() => expect(activeCrumb()).not.toBe('MOTIR-2200 · The agent loop'));
+    expect(node(EPIC_ID)).not.toBeNull();
   });
 
   it('a stalled plan (idle control) still moves on press, and the next live step drives again', async () => {

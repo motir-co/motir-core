@@ -32,6 +32,14 @@ export interface DrivenStep {
   levelId: string | null;
   /** The breadcrumb down to that level; `[]` is the top level. */
   trail: CanvasCrumb[];
+  /**
+   * `true` when this is not a planner step but a press's fallback destination
+   * (the last proposal, the target, the root — {@link followDestination}). The
+   * host holds it like a step, but it is never the "step held last": a later
+   * press re-derives it, so a root held before the target resolved, or before the
+   * first proposal landed, does not shadow those rungs.
+   */
+  synthetic?: true;
 }
 
 type LiveStep = Pick<
@@ -114,7 +122,8 @@ export function drivenFollowRequest(
 // so the destination falls back, in order:
 //
 //   1. `live`     — a live step that resolves to a level (`nextDrivenStep`);
-//   2. `held`     — the last step this mount drove;
+//   2. `held`     — the last planner step this mount drove (never a held
+//                   fallback destination: those are `synthetic`, re-derived);
 //   3. `snapshot` — the most recently STARTED step the snapshot still reports
 //                   (live or not) whose level resolves (`stepLevel`);
 //   4. `proposal` — the LAST `add` in `items`, which arrive in append order
@@ -166,7 +175,7 @@ export function followDestination({
 }: FollowDestinationInput): FollowDestination {
   const live = nextDrivenStep(held, liveSteps, items, proposedWord);
   if (live) return { ...live, source: 'live' };
-  if (held) return { ...held, source: 'held' };
+  if (held && !held.synthetic) return { ...held, source: 'held' };
 
   // Latest `startedAt` first; on a tie the snapshot's own order (ties by
   // `sessionKey`) decides, read from its end. `sort` is stable.
@@ -186,6 +195,7 @@ export function followDestination({
       id: JSON.stringify(['proposal', item.planItemId]),
       levelId,
       trail: levelTrail(items, levelId, proposedWord),
+      synthetic: true,
       source: 'proposal',
     };
   }
@@ -196,8 +206,15 @@ export function followDestination({
       id: JSON.stringify(['target', levelId]),
       levelId,
       trail: [...targetTrail],
+      synthetic: true,
       source: 'target',
     };
   }
-  return { id: JSON.stringify(['root']), levelId: null, trail: [], source: 'root' };
+  return {
+    id: JSON.stringify(['root']),
+    levelId: null,
+    trail: [],
+    synthetic: true,
+    source: 'root',
+  };
 }

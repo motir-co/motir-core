@@ -900,8 +900,13 @@ function PlanWorkspaceHost({
     key: string;
     trail: CanvasCrumb[];
   } | null>(null);
+  // The follow-move already reads the first target the person ADDED (TRIGGER 1
+  // above, `firstTargetKey`); that key is not read twice. When that read lands no
+  // trail (a leaf at the root, an unreadable key) the rung is the root either way.
   const fetchTargetKey =
-    drivenPane && paneLive && knownTargetTrail === null ? pressTargetKey : null;
+    drivenPane && paneLive && knownTargetTrail === null && pressTargetKey !== firstTargetKey
+      ? pressTargetKey
+      : null;
   useEffect(() => {
     if (fetchTargetKey === null) return;
     const controller = new AbortController();

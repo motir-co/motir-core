@@ -225,15 +225,33 @@ describe('followDestination — where a press of Follow the planner goes (MOTIR-
       id: JSON.stringify(['target', 'wi_story']),
       levelId: 'wi_story',
       trail: targetTrail,
+      synthetic: true,
       source: 'target',
     });
     expect(d.trail).not.toBe(targetTrail);
   });
 
   it('6 · no target (or one that arrives at the root): the project root', () => {
-    const root = { id: JSON.stringify(['root']), levelId: null, trail: [], source: 'root' };
+    const root = {
+      id: JSON.stringify(['root']),
+      levelId: null,
+      trail: [],
+      synthetic: true,
+      source: 'root',
+    };
     expect(followDestination({ ...base, items: [], targetTrail: null })).toEqual(root);
     expect(followDestination({ ...base, items: [], targetTrail: [] })).toEqual(root);
+  });
+
+  it('a held FALLBACK destination is re-derived, never returned as the step held last', () => {
+    const heldRoot = followDestination({ ...base, items: [], targetTrail: null });
+    expect(heldRoot.synthetic).toBe(true);
+    // The proposals have landed since the press that held the root.
+    const d = followDestination({ ...base, held: heldRoot, items: [story, task] });
+    expect(d.source).toBe('proposal');
+    expect(d.levelId).toBe('ps');
+    // A real step is held as before, and carries no mark.
+    expect(followDestination({ ...base, held: heldStep }).synthetic).toBeUndefined();
   });
 
   it('every destination gives a request, and a new epoch a new key', () => {
