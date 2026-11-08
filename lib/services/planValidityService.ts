@@ -712,9 +712,11 @@ function projectedCrossLevelEdges(
     const member = proj.nodes.get(memberId)!;
     if (isDone(proj, member)) continue;
     for (const blockerId of proj.blockedBy.get(memberId) ?? []) {
-      if (proj.nodes.get(blockerId)?.projectId === member.projectId && owns(memberId, blockerId)) {
-        edges.push({ blockedId: memberId, blockerId });
-      }
+      const blocker = proj.nodes.get(blockerId);
+      // A DONE blocker holds nothing (bug MOTIR-10627) — the committed walk leaves
+      // the edge out too, so the two verdicts stay one.
+      if (blocker?.projectId !== member.projectId || isDone(proj, blocker)) continue;
+      if (owns(memberId, blockerId)) edges.push({ blockedId: memberId, blockerId });
     }
   }
   return crossLevelEdgeFindings(edges, (id) => {
