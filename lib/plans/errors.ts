@@ -474,6 +474,15 @@ export type PlanGrammarViolation =
    */
   | 'unknown_type'
   /**
+   * An `add` proposing, or a `modify` patching in, a `priority` that is not one
+   * of the five `WorkItemPriority` members (MOTIR-10656) — the third closed-set
+   * column after `kind` and `type`, re-checked for the same reason. The internal
+   * AI routes forward the planner's value as sent, so without it a `"p2"` passed
+   * `validate_plan` and was refused only by `prisma.workItem.create()` inside
+   * approve, as `PLAN_ITEM_FIELD_REJECTED`.
+   */
+  | 'unknown_priority'
+  /**
    * A `modify` whose `patch.parentRef` would push the target past the tree's
    * depth cap of 4 (MOTIR-3859). The SAME arithmetic
    * `enforce_work_item_depth_limit` runs — the new parent's own chain length
@@ -570,6 +579,7 @@ const PLAN_GRAMMAR_VIOLATION_MEMBERS: Record<PlanGrammarViolation, true> = {
   illegal_parent: true,
   unknown_kind: true,
   unknown_type: true,
+  unknown_priority: true,
   parent_depth_limit: true,
   parent_terminal: true,
   malformed_subject: true,
