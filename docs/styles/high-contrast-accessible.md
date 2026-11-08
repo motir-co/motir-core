@@ -247,31 +247,37 @@ custom properties — the pill through `var(--plan-hero-fill, …)` and
 `var(--plan-hero-shadow, …)`, the orb through `var(--plan-orb-fill, …)` and
 `var(--plan-orb-shadow, …)`. A rule writing `background-image` or `box-shadow`
 literally would land, review cleanly and change nothing on screen. Under this
-style both controls take a flat fill of the palette's accent and lose their
-halos, so they read as solid, edged, motionless targets. The label and the mark
+style both controls take a flat fill of the palette's accent, lose their halos
+and draw a 2px `--el-border-strong` rim, so they read as solid, edged,
+motionless targets. The label and the mark
 stay `--el-accent-text` on `--el-accent`, the palette's own CTA pair.
 
 ```css
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'] {
+    border: 2px solid var(--el-border-strong);
     --plan-hero-shadow: none;
     --plan-orb-shadow: none;
   }
 }
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
-    --plan-hero-fill: linear-gradient(var(--el-accent), var(--el-accent));
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
   }
 }
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='orb'] {
-    --plan-orb-fill: linear-gradient(var(--el-accent), var(--el-accent));
+    --plan-orb-fill: none;
+    background-color: var(--el-accent);
   }
 }
 ```
 
-A flat fill is written as a one-colour gradient because the seam property feeds
-`background-image`. No raw hue, no literal `background-image` or `box-shadow`,
+The flat fill turns the seam off (`none`) and paints `background-color`, the
+same composition Bento uses, so the controls carry no gradient at all. The rim
+is the edge the contract below owes every control: a boundary that does not
+depend on a shadow. No raw hue, no literal `background-image` or `box-shadow`,
 no animation.
 
 ## The rail

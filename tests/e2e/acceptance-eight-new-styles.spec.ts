@@ -564,9 +564,9 @@ test.describe('eight new styles', () => {
         expect(hero.pill, `${id}'s pill has the base material`).not.toBe(base.pill);
         expect(hero.orb, `${id}'s orb has the base material`).not.toBe(base.orb);
         // The new styles whose record draws a flat orb, as the hero spec's
-        // FLAT_ORB set lists them: no lit sphere, whatever the flat fill is.
+        // FLAT_ORB set lists them: the seam is off and the orb paints no image.
         if (FLAT_ORB.has(id)) {
-          expect(hero.orbImage, `${id}'s orb is flat`).not.toContain('radial-gradient');
+          expect(hero.orbImage, `${id}'s orb is flat`).toBe('none');
         } else expect(hero.orbImage, `${id}'s orb`).toContain('radial-gradient');
       }
       await page.locator('[data-ai-cta="pill"]').scrollIntoViewIfNeeded();

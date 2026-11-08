@@ -367,22 +367,20 @@ colour source. No hex literal appears in the layer.
       var(--el-accent) var(--deco-edge-tint),
       var(--el-border-strong)
     );
-    border-color: var(--deco-edge);
     box-shadow: inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge);
   }
 }
+/* The tinted edge colours only an editable, valid field. `data-surface` is on the
+   Input's wrapper, so the error and disabled states are read from the wrapper
+   (`:has([aria-invalid])`, `data-state`), and on those the primitive's own
+   `border-(--el-danger)` / `border-(--el-input-disabled-border)` stands. */
 @scope ([data-style='art-deco']) to ([data-style]) {
-  [data-surface='input']:focus {
-    box-shadow:
-      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
-      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
-      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
-        var(--deco-edge);
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: var(--deco-edge, var(--el-border-strong));
   }
 }
 @scope ([data-style='art-deco']) to ([data-style]) {
-  [data-surface='input'][aria-invalid='true'] {
-    --deco-edge: var(--el-danger);
+  [data-surface='input']:focus-within {
     box-shadow:
       inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
       inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
@@ -404,9 +402,31 @@ colour source. No hex literal appears in the layer.
   }
 }
 @scope ([data-style='art-deco']) to ([data-style]) {
-  :is([aria-selected='true'], [aria-current='page']):not([data-surface]) {
-    background-color: color-mix(in srgb, var(--el-accent) 8%, var(--el-page-bg));
-    box-shadow: inset 2px 0 0 0 var(--el-accent);
+  [data-surface='input'][data-state='disabled'] {
+    --deco-edge: var(--el-input-disabled-border);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input']:has([aria-invalid='true']) {
+    --deco-edge: var(--el-danger);
+    box-shadow:
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
+        var(--deco-edge);
+  }
+}
+/* The selected tint is a DEFAULT for rows that paint no selected state of their
+   own, so it sits in Tailwind's `components` layer: a control's own fill or ring
+   utility (`@layer utilities`) outranks it. Unlayered, it repainted the items
+   pager's current page (`bg-(--el-accent) text-(--el-accent-text)`) to about
+   1.13:1 and replaced every selected control's focus ring (MOTIR-10549 review). */
+@layer components {
+  @scope ([data-style='art-deco']) to ([data-style]) {
+    :is([aria-selected='true'], [aria-current='page']):not([data-surface]) {
+      background-color: color-mix(in srgb, var(--el-accent) 8%, var(--el-page-bg));
+      box-shadow: inset 2px 0 0 0 var(--el-accent);
+    }
   }
 }
 @scope ([data-style='art-deco']) to ([data-style]) {
@@ -489,7 +509,9 @@ colour source. No hex literal appears in the layer.
   the palette's muted roles. Nothing is removed: here the frame is structure.
 - **Selected** (a row, a tab, a nav item carrying `aria-selected='true'` or
   `aria-current='page'`) — a 2px accent rule on the leading edge, and the fill
-  stepped 8% toward the accent. The plate's double rule is unchanged.
+  stepped 8% toward the accent. The plate's double rule is unchanged. It is a
+  default in the `components` layer, so a control that paints its own selected
+  fill or focus ring (the items pager's current page) keeps it.
 - **Invalid** (`aria-invalid='true'` on an input) — the rule takes the palette's
   danger role and the inner 1px rule appears. The focus ring is a different
   signal and is unaffected.

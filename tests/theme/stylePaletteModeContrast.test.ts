@@ -45,6 +45,12 @@ import { contrast, flattenColorMix } from './colorMetrics';
 // The predicate is "does an exact-hook rule declare a fill", never a list of
 // styles, so a hook that moves cannot fall between two lists.
 //
+// One state ground sits outside the partition: a style's SELECTED-row tint
+// (`:is([aria-selected='true'], [aria-current='page']):not([data-surface])`),
+// measured against the four hard inks wherever a style declares one. A rule in
+// an `@layer` is read as top level, since layering only lets a component's own
+// utilities outrank it.
+//
 // ── The inks ────────────────────────────────────────────────────────────────
 // The hard bar on every ground is the four roles `theme.css` documents as AA
 // everywhere: `--el-text`, `--el-text-strong`, `--el-text-secondary`,
@@ -102,10 +108,19 @@ const HARD_INKS = [
 ];
 const MUTED_INK = '--el-text-muted';
 
-type Hook = 'canvas' | 'card' | 'popover' | 'modal' | 'input' | 'sidebar' | 'pill' | 'orb';
+type Hook =
+  | 'canvas'
+  | 'card'
+  | 'popover'
+  | 'modal'
+  | 'input'
+  | 'sidebar'
+  | 'selected'
+  | 'pill'
+  | 'orb';
 const SURFACE_HOOKS = ['canvas', 'card', 'popover', 'modal', 'input', 'sidebar'] as const;
 type SurfaceHook = (typeof SURFACE_HOOKS)[number];
-const HOOKS: Hook[] = [...SURFACE_HOOKS, 'pill', 'orb'];
+const HOOKS: Hook[] = [...SURFACE_HOOKS, 'selected', 'pill', 'orb'];
 
 /** The exact selectors that ARE each hook. */
 const HOOK_SELECTORS: Record<Hook, string[]> = {
@@ -115,6 +130,9 @@ const HOOK_SELECTORS: Record<Hook, string[]> = {
   modal: ["[data-surface='modal']"],
   input: ["[data-surface='input']"],
   sidebar: ["[data-surface='sidebar']"],
+  // A style's selected-row tint: a row, tab or nav item that paints no fill of
+  // its own. Measured only where a style declares one.
+  selected: [":is([aria-selected='true'], [aria-current='page']):not([data-surface])"],
   pill: ["[data-surface='ai-cta']", "[data-surface='ai-cta'][data-ai-cta='pill']"],
   orb: ["[data-surface='ai-cta']", "[data-surface='ai-cta'][data-ai-cta='orb']"],
 };
@@ -1269,10 +1287,36 @@ const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
 
 // ── The material reader ─────────────────────────────────────────────────────
 
-const CSS = (
-  readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8') +
-  readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8')
-).replace(/\/\*[\s\S]*?\*\//g, '');
+/**
+ * Drop each `@layer <name> { … }` wrapper and keep its body. A layered rule is
+ * still the default render (it only yields to the utilities a component sets on
+ * itself), so the reader treats it as top level.
+ */
+function unwrapLayers(css: string): string {
+  let out = '';
+  let cursor = 0;
+  for (const match of css.matchAll(/@layer\s+[a-z-]+\s*\{/g)) {
+    if (match.index < cursor) continue;
+    const open = match.index + match[0].length;
+    let level = 1;
+    let end = open;
+    while (level > 0) {
+      if (css[end] === '{') level += 1;
+      else if (css[end] === '}') level -= 1;
+      end += 1;
+    }
+    out += css.slice(cursor, match.index) + css.slice(open, end - 1);
+    cursor = end;
+  }
+  return out + css.slice(cursor);
+}
+
+const CSS = unwrapLayers(
+  (
+    readFileSync(join(process.cwd(), 'app/globals.css'), 'utf8') +
+    readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8')
+  ).replace(/\/\*[\s\S]*?\*\//g, ''),
+);
 
 /** Split on commas at parenthesis depth 0. */
 function topLevelSplit(text: string, separator = ','): string[] {
@@ -1640,6 +1684,10 @@ function groundsFor(ctx: Context): { grounds: Ground[]; unresolved: string[] } {
     }
   }
 
+  // The selected tint lies on the row's container, the page ground.
+  const selected = hookDeclarations(ctx.style, 'selected')['background-color'];
+  if (selected) push('selected', 'own background-color', colourIn(ctx, selected));
+
   for (const hook of ['pill', 'orb'] as const) {
     const own = hookDeclarations(ctx.style, hook);
     const seam = hook === 'pill' ? '--plan-hero-fill' : '--plan-orb-fill';
@@ -1670,6 +1718,7 @@ function inkFor(ctx: Context, hook: Hook, ink: string): Rgba | undefined {
 
 function inksFor(ctx: Context, ground: Ground): string[] {
   if (ground.hook === 'pill' || ground.hook === 'orb') return ['label ink'];
+  if (ground.hook === 'selected') return HARD_INKS;
   const unpainted = !isRepainted(ctx.style, ground.hook);
   return unpainted && MUTED_GROUNDS.has(ground.name) ? [...HARD_INKS, MUTED_INK] : HARD_INKS;
 }
@@ -1744,7 +1793,13 @@ describe('style × palette × mode AA contrast gate (MOTIR-10674)', () => {
     expect(isRepainted('claymorphism', 'card')).toBe(true);
     expect(isRepainted('memphis', 'canvas')).toBe(true);
     expect(isRepainted('dense-pro', 'card')).toBe(false);
-    expect(HOOKS).toHaveLength(8);
+    expect(HOOKS).toHaveLength(9);
+    // The selected-row tint is a measured pair (MOTIR-10549 review): Art Deco
+    // declares one, in the components layer the reader unwraps.
+    expect(hookDeclarations('art-deco', 'selected')['background-color']).toBeDefined();
+    expect(
+      MATRIX.rows.some((r) => r.id.startsWith('art-deco/') && r.id.includes(' on selected ')),
+    ).toBe(true);
   });
 
   it('records a well-shaped ratio row for every measured pair', () => {

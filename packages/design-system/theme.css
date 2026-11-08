@@ -3066,6 +3066,28 @@
     box-shadow: var(--shadow-card);
   }
 }
+/* Rung 1 restated on its three named members, so the card, the rail and the top
+   bar are each an exact-selector rule the shell-chrome and contrast guards can
+   read. The `:where()` default above still carries every member the map does
+   not name. */
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='card'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='header'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
 @scope ([data-style='tonal-elevated']) to ([data-style]) {
   [data-surface='popover'] {
     background-color: color-mix(in srgb, var(--el-text) var(--tonal-step-2), var(--el-surface));
@@ -3091,7 +3113,7 @@
     [data-surface='header'],
     [data-surface='popover'],
     [data-surface='modal'],
-    [data-surface='input'] {
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
       background-color: var(--el-surface);
       border-color: var(--el-border-strong);
     }
@@ -3205,10 +3227,17 @@
 @scope ([data-style='claymorphism']) to ([data-style]) {
   [data-surface='input'] {
     background-color: var(--el-surface);
-    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
     box-shadow:
       inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-shade),
       inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-light);
+  }
+}
+/* The softened edge colours only an editable, valid field: `data-surface` is on
+   the Input's wrapper, so an invalid or disabled field keeps the primitive's own
+   danger / disabled border colour. */
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
   }
 }
 @scope ([data-style='claymorphism']) to ([data-style]) {
@@ -3227,7 +3256,11 @@
   }
 }
 @scope ([data-style='claymorphism']) to ([data-style]) {
-  [data-surface='input']:disabled,
+  [data-surface='input'][data-state='disabled'] {
+    box-shadow: none;
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
   [data-surface='card'][aria-disabled='true'] {
     box-shadow: none;
     border-color: var(--el-border);
@@ -3238,7 +3271,7 @@
     [data-surface='card'],
     [data-surface='popover'],
     [data-surface='modal'],
-    [data-surface='input'],
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']),
     [data-surface='sidebar'] {
       border-color: var(--el-border-strong);
       box-shadow: var(--shadow-card);
@@ -3340,6 +3373,7 @@
   --height-btn-md: 36px;
   --height-btn-lg: 44px;
   --height-input: 40px;
+  --spacing-rail-inset: 0px;
   --height-control: 32px;
   --transition-duration: 90ms;
   --transition-fast: 70ms;
@@ -3556,22 +3590,20 @@
       var(--el-accent) var(--deco-edge-tint),
       var(--el-border-strong)
     );
-    border-color: var(--deco-edge);
     box-shadow: inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge);
   }
 }
+/* The tinted edge colours only an editable, valid field. `data-surface` is on the
+   Input's wrapper, so the error and disabled states are read from the wrapper
+   (`:has([aria-invalid])`, `data-state`), and on those the primitive's own
+   `border-(--el-danger)` / `border-(--el-input-disabled-border)` stands. */
 @scope ([data-style='art-deco']) to ([data-style]) {
-  [data-surface='input']:focus {
-    box-shadow:
-      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
-      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
-      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
-        var(--deco-edge);
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: var(--deco-edge, var(--el-border-strong));
   }
 }
 @scope ([data-style='art-deco']) to ([data-style]) {
-  [data-surface='input'][aria-invalid='true'] {
-    --deco-edge: var(--el-danger);
+  [data-surface='input']:focus-within {
     box-shadow:
       inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
       inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
@@ -3593,9 +3625,31 @@
   }
 }
 @scope ([data-style='art-deco']) to ([data-style]) {
-  :is([aria-selected='true'], [aria-current='page']):not([data-surface]) {
-    background-color: color-mix(in srgb, var(--el-accent) 8%, var(--el-page-bg));
-    box-shadow: inset 2px 0 0 0 var(--el-accent);
+  [data-surface='input'][data-state='disabled'] {
+    --deco-edge: var(--el-input-disabled-border);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input']:has([aria-invalid='true']) {
+    --deco-edge: var(--el-danger);
+    box-shadow:
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
+        var(--deco-edge);
+  }
+}
+/* The selected tint is a DEFAULT for rows that paint no selected state of their
+   own, so it sits in Tailwind's `components` layer: a control's own fill or ring
+   utility (`@layer utilities`) outranks it. Unlayered, it repainted the items
+   pager's current page (`bg-(--el-accent) text-(--el-accent-text)`) to about
+   1.13:1 and replaced every selected control's focus ring (MOTIR-10549 review). */
+@layer components {
+  @scope ([data-style='art-deco']) to ([data-style]) {
+    :is([aria-selected='true'], [aria-current='page']):not([data-surface]) {
+      background-color: color-mix(in srgb, var(--el-accent) 8%, var(--el-page-bg));
+      box-shadow: inset 2px 0 0 0 var(--el-accent);
+    }
   }
 }
 @scope ([data-style='art-deco']) to ([data-style]) {
@@ -3700,19 +3754,25 @@
   [data-surface='input'] {
     border-width: 2px;
     border-style: solid;
-    border-color: color-mix(in srgb, var(--el-text) 70%, transparent);
     border-radius: var(--radius-input);
     box-shadow: var(--shadow-subtle);
   }
 }
+/* The ink edge colours only an editable, valid field: `data-surface` is on the
+   Input's wrapper, so an invalid or disabled field keeps the primitive's own
+   danger / disabled border colour. */
 @scope ([data-style='memphis']) to ([data-style]) {
-  [data-surface='input']:focus-visible {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-text) 70%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']):focus-within {
     border-color: color-mix(in srgb, var(--el-text) 92%, transparent);
   }
 }
 @scope ([data-style='memphis']) to ([data-style]) {
-  [data-surface='input']:disabled {
-    border-color: color-mix(in srgb, var(--el-text) 32%, transparent);
+  [data-surface='input'][data-state='disabled'] {
     box-shadow: none;
   }
 }
@@ -4150,18 +4210,21 @@
 /* 13 · High-Contrast / Accessible — see docs/styles/high-contrast-accessible.md § the hero AI control. */
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'] {
+    border: 2px solid var(--el-border-strong);
     --plan-hero-shadow: none;
     --plan-orb-shadow: none;
   }
 }
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
-    --plan-hero-fill: linear-gradient(var(--el-accent), var(--el-accent));
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
   }
 }
 @scope ([data-style='high-contrast-accessible']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='orb'] {
-    --plan-orb-fill: linear-gradient(var(--el-accent), var(--el-accent));
+    --plan-orb-fill: none;
+    background-color: var(--el-accent);
   }
 }
 

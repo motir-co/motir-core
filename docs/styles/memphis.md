@@ -155,19 +155,25 @@ Corners alternate so no two adjacent corners round the same amount. Each
   [data-surface='input'] {
     border-width: 2px;
     border-style: solid;
-    border-color: color-mix(in srgb, var(--el-text) 70%, transparent);
     border-radius: var(--radius-input);
     box-shadow: var(--shadow-subtle);
   }
 }
+/* The ink edge colours only an editable, valid field: `data-surface` is on the
+   Input's wrapper, so an invalid or disabled field keeps the primitive's own
+   danger / disabled border colour. */
 @scope ([data-style='memphis']) to ([data-style]) {
-  [data-surface='input']:focus-visible {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-text) 70%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']):focus-within {
     border-color: color-mix(in srgb, var(--el-text) 92%, transparent);
   }
 }
 @scope ([data-style='memphis']) to ([data-style]) {
-  [data-surface='input']:disabled {
-    border-color: color-mix(in srgb, var(--el-text) 32%, transparent);
+  [data-surface='input'][data-state='disabled'] {
     box-shadow: none;
   }
 }
@@ -175,8 +181,8 @@ Corners alternate so no two adjacent corners round the same amount. Each
 
 - The outline is the boundary and the hard shadow is decoration: no edge depends
   on a shadow.
-- Disabled controls keep their outline at a muted alpha and lose the accent
-  block.
+- Disabled controls keep their outline in the primitive's own disabled border
+  colour and lose the accent block.
 - The invalid field keeps the palette's own danger edge, which the primitive
   already paints, at the style's 2px weight; the style pins no hue.
 

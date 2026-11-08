@@ -273,10 +273,17 @@ both bands and the drop and keeps its hairline.
 @scope ([data-style='claymorphism']) to ([data-style]) {
   [data-surface='input'] {
     background-color: var(--el-surface);
-    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
     box-shadow:
       inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-shade),
       inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-light);
+  }
+}
+/* The softened edge colours only an editable, valid field: `data-surface` is on
+   the Input's wrapper, so an invalid or disabled field keeps the primitive's own
+   danger / disabled border colour. */
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
   }
 }
 @scope ([data-style='claymorphism']) to ([data-style]) {
@@ -295,7 +302,11 @@ both bands and the drop and keeps its hairline.
   }
 }
 @scope ([data-style='claymorphism']) to ([data-style]) {
-  [data-surface='input']:disabled,
+  [data-surface='input'][data-state='disabled'] {
+    box-shadow: none;
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
   [data-surface='card'][aria-disabled='true'] {
     box-shadow: none;
     border-color: var(--el-border);
@@ -391,7 +402,7 @@ Rules, not intentions:
     [data-surface='card'],
     [data-surface='popover'],
     [data-surface='modal'],
-    [data-surface='input'],
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']),
     [data-surface='sidebar'] {
       border-color: var(--el-border-strong);
       box-shadow: var(--shadow-card);

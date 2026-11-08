@@ -235,20 +235,15 @@ test.describe('every registered style gives the hero control its own material', 
     // `--orb-lit-mix` keeps deciding the glyph's contrast (MOTIR-3207, the 3:1
     // floor `tests/theme/orb-glyph-contrast.test.ts` enforces). The styles
     // that legitimately paint a FLAT orb say so in their row: High-Contrast /
-    // Accessible draws it as a one-colour accent plate (its glyph sits on
-    // `--el-accent` itself, the pairing `--el-accent-text` is defined against).
-    // Bento paints a flat accent tile (`--plan-orb-fill: none` over an accent
-    // background colour), so there is no sphere for it to compose over.
+    // Accessible and Bento both turn the seam off (`--plan-orb-fill: none`)
+    // over an `--el-accent` background colour, so the glyph sits on the
+    // palette's own CTA pair and there is no sphere to compose over.
     const FLAT_ORB = new Set(['neumorphism', 'high-contrast-accessible', 'bento']);
     for (const [id, name] of STYLES) {
       await setStyle(page, id, name);
       const orb = await readMaterial(page, 'orb');
       if (FLAT_ORB.has(id)) {
-        // `none` (neumorphism) or a one-colour gradient (high-contrast) — either
-        // way no lit sphere, which is the claim the row makes.
-        expect(orb.backgroundImage, `${id} draws a flat orb by design`).not.toContain(
-          'radial-gradient',
-        );
+        expect(orb.backgroundImage, `${id} draws a flat orb by design`).toBe('none');
         continue;
       }
       expect(

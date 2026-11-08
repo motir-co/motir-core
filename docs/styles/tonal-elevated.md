@@ -229,6 +229,28 @@ is a palette token, a single two-operand `color-mix()` over two of them, or
     box-shadow: var(--shadow-card);
   }
 }
+/* Rung 1 restated on its three named members, so the card, the rail and the top
+   bar are each an exact-selector rule the shell-chrome and contrast guards can
+   read. The `:where()` default above still carries every member the map does
+   not name. */
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='card'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='header'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
 @scope ([data-style='tonal-elevated']) to ([data-style]) {
   [data-surface='popover'] {
     background-color: color-mix(in srgb, var(--el-text) var(--tonal-step-2), var(--el-surface));
@@ -283,7 +305,7 @@ is a palette token, a single two-operand `color-mix()` over two of them, or
     [data-surface='header'],
     [data-surface='popover'],
     [data-surface='modal'],
-    [data-surface='input'] {
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
       background-color: var(--el-surface);
       border-color: var(--el-border-strong);
     }

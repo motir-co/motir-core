@@ -121,21 +121,21 @@ single-column layout; never a shadow. No new hook is added.
 
 ### 6 · Dense rhythm — density
 
-| token                             | warm-editorial base | Editorial Print                                                          |
-| --------------------------------- | ------------------- | ------------------------------------------------------------------------ |
-| `--spacing-btn-x` / `-y`          | 18px / 10px         | 16px / 8px                                                               |
-| `--spacing-btn-x-sm` / `-y-sm`    | 12px / 8px          | 10px / 6px                                                               |
-| `--spacing-input-x` / `-y`        | 16px / 12px         | 14px / 10px                                                              |
-| `--spacing-card-padding`          | 24px                | 24px (kept: a column keeps a readable measure)                           |
-| `--spacing-control-x` / `-y`      | 10px / 6px          | 8px / 4px                                                                |
-| `--spacing-chip-x` / `-y`         | 10px / 2px          | 8px / 2px                                                                |
-| `--spacing-icon-btn`              | 4px                 | 2px                                                                      |
-| `--spacing-kbd-x` / `-y`          | 6px / 2px           | 6px / 2px                                                                |
-| `--spacing-tooltip-x` / `-y`      | 8px / 4px           | 8px / 4px                                                                |
-| `--spacing-rail-inset`            | 0px                 | 0px — not declared; the rail stays flush, only 3D / Immersive floats one |
-| `--height-btn-sm` / `-md` / `-lg` | 32 / 40 / 48px      | 28 / 36 / 44px                                                           |
-| `--height-input`                  | 44px                | 40px                                                                     |
-| `--height-control`                | 36px                | 32px                                                                     |
+| token                             | warm-editorial base | Editorial Print                                                      |
+| --------------------------------- | ------------------- | -------------------------------------------------------------------- |
+| `--spacing-btn-x` / `-y`          | 18px / 10px         | 16px / 8px                                                           |
+| `--spacing-btn-x-sm` / `-y-sm`    | 12px / 8px          | 10px / 6px                                                           |
+| `--spacing-input-x` / `-y`        | 16px / 12px         | 14px / 10px                                                          |
+| `--spacing-card-padding`          | 24px                | 24px (kept: a column keeps a readable measure)                       |
+| `--spacing-control-x` / `-y`      | 10px / 6px          | 8px / 4px                                                            |
+| `--spacing-chip-x` / `-y`         | 10px / 2px          | 8px / 2px                                                            |
+| `--spacing-icon-btn`              | 4px                 | 2px                                                                  |
+| `--spacing-kbd-x` / `-y`          | 6px / 2px           | 6px / 2px                                                            |
+| `--spacing-tooltip-x` / `-y`      | 8px / 4px           | 8px / 4px                                                            |
+| `--spacing-rail-inset`            | 0px                 | 0px — declared; the rail stays flush, only 3D / Immersive floats one |
+| `--height-btn-sm` / `-md` / `-lg` | 32 / 40 / 48px      | 28 / 36 / 44px                                                       |
+| `--height-input`                  | 44px                | 40px                                                                 |
+| `--height-control`                | 36px                | 32px                                                                 |
 
 The generic spacing scale (`--spacing-xxs` … `--spacing-hero`) is not moved.
 Tighter than Warm Editorial where the rhythm is read: buttons 16×8 against
