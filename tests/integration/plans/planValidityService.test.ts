@@ -79,6 +79,20 @@ const withoutRunnerStops = <V extends { advisories: WorkItemValidityAdvisoryDto[
   advisories: plainAdvisories(v.advisories),
 });
 
+/**
+ * A projected verdict in the COMMITTED read's shape: no runner stops (above) and
+ * no `waits` (MOTIR-9021 · MOTIR-10760) — a wait is a plan read's alone, so the
+ * committed `validate_work_item` never carries it and the projection==materialize
+ * contract holds for everything else.
+ */
+const asCommitted = (v: WorkItemValidityDto): WorkItemValidityDto => {
+  const { waits: _waits, ...rest } = withoutRunnerStops(v);
+  return rest;
+};
+
+const setStatus = (id: string, status: string) =>
+  adminDb.workItem.update({ where: { id }, data: { status } });
+
 afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
@@ -223,6 +237,8 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
     );
     expect(tight.valid).toBe(false);
     expect(tight.blockers.map((b) => b.blockedBy)).toContain(outside.identifier);
+    // A DONE blocker is never a wait (MOTIR-10760): nothing is still being worked.
+    expect(tight.waits).toBeUndefined();
   });
 
   it('an `add` whose blocker is ANOTHER add IN the subtree is VALID (temp-ref resolution, in-set)', async () => {
@@ -290,15 +306,20 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
         blockerSprintId: null,
       },
     ]);
+    // A blocker that is a PROPOSAL of the plan is the plan's to fix, never a wait
+    // (MOTIR-10760's counter-case).
+    expect(res.waits).toBeUndefined();
   });
 
-  it('a blocker the plan does NOT own is also reported as a WAIT; one the plan draws is not (MOTIR-9021)', async () => {
+  it('a blocker on a committed, unfinished card is a WAIT whoever drew the edge (MOTIR-9021 · MOTIR-10760)', async () => {
     const fx = await makeWorkItemFixture();
     const story = await mk(fx, 'Story', 'story');
     const outside = await outsideTask(fx, 'Outside');
     await link(fx, story.id, outside.elsewhere.id); // LIVE, before the plan: Story blocked_by Elsewhere
 
     const planId = await freshPlan(fx);
+    // THIS JOB'S SHAPE: the plan draws an `add` subtask under the committed story
+    // onto a committed `todo` card at the same level, the parents' edge in place.
     const p = await addProposal(fx, planId, {
       op: 'add',
       proposedFields: { title: 'New child', kind: 'subtask' },
@@ -315,19 +336,67 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
     );
     // `valid` and `blockers` are unchanged: both edges still gate the subtree …
     expect(res.valid).toBe(false);
-    expect(res.blockers.map((b) => b.blockedBy).sort()).toEqual(
-      [outside.elsewhere.identifier, outside.identifier].sort(),
+    const planDrawn = {
+      item: `planItem:${addId}`,
+      blockedBy: outside.identifier,
+      blockerStatus: 'todo',
+      blockerSprintId: null,
+    };
+    const preExisting = {
+      item: story.identifier,
+      blockedBy: outside.elsewhere.identifier,
+      blockerStatus: 'todo',
+      blockerSprintId: null,
+    };
+    expect(res.blockers).toEqual(expect.arrayContaining([planDrawn, preExisting]));
+    expect(res.blockers).toHaveLength(2);
+    // … and BOTH are waits: the plan-drawn edge too, since the only "fix" for it
+    // is dropping a real dependency.
+    expect(res.waits).toEqual(res.blockers);
+    // The edge is legal, and the edge findings — still scoped to what the plan
+    // owns (MOTIR-7727) — say so.
+    expect(res.invalidEdges).toEqual([]);
+    expect(res.crossLevelEdges).toEqual([]);
+  });
+
+  it('a pre-existing edge onto an `in_review` card under a story the plan MODIFIES is a WAIT (MOTIR-10760)', async () => {
+    const fx = await makeWorkItemFixture();
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'subtask', story.id);
+    const outside = await outsideTask(fx, 'Outside');
+    await setStatus(outside.id, 'in_review');
+    // Person-drawn, before the plan: the child's edge and the parents' edge.
+    await link(fx, child.id, outside.id);
+    await link(fx, story.id, outside.elsewhere.id);
+    // An edge the plan will drop, so its `modify` of the story carries an EDGE key
+    // — the patch that put the whole subtree in `planOwnsEdge`'s reach.
+    const old = await mk(fx, 'Old story', 'story');
+    await link(fx, story.id, old.id);
+    await markDone(old.id);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: story.id,
+      patch: { blockedByRemove: [old.id] },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedWorkItem(
+      planId,
+      story.identifier,
+      fx.ctx,
     );
-    // … but only the edge in place before the plan is a wait.
-    expect(res.waits).toEqual([
-      {
-        item: story.identifier,
-        blockedBy: outside.elsewhere.identifier,
-        blockerStatus: 'todo',
-        blockerSprintId: null,
-      },
-    ]);
-    expect(res.waits!.some((w) => w.item === `planItem:${addId}`)).toBe(false);
+    expect(res.valid).toBe(false);
+    const onInReview = {
+      item: child.identifier,
+      blockedBy: outside.identifier,
+      blockerStatus: 'in_review',
+      blockerSprintId: null,
+    };
+    expect(res.blockers).toContainEqual(onInReview);
+    expect(res.waits).toContainEqual(onInReview);
+    expect(res.waits).toEqual(res.blockers);
   });
 
   it('a `modify` adding an out-of-subtree blocked_by edge is INVALID, and the verdict EQUALS post-materialize validate_work_item', async () => {
@@ -366,7 +435,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       story.identifier,
       fx.ctx,
     );
-    expect(materialized).toEqual(withoutRunnerStops(projected));
+    expect(materialized).toEqual(asCommitted(projected));
   });
 
   it('a `remove` drops the target node AND every edge touching it (a removed blocker no longer gates)', async () => {
@@ -399,7 +468,7 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
       story.identifier,
       fx.ctx,
     );
-    expect(materialized).toEqual(withoutRunnerStops(projected));
+    expect(materialized).toEqual(asCommitted(projected));
   });
 
   it('an unknown targetKey throws WorkItemNotFoundError; an unknown planId throws PlanNotFoundError', async () => {
@@ -497,6 +566,9 @@ describe('planValidityService.validateProjectedWorkItem — the projected subtre
         blockerSprintId: null,
       },
     ]);
+    // A blocker that is a PROPOSAL of the plan is the plan's to fix, never a wait
+    // (MOTIR-10760's counter-case).
+    expect(res.waits).toBeUndefined();
   });
 
   it('an unknown `planItem:` temp-ref root throws WorkItemNotFoundError', async () => {
@@ -661,6 +733,60 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
         blockerSprintId: null,
       },
     ]);
+    // The plan drew it, and it is still a WAIT (MOTIR-10760): the blocker is a
+    // committed card still being worked.
+    expect(res.waits).toEqual(res.blockers);
+  });
+
+  it('the whole-plan walk: a pre-existing edge onto an `in_review` card under a story the plan MODIFIES is a WAIT (MOTIR-10760)', async () => {
+    const fx = await makeWorkItemFixture();
+    const projectQ = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      identifier: 'BETA',
+    });
+    // One level down under a root of its own, at the child's depth (MOTIR-6411).
+    const qStory = await workItemsService.createWorkItem(
+      { projectId: projectQ.id, kind: 'story', title: 'Cross-project story' },
+      fx.ctx,
+    );
+    const qBlocker = await workItemsService.createWorkItem(
+      {
+        projectId: projectQ.id,
+        kind: 'task',
+        type: 'code',
+        title: 'Cross-project blocker',
+        parentId: qStory.id,
+      },
+      fx.ctx,
+    );
+    await setStatus(qBlocker.id, 'in_review');
+    const story = await mk(fx, 'Story', 'story');
+    const child = await mk(fx, 'Child', 'task', story.id);
+    await link(fx, child.id, qBlocker.id); // person-drawn, before the plan
+    // An edge the plan will drop, so its `modify` of the story carries an EDGE key.
+    const old = await mk(fx, 'Old story', 'story');
+    await link(fx, story.id, old.id);
+    await markDone(old.id);
+
+    const planId = await freshPlan(fx);
+    await addProposal(fx, planId, {
+      op: 'modify',
+      workItemId: story.id,
+      patch: { blockedByRemove: [old.id] },
+    });
+    await plansService.markPlanned(planId, fx.ctx);
+
+    const res = await planValidityService.validateProjectedPlan(planId, fx.ctx);
+    const row = {
+      item: child.identifier,
+      blockedBy: qBlocker.identifier,
+      blockerStatus: 'in_review',
+      blockerSprintId: null,
+    };
+    expect(res.valid).toBe(false);
+    expect(res.blockers).toEqual([row]);
+    expect(res.waits).toEqual([row]);
   });
 
   it('a DONE cross-project blocker is satisfied under LOOSE but flagged under TIGHT', async () => {

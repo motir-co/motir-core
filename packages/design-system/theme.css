@@ -3819,17 +3819,17 @@
     background-image:
       radial-gradient(
         circle at 9px 9px,
-        color-mix(in srgb, var(--el-accent) 16%, transparent) 3px,
+        color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
         transparent 3.5px
       ),
       radial-gradient(
         circle at 29px 29px,
-        color-mix(in srgb, var(--el-highlight) 12%, transparent) 2px,
+        color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
         transparent 2.5px
       ),
       repeating-linear-gradient(
         45deg,
-        color-mix(in srgb, var(--el-link) 8%, transparent) 0 2px,
+        color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
         transparent 2px 18px
       );
     background-size:
@@ -4575,17 +4575,17 @@
   background-image:
     radial-gradient(
       circle at 9px 9px,
-      color-mix(in srgb, var(--el-accent) 16%, transparent) 3px,
+      color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
       transparent 3.5px
     ),
     radial-gradient(
       circle at 29px 29px,
-      color-mix(in srgb, var(--el-highlight) 12%, transparent) 2px,
+      color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
       transparent 2.5px
     ),
     repeating-linear-gradient(
       45deg,
-      color-mix(in srgb, var(--el-link) 8%, transparent) 0 2px,
+      color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
       transparent 2px 18px
     );
   background-size:
