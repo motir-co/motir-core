@@ -65,6 +65,17 @@ export const INSTANCE_INLINE_UPDATE_WAIT_MS = 20_000;
 export const INSTANCE_BOOT_DEADLINE_MS = 10 * 60_000;
 
 /**
+ * THE AGENT ANSWERING (MOTIR-10808). A machine the provider reports `running` may
+ * not take commands yet — an AWS instance's host agent starts minutes later, once
+ * the per-boot script has pulled the image — so the `machine_start` step stays in
+ * progress until its exec answers, within {@link INSTANCE_BOOT_DEADLINE_MS}. These
+ * are the step's two `detail` codes for it: the one it carries while it waits,
+ * and the one it fails with at the deadline. Stable, naming no provider.
+ */
+export const BOOT_AGENT_WAITING_DETAIL = 'waiting for the agent to answer';
+export const BOOT_AGENT_DEADLINE_DETAIL = 'the agent did not answer in time';
+
+/**
  * How long a machine that EXITED with a non-zero (or unknown) code during a boot
  * may stay stopped before the boot is failed (MOTIR-7336). Fly's `on-failure`
  * policy restarts such an exit, so the first sighting of `stopped` may be the gap

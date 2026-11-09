@@ -23,6 +23,7 @@ import type {
   PersistentContainerState,
   PersistentContainerStatus,
   PersistentMachineEvent,
+  PersistentExecReadiness,
   PersistentExecResult,
   PersistentLivenessResult,
   PersistentPublicService,
@@ -907,6 +908,12 @@ export const flyPersistentOrchestrator: PersistentContainerOrchestrator = {
       command,
       options.timeoutSeconds,
     );
+  },
+
+  /** A started Fly machine already serves exec through the Machines API, so there
+   *  is nothing to wait for and nothing is called (MOTIR-10808). */
+  async checkExecReady(_handle: PersistentContainerHandle): Promise<PersistentExecReadiness> {
+    return 'ready';
   },
 
   terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint {

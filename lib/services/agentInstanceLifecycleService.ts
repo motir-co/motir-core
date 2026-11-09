@@ -767,10 +767,6 @@ function bootFailureReason(
   provisionEndedAt: Date | null = null,
 ): string | null {
   const began = row.stateChangedAt.getTime();
-  // The deadline measures the machine coming up: from the provision's end when
-  // that is later — a boot that waited for room counts from the pass that got it
-  // (MOTIR-9474).
-  const deadlineFrom = Math.max(began, provisionEndedAt?.getTime() ?? began);
   const exited =
     status.state === 'stopped' && status.stoppedAt !== null && status.stoppedAt.getTime() >= began;
   if (exited) {
@@ -781,11 +777,27 @@ function bootFailureReason(
       return `The machine exited during boot${said}. Wake to try again, or delete it.`;
     }
   }
-  if (now - deadlineFrom >= INSTANCE_BOOT_DEADLINE_MS) {
+  if (bootDeadlinePassed(row, now, provisionEndedAt)) {
     const minutes = Math.round(INSTANCE_BOOT_DEADLINE_MS / 60_000);
     return `The machine did not finish starting within ${minutes} minutes. Wake to try again, or delete it.`;
   }
   return null;
+}
+
+/**
+ * Has the boot's deadline (MOTIR-7336) passed? It measures the machine coming up
+ * — and, on AWS, its host agent answering (MOTIR-10808) — from the boot's start,
+ * or from the provision's end when that is later: a boot that waited for room
+ * counts from the pass that got it (MOTIR-9474).
+ */
+function bootDeadlinePassed(
+  row: AgentInstance,
+  now: number,
+  provisionEndedAt: Date | null = null,
+): boolean {
+  const began = row.stateChangedAt.getTime();
+  const deadlineFrom = Math.max(began, provisionEndedAt?.getTime() ?? began);
+  return now - deadlineFrom >= INSTANCE_BOOT_DEADLINE_MS;
 }
 
 /** What a clone exec said on failure: git's words, trimmed, with no credential in them. */
@@ -1246,6 +1258,7 @@ export const agentInstanceBootSteps = {
   reload,
   failInstance,
   bootFailureReason,
+  bootDeadlinePassed,
   provisionNew: (row: AgentInstance) =>
     provisionNewInstance(row, agentTerminalMachineConfig(row.id)),
   startRecorded: startRecordedInstance,

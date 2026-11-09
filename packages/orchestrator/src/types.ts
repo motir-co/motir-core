@@ -852,7 +852,26 @@ export interface PersistentContainerOrchestrator {
     command: readonly string[],
     options?: { timeoutSeconds?: number },
   ): Promise<PersistentLivenessResult>;
+
+  /**
+   * DOES {@link exec} REACH THE MACHINE YET (MOTIR-10808)? Asked by the boot and
+   * the wake once {@link describePersistent} reports the machine `running`,
+   * before its first exec. `'ready'` once something on the machine answers an
+   * exec — whatever it answered: a refusal, a timeout or a non-zero exit is the
+   * first exec's to meet, as it always was. `'starting'` while nothing answers
+   * yet: the machine runs but the service that takes its commands is not
+   * listening (an AWS instance's host agent starts after the per-boot script has
+   * pulled the image), or it has no address yet. A machine that could not be
+   * asked is `'starting'` too, never a throw: the boot's deadline bounds the wait.
+   * Fly answers `'ready'` with no call: a started Fly machine already has its
+   * container serving exec through the Machines API. The fake answers what a
+   * test set (`setExecReadiness`), `'ready'` by default on a running machine.
+   */
+  checkExecReady(handle: PersistentContainerHandle): Promise<PersistentExecReadiness>;
 }
+
+/** What {@link PersistentContainerOrchestrator.checkExecReady} answered. */
+export type PersistentExecReadiness = 'ready' | 'starting';
 
 /** What {@link PersistentContainerOrchestrator.checkLiveness} answered. */
 export type PersistentLivenessResult =

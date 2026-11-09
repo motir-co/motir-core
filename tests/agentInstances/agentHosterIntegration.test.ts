@@ -189,6 +189,31 @@ describe('the agent hoster, assembled', () => {
     expect((await execOn(id, ['cat', HOME_FILE])).stdout).toBe('kept across a stop');
   });
 
+  it('a new AWS machine whose host agent is not listening yet waits, then clones once it answers (MOTIR-10808)', async () => {
+    setSwitch(true);
+    // EC2 says running before the host agent listens: its first three asks find nothing.
+    a.hostAgentDown = 3;
+    const answered = vi.spyOn(console, 'info');
+    const dto = await create('agent-late');
+    // Before MOTIR-10808 the first clone met nothing listening and failed the boot.
+    expect(dto.state).toBe('running');
+    expect(a.hostAgentDown).toBe(0);
+    expect(answered).toHaveBeenCalledWith(
+      '[agentInstanceBoot] the agent answered',
+      expect.objectContaining({ instanceId: dto.id }),
+    );
+    const read = (await readBoot(dto.id))!;
+    expect(read.outcome).toBe('running');
+    expect(read.steps.find((s) => s.step === 'machine_start')).toMatchObject({
+      state: 'done',
+      detail: null,
+    });
+    expect(read.steps.filter((s) => s.step === 'clone').every((s) => s.state === 'done')).toBe(
+      true,
+    );
+    expect(a.execs.some((e) => e.command.includes('motir-clone'))).toBe(true);
+  });
+
   it('a run on the AWS instance is executed on account A only', async () => {
     const id = await placedOnA();
     const flyExecs = fleet.execs.length;

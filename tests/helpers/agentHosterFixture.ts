@@ -72,6 +72,12 @@ export interface HosterAccount {
   readonly ec2: HosterEc2;
   /** Every exec this account's host agents answered. */
   readonly execs: HostAgentCall[];
+  /**
+   * How many more execs to a RUNNING machine find no host agent listening, each
+   * failing transport-level `unreachable` (MOTIR-10808: the agent starts minutes
+   * after EC2 reports `running`). Counts down; 0 (the default) answers every one.
+   */
+  hostAgentDown: number;
   /** The account's machines, as the adapter's handle names them. */
   liveMachines(): string[];
   liveVolumes(): string[];
@@ -203,9 +209,11 @@ function hostAgentFor(account: HosterAccount): HostAgentClient {
   return {
     async exec(address: string, request: HostAgentExecRequest): Promise<PersistentExecResult> {
       const machine = machineAt(account, address);
-      if (!machine) {
-        const { OrchestratorApiError } = world.source!;
-        throw new OrchestratorApiError('aws', 503, 'unreachable');
+      if (!machine || account.hostAgentDown > 0) {
+        // Nothing listening: no running machine there, or its agent not up yet.
+        if (machine) account.hostAgentDown -= 1;
+        const { HostAgentUnreachableError } = world.source!;
+        throw new HostAgentUnreachableError();
       }
       account.execs.push({
         machineId: machine.instanceId,
@@ -311,6 +319,7 @@ export async function seedHosterAccount(name: string, machineLimit = 10): Promis
     shard,
     ec2,
     execs: [],
+    hostAgentDown: 0,
     liveMachines: () =>
       [...ec2.instances.values()]
         .filter((i) => i.state !== 'terminated' && inAccount(i.tags))

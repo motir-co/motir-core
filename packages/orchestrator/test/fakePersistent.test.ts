@@ -477,6 +477,30 @@ describe('the image move and the liveness check (agent-image-update.md Q2, Q3 ·
   });
 });
 
+describe('checkExecReady — the seam for an agent that is not listening yet (MOTIR-10808)', () => {
+  it('answers ready on a running machine, what the test set, and starting once it stops', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    expect(await fake.checkExecReady(h)).toBe('ready');
+    fake.setExecReadiness('starting');
+    expect(await fake.checkExecReady(h)).toBe('starting');
+    fake.setExecReadiness('ready');
+    expect(await fake.checkExecReady(h)).toBe('ready');
+    await fake.stop(h);
+    expect(await fake.checkExecReady(h)).toBe('starting');
+    expect(fake.execReadyChecks).toContain(h.machineId);
+    expect(fake.operations).not.toContain(`machine:exec-ready:${h.machineId}`);
+  });
+
+  it('is reset to ready', async () => {
+    const h = await fake.provisionPersistent(SPEC);
+    fake.setExecReadiness('starting');
+    fake.reset();
+    const fresh = await fake.provisionPersistent(SPEC);
+    expect(await fake.checkExecReady(fresh)).toBe('ready');
+    expect(h.machineId).toBeTruthy();
+  });
+});
+
 describe('the home a volume holds (MOTIR-6954)', () => {
   it('keeps a written file across an image move, and answers null once the volume is gone', async () => {
     const h = await fake.provisionPersistent(SPEC);

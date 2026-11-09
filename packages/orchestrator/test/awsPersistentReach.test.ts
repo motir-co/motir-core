@@ -3,9 +3,12 @@ import { createServer, type Server } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AWS_EXEC_READY_COMMAND,
+  AWS_EXEC_READY_TIMEOUT_SECONDS,
   AWS_HOST_AGENT_INGRESS_DESCRIPTION,
   HOST_AGENT_PORT,
   HOST_CERTIFICATE_VALIDITY_DAYS,
+  HostAgentUnreachableError,
   HostCertificateError,
   OrchestratorApiError,
   createAwsPersistentOrchestrator,
@@ -15,6 +18,7 @@ import {
   mintHostClientCertificate,
   mintHostServerCertificate,
   parseInstanceUserData,
+  type HostAgentClient,
   type PersistentContainerHandle,
   type PersistentContainerSpec,
 } from '../src/index';
@@ -44,10 +48,10 @@ const MARKER = 'RUN-CREDENTIAL-MARKER-9470';
 let ec2: AwsEc2Fake;
 let agent: FakeHostAgentClient;
 
-function adapter() {
+function adapter(client: HostAgentClient = agent) {
   return createAwsPersistentOrchestrator({
     ec2,
-    hostAgent: testHostAgentConfig(agent),
+    hostAgent: testHostAgentConfig(client),
     region: 'us-east-1',
     shardTag: SHARD,
     amiId: AWS_HOSTER_AMI_ID,
@@ -125,7 +129,10 @@ describe('exec — through the host agent at the instance’s public address', (
     });
     agent.behaviour = {};
     await orchestrator.stop(handle);
-    await expect(orchestrator.exec(handle, ['true'])).rejects.toMatchObject({ status: 503 });
+    // No address yet is the same typed answer as a transport failure (MOTIR-10808).
+    await expect(orchestrator.exec(handle, ['true'])).rejects.toBeInstanceOf(
+      HostAgentUnreachableError,
+    );
     ec2.terminateOutside(handle.machineId);
     ec2.ageOut(handle.machineId);
     await expect(orchestrator.exec(handle, ['true'])).rejects.toMatchObject({ status: 503 });
@@ -141,6 +148,57 @@ describe('exec — through the host agent at the instance’s public address', (
     expect(`${(err as Error).message} ${JSON.stringify(err)}`).not.toContain(MARKER);
     expect(everythingButTheDocument()).not.toContain(MARKER);
     expect(ec2.userData.get(handle.machineId)).not.toContain(MARKER);
+  });
+});
+
+describe('checkExecReady — the host agent answering, not EC2’s `running` (MOTIR-10808)', () => {
+  it('is starting while nothing answers on a running instance, and ready once a no-op exec does', async () => {
+    const orchestrator = adapter();
+    const handle = await orchestrator.provisionPersistent(spec());
+    agent.behaviour = { unreachable: true };
+    expect(await orchestrator.checkExecReady(handle)).toBe('starting');
+    expect(agent.calls).toHaveLength(0);
+    agent.behaviour = {};
+    expect(await orchestrator.checkExecReady(handle)).toBe('ready');
+    expect(agent.calls).toEqual([
+      {
+        address: addressOf(handle),
+        request: {
+          command: AWS_EXEC_READY_COMMAND,
+          timeoutSeconds: AWS_EXEC_READY_TIMEOUT_SECONDS,
+        },
+      },
+    ]);
+  });
+
+  it('is starting with no public address yet, and when EC2 cannot be asked for it', async () => {
+    const orchestrator = adapter();
+    const handle = await orchestrator.provisionPersistent(spec());
+    await orchestrator.stop(handle);
+    expect(await orchestrator.checkExecReady(handle)).toBe('starting');
+    vi.spyOn(ec2, 'describeInstances').mockRejectedValueOnce(new Error('throttled'));
+    expect(await orchestrator.checkExecReady(handle)).toBe('starting');
+    expect(agent.calls).toHaveLength(0);
+  });
+
+  it('is ready when the agent answered at all — a non-zero exit, its timeout or a refusal', async () => {
+    const orchestrator = adapter();
+    const handle = await orchestrator.provisionPersistent(spec());
+    agent.behaviour = { exitCode: 1 };
+    expect(await orchestrator.checkExecReady(handle)).toBe('ready');
+    agent.behaviour = { hangs: true };
+    expect(await orchestrator.checkExecReady(handle)).toBe('ready');
+    // A refusal may carry any status — 503 included — and is still an answer.
+    const refusing = adapter({
+      exec: () => Promise.reject(new OrchestratorApiError('aws', 503, 'host_agent_refused')),
+    });
+    expect(await refusing.checkExecReady(handle)).toBe('ready');
+  });
+
+  it('does not hide an error that is no host agent’s answer', async () => {
+    const orchestrator = adapter({ exec: () => Promise.reject(new TypeError('a bug')) });
+    const handle = await orchestrator.provisionPersistent(spec());
+    await expect(orchestrator.checkExecReady(handle)).rejects.toThrow('a bug');
   });
 });
 
@@ -410,8 +468,19 @@ describe('createHostAgentClient — mutual TLS against a local HTTPS host agent'
       .exec('127.0.0.1', { command: ['x'], timeoutSeconds: 1 })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(OrchestratorApiError);
+    expect(err).not.toBeInstanceOf(HostAgentUnreachableError);
     expect(err).toMatchObject({ status: 500 });
     expect((err as Error).message).not.toContain(MARKER);
+    // An agent answering 503 refused: it is not the transport's `unreachable`.
+    answer = () => ({ status: 503, body: '{}' });
+    const refused = await client()
+      .exec('127.0.0.1', { command: ['x'], timeoutSeconds: 1 })
+      .catch((e: unknown) => e);
+    expect(refused).toMatchObject({
+      status: 503,
+      message: expect.stringContaining('host_agent_refused'),
+    });
+    expect(refused).not.toBeInstanceOf(HostAgentUnreachableError);
     answer = () => ({ status: 200, body: 'not json' });
     await expect(
       client().exec('127.0.0.1', { command: ['x'], timeoutSeconds: 1 }),
@@ -441,7 +510,7 @@ describe('createHostAgentClient — mutual TLS against a local HTTPS host agent'
         command: ['x'],
         timeoutSeconds: 0,
       }),
-    ).rejects.toMatchObject({ status: 503 });
+    ).rejects.toBeInstanceOf(HostAgentUnreachableError);
   });
 
   it('dials the host agent port by default', async () => {
@@ -458,9 +527,17 @@ describe('createHostAgentClient — mutual TLS against a local HTTPS host agent'
     expect(received).toHaveLength(0);
   });
 
-  it('is unreachable when nothing listens', async () => {
-    await expect(
-      client({ port: 1 }).exec('127.0.0.1', { command: ['x'], timeoutSeconds: 1 }),
-    ).rejects.toMatchObject({ status: 503 });
+  it('is unreachable when nothing listens — the typed transport failure', async () => {
+    const err = await client({ port: 1 })
+      .exec('127.0.0.1', { command: ['x'], timeoutSeconds: 1 })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HostAgentUnreachableError);
+    expect(err).toBeInstanceOf(OrchestratorApiError);
+    expect(err).toMatchObject({
+      name: 'HostAgentUnreachableError',
+      provider: 'aws',
+      status: 503,
+      message: 'The aws orchestrator refused a call (HTTP 503: unreachable).',
+    });
   });
 });
