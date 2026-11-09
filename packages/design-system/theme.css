@@ -7543,6 +7543,133 @@
   --el-sidebar-item-bg-hover: #003848; /* Cyan dark-4 */
 }
 
+/* ── Palette: Olive (data-palette="olive") — MOTIR-10714 ───────────────────────
+   A muted, EARTHY re-skin: warm green-grey olive neutrals, a moss primary and a
+   terracotta highlight. No single brand documents an olive/earthy system, so —
+   exactly as candy and lagoon do — EVERY value is a documented **Radix Colors**
+   step (@radix-ui/colors@3.0.0): Olive is the neutral ramp, Lime the moss
+   primary, Orange the terracotta highlight, and Orange / Crimson / Lime / Violet
+   / Sky / Amber / Grass / Blue / Red supply the tints and semantics. Where Olive
+   cannot supply a role (a canvas darker than its own dark-1 page), the value is
+   taken from Gray at a documented step.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). Every --el-*
+   role clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/olive.md. */
+[data-palette='olive'] {
+  /* brand & primary — moss (Radix Lime). The fill carries white labels. */
+  --color-primary: #4a5e26; /* Radix Lime-11 mixed 50% toward Lime-12 — moss AS text (6.33:1 on the Olive-3 surface) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #37401c; /* Radix Lime-12 */
+  --color-primary-fill: #4a5e26; /* the same Lime-11 → Lime-12 50% step — fill behind white labels (7.2:1) */
+
+  /* surfaces — warm green-grey olive (Radix Olive-1/2/3) */
+  --color-background: #fcfdfc; /* Radix Olive-1 */
+  --color-foreground: #1d211c; /* Radix Olive-12 ink */
+  --color-surface: #eff1ef; /* Radix Olive-3 — section surface */
+  --color-surface-soft: #f8faf8; /* Radix Olive-2 — quieter division */
+  --color-canvas: #e7e9e7; /* recessed planning board — Radix Olive-4, a step under the Olive-3 surface */
+
+  /* text scale — Radix Olive neutral + a Lime-12 deep-moss emphasis */
+  --color-ink: #1d211c; /* Olive-12 */
+  --color-charcoal: #37401c; /* Lime-12 — emphasis / AA-safe text on tints */
+  --color-slate: #60655f; /* Olive-11 — secondary text */
+  --color-steel: #60655f; /* Olive-11 — tertiary */
+  --color-stone: #898e87; /* Olive-9 — faint labels (decorative) */
+  --color-muted: #eff1ef; /* Olive-3 */
+  --color-muted-foreground: #60655f; /* Olive-11 — captions */
+
+  /* borders — olive hairlines (Radix Olive-5/4/6) */
+  --color-hairline: #dfe2df; /* Olive-5 */
+  --color-hairline-soft: #e7e9e7; /* Olive-4 */
+  --color-hairline-strong: #d7dad7; /* Olive-6 */
+  --color-border: #dfe2df; /* Olive-5 */
+
+  /* accent secondary — a terracotta highlight (Radix Orange-11), the warm earth
+     beside the moss primary */
+  --color-accent: #cc4e00; /* Radix Orange-11 — highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 */
+  --color-accent-teal: #008573; /* Radix Teal-11 */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 */
+
+  /* card tints — Radix step-4 pastels (Lime-12 emphasis text on each) */
+  --color-tint-peach: #ffdfb5; /* Orange-4 */
+  --color-tint-rose: #fedce7; /* Crimson-4 */
+  --color-tint-mint: #e2f0bd; /* Lime-4 */
+  --color-tint-lavender: #ebe4ff; /* Violet-4 */
+  --color-tint-sky: #d1f0fa; /* Sky-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix "text" steps (AA-safe) */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Radix Blue, apart from the moss primary; Blue-11 alone is 4.20:1 on
+     the Olive-3 surface, so it takes lagoon's 65% step toward Blue-12 */
+  --color-link: #0e5da9; /* Blue-11 mixed 65% toward Blue-12 */
+  --color-link-pressed: #113264; /* Blue-12 */
+
+  /* sidebar hover — one shade deeper than the Olive-3 surface (Olive-4) */
+  --el-sidebar-item-bg-hover: #e7e9e7;
+}
+
+/* Olive — dark companion. A warm olive-black (Radix Olive dark 1/2/3); the moss
+   brightens to a lime that reads as text, the fill is a bright lime with dark
+   labels, and the tints become deep washes. All Radix dark steps. */
+[data-theme='dark'] [data-palette='olive']:not([data-theme]),
+[data-palette='olive'][data-theme='dark'] {
+  --color-primary: #bde56c; /* Lime dark-11 */
+  --color-primary-foreground: #151a10; /* Lime dark-2 ink on the bright lime fill */
+  --color-primary-pressed: #d4ff70; /* Lime dark-10 */
+  --color-primary-fill: #bde56c; /* Lime dark-11 */
+
+  --color-background: #111210; /* Olive dark-1 */
+  --color-foreground: #eceeec; /* Olive dark-12 */
+  --color-surface: #212220; /* Olive dark-3 */
+  --color-surface-soft: #181917; /* Olive dark-2 */
+  --color-canvas: #111111; /* Gray dark-1 — Olive has no step below its dark-1 page */
+
+  --color-ink: #eceeec; /* Olive dark-12 */
+  --color-charcoal: #e3f7ba; /* Lime dark-12 */
+  --color-slate: #afb5ad; /* Olive dark-11 */
+  --color-steel: #afb5ad; /* Olive dark-11 */
+  --color-stone: #687066; /* Olive dark-9 */
+  --color-muted: #212220; /* Olive dark-3 */
+  --color-muted-foreground: #afb5ad; /* Olive dark-11 */
+
+  --color-hairline: #2f312e; /* Olive dark-5 */
+  --color-hairline-soft: #282a27; /* Olive dark-4 */
+  --color-hairline-strong: #383a36; /* Olive dark-6 */
+  --color-border: #2f312e; /* Olive dark-5 */
+
+  --color-accent: #ffa057; /* Orange dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #0bd8b6; /* Teal dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #462100; /* Orange dark-4 */
+  --color-tint-rose: #4d122f; /* Crimson dark-4 */
+  --color-tint-mint: #29371d; /* Lime dark-4 */
+  --color-tint-lavender: #33255b; /* Violet dark-4 */
+  --color-tint-sky: #113555; /* Sky dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 ink on the bright danger */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-sidebar-item-bg-hover: #282a27; /* Olive dark-4 */
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk

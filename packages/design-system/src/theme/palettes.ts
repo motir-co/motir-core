@@ -174,6 +174,15 @@ export const PALETTE_REGISTRY = {
       'A lagoon concept grounded entirely in documented Radix Colors scales (every value a Radix step): Cyan primary + Slate cool neutrals, a Tomato coral highlight, and Tomato/Crimson/Jade/Violet/Cyan/Amber tints.',
     designDoc: 'docs/palettes/lagoon.md',
   },
+  olive: {
+    id: 'olive',
+    name: 'Olive',
+    tagline:
+      'Muted and earthy — a moss primary over warm olive greys, with a terracotta highlight.',
+    inspiration:
+      'An olive/earthy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Lime moss primary + Olive warm green-grey neutrals, an Orange terracotta highlight, and Orange/Crimson/Lime/Violet/Sky/Amber tints.',
+    designDoc: 'docs/palettes/olive.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */

@@ -18,6 +18,7 @@ mocks and states what each one draws and from which parts.
 | palette | mock                                   | design record                                            | card        |
 | ------- | -------------------------------------- | -------------------------------------------------------- | ----------- |
 | Lagoon  | [lagoon.mock.html](./lagoon.mock.html) | [docs/palettes/lagoon.md](../../docs/palettes/lagoon.md) | MOTIR-10713 |
+| Olive   | [olive.mock.html](./olive.mock.html)   | [docs/palettes/olive.md](../../docs/palettes/olive.md)   | MOTIR-10714 |
 
 ## How every mock in this area is built
 
@@ -85,3 +86,23 @@ What the panels show, against the record:
 - **Panel 4** — the six material styles keep Lagoon's hues; every text role on
   their composite grounds clears 4.5:1 (the style × palette × mode gate records
   no Lagoon failure).
+
+## Olive (MOTIR-10714)
+
+[olive.mock.html](./olive.mock.html) · record:
+[docs/palettes/olive.md](../../docs/palettes/olive.md)
+
+What the panels show, against the record:
+
+- **Panel 1** — Olive's tile in the gallery after Lagoon, its swatch the moss primary
+  `#4a5e26`, selected in light and dark.
+- **Panel 2** — Olive-1 page and Olive-3 surfaces under Olive ink in light, with the moss
+  fill carrying white labels; the warm olive-black in dark, with the bright Lime-dark-11
+  fill carrying a dark label. The terracotta Orange highlight and the Blue link sit apart
+  from the primary.
+- **Panel 3** — beside Evergreen and Sienna: Olive's moss reads about 40° of hue toward
+  yellow from Evergreen's emerald (ΔE2000 16.0 between the accent fills in light), and
+  its green-grey neutrals read cooler than Sienna's browns.
+- **Panel 4** — the six material styles keep Olive's hues; every text role on their
+  composite grounds clears 4.5:1 (the style × palette × mode gate records no Olive
+  failure).
