@@ -95,6 +95,7 @@ import {
   installFleetPersistentOrchestrator,
   type PersistentContainerOrchestrator,
 } from '@/lib/orchestrator';
+import { isOnInstallFleet } from '@/lib/ciFleet/installFleet';
 import { agentInstancePlacementService } from '@/lib/services/agentInstancePlacementService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { agentInstanceIntervalRepository } from '@/lib/repositories/agentInstanceIntervalRepository';
@@ -270,6 +271,23 @@ async function ownInstance(
  */
 export function agentInstanceHandle(row: AgentInstance): PersistentContainerHandle | null {
   return handleOf(row);
+}
+
+/**
+ * Is this instance out of reach on this deployment because its host is the
+ * process-wide lane and that lane is not configured (no Fly instances token)?
+ * An instance on an AWS hoster account or on the install fleet is reached
+ * through its own account, whatever the process-wide lane is (MOTIR-9473,
+ * MOTIR-10794), so it is never out of reach for want of a Fly token
+ * (MOTIR-10803). The same split the sweep's `reachable` makes, as a pure read
+ * of the row.
+ */
+export function agentInstanceLaneMissing(
+  row: Pick<AgentInstance, 'fleetShardId' | 'flyApp'>,
+): boolean {
+  return (
+    row.fleetShardId === null && !isOnInstallFleet(row) && !isPersistentOrchestratorConfigured()
+  );
 }
 
 /** The handle through the PROCESS-WIDE orchestrator — for the paths the second
@@ -1085,11 +1103,13 @@ const UNKNOWN_IMAGE: AgentInstanceImageFields = { imageVersion: null, update: 'u
 async function imageFieldsFor(
   rows: readonly AgentInstance[],
 ): Promise<Map<string, AgentInstanceImageFields>> {
-  // No instance lane on this deployment: nothing could be updated, and a list
-  // read must not reach a registry for it.
-  if (!isPersistentOrchestratorConfigured()) return new Map();
+  // A row whose host this deployment cannot reach — the process-wide lane with
+  // no Fly token — could not be updated, and a list read must not reach a
+  // registry for it: it reads unknown. A row on an AWS account or on the install
+  // fleet is asked whatever the Fly token (MOTIR-10803).
+  const reachable = rows.filter((row) => !agentInstanceLaneMissing(row));
   const answers = await Promise.all(
-    rows.map(async (row): Promise<[string, AgentInstanceImageFields]> => {
+    reachable.map(async (row): Promise<[string, AgentInstanceImageFields]> => {
       try {
         return [row.id, await imageCatalog.updateFor(row.profileId, row.imageDigest)];
       } catch (err) {
