@@ -93,6 +93,7 @@ const REQUIRED_TSCONFIGS = [
   'tsconfig.node.json',
   'tsconfig.base.json',
   'tsconfig.app.json',
+  'tsconfig.lib.json',
   'tsconfig.tests.json',
   'tsconfig.tests-platform.json',
   'tsconfig.tests-product.json',
@@ -464,6 +465,96 @@ describe('every composite PACKAGE project is on the solution file (MOTIR-5759)',
       references: (solution.references ?? []).filter((r) => r.path !== './packages/pages'),
     };
     expect(missingFromSolution(without, PACKAGE_PROJECTS)).toEqual(['packages/pages']);
+  });
+});
+
+// ── The LIB LAYER project (MOTIR-10798) ─────────────────────────────────────
+//
+// The app project reached 84–87% of the heap budget as one program of 8441
+// files. No file stood out in a `--generateTrace` and the per-file instantiation
+// cost had not moved, so the cost was the program's size — the generated Prisma
+// client alone retains ~710 MB. `tsconfig.lib.json` checks the layer BELOW the
+// UI — `lib/`, the generated client, `i18n/`, the catalogues, the CLI sources
+// and `proxy.ts` — and the app project consumes it through `.tsout/lib/**/*.d.ts`.
+//
+// The boundary is the layering rule, so it can only hold while `lib/` does not
+// import UP. A `lib/` file that does is a TS6307 in this project; the few that
+// already did are listed in its `exclude` and stay in the app project.
+
+const UI_DIRECTORIES = ['app', 'components', 'hooks'] as const;
+
+/** The lib project's `include` globs that reach into the UI layer — empty when none do. */
+export const libLayerLeaks = (include: unknown): string[] =>
+  asStrings(include).filter((glob) =>
+    UI_DIRECTORIES.some((dir) => glob === dir || glob.startsWith(`${dir}/`)),
+  );
+
+/** `include` globs of the lib project that Next's product set does not also name. */
+export const outsideProductSet = (libInclude: unknown, productInclude: unknown): string[] => {
+  const product = new Set(asStrings(productInclude));
+  return asStrings(libInclude).filter((glob) => !product.has(glob));
+};
+
+/** `exclude` entries naming a single source file that no longer exists. */
+export const staleFileExcludes = (exclude: unknown, exists: (path: string) => boolean): string[] =>
+  asStrings(exclude)
+    .filter((entry) => /\.(ts|tsx)$/.test(entry))
+    .filter((entry) => !exists(entry));
+
+describe('the lib layer is its own type-check project under the app (MOTIR-10798)', () => {
+  const lib = () => configs.get('tsconfig.lib.json')!;
+
+  it('is a composite project the app project references', () => {
+    const options = lib().compilerOptions as Record<string, unknown>;
+    expect(options.composite).toBe(true);
+    expect(options.emitDeclarationOnly).toBe(true);
+    const refs = (configs.get('tsconfig.app.json')!.references ?? []) as { path?: string }[];
+    expect(refs.map((r) => r.path)).toContain('./tsconfig.lib.json');
+  });
+
+  it('holds the lib layer and the generated Prisma client', () => {
+    const include = asStrings(lib().include);
+    expect(include).toContain('lib/**/*.ts');
+    expect(include).toContain('generated/**/*.ts');
+  });
+
+  it('reaches into no UI directory', () => {
+    expect(libLayerLeaks(lib().include)).toEqual([]);
+  });
+
+  it('BITES on an include that reaches into the UI', () => {
+    expect(libLayerLeaks(['lib/**/*.ts', 'components/**/*.tsx', 'hooks'])).toEqual([
+      'components/**/*.tsx',
+      'hooks',
+    ]);
+  });
+
+  it('checks nothing Next’s product set does not also name', () => {
+    expect(outsideProductSet(lib().include, configs.get('tsconfig.json')!.include)).toEqual([]);
+  });
+
+  it('BITES on a glob outside the product set', () => {
+    expect(outsideProductSet(['lib/**/*.ts', 'tests/**/*.ts'], ['lib/**/*.ts'])).toEqual([
+      'tests/**/*.ts',
+    ]);
+  });
+
+  it('excludes only files that exist', () => {
+    const exists = (path: string) => {
+      try {
+        readFileSync(join(ROOT, path));
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    expect(staleFileExcludes(lib().exclude, exists)).toEqual([]);
+  });
+
+  it('BITES on an exclusion whose file is gone', () => {
+    expect(
+      staleFileExcludes(['node_modules', 'lib/a.ts', 'lib/b.tsx'], (p) => p === 'lib/a.ts'),
+    ).toEqual(['lib/b.tsx']);
   });
 });
 

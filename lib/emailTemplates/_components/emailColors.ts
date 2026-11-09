@@ -1,8 +1,4 @@
-import {
-  BRAND_ACCENT_HEX,
-  BRAND_ACCENT_INK_HEX,
-  BRAND_LINK_HEX,
-} from '@/components/brand/waveBand';
+import { BRAND_ACCENT_HEX, BRAND_ACCENT_INK_HEX, BRAND_LINK_HEX } from '@motir/brand';
 
 // The brand colours an email paints with, in ONE place (design/brand/design-notes.md
 // §10 · MOTIR-6474). Email reads no CSS variable — Gmail strips `<style>` and the

@@ -16,6 +16,11 @@
   // `.tsout/`, and Next / vitest / tsx each compile from source as before. The
   // directory is git-ignored and holds the per-project `.tsbuildinfo` too, so no
   // build state lands beside the sources.
+  //
+  // It REFERENCES `tsconfig.lib.json` (MOTIR-10798): the lib layer and the
+  // generated Prisma client are checked there, and every file of theirs this
+  // include set names is read here through `.tsout/lib/**/*.d.ts`. That file's
+  // header carries the reasoning and the numbers.
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "composite": true,
@@ -26,5 +31,6 @@
     "rootDir": ".",
     "outDir": ".tsout/app",
     "tsBuildInfoFile": ".tsout/app/tsconfig.tsbuildinfo"
-  }
+  },
+  "references": [{ "path": "./tsconfig.lib.json" }]
 }

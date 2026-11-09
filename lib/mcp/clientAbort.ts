@@ -1,4 +1,8 @@
 import { CLIENT_CLOSED_REQUEST_STATUS, isClientAbort } from '@/lib/api/clientAbort';
+// `req.auth` is `mcp-handler`'s global augmentation of `Request`. Import it here
+// rather than inherit it from whichever route happens to load the library: the
+// lib layer is its own type-check project (`tsconfig.lib.json`, MOTIR-10798).
+import type {} from 'mcp-handler';
 
 // A caller that hung up before its MCP request body was read (MOTIR-6853).
 //

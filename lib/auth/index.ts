@@ -96,7 +96,7 @@ function requiredEnv(name: string): string {
 // LOAD-BEARING (MOTIR-4293). Do not inline this object back into the
 // `betterAuth(...)` call, and do not delete the annotation.
 //
-// The app is a COMPOSITE TypeScript project now (`tsconfig.app.json`): it emits
+// The lib layer is a COMPOSITE TypeScript project now (`tsconfig.lib.json`): it emits
 // `.d.ts` for the tests and scripts projects to consume, which is what takes
 // the whole-repository type-check off the one-program heap cliff. A declaration
 // can only NAME types the emitting file references, and Better-Auth's INFERRED

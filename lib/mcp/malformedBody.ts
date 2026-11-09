@@ -1,3 +1,8 @@
+// `req.auth` is `mcp-handler`'s global augmentation of `Request`. Import it here
+// rather than inherit it from whichever route happens to load the library: the
+// lib layer is its own type-check project (`tsconfig.lib.json`, MOTIR-10798).
+import type {} from 'mcp-handler';
+
 // A POST whose body is not JSON (MOTIR-7299).
 //
 // `mcp-handler@1.1.0` reads a POST's body with `await req.json()` whenever the

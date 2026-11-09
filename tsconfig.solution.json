@@ -12,6 +12,7 @@
   // what a package IS.
   "files": [],
   "references": [
+    { "path": "./tsconfig.lib.json" },
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.tests.json" },
     { "path": "./tsconfig.tests-platform.json" },
