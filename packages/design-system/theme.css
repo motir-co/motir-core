@@ -1039,13 +1039,17 @@
    can carry the faint grid lines: built from currentColor at a very low alpha
    so it adapts to the active palette and sits BEHIND content (text never
    renders on it), keeping AA intact. Dark-first — on the dark theme this reads
-   as a Tron grid over the near-black canvas. */
+   as a Tron grid over the near-black canvas.
+   The lines are 5%, not 6%: where a horizontal and a vertical line cross, the
+   page takes both tints (1 - 0.94² = 11.6% of the ink at 6%), and that crossing
+   took --el-accent-on-surface to 4.46:1 in sienna light (Chromium 4.39:1).
+   At 5% the worst crossing is 4.63:1, sienna light again (MOTIR-10746). */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   body,
   [data-app-shell] {
     background-image:
-      linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-      linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+      linear-gradient(color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px);
     background-size: 32px 32px;
     background-position: center top;
   }
@@ -4497,8 +4501,8 @@
 .style-vignette[data-style='cybercore-y2k'] > .sv-canvas {
   background-color: var(--el-page-bg);
   background-image:
-    linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px);
   background-size: 26px 26px;
 }
 /* Aurora's drifting ribbons, painted statically onto the preview swatch (the
