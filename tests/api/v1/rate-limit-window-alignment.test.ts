@@ -633,8 +633,13 @@ describe('fixed-window alignment lives in ONE place', () => {
     return sql.test(code) || model.test(code) || repo.test(code);
   }
 
-  /** A CALL of an alignment wait, in code. */
-  const CALLS_ALIGNMENT = /\b(?:waitForWindowHeadroom|waitForWindowBoundary)\s*\(/;
+  /**
+   * A CALL that secures the window, in code: an alignment wait, or freezing the
+   * clock the limiter reads (`tests/helpers/frozenWindowClock.ts`, MOTIR-10807),
+   * which secures it outright — every counted call then reads the same instant.
+   */
+  const CALLS_ALIGNMENT =
+    /\b(?:waitForWindowHeadroom|waitForWindowBoundary|freezeWindowClock)\s*\(/;
 
   /**
    * Files that read the counter and legitimately never depend on which cell
@@ -696,7 +701,9 @@ describe('fixed-window alignment lives in ONE place', () => {
         `their counted calls land in, so the calls can straddle an epoch-aligned ` +
         `boundary and split across two rows. Before the first counted call, ` +
         `\`await waitForWindowHeadroom(<the budget's windowMs>, <headroom sized from ` +
-        `the counted span>)\` from ${HELPER} — or, if the file's assertion cannot ` +
+        `the counted span>)\` from ${HELPER}, or freeze the clock with ` +
+        `\`freezeWindowClock()\` from tests/helpers/frozenWindowClock.ts — or, if the ` +
+        `file's assertion cannot ` +
         `straddle, add it to COUNTER_READ_EXEMPT with the reason. See MOTIR-6418`,
     ).toEqual([]);
   });
@@ -721,7 +728,9 @@ describe('fixed-window alignment lives in ONE place', () => {
     expect(CALLS_ALIGNMENT.test(withoutComments(planted))).toBe(false);
     // The fix makes it compliant.
     const fixed = `await waitForWindowHeadroom(mcpBudget().windowMs, 9_000);\n${planted}`;
-    expect(CALLS_ALIGNMENT.test(withoutComments(fixed))).toBe(true);
+    expect(CALLS_ALIGNMENT.test(withoutComments(fixed))).toBe(true); // …and so does freezing the clock the limiter reads (MOTIR-10807).
+    const frozen = `freezeWindowClock();\n${planted}`;
+    expect(CALLS_ALIGNMENT.test(withoutComments(frozen))).toBe(true);
   });
 
   it('sees a repository read, and does NOT count a comment as a read or as a call', () => {
