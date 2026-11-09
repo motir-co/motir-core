@@ -24,6 +24,17 @@
 
 ## 0.21.2
 
+### Minor Changes
+
+- 42424ef: Add the Dense / Pro style (`data-style="dense-pro"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the High-Contrast / Accessible style (`data-style="high-contrast-accessible"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Tonal / Elevated style (`data-style="tonal-elevated"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Claymorphism style (`data-style="claymorphism"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Bento style (`data-style="bento"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Editorial Print / Newspaper style (`data-style="editorial-print"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Art Deco style (`data-style="art-deco"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Memphis style (`data-style="memphis"`) to the style registry and `theme.css` (MOTIR-10549).
+
 ### Patch Changes
 
 - 67859cd: `theme.css`: Cybercore / Y2K's plan-with-AI pill and orb clear WCAG AA in every palette and mode (MOTIR-10710). The pill's fill takes 6% / 5% black with the base 14% highlight share (was 12% / 22% black with 30% highlight), because black lowers the contrast of the palettes whose label ink is dark: sienna light was 3.18:1 and candy light 3.49:1, and every pair is now at least 4.5:1. The orb's highlight wash drops from 22% to 15%, which takes the cobalt dark glyph from 2.96:1 back over the 3:1 non-text floor.
@@ -39,6 +50,11 @@
 ### Minor Changes
 
 - 4114081: `theme.css` adds `--spacing-shadow-elevated-drop` (MOTIR-10631): how far the solid edge of `--shadow-elevated` falls below the box that casts it. It is `0px` in every style whose elevated shadow is blurred, and `6px` in Neo-Brutalism, whose elevated shadow is a hard 6px offset block. A control hung over other content lifts itself by it, so its shadow clears what it floats above as its box does. No existing token changes.
+- 69dec83: Add the `marker` type pairing (`data-type="marker"`), a marker / script face, Hand-Drawn's default (MOTIR-10548).
+- 69dec83: Add the `rounded` type pairing (`data-type="rounded"`), a rounded sans (MOTIR-10548).
+- 69dec83: Add the `slab` type pairing (`data-type="slab"`), a slab serif (MOTIR-10548).
+- 69dec83: Add the `humanist` type pairing (`data-type="humanist"`), a humanist sans (MOTIR-10548).
+- c04656c: Export `DatePicker` from the package root, with an injected locale and date formatter (MOTIR-10551).
 
 ## 0.20.0
 

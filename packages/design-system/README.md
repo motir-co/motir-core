@@ -341,9 +341,23 @@ in-isolation verification; drop it into any route or render it headless.
 
 ## Releasing
 
-Releases publish to the **public npm registry** (ADR §3) via CI — the
-`.github/workflows/release-design-system.yml` workflow, triggered by a
-package-scoped git tag. There is no manual `npm publish` in the normal path.
+Releases publish to the **public npm registry** (ADR §3) via CI. There is no
+manual `npm publish` and no hand bump in the normal path.
+
+**The normal path is a changeset.** A pull request that changes what the package
+ships adds one file under `.changeset/` (`npx changeset`) naming the bump
+(`patch` / `minor` / `major`) and one line for the changelog. On `main`,
+`.github/workflows/release.yml` keeps a **Version Packages** pull request in sync
+with every pending changeset. Merging that pull request raises `version` in
+`packages/design-system/package.json`, writes the new entry into `CHANGELOG.md`,
+and pushes `design-system-v<version>` on the commit that set it. That tag fires
+`.github/workflows/release-design-system.yml`, which builds, verifies and
+publishes. A change with no changeset is still released by the next Version
+Packages merge, but the changelog will not say it shipped, so every new style,
+palette, pairing or export needs its own changeset.
+
+**Fallback, when that lane cannot run** — the hand steps the tag-triggered
+workflow still accepts:
 
 1. **Bump the version** in `packages/design-system/package.json` (semver: the
    token contract — `--el-*` names, the `data-*` attribute set, the apply API — is
