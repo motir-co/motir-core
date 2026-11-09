@@ -5,7 +5,11 @@ import {
   readStandingReviewRefusal,
 } from '@/lib/approvalGates/reviewRefusal';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
-import { isCiUndecidedAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
+import {
+  isCiUndecidedAtHead,
+  lastDecidedBeforeHead,
+  pullRequestHead,
+} from '@/lib/github/pullRequestHead';
 import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
@@ -24,6 +28,7 @@ import {
   NOTHING_TO_FIX,
   PULL_REQUEST_GROUP_PREFIX,
   REVIEW_AGENT_REVIEWER_NAME,
+  answeredCiFailureOf,
   cardFixGroupKey,
   changesRequestedOf,
   deadRunReasonOf,
@@ -38,6 +43,7 @@ import {
   withFixGroupKey,
   withRaisedHeads,
   type FixReasonValue,
+  type RedBeforeHead,
 } from '@/lib/workItems/fixReason';
 
 // WHY A CARD IS STUCK UNTIL SOMETHING IS REPAIRED, STORED (Story MOTIR-6588 ·
@@ -77,7 +83,9 @@ import {
 // before anything running there: that recompute reads green, stores nothing to fix, and the
 // prior is gone. The refusal the push answered is still in its own rows
 // (`readAnsweredReviewRefusal`), so the next recompute that sees CI running at a moved head
-// raises it again as Fixing — through the same moved-head rule.
+// raises it again as Fixing — through the same moved-head rule. A RED BUILD is read the
+// same way (Bug MOTIR-10747): the failed check rows at a running member's last decided
+// commit before its head (`lastDecidedBeforeHead`) are the failure the push answered.
 //
 // ── …and a LIVE REPAIR is Fixing from its first second (MOTIR-10506) ────────────
 // A `fix` run alive on the card — a claimed `motir fix`, a hosted or agent repair, read
@@ -296,6 +304,33 @@ export async function deriveFixReason(
         fixDetail: priorDetail,
       });
       if (kept) return kept;
+    }
+    // …and when the stored prior is GONE, the red build a push answered is read from its
+    // own check rows (Bug MOTIR-10747): a quick success at the new head, recorded before
+    // anything running there, read the head green and stored nothing to fix. Each running
+    // member's last DECIDED commit before its head says whether the build it answers was
+    // red; the failure is rebuilt as it was raised and put through the same moved-head rule.
+    // Only a GONE prior is rebuilt — a stored answer the rule declined (a re-run at its own
+    // head, a row from before heads were recorded) is the card's word and is kept as such.
+    // It is asked before the review's refusal because `ci_failed` outranks
+    // `changes_requested` (`FIX_REASON_PRIORITY`): with both, the red build was stored.
+    if (item.fixReason === null) {
+      const runningIds = new Set(verdict.running.map((m) => m.pullRequestId));
+      const red: RedBeforeHead[] = [];
+      for (const d of open) {
+        if (!runningIds.has(d.pullRequest.id)) continue;
+        const before = lastDecidedBeforeHead(d.pullRequest);
+        if (before?.red) {
+          red.push({
+            pullRequestId: d.pullRequest.id,
+            commitSha: before.commitSha,
+            failingChecks: before.failingChecks,
+          });
+        }
+      }
+      const failed = answeredCiFailureOf(red, heads, total);
+      const refixing = failed && fixingReasonOf(withFixGroupKey(failed, setKey), verdict.running);
+      if (refixing) return refixing;
     }
     // …and when the stored prior is GONE, the refusal a push answered is read from its own
     // rows (Bug MOTIR-10733): a recompute that saw the new head green on a partial set of

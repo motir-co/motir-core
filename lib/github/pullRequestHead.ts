@@ -91,3 +91,56 @@ export function isCiUndecidedAtHead(pr: PullRequestHeadSlice): boolean {
   if (atHead.length > 0) return foldHeadCheckRows(atHead) === 'running';
   return pr.checkRuns.length > 0;
 }
+
+/** What CI last DECIDED on a commit before the pull request's head — see {@link lastDecidedBeforeHead}. */
+export interface DecidedBeforeHead {
+  commitSha: string;
+  /** Whether CI decided RED there. */
+  red: boolean;
+  /** The failing checks' names there, unique and sorted — empty when it was not red. */
+  failingChecks: string[];
+}
+
+/**
+ * The newest commit BEFORE the pull request's head on which CI decided, and what it decided —
+ * or null when no earlier commit has a decided verdict (Bug MOTIR-10747).
+ *
+ * Commits are ordered by FIRST SIGHTING (their earliest check row), the order
+ * `liveRowsAtLatestSha` reads a head by, and each is folded over its live rows only, so a
+ * replaced run decides nothing. A commit whose CI never decided — still running, or replaced
+ * by a push before it reported — is skipped: it says nothing about whether the build the
+ * head is answering was red. Rows that all carry a conclusion the fold does not rank
+ * (`skipped`, `neutral`) HAVE decided, as `isCiUndecidedAtHead` reads them: not red. The head itself is never read; that is `prCiStateAtHead`'s.
+ *
+ * ⚠️ WHY. Check rows of older commits are kept, so "the build a push answered was red" is a
+ * durable fact of these rows, unlike the card's stored To fix answer, which one recompute
+ * can wipe: a quick success at the new head recorded before anything running there reads the
+ * head green and stores nothing to fix.
+ */
+export function lastDecidedBeforeHead(pr: PullRequestHeadSlice): DecidedBeforeHead | null {
+  const head = pullRequestHead(pr);
+  const byCommit = new Map<string, PrCheckRunSlice[]>();
+  for (const row of pr.checkRuns) {
+    if (row.commitSha === head) continue;
+    const rows = byCommit.get(row.commitSha);
+    if (rows) rows.push(row);
+    else byCommit.set(row.commitSha, [row]);
+  }
+  const newestFirst = [...byCommit.entries()]
+    .map(([commitSha, rows]) => ({
+      commitSha,
+      rows,
+      firstSeen: Math.min(...rows.map((r) => r.createdAt.getTime())),
+    }))
+    .sort((a, b) => b.firstSeen - a.firstSeen);
+  for (const { commitSha, rows } of newestFirst) {
+    const live = liveCheckRows(rows);
+    const state = foldHeadCheckRows(live);
+    if (state === 'running') continue;
+    const failingChecks = [
+      ...new Set(live.filter((r) => r.conclusion === 'failure').map((r) => r.checkName)),
+    ].sort();
+    return { commitSha, red: state === 'failing', failingChecks };
+  }
+  return null;
+}
