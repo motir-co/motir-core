@@ -1,4 +1,5 @@
 import {
+  HostAgentUnreachableError,
   OrchestratorApiError,
   mintHostCertificateAuthority,
   mintHostClientCertificate,
@@ -35,7 +36,7 @@ export class FakeHostAgentClient implements HostAgentClient {
   behaviour: PersistentExecBehaviour = {};
 
   async exec(address: string, request: HostAgentExecRequest): Promise<PersistentExecResult> {
-    if (this.behaviour.unreachable) throw new OrchestratorApiError('aws', 503, 'unreachable');
+    if (this.behaviour.unreachable) throw new HostAgentUnreachableError();
     this.calls.push({ address, request });
     if (this.behaviour.hangs) throw new OrchestratorApiError('aws', 408, 'exec_timeout');
     return {

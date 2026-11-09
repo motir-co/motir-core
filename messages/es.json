@@ -14124,6 +14124,7 @@
         "cloneNoAccess": "No se pudo leer {repository}: la app no tiene acceso",
         "exited": "La máquina terminó durante el arranque (código de salida {code})",
         "deadline": "El arranque no terminó en {minutes} minutos",
+        "agentDeadline": "El agente no respondió en {minutes} minutos tras arrancar",
         "deleted": "Eliminado durante el arranque"
       },
       "summary": {

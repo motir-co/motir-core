@@ -12,6 +12,7 @@ import type {
   PersistentContainerSpec,
   PersistentContainerState,
   PersistentContainerStatus,
+  PersistentExecReadiness,
   PersistentExecResult,
   PersistentLivenessResult,
   PersistentMachineEvent,
@@ -165,6 +166,17 @@ export interface FakePersistentControls {
   readonly operations: string[];
   /** Every `exec` command, in order, with the machine it ran on and its stdin (if any). */
   readonly execs: Array<{ machineId: string; command: string[]; stdin?: string }>;
+  /**
+   * Every machine `checkExecReady` was asked about, in order. Kept apart from
+   * `operations`: Fly answers it with no call, so it is not part of a life's sequence.
+   */
+  readonly execReadyChecks: string[];
+  /**
+   * What `checkExecReady` answers for a RUNNING machine until set again (MOTIR-10808):
+   * `'starting'` stands in for an AWS host agent that is not listening yet.
+   * Default `'ready'`; a machine that is not running always answers `'starting'`.
+   */
+  setExecReadiness(readiness: PersistentExecReadiness): void;
   /** What the next `exec` returns (default: exit 0, empty output). */
   setNextExecResult(result: PersistentExecResult): void;
   /**
@@ -216,6 +228,7 @@ let store: FakeStore = { apps: [], machines: {}, volumes: {}, sequence: 0 };
 const persistentSpecs: PersistentContainerSpec[] = [];
 const operations: string[] = [];
 const execs: Array<{ machineId: string; command: string[]; stdin?: string }> = [];
+const execReadyChecks: string[] = [];
 let nextExec: PersistentExecResult | null = null;
 let execResponder:
   | ((command: readonly string[], stdin: string | undefined) => PersistentExecResult)
@@ -231,6 +244,7 @@ const failures: Record<FailureKind, string | null> = {
 };
 const heldCapacity = new Set<FakeCapacityOperation>();
 let bootBehaviour: 'start' | 'never_start' = 'start';
+let execReadiness: PersistentExecReadiness = 'ready';
 let terminalBase: string | null = null;
 let now: () => Date = () => new Date();
 
@@ -319,6 +333,7 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     persistentSpecs,
     operations,
     execs,
+    execReadyChecks,
 
     // ── controls ──────────────────────────────────────────────────────────────
 
@@ -328,12 +343,14 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
       persistentSpecs.length = 0;
       operations.length = 0;
       execs.length = 0;
+      execReadyChecks.length = 0;
       nextExec = null;
       execResponder = null;
       for (const key of Object.keys(failures) as Array<keyof typeof failures>) failures[key] = null;
       writeSharedFailures({});
       heldCapacity.clear();
       bootBehaviour = 'start';
+      execReadiness = 'ready';
       terminalBase = null;
       now = () => new Date();
     },
@@ -443,6 +460,9 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
     },
     setNextExecResult(result) {
       nextExec = result;
+    },
+    setExecReadiness(readiness) {
+      execReadiness = readiness;
     },
     setTerminalAddress(base) {
       terminalBase = base;
@@ -783,6 +803,13 @@ export const fakePersistentOrchestrator: PersistentContainerOrchestrator & FakeP
         };
       }
       return { alive: true };
+    },
+
+    async checkExecReady(handle: PersistentContainerHandle): Promise<PersistentExecReadiness> {
+      load();
+      execReadyChecks.push(handle.machineId);
+      const machine = store.machines[handle.machineId];
+      return machine?.state === 'running' ? execReadiness : 'starting';
     },
 
     terminalEndpoint(handle: PersistentContainerHandle): PersistentTerminalEndpoint {

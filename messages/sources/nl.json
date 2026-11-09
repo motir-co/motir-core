@@ -11039,6 +11039,7 @@
   "myAgents.boot.detail.cloneNoAccess": "Could not read {repository} — the app has no access",
   "myAgents.boot.detail.exited": "The machine exited during boot (exit code {code})",
   "myAgents.boot.detail.deadline": "The boot didn’t finish within {minutes} minutes",
+  "myAgents.boot.detail.agentDeadline": "The agent didn’t answer within {minutes} minutes of starting",
   "myAgents.boot.detail.deleted": "Deleted while booting",
   "myAgents.boot.summary.create": "Booted in {time}",
   "myAgents.boot.summary.wake": "Woke in {time}",

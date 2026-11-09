@@ -14124,6 +14124,7 @@
         "cloneNoAccess": "Nie udało się odczytać {repository} — aplikacja nie ma dostępu",
         "exited": "Maszyna zakończyła działanie podczas uruchamiania (kod wyjścia {code})",
         "deadline": "Uruchamianie nie zakończyło się w ciągu {minutes} min",
+        "agentDeadline": "Agent nie odpowiedział w ciągu {minutes} min od uruchomienia",
         "deleted": "Usunięto w trakcie uruchamiania"
       },
       "summary": {

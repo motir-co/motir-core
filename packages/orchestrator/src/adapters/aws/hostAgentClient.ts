@@ -24,6 +24,21 @@ export const HOST_AGENT_PORT = 8443;
 /** How much longer than the command's own timeout the request may take. */
 export const HOST_AGENT_DEADLINE_MARGIN_SECONDS = 15;
 
+/**
+ * NO HOST AGENT ANSWERED (MOTIR-10808): a refused, reset or timed-out
+ * connection, a TLS failure, or an instance with no public address yet. It is
+ * the contract's `503 unreachable`, with the same message and status as before,
+ * as its own type so a caller can tell "nothing is listening yet" apart from a
+ * host agent that DID answer and refused (`host_agent_refused`, which may carry
+ * any status, 503 included) — never by reading the message.
+ */
+export class HostAgentUnreachableError extends OrchestratorApiError {
+  constructor() {
+    super('aws', 503, 'unreachable');
+    this.name = 'HostAgentUnreachableError';
+  }
+}
+
 /** The TLS material Motir dials a host agent with. */
 export interface HostAgentTls {
   /** The Motir hoster CA certificate — the only trust anchor. */
@@ -44,7 +59,7 @@ export interface HostAgentExecRequest {
 export interface HostAgentClient {
   /** Run `request.command` in the instance's container at `address`. A non-zero
    *  exit is a result. The agent's own timeout throws status 408; a transport
-   *  failure throws status 503 `unreachable`. */
+   *  failure throws {@link HostAgentUnreachableError} (status 503 `unreachable`). */
   exec(address: string, request: HostAgentExecRequest): Promise<PersistentExecResult>;
 }
 
@@ -94,7 +109,7 @@ export function createHostAgentClient(options: HostAgentClientOptions): HostAgen
       });
       const deadlineMs = (request.timeoutSeconds + margin) * 1000;
       return new Promise<PersistentExecResult>((resolve, reject) => {
-        const unreachable = () => reject(new OrchestratorApiError('aws', 503, 'unreachable'));
+        const unreachable = () => reject(new HostAgentUnreachableError());
         const req = httpsRequest(
           {
             host: address,

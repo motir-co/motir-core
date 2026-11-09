@@ -14124,6 +14124,7 @@
         "cloneNoAccess": "Impossibile leggere {repository} — l’app non ha accesso",
         "exited": "La macchina è terminata durante l’avvio (codice di uscita {code})",
         "deadline": "L’avvio non si è concluso entro {minutes} minuti",
+        "agentDeadline": "L’agente non ha risposto entro {minutes} minuti dall’avvio",
         "deleted": "Eliminato durante l’avvio"
       },
       "summary": {

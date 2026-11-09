@@ -14118,6 +14118,7 @@
         "cloneNoAccess": "{repository}을(를) 읽을 수 없습니다 — 앱에 접근 권한이 없습니다",
         "exited": "부팅 중 머신이 종료되었습니다(종료 코드 {code})",
         "deadline": "부팅이 {minutes}분 이내에 끝나지 않았습니다",
+        "agentDeadline": "에이전트가 시작 후 {minutes}분 이내에 응답하지 않았습니다",
         "deleted": "부팅 중 삭제됨"
       },
       "summary": {

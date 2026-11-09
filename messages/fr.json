@@ -14124,6 +14124,7 @@
         "cloneNoAccess": "Impossible de lire {repository} — l'application n'y a pas accès",
         "exited": "La machine s'est arrêtée pendant le démarrage (code de sortie {code})",
         "deadline": "Le démarrage ne s'est pas terminé en {minutes} minutes",
+        "agentDeadline": "L’agent n’a pas répondu dans les {minutes} minutes suivant le démarrage",
         "deleted": "Supprimé pendant le démarrage"
       },
       "summary": {

@@ -1176,6 +1176,14 @@ describe('moveImage — an agent moved to a newer image on the same machine and 
   });
 });
 
+describe('checkExecReady — a started Fly machine already serves exec (MOTIR-10808)', () => {
+  it('answers ready without calling Fly', async () => {
+    handler = () => json(500, { error: 'must not be called' });
+    expect(await flyPersistentOrchestrator.checkExecReady(HANDLE)).toBe('ready');
+    expect(calls).toHaveLength(0);
+  });
+});
+
 describe('checkLiveness — is the coding agent alive on the new image? (MOTIR-6950)', () => {
   const LIVENESS = ['claude', '--version'];
 

@@ -14124,6 +14124,7 @@
         "cloneNoAccess": "Kan {repository} niet lezen — de app heeft geen toegang",
         "exited": "De machine is tijdens het opstarten afgesloten (exitcode {code})",
         "deadline": "Het opstarten was niet binnen {minutes} minuten klaar",
+        "agentDeadline": "De agent reageerde niet binnen {minutes} minuten na het opstarten",
         "deleted": "Verwijderd tijdens het opstarten"
       },
       "summary": {

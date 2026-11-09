@@ -14,6 +14,7 @@ import type {
   PersistentContainerSpec,
   PersistentContainerState,
   PersistentContainerStatus,
+  PersistentExecReadiness,
   PersistentExecResult,
   PersistentLivenessResult,
   PersistentMachineEvent,
@@ -43,7 +44,12 @@ import {
   transitionTimeOf,
   type AwsExplicitNetwork,
 } from './index';
-import { HOST_AGENT_PORT, type HostAgentClient, type HostAgentTls } from './hostAgentClient';
+import {
+  HOST_AGENT_PORT,
+  HostAgentUnreachableError,
+  type HostAgentClient,
+  type HostAgentTls,
+} from './hostAgentClient';
 import {
   hostCertificateNeedsRenewal,
   mintHostServerCertificate,
@@ -124,6 +130,16 @@ export const AWS_LIST_PAGE_SIZE = 200;
 
 /** The default bound on one exec, as on Fly. */
 export const AWS_EXEC_DEFAULT_TIMEOUT_SECONDS = 120;
+
+/**
+ * THE READINESS EXEC (MOTIR-10808): the no-op `checkExecReady` sends to the host
+ * agent. The contract defines no health path (`aws-hoster-host-agent.md` §1), so
+ * the probe is the exec door itself, with a command that does nothing. Its bound
+ * is short: a host agent that is up answers `true` at once, and one that is not
+ * fails at the transport — the client's deadline is this plus its margin.
+ */
+export const AWS_EXEC_READY_COMMAND: readonly string[] = ['true'];
+export const AWS_EXEC_READY_TIMEOUT_SECONDS = 5;
 
 /** The description on the host agent's one inbound rule. */
 export const AWS_HOST_AGENT_INGRESS_DESCRIPTION =
@@ -818,12 +834,42 @@ export function createAwsPersistentOrchestrator(
       options: { timeoutSeconds?: number; stdin?: string } = {},
     ): Promise<PersistentExecResult> {
       const address = await publicAddressOf(ec2, handle.machineId);
-      if (!address) throw new OrchestratorApiError('aws', 503, 'unreachable');
+      if (!address) throw new HostAgentUnreachableError();
       return config.hostAgent.client.exec(address, {
         command,
         ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
         timeoutSeconds: options.timeoutSeconds ?? AWS_EXEC_DEFAULT_TIMEOUT_SECONDS,
       });
+    },
+
+    /** A running instance's host agent starts only after the per-boot script has
+     *  pulled the image and started the container (the hoster AMI orders its
+     *  service after cloud-final), minutes after EC2 reports `running`. So the
+     *  instance is `starting` until a no-op exec gets ANY answer from it; only
+     *  a transport failure — {@link HostAgentUnreachableError} — or an error
+     *  reading its address means not yet. A host agent that answered with a
+     *  refusal or a timeout is up: the boot's first real exec meets that. */
+    async checkExecReady(handle: PersistentContainerHandle): Promise<PersistentExecReadiness> {
+      let address: string | null;
+      try {
+        address = await publicAddressOf(ec2, handle.machineId);
+      } catch {
+        // EC2 could not be asked for the address: not known to answer yet.
+        return 'starting';
+      }
+      if (!address) return 'starting';
+      try {
+        await config.hostAgent.client.exec(address, {
+          command: AWS_EXEC_READY_COMMAND,
+          timeoutSeconds: AWS_EXEC_READY_TIMEOUT_SECONDS,
+        });
+      } catch (err) {
+        if (err instanceof HostAgentUnreachableError) return 'starting';
+        // `exec_timeout` or `host_agent_refused`: the agent answered. Anything
+        // else is not a host agent's answer, and is not hidden as one.
+        if (!(err instanceof OrchestratorApiError)) throw err;
+      }
+      return 'ready';
     },
 
     terminalEndpoint(handle: PersistentContainerHandle): Promise<PersistentTerminalEndpoint> {

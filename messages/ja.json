@@ -14121,6 +14121,7 @@
         "cloneNoAccess": "{repository} を読み取れませんでした — アプリにアクセス権がありません",
         "exited": "起動中にマシンが終了しました（終了コード {code}）",
         "deadline": "起動が {minutes} 分以内に完了しませんでした",
+        "agentDeadline": "エージェントが起動後 {minutes} 分以内に応答しませんでした",
         "deleted": "起動中に削除されました"
       },
       "summary": {

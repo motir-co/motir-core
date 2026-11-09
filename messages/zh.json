@@ -14115,6 +14115,7 @@
         "cloneNoAccess": "无法读取 {repository} — 应用没有访问权限",
         "exited": "机器在启动过程中退出（退出码 {code}）",
         "deadline": "启动未能在 {minutes} 分钟内完成",
+        "agentDeadline": "智能体在启动后 {minutes} 分钟内没有响应",
         "deleted": "在启动过程中被删除"
       },
       "summary": {
