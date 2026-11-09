@@ -1,5 +1,14 @@
 # @motir/design-system
 
+## 0.22.0
+
+### Minor Changes
+
+- d246115: Add the Contrast palette (`data-palette="contrast"`): one Radix Gray ramp with body text at 7:1 (AAA) under every style in light and dark, control edges at 3:1, a Plum primary and step-3 tints.
+- d246115: Add the Lagoon palette (`data-palette="lagoon"`): a deep lagoon-cyan primary over shallow-water cyan surfaces and Slate ink, with a coral highlight, every value a Radix Colors step and every text role AA in light and dark under every style.
+- d246115: Add the Midnight palette (`data-palette="midnight"`): dark-first — authored in Radix Slate and Sky dark with each light value derived as the same step of the light scale — a starlight-sky primary over a night-slate ground, AA in light and dark under every style.
+- d246115: Add the Olive palette (`data-palette="olive"`): a moss primary over warm olive greys with a terracotta highlight, every value a Radix Colors step and every text role AA in light and dark under every style.
+
 ## 0.21.4
 
 ### Patch Changes
