@@ -596,6 +596,23 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * The NON-DELETED record that names this disk in an app NO fleet account holds
+   * (MOTIR-10828) — the install fleet's disk pass: an install-fleet instance is
+   * keyed by its app (the fleet's tag) with no account row (MOTIR-10794). A
+   * deleted record owns no disk.
+   */
+  async findByVolumeInUnshardedApp(
+    app: string,
+    volumeId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { flyApp: app, fleetShardId: null, volumeId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
    * Every PROCESS-WIDE instance app any record (live or deleted) has ever named —
    * the orphan-volume pass walks each one. Distinct, sorted for a stable pass. An
    * instance placed on a fleet account is in none of them: its account's own
