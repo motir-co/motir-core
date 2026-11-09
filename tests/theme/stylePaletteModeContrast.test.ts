@@ -184,65 +184,13 @@ const ORB_FALLBACK =
  * row id `style/palette/mode · ink on hook`. Asserted by equality.
  */
 // One entry per measured pair, each carrying the ratio it measured and the bug
-// filed when it was recorded: MOTIR-10709 aurora. Retrofuturism (MOTIR-10708),
+// filed when it was recorded. Every style that shipped before MOTIR-10549 now
+// clears every row and holds no entry: retrofuturism (MOTIR-10708),
 // glassmorphism (MOTIR-10707), cybercore-y2k (MOTIR-10710 pill and orb,
-// MOTIR-10746 canvas grid) and memphis (MOTIR-10745: painting the canvas whole
+// MOTIR-10746 canvas grid), memphis (MOTIR-10745: painting the canvas whole
 // found its dot-over-hatch pixels under the floor; the pattern now takes
-// 11 / 9 / 5%) clear every row and hold no entry.
-const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
-  'aurora/amber/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '3.95',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/amethyst/dark · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.19',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/amethyst/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.44',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '3.81',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-text-secondary on canvas (pattern)': {
-    ratio: '3.87',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/citrine/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.08',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/cobalt/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.00',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/evergreen/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '3.97',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/garnet/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '3.97',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/motir/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '3.98',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/motir/light · --el-text-secondary on canvas (pattern)': {
-    ratio: '4.25',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '3.71',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/spectrum/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.26',
-    bug: 'MOTIR-10709',
-  },
-};
+// 11 / 9 / 5%) and aurora (MOTIR-10709). A new failure joins with its own bug key.
+const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {};
 
 // ── The material reader ─────────────────────────────────────────────────────
 

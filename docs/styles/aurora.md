@@ -75,8 +75,8 @@ the block (the disjoint-axis acceptance criterion; enforced by
   `--spacing-control-x/y: 12/7`, `--height-control: 38px`.
 - **Motion:** `--transition-duration: 260ms` (`--transition-slow: 380ms`) and a
   faint `--active-scale: 0.985` — smooth and slow, never snappy.
-- **Material scalars (palette-agnostic):** `--aurora-wash: 22%` /
-  `--aurora-wash-soft: 15%` (ribbon tint strengths), `--aurora-sheen: 7%`
+- **Material scalars (palette-agnostic):** `--aurora-wash: 10%` /
+  `--aurora-wash-soft: 7%` (ribbon tint strengths), `--aurora-sheen: 7%`
   (lit-from-above surface sheen), `--aurora-glow: 22%` /
   `--aurora-glow-strong: 30%` (colour-glow halo strengths), and
   `--aurora-drift-duration: 28s` (one slow breath of the drifting canvas). These
@@ -140,8 +140,16 @@ not balanced against a translucent blur. Four things keep it AA:
    surface toward a hue enough to threaten contrast.
 3. **The glow is a `box-shadow` halo** — it lives _outside_ the panel and never
    sits behind text.
-4. **The canvas washes are subtle** (`--aurora-wash: 22%`, the cooler band 15%)
+4. **The canvas washes are subtle** (`--aurora-wash: 10%`, the cooler band 7%)
    and only the page-level canvas shows them; body copy lives on opaque surfaces.
+   The strength is set by text that sits straight on the canvas, not by body
+   copy: where two ribbons overlap they pull the page toward the accent hue, and
+   `--el-accent-on-surface` is that same hue. At the original 22% / 15% it fell
+   to 3.63:1 rendered in sienna light (3.98:1 on the token gate's single-stop
+   read, motir light). 10% / 7% is the strongest pair whose rendered worst case
+   clears 4.5:1 for all four hard inks in every palette, both modes, across the
+   drift and at phone, laptop and desktop sizes (worst 4.52:1, sienna light) —
+   MOTIR-10709. Raise either value only with a fresh rendered sweep.
    Text continues to use the palette's `--el-text*` tokens, whose AA pairings are
    unchanged.
 
