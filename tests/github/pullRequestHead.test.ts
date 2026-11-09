@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   checkRowsAtHead,
   isCiUndecidedAtHead,
+  hasHeadDecidedBeforeRunningChecks,
+  isLateCheckAtHead,
   isReRunAtHead,
   lastDecidedBeforeHead,
   prCiStateAtHead,
@@ -423,5 +425,63 @@ describe('queueFailureAnsweredByHead', () => {
     expect(queueFailureAnsweredByHead(null, B, A)).toBe(false);
     expect(queueFailureAnsweredByHead(exit(), null, A)).toBe(false);
     expect(queueFailureAnsweredByHead(exit(), B, undefined)).toBe(false);
+  });
+});
+
+// A CHECK THAT BEGAN AFTER THE HEAD'S VERDICT (review of MOTIR-10791): every running check at
+// the head started after every decided one there finished.
+describe('isLateCheckAtHead / hasHeadDecidedBeforeRunningChecks', () => {
+  // Before every `run` row's createdAt, so no pending row reads as a reopened re-run.
+  const T = Date.UTC(2026, 8, 30, 9, 0, 0);
+  const timed = (conclusion: string, seconds: number | null, checkName: string) => ({
+    ...run(B, conclusion, checkName),
+    conclusionAt: seconds === null ? null : new Date(T + seconds * 1000),
+  });
+
+  it('a check started after every decided check finished is late, and the head had decided', () => {
+    const pr = {
+      headSha: B,
+      checkRuns: [timed('success', 30, 'vitest'), timed('pending', 60, 'labeled')],
+    };
+    expect(isLateCheckAtHead(pr)).toBe(true);
+    expect(hasHeadDecidedBeforeRunningChecks(pr)).toBe(true);
+  });
+
+  it('the push’s own checks delivered out of order are not: one running check started before a decided one finished', () => {
+    const pr = {
+      headSha: B,
+      checkRuns: [
+        timed('success', 30, 'lint'),
+        timed('pending', 5, 'vitest'),
+        timed('pending', 60, 'labeled'),
+      ],
+    };
+    expect(isLateCheckAtHead(pr)).toBe(false);
+    expect(hasHeadDecidedBeforeRunningChecks(pr)).toBe(false);
+  });
+
+  it('no evidence is not late: a row with no time, nothing running, or nothing decided', () => {
+    expect(
+      isLateCheckAtHead({
+        headSha: B,
+        checkRuns: [timed('success', null, 'vitest'), timed('pending', 60, 'labeled')],
+      }),
+    ).toBe(false);
+    expect(isLateCheckAtHead({ headSha: B, checkRuns: [timed('success', 30, 'vitest')] })).toBe(
+      false,
+    );
+    expect(isLateCheckAtHead({ headSha: B, checkRuns: [timed('pending', 60, 'labeled')] })).toBe(
+      false,
+    );
+    expect(isLateCheckAtHead({ headSha: B, checkRuns: [] })).toBe(false);
+  });
+
+  it('a re-run at the head is a decided head too', () => {
+    const reopened = { ...run(B, 'pending'), conclusionAt: null };
+    const replaced = { ...run(B, 'failure'), checkSuiteId: '1' };
+    const again = { ...reopened, checkSuiteId: '2' };
+    expect(hasHeadDecidedBeforeRunningChecks({ headSha: B, checkRuns: [replaced, again] })).toBe(
+      true,
+    );
   });
 });

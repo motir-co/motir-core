@@ -6,6 +6,7 @@ import {
 } from '@/lib/approvalGates/reviewRefusal';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import {
+  hasHeadDecidedBeforeRunningChecks,
   isCiUndecidedAtHead,
   lastDecidedBeforeHead,
   pullRequestHead,
@@ -150,7 +151,8 @@ async function reviewerName(
  * (`answeredPullRequestReasonOf`), or null when none answered one (Bugs MOTIR-10747 ·
  * MOTIR-10791). Per running member: its latest queue exit, if it was a failure at the last
  * commit CI decided on before the head; the carried conflict or out-of-date reading about an
- * earlier head; and the red build at that last decided commit.
+ * earlier head; and the red build at that last decided commit. A member whose head CI had
+ * already decided before the checks running there now answers nothing.
  */
 async function answeredReasonOf(
   open: readonly WorkItemDeliveryWithChecks[],
@@ -160,7 +162,13 @@ async function answeredReasonOf(
   tx: Prisma.TransactionClient,
 ): Promise<FixReasonValue | null> {
   const runningIds = new Set(running.map((m) => m.pullRequestId));
-  const members = open.filter((d) => runningIds.has(d.pullRequest.id));
+  // ⚠️ ONLY A HEAD CI HAS NOT YET DECIDED answers anything (review of MOTIR-10791): a re-run
+  // there, or a check that started after the head's verdict, answers the head's own verdict.
+  // Without this guard the carried conflict reading, which stands until the next push, would
+  // re-raise a conflict the head had already resolved as Fixing on every such recompute.
+  const members = open.filter(
+    (d) => runningIds.has(d.pullRequest.id) && !hasHeadDecidedBeforeRunningChecks(d.pullRequest),
+  );
   const exits = await githubPullRequestQueueExitRepository.findLatestByPullRequests(
     members.map((d) => d.pullRequest.id),
     tx,

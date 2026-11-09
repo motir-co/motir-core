@@ -1990,6 +1990,112 @@ describe('Fixing — a quick green landed first on a push answering a queue exit
     });
   });
 
+  // ── A HEAD CI HAD ALREADY DECIDED answers nothing (review of MOTIR-10791) ──────────────
+  // The carried conflict reading stands until the next push, and the queue exit and the red
+  // build stay in their rows, so the rebuild must refuse a head whose CI had a verdict before
+  // the checks running there now: a re-run, or a check that began after the verdict.
+
+  /** A check row at PUSHED with its provider time (`conclusionAt`): a pending row's start,
+   *  a decided row's finish. Times sit in the past, so a fresh row is never "reopened". */
+  const T0 = () => new Date(Date.now() - 600_000);
+  const checkAt = (
+    pullRequestId: string,
+    checkName: string,
+    conclusion: 'pending' | 'success' | 'failure',
+    conclusionAt: Date,
+  ) =>
+    adminDb.githubCheckRun.create({
+      data: { pullRequestId, commitSha: PUSHED, checkName, conclusion, conclusionAt },
+    });
+  const at = (base: Date, seconds: number) => new Date(base.getTime() + seconds * 1000);
+  /** A re-run: the row reopened in place, dated by its own start, after it was recorded. */
+  async function reRun(checkRunId: string) {
+    const row = await adminDb.githubCheckRun.findUniqueOrThrow({ where: { id: checkRunId } });
+    await adminDb.githubCheckRun.update({
+      where: { id: checkRunId },
+      data: { conclusion: 'pending', conclusionAt: new Date(row.createdAt.getTime() + 60_000) },
+    });
+  }
+  async function twiceNothing(fx: WorkItemFixture, cardId: string) {
+    expect(await recompute(fx, cardId), 'first recompute').toEqual({
+      fixReason: null,
+      fixDetail: null,
+    });
+    expect(await recompute(fx, cardId), 'second recompute').toEqual({
+      fixReason: null,
+      fixDetail: null,
+    });
+  }
+
+  it('the push’s own checks, delivered out of order with real times, still bring the conflict back Fixing', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr, before } = await stuckCard(fx, 'conflicted');
+    await pushMarksPending(pr.id, PUSHED);
+    await reads(pr.id, 'clean', PUSHED);
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: PUSHED } });
+    const t0 = T0();
+    // Lint finished at +30s and is recorded first; Vitest STARTED at +5s and is recorded later.
+    await checkAt(pr.id, 'Lint', 'success', at(t0, 30));
+    expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+    await checkAt(pr.id, 'Vitest', 'pending', at(t0, 5));
+
+    for (const pass of ['first', 'second']) {
+      expect(await recompute(fx, card.id), `${pass} recompute`).toEqual({
+        fixReason: 'conflicted',
+        fixDetail: { ...before.fixDetail, fixing: true },
+      });
+    }
+  });
+
+  it('a re-run of a FAILED fix that answered a conflict is never Fixing — however many recomputes', async () => {
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await stuckCard(fx, 'conflicted');
+    await pushMarksPending(pr.id, PUSHED);
+    await reads(pr.id, 'clean', PUSHED);
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: PUSHED } });
+    const vitest = await ciStarts(pr.id, PUSHED, 'Vitest');
+    await finishes(vitest.id, 'failure');
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'ci_failed',
+      fixDetail: { fixing: false, raisedHeads: { [pr.id]: PUSHED } },
+    });
+
+    await reRun(vitest.id);
+
+    await twiceNothing(fx, card.id);
+  });
+
+  for (const how of ['conflicted', 'queue_failed', 'ci_failed'] as const) {
+    for (const later of ['a re-run', 'a check that starts after the verdict'] as const) {
+      it(`${how}: a fix that went green, then ${later} at its head, is never Fixing`, async () => {
+        const fx = await makeWorkItemFixture();
+        const { card, pr } =
+          how === 'ci_failed'
+            ? await cardWith(fx, 'implemented', { Vitest: 'failure' })
+            : await stuckCard(fx, how);
+        if (how === 'ci_failed') await recompute(fx, card.id);
+        if (how === 'conflicted') {
+          await pushMarksPending(pr.id, PUSHED);
+          await reads(pr.id, 'clean', PUSHED);
+        }
+        await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: PUSHED } });
+        // The fix's whole CI: Vitest started at +0s and finished green at +30s.
+        const t0 = T0();
+        const vitest = await checkAt(pr.id, 'Vitest', 'pending', t0);
+        await adminDb.githubCheckRun.update({
+          where: { id: vitest.id },
+          data: { conclusion: 'success', conclusionAt: at(t0, 30) },
+        });
+        expect(await recompute(fx, card.id)).toEqual({ fixReason: null, fixDetail: null });
+
+        if (later === 'a re-run') await reRun(vitest.id);
+        else await checkAt(pr.id, 'Labeled', 'pending', at(t0, 90));
+
+        await twiceNothing(fx, card.id);
+      });
+    }
+  }
+
   it('the pure half: conflicted outranks out_of_date, which outranks a red build, each on its own head', () => {
     const member = (pullRequestId: string, over: Partial<AnsweredMember>): AnsweredMember => ({
       pullRequestId,
