@@ -3,6 +3,7 @@ import { deferRun } from '../engine/defer';
 import { dispatchSystemEvent } from '../sendEvent';
 import { transactionTimeoutHalf } from '@/lib/monitoring/transactionStall';
 import { ciRunnerBootEvent } from '@/lib/ciFleet/bootDispatch';
+import type { ReconcileOutcome } from '@/lib/services/ciRunnerReconcileService';
 
 // The runner FLEET's background jobs (Story MOTIR-1916 · MOTIR-1921) — the
 // trigger, the boot, and the backstop.
@@ -104,17 +105,27 @@ export const ciRunnerProvisionSweep = defineJob(
     // pending intents to fan out: a lost runner leaves a job queued on GitHub with
     // NO pending intent in our DB at all, which is exactly the case this finds.
     // A step of its own so an outage on the GitHub side cannot fail the fan-out.
-    await ctx.step.run('reconcile-github-queue', async () => {
-      try {
-        const outcome = await services.ciRunnerReconcile.reconcile();
-        return { added: outcome.added };
-      } catch (err) {
-        console.error('[ciRunnerProvisionSweep] the GitHub-queue reconcile failed', err);
-        return { added: 0 };
-      }
-    });
+    //
+    // Its whole outcome — per org: queued, idle runners, awaiting, added, skipped
+    // runs, error — rides the sweep's OUTPUT (MOTIR-10790), so a reconcile that
+    // keeps failing for an org shows on the `job_run` row, not only in the logs.
+    const reconcile = await ctx.step.run(
+      'reconcile-github-queue',
+      async (): Promise<ReconcileOutcome & { error?: string }> => {
+        try {
+          return await services.ciRunnerReconcile.reconcile();
+        } catch (err) {
+          console.error('[ciRunnerProvisionSweep] the GitHub-queue reconcile failed', err);
+          return {
+            orgs: [],
+            added: 0,
+            error: err instanceof Error ? err.message : 'unknown',
+          };
+        }
+      },
+    );
 
-    if (intentIds.length === 0) return { dispatched: 0 };
+    if (intentIds.length === 0) return { dispatched: 0, reconcile };
 
     if (intentIds.length === SWEEP_BATCH) {
       // The batch ceiling bound. Say so — a sweep that silently drops the tail
@@ -143,7 +154,7 @@ export const ciRunnerProvisionSweep = defineJob(
       return { dispatched: intentIds.length };
     });
 
-    return { dispatched: intentIds.length };
+    return { dispatched: intentIds.length, reconcile };
   },
 );
 

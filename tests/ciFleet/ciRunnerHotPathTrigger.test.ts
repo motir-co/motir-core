@@ -475,7 +475,7 @@ describe('the SWEEP is unchanged — it still drains a backlog', () => {
     const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     const { result } = await engine.execute();
 
-    expect(result).toEqual({ dispatched: 3 });
+    expect(result).toMatchObject({ dispatched: 3 });
     expect(dispatchedEvents(send)).toEqual([
       ciRunnerBootEvent('i1'),
       ciRunnerBootEvent('i2'),
