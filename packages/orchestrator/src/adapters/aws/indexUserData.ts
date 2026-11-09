@@ -33,15 +33,33 @@ import { parseImageReference } from '../../imagePull';
 // its role can do nothing but read the indexer image, so it reports nothing
 // through an AWS API. It can write to its own console, and `GetConsoleOutput`
 // reads that console with the adapter's own key.
-// When the pull fails, the script writes ONE line, {@link AWS_INDEX_PULL_FAILED_MARKER},
-// to the console and powers off. The adapter's `describe` reads the console of a
-// stopped index VM and reports `imagePullFailed`. Every other line of the script,
-// the container's own output included, goes to a log file on the VM, never the
-// console. That way an indexed repository's content cannot forge the marker.
+// When the pull fails, the script writes the last lines of the failed command's
+// own output, each prefixed {@link AWS_INDEX_PULL_ERROR_PREFIX}, then ONE line,
+// {@link AWS_INDEX_PULL_FAILED_MARKER}, and powers off. The error lines are why a
+// failed pull can be diagnosed at all: the log file below lives on the VM's disk,
+// which is gone once the VM is terminated (MOTIR-10823). They are docker's and the
+// AWS CLI's own words (a registry refusal, a missing image, a network error) —
+// the login password travels on a pipe and is never printed, and the env file is
+// written by a heredoc that echoes nothing. The adapter's `describe` reads the
+// console and reports `imagePullFailed`, logging the error lines. Every other line
+// of the script, the container's own output included, goes to a log file on the
+// VM, never the console. That way an indexed repository's content cannot forge
+// either marker: the error lines come only from the login and the pull, which run
+// before the container does.
 //
 // THE EXIT-CODE CHANNEL (MOTIR-9449) is the same console with a DIFFERENT marker:
 // once `docker run` returns, the script writes {@link AWS_INDEX_EXIT_MARKER} and the
-// code, and only then powers off. A pull failure writes its own marker and never
+// code, and only then powers off.
+//
+// THE HOLD BEFORE THE POWER-OFF (MOTIR-10823). After either marker the VM stays
+// up for {@link AWS_INDEX_MARKER_HOLD_SECONDS} before it powers off, so the
+// adapter reads the marker LIVE while the VM is still running. Waiting for EC2 to
+// post a STOPPED instance's buffered console is not dependable: on 2026-11-09 it
+// took 5 to 9 minutes on the install fleet and more than 10 on a pool account,
+// past MOTIR-10805's grace window, and two runs that had a marker settled as
+// `exit_unobserved`. The hold is several times supervision's longest poll
+// interval (15 s), so a poll lands inside it; the stopped-VM read and its grace
+// window stay as the fallback for a hold no poll saw. A pull failure writes its own marker and never
 // this one, so a pull failure is never read as an exit code. The ordering closes
 // the race with teardown: an index VM launches with
 // `InstanceInitiatedShutdownBehavior: 'stop'` (a runner keeps `terminate`), so the
@@ -61,6 +79,21 @@ export const AWS_INDEX_PULL_FAILED_MARKER = 'MOTIR_INDEX_BOOT: image_pull_failed
 /** The console line an index VM writes when its container returns, before the
  *  code: `MOTIR_INDEX_BOOT: exit_code=0`. */
 export const AWS_INDEX_EXIT_MARKER = 'MOTIR_INDEX_BOOT: exit_code=';
+
+/** The prefix of each console line that carries the failed login's or pull's own
+ *  output, written before {@link AWS_INDEX_PULL_FAILED_MARKER} (MOTIR-10823). */
+export const AWS_INDEX_PULL_ERROR_PREFIX = 'MOTIR_INDEX_BOOT: pull_error: ';
+
+/** How many of the failed command's last output lines reach the console, and how
+ *  long each may be. Docker's refusal is its last line; the cap keeps a pull's
+ *  progress output off the console. */
+export const AWS_INDEX_PULL_ERROR_LINES = 5;
+export const AWS_INDEX_PULL_ERROR_LINE_CHARS = 300;
+
+/** How long an index VM stays up after it writes a marker, so a live console read
+ *  sees it before the power-off (MOTIR-10823). Supervision polls at most every
+ *  15 s; four polls fit inside it. */
+export const AWS_INDEX_MARKER_HOLD_SECONDS = 60;
 
 /** The comment line naming the image the script pulls. The fake EC2 reads it to
  *  decide whether the pull succeeds; nothing in AWS does. */
@@ -133,11 +166,20 @@ function envLines(env: Readonly<Record<string, string>>): string[] {
   });
 }
 
-/** The lines that end the boot on a failed pull: the marker, then power off. */
-const PULL_FAILED_LINES = [
+/** The shell functions the boot uses: `console` writes one line to the serial
+ *  console; `pull_failed` copies the failed command's last output lines (control
+ *  characters dropped, each line capped) to the console, then the marker, holds,
+ *  and powers off. */
+const FUNCTION_LINES = [
+  'console() { echo "$1" >/dev/ttyS0 2>/dev/null || echo "$1" >/dev/console; }',
+  'pull_failed() {',
+  '  printf \'%s\\n\' "$1"',
+  `  printf '%s\\n' "$1" | tr -cd '[:print:]\\n' | grep -v '^[[:space:]]*$' | tail -n ${AWS_INDEX_PULL_ERROR_LINES} | cut -c1-${AWS_INDEX_PULL_ERROR_LINE_CHARS} | while IFS= read -r line; do console "${AWS_INDEX_PULL_ERROR_PREFIX}$line"; done`,
   `  console '${AWS_INDEX_PULL_FAILED_MARKER}'`,
+  `  sleep ${AWS_INDEX_MARKER_HOLD_SECONDS}`,
   '  shutdown -h now',
   '  exit 0',
+  '}',
 ];
 
 /**
@@ -150,8 +192,10 @@ function ecrLoginLines(image: string): string[] {
   if (!ecr) return [];
   return [
     'if ! command -v aws >/dev/null 2>&1; then dnf install -y -q awscli-2; fi',
-    `if ! aws ecr get-login-password --region '${ecr.region}' | docker login --username AWS --password-stdin '${ecr.registry}'; then`,
-    ...PULL_FAILED_LINES,
+    // The whole pipe's stderr and docker's stdout are kept; the password is the
+    // CLI's stdout, which only the pipe carries.
+    `if ! out=$({ aws ecr get-login-password --region '${ecr.region}' | docker login --username AWS --password-stdin '${ecr.registry}'; } 2>&1); then`,
+    '  pull_failed "$out"',
     'fi',
   ];
 }
@@ -167,8 +211,8 @@ export function buildIndexUserData(spec: {
     `${AWS_INDEX_IMAGE_COMMENT}${image}`,
     // pipefail: the ECR login is a pipe, and its failure is the CLI's too.
     'set -u -o pipefail',
-    'console() { echo "$1" >/dev/ttyS0 2>/dev/null || echo "$1" >/dev/console; }',
-    // Everything below stays off the console: only the marker may reach it.
+    ...FUNCTION_LINES,
+    // Everything below stays off the console: only the markers may reach it.
     'exec >>/var/log/motir-index-boot.log 2>&1',
     'systemctl disable --now ecs || true',
     'systemctl start docker',
@@ -178,14 +222,15 @@ export function buildIndexUserData(spec: {
     ENV_DELIMITER,
     `IMAGE='${image}'`,
     ...ecrLoginLines(image),
-    'if ! docker pull "$IMAGE"; then',
-    ...PULL_FAILED_LINES,
+    'if ! out=$(docker pull "$IMAGE" 2>&1); then',
+    '  pull_failed "$out"',
     'fi',
     'docker run --rm --env-file /run/motir-index.env "$IMAGE"',
     'code=$?',
     // Written before the power-off, so a VM that reads stopped has written it.
     `console "${AWS_INDEX_EXIT_MARKER}$code"`,
     'sync',
+    `sleep ${AWS_INDEX_MARKER_HOLD_SECONDS}`,
     'shutdown -h now',
     '',
   ].join('\n');
@@ -203,6 +248,16 @@ export function consoleExitCode(output: string | null): number | null {
     if (/^\d{1,3}$/.test(value) && Number(value) <= 255) code = Number(value);
   }
   return code;
+}
+
+/** The failed login's or pull's own output lines from a console read, in order,
+ *  without their prefix (MOTIR-10823). Empty when there are none. */
+export function consolePullError(output: string | null): string[] {
+  return (output ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith(AWS_INDEX_PULL_ERROR_PREFIX))
+    .map((line) => line.slice(AWS_INDEX_PULL_ERROR_PREFIX.length));
 }
 
 /** Whether a console read holds the pull-failure marker on a line of its own. */

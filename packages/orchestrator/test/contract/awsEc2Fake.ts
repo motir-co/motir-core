@@ -1,6 +1,7 @@
 import {
   AWS_INDEX_IMAGE_COMMENT,
   AWS_INDEX_EXIT_MARKER,
+  AWS_INDEX_PULL_ERROR_PREFIX,
   AWS_INDEX_PULL_FAILED_MARKER,
   Ec2ApiError,
   type Ec2Api,
@@ -281,6 +282,23 @@ export class AwsEc2Fake implements Ec2Api {
     const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
     this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
     this.powerOff(instanceId);
+  }
+
+  /** An index VM's container returns `code` and the script writes the exit
+   *  marker, then HOLDS the VM up before its power-off (MOTIR-10823): the VM is
+   *  still `running`, so only a live read sees the marker. */
+  exitIndexContainerHeld(instanceId: string, code: number): void {
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
+  }
+
+  /** An index VM's login or pull fails: the script copies the failed command's
+   *  lines and the pull-failure marker to the console, then HOLDS the VM up
+   *  (MOTIR-10823) — still `running`. */
+  failIndexPullHeld(instanceId: string, errorLines: readonly string[]): void {
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    const errors = errorLines.map((line) => `${AWS_INDEX_PULL_ERROR_PREFIX}${line}\n`).join('');
+    this.consoles.set(instanceId, `${before}${errors}${AWS_INDEX_PULL_FAILED_MARKER}\n`);
   }
 
   /** Console text EC2 has not posted yet — what a buffered read cannot see until
