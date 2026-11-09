@@ -272,6 +272,7 @@ const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
   candy: '#efbfdd',
   lagoon: '#0f667c',
   olive: '#4a5e26',
+  contrast: '#953ea3',
 };
 
 /** Palette (colour) — the 10-palette chip row, each with its accent swatch dot. */

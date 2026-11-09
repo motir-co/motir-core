@@ -183,6 +183,15 @@ export const PALETTE_REGISTRY = {
       'An olive/earthy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Lime moss primary + Olive warm green-grey neutrals, an Orange terracotta highlight, and Orange/Crimson/Lime/Violet/Sky/Amber tints.',
     designDoc: 'docs/palettes/olive.md',
   },
+  contrast: {
+    id: 'contrast',
+    name: 'Contrast',
+    tagline:
+      'Clear and strong — paper-white grounds, near-black ink, AAA secondary text and edges you can see.',
+    inspiration:
+      'A high-contrast reading scheme grounded entirely in documented Radix Colors scales (every value a Radix step): one Gray neutral ramp with its text steps held to 7:1, a Plum primary, an Orange highlight, and step-3 tints.',
+    designDoc: 'docs/palettes/contrast.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */

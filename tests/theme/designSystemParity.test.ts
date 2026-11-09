@@ -127,6 +127,7 @@ describe('consumed registries match the app-facing contract (no divergence after
       'candy',
       'lagoon',
       'olive',
+      'contrast',
     ]);
     expect(DEFAULT_PALETTE_ID).toBe('motir');
     expect(PALETTE_IDS).toContain(DEFAULT_PALETTE_ID);

@@ -7670,6 +7670,133 @@
   --el-sidebar-item-bg-hover: #282a27; /* Olive dark-4 */
 }
 
+/* ── Palette: Contrast (data-palette="contrast") — MOTIR-10715 ─────────────────
+   A HIGH-CONTRAST neutral re-skin for reading without strain: paper-white
+   grounds, near-black ink, secondary copy at AAA (7:1) rather than AA, and
+   control edges strong enough to see (3:1, WCAG 1.4.11). It is judged on
+   measured ratios against `motir`, not on looking starker. EVERY value is a
+   documented **Radix Colors** step (@radix-ui/colors@3.0.0): Gray is the one
+   neutral ramp, Plum the primary, and Orange / Amber / Teal / Grass / Crimson /
+   Violet / Blue / Red supply the highlight, tints and semantics.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). See
+   docs/palettes/contrast.md. */
+[data-palette='contrast'] {
+  /* brand & primary — Radix Plum. The fill carries white labels. */
+  --color-primary: #953ea3; /* Radix Plum-11 */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #53195d; /* Radix Plum-12 */
+  --color-primary-fill: #953ea3; /* Radix Plum-11 — fill behind white labels */
+
+  /* surfaces — Radix Gray-1/2/3, paper-white to a pale grey */
+  --color-background: #fcfcfc; /* Radix Gray-1 */
+  --color-foreground: #202020; /* Radix Gray-12 ink */
+  --color-surface: #f0f0f0; /* Radix Gray-3 — section surface */
+  --color-surface-soft: #f9f9f9; /* Radix Gray-2 — quieter division */
+  --color-canvas: #e8e8e8; /* recessed planning board — Radix Gray-4, a step under the Gray-3 surface */
+
+  /* text scale — Radix Gray's text steps; secondary takes Gray-11 mixed 50%
+     toward Gray-12 so it holds 7:1 on every ground */
+  --color-ink: #202020; /* Gray-12 */
+  --color-charcoal: #202020; /* Gray-12 — emphasis / text on tints */
+  --color-slate: #424242; /* Gray-11 mixed 50% toward Gray-12 — secondary text at AAA */
+  --color-steel: #646464; /* Gray-11 — tertiary */
+  --color-stone: #8d8d8d; /* Gray-9 — faint labels (decorative) */
+  --color-muted: #f0f0f0; /* Gray-3 */
+  --color-muted-foreground: #646464; /* Gray-11 — captions */
+
+  /* borders — a visible ramp: soft Gray-7 < default Gray-8 < strong Gray-10,
+     the strong edge 3:1 or better on card, surface and canvas */
+  --color-hairline: #bbbbbb; /* Gray-8 */
+  --color-hairline-soft: #cecece; /* Gray-7 */
+  --color-hairline-strong: #838383; /* Gray-10 */
+  --color-border: #bbbbbb; /* Gray-8 */
+
+  /* accent secondary — an orange highlight (Radix Orange-11) */
+  --color-accent: #cc4e00; /* Radix Orange-11 — highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 */
+  --color-accent-teal: #008573; /* Radix Teal-11 */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 */
+
+  /* card tints — Radix step-3 pastels, one step lighter than the step-4
+     convention so body ink holds 7:1 on them */
+  --color-tint-peach: #ffefd6; /* Orange-3 */
+  --color-tint-rose: #ffe9f0; /* Crimson-3 */
+  --color-tint-mint: #e9f6e9; /* Grass-3 */
+  --color-tint-lavender: #f4f0fe; /* Violet-3 */
+  --color-tint-sky: #e6f4fe; /* Blue-3 */
+  --color-tint-yellow: #fff7c2; /* Amber-3 */
+
+  /* semantic — Radix "text" steps */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Radix Blue, apart from the Plum primary; Blue-11 mixed 65% toward
+     Blue-12 so it clears AA on the Gray-4 canvas */
+  --color-link: #0e5da9; /* Blue-11 mixed 65% toward Blue-12 */
+  --color-link-pressed: #113264; /* Blue-12 */
+
+  /* sidebar hover — one shade deeper than the Gray-3 surface (Gray-4) */
+  --el-sidebar-item-bg-hover: #e8e8e8;
+}
+
+/* Contrast — dark companion. Radix Gray dark: the canvas recesses to Gray
+   dark-1 under a Gray dark-2 page; ink is Gray dark-12, secondary Gray dark-11
+   mixed 50% toward dark-12, and the strong edge Gray dark-10. */
+[data-theme='dark'] [data-palette='contrast']:not([data-theme]),
+[data-palette='contrast'][data-theme='dark'] {
+  --color-primary: #e796f3; /* Plum dark-11 */
+  --color-primary-foreground: #181118; /* Plum dark-1 ink on the bright plum fill */
+  --color-primary-pressed: #b658c4; /* Plum dark-10 */
+  --color-primary-fill: #e796f3; /* Plum dark-11 */
+
+  --color-background: #191919; /* Gray dark-2 */
+  --color-foreground: #eeeeee; /* Gray dark-12 */
+  --color-surface: #2a2a2a; /* Gray dark-4 */
+  --color-surface-soft: #222222; /* Gray dark-3 */
+  --color-canvas: #111111; /* Gray dark-1 — a step under the dark-2 page */
+
+  --color-ink: #eeeeee; /* Gray dark-12 */
+  --color-charcoal: #eeeeee; /* Gray dark-12 */
+  --color-slate: #d1d1d1; /* Gray dark-11 mixed 50% toward dark-12 */
+  --color-steel: #b4b4b4; /* Gray dark-11 */
+  --color-stone: #6e6e6e; /* Gray dark-9 */
+  --color-muted: #2a2a2a; /* Gray dark-4 */
+  --color-muted-foreground: #b4b4b4; /* Gray dark-11 */
+
+  --color-hairline: #606060; /* Gray dark-8 */
+  --color-hairline-soft: #484848; /* Gray dark-7 */
+  --color-hairline-strong: #7b7b7b; /* Gray dark-10 */
+  --color-border: #606060; /* Gray dark-8 */
+
+  --color-accent: #ffa057; /* Orange dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #0bd8b6; /* Teal dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #331e0b; /* Orange dark-3 */
+  --color-tint-rose: #381525; /* Crimson dark-3 */
+  --color-tint-mint: #1b2a1e; /* Grass dark-3 */
+  --color-tint-lavender: #291f43; /* Violet dark-3 */
+  --color-tint-sky: #0d2847; /* Blue dark-3 */
+  --color-tint-yellow: #302008; /* Amber dark-3 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 ink on the bright danger */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-sidebar-item-bg-hover: #313131; /* Gray dark-5 */
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk

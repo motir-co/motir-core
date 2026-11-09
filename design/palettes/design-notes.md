@@ -15,10 +15,11 @@ lives in its `docs/palettes/<id>.md`, which `PALETTE_REGISTRY[id].designDoc` poi
 at and `tests/theme/paletteRegistry.test.ts` requires on disk. This file indexes the
 mocks and states what each one draws and from which parts.
 
-| palette | mock                                   | design record                                            | card        |
-| ------- | -------------------------------------- | -------------------------------------------------------- | ----------- |
-| Lagoon  | [lagoon.mock.html](./lagoon.mock.html) | [docs/palettes/lagoon.md](../../docs/palettes/lagoon.md) | MOTIR-10713 |
-| Olive   | [olive.mock.html](./olive.mock.html)   | [docs/palettes/olive.md](../../docs/palettes/olive.md)   | MOTIR-10714 |
+| palette  | mock                                       | design record                                                | card        |
+| -------- | ------------------------------------------ | ------------------------------------------------------------ | ----------- |
+| Lagoon   | [lagoon.mock.html](./lagoon.mock.html)     | [docs/palettes/lagoon.md](../../docs/palettes/lagoon.md)     | MOTIR-10713 |
+| Olive    | [olive.mock.html](./olive.mock.html)       | [docs/palettes/olive.md](../../docs/palettes/olive.md)       | MOTIR-10714 |
+| Contrast | [contrast.mock.html](./contrast.mock.html) | [docs/palettes/contrast.md](../../docs/palettes/contrast.md) | MOTIR-10715 |
 
 ## How every mock in this area is built
 
@@ -106,3 +107,22 @@ What the panels show, against the record:
 - **Panel 4** — the six material styles keep Olive's hues; every text role on their
   composite grounds clears 4.5:1 (the style × palette × mode gate records no Olive
   failure).
+
+## Contrast (MOTIR-10715)
+
+[contrast.mock.html](./contrast.mock.html) · record:
+[docs/palettes/contrast.md](../../docs/palettes/contrast.md)
+
+What the panels show, against the record:
+
+- **Panel 1** — Contrast's tile in the gallery after Olive, its swatch the Plum-11
+  primary `#953ea3`, selected in light and dark.
+- **Panel 2** — Gray-1 page and Gray-3 surfaces under Gray-12 ink; secondary copy at
+  `#424242` (8.82:1 on the surface) and the Gray-10 strong edge visible on the card
+  (3.70:1). In dark, the Gray-dark-2 page over a Gray-dark-1 canvas, secondary at
+  `#d1d1d1`, the bright Plum fill carrying a dark label.
+- **Panel 3** — beside Motir and Amethyst: the panel where the palette's reason shows.
+  Motir's secondary on its surface is 5.91:1 and its strong edge 1.61:1 on the card;
+  Contrast's are 8.82:1 and 3.70:1.
+- **Panel 4** — the six material styles keep Contrast's AAA body text: the lowest
+  secondary row across every style's composite grounds is 7.79:1 light and 7.91:1 dark.
