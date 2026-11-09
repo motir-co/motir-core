@@ -538,6 +538,54 @@ export function fixingReasonOf(
   return { fixReason: prior.fixReason, fixDetail: { ...prior.fixDetail, fixing: true } };
 }
 
+/** A running member whose last DECIDED commit before its head was red (Bug MOTIR-10747). */
+export interface RedBeforeHead {
+  pullRequestId: string;
+  /** The red commit — the head the failure was raised on. */
+  commitSha: string;
+  /** Its failing checks' names, sorted. */
+  failingChecks: readonly string[];
+}
+
+/**
+ * The `ci_failed` answer a PUSH ANSWERED, rebuilt from check rows, or null when no running
+ * member's last decided commit was red (Bug MOTIR-10747).
+ *
+ * ⚠️ WHY IT EXISTS. The Fixing rule keeps the card's PRIOR stored answer while CI runs on a
+ * pushed fix — and GitHub delivers a push's checks one webhook at a time, in no order, so a
+ * quick success at the new head (a lint job, Motir's own link check) can be recorded before
+ * anything running there. That recompute reads the head green and stores nothing to fix, and
+ * from then on the rule had no prior to keep: the card showed no Fixing for the rest of its
+ * CI. The red build is still in its own rows, so the answer is rebuilt as the failure raised
+ * it — the same detail `pullRequestReasonOf` writes, `affected` counting the members that were
+ * red, `raisedHeads` naming each red member's red commit — and the caller puts it through
+ * {@link fixingReasonOf}, the same moved-head rule, so it is Fixing exactly when the stored
+ * answer would have been.
+ *
+ * `red` is in the members' order; `heads` the heads the members are raised on now, which a
+ * member that was not red keeps.
+ */
+export function answeredCiFailureOf(
+  red: readonly RedBeforeHead[],
+  heads: Record<string, string>,
+  total: number,
+): FixReasonValue | null {
+  if (red.length === 0) return null;
+  const raisedHeads = { ...heads };
+  for (const m of red) raisedHeads[m.pullRequestId] = m.commitSha;
+  return {
+    fixReason: 'ci_failed',
+    fixDetail: {
+      ...EMPTY_DETAIL,
+      repair: 'fix',
+      check: red[0]!.failingChecks[0] ?? null,
+      affected: red.length,
+      total,
+      raisedHeads,
+    },
+  };
+}
+
 // ── A LIVE REPAIR IS FIXING (MOTIR-10506) ───────────────────────────────────────────
 // Fixing used to turn on only once CI ran at a moved head, so a card with a repair under
 // way — a claimed `motir fix`, a hosted or agent `fix` run — kept its red reason until

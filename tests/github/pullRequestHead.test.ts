@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   checkRowsAtHead,
   isCiUndecidedAtHead,
+  isReRunAtHead,
+  lastDecidedBeforeHead,
   prCiStateAtHead,
   pullRequestHead,
 } from '@/lib/github/pullRequestHead';
@@ -191,6 +193,133 @@ describe('isOutOfDateAtCurrentHead', () => {
   it('with no known head, any `behind` reading with a head of its own counts', () => {
     expect(isOutOfDateAt({ mergeableState: 'behind', mergeableStateHeadSha: A }, null)).toBe(true);
     expect(isOutOfDateAt({ mergeableState: 'behind', mergeableStateHeadSha: null }, null)).toBe(
+      false,
+    );
+  });
+});
+
+// THE BUILD A PUSH ANSWERED (Bug MOTIR-10747): the newest commit before the head on which CI
+// DECIDED, read from the rows older commits keep — what the Fixing rule falls back on when a
+// quick green at the new head wiped the card's stored answer.
+describe('lastDecidedBeforeHead', () => {
+  const C = 'e'.repeat(40);
+
+  it('is the red commit before the head, naming its failing checks unique and sorted', () => {
+    const rows = [
+      run(A, 'failure', 'lint'),
+      run(A, 'failure', 'ci / vitest'),
+      run(A, 'failure', 'lint'),
+      run(A, 'success', 'typecheck'),
+      run(B, 'success', 'lint'),
+      run(B, 'pending'),
+    ];
+    expect(lastDecidedBeforeHead({ headSha: B, checkRuns: rows })).toEqual({
+      commitSha: A,
+      red: true,
+      failingChecks: ['ci / vitest', 'lint'],
+    });
+  });
+
+  it('is the NEWEST decided commit by first sighting — a green one is not red', () => {
+    // A was red, B went green, C is the head: the build C answers is B's.
+    const rows = [run(A, 'failure'), run(B, 'success'), run(C, 'pending')];
+    expect(lastDecidedBeforeHead({ headSha: C, checkRuns: rows })).toEqual({
+      commitSha: B,
+      red: false,
+      failingChecks: [],
+    });
+    // A late row on an OLD commit does not make it the newer one.
+    const late = [
+      run(A, 'failure'),
+      run(B, 'success'),
+      run(A, 'failure', 'late'),
+      run(C, 'pending'),
+    ];
+    expect(lastDecidedBeforeHead({ headSha: C, checkRuns: late })?.commitSha).toBe(B);
+  });
+
+  it('skips a commit CI never decided on — it says nothing about the build the head answers', () => {
+    const rows = [run(A, 'failure'), run(B, 'pending'), run(C, 'success', 'lint')];
+    expect(lastDecidedBeforeHead({ headSha: C, checkRuns: rows })).toMatchObject({
+      commitSha: A,
+      red: true,
+    });
+  });
+
+  it('a commit whose rows are all unranked (skipped) has decided: not red', () => {
+    const rows = [run(A, 'failure'), run(B, 'skipped'), run(C, 'pending')];
+    expect(lastDecidedBeforeHead({ headSha: C, checkRuns: rows })).toEqual({
+      commitSha: B,
+      red: false,
+      failingChecks: [],
+    });
+  });
+
+  it('a red run a later run at the same commit replaced decides nothing', () => {
+    const replaced = { ...run(A, 'failure'), checkSuiteId: '1' };
+    const rerun = { ...run(A, 'success'), checkSuiteId: '2' };
+    expect(
+      lastDecidedBeforeHead({ headSha: B, checkRuns: [replaced, rerun, run(B, 'pending')] }),
+    ).toMatchObject({ commitSha: A, red: false });
+  });
+
+  it('is null with no commit before the head, and never reads the head itself', () => {
+    expect(lastDecidedBeforeHead({ headSha: A, checkRuns: [run(A, 'failure')] })).toBeNull();
+    expect(lastDecidedBeforeHead({ headSha: null, checkRuns: [] })).toBeNull();
+    // A head the rows have not reached yet: every row is before it.
+    expect(lastDecidedBeforeHead({ headSha: B, checkRuns: [run(A, 'failure')] })).toMatchObject({
+      commitSha: A,
+      red: true,
+    });
+  });
+});
+
+// A RE-RUN AT THE HEAD (review of MOTIR-10747): the head had decided before the checks running
+// there now, so the build those checks answer is the head's own, and nothing older is read.
+describe('isReRunAtHead', () => {
+  const startedAt = (row: ReturnType<typeof run>, offsetSeconds: number) => ({
+    ...row,
+    conclusionAt: new Date(row.createdAt.getTime() + offsetSeconds * 1000),
+  });
+
+  it('a pending row whose run started after the row was first recorded is a reopened re-run', () => {
+    const reopened = startedAt(run(B, 'pending'), 90);
+    expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), reopened] })).toBe(true);
+    // …and lastDecidedBeforeHead then reads nothing older.
+    expect(
+      lastDecidedBeforeHead({ headSha: B, checkRuns: [run(A, 'failure'), reopened] }),
+    ).toBeNull();
+  });
+
+  it('a fresh pending row — started before we recorded it, or with no start known — is not', () => {
+    for (const fresh of [startedAt(run(B, 'pending'), -2), startedAt(run(B, 'pending'), 0)]) {
+      expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), fresh] })).toBe(false);
+    }
+    expect(
+      isReRunAtHead({
+        headSha: B,
+        checkRuns: [run(A, 'failure'), { ...run(B, 'pending'), conclusionAt: null }],
+      }),
+    ).toBe(false);
+    // A terminal row finished after it was recorded is an ordinary completion.
+    expect(isReRunAtHead({ headSha: B, checkRuns: [startedAt(run(B, 'success'), 60)] })).toBe(
+      false,
+    );
+  });
+
+  it('a decided run a later run at the same commit replaced is a re-run; a replaced pending one is not', () => {
+    const first = { ...run(B, 'failure'), checkSuiteId: '1' };
+    const again = { ...run(B, 'pending'), checkSuiteId: '2' };
+    expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), first, again] })).toBe(true);
+    const cancelled = { ...run(B, 'pending'), checkSuiteId: '1' };
+    expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), cancelled, again] })).toBe(
+      false,
+    );
+  });
+
+  it('only the head is read — a reopened row at an older commit says nothing about it', () => {
+    const olderReopened = startedAt(run(A, 'pending'), 90);
+    expect(isReRunAtHead({ headSha: B, checkRuns: [olderReopened, run(B, 'pending')] })).toBe(
       false,
     );
   });

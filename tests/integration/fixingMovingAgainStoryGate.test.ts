@@ -330,7 +330,7 @@ describe('Fixing — a pushed fix stays on To fix while its CI runs', () => {
     expect((await whereIs(s, item.id)).fixRow?.fixDetail?.fixing ?? false).toBe(false);
   });
 
-  it('a card stored before the recorded heads existed is never Fixing', async () => {
+  it('a card stored before the recorded heads existed is not kept Fixing — its red build, read from its rows, is', async () => {
     const s = await makeScenario('fixing-noheads@example.com');
     const { item, headRef } = await redCard(s, 204);
     // The answer the derivation stored before MOTIR-10307: no heads recorded.
@@ -342,11 +342,183 @@ describe('Fixing — a pushed fix stays on To fix while its CI runs', () => {
     } = row.fixDetail as Record<string, string | number | boolean | null>;
     await adminDb.workItem.update({ where: { id: item.id }, data: { fixDetail: legacy } });
 
-    await push(s, 204, headRef, 'sha-b');
-
-    expect((await stored(item.id)).fixing).toBe(false);
+    // The stored row proves nothing about the push, so it is not kept.
+    await pullRequestEvent(s, 'synchronize', 204, headRef, 'sha-b');
+    expect(await stored(item.id), 'on the push').toMatchObject({ fixReason: null, fixing: false });
     expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+
+    // With the stored answer gone, the red build at sha-a is read from its check rows
+    // (Bug MOTIR-10747): CI running at sha-b is a pushed fix for it.
+    await check(s, 204, 'sha-b', 'vitest', null);
+    expect(await stored(item.id), 'CI running at the new head').toMatchObject({
+      fixReason: 'ci_failed',
+      fixing: true,
+      raisedHeads: { [await prId(s, 204)]: 'sha-a' },
+    });
   });
+});
+
+// A QUICK GREEN LANDED FIRST, ON A RED BUILD (Bug MOTIR-10747). The same out-of-order delivery
+// MOTIR-10733 closed for a review's send-back: a fast check finishing at the pushed head before
+// anything running is recorded there reads the head green and stores nothing to fix. The red
+// build the push answers is still in its check rows, so the running check brings Fixing back.
+describe('Fixing — a red build, a quick green at the new head first (Bug MOTIR-10747)', () => {
+  async function redCard(s: Scenario, number: number) {
+    const { item, heads } = await card(s, `red early green ${number}`, [number]);
+    await check(s, number, 'sha-a', 'vitest', 'failure');
+    expect(await stored(item.id)).toMatchObject({ fixReason: 'ci_failed', fixing: false });
+    return { item, headRef: heads[number]! };
+  }
+
+  const withSwitch = async (s: Scenario, gateOn: boolean) => {
+    if (gateOn) {
+      await adminDb.project.update({
+        where: { id: s.project.id },
+        data: { reviewAgentEnabled: true },
+      });
+    }
+  };
+
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 241 },
+    { label: 'the switch on', gateOn: true, number: 242 },
+  ])(
+    'with $label: a quick green at the new head, then a running check, reads ci_failed Fixing again',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-red-early-green-${number}@example.com`);
+      await withSwitch(s, gateOn);
+      const { item, headRef } = await redCard(s, number);
+      const before = (await whereIs(s, item.id)).counts.toFix;
+
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      expect((await stored(item.id)).fixing, 'on the push').toBe(true);
+      await check(s, number, 'sha-b', 'lint', 'success');
+      // The partial set reads green for a moment: nothing running is recorded yet.
+      expect((await stored(item.id)).fixReason).toBeNull();
+
+      await check(s, number, 'sha-b', 'vitest', null);
+      expect(await stored(item.id), 'the running check brings it back').toMatchObject({
+        status: 'implemented',
+        fixReason: 'ci_failed',
+        fixing: true,
+        raisedHeads: { [await prId(s, number)]: 'sha-a' },
+      });
+      const seen = await whereIs(s, item.id);
+      expect(seen.tabs).toEqual(['to-fix']);
+      expect(seen.counts.toFix).toBe(before);
+      expect(seen.fixRow).toMatchObject({
+        fixReason: 'ci_failed',
+        fixDetail: { fixing: true, check: 'vitest' },
+      });
+      // `motir fix` refuses it as CI running, exactly as for a Fixing card it always did.
+      expect(await repairClaim(s, item.identifier)).toMatchObject({
+        outcome: 'not_repairable',
+        reason: 'ci_running',
+      });
+
+      await check(s, number, 'sha-b', 'vitest', 'success');
+      expect((await stored(item.id)).fixReason, 'green clears it').toBeNull();
+      expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+    },
+  );
+
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 243 },
+    { label: 'the switch on', gateOn: true, number: 244 },
+  ])(
+    'with $label: red at the new head after the quick green raises it there, not Fixing',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-red-early-green-red-${number}@example.com`);
+      await withSwitch(s, gateOn);
+      const { item, headRef } = await redCard(s, number);
+
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      await check(s, number, 'sha-b', 'lint', 'success');
+      await check(s, number, 'sha-b', 'vitest', null);
+      expect((await stored(item.id)).fixing).toBe(true);
+
+      await check(s, number, 'sha-b', 'vitest', 'failure');
+      expect(await stored(item.id)).toMatchObject({
+        fixReason: 'ci_failed',
+        fixing: false,
+        raisedHeads: { [await prId(s, number)]: 'sha-b' },
+      });
+    },
+  );
+
+  // REVIEW OF MOTIR-10747: a re-run of a fix that failed answers the fix's own verdict, not the
+  // build before it. GitHub dates each delivery (`started_at` / `completed_at`), and the re-run
+  // reopens the check's row at the head; the red build two commits back must not make it Fixing.
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 247 },
+    { label: 'the switch on', gateOn: true, number: 248 },
+  ])(
+    'with $label: a re-run of a failed fix at its own head is never Fixing, on any later event',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-red-rerun-${number}@example.com`);
+      await withSwitch(s, gateOn);
+      const { item, headRef } = await redCard(s, number);
+      const at = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
+      const timed = (name: string, conclusion: 'failure' | 'success' | null, when: string) =>
+        githubWebhookService.handleEvent('check_run', {
+          action: conclusion === null ? 'created' : 'completed',
+          installation: s.installation,
+          repository: { id: Number(s.providerRepoId) },
+          check_run: {
+            head_sha: 'sha-b',
+            status: conclusion === null ? 'in_progress' : 'completed',
+            conclusion,
+            name,
+            started_at: when,
+            completed_at: conclusion === null ? null : when,
+            check_suite: { id: 9001, head_branch: null },
+            pull_requests: [{ number }],
+          },
+        });
+
+      // The fix push, its CI dated as GitHub dates it, goes red.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      await timed('vitest', null, at(-120));
+      await timed('vitest', 'failure', at(-60));
+      expect(await stored(item.id)).toMatchObject({
+        fixReason: 'ci_failed',
+        fixing: false,
+        raisedHeads: { [await prId(s, number)]: 'sha-b' },
+      });
+
+      // Someone re-runs it: the row reopens, dated after it was first recorded.
+      await timed('vitest', null, at(60));
+      expect((await stored(item.id)).fixReason, 'the re-run').toBeNull();
+      await timed('lint', 'success', at(61));
+      expect((await stored(item.id)).fixReason, 'the next event during the re-run').toBeNull();
+      expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+    },
+  );
+
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 245 },
+    { label: 'the switch on', gateOn: true, number: 246 },
+  ])(
+    'with $label: a later push after the fix went green is not Fixing, in either check order',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-red-later-push-${number}@example.com`);
+      await withSwitch(s, gateOn);
+      const { item, headRef } = await redCard(s, number);
+
+      // The fix push: Fixing while its CI runs, cleared once it is green.
+      await push(s, number, headRef, 'sha-b');
+      expect((await stored(item.id)).fixing).toBe(true);
+      await check(s, number, 'sha-b', 'vitest', 'success');
+      expect((await stored(item.id)).fixReason).toBeNull();
+
+      // A later push (a main merge): the build it answers was green.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-c');
+      await check(s, number, 'sha-c', 'lint', 'success');
+      await check(s, number, 'sha-c', 'vitest', null);
+      expect((await stored(item.id)).fixReason, 'CI running at the later head').toBeNull();
+      expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+    },
+  );
 });
 
 describe('Fixing — several pull requests', () => {
