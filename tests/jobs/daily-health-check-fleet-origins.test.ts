@@ -143,9 +143,9 @@ describe('the fleet origins preflight on the daily health check', () => {
     expect(message).not.toContain('AiContainerOrigin');
   });
 
-  it('FAILS a CI-only Fly fleet whose core origin is private, through the real chain', async () => {
-    // Real services, no stubbed verdict: env selects a CI runner fleet on Fly and
-    // core's origin is its private Fly name. Every probe that reaches the network
+  it('FAILS a deployment running agent instances whose core origin is private, through the real chain', async () => {
+    // Real services, no stubbed verdict: env selects a CI runner fleet and the
+    // agent-instance lane on Fly, and core's origin is its private Fly name. Every probe that reaches the network
     // gets no answer, so the only DEFINITE fault is the address.
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
     vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
@@ -153,6 +153,7 @@ describe('the fleet origins preflight on the daily health check', () => {
     vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
     vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
     vi.stubEnv('MOTIR_HOSTED_AGENT_IMAGE', '');
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', 'fly_instances_token');
     vi.stubEnv('MOTIR_BASE_URL', 'http://motir-core.internal:3000');
     vi.stubGlobal(
       'fetch',
@@ -167,7 +168,7 @@ describe('the fleet origins preflight on the daily health check', () => {
     expect(error).toBeInstanceOf(FleetOriginsError);
     expect(error?.message).toContain('MOTIR_BASE_URL: motir-core.internal');
     expect(error?.message).toContain('services stack output CoreOrigin');
-    // A CI-only fleet is handed neither of the other two origins.
+    // An agent instance is handed neither of the other two origins.
     expect(error?.message).not.toContain('MOTIR_AI_CONTAINER_URL');
     expect(error?.message).not.toContain('MOTIR_GATEWAY_RUN_URL');
   });
