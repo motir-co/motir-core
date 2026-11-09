@@ -92,6 +92,42 @@ export function isCiUndecidedAtHead(pr: PullRequestHeadSlice): boolean {
   return pr.checkRuns.length > 0;
 }
 
+/** A check row with the time its current run started or finished (`conclusionAt`, MOTIR-10456). */
+export interface CheckRunWithStart extends PrCheckRunSlice {
+  /** The provider's time for the row's conclusion: a pending row's START. Null when unknown. */
+  conclusionAt?: Date | null;
+}
+
+/**
+ * Whether CI at the pull request's head is a RE-RUN — the head had already DECIDED before the
+ * checks running there now (review of MOTIR-10747). Two durable traces of it, either enough:
+ *
+ *  · a PENDING row whose run STARTED AFTER we first recorded the row (`conclusionAt` later
+ *    than `createdAt`): the row existed before this run began, so an earlier run at this
+ *    commit wrote it and this one reopened it (`reopenAsPending`). A fresh row is created by
+ *    the delivery of a run that has already started, so its start is never after its creation;
+ *  · a row a LATER run at the same commit REPLACED (`liveCheckRows` drops it) that had
+ *    decided — `success` or `failure`: a whole run at this commit finished before this one.
+ *
+ * A row with no start recorded (`conclusionAt` null: a provider that gives none, or a row older
+ * than the column) cannot be ordered and is no evidence either way.
+ */
+export function isReRunAtHead(pr: PullRequestHeadSlice<CheckRunWithStart>): boolean {
+  const head = pullRequestHead(pr);
+  const atHead = pr.checkRuns.filter((row) => row.commitSha === head);
+  const reopened = atHead.some(
+    (row) =>
+      row.conclusion === 'pending' &&
+      row.conclusionAt != null &&
+      row.conclusionAt.getTime() > row.createdAt.getTime(),
+  );
+  if (reopened) return true;
+  const live = new Set(liveCheckRows([...atHead]));
+  return atHead.some(
+    (row) => !live.has(row) && (row.conclusion === 'success' || row.conclusion === 'failure'),
+  );
+}
+
 /** What CI last DECIDED on a commit before the pull request's head — see {@link lastDecidedBeforeHead}. */
 export interface DecidedBeforeHead {
   commitSha: string;
@@ -116,8 +152,18 @@ export interface DecidedBeforeHead {
  * durable fact of these rows, unlike the card's stored To fix answer, which one recompute
  * can wipe: a quick success at the new head recorded before anything running there reads the
  * head green and stores nothing to fix.
+ *
+ * ⚠️ NULL WHEN THE HEAD IS A RE-RUN (review of MOTIR-10747). A check re-run at the head
+ * answers the head's OWN earlier verdict, not an older commit's, and that verdict is gone: the
+ * re-run reopened its row in place. Walking past the head to an older red commit would read a
+ * re-run of a failed fix as a push answering the build before it, and tag it Fixing (the
+ * MOTIR-10307 rule says a re-run at the recorded head never is). {@link isReRunAtHead} is the
+ * test.
  */
-export function lastDecidedBeforeHead(pr: PullRequestHeadSlice): DecidedBeforeHead | null {
+export function lastDecidedBeforeHead(
+  pr: PullRequestHeadSlice<CheckRunWithStart>,
+): DecidedBeforeHead | null {
+  if (isReRunAtHead(pr)) return null;
   const head = pullRequestHead(pr);
   const byCommit = new Map<string, PrCheckRunSlice[]>();
   for (const row of pr.checkRuns) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkRowsAtHead,
   isCiUndecidedAtHead,
+  isReRunAtHead,
   lastDecidedBeforeHead,
   prCiStateAtHead,
   pullRequestHead,
@@ -270,5 +271,56 @@ describe('lastDecidedBeforeHead', () => {
       commitSha: A,
       red: true,
     });
+  });
+});
+
+// A RE-RUN AT THE HEAD (review of MOTIR-10747): the head had decided before the checks running
+// there now, so the build those checks answer is the head's own, and nothing older is read.
+describe('isReRunAtHead', () => {
+  const startedAt = (row: ReturnType<typeof run>, offsetSeconds: number) => ({
+    ...row,
+    conclusionAt: new Date(row.createdAt.getTime() + offsetSeconds * 1000),
+  });
+
+  it('a pending row whose run started after the row was first recorded is a reopened re-run', () => {
+    const reopened = startedAt(run(B, 'pending'), 90);
+    expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), reopened] })).toBe(true);
+    // …and lastDecidedBeforeHead then reads nothing older.
+    expect(
+      lastDecidedBeforeHead({ headSha: B, checkRuns: [run(A, 'failure'), reopened] }),
+    ).toBeNull();
+  });
+
+  it('a fresh pending row — started before we recorded it, or with no start known — is not', () => {
+    for (const fresh of [startedAt(run(B, 'pending'), -2), startedAt(run(B, 'pending'), 0)]) {
+      expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), fresh] })).toBe(false);
+    }
+    expect(
+      isReRunAtHead({
+        headSha: B,
+        checkRuns: [run(A, 'failure'), { ...run(B, 'pending'), conclusionAt: null }],
+      }),
+    ).toBe(false);
+    // A terminal row finished after it was recorded is an ordinary completion.
+    expect(isReRunAtHead({ headSha: B, checkRuns: [startedAt(run(B, 'success'), 60)] })).toBe(
+      false,
+    );
+  });
+
+  it('a decided run a later run at the same commit replaced is a re-run; a replaced pending one is not', () => {
+    const first = { ...run(B, 'failure'), checkSuiteId: '1' };
+    const again = { ...run(B, 'pending'), checkSuiteId: '2' };
+    expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), first, again] })).toBe(true);
+    const cancelled = { ...run(B, 'pending'), checkSuiteId: '1' };
+    expect(isReRunAtHead({ headSha: B, checkRuns: [run(A, 'failure'), cancelled, again] })).toBe(
+      false,
+    );
+  });
+
+  it('only the head is read — a reopened row at an older commit says nothing about it', () => {
+    const olderReopened = startedAt(run(A, 'pending'), 90);
+    expect(isReRunAtHead({ headSha: B, checkRuns: [olderReopened, run(B, 'pending')] })).toBe(
+      false,
+    );
   });
 });

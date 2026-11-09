@@ -1661,6 +1661,43 @@ describe('Fixing — a quick green at the new head landed first (Bug MOTIR-10747
     });
   });
 
+  it('a re-run of a FAILED fix at its own head is never Fixing — however many recomputes it sees', async () => {
+    // Review of MOTIR-10747: red at HEAD, a fix pushed at PUSHED goes red too, and its failing
+    // check is re-run there. The first recompute declines the prior (a re-run at the recorded
+    // head); every later one must not walk past PUSHED to the red build at HEAD.
+    const fx = await makeWorkItemFixture();
+    const { card, pr } = await redCard(fx);
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: PUSHED } });
+    const vitest = await ciStarts(pr.id, PUSHED, 'Vitest');
+    await finishes(vitest.id, 'failure');
+    expect(await recompute(fx, card.id)).toMatchObject({
+      fixReason: 'ci_failed',
+      fixDetail: { fixing: false, raisedHeads: { [pr.id]: PUSHED } },
+    });
+
+    // The re-run reopens the row in place, dated by its own start — after the row was recorded.
+    const row = await adminDb.githubCheckRun.findUniqueOrThrow({ where: { id: vitest.id } });
+    await adminDb.githubCheckRun.update({
+      where: { id: vitest.id },
+      data: { conclusion: 'pending', conclusionAt: new Date(row.createdAt.getTime() + 60_000) },
+    });
+
+    expect(await recompute(fx, card.id), 'first recompute').toEqual({
+      fixReason: null,
+      fixDetail: null,
+    });
+    expect(await recompute(fx, card.id), 'second recompute').toEqual({
+      fixReason: null,
+      fixDetail: null,
+    });
+    // A quick check finishing beside the re-run changes nothing either.
+    await finishes((await ciStarts(pr.id, PUSHED, 'Lint')).id, 'success');
+    expect(await recompute(fx, card.id), 'third recompute').toEqual({
+      fixReason: null,
+      fixDetail: null,
+    });
+  });
+
   it('a stored answer the rule declined is kept as the card’s word, not rebuilt', async () => {
     const fx = await makeWorkItemFixture();
     const { card, pr } = await redCard(fx);

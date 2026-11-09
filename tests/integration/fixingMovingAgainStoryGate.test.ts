@@ -446,6 +446,55 @@ describe('Fixing — a red build, a quick green at the new head first (Bug MOTIR
     },
   );
 
+  // REVIEW OF MOTIR-10747: a re-run of a fix that failed answers the fix's own verdict, not the
+  // build before it. GitHub dates each delivery (`started_at` / `completed_at`), and the re-run
+  // reopens the check's row at the head; the red build two commits back must not make it Fixing.
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 247 },
+    { label: 'the switch on', gateOn: true, number: 248 },
+  ])(
+    'with $label: a re-run of a failed fix at its own head is never Fixing, on any later event',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-red-rerun-${number}@example.com`);
+      await withSwitch(s, gateOn);
+      const { item, headRef } = await redCard(s, number);
+      const at = (seconds: number) => new Date(Date.now() + seconds * 1000).toISOString();
+      const timed = (name: string, conclusion: 'failure' | 'success' | null, when: string) =>
+        githubWebhookService.handleEvent('check_run', {
+          action: conclusion === null ? 'created' : 'completed',
+          installation: s.installation,
+          repository: { id: Number(s.providerRepoId) },
+          check_run: {
+            head_sha: 'sha-b',
+            status: conclusion === null ? 'in_progress' : 'completed',
+            conclusion,
+            name,
+            started_at: when,
+            completed_at: conclusion === null ? null : when,
+            check_suite: { id: 9001, head_branch: null },
+            pull_requests: [{ number }],
+          },
+        });
+
+      // The fix push, its CI dated as GitHub dates it, goes red.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      await timed('vitest', null, at(-120));
+      await timed('vitest', 'failure', at(-60));
+      expect(await stored(item.id)).toMatchObject({
+        fixReason: 'ci_failed',
+        fixing: false,
+        raisedHeads: { [await prId(s, number)]: 'sha-b' },
+      });
+
+      // Someone re-runs it: the row reopens, dated after it was first recorded.
+      await timed('vitest', null, at(60));
+      expect((await stored(item.id)).fixReason, 'the re-run').toBeNull();
+      await timed('lint', 'success', at(61));
+      expect((await stored(item.id)).fixReason, 'the next event during the re-run').toBeNull();
+      expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+    },
+  );
+
   it.each([
     { label: 'the switch off', gateOn: false, number: 245 },
     { label: 'the switch on', gateOn: true, number: 246 },
