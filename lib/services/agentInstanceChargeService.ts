@@ -138,7 +138,9 @@ export const agentInstanceChargeService = {
       handle: {
         provider,
         id: `${instance.machineId ?? instance.id}:${interval.id}`,
-        region: instance.region,
+        // An instance still waiting for room has no region and no machine: its
+        // interval is recorded unpriced, never at a lane it was not placed on.
+        region: instance.region ?? '',
         createdAt: interval.startedAt,
       },
       attribution: {

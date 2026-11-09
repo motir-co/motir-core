@@ -196,7 +196,7 @@ export const agentTerminalRelayService = {
       app: row.flyApp!,
       machineId: row.machineId!,
       volumeId: row.volumeId!,
-      region: row.region,
+      region: row.region!,
       createdAt: row.createdAt,
     };
     const endpoint = shard

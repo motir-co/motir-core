@@ -248,7 +248,7 @@ async function advanceProvision(
 ): Promise<AgentBootPassVerdict | null> {
   const waiting = parseWaitingReason(step.detail);
   if (waiting) return retryWaiting(pass, step, waiting);
-  if (steps.handleOf(pass.row)) {
+  if (steps.hasMachine(pass.row)) {
     const now = agentInstanceClock.now();
     await pass.record(step, { state: 'done', startedAt: step.startedAt ?? now, endedAt: now });
     return null;
@@ -281,7 +281,7 @@ async function retryWaiting(
   waiting: AgentWaitingReason,
 ): Promise<AgentBootPassVerdict> {
   // A new instance whose machine an earlier pass created but did not record as done.
-  const created = waiting === 'pool' && steps.handleOf(pass.row) !== null;
+  const created = waiting === 'pool' && steps.hasMachine(pass.row);
   if (!created) {
     try {
       const answer =

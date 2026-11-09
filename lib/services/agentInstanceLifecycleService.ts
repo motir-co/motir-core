@@ -223,10 +223,16 @@ async function resolveProject(projectKey: string, ctx: ServiceContext): Promise<
   return { id: project.id, workspaceId: ctx.workspaceId, organizationId };
 }
 
-function requireLane(): void {
-  if (!isPersistentOrchestratorConfigured()) {
-    throw new AgentInstancesUnavailableError('no instance fleet is configured');
-  }
+/**
+ * Can an instance of this organisation be hosted on this deployment at all? The
+ * process-wide lane (the Fly app, or the fake), or a placement that never reaches
+ * it — the install fleet, or an AWS hoster account (MOTIR-10801). An install with
+ * no Fly lane is not refused for want of a token it never uses.
+ */
+async function requireLane(organizationId: string): Promise<void> {
+  if (isPersistentOrchestratorConfigured()) return;
+  if (await agentInstancePlacementService.placesOffProcessWideLane(organizationId)) return;
+  throw new AgentInstancesUnavailableError('no instance fleet is configured');
 }
 
 function inProject<T>(
@@ -273,13 +279,31 @@ function handleOf(row: AgentInstance): PersistentContainerHandle | null {
   return handleFor(row, getPersistentOrchestrator());
 }
 
+/**
+ * Has the instance's machine been created — its handle and region written? A
+ * pure read of the row: the boot asks it on every pass, and it must not resolve
+ * the process-wide orchestrator, which an instance on the install fleet or an AWS
+ * account never uses and an install with no Fly lane cannot build (MOTIR-10801).
+ */
+function hasMachine(row: AgentInstance): row is PlacedAgentInstance {
+  return Boolean(row.flyApp && row.machineId && row.volumeId && row.region);
+}
+
+/** A row whose machine exists: its handle columns and its region are written. */
+type PlacedAgentInstance = AgentInstance & {
+  flyApp: string;
+  machineId: string;
+  volumeId: string;
+  region: string;
+};
+
 /** The handle the row names, through the orchestrator it was resolved to: its
  *  provider, and the zone the row records (none for an unplaced instance). */
 function handleFor(
   row: AgentInstance,
   orchestrator: Pick<PersistentContainerOrchestrator, 'provider'>,
 ): PersistentContainerHandle | null {
-  if (!row.flyApp || !row.machineId || !row.volumeId) return null;
+  if (!hasMachine(row)) return null;
   return {
     provider: orchestrator.provider,
     app: row.flyApp,
@@ -1015,7 +1039,12 @@ async function provisionNewInstance(
     await withWorkspaceServiceContext(row.workspaceId, (tx) =>
       agentInstanceRepository.setHandle(
         row.id,
-        { flyApp: handle.app, machineId: handle.machineId, volumeId: handle.volumeId },
+        {
+          flyApp: handle.app,
+          machineId: handle.machineId,
+          volumeId: handle.volumeId,
+          region: handle.region,
+        },
         tx,
       ),
     );
@@ -1178,8 +1207,8 @@ async function beginRollback(row: AgentInstance, detail: string): Promise<void> 
  * a boot always used, so the driver changes who calls them, never what they do.
  */
 export const agentInstanceBootSteps = {
-  /** The caller's own agent in the project, or `AgentInstanceNotFoundError` (§8's gate). */
-  handleOf,
+  /** Has the instance's machine been created? A pure read of the row. */
+  hasMachine,
   routeOf,
   reachOf: agentInstanceReach,
   reload,
@@ -1312,7 +1341,7 @@ export const agentInstanceLifecycleService = {
     ctx: ServiceContext,
   ): Promise<AgentInstanceDto> {
     const project = await resolveProject(projectKey, ctx);
-    requireLane();
+    await requireLane(project.organizationId);
     // The `hosted_runs` kill-switch (MOTIR-750) refuses NEW agent instances.
     await assertOrgFeatureEnabled(project.organizationId, 'hosted_runs');
     const name = input.name.trim();
@@ -1368,8 +1397,9 @@ export const agentInstanceLifecycleService = {
       judgeOrgFigure: true,
     });
 
-    const orchestrator = getPersistentOrchestrator();
-    const region = orchestrator.defaultRegion();
+    // No region yet: the placement writes it with the handle (MOTIR-10801). Create
+    // never asks the process-wide lane, which an instance placed on the install
+    // fleet or an AWS account does not use.
     const openedAt = agentInstanceClock.now();
     let row: AgentInstance;
     let boot = null as AgentBootOpened | null;
@@ -1387,7 +1417,6 @@ export const agentInstanceLifecycleService = {
             imageTag,
             imageDigest,
             imageVersion,
-            region,
             // The boot's start, on the clock its deadline is read against (MOTIR-7336).
             stateChangedAt: openedAt,
           },
@@ -1445,7 +1474,7 @@ export const agentInstanceLifecycleService = {
     ctx: ServiceContext,
   ): Promise<AgentInstanceDto> {
     const project = await resolveProject(projectKey, ctx);
-    requireLane();
+    await requireLane(project.organizationId);
     // …and refuses WAKING one: a woken agent is a running hosted container.
     await assertOrgFeatureEnabled(project.organizationId, 'hosted_runs');
     const row = await ownInstance(project, instanceId, ctx);
@@ -1570,7 +1599,7 @@ export const agentInstanceLifecycleService = {
     ctx: ServiceContext,
   ): Promise<AgentInstanceDto> {
     const project = await resolveProject(projectKey, ctx);
-    requireLane();
+    await requireLane(project.organizationId);
     const row = await ownInstance(project, instanceId, ctx);
     if (row.state !== 'running') {
       throw new AgentInstanceStateConflictError(row.id, row.state, 'hibernated');
@@ -1749,7 +1778,7 @@ export const agentInstanceLifecycleService = {
    */
   async delete(projectKey: string, instanceId: string, ctx: ServiceContext): Promise<void> {
     const project = await resolveProject(projectKey, ctx);
-    requireLane();
+    await requireLane(project.organizationId);
     const row = await ownInstance(project, instanceId, ctx);
     // §6: never under a running run — the person cancels it first.
     await assertNoRunningRun(row, 'deleted');
@@ -1795,7 +1824,8 @@ export const agentInstanceLifecycleService = {
         agentInstanceBootService.start(row, row.state === 'waking' ? 'wake' : 'create', tx),
       );
       // The machine exists, so its provision is done; the driver reads the rest.
-      if (handleOf(row)) await agentInstanceBootService.recordProvision(row, opened.attempt, null);
+      if (hasMachine(row))
+        await agentInstanceBootService.recordProvision(row, opened.attempt, null);
       await sendEvent('agent-instance/boot', opened.event);
       return 'opened';
     }
@@ -1829,7 +1859,7 @@ export const agentInstanceLifecycleService = {
     ctx: ServiceContext,
   ): Promise<AgentInstanceDto> {
     const project = await resolveProject(projectKey, ctx);
-    requireLane();
+    await requireLane(project.organizationId);
     const row = await ownInstance(project, instanceId, ctx);
     if (row.state !== 'running' && row.state !== 'hibernated') {
       throw new AgentInstanceStateConflictError(row.id, row.state, 'updated');

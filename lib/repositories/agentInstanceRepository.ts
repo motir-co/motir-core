@@ -227,10 +227,11 @@ export const agentInstanceRepository = {
     return result.count;
   },
 
-  /** Record the persistent handle once `provisionPersistent` answers. `tx` required. */
+  /** Record the persistent handle, and the region it answered in, once
+   *  `provisionPersistent` answers on the process-wide lane. `tx` required. */
   async setHandle(
     id: string,
-    handle: AgentInstanceHandleColumns,
+    handle: AgentInstanceHandleColumns & { region: string },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.agentInstance.updateMany({
