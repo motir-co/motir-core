@@ -15,6 +15,7 @@
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.tests.json" },
     { "path": "./tsconfig.tests-platform.json" },
+    { "path": "./tsconfig.tests-product.json" },
     { "path": "./tsconfig.components.json" },
     { "path": "./tsconfig.integration.json" },
     { "path": "./tsconfig.e2e.json" },

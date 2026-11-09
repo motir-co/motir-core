@@ -1,0 +1,95 @@
+{
+  // ── The PRODUCT TESTS project (MOTIR-10796) ──────────────────────────────────
+  //
+  // The server-side suites for the product surfaces — the API routes, the
+  // platform-admin console (`tests/platform`, which is the admin console and NOT
+  // the agent platform `tsconfig.tests-platform.json` holds), approval gates,
+  // services, pages, settings, i18n, work items, permissions, organizations,
+  // readiness, workflows, boards, public addresses, monitoring and monitors,
+  // billing and the load-test harness — carved out of `tsconfig.tests.json` BY
+  // AREA, the same way and for the same reason as `tsconfig.tests-platform.json`
+  // (MOTIR-8353). That program had grown back to 89.5% of the heap budget on
+  // `main` (`scripts/ci/assert-typecheck-headroom.mjs` fails at 90%): 9290
+  // files, 3.42M instantiations — 368 per file against MOTIR-8353's 389, so the
+  // per-file cost was the cost it ought to be and the lever was the program.
+  //
+  // ⚠️ WHY A THIRD PROJECT AND NOT MORE DIRECTORIES IN THE PLATFORM ONE. Priced
+  // before drawing, by the heap each program RETAINS after a forced GC (a
+  // deterministic reading; `Memory used` swings by points between runs of one
+  // tree). On `31a7329`:
+  //
+  //   configuration                              tests.json         this / platform
+  //   main                                       9290 · 3555 MB     —    / 2520 MB
+  //   these 18 areas → this project              7796 · 2690 MB     2290 /   —
+  //   attachments + awsDeploy → platform         8614 · 3436 MB     —    / 2629 MB
+  //   tests/platform alone → platform            9093 · 3440 MB     —    / 2761 MB
+  //
+  // The areas here import a slice of `lib/` the platform suites do not, so in the
+  // platform project they would have added nearly what they removed (the last
+  // row: −115 MB on one side, +241 MB on the other) and left it near the line in
+  // its turn. On their own they cost what they import, and the tests project
+  // sheds 1.65M instantiations — the i18n suites alone carry the catalogue's
+  // literal types.
+  //
+  // THE SAME RULES AS THE PLATFORM PROJECT. A directory moves by adding it to
+  // `include` here and to `exclude` in `tsconfig.tests.json` (or the reverse);
+  // `tests/typecheck-program.test.ts` holds the lists to each other and keeps
+  // the area projects disjoint. A directory whose modules are imported from
+  // another project stays where its importers are — the arrow runs one way,
+  // from this project into the tests project, and nothing references this one.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/tests-product",
+    "tsBuildInfoFile": ".tsout/tests-product/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "tests/api/**/*.ts",
+    "tests/api/**/*.tsx",
+    "tests/approvalGates/**/*.ts",
+    "tests/approvalGates/**/*.tsx",
+    "tests/billing/**/*.ts",
+    "tests/billing/**/*.tsx",
+    "tests/boards/**/*.ts",
+    "tests/boards/**/*.tsx",
+    "tests/i18n/**/*.ts",
+    "tests/i18n/**/*.tsx",
+    "tests/loadtest/**/*.ts",
+    "tests/loadtest/**/*.tsx",
+    "tests/monitoring/**/*.ts",
+    "tests/monitoring/**/*.tsx",
+    "tests/monitors/**/*.ts",
+    "tests/monitors/**/*.tsx",
+    "tests/organizations/**/*.ts",
+    "tests/organizations/**/*.tsx",
+    "tests/pages/**/*.ts",
+    "tests/pages/**/*.tsx",
+    "tests/permissions/**/*.ts",
+    "tests/permissions/**/*.tsx",
+    "tests/platform/**/*.ts",
+    "tests/platform/**/*.tsx",
+    "tests/publicAddresses/**/*.ts",
+    "tests/publicAddresses/**/*.tsx",
+    "tests/ready/**/*.ts",
+    "tests/ready/**/*.tsx",
+    "tests/services/**/*.ts",
+    "tests/services/**/*.tsx",
+    "tests/settings/**/*.ts",
+    "tests/settings/**/*.tsx",
+    "tests/workflows/**/*.ts",
+    "tests/workflows/**/*.tsx",
+    "tests/workItems/**/*.ts",
+    "tests/workItems/**/*.tsx"
+  ],
+  "exclude": ["node_modules", "packages", ".tsout"],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.scripts.json" },
+    { "path": "./tsconfig.tests.json" }
+  ]
+}

@@ -95,6 +95,7 @@ const REQUIRED_TSCONFIGS = [
   'tsconfig.app.json',
   'tsconfig.tests.json',
   'tsconfig.tests-platform.json',
+  'tsconfig.tests-product.json',
   'tsconfig.components.json',
   'tsconfig.e2e.json',
   'tsconfig.scripts.json',
@@ -161,26 +162,52 @@ export const areaDirectories = (globs: unknown, shape: 'include' | 'exclude'): s
 };
 
 /**
+ * The AREA projects — each carved out of `tsconfig.tests.json` by directory when
+ * that program reached the heap line, each referencing it and referenced by
+ * nothing but the solution: the platform suites (MOTIR-8353) and the product
+ * server suites (MOTIR-10796).
+ */
+const AREA_PROJECTS = ['tsconfig.tests-platform.json', 'tsconfig.tests-product.json'] as const;
+
+/**
  * Directories the two lists disagree on — empty when they agree. `elsewhere` is
  * every directory some OTHER project includes (`tests/components` is
- * `tsconfig.components.json`'s), which the tests project may exclude without the
- * platform project claiming it.
+ * `tsconfig.components.json`'s, and each area project's directories are the
+ * other's `elsewhere`), which the tests project may exclude without this area
+ * project claiming it.
  */
 export const areaDrift = (
-  platformInclude: string[],
+  areaInclude: string[],
   testsExclude: string[],
   elsewhere: string[] = [],
+  areaProject = 'tsconfig.tests-platform.json',
 ): string[] => [
-  ...platformInclude
+  ...areaInclude
     .filter((d) => !testsExclude.includes(d))
-    .map(
-      (d) =>
-        `tests/${d} is in tsconfig.tests-platform.json but not excluded from tsconfig.tests.json`,
-    ),
+    .map((d) => `tests/${d} is in ${areaProject} but not excluded from tsconfig.tests.json`),
   ...testsExclude
-    .filter((d) => !platformInclude.includes(d) && !elsewhere.includes(d))
+    .filter((d) => !areaInclude.includes(d) && !elsewhere.includes(d))
     .map((d) => `tests/${d} is excluded from tsconfig.tests.json but in no project`),
 ];
+
+/**
+ * Directories two area projects BOTH include — empty when they are disjoint. A
+ * directory in two composite projects is emitted twice and checked twice, and
+ * `areaDrift` cannot see it: each project finds the directory excluded from the
+ * tests project and is satisfied.
+ */
+export const areaOverlap = (areas: Record<string, string[]>): string[] => {
+  const owner = new Map<string, string>();
+  const clashes: string[] = [];
+  for (const [project, dirs] of Object.entries(areas)) {
+    for (const d of dirs) {
+      const first = owner.get(d);
+      if (first === undefined) owner.set(d, project);
+      else clashes.push(`tests/${d} is in both ${first} and ${project}`);
+    }
+  }
+  return clashes;
+};
 
 /** The heap bump this story reverses, wherever it hides in a script. */
 export const carriesHeapBump = (script: string): boolean => /max-old-space-size/.test(script);
@@ -259,35 +286,53 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
     ).toBe(false);
   });
 
-  it('splits the tests BY AREA: every platform directory leaves the tests project, and only those (MOTIR-8353)', () => {
+  it('splits the tests BY AREA: every area directory leaves the tests project, and only those (MOTIR-8353, MOTIR-10796)', () => {
     // A directory in BOTH projects is emitted and checked twice; a directory the
-    // tests project excludes and the platform project never includes is not
-    // type-checked at all, silently and greenly. Moving an area between the two
-    // is meant to be a two-line change, so the two lines are held to each other.
-    const platform = areaDirectories(
-      configs.get('tsconfig.tests-platform.json')!.include,
-      'include',
-    );
+    // tests project excludes and no area project includes is not type-checked
+    // at all, silently and greenly. Moving an area between projects is meant to
+    // be a two-line change, so the two lines are held to each other.
     const excluded = areaDirectories(configs.get('tsconfig.tests.json')!.exclude, 'exclude');
-    const elsewhere = [...configs]
-      .filter(([name]) => name !== 'tsconfig.tests-platform.json')
-      .flatMap(([, config]) => areaDirectories(config.include, 'include'));
-    expect(platform.length, 'the platform project names no area').toBeGreaterThan(0);
-    expect(areaDrift(platform, excluded, elsewhere)).toEqual([]);
-    // The arrow runs one way: the platform project imports the shared helpers
-    // through a reference, and nothing references the platform project back.
-    const refs = (configs.get('tsconfig.tests-platform.json')!.references ?? []) as {
-      path?: string;
-    }[];
-    expect(refs.map((r) => r.path)).toContain('./tsconfig.tests.json');
-    for (const [name, config] of configs) {
-      const back = ((config.references ?? []) as { path?: string }[]).map((r) => r.path);
-      if (name !== 'tsconfig.solution.json') {
-        expect(back, `${name} must not reference the platform project`).not.toContain(
-          './tsconfig.tests-platform.json',
-        );
+    const areas: Record<string, string[]> = {};
+    for (const project of AREA_PROJECTS) {
+      const dirs = areaDirectories(configs.get(project)!.include, 'include');
+      const elsewhere = [...configs]
+        .filter(([name]) => name !== project)
+        .flatMap(([, config]) => areaDirectories(config.include, 'include'));
+      expect(dirs.length, `${project} names no area`).toBeGreaterThan(0);
+      expect(areaDrift(dirs, excluded, elsewhere, project)).toEqual([]);
+      areas[project] = dirs;
+    }
+    expect(areaOverlap(areas)).toEqual([]);
+    // The arrow runs one way: an area project imports the shared helpers
+    // through a reference, and nothing but the solution references it back.
+    for (const project of AREA_PROJECTS) {
+      const refs = (configs.get(project)!.references ?? []) as { path?: string }[];
+      expect(refs.map((r) => r.path)).toContain('./tsconfig.tests.json');
+      for (const [name, config] of configs) {
+        const back = ((config.references ?? []) as { path?: string }[]).map((r) => r.path);
+        if (name !== 'tsconfig.solution.json') {
+          expect(back, `${name} must not reference ${project}`).not.toContain(`./${project}`);
+        }
       }
     }
+  });
+
+  it('BITES on a directory two area projects both include', () => {
+    expect(
+      areaOverlap({
+        'tsconfig.tests-platform.json': ['github', 'mcp'],
+        'tsconfig.tests-product.json': ['api', 'mcp'],
+      }),
+    ).toEqual([
+      'tests/mcp is in both tsconfig.tests-platform.json and tsconfig.tests-product.json',
+    ]);
+    expect(areaOverlap({ a: ['github'], b: ['api'] })).toEqual([]);
+  });
+
+  it('names the area project it found drifting', () => {
+    expect(areaDrift(['api'], [], [], 'tsconfig.tests-product.json')).toEqual([
+      'tests/api is in tsconfig.tests-product.json but not excluded from tsconfig.tests.json',
+    ]);
   });
 
   it('BITES on an area listed on one side only', () => {
