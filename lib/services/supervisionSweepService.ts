@@ -4,6 +4,7 @@ import { jobSupervisionRepository } from '@/lib/repositories/jobSupervisionRepos
 import { jobStepRepository } from '@/lib/repositories/jobStepRepository';
 import { jobQueueRepository } from '@/lib/repositories/jobQueueRepository';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { platformMeterReportEnqueue } from '@/lib/services/platformMeterReportEnqueue';
 import {
   codeGraphIndexDispatchService,
   type IndexSession,
@@ -209,11 +210,26 @@ export const supervisionSweepService = {
    * Settle the index usage rows a lost settle write stranded (MOTIR-8913). It
    * rides this sweep's tick because it is the same failure one step later: the
    * supervision ended, and the record of what it cost did not.
+   *
+   * ⚠️ AND REPORT EACH ONE TO THE PLATFORM METER, AFTER THE REPAIR COMMITS
+   * (MOTIR-10822). The repair writes the row directly, never through the usage
+   * sink `withPlatformMeterReport` wraps, so nothing else enqueues its report and
+   * motir-ai's platform rollup would miss its seconds and cost for good. The
+   * enqueue is here rather than in the meter service because that service must not
+   * reach the job registry, and it follows the awaited repair so the job never
+   * reads a row whose settle has not committed — the same order the settle path
+   * keeps. The job and its receiver are idempotent on the usage id, and a failed
+   * enqueue is swallowed by `sendSystemEvent`, so it can never undo the repair.
    */
   async repairStrandedUsage(
     options: { now?: () => Date } = {},
   ): Promise<{ scanned: number; settled: number }> {
-    return ciFleetCostMeterService.settleStrandedIndexUsage(options);
+    const { scanned, settled, repaired } =
+      await ciFleetCostMeterService.settleStrandedIndexUsage(options);
+    for (const row of repaired) {
+      await platformMeterReportEnqueue.container(row.containerProvider, row.handleId);
+    }
+    return { scanned, settled };
   },
 
   /**

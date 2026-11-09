@@ -5,6 +5,8 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { ciFleetCostMeterService } from '@/lib/services/ciFleetCostMeterService';
+import { platformMeterReportEnqueue } from '@/lib/services/platformMeterReportEnqueue';
+import { supervisionSweepService } from '@/lib/services/supervisionSweepService';
 import { ciPeriodUsageRepository } from '@/lib/repositories/ciPeriodUsageRepository';
 import { ciContainerUsageRepository } from '@/lib/repositories/ciContainerUsageRepository';
 import {
@@ -21,7 +23,7 @@ import {
 import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
-import { truncateAuthTables } from '../helpers/db';
+import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
 // THE FLEET COST METER against real Postgres (Story MOTIR-1916 · MOTIR-1924 ·
@@ -1483,7 +1485,11 @@ describe('repairing an index row its settle never closed (MOTIR-8913)', () => {
 
     const result = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
 
-    expect(result).toEqual({ scanned: 1, settled: 1 });
+    expect(result).toEqual({
+      scanned: 1,
+      settled: 1,
+      repaired: [{ containerProvider: 'fake', handleId: accrual.handleId }],
+    });
     const row = await rowFor(accrual.handleId);
     expect(row.terminalState).toBe('repaired');
     expect(row.teardownReason).toBe('reaped');
@@ -1505,7 +1511,7 @@ describe('repairing an index row its settle never closed (MOTIR-8913)', () => {
 
     const result = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
 
-    expect(result).toEqual({ scanned: 0, settled: 0 });
+    expect(result).toEqual({ scanned: 0, settled: 0, repaired: [] });
     expect((await rowFor(accrual.handleId)).containerStoppedAt).toBeNull();
   });
 
@@ -1526,9 +1532,145 @@ describe('repairing an index row its settle never closed (MOTIR-8913)', () => {
     const first = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
     const second = await ciFleetCostMeterService.settleStrandedIndexUsage({ now: () => NOW });
 
-    expect(first).toEqual({ scanned: 1, settled: 1 });
-    expect(second).toEqual({ scanned: 0, settled: 0 });
+    expect(first).toEqual({
+      scanned: 1,
+      settled: 1,
+      repaired: [{ containerProvider: 'fake', handleId: stranded.handleId }],
+    });
+    expect(second).toEqual({ scanned: 0, settled: 0, repaired: [] });
     expect((await rowFor(stranded.handleId)).terminalState).toBe('repaired');
     expect((await rowFor(real.handleId)).terminalState).toBe('destroyed');
+  });
+});
+
+describe('reporting a repaired index row to the platform meter (MOTIR-10822)', () => {
+  // The repair writes the row directly, never through the usage sink that
+  // `withPlatformMeterReport` wraps, so before this card a repaired row was never
+  // reported and motir-ai's platform rollup missed it for good. The sweep's tick
+  // now enqueues one `system.platform-meter-report` per row it settled, after the
+  // repair commits. The events are real `job_event` rows, read back here.
+  const NOW = new Date('2026-08-20T12:00:00.000Z');
+  const STRANDED_AGE_MS = 3 * 60 * 60_000;
+
+  beforeEach(async () => {
+    await truncateJobRuns();
+  });
+
+  afterEach(async () => {
+    await truncateJobRuns();
+  });
+
+  async function seedStranded(fx: Fixture, ageMs = STRANDED_AGE_MS): Promise<ContainerAccrual> {
+    const accrual = accrualFor(fx, {
+      accruedSeconds: 90,
+      observedAt: new Date(NOW.getTime() - ageMs + 90_000),
+    });
+    await ciFleetCostMeterService.recordContainerAccrual(accrual);
+    await adminDb.ciContainerUsage.update({
+      where: {
+        containerProvider_handleId: { containerProvider: 'fake', handleId: accrual.handleId },
+      },
+      data: { createdAt: new Date(NOW.getTime() - ageMs) },
+    });
+    return accrual;
+  }
+
+  const meterReports = () =>
+    adminDb.jobEvent.findMany({ where: { name: 'system.platform-meter-report' } });
+
+  it('enqueues exactly one report for a row it settles, after the settle commits', async () => {
+    const fx = await seedTenant();
+    const accrual = await seedStranded(fx);
+    // What a SEPARATE connection sees at the moment of the enqueue: only a
+    // committed settle is visible to it, so an enqueue from inside the repair's
+    // transaction would read the row still unsettled.
+    const seenAtEnqueue: Array<string | null> = [];
+    const original = platformMeterReportEnqueue.container.bind(platformMeterReportEnqueue);
+    const enqueue = vi
+      .spyOn(platformMeterReportEnqueue, 'container')
+      .mockImplementation(async (provider, handleId) => {
+        const row = await adminDb.ciContainerUsage.findUniqueOrThrow({
+          where: { containerProvider_handleId: { containerProvider: provider, handleId } },
+        });
+        seenAtEnqueue.push(row.terminalState);
+        await original(provider, handleId);
+      });
+
+    const result = await supervisionSweepService.repairStrandedUsage({ now: () => NOW });
+
+    expect(result).toEqual({ scanned: 1, settled: 1 });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith('fake', accrual.handleId);
+    expect(seenAtEnqueue).toEqual(['repaired']);
+    const events = await meterReports();
+    expect(events.map((e) => e.data)).toEqual([
+      { containerProvider: 'fake', handleId: accrual.handleId },
+    ]);
+  });
+
+  it('reports each row of a tick once, and a second tick reports nothing more', async () => {
+    const fx = await seedTenant();
+    const a = await seedStranded(fx);
+    const b = await seedStranded(fx);
+
+    await supervisionSweepService.repairStrandedUsage({ now: () => NOW });
+    const second = await supervisionSweepService.repairStrandedUsage({ now: () => NOW });
+
+    expect(second).toEqual({ scanned: 0, settled: 0 });
+    const handles = (await meterReports()).map((e) => (e.data as { handleId: string }).handleId);
+    expect(handles.sort()).toEqual([a.handleId, b.handleId].sort());
+  });
+
+  it('enqueues nothing for a row the repair skips — it raced the real settle', async () => {
+    const fx = await seedTenant();
+    const accrual = await seedStranded(fx);
+    // THE RACE, run for real: the row's own settle commits on another connection
+    // after the repair has listed it and before the repair writes it, so
+    // `settleStranded` finds `container_stopped_at` set and answers 0. That settle
+    // goes through the usage sink, which reports the row itself.
+    const list = ciContainerUsageRepository.listStrandedIndexUsage.bind(ciContainerUsageRepository);
+    vi.spyOn(ciContainerUsageRepository, 'listStrandedIndexUsage').mockImplementation(
+      async (...args) => {
+        const rows = await list(...args);
+        await ciFleetCostMeterService.recordContainerUsage(
+          usageFor(fx, {
+            handleId: accrual.handleId,
+            workload: 'code_graph_index',
+            billableSeconds: accrual.accruedSeconds,
+            startedAt: accrual.startedAt,
+            createdAt: accrual.createdAt,
+          }),
+        );
+        return rows;
+      },
+    );
+    const enqueue = vi.spyOn(platformMeterReportEnqueue, 'container');
+
+    const result = await supervisionSweepService.repairStrandedUsage({ now: () => NOW });
+
+    expect(result).toEqual({ scanned: 1, settled: 0 });
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(await meterReports()).toEqual([]);
+    expect(
+      (
+        await adminDb.ciContainerUsage.findUniqueOrThrow({
+          where: {
+            containerProvider_handleId: { containerProvider: 'fake', handleId: accrual.handleId },
+          },
+        })
+      ).terminalState,
+    ).toBe('destroyed');
+  });
+
+  it('enqueues nothing when no row is stranded', async () => {
+    const fx = await seedTenant();
+    await seedStranded(fx, 10 * 60_000);
+    const enqueue = vi.spyOn(platformMeterReportEnqueue, 'container');
+
+    const result = await supervisionSweepService.repairStrandedUsage({ now: () => NOW });
+
+    expect(result).toEqual({ scanned: 0, settled: 0 });
+    expect(enqueue).not.toHaveBeenCalled();
+    expect(await meterReports()).toEqual([]);
   });
 });
