@@ -46,6 +46,18 @@ export function isInstallFleetShardId(id: string | null | undefined): boolean {
   return id === INSTALL_FLEET_SHARD_ID;
 }
 
+/**
+ * Was this container placed on the install fleet? Its row records no account
+ * (`fleet_shard_id` is null) and its handle's app is the install fleet's tag
+ * (MOTIR-10794). A null account with any other app is the process-wide lane.
+ */
+export function isOnInstallFleet(placement: {
+  fleetShardId: string | null;
+  flyApp?: string | null;
+}): boolean {
+  return placement.fleetShardId === null && placement.flyApp === INSTALL_FLEET_TAG;
+}
+
 /** The kinds `MOTIR_INSTALL_FLEET_KINDS` lists that the install fleet can run.
  *  Unset or empty: none, and every placement is as before. Read per call. */
 export function installFleetKinds(): ReadonlySet<FleetWorkloadKind> {
