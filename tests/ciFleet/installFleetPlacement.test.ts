@@ -18,6 +18,7 @@ import {
   isInstallFleetEnabled,
   isInstallFleetShardId,
   isInstallOrganization,
+  isOnInstallFleet,
 } from '@/lib/ciFleet/installFleet';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
@@ -189,6 +190,11 @@ describe('the install fleet module', () => {
     expect(isInstallFleetShardId(INSTALL_FLEET_SHARD_ID)).toBe(true);
     expect(isInstallFleetShardId('cmshard000')).toBe(false);
     expect(isInstallFleetShardId(null)).toBe(false);
+    // A placement on the install fleet: no account, and the install fleet's tag.
+    expect(isOnInstallFleet({ fleetShardId: null, flyApp: INSTALL_FLEET_TAG })).toBe(true);
+    expect(isOnInstallFleet({ fleetShardId: 'cmshard000', flyApp: INSTALL_FLEET_TAG })).toBe(false);
+    expect(isOnInstallFleet({ fleetShardId: null, flyApp: 'motir-instances' })).toBe(false);
+    expect(isOnInstallFleet({ fleetShardId: null })).toBe(false);
     expect(isInstallOrganization({ isMeta: true })).toBe(true);
     expect(isInstallOrganization({ isMeta: false })).toBe(false);
     expect(isInstallOrganization(null)).toBe(false);
