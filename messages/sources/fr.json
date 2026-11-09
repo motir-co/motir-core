@@ -10851,6 +10851,7 @@
   "myAgents.refusal.nameTaken": "You already have an agent called {name} on this project.",
   "myAgents.refusal.nameInvalid": "Use lower-case letters, numbers and dashes, starting with a letter or number — up to 40 characters.",
   "myAgents.refusal.unavailable": "My agents aren’t available on this deployment.",
+  "myAgents.refusal.laneMissing": "This agent was made on a host this deployment no longer runs, so it can’t be woken, hibernated or updated. Delete it and create a new one.",
   "myAgents.refusal.conflict": "That agent changed while you were looking. The list is up to date now.",
   "myAgents.refusal.generic": "Something went wrong. Try again.",
   "myAgents.refusalTitle.aiPlanRequired": "Needs an AI plan",

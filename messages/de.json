@@ -13857,6 +13857,7 @@
       "nameTaken": "Sie haben in diesem Projekt bereits einen Agenten namens {name}.",
       "nameInvalid": "Verwenden Sie Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben oder einer Ziffer — bis zu 40 Zeichen.",
       "unavailable": "„Meine Agenten“ ist in dieser Installation nicht verfügbar.",
+      "laneMissing": "Dieser Agent wurde auf einem Host erstellt, den diese Installation nicht mehr betreibt. Er kann daher nicht aufgeweckt, in den Ruhezustand versetzt oder aktualisiert werden. Löschen Sie ihn und erstellen Sie einen neuen.",
       "conflict": "Dieser Agent hat sich geändert, während Sie ihn angesehen haben. Die Liste ist jetzt aktuell.",
       "generic": "Etwas ist schiefgegangen. Versuchen Sie es erneut."
     },

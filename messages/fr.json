@@ -13857,6 +13857,7 @@
       "nameTaken": "Vous avez déjà un agent nommé {name} sur ce projet.",
       "nameInvalid": "Utilisez des lettres minuscules, des chiffres et des tirets, en commençant par une lettre ou un chiffre — 40 caractères au maximum.",
       "unavailable": "Mes agents n'est pas disponible sur ce déploiement.",
+      "laneMissing": "Cet agent a été créé sur un hôte que ce déploiement n’exécute plus : il ne peut donc être ni réveillé, ni mis en veille, ni mis à jour. Supprimez-le et créez-en un nouveau.",
       "conflict": "Cet agent a changé pendant que vous le consultiez. La liste est désormais à jour.",
       "generic": "Une erreur s'est produite. Réessayez."
     },

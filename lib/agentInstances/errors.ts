@@ -97,6 +97,26 @@ export class AgentInstanceStateConflictError extends Error {
   }
 }
 
+/**
+ * The agent's ROW names a host this deployment no longer runs (MOTIR-10809): it
+ * was made on the process-wide Fly lane, and that lane is not configured here —
+ * the install moved its agents to AWS (MOTIR-10801). Its machine cannot be
+ * reached, so it cannot be woken, hibernated or updated; it can only be deleted,
+ * which finishes in Motir alone. Raised before anything moves.
+ */
+export class AgentInstanceLaneMissingError extends Error {
+  readonly code = 'agent_instance_lane_missing' as const;
+  constructor(
+    readonly instanceId: string,
+    action: 'woken' | 'hibernated' | 'updated',
+  ) {
+    super(
+      `This agent was made on a host this deployment no longer runs, so it can't be ${action}. Delete it and create a new one.`,
+    );
+    this.name = 'AgentInstanceLaneMissingError';
+  }
+}
+
 /** The lane is not configured on this deployment. */
 export class AgentInstancesUnavailableError extends Error {
   readonly code = 'agent_instances_unavailable' as const;

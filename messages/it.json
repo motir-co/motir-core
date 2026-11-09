@@ -13857,6 +13857,7 @@
       "nameTaken": "Hai già un agente chiamato {name} in questo progetto.",
       "nameInvalid": "Usa lettere minuscole, numeri e trattini, iniziando con una lettera o un numero — fino a 40 caratteri.",
       "unavailable": "I miei agenti non sono disponibili in questa installazione.",
+      "laneMissing": "Questo agente è stato creato su un host che questa installazione non gestisce più, quindi non può essere risvegliato, ibernato o aggiornato. Eliminalo e creane uno nuovo.",
       "conflict": "Quell’agente è cambiato mentre lo guardavi. Ora l’elenco è aggiornato.",
       "generic": "Qualcosa è andato storto. Riprova."
     },
