@@ -65,17 +65,42 @@ export interface FleetQueueRepoRef {
   repo: string;
 }
 
+/** A run whose jobs GitHub would not serve (Bug MOTIR-10790). It is left out of
+ *  this read and tried again on the next tick. */
+export interface SkippedFleetRun {
+  repoOwner: string;
+  repoName: string;
+  runId: string;
+  /** GitHub's HTTP status, or null when the call never got an answer. */
+  status: number | null;
+  /** GitHub's `message`, trimmed, or the transport error. */
+  detail: string;
+}
+
+/** One repository's queued fleet jobs, and the runs that could not be read. */
+export interface QueuedFleetJobsRead {
+  jobs: QueuedFleetJob[];
+  skippedRuns: SkippedFleetRun[];
+}
+
 export const fleetQueueClient = {
   /**
    * Every job of one repository that is `queued` AND asks for the fleet label.
    * A run that is `in_progress` can still hold queued jobs (PR #785's `CI complete`
    * sat behind finished siblings), so both active run statuses are read. A `404`
    * answers an empty list: the repository is gone or no longer visible.
+   *
+   * ⚠️ ONE RUN NEVER FAILS THE REPOSITORY (Bug MOTIR-10790). GitHub can answer
+   * 5xx on every read of one run's jobs for hours, and a throw there aborted the
+   * whole org's reconcile, so every stranded job in the org waited. A run whose
+   * jobs read is refused or unanswered is SKIPPED and returned in `skippedRuns`.
+   * The runs-list reads stay fatal: without them nothing about the repository is
+   * known, and the caller reports the org as failed.
    */
   async listQueuedFleetJobs(
     ref: FleetQueueRepoRef,
     target?: GithubOrgTarget,
-  ): Promise<QueuedFleetJob[]> {
+  ): Promise<QueuedFleetJobsRead> {
     const { token } = await resolveOrgAuth(target);
     const repoUrl = `${GITHUB_API}/repos/${encodeURIComponent(ref.owner)}/${encodeURIComponent(ref.repo)}`;
     const runIds = new Set<number>();
@@ -84,7 +109,7 @@ export const fleetQueueClient = {
         `${repoUrl}/actions/runs?status=${status}&per_page=${PER_PAGE}`,
         token,
       );
-      if (res.status === 404) return [];
+      if (res.status === 404) return { jobs: [], skippedRuns: [] };
       if (!res.ok) throw new FleetQueueApiError(res.status, await errorDetail(res));
       const body = asRecord(await res.json());
       for (const run of asArray(body?.['workflow_runs'])) {
@@ -94,13 +119,34 @@ export const fleetQueueClient = {
     }
 
     const jobs: QueuedFleetJob[] = [];
+    const skippedRuns: SkippedFleetRun[] = [];
+    const skip = (runId: number, status: number | null, detail: string) =>
+      skippedRuns.push({
+        repoOwner: ref.owner,
+        repoName: ref.repo,
+        runId: String(runId),
+        status,
+        detail,
+      });
     for (const runId of runIds) {
-      const res = await call(
-        `${repoUrl}/actions/runs/${runId}/jobs?filter=latest&per_page=${PER_PAGE}`,
-        token,
-      );
+      let res: Response;
+      try {
+        res = await call(
+          `${repoUrl}/actions/runs/${runId}/jobs?filter=latest&per_page=${PER_PAGE}`,
+          token,
+        );
+      } catch (err) {
+        // A timeout or reset on this one read. The runs list above was answered,
+        // so GitHub is reachable; one unanswered run must not hide the others.
+        if (!(err instanceof FleetQueueApiError)) throw err;
+        skip(runId, null, err.message);
+        continue;
+      }
       if (res.status === 404) continue;
-      if (!res.ok) throw new FleetQueueApiError(res.status, await errorDetail(res));
+      if (!res.ok) {
+        skip(runId, res.status, await errorDetail(res));
+        continue;
+      }
       const body = asRecord(await res.json());
       for (const entry of asArray(body?.['jobs'])) {
         const job = asRecord(entry);
@@ -123,7 +169,7 @@ export const fleetQueueClient = {
         });
       }
     }
-    return jobs;
+    return { jobs, skippedRuns };
   },
 
   /** Every runner registered in the target's org that carries the fleet label. */

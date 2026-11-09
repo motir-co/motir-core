@@ -5,7 +5,11 @@ import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunne
 import { dispatchCiRunnerBoot } from '@/lib/ciFleet/bootDispatch';
 import { fleetRunnerTargetFor } from '@/lib/ciFleet/runnerTarget';
 import { isCiFleetConfigured } from '@/lib/orchestrator';
-import { fleetQueueClient, type QueuedFleetJob } from '@/lib/github/fleetQueue';
+import {
+  fleetQueueClient,
+  type QueuedFleetJob,
+  type SkippedFleetRun,
+} from '@/lib/github/fleetQueue';
 
 // THE GITHUB-SIDE RECONCILE (Bug MOTIR-8976).
 //
@@ -48,6 +52,9 @@ export interface ReconcileOrgOutcome {
   idleRunners: number;
   awaiting: number;
   added: number;
+  /** Runs whose jobs GitHub would not serve this tick (MOTIR-10790). Their jobs
+   *  are not counted; the other runs of the org are. Present only when non-empty. */
+  skippedRuns?: SkippedFleetRun[];
   /** Set when the org could not be read; the other orgs are unaffected. */
   error?: string;
 }
@@ -55,6 +62,8 @@ export interface ReconcileOrgOutcome {
 export interface ReconcileOutcome {
   orgs: ReconcileOrgOutcome[];
   added: number;
+  /** Set by the provision sweep when the reconcile itself threw. */
+  error?: string;
 }
 
 export const ciRunnerReconcileService = {
@@ -105,13 +114,22 @@ async function reconcileOrg(
   const target = fleetRunnerTargetFor(repos[0]!);
 
   const queued: QueuedFleetJob[] = [];
+  const skippedRuns: SkippedFleetRun[] = [];
   for (const repo of repos) {
-    queued.push(
-      ...(await fleetQueueClient.listQueuedFleetJobs(
-        { owner: repo.repoOwner, repo: repo.repoName },
-        target,
-      )),
+    const read = await fleetQueueClient.listQueuedFleetJobs(
+      { owner: repo.repoOwner, repo: repo.repoName },
+      target,
     );
+    queued.push(...read.jobs);
+    skippedRuns.push(...read.skippedRuns);
+  }
+  for (const run of skippedRuns) {
+    // A run GitHub will not serve is left out, not fatal (MOTIR-10790). Its own
+    // queued jobs are not counted this tick; every other run's still are.
+    console.warn('[ciRunnerReconcile] skipped a run whose jobs GitHub would not serve', {
+      org,
+      ...run,
+    });
   }
   const runners = await fleetQueueClient.listFleetRunners(target);
   const idleRunners = runners.filter((r) => r.online && !r.busy).length;
@@ -142,7 +160,14 @@ async function reconcileOrg(
     await dispatchCiRunnerBoot(intentId, 'hot-path');
   }
 
-  const outcome = { org, queued: queued.length, idleRunners, awaiting, added };
+  const outcome: ReconcileOrgOutcome = {
+    org,
+    queued: queued.length,
+    idleRunners,
+    awaiting,
+    added,
+    ...(skippedRuns.length > 0 ? { skippedRuns } : {}),
+  };
   if (added > 0) {
     console.warn(
       '[ciRunnerReconcile] queued fleet jobs had no runner coming — booted more',

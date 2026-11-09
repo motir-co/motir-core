@@ -21,6 +21,7 @@ import {
 } from '@/lib/jobs/definitions/ciRunnerFleet';
 import { FLEET_ATTRIBUTION_CRON, fleetAttribution } from '@/lib/jobs/definitions/fleetAttribution';
 import { fleetAttributionService } from '@/lib/services/fleetAttributionService';
+import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { createStepApi } from '@/lib/jobs/engine/step';
@@ -243,7 +244,7 @@ describe('the sweep fans out ONE event per intent', () => {
     const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     const { result } = await engine.execute();
 
-    expect(result).toEqual({ dispatched: 2 });
+    expect(result).toMatchObject({ dispatched: 2 });
     expect(send).toHaveBeenCalledTimes(2);
     // The literal, spelled out rather than compared to `ciRunnerBootEvent('i1')`
     // — this is the one place that pins the payload independently of the builder
@@ -263,7 +264,7 @@ describe('the sweep fans out ONE event per intent', () => {
     const engine = new JobTestEngine({ function: ciRunnerProvisionSweep });
     const { result } = await engine.execute();
 
-    expect(result).toEqual({ dispatched: 0 });
+    expect(result).toMatchObject({ dispatched: 0 });
     expect(send).not.toHaveBeenCalled();
   });
 
@@ -282,6 +283,62 @@ describe('the sweep fans out ONE event per intent', () => {
     expect(warn).toHaveBeenCalledWith(
       '[ciRunnerProvisionSweep] the batch ceiling bound; more intents remain',
       { batch: 25 },
+    );
+  });
+});
+
+describe('the sweep records the GitHub-queue reconcile (MOTIR-10790)', () => {
+  // The sweep used to record only `{ dispatched }`, so a reconcile that failed for
+  // an org on every tick was visible only in the worker logs. Its per-org outcome
+  // is now part of what lands on the `job_run` row.
+  it('returns the per-org outcome, including an org that could not be read', async () => {
+    vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue([]);
+    const outcome = {
+      orgs: [
+        {
+          org: 'motir-co',
+          queued: 3,
+          idleRunners: 0,
+          awaiting: 1,
+          added: 2,
+          skippedRuns: [
+            {
+              repoOwner: 'motir-co',
+              repoName: 'motir-meta',
+              runId: '42516284826',
+              status: 502,
+              detail: 'Server Error',
+            },
+          ],
+        },
+        { org: 'acme', queued: 0, idleRunners: 0, awaiting: 0, added: 0, error: 'revoked' },
+      ],
+      added: 2,
+    };
+    vi.spyOn(ciRunnerReconcileService, 'reconcile').mockResolvedValue(outcome);
+    spyOnJobDispatch();
+
+    const { result } = await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
+
+    expect(result).toEqual({ dispatched: 0, reconcile: outcome });
+  });
+
+  it('records a reconcile that threw as an error, and still fans out the boots', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(ciRunnerBootService, 'listRunnableIntentIds').mockResolvedValue(['i1']);
+    vi.spyOn(ciRunnerReconcileService, 'reconcile').mockRejectedValue(new Error('db down'));
+    const send = spyOnJobDispatch();
+
+    const { result } = await new JobTestEngine({ function: ciRunnerProvisionSweep }).execute();
+
+    expect(result).toEqual({
+      dispatched: 1,
+      reconcile: { orgs: [], added: 0, error: 'db down' },
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      '[ciRunnerProvisionSweep] the GitHub-queue reconcile failed',
+      expect.any(Error),
     );
   });
 });
