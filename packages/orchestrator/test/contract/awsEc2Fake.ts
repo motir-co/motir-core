@@ -283,6 +283,27 @@ export class AwsEc2Fake implements Ec2Api {
     this.powerOff(instanceId);
   }
 
+  /** Console text EC2 has not posted yet — what a buffered read cannot see until
+   *  {@link postConsole} (MOTIR-10805). */
+  readonly unpostedConsoles = new Map<string, string>();
+
+  /** As {@link exitIndexContainer}, but the marker reaches the buffered console
+   *  only when {@link postConsole} is called — EC2 posts a stopped instance's
+   *  output minutes after the stop, and a live read of it answers empty. */
+  exitIndexContainerUnposted(instanceId: string, code: number): void {
+    this.unpostedConsoles.set(instanceId, `${AWS_INDEX_EXIT_MARKER}${code}\n`);
+    this.powerOff(instanceId);
+  }
+
+  /** EC2 posts the buffered console output written before the stop. */
+  postConsole(instanceId: string): void {
+    const pending = this.unpostedConsoles.get(instanceId);
+    if (pending === undefined) return;
+    this.unpostedConsoles.delete(instanceId);
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    this.consoles.set(instanceId, `${before}${pending}`);
+  }
+
   /** The VM powers itself off: `stopped` or `terminated`, as its launch asked. */
   powerOff(instanceId: string): void {
     const behaviour = this.instance(instanceId).request.instanceInitiatedShutdownBehavior;
@@ -834,10 +855,17 @@ export class AwsEc2Fake implements Ec2Api {
     this.volumes.delete(volumeId);
   }
 
-  async getConsoleOutput(instanceId: string) {
+  async getConsoleOutput(instanceId: string, options?: { readonly latest?: boolean }) {
     this.record('getConsoleOutput', instanceId);
     if (!this.instances.has(instanceId)) {
       throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+    }
+    // A live read reaches only a RUNNING instance's serial port; a stopped one
+    // answers empty, as EC2 does (MOTIR-10805).
+    if (options?.latest) {
+      return this.instance(instanceId).state === 'running'
+        ? (this.consoles.get(instanceId) ?? null)
+        : null;
     }
     return this.consoles.get(instanceId) ?? null;
   }

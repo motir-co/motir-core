@@ -356,10 +356,15 @@ export interface Ec2Api {
    *  thrown. */
   describeImages(imageIds: readonly string[]): Promise<Ec2Image[]>;
   /** https://docs.aws.amazon.com/AWSEC2/latest/APIReference/API_GetConsoleOutput.html —
-   *  the instance's serial console, decoded, with `Latest` (a Nitro instance's
-   *  most recent output). Null when EC2 holds none yet. An unknown id throws as
+   *  the instance's serial console, decoded. By default the BUFFERED output EC2
+   *  posts a few minutes after a state transition; `latest` asks a Nitro
+   *  instance for its live output instead, which a STOPPED instance answers
+   *  empty (MOTIR-10805). Null when EC2 holds none yet. An unknown id throws as
    *  `describeInstances` does. */
-  getConsoleOutput(instanceId: string): Promise<string | null>;
+  getConsoleOutput(
+    instanceId: string,
+    options?: { readonly latest?: boolean },
+  ): Promise<string | null>;
 }
 
 /** The slice of `EC2Client` the factory uses — what a test stubs. */
@@ -636,9 +641,12 @@ function instanceCalls(send: Send): InstanceCalls {
         }),
       );
     },
-    async getConsoleOutput(instanceId) {
+    async getConsoleOutput(instanceId, options) {
       const out = await send<{ Output?: string }>(
-        new GetConsoleOutputCommand({ InstanceId: instanceId, Latest: true }),
+        new GetConsoleOutputCommand({
+          InstanceId: instanceId,
+          ...(options?.latest ? { Latest: true } : {}),
+        }),
       );
       return out.Output ? Buffer.from(out.Output, 'base64').toString('utf8') : null;
     },

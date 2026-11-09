@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AWS_INDEX_CONSOLE_GRACE_MS,
   AWS_INDEX_EXIT_MARKER,
   AWS_INDEX_IAM_ROLE,
   AWS_INDEX_PULL_FAILED_MARKER,
@@ -1006,14 +1007,66 @@ describe('an index VM reports its exit code through describe (MOTIR-9449)', () =
     expect(ec2.count('getConsoleOutput')).toBe(0);
   });
 
-  it('a VM that stopped with no marker on its console reads as no code', async () => {
-    const { orchestrator, handle } = await bootIndex();
+  it('a VM that stopped with no marker is held non-terminal until the grace window closes, then reads as no code', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID, now: () => new Date(clock) });
+    const handle = await orchestrator.provision(INDEX_SPEC);
     ec2.powerOff(handle.id);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      terminal: false,
+      exitCode: null,
+    });
+    clock += AWS_INDEX_CONSOLE_GRACE_MS - 1;
+    expect((await orchestrator.describe(handle)).terminal).toBe(false);
+    clock += 1;
     expect(await orchestrator.describe(handle)).toMatchObject({
       state: 'stopped',
       terminal: true,
       exitCode: null,
     });
+    expect(ec2.count('terminateInstances')).toBe(0);
+  });
+
+  it('reads the code EC2 posts minutes after the stop, not exit_unobserved (MOTIR-10805)', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID, now: () => new Date(clock) });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.exitIndexContainerUnposted(handle.id, 0);
+
+    // Stopped, but neither the buffered nor the live read holds the marker yet.
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
+    clock += 5 * 60_000;
+    ec2.postConsole(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      terminal: true,
+      exitCode: 0,
+    });
+  });
+
+  it('a new adapter keeps the window a stop opened (an adapter per supervision pass)', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const now = () => new Date(clock);
+    const handle = await adapter({ indexerAmiId: INDEXER_AMI_ID, now }).provision(INDEX_SPEC);
+    ec2.powerOff(handle.id);
+    expect((await adapter({ indexerAmiId: INDEXER_AMI_ID, now }).describe(handle)).terminal).toBe(
+      false,
+    );
+    clock += AWS_INDEX_CONSOLE_GRACE_MS;
+    expect((await adapter({ indexerAmiId: INDEXER_AMI_ID, now }).describe(handle)).terminal).toBe(
+      true,
+    );
+  });
+
+  it('times the window from a stop instant EC2 states', async () => {
+    const clock = Date.parse('2026-11-09T11:30:00Z');
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID, now: () => new Date(clock) });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.setState(handle.id, 'stopped', 'User initiated (2026-11-09 11:13:00 GMT)');
+    // Seventeen minutes after the stated stop: past the window at the first read.
+    expect((await orchestrator.describe(handle)).terminal).toBe(true);
   });
 
   it('teardown right after the exit: the describe before it has the code, and the VM ends', async () => {
