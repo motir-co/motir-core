@@ -1,7 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 import {
   HOME_FILESYSTEM_LABEL,
   INSTANCE_CONFIG_MARKER,
+  MACHINE_ID_ENV_KEYS,
   PERSISTENT_CONFIG_FILE,
   PERSISTENT_ENV_FILE,
   PersistentUserDataError,
@@ -176,4 +181,130 @@ describe('encodeInstanceUserData', () => {
       expect.objectContaining({ reason: 'too_large', key: null }),
     );
   });
+});
+
+// THE MACHINE ID (MOTIR-10817). The terminal server refuses to start without a
+// machine id and the relay's tokens bind it; Fly sets FLY_MACHINE_ID, EC2 sets
+// nothing. These run the boot script's OWN bash and python — the metadata reads,
+// the document decode and the env file — against a stand-in metadata service, so
+// what is asserted is what the VM executes, not a substring of it. The disk,
+// TLS and docker steps need a real VM and are cut out; `/etc/motir` is pointed at
+// a temporary directory.
+describe('the boot script gives the container the instance id as its machine id', () => {
+  const INSTANCE_ID = 'i-00df27f5ec6ca138a';
+  const TOKEN = 'imds-token-10817';
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  /** The script's metadata, decode and env-file steps, runnable on this machine. */
+  function runnableSteps(userData: string, etc: string): string {
+    const script = userData.slice(userData.indexOf('#!/bin/bash'), userData.lastIndexOf('\n--'));
+    const cut = (text: string, from: string, to: string | null): string => {
+      const start = text.indexOf(from);
+      expect(start).toBeGreaterThan(-1);
+      const end = to === null ? text.length : text.indexOf(to, start);
+      expect(end).toBeGreaterThan(start);
+      return text.slice(0, start) + text.slice(end);
+    };
+    const steps = cut(cut(script, '# The home disk', '# The env file'), '# The agent, FRESH', null);
+    return steps.replaceAll('/etc/motir', etc);
+  }
+
+  /** Boots `userData` once against a metadata service answering `instanceId`. */
+  function boot(userData: string, instanceId: string) {
+    const root = mkdtempSync(join(tmpdir(), 'motir-10817-'));
+    dirs.push(root);
+    const bin = join(root, 'bin');
+    const etc = join(root, 'etc-motir');
+    writeFileSync(join(root, 'user-data'), userData);
+    spawnSync('mkdir', ['-p', bin]);
+    // A stand-in IMDSv2: a token on PUT, and every read refused without it.
+    writeFileSync(
+      join(bin, 'curl'),
+      [
+        '#!/bin/bash',
+        'args="$*"',
+        `case "$args" in *"-X PUT"*api/token*) printf '%s' '${TOKEN}'; exit 0;; esac`,
+        `case "$args" in *"X-aws-ec2-metadata-token: ${TOKEN}"*) ;; *) exit 22;; esac`,
+        'case "$args" in',
+        `  *meta-data/instance-id*) printf '%s' "$FAKE_INSTANCE_ID";;`,
+        `  *user-data*) cat ${JSON.stringify(join(root, 'user-data'))};;`,
+        '  *) exit 22;;',
+        'esac',
+      ].join('\n'),
+    );
+    chmodSync(join(bin, 'curl'), 0o755);
+    const run = spawnSync('bash', ['-c', runnableSteps(userData, etc)], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env['PATH']}`, FAKE_INSTANCE_ID: instanceId },
+    });
+    const envFile = join(etc, 'instance.env');
+    const lines = existsSync(envFile) ? readFileSync(envFile, 'utf8').split('\n') : null;
+    return { status: run.status, stderr: run.stderr, lines };
+  }
+
+  const machineIdLines = (id: string) => MACHINE_ID_ENV_KEYS.map((k) => `${k}=${id}`);
+
+  it('names the host-neutral key first, and Fly’s for images that read only that', () => {
+    expect(MACHINE_ID_ENV_KEYS).toEqual(['MOTIR_MACHINE_ID', 'FLY_MACHINE_ID']);
+  });
+
+  it('reads instance-id from IMDSv2 with the boot’s token, and refuses an id that is not one', () => {
+    const text = renderInstanceUserData(config());
+    expect(text).toContain(`-H "X-aws-ec2-metadata-token: $token" "$imds/meta-data/instance-id"`);
+    expect(text).toContain(`python3 -c '`);
+    expect(text).toMatch(/python3 -c '[^\n]*' "\$instance_id" > \/etc\/motir\/instance\.env/);
+  });
+
+  it('on create: the env file carries the document’s env, the terminal’s, and the instance id', () => {
+    const { status, stderr, lines } = boot(
+      renderInstanceUserData(config({ terminal: TERMINAL, idleCommand: null })),
+      INSTANCE_ID,
+    );
+    expect(stderr).toBe('');
+    expect(status).toBe(0);
+    expect(lines).toEqual(
+      expect.arrayContaining([
+        'MOTIR_INSTANCE_ID=inst-contract-a',
+        'MOTIR_TERMINAL_KEY=derived',
+        ...machineIdLines(INSTANCE_ID),
+      ]),
+    );
+  });
+
+  it('a value the document carries under a machine-id key never stands in for the instance id', () => {
+    const { status, lines } = boot(
+      renderInstanceUserData(config({ env: { FLY_MACHINE_ID: 'forged', MOTIR_MACHINE_ID: 'x' } })),
+      INSTANCE_ID,
+    );
+    expect(status).toBe(0);
+    expect(lines).toEqual(expect.arrayContaining(machineIdLines(INSTANCE_ID)));
+    expect(lines).not.toContain('FLY_MACHINE_ID=forged');
+    expect(lines).not.toContain('MOTIR_MACHINE_ID=x');
+  });
+
+  it('on wake, from a rewritten document: the same instance id, read again', () => {
+    const created = boot(renderInstanceUserData(config()), INSTANCE_ID);
+    const woken = boot(
+      renderInstanceUserData(
+        config({ terminal: { ...TERMINAL, keyId: 'kid-2' }, idleCommand: null }),
+      ),
+      INSTANCE_ID,
+    );
+    expect(created.lines).toEqual(expect.arrayContaining(machineIdLines(INSTANCE_ID)));
+    expect(woken.status).toBe(0);
+    expect(woken.lines).toEqual(expect.arrayContaining(machineIdLines(INSTANCE_ID)));
+  });
+
+  it.each(['', 'not-an-instance', 'i-00DF', `i-0abc\nEVIL=1`])(
+    'stops the boot, before any env is written, when the metadata answers %j',
+    (answer) => {
+      const { status, stderr, lines } = boot(renderInstanceUserData(config()), answer);
+      expect(status).not.toBe(0);
+      expect(stderr).toContain('motir: no instance id');
+      expect(lines).toBeNull();
+    },
+  );
 });

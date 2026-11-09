@@ -118,7 +118,7 @@ export interface TerminalServerOptions {
   instanceKey: string;
   /** MOTIR_INSTANCE_ID. */
   instanceId: string;
-  /** FLY_MACHINE_ID. */
+  /** The machine id: MOTIR_MACHINE_ID, else FLY_MACHINE_ID (`commands/agentTerminal.ts`). */
   machineId: string;
   spawnPty: SpawnPty;
   /** The server's own environment; the shell gets it minus the key. */

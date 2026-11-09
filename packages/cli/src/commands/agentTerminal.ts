@@ -43,7 +43,26 @@ import { checkSignIn, type StatFn } from '../agentTerminal/signIn.js';
 export const DEFAULT_TERMINAL_PORT = 7681;
 
 /** The machine env the server cannot start without. Named, never echoed. */
-const REQUIRED_ENV = [TERMINAL_KEY_ENV, 'MOTIR_INSTANCE_ID', 'FLY_MACHINE_ID'] as const;
+const REQUIRED_ENV = [TERMINAL_KEY_ENV, 'MOTIR_INSTANCE_ID'] as const;
+
+/**
+ * The machine id the relay's tokens bind (MOTIR-10817), host-neutral. An AWS
+ * agent VM's boot script sets it to the EC2 instance id
+ * (`@motir/orchestrator`'s `MACHINE_ID_ENV_KEYS`).
+ */
+export const MACHINE_ID_ENV = 'MOTIR_MACHINE_ID';
+
+/** The machine id the Fly platform sets on every machine — read when {@link MACHINE_ID_ENV} is not set. */
+export const FLY_MACHINE_ID_ENV = 'FLY_MACHINE_ID';
+
+/** The machine id, by its host-neutral name first and Fly's second; null when neither is set. */
+function machineIdOf(env: NodeJS.ProcessEnv): string | null {
+  for (const name of [MACHINE_ID_ENV, FLY_MACHINE_ID_ENV]) {
+    const value = env[name];
+    if (value?.trim()) return value;
+  }
+  return null;
+}
 
 export interface AgentTerminalServeOptions {
   port?: string;
@@ -93,11 +112,17 @@ export async function agentTerminalServeCommand(
       throw new CliError(`The terminal server needs ${name}, which the agent's machine sets.`);
     }
   }
+  const machineId = machineIdOf(env);
+  if (machineId === null) {
+    throw new CliError(
+      `The terminal server needs ${MACHINE_ID_ENV} (${FLY_MACHINE_ID_ENV} on Fly), which the agent's machine sets.`,
+    );
+  }
   const log = deps.log ?? ((line: string) => process.stdout.write(`${line}\n`));
   const terminal = createTerminalServer({
     instanceKey: env[TERMINAL_KEY_ENV] as string,
     instanceId: env['MOTIR_INSTANCE_ID'] as string,
-    machineId: env['FLY_MACHINE_ID'] as string,
+    machineId,
     spawnPty,
     env,
     log,

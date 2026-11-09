@@ -10,6 +10,8 @@ import {
 import type { TerminalServer } from '../../src/agentTerminal/server.js';
 import {
   DEFAULT_TERMINAL_PORT,
+  FLY_MACHINE_ID_ENV,
+  MACHINE_ID_ENV,
   agentTerminalServeCommand,
 } from '../../src/commands/agentTerminal.js';
 import { CliError } from '../../src/errors.js';
@@ -73,7 +75,7 @@ describe('motir agent-terminal serve — where it may run', () => {
     expect(seen).toEqual(['/opt/motir-terminal', '/elsewhere']);
   });
 
-  it.each(['MOTIR_TERMINAL_KEY', 'MOTIR_INSTANCE_ID', 'FLY_MACHINE_ID'])(
+  it.each(['MOTIR_TERMINAL_KEY', 'MOTIR_INSTANCE_ID'])(
     'refuses without %s, naming it and never a value',
     async (name) => {
       const env: NodeJS.ProcessEnv = { ...ENV, [name]: '' };
@@ -87,6 +89,24 @@ describe('motir agent-terminal serve — where it may run', () => {
     },
   );
 
+  it('refuses with no machine id under either name, naming both and never a value', async () => {
+    for (const env of [
+      { ...ENV, FLY_MACHINE_ID: '' },
+      { ...ENV, FLY_MACHINE_ID: '  ', MOTIR_MACHINE_ID: ' ' },
+    ]) {
+      const error = (await agentTerminalServeCommand(
+        {},
+        { env, loadPty: () => fakeSpawner().spawn },
+      ).catch((err: unknown) => err)) as CliError;
+      expect(error).toBeInstanceOf(CliError);
+      expect(error.message).toBe(
+        `The terminal server needs ${MACHINE_ID_ENV} (${FLY_MACHINE_ID_ENV} on Fly), which the agent's machine sets.`,
+      );
+      expect(error.message).not.toContain(KEY);
+    }
+    expect([MACHINE_ID_ENV, FLY_MACHINE_ID_ENV]).toEqual(['MOTIR_MACHINE_ID', 'FLY_MACHINE_ID']);
+  });
+
   it.each(['0', '65536', 'abc', '80x'])('refuses --port %s', async (port) => {
     await expect(
       agentTerminalServeCommand({ port }, { env: ENV, loadPty: () => fakeSpawner().spawn }),
@@ -95,6 +115,61 @@ describe('motir agent-terminal serve — where it may run', () => {
 
   it('defaults to port 7681', () => {
     expect(DEFAULT_TERMINAL_PORT).toBe(7681);
+  });
+});
+
+describe('the machine id the relay token must carry (MOTIR-10817)', () => {
+  const tokenFor = (machineId: string): string =>
+    relayAuthorizationHeader(
+      signRelayToken(KEY, {
+        instanceId: INSTANCE,
+        machineId,
+        exp: Math.floor(Date.now() / 1000) + 60,
+        nonce: newNonce(),
+      }),
+    );
+
+  async function serve(env: NodeJS.ProcessEnv): Promise<number> {
+    const port = await freePort();
+    running = await agentTerminalServeCommand(
+      { port: String(port) },
+      { env, loadPty: () => fakeSpawner().spawn, log: () => {} },
+    );
+    return port;
+  }
+
+  async function accepts(port: number, machineId: string): Promise<boolean> {
+    try {
+      const client = await Client.connect(port, tokenFor(machineId));
+      client.close();
+      await client.closed();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  it('an AWS VM: MOTIR_MACHINE_ID alone (the instance id) starts the server and binds its tokens', async () => {
+    const { FLY_MACHINE_ID: _fly, ...aws } = ENV;
+    const port = await serve({ ...aws, MOTIR_MACHINE_ID: 'i-00df27f5ec6ca138a' });
+    expect(await accepts(port, 'i-00df27f5ec6ca138a')).toBe(true);
+    expect(await accepts(port, MACHINE)).toBe(false);
+  });
+
+  it('a Fly machine: FLY_MACHINE_ID alone behaves as before', async () => {
+    const port = await serve(ENV);
+    expect(await accepts(port, MACHINE)).toBe(true);
+    expect(await accepts(port, 'i-00df27f5ec6ca138a')).toBe(false);
+  });
+
+  it('both set: the host-neutral name wins, and a blank one falls through to Fly’s', async () => {
+    let port = await serve({ ...ENV, MOTIR_MACHINE_ID: 'i-0abc' });
+    expect(await accepts(port, 'i-0abc')).toBe(true);
+    expect(await accepts(port, MACHINE)).toBe(false);
+    await running?.close();
+    running = null;
+    port = await serve({ ...ENV, MOTIR_MACHINE_ID: '  ' });
+    expect(await accepts(port, MACHINE)).toBe(true);
   });
 });
 
