@@ -116,7 +116,7 @@ function placedElsewhere(row: AgentInstance | null): AgentInstancePlacementOutco
   }
   if (!row?.fleetShardId) return { outcome: 'pool_full', refusedShardIds: [] };
   const handle =
-    row.flyApp && row.machineId && row.volumeId
+    row.flyApp && row.machineId && row.volumeId && row.region
       ? {
           provider: 'aws' as const,
           app: row.flyApp,
@@ -237,6 +237,24 @@ async function placeOnInstallFleet(
 }
 
 export const agentInstancePlacementService = {
+  /**
+   * Will a new instance of this organisation be placed OFF the process-wide lane
+   * — on the install fleet, or on an AWS hoster account — rather than on the Fly
+   * app? The same two reads {@link placeAndProvision} decides by, in its order, so
+   * the lifecycle's lane gate and the placement cannot disagree (MOTIR-10801): an
+   * install with no Fly lane may still create an instance whose placement never
+   * reaches Fly.
+   */
+  async placesOffProcessWideLane(organizationId: string): Promise<boolean> {
+    const installFleet = await withSystemContext((tx) =>
+      fleetShardAdmissionService.installFleetTakesInTx(
+        { fleetKind: 'agent_instance', organizationId },
+        tx,
+      ),
+    );
+    return installFleet || (await fleetKindOnPool('agent_instance'));
+  },
+
   /** Place one new agent instance and create its machine and disk there. */
   async placeAndProvision(
     input: AgentInstancePlacementInput,

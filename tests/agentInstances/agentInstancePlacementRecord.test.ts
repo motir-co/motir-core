@@ -122,7 +122,7 @@ describe('an instance with no placement — the process-wide Fly app', () => {
     await withWorkspaceServiceContext(f.workspaceId, (tx) =>
       agentInstanceRepository.setHandle(
         created.id,
-        { flyApp: 'motir-inst-x', machineId: 'm-1', volumeId: 'vol_1' },
+        { flyApp: 'motir-inst-x', machineId: 'm-1', volumeId: 'vol_1', region: 'iad' },
         tx,
       ),
     );

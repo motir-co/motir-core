@@ -15139,11 +15139,14 @@ model AgentInstance {
   updateFailedAt      DateTime? @map("update_failed_at")
 
   /// The persistent handle `provisionPersistent` returns (§1, §7). Null until
-  /// the provision call answers; the region is fixed at create.
+  /// the provision call answers. The region is the placement's, written with the
+  /// handle (MOTIR-10801): null while the instance waits for room, because create
+  /// does not know where it will go — the Fly app, an AWS account or the install
+  /// fleet — and must not ask a lane it may not have.
   flyApp    String? @map("fly_app")
   machineId String? @map("machine_id")
   volumeId  String? @map("volume_id")
-  region    String
+  region    String?
 
   /// The fleet account the instance lives in (Story MOTIR-9361 · MOTIR-9468).
   /// NULL = the process-wide Fly app: every instance created before AWS, and every

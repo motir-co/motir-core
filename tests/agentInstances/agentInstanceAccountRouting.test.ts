@@ -107,7 +107,11 @@ describe('create places; every later step follows the record', () => {
     const dto = await create();
     expect(dto.state).toBe('running');
     const placed = await rowOf(dto.id);
-    expect(placed).toMatchObject({ fleetShardId: a.id, availabilityZone: 'us-east-1a' });
+    expect(placed).toMatchObject({
+      fleetShardId: a.id,
+      availabilityZone: 'us-east-1a',
+      region: 'us-east-1',
+    });
     const viewA = fakePersistentOrchestratorForShard(a.id);
     const viewB = fakePersistentOrchestratorForShard(b.id);
     expect(viewA.calls).toContain('provisionPersistent');
@@ -172,6 +176,8 @@ describe('create places; every later step follows the record', () => {
       fleetShardId: null,
       availabilityZone: null,
       machineId: null,
+      // No region until a placement writes one (MOTIR-10801).
+      region: null,
     });
     expect(fakePersistentOrchestratorForShard(full.id).calls).toEqual([]);
   });
@@ -181,7 +187,13 @@ describe('create places; every later step follows the record', () => {
     const row = await rowOf(dto.id);
     const { orchestrator, handle } = await agentInstanceBootSteps.routeOf(row);
     expect(orchestrator).toBe(getPersistentOrchestrator());
-    expect(handle).toEqual(agentInstanceBootSteps.handleOf(row));
+    expect(agentInstanceBootSteps.hasMachine(row)).toBe(true);
+    expect(handle).toMatchObject({
+      provider: getPersistentOrchestrator().provider,
+      machineId: row.machineId,
+      // The Fly path writes the region its provision answered in (MOTIR-10801).
+      region: getPersistentOrchestrator().defaultRegion(),
+    });
     expect(handle).not.toHaveProperty('availabilityZone');
   });
 });

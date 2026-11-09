@@ -71,7 +71,8 @@ export interface AgentInstanceDto {
   pendingImageVersion: string | null;
   /** The last update's failure in words (Q4) — a rollback's reason; null otherwise. */
   updateFailureReason: string | null;
-  region: string;
+  /** Where the machine was placed; null while the instance waits for room (MOTIR-10801). */
+  region: string | null;
   state: AgentInstanceState;
   /** Set on `failed`, in words; null otherwise. */
   failureReason: string | null;
