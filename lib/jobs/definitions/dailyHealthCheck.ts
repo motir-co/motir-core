@@ -468,7 +468,7 @@ export class FleetOriginsError extends Error {
     );
     super(
       `${verdict.failures.length} fleet origin(s) cannot work for a fleet machine: ` +
-        `${sentences.join(' ')} Every fleet kind (CI runner, indexer, agent runner, hoster) is ` +
+        `${sentences.join(' ')} The indexer, the agent runner and the agent hoster are ` +
         `handed these addresses, and a machine handed a wrong one boots, is billed and fails ` +
         `late (MOTIR-4518 · MOTIR-4916).`,
     );

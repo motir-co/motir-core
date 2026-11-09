@@ -255,6 +255,8 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
       'MOTIR_RUNNER_IMAGE',
       'MOTIR_INDEXER_IMAGE',
       'MOTIR_HOSTED_AGENT_IMAGE',
+      'FLY_INSTANCES_API_TOKEN',
+      'MOTIR_INSTALL_FLEET_KINDS',
       'MOTIR_BASE_URL',
     ]) {
       vi.stubEnv(name, '');
@@ -264,22 +266,87 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
     });
   });
 
-  it("asks only core's origin of a CI-only Fly fleet", async () => {
+  function wireOnly(kinds: {
+    ci?: boolean;
+    index?: boolean;
+    hosted?: boolean;
+    instances?: boolean;
+  }) {
     vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fly');
-    vi.stubEnv('FLY_FLEET_API_TOKEN', 'fly_fleet_token');
-    vi.stubEnv('FLY_FLEET_APP', 'motir-ci-fleet');
-    vi.stubEnv('MOTIR_RUNNER_IMAGE', 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d');
-    vi.stubEnv('MOTIR_INDEXER_IMAGE', '');
-    vi.stubEnv('MOTIR_HOSTED_AGENT_IMAGE', '');
+    vi.stubEnv('FLY_FLEET_API_TOKEN', kinds.ci || kinds.index ? 'fly_fleet_token' : '');
+    vi.stubEnv('FLY_FLEET_APP', kinds.ci || kinds.index ? 'motir-ci-fleet' : '');
+    vi.stubEnv(
+      'MOTIR_RUNNER_IMAGE',
+      kinds.ci || kinds.index ? 'ghcr.io/motir-co/motir-ci-runner@sha256:446c692d' : '',
+    );
+    vi.stubEnv(
+      'MOTIR_INDEXER_IMAGE',
+      kinds.index ? 'registry.fly.io/motir-indexer@sha256:0a1b2c3d' : '',
+    );
+    vi.stubEnv(
+      'MOTIR_HOSTED_AGENT_IMAGE',
+      kinds.hosted ? 'ghcr.io/motir-co/motir-agent@sha256:9f8e7d6c' : '',
+    );
+    vi.stubEnv('FLY_INSTANCES_API_TOKEN', kinds.instances ? 'fly_instances_token' : '');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', '');
+  }
+
+  const verdicts = (result: Awaited<ReturnType<typeof fleetPreflightService.checkFleetOrigins>>) =>
+    'readings' in result ? result.readings.map((r) => [r.origin, r.verdict]) : result.verdict;
+
+  it('is not_applicable on a CI-only fleet, whose runner is handed no Motir address', async () => {
+    wireOnly({ ci: true });
+    vi.stubEnv('MOTIR_BASE_URL', '');
+    expect(await fleetPreflightService.checkFleetOrigins()).toMatchObject({
+      verdict: 'not_applicable',
+    });
+  });
+
+  it("asks only core's origin of a deployment that runs agent instances alone", async () => {
+    wireOnly({ instances: true });
     stubOrigins();
-    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
-    const result = await fleetPreflightService.checkFleetOrigins();
-    expect(result.verdict).toBe('ok');
-    if (result.verdict !== 'ok') return;
-    expect(result.readings.map((r) => [r.origin, r.verdict])).toEqual([
+    expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
       ['core', 'reachable'],
       ['aiContainer', 'not_applicable'],
       ['gatewayRun', 'not_applicable'],
+    ]);
+    vi.stubEnv('MOTIR_BASE_URL', '');
+    expect(await fleetPreflightService.checkFleetOrigins()).toMatchObject({
+      verdict: 'failed',
+      failures: [{ origin: 'core', verdict: 'unconfigured' }],
+    });
+  });
+
+  it("asks core's origin of agent instances on the install fleet, with no Fly lane", async () => {
+    wireOnly({});
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'agent_instance');
+    stubOrigins();
+    expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
+      ['core', 'reachable'],
+      ['aiContainer', 'not_applicable'],
+      ['gatewayRun', 'not_applicable'],
+    ]);
+  });
+
+  it("asks only motir-ai's origin of a deployment that only indexes", async () => {
+    wireOnly({ index: true });
+    stubOrigins();
+    vi.stubEnv('MOTIR_BASE_URL', '');
+    expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
+      ['core', 'not_applicable'],
+      ['aiContainer', 'reachable'],
+      ['gatewayRun', 'not_applicable'],
+    ]);
+  });
+
+  it("asks core's and the gateway's origins of a deployment that runs hosted agents", async () => {
+    wireOnly({ hosted: true });
+    stubOrigins();
+    vi.stubEnv('MOTIR_AI_CONTAINER_URL', '');
+    expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
+      ['core', 'reachable'],
+      ['aiContainer', 'not_applicable'],
+      ['gatewayRun', 'reachable'],
     ]);
   });
 

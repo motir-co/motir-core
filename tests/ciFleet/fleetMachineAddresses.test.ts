@@ -50,9 +50,13 @@ import {
 //   kind           built by                                  Motir addresses
 //   CI runner      ciRunnerBootService.buildSpec             none
 //   indexer        codeGraphIndexDispatchService.buildIndexSpec  MOTIR_AI_BASE_URL
-//   hoster         hostedRunService (+ hostedRunKeyService.mintRunKey)
+//   agent runner   hostedRunService (+ hostedRunKeyService.mintRunKey)
 //                                                            MOTIR_API_URL, MOTIR_GATEWAY_URL
-//   agent runner   agentInstanceRunService launch (stdin)    apiUrl
+//   hoster         agentInstanceRunService launch (stdin)    apiUrl
+//
+// The kinds are named as core names them: the agent RUNNER boots a hosted
+// run's container (`hosted_agent`), the agent HOSTER an agent instance
+// (`agent_instance`).
 //
 // The source guard at the end reports a kind that starts carrying an address
 // outside the three, so that origin is added to the stack outputs.
@@ -63,7 +67,7 @@ const PUBLISHED = {
   MOTIR_GATEWAY_RUN_URL: 'https://gateway-run.motir.co',
 } as const;
 
-type FleetKind = 'CI runner' | 'indexer' | 'hoster' | 'agent runner';
+type FleetKind = 'CI runner' | 'indexer' | 'agent runner' | 'hoster';
 
 function stubPublishedOrigins(): void {
   for (const [name, value] of Object.entries(PUBLISHED)) vi.stubEnv(name, value);
@@ -192,7 +196,7 @@ describe('indexer — codeGraphIndexDispatchService.buildIndexSpec', () => {
   });
 });
 
-describe('hoster — hostedRunKeyService.mintRunKey', () => {
+describe('agent runner — hostedRunKeyService.mintRunKey', () => {
   it('hands MOTIR_GATEWAY_URL, the published GatewayRunOrigin', async () => {
     stubPublishedOrigins();
     // The gateway's MINT seam is core's own address for it, not the machine's.
@@ -220,7 +224,7 @@ describe('hoster — hostedRunKeyService.mintRunKey', () => {
     );
     expect(
       assertPublishedOrigin({
-        kind: 'hoster',
+        kind: 'agent runner',
         variable: 'MOTIR_GATEWAY_URL',
         value: config.containerEnv.MOTIR_GATEWAY_URL,
       }),
@@ -228,7 +232,7 @@ describe('hoster — hostedRunKeyService.mintRunKey', () => {
   });
 });
 
-// ── The hoster's container request, captured at the fake orchestrator ──────
+// ── The agent runner's container request, captured at the fake orchestrator
 //
 // The few lines of `tests/hostedRuns/hostedRunStart.test.ts`'s fixture a
 // hosted run's admission needs, copied rather than exported: motir-ai's model
@@ -325,7 +329,7 @@ async function seedHostedRepo(hfx: WorkItemFixture): Promise<void> {
   });
 }
 
-describe('hoster — hostedRunService, the container request a fake orchestrator receives', () => {
+describe('agent runner — hostedRunService, the container request a fake orchestrator receives', () => {
   grantPaidAiPlan();
 
   beforeEach(async () => {
@@ -371,14 +375,14 @@ describe('hoster — hostedRunService, the container request a fake orchestrator
     const env = fakeOrchestrator.specs[0]!.env;
     expect(
       assertPublishedOrigin({
-        kind: 'hoster',
+        kind: 'agent runner',
         variable: 'MOTIR_API_URL',
         value: env['MOTIR_API_URL']!,
       }),
     ).toBe(PUBLISHED.MOTIR_BASE_URL);
     expect(
       assertPublishedOrigin({
-        kind: 'hoster',
+        kind: 'agent runner',
         variable: 'MOTIR_GATEWAY_URL',
         value: env['MOTIR_GATEWAY_URL']!,
       }),
@@ -391,7 +395,7 @@ describe('hoster — hostedRunService, the container request a fake orchestrator
   });
 });
 
-// ── The agent runner's launch, captured at the fake persistent fleet ────────
+// ── The agent hoster's launch, captured at the fake persistent fleet ────────
 
 /** What the fake agent's terminal server answers — a signed-in agent that launches. */
 function answer(command: readonly string[]): PersistentExecResult {
@@ -405,7 +409,7 @@ function answer(command: readonly string[]): PersistentExecResult {
   return ok();
 }
 
-describe('agent runner — agentInstanceRunService, the launch exec a fake fleet receives', () => {
+describe('hoster — agentInstanceRunService, the launch exec a fake fleet receives', () => {
   beforeEach(async () => {
     await setUpHarness();
     await truncateJobRuns();
@@ -451,7 +455,7 @@ describe('agent runner — agentInstanceRunService, the launch exec a fake fleet
     expect(Object.keys(stdin).sort()).toEqual(['apiUrl', 'token']);
     expect(
       assertPublishedOrigin({
-        kind: 'agent runner',
+        kind: 'hoster',
         variable: 'apiUrl',
         value: String(stdin['apiUrl']),
       }),
@@ -474,8 +478,8 @@ describe('assertPublishedOrigin refuses every form a fleet machine cannot use', 
     ['https://100.64.0.1', 'private range'],
   ])('%s — %s, naming the kind and the variable', (value, form) => {
     expect(() =>
-      assertPublishedOrigin({ kind: 'hoster', variable: 'MOTIR_GATEWAY_URL', value }),
-    ).toThrow(`hoster MOTIR_GATEWAY_URL=${value}: ${form}`);
+      assertPublishedOrigin({ kind: 'agent runner', variable: 'MOTIR_GATEWAY_URL', value }),
+    ).toThrow(`agent runner MOTIR_GATEWAY_URL=${value}: ${form}`);
   });
 
   it.each(['https://motir-core-123.us-east-1.elb.amazonaws.com', 'https://app.example.com'])(
@@ -490,20 +494,24 @@ describe('assertPublishedOrigin refuses every form a fleet machine cannot use', 
   it('refuses a published host over plain http, and a published origin with a path', () => {
     expect(() =>
       assertPublishedOrigin({
-        kind: 'hoster',
+        kind: 'agent runner',
         variable: 'MOTIR_API_URL',
         value: 'http://app.motir.co',
       }),
     ).toThrow('not https');
     expect(() =>
       assertPublishedOrigin({
-        kind: 'hoster',
+        kind: 'agent runner',
         variable: 'MOTIR_GATEWAY_URL',
         value: 'https://gateway-run.motir.co/v1',
       }),
     ).toThrow('unpublished host');
     expect(() =>
-      assertPublishedOrigin({ kind: 'hoster', variable: 'MOTIR_API_URL', value: 'app.motir.co' }),
+      assertPublishedOrigin({
+        kind: 'agent runner',
+        variable: 'MOTIR_API_URL',
+        value: 'app.motir.co',
+      }),
     ).toThrow('not an absolute URL');
   });
 
@@ -511,9 +519,9 @@ describe('assertPublishedOrigin refuses every form a fleet machine cannot use', 
     vi.stubEnv('MOTIR_BASE_URL', '');
     const value = resolveBaseUrlTrimmed();
     expect(value).toBe('http://localhost:3000');
-    expect(() =>
-      assertPublishedOrigin({ kind: 'agent runner', variable: 'apiUrl', value }),
-    ).toThrow(`agent runner apiUrl=${value}: localhost`);
+    expect(() => assertPublishedOrigin({ kind: 'hoster', variable: 'apiUrl', value })).toThrow(
+      `hoster apiUrl=${value}: localhost`,
+    );
   });
 });
 
@@ -536,16 +544,16 @@ const ADDRESS_NAMES: Record<string, Record<string, string>> = {
     'motirAiBaseUrl(': "core's own call to motir-ai; never handed to the machine",
   },
   'lib/services/hostedRunKeyService.ts': {
-    MOTIR_GATEWAY_URL: 'the hoster env key, from gatewayRunUrl (checked above)',
-    'gatewayRunUrl(': 'the hoster gateway address (checked above)',
+    MOTIR_GATEWAY_URL: 'the agent runner env key, from gatewayRunUrl (checked above)',
+    'gatewayRunUrl(': 'the agent runner gateway address (checked above)',
   },
   'lib/services/hostedRunService.ts': {
-    MOTIR_API_URL: 'the hoster env key, from resolveBaseUrlTrimmed (checked above)',
-    MOTIR_GATEWAY_URL: 'the hoster env key, from mintRunKey (checked above)',
-    'resolveBaseUrlTrimmed(': 'the hoster core address (checked above)',
+    MOTIR_API_URL: 'the agent runner env key, from resolveBaseUrlTrimmed (checked above)',
+    MOTIR_GATEWAY_URL: 'the agent runner env key, from mintRunKey (checked above)',
+    'resolveBaseUrlTrimmed(': 'the agent runner core address (checked above)',
   },
   'lib/services/agentInstanceRunService.ts': {
-    'resolveBaseUrlTrimmed(': 'the agent runner apiUrl (checked above)',
+    'resolveBaseUrlTrimmed(': 'the hoster apiUrl (checked above)',
   },
 };
 
