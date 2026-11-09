@@ -14,9 +14,10 @@ import { DisconnectAccountButton } from './DisconnectAccountButton';
 // states can be rendered by a test: the page is an async server component that
 // reads the session, and a state nobody can render is a state nobody asserts.
 //
-// ⚠️ STATE B — NEEDS RE-AUTH (Bug MOTIR-10047). GitHub refused to renew the
-// member's sign-in (`github_identity.refresh_refused_at`, written by
-// `githubIdentityService.getLiveToken` since MOTIR-10021), so every action that
+// ⚠️ STATE B — NEEDS RE-AUTH (Bug MOTIR-10047). GitHub refused the member's
+// sign-in (`github_identity.refresh_refused_at`, written by
+// `githubIdentityService.getLiveToken` on a refused renewal since MOTIR-10021,
+// and by `recordRejectedToken` on a 401 since MOTIR-10806), so every action that
 // uses it now fails with the reconnect message of MOTIR-8984. This page is the
 // one place about the sign-in itself, so it says so: a danger notice, the row
 // kept with a warning `Needs re-auth` pill, and a primary `Reconnect` that runs

@@ -1206,7 +1206,9 @@ async function authoriseOrgAdmin(actorUserId: string, organizationId: string): P
  *  GitHub answers `Bad credentials` for a token that was revoked, replaced or
  *  has expired, and no retry revives it — so it becomes
  *  {@link GithubIdentityRefusedError}, which every caller answers with
- *  "reconnect". Network failures, 5xx and every other status stay
+ *  "reconnect" — and is recorded on the identity first
+ *  (`githubIdentityService.recordRejectedToken`, Bug MOTIR-10806), so the
+ *  account Git pane says the same thing as the error. Network failures, 5xx and every other status stay
  *  `GithubUserInstallationsError`: for those, "couldn't reach GitHub" is true. */
 async function accessibleInstallations(
   actorUserId: string,
@@ -1217,6 +1219,9 @@ async function accessibleInstallations(
     return await userInstallationsClient.listForToken(live.accessToken);
   } catch (err) {
     if (err instanceof GithubUserInstallationsError && err.status === 401) {
+      // Recorded on the row, so the account Git pane reads Needs re-auth rather
+      // than Connected (Bug MOTIR-10806).
+      await githubIdentityService.recordRejectedToken(actorUserId, live.accessToken);
       throw new GithubIdentityRefusedError();
     }
     throw err;

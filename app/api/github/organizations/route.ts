@@ -10,7 +10,8 @@ import { requireCompliantWorkspaceContext } from '@/lib/auth/requireCompliantSes
 //   GET → 200 { organizations: [{ login, avatarUrl }] }
 //       → 502 { code: 'GITHUB_ORGS_UNAVAILABLE' } when GitHub could not answer
 //       → 409 { code: 'github_identity_refused' } when the member's GitHub
-//         sign-in is dead and could not be renewed (Bugs MOTIR-8984 · MOTIR-10021)
+//         sign-in is dead: its renewal was refused, or GitHub answered the
+//         org list 401 (Bugs MOTIR-8984 · MOTIR-10021 · MOTIR-10806)
 //
 // ⚠️ THE FAILURE IS A FIRST-CLASS ANSWER, NOT A 500. Nothing stores an
 // organization list, so this is a live `GET /user/orgs` that can be slow or
@@ -36,7 +37,8 @@ export async function GET(): Promise<Response> {
     if (err instanceof GithubUserOrgsError) {
       return NextResponse.json({ code: 'GITHUB_ORGS_UNAVAILABLE' }, { status: 502 });
     }
-    // A refused renewal is a dead sign-in, not an unreachable GitHub — the same
+    // A dead sign-in (a refused renewal, or a 401 on the org list, which the
+    // service records on the identity) is not an unreachable GitHub — the same
     // code the organisation connect routes answer it with (`mapGithubLinkError`).
     if (err instanceof GithubIdentityRefusedError) {
       return NextResponse.json({ code: 'github_identity_refused' }, { status: 409 });

@@ -8245,9 +8245,10 @@ model GithubIdentity {
   /// grant is spent, cleared when the rotated pair is stored. A live lease makes
   /// every other caller wait rather than spend the same refresh token.
   refreshLeaseUntil     DateTime? @map("refresh_lease_until")
-  /// When GitHub REFUSED the refresh token (`bad_refresh_token` — expired or
-  /// revoked). The identity is dead until the member reconnects, and no further
-  /// renewal is attempted. Cleared by a reconnect.
+  /// When GitHub REFUSED this sign-in: the refresh token (`bad_refresh_token` —
+  /// expired or revoked), or the access token itself (a 401 from a user-token
+  /// read, Bug MOTIR-10806). The identity is dead until the member reconnects,
+  /// and no further renewal is attempted. Cleared by a reconnect.
   refreshRefusedAt      DateTime? @map("refresh_refused_at")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
