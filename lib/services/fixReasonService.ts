@@ -1,6 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { Prisma } from '@/generated/prisma/client';
-import { readStandingReviewRefusal } from '@/lib/approvalGates/reviewRefusal';
+import {
+  readAnsweredReviewRefusal,
+  readStandingReviewRefusal,
+} from '@/lib/approvalGates/reviewRefusal';
 import type { WorkItemFixReasonDto } from '@/lib/dto/fixReason';
 import { isCiUndecidedAtHead, pullRequestHead } from '@/lib/github/pullRequestHead';
 import { toFixDetailDto } from '@/lib/mappers/fixReasonMappers';
@@ -69,6 +72,12 @@ import {
 // stays on To fix and its count does not move until the CI decides. Green then clears it,
 // red raises a fresh reason on the new heads. The prior is read from the row the caller
 // passes — the recompute's locked row, so it is consistent with the write it decides.
+// ⚠️ A REVIEW REFUSAL DOES NOT DEPEND ON THAT ROW (Bug MOTIR-10733). A push's checks arrive
+// one webhook at a time and in no order, so a quick success at the new head can be recorded
+// before anything running there: that recompute reads green, stores nothing to fix, and the
+// prior is gone. The refusal the push answered is still in its own rows
+// (`readAnsweredReviewRefusal`), so the next recompute that sees CI running at a moved head
+// raises it again as Fixing — through the same moved-head rule.
 //
 // ── …and a LIVE REPAIR is Fixing from its first second (MOTIR-10506) ────────────
 // A `fix` run alive on the card — a claimed `motir fix`, a hosted or agent repair, read
@@ -287,6 +296,34 @@ export async function deriveFixReason(
         fixDetail: priorDetail,
       });
       if (kept) return kept;
+    }
+    // …and when the stored prior is GONE, the refusal a push answered is read from its own
+    // rows (Bug MOTIR-10733): a recompute that saw the new head green on a partial set of
+    // checks stored nothing to fix, and the Fixing rule had no prior left to keep. The
+    // answer is the one the refusal raised — its gate, reviewer, findings and the heads it
+    // was about — put through the same moved-head rule, so a re-run at the reviewed head is
+    // still never Fixing.
+    const answered = await readAnsweredReviewRefusal(item.id, deliveries, tx);
+    if (answered) {
+      const byAgent = answered.kind === 'agent_review';
+      const asRaised = withRaisedHeads(
+        withFixGroupKey(
+          changesRequestedOf(
+            {
+              gate: answered.kind,
+              reviewerName: byAgent
+                ? REVIEW_AGENT_REVIEWER_NAME
+                : await reviewerName(answered.decidedById, answered.decidedByLabel, tx),
+              noteMd: answered.noteMd,
+            },
+            total,
+          ),
+          setKey,
+        ),
+        answered.raisedHeads,
+      );
+      const refixing = fixingReasonOf(asRaised, verdict.running);
+      if (refixing) return refixing;
     }
   }
 
