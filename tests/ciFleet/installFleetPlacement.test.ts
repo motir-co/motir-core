@@ -21,6 +21,7 @@ import {
 } from '@/lib/ciFleet/installFleet';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
 import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import { codeGraphIndexAdmissionService } from '@/lib/services/codeGraphIndexAdmissionService';
@@ -219,6 +220,20 @@ describe('a meta-org job on cloud', () => {
       ).toBe(true);
     },
   );
+
+  it('a meta-org CI job never consults the install-fleet predicate: no org read, answer false', async () => {
+    const meta = await seedOrg({ isMeta: true });
+    const orgRead = vi.spyOn(organizationRepository, 'findByIdInTx');
+    expect(
+      await withSystemContext((tx) =>
+        fleetShardAdmissionService.installFleetTakesInTx(
+          { fleetKind: 'ci_runner', organizationId: meta.organizationId },
+          tx,
+        ),
+      ),
+    ).toBe(false);
+    expect(orgRead).not.toHaveBeenCalled();
+  });
 
   it('a meta-org CI job goes to the pool as before, even with ci_runner listed', async () => {
     onPool();
@@ -510,9 +525,8 @@ describe('the database admits one meta org', () => {
   });
 });
 
-async function organizationIds(
+function organizationIds(
   tx: Parameters<Parameters<typeof withSystemContext>[0]>[0],
 ): Promise<string[]> {
-  const { organizationRepository } = await import('@/lib/repositories/organizationRepository');
   return organizationRepository.listMetaIdsInTx(tx);
 }
