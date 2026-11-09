@@ -13,7 +13,9 @@ import {
   isMergeabilityOwedAtCurrentHead,
   isOutOfDateAt,
   isOutOfDateAtCurrentHead,
+  mergeabilityAnsweredByHead,
 } from '@/lib/github/mergeability';
+import { queueFailureAnsweredByHead } from '@/lib/workItems/deliverySet';
 
 // THE PULL REQUEST'S HEAD, READ ONE WAY (MOTIR-7005). The check rows are not the head:
 // a push that produces no CI — every push to a conflicting pull request — leaves them
@@ -322,5 +324,104 @@ describe('isReRunAtHead', () => {
     expect(isReRunAtHead({ headSha: B, checkRuns: [olderReopened, run(B, 'pending')] })).toBe(
       false,
     );
+  });
+});
+
+// THE READING A PUSH ANSWERED (Bug MOTIR-10791): the last decided mergeability reading about
+// an earlier head — the stored one while no reading at a new head has replaced it, else the
+// pair the writers carried.
+describe('mergeabilityAnsweredByHead', () => {
+  const C = 'e'.repeat(40);
+  const pr = (over: {
+    headSha?: string | null;
+    mergeableState?: string | null;
+    mergeableStateHeadSha?: string | null;
+    previousMergeableState?: string | null;
+    previousMergeableStateHeadSha?: string | null;
+  }) => ({
+    headSha: B,
+    checkRuns: [],
+    mergeableState: null,
+    mergeableStateHeadSha: null,
+    previousMergeableState: null,
+    previousMergeableStateHeadSha: null,
+    ...over,
+  });
+
+  it('a decided blocking reading stored about an earlier head is the one answered', () => {
+    expect(
+      mergeabilityAnsweredByHead(pr({ mergeableState: 'dirty', mergeableStateHeadSha: A })),
+    ).toEqual({
+      blocked: 'conflicted',
+      headSha: A,
+    });
+    expect(
+      mergeabilityAnsweredByHead(pr({ mergeableState: 'behind', mergeableStateHeadSha: A })),
+    ).toEqual({
+      blocked: 'out_of_date',
+      headSha: A,
+    });
+  });
+
+  it('a reading at the head, or an undecided one, defers to the carried pair', () => {
+    for (const stored of [
+      { mergeableState: 'clean', mergeableStateHeadSha: B },
+      { mergeableState: 'unknown', mergeableStateHeadSha: B },
+      { mergeableState: 'unknown', mergeableStateHeadSha: C },
+      { mergeableState: null, mergeableStateHeadSha: null },
+    ]) {
+      expect(
+        mergeabilityAnsweredByHead(
+          pr({ ...stored, previousMergeableState: 'dirty', previousMergeableStateHeadSha: A }),
+        ),
+      ).toEqual({ blocked: 'conflicted', headSha: A });
+    }
+  });
+
+  it('a clean reading answered, a carried pair at the head, no pair or no head: nothing', () => {
+    expect(
+      mergeabilityAnsweredByHead(pr({ mergeableState: 'clean', mergeableStateHeadSha: A })),
+    ).toBeNull();
+    expect(
+      mergeabilityAnsweredByHead(
+        pr({
+          mergeableState: 'dirty',
+          mergeableStateHeadSha: B,
+          previousMergeableState: 'dirty',
+          previousMergeableStateHeadSha: B,
+        }),
+      ),
+    ).toBeNull();
+    expect(mergeabilityAnsweredByHead(pr({}))).toBeNull();
+    expect(
+      mergeabilityAnsweredByHead(
+        pr({ headSha: null, mergeableState: 'dirty', mergeableStateHeadSha: A }),
+      ),
+    ).toBeNull();
+  });
+});
+
+describe('queueFailureAnsweredByHead', () => {
+  const exit = (
+    over: Partial<{ disposition: string; requeuedAt: Date | null; headSha: string }> = {},
+  ) => ({
+    disposition: 'failure',
+    requeuedAt: null,
+    headSha: A,
+    ...over,
+  });
+
+  it('a standing failure at the last decided commit before the head is what the head answered', () => {
+    expect(queueFailureAnsweredByHead(exit(), B, A)).toBe(true);
+  });
+
+  it('nothing else is: at the head, neutral, re-queued, at another commit, or a missing fact', () => {
+    expect(queueFailureAnsweredByHead(exit({ headSha: B }), B, B)).toBe(false);
+    expect(queueFailureAnsweredByHead(exit({ disposition: 'neutral' }), B, A)).toBe(false);
+    expect(queueFailureAnsweredByHead(exit({ requeuedAt: new Date() }), B, A)).toBe(false);
+    expect(queueFailureAnsweredByHead(exit(), B, 'f'.repeat(40))).toBe(false);
+    expect(queueFailureAnsweredByHead(null, B, A)).toBe(false);
+    expect(queueFailureAnsweredByHead(exit(), null, A)).toBe(false);
+    expect(queueFailureAnsweredByHead(exit(), B, undefined)).toBe(false);
   });
 });

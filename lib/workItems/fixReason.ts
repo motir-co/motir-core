@@ -3,6 +3,7 @@ import type { FixBranchDto, FixDetailDto, WorkItemFixReasonDto } from '@/lib/dto
 import type { RunDiedReason, WorkItemContinueRefusal } from '@/lib/dto/workItemContinue';
 import type { RepairPullRequestDto } from '@/lib/dto/workItemRepair';
 import { routedToDisplayName } from '@/lib/approvalGates/routing';
+import type { BlockingReadingBeforeHead } from '@/lib/github/mergeability';
 
 // THE PURE HALF of a card's to-fix answer (Story MOTIR-6588 · MOTIR-6600). The reads
 // live in `fixReasonService`; everything here is a function of what they returned, so
@@ -538,52 +539,98 @@ export function fixingReasonOf(
   return { fixReason: prior.fixReason, fixDetail: { ...prior.fixDetail, fixing: true } };
 }
 
-/** A running member whose last DECIDED commit before its head was red (Bug MOTIR-10747). */
-export interface RedBeforeHead {
+/**
+ * What a running member's PUSH ANSWERED, read from durable rows (Bugs MOTIR-10747 ·
+ * MOTIR-10791) — each fact null when the member's history does not hold it. The caller reads
+ * them only for members CI is running on at a moved head.
+ */
+export interface AnsweredMember {
   pullRequestId: string;
-  /** The red commit — the head the failure was raised on. */
-  commitSha: string;
-  /** Its failing checks' names, sorted. */
-  failingChecks: readonly string[];
+  /** The member's base branch — what a conflict or an out-of-date answer names. */
+  baseRef: string | null;
+  /** A merge-queue FAILURE at the commit the push answered (`queueFailureAnsweredByHead`). */
+  queueFailure: { headSha: string; failingCheckName: string | null; rawReason: string } | null;
+  /** A conflict or out-of-date reading about an earlier head (`mergeabilityAnsweredByHead`). */
+  blockedReading: BlockingReadingBeforeHead | null;
+  /** The red build at the last commit CI decided on before the head (`lastDecidedBeforeHead`). */
+  red: { commitSha: string; failingChecks: readonly string[] } | null;
 }
 
 /**
- * The `ci_failed` answer a PUSH ANSWERED, rebuilt from check rows, or null when no running
- * member's last decided commit was red (Bug MOTIR-10747).
+ * The PULL-REQUEST reason a PUSH ANSWERED, rebuilt from durable rows, or null when none of
+ * the members' push answered one (Bugs MOTIR-10747 · MOTIR-10791).
  *
  * ⚠️ WHY IT EXISTS. The Fixing rule keeps the card's PRIOR stored answer while CI runs on a
  * pushed fix — and GitHub delivers a push's checks one webhook at a time, in no order, so a
  * quick success at the new head (a lint job, Motir's own link check) can be recorded before
  * anything running there. That recompute reads the head green and stores nothing to fix, and
  * from then on the rule had no prior to keep: the card showed no Fixing for the rest of its
- * CI. The red build is still in its own rows, so the answer is rebuilt as the failure raised
- * it — the same detail `pullRequestReasonOf` writes, `affected` counting the members that were
- * red, `raisedHeads` naming each red member's red commit — and the caller puts it through
+ * CI. What the push answered is still in rows nothing overwrites — the queue exit, the
+ * carried mergeability reading, the red build's check rows — so the answer is rebuilt as
+ * {@link pullRequestReasonOf} raised it: the same priority (`queue_failed`, `conflicted`,
+ * `out_of_date`, `ci_failed`), the same detail, `affected` counting the members carrying the
+ * reason, `raisedHeads` naming each such member's commit. The caller puts it through
  * {@link fixingReasonOf}, the same moved-head rule, so it is Fixing exactly when the stored
  * answer would have been.
  *
- * `red` is in the members' order; `heads` the heads the members are raised on now, which a
- * member that was not red keeps.
+ * `members` is in the members' order; `heads` the heads the members are raised on now, which
+ * a member not carrying the reason keeps.
  */
-export function answeredCiFailureOf(
-  red: readonly RedBeforeHead[],
+export function answeredPullRequestReasonOf(
+  members: readonly AnsweredMember[],
   heads: Record<string, string>,
   total: number,
 ): FixReasonValue | null {
-  if (red.length === 0) return null;
-  const raisedHeads = { ...heads };
-  for (const m of red) raisedHeads[m.pullRequestId] = m.commitSha;
-  return {
-    fixReason: 'ci_failed',
-    fixDetail: {
-      ...EMPTY_DETAIL,
-      repair: 'fix',
-      check: red[0]!.failingChecks[0] ?? null,
-      affected: red.length,
-      total,
-      raisedHeads,
-    },
+  const raisedOn = (
+    fixReason: WorkItemFixReasonDto,
+    carrying: ReadonlyArray<{ pullRequestId: string; headSha: string }>,
+    detail: Partial<FixDetailDto>,
+  ): FixReasonValue => {
+    const raisedHeads = { ...heads };
+    for (const m of carrying) raisedHeads[m.pullRequestId] = m.headSha;
+    return {
+      fixReason,
+      fixDetail: {
+        ...EMPTY_DETAIL,
+        ...detail,
+        repair: 'fix',
+        affected: carrying.length,
+        total,
+        raisedHeads,
+      },
+    };
   };
+  const queued = members.filter((m) => m.queueFailure !== null);
+  if (queued.length > 0) {
+    const exit = queued[0]!.queueFailure!;
+    return raisedOn(
+      'queue_failed',
+      queued.map((m) => ({ pullRequestId: m.pullRequestId, headSha: m.queueFailure!.headSha })),
+      { check: exit.failingCheckName, queueReason: exit.rawReason },
+    );
+  }
+  for (const blocked of ['conflicted', 'out_of_date'] as const) {
+    const carrying = members.filter((m) => m.blockedReading?.blocked === blocked);
+    if (carrying.length > 0) {
+      return raisedOn(
+        blocked,
+        carrying.map((m) => ({
+          pullRequestId: m.pullRequestId,
+          headSha: m.blockedReading!.headSha,
+        })),
+        { base: carrying[0]!.baseRef },
+      );
+    }
+  }
+  const red = members.filter((m) => m.red !== null);
+  if (red.length > 0) {
+    return raisedOn(
+      'ci_failed',
+      red.map((m) => ({ pullRequestId: m.pullRequestId, headSha: m.red!.commitSha })),
+      { check: red[0]!.red!.failingChecks[0] ?? null },
+    );
+  }
+  return null;
 }
 
 // ── A LIVE REPAIR IS FIXING (MOTIR-10506) ───────────────────────────────────────────

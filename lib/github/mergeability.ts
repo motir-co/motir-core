@@ -124,3 +124,65 @@ export function isMergeabilityOwedAtCurrentHead(
 ): boolean {
   return isMergeabilityOwedAt(pr, pullRequestHead(pr));
 }
+
+/** The stored reading with the one it replaced at an earlier head (MOTIR-10791). */
+export interface MergeabilityHistory extends StoredMergeability {
+  previousMergeableState: string | null;
+  previousMergeableStateHeadSha: string | null;
+}
+
+/** A reading that stopped the merge, about an EARLIER head than the pull request's. */
+export interface BlockingReadingBeforeHead {
+  /** `conflicted` for `dirty`, `out_of_date` for `behind`. */
+  blocked: 'conflicted' | 'out_of_date';
+  /** The head the reading was taken at — the head the reason was raised on. */
+  headSha: string;
+}
+
+/** Whether a reading is the host's ANSWER — neither unread nor `unknown`. */
+function isDecidedReading(state: string | null): state is string {
+  return state !== null && state !== PENDING_MERGEABLE_STATE;
+}
+
+/**
+ * The CONFLICT or OUT-OF-DATE reading the pull request's head was pushed to answer — or null
+ * when the last decided reading before the head did not block the merge (Bug MOTIR-10791).
+ *
+ * The last decided reading about an earlier head is the stored one when it is decided and
+ * about another commit (no push has replaced it yet, or the push's reading has not been
+ * marked), else the carried `previous_*` pair — written when a reading about a new head
+ * replaced it (`githubPullRequestRepository.setMergeability` / `markMergeabilityPending`).
+ * A reading AT the head is never this; that is {@link isConflictedAtCurrentHead}'s.
+ *
+ * ⚠️ WHY. A push replaces the reading, so a conflict it answered was gone from the row the
+ * moment it landed, and the card's stored To fix answer could be wiped by a quick green
+ * check at the new head recorded before anything running there. The carried reading is the
+ * durable fact the To fix answer re-raises the conflict from, Fixing, while CI runs. A
+ * clean reading between the conflict and the head is carried in its place, so a later push
+ * after the conflict was resolved answers nothing.
+ */
+export function mergeabilityAnsweredByHead(
+  pr: MergeabilityHistory & PullRequestHeadSlice,
+): BlockingReadingBeforeHead | null {
+  const head = pullRequestHead(pr);
+  if (head === null) return null;
+  const stored =
+    isDecidedReading(pr.mergeableState) &&
+    pr.mergeableStateHeadSha !== null &&
+    pr.mergeableStateHeadSha !== head
+      ? { state: pr.mergeableState, headSha: pr.mergeableStateHeadSha }
+      : null;
+  const reading =
+    stored ??
+    (pr.previousMergeableStateHeadSha !== null && pr.previousMergeableStateHeadSha !== head
+      ? { state: pr.previousMergeableState, headSha: pr.previousMergeableStateHeadSha }
+      : null);
+  if (reading === null) return null;
+  if (reading.state === CONFLICTED_MERGEABLE_STATE) {
+    return { blocked: 'conflicted', headSha: reading.headSha };
+  }
+  if (reading.state === OUT_OF_DATE_MERGEABLE_STATE) {
+    return { blocked: 'out_of_date', headSha: reading.headSha };
+  }
+  return null;
+}
