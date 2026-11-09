@@ -20,6 +20,13 @@
   // `tsconfig.e2e.json`'s header carries the rule in full; the short form is
   // *Playwright ENTERS THROUGH it ⇒ e2e project; something Playwright runs
   // IMPORTS it ⇒ here*.
+  //
+  // ⚠️ TWO AREA PROJECTS REFERENCE THIS ONE: `tsconfig.tests-platform.json`
+  // (MOTIR-8353, the agent / CI / planning platform suites) and
+  // `tsconfig.tests-product.json` (MOTIR-10796, the product server suites). Each
+  // was carved out when this program reached the heap line; their headers carry
+  // the readings. What stays here is everything another project imports — the
+  // helpers and fixtures — and the suites nobody has moved yet.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
@@ -96,7 +103,27 @@
     "tests/planning/**",
     "tests/plans/**",
     "tests/projectRepos/**",
-    "tests/runs/**"
+    "tests/runs/**",
+    // `tsconfig.tests-product.json` (MOTIR-10796) — the same rule: its `include`
+    // and this list name the same directories, and the guard fails on drift.
+    "tests/api/**",
+    "tests/approvalGates/**",
+    "tests/billing/**",
+    "tests/boards/**",
+    "tests/i18n/**",
+    "tests/loadtest/**",
+    "tests/monitoring/**",
+    "tests/monitors/**",
+    "tests/organizations/**",
+    "tests/pages/**",
+    "tests/permissions/**",
+    "tests/platform/**",
+    "tests/publicAddresses/**",
+    "tests/ready/**",
+    "tests/services/**",
+    "tests/settings/**",
+    "tests/workflows/**",
+    "tests/workItems/**"
   ],
   // BOTH, because a test importing `@/scripts/plan-seed/…` (the seed fixtures) or
   // `../../scripts/deployFreshness.mjs` must redirect into the scripts project

@@ -201,6 +201,9 @@ export const fleetInFlightSlotRepository = {
      *  which the global index cap does not cover (MOTIR-9589). A slot on no
      *  account (the Fly fleet) is always counted. */
     excludedShardIds: readonly string[] = [],
+    /** Organisations whose slots on NO account are not counted — the install
+     *  fleet's (MOTIR-10794), which no shared cap covers either. */
+    excludedUnplacedOrganizationIds: readonly string[] = [],
   ): Promise<number> {
     return tx.fleetInFlightSlot.count({
       where: {
@@ -208,6 +211,14 @@ export const fleetInFlightSlotRepository = {
         expiresAt: { gt: now },
         ...(excludedShardIds.length > 0
           ? { OR: [{ fleetShardId: null }, { fleetShardId: { notIn: [...excludedShardIds] } }] }
+          : {}),
+        ...(excludedUnplacedOrganizationIds.length > 0
+          ? {
+              NOT: {
+                fleetShardId: null,
+                organizationId: { in: [...excludedUnplacedOrganizationIds] },
+              },
+            }
           : {}),
       },
     });

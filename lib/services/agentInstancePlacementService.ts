@@ -4,6 +4,7 @@ import {
   type PersistentContainerOrchestrator,
   type PersistentContainerSpec,
 } from '@motir/orchestrator';
+import { INSTALL_FLEET_TAG, installFleetConfig } from '@/lib/ciFleet/installFleet';
 import type { AgentInstance, FleetShard } from '@/generated/prisma/client';
 import { AgentInstancePlacementError } from '@/lib/agentInstances/errors';
 import { fleetKindOnPool, SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
@@ -59,6 +60,8 @@ export interface AgentInstancePlacementDeps {
   ) => PersistentContainerOrchestrator;
   /** The process-wide Fly orchestrator — the switch-off path. */
   readonly processWideOrchestrator: () => PersistentContainerOrchestrator;
+  /** The install fleet's orchestrator (MOTIR-10794). */
+  readonly installFleetOrchestrator: () => PersistentContainerOrchestrator;
   readonly now?: () => Date;
 }
 
@@ -73,6 +76,17 @@ export type AgentInstancePlacementOutcome =
   | {
       outcome: 'aws';
       fleetShardId: string;
+      availabilityZone: string | null;
+      handle: PersistentContainerHandle | null;
+      placedElsewhere?: true;
+    }
+  /**
+   * Placed on the install fleet (MOTIR-10794), in core's own account: no
+   * account row, no headroom count. `handle` is null only when another placement
+   * of the same instance already holds it.
+   */
+  | {
+      outcome: 'install_fleet';
       availabilityZone: string | null;
       handle: PersistentContainerHandle | null;
       placedElsewhere?: true;
@@ -92,6 +106,14 @@ export function placementZoneFor(shard: Pick<FleetShard, 'awsRegion'>): string {
 
 /** The existing placement on the row — the answer when another call won. */
 function placedElsewhere(row: AgentInstance | null): AgentInstancePlacementOutcome {
+  if (row && !row.fleetShardId && row.flyApp === INSTALL_FLEET_TAG) {
+    return {
+      outcome: 'install_fleet',
+      availabilityZone: row.availabilityZone,
+      handle: null,
+      placedElsewhere: true,
+    };
+  }
   if (!row?.fleetShardId) return { outcome: 'pool_full', refusedShardIds: [] };
   const handle =
     row.flyApp && row.machineId && row.volumeId
@@ -176,6 +198,44 @@ async function release(
   });
 }
 
+/**
+ * THE INSTALL FLEET (MOTIR-10794): provision in core's own account and write the
+ * handle with no account. A capacity refusal throws through, as an account's
+ * does at the caller (which waits for room); nothing is recorded before the
+ * machine exists, so a refusal leaves no reservation to give back.
+ */
+async function placeOnInstallFleet(
+  input: AgentInstancePlacementInput,
+  deps: AgentInstancePlacementDeps,
+): Promise<AgentInstancePlacementOutcome> {
+  const orchestrator = deps.installFleetOrchestrator();
+  const region = installFleetConfig().region;
+  const availabilityZone = `${region}a`;
+  const handle = await orchestrator.provisionPersistent({
+    ...input.spec,
+    region,
+    availabilityZone,
+  });
+  const { applied } = await withSystemContext(async (tx) => {
+    await bindWorkspaceContext(tx, input.workspaceId);
+    return agentInstanceRepository.setInstallFleetHandle(
+      input.instanceId,
+      {
+        flyApp: INSTALL_FLEET_TAG,
+        machineId: handle.machineId,
+        volumeId: handle.volumeId,
+        region: handle.region,
+      },
+      tx,
+    );
+  });
+  if (!applied) {
+    await orchestrator.destroyPersistent(handle);
+    return placedElsewhere(await readRow(input));
+  }
+  return { outcome: 'install_fleet', availabilityZone, handle };
+}
+
 export const agentInstancePlacementService = {
   /** Place one new agent instance and create its machine and disk there. */
   async placeAndProvision(
@@ -183,6 +243,14 @@ export const agentInstancePlacementService = {
     deps: AgentInstancePlacementDeps,
   ): Promise<AgentInstancePlacementOutcome> {
     const now = deps.now ?? (() => new Date());
+    // The install fleet is asked before the switch (MOTIR-10794).
+    const installFleet = await withSystemContext((tx) =>
+      fleetShardAdmissionService.installFleetTakesInTx(
+        { fleetKind: 'agent_instance', organizationId: input.organizationId },
+        tx,
+      ),
+    );
+    if (installFleet) return placeOnInstallFleet(input, deps);
     // THE ONE READ OF THE SWITCH.
     if (!(await fleetKindOnPool('agent_instance'))) {
       const fly = deps.processWideOrchestrator();

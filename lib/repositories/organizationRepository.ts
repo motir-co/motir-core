@@ -54,6 +54,13 @@ export const organizationRepository = {
     return tx.organization.findUnique({ where: { id } });
   },
 
+  /** The meta organisation's id, at most one (MOTIR-10794's unique index) — as
+   *  a list, so the caller needs no null case. */
+  async listMetaIdsInTx(tx: Prisma.TransactionClient): Promise<string[]> {
+    const rows = await tx.organization.findMany({ where: { isMeta: true }, select: { id: true } });
+    return rows.map((row) => row.id);
+  },
+
   /**
    * When organization `id` started CLOSING, or null when it is not closing
    * (MOTIR-6396) — the org-tier write guard's read (`lib/organizations/closingGuard.ts`).

@@ -5,7 +5,13 @@ import type {
   PersistentContainerState,
 } from '../../types';
 import { awsApiError } from './capacityErrors';
-import { Ec2ApiError, type Ec2Api, type Ec2Instance, type Ec2Volume } from './ec2Client';
+import {
+  Ec2ApiError,
+  type Ec2Api,
+  type Ec2Filter,
+  type Ec2Instance,
+  type Ec2Volume,
+} from './ec2Client';
 
 // THE AWS FLEET INVENTORY (Story MOTIR-9359 · MOTIR-9426,
 // `docs/decisions/fleet-per-org-pool.md` §5) — every instance in one AWS fleet
@@ -36,6 +42,10 @@ export interface AwsFleetInventoryConfig {
   /** DescribeInstances / DescribeVolumes page size (EC2 takes 5–1000 and
    *  5–500) — the test seam. */
   readonly pageSize?: number;
+  /** Scope the listing of machines and disks — the install fleet's tag, in an
+   *  account whose other instances are not the fleet's to judge (MOTIR-10794).
+   *  Absent: the whole region, as above. */
+  readonly filters?: readonly Ec2Filter[];
 }
 
 /** EC2 takes 5–1000 per DescribeInstances page. */
@@ -97,6 +107,7 @@ export function createAwsFleetInventory(config: AwsFleetInventoryConfig): FleetI
         let page: Awaited<ReturnType<Ec2Api['describeInstances']>>;
         try {
           page = await ec2.describeInstances({
+            ...(config.filters ? { filters: config.filters } : {}),
             maxResults: pageSize,
             ...(nextToken ? { nextToken } : {}),
           });
@@ -138,6 +149,7 @@ export function createAwsFleetInventory(config: AwsFleetInventoryConfig): FleetI
         let page: Awaited<ReturnType<Ec2Api['describeVolumes']>>;
         try {
           page = await ec2.describeVolumes({
+            ...(config.filters ? { filters: config.filters } : {}),
             maxResults: Math.min(pageSize, VOLUME_PAGE_SIZE),
             ...(nextToken ? { nextToken } : {}),
           });

@@ -128,6 +128,45 @@ export function isReRunAtHead(pr: PullRequestHeadSlice<CheckRunWithStart>): bool
   );
 }
 
+/**
+ * Whether every check RUNNING at the pull request's head STARTED after every check that had
+ * DECIDED there FINISHED — a check that began on a head CI had already decided (Bug
+ * MOTIR-10791 review): a workflow on a later event (`labeled`, a review), a third-party suite,
+ * a manual run. At the moment the last decided check finished nothing was running, so the head
+ * had a verdict, and the check running now answers that verdict, not an older commit's.
+ *
+ * ⚠️ IT IS NOT THE OUT-OF-ORDER DELIVERY. A push's own checks start together and are delivered
+ * one webhook at a time: a running check recorded after a quick green STARTED before that green
+ * finished (`conclusionAt` is a pending row's start, a decided row's finish), so it is not late.
+ *
+ * Every live row at the head must carry its time (`conclusionAt`); a row without one cannot be
+ * ordered and is no evidence either way, so the answer is false. False too when nothing is
+ * running or nothing has decided there. A pipeline whose next stage starts only after the
+ * first stage's checks have all finished reads as late — the head showed a green verdict in
+ * between — and loses the tag for that stage, the conservative side.
+ */
+export function isLateCheckAtHead(pr: PullRequestHeadSlice<CheckRunWithStart>): boolean {
+  const live = checkRowsAtHead(pr);
+  if (live.some((row) => row.conclusionAt == null)) return false;
+  const running = live.filter((row) => row.conclusion === 'pending');
+  const decided = live.filter((row) => row.conclusion !== 'pending');
+  if (running.length === 0 || decided.length === 0) return false;
+  const lastFinished = Math.max(...decided.map((row) => row.conclusionAt!.getTime()));
+  return running.every((row) => row.conclusionAt!.getTime() > lastFinished);
+}
+
+/**
+ * Whether CI at the pull request's head had ALREADY DECIDED before the checks running there now
+ * — a re-run ({@link isReRunAtHead}) or a check that began after the head's verdict
+ * ({@link isLateCheckAtHead}). Such a head answers its own verdict, so nothing a push to it
+ * answered (an older red build, a queue exit, a conflict) is rebuilt as Fixing (MOTIR-10791).
+ */
+export function hasHeadDecidedBeforeRunningChecks(
+  pr: PullRequestHeadSlice<CheckRunWithStart>,
+): boolean {
+  return isReRunAtHead(pr) || isLateCheckAtHead(pr);
+}
+
 /** What CI last DECIDED on a commit before the pull request's head — see {@link lastDecidedBeforeHead}. */
 export interface DecidedBeforeHead {
   commitSha: string;

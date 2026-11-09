@@ -15,6 +15,9 @@ import {
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { fleetShardAdmissionService } from '@/lib/services/fleetShardAdmissionService';
+import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { isCloud } from '@/lib/billing/availability';
+import { installFleetTakesKind } from '@/lib/ciFleet/installFleet';
 import {
   fleetCeilingService,
   describeFleetCensus,
@@ -185,6 +188,9 @@ export interface IndexAdmission {
    * existed carries none, which reads as Fly, and so does its slot row.
    */
   readonly shardId?: string | null;
+  /** The container boots on the install fleet (MOTIR-10794), in core's own
+   *  account; its slot row names no account. */
+  readonly installFleet?: true;
 }
 
 export type IndexAdmissionVerdict =
@@ -260,10 +266,26 @@ function detailOf(err: unknown): string {
  * one unit of work, never under-count one that is running. It costs at most the
  * holder's remaining TTL, once, on the deploy that ships this column.
  */
+/** Is a held index slot on the install fleet (MOTIR-10794)? On no account, and
+ *  its org's index is the install fleet's now. */
+async function heldOnInstallFleet(
+  held: { fleetShardId: string | null; organizationId: string },
+  tx: Prisma.TransactionClient,
+): Promise<boolean> {
+  if (held.fleetShardId !== null) return false;
+  return fleetShardAdmissionService.installFleetTakesInTx(
+    { fleetKind: CODE_GRAPH_INDEX_WORKLOAD, organizationId: held.organizationId },
+    tx,
+  );
+}
+
 function heldVerdict(
   held: { claimedAt: Date; ownerRef: string | null; fleetShardId: string | null },
   slotRef: string,
   dispatchId: string,
+  /** The held slot is on the install fleet (MOTIR-10794): no account, so the
+   *  replay is told where the container booted. */
+  installFleet = false,
 ): IndexAdmissionVerdict {
   const takenAt = held.claimedAt.toISOString();
   if (held.ownerRef === dispatchId) {
@@ -276,6 +298,7 @@ function heldVerdict(
         // The account the held slot was admitted onto — a replay must reach the
         // same orchestrator the container booted on (MOTIR-9445).
         shardId: held.fleetShardId,
+        ...(installFleet ? { installFleet: true as const } : {}),
       },
     };
   }
@@ -417,7 +440,9 @@ export const codeGraphIndexAdmissionService = {
         // former was how a second run reached a boot having consulted none of the
         // bounds below.
         const held = await slots.findByRef(CODE_GRAPH_INDEX_WORKLOAD, slotRef, tx);
-        if (held) return heldVerdict(held, slotRef, request.dispatchId);
+        if (held) {
+          return heldVerdict(held, slotRef, request.dispatchId, await heldOnInstallFleet(held, tx));
+        }
 
         // The org's census: `byWorkload.code_graph_index` IS the org's index
         // share, and the rest is the admitted verdict's breakdown.
@@ -426,18 +451,25 @@ export const codeGraphIndexAdmissionService = {
         // A Host org's own indexer account (MOTIR-9589) is bounded by its own
         // split (`mergedAccountSplit`, applied in step 3), not by the two shared
         // caps below — and its containers draw nothing from the global one.
-        const ownAccount = await fleetShardAdmissionService.ownAccountTakesInTx(
+        // The install fleet (MOTIR-10794) takes neither shared cap either, and its
+        // slots — on no account, of the meta org — are not counted against them.
+        const ownAccount = await fleetShardAdmissionService.outsideSharedCapsInTx(
           { fleetKind: CODE_GRAPH_INDEX_WORKLOAD, organizationId: request.organizationId },
           tx,
         );
         const ownIndexAccounts = (
           await fleetShardRepository.listOrgOwned({ fleetKind: CODE_GRAPH_INDEX_WORKLOAD }, tx)
         ).map((shard) => shard.id);
+        const installOrgs =
+          isCloud() && installFleetTakesKind(CODE_GRAPH_INDEX_WORKLOAD)
+            ? await organizationRepository.listMetaIdsInTx(tx)
+            : [];
         const indexInFlight = await slots.countLiveForWorkload(
           CODE_GRAPH_INDEX_WORKLOAD,
           now,
           tx,
           ownIndexAccounts,
+          installOrgs,
         );
 
         // ── 1 · THE PER-ORGANISATION INDEX SHARE — fairness, checked first ─────
@@ -519,7 +551,7 @@ export const codeGraphIndexAdmissionService = {
         if (!took) {
           const winner = await slots.findByRef(CODE_GRAPH_INDEX_WORKLOAD, slotRef, tx);
           return winner
-            ? heldVerdict(winner, slotRef, request.dispatchId)
+            ? heldVerdict(winner, slotRef, request.dispatchId, await heldOnInstallFleet(winner, tx))
             : {
                 outcome: 'deferred' as const,
                 reason: 'repo_index_in_flight' as const,
@@ -538,8 +570,10 @@ export const codeGraphIndexAdmissionService = {
             detail:
               `admitted: organization index ${orgIndexInFlight + 1}/${orgCap}, ` +
               `indexing ${indexInFlight + 1}/${globalCap} (${describeFleetCensus(census)})` +
-              (placement.shardId ? `, on account ${placement.shardId}` : ''),
+              (placement.shardId ? `, on account ${placement.shardId}` : '') +
+              ('installFleet' in placement ? ', on the install fleet' : ''),
             shardId: placement.shardId,
+            ...('installFleet' in placement ? { installFleet: true as const } : {}),
           },
         };
       });

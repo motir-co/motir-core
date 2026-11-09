@@ -1,0 +1,13 @@
+-- MOTIR-10794 — at most ONE meta organisation.
+--
+-- `organization."isMeta"` is the install's own organisation on Motir cloud: its
+-- index, agent host and agent run jobs are placed on the install fleet in core's
+-- own account, outside every pool and cap (`lib/ciFleet/installFleet.ts`). A
+-- second meta org would be a second tenant on that fleet, so the database refuses
+-- one. Production holds exactly one (`moooon`), so no row changes.
+--
+-- PARTIAL, on its own column list: Prisma cannot express the `WHERE` and ignores
+-- an index it cannot express while no datamodel index claims the same columns
+-- (`20260804230000_fix_project_repo_ci_actions_pending_index_drift`), and the
+-- `Organization` model declares no index on `isMeta`.
+CREATE UNIQUE INDEX "organization_one_meta_idx" ON "organization" ("isMeta") WHERE "isMeta";
