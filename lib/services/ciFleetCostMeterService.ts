@@ -459,10 +459,21 @@ export const ciFleetCostMeterService = {
    *
    * IDEMPOTENT: `settleStranded` only writes a row whose `container_stopped_at` is
    * still NULL, so a tick that races the real settle, or a replay, changes nothing.
+   *
+   * ⚠️ IT ANSWERS THE ROWS IT SETTLED, AND THE CALLER REPORTS THEM (MOTIR-10822).
+   * A repaired row is a settled container the platform meter has never seen: the
+   * settle path's report rides `withPlatformMeterReport`, which this write never
+   * passes through, and the backfill is a hand-run script. This service cannot
+   * enqueue the report itself — it is on the fleet-cost READ graph, which must not
+   * reach the job registry (`platformMeterReportEnqueue`'s header) — so it hands
+   * back each settled row's identity, and `supervisionSweepService` enqueues one
+   * report per row once this transaction has committed. A row `settleStranded`
+   * skipped is not in the list, so a tick that raced the real settle reports
+   * nothing twice.
    */
   async settleStrandedIndexUsage(
     options: { now?: () => Date; strandedAfterMs?: number; batch?: number } = {},
-  ): Promise<{ scanned: number; settled: number }> {
+  ): Promise<StrandedUsageRepair> {
     const now = (options.now ?? ((): Date => new Date()))();
     const createdBefore = new Date(now.getTime() - (options.strandedAfterMs ?? STRANDED_AFTER_MS));
 
@@ -472,7 +483,7 @@ export const ciFleetCostMeterService = {
         options.batch ?? STRANDED_BATCH,
         tx,
       );
-      let settled = 0;
+      const repaired: ContainerHandleRef[] = [];
       for (const row of stranded) {
         const from = row.containerStartedAt ?? row.containerCreatedAt;
         const stoppedAt = new Date(from.getTime() + row.billableSeconds * 1000);
@@ -482,7 +493,7 @@ export const ciFleetCostMeterService = {
           tx,
         );
         if (count === 0) continue;
-        settled += 1;
+        repaired.push({ containerProvider: row.containerProvider, handleId: row.handleId });
         // The one trace of the swallowed write: the sink logged (or lost) the failure
         // without ever reaching a row, so the handle id is named here, where the
         // repair is the only thing that knows the record was missing.
@@ -491,10 +502,26 @@ export const ciFleetCostMeterService = {
           provider: row.containerProvider,
         });
       }
-      return { scanned: stranded.length, settled };
+      return { scanned: stranded.length, settled: repaired.length, repaired };
     });
   },
 };
+
+/** One container usage row, by the identity the platform meter report is keyed on. */
+export interface ContainerHandleRef {
+  containerProvider: string;
+  handleId: string;
+}
+
+/** What one stranded-row repair tick did (MOTIR-8913, MOTIR-10822). */
+export interface StrandedUsageRepair {
+  /** Stranded rows the tick read. */
+  scanned: number;
+  /** Rows it settled — `repaired.length`. */
+  settled: number;
+  /** The rows it settled, so the caller can report each one to the platform meter. */
+  repaired: ContainerHandleRef[];
+}
 
 /** The reaper's window (70 min) with generous margin: older than this, an index
  *  container is destroyed whatever its usage row says (MOTIR-8913). */
