@@ -11,6 +11,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { homeService } from '@/lib/services/homeService';
 import { projectsService } from '@/lib/services/projectsService';
+import { reviewVerdictService } from '@/lib/services/reviewVerdictService';
 import { recomputeWorkItemResumeState } from '@/lib/services/resumeStateService';
 import { usersService } from '@/lib/services/usersService';
 import { workItemContinueService } from '@/lib/services/workItemContinueService';
@@ -437,6 +438,161 @@ describe('Fixing — a standing Request changes', () => {
     expect(await repairClaim(s, item.identifier)).toMatchObject({
       outcome: 'not_repairable',
       reason: 'ci_running',
+    });
+  });
+});
+
+describe('Fixing — a review AGENT sent it back (Bug MOTIR-10733)', () => {
+  const versionOf = (s: Scenario, number: number, sha: string) =>
+    `moooon/${s.repoName}#${number}@${sha}`;
+
+  async function agentSentBack(s: Scenario, number: number) {
+    const { item, heads } = await card(s, `agent sent back ${number}`, [number]);
+    await check(s, number, 'sha-a', 'vitest', 'success');
+    await reviewVerdictService.submit(
+      s.project.id,
+      item.identifier,
+      {
+        verdict: 'changes_requested',
+        subjectVersion: versionOf(s, number, 'sha-a'),
+        summaryMd: 'A zero count renders blank.',
+        findingsMd: '- `lib/export.ts:12` drops the header row.',
+        checklist: [{ key: null, criterion: 'It exports', status: 'not_met', evidence: null }],
+        harness: 'Claude Code',
+        model: 'claude-opus-5-5',
+      },
+      s.ctx,
+    );
+    expect(await stored(item.id)).toMatchObject({
+      status: 'in_review',
+      fixReason: 'changes_requested',
+      fixing: false,
+      raisedHeads: { [await prId(s, number)]: 'sha-a' },
+    });
+    return { item, headRef: heads[number]! };
+  }
+
+  it('the push alone (no check at the new head yet) reads Fixing, and so does its first check', async () => {
+    const s = await makeScenario('fixing-agent-push@example.com');
+    const { item, headRef } = await agentSentBack(s, 231);
+
+    await pullRequestEvent(s, 'synchronize', 231, headRef, 'sha-b');
+    expect(await stored(item.id), 'on the push').toMatchObject({
+      fixReason: 'changes_requested',
+      fixing: true,
+    });
+
+    await check(s, 231, 'sha-b', 'vitest', null);
+    expect(await stored(item.id), 'CI running at the new head').toMatchObject({
+      fixReason: 'changes_requested',
+      fixing: true,
+    });
+    expect((await whereIs(s, item.id)).tabs).toEqual(['to-fix']);
+
+    await check(s, 231, 'sha-b', 'vitest', 'success');
+    expect((await stored(item.id)).fixReason, 'green clears it').toBeNull();
+  });
+
+  // THE OBSERVED DEFECT. GitHub delivers a push's checks one webhook at a time and in no
+  // order: a quick success at the new head (a lint job, Motir's own link check) can be
+  // recorded before anything running there. That recompute reads the head green and stores
+  // nothing to fix — and the Fixing rule, reading only that stored prior, had nothing left to
+  // keep for the rest of the CI run.
+  it.each([
+    { label: 'the switch off (a recorded send-back)', gateOn: false, number: 232 },
+    { label: 'the switch on (a decided review gate)', gateOn: true, number: 233 },
+  ])(
+    'with $label: a quick green at the new head, then a running check, reads Fixing again',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-agent-early-green-${number}@example.com`);
+      if (gateOn) {
+        await adminDb.project.update({
+          where: { id: s.project.id },
+          data: { reviewAgentEnabled: true },
+        });
+      }
+      const { item, headRef } = await agentSentBack(s, number);
+      if (gateOn) {
+        expect(
+          await adminDb.approvalGate.count({
+            where: { workItemId: item.id, kind: 'agent_review', state: 'changes_requested' },
+          }),
+        ).toBe(1);
+      }
+
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      await check(s, number, 'sha-b', 'lint', 'success');
+      // The partial set reads green for a moment: nothing running is recorded yet.
+      expect((await stored(item.id)).fixReason).toBeNull();
+
+      await check(s, number, 'sha-b', 'vitest', null);
+      expect(await stored(item.id), 'the running check brings it back').toMatchObject({
+        status: 'in_review',
+        fixReason: 'changes_requested',
+        fixing: true,
+        raisedHeads: { [await prId(s, number)]: 'sha-a' },
+      });
+      const seen = await whereIs(s, item.id);
+      expect(seen.tabs).toEqual(['to-fix']);
+      expect(seen.fixRow).toMatchObject({
+        fixReason: 'changes_requested',
+        fixDetail: { fixing: true, gate: 'agent_review', reviewerName: 'Review agent' },
+      });
+
+      await check(s, number, 'sha-b', 'vitest', 'success');
+      expect((await stored(item.id)).fixReason, 'green clears it').toBeNull();
+    },
+  );
+
+  // REVIEW OF MOTIR-10733: the refusal stays the latest review word until a newer review, so
+  // without a bound every later push — a main merge, an Update branch — read as a moved head.
+  // Once the fix push went green, a later push is not a fix for that refusal.
+  it.each([
+    { label: 'the switch off', gateOn: false, number: 236 },
+    { label: 'the switch on', gateOn: true, number: 237 },
+  ])(
+    'with $label: a later push after the fix went green is not Fixing, in either check order',
+    async ({ gateOn, number }) => {
+      const s = await makeScenario(`fixing-agent-later-push-${number}@example.com`);
+      if (gateOn) {
+        await adminDb.project.update({
+          where: { id: s.project.id },
+          data: { reviewAgentEnabled: true },
+        });
+      }
+      const { item, headRef } = await agentSentBack(s, number);
+
+      // The fix push: Fixing while its CI runs, cleared once it is green.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-b');
+      await check(s, number, 'sha-b', 'vitest', null);
+      expect((await stored(item.id)).fixing).toBe(true);
+      await check(s, number, 'sha-b', 'vitest', 'success');
+      expect((await stored(item.id)).fixReason).toBeNull();
+
+      // A later push (a main merge): nothing to fix on the push, nor while its CI runs.
+      await pullRequestEvent(s, 'synchronize', number, headRef, 'sha-c');
+      expect((await stored(item.id)).fixReason, 'on the push').toBeNull();
+      await check(s, number, 'sha-c', 'lint', 'success');
+      await check(s, number, 'sha-c', 'vitest', null);
+      expect((await stored(item.id)).fixReason, 'CI running at the later head').toBeNull();
+      expect((await whereIs(s, item.id)).tabs).not.toContain('to-fix');
+    },
+  );
+
+  it('a person’s Request changes: a quick green at the new head, then a running check, reads Fixing again', async () => {
+    const s = await makeScenario('fixing-person-early-green@example.com');
+    const { item, heads } = await card(s, 'person sent back', [235]);
+    await check(s, 235, 'sha-a', 'vitest', 'success');
+    await requestChanges(s, item.id, 'Rename the export button.');
+
+    await pullRequestEvent(s, 'synchronize', 235, heads[235]!, 'sha-b');
+    await check(s, 235, 'sha-b', 'lint', 'success');
+    expect((await stored(item.id)).fixReason).toBeNull();
+
+    await check(s, 235, 'sha-b', 'vitest', null);
+    expect((await whereIs(s, item.id)).fixRow).toMatchObject({
+      fixReason: 'changes_requested',
+      fixDetail: { fixing: true, gate: 'pull_request_approval', reviewerName: 'Owner' },
     });
   });
 });

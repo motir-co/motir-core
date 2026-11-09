@@ -83,8 +83,11 @@ and grid use `currentColor`, never a `--color-*` / `--el-*` token:
 The "surface treatment" axis is carried by a small **component-variant
 override** — `[data-style='cybercore-y2k'] body` — rather than a token (a token
 can't paint a background-image). Two crossing `currentColor` linear gradients at
-**6% alpha** draw a 32px tech grid on the canvas, sitting BEHIND every surface;
-text never renders on it, so AA is unaffected. On the dark theme this reads as a
+**5% alpha** draw a 32px tech grid on the canvas, sitting BEHIND every surface.
+Where two lines cross the page takes both tints, so the alpha is held by the
+painted canvas AA gate (`tests/theme/stylePaletteModeContrast.test.ts`): at 6%
+a crossing took `--el-accent-on-surface` to 4.46:1 in sienna light; at 5% the
+worst crossing is 4.63:1 (MOTIR-10746). On the dark theme this reads as a
 Tron grid over the near-black canvas. This is the one place a richer style
 reaches past the token block (the schema's "+ component-variant overrides"),
 and it still pins no hue — `currentColor` keeps it palette-driven.
