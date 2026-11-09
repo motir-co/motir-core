@@ -276,6 +276,11 @@ describe('ONE DOOR — a gate DECISION has exactly one writer (MOTIR-4796)', () 
       // (`republished`), when the body stops parsing, or when the item stops being a
       // choice (`withdrawn`). Product-written, no actor — its one raiser owns it.
       callers: [
+        // MOTIR-10731: a person's REQUEST CHANGES on a story run's approve-and-merge gate withdraws the
+        // story's awaiting acceptance question, cause `pulled_back` — the video is the
+        // evidence for that merge, so it closes with it. Product-written, no actor, never
+        // a decision; the merge gate's own handler is its one writer, in the door's tx.
+        'lib/approvalGates/pullRequestApprovalHandler.ts',
         'lib/services/acceptanceEvidenceService.ts',
         // MOTIR-6819 (`approval-gates.md` §12.5): switching the review agent OFF withdraws
         // every awaiting `agent_review` in the project, cause `review_agent_disabled` —

@@ -13,6 +13,7 @@ import {
 } from '@/lib/repositories/workItemDeliveryRepository';
 import { decisionHoldsMerge } from '@/lib/approvalGates/decisionApprovalHandler';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { approvalGateRepository } from '@/lib/repositories/approvalGateRepository';
 import { acceptanceResultHoldsMerge, designResultHoldsMerge } from '@/lib/services/mergeGates';
 import { ApprovalGatePrimaryPendingError } from '@/lib/approvalGates/errors';
 import { requireArgsCard, requireGateCard } from './gateCard';
@@ -201,8 +202,25 @@ export const pullRequestApprovalGateHandler: GateHandler<PullRequestApprovalSubj
     return { statusWritten: resolvedStatusKey };
   },
 
-  /** REQUEST CHANGES — record the decision and move nothing. */
-  async requestChanges(): Promise<GateEffect> {
+  /**
+   * REQUEST CHANGES — record the decision and move nothing.
+   *
+   * ⚠️ ON A STORY RUN IT ALSO WITHDRAWS THE AWAITING ACCEPTANCE QUESTION. A story run's
+   * acceptance video is the evidence for THIS merge — its approve press merges — so the
+   * two are one question about one set of commits. Left awaiting, the video would keep
+   * the story in To approve over code just sent back, and one press on it would answer
+   * the merge too. It is superseded `pulled_back` in the door's transaction (the cause
+   * the acceptance refusal writes on this gate, the mirror of it), and the gate set does
+   * not ask it again until a push moves the set's version. The card's only awaiting
+   * acceptance gate on a story run is the one beside this gate, so the read is by card.
+   */
+  async requestChanges(args: GateEffectArgs): Promise<GateEffect> {
+    await approvalGateRepository.supersedeAwaitingByWorkItem(
+      requireGateCard(args.gate, 'pullRequestApprovalHandler'),
+      'acceptance_result',
+      'pulled_back',
+      args.tx,
+    );
     return { statusWritten: null, statusDeferredReason: 'request_changes_moves_nothing' };
   },
 };

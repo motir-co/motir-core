@@ -467,3 +467,93 @@ describe('a VERDICT-LESS refusal moves nothing and holds nothing (today’s beha
     ).toBe(false);
   });
 });
+
+describe('…and the MIRROR: a refused MERGE on a story run withdraws the waiting acceptance', () => {
+  async function refuseMerge(storyId: string) {
+    const gate = await awaitingGate(storyId, 'pull_request_approval');
+    return approvalGatesService.decide(
+      {
+        gateId: gate.id,
+        decision: 'request_changes',
+        source: 'ui',
+        noteMd: REASON,
+        stamp: DECIDED_WITHOUT_A_READER,
+      },
+      fx.ctx,
+    );
+  }
+
+  it('Request changes on the merge gate withdraws the video `pulled_back`, moves nothing, and the receipt stays unanswered', async () => {
+    const { story } = await waitingStoryRun();
+    const before = await statusOf(story.id);
+
+    const decided = await refuseMerge(story.id);
+
+    expect(decided.gate.state).toBe('changes_requested');
+    expect(
+      await adminDb.approvalGate.findFirstOrThrow({
+        where: { workItemId: story.id, kind: 'acceptance_result' },
+      }),
+    ).toMatchObject({ state: 'superseded', supersededCause: 'pulled_back' });
+    expect(await statusOf(story.id)).toBe(before);
+    expect(
+      (await adminDb.acceptanceEvidence.findFirstOrThrow({ where: { workItemId: story.id } }))
+        .status,
+    ).toBe('pending');
+  });
+
+  it('a reconcile at the SAME set asks nothing again; a push that goes green asks both, acceptance leading', async () => {
+    const { story, pr } = await waitingStoryRun();
+    await refuseMerge(story.id);
+
+    await reconcile(story.id);
+    expect(
+      await adminDb.approvalGate.findMany({ where: { workItemId: story.id, state: 'awaiting' } }),
+    ).toEqual([]);
+
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: pr.id,
+        commitSha: 'b2'.repeat(20),
+        checkName: 'Vitest',
+        conclusion: 'success',
+      },
+    });
+    await reconcile(story.id);
+    const awaitingNow = (
+      await adminDb.approvalGate.findMany({ where: { workItemId: story.id, state: 'awaiting' } })
+    )
+      .map((g) => g.kind)
+      .sort();
+    expect(awaitingNow).toEqual(['acceptance_result', 'pull_request_approval']);
+  });
+
+  it('a GitHub review requesting changes withdraws the video too', async () => {
+    const { story, pr } = await waitingStoryRun();
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      githubPullRequestReviewRepository.upsertByGithubReviewId(
+        {
+          githubReviewId: `gh-cr-${story.id}`,
+          githubPullRequestId: pr.id,
+          reviewerGithubUserId: '4242',
+          reviewerLogin: 'ada-l',
+          reviewerType: 'User',
+          state: 'changes_requested',
+          commitSha: HEAD,
+          reviewerPermission: 'write',
+          submittedAt: new Date('2026-09-26T10:00:00Z'),
+          htmlUrl: null,
+        },
+        tx,
+      ),
+    );
+
+    const evaluated = await evaluateForWorkItem(story.id, fx.workspaceId);
+
+    expect(evaluated.outcome).toBe('decided_changes_requested');
+    expect(await gatesOn(story.id)).toEqual([
+      ['acceptance_result', 'superseded'],
+      ['pull_request_approval', 'changes_requested'],
+    ]);
+  });
+});

@@ -684,8 +684,24 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   const storyRun = input.members.length > 0;
   // A story run's video rides the merge question, so it takes that question's status
   // condition too (MOTIR-6971): asked only while the story is `in_review`.
+  //
+  // ⚠️ AND A STORY RUN'S VIDEO IS NOT ASKED WHILE THE MERGE IS REFUSED AT THIS VERSION —
+  // a person's Request changes on the merge gate, or a standing agent send-back. The video
+  // rides the merge question, so refusing the commits withdrew it too
+  // (`pullRequestApprovalHandler.requestChanges`, `reviewVerdictService`'s send-back), and
+  // without this clause the next reconcile would ask it again, alone, over the code just
+  // sent back. A push moves the version and asks both again.
+  const sentBack =
+    version !== null &&
+    (input.agentSendBackVersion ?? null) === version &&
+    (input.dismissedSendBackVersion ?? null) !== version;
+  const mergeRefusedAtVersion =
+    version !== null &&
+    input.latestMergeGate?.state === 'changes_requested' &&
+    input.latestMergeGate.subjectId === input.workItemId &&
+    input.latestMergeGate.subjectVersion === version;
   const acceptanceTimely = storyRun
-    ? everyMemberMergeable && input.cardInReview
+    ? everyMemberMergeable && input.cardInReview && !mergeRefusedAtVersion && !sentBack
     : input.subtreeSettled === true;
   if (
     receipt !== null &&
@@ -750,11 +766,8 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // the merge question stays withdrawn (`agent_changes_requested`) until a push moves the
   // version, and a review switched on since is not asked of commits already reviewed.
   // A person's DISMISSAL at the version (MOTIR-10334; §12.15) ends it: the merge question is
-  // asked again, at the same version, through this one rule.
-  const sentBack =
-    version !== null &&
-    (input.agentSendBackVersion ?? null) === version &&
-    (input.dismissedSendBackVersion ?? null) !== version;
+  // asked again, at the same version, through this one rule. (`sentBack` is computed above,
+  // where the acceptance question reads it too.)
   if (mergeAskable && !sentBack && review === 'owed') {
     awaited.push({
       kind: 'agent_review',
