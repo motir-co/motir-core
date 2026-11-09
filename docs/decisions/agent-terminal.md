@@ -206,7 +206,7 @@ Refusals are WebSocket close codes the panel maps to words:
 - **The server's checks:**
   - the signature against its own key;
   - `instanceId` equals its `MOTIR_INSTANCE_ID`;
-  - `machineId` equals `FLY_MACHINE_ID`;
+  - `machineId` equals the machine id — `MOTIR_MACHINE_ID`, else `FLY_MACHINE_ID` (AMENDMENT 2);
   - `exp` is not past;
   - the nonce is unseen, from an in-memory set kept until its `exp`.
 - **What a stolen key grants: that one machine's shell, and nothing else.** The owner already has
@@ -500,3 +500,20 @@ which the record never said.
 process, because a wake rewrites the config only to install the terminal (Q8). Its wake now ENDS
 `failed` in words (`agent-instances.md` AMENDMENT 5) instead of hanging; setting the master key and
 waking brings it up on Q8's terminal config, or the owner deletes it.
+
+## AMENDMENT 2 — the machine id has a host-neutral name, and an AWS VM sets it (MOTIR-10817, 2026-11-09)
+
+The record took the machine id from `FLY_MACHINE_ID`, which the Fly platform sets on every machine.
+EC2 sets no such variable, so on an AWS agent VM (`agent-instances` on AWS, MOTIR-9361) the server
+refused to start, the container's main process exited, and the boot's first clone found the
+container stopped (EC2 `i-00df27f5ec6ca138a`, 2026-11-09 19:35:02 UTC).
+
+**The choice.** The server reads the machine id as `MOTIR_MACHINE_ID` first and `FLY_MACHINE_ID`
+second, and refuses in words naming both when neither is set; a Fly machine, which sets only the
+second, behaves exactly as before. The AWS boot script reads the instance id from the metadata
+service on EVERY boot — a create and a wake alike — and writes it into the container's env under
+both names (`@motir/orchestrator` `MACHINE_ID_ENV_KEYS`), after the document's own env so nothing
+else can stand in for it. It is the value the relay mints tokens with, because an AWS instance row's
+`machine_id` is the instance id RunInstances returned, so a token for that instance passes the
+`machineId` check above. `FLY_MACHINE_ID` is written too because an instance keeps booting the image
+digest it was created on, and an image published before this change reads only that name.

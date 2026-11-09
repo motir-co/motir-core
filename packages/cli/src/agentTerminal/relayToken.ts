@@ -127,7 +127,7 @@ export interface VerifyRelayTokenOptions {
   instanceKey: string;
   /** The server's MOTIR_INSTANCE_ID. */
   instanceId: string;
-  /** The server's FLY_MACHINE_ID. */
+  /** The server's machine id: MOTIR_MACHINE_ID, else FLY_MACHINE_ID. */
   machineId: string;
   /** Now, in whole seconds since the epoch. */
   nowSeconds: number;
