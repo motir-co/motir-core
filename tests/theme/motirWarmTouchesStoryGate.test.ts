@@ -26,6 +26,9 @@ import { declaredIn, loadTokenLayer, resolveValue, type ThemeContext } from './p
 // (the agent-hibernated-by-an-admin notification hue, MOTIR-10368), the same way.
 // mark's at-work flow, MOTIR-9213), the same way. And the `--el-notif-review-*` pair
 // (the review-path notification hues, MOTIR-10327), the same way.
+// The four palettes MOTIR-10550 added (lagoon, olive, contrast, midnight) joined
+// the fixture at their resolved values when they were registered: a palette born
+// after the warm touches has no pre-change layer, so its row pins it from birth.
 
 const REPO = process.cwd();
 const THEMES = ['light', 'dark'] as const;
