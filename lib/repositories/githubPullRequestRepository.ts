@@ -659,6 +659,31 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
+  /** Record that the HOST confirmed CI had decided the WHOLE check set at `commitSha`
+   *  (Bug MOTIR-10797) — the marker `hasHeadDecidedBeforeRunningChecks` reads. Written only
+   *  while that commit IS the pull request's head (or the row has no stored head yet, when
+   *  the check rows' head stands in for it): a late reconcile about an older commit must not
+   *  replace the marker of the head it was pushed over. One statement; answers how many rows
+   *  it wrote (0 when the head has moved or the marker is already there). Write path → `tx`. */
+  async markCiDecided(
+    pullRequestId: string,
+    commitSha: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: {
+        id: pullRequestId,
+        AND: [
+          { OR: [{ headSha: null }, { headSha: commitSha }] },
+          // `OR` with the null arm spelled out: SQL's `<>` is not true of a NULL marker.
+          { OR: [{ ciDecidedSha: null }, { ciDecidedSha: { not: commitSha } }] },
+        ],
+      },
+      data: { ciDecidedSha: commitSha },
+    });
+    return result.count;
+  },
+
   /** Mark the reading OWED at a new head — a `synchronize` replaces the old head's
    *  reading, so its `dirty` cannot hold the new one (MOTIR-5913), with the host's
    *  "not computed yet" word AT that head rather than with nothing (MOTIR-7063): `null`

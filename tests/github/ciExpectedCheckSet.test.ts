@@ -13,6 +13,7 @@ import {
 } from '@/lib/services/changeRequestCiFeedback';
 import { promoteDeliveredCardsOnGreen, promoteIfCiAlreadyGreen } from '@/lib/services/ciPromotion';
 import type { ReportedCheckRun } from '@/lib/github/checkRuns';
+import { hostReportsDecided, reconcileRecordedCheckSet } from '@/lib/services/checkSetReconcile';
 import type { NormalizedStatusEvent } from '@/lib/git/types';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -830,5 +831,130 @@ describe('a workflow run GitHub has created but that has no job yet (MOTIR-6946)
     expect(first.promoted).toEqual([card.id]);
     expect(await statusOf(card.id)).toBe('in_review');
     expect((await mergeGatesOn(card.id)).map((g) => g.state)).toEqual(['awaiting']);
+  });
+});
+
+// Bug MOTIR-10797 — THE HOST'S ANSWER IS THE ONE PLACE A HEAD'S WHOLE SET IS KNOWN DECIDED.
+// A set of terminal rows is also what a quick green looks like before the slow lanes are
+// recorded, so the rows cannot say whether CI ever decided the head; the reconcile, which asks
+// the host, records it on the pull request (`ciDecidedSha`). The To fix rebuild reads it.
+describe('the reconcile records a head whose WHOLE set the host confirms decided (MOTIR-10797)', () => {
+  const marker = async (prNumber: number) =>
+    (await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: prNumber } }))
+      .ciDecidedSha;
+  const all = (conclusion: 'success' | 'failure') =>
+    reported(
+      [...THE_THREE, ...THE_OTHER_TWO].map((n) => [n, conclusion] as [string, typeof conclusion]),
+    );
+
+  it('a prefix the host knows is partial records nothing; the whole set, finished, records the head', async () => {
+    const s = await makeScenario('decided-prefix-then-whole@example.com');
+    await cardWithPr(s, 'the card whose CI finishes', 120);
+
+    const partial = deliverer(s, 120, () =>
+      reported([
+        ...THE_THREE.map((n) => [n, 'success'] as [string, 'success']),
+        ...THE_OTHER_TWO.map((n) => [n, 'pending'] as [string, 'pending']),
+      ]),
+    );
+    for (const name of THE_THREE) await partial.deliver(name, 'success');
+    expect(partial.calls).toEqual([HEAD_SHA]);
+    expect(await marker(120)).toBeNull();
+
+    // A RED verdict is a decided head as much as a green one.
+    const whole = deliverer(s, 120, () => [
+      ...all('success').filter((r) => r.checkName !== 'Vitest'),
+      ...reported([['Vitest', 'failure']]),
+    ]);
+    await whole.deliver('Vitest', 'failure');
+    expect(await marker(120)).toBeNull(); // the other lane is still recorded running
+    await whole.deliver(THE_OTHER_TWO[1]!, 'success');
+    expect(await marker(120)).toBe(HEAD_SHA);
+  });
+
+  it('a recorded row still running that the host does not report (a commit status) is not decided', async () => {
+    const s = await makeScenario('decided-status-pending@example.com');
+    await cardWithPr(s, 'the card with a legacy status', 121);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 121 } });
+    await adminDb.githubCheckRun.create({
+      data: {
+        pullRequestId: pr.id,
+        commitSha: HEAD_SHA,
+        checkName: 'ci/legacy',
+        conclusion: 'pending',
+      },
+    });
+
+    // The delivery's own set claims nothing while the status runs, so the host is not asked;
+    // the reconcile itself, called on a whole host answer, still reads the recorded row.
+    const result = await adminDb.$transaction((tx) =>
+      reconcileRecordedCheckSet({
+        pullRequestId: pr.id,
+        commitSha: HEAD_SHA,
+        reported: all('success'),
+        recorded: [],
+        tx,
+      }),
+    );
+    expect(result).toEqual({ created: 5, settled: 0, decided: false });
+    expect(await marker(121)).toBeNull();
+  });
+
+  it('a head the pull request has moved past is never recorded — the late answer about an older commit', async () => {
+    const s = await makeScenario('decided-moved-head@example.com');
+    await cardWithPr(s, 'the card pushed again', 122);
+    await adminDb.githubPullRequest.updateMany({
+      where: { number: 122 },
+      data: { headSha: 'f'.repeat(40) },
+    });
+
+    const whole = deliverer(s, 122, () => all('success'));
+    await whole.deliver(THE_THREE[0]!, 'success');
+
+    expect(whole.calls).toEqual([HEAD_SHA]);
+    expect(await marker(122)).toBeNull();
+  });
+
+  it('EDGE 2’s reconcile records it too, when the host confirms the set whole', async () => {
+    const s = await makeScenario('decided-edge2@example.com');
+    const card = await cardWithPr(s, 'the host agrees, and says so', 123);
+    await seedRows(
+      123,
+      [...THE_THREE, ...THE_OTHER_TWO].map((n) => [n, 'success'] as [string, 'success']),
+    );
+
+    expect(await promoteIfCiAlreadyGreen(card.id, s.ctx, async () => all('success'))).toBe(true);
+    expect(await marker(123)).toBe(HEAD_SHA);
+  });
+
+  it('an EMPTY host answer is no verdict — nothing is recorded', async () => {
+    const s = await makeScenario('decided-empty@example.com');
+    await cardWithPr(s, 'the host reports nothing', 124);
+
+    await deliverer(s, 124, () => []).deliver(THE_THREE[0]!, 'success');
+
+    expect(await marker(124)).toBeNull();
+  });
+});
+
+describe('hostReportsDecided (MOTIR-10797)', () => {
+  it('is decided only when the host reports something and nothing it reports is running', () => {
+    expect(hostReportsDecided([])).toBe(false);
+    expect(
+      hostReportsDecided(
+        reported([
+          ['Vitest', 'success'],
+          ['Lint', 'failure'],
+        ]),
+      ),
+    ).toBe(true);
+    expect(
+      hostReportsDecided(
+        reported([
+          ['Vitest', 'success'],
+          ['Lint', 'pending'],
+        ]),
+      ),
+    ).toBe(false);
   });
 });

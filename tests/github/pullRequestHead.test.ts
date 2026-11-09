@@ -3,6 +3,7 @@ import {
   checkRowsAtHead,
   isCiUndecidedAtHead,
   hasHeadDecidedBeforeRunningChecks,
+  isCiConfirmedDecidedAtHead,
   isLateCheckAtHead,
   isReRunAtHead,
   lastDecidedBeforeHead,
@@ -483,5 +484,36 @@ describe('isLateCheckAtHead / hasHeadDecidedBeforeRunningChecks', () => {
     expect(hasHeadDecidedBeforeRunningChecks({ headSha: B, checkRuns: [replaced, again] })).toBe(
       true,
     );
+  });
+});
+
+describe('isCiConfirmedDecidedAtHead (Bug MOTIR-10797)', () => {
+  it('holds only when the host’s confirmation is about the current head', () => {
+    const checkRuns = [run(A, 'failure'), run(B, 'success')];
+    expect(isCiConfirmedDecidedAtHead({ headSha: B, checkRuns, ciDecidedSha: B })).toBe(true);
+    // A confirmation about the commit before the push says nothing about this one.
+    expect(isCiConfirmedDecidedAtHead({ headSha: B, checkRuns, ciDecidedSha: A })).toBe(false);
+    expect(isCiConfirmedDecidedAtHead({ headSha: B, checkRuns, ciDecidedSha: null })).toBe(false);
+    // A reader that never selected the column reads no confirmation.
+    expect(isCiConfirmedDecidedAtHead({ headSha: B, checkRuns })).toBe(false);
+    // With no stored head, the check rows' head stands in for it.
+    expect(isCiConfirmedDecidedAtHead({ headSha: null, checkRuns, ciDecidedSha: B })).toBe(true);
+  });
+
+  it('is a decided head for the shared guard when no row carries a time', () => {
+    const pr = {
+      headSha: B,
+      checkRuns: [
+        { ...run(A, 'failure'), conclusionAt: null },
+        { ...run(B, 'success', 'vitest'), conclusionAt: null },
+        { ...run(B, 'pending', 'preview'), conclusionAt: null },
+      ],
+    };
+    // The row tests cannot order rows without times…
+    expect(isReRunAtHead(pr)).toBe(false);
+    expect(isLateCheckAtHead(pr)).toBe(false);
+    expect(hasHeadDecidedBeforeRunningChecks(pr)).toBe(false);
+    // …and the host's confirmation does not need them.
+    expect(hasHeadDecidedBeforeRunningChecks({ ...pr, ciDecidedSha: B })).toBe(true);
   });
 });

@@ -8817,6 +8817,24 @@ model GithubPullRequest {
   /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — then the readers fall back
   /// to the check rows' head, which is what they did before the column existed.
   headSha                       String?             @map("head_sha")
+  /// The head commit at which the HOST confirmed CI had DECIDED this pull request's WHOLE
+  /// check set (Bug MOTIR-10797): every check run and workflow run it reports there is
+  /// finished, and no recorded row there is still running. Written by the check-set reconcile
+  /// (`reconcileRecordedCheckSet`), the one place that asks the host which checks a commit has,
+  /// and only while the commit is the pull request's head. Never cleared: a push moves the
+  /// head, and a marker about another commit says nothing about the new one.
+  ///
+  /// ⚠️ WHY IT EXISTS. The recorded rows cannot say whether a head's CI was ever WHOLE: a
+  /// quick green recorded before anything running there is exactly a set of terminal rows.
+  /// So a check that starts at a head CI had already decided (a workflow on `labeled`, a
+  /// third-party suite, a re-run recorded without times) was read as the push's own CI, and
+  /// a card whose fix had gone green was rebuilt as Fixing. A head with this marker answers
+  /// its own verdict, and nothing a push to it answered is rebuilt
+  /// (`hasHeadDecidedBeforeRunningChecks`).
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED: null is "never confirmed", the state the readers fall back
+  /// to the check rows' own times in.
+  ciDecidedSha                  String?             @map("ci_decided_sha")
   /// The pull request's AUTHOR on the host — GitHub's `pull_request.user` (Story MOTIR-10327 ·
   /// MOTIR-10340). The review state read model compares `authorGithubUserId` with the routed
   /// person's `GithubIdentity.githubUserId` to say whether they opened every pull request of
