@@ -297,6 +297,26 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * Write an INSTALL-FLEET instance's handle (MOTIR-10794): its machine, disk
+   * and region, with no account — and no zone, which the table admits only beside
+   * an account (`agent_instance_zone_needs_account_check`; the zone matters only
+   * at the provision, which has passed) — only while the row is live, on no
+   * account and has no machine yet. `applied: false` means another call placed
+   * it first: what this one provisioned must be destroyed. `tx` required.
+   */
+  async setInstallFleetHandle(
+    id: string,
+    handle: AgentInstanceHandleColumns & { region: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId: null, machineId: null, ...LIVE },
+      data: handle,
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
    * How many live instances one account holds — reserved, running or asleep
    * (MOTIR-9471): admission's per-account in-flight count for the agent hoster.
    * A sleeping instance counts, because its wake comes back to the same account

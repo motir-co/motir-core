@@ -182,6 +182,9 @@ function deps(accounts: Record<string, ReturnType<typeof fakeAccount>>) {
       return account.orchestrator;
     },
     processWideOrchestrator: () => fly.orchestrator,
+    installFleetOrchestrator: () => {
+      throw new Error('no install fleet in this suite');
+    },
     now: () => NOW,
   };
   return { value, fly };

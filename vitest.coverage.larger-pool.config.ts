@@ -40,6 +40,8 @@ export default defineConfig({
       // The story's integration gate (MOTIR-9656).
       'tests/billing/largerPoolHostAnchorStoryGate.test.ts',
       'tests/ciFleet/rungOwnAccountsIntegration.test.ts',
+      // The install fleet's placement in `chooseInTx` (MOTIR-10794).
+      'tests/ciFleet/installFleetPlacement.test.ts',
     ],
     coverage: {
       provider: 'v8',

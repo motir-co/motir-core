@@ -1,11 +1,17 @@
 import type { FleetWorkloadKind } from '@/lib/ciFleet/workloads';
 import {
+  INSTALL_FLEET_SHARD_ID,
+  installFleetConfig,
+  isInstallFleetShardId,
+} from '@/lib/ciFleet/installFleet';
+import {
   HostedAgentContainerRequestInvalidError,
   HostedAgentContainerUnpricedError,
 } from '@/lib/ciFleet/errors';
 import { fleetCeilingService, type FleetSlotVerdict } from '@/lib/services/fleetCeilingService';
 import {
   classifyProvisionRefusal,
+  HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
   fleetShardAdmissionService,
 } from '@/lib/services/fleetShardAdmissionService';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
@@ -515,6 +521,16 @@ async function resolveBootTarget(
   fleetShardId: string | null,
   request: HostedAgentContainerRequest,
 ): Promise<BootTarget> {
+  // The install fleet (MOTIR-10794): core's own account, the AWS image pin,
+  // the fleet's region.
+  if (isInstallFleetShardId(fleetShardId)) {
+    return {
+      orchestrator: await fleetShardOrchestratorService.forShard(INSTALL_FLEET_SHARD_ID),
+      image: hostedAgentImage('aws'),
+      region: installFleetConfig().region,
+      shardId: INSTALL_FLEET_SHARD_ID,
+    };
+  }
   if (fleetShardId === null) {
     return {
       orchestrator: getOrchestrator(),
@@ -652,7 +668,9 @@ export const hostedAgentContainerService = {
         throw err;
       }
     };
-    let target = await targetFor(verdict.fleetShardId ?? null);
+    let target = await targetFor(
+      verdict.installFleet ? INSTALL_FLEET_SHARD_ID : (verdict.fleetShardId ?? null),
+    );
 
     // ── 1b · The run's credentials, minted only now that it is admitted ──────
     // (MOTIR-9381) A run that waited for room gets credentials whose life starts
@@ -694,6 +712,19 @@ export const hostedAgentContainerService = {
         break;
       } catch (err) {
         const reason = target.shardId === null ? 'job_fault' : classifyProvisionRefusal(err);
+        // The install fleet has no other account to move to (MOTIR-10794): a
+        // full or unreachable one waits, as a full pool does.
+        if (isInstallFleetShardId(target.shardId) && reason !== 'job_fault') {
+          await releaseSlot();
+          return {
+            phase: 'terminal',
+            outcome: {
+              outcome: 'admission_deferred',
+              reason: 'shard_capacity',
+              detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+            },
+          };
+        }
         if (target.shardId === null || reason === 'job_fault') {
           // The port guarantees a failed `provision` left no container, so the
           // slot stands for nothing and goes back now rather than at its TTL.

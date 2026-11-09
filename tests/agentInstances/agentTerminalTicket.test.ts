@@ -328,6 +328,23 @@ describe('the relay’s redeem (Q3)', () => {
     fleet.setTerminalAddress(null);
   });
 
+  it('dials an install-fleet instance in core’s own account — the fake while the fake is selected (MOTIR-10794)', async () => {
+    fleet.setTerminalAddress('ws://127.0.0.1:7998');
+    const id = await running();
+    const before = await adminDb.agentInstance.findUniqueOrThrow({ where: { id } });
+    await adminDb.agentInstance.update({
+      where: { id },
+      data: { fleetShardId: null, flyApp: 'motir-install-fleet' },
+    });
+    const { ticket } = await ticketFor(id);
+    const verdict = await relayService.authorizeConnection(ticket);
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.target.dial.url).toBe('ws://127.0.0.1:7998/v1/terminal');
+    await adminDb.agentInstance.update({ where: { id }, data: { flyApp: before.flyApp } });
+    fleet.setTerminalAddress(null);
+  });
+
   it('closes not-running, and dials nothing, for an account that is not on record (MOTIR-9473)', async () => {
     fleet.setTerminalAddress('ws://127.0.0.1:7999');
     const id = await running();
