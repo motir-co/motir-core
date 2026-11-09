@@ -512,6 +512,9 @@ export const githubRepoRepository = {
     },
     tx: Prisma.TransactionClient,
   ): Promise<IndexRetryCandidate[]> {
+    // `now` is cast `::timestamp`, never `::timestamptz`: `@prisma/adapter-pg` binds a
+    // Date as untyped UTC wall-clock text with NO offset, matching the naive-UTC
+    // columns; a `timestamptz` cast would read it in the session time zone.
     const backoff = Prisma.sql`make_interval(secs => ${args.baseBackoffMs}::double precision / 1000 * power(2, gr."index_retry_attempts"))`;
     const lostGrace = Prisma.sql`make_interval(secs => ${args.lostDispatchGraceMs}::double precision / 1000)`;
     return tx.$queryRaw<IndexRetryCandidate[]>`
@@ -554,7 +557,7 @@ export const githubRepoRepository = {
               gr."index_retry_attempts" < ${args.maxAttempts}
               AND jr."function_id" IN ('system.code-graph-index', 'system.code-graph-refresh')
               AND jr."status" IN ('failed', 'abandoned')
-              AND COALESCE(jr."finished_at", jr."started_at") <= (${args.now}::timestamptz AT TIME ZONE 'UTC') - ${backoff}
+              AND COALESCE(jr."finished_at", jr."started_at") <= ${args.now}::timestamp - ${backoff}
               AND NOT EXISTS (
                 SELECT 1 FROM "job_queue" q
                 WHERE q."job_id" = jr."function_id"
@@ -565,7 +568,7 @@ export const githubRepoRepository = {
             OR (
               gr."indexing_run_id" IS NULL
               AND gr."index_retry_dispatched_at" IS NOT NULL
-              AND gr."index_retry_dispatched_at" <= (${args.now}::timestamptz AT TIME ZONE 'UTC') - GREATEST(${backoff}, ${lostGrace})
+              AND gr."index_retry_dispatched_at" <= ${args.now}::timestamp - GREATEST(${backoff}, ${lostGrace})
             )
           )
       ) candidates
