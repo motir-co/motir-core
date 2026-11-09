@@ -250,12 +250,17 @@ export const githubIdentityService = {
    * token compared with the one GitHub refused: a member who reconnected, or a
    * renewal that rotated the pair, while the rejected call was in flight holds a
    * NEW credential, and marking it would send a working sign-in to reconnect.
+   * The same holds while a renewal LEASE is live: GitHub may already have
+   * rotated the pair (which is what invalidated this token), and the renewal
+   * is about to store the new one, so its outcome decides — a refused renewal
+   * marks the row itself.
    */
   async recordRejectedToken(userId: string, accessToken: string): Promise<void> {
     const marked = await withUserContext(userId, async (tx) => {
       await githubIdentityRepository.lockByUserId(userId, tx);
       const row = await githubIdentityRepository.findByUserId(userId, tx);
       if (!row || row.refreshRefusedAt) return null;
+      if (row.refreshLeaseUntil && row.refreshLeaseUntil.getTime() > Date.now()) return null;
       if (decryptToken(row.accessTokenEncrypted) !== accessToken) return null;
       await githubIdentityRepository.markRefreshRefused(row.id, new Date(), tx);
       return row.id;

@@ -594,6 +594,37 @@ describe('githubIdentityService.recordRejectedToken (Bug MOTIR-10806)', () => {
     expect((await readIdentity(user.id)).refreshRefusedAt).toBeNull();
   });
 
+  it('leaves the row alone while a renewal lease is live — the renewal decides', async () => {
+    // A renewal rotating the pair is what invalidates the old token. Marking now
+    // would leave the pair the renewal is about to store flagged Needs re-auth.
+    const user = await makeUser();
+    await seedIdentity(user.id, { accessToken: 'gho_rotating', refreshToken: 'ghr_rotating' });
+    const lease = new Date(Date.now() + 20_000);
+    await adminDb.githubIdentity.update({
+      where: { userId: user.id },
+      data: { refreshLeaseUntil: lease },
+    });
+
+    await githubIdentityService.recordRejectedToken(user.id, 'gho_rotating');
+
+    const row = await readIdentity(user.id);
+    expect(row.refreshRefusedAt).toBeNull();
+    expect(row.refreshLeaseUntil).toEqual(lease);
+  });
+
+  it('an EXPIRED lease does not shield the row: a dead renewer left it behind', async () => {
+    const user = await makeUser();
+    await seedIdentity(user.id, { accessToken: 'gho_dead', refreshToken: 'ghr_dead' });
+    await adminDb.githubIdentity.update({
+      where: { userId: user.id },
+      data: { refreshLeaseUntil: new Date(Date.now() - 1_000) },
+    });
+
+    await githubIdentityService.recordRejectedToken(user.id, 'gho_dead');
+
+    expect((await readIdentity(user.id)).refreshRefusedAt).toBeInstanceOf(Date);
+  });
+
   it('keeps the FIRST refusal time, and is a no-op for a member with no identity', async () => {
     const user = await makeUser();
     await seedIdentity(user.id, { accessToken: 'gho_dead' });
