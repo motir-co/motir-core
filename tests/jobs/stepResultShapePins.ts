@@ -445,9 +445,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: 'Array<string>',
   },
-  'reconcile-github-queue': {
+  'reconcile-github-queue-v2': {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
-    shape: '{ added: number }',
+    shape:
+      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined }> }',
   },
   'mark-stale-for-terminal-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
@@ -951,6 +952,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-github-queue': {
+    shape: '{ added: number }',
+    supersededBy: 'reconcile-github-queue-v2',
+    reason:
+      'MOTIR-10790 made the step return the whole reconcile outcome (per org: queued, idle runners, awaiting, added, skipped runs, error) so the provision sweep can record it on `job_run`. A memo under the old id carries only `added`. Re-executing the reconcile on a resumed run is safe: it counts queued jobs against idle runners and pending intents before minting, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
+  },
   'runner-image-freshness': {
     shape:
       '{ ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; build: { commit: string; image: string; source: "label" | "sha_tag" }; checkedAt: string; unreleased: Array<{ commit: string; committedAt: string; paths: Array<string>; relation: "ahead" | "diverged"; subject: string }>; verdict: "stale" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; build: { commit: string; image: string; source: "label" | "sha_tag" }; checkedAt: string; verdict: "current" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; checkedAt: string; detail: string; image: string; phase: "build_commit" | "github" | "registry"; verdict: "indeterminate" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; checkedAt: string; reason: "runner_image_unset"; verdict: "not_applicable" }',

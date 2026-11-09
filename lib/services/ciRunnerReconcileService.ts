@@ -62,6 +62,8 @@ export interface ReconcileOrgOutcome {
 export interface ReconcileOutcome {
   orgs: ReconcileOrgOutcome[];
   added: number;
+  /** Set by the provision sweep when the reconcile itself threw (MOTIR-10790). */
+  error?: string;
 }
 
 export const ciRunnerReconcileService = {
