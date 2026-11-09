@@ -40,6 +40,7 @@ describe('the renamed registry', () => {
       'lagoon',
       'olive',
       'contrast',
+      'midnight',
     ]);
     expect(PALETTE_REGISTRY.motir.name).toBe('Motir');
     expect(PALETTE_REGISTRY.motir.tagline).toMatch(/^Stark and editorial/);

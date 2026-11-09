@@ -20,6 +20,7 @@ mocks and states what each one draws and from which parts.
 | Lagoon   | [lagoon.mock.html](./lagoon.mock.html)     | [docs/palettes/lagoon.md](../../docs/palettes/lagoon.md)     | MOTIR-10713 |
 | Olive    | [olive.mock.html](./olive.mock.html)       | [docs/palettes/olive.md](../../docs/palettes/olive.md)       | MOTIR-10714 |
 | Contrast | [contrast.mock.html](./contrast.mock.html) | [docs/palettes/contrast.md](../../docs/palettes/contrast.md) | MOTIR-10715 |
+| Midnight | [midnight.mock.html](./midnight.mock.html) | [docs/palettes/midnight.md](../../docs/palettes/midnight.md) | MOTIR-10716 |
 
 ## How every mock in this area is built
 
@@ -126,3 +127,28 @@ What the panels show, against the record:
   Contrast's are 8.82:1 and 3.70:1.
 - **Panel 4** — the six material styles keep Contrast's AAA body text: the lowest
   secondary row across every style's composite grounds is 7.79:1 light and 7.91:1 dark.
+
+## Midnight (MOTIR-10716)
+
+[midnight.mock.html](./midnight.mock.html) · record:
+[docs/palettes/midnight.md](../../docs/palettes/midnight.md)
+
+Midnight is dark-first: its dark block is the authored source and its light block is
+derived from it step for step, with five recorded departures. Read the panels with the
+dark half first.
+
+What the panels show, against the record:
+
+- **Panel 1** — Midnight's tile in the gallery after Contrast, its swatch the Sky-9 fill
+  `#7ce2fe` (the same value in both Radix scales), selected in light and dark.
+- **Panel 2** — dark: a Slate dark-2 page over a dark-1 canvas, Slate dark-3 surfaces, the
+  starlight Sky-9 fill under a dark label, Sky dark-11 accent text and a Purple highlight.
+  Light: the same steps of the light scales, the same Sky-9 fill, with the departures the
+  record names (Sky-12 accent text, the Slate-12 label, the Slate-4 canvas, the Blue-12
+  link, the ink logo tile).
+- **Panel 3** — beside Cobalt and Spectrum, its two nearest neighbours: the bright sky fill
+  reads apart from their indigo and violet (ΔE2000 46.4 and 51.1 in light, 39.8 and 44.0
+  in dark).
+- **Panel 4** — the six material styles keep Midnight's hues; every text role on their
+  composite grounds clears 4.5:1 (the style × palette × mode gate records no Midnight
+  failure).

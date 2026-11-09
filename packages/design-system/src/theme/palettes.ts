@@ -192,6 +192,15 @@ export const PALETTE_REGISTRY = {
       'A high-contrast reading scheme grounded entirely in documented Radix Colors scales (every value a Radix step): one Gray neutral ramp with its text steps held to 7:1, a Plum primary, an Orange highlight, and step-3 tints.',
     designDoc: 'docs/palettes/contrast.md',
   },
+  midnight: {
+    id: 'midnight',
+    name: 'Midnight',
+    tagline:
+      'Dark-first and calm — a night-slate ground with a starlight-sky primary and a violet highlight.',
+    inspiration:
+      'A dark-first scheme grounded entirely in documented Radix Colors scales (every value a Radix step): authored in Slate and Sky dark, with each light value derived as the same step of the light scale and every departure recorded.',
+    designDoc: 'docs/palettes/midnight.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */

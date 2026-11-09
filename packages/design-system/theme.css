@@ -7797,6 +7797,153 @@
   --el-sidebar-item-bg-hover: #313131; /* Gray dark-5 */
 }
 
+/* ── Palette: Midnight (data-palette="midnight") — MOTIR-10716 ─────────────────
+   A DARK-FIRST palette: a cool night-slate ground with a starlight-sky primary
+   and a violet highlight. The DARK companion below is the authored source; this
+   LIGHT block is DERIVED from it role by role — each role takes the same Radix
+   step of the light scale of the same ramp — and every departure from that rule
+   is named in its comment and in docs/palettes/midnight.md with the measurement
+   that forced it. EVERY value is a documented **Radix Colors** step
+   (@radix-ui/colors@3.0.0): Slate is the night neutral, Sky the identity hue,
+   Purple the highlight, and Orange / Pink / Mint / Purple / Sky / Amber / Grass
+   / Blue / Red the tints and semantics.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). */
+[data-palette='midnight'] {
+  /* primary — Sky. The fill is the derived Sky-9, which Radix publishes as the
+     same bright value in both scales. As TEXT the primary departs to Sky-12 (the
+     derived Sky-11 is 4.63:1 on the Slate-3 surface and 4.13:1 on the peach
+     tint), and the label departs to the Slate-12 ink (the derived Sky-1 is
+     1.07:1 on the bright Sky-9 fill; Sky-12 would leave the orb's highlight stop
+     darker than its lit stop). */
+  --color-primary: #1d3e56; /* Radix Sky-12 — DEPARTURE from Sky-11 */
+  --color-primary-foreground: #1c2024; /* Radix Slate-12 — DEPARTURE from Sky-1 */
+  --color-primary-pressed: #74daf8; /* Radix Sky-10 — derived from Sky dark-10 */
+  --color-primary-fill: #7ce2fe; /* Radix Sky-9 — derived from Sky dark-9 */
+
+  /* surfaces — Radix Slate-2/3, derived from dark-2/3 */
+  --color-background: #f9f9fb; /* Slate-2 */
+  --color-foreground: #1c2024; /* Slate-12 */
+  --color-surface: #f0f0f3; /* Slate-3 */
+  --color-surface-soft: #f9f9fb; /* Slate-2 */
+  --color-canvas: #e8e8ec; /* Slate-4 — DEPARTURE from Slate-1, which is ABOVE the Slate-2 page in light */
+
+  /* text scale — Slate text steps + a Sky-12 emphasis */
+  --color-ink: #1c2024; /* Slate-12 */
+  --color-charcoal: #1d3e56; /* Sky-12 */
+  --color-slate: #60646c; /* Slate-11 */
+  --color-steel: #60646c; /* Slate-11 */
+  --color-stone: #8b8d98; /* Slate-9 */
+  --color-muted: #f0f0f3; /* Slate-3 */
+  --color-muted-foreground: #60646c; /* Slate-11 */
+
+  /* borders — Slate-5/4/6 */
+  --color-hairline: #e0e1e6; /* Slate-5 */
+  --color-hairline-soft: #e8e8ec; /* Slate-4 */
+  --color-hairline-strong: #d9d9e0; /* Slate-6 */
+  --color-border: #e0e1e6; /* Slate-5 */
+
+  /* accent — a violet highlight (Purple-11) and the hue roles */
+  --color-accent: #8145b5; /* Purple-11 */
+  --color-accent-orange: #ab6400; /* Amber-11 */
+  --color-accent-teal: #027864; /* Mint-11 */
+  --color-accent-green: #2a7e3b; /* Grass-11 */
+
+  /* card tints — Radix step-4 pastels, derived from the dark-4 washes */
+  --color-tint-peach: #ffdfb5; /* Orange-4 */
+  --color-tint-rose: #fbdcef; /* Pink-4 */
+  --color-tint-mint: #c8f4e9; /* Mint-4 */
+  --color-tint-lavender: #f2e2fc; /* Purple-4 */
+  --color-tint-sky: #d1f0fa; /* Sky-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix step 11 */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 */
+  --color-destructive-foreground: #fffcfc; /* Red-1 — derived from Red dark-1 */
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Blue-12, a DEPARTURE from the derived Blue-11 (4.19:1 on the Slate-3
+     surface, 3.74:1 on the peach tint) */
+  --color-link: #113264; /* Blue-12 — DEPARTURE from Blue-11 */
+  --color-link-pressed: #113264; /* Blue-12 — derived from Blue dark-12 */
+
+  /* status — In review moves off the primary: Sky dark-11 sits 8.1 ΔE from the
+     Blue info hue (In progress) in dark, so the source takes Sky dark-12, and
+     light takes the derived Sky-12 */
+  --el-status-in-review: #1d3e56; /* Sky-12 */
+
+  /* logo — the bright Sky-9 mark sits on the dark ink tile (amber's precedent
+     for a bright identity hue); the derived wash of itself is 1.34:1 */
+  --el-logo-tile: var(--color-foreground);
+
+  /* sidebar hover — Slate-4, derived from dark-4 */
+  --el-sidebar-item-bg-hover: #e8e8ec; /* Slate-4 */
+}
+
+/* Midnight — dark companion, THE AUTHORED SOURCE. A night-slate ground (Radix
+   Slate dark-2/3) over a Slate dark-1 recessed canvas, a starlight Sky dark-9
+   fill with Sky dark-11 as text, Purple dark-11 for the highlight, deep step-4
+   washes. */
+[data-theme='dark'] [data-palette='midnight']:not([data-theme]),
+[data-palette='midnight'][data-theme='dark'] {
+  --color-primary: #75c7f0; /* Sky dark-11 */
+  --color-primary-foreground: #0d141f; /* Sky dark-1 */
+  --color-primary-pressed: #a8eeff; /* Sky dark-10 */
+  --color-primary-fill: #7ce2fe; /* Sky dark-9 */
+
+  --color-background: #18191b; /* Slate dark-2 */
+  --color-foreground: #edeef0; /* Slate dark-12 */
+  --color-surface: #212225; /* Slate dark-3 */
+  --color-surface-soft: #18191b; /* Slate dark-2 */
+  --color-canvas: #111113; /* Slate dark-1 */
+
+  --color-ink: #edeef0; /* Slate dark-12 */
+  --color-charcoal: #c2f3ff; /* Sky dark-12 */
+  --color-slate: #b0b4ba; /* Slate dark-11 */
+  --color-steel: #b0b4ba; /* Slate dark-11 */
+  --color-stone: #696e77; /* Slate dark-9 */
+  --color-muted: #212225; /* Slate dark-3 */
+  --color-muted-foreground: #b0b4ba; /* Slate dark-11 */
+
+  --color-hairline: #2e3135; /* Slate dark-5 */
+  --color-hairline-soft: #272a2d; /* Slate dark-4 */
+  --color-hairline-strong: #363a3f; /* Slate dark-6 */
+  --color-border: #2e3135; /* Slate dark-5 */
+
+  --color-accent: #d19dff; /* Purple dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #58d5ba; /* Mint dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #462100; /* Orange dark-4 */
+  --color-tint-rose: #4b143d; /* Pink dark-4 */
+  --color-tint-mint: #003a38; /* Mint dark-4 */
+  --color-tint-lavender: #3d224e; /* Purple dark-4 */
+  --color-tint-sky: #113555; /* Sky dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-status-in-review: #c2f3ff; /* Sky dark-12 */
+  --el-logo-tile: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-background)
+  ); /* the shipped dark-base recipe */
+
+  --el-sidebar-item-bg-hover: #272a2d; /* Slate dark-4 */
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk
