@@ -162,8 +162,9 @@ async function answeredReasonOf(
   tx: Prisma.TransactionClient,
 ): Promise<FixReasonValue | null> {
   const runningIds = new Set(running.map((m) => m.pullRequestId));
-  // ⚠️ ONLY A HEAD CI HAS NOT YET DECIDED answers anything (review of MOTIR-10791): a re-run
-  // there, or a check that started after the head's verdict, answers the head's own verdict.
+  // ⚠️ ONLY A HEAD CI HAS NOT YET DECIDED answers anything (review of MOTIR-10791): a head
+  // the host confirmed decided (MOTIR-10797), a re-run there, or a check that started after
+  // the head's verdict, answers the head's own verdict.
   // Without this guard the carried conflict reading, which stands until the next push, would
   // re-raise a conflict the head had already resolved as Fixing on every such recompute.
   const members = open.filter(

@@ -41,6 +41,12 @@ export interface PullRequestHeadSlice<T extends PrCheckRunSlice = PrCheckRunSlic
   /** The host's head as last delivered or read; null when no delivery has said. */
   headSha: string | null;
   checkRuns: readonly T[];
+  /**
+   * The head at which the host confirmed CI had decided the WHOLE check set (Bug MOTIR-10797,
+   * `GithubPullRequest.ciDecidedSha`). Optional: a reader that never selected it reads no
+   * confirmation, which is what a row without one says too.
+   */
+  ciDecidedSha?: string | null;
 }
 
 /**
@@ -156,15 +162,35 @@ export function isLateCheckAtHead(pr: PullRequestHeadSlice<CheckRunWithStart>): 
 }
 
 /**
+ * Whether the HOST confirmed that CI had decided the pull request's WHOLE check set at its
+ * current head (Bug MOTIR-10797): the marker the check-set reconcile writes when every check
+ * the host reports there has finished. A marker about another commit — the head before a push
+ * — says nothing about this one.
+ *
+ * ⚠️ WHY IT IS NEEDED BESIDE THE ROW TESTS. {@link isReRunAtHead} and {@link isLateCheckAtHead}
+ * read provider times, and a row without one is no evidence: a check run delivered while still
+ * `queued` (no `started_at`), a pending row the reconcile created for a check no delivery had
+ * reported, a row older than the column. A check that starts at a decided head with no time
+ * was read as the push's own CI, and a fix that had gone green went back onto To fix, Fixing.
+ * The marker is a fact about the head, not about any row, so it holds whatever times arrive.
+ */
+export function isCiConfirmedDecidedAtHead(pr: PullRequestHeadSlice): boolean {
+  const decided = pr.ciDecidedSha;
+  return decided != null && decided === pullRequestHead(pr);
+}
+
+/**
  * Whether CI at the pull request's head had ALREADY DECIDED before the checks running there now
- * — a re-run ({@link isReRunAtHead}) or a check that began after the head's verdict
+ * — the host confirmed the head's whole set decided ({@link isCiConfirmedDecidedAtHead}), a
+ * re-run ({@link isReRunAtHead}), or a check that began after the head's verdict
  * ({@link isLateCheckAtHead}). Such a head answers its own verdict, so nothing a push to it
- * answered (an older red build, a queue exit, a conflict) is rebuilt as Fixing (MOTIR-10791).
+ * answered (an older red build, a queue exit, a conflict) is rebuilt as Fixing (MOTIR-10791 ·
+ * MOTIR-10797). The ONE guard every arm of the rebuild goes through.
  */
 export function hasHeadDecidedBeforeRunningChecks(
   pr: PullRequestHeadSlice<CheckRunWithStart>,
 ): boolean {
-  return isReRunAtHead(pr) || isLateCheckAtHead(pr);
+  return isCiConfirmedDecidedAtHead(pr) || isReRunAtHead(pr) || isLateCheckAtHead(pr);
 }
 
 /** What CI last DECIDED on a commit before the pull request's head — see {@link lastDecidedBeforeHead}. */
