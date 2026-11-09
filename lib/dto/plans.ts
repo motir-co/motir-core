@@ -1837,7 +1837,7 @@ export interface PlanValidityDto {
    */
   valid: boolean;
   blockers: SprintBlockerDto[];
-  /** As on `WorkItemValidityDto.waits` (MOTIR-9021): the subset of `blockers` the plan does not own. */
+  /** As on `WorkItemValidityDto.waits` (MOTIR-9021 · MOTIR-10760): the subset of `blockers` on a committed, unfinished card. */
   waits?: SprintBlockerDto[];
   rejections: PlanApprovabilityRejectionDto[];
   /**

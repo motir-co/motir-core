@@ -6,6 +6,7 @@ import {
   mintCodeGraphRunCredential,
   motirAiContainerBaseUrl,
 } from '@/lib/ai/motirAiClient';
+import { INSTALL_FLEET_SHARD_ID, installFleetConfig } from '@/lib/ciFleet/installFleet';
 import {
   indexDrawKey,
   indexPauseReasonFor,
@@ -1286,7 +1287,17 @@ export const codeGraphIndexDispatchService = {
     // The account's region, too (MOTIR-9502): an AWS account refuses a spec for
     // any region but its own, and the process-wide fleet's is Fly's.
     let accountRegion: string | undefined;
-    if (admission.shardId) {
+    // The install fleet (MOTIR-10794): core's own account, its own region.
+    if (admission.installFleet) {
+      try {
+        orchestrator = await fleetShardOrchestratorService.forShard(INSTALL_FLEET_SHARD_ID);
+        accountRegion = installFleetConfig().region;
+      } catch (err) {
+        await codeGraphIndexAdmissionService.release(admission.slotRef, input.dispatchId);
+        const detail = `the install fleet could not be reached: ${detailOf(err)}`;
+        return { phase: 'terminal', outcome: { outcome: 'provision_failed', detail } };
+      }
+    } else if (admission.shardId) {
       try {
         const shard = await fleetShardService.getShard(admission.shardId);
         orchestrator = fleetShardOrchestratorService.forShardRow(shard);
@@ -1438,7 +1449,11 @@ export const codeGraphIndexDispatchService = {
         dispatchId: input.dispatchId,
         repoRef: input.repoRef,
         slotRef: admission.slotRef,
-        ...(admission.shardId ? { shardId: admission.shardId } : {}),
+        ...(admission.installFleet
+          ? { shardId: INSTALL_FLEET_SHARD_ID }
+          : admission.shardId
+            ? { shardId: admission.shardId }
+            : {}),
         // MOTIR-4945 — the MODE, recorded at the only moment it is knowable.
         //
         // ⚠️ THE SAME PREDICATE THE SPEC BRANCHED ON, deliberately, and it must

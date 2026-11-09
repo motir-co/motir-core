@@ -29,6 +29,8 @@ import { fleetQuotaRequestRepository } from '@/lib/repositories/fleetQuotaReques
 import { fleetShardRepository } from '@/lib/repositories/fleetShardRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
+import { isCloud } from '@/lib/billing/availability';
+import { installFleetTakesKind, isInstallOrganization } from '@/lib/ciFleet/installFleet';
 
 // WHICH ACCOUNT A JOB'S MACHINE BOOTS ON (Story MOTIR-8953 · MOTIR-8968) — the
 // admission order of `docs/decisions/fleet-per-org-pool.md` AMENDMENT 1:
@@ -56,6 +58,13 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 // shared floor, the set as before. The Fly switch is still read first. The owner
 // is the account row's against the job's own org id, never a caller flag, and the
 // shared set never holds an `org_owned` row (it lists `primary` and `spare` only).
+//
+// THE INSTALL FLEET (Story MOTIR-10792 · MOTIR-10794) is asked BEFORE all of the
+// above, the switch included: a job of the install's own org — the meta org on
+// cloud, any org with cloud off — of a kind `MOTIR_INSTALL_FLEET_KINDS` lists
+// runs in core's own account, with no `fleet_shard` read, no account and no
+// shared or org cap (as an org-owned account takes none). A CI runner never
+// does, and every other org's job is placed exactly as before.
 
 /** The job admission places. */
 export interface ShardPlacementJob {
@@ -68,6 +77,9 @@ export type ShardPlacement =
   | { shardId: string }
   /** The kind's switch is Fly: boot on the process-wide fleet, as today. */
   | { shardId: null }
+  /** The install fleet, in core's own account (MOTIR-10794). No account row, so
+   *  every row the job writes carries a null `fleetShardId`. */
+  | { shardId: null; installFleet: true }
   /** Every account of the kind is full, paused or excluded. `own`: the account
    *  was the org's own (MOTIR-9586), and `detail` says so. */
   | { deferred: 'shard_capacity'; detail: string; own?: true };
@@ -235,6 +247,7 @@ export const fleetShardAdmissionService = {
     tx: Prisma.TransactionClient,
     options: { exclude?: ReadonlySet<string>; switchRead?: true } = {},
   ): Promise<ShardPlacement> {
+    if (await this.installFleetTakesInTx(job, tx)) return { shardId: null, installFleet: true };
     if (!options.switchRead && !(await fleetKindOnPool(job.fleetKind))) return { shardId: null };
 
     const countInFlight = IN_FLIGHT_ON_SHARD[job.fleetKind];
@@ -315,6 +328,34 @@ export const fleetShardAdmissionService = {
     if (!(await fleetKindOnPool(job.fleetKind))) return false;
     const own = await this.ownAccountInTx(job, tx);
     return own !== null && own !== 'plan_unknown';
+  },
+
+  /**
+   * Does the INSTALL FLEET take this job (MOTIR-10794)? Its kind is listed in
+   * `MOTIR_INSTALL_FLEET_KINDS` (never `ci_runner`), and its org is the install's
+   * own: with cloud off any org — nothing is read — and on cloud the meta org,
+   * read from the job's own org row in the caller's transaction, never a flag.
+   */
+  async installFleetTakesInTx(
+    job: ShardPlacementJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (!installFleetTakesKind(job.fleetKind)) return false;
+    if (!isCloud()) return true;
+    return isInstallOrganization(await organizationRepository.findByIdInTx(job.organizationId, tx));
+  },
+
+  /**
+   * Is this job bounded by its own place rather than the shared caps — an own
+   * account (MOTIR-9589) or the install fleet (MOTIR-10794)? The same reads
+   * `chooseInTx` places by, so the exemption and the placement cannot disagree.
+   */
+  async outsideSharedCapsInTx(
+    job: ShardPlacementJob,
+    tx: Prisma.TransactionClient,
+  ): Promise<boolean> {
+    if (await this.installFleetTakesInTx(job, tx)) return true;
+    return this.ownAccountTakesInTx(job, tx);
   },
 
   /** The `shard_capacity` words for a job no account could take — its own

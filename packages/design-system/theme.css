@@ -1125,8 +1125,14 @@
      Consumed only by the [data-style='aurora'] material rules below: how strong
      each aurora ribbon tints the canvas, the faint top-sheen on a surface, the
      glow-halo strengths, and how slowly the canvas drifts. ── */
-  --aurora-wash: 22%; /* primary ribbon tint over the page canvas */
-  --aurora-wash-soft: 15%; /* the cooler secondary ribbon (green/teal band) */
+  /* Ribbon tint strengths. The binding constraint is `--el-accent-on-surface`
+     sitting straight on the canvas where two ribbons overlap: at 22% / 15% it
+     fell to 3.63:1 rendered (sienna light), and the token gate's per-stop read
+     to 3.98:1. 10% / 7% is the strongest pair that holds every hard ink >= 4.5:1
+     rendered across all palettes, both modes, the whole drift and every
+     viewport (worst 4.52:1, sienna light) — MOTIR-10709. */
+  --aurora-wash: 10%; /* primary ribbon tint over the page canvas */
+  --aurora-wash-soft: 7%; /* the cooler secondary ribbon (green/teal band) */
   --aurora-sheen: 7%; /* faint lit-from-above sheen on an opaque surface */
   --aurora-glow: 22%; /* colour-glow halo strength on a card / popover */
   --aurora-glow-strong: 30%; /* the modal's slightly deeper halo */
@@ -3819,17 +3825,17 @@
     background-image:
       radial-gradient(
         circle at 9px 9px,
-        color-mix(in srgb, var(--el-accent) 16%, transparent) 3px,
+        color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
         transparent 3.5px
       ),
       radial-gradient(
         circle at 29px 29px,
-        color-mix(in srgb, var(--el-highlight) 12%, transparent) 2px,
+        color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
         transparent 2.5px
       ),
       repeating-linear-gradient(
         45deg,
-        color-mix(in srgb, var(--el-link) 8%, transparent) 0 2px,
+        color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
         transparent 2px 18px
       );
     background-size:
@@ -4575,17 +4581,17 @@
   background-image:
     radial-gradient(
       circle at 9px 9px,
-      color-mix(in srgb, var(--el-accent) 16%, transparent) 3px,
+      color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
       transparent 3.5px
     ),
     radial-gradient(
       circle at 29px 29px,
-      color-mix(in srgb, var(--el-highlight) 12%, transparent) 2px,
+      color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
       transparent 2.5px
     ),
     repeating-linear-gradient(
       45deg,
-      color-mix(in srgb, var(--el-link) 8%, transparent) 0 2px,
+      color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
       transparent 2px 18px
     );
   background-size:

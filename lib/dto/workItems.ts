@@ -1860,10 +1860,12 @@ export interface WorkItemValidityDto {
   /** The in-subtree items gated by out-of-subtree, unsatisfied work; empty when valid. */
   blockers: SprintBlockerDto[];
   /**
-   * The subset of `blockers` the plan does NOT own (MOTIR-9021) — an edge in place
-   * before the plan, on a card still being worked. A WAIT, not a defect: the
-   * subtree is finishable once that card lands, so a planner keeps the edge and
-   * must not drop it to make the verdict pass. A SUBSET, so `valid` and `blockers`
+   * The subset of `blockers` whose blocker is a COMMITTED card (not an `add` of
+   * the plan) still being worked (MOTIR-9021 · MOTIR-10760), whoever drew the
+   * edge. A WAIT, not a defect: the subtree is finishable once that card lands,
+   * so a planner keeps the edge and must not drop it to make the verdict pass.
+   * Whether a plan-drawn edge is legal is `invalidEdges` / `crossLevelEdges`'s
+   * question, not this one's. A SUBSET, so `valid` and `blockers`
    * are byte-identical whether or not this is present. Absent when empty, and from
    * the committed verdict.
    */

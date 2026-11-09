@@ -163,6 +163,17 @@ export interface RetiredStepId {
  * the change carries no `shardId`, which resolves to the process-wide fleet —
  * where that memo's container was booted.
  *
+ * ⚠️ MOTIR-10794 KEPT `index-admit:` AND `index-admit-try:` ON PURPOSE.
+ * `IndexAdmission` gained an OPTIONAL `installFleet: true` (the index was admitted
+ * onto the install fleet, in core's own account), which WIDENS both shapes. Both
+ * steps admit, so a new id would take a second slot on a resumed run. A memo
+ * written before the change carries no `installFleet`, which the boot reads as
+ * "not the install fleet" — the account `shardId` names, or the process-wide
+ * fleet — exactly where that memo's admission placed it, since no admission
+ * before this change could choose the install fleet. The install fleet's
+ * pseudo-account id rides `index-boot:`'s and the hosted boot's existing
+ * optional `shardId: string`, whose shape did not change.
+ *
  * ⚠️ MOTIR-9424 KEPT `hostedAgentBootStepId(…)` ON PURPOSE. The supervising
  * `session.handle` gained an OPTIONAL `shardId` (the agent-runner account the run
  * booted on), which WIDENS the shape. The step provisions, so a new id would
@@ -180,7 +191,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`index-admit:${subject}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:
-      '{ admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight"; requestedAt: string }',
+      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight"; requestedAt: string }',
   },
   // MOTIR-10600 — ONE admission ask, memoized on its own so the wait between two
   // asks can be a defer. Its result is the admission verdict plus the instant it
@@ -188,7 +199,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`index-admit-try:${subject}:${attempt}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:
-      '{ admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; askedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted" } | { admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; askedAt: string; outcome: "already_held" } | { askedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" }',
+      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted" } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; outcome: "already_held" } | { askedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" }',
   },
   '`index-boot:${subject}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',

@@ -211,17 +211,17 @@ gallery shows many vignettes at once).
     background-image:
       radial-gradient(
         circle at 9px 9px,
-        color-mix(in srgb, var(--el-accent) 16%, transparent) 3px,
+        color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
         transparent 3.5px
       ),
       radial-gradient(
         circle at 29px 29px,
-        color-mix(in srgb, var(--el-highlight) 12%, transparent) 2px,
+        color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
         transparent 2.5px
       ),
       repeating-linear-gradient(
         45deg,
-        color-mix(in srgb, var(--el-link) 8%, transparent) 0 2px,
+        color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
         transparent 2px 18px
       );
     background-size:
@@ -240,17 +240,17 @@ gallery shows many vignettes at once).
   background-image:
     radial-gradient(
       circle at 9px 9px,
-      color-mix(in srgb, var(--el-accent) 16%, transparent) 3px,
+      color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
       transparent 3.5px
     ),
     radial-gradient(
       circle at 29px 29px,
-      color-mix(in srgb, var(--el-highlight) 12%, transparent) 2px,
+      color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
       transparent 2.5px
     ),
     repeating-linear-gradient(
       45deg,
-      color-mix(in srgb, var(--el-link) 8%, transparent) 0 2px,
+      color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
       transparent 2px 18px
     );
   background-size:
@@ -263,8 +263,14 @@ gallery shows many vignettes at once).
 **Tile geometry.** A 40px square tile with one 3px dot at (9, 9) in the accent
 and one 2px dot at (29, 29) in the highlight — a staggered lattice, the
 _Bacterio_ dot rhythm — over an 18px diagonal hatch at 45° in the link hue.
-**Peak alphas 16% / 12% / 8%**, mixed toward `transparent`; nothing is layered
-above that. Nothing animates.
+**Peak alphas 11% / 9% / 5%**, mixed toward `transparent`; nothing is layered
+above that. Nothing animates. The first cut shipped 16% / 12% / 8%, which cleared
+AA with each layer measured alone, but where a dot lands on a hatch line the pixel
+takes both tints: `--el-accent-on-surface` fell to 4.08:1 (motir light) and
+`--el-text-secondary` to 4.36:1, in six light palettes (MOTIR-10745). At
+11 / 9 / 5 the worst overlap pixel in every palette and theme is 4.60:1 (sienna
+light, `--el-accent-on-surface`), which keeps a margin over the ~2% that
+Chromium's gradient dither takes off single pixels.
 
 ## The hero AI control
 
@@ -311,32 +317,32 @@ overwrite the orb's recipe.
 
 ## States
 
-| state                                                     | treatment                                                                                                                                                                               |
-| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Canvas, light, any palette                                | three layers from `color-mix()` over the palette's `--el-accent`, `--el-highlight` and `--el-link` at 16 / 12 / 8%: a 40px staggered dot lattice and an 18px hatch, at texture strength |
-| Canvas, dark                                              | the same layers over the dark theme's element values; nothing re-declared, the pattern inverts with the palette                                                                         |
-| Palette swapped                                           | the pattern re-tints; no geometry moves                                                                                                                                                 |
-| Signed-in routes                                          | `[data-app-shell]` is in the same canvas rule as `body`                                                                                                                                 |
-| Anonymous routes (auth, the public site, the tokens page) | `body` carries the pattern from that one rule                                                                                                                                           |
-| No type pinned / a pinned type                            | `rounded` re-types the UI / the pinned pairing wins; geometry unchanged either way                                                                                                      |
-| Card and popover, rest                                    | 2px ink outline, a 5px ink offset block plus a 3px accent block, corners alternating 6px / 22px                                                                                         |
-| Card and popover, hover                                   | swells to 1.01; the offset blocks do not move                                                                                                                                           |
-| Focus-visible                                             | a 3px ring at a 2px offset in the palette's focus colour, outside the 2px outline                                                                                                       |
-| Pressed                                                   | 0.97 scale, shadows unchanged (buttons have no surface hook)                                                                                                                            |
-| Disabled                                                  | outline and offset at a muted alpha; accent block dropped                                                                                                                               |
-| Input, empty / filled                                     | 2px outline at the 2px radius, sharper than the 10px button beside it; fill stays the palette's surface                                                                                 |
-| Input, focused                                            | the 3px ring, clear of the outline                                                                                                                                                      |
-| Input, invalid                                            | the palette's danger edge at 2px, the field's message carrying the error                                                                                                                |
-| Input, disabled                                           | muted outline, no accent block, no ring                                                                                                                                                 |
-| Modal open                                                | 2px outline, the 22px / 6px alternation, the 9px ink block plus a 4px accent block; the overlay as the primitives draw it                                                               |
-| Sidebar rail                                              | flush at 0px inset, its right edge widened to 2px in the rail colour, a 40px control in a 60px track                                                                                    |
-| Empty state                                               | an ordinary card: outline plus both blocks                                                                                                                                              |
-| Loading skeleton                                          | skeleton shapes on the palette surface inside an outlined card; no shimmer added                                                                                                        |
-| Error surface                                             | the palette's danger hue on the outline, both blocks kept                                                                                                                               |
-| Hero pill                                                 | its accent-dominant fill and a 5px ink block; the shared focus ring; no added animation                                                                                                 |
-| Floating orb                                              | its lit-sphere fill and a 4px ink block, separate from the pill's rule                                                                                                                  |
-| Reduced motion                                            | nothing to gate: the canvas is static and the style declares no animation                                                                                                               |
-| Unregistered style id                                     | resolves to `warm-editorial` through `resolveStyle`                                                                                                                                     |
+| state                                                     | treatment                                                                                                                                                                              |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Canvas, light, any palette                                | three layers from `color-mix()` over the palette's `--el-accent`, `--el-highlight` and `--el-link` at 11 / 9 / 5%: a 40px staggered dot lattice and an 18px hatch, at texture strength |
+| Canvas, dark                                              | the same layers over the dark theme's element values; nothing re-declared, the pattern inverts with the palette                                                                        |
+| Palette swapped                                           | the pattern re-tints; no geometry moves                                                                                                                                                |
+| Signed-in routes                                          | `[data-app-shell]` is in the same canvas rule as `body`                                                                                                                                |
+| Anonymous routes (auth, the public site, the tokens page) | `body` carries the pattern from that one rule                                                                                                                                          |
+| No type pinned / a pinned type                            | `rounded` re-types the UI / the pinned pairing wins; geometry unchanged either way                                                                                                     |
+| Card and popover, rest                                    | 2px ink outline, a 5px ink offset block plus a 3px accent block, corners alternating 6px / 22px                                                                                        |
+| Card and popover, hover                                   | swells to 1.01; the offset blocks do not move                                                                                                                                          |
+| Focus-visible                                             | a 3px ring at a 2px offset in the palette's focus colour, outside the 2px outline                                                                                                      |
+| Pressed                                                   | 0.97 scale, shadows unchanged (buttons have no surface hook)                                                                                                                           |
+| Disabled                                                  | outline and offset at a muted alpha; accent block dropped                                                                                                                              |
+| Input, empty / filled                                     | 2px outline at the 2px radius, sharper than the 10px button beside it; fill stays the palette's surface                                                                                |
+| Input, focused                                            | the 3px ring, clear of the outline                                                                                                                                                     |
+| Input, invalid                                            | the palette's danger edge at 2px, the field's message carrying the error                                                                                                               |
+| Input, disabled                                           | muted outline, no accent block, no ring                                                                                                                                                |
+| Modal open                                                | 2px outline, the 22px / 6px alternation, the 9px ink block plus a 4px accent block; the overlay as the primitives draw it                                                              |
+| Sidebar rail                                              | flush at 0px inset, its right edge widened to 2px in the rail colour, a 40px control in a 60px track                                                                                   |
+| Empty state                                               | an ordinary card: outline plus both blocks                                                                                                                                             |
+| Loading skeleton                                          | skeleton shapes on the palette surface inside an outlined card; no shimmer added                                                                                                       |
+| Error surface                                             | the palette's danger hue on the outline, both blocks kept                                                                                                                              |
+| Hero pill                                                 | its accent-dominant fill and a 5px ink block; the shared focus ring; no added animation                                                                                                |
+| Floating orb                                              | its lit-sphere fill and a 4px ink block, separate from the pill's rule                                                                                                                 |
+| Reduced motion                                            | nothing to gate: the canvas is static and the style declares no animation                                                                                                              |
+| Unregistered style id                                     | resolves to `warm-editorial` through `resolveStyle`                                                                                                                                    |
 
 **Observed in the mock:** the ink offset block is near-black neutral ink, as the
 card's token values fix it, so on a dark page it nearly disappears and the accent
@@ -346,8 +352,10 @@ to judge against the render.
 
 ## Accessibility contract
 
-- **Pattern alphas** — 16% accent, 12% highlight, 8% link over the page
-  background. These are ceilings, and the contrast matrix measures against them.
+- **Pattern alphas** — 11% accent, 9% highlight, 5% link over the page
+  background. These are ceilings, and the contrast matrix measures the painted
+  canvas against them, overlaps included: a dot over a hatch line is the worst
+  pixel, not either layer alone.
 - **Text never sits on the pattern.** Every text-bearing surface is an opaque
   palette panel; the style declares no fill and no text colour, so the palette's
   AA pairings are inherited.
