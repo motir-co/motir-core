@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { planReferenceIds, planTargetKeyResolver, presentPlan } from '@/lib/api/v1/workLoop/schema';
+import { readPlanJobCost } from '@/lib/services/planJobCostService';
 import { planReviewService } from '@/lib/services/planReviewService';
 import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -40,6 +41,9 @@ export const GET = withV1Route<{ planId: string }>(
     );
     // …and the FOLDERS its proposals name (MOTIR-5415), in one batched read.
     const folders = await planReviewService.resolveProposalFolders(plan, ctx.service);
-    return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs), folders));
+    // …and what its motir-ai job cost (MOTIR-10815): absent for a plan no job
+    // produced, every figure `null` when motir-ai could not answer. Never fails the read.
+    const cost = await readPlanJobCost(plan);
+    return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs), folders, cost));
   },
 );

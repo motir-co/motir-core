@@ -7,6 +7,7 @@ import {
   planSchema,
   planSessionSchema,
   presentDispatchPrompt,
+  presentPlanJobCost,
   presentPlanJobHandle,
   presentPlanOutcome,
   presentPlanSession,
@@ -24,6 +25,7 @@ import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { WorkItemContinueClaimDto } from '@/lib/dto/workItemContinue';
 import type { WorkItemRepairClaimDto } from '@/lib/dto/workItemRepair';
 import type { PlanOutcomeDto, PlanWithItemsAndWarningsDto } from '@/lib/dto/plans';
+import type { PlanJobCostDto } from '@/lib/dto/planJobCost';
 import { redactNativeActor } from '@/lib/plans/redactNativeModel';
 import { definePayload } from './define';
 import { parsedSectionsSchema } from './parsedSectionsSchema';
@@ -182,6 +184,11 @@ export const planOutcomePayload = definePayload({
  * a field that lies. Neither is a change this card's boundary permits, so the
  * proposal rows stay MCP's own and the divergence is DECLARED here rather than
  * discovered later.
+ *
+ * `cost` (MOTIR-10815) is INHERITED from `planSchema`, never re-declared here:
+ * `get_plan` carries it for a plan a motir-ai job produced, rendered by v1's
+ * `presentPlanJobCost`; it is absent on a plan with no `sourceJobId` and on every
+ * write door's answer.
  */
 /**
  * One `modify` approve will send back from built work (MOTIR-10106) — the shape
@@ -346,6 +353,7 @@ export type McpPlan = z.infer<typeof mcpPlanSchema>;
 export function presentMcpPlan(
   plan: PlanWithItemsAndWarningsDto,
   folders?: ReadonlyMap<string, { folderId: string; folderPath: string[] | null }>,
+  cost?: PlanJobCostDto,
 ): McpPlan {
   return {
     id: plan.id,
@@ -384,6 +392,9 @@ export function presentMcpPlan(
     ...(plan.rescopeWarnings && plan.rescopeWarnings.length > 0
       ? { rescopeWarnings: plan.rescopeWarnings }
       : {}),
+    // `get_plan` only (MOTIR-10815), through v1's own presenter; the write doors
+    // pass none, so their answers carry no `cost` key.
+    ...(cost ? { cost: presentPlanJobCost(cost) } : {}),
   };
 }
 

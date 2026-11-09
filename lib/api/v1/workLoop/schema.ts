@@ -29,6 +29,7 @@ import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import type { DispatchRunCloseOutPromptDto } from '@/lib/dto/dispatchRuns';
 import type { CurrentTestInstructionsDTO } from '@/lib/dto/testInstructions';
 import type { PlanItemProposedFields, PlanOutcomeDto, PlanWithItemsDto } from '@/lib/dto/plans';
+import type { PlanJobCostDto } from '@/lib/dto/planJobCost';
 
 // The v1 WORK-LOOP resources, declared once (Story 11.7 · Subtask 11.7.3 —
 // MOTIR-2237). The paths, verbs, scopes and response shapes are pinned by ADR
@@ -1318,6 +1319,48 @@ export const planProposalSchema = z.object({
   blockedByRefs: z.array(z.string()),
 });
 
+/**
+ * What the plan's motir-ai job cost (MOTIR-10815) — motir-ai's figures, each a
+ * number or `null`.
+ *
+ * ⚠️ `null` IS "UNKNOWN", NEVER "FREE". A figure is `null` when motir-ai said it
+ * cannot be known (its ledger is incomplete, or a session was unpriced), and the
+ * whole block is `null`s when the cost could not be read at all. A kind reads `0`
+ * only because motir-ai answered `0`. `totalCostMicroUsd` is motir-ai's own
+ * total, never a sum of the kinds.
+ */
+export const planJobCostSchema = z.object({
+  ledgerComplete: z.boolean().nullable(),
+  totalCostMicroUsd: z.number().nullable(),
+  credits: z.number().nullable(),
+  bySessionKind: z.object({
+    conversation: z.number().nullable(),
+    lay: z.number().nullable(),
+    author: z.number().nullable(),
+    entry_author: z.number().nullable(),
+    tool: z.number().nullable(),
+  }),
+});
+
+export type V1PlanJobCost = z.infer<typeof planJobCostSchema>;
+
+/** The cost block — the ONE presenter `presentPlan` and `presentMcpPlan` share. */
+export function presentPlanJobCost(cost: PlanJobCostDto): V1PlanJobCost {
+  const k = cost.bySessionKind;
+  return {
+    ledgerComplete: cost.ledgerComplete,
+    totalCostMicroUsd: cost.totalCostMicroUsd,
+    credits: cost.credits,
+    bySessionKind: {
+      conversation: k.conversation,
+      lay: k.lay,
+      author: k.author,
+      entry_author: k.entry_author,
+      tool: k.tool,
+    },
+  };
+}
+
 /** A plan WITH the proposals it bundles. */
 export const planSchema = z.object({
   id: z.string(),
@@ -1331,6 +1374,12 @@ export const planSchema = z.object({
   plannedAt: z.string().nullable(),
   decidedAt: z.string().nullable(),
   proposals: z.array(planProposalSchema),
+  /**
+   * What the plan's job cost (MOTIR-10815) — on `GET /api/v1/plans/{planId}`
+   * only, for a plan a motir-ai job produced. ABSENT for a plan with no
+   * `sourceJobId`, and on every other answer that carries a plan.
+   */
+  cost: planJobCostSchema.optional(),
 });
 
 /**
@@ -1712,6 +1761,7 @@ export function presentPlan(
     string,
     { folderId: string; folderPath: string[] | null }
   > = new Map(),
+  cost?: PlanJobCostDto,
 ): V1Plan {
   return {
     id: plan.id,
@@ -1740,6 +1790,8 @@ export function presentPlan(
       folderPath: foldersByPlanItemId.get(item.id)?.folderPath ?? null,
       blockedByRefs: item.blockedByRefs,
     })),
+    // Only when the caller read it: absent, not a block of nulls, otherwise.
+    ...(cost ? { cost: presentPlanJobCost(cost) } : {}),
   };
 }
 

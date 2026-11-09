@@ -486,6 +486,52 @@ export async function cancelJob(
   return { jobId: body.jobId, status: body.status };
 }
 
+/**
+ * The body of motir-ai's `GET /v1/jobs/:id/cost` (MOTIR-10814, motir-ai
+ * `docs/contract.md` §2.4), as it arrived. Every member is `unknown` on purpose:
+ * the figures are judged one by one by `planJobCostService`, which keeps an
+ * absent or non-numeric figure `null` — never `0`.
+ */
+export interface RawJobCost {
+  jobId: unknown;
+  ledgerComplete: unknown;
+  totalCostMicroUsd: unknown;
+  credits: unknown;
+  bySessionKind: unknown;
+}
+
+/**
+ * GET /v1/jobs/:id/cost — what one plan job cost, whole and by session kind
+ * (MOTIR-10815), scoped by the same project id as {@link getJob}.
+ *
+ * ⚠️ A 404 IS AN ERROR HERE, NOT A VALUE. motir-ai answers the same `not_found`
+ * for a job it never saw and for another project's job, and either read as zeros
+ * would be a plan that cost nothing. So every non-2xx throws its typed error, a
+ * body that is not an object throws {@link MotirAiUnavailableError}, and the
+ * figures are handed back exactly as they arrived — nothing defaulted.
+ */
+export async function getJobCost(jobId: string, coreProjectId: string): Promise<RawJobCost> {
+  const { url, serviceToken } = config();
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
+  const res = await aiFetch(
+    `${url}/v1/jobs/${encodeURIComponent(jobId)}/cost?${params.toString()}`,
+    { headers: authHeaders(serviceToken) },
+  );
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body = (await res.json()) as unknown;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    throw new MotirAiUnavailableError('job cost answered with no body');
+  }
+  const b = body as Record<string, unknown>;
+  return {
+    jobId: b['jobId'],
+    ledgerComplete: b['ledgerComplete'],
+    totalCostMicroUsd: b['totalCostMicroUsd'],
+    credits: b['credits'],
+    bySessionKind: b['bySessionKind'],
+  };
+}
+
 // GET /v1/usage — the org cost rollup for the cost dashboard (Subtask 7.2.11),
 // at a drill level (org / workspace / project). Read-through: the caller is the
 // aiUsageService, which has already gated the actor and narrowed the scope. A
