@@ -84,6 +84,9 @@ function row(over: Partial<ProjectRepoWithRealized> = {}): ProjectRepoWithRealiz
       indexRefusedSizeBytes: null,
       indexRefusedCapBytes: null,
       indexRefusedAt: null,
+      // MOTIR-10819's automatic retry ledger — part of the shape, irrelevant here.
+      indexRetryAttempts: 0,
+      indexRetryDispatchedAt: null,
       id: 'gr-1',
       provider: 'github',
       workspaceId: 'ws-1',

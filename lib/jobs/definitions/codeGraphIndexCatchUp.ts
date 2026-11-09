@@ -5,6 +5,10 @@ import { defineJob } from '../defineJob';
  * index allowance for repositories MOTIR-4593 paused, and resumes indexing where
  * it may. See `codeGraphIndexCatchUpService` for why this is a pull.
  *
+ * It also RE-DISPATCHES, bounded, the repositories whose claimed index or refresh
+ * run ended terminal for a reason other than size (MOTIR-10819), as a second step
+ * on the same tick so the two passes memoize — and fail — independently.
+ *
  * Every 5 minutes — the one sub-hourly cadence (`SUB_HOURLY_CADENCE`,
  * `lib/jobs/schedules.ts`). Five minutes is the latency between a top-up and the
  * index resuming.
@@ -22,9 +26,15 @@ export const codeGraphIndexCatchUp = defineJob(
     // enqueues what the refresh job's debounce coalesces.
     retryPolicy: 'idempotent',
   },
-  (ctx, services) => {
-    return ctx.step.run('catch-up-paused-indexes-v2', () =>
+  async (ctx, services) => {
+    const paused = await ctx.step.run('catch-up-paused-indexes-v2', () =>
       services.codeGraphIndexCatchUp.catchUp(),
     );
+    // Each repository's re-dispatch is claimed by a conditional release, so a
+    // retried pass re-reads live state and never enqueues one twice.
+    const retried = await ctx.step.run('retry-failed-indexes', () =>
+      services.codeGraphIndexCatchUp.retryFailed(),
+    );
+    return { paused, retried };
   },
 );

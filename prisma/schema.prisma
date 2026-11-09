@@ -8602,6 +8602,20 @@ model GithubRepo {
   /// When the refusal above was recorded.
   indexRefusedAt        DateTime? @map("index_refused_at")
 
+  /// THE AUTOMATIC RETRY LEDGER (MOTIR-10819). How many times the catch-up sweep
+  /// re-dispatched this repository's index or refresh after its claimed run ended
+  /// terminal (`failed` / `abandoned`) for a reason other than size, and when it
+  /// last did. Reset by `markIndexSettled` when a run actually indexes.
+  ///
+  /// ⚠️ THE COUNT IS WHAT BOUNDS THE RETRY. A repository that fails
+  /// deterministically would otherwise be re-dispatched on every tick; once the
+  /// count reaches `INDEX_RETRY_MAX_ATTEMPTS` the sweep leaves it alone and
+  /// `refreshFailing` (MOTIR-2105) is the human signal from then on.
+  indexRetryAttempts     Int       @default(0) @map("index_retry_attempts")
+  /// When the sweep last released a dead claim and re-enqueued. Read only while
+  /// `indexingRunId` is null: a re-dispatch no run ever claimed is a lost enqueue.
+  indexRetryDispatchedAt DateTime? @map("index_retry_dispatched_at")
+
   /// THE DRIFT COUNT — how many commits the default branch is ahead of the graph
   /// (MOTIR-4644), and the exact PAIR it was computed for.
   ///
