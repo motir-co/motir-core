@@ -337,7 +337,8 @@ export const agentInstanceSweepService = {
       //     so one rule, in one place, raises one alert for every machine Fly runs.
       //     The process-wide apps only: a fleet account's inventory is the
       //     reconciler's (MOTIR-9476).
-      // The install fleet's disks are not the process-wide lane's (MOTIR-10794).
+      // The install fleet's disks are not the process-wide lane's (MOTIR-10794):
+      // the reconciler's install-fleet disk pass judges them (MOTIR-10828).
       const apps = laneConfigured
         ? (await withSystemContext((tx) => agentInstanceRepository.listDistinctApps(tx))).filter(
             (app) => app !== INSTALL_FLEET_TAG,

@@ -321,9 +321,10 @@ function accountInventories(accounts: readonly FleetShardDTO[]): AccountInventor
  * THE INSTALL FLEET'S LISTING (MOTIR-10794) — core's own account, scoped to the
  * install fleet's tag, walked like an account with no owner. Its machines settle
  * through the install fleet (the pseudo-account id), and an agent instance there
- * is matched by its app, the fleet's tag. Its disks are not swept: no hoster
- * account row names them. Null when no kind is listed; an unbuildable listing
- * is alerted and skipped.
+ * is matched by its app, the fleet's tag. Its disks are swept after its
+ * machines, as a hoster account's are (MOTIR-10828), against the install
+ * fleet's own instance records ({@link diskOwnerLookup}). Null when no kind is
+ * listed; an unbuildable listing is alerted and skipped.
  */
 function installFleetAccountInventory(): AccountInventory | null {
   try {
@@ -335,6 +336,33 @@ function installFleetAccountInventory(): AccountInventory | null {
     alertFleetAttribution(new FleetInventoryUnavailableError(INSTALL_FLEET_TAG, detailOf(err)));
     return null;
   }
+}
+
+/** Reads the NON-DELETED instance record that names a disk as its home. */
+type DiskOwnerLookup = (volumeId: string) => Promise<{ id: string } | null>;
+
+/**
+ * Whose instance records judge this listing's disks — or null when its disks are
+ * not judged here. A hoster account's are judged by that account's row
+ * (MOTIR-9476). The install fleet's are judged by its own records — app = the
+ * fleet's tag, no account row (MOTIR-10794) — because a provision that gives its
+ * machine back leaves the home disk (`DeleteOnTermination: false`) and nothing
+ * else ever deletes it there (MOTIR-10828).
+ */
+function diskOwnerLookup(account: AccountInventory): DiskOwnerLookup | null {
+  if (account.fleetKind === AGENT_INSTANCE) {
+    return (volumeId) =>
+      withSystemContext((tx) =>
+        agentInstanceRepository.findByVolumeInShard(account.shardId, volumeId, tx),
+      );
+  }
+  if (account.shardId === INSTALL_FLEET_SHARD_ID) {
+    return (volumeId) =>
+      withSystemContext((tx) =>
+        agentInstanceRepository.findByVolumeInUnshardedApp(INSTALL_FLEET_TAG, volumeId, tx),
+      );
+  }
+  return null;
 }
 
 function detailOf(err: unknown): string {
@@ -539,11 +567,12 @@ export const fleetAttributionService = {
       result.apps += accountApps.length;
       result.accounts += 1;
       const hoster = account.fleetKind === AGENT_INSTANCE ? account.shardId : undefined;
+      const diskOwner = diskOwnerLookup(account);
       // The disks are LISTED before the machines are judged and JUDGED after: a
       // disk attached when the pass began is never taken in that pass, so the
       // home disk this pass's own machine kill detaches waits for the next one,
       // under the grace, rather than being raced (MOTIR-9476).
-      const disks = hoster
+      const disks = diskOwner
         ? await this.listHosterVolumes(account, accountApps, retryDelayMs, result)
         : [];
       await walk(
@@ -553,16 +582,17 @@ export const fleetAttributionService = {
         hoster,
         account.ownerOrganizationId,
       );
-      if (hoster) await this.sweepHosterVolumes(account, disks, hoster, now, result);
+      if (diskOwner) await this.sweepHosterVolumes(account, disks, diskOwner, now, result);
     }
     result.orphanedVolumesDestroyed += await sweepOrphanedVolumes(now, accounts);
     return result;
   },
 
   /**
-   * THE HOSTER DISK PASS (MOTIR-9476) — one agent-hoster account's EBS volumes.
+   * THE HOSTER DISK PASS (MOTIR-9476) — one agent-hoster account's EBS volumes,
+   * or the install fleet's (MOTIR-10828), each judged by its own records.
    * A disk is deleted only when it is unattached (`available`), past the grace,
-   * and no NON-deleted instance of this account names it as its home: that is
+   * and no NON-deleted instance of this listing names it as its home: that is
    * the disk a machine destroy detached (`DeleteOnTermination: false`) or a
    * failed teardown left. A disk with no creation instant is alerted and left; a
    * failed listing or record read deletes nothing. Recorded first, then deleted,
@@ -595,7 +625,7 @@ export const fleetAttributionService = {
   async sweepHosterVolumes(
     account: AccountInventory,
     disks: ReadonlyArray<{ app: string; volume: InventoryVolume }>,
-    fleetShardId: string,
+    findOwner: DiskOwnerLookup,
     now: () => Date,
     result: { orphanedVolumesDestroyed: number; undated: number; failures: number },
   ): Promise<void> {
@@ -617,9 +647,7 @@ export const fleetAttributionService = {
       if (ageMs < FLEET_ATTRIBUTION_GRACE_MS) continue;
       let owner;
       try {
-        owner = await withSystemContext((tx) =>
-          agentInstanceRepository.findByVolumeInShard(fleetShardId, volume.volumeId, tx),
-        );
+        owner = await findOwner(volume.volumeId);
       } catch (err) {
         result.failures += 1;
         console.error('[fleetAttribution] could not judge a volume — left in place', {
