@@ -162,12 +162,35 @@ export const areaDirectories = (globs: unknown, shape: 'include' | 'exclude'): s
 };
 
 /**
- * The AREA projects — each carved out of `tsconfig.tests.json` by directory when
- * that program reached the heap line, each referencing it and referenced by
- * nothing but the solution: the platform suites (MOTIR-8353) and the product
- * server suites (MOTIR-10796).
+ * The AREA projects — every composite project that REFERENCES the tests project
+ * and names whole `tests/<dir>` directories in its `include`: each one was carved
+ * out of `tsconfig.tests.json` by directory, and each is referenced by nothing
+ * but the solution. DISCOVERED, not listed, for the reason `ROOT_TSCONFIGS` is
+ * (MOTIR-4363): a hand-written list exempts the next area project from the
+ * overlap and back-reference checks, which is the hole those checks close.
+ * Exported so the mutation case can drive it.
  */
-const AREA_PROJECTS = ['tsconfig.tests-platform.json', 'tsconfig.tests-product.json'] as const;
+export const areaProjectsOf = (configs: Map<string, Record<string, unknown>>): string[] =>
+  [...configs]
+    .filter(([, config]) => {
+      const options = (config.compilerOptions ?? {}) as { composite?: boolean };
+      const refs = ((config.references ?? []) as { path?: string }[]).map((r) => r.path);
+      return (
+        options.composite === true &&
+        refs.includes('./tsconfig.tests.json') &&
+        areaDirectories(config.include, 'include').length > 0
+      );
+    })
+    .map(([name]) => name)
+    .sort();
+
+/**
+ * The area projects discovery must find — the FLOOR, not the population: the
+ * platform suites (MOTIR-8353) and the product server suites (MOTIR-10796). A
+ * glob shape `areaDirectories` stops recognising would otherwise empty the set
+ * and pass every check over nothing.
+ */
+const AREA_PROJECT_FLOOR = ['tsconfig.tests-platform.json', 'tsconfig.tests-product.json'];
 
 /**
  * Directories the two lists disagree on — empty when they agree. `elsewhere` is
@@ -292,8 +315,10 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
     // at all, silently and greenly. Moving an area between projects is meant to
     // be a two-line change, so the two lines are held to each other.
     const excluded = areaDirectories(configs.get('tsconfig.tests.json')!.exclude, 'exclude');
+    const areaProjects = areaProjectsOf(configs);
+    expect(areaProjects).toEqual(expect.arrayContaining(AREA_PROJECT_FLOOR));
     const areas: Record<string, string[]> = {};
-    for (const project of AREA_PROJECTS) {
+    for (const project of areaProjects) {
       const dirs = areaDirectories(configs.get(project)!.include, 'include');
       const elsewhere = [...configs]
         .filter(([name]) => name !== project)
@@ -305,7 +330,7 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
     expect(areaOverlap(areas)).toEqual([]);
     // The arrow runs one way: an area project imports the shared helpers
     // through a reference, and nothing but the solution references it back.
-    for (const project of AREA_PROJECTS) {
+    for (const project of areaProjects) {
       const refs = (configs.get(project)!.references ?? []) as { path?: string }[];
       expect(refs.map((r) => r.path)).toContain('./tsconfig.tests.json');
       for (const [name, config] of configs) {
@@ -315,6 +340,29 @@ describe('the type-check is a solution of project references (MOTIR-4293)', () =
         }
       }
     }
+  });
+
+  it('DISCOVERS an area project nobody listed, so a third one cannot escape the checks', () => {
+    const area = (include: string[], references: string[]) => ({
+      compilerOptions: { composite: true },
+      include,
+      references: references.map((path) => ({ path })),
+    });
+    expect(
+      areaProjectsOf(
+        new Map<string, Record<string, unknown>>([
+          ['tsconfig.tests-new.json', area(['tests/api/**/*.ts'], ['./tsconfig.tests.json'])],
+          // References the tests project but names no whole directory (the
+          // integration project's shape): not an area project.
+          [
+            'tsconfig.int.json',
+            area(['tests/integration/**/*.test.ts'], ['./tsconfig.tests.json']),
+          ],
+          // Names a directory but does not build on the tests project.
+          ['tsconfig.other.json', area(['tests/api/**/*.ts'], ['./tsconfig.app.json'])],
+        ]),
+      ),
+    ).toEqual(['tsconfig.tests-new.json']);
   });
 
   it('BITES on a directory two area projects both include', () => {
