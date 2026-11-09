@@ -1,6 +1,8 @@
 import type { PlanReviewItemDto } from '@/lib/dto/planReview';
 import type { PlanProgressStep } from '@/lib/plans/planProgress';
 import { stepLevel } from '@/lib/planning/livePane';
+import { levelTrail } from '@/lib/planning/planArrival';
+import { proposalLevelKey } from '@/lib/planning/planShape';
 import type { CanvasCrumb } from '@/lib/planning/projectCanvasModel';
 import type { FollowRequest } from '@/lib/planning/surfaceFollow';
 
@@ -30,6 +32,14 @@ export interface DrivenStep {
   levelId: string | null;
   /** The breadcrumb down to that level; `[]` is the top level. */
   trail: CanvasCrumb[];
+  /**
+   * `true` when this is not a planner step but a press's fallback destination
+   * (the last proposal, the target, the root — {@link followDestination}). The
+   * host holds it like a step, but it is never the "step held last": a later
+   * press re-derives it, so a root held before the target resolved, or before the
+   * first proposal landed, does not shadow those rungs.
+   */
+  synthetic?: true;
 }
 
 type LiveStep = Pick<
@@ -100,5 +110,111 @@ export function drivenFollowRequest(
   return {
     key: `drive:${epoch}:${driven.id}:${driven.levelId ?? 'root'}`,
     trail: driven.trail,
+  };
+}
+
+// ── WHERE A PRESS OF *FOLLOW THE PLANNER* GOES (MOTIR-10740) ────────────────
+//
+// `nextDrivenStep` answers only while a step is LIVE. Between steps, while the
+// plan is stalled, before its first step lands, and on a reopen (`held` starts
+// `null` on every mount), it answers nothing — and a press that asked the canvas
+// for nothing changed nothing. A press must always take the person somewhere,
+// so the destination falls back, in order:
+//
+//   1. `live`     — a live step that resolves to a level (`nextDrivenStep`);
+//   2. `held`     — the last planner step this mount drove (never a held
+//                   fallback destination: those are `synthetic`, re-derived);
+//   3. `snapshot` — the most recently STARTED step the snapshot still reports
+//                   (live or not) whose level resolves (`stepLevel`);
+//   4. `proposal` — the LAST `add` in `items`, which arrive in append order
+//                   (`planItemRepository.findByPlan`: createdAt, id): the level it
+//                   sits on. This covers a reopened plan whose finished steps the
+//                   snapshot no longer reports, without a server field;
+//   5. `target`   — the target's arrival trail (the caller resolves it: the trail
+//                   the pane arrived on, the follow-move's, or the first target's
+//                   `surfaceArrivalTrail`);
+//   6. `root`     — `[]`, the project's top level.
+//
+// The answer is a `DrivenStep`, so the host HOLDS it like any driven step: the
+// next step that goes live is not found under its id and takes over
+// (`nextDrivenStep`'s hand-over), which is what keeps following on after a press.
+
+/** Which rung of the fallback a destination came from. */
+export type FollowDestinationSource = 'live' | 'held' | 'snapshot' | 'proposal' | 'target' | 'root';
+
+export interface FollowDestination extends DrivenStep {
+  source: FollowDestinationSource;
+}
+
+export interface FollowDestinationInput {
+  /** The step the host holds (`drive.held`), `null` when nothing was driven yet. */
+  held: DrivenStep | null;
+  /** `readPlanProgress(...).liveSteps` — empty when stalled or between steps. */
+  liveSteps: readonly LiveStep[];
+  /** `PlanProgressSnapshot.steps` — every step the snapshot reports. */
+  snapshotSteps: readonly LiveStep[];
+  /** The live review's items, in append order. */
+  items: readonly PlanReviewItemDto[];
+  /** The target's arrival trail, or `null` when there is no target (or it is
+   *  not resolved). `[]` is a real answer: a target that arrives at the root. */
+  targetTrail: readonly CanvasCrumb[] | null;
+  proposedWord: string;
+}
+
+/**
+ * The level a press of *Follow the planner* moves the canvas to. Never `null`:
+ * the last rung is the project root. See the section comment for the order.
+ */
+export function followDestination({
+  held,
+  liveSteps,
+  snapshotSteps,
+  items,
+  targetTrail,
+  proposedWord,
+}: FollowDestinationInput): FollowDestination {
+  const live = nextDrivenStep(held, liveSteps, items, proposedWord);
+  if (live) return { ...live, source: 'live' };
+  if (held && !held.synthetic) return { ...held, source: 'held' };
+
+  // Latest `startedAt` first; on a tie the snapshot's own order (ties by
+  // `sessionKey`) decides, read from its end. `sort` is stable.
+  const latestFirst = snapshotSteps
+    .map((step, index) => ({ step, index, at: Date.parse(step.startedAt) }))
+    .sort((a, b) => b.at - a.at || b.index - a.index);
+  for (const { step } of latestFirst) {
+    const level = stepLevel(items, step, proposedWord);
+    if (level) return { id: drivenStepId(step), ...level, source: 'snapshot' };
+  }
+
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const item = items[i]!;
+    if (item.op !== 'add') continue;
+    const levelId = proposalLevelKey(item);
+    return {
+      id: JSON.stringify(['proposal', item.planItemId]),
+      levelId,
+      trail: levelTrail(items, levelId, proposedWord),
+      synthetic: true,
+      source: 'proposal',
+    };
+  }
+
+  if (targetTrail !== null && targetTrail.length > 0) {
+    const levelId = targetTrail[targetTrail.length - 1]!.id;
+    return {
+      id: JSON.stringify(['target', levelId]),
+      levelId,
+      trail: [...targetTrail],
+      synthetic: true,
+      source: 'target',
+    };
+  }
+  return {
+    id: JSON.stringify(['root']),
+    levelId: null,
+    trail: [],
+    synthetic: true,
+    source: 'root',
   };
 }

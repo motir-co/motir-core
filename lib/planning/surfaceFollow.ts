@@ -10,16 +10,16 @@ import type { PlanningAnchor } from '@/lib/planning/planningAnchorClient';
 // conversation that started with NO target — a project launch, ⌘K — opens at the
 // root, and this is what decides when it should move, and to where.
 //
-// ── Core can see exactly TWO such moments, and it is worth saying why ───────
-// Motir AI settles a target inside the conversation, and core holds no record of
-// that: there is no motir-ai → core signal for it, and the story deliberately
-// does not add one. What core CAN see is
+// ── Core can see exactly TWO such moments ──────────────────────────────────
 //
-//   1. a target ADDED to the surface's own target set, and
+//   1. a target becomes KNOWN — the person ADDED it to the surface's own target
+//      set, or, with none there, Motir AI SETTLED it: the run's `target_settled`
+//      frame names the card at index 0 (MOTIR-10739; the story first shipped with
+//      no such signal, and the frame has carried `key` since), and
 //   2. where the plan's proposals LAND, once there are any,
 //
 // and the second answers the same question a moment later. Both are already in
-// the host's hands; neither needs a new read.
+// the host's hands; the first resolves its key through the anchor read.
 //
 // ── Why a pure module ──────────────────────────────────────────────────────
 // The host wires the effects; the DECISION is here, so it can be ruled on
@@ -34,7 +34,8 @@ export interface FollowRequest {
 }
 
 /**
- * TRIGGER 1 — a target became known because the person ADDED it.
+ * TRIGGER 1 — a target became known: the person ADDED it, or the planner settled
+ * it while the set was still empty (MOTIR-10739).
  *
  * Only when the set was EMPTY at open: a surface that already had a target
  * arrived inside it, and a second target must not move the canvas off the first
