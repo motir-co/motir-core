@@ -335,6 +335,50 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
   });
 });
 
+describe('get_project_state — a REFRESH claim counts as running (bug MOTIR-10821)', () => {
+  /** A code-graph REFRESH run the repository's claim names, as `claimIndexingRepo` stamps it. */
+  async function claimWithRefresh(
+    fx: WorkItemFixture,
+    name: string,
+    status: 'running' | 'succeeded' | 'failed' | 'abandoned',
+  ) {
+    const run = await adminDb.jobRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        functionId: 'system.code-graph-refresh',
+        eventName: 'system.code-graph-refresh',
+        eventId: `evt-${randomToken()}`,
+        lane: 'engine',
+        attempt: 0,
+        status,
+        ...(status === 'running' ? {} : { finishedAt: new Date() }),
+        output: {},
+      },
+    });
+    await adminDb.githubRepo.updateMany({ where: { name }, data: { indexingRunId: run.id } });
+  }
+
+  it('a running refresh reads `indexing`; a settled one reads what it read before', async () => {
+    const fx = await makeWorkItemFixture();
+    const inst = await seedInstallation(fx);
+    const running = await seedRepo(inst, 'moooon-B-V', 'refresh-running');
+    const succeeded = await seedRepo(inst, 'moooon-B-V', 'refresh-succeeded');
+    const failed = await seedRepo(inst, 'moooon-B-V', 'refresh-failed');
+    const abandoned = await seedRepo(inst, 'moooon-B-V', 'refresh-abandoned');
+    await claimWithRefresh(fx, 'refresh-running', 'running');
+    await claimWithRefresh(fx, 'refresh-succeeded', 'succeeded');
+    await claimWithRefresh(fx, 'refresh-failed', 'failed');
+    await claimWithRefresh(fx, 'refresh-abandoned', 'abandoned');
+
+    const state = stateOf(await callTool(fx.ctx, fx.projectIdentifier));
+    const byRef = new Map(state.code.index.repos.map((r) => [r.repoRef, r.status]));
+    expect(byRef.get(running)).toBe('indexing');
+    expect(byRef.get(succeeded)).toBe('queued');
+    expect(byRef.get(failed)).toBe('failed');
+    expect(byRef.get(abandoned)).toBe('failed');
+  });
+});
+
 describe('get_project_state — the project repository SET and the onboarding run', () => {
   it('reports the project`s own repo set, distinct from the workspace`s connected set', async () => {
     const fx = await makeWorkItemFixture();

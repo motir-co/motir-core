@@ -293,6 +293,61 @@ describe('the project code-context read', () => {
     expect(state.repos[0]!.indexState).toBe('indexing');
   });
 
+  it('⚠️ reports `indexing` while a REFRESH its pointer names is running (bug MOTIR-10821)', async () => {
+    // A refresh claims the repository with its own job_run id exactly as a first
+    // index does (MOTIR-9454). The running read used to count only
+    // `system.code-graph-index`, so a behind graph being re-indexed read `stale`.
+    const refresh = await adminDb.jobRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        functionId: 'system.code-graph-refresh',
+        eventName: 'code-graph/refresh.requested',
+        eventId: `evt-${Math.random().toString(36).slice(2)}`,
+        lane: 'engine',
+        attempt: 1,
+        status: 'running',
+      },
+    });
+    const repo = await seedRepo('repo-a', {
+      indexingRunId: refresh.id,
+      defaultBranchHeadSha: 'bbb',
+      indexedHeadSha: 'aaa',
+    });
+    await linkIntoProject(fx.projectId, repo.id, 'repo-a');
+    await seedSucceededIndex('moooon/repo-a');
+
+    const state = await resolveCodeContextState(fx.projectId, fx.ctx);
+    expect(state.repos[0]!.indexState).toBe('indexing');
+  });
+
+  it.each(['succeeded', 'failed', 'abandoned'] as const)(
+    'a claimed REFRESH that ended `%s` reads `stale`, exactly as before (bug MOTIR-10821)',
+    async (status) => {
+      const refresh = await adminDb.jobRun.create({
+        data: {
+          workspaceId: fx.workspaceId,
+          functionId: 'system.code-graph-refresh',
+          eventName: 'code-graph/refresh.requested',
+          eventId: `evt-${Math.random().toString(36).slice(2)}`,
+          lane: 'engine',
+          attempt: 1,
+          status,
+          finishedAt: new Date(),
+        },
+      });
+      const repo = await seedRepo('repo-a', {
+        indexingRunId: refresh.id,
+        defaultBranchHeadSha: 'bbb',
+        indexedHeadSha: 'aaa',
+      });
+      await linkIntoProject(fx.projectId, repo.id, 'repo-a');
+      await seedSucceededIndex('moooon/repo-a');
+
+      const state = await resolveCodeContextState(fx.projectId, fx.ctx);
+      expect(state.repos[0]!.indexState).toBe('stale');
+    },
+  );
+
   it('`hasImplementedWork` reads implementation provenance, not a done status', async () => {
     // A project with work items but NONE implemented is the case the prompt is
     // for, so seed one and leave its provenance null first.

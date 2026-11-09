@@ -59,11 +59,11 @@ async function readFacts(
     // read `indexing` for ever after would be worse than one that never read it.
     // One read for the whole set rather than one per row, which is also what
     // makes a crashed run self-healing — an `abandoned` row is simply not in this
-    // set.
-    const running = await tx.jobRun.findMany({
-      where: { functionId: 'system.code-graph-index', status: 'running' },
-      select: { id: true },
-    });
+    // set. A first INDEX and a REFRESH both claim the repository, so the read is
+    // the repository's one running-claim predicate over both (bug MOTIR-10821).
+    const runningRunIds = new Set(
+      await jobRunRepository.listRunningCodeGraphRunIds(ctx.workspaceId, tx),
+    );
 
     // ⚠️ AND WHICH CLAIMED RUNS ARE TERMINALLY DEAD (MOTIR-2105) — the same
     // pointer, asked the other question. `indexingRunId` resolving to a `running`
@@ -80,7 +80,7 @@ async function readFacts(
 
     return {
       rows,
-      runningRunIds: new Set(running.map((r) => r.id)),
+      runningRunIds,
       terminalRunIds,
       hasImplementedWork: implemented !== null,
     };
