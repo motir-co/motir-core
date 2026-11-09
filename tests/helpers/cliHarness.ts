@@ -188,6 +188,9 @@ export interface CliWorkspace {
   path(...segments: string[]): string;
 }
 
+/** How long one CLI command may run before the harness kills it. */
+const CLI_KILL_AFTER_MS = 60_000;
+
 export function makeCliWorkspace(): CliWorkspace {
   const base = mkdtempSync(join(tmpdir(), 'motir-cli-'));
   const root = join(base, 'workspace');
@@ -235,11 +238,13 @@ export function makeCliWorkspace(): CliWorkspace {
       stderr += chunk;
     });
 
+    let killed = false;
     const exitCode = await new Promise<number>((resolveExit, rejectExit) => {
       // A hung command must fail its own test, not stall the whole file.
       const timer = setTimeout(() => {
+        killed = true;
         child.kill('SIGKILL');
-      }, 60_000);
+      }, CLI_KILL_AFTER_MS);
       child.on('error', (err) => {
         clearTimeout(timer);
         rejectExit(err);
@@ -249,6 +254,15 @@ export function makeCliWorkspace(): CliWorkspace {
         resolveExit(signal ? 1 : (code ?? 1));
       });
     });
+
+    // ⚠️ SAY SO when the harness killed the command (MOTIR-10799). A kill used to
+    // read as a bare exit code 1 with no stderr line, indistinguishable from the
+    // CLI failing on its own — which is how a case that only ran too long was
+    // filed as a wrong result. The line names the bound, so the failure points
+    // at the wait that hit it rather than at the assertion.
+    if (killed) {
+      stderr += `\n[cliHarness] killed with SIGKILL after ${CLI_KILL_AFTER_MS} ms: \`motir ${args.join(' ')}\` did not exit in time.\n`;
+    }
 
     return { exitCode, stdout, stderr, output: stdout + stderr };
   };
