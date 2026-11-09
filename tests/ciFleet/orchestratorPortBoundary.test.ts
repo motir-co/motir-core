@@ -197,6 +197,18 @@ const ALLOWED: ReadonlyArray<{ file: string; tell: RegExp; why: string }> = [
     why: "the DEPLOYMENT-STATUS port's composition root — it selects that adapter, not the fleet's (MOTIR-7332)",
   },
   {
+    // The AWS agent VM's boot script (MOTIR-10817) writes the EC2 instance id
+    // into the container's env under the host-neutral MOTIR_MACHINE_ID AND
+    // under FLY_MACHINE_ID, because every sandbox image published before the
+    // terminal server read the neutral name reads only Fly's, and an instance
+    // keeps booting the digest it was created on. It is an env-var NAME for the
+    // agent image, not a Fly client: no Fly type, API or token. The tell is the
+    // one variable; any other FLY_* in that file still fails here.
+    file: join('packages', 'orchestrator', 'src', 'adapters', 'aws', 'persistentUserData.ts'),
+    tell: /\bFLY_MACHINE_ID\b/,
+    why: 'names the machine-id variable that already-published agent images read, so an AWS VM can supply it (MOTIR-10817)',
+  },
+  {
     file: join('packages', 'orchestrator', 'src', 'index.ts'),
     tell: /adapters\/fly/,
     why: "the package's BARREL — it re-exports the adapter the app's composition root selects, and a package whose surface cannot name what it exports has no surface (MOTIR-4299)",
