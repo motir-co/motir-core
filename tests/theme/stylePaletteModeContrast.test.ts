@@ -184,46 +184,13 @@ const ORB_FALLBACK =
  * row id `style/palette/mode · ink on hook`. Asserted by equality.
  */
 // One entry per measured pair, each carrying the ratio it measured and the bug
-// filed when it was recorded: MOTIR-10745 memphis's canvas. Its rows were
-// found by painting the canvas whole (MOTIR-10736): each layer alone clears the
-// floor, and the pixels where two of them overlap do not. Retrofuturism
-// (MOTIR-10708), glassmorphism (MOTIR-10707), cybercore-y2k (MOTIR-10710 pill
-// and orb, MOTIR-10746 canvas grid) and aurora (MOTIR-10709) clear every row
-// and hold no entry.
-const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
-  'memphis/candy/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.39',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/candy/light · --el-text-secondary on canvas (pattern)': {
-    ratio: '4.46',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/cobalt/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.31',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/evergreen/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.36',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/garnet/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.17',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/motir/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.08',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/motir/light · --el-text-secondary on canvas (pattern)': {
-    ratio: '4.36',
-    bug: 'MOTIR-10745',
-  },
-  'memphis/sienna/light · --el-accent-on-surface on canvas (pattern)': {
-    ratio: '4.20',
-    bug: 'MOTIR-10745',
-  },
-};
+// filed when it was recorded. Every style that shipped before MOTIR-10549 now
+// clears every row and holds no entry: retrofuturism (MOTIR-10708),
+// glassmorphism (MOTIR-10707), cybercore-y2k (MOTIR-10710 pill and orb,
+// MOTIR-10746 canvas grid), memphis (MOTIR-10745: painting the canvas whole
+// found its dot-over-hatch pixels under the floor; the pattern now takes
+// 11 / 9 / 5%) and aurora (MOTIR-10709). A new failure joins with its own bug key.
+const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {};
 
 // ── The material reader ─────────────────────────────────────────────────────
 
