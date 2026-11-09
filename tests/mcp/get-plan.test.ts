@@ -37,7 +37,8 @@ import { truncateAuthTables } from '../helpers/db';
 //
 // Real Postgres, real plan rows, the real MCP server over the in-memory
 // transport with a FIXED-context resolver (the `tools.test.ts` / `expand-item`
-// pattern). motir-ai is never involved — this tool never touches a job.
+// pattern). motir-ai is not configured here, so the one call this tool makes to
+// it — the plan job's cost (MOTIR-10815) — answers the all-null cost block.
 
 const struct = (r: CallToolResult) => r.structuredContent as unknown as PlanWithItemsDto;
 const text = (r: CallToolResult) => (r.content as { text: string }[])[0]!.text;
@@ -132,15 +133,31 @@ describe('get_plan — the transport contract', () => {
     // `plannerRecord`, kept off the plan DTO — `null` on this plan, which has none.
     // AND ONE MORE (MOTIR-10176): the payload carries the plan's `raisedGaps`, the
     // gaps its author sessions declared, kept off the plan DTO — empty on this plan.
+    // AND ONE MORE (MOTIR-10815): a plan with a `sourceJobId` carries its job's
+    // `cost`, kept off the plan DTO — every figure `null` here, since motir-ai is
+    // not configured and an unanswered cost read is unknown, never zero.
     const fromService = await plansService.getPlan(plan.id, fx.ctx);
     const expected = JSON.parse(JSON.stringify(fromService)) as {
       items: Record<string, unknown>[];
       plannerRecord?: unknown;
       raisedGaps?: unknown[];
+      cost?: unknown;
     };
     expected.items = expected.items.map((item) => ({ ...item, folderId: null, folderPath: null }));
     expected.plannerRecord = null;
     expected.raisedGaps = [];
+    expected.cost = {
+      ledgerComplete: null,
+      totalCostMicroUsd: null,
+      credits: null,
+      bySessionKind: {
+        conversation: null,
+        lay: null,
+        author: null,
+        entry_author: null,
+        tool: null,
+      },
+    };
     expect(struct(res)).toEqual(expected);
     await client.close();
   });
