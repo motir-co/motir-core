@@ -523,6 +523,35 @@ describe('a refused GitHub sign-in (Bug MOTIR-8984)', () => {
     expect(await res.json()).toEqual({ state: 'identity_required', reason: 'refused' });
   });
 
+  async function refusedAt(userId: string): Promise<Date | null> {
+    const row = await adminDb.githubIdentity.findUniqueOrThrow({ where: { userId } });
+    return row.refreshRefusedAt;
+  }
+
+  function userInstallationCalls(): number {
+    return vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => String(input).includes('/user/installations')).length;
+  }
+
+  it('records the refusal on the identity, so the next call refuses without asking GitHub (Bug MOTIR-10806)', async () => {
+    signIn(y);
+    expect(await refusedAt(y.ownerId)).toBeNull();
+
+    await getAccounts(y.organizationId);
+    expect(await refusedAt(y.ownerId)).toBeInstanceOf(Date);
+    expect(userInstallationCalls()).toBe(1);
+
+    // Even once GitHub would answer, the dead sign-in stays dead until the member
+    // reconnects: one recorded state, read by the pane and by every door.
+    userInstallationsFailure = {};
+    const res = await getAccounts(y.organizationId);
+    expect(await res.json()).toEqual({ state: 'identity_required', reason: 'refused' });
+    expect(userInstallationCalls()).toBe(1);
+    // …and only the member GitHub refused is marked.
+    expect(await refusedAt(x.ownerId)).toBeNull();
+  });
+
   it.each([
     ['a 5xx', 503 as const],
     ['a network failure', 'network' as const],
@@ -535,6 +564,8 @@ describe('a refused GitHub sign-in (Bug MOTIR-8984)', () => {
     );
     expect(err).toBeInstanceOf(GithubUserInstallationsError);
     expect((err as GithubUserInstallationsError).status).toBe(failure === 503 ? 503 : null);
+    // Not a dead sign-in, so nothing is recorded (Bug MOTIR-10806).
+    expect(await refusedAt(y.ownerId)).toBeNull();
   });
 
   it('a 403 from GitHub is not read as a dead sign-in', async () => {
@@ -543,6 +574,7 @@ describe('a refused GitHub sign-in (Bug MOTIR-8984)', () => {
     await expect(getAccounts(y.organizationId)).rejects.toBeInstanceOf(
       GithubUserInstallationsError,
     );
+    expect(await refusedAt(y.ownerId)).toBeNull();
   });
 
   it('GET repositories answers 409 github_identity_refused', async () => {
