@@ -255,7 +255,7 @@ export function StylePicker({
 
 /**
  * Each palette's signature primary hue, hardcoded — the light-theme
- * `--color-primary-fill` of its `[data-palette]` block in `app/globals.css`
+ * `--color-primary-fill` of its `[data-palette]` block in `packages/design-system/theme.css`
  * (motir's is its near-black ink CTA; amethyst, the base, is the old purple). Used for the picker swatch so the dot
  * shows the palette's identity colour independent of the active theme/style.
  */
@@ -270,6 +270,7 @@ const PALETTE_SWATCH_HEX: Record<PaletteId, string> = {
   garnet: '#c30021',
   citrine: '#ffd02f',
   candy: '#efbfdd',
+  lagoon: '#0f667c',
 };
 
 /** Palette (colour) — the 10-palette chip row, each with its accent swatch dot. */
@@ -286,7 +287,7 @@ export function PalettePicker({
     id,
     label: PALETTE_REGISTRY[id].name,
     // The dot's colour is HARDCODED (the palette's light-theme signature primary
-    // — its `--color-primary-fill` in globals.css), NOT a `data-palette`-scoped
+    // — its `--color-primary-fill` in packages/design-system/theme.css), NOT a `data-palette`-scoped
     // `--el-accent`. The reason is THEME-INDEPENDENCE, and it is the whole of
     // the reason: a scoped `--el-accent` resolves under the ACTIVE theme, so the
     // dot would shift in dark mode, while this row is an identity legend — each

@@ -40,6 +40,7 @@ describe('palette registry', () => {
       'garnet',
       'citrine',
       'candy',
+      'lagoon',
     ]);
     expect(PALETTE_REGISTRY['motir'].name).toBe('Motir');
     expect(PALETTE_REGISTRY['amethyst'].name).toBe('Amethyst');

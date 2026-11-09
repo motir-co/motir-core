@@ -11,15 +11,17 @@
  * style never changes a hue.
  *
  * ── The two-axis runtime contract ───────────────────────────────────────
- *   data-palette="<palette-id>" — THIS axis. Layers per-palette `--el-*`
- *                                 element-token overrides over the Tier-3
- *                                 base in app/globals.css.
+ *   data-palette="<palette-id>" — THIS axis. Layers per-palette colour
+ *                                 overrides over the base in
+ *                                 packages/design-system/theme.css (which
+ *                                 app/globals.css imports).
  *   data-style="<style-id>"     — the INDEPENDENT shape/feel axis.
  *   data-theme="light|dark"     — the light/dark base WITHIN a palette
  *                                 (`--color-*`); orthogonal to the palette.
  *
- * A `[data-palette='…']` block in globals.css MUST override ONLY `--el-*`
- * element colour tokens — NEVER a shape/feel token (radius / spacing / shadow
+ * A `[data-palette='…']` block in packages/design-system/theme.css MUST
+ * override ONLY colour tokens — the Tier-0 `--color-*` sources the `--el-*`
+ * element layer reads, plus the odd `--el-*` — NEVER a shape/feel token (radius / spacing / shadow
  * / sizing / motion / type). That is the style axis's job, and keeping the two
  * disjoint is what makes "style × palette" a true product of two independent
  * choices rather than N×M hand-tuned combinations.
@@ -39,7 +41,8 @@
  * blocks only re-assert that base inside a scoped subtree. `<html>` always
  * carries a `data-palette`, so the base is a fallback, never what a person sees
  * by default. Each later "Palette: …" subtask ADDS its entry here, ships a
- * `[data-palette='<id>']` block overriding the `--el-*` layer, and authors its
+ * `[data-palette='<id>']` block in packages/design-system/theme.css overriding
+ * the Tier-0 `--color-*` sources (plus the odd `--el-*`), and authors its
  * `docs/palettes/<id>.md` doc — exactly the shape the per-style subtasks
  * (7.3.33+) follow on the other axis.
  *
@@ -161,6 +164,15 @@ export const PALETTE_REGISTRY = {
     inspiration:
       'A candy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Pink primary + Mauve neutrals + a Sky/Jade/Violet/Amber/Crimson candy rainbow; Glossier Pink #F5DADF as the pastel-pink mood reference.',
     designDoc: 'docs/palettes/candy.md',
+  },
+  lagoon: {
+    id: 'lagoon',
+    name: 'Lagoon',
+    tagline:
+      'Cool and fresh — a deep lagoon-cyan primary over shallow-water surfaces and slate ink, with a coral highlight.',
+    inspiration:
+      'A lagoon concept grounded entirely in documented Radix Colors scales (every value a Radix step): Cyan primary + Slate cool neutrals, a Tomato coral highlight, and Tomato/Crimson/Jade/Violet/Cyan/Amber tints.',
+    designDoc: 'docs/palettes/lagoon.md',
   },
 } satisfies Record<string, PaletteDefinition>;
 

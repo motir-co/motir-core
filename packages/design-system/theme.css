@@ -7415,6 +7415,134 @@
   --el-status-implemented: var(--color-charcoal);
 }
 
+/* ── Palette: Lagoon (data-palette="lagoon") — MOTIR-10713 ─────────────────────
+   A cool, fresh TEAL/CYAN re-skin: shallow-water cyan surfaces over cool slate
+   ink, a deep cyan primary, and a coral highlight for the reef. There is no
+   single brand behind a "lagoon", so — exactly as candy does — EVERY value is a
+   documented **Radix Colors** step (@radix-ui/colors@3.0.0): Cyan is the
+   primary ramp, Slate the matched cool neutral, and Tomato / Crimson / Jade /
+   Violet / Amber / Grass / Blue / Red supply the highlight, tints and
+   semantics. Where Cyan cannot supply a role (a canvas darker than its own
+   dark-1 page), the value is taken from Slate at a documented step.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). Every --el-*
+   role clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/lagoon.md. */
+[data-palette='lagoon'] {
+  /* brand & primary — deep lagoon cyan (Radix Cyan). The fill carries white labels. */
+  --color-primary: #0f667c; /* Radix Cyan-11 mixed 65% toward Cyan-12 — cyan AS text (5.85:1 on the Cyan-3 surface) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #0d3c48; /* Radix Cyan-12 */
+  --color-primary-fill: #0f667c; /* the same Cyan-11 → Cyan-12 65% step — fill behind white labels (6.5:1) */
+
+  /* surfaces — shallow-water cyans (Radix Cyan-1/2/3) */
+  --color-background: #fafdfe; /* Radix Cyan-1 */
+  --color-foreground: #1c2024; /* Radix Slate-12 ink */
+  --color-surface: #def7f9; /* Radix Cyan-3 — section surface */
+  --color-surface-soft: #f2fafb; /* Radix Cyan-2 — quieter division */
+  --color-canvas: #caf1f6; /* recessed planning board — Radix Cyan-4, a step under the Cyan-3 surface */
+
+  /* text scale — Radix Slate neutral + a Cyan-12 deep-water emphasis */
+  --color-ink: #1c2024; /* Slate-12 */
+  --color-charcoal: #0d3c48; /* Cyan-12 — emphasis / AA-safe text on tints */
+  --color-slate: #60646c; /* Slate-11 — secondary text */
+  --color-steel: #60646c; /* Slate-11 — tertiary */
+  --color-stone: #8b8d98; /* Slate-9 — faint labels (decorative) */
+  --color-muted: #def7f9; /* Cyan-3 */
+  --color-muted-foreground: #60646c; /* Slate-11 — captions */
+
+  /* borders — cool cyan hairlines (Radix Cyan-5/4/6) */
+  --color-hairline: #b5e9f0; /* Cyan-5 */
+  --color-hairline-soft: #caf1f6; /* Cyan-4 */
+  --color-hairline-strong: #9ddde7; /* Cyan-6 */
+  --color-border: #b5e9f0; /* Cyan-5 */
+
+  /* accent secondary — a reef-coral highlight (Radix Tomato-11), the warm
+     counterweight to the cyan primary */
+  --color-accent: #d13415; /* Radix Tomato-11 — highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 */
+  --color-accent-teal: #008573; /* Radix Teal-11 */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 */
+
+  /* card tints — Radix step-4 pastels (Cyan-12 emphasis text on each) */
+  --color-tint-peach: #ffdcd3; /* Tomato-4 */
+  --color-tint-rose: #fedce7; /* Crimson-4 */
+  --color-tint-mint: #d6f1e3; /* Jade-4 */
+  --color-tint-lavender: #ebe4ff; /* Violet-4 */
+  --color-tint-sky: #caf1f6; /* Cyan-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix "text" steps (AA-safe) */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Radix Blue, apart from the cyan primary; Blue-11 alone is 4.26:1 on
+     the Cyan-3 surface, so it takes the same 65% step toward Blue-12 the primary
+     takes toward Cyan-12 (5.95:1 on the surface, 5.20:1 on the lowest tint) */
+  --color-link: #0e5da9; /* Blue-11 mixed 65% toward Blue-12 */
+  --color-link-pressed: #113264; /* Blue-12 */
+
+  /* sidebar hover — one shade deeper than the Cyan-3 surface (Cyan-4) */
+  --el-sidebar-item-bg-hover: #caf1f6;
+}
+
+/* Lagoon — dark companion. A cyan-tinted deep-water black (Radix Cyan dark
+   1/2/3); the cyan brightens to read as text, the fill is a bright cyan with
+   dark labels, and the tints become deep washes. All Radix dark steps. */
+[data-theme='dark'] [data-palette='lagoon']:not([data-theme]),
+[data-palette='lagoon'][data-theme='dark'] {
+  --color-primary: #4ccce6; /* Cyan dark-11 */
+  --color-primary-foreground: #101b20; /* Cyan dark-2 ink on the bright cyan fill */
+  --color-primary-pressed: #23afd0; /* Cyan dark-10 */
+  --color-primary-fill: #4ccce6; /* Cyan dark-11 */
+
+  --color-background: #0b161a; /* Cyan dark-1 */
+  --color-foreground: #edeef0; /* Slate dark-12 */
+  --color-surface: #082c36; /* Cyan dark-3 */
+  --color-surface-soft: #101b20; /* Cyan dark-2 */
+  --color-canvas: #111113; /* Slate dark-1 — Cyan has no step below its dark-1 page */
+
+  --color-ink: #edeef0; /* Slate dark-12 */
+  --color-charcoal: #b6ecf7; /* Cyan dark-12 */
+  --color-slate: #b0b4ba; /* Slate dark-11 */
+  --color-steel: #b0b4ba; /* Slate dark-11 */
+  --color-stone: #696e77; /* Slate dark-9 */
+  --color-muted: #082c36; /* Cyan dark-3 */
+  --color-muted-foreground: #b0b4ba; /* Slate dark-11 */
+
+  --color-hairline: #004558; /* Cyan dark-5 */
+  --color-hairline-soft: #003848; /* Cyan dark-4 */
+  --color-hairline-strong: #045468; /* Cyan dark-6 */
+  --color-border: #004558; /* Cyan dark-5 */
+
+  --color-accent: #ff977d; /* Tomato dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #0bd8b6; /* Teal dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #4e1511; /* Tomato dark-4 */
+  --color-tint-rose: #4d122f; /* Crimson dark-4 */
+  --color-tint-mint: #0b3b2c; /* Jade dark-4 */
+  --color-tint-lavender: #33255b; /* Violet dark-4 */
+  --color-tint-sky: #003848; /* Cyan dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 ink on the bright danger */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-sidebar-item-bg-hover: #003848; /* Cyan dark-4 */
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk
