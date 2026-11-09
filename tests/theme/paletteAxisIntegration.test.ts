@@ -320,8 +320,8 @@ describe('the style × palette × mode AA contrast gate covers the new palettes'
     expect(code).toContain(
       'expect(CONTEXTS.length).toBe(STYLE_IDS.length * PALETTE_IDS.length * THEMES.length)',
     );
-    const themes = THEMES.length;
-    expect(STYLE_IDS.length * PALETTE_IDS.length * themes).toBe(STYLE_IDS.length * 14 * 2);
+    // The registry those contexts are derived from holds the fourteen.
+    expect(PALETTE_IDS).toHaveLength(SHIPPED_TEN.length + 4);
   });
 
   it('labels each row by style, palette and mode, and holds every row to 4.5:1', () => {
@@ -353,6 +353,9 @@ describe('the style × palette × mode AA contrast gate covers the new palettes'
       ]);
     } else {
       expect(keys.length, 'the map is populated, so its keys must parse').toBeGreaterThan(0);
+      // Every entry parses, so none (a new palette's included) slips past the reader.
+      const entries = [...body.matchAll(/^\s*['"][^'"]+['"]\s*:/gm)].length;
+      expect(keys.length, 'every entry of the map parses as a row key').toBe(entries);
       for (const key of keys) expect(PALETTE_IDS as readonly string[]).toContain(key.palette);
     }
     expect(keys.filter((key) => (NEW_IDS as readonly string[]).includes(key.palette))).toEqual([]);

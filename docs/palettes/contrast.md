@@ -138,7 +138,8 @@ over the cascade `tests/theme/paletteCascade.ts` models.
 (`tests/theme/stylePaletteModeContrast.test.ts`) resolves every ground each registered
 style paints — material composites and canvas patterns included, folded with
 `flattenColorMix`. Over every `contrast` row of that matrix, the lowest ratio for each
-body-text role is:
+body-text role is (the matrix's palette-scoped floor, `PALETTE_FLOORS`, holds every
+one of these rows to 7:1 and the three edges below to 3:1, so a retune under either goes red):
 
 | Role                  | light (lowest row) | dark (lowest row) |
 | --------------------- | ------------------ | ----------------- |
