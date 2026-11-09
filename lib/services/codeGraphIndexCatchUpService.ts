@@ -11,6 +11,8 @@ import type { CodeGraphIndexData } from '@/lib/jobs/types';
 import {
   githubRepoRepository,
   type IndexCatchUpCandidate,
+  type IndexRetryArm,
+  type IndexRetryCandidate,
 } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 
@@ -53,6 +55,71 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // stay paused as `pool_still_full`, so the sweep never re-enqueues into a pool
 // that is still full. Admission stays the authority: a dispatch it defers again
 // pauses again, and the next tick retries.
+
+// ⚠️ A TERMINALLY FAILED RUN IS RE-DISPATCHED, BOUNDED (MOTIR-10819). A run that
+// ends `failed` (its retries exhausted, dead-lettered) or `abandoned` writes no
+// pause, so the pass above never saw it: a transient fleet fault left a new
+// repository unindexed, and a stale one unrefreshed, until a person replayed the
+// dead letter. `retryFailed` is the sweep's second input on the same tick. It
+// re-dispatches through the release-then-enqueue `retryIndex` uses — the release
+// conditional on the claim still naming the dead run is the race guard — and it is
+// BOUNDED, because a repository that fails deterministically must not be
+// re-dispatched every five minutes: a backoff doubling from the dead run's finish,
+// and a cap on attempts after which `refreshFailing` (MOTIR-2105) is the signal.
+// A size refusal is never retried: the index would be refused the same way.
+
+/** Automatic re-dispatches per repository between two successful indexes.
+ *  Five, with the backoff below, spans about 15½ hours of failures (30 min, 1 h,
+ *  2 h, 4 h, 8 h): long enough to outlast a fleet outage like MOTIR-10805's three
+ *  hours with room to spare, short enough that a repository that fails every
+ *  time stops costing index runs within a day and is left to `refreshFailing`. */
+export const INDEX_RETRY_MAX_ATTEMPTS = 5;
+
+/** The wait before the first re-dispatch, doubled for each attempt already made.
+ *  Thirty minutes, because a transient fault that dead-lettered a run already
+ *  outlasted that run's own five queue attempts: re-dispatching on the next tick
+ *  would most likely land in the same fault. */
+export const INDEX_RETRY_BASE_BACKOFF_MS = 30 * 60_000;
+
+/** How long a re-dispatch may go unclaimed before it is read as LOST. The enqueue
+ *  is best-effort and swallows a transport failure, and the release already
+ *  cleared the claim, so nothing else would ever say an index is still owed. Six
+ *  hours, because a queued index normally starts within minutes and a run that
+ *  waits for room records a pause instead; re-sending sooner would double a run
+ *  that is merely queued. */
+export const INDEX_RETRY_LOST_DISPATCH_GRACE_MS = 6 * 60 * 60_000;
+
+/** Retry candidates considered per tick — the oldest failure first. */
+export const INDEX_RETRY_BATCH = 200;
+
+export type IndexRetryOutcome =
+  /** Never indexed — a first index was re-enqueued. */
+  | 'retry_index_enqueued'
+  /** The head moved past the graph — a refresh was re-enqueued. */
+  | 'retry_refresh_enqueued'
+  /** Another sweep, or a manual retry, claimed it first — nothing was enqueued. */
+  | 'retry_raced'
+  /** The graph is current after all — nothing is owed, nothing was written. */
+  | 'retry_not_owed'
+  /** The claim was taken but the enqueue threw. The attempt is spent; the lost-
+   *  dispatch arm re-sends it once its grace has passed. */
+  | 'retry_enqueue_failed';
+
+export interface IndexRetrySummary {
+  scanned: number;
+  outcomes: {
+    repoRef: string;
+    organizationId: string;
+    arm: IndexRetryArm;
+    attempt: number;
+    outcome: IndexRetryOutcome;
+  }[];
+}
+
+export interface IndexRetryDeps {
+  enqueueRefresh: (data: CodeGraphIndexData) => Promise<void>;
+  enqueueIndex: (data: CodeGraphIndexData) => Promise<void>;
+}
 
 /** Paused repositories considered per tick — oldest pause first. */
 export const INDEX_CATCH_UP_BATCH = 200;
@@ -152,6 +219,43 @@ export function catchUpActionFor(
   return 'refresh_enqueued';
 }
 
+/** Re-dispatch ONE retry candidate: claim it, then enqueue what it is owed. */
+async function retryOne(
+  repo: IndexRetryCandidate,
+  now: Date,
+  deps: IndexRetryDeps,
+): Promise<IndexRetryOutcome> {
+  const action = catchUpActionFor(repo);
+  // The read already leaves a current graph out; this is the one derivation
+  // having the last word, so a row it calls current is never re-indexed.
+  if (action !== 'index_enqueued' && action !== 'refresh_enqueued') return 'retry_not_owed';
+  const claimed = await withSystemContext((tx) =>
+    githubRepoRepository.claimIndexRetry(repo, now, tx),
+  );
+  if (claimed === 0) return 'retry_raced';
+  const data: CodeGraphIndexData = {
+    installationId: repo.hostInstallationId,
+    workspaceId: repo.workspaceId,
+    repoOwner: repo.owner,
+    repoName: repo.name,
+    defaultBranch: repo.defaultBranch,
+  };
+  try {
+    if (action === 'index_enqueued') {
+      await deps.enqueueIndex(data);
+      return 'retry_index_enqueued';
+    }
+    await deps.enqueueRefresh(data);
+    return 'retry_refresh_enqueued';
+  } catch (err) {
+    console.error('[index-catch-up] could not re-enqueue a failed index', {
+      repoRef: `${repo.owner}/${repo.name}`,
+      err,
+    });
+    return 'retry_enqueue_failed';
+  }
+}
+
 export const codeGraphIndexCatchUpService = {
   /**
    * One pass. Never throws on a single organisation's failure: an unreachable
@@ -236,6 +340,43 @@ export const codeGraphIndexCatchUpService = {
           summary.outcomes.push({ repoRef, organizationId, outcome: 'action_failed' });
         }
       }
+    }
+    return summary;
+  },
+
+  /**
+   * The RETRY pass (MOTIR-10819): re-dispatch each repository whose claimed index
+   * or refresh run ended terminal for a reason other than size, once its backoff
+   * has elapsed and while it is under the attempt cap. A first index when it was
+   * never indexed, a refresh when its head moved past the graph — the same
+   * `catchUpActionFor` the paused pass reads. Never throws on one repository.
+   */
+  async retryFailed(
+    opts: { limit?: number; now?: Date; deps?: IndexRetryDeps } = {},
+  ): Promise<IndexRetrySummary> {
+    const deps = opts.deps ?? defaultDeps;
+    const now = opts.now ?? new Date();
+    const rows = await withSystemContext((tx) =>
+      githubRepoRepository.listIndexRetryCandidates(
+        {
+          limit: opts.limit ?? INDEX_RETRY_BATCH,
+          maxAttempts: INDEX_RETRY_MAX_ATTEMPTS,
+          baseBackoffMs: INDEX_RETRY_BASE_BACKOFF_MS,
+          lostDispatchGraceMs: INDEX_RETRY_LOST_DISPATCH_GRACE_MS,
+          now,
+        },
+        tx,
+      ),
+    );
+    const summary: IndexRetrySummary = { scanned: rows.length, outcomes: [] };
+    for (const repo of rows) {
+      summary.outcomes.push({
+        repoRef: `${repo.owner}/${repo.name}`,
+        organizationId: repo.organizationId,
+        arm: repo.arm,
+        attempt: repo.retryAttempts + 1,
+        outcome: await retryOne(repo, now, deps),
+      });
     }
     return summary;
   },

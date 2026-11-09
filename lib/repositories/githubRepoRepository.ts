@@ -69,6 +69,35 @@ export interface IndexCatchUpCandidate {
   hostInstallationId: string;
 }
 
+/** Why a repository is a RETRY candidate of the catch-up sweep (MOTIR-10819).
+ *
+ *  - `dead_run`: its claimed index/refresh run ended terminal for a reason other
+ *    than size, and nothing has claimed it since.
+ *  - `lost_dispatch`: the sweep released a dead claim and re-enqueued, and no run
+ *    ever claimed the repository — the enqueue is best-effort and can be lost. */
+export type IndexRetryArm = 'dead_run' | 'lost_dispatch';
+
+/** One repository the catch-up sweep may RE-DISPATCH (MOTIR-10819) — projected. */
+export interface IndexRetryCandidate {
+  id: string;
+  owner: string;
+  name: string;
+  workspaceId: string;
+  organizationId: string;
+  defaultBranch: string;
+  indexedAt: Date | null;
+  indexedHeadSha: string | null;
+  defaultBranchHeadSha: string | null;
+  hostInstallationId: string;
+  arm: IndexRetryArm;
+  /** The dead run the claim names (`dead_run`), else null. */
+  deadRunId: string | null;
+  /** The automatic re-dispatches already made since the last successful index. */
+  retryAttempts: number;
+  /** When the last re-dispatch was made (`lost_dispatch`), else null. */
+  retryDispatchedAt: Date | null;
+}
+
 /** One organisation whose indexing is paused, as the admin's Stopped orgs list pages
  *  it (MOTIR-4595) — the org-level roll-up of its paused repositories. */
 export interface IndexPausedOrgRow {
@@ -343,6 +372,10 @@ export const githubRepoRepository = {
         indexingRunId: null,
         indexedAt: args.indexedAt ?? new Date(),
         ...(args.headSha ? { indexedHeadSha: args.headSha } : {}),
+        // A run that indexed ends the automatic retry ledger (MOTIR-10819): the
+        // next transient failure starts from a full set of attempts.
+        indexRetryAttempts: 0,
+        indexRetryDispatchedAt: null,
       },
     });
     return result.count;
@@ -436,6 +469,138 @@ export const githubRepoRepository = {
       ORDER BY gr."index_paused_at" ASC NULLS FIRST, gr."id" ASC
       LIMIT ${limit}
     `;
+  },
+
+  /**
+   * The repositories the catch-up sweep may RE-DISPATCH (MOTIR-10819) — the
+   * sweep's SECOND input, beside {@link githubRepoRepository.listIndexPaused}.
+   * A terminally failed run writes no pause, so without this a transient fleet
+   * fault left a repository code-blind until a person replayed its dead letter.
+   *
+   * Two arms (see {@link IndexRetryArm}), both:
+   *  - not paused (`listIndexPaused` owns those), not archived, and not refused
+   *    for size (`index_refused_at IS NULL`: a re-dispatch is refused the same way);
+   *  - under the attempt cap (`index_retry_attempts < maxAttempts`);
+   *  - owed something: never indexed, or a graph whose known head moved past it
+   *    (or that was built at an unknown head). A current graph is owed nothing,
+   *    and is left out here so it cannot hold a slot of the batch on every tick;
+   *  - DUE: the backoff `baseBackoffMs * 2^attempts` has elapsed since the dead
+   *    run finished (`dead_run`), or the longer of that and `lostDispatchGraceMs`
+   *    since the last re-dispatch (`lost_dispatch`).
+   *
+   * `dead_run` reads the claimed `job_run` row: `failed` (every retry of the
+   * job exhausted, dead-lettered) or `abandoned` — the same terminal set
+   * `deriveRefreshFailing` reads — and only while no `job_queue` run is still
+   * live for its event, so an abandoned row whose run is resuming is not doubled.
+   *
+   * Oldest anchor first, bounded per tick. A CROSS-TENANT SYSTEM READ, as
+   * `listIndexPaused` is, with every column aliased.
+   */
+  async listIndexRetryCandidates(
+    args: {
+      limit: number;
+      maxAttempts: number;
+      baseBackoffMs: number;
+      lostDispatchGraceMs: number;
+      now: Date;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<IndexRetryCandidate[]> {
+    const backoff = Prisma.sql`make_interval(secs => ${args.baseBackoffMs}::double precision / 1000 * power(2, gr."index_retry_attempts"))`;
+    const lostGrace = Prisma.sql`make_interval(secs => ${args.lostDispatchGraceMs}::double precision / 1000)`;
+    return tx.$queryRaw<IndexRetryCandidate[]>`
+      SELECT * FROM (
+        SELECT
+          gr."id"                         AS "id",
+          gr."owner"                      AS "owner",
+          gr."name"                       AS "name",
+          gr."workspace_id"               AS "workspaceId",
+          gr."organization_id"            AS "organizationId",
+          gr."default_branch"             AS "defaultBranch",
+          gr."indexed_at"                 AS "indexedAt",
+          gr."indexed_head_sha"           AS "indexedHeadSha",
+          gr."default_branch_head_sha"    AS "defaultBranchHeadSha",
+          gi."installation_id"            AS "hostInstallationId",
+          CASE WHEN gr."indexing_run_id" IS NULL THEN 'lost_dispatch' ELSE 'dead_run' END
+                                          AS "arm",
+          gr."indexing_run_id"            AS "deadRunId",
+          gr."index_retry_attempts"       AS "retryAttempts",
+          gr."index_retry_dispatched_at"  AS "retryDispatchedAt",
+          CASE WHEN gr."indexing_run_id" IS NULL
+               THEN gr."index_retry_dispatched_at"
+               ELSE COALESCE(jr."finished_at", jr."started_at") END
+                                          AS "anchor"
+        FROM "github_repo" gr
+        JOIN "github_installation" gi ON gi."id" = gr."installation_id"
+        LEFT JOIN "job_run" jr ON jr."id" = gr."indexing_run_id"
+        WHERE gr."archived" = false
+          AND gr."index_paused_reason" IS NULL
+          AND gr."index_refused_at" IS NULL
+          AND gr."index_retry_attempts" < ${args.maxAttempts}
+          AND (
+            gr."indexed_at" IS NULL
+            OR (
+              gr."default_branch_head_sha" IS NOT NULL
+              AND gr."indexed_head_sha" IS DISTINCT FROM gr."default_branch_head_sha"
+            )
+          )
+          AND (
+            (
+              jr."function_id" IN ('system.code-graph-index', 'system.code-graph-refresh')
+              AND jr."status" IN ('failed', 'abandoned')
+              AND COALESCE(jr."finished_at", jr."started_at") <= ${args.now}::timestamp - ${backoff}
+              AND NOT EXISTS (
+                SELECT 1 FROM "job_queue" q
+                WHERE q."job_id" = jr."function_id"
+                  AND q."state" IN ('pending', 'running')
+                  AND (q."event_id" = jr."event_id" OR q."id" = jr."event_id")
+              )
+            )
+            OR (
+              gr."indexing_run_id" IS NULL
+              AND gr."index_retry_dispatched_at" IS NOT NULL
+              AND gr."index_retry_dispatched_at" <= ${args.now}::timestamp - GREATEST(${backoff}, ${lostGrace})
+            )
+          )
+      ) candidates
+      ORDER BY "anchor" ASC, "id" ASC
+      LIMIT ${args.limit}
+    `;
+  },
+
+  /**
+   * CLAIM ONE automatic re-dispatch (MOTIR-10819) — the race guard, and the only
+   * write the retry makes before it enqueues. It releases the dead claim, counts
+   * the attempt and stamps when, in ONE conditional update that holds only while
+   * the row is exactly as the sweep read it: the claim still names the dead run
+   * (`dead_run`) or is still empty with the same stamp (`lost_dispatch`), and the
+   * count is unchanged. Of two concurrent sweeps — or a sweep racing the manual
+   * `retryIndex`, whose {@link githubRepoRepository.releaseIndexClaim} is
+   * conditional on the same pointer — only the one that updated a row enqueues.
+   */
+  async claimIndexRetry(
+    candidate: Pick<
+      IndexRetryCandidate,
+      'id' | 'arm' | 'deadRunId' | 'retryAttempts' | 'retryDispatchedAt'
+    >,
+    at: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubRepo.updateMany({
+      where: {
+        id: candidate.id,
+        indexRetryAttempts: candidate.retryAttempts,
+        ...(candidate.arm === 'dead_run'
+          ? { indexingRunId: candidate.deadRunId }
+          : { indexingRunId: null, indexRetryDispatchedAt: candidate.retryDispatchedAt }),
+      },
+      data: {
+        indexingRunId: null,
+        indexRetryAttempts: { increment: 1 },
+        indexRetryDispatchedAt: at,
+      },
+    });
+    return result.count;
   },
 
   /**

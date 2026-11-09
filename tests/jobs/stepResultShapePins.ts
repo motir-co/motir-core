@@ -289,6 +289,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "pool_still_full" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
   },
+  'retry-failed-indexes': {
+    file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
+    shape:
+      '{ outcomes: Array<{ arm: "dead_run" | "lost_dispatch"; attempt: number; organizationId: string; outcome: "retry_enqueue_failed" | "retry_index_enqueued" | "retry_not_owed" | "retry_raced" | "retry_refresh_enqueued"; repoRef: string }>; scanned: number }',
+  },
   'deliver-digest': {
     file: 'lib/jobs/definitions/publicFollowDigestDeliver.ts',
     shape: '{ itemCount: number; sent: boolean }',
