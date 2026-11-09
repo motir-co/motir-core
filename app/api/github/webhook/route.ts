@@ -3,6 +3,7 @@ import { CLIENT_CLOSED_REQUEST_STATUS, readRawBodyUnlessAborted } from '@/lib/ap
 import { verifyGithubWebhookSignature } from '@/lib/github/webhookSignature';
 import { GithubWebhookNotConfiguredError, GithubWebhookSignatureError } from '@/lib/github/errors';
 import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxService';
+import { bodyByteLength, logWebhookAnswer } from '@/lib/github/webhookAnswerLog';
 
 // POST /api/github/webhook (Story 7.10 · MOTIR-892) — the inbound GitHub App
 // webhook: PR lifecycle → work-item status sync, CI feedback, the installation
@@ -23,10 +24,37 @@ import { githubWebhookInboxService } from '@/lib/services/githubWebhookInboxServ
 //
 // Never leak internals: a bad/missing signature → 401, an unconfigured secret →
 // 500, a malformed JSON body → 400, a handled event with no `X-GitHub-Delivery`
-// GUID → 400, a sender that hung up before the body was read → 499 and a warning,
-// never a thrown `Error: aborted`.
+// GUID → 400, a sender that hung up before the body was read → 499, never a thrown
+// `Error: aborted`.
+//
+// ⚠️ EVERY NON-2xx ANSWER WRITES ONE LOG LINE (Bug MOTIR-10804). None of them stores an
+// inbox row, so without the line a refused delivery cannot be told from one GitHub never
+// sent. The line names the status, the code, the delivery id and the event, and never
+// the payload or the signature (`lib/github/webhookAnswerLog.ts`). A throw that escapes
+// the handler is logged the same way with code `UNHANDLED_ERROR`, then re-thrown so Next
+// still reports it to the monitor.
 
 export async function POST(req: NextRequest): Promise<Response> {
+  try {
+    return await handleDelivery(req);
+  } catch (err) {
+    logWebhookAnswer({
+      status: 500,
+      code: 'UNHANDLED_ERROR',
+      headers: req.headers,
+      bodyBytes: null,
+    });
+    throw err;
+  }
+}
+
+/** The answer for a non-2xx outcome — logged, then returned with its code as the body. */
+function refuse(req: NextRequest, status: number, code: string, bodyBytes: number | null) {
+  logWebhookAnswer({ status, code, headers: req.headers, bodyBytes });
+  return NextResponse.json({ code }, { status });
+}
+
+async function handleDelivery(req: NextRequest): Promise<Response> {
   // Read the EXACT bytes GitHub signed — before any JSON parse (a re-serialized
   // body would not match the HMAC).
   const rawBody = await readRawBodyUnlessAborted(req);
@@ -36,26 +64,17 @@ export async function POST(req: NextRequest): Promise<Response> {
     // could be verified or processed, so this is a LOST delivery, not a server
     // fault: GitHub records it as failed and does not retry it, and a lost close
     // or check verdict is replayed from the host by `system.pull-request-reconcile`.
-    // Name it, so it can be found in the App's delivery log and redelivered by hand.
-    console.warn(
-      `[github-webhook] delivery ${req.headers.get('x-github-delivery') ?? '(no id)'} ` +
-        `(${req.headers.get('x-github-event') ?? 'unknown event'}) lost: the client closed the connection before the body was read`,
-    );
-    return NextResponse.json(
-      { code: 'CLIENT_CLOSED_REQUEST' },
-      { status: CLIENT_CLOSED_REQUEST_STATUS },
-    );
+    // The line names it, so it can be found in the App's delivery log and redelivered.
+    return refuse(req, CLIENT_CLOSED_REQUEST_STATUS, 'CLIENT_CLOSED_REQUEST', null);
   }
+  const bodyBytes = bodyByteLength(rawBody);
 
   try {
     verifyGithubWebhookSignature(rawBody, req.headers.get('x-hub-signature-256'));
   } catch (err) {
-    if (err instanceof GithubWebhookSignatureError) {
-      return NextResponse.json({ code: err.code }, { status: 401 });
-    }
-    if (err instanceof GithubWebhookNotConfiguredError) {
-      return NextResponse.json({ code: err.code }, { status: 500 });
-    }
+    if (err instanceof GithubWebhookSignatureError) return refuse(req, 401, err.code, bodyBytes);
+    if (err instanceof GithubWebhookNotConfiguredError)
+      return refuse(req, 500, err.code, bodyBytes);
     throw err;
   }
 
@@ -63,7 +82,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   try {
     payload = JSON.parse(rawBody);
   } catch {
-    return NextResponse.json({ code: 'GITHUB_WEBHOOK_MALFORMED_BODY' }, { status: 400 });
+    return refuse(req, 400, 'GITHUB_WEBHOOK_MALFORMED_BODY', bodyBytes);
   }
 
   const receipt = await githubWebhookInboxService.receive({
@@ -78,7 +97,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     case 'ignored':
       return NextResponse.json({ ok: true, result: receipt.result }, { status: 200 });
     case 'missing_delivery_id':
-      return NextResponse.json({ code: 'GITHUB_WEBHOOK_MISSING_DELIVERY_ID' }, { status: 400 });
+      return refuse(req, 400, 'GITHUB_WEBHOOK_MISSING_DELIVERY_ID', bodyBytes);
     default:
       // 202 — stored, and processed after this answer. The body is for logging and
       // tests (`tests/e2e/_helpers/github-seed.ts` waits on the delivery by its id).
