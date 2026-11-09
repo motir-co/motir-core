@@ -149,6 +149,24 @@ const planIs = (status: string | null) => {
 };
 const destroys = () => fleet.operations.filter((o) => o.includes(':destroy:'));
 
+/**
+ * THE STORAGE CHARGE'S CLOCK (MOTIR-10784). The charge window is built from the
+ * `now` it is handed, but the rows it reads were stamped with the DATABASE's own
+ * clock — an agent's `createdAt` is the real now, while the harness's virtual
+ * clock starts at a fixed date. Charging at `clock.now()` therefore compares a
+ * virtual "today" against a real `createdAt`, and the result depends on how far
+ * the calendar has moved past the harness's start: once it is more than the
+ * walk's length, no agent ever stood in the window. So a walk charges on the
+ * database's timeline: the instant the earliest agent was stamped, plus the
+ * virtual time that has passed since it was created. Call it right after the
+ * agents are created; it measures the offset once.
+ */
+async function storageChargeClock(): Promise<() => Date> {
+  const first = await adminDb.agentInstance.findFirstOrThrow({ orderBy: { createdAt: 'asc' } });
+  const offset = first.createdAt.getTime() - clock.now().getTime();
+  return () => new Date(clock.now().getTime() + offset);
+}
+
 describe('SEAM · the daily storage charge reaches the Agents line with the same number', () => {
   it('two agents, one asleep: the day’s debits, the usage read and the line all say 2 × the rate — beside the machine time', async () => {
     const running = await create('one');
@@ -227,6 +245,7 @@ describe('GUARD · nothing deletes an agent before its scheduledDeletionAt', () 
       (await adminDb.organization.findUniqueOrThrow({ where: { id: orgId() } })).aiPlanLapsedAt!,
     );
     const destroysBefore = destroys().length;
+    const chargeNow = await storageChargeClock();
 
     // Walk the clock to the minute before the date, one day at a time, running
     // every pass the product runs — the instance sweep, the lapse pass, the
@@ -239,7 +258,7 @@ describe('GUARD · nothing deletes an agent before its scheduledDeletionAt', () 
       await sweeper.sweep();
       await sweeper.sweepPlanLapse();
       await sweeper.sweepPlanLapse();
-      await agentInstanceStorageChargeService.chargeDays({ now: clock.now() });
+      await agentInstanceStorageChargeService.chargeDays({ now: chargeNow() });
     }
     clock.advance(deletesOn.getTime() - clock.now().getTime() - MIN);
     await sweeper.sweep();
@@ -280,6 +299,7 @@ describe('GUARD · an internal org is never refused and never scheduled — and 
 
     const agents = [await create('one'), await create('two')];
     expect(agents.map((a) => a.state)).toEqual(['running', 'running']);
+    const chargeNow = await storageChargeClock();
     await lifecycle.hibernate(KEY(), agents[1]!.id, fx().ctx);
     expect((await lifecycle.wake(KEY(), agents[1]!.id, fx().ctx)).state).toBe('running');
 
@@ -294,7 +314,7 @@ describe('GUARD · an internal org is never refused and never scheduled — and 
       for (const a of agents) await lifecycle.touchActivity(a.id);
       await sweeper.sweep();
       await sweeper.sweepPlanLapse();
-      await agentInstanceStorageChargeService.chargeDays({ now: clock.now() });
+      await agentInstanceStorageChargeService.chargeDays({ now: chargeNow() });
     }
     expect(await live()).toHaveLength(2);
     expect((await live()).every((r) => r.scheduledDeletionAt === null)).toBe(true);
@@ -306,7 +326,13 @@ describe('GUARD · an internal org is never refused and never scheduled — and 
     const days = await adminDb.agentInstanceStorageCharge.count({
       where: { chargeOutcome: 'charged' },
     });
-    expect(days).toBeGreaterThan(0);
+    // Every UTC day each agent stood on is charged once — the creation day through
+    // the last pass's day — not just whichever day the window happened to catch.
+    const utcDay = (d: Date) => Math.floor(d.getTime() / DAY_MS);
+    const rows = await adminDb.agentInstance.findMany({ where: { deletedAt: null } });
+    const daysStood = rows.map((r) => utcDay(chargeNow()) - utcDay(r.createdAt) + 1);
+    expect(daysStood.every((n) => n >= 41)).toBe(true);
+    expect(days).toBe(daysStood.reduce((a, b) => a + b, 0));
     expect(spent(orgId(), 'storage')).toBe(days * INSTANCE_STORAGE_CREDITS_PER_DAY);
   });
 });
