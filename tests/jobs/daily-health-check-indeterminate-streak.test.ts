@@ -344,6 +344,7 @@ describe('every probe of the daily check is in the streak table', () => {
       indexFleet: { verdict: 'indeterminate', reference: 'registry.fly.io/b', detail: '503' },
       hostedAgentImage: { verdict: 'bootable', reference: 'ghcr.io/c', digest: null },
       indexContainerAi: { verdict: 'indeterminate', address: 'https://ai', detail: 'ECONNRESET' },
+      fleetOrigins: { verdict: 'indeterminate', readings: [], detail: 'MOTIR_BASE_URL: 503' },
       indexRebuildStreak: { verdict: 'not_applicable', detail: '', checkedAt: '', blindSpot: '' },
       monitorConfig: { verdict: 'not_applicable', detail: '', providers: [], blindSpot: '' },
       credentialExpiry: { verdict: 'ok', checkedAt: '', entries: [], skipped: [] },
@@ -383,6 +384,7 @@ describe('every probe of the daily check is in the streak table', () => {
       ['indexFleet', { phase: 'registry', detail: 'registry.fly.io/b: 503' }],
       ['hostedAgentImage', null],
       ['indexContainerAi', { phase: 'address', detail: 'https://ai: ECONNRESET' }],
+      ['fleetOrigins', { phase: 'address', detail: 'MOTIR_BASE_URL: 503' }],
       ['fleetImageCoverage', { phase: 'pairs', detail: 'MOTIR on motir-co: no read' }],
       [
         'runnerImageFreshness',

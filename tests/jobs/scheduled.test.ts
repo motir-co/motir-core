@@ -18,6 +18,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { classifyRunner, MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import { generateKeyPairSync } from 'node:crypto';
 import { fleetOrgCiSettingService } from '@/lib/services/fleetOrgCiSettingService';
+import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { fleetReadinessService } from '@/lib/services/fleetReadinessService';
 import { runnerImageFreshnessProbeService } from '@/lib/services/runnerImageFreshnessProbeService';
 import { runnerVersionSupportProbeService } from '@/lib/services/runnerVersionSupportProbeService';
@@ -46,6 +47,14 @@ beforeEach(async () => {
     supersededBy: null,
     deadline: null,
     daysLeft: null,
+  });
+  // The three fleet origins (Story MOTIR-9714) have their own suite,
+  // `daily-health-check-fleet-origins.test.ts`, which drives the real chain.
+  // Here they are held `ok`, so a test of another probe that selects the Fly
+  // fleet does not also have to publish core's own origin.
+  vi.spyOn(fleetPreflightService, 'checkFleetOrigins').mockResolvedValue({
+    verdict: 'ok',
+    readings: [],
   });
 });
 
