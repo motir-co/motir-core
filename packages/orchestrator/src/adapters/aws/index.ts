@@ -176,6 +176,20 @@ export interface AwsOrchestratorConfig {
   readonly clientToken?: () => string;
   /** The clock — the test seam. */
   readonly now?: () => Date;
+  /** A network NAMED by configuration instead of found by the shard tag — the
+   *  install fleet's subnets and group, which its infrastructure defines and
+   *  passes as values (MOTIR-10794). Each subnet is its own rotation stop. */
+  readonly network?: AwsExplicitNetwork;
+  /** The instance profile an INDEX VM boots with, by ARN, in place of the pool
+   *  account's own by name — the install fleet's VM profile (MOTIR-10794). Every
+   *  other workload still boots with none, as on a pool account. */
+  readonly indexInstanceProfileArn?: string;
+}
+
+/** Subnets and a security group given as ids (MOTIR-10794). */
+export interface AwsExplicitNetwork {
+  readonly subnetIds: readonly string[];
+  readonly securityGroupId: string;
 }
 
 /** The tagged network one launch goes into. */
@@ -280,6 +294,8 @@ interface LaunchPayload {
   readonly tagNetworkInterface?: boolean;
   /** The instance profile the VM boots with; omitted means none. */
   readonly instanceProfileName?: string;
+  /** The instance profile by ARN; wins over the name. */
+  readonly instanceProfileArn?: string;
 }
 
 /**
@@ -351,6 +367,14 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
 
   /** The shard's subnets (sorted by zone) and its group, found by tag. */
   async function shardNetwork(): Promise<ShardNetwork> {
+    if (config.network) {
+      // Named, not found: no EC2 read, and each subnet is one stop of the walk.
+      return {
+        subnets: config.network.subnetIds.map((subnetId) => ({ subnetId, zone: subnetId })),
+        securityGroupId: config.network.securityGroupId,
+        readAt: now().getTime(),
+      };
+    }
     if (network && now().getTime() - network.readAt < AWS_NETWORK_CACHE_MS) return network;
     const byTag = [{ name: `tag:${AWS_SHARD_TAG_KEY}`, values: [shardTag] }];
     let subnets, groups;
@@ -396,6 +420,7 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       shutdownBehavior,
       tagNetworkInterface,
       instanceProfileName,
+      instanceProfileArn,
     }: LaunchPayload,
     { subnetId, zone }: { subnetId: string; zone: string },
     securityGroupId: string,
@@ -433,7 +458,11 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
               : [],
           tags,
           ...(tagNetworkInterface ? { tagNetworkInterface: true } : {}),
-          ...(instanceProfileName ? { iamInstanceProfileName: instanceProfileName } : {}),
+          ...(instanceProfileArn
+            ? { iamInstanceProfileArn: instanceProfileArn }
+            : instanceProfileName
+              ? { iamInstanceProfileName: instanceProfileName }
+              : {}),
         });
       } catch (err) {
         const retryable = err instanceof Ec2ApiError && err.retryable && !awsCapacityReason(err);
@@ -550,7 +579,11 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       if (spec.size.cpus !== 2 || spec.size.memoryMb !== 8192) {
         throw new AwsInstanceSizeError(spec.size.cpus, spec.size.memoryMb);
       }
-      const payload = LAUNCH_PAYLOADS[spec.workload](spec, shardTag, config);
+      const base = LAUNCH_PAYLOADS[spec.workload](spec, shardTag, config);
+      const payload =
+        config.indexInstanceProfileArn && base.instanceProfileName
+          ? { ...base, instanceProfileArn: config.indexInstanceProfileArn }
+          : base;
 
       // THE ZONE WALK (MOTIR-9277): from this call's rotation index around the
       // list once, one RunInstances per zone, each with its own token (a refused

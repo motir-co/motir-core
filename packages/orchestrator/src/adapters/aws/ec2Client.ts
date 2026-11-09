@@ -73,6 +73,13 @@ export interface AwsProvidedCredentialsConfig {
   readonly region: string;
 }
 
+/** A client on the SDK's DEFAULT credential chain — the process's own identity
+ *  (an ECS task role, say), with no key and no assumed role (MOTIR-10794). */
+export interface AwsDefaultCredentialsConfig {
+  readonly defaultCredentials: true;
+  readonly region: string;
+}
+
 /** One resource tag, as every create writes it and every describe returns it. */
 export interface Ec2Tag {
   readonly key: string;
@@ -228,6 +235,9 @@ export interface Ec2RunInstanceInput {
   /** The instance profile the VM boots with, by name — an index VM's only
    *  (MOTIR-10123), so it can pull its image from ECR. A runner's launch omits it. */
   readonly iamInstanceProfileName?: string;
+  /** The instance profile by ARN, in place of a name — the install fleet's,
+   *  which its infrastructure passes as an ARN (MOTIR-10794). */
+  readonly iamInstanceProfileArn?: string;
 }
 
 export interface Ec2DescribeInstancesInput {
@@ -360,7 +370,8 @@ export interface Ec2SdkClient {
 /** How the factory builds its SDK client — the default is `new EC2Client(config)`. */
 export type Ec2SdkClientFactory = (config: {
   region: string;
-  credentials:
+  /** Absent: the SDK's default credential chain. */
+  credentials?:
     | { accessKeyId: string; secretAccessKey: string; sessionToken?: string }
     | AwsCredentialProvider;
 }) => Ec2SdkClient;
@@ -412,20 +423,24 @@ export function toEc2ApiError(err: unknown): Ec2ApiError {
 
 /** An {@link Ec2Api} over `@aws-sdk/client-ec2`. `clientFactory` is the test seam. */
 export function createEc2Api(
-  config: AwsCredentialsConfig | AwsProvidedCredentialsConfig,
+  config: AwsCredentialsConfig | AwsProvidedCredentialsConfig | AwsDefaultCredentialsConfig,
   clientFactory: Ec2SdkClientFactory = defaultClientFactory,
 ): Ec2Api {
-  const client = clientFactory({
-    region: config.region,
-    credentials:
-      'credentialProvider' in config
-        ? config.credentialProvider
-        : {
-            accessKeyId: config.accessKeyId,
-            secretAccessKey: config.secretAccessKey,
-            ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
-          },
-  });
+  const client = clientFactory(
+    'defaultCredentials' in config
+      ? { region: config.region }
+      : {
+          region: config.region,
+          credentials:
+            'credentialProvider' in config
+              ? config.credentialProvider
+              : {
+                  accessKeyId: config.accessKeyId,
+                  secretAccessKey: config.secretAccessKey,
+                  ...(config.sessionToken ? { sessionToken: config.sessionToken } : {}),
+                },
+        },
+  );
   async function send<T>(command: unknown): Promise<T> {
     try {
       return (await client.send(command)) as T;
@@ -512,9 +527,11 @@ function instanceCalls(send: Send): InstanceCalls {
             HttpEndpoint: input.metadataOptions.httpEndpoint,
           },
           InstanceInitiatedShutdownBehavior: input.instanceInitiatedShutdownBehavior,
-          ...(input.iamInstanceProfileName
-            ? { IamInstanceProfile: { Name: input.iamInstanceProfileName } }
-            : {}),
+          ...(input.iamInstanceProfileArn
+            ? { IamInstanceProfile: { Arn: input.iamInstanceProfileArn } }
+            : input.iamInstanceProfileName
+              ? { IamInstanceProfile: { Name: input.iamInstanceProfileName } }
+              : {}),
           ...(input.blockDeviceMappings.length > 0
             ? {
                 BlockDeviceMappings: input.blockDeviceMappings.map((m) => ({

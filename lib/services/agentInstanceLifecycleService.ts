@@ -92,6 +92,7 @@ import {
   getPersistentOrchestrator,
   isPersistentOrchestratorConfigured,
   persistentOrchestratorForShard,
+  installFleetPersistentOrchestrator,
   type PersistentContainerOrchestrator,
 } from '@/lib/orchestrator';
 import { agentInstancePlacementService } from '@/lib/services/agentInstancePlacementService';
@@ -970,7 +971,6 @@ async function provisionNewInstance(
   row: AgentInstance,
   terminal: ReturnType<typeof agentTerminalMachineConfig>,
 ): Promise<'placed' | 'waiting'> {
-  const orchestrator = getPersistentOrchestrator();
   let placed: Awaited<ReturnType<typeof agentInstancePlacementService.placeAndProvision>>;
   try {
     placed = await agentInstancePlacementService.placeAndProvision(
@@ -998,7 +998,12 @@ async function provisionNewInstance(
           idleCommand: terminal ? null : AGENT_IDLE_COMMAND,
         },
       },
-      { persistentOrchestratorForShard, processWideOrchestrator: () => orchestrator },
+      {
+        persistentOrchestratorForShard,
+        // Read only on the Fly path, so an install with no Fly lane never asks.
+        processWideOrchestrator: () => getPersistentOrchestrator(),
+        installFleetOrchestrator: () => installFleetPersistentOrchestrator(),
+      },
     );
   } catch (err) {
     if (err instanceof OrchestratorCapacityError) return 'waiting';

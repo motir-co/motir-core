@@ -4,12 +4,15 @@ import { OrchestratorNotConfiguredError } from '@motir/orchestrator';
 import {
   getOrchestrator,
   getPersistentOrchestrator,
+  installFleetOrchestrator,
+  installFleetPersistentOrchestrator,
   orchestratorForShard,
   persistentOrchestratorForShard,
   type ContainerOrchestrator,
   type PersistentContainerOrchestrator,
 } from '@/lib/orchestrator';
 import { fleetShardService } from '@/lib/services/fleetShardService';
+import { INSTALL_FLEET_TAG, isInstallFleetShardId } from '@/lib/ciFleet/installFleet';
 
 // WHICH ORCHESTRATOR a CI-runner container is reached through (Story MOTIR-8953 ·
 // MOTIR-8964) — the one seam every container path (boot, poll, settle, stop,
@@ -45,6 +48,8 @@ export const fleetShardOrchestratorService = {
    *  containers to poll, settle and reap. */
   async forShard(shardId: string | null): Promise<ContainerOrchestrator> {
     if (shardId === null) return getOrchestrator();
+    // The install fleet (MOTIR-10794): core's own account, no row to read.
+    if (isInstallFleetShardId(shardId)) return installFleetOrchestrator();
     return this.forShardRow(await fleetShardService.getShard(shardId));
   },
 
@@ -66,7 +71,13 @@ export const fleetShardOrchestratorService = {
    */
   async persistentOrchestratorFor(placement: {
     fleetShardId: string | null;
+    flyApp?: string | null;
   }): Promise<PersistentContainerOrchestrator> {
+    // An install-fleet instance (MOTIR-10794) records no account; its handle's
+    // app is the install fleet's tag.
+    if (placement.fleetShardId === null && placement.flyApp === INSTALL_FLEET_TAG) {
+      return installFleetPersistentOrchestrator();
+    }
     if (placement.fleetShardId === null) return getPersistentOrchestrator();
     let shard: FleetShardDTO;
     try {

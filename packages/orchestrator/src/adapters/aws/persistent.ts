@@ -37,7 +37,12 @@ import {
   type Ec2Tag,
   type Ec2Volume,
 } from './ec2Client';
-import { AWS_DEFAULT_INSTANCE_TYPE, AwsInstanceSizeError, transitionTimeOf } from './index';
+import {
+  AWS_DEFAULT_INSTANCE_TYPE,
+  AwsInstanceSizeError,
+  transitionTimeOf,
+  type AwsExplicitNetwork,
+} from './index';
 import { HOST_AGENT_PORT, type HostAgentClient, type HostAgentTls } from './hostAgentClient';
 import {
   hostCertificateNeedsRenewal,
@@ -183,6 +188,10 @@ export interface AwsPersistentOrchestratorConfig {
   readonly now?: () => Date;
   /** The pause between polls — the test seam. */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** Subnets and group NAMED by configuration — the install fleet's
+   *  (MOTIR-10794). The zone's subnet is the one of them EC2 places in that zone,
+   *  and the group's inbound rule is its infrastructure's, never written here. */
+  readonly network?: AwsExplicitNetwork;
 }
 
 function defaultInstanceType(size: ContainerSize): string | null {
@@ -328,6 +337,7 @@ export function createAwsPersistentOrchestrator(
 
   /** The account's subnet in `zone` and its security group, found by tag. */
   async function networkIn(zone: string): Promise<{ subnetId: string; securityGroupId: string }> {
+    if (config.network) return namedNetworkIn(config.network, zone);
     const byTag = { name: `tag:${AWS_SHARD_TAG_KEY}`, values: [shardTag] };
     let subnets, groups;
     try {
@@ -346,6 +356,28 @@ export function createAwsPersistentOrchestrator(
       );
     }
     return { subnetId: subnets[0]!.subnetId, securityGroupId: groups[0]!.groupId };
+  }
+
+  /** The named subnet in `zone`, read by id (MOTIR-10794). */
+  async function namedNetworkIn(
+    named: AwsExplicitNetwork,
+    zone: string,
+  ): Promise<{ subnetId: string; securityGroupId: string }> {
+    let subnets;
+    try {
+      subnets = await ec2.describeSubnets([
+        { name: 'subnet-id', values: [...named.subnetIds] },
+        { name: 'availability-zone', values: [zone] },
+      ]);
+    } catch (err) {
+      throw awsApiError(err);
+    }
+    if (subnets.length === 0) {
+      throw new OrchestratorNotConfiguredError(
+        `none of the configured subnets is in ${zone} (${region})`,
+      );
+    }
+    return { subnetId: subnets[0]!.subnetId, securityGroupId: named.securityGroupId };
   }
 
   const readInstance = (id: string) => readAwsInstance(ec2, id);
@@ -408,7 +440,7 @@ export function createAwsPersistentOrchestrator(
     userData: string,
   ): Promise<Ec2Instance> {
     const { subnetId, securityGroupId } = await networkIn(zone);
-    await ensureHostAgentIngress(securityGroupId);
+    if (!config.network) await ensureHostAgentIngress(securityGroupId);
     const token = clientToken();
     for (let attempt = 1; ; attempt += 1) {
       try {
