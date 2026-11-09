@@ -392,6 +392,46 @@ describe('END TO END, against real Postgres — the four states as the inventory
     expect(afterPause.indexPausedReason).toBeNull();
   });
 
+  it('⚠️ INDEXING — a REFRESH claiming a behind graph reads `indexing`, not `stale` (bug MOTIR-10821)', async () => {
+    // A refresh claims the repository with its own job_run id (MOTIR-9454), so
+    // the inventory's running read must count it exactly as a first index.
+    await seedSucceededIndex();
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexSettled(
+        REPO_REF,
+        fx.workspace.organizationId,
+        { headSha: 'sha-at-index' },
+        tx,
+      ),
+    );
+    await withSystemContext((tx) =>
+      githubRepoRepository.setDefaultBranchHeadSha(repoRowId, 'sha-after-push', tx),
+    );
+    expect(await stateOf()).toBe('stale');
+
+    const refresh = await adminDb.jobRun.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        functionId: 'system.code-graph-refresh',
+        eventName: 'system.code-graph-refresh',
+        eventId: `evt-${Math.floor(Math.random() * 1_000_000)}`,
+        lane: 'engine',
+        attempt: 0,
+        status: 'running',
+      },
+    });
+    await withSystemContext((tx) =>
+      githubRepoRepository.markIndexStarted(REPO_REF, fx.workspace.organizationId, refresh.id, tx),
+    );
+    expect(await stateOf()).toBe('indexing');
+
+    // …and a refresh that ends without settling the row reads what its shas say.
+    for (const status of ['failed', 'abandoned', 'succeeded'] as const) {
+      await adminDb.jobRun.update({ where: { id: refresh.id }, data: { status } });
+      expect(await stateOf(), status).toBe('stale');
+    }
+  });
+
   it('⚠️ A CRASHED run does NOT strand the row on `Indexing…` for ever', async () => {
     // The reason `indexing_run_id` is a POINTER and not a state. The derivation
     // resolves it against the ledger, so a run that died leaves the row reading

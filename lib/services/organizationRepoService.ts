@@ -16,6 +16,7 @@ import { deriveCodeGraphIndexState, hasBuiltGraph } from '@/lib/codeGraph/indexS
 import { motirOwnedOrgLogins } from '@/lib/ciMetering/ownedOrgs';
 import { isMotirHostedOwner } from '@/lib/git/hostOwnership';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { toProjectRepoDto } from '@/lib/mappers/projectRepoMappers';
 import { toOrgRepoOptionDto, toUsingProjectDto } from '@/lib/mappers/organizationRepoMappers';
 import type {
@@ -370,17 +371,6 @@ export const organizationRepoService = {
       (tx) => resolveOrganizationId(ctx.workspaceId, tx),
     );
 
-    const { runningRunIds } = await withSystemContext(async (tx) => {
-      // WHICH claimed runs are actually still running. One read for the whole
-      // inventory rather than one per row, and it is what makes a crashed run
-      // self-healing: an `abandoned` row is simply not in this set.
-      const running = await tx.jobRun.findMany({
-        where: { functionId: 'system.code-graph-index', status: 'running' },
-        select: { id: true },
-      });
-      return { runningRunIds: new Set(running.map((r) => r.id)) };
-    });
-
     const repos = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       async (tx) => {
@@ -389,6 +379,19 @@ export const organizationRepoService = {
       },
     );
     const byId = new Map(repos.map((r) => [r.id, r]));
+
+    // WHICH claimed runs are actually still running. One read for the whole
+    // inventory rather than one per row, and it is what makes a crashed run
+    // self-healing: an `abandoned` row is simply not in this set. It is the
+    // repository's one running-claim predicate — a first INDEX and a REFRESH both
+    // claim a repository (bug MOTIR-10821) — asked of exactly the claims these
+    // rows carry, since the runs may belong to any workspace of the organisation.
+    const claimedRunIds = repos.flatMap((r) => (r.indexingRunId === null ? [] : [r.indexingRunId]));
+    const runningRunIds = new Set(
+      await withSystemContext((tx) =>
+        jobRunRepository.listRunningCodeGraphRunIdsAmong(claimedRunIds, tx),
+      ),
+    );
 
     // ⚠️ WHOSE EACH ROW IS — resolved ONCE for the list, and the answer the ROOM
     // already gives (bug MOTIR-4892). `listByOrganization` filters on
