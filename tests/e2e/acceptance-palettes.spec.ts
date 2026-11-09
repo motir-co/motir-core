@@ -74,7 +74,11 @@ const STEP = 'onboarding.design';
 /** The pane's card title — `text-(--el-text)`, so it carries the palette's ink. */
 const paneTitle = (page: Page): Locator =>
   page.getByRole('heading', { name: msg('en', `${PANE}.card.title`), exact: true });
-const designPage = (page: Page): Locator => page.getByTestId('design-page');
+// Reached through the accessibility tree, which excludes React's streamed and
+// outgoing copies (the page-rooted locator guard); the section's `design-page`
+// test id is asserted on it, so the right region is the one found.
+const designPage = (page: Page): Locator =>
+  page.getByRole('region', { name: msg('en', `${STEP}.title`), exact: true });
 /** The Design step's own title — `text-(--el-text)` inside the scoped section. */
 const stepTitle = (page: Page): Locator =>
   designPage(page).getByRole('heading', { name: msg('en', `${STEP}.title`), exact: true });
@@ -321,6 +325,7 @@ test.describe('four new palettes', () => {
         .last()
         .click();
       await expect(designPage(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
+      await expect(designPage(page)).toHaveAttribute('data-testid', 'design-page');
       await expect(designPage(page)).toHaveAttribute('data-appearance-scope', '');
       const radios = group(designPage(page), STEP, 'palette').getByRole('radio');
       await expect(radios).toHaveCount(PALETTE_IDS.length);
