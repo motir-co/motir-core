@@ -584,3 +584,113 @@ describe('the live List (§23.9)', () => {
     await act(async () => {});
   });
 });
+
+// THE PANE OPENS ON THE CANVAS, AT THE TARGET (MOTIR-10739). A plan's first live read
+// has no proposals, and its review used to count the PROJECT ROOT as its arrival
+// level — so on a large project the pin seeded the List ("Nothing proposed yet") for
+// the whole session. These reads say exactly that: a root far past both size arms.
+describe('a fresh plan opens on the CANVAS at its target, not on an empty List (MOTIR-10739)', () => {
+  const PAST_BOTH_ARMS = { arrivalLevelSize: 200, arrivalLevelTotal: 640 };
+  const fresh = (over: Partial<PlanChangeConversationState> = {}) => ({
+    ...BASE,
+    liveReview: planReview([], {
+      id: PLAN_ID,
+      status: 'generating',
+      plannedAt: null,
+      ...PAST_BOTH_ARMS,
+    }),
+    liveVersion: (version += 1),
+    ...over,
+  });
+  const listButton = () => screen.getByRole('button', { name: /List/ });
+  const STORY_ANCHOR = {
+    anchor: { id: STORY_ID, identifier: 'MOTIR-7', title: 'Planning layer', kind: 'story' },
+    ancestors: [
+      { id: EPIC_ID, identifier: 'MOTIR-2200', title: 'The agent loop' },
+      { id: BUG_ID, identifier: 'MOTIR-3070', title: 'The review surface' },
+    ],
+    hasChildren: true,
+  };
+  beforeEach(() => {
+    fetchPlanningAnchor.mockReset().mockResolvedValue(STORY_ANCHOR);
+  });
+
+  it('shows the canvas, not PlanProposalList, on a first read with no items — and the List is one click away', async () => {
+    mountHost(fresh());
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    expect(screen.getByTestId('roadmap-canvas')).toBeTruthy();
+    expect(listButton().getAttribute('aria-pressed')).toBe('false');
+    expect(screen.queryByText('Nothing proposed yet')).toBeNull();
+
+    fireEvent.click(listButton());
+    expect(listButton().getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Nothing proposed yet')).toBeTruthy();
+  });
+
+  it('keeps the seeded view pinned: the reader’s List survives the plan’s next reads', async () => {
+    const next = mountHost(fresh());
+    fireEvent.click(listButton());
+    next(live([P1]));
+    next(live([P1, P2]));
+    expect(listButton().getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('First card')).toBeTruthy();
+    await act(async () => {});
+  });
+
+  it('a PROJECT-launched session moves the canvas inside the target the planner settles', async () => {
+    const next = mountHost(fresh());
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    expect(fetchPlanningAnchor).not.toHaveBeenCalled();
+
+    next(fresh({ settledTargetKey: 'MOTIR-7' }));
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-7 · Planning layer'));
+    expect(fetchPlanningAnchor).toHaveBeenCalledTimes(1);
+    expect(fetchPlanningAnchor.mock.calls[0]![0]).toBe('MOTIR-7');
+    expect(listButton().getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('a reader who has already navigated stays where they are when the target settles', async () => {
+    const next = mountHost(fresh());
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    fireEvent.keyDown(node(EPIC_ID)!, { key: 'Enter' });
+    fireEvent.click(within(node(EPIC_ID)!).getByTestId('drill-button'));
+    await waitFor(() => expect(node(BUG_ID)).not.toBeNull());
+    expect(activeCrumb()).toBe('MOTIR-2200 · The agent loop');
+
+    next(fresh({ settledTargetKey: 'MOTIR-7' }));
+    await waitFor(() => expect(fetchPlanningAnchor).toHaveBeenCalled());
+    await act(async () => {});
+    expect(activeCrumb()).toBe('MOTIR-2200 · The agent loop');
+  });
+
+  it('a target the viewer cannot see moves nothing and says nothing', async () => {
+    fetchPlanningAnchor.mockResolvedValue(null);
+    const next = mountHost(fresh());
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    next(fresh({ settledTargetKey: 'MOTIR-404' }));
+    await waitFor(() => expect(fetchPlanningAnchor).toHaveBeenCalled());
+    await act(async () => {});
+    expect(node(EPIC_ID)).not.toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('a WORK-ITEM-launched session opens the canvas at that item’s arrival trail', async () => {
+    const next = mountHost(
+      fresh(),
+      [
+        { id: EPIC_ID, label: 'MOTIR-2200 · The agent loop' },
+        { id: BUG_ID, label: 'MOTIR-3070 · The review surface' },
+      ],
+      true,
+    );
+    await waitFor(() => expect(node(STORY_ID)).not.toBeNull());
+    expect(activeCrumb()).toBe('MOTIR-3070 · The review surface');
+    expect(listButton().getAttribute('aria-pressed')).toBe('false');
+
+    // It arrived inside its own target, so the planner's key does not move it.
+    next(fresh({ settledTargetKey: 'MOTIR-7' }));
+    await act(async () => {});
+    expect(fetchPlanningAnchor).not.toHaveBeenCalled();
+    expect(activeCrumb()).toBe('MOTIR-3070 · The review surface');
+  });
+});

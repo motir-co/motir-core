@@ -249,6 +249,22 @@ describe('the ARRIVAL LEVEL’s size decides the default too (MOTIR-4024)', () =
   it('is unchanged for a small, single-container plan — the case that must stay a canvas', () => {
     expect(defaultPlanView(level(3))).toBe('canvas');
   });
+
+  it('opens a plan with NO items on the CANVAS, whatever the level sizes say (MOTIR-10739)', () => {
+    // An empty plan has no arrival container, so neither size describes a level of
+    // it — an older read counted the project ROOT there, and a large project's root
+    // sent every freshly started plan to an empty List. Both size arms, past both
+    // thresholds, and the empty plan still opens on the canvas.
+    const empty = (size: number, total: number) =>
+      planReview([], { arrivalLevelSize: size, arrivalLevelTotal: total });
+    expect(defaultPlanView(empty(ARRIVAL_LEVEL_MAX_NODES + 1, ARRIVAL_LEVEL_MAX_NODES + 1))).toBe(
+      'canvas',
+    );
+    expect(defaultPlanView(empty(TREE_LEVEL_MAX_TAKE, TREE_LEVEL_MAX_TAKE + 50))).toBe('canvas');
+    expect(defaultPlanView(empty(0, 0))).toBe('canvas');
+    // …and ONE item is enough for the size arms to rule again.
+    expect(defaultPlanView(level(ARRIVAL_LEVEL_MAX_NODES + 1))).toBe('list');
+  });
 });
 
 describe('the PREMISE the legibility arm is justified against (MOTIR-6250)', () => {

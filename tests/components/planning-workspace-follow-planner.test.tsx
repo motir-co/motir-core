@@ -469,3 +469,153 @@ describe('follow the planner — the driven canvas while the plan is written', (
     expect(followButton()).toBeNull();
   });
 });
+
+// ── A PRESS ALWAYS MOVES THE CANVAS (MOTIR-10740) ────────────────────────────
+// With no live step the press used to ask the canvas for nothing. It now falls
+// back to the planner's last step, its last written proposal, the target's
+// arrival, and finally the root (`followDestination`).
+describe('follow the planner — a press with no live step still takes the person somewhere', () => {
+  beforeEach(() => {
+    fetchPlanningAnchor.mockReset();
+  });
+  /** Drill into the epic by hand: the person's own act, so following turns OFF. */
+  async function drillIntoEpic() {
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    fireEvent.keyDown(node(EPIC_ID)!, { key: 'Enter' });
+    fireEvent.click(within(node(EPIC_ID)!).getByTestId('drill-button'));
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-2200 · The agent loop'));
+    await waitFor(() => expect(followButton()).not.toBeNull());
+  }
+  const BUG_ANCHOR = {
+    anchor: { id: BUG_ID, identifier: 'MOTIR-3070', title: 'The review surface', kind: 'bug' },
+    ancestors: [{ id: EPIC_ID, identifier: 'MOTIR-2200', title: 'The agent loop' }],
+    hasChildren: true,
+  };
+
+  it('no live step, a step held earlier: the press goes back to the held step’s level', async () => {
+    const next = await startDriven();
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-7 · Planning layer'));
+    // Between steps: the snapshot names nothing live any more.
+    next(driving([P1, P3], []));
+    const crumbs = screen.getByRole('navigation', { name: /breadcrumb/i });
+    fireEvent.click(within(crumbs).getByRole('button', { name: 'MOTIR-2200 · The agent loop' }));
+    await waitFor(() => expect(followButton()).not.toBeNull());
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-7 · Planning layer'));
+    expect(followState()?.getAttribute('data-follow')).toBe('on');
+    await waitFor(() => expect(document.activeElement?.getAttribute('role')).toBe('application'));
+  });
+
+  it('a freshly mounted live plan with no live step: the press goes to the last written proposal', async () => {
+    const next = mountHost(live([]), undefined, true);
+    next(driving([P3, P1], []));
+    await drillIntoEpic();
+
+    fireEvent.click(followButton()!);
+    // P1 is the LAST add in append order — it sits under MOTIR-3070.
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
+    expect(followState()?.getAttribute('data-follow')).toBe('on');
+    expect(liveRegion()).toBe('Showing work inside MOTIR-3070 · The review surface');
+  });
+
+  it('no steps and no proposals: the press goes to the FIRST target’s arrival level', async () => {
+    fetchPlanningAnchor.mockResolvedValue(BUG_ANCHOR);
+    conversation.state = live([]);
+    renderWithIntl(
+      <PlanningWorkspaceHost
+        projectKey="MOTIR"
+        projectName="Motir"
+        launch={parsePlanningLaunch({ mode: 'replan', from: 'project' })}
+        onClose={() => {}}
+        initialTarget={TARGETED}
+        extraInitialTargets={[
+          { id: 'wi_second', identifier: 'MOTIR-2', title: 'Second', kind: 'story' },
+        ]}
+      />,
+    );
+    await drillIntoEpic();
+    await waitFor(() => expect(fetchPlanningAnchor).toHaveBeenCalled());
+    expect(fetchPlanningAnchor.mock.calls.map((c) => c[0])).toEqual(['MOTIR-1']);
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
+    expect(followState()?.getAttribute('data-follow')).toBe('on');
+  });
+
+  it('the trail the pane arrived on is the target’s arrival, with no anchor read', async () => {
+    const arrived = [
+      { id: EPIC_ID, label: 'MOTIR-2200 · The agent loop' },
+      { id: BUG_ID, label: 'MOTIR-3070 · The review surface' },
+    ];
+    mountHost(live([]), arrived, true);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
+    const crumbs = screen.getByRole('navigation', { name: /breadcrumb/i });
+    fireEvent.click(within(crumbs).getByRole('button', { name: 'MOTIR-2200 · The agent loop' }));
+    await waitFor(() => expect(followButton()).not.toBeNull());
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
+    expect(fetchPlanningAnchor).not.toHaveBeenCalled();
+  });
+
+  it('no target at all: the press goes to the root', async () => {
+    const next = mountHost(live([]));
+    await waitFor(() => expect(node(EPIC_ID)).not.toBeNull());
+    const root = activeCrumb();
+    await drillIntoEpic();
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe(root));
+    expect(node(EPIC_ID)).not.toBeNull();
+    expect(followState()?.getAttribute('data-follow')).toBe('on');
+
+    // The root the press held is a fallback, not a step: once proposals land, the
+    // next press goes to the last one instead of the root again.
+    next(driving([P3, P1], []));
+    await drillIntoEpic();
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
+  });
+
+  it('a target the viewer cannot read degrades to the root', async () => {
+    fetchPlanningAnchor.mockResolvedValue(null);
+    mountHost(live([]), undefined, true);
+    await drillIntoEpic();
+    await waitFor(() =>
+      expect(fetchPlanningAnchor).toHaveBeenCalledWith('MOTIR-1', expect.anything()),
+    );
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).not.toBe('MOTIR-2200 · The agent loop'));
+    expect(node(EPIC_ID)).not.toBeNull();
+    expect(followState()?.getAttribute('data-follow')).toBe('on');
+  });
+
+  it('an anchor read that fails leaves the press on the root fallback', async () => {
+    fetchPlanningAnchor.mockRejectedValue(new Error('down'));
+    mountHost(live([]), undefined, true);
+    await drillIntoEpic();
+    await waitFor(() => expect(fetchPlanningAnchor).toHaveBeenCalled());
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).not.toBe('MOTIR-2200 · The agent loop'));
+    expect(node(EPIC_ID)).not.toBeNull();
+  });
+
+  it('a stalled plan (idle control) still moves on press, and the next live step drives again', async () => {
+    const next = mountHost(live([]), undefined, true);
+    // Stalled from the start: no live step, nothing held — only the snapshot's last step.
+    next(driving([P1, P3], [authoring('pi_3')], { lastActivityAt: STALE }));
+    await drillIntoEpic();
+    expect(followButton()?.getAttribute('data-idle')).toBe('true');
+
+    fireEvent.click(followButton()!);
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-7 · Planning layer'));
+    expect(followState()?.getAttribute('data-follow')).toBe('on');
+
+    // The planner comes back and starts a step elsewhere: following is still on.
+    next(driving([P1, P3], [authoring('pi_1', 'sess_back')]));
+    await waitFor(() => expect(activeCrumb()).toBe('MOTIR-3070 · The review surface'));
+  });
+});

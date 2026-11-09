@@ -33,7 +33,13 @@ import { FollowPlannerControl } from '@/components/planning/FollowPlannerControl
 import type { ProjectRoadmapCanvasProps } from '@/components/planning/ProjectRoadmapCanvas';
 import { usePlanProgressReading } from '@/lib/hooks/usePlanProgressReading';
 import { providerLimitView } from '@/lib/planChange/providerLimitView';
-import { drivenFollowRequest, nextDrivenStep, type DrivenStep } from '@/lib/planning/plannerDrive';
+import {
+  drivenFollowRequest,
+  followDestination,
+  nextDrivenStep,
+  type DrivenStep,
+} from '@/lib/planning/plannerDrive';
+import { surfaceArrivalTrail } from '@/lib/planning/surfaceArrival';
 import { GuideWorkspaceHost } from '@/components/planning/GuideWorkspaceHost';
 import { PlanCloseGuard } from '@/components/planning/PlanCloseGuard';
 import {
@@ -412,33 +418,8 @@ function PlanWorkspaceHost({
   // write in an effect body, which this is not.
   const [followFromTheTarget, setFollowFromTheTarget] = useState<FollowRequest | null>(null);
 
-  // TRIGGER 1 — the person added the first target. The trail needs the target's
-  // ANCESTORS, which only the anchor read has, so this is a fetch rather than a
-  // derivation from the chip.
-  const firstTarget = targets[0] ?? null;
-  const firstTargetKey =
-    startedWithNoTarget &&
-    firstTarget !== null &&
-    !pickedOnCanvas.has(firstTarget.identifier.toUpperCase())
-      ? firstTarget.identifier
-      : null;
-  useEffect(() => {
-    if (firstTargetKey === null) return;
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const found = await fetchPlanningAnchor(firstTargetKey, controller.signal);
-        if (controller.signal.aborted) return;
-        // A target the viewer cannot see degrades to nothing at all, never an
-        // error and never a move — the same silent contract the arrival keeps.
-        const next = followFromTarget(found);
-        if (next !== null) setFollowFromTheTarget(next);
-      } catch {
-        // An outage is not a reason to move the canvas, or to say anything.
-      }
-    })();
-    return () => controller.abort();
-  }, [firstTargetKey]);
+  // TRIGGER 1's effect sits below the conversation hook: it also reads the
+  // target the planner SETTLED, which only the hook's state carries (MOTIR-10739).
 
   // ── THE CLOSE, AND THE ONE QUESTION IT MAY ASK (MOTIR-4731) ───────────────
   //
@@ -547,6 +528,42 @@ function PlanWorkspaceHost({
     onGuideOfferConfirmed,
     onRestarted,
   });
+
+  // TRIGGER 1 — the FIRST target became known: the person added it, or, with no
+  // target chip, the planner SETTLED it (MOTIR-10739 — the run's `target_settled`
+  // frame at index 0, `state.settledTargetKey`). A project launch has no chip, and
+  // without the planner's key its canvas sat at the root while the plan was written
+  // under a card the reader could not see. The person's own chip outranks the
+  // planner's key: it is their act. The trail needs the target's ANCESTORS, which
+  // only the anchor read has, so this is a fetch rather than a derivation.
+  //
+  // MOTIR-6161's rule holds unchanged: the canvas DECLINES the move once the reader
+  // has navigated, and a target the viewer cannot see, or an outage, moves nothing
+  // and says nothing.
+  const firstTarget = targets[0] ?? null;
+  const firstChipKey =
+    firstTarget !== null && !pickedOnCanvas.has(firstTarget.identifier.toUpperCase())
+      ? firstTarget.identifier
+      : null;
+  const plannerTargetKey = firstTarget === null ? (state.settledTargetKey ?? null) : null;
+  const firstTargetKey = startedWithNoTarget ? (firstChipKey ?? plannerTargetKey) : null;
+  useEffect(() => {
+    if (firstTargetKey === null) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const found = await fetchPlanningAnchor(firstTargetKey, controller.signal);
+        if (controller.signal.aborted) return;
+        // A target the viewer cannot see degrades to nothing at all, never an
+        // error and never a move — the same silent contract the arrival keeps.
+        const next = followFromTarget(found);
+        if (next !== null) setFollowFromTheTarget(next);
+      } catch {
+        // An outage is not a reason to move the canvas, or to say anything.
+      }
+    })();
+    return () => controller.abort();
+  }, [firstTargetKey]);
 
   // THE START TURN HAS LANDED (MOTIR-7973): once the thread holds a user turn, the
   // address that asked to START it now names it instead — ONE replace, dropping
@@ -878,23 +895,82 @@ function PlanWorkspaceHost({
   const followReaderNavigated = useCallback(() => {
     setDrive((d) => (d.on ? { ...d, on: false } : d));
   }, []);
+  // ── WHERE A PRESS GOES WHEN NO STEP IS LIVE (MOTIR-10740) ──────────────────
+  //
+  // The press's fallback rungs live in `followDestination`; its fifth is the
+  // TARGET's arrival trail. Known here as the trail the pane arrived on, else the
+  // follow-move's (MOTIR-6161). When neither is resolved — a launch with a target
+  // but no arrival read, or a reopened session — the first target is read once
+  // with the same anchor read and turned into its arrival by the same rule
+  // (`surfaceArrivalTrail`). The FIRST target is the person's first pick
+  // (`targets[0]`, the primary anchor); the session's `targetKeys` are canonical
+  // (sorted), so they are only the fallback when the composer holds none.
+  const pressTargetKey = targets[0]?.identifier ?? state.session?.targetKeys[0] ?? null;
+  const knownTargetTrail = initialCanvasTrail ?? followFromTheTarget?.trail ?? null;
+  const [fetchedTarget, setFetchedTarget] = useState<{
+    key: string;
+    trail: CanvasCrumb[];
+  } | null>(null);
+  // The follow-move already reads the first target the person ADDED (TRIGGER 1
+  // above, `firstTargetKey`); that key is not read twice. When that read lands no
+  // trail (a leaf at the root, an unreadable key) the rung is the root either way.
+  const fetchTargetKey =
+    drivenPane && paneLive && knownTargetTrail === null && pressTargetKey !== firstTargetKey
+      ? pressTargetKey
+      : null;
+  useEffect(() => {
+    if (fetchTargetKey === null) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const found = (await fetchPlanningAnchor(fetchTargetKey, controller.signal)) ?? null;
+        if (controller.signal.aborted) return;
+        // A target the viewer cannot see arrives at the root, silently — the
+        // arrival rule's own degradation.
+        const trail = found
+          ? surfaceArrivalTrail({
+              anchor: found.anchor,
+              ancestors: found.ancestors,
+              hasChildren: found.hasChildren,
+            })
+          : [];
+        setFetchedTarget({ key: fetchTargetKey, trail });
+      } catch {
+        // An outage leaves the rung unresolved; the press falls through to the root.
+      }
+    })();
+    return () => controller.abort();
+  }, [fetchTargetKey]);
+  const pressTargetTrail =
+    knownTargetTrail ??
+    (fetchedTarget !== null && fetchedTarget.key === pressTargetKey ? fetchedTarget.trail : null);
   const followPlanner = useCallback(() => {
+    // A press ALWAYS asks the canvas for a level (MOTIR-10740): the live step, else
+    // the planner's last one, else its last proposal, else the target, else the
+    // root. The destination is HELD like a driven step, so the next step that goes
+    // live takes over from it and following stays on. The request carries a fresh
+    // key (the bumped epoch) and `focus`, so the canvas takes focus once the level
+    // is drawn — and a destination already on screen moves nothing and announces
+    // "Following the planner again".
     setDrive((d) => {
       const epoch = d.epoch + 1;
+      const { source: _source, ...held } = followDestination({
+        held: d.held,
+        liveSteps: paneReading?.liveSteps ?? [],
+        snapshotSteps: paneReview?.progress?.steps ?? [],
+        items: paneReview?.items ?? [],
+        targetTrail: pressTargetTrail,
+        proposedWord,
+      });
       return {
         ...d,
         on: true,
         epoch,
-        resumeKey: drivenFollowRequest(d.held, epoch)?.key ?? null,
+        held,
+        resumeKey: drivenFollowRequest(held, epoch)?.key ?? null,
       };
     });
-    // §28.7: the press hands focus to the canvas, which is where the result is.
-    // With a driven step the canvas does it (`focus` on the request below), once
-    // the level is drawn; with none nothing moves, so the canvas in view takes it.
-    if (!drive.held) {
-      paneRef.current?.querySelector<HTMLElement>('[role="application"]')?.focus();
-    }
-  }, [drive.held]);
+  }, [paneReading, paneReview, pressTargetTrail, proposedWord]);
   const followLeft = useCallback(() => {
     setDrive((d) => (d.leaving ? { ...d, leaving: false } : d));
   }, []);
