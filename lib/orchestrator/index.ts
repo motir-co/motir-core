@@ -1043,6 +1043,16 @@ function rawHostedAgentImage(): string {
 }
 
 /**
+ * Does this deployment run hosted agents — is the hosted-agent image set? The
+ * same test the hosted-agent image preflight makes, exported so the fleet
+ * origins preflight (MOTIR-9714) asks the gateway's run-lane origin of exactly
+ * the deployments that hand it to a machine.
+ */
+export function isHostedAgentConfigured(): boolean {
+  return rawHostedAgentImage() !== '';
+}
+
+/**
  * The registry host of an image reference, lower-cased: the first path segment
  * when it looks like a host (a `.`, a `:` or `localhost`), Docker Hub otherwise —
  * the same rule `docker pull` applies.
