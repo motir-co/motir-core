@@ -202,8 +202,9 @@ async function readOrigin(
  * injected so the test drives every arm with no environment and no network.
  *
  * `applies` says which origins this deployment hands a machine at all: core's
- * origin is owed wherever real machines boot, motir-ai's only where it indexes
- * and the gateway's only where it runs hosted agents. An origin left out of it
+ * origin only where it runs hosted agents or agent instances (both are handed
+ * it), motir-ai's only where it indexes and the gateway's only where it runs
+ * hosted agents. An origin left out of it
  * applies. One that does not is read `not_applicable` and never fails.
  */
 export async function verifyFleetOrigins(args: {

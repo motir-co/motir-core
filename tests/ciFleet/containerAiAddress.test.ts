@@ -147,7 +147,15 @@ describe('isPrivateNetworkHost — the structural half, decided without a networ
     ['fc00::1', true],
     ['fe80::1', true],
     ['2606:4700::1111', false],
-    ['::ffff:a00:1', false],
+    // IPv4-mapped and -compatible literals are judged by the IPv4 inside them.
+    ['::ffff:a00:1', true],
+    ['[::ffff:10.0.0.1]', true],
+    ['::ffff:127.0.0.1', true],
+    ['::ffff:7f00:1', true],
+    ['0:0:0:0:0:ffff:c0a8:9', true],
+    ['::ac14:505', true],
+    ['::ffff:808:808', false],
+    ['::ffff:8.8.8.8', false],
   ])('IPv6 literals: %s → private: %s', (host, expected) => {
     expect(isPrivateNetworkHost(host)).toBe(expected);
   });

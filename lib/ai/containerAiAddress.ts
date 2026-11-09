@@ -127,11 +127,32 @@ function isPrivateIpv4(octets: readonly number[]): boolean {
 }
 
 /**
+ * The IPv4 address inside an IPv4-MAPPED (`::ffff:a.b.c.d`) or IPv4-COMPATIBLE
+ * (`::a.b.c.d`) IPv6 literal, in its dotted or its hex form (`::ffff:a00:1`,
+ * which is how `new URL` writes it) — or null. Without it, `[::ffff:10.0.0.1]`
+ * would pass as a public host.
+ */
+function embeddedIpv4(host: string): number[] | null {
+  const compact = host.replace(/^(?:0{1,4}:){5}ffff:/, '::ffff:').replace(/^(?:0{1,4}:){6}/, '::');
+  const m = /^::(?:ffff:)?(?:(\d{1,3}(?:\.\d{1,3}){3})|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/.exec(
+    compact,
+  );
+  if (!m) return null;
+  if (m[1]) return ipv4Octets(m[1]);
+  const hi = parseInt(m[2]!, 16);
+  const lo = parseInt(m[3]!, 16);
+  return [hi >> 8, hi & 0xff, lo >> 8, lo & 0xff];
+}
+
+/**
  * A private IPv6 literal: unspecified (`::`), loopback (`::1`), unique local
- * (fc00::/7, Fly 6PN is `fdaa:`) and link-local (fe80::/10).
+ * (fc00::/7, Fly 6PN is `fdaa:`), link-local (fe80::/10), and an IPv4 address
+ * in a private range embedded in an IPv4-mapped or -compatible literal.
  */
 function isPrivateIpv6(host: string): boolean {
   if (host === '::' || host === '::1') return true;
+  const embedded = embeddedIpv4(host);
+  if (embedded) return isPrivateIpv4(embedded);
   const first = host.split(':')[0] ?? '';
   if (!/^[0-9a-f]{1,4}$/.test(first)) return false;
   const group = parseInt(first.padStart(4, '0'), 16);
