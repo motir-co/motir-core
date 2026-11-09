@@ -256,6 +256,7 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
       'MOTIR_INDEXER_IMAGE',
       'MOTIR_HOSTED_AGENT_IMAGE',
       'FLY_INSTANCES_API_TOKEN',
+      'MOTIR_INSTALL_FLEET_KINDS',
       'MOTIR_BASE_URL',
     ]) {
       vi.stubEnv(name, '');
@@ -287,6 +288,7 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
       kinds.hosted ? 'ghcr.io/motir-co/motir-agent@sha256:9f8e7d6c' : '',
     );
     vi.stubEnv('FLY_INSTANCES_API_TOKEN', kinds.instances ? 'fly_instances_token' : '');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', '');
   }
 
   const verdicts = (result: Awaited<ReturnType<typeof fleetPreflightService.checkFleetOrigins>>) =>
@@ -313,6 +315,17 @@ describe('fleetPreflightService.checkFleetOrigins', () => {
       verdict: 'failed',
       failures: [{ origin: 'core', verdict: 'unconfigured' }],
     });
+  });
+
+  it("asks core's origin of agent instances on the install fleet, with no Fly lane", async () => {
+    wireOnly({});
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'agent_instance');
+    stubOrigins();
+    expect(verdicts(await fleetPreflightService.checkFleetOrigins())).toEqual([
+      ['core', 'reachable'],
+      ['aiContainer', 'not_applicable'],
+      ['gatewayRun', 'not_applicable'],
+    ]);
   });
 
   it("asks only motir-ai's origin of a deployment that only indexes", async () => {

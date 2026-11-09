@@ -12,6 +12,7 @@ import {
   verifyIndexContainerAiAddress,
   type ContainerAiAddressVerdict,
 } from '@/lib/ai/containerAiAddress';
+import { installFleetTakesKind } from '@/lib/ciFleet/installFleet';
 import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
 import { verifyFleetOrigins, type FleetOriginsVerdict } from '@/lib/ai/fleetOrigins';
 
@@ -149,8 +150,12 @@ export const fleetPreflightService = {
     }
     const indexes = isIndexFleetConfigured();
     const hostedRuns = isHostedAgentConfigured();
+    // Agent instances run on the Fly lane, the install fleet (MOTIR-10801) or
+    // their AWS pool: any one of the three means a launch hands core's origin.
     const agentInstances =
-      isPersistentOrchestratorConfigured() || (await fleetKindOnPool('agent_instance'));
+      isPersistentOrchestratorConfigured() ||
+      installFleetTakesKind('agent_instance') ||
+      (await fleetKindOnPool('agent_instance'));
     return verifyFleetOrigins({
       isConfigured: indexes || hostedRuns || agentInstances,
       applies: {
