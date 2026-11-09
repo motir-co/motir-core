@@ -27,7 +27,12 @@ import {
 import { AWS_INDEX_IAM_ROLE } from './management';
 import { AWS_SHARD_TAG_KEY } from './network';
 import { buildContainerUserData, buildRunnerUserData, encodeUserData } from './userData';
-import { buildIndexUserData, consoleExitCode, consoleShowsPullFailure } from './indexUserData';
+import {
+  buildIndexUserData,
+  consoleExitCode,
+  consolePullError,
+  consoleShowsPullFailure,
+} from './indexUserData';
 
 export * from './userData';
 export * from './indexUserData';
@@ -64,9 +69,10 @@ export * from './inventory';
 // `code_graph_index` spec boots the stock Docker-host AMI (`indexerAmiId`) with a
 // script that pulls the indexer image by digest and runs it (`./indexUserData.ts`
 // names the AMI and why). Same size, same network, same tags and the same
-// launch/zone walk as a runner. Its signals are read from the VM's serial console
-// once it has stopped: a failed pull, reported as `imagePullFailed`, and the
-// indexer's exit code (MOTIR-9449), reported as `exitCode`. Unlike a runner it
+// launch/zone walk as a runner. Its signals are read from the VM's serial console:
+// a failed pull, reported as `imagePullFailed`, and the indexer's exit code
+// (MOTIR-9449), reported as `exitCode`. They are read LIVE while the VM holds
+// after writing them (MOTIR-10823), and from the posted console once it stopped. Unlike a runner it
 // launches with `InstanceInitiatedShutdownBehavior: 'stop'`, so its power-off
 // leaves it stopped and readable until `teardown` terminates it at settle.
 
@@ -557,6 +563,39 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    * cannot be read is "not known" for both, never a pull failure: the run then
    * ends as a stop whose code was not observed.
    */
+  /** Log the failed login's or pull's own words, read off the console, so the
+   *  cause outlives the VM (MOTIR-10823). */
+  function reportPullFailure(instance: Ec2Instance, output: string | null): void {
+    console.warn('[awsOrchestrator] an index VM could not pull its image', {
+      instanceId: instance.instanceId,
+      detail: consolePullError(output).join(' | ') || 'no error lines on the console',
+    });
+  }
+
+  /**
+   * A RUNNING index VM's live console, read for a marker (MOTIR-10823). The boot
+   * script holds the VM up after it writes either marker, so a poll inside that
+   * hold reads it here instead of waiting for EC2 to post a stopped VM's console.
+   * Null while no marker is there yet, and on a read that fails: a running VM is
+   * read again on the next poll, and the stopped-VM read below still warns.
+   */
+  async function liveIndexOutcome(
+    instance: Ec2Instance,
+  ): Promise<{ imagePullFailed?: true; exitCode: number | null } | null> {
+    let output: string | null;
+    try {
+      output = await ec2.getConsoleOutput(instance.instanceId, { latest: true });
+    } catch {
+      return null;
+    }
+    if (consoleShowsPullFailure(output)) {
+      reportPullFailure(instance, output);
+      return { imagePullFailed: true, exitCode: null };
+    }
+    const exitCode = consoleExitCode(output);
+    return exitCode === null ? null : { exitCode };
+  }
+
   async function indexOutcome(
     instance: Ec2Instance,
   ): Promise<{ imagePullFailed?: true; exitCode: number | null; markerMissing?: true }> {
@@ -577,7 +616,10 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       });
       return { exitCode: null };
     }
-    if (consoleShowsPullFailure(output)) return { imagePullFailed: true, exitCode: null };
+    if (consoleShowsPullFailure(output)) {
+      reportPullFailure(instance, output);
+      return { imagePullFailed: true, exitCode: null };
+    }
     const exitCode = consoleExitCode(output);
     return exitCode === null ? { exitCode, markerMissing: true } : { exitCode };
   }
@@ -661,12 +703,31 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       const instance = await readInstance(handle.id);
       if (!instance) return gone(handle);
       const index = isIndexInstance(instance);
+      // A RUNNING index VM that has written a marker is finished: the script is
+      // only holding it up so the marker can be read (MOTIR-10823). It settles
+      // now; teardown terminates it.
+      if (index && instance.state === 'running') {
+        const live = await liveIndexOutcome(instance);
+        if (live) {
+          return {
+            ...live,
+            handleId: handle.id,
+            exists: true,
+            state: instance.state,
+            terminal: true,
+            createdAt: instance.launchTime ?? handle.createdAt,
+            startedAt: startedAtOf(instance),
+            stoppedAt: now(),
+          };
+        }
+      }
       // An index VM that is still `stopping` has not finished: its console is read
       // once it reads `stopped`, so the code is never judged missing too early.
       const terminal =
         TERMINAL_STATES.has(instance.state) && !(index && instance.state === 'stopping');
       const stopped = instance.state === 'terminated' || terminal;
-      // Only a stopped index VM is asked: one console read per stop, not per poll.
+      // A stopped index VM's posted console is read here; a running one was read
+      // live above.
       const read = stopped && index ? await indexOutcome(instance) : { exitCode: null };
       const { markerMissing, ...outcome } = read as typeof read & { markerMissing?: true };
       if (instance.state === 'terminated') {
