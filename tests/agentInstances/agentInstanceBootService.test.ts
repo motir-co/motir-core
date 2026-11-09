@@ -353,6 +353,49 @@ describe('the agent answering — a running machine is not yet one that takes co
     expect(agent.failureReason).toMatch(/agent did not answer within 10 minutes of starting/);
   });
 
+  it('a machine that attests no start time still ends its wait when the agent answers', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.setExecReadiness('starting');
+    fleet.completeBoot(row.machineId!);
+    const describe = fleet.describePersistent.bind(fleet);
+    const unattested = vi
+      .spyOn(fleet, 'describePersistent')
+      .mockImplementation(async (h) => ({ ...(await describe(h)), startedAt: null, events: [] }));
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    clock.advance(20_000);
+    fleet.setExecReadiness('ready');
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect(info).toHaveBeenCalledWith(
+      '[agentInstanceBoot] the agent answered',
+      expect.objectContaining({ machineStartedAt: null, waitedMs: null }),
+    );
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      state: 'done',
+      endedAt: clock.now(),
+      detail: null,
+    });
+    unattested.mockRestore();
+  });
+
+  it('a machine that attests no start time and answers at once ends its step on this pass', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.completeBoot(row.machineId!);
+    const describe = fleet.describePersistent.bind(fleet);
+    const unattested = vi
+      .spyOn(fleet, 'describePersistent')
+      .mockImplementation(async (h) => ({ ...(await describe(h)), startedAt: null, events: [] }));
+    clock.advance(5_000);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      state: 'done',
+      endedAt: clock.now(),
+    });
+    unattested.mockRestore();
+  });
+
   it('a readiness check that throws is asked again, as a machine still starting', async () => {
     const row = await startingAgent();
     const attempt = await open(row);
