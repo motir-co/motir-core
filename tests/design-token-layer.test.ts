@@ -229,6 +229,11 @@ export const fileOf = (finding: string): string => finding.split(' ')[0]!;
 const STYLE_MOCKS = readdirSync(join(process.cwd(), 'design', 'styles'))
   .filter((name) => name.endsWith('.mock.html'))
   .map((name) => `design/styles/${name}`);
+// Every mock in the palette area (MOTIR-10550) — one per palette, rendered the
+// same way over the same `StyleVignette` (see design/palettes/design-notes.md).
+const PALETTE_MOCKS = readdirSync(join(process.cwd(), 'design', 'palettes'))
+  .filter((name) => name.endsWith('.mock.html'))
+  .map((name) => `design/palettes/${name}`);
 
 const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] = [
   {
@@ -247,10 +252,11 @@ const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] =
       '`--color-white` above: the compiler writes it, `bg-black/10` utilities read it, and no ' +
       'sweep can remove it without hand-editing generated CSS.',
   },
-  // The style mocks (MOTIR-10549) are `renderMock` output over the REAL
+  // The style mocks (MOTIR-10549) and the palette mocks (MOTIR-10550) are
+  // `renderMock` output over the REAL
   // `StyleVignette`, whose modal scrim is `bg-black/10`: the compiler writes
   // `--color-black` for it, the same machine output as context-row's row above.
-  ...STYLE_MOCKS.map((file) => ({
+  ...[...STYLE_MOCKS, ...PALETTE_MOCKS].map((file) => ({
     file,
     property: '--color-black',
     why:

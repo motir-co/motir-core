@@ -7415,6 +7415,535 @@
   --el-status-implemented: var(--color-charcoal);
 }
 
+/* ── Palette: Lagoon (data-palette="lagoon") — MOTIR-10713 ─────────────────────
+   A cool, fresh TEAL/CYAN re-skin: shallow-water cyan surfaces over cool slate
+   ink, a deep cyan primary, and a coral highlight for the reef. There is no
+   single brand behind a "lagoon", so — exactly as candy does — EVERY value is a
+   documented **Radix Colors** step (@radix-ui/colors@3.0.0): Cyan is the
+   primary ramp, Slate the matched cool neutral, and Tomato / Crimson / Jade /
+   Violet / Amber / Grass / Blue / Red supply the highlight, tints and
+   semantics. Where Cyan cannot supply a role (a canvas darker than its own
+   dark-1 page), the value is taken from Slate at a documented step.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). Every --el-*
+   role clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/lagoon.md. */
+[data-palette='lagoon'] {
+  /* brand & primary — deep lagoon cyan (Radix Cyan). The fill carries white labels. */
+  --color-primary: #0f667c; /* Radix Cyan-11 mixed 65% toward Cyan-12 — cyan AS text (5.85:1 on the Cyan-3 surface) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #0d3c48; /* Radix Cyan-12 */
+  --color-primary-fill: #0f667c; /* the same Cyan-11 → Cyan-12 65% step — fill behind white labels (6.5:1) */
+
+  /* surfaces — shallow-water cyans (Radix Cyan-1/2/3) */
+  --color-background: #fafdfe; /* Radix Cyan-1 */
+  --color-foreground: #1c2024; /* Radix Slate-12 ink */
+  --color-surface: #def7f9; /* Radix Cyan-3 — section surface */
+  --color-surface-soft: #f2fafb; /* Radix Cyan-2 — quieter division */
+  --color-canvas: #caf1f6; /* recessed planning board — Radix Cyan-4, a step under the Cyan-3 surface */
+
+  /* text scale — Radix Slate neutral + a Cyan-12 deep-water emphasis */
+  --color-ink: #1c2024; /* Slate-12 */
+  --color-charcoal: #0d3c48; /* Cyan-12 — emphasis / AA-safe text on tints */
+  --color-slate: #60646c; /* Slate-11 — secondary text */
+  --color-steel: #60646c; /* Slate-11 — tertiary */
+  --color-stone: #8b8d98; /* Slate-9 — faint labels (decorative) */
+  --color-muted: #def7f9; /* Cyan-3 */
+  --color-muted-foreground: #60646c; /* Slate-11 — captions */
+
+  /* borders — cool cyan hairlines (Radix Cyan-5/4/6) */
+  --color-hairline: #b5e9f0; /* Cyan-5 */
+  --color-hairline-soft: #caf1f6; /* Cyan-4 */
+  --color-hairline-strong: #9ddde7; /* Cyan-6 */
+  --color-border: #b5e9f0; /* Cyan-5 */
+
+  /* accent secondary — a reef-coral highlight (Radix Tomato-11), the warm
+     counterweight to the cyan primary */
+  --color-accent: #d13415; /* Radix Tomato-11 — highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 */
+  --color-accent-teal: #008573; /* Radix Teal-11 */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 */
+
+  /* card tints — Radix step-4 pastels (Cyan-12 emphasis text on each) */
+  --color-tint-peach: #ffdcd3; /* Tomato-4 */
+  --color-tint-rose: #fedce7; /* Crimson-4 */
+  --color-tint-mint: #d6f1e3; /* Jade-4 */
+  --color-tint-lavender: #ebe4ff; /* Violet-4 */
+  --color-tint-sky: #caf1f6; /* Cyan-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix "text" steps (AA-safe) */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Radix Blue, apart from the cyan primary; Blue-11 alone is 4.26:1 on
+     the Cyan-3 surface, so it takes the same 65% step toward Blue-12 the primary
+     takes toward Cyan-12 (5.95:1 on the surface, 5.20:1 on the lowest tint) */
+  --color-link: #0e5da9; /* Blue-11 mixed 65% toward Blue-12 */
+  --color-link-pressed: #113264; /* Blue-12 */
+
+  /* sidebar hover — one shade deeper than the Cyan-3 surface (Cyan-4) */
+  --el-sidebar-item-bg-hover: #caf1f6;
+}
+
+/* Lagoon — dark companion. A cyan-tinted deep-water black (Radix Cyan dark
+   1/2/3); the cyan brightens to read as text, the fill is a bright cyan with
+   dark labels, and the tints become deep washes. All Radix dark steps. */
+[data-theme='dark'] [data-palette='lagoon']:not([data-theme]),
+[data-palette='lagoon'][data-theme='dark'] {
+  --color-primary: #4ccce6; /* Cyan dark-11 */
+  --color-primary-foreground: #101b20; /* Cyan dark-2 ink on the bright cyan fill */
+  --color-primary-pressed: #23afd0; /* Cyan dark-10 */
+  --color-primary-fill: #4ccce6; /* Cyan dark-11 */
+
+  --color-background: #0b161a; /* Cyan dark-1 */
+  --color-foreground: #edeef0; /* Slate dark-12 */
+  --color-surface: #082c36; /* Cyan dark-3 */
+  --color-surface-soft: #101b20; /* Cyan dark-2 */
+  --color-canvas: #111113; /* Slate dark-1 — Cyan has no step below its dark-1 page */
+
+  --color-ink: #edeef0; /* Slate dark-12 */
+  --color-charcoal: #b6ecf7; /* Cyan dark-12 */
+  --color-slate: #b0b4ba; /* Slate dark-11 */
+  --color-steel: #b0b4ba; /* Slate dark-11 */
+  --color-stone: #696e77; /* Slate dark-9 */
+  --color-muted: #082c36; /* Cyan dark-3 */
+  --color-muted-foreground: #b0b4ba; /* Slate dark-11 */
+
+  --color-hairline: #004558; /* Cyan dark-5 */
+  --color-hairline-soft: #003848; /* Cyan dark-4 */
+  --color-hairline-strong: #045468; /* Cyan dark-6 */
+  --color-border: #004558; /* Cyan dark-5 */
+
+  --color-accent: #ff977d; /* Tomato dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #0bd8b6; /* Teal dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #4e1511; /* Tomato dark-4 */
+  --color-tint-rose: #4d122f; /* Crimson dark-4 */
+  --color-tint-mint: #0b3b2c; /* Jade dark-4 */
+  --color-tint-lavender: #33255b; /* Violet dark-4 */
+  --color-tint-sky: #003848; /* Cyan dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 ink on the bright danger */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-sidebar-item-bg-hover: #003848; /* Cyan dark-4 */
+}
+
+/* ── Palette: Olive (data-palette="olive") — MOTIR-10714 ───────────────────────
+   A muted, EARTHY re-skin: warm green-grey olive neutrals, a moss primary and a
+   terracotta highlight. No single brand documents an olive/earthy system, so —
+   exactly as candy and lagoon do — EVERY value is a documented **Radix Colors**
+   step (@radix-ui/colors@3.0.0): Olive is the neutral ramp, Lime the moss
+   primary, Orange the terracotta highlight, and Orange / Crimson / Lime / Violet
+   / Sky / Amber / Grass / Blue / Red supply the tints and semantics. Where Olive
+   cannot supply a role (a canvas darker than its own dark-1 page), the value is
+   taken from Gray at a documented step.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). Every --el-*
+   role clears WCAG AA in BOTH themes, verified numerically. See
+   docs/palettes/olive.md. */
+[data-palette='olive'] {
+  /* brand & primary — moss (Radix Lime). The fill carries white labels. */
+  --color-primary: #4a5e26; /* Radix Lime-11 mixed 50% toward Lime-12 — moss AS text (6.33:1 on the Olive-3 surface) */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #37401c; /* Radix Lime-12 */
+  --color-primary-fill: #4a5e26; /* the same Lime-11 → Lime-12 50% step — fill behind white labels (7.2:1) */
+
+  /* surfaces — warm green-grey olive (Radix Olive-1/2/3) */
+  --color-background: #fcfdfc; /* Radix Olive-1 */
+  --color-foreground: #1d211c; /* Radix Olive-12 ink */
+  --color-surface: #eff1ef; /* Radix Olive-3 — section surface */
+  --color-surface-soft: #f8faf8; /* Radix Olive-2 — quieter division */
+  --color-canvas: #e7e9e7; /* recessed planning board — Radix Olive-4, a step under the Olive-3 surface */
+
+  /* text scale — Radix Olive neutral + a Lime-12 deep-moss emphasis */
+  --color-ink: #1d211c; /* Olive-12 */
+  --color-charcoal: #37401c; /* Lime-12 — emphasis / AA-safe text on tints */
+  --color-slate: #60655f; /* Olive-11 — secondary text */
+  --color-steel: #60655f; /* Olive-11 — tertiary */
+  --color-stone: #898e87; /* Olive-9 — faint labels (decorative) */
+  --color-muted: #eff1ef; /* Olive-3 */
+  --color-muted-foreground: #60655f; /* Olive-11 — captions */
+
+  /* borders — olive hairlines (Radix Olive-5/4/6) */
+  --color-hairline: #dfe2df; /* Olive-5 */
+  --color-hairline-soft: #e7e9e7; /* Olive-4 */
+  --color-hairline-strong: #d7dad7; /* Olive-6 */
+  --color-border: #dfe2df; /* Olive-5 */
+
+  /* accent secondary — a terracotta highlight (Radix Orange-11), the warm earth
+     beside the moss primary */
+  --color-accent: #cc4e00; /* Radix Orange-11 — highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 */
+  --color-accent-teal: #008573; /* Radix Teal-11 */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 */
+
+  /* card tints — Radix step-4 pastels (Lime-12 emphasis text on each) */
+  --color-tint-peach: #ffdfb5; /* Orange-4 */
+  --color-tint-rose: #fedce7; /* Crimson-4 */
+  --color-tint-mint: #e2f0bd; /* Lime-4 */
+  --color-tint-lavender: #ebe4ff; /* Violet-4 */
+  --color-tint-sky: #d1f0fa; /* Sky-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix "text" steps (AA-safe) */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Radix Blue, apart from the moss primary; Blue-11 alone is 4.20:1 on
+     the Olive-3 surface, so it takes lagoon's 65% step toward Blue-12 */
+  --color-link: #0e5da9; /* Blue-11 mixed 65% toward Blue-12 */
+  --color-link-pressed: #113264; /* Blue-12 */
+
+  /* sidebar hover — one shade deeper than the Olive-3 surface (Olive-4) */
+  --el-sidebar-item-bg-hover: #e7e9e7;
+}
+
+/* Olive — dark companion. A warm olive-black (Radix Olive dark 1/2/3); the moss
+   brightens to a lime that reads as text, the fill is a bright lime with dark
+   labels, and the tints become deep washes. All Radix dark steps. */
+[data-theme='dark'] [data-palette='olive']:not([data-theme]),
+[data-palette='olive'][data-theme='dark'] {
+  --color-primary: #bde56c; /* Lime dark-11 */
+  --color-primary-foreground: #151a10; /* Lime dark-2 ink on the bright lime fill */
+  --color-primary-pressed: #d4ff70; /* Lime dark-10 */
+  --color-primary-fill: #bde56c; /* Lime dark-11 */
+
+  --color-background: #111210; /* Olive dark-1 */
+  --color-foreground: #eceeec; /* Olive dark-12 */
+  --color-surface: #212220; /* Olive dark-3 */
+  --color-surface-soft: #181917; /* Olive dark-2 */
+  --color-canvas: #111111; /* Gray dark-1 — Olive has no step below its dark-1 page */
+
+  --color-ink: #eceeec; /* Olive dark-12 */
+  --color-charcoal: #e3f7ba; /* Lime dark-12 */
+  --color-slate: #afb5ad; /* Olive dark-11 */
+  --color-steel: #afb5ad; /* Olive dark-11 */
+  --color-stone: #687066; /* Olive dark-9 */
+  --color-muted: #212220; /* Olive dark-3 */
+  --color-muted-foreground: #afb5ad; /* Olive dark-11 */
+
+  --color-hairline: #2f312e; /* Olive dark-5 */
+  --color-hairline-soft: #282a27; /* Olive dark-4 */
+  --color-hairline-strong: #383a36; /* Olive dark-6 */
+  --color-border: #2f312e; /* Olive dark-5 */
+
+  --color-accent: #ffa057; /* Orange dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #0bd8b6; /* Teal dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #462100; /* Orange dark-4 */
+  --color-tint-rose: #4d122f; /* Crimson dark-4 */
+  --color-tint-mint: #29371d; /* Lime dark-4 */
+  --color-tint-lavender: #33255b; /* Violet dark-4 */
+  --color-tint-sky: #113555; /* Sky dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 ink on the bright danger */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-sidebar-item-bg-hover: #282a27; /* Olive dark-4 */
+}
+
+/* ── Palette: Contrast (data-palette="contrast") — MOTIR-10715 ─────────────────
+   A HIGH-CONTRAST neutral re-skin for reading without strain: paper-white
+   grounds, near-black ink, secondary copy at AAA (7:1) rather than AA, and
+   control edges strong enough to see (3:1, WCAG 1.4.11). It is judged on
+   measured ratios against `motir`, not on looking starker. EVERY value is a
+   documented **Radix Colors** step (@radix-ui/colors@3.0.0): Gray is the one
+   neutral ramp, Plum the primary, and Orange / Amber / Teal / Grass / Crimson /
+   Violet / Blue / Red supply the highlight, tints and semantics.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). See
+   docs/palettes/contrast.md. */
+[data-palette='contrast'] {
+  /* brand & primary — Radix Plum. The fill carries white labels. */
+  --color-primary: #953ea3; /* Radix Plum-11 */
+  --color-primary-foreground: #ffffff;
+  --color-primary-pressed: #53195d; /* Radix Plum-12 */
+  --color-primary-fill: #953ea3; /* Radix Plum-11 — fill behind white labels */
+
+  /* surfaces — Radix Gray-1/2/3, paper-white to a pale grey */
+  --color-background: #fcfcfc; /* Radix Gray-1 */
+  --color-foreground: #202020; /* Radix Gray-12 ink */
+  --color-surface: #f0f0f0; /* Radix Gray-3 — section surface */
+  --color-surface-soft: #f9f9f9; /* Radix Gray-2 — quieter division */
+  --color-canvas: #e8e8e8; /* recessed planning board — Radix Gray-4, a step under the Gray-3 surface */
+
+  /* text scale — Radix Gray's text steps; secondary takes Gray-11 mixed 50%
+     toward Gray-12 so it holds 7:1 on every ground */
+  --color-ink: #202020; /* Gray-12 */
+  --color-charcoal: #202020; /* Gray-12 — emphasis / text on tints */
+  --color-slate: #424242; /* Gray-11 mixed 50% toward Gray-12 — secondary text at AAA */
+  --color-steel: #646464; /* Gray-11 — tertiary */
+  --color-stone: #8d8d8d; /* Gray-9 — faint labels (decorative) */
+  --color-muted: #f0f0f0; /* Gray-3 */
+  --color-muted-foreground: #646464; /* Gray-11 — captions */
+
+  /* borders — a visible ramp: soft Gray-7 < default Gray-8 < strong Gray-10,
+     the strong edge 3:1 or better on card, surface and canvas */
+  --color-hairline: #bbbbbb; /* Gray-8 */
+  --color-hairline-soft: #cecece; /* Gray-7 */
+  --color-hairline-strong: #838383; /* Gray-10 */
+  --color-border: #bbbbbb; /* Gray-8 */
+
+  /* accent secondary — an orange highlight (Radix Orange-11) */
+  --color-accent: #cc4e00; /* Radix Orange-11 — highlight / epic & design hue */
+  --color-accent-orange: #ab6400; /* Radix Amber-11 */
+  --color-accent-teal: #008573; /* Radix Teal-11 */
+  --color-accent-green: #2a7e3b; /* Radix Grass-11 */
+
+  /* card tints — Radix step-3 pastels, one step lighter than the step-4
+     convention so body ink holds 7:1 on them */
+  --color-tint-peach: #ffefd6; /* Orange-3 */
+  --color-tint-rose: #ffe9f0; /* Crimson-3 */
+  --color-tint-mint: #e9f6e9; /* Grass-3 */
+  --color-tint-lavender: #f4f0fe; /* Violet-3 */
+  --color-tint-sky: #e6f4fe; /* Blue-3 */
+  --color-tint-yellow: #fff7c2; /* Amber-3 */
+
+  /* semantic — Radix "text" steps */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 (white-on AA) */
+  --color-destructive-foreground: #ffffff;
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Radix Blue, apart from the Plum primary; Blue-11 mixed 65% toward
+     Blue-12 so it clears AA on the Gray-4 canvas */
+  --color-link: #0e5da9; /* Blue-11 mixed 65% toward Blue-12 */
+  --color-link-pressed: #113264; /* Blue-12 */
+
+  /* sidebar hover — one shade deeper than the Gray-3 surface (Gray-4) */
+  --el-sidebar-item-bg-hover: #e8e8e8;
+}
+
+/* Contrast — dark companion. Radix Gray dark: the canvas recesses to Gray
+   dark-1 under a Gray dark-2 page; ink is Gray dark-12, secondary Gray dark-11
+   mixed 50% toward dark-12, and the strong edge Gray dark-10. */
+[data-theme='dark'] [data-palette='contrast']:not([data-theme]),
+[data-palette='contrast'][data-theme='dark'] {
+  --color-primary: #e796f3; /* Plum dark-11 */
+  --color-primary-foreground: #181118; /* Plum dark-1 ink on the bright plum fill */
+  --color-primary-pressed: #b658c4; /* Plum dark-10 */
+  --color-primary-fill: #e796f3; /* Plum dark-11 */
+
+  --color-background: #191919; /* Gray dark-2 */
+  --color-foreground: #eeeeee; /* Gray dark-12 */
+  --color-surface: #2a2a2a; /* Gray dark-4 */
+  --color-surface-soft: #222222; /* Gray dark-3 */
+  --color-canvas: #111111; /* Gray dark-1 — a step under the dark-2 page */
+
+  --color-ink: #eeeeee; /* Gray dark-12 */
+  --color-charcoal: #eeeeee; /* Gray dark-12 */
+  --color-slate: #d1d1d1; /* Gray dark-11 mixed 50% toward dark-12 */
+  --color-steel: #b4b4b4; /* Gray dark-11 */
+  --color-stone: #6e6e6e; /* Gray dark-9 */
+  --color-muted: #2a2a2a; /* Gray dark-4 */
+  --color-muted-foreground: #b4b4b4; /* Gray dark-11 */
+
+  --color-hairline: #606060; /* Gray dark-8 */
+  --color-hairline-soft: #484848; /* Gray dark-7 */
+  --color-hairline-strong: #7b7b7b; /* Gray dark-10 */
+  --color-border: #606060; /* Gray dark-8 */
+
+  --color-accent: #ffa057; /* Orange dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #0bd8b6; /* Teal dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #331e0b; /* Orange dark-3 */
+  --color-tint-rose: #381525; /* Crimson dark-3 */
+  --color-tint-mint: #1b2a1e; /* Grass dark-3 */
+  --color-tint-lavender: #291f43; /* Violet dark-3 */
+  --color-tint-sky: #0d2847; /* Blue dark-3 */
+  --color-tint-yellow: #302008; /* Amber dark-3 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 ink on the bright danger */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-sidebar-item-bg-hover: #313131; /* Gray dark-5 */
+}
+
+/* ── Palette: Midnight (data-palette="midnight") — MOTIR-10716 ─────────────────
+   A DARK-FIRST palette: a cool night-slate ground with a starlight-sky primary
+   and a violet highlight. The DARK companion below is the authored source; this
+   LIGHT block is DERIVED from it role by role — each role takes the same Radix
+   step of the light scale of the same ramp — and every departure from that rule
+   is named in its comment and in docs/palettes/midnight.md with the measurement
+   that forced it. EVERY value is a documented **Radix Colors** step
+   (@radix-ui/colors@3.0.0): Slate is the night neutral, Sky the identity hue,
+   Purple the highlight, and Orange / Pink / Mint / Purple / Sky / Amber / Grass
+   / Blue / Red the tints and semantics.
+
+   Re-skins by overriding the Tier-0 --color-* SOURCE; ONLY colour tokens, never
+   a shape/feel/font token (paletteRegistry.test.ts enforces it). */
+[data-palette='midnight'] {
+  /* primary — Sky. The fill is the derived Sky-9, which Radix publishes as the
+     same bright value in both scales. As TEXT the primary departs to Sky-12 (the
+     derived Sky-11 is 4.63:1 on the Slate-3 surface and 4.13:1 on the peach
+     tint), and the label departs to the Slate-12 ink (the derived Sky-1 is
+     1.07:1 on the bright Sky-9 fill; Sky-12 would leave the orb's highlight stop
+     darker than its lit stop). */
+  --color-primary: #1d3e56; /* Radix Sky-12 — DEPARTURE from Sky-11 */
+  --color-primary-foreground: #1c2024; /* Radix Slate-12 — DEPARTURE from Sky-1 */
+  --color-primary-pressed: #74daf8; /* Radix Sky-10 — derived from Sky dark-10 */
+  --color-primary-fill: #7ce2fe; /* Radix Sky-9 — derived from Sky dark-9 */
+
+  /* surfaces — Radix Slate-2/3, derived from dark-2/3 */
+  --color-background: #f9f9fb; /* Slate-2 */
+  --color-foreground: #1c2024; /* Slate-12 */
+  --color-surface: #f0f0f3; /* Slate-3 */
+  --color-surface-soft: #f9f9fb; /* Slate-2 */
+  --color-canvas: #e8e8ec; /* Slate-4 — DEPARTURE from Slate-1, which is ABOVE the Slate-2 page in light */
+
+  /* text scale — Slate text steps + a Sky-12 emphasis */
+  --color-ink: #1c2024; /* Slate-12 */
+  --color-charcoal: #1d3e56; /* Sky-12 */
+  --color-slate: #60646c; /* Slate-11 */
+  --color-steel: #60646c; /* Slate-11 */
+  --color-stone: #8b8d98; /* Slate-9 */
+  --color-muted: #f0f0f3; /* Slate-3 */
+  --color-muted-foreground: #60646c; /* Slate-11 */
+
+  /* borders — Slate-5/4/6 */
+  --color-hairline: #e0e1e6; /* Slate-5 */
+  --color-hairline-soft: #e8e8ec; /* Slate-4 */
+  --color-hairline-strong: #d9d9e0; /* Slate-6 */
+  --color-border: #e0e1e6; /* Slate-5 */
+
+  /* accent — a violet highlight (Purple-11) and the hue roles */
+  --color-accent: #8145b5; /* Purple-11 */
+  --color-accent-orange: #ab6400; /* Amber-11 */
+  --color-accent-teal: #027864; /* Mint-11 */
+  --color-accent-green: #2a7e3b; /* Grass-11 */
+
+  /* card tints — Radix step-4 pastels, derived from the dark-4 washes */
+  --color-tint-peach: #ffdfb5; /* Orange-4 */
+  --color-tint-rose: #fbdcef; /* Pink-4 */
+  --color-tint-mint: #c8f4e9; /* Mint-4 */
+  --color-tint-lavender: #f2e2fc; /* Purple-4 */
+  --color-tint-sky: #d1f0fa; /* Sky-4 */
+  --color-tint-yellow: #ffee9c; /* Amber-4 */
+
+  /* semantic — Radix step 11 */
+  --color-success: #2a7e3b; /* Grass-11 */
+  --color-warning: #ab6400; /* Amber-11 */
+  --color-destructive: #ce2c31; /* Red-11 */
+  --color-destructive-foreground: #fffcfc; /* Red-1 — derived from Red dark-1 */
+  --color-info: #0d74ce; /* Blue-11 */
+
+  /* links — Blue-12, a DEPARTURE from the derived Blue-11 (4.19:1 on the Slate-3
+     surface, 3.74:1 on the peach tint) */
+  --color-link: #113264; /* Blue-12 — DEPARTURE from Blue-11 */
+  --color-link-pressed: #113264; /* Blue-12 — derived from Blue dark-12 */
+
+  /* status — In review moves off the primary: Sky dark-11 sits 8.1 ΔE from the
+     Blue info hue (In progress) in dark, so the source takes Sky dark-12, and
+     light takes the derived Sky-12 */
+  --el-status-in-review: #1d3e56; /* Sky-12 */
+
+  /* logo — the bright Sky-9 mark sits on the dark ink tile (amber's precedent
+     for a bright identity hue); the derived wash of itself is 1.34:1 */
+  --el-logo-tile: var(--color-foreground);
+
+  /* sidebar hover — Slate-4, derived from dark-4 */
+  --el-sidebar-item-bg-hover: #e8e8ec; /* Slate-4 */
+}
+
+/* Midnight — dark companion, THE AUTHORED SOURCE. A night-slate ground (Radix
+   Slate dark-2/3) over a Slate dark-1 recessed canvas, a starlight Sky dark-9
+   fill with Sky dark-11 as text, Purple dark-11 for the highlight, deep step-4
+   washes. */
+[data-theme='dark'] [data-palette='midnight']:not([data-theme]),
+[data-palette='midnight'][data-theme='dark'] {
+  --color-primary: #75c7f0; /* Sky dark-11 */
+  --color-primary-foreground: #0d141f; /* Sky dark-1 */
+  --color-primary-pressed: #a8eeff; /* Sky dark-10 */
+  --color-primary-fill: #7ce2fe; /* Sky dark-9 */
+
+  --color-background: #18191b; /* Slate dark-2 */
+  --color-foreground: #edeef0; /* Slate dark-12 */
+  --color-surface: #212225; /* Slate dark-3 */
+  --color-surface-soft: #18191b; /* Slate dark-2 */
+  --color-canvas: #111113; /* Slate dark-1 */
+
+  --color-ink: #edeef0; /* Slate dark-12 */
+  --color-charcoal: #c2f3ff; /* Sky dark-12 */
+  --color-slate: #b0b4ba; /* Slate dark-11 */
+  --color-steel: #b0b4ba; /* Slate dark-11 */
+  --color-stone: #696e77; /* Slate dark-9 */
+  --color-muted: #212225; /* Slate dark-3 */
+  --color-muted-foreground: #b0b4ba; /* Slate dark-11 */
+
+  --color-hairline: #2e3135; /* Slate dark-5 */
+  --color-hairline-soft: #272a2d; /* Slate dark-4 */
+  --color-hairline-strong: #363a3f; /* Slate dark-6 */
+  --color-border: #2e3135; /* Slate dark-5 */
+
+  --color-accent: #d19dff; /* Purple dark-11 */
+  --color-accent-orange: #ffca16; /* Amber dark-11 */
+  --color-accent-teal: #58d5ba; /* Mint dark-11 */
+  --color-accent-green: #71d083; /* Grass dark-11 */
+
+  --color-tint-peach: #462100; /* Orange dark-4 */
+  --color-tint-rose: #4b143d; /* Pink dark-4 */
+  --color-tint-mint: #003a38; /* Mint dark-4 */
+  --color-tint-lavender: #3d224e; /* Purple dark-4 */
+  --color-tint-sky: #113555; /* Sky dark-4 */
+  --color-tint-yellow: #3f2700; /* Amber dark-4 */
+
+  --color-success: #71d083; /* Grass dark-11 */
+  --color-warning: #ffca16; /* Amber dark-11 */
+  --color-destructive: #ff9592; /* Red dark-11 */
+  --color-destructive-foreground: #191111; /* Red dark-1 */
+  --color-info: #70b8ff; /* Blue dark-11 */
+
+  --color-link: #70b8ff; /* Blue dark-11 */
+  --color-link-pressed: #c2e6ff; /* Blue dark-12 */
+
+  --el-status-in-review: #c2f3ff; /* Sky dark-12 */
+  --el-logo-tile: color-mix(
+    in srgb,
+    var(--color-primary) 18%,
+    var(--color-background)
+  ); /* the shipped dark-base recipe */
+
+  --el-sidebar-item-bg-hover: #272a2d; /* Slate dark-4 */
+}
+
 [data-type='grotesk'] {
   /* Grotesk (7.3.54) — geometric / neo-grotesque headlines AND body/UI. Re-point
      BOTH the headline (serif) role AND the body/UI (sans) role at Space Grotesk

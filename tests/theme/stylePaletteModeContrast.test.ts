@@ -545,6 +545,9 @@ interface Row {
   ratio: number;
   floor: number;
   style: string;
+  palette: string;
+  /** The ink role measured, or `label ink` for the hero pill and orb. */
+  ink: string;
   /** For a painted canvas: the viewport, frame and pixel of the worst point. */
   where?: string;
 }
@@ -773,6 +776,8 @@ function buildMatrix(): { rows: Row[]; unresolved: string[]; expected: number } 
           ratio,
           floor,
           style: ctx.style,
+          palette: ctx.palette,
+          ink,
         });
       }
     }
@@ -790,6 +795,8 @@ function buildMatrix(): { rows: Row[]; unresolved: string[]; expected: number } 
         ratio,
         floor: WCAG_TEXT_MIN,
         style: ctx.style,
+        palette: ctx.palette,
+        ink,
         where,
       });
     }
@@ -929,5 +936,120 @@ describe('style × palette × mode AA contrast gate (MOTIR-10674)', () => {
 
   it('reads --orb-lit-mix from its one declaration and never redeclares it', () => {
     expect([...CSS.matchAll(/--orb-lit-mix\s*:/g)]).toHaveLength(1);
+  });
+});
+
+// ── Palette-scoped floors (MOTIR-10550) ─────────────────────────────────────
+// A palette that PROMISES more than AA is held to its promise here, over the
+// same rows the AA gate measures. `contrast` exists to give AAA body text (7:1,
+// WCAG 1.4.6) and control edges a person can see (3:1, WCAG 1.4.11), and its
+// doc (`docs/palettes/contrast.md`) quotes the lowest rows. Without this block a
+// retune could drop its secondary text to 5:1 with every AA row still green.
+// A future high-contrast palette joins by adding its own entry.
+
+const PALETTE_FLOORS: Record<string, { bodyText: number; edge: number }> = {
+  contrast: { bodyText: 7, edge: WCAG_GRAPHIC_MIN },
+};
+/** The body-text roles an AAA promise covers (accent-on-surface stays at AA). */
+/** A palette with no promise past AA, used as the floor's control. */
+const DEFAULT_FLOORLESS = 'motir';
+const BODY_TEXT_INKS = ['--el-text', '--el-text-strong', '--el-text-secondary'];
+/** The control-edge roles, and the grounds a control sits on. */
+const EDGE_INKS = ['--el-border-strong', '--el-input-border', '--el-button-border'];
+const EDGE_GROUNDS = ['--el-card', '--el-surface', '--el-canvas'];
+
+interface EdgeRow {
+  id: string;
+  ratio: number;
+}
+
+function edgeRows(palette: string): { rows: EdgeRow[]; unresolved: string[] } {
+  const rows: EdgeRow[] = [];
+  const unresolved: string[] = [];
+  for (const ctx of CONTEXTS.filter((c) => c.palette === palette)) {
+    const page = colourIn(ctx, 'var(--el-page-bg)');
+    if (!page) {
+      unresolved.push(`${label(ctx)} · --el-page-bg`);
+      continue;
+    }
+    for (const groundToken of EDGE_GROUNDS) {
+      const ground = colourIn(ctx, `var(${groundToken})`);
+      if (!ground) {
+        unresolved.push(`${label(ctx)} · ${groundToken}`);
+        continue;
+      }
+      const flatGround = ground.a < 1 ? over(ground, page) : ground;
+      for (const edge of EDGE_INKS) {
+        const colour = colourIn(ctx, `var(${edge})`);
+        if (!colour) {
+          unresolved.push(`${label(ctx)} · ${edge}`);
+          continue;
+        }
+        const flatEdge = colour.a < 1 ? over(colour, flatGround) : colour;
+        const ratio = contrast(toHex(flatEdge), toHex(flatGround));
+        rows.push({
+          id: `${label(ctx)} · ${edge} on ${groundToken} = ${ratio.toFixed(2)}:1`,
+          ratio,
+        });
+      }
+    }
+  }
+  return { rows, unresolved };
+}
+
+describe('palette-scoped floors: a high-contrast palette keeps its promise (MOTIR-10550)', () => {
+  const floored = Object.keys(PALETTE_FLOORS);
+
+  it('names only registered palettes, and never floors below AA', () => {
+    expect(floored.length).toBeGreaterThan(0);
+    for (const palette of floored) {
+      expect(PALETTE_IDS as readonly string[]).toContain(palette);
+      expect(PALETTE_FLOORS[palette]!.bodyText).toBeGreaterThanOrEqual(WCAG_TEXT_MIN);
+      expect(PALETTE_FLOORS[palette]!.edge).toBeGreaterThanOrEqual(WCAG_GRAPHIC_MIN);
+    }
+  });
+
+  it('the AAA floor bites: a palette without the promise has body text under 7:1', () => {
+    // Motir's secondary on --el-surface is 6.24:1 light — AA, not AAA. If no row
+    // of an un-floored palette fell under 7, the floor below could not fail.
+    expect(
+      MATRIX.rows.some(
+        (r) => r.palette === DEFAULT_FLOORLESS && r.ink === '--el-text-secondary' && r.ratio < 7,
+      ),
+    ).toBe(true);
+  });
+
+  it.each(floored)(
+    '%s: body text clears its floor on every ground, under every style and mode',
+    (palette) => {
+      const floor = PALETTE_FLOORS[palette]!.bodyText;
+      const rows = MATRIX.rows.filter(
+        (r) => r.palette === palette && BODY_TEXT_INKS.includes(r.ink),
+      );
+      // Every style × both modes × all three roles is present, so none was dropped.
+      for (const style of STYLE_IDS) {
+        for (const theme of THEMES) {
+          for (const ink of BODY_TEXT_INKS) {
+            expect(
+              rows.some((r) => r.id.startsWith(`${style}/${palette}/${theme} · ${ink} on `)),
+              `${style}/${palette}/${theme} · ${ink} has no measured row`,
+            ).toBe(true);
+          }
+        }
+      }
+      const under = rows.filter((r) => r.ratio < floor).map((r) => r.line);
+      expect(under, `body text under ${floor}:1:\n${under.join('\n')}`).toEqual([]);
+    },
+  );
+
+  it.each(floored)('%s: control edges clear their floor on card, surface and canvas', (palette) => {
+    const floor = PALETTE_FLOORS[palette]!.edge;
+    const { rows, unresolved } = edgeRows(palette);
+    expect(unresolved).toEqual([]);
+    expect(rows).toHaveLength(
+      STYLE_IDS.length * THEMES.length * EDGE_GROUNDS.length * EDGE_INKS.length,
+    );
+    const under = rows.filter((r) => r.ratio < floor).map((r) => r.id);
+    expect(under, `edges under ${floor}:1:\n${under.join('\n')}`).toEqual([]);
   });
 });
