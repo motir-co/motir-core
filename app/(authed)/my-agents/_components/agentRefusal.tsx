@@ -74,6 +74,9 @@ export function refusalKey(body: RefusalBody | null): string {
       return 'notOffered';
     case 'agent_instances_unavailable':
       return 'unavailable';
+    case 'agent_instance_lane_missing':
+      // A row on a host this deployment no longer runs (MOTIR-10809).
+      return 'laneMissing';
     case 'agent_instance_state_conflict':
     case 'agent_instance_not_found':
       return 'conflict';

@@ -36,6 +36,7 @@ import {
   AgentInstanceStartRefusedError,
   AgentInstanceStateConflictError,
   AgentInstanceUpToDateError,
+  AgentInstanceLaneMissingError,
   AgentInstancesUnavailableError,
   AgentImageCatalogUnavailableError,
   AgentProfileNotOfferedError,
@@ -288,6 +289,17 @@ export function agentInstanceLaneMissing(
   return (
     row.fleetShardId === null && !isOnInstallFleet(row) && !isPersistentOrchestratorConfigured()
   );
+}
+
+/**
+ * Refuse a person's Wake, Hibernate or Update of an agent whose host this
+ * deployment no longer runs (MOTIR-10809) — in words, BEFORE anything resolves
+ * the row's route, which would fail on the missing Fly token. Delete is the one
+ * action such an agent takes: {@link agentInstanceLifecycleService.settleDelete}
+ * finishes it in Motir.
+ */
+function assertLaneReachable(row: AgentInstance, action: 'woken' | 'hibernated' | 'updated'): void {
+  if (agentInstanceLaneMissing(row)) throw new AgentInstanceLaneMissingError(row.id, action);
 }
 
 /** The handle through the PROCESS-WIDE orchestrator — for the paths the second
@@ -1498,6 +1510,7 @@ export const agentInstanceLifecycleService = {
     // …and refuses WAKING one: a woken agent is a running hosted container.
     await assertOrgFeatureEnabled(project.organizationId, 'hosted_runs');
     const row = await ownInstance(project, instanceId, ctx);
+    assertLaneReachable(row, 'woken');
     const from = statesThatMayEnter('waking');
     if (!from.includes(row.state))
       throw new AgentInstanceStateConflictError(row.id, row.state, 'woken');
@@ -1621,6 +1634,7 @@ export const agentInstanceLifecycleService = {
     const project = await resolveProject(projectKey, ctx);
     await requireLane(project.organizationId);
     const row = await ownInstance(project, instanceId, ctx);
+    assertLaneReachable(row, 'hibernated');
     if (row.state !== 'running') {
       throw new AgentInstanceStateConflictError(row.id, row.state, 'hibernated');
     }
@@ -1881,6 +1895,7 @@ export const agentInstanceLifecycleService = {
     const project = await resolveProject(projectKey, ctx);
     await requireLane(project.organizationId);
     const row = await ownInstance(project, instanceId, ctx);
+    assertLaneReachable(row, 'updated');
     if (row.state !== 'running' && row.state !== 'hibernated') {
       throw new AgentInstanceStateConflictError(row.id, row.state, 'updated');
     }
@@ -2199,11 +2214,30 @@ export const agentInstanceLifecycleService = {
    * SETTLE A DELETE (`deleting`), idempotently: destroy the machine then the
    * volume, close the open interval (`deleted`), release the slot, stamp
    * `deletedAt`. A destroy that fails leaves the instance `deleting` for the sweep.
+   *
+   * ⚠️ A ROW WHOSE LANE IS GONE IS FINISHED IN MOTIR ALONE (MOTIR-10809). An agent
+   * recorded on the process-wide Fly lane, on a deployment where that lane is not
+   * configured, has no orchestrator to destroy it through: the destroy failed on
+   * the missing token on every pass and the row sat `deleting` for ever. Its
+   * machine, volume and app are destroyed on the Fly side by the lane's
+   * decommissioning (MOTIR-9716), so here the row skips the destroy, names what it
+   * leaves behind in a log line for that destruction, and settles as any delete.
    */
   async settleDelete(instanceId: string): Promise<'deleted' | 'pending' | 'noop'> {
     const row = await withSystemContext((tx) => agentInstanceRepository.findById(instanceId, tx));
     if (!row || row.deletedAt || row.state !== 'deleting') return 'noop';
-    if (row.machineId) {
+    if (row.machineId && agentInstanceLaneMissing(row)) {
+      console.warn(
+        '[agentInstanceLifecycle] deleted an agent whose Fly lane is not configured; its machine is left for the Fly-side destruction',
+        {
+          instanceId: row.id,
+          flyApp: row.flyApp,
+          machineId: row.machineId,
+          volumeId: row.volumeId,
+          region: row.region,
+        },
+      );
+    } else if (row.machineId) {
       try {
         // Machine then disk, on the account the row records (MOTIR-9472).
         const { orchestrator, handle } = await routeOf(row);

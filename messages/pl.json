@@ -13857,6 +13857,7 @@
       "nameTaken": "Masz już w tym projekcie agenta o nazwie {name}.",
       "nameInvalid": "Użyj małych liter, cyfr i myślników, zaczynając od litery lub cyfry — maksymalnie 40 znaków.",
       "unavailable": "Funkcja „Moi agenci” nie jest dostępna w tym wdrożeniu.",
+      "laneMissing": "Ten agent został utworzony na hoście, którego to wdrożenie już nie obsługuje, więc nie można go wybudzić, uśpić ani zaktualizować. Usuń go i utwórz nowego.",
       "conflict": "Ten agent zmienił się w trakcie przeglądania. Lista jest już aktualna.",
       "generic": "Coś poszło nie tak. Spróbuj ponownie."
     },

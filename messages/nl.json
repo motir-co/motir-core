@@ -13857,6 +13857,7 @@
       "nameTaken": "Je hebt al een agent met de naam {name} in dit project.",
       "nameInvalid": "Gebruik kleine letters, cijfers en streepjes, beginnend met een letter of cijfer — maximaal 40 tekens.",
       "unavailable": "Mijn agents is niet beschikbaar op deze installatie.",
+      "laneMissing": "Deze agent is gemaakt op een host die deze installatie niet meer draait, dus hij kan niet worden gewekt, in slaap gezet of bijgewerkt. Verwijder hem en maak een nieuwe.",
       "conflict": "Die agent is gewijzigd terwijl je keek. De lijst is nu bijgewerkt.",
       "generic": "Er ging iets mis. Probeer het opnieuw."
     },

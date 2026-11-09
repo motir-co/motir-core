@@ -74,6 +74,7 @@ describe('every refusal maps to the design’s copy', () => {
     [{ code: 'agent_instance_name_invalid' }, 'nameInvalid'],
     [{ code: 'agent_profile_not_offered' }, 'notOffered'],
     [{ code: 'agent_instances_unavailable' }, 'unavailable'],
+    [{ code: 'agent_instance_lane_missing' }, 'laneMissing'],
     [{ code: 'agent_instance_state_conflict' }, 'conflict'],
     [{ code: 'agent_instance_not_found' }, 'conflict'],
     [{ code: 'something_else' }, 'generic'],

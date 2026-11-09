@@ -15,6 +15,7 @@ import { agentInstanceLapseService } from '@/lib/services/agentInstanceLapseServ
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
   agentInstanceClock,
+  agentInstanceLaneMissing,
   agentInstanceLifecycleService as lifecycle,
   readUnlimitedAgentOrg,
 } from '@/lib/services/agentInstanceLifecycleService';
@@ -215,16 +216,22 @@ export const agentInstanceSweepService = {
     };
 
     {
-      // 1 · Anything in motion: finish what an earlier request left pending.
-      const moving = await reachableOnly(
-        await withSystemContext((tx) =>
-          agentInstanceRepository.listLiveInStates(
-            ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
-            SWEEP_BATCH,
-            tx,
-          ),
+      // 1 · Anything in motion: finish what an earlier request left pending. A
+      //     DELETE whose lane is gone is taken too (MOTIR-10809): it needs no
+      //     orchestrator, because `settleDelete` finishes it in Motir alone and
+      //     leaves its Fly machine to the lane's decommissioning (MOTIR-9716).
+      const inMotion = await withSystemContext((tx) =>
+        agentInstanceRepository.listLiveInStates(
+          ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
+          SWEEP_BATCH,
+          tx,
         ),
       );
+      const moving: AgentInstance[] = [];
+      for (const row of inMotion) {
+        const finishedInMotir = row.state === 'deleting' && agentInstanceLaneMissing(row);
+        if (finishedInMotir || (await reachable(row))) moving.push(row);
+      }
       const sweepNow = agentInstanceClock.now().getTime();
       for (const row of moving) {
         // `agent-image-update.md` Q6: an update is the inline settle's while it is
