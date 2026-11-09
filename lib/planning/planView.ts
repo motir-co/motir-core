@@ -88,7 +88,18 @@ export const PLAN_VIEW_VALUES = ['canvas', 'list'] as const satisfies readonly P
  * `/plans/[id]` link stays byte-identical.
  */
 export function defaultPlanView(review: PlanReviewDto): PlanViewDto {
-  // ⚠️ THE TRUNCATION ARM FIRST, because it is not about legibility at all
+  // ⚠️ A PLAN WITH NO PROPOSALS OPENS ON THE CANVAS, before either size arm
+  // (MOTIR-10739). With nothing proposed there is no arrival container: the
+  // review's `arrivalLevelSize` / `arrivalLevelTotal` describe no level of THIS
+  // plan, and an older read counted the PROJECT ROOT in their place — so a large
+  // project sent every freshly started plan to an empty List ("Nothing proposed
+  // yet") and the pin above kept it there for the whole session. The canvas is
+  // where an empty plan's reader watches it arrive: the planning workspace opens
+  // it at the launch's level and follows the target, and the plan page opens it
+  // at the root. Neither size arm can say anything about a plan with no items.
+  if (review.items.length === 0) return 'canvas';
+
+  // ⚠️ THE TRUNCATION ARM NEXT, because it is not about legibility at all
   // (MOTIR-4024, Part XIII §6). A level past `TREE_LEVEL_MAX_TAKE` is read
   // key-ASCENDING and the read discards the HIGHEST keys — the most recently
   // created cards — and a `modify` / `remove` targets a committed work item, so

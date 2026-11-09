@@ -707,8 +707,15 @@
   --glass-chrome-alpha: 52%; /* sidebar / chrome translucency */
   --glass-input-alpha: 44%; /* form-control fill translucency */
   --glass-border-alpha: 72%; /* the glass RIM — a more visible lit edge */
-  --glass-wash: 42%; /* MUCH stronger canvas tint — glass needs vibrant colour
-                        behind it to refract; a near-white canvas looks flat */
+  /* The canvas tint. 12% is a CEILING set by contrast, not a taste (MOTIR-10707):
+     text sits straight on this canvas (page headers, empty states), so the
+     four AA inks have to clear 4.5:1 over its darkest point. Rendered at
+     1440x900 and 390x844 across all ten palettes in both modes, the worst
+     pixel — the bottom-right corner, where the link and accent washes
+     overlap — is 4.60:1 at 12% (sienna light, --el-accent-on-surface), 4.46:1
+     at 14% and 2.10:1 at the 42% this replaced. The vibrancy the panels refract
+     comes from --glass-saturate on the blur, which never touches canvas text. */
+  --glass-wash: 12%;
   --glass-saturate: 180%; /* punchier refraction (was a fixed 150%) */
   /* The specular SHEEN + RIM light — white, palette-agnostic (glass catches
      light regardless of hue); used by the material layer, never as a fill. */
@@ -3928,9 +3935,11 @@
   }
 }
 
-/* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR, not a
-   preference: white is the lightest backdrop the light theme can put behind it,
-   so 86% accent composited over anything measures >= 4.87:1. */
+/* 4 · Glassmorphism — frosted translucency over the rim. 94% is a FLOOR, not a
+   preference: the page is the worst backdrop in either mode (the lightest under
+   the light theme's white label, the darkest under the dark theme's dark one),
+   and 94% accent composited over it measures >= 4.78:1 in every palette —
+   evergreen light is the binding pair. 86% measured 4.09:1 there (MOTIR-10707). */
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='ai-cta'] {
     border: 1px solid var(--glass-rim);
@@ -3947,7 +3956,7 @@
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     --plan-hero-fill: none;
-    background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+    background-color: color-mix(in srgb, var(--el-accent) 94%, transparent);
   }
 }
 @scope ([data-style='glassmorphism']) to ([data-style]) {

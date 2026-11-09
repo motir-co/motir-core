@@ -77,15 +77,15 @@ the block (the disjoint-axis acceptance criterion; enforced by
   fractions — kept **low so the canvas shows THROUGH** the glass
   (`--glass-surface-alpha: 50%`, `--glass-modal-alpha: 70%`,
   `--glass-chrome-alpha: 52%`, `--glass-input-alpha: 44%`,
-  `--glass-border-alpha: 72%` the lit rim), `--glass-wash: 42%` (a **vibrant**
-  gradient-canvas tint — glass needs real colour behind it to refract; a
-  near-white canvas reads "flat with a little blur"), `--glass-saturate: 180%`
-  (punchier refraction), and the white specular `--glass-sheen` / `--glass-rim`
+  `--glass-border-alpha: 72%` the lit rim), `--glass-wash: 12%` (the gradient-canvas
+  tint, capped by contrast — see Accessibility), `--glass-saturate: 180%`
+  (punchier refraction: the blur amplifies the wash's colour behind each panel,
+  which is where the vibrancy comes from), and the white specular `--glass-sheen` / `--glass-rim`
   (light is palette-agnostic). These carry no hue, so they live here; the
   material layer consumes them.
 
 **The three things that make it read as glass (not a flat blurred box):** a
-**vibrant canvas** to refract (high `--glass-wash`), **genuine translucency**
+**coloured canvas** to refract (`--glass-wash`, saturated by the blur), **genuine translucency**
 (low surface alpha, so the colour shows through), and a **lit edge** — the
 `linear-gradient` sheen raking across the panel + the inset `--glass-rim`
 highlight + a soft drop shadow so the sheet floats.
@@ -132,14 +132,21 @@ Glassmorphism's identity lives in the axes a radius/shadow swap can't reach:
 
 Text sits on _translucent_ surfaces over a gradient, so contrast is verified
 **over the blur/gradient, not just on a solid fill** (the explicit acceptance
-criterion). Three things keep it AA:
+criterion). Four things keep it AA:
 
 1. **Panels stay substantially opaque** (cards 64%, modals 82%, derived from the
    near-white / near-black page bg), so the effective surface behind text stays
    close to the base colour the palette already tuned for AA.
-2. **The washes are subtle** (`--glass-wash: 15%`), so the gradient never pulls
-   a surface far enough toward a hue to threaten contrast.
-3. **Body-text-dense surfaces use the more opaque modal recipe.** Text continues
+2. **The washes are subtle** (`--glass-wash: 12%`), so the gradient never pulls
+   a surface far enough toward a hue to threaten contrast. 12% is a ceiling, not
+   a taste: text sits straight on the canvas (page headers, empty states), and
+   rendered across all ten palettes in both modes the darkest canvas pixel (the
+   bottom-right corner, where two washes overlap) holds the four AA inks at
+   ≥ 4.60:1. The 42% this once shipped at measured 2.10:1 there (MOTIR-10707).
+   `tests/theme/stylePaletteModeContrast.test.ts` gates it.
+3. **The AI hero pill is 94% accent**, the floor at which its label clears
+   4.5:1 over the page in every palette (evergreen light binds at 4.78:1).
+4. **Body-text-dense surfaces use the more opaque modal recipe.** Text continues
    to use the palette's `--el-text*` tokens, whose AA pairings are unchanged.
 
 Verified in light and dark themes against the `/tokens` specimen with the

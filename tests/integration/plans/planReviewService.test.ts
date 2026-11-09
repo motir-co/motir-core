@@ -796,6 +796,22 @@ describe('planReviewService.getPlanReview', () => {
     expect(review.arrivalLevelTotal).toBe(3);
   });
 
+  it('does NOT count the project root for a plan with NO items — it has no arrival level (MOTIR-10739)', async () => {
+    // A plan being written has no proposals at its first read. `fullestContainer`
+    // answers null for it, which is also how the top level is spelled, so the count
+    // used to read the ROOT: a large project then sent every fresh plan to the list.
+    const fx = await makeWorkItemFixture();
+    await seedChild(fx, 'epic', 'A committed root epic');
+    await seedChild(fx, 'epic', 'Another root epic');
+
+    const plan = await plansService.createPlan(fx.projectId, { title: 'Just started' }, fx.ctx);
+
+    const review = await planReviewService.getPlanReview(plan.id, fx.ctx);
+    expect(review.items).toHaveLength(0);
+    expect(review.arrivalLevelSize).toBe(0);
+    expect(review.arrivalLevelTotal).toBe(0);
+  });
+
   it('surfaces a leaf-sizing re-scope in the change preview so the approver SEES it (MOTIR-1532)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'Resized card');

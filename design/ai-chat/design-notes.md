@@ -833,7 +833,7 @@ new numbers trustworthy.
 | 1   | **Warm Editorial** (base) | 135° `--el-accent` → `color-mix(--el-accent 86%, --el-highlight)` — **accent-dominant, see the base-fill finding below** | none                                                                                              | inner sheen + violet drop + pink aura (the component's own `var()` fallback)                                     | sans, 600, sentence case                | **5.97** / **4.64**     |
 | 2   | **Soft / Playful**        | as base                                                                                                                  | none                                                                                              | **pillowy stack**: a hard `0 7px 0 -1px` ledge in `color-mix(--el-accent 22%, --el-page-bg)` + a wide soft bloom | sans, **800**, sentence case            | **5.97** / **4.64**     |
 | 3   | **Swiss / Minimal-Flat**  | **flat solid `--el-accent`** — no gradient                                                                               | none                                                                                              | **none** (the style removes every shadow; depth is hairline + whitespace)                                        | sans, 700, **UPPERCASE**, `0.07em`      | **6.57** / **4.99**     |
-| 4   | **Glassmorphism**         | **frosted**: `color-mix(--el-accent 86%, transparent)` + `backdrop-filter: blur(var(--glass-blur))`                      | `1px` `var(--glass-rim)`                                                                          | inner rim sheen + diffuse lift                                                                                   | sans, 600, sentence case                | **4.87** / **5.73**     |
+| 4   | **Glassmorphism**         | **frosted**: `color-mix(--el-accent 94%, transparent)` + `backdrop-filter: blur(var(--glass-blur))`                      | `1px` `var(--glass-rim)`                                                                          | inner rim sheen + diffuse lift                                                                                   | sans, 600, sentence case                | **14.24** / **14.86**   |
 | 5   | **Neo-Brutalism**         | **flat solid `--el-accent`**                                                                                             | **2px solid `--el-text`**                                                                         | **hard offset, zero blur** — `4px 4px 0 var(--el-text)`                                                          | sans, 800, **UPPERCASE**                | **6.57** / **4.99**     |
 | 6   | **Cybercore / Y2K**       | dark HUD ground: `color-mix(--el-accent 88%, black)` → the highlight mix taken 78% to black                              | `1px` `color-mix(--el-highlight 70%, transparent)`                                                | **neon halo, no drop shadow**: `0 0 10px` / `0 0 26px -4px` over `--el-highlight` / `--el-accent`                | **mono** (`--font-mono`), 600, `0.04em` | **7.42** / **6.10**     |
 | 7   | **Aurora**                | base + a lit-from-within crown sheen at `--aurora-sheen`                                                                 | none                                                                                              | **colour halo** at `--aurora-glow`, no hard shadow                                                               | sans, 600, sentence case                | **5.97** / **4.64**     |
@@ -904,6 +904,16 @@ only just, which is exactly the value a designer would accept by eye. The frost 
 glass read carried by the blur + `--glass-rim` + the inner sheen rather than by thinning the fill.
 **86% is a floor, not a preference**: white is the lightest backdrop the light theme can put behind
 it (`--el-page-bg` is `#ffffff`), so 86% accent composited over anything is **≥ 4.87:1**.
+
+> **Amended by MOTIR-10707 (2026-11-08): the floor is now 94%.** The 86% figure was measured on
+> one palette. The style × palette × mode gate (`tests/theme/stylePaletteModeContrast.test.ts`,
+> MOTIR-10674) measures every palette, and at 86% `evergreen` light reads **4.09:1**. The page is
+> the worst backdrop in both modes (the lightest under the light theme's white label, the darkest
+> under the dark theme's dark one). Re-measured over it, with the label `--el-accent-text` on the
+> accent composited over `--el-page-bg`: 90% gives 4.45:1, 92% gives 4.58:1, and **94% gives
+> ≥ 4.78:1 in all ten palettes in both modes**. Evergreen light is the binding pair; the next lowest
+> are amethyst dark 5.46 and sienna light 5.57. The fill stays translucent. Row 4's ratios are the
+> default `motir` palette re-measured at 94% the same way.
 
 #### ⚠️ Row 8 reconciled — `3d-immersive` ADDS NOTHING to the shadow (AC 4)
 
@@ -1030,7 +1040,7 @@ shape role.
   }
 }
 
-/* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR. */
+/* 4 · Glassmorphism — frosted translucency over the rim. 94% is a FLOOR (MOTIR-10707). */
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='ai-cta'] {
     border: 1px solid var(--glass-rim);
@@ -1042,7 +1052,7 @@ shape role.
   }
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     background-image: none;
-    background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+    background-color: color-mix(in srgb, var(--el-accent) 94%, transparent);
   }
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     /* Crown-confined: across the whole circle this sheen lightens the
