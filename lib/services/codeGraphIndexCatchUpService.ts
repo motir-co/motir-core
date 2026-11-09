@@ -68,7 +68,8 @@ import { withSystemContext } from '@/lib/workspaces/context';
 // and a cap on attempts after which `refreshFailing` (MOTIR-2105) is the signal.
 // A size refusal is never retried: the index would be refused the same way.
 
-/** Automatic re-dispatches per repository between two successful indexes.
+/** Automatic re-dispatches of a FAILED run per repository between two successful
+ *  indexes. A lost dispatch is re-sent past it (see `listIndexRetryCandidates`).
  *  Five, with the backoff below, spans about 15½ hours of failures (30 min, 1 h,
  *  2 h, 4 h, 8 h): long enough to outlast a fleet outage like MOTIR-10805's three
  *  hours with room to spare, short enough that a repository that fails every

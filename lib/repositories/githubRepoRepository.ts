@@ -480,13 +480,19 @@ export const githubRepoRepository = {
    * Two arms (see {@link IndexRetryArm}), both:
    *  - not paused (`listIndexPaused` owns those), not archived, and not refused
    *    for size (`index_refused_at IS NULL`: a re-dispatch is refused the same way);
-   *  - under the attempt cap (`index_retry_attempts < maxAttempts`);
    *  - owed something: never indexed, or a graph whose known head moved past it
    *    (or that was built at an unknown head). A current graph is owed nothing,
    *    and is left out here so it cannot hold a slot of the batch on every tick;
    *  - DUE: the backoff `baseBackoffMs * 2^attempts` has elapsed since the dead
    *    run finished (`dead_run`), or the longer of that and `lostDispatchGraceMs`
    *    since the last re-dispatch (`lost_dispatch`).
+   *
+   * ⚠️ THE CAP BOUNDS `dead_run` ONLY (`index_retry_attempts < maxAttempts`). It
+   * exists to stop re-dispatching runs that keep FAILING, and a lost dispatch is
+   * not a failure: the enqueue swallows a transport error, so the LAST attempt
+   * can be lost with no run, no claim and `refreshFailing` reading false. Capping
+   * that arm too would strand exactly that repository. It stays bounded in rate
+   * instead, because each re-send counts and so doubles the next wait.
    *
    * `dead_run` reads the claimed `job_run` row: `failed` (every retry of the
    * job exhausted, dead-lettered) or `abandoned` — the same terminal set
@@ -536,7 +542,6 @@ export const githubRepoRepository = {
         WHERE gr."archived" = false
           AND gr."index_paused_reason" IS NULL
           AND gr."index_refused_at" IS NULL
-          AND gr."index_retry_attempts" < ${args.maxAttempts}
           AND (
             gr."indexed_at" IS NULL
             OR (
@@ -546,9 +551,10 @@ export const githubRepoRepository = {
           )
           AND (
             (
-              jr."function_id" IN ('system.code-graph-index', 'system.code-graph-refresh')
+              gr."index_retry_attempts" < ${args.maxAttempts}
+              AND jr."function_id" IN ('system.code-graph-index', 'system.code-graph-refresh')
               AND jr."status" IN ('failed', 'abandoned')
-              AND COALESCE(jr."finished_at", jr."started_at") <= ${args.now}::timestamp - ${backoff}
+              AND COALESCE(jr."finished_at", jr."started_at") <= (${args.now}::timestamptz AT TIME ZONE 'UTC') - ${backoff}
               AND NOT EXISTS (
                 SELECT 1 FROM "job_queue" q
                 WHERE q."job_id" = jr."function_id"
@@ -559,7 +565,7 @@ export const githubRepoRepository = {
             OR (
               gr."indexing_run_id" IS NULL
               AND gr."index_retry_dispatched_at" IS NOT NULL
-              AND gr."index_retry_dispatched_at" <= ${args.now}::timestamp - GREATEST(${backoff}, ${lostGrace})
+              AND gr."index_retry_dispatched_at" <= (${args.now}::timestamptz AT TIME ZONE 'UTC') - GREATEST(${backoff}, ${lostGrace})
             )
           )
       ) candidates

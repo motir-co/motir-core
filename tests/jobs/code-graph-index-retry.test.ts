@@ -493,6 +493,34 @@ describe('a re-dispatch nobody ever claimed is LOST, and re-sent after its grace
     expect(indexes).toEqual([]);
   });
 
+  it('a LAST attempt that was lost is still re-sent: the cap bounds failing runs, not lost dispatches', async () => {
+    const seeded = await seedRepo('rt-lost-last', 'dropped');
+    // Every attempt spent, the last re-dispatch sent and never claimed by a run.
+    await adminDb.githubRepo.update({
+      where: { id: seeded.repoId },
+      data: {
+        indexingRunId: null,
+        indexRetryAttempts: INDEX_RETRY_MAX_ATTEMPTS,
+        indexRetryDispatchedAt: longAgo(17 * 60),
+      },
+    });
+    const { deps, indexes } = fakeDeps();
+
+    // 30 min × 2⁵ = 16 h, longer than the 6 h grace, so 15 h is too soon.
+    const early = await codeGraphIndexCatchUpService.retryFailed({
+      deps,
+      now: new Date(NOW.getTime() - 2 * 60 * MINUTE),
+    });
+    expect(early.scanned).toBe(0);
+
+    const summary = await codeGraphIndexCatchUpService.retryFailed({ deps, now: NOW });
+
+    expect(summary.outcomes.map((o) => [o.arm, o.attempt, o.outcome])).toEqual([
+      ['lost_dispatch', INDEX_RETRY_MAX_ATTEMPTS + 1, 'retry_index_enqueued'],
+    ]);
+    expect(indexes.map((d) => d.repoName)).toEqual(['dropped']);
+  });
+
   it('a paused repository belongs to the paused pass, not this one', async () => {
     const seeded = await seedRepo('rt-paused', 'paused');
     await adminDb.githubRepo.update({
