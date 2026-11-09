@@ -55,6 +55,10 @@ interface GhRunner {
 /** What GitHub holds, per `owner/repo` and per org. */
 let queuedJobs: Record<string, GhJob[]>;
 let orgRunners: Record<string, GhRunner[]>;
+/** Runs whose jobs read GitHub refuses, by run id → HTTP status (MOTIR-10790). */
+let failingRunJobs: Record<number, number>;
+/** `owner/repo`s whose runs list GitHub refuses, → HTTP status. */
+let failingRunLists: Record<string, number>;
 let urls: string[];
 
 function json(body: unknown, status = 200): Response {
@@ -79,6 +83,8 @@ function stubGithub(): void {
       }
       const runs = path.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/runs$/);
       if (runs) {
+        const refused = failingRunLists[runs[1]!];
+        if (refused) return json({ message: 'Server Error' }, refused);
         const jobs = queuedJobs[runs[1]!] ?? [];
         const status = new URL(url).searchParams.get('status');
         const ids = [...new Set(jobs.map((j) => j.run_id))];
@@ -86,6 +92,8 @@ function stubGithub(): void {
       }
       const runJobs = path.match(/^\/repos\/([^/]+\/[^/]+)\/actions\/runs\/(\d+)\/jobs$/);
       if (runJobs) {
+        const refused = failingRunJobs[Number(runJobs[2])];
+        if (refused) return json({ message: 'Server Error' }, refused);
         const jobs = (queuedJobs[runJobs[1]!] ?? []).filter((j) => j.run_id === Number(runJobs[2]));
         return json({
           jobs: jobs.map((j) => ({
@@ -191,6 +199,8 @@ beforeEach(async () => {
   fakeOrchestrator.reset();
   queuedJobs = {};
   orgRunners = {};
+  failingRunJobs = {};
+  failingRunLists = {};
   urls = [];
   vi.stubEnv('MOTIR_FLEET_ORCHESTRATOR', 'fake');
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
@@ -483,6 +493,74 @@ describe('it covers BOTH sides of the fleet', () => {
   });
 });
 
+describe('one run GitHub cannot list does not stop the org (MOTIR-10790)', () => {
+  it('skips a run whose jobs read answers 5xx and still mints for the other runs’ stranded jobs', async () => {
+    // The 2026-11-09 shape: one motir-meta run answered 502 on every jobs read,
+    // and that aborted the whole org's reconcile on every tick.
+    const fx = await seedTenant();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await seedIntent(fx, { jobId: 9001, runId: 500 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(8001, 600), stranded(9001, 500)];
+    failingRunJobs[600] = 502;
+
+    const outcome = await reconcile();
+
+    expect(outcome.added).toBe(1);
+    expect(outcome.orgs).toEqual([
+      {
+        org: MOTIR_ORG,
+        queued: 1,
+        idleRunners: 0,
+        awaiting: 0,
+        added: 1,
+        skippedRuns: [
+          {
+            repoOwner: MOTIR_ORG,
+            repoName: 'acme-web',
+            runId: '600',
+            status: 502,
+            detail: 'Server Error',
+          },
+        ],
+      },
+    ]);
+    const minted = await adminDb.ciRunnerProvisioningIntent.findMany({
+      where: { reconcileGeneration: 1 },
+    });
+    expect(minted.map((m) => [m.runId, m.jobId])).toEqual([['500', '9001']]);
+    expect(bootEvents()).toHaveLength(1);
+    // The skipped run is logged with its id and status; the org did not fail.
+    expect(warn).toHaveBeenCalledWith(
+      '[ciRunnerReconcile] skipped a run whose jobs GitHub would not list',
+      expect.objectContaining({ org: MOTIR_ORG, runId: '600', status: 502 }),
+    );
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('still reports an org-level failure when a repository’s runs list cannot be read', async () => {
+    const fx = await seedTenant();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await seedIntent(fx, { jobId: 9001 });
+    queuedJobs[`${MOTIR_ORG}/acme-web`] = [stranded(9001)];
+    failingRunLists[`${MOTIR_ORG}/acme-web`] = 502;
+
+    const outcome = await reconcile();
+
+    expect(outcome.added).toBe(0);
+    expect(outcome.orgs).toEqual([
+      {
+        org: MOTIR_ORG,
+        queued: 0,
+        idleRunners: 0,
+        awaiting: 0,
+        added: 0,
+        error: 'GitHub refused a fleet-queue call (HTTP 502: Server Error).',
+      },
+    ]);
+  });
+});
+
 describe('the new intents go through the admission gate', () => {
   it('an org at its CI figure DEFERS the reconcile intent instead of exceeding it', async () => {
     const fx = await seedTenant();
@@ -525,9 +603,10 @@ describe('fleetQueueClient edges', () => {
         return json({ message: 'Not Found' }, 404);
       }),
     );
-    expect(await fleetQueueClient.listQueuedFleetJobs({ owner: MOTIR_ORG, repo: 'gone' })).toEqual(
-      [],
-    );
+    expect(await fleetQueueClient.listQueuedFleetJobs({ owner: MOTIR_ORG, repo: 'gone' })).toEqual({
+      jobs: [],
+      skippedRuns: [],
+    });
   });
 
   it('raises a typed error on a refusal and on an unreachable GitHub', async () => {
@@ -557,5 +636,37 @@ describe('fleetQueueClient edges', () => {
       throw new TypeError('fetch failed');
     });
     await expect(fleetQueueClient.listFleetRunners()).rejects.toMatchObject({ status: null });
+  });
+
+  it('skips a run whose jobs read GitHub cannot be reached for, naming it with a null status', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('/access_tokens')) {
+          return json({ token: 't', expires_at: new Date(Date.now() + 3_600_000).toISOString() });
+        }
+        if (url.endsWith(`/orgs/${MOTIR_ORG}/installation`)) {
+          return json({ id: Number(PROVISIONING_INSTALLATION) });
+        }
+        if (url.includes('/actions/runs/77/jobs')) throw new TypeError('fetch failed');
+        if (url.includes('/actions/runs?status=queued'))
+          return json({ workflow_runs: [{ id: 77 }] });
+        return json({ workflow_runs: [] });
+      }),
+    );
+
+    expect(await fleetQueueClient.listQueuedFleetJobs({ owner: MOTIR_ORG, repo: 'r' })).toEqual({
+      jobs: [],
+      skippedRuns: [
+        {
+          repoOwner: MOTIR_ORG,
+          repoName: 'r',
+          runId: '77',
+          status: null,
+          detail: 'GitHub could not be reached for the fleet queue (fetch failed).',
+        },
+      ],
+    });
   });
 });

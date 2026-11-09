@@ -224,6 +224,12 @@ export const fileOf = (finding: string): string => finding.split(' ')[0]!;
 // debt with a card, and it goes in `UNSWEPT_ASSETS` below, where it is COUNTED.
 // The difference between the two tables is the difference between an exemption
 // and a countdown.
+// Every mock in the style area — one per registered-or-proposed style, each
+// rendered the same way (see design/styles/design-notes.md).
+const STYLE_MOCKS = readdirSync(join(process.cwd(), 'design', 'styles'))
+  .filter((name) => name.endsWith('.mock.html'))
+  .map((name) => `design/styles/${name}`);
+
 const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] = [
   {
     file: 'design/shell/context-row.mock.html',
@@ -241,6 +247,16 @@ const KNOWN_PRIVATE_COLOURS: { file: string; property: string; why: string }[] =
       '`--color-white` above: the compiler writes it, `bg-black/10` utilities read it, and no ' +
       'sweep can remove it without hand-editing generated CSS.',
   },
+  // The style mocks (MOTIR-10549) are `renderMock` output over the REAL
+  // `StyleVignette`, whose modal scrim is `bg-black/10`: the compiler writes
+  // `--color-black` for it, the same machine output as context-row's row above.
+  ...STYLE_MOCKS.map((file) => ({
+    file,
+    property: '--color-black',
+    why:
+      "Tailwind v4's generated default `@theme` layer, written for the shipped `StyleVignette` " +
+      "scrim's `bg-black/10`. Machine output, not an authored alias.",
+  })),
 ];
 
 // ── Inherited debt — a COUNT that has to reach zero, with a card ─────────────

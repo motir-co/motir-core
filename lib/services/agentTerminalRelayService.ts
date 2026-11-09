@@ -1,4 +1,5 @@
 import type { AgentInstance } from '@/generated/prisma/client';
+import { INSTALL_FLEET_TAG } from '@/lib/ciFleet/installFleet';
 import { AgentInstancesUnavailableError } from '@/lib/agentInstances/errors';
 import { terminalMasterKey } from '@/lib/agentInstances/terminal';
 import {
@@ -13,6 +14,7 @@ import { relayAuthorization } from '@/lib/agentTerminal/relayToken';
 import { hashTerminalTicket } from '@/lib/agentTerminal/ticket';
 import {
   hosterTerminalEndpointFor,
+  installFleetTerminalEndpoint,
   persistentTerminalEndpoint,
   selectedOrchestratorProvider,
 } from '@/lib/orchestrator';
@@ -183,6 +185,9 @@ export const agentTerminalRelayService = {
         return refuse(TERMINAL_CLOSE.notRunning);
       }
     }
+    // An install-fleet instance (MOTIR-10794) records no account: it is dialled
+    // in core's own account, by its machine id alone.
+    const installFleet = !row.fleetShardId && row.flyApp === INSTALL_FLEET_TAG;
     const handle = {
       provider:
         shard && selectedOrchestratorProvider() !== 'fake'
@@ -191,12 +196,14 @@ export const agentTerminalRelayService = {
       app: row.flyApp!,
       machineId: row.machineId!,
       volumeId: row.volumeId!,
-      region: row.region,
+      region: row.region!,
       createdAt: row.createdAt,
     };
     const endpoint = shard
       ? await hosterTerminalEndpointFor(shard, handle)
-      : await persistentTerminalEndpoint(handle);
+      : installFleet
+        ? await installFleetTerminalEndpoint(handle)
+        : await persistentTerminalEndpoint(handle);
     const authorization = relayAuthorization({
       masterKey: requireMasterKey(),
       instanceId: row.id,

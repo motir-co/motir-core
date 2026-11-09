@@ -27,7 +27,7 @@ const GLOBALS_CSS =
   readFileSync(join(process.cwd(), 'packages/design-system/theme.css'), 'utf8');
 
 describe('style registry', () => {
-  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism)', () => {
+  it('registers the styles in gallery order (Warm Editorial + Soft / Playful + Swiss / Minimal-Flat + Neo-Brutalism + Glassmorphism + Cybercore / Y2K + Aurora + 3D / Immersive + Neumorphism + Hand-Drawn / Indie + Retrofuturism + Dense / Pro + High-Contrast / Accessible + Tonal / Elevated + Claymorphism + Bento + Editorial Print / Newspaper + Art Deco + Memphis)', () => {
     expect(STYLE_IDS).toEqual([
       'warm-editorial',
       'soft-playful',
@@ -40,6 +40,14 @@ describe('style registry', () => {
       'neumorphism',
       'hand-drawn-indie',
       'retrofuturism',
+      'dense-pro',
+      'high-contrast-accessible',
+      'tonal-elevated',
+      'claymorphism',
+      'bento',
+      'editorial-print',
+      'art-deco',
+      'memphis',
     ]);
     expect(STYLE_REGISTRY['warm-editorial'].name).toBe('Warm Editorial');
     expect(STYLE_REGISTRY['soft-playful'].name).toBe('Soft / Playful');
@@ -52,6 +60,14 @@ describe('style registry', () => {
     expect(STYLE_REGISTRY['neumorphism'].name).toBe('Neumorphism');
     expect(STYLE_REGISTRY['hand-drawn-indie'].name).toBe('Hand-Drawn / Indie');
     expect(STYLE_REGISTRY['retrofuturism'].name).toBe('Retrofuturism');
+    expect(STYLE_REGISTRY['dense-pro'].name).toBe('Dense / Pro');
+    expect(STYLE_REGISTRY['high-contrast-accessible'].name).toBe('High-Contrast / Accessible');
+    expect(STYLE_REGISTRY['tonal-elevated'].name).toBe('Tonal / Elevated');
+    expect(STYLE_REGISTRY['claymorphism'].name).toBe('Claymorphism');
+    expect(STYLE_REGISTRY['bento'].name).toBe('Bento');
+    expect(STYLE_REGISTRY['editorial-print'].name).toBe('Editorial Print / Newspaper');
+    expect(STYLE_REGISTRY['art-deco'].name).toBe('Art Deco');
+    expect(STYLE_REGISTRY['memphis'].name).toBe('Memphis');
   });
 
   it('keeps every entry self-consistent (key === id) and STYLE_IDS in sync', () => {

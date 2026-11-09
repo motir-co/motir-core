@@ -1,5 +1,24 @@
 # @motir/design-system
 
+## 0.21.4
+
+### Patch Changes
+
+- fe354d8: Memphis: lower the canvas pattern to 11% accent dots, 9% highlight dots and a 5% link hatch, so text on a dot that lands on a hatch line clears AA in every palette (MOTIR-10745).
+
+## 0.21.3
+
+### Patch Changes
+
+- c301602: `theme.css`: Cybercore / Y2K's canvas grid lines drop from 6% to 5% `currentColor`, on the page and on the style-gallery vignette (MOTIR-10746). Where a horizontal and a vertical line cross, the page takes both tints, and at 6% that crossing took `--el-accent-on-surface` to 4.46:1 in sienna light. At 5% the worst crossing in any palette and mode is 4.63:1.
+- 6f1a304: Glassmorphism: the canvas wash drops from 42% to 12% and the AI hero pill fill rises from 86% to 94% accent, so text on the canvas and the pill label clear WCAG AA (4.5:1) in every palette and mode (MOTIR-10707).
+
+## 0.21.2
+
+### Patch Changes
+
+- 67859cd: `theme.css`: Cybercore / Y2K's plan-with-AI pill and orb clear WCAG AA in every palette and mode (MOTIR-10710). The pill's fill takes 6% / 5% black with the base 14% highlight share (was 12% / 22% black with 30% highlight), because black lowers the contrast of the palettes whose label ink is dark: sienna light was 3.18:1 and candy light 3.49:1, and every pair is now at least 4.5:1. The orb's highlight wash drops from 22% to 15%, which takes the cobalt dark glyph from 2.96:1 back over the 3:1 non-text floor.
+
 ## 0.21.1
 
 ### Patch Changes

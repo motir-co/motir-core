@@ -12,6 +12,9 @@ import { escapeRegExp } from '@/lib/utils/regexp';
 // re-skins it via its --color-* override), and the cited dnd / selection / due
 // / tabnav surfaces are migrated OFF the shared --el-tint-lavender / --el-accent
 // pool onto the dedicated tokens (un-collapsing the meanings — story MOTIR-1266).
+// The due SURFACE (`DueValue`) is gone: its last renderer, the unrendered inline
+// due editor, was removed in MOTIR-10591, so only the overdue / due-soon TOKENS
+// are still pinned here.
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
@@ -144,20 +147,5 @@ describe('agile accents + tabnav + card-icon + vote are wired to their tokens', 
     const src = read('app/(authed)/reports/page.tsx');
     expect(src).toContain('bg-(--el-card-icon-bg)');
     expect(src).toContain('text-(--el-card-icon-fg)');
-  });
-});
-
-describe('the overdue due-date cell reads the raw ISO to flag past-due dates', () => {
-  it('DueValue takes an iso prop and styles overdue / due-soon via the new tokens', () => {
-    const src = read('app/(authed)/items/_components/issueCellPrimitives.tsx');
-    expect(src).toContain('text-(--el-overdue)');
-    expect(src).toContain('text-(--el-due-soon)');
-    expect(src).toMatch(/DueValue\(\{\s*label,\s*iso\s*\}/);
-  });
-
-  it('both DueValue call-sites pass the ISO date through so overdue resolves', () => {
-    const src = read('app/(authed)/items/_components/IssueInlineEdit.tsx');
-    expect(src).toContain('<DueValue label={label} iso={dueIso} />');
-    expect(src).toContain('iso={row.dueDate}');
   });
 });

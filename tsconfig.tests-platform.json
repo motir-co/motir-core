@@ -25,6 +25,13 @@
   // other side stays where its importers are (`agentInstances/_harness` and
   // `ideas/_helpers` are why those two are not here) — the arrow runs one way,
   // from this project into the tests project, never back.
+  //
+  // ⚠️ AND MOVE THEM TO WHERE THEIR `lib/` SLICE ALREADY IS (MOTIR-10796). The
+  // product server suites (API routes, approval gates, services, pages, i18n, …)
+  // went to their own `tsconfig.tests-product.json` rather than here: priced,
+  // they added to this program nearly what they removed from the tests one,
+  // because they import a slice of `lib/` these suites do not. That header has
+  // the readings.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,

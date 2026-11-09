@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 import { ToastProvider } from '@/components/ui/Toast';
 import type { OrgFleetDTO } from '@/lib/dto/orgFleet';
 import type { OrgFleetStopResultDTO } from '@/lib/dto/orgFleetStop';
@@ -164,11 +165,20 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 
+// The cancel / hibernate outcome toasts arm Radix's 5 s close timer, which
+// Radix never clears on unmount. Left running it fires after happy-dom is torn
+// down and fails the shard with "document is not defined" (MOTIR-10744).
+clearToastTimersAfterEach();
+
 afterEach(() => {
   cleanup();
   window.sessionStorage.clear();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  // Restores every `vi.spyOn` — the toast-timer spy above, and the
+  // `document.visibilityState` getters two polling tests pin to `hidden`, which
+  // otherwise leak into whichever test runs next under `--sequence.shuffle`.
+  vi.restoreAllMocks();
   for (const fn of [
     cancelHostedRunAction,
     hibernateAgentAction,

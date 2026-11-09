@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { PlanChangeSessionDto, PlanChangeTurnDto } from '@/lib/dto/planChange';
 import { planReview } from '../helpers/planReview';
-import { planRunPhase } from '@/lib/planning/planRunPhase';
+import { conversationAckFor, planRunPhase } from '@/lib/planning/planRunPhase';
 
 // THE CONVERSATION PHASE ENDS AT `target_settled` (MOTIR-8203). A plan job carries
 // its plan id from the submit, but PART 1 — settling the target, the entry and the
@@ -78,7 +78,10 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
   };
 });
 
-import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
+import {
+  settledFirstTargetKey,
+  usePlanChangeConversation,
+} from '@/lib/hooks/usePlanChangeConversation';
 
 type Frame = (event: string, data: unknown) => void;
 
@@ -189,10 +192,74 @@ describe('a LIVE plan run', () => {
     run.emit('target_settled', { seq: 3, key: 'ACME-1', entry: 'lay' });
     expect(hook.result.current.state.settledJobId).toBe('job-1');
     expect(planRunPhase(hook.result.current.state)).toBe('planning');
+    // The settled card is what a project-launched surface follows (MOTIR-10739).
+    expect(hook.result.current.state.settledTargetKey).toBe('ACME-1');
 
     await run.end();
     await act(async () => sent);
     expect(planRunPhase(hook.result.current.state)).toBeNull();
+  });
+
+  it('keeps the job’s `conversation_ack` while it converses, and drops it at `target_settled` (MOTIR-10738)', async () => {
+    const run = heldStream();
+    stream.mockImplementation(run.impl);
+    const hook = renderHook(() => usePlanChangeConversation());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+
+    let sent!: Promise<void>;
+    act(() => {
+      sent = hook.result.current.send('add payments');
+    });
+    await waitFor(() => expect(run.impl).toHaveBeenCalled());
+    expect(conversationAckFor(hook.result.current.state)).toBeNull();
+
+    // A frame with no usable text is ignored.
+    run.emit('conversation_ack', { seq: 1, text: '   ' });
+    expect(hook.result.current.state.conversationAck).toBeNull();
+
+    run.emit('conversation_ack', { seq: 2, text: '  You want payments. I’ll look first.  ' });
+    expect(hook.result.current.state.conversationAck).toEqual({
+      jobId: 'job-1',
+      text: 'You want payments. I’ll look first.',
+    });
+    expect(conversationAckFor(hook.result.current.state)).toBe(
+      'You want payments. I’ll look first.',
+    );
+
+    run.emit('target_settled', { seq: 3 });
+    expect(conversationAckFor(hook.result.current.state)).toBeNull();
+
+    await run.end();
+    await act(async () => sent);
+  });
+
+  it('keeps the FIRST settled target when a run settles several, and none for a new card (MOTIR-10739)', async () => {
+    const run = heldStream();
+    stream.mockImplementation(run.impl);
+    const hook = renderHook(() => usePlanChangeConversation());
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    expect(hook.result.current.state.settledTargetKey).toBeNull();
+
+    let sent!: Promise<void>;
+    act(() => {
+      sent = hook.result.current.send('add payments');
+    });
+    await waitFor(() => expect(run.impl).toHaveBeenCalled());
+
+    // A run that starts a NEW card settles no key: there is nowhere to follow.
+    run.emit('target_settled', { seq: 1, key: null, index: 0, of: 1 });
+    expect(hook.result.current.state.settledJobId).toBe('job-1');
+    expect(hook.result.current.state.settledTargetKey).toBeNull();
+
+    // Each further target settles just before its walk; only index 0 is followed.
+    run.emit('target_settled', { seq: 2, key: 'ACME-4', index: 0, of: 2 });
+    run.emit('target_settled', { seq: 3, key: 'ACME-9', index: 1, of: 2 });
+    expect(hook.result.current.state.settledTargetKey).toBe('ACME-4');
+
+    await run.end();
+    await act(async () => sent);
+    // Kept after the run: the canvas has already been asked to move there once.
+    expect(hook.result.current.state.settledTargetKey).toBe('ACME-4');
   });
 
   it('a job that comes back with a QUESTION never reaches the planning phase', async () => {
@@ -221,6 +288,28 @@ describe('a LIVE plan run', () => {
     await act(async () => sent);
     expect(hook.result.current.state.settledJobId).toBeNull();
     expect(planRunPhase(hook.result.current.state)).toBeNull();
+  });
+});
+
+describe('settledFirstTargetKey — the card a `target_settled` frame hands the surface (MOTIR-10739)', () => {
+  it('reads the key of a one-target frame and of index 0, and nothing else', () => {
+    expect(settledFirstTargetKey({ key: 'ACME-1' })).toBe('ACME-1');
+    expect(settledFirstTargetKey({ key: 'ACME-1', index: 0, of: 3 })).toBe('ACME-1');
+    expect(settledFirstTargetKey({ key: 'ACME-2', index: 1, of: 3 })).toBeNull();
+    expect(settledFirstTargetKey({ key: null, index: 0 })).toBeNull();
+    expect(settledFirstTargetKey({ key: '  ' })).toBeNull();
+    expect(settledFirstTargetKey({})).toBeNull();
+    expect(settledFirstTargetKey(null)).toBeNull();
+  });
+
+  it('answers null for a revise run’s settled PROPOSAL — no work item carries its ref', () => {
+    // motir-ai's revise handler names a proposal target `planItem:<ref>` with
+    // `proposal: true`; an anchor read for it could only be refused.
+    expect(
+      settledFirstTargetKey({ key: 'planItem:pi_7', proposal: true, index: 0, of: 1 }),
+    ).toBeNull();
+    expect(settledFirstTargetKey({ key: 'planItem:pi_7', index: 0 })).toBeNull();
+    expect(settledFirstTargetKey({ key: 'ACME-3', proposal: true })).toBeNull();
   });
 });
 
@@ -254,13 +343,36 @@ describe('a REOPENED overlay mid-run', () => {
 
     replay.emit('conversation', { seq: 1 });
     expect(planRunPhase(hook.result.current.state)).toBe('conversation');
-    replay.emit('target_settled', { seq: 2 });
+    replay.emit('target_settled', { seq: 2, key: 'ACME-7', index: 0, of: 1 });
     expect(hook.result.current.state.settledJobId).toBe('job-1');
     expect(planRunPhase(hook.result.current.state)).toBe('planning');
+    // The replay settles the target the surface follows too (MOTIR-10739).
+    expect(hook.result.current.state.settledTargetKey).toBe('ACME-7');
     // The replay is read for that one frame and no further.
     const signal = replay.impl.mock.calls[0]![1] as AbortSignal;
     expect(signal.aborted).toBe(true);
     expect(replay.impl).toHaveBeenCalledTimes(1);
+  });
+
+  it('a read-only viewer reads the run’s `conversation_ack` from the same replay (MOTIR-10738)', async () => {
+    getSession.mockResolvedValue(
+      session({ pendingPlanId: 'plan-1', lastJobId: 'job-1', viewerCanPlan: false }),
+    );
+    const replay = heldStream();
+    stream.mockImplementation(replay.impl);
+    const hook = renderHook(() => usePlanChangeConversation({ sessionId: 's1' }));
+
+    await waitFor(() => expect(replay.impl).toHaveBeenCalled());
+    replay.emit('conversation_ack', { seq: 1, text: 42 });
+    expect(hook.result.current.state.conversationAck).toBeNull();
+    replay.emit('conversation_ack', { seq: 2, text: 'You want payments.' });
+    expect(conversationAckFor(hook.result.current.state)).toBe('You want payments.');
+    // The ack does not close the replay: it is still waiting for the settle.
+    const signal = replay.impl.mock.calls[0]![1] as AbortSignal;
+    expect(signal.aborted).toBe(false);
+    replay.emit('target_settled', { seq: 3 });
+    expect(signal.aborted).toBe(true);
+    expect(conversationAckFor(hook.result.current.state)).toBeNull();
   });
 
   it('a viewer who may plan ADOPTS the run, and the adopted stream settles its phase', async () => {

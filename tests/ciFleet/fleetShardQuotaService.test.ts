@@ -9,6 +9,7 @@ import {
 } from '@/lib/services/fleetShardQuotaService';
 import { fleetShardService, type CreateFleetShardInput } from '@/lib/services/fleetShardService';
 import { adminDb } from '../helpers/adminDb';
+import { truncateAuthTables } from '../helpers/db';
 import { FakeOrganization } from '../helpers/addShardFakes';
 
 // THE LIVE GRANTED vCPU QUOTA (Story MOTIR-9362 · MOTIR-9458), against real
@@ -57,14 +58,18 @@ function awsAccount(overrides: Partial<CreateFleetShardInput> = {}) {
 
 const okOf = (r: LiveQuotaReading) => ('failure' in r ? null : r);
 
+// ⚠️ TRUNCATE, NOT `deleteMany` (MOTIR-10733's CI). A suite that ran earlier on this worker's
+// database can leave `agent_instance` rows naming a fleet shard, and that foreign key is
+// RESTRICT, so a plain delete of every shard is refused and the whole file fails in its hook.
+// `truncateAuthTables` truncates `fleet_shard` with CASCADE, as every suite's reset does.
 beforeEach(async () => {
-  await adminDb.fleetShard.deleteMany({});
+  await truncateAuthTables(adminDb);
   org = new FakeOrganization(SESSION);
   onPool = new Set(['ci_runner']);
 });
 
 afterAll(async () => {
-  await adminDb.fleetShard.deleteMany({});
+  await truncateAuthTables(adminDb);
   await db.$disconnect();
   await adminDb.$disconnect();
 });

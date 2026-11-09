@@ -619,6 +619,28 @@ function planOwnsEdge(proj: Projection): (blockedId: string, blockerId: string) 
   return (blockedId, blockerId) => reaches(blockedId) || reaches(blockerId);
 }
 
+/**
+ * Is an unsatisfied blocker row a WAIT (MOTIR-9021 · MOTIR-10760)? Yes ⟺ the
+ * blocker is a COMMITTED card (not an `add` of this plan) whose status is not
+ * terminal. Such a row is not a defect the plan can repair: the subtree is
+ * finishable once that card lands, and the only "fix" is to drop a real
+ * dependency — the move that makes a release gate falsely ready.
+ *
+ * Who drew the edge does NOT matter. MOTIR-9021 first scoped the wait with
+ * {@link planOwnsEdge}, which made two waits fixable: an edge the plan itself
+ * draws onto a committed `todo` card, and every pre-existing edge under a story
+ * the plan `modify`s (a "Plan <story>" session modifies its anchor, and the
+ * ancestor reach then owns the whole subtree). Whether a plan-drawn edge is
+ * LEGAL is judged apart — `invalidEdges`, `crossLevelEdges` and the approve
+ * gate's rejections — so ownership stays the scope of those findings only.
+ *
+ * Still fixable: a blocker that is a proposal of the plan (`planItem:`), and one
+ * that is terminal (reached only under `tight`: the set must be self-contained).
+ */
+function isWait(proj: Projection, blocker: ProjectedNode): boolean {
+  return !proj.proposalByRef.has(blocker.id) && !isDone(proj, blocker);
+}
+
 /** The `modify` patch keys that move an edge or a position (MOTIR-7727). */
 const EDGE_PATCH_KEYS = ['parentRef', 'blockedByAdd', 'blockedByRemove'] as const;
 
@@ -823,9 +845,8 @@ export const planValidityService = {
           blockerSprintId: blocker.sprintId,
         };
         blockers.push(row);
-        // A WAIT (MOTIR-9021): an edge the plan does not own, so it was in place
-        // before the plan and waits on a committed card still being worked.
-        if (!owns(memberId, blockerId)) waits.push(row);
+        // A WAIT (MOTIR-9021 · MOTIR-10760): see `isWait`.
+        if (isWait(proj, blocker)) waits.push(row);
       }
     }
     sortBlockers(blockers);
@@ -932,9 +953,8 @@ export const planValidityService = {
           blockerSprintId: blocker.sprintId,
         };
         blockers.push(row);
-        // A WAIT (MOTIR-9021): an edge the plan does not own, so it was in place
-        // before the plan and waits on a committed card still being worked.
-        if (!owns(memberId, blockerId)) waits.push(row);
+        // A WAIT (MOTIR-9021 · MOTIR-10760): see `isWait`.
+        if (isWait(proj, blocker)) waits.push(row);
       }
     }
     sortBlockers(blockers);

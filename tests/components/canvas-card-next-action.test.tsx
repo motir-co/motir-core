@@ -73,6 +73,7 @@ function nextAction(): HTMLElement | null {
 
 describe('cardNextAction — the state → action table (MOTIR-10508)', () => {
   const base = {
+    kind: 'task',
     toPlan: false,
     fixReason: null,
     status: 'todo',
@@ -167,6 +168,44 @@ describe('cardNextAction — the state → action table (MOTIR-10508)', () => {
     expect(cardNextAction({ ...base, manual: true, status: 'in_progress' })).toBeNull();
     expect(cardNextAction({ ...base, ready: true, manual: true, options: null })).toBeNull();
     expect(cardNextAction({ ...base, ready: true, manual: true, options: undefined })).toBeNull();
+  });
+
+  // MOTIR-10741: an epic is not run with one command, so a ready epic copies
+  // neither motir run nor motir guide.
+  it('a ready epic draws no button, manual or not', () => {
+    expect(cardNextAction({ ...base, kind: 'epic', ready: true })).toBeNull();
+    expect(cardNextAction({ ...base, kind: 'epic', ready: true, manual: true })).toBeNull();
+  });
+
+  it.each(['story', 'task', 'bug', 'subtask'] as const)(
+    'a ready %s still copies motir run, or motir guide when manual',
+    (kind) => {
+      expect(cardNextAction({ ...base, kind, ready: true })).toEqual({
+        kind: 'copy',
+        verb: 'run',
+        reason: null,
+      });
+      expect(cardNextAction({ ...base, kind, ready: true, manual: true })).toEqual({
+        kind: 'copy',
+        verb: 'guide',
+        reason: null,
+      });
+    },
+  );
+
+  it('an epic keeps its To plan, fix and In Review rows', () => {
+    const epic = { ...base, kind: 'epic' } as const;
+    expect(cardNextAction({ ...epic, toPlan: true, ready: true })).toEqual({ kind: 'plan' });
+    expect(cardNextAction({ ...epic, ready: true, fixReason: 'ci_failed' })).toEqual({
+      kind: 'copy',
+      verb: 'fix',
+      reason: 'ci_failed',
+    });
+    expect(cardNextAction({ ...epic, ready: true, status: 'in_review' })).toEqual({
+      kind: 'copy',
+      verb: 'review',
+      reason: null,
+    });
   });
 
   it('anything else draws no button', () => {
@@ -577,6 +616,26 @@ describe('the next-action button', () => {
     expect(button.getAttribute('data-copied')).toBeNull();
   });
 
+  it('a ready epic card draws no copy button (MOTIR-10741)', () => {
+    const epic: WorkItemNodeData = {
+      ...leaf,
+      id: 'E1',
+      identifier: 'MOTIR-10740',
+      kind: 'epic',
+      type: null,
+      executor: null,
+      hasChildren: true,
+    };
+    render(
+      <ToastProvider>
+        <WorkItemNode item={epic} ready nextActions={ON} />
+      </ToastProvider>,
+    );
+    expect(screen.getByText('MOTIR-10740')).toBeTruthy();
+    expect(nextAction()).toBeNull();
+    expect(screen.queryByText('motir run')).toBeNull();
+  });
+
   describe('a ready manual or human card copies motir guide (MOTIR-10559)', () => {
     const manual = { ...leaf, type: 'manual', executor: 'human' } as const;
 
@@ -733,6 +792,8 @@ describe('the next-action button', () => {
         kind: 'work-item',
         itemKey: 'MOTIR-10520',
         hasPlan: false,
+        // The card's Plan opens on the start prompt, as the item page's does (MOTIR-10711).
+        confirmStart: true,
       }),
     );
     expect(writeText).not.toHaveBeenCalled();

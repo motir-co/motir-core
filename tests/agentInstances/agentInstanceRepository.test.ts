@@ -349,7 +349,7 @@ describe('agentInstanceRepository', () => {
       expect(
         await agentInstanceRepository.setHandle(
           row.id,
-          { flyApp: 'motir-inst-x', machineId: 'm1', volumeId: 'v1' },
+          { flyApp: 'motir-inst-x', machineId: 'm1', volumeId: 'v1', region: 'iad' },
           tx,
         ),
       ).toBe(1);

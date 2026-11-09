@@ -1,0 +1,77 @@
+{
+  // ── The LIB LAYER project (MOTIR-10798) ─────────────────────────────────────
+  //
+  // The layer BELOW the UI — `lib/`, the generated Prisma client, `i18n/`, the
+  // message catalogues, the CLI sources `lib/apiDocs` reads, and `proxy.ts` (the
+  // lib layer imports its header constant) — checked as its own composite
+  // project, so the product is two programs instead of one.
+  //
+  // WHY: `tsconfig.app.json` reached 84.4% of the 4.05 GB heap budget on main
+  // (87.1% on one CI run) as one program of 8441 files, past the 80% warning in
+  // `scripts/ci/assert-typecheck-headroom.mjs`. Its cost was not one file: a
+  // `--generateTrace` showed none standing out, and instantiations per file
+  // (~441) were where MOTIR-8405 left them. It was the program's SIZE — the
+  // generated Prisma client alone retains ~710 MB once checked. Read locally at
+  // CI's heap: lib 62–69%, app 58–65%, where the one program read 83.6%.
+  //
+  // `tsconfig.app.json` references this file and still extends Next's
+  // `tsconfig.json` unchanged: a root file that belongs to a referenced project
+  // is read through that project's `.tsout/lib/**/*.d.ts`, so the app project
+  // checks and emits only what is not here. Projects that reference the app
+  // reach this one through it.
+  //
+  // ⚠️ THE BOUNDARY IS THE LAYERING RULE. A file here may not import from `app/`,
+  // `components/` or `hooks/`: `tsc -b` refuses it with TS6307 naming the file,
+  // because that file belongs to no project this one references. The files in
+  // `exclude` below already imported UP (directly or through each other) when
+  // the boundary was drawn, so they stay in the app project. Fixing such an
+  // import and deleting its line here moves the file back; a NEW upward import
+  // is a layering defect to refactor away, not a line to add.
+  // `tests/typecheck-program.test.ts` pins the shape.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "declarationMap": true,
+    "rootDir": ".",
+    "outDir": ".tsout/lib",
+    "tsBuildInfoFile": ".tsout/lib/tsconfig.tsbuildinfo"
+  },
+  "include": [
+    "next-env.d.ts",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "lib/**/*.json",
+    "generated/**/*.ts",
+    "i18n/**/*.ts",
+    "messages/en.json",
+    "messages/*.d.json.ts",
+    "messages/sources/*.d.json.ts",
+    "proxy.ts",
+    "packages/cli/src/**/*.ts",
+    "packages/cli/package.json"
+  ],
+  "exclude": [
+    "node_modules",
+    ".tsout",
+    "packages/cli/test",
+    "packages/cli/sandbox",
+    "packages/cli/dist",
+    "packages/cli/node_modules",
+    "lib/hooks/usePlanChangeConversation.ts",
+    "lib/hooks/usePlanCheck.ts",
+    "lib/hooks/useRunPause.ts",
+    "lib/hooks/useWorkItemTargetSearch.ts",
+    "lib/issues/priorityMeta.ts",
+    "lib/markdown/render.tsx",
+    "lib/mentions/workItemMentionSearch.ts",
+    "lib/planning/grillHandoff.ts",
+    "lib/planning/planChangeFrames.ts",
+    "lib/planning/planOfferRow.ts",
+    "lib/planning/planPending.ts",
+    "lib/planning/planRunPhase.ts",
+    "lib/reports/reportChartData.ts"
+  ]
+}

@@ -1,10 +1,8 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/ui/Pill';
 import { StatusPill } from '@/components/issues/StatusPill';
-import { cn } from '@/lib/utils/cn';
 import { PRIORITY_META } from '@/lib/issues/priorityMeta';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkItemPriorityDto } from '@/lib/dto/workItems';
@@ -73,63 +71,6 @@ export function PriorityValue({ priority }: { priority: WorkItemPriorityDto }) {
       <meta.icon className="h-3 w-3" aria-hidden />
       {t(`priority.${priority}`)}
     </Pill>
-  );
-}
-
-/** Pure: classify a UTC-midnight ISO due date against the current UTC day. */
-function computeDueUrgency(iso: string | null | undefined): 'overdue' | 'due-soon' | null {
-  if (!iso) return null;
-  const due = new Date(iso);
-  if (Number.isNaN(due.getTime())) return null;
-  const now = new Date();
-  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const days = Math.round((dueDay - today) / 86_400_000);
-  return days < 0 ? 'overdue' : days <= 3 ? 'due-soon' : null;
-}
-
-const noopSubscribe = () => () => {};
-
-/**
- * Due-date URGENCY against today (MOTIR-1276 · 1266.5) — `overdue` when the due
- * day is past, `due-soon` when today / within three days, else null. Resolved
- * CLIENT-ONLY via `useSyncExternalStore`: the server snapshot is `null` (neutral)
- * and the client snapshot computes against the browser's clock, so SSR + first
- * paint render neutral and the colour resolves after hydration — no mismatch (the
- * server's "today" can differ from the client's; the relativeTime trap, finding
- * #89), and no setState-in-effect (the motir-core React-19 lint).
- */
-function useDueUrgency(iso: string | null | undefined): 'overdue' | 'due-soon' | null {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => computeDueUrgency(iso),
-    () => null,
-  );
-}
-
-/**
- * The DUE cell value — the pre-formatted date, or a muted em dash when unset.
- * When the raw `iso` is provided, a past-due date renders in `--el-overdue` (red,
- * + medium weight as the redundant non-colour cue, finding #35) and a date due
- * today / within three days in `--el-due-soon` (amber), so an overdue date no
- * longer looks identical to a future one.
- */
-export function DueValue({ label, iso }: { label: string | null; iso?: string | null }) {
-  const urgency = useDueUrgency(iso);
-  if (!label) return <span className="text-(--el-text-secondary)">—</span>;
-  return (
-    <span
-      className={cn(
-        'truncate',
-        urgency === 'overdue'
-          ? 'font-medium text-(--el-overdue)'
-          : urgency === 'due-soon'
-            ? 'text-(--el-due-soon)'
-            : 'text-(--el-text-secondary)',
-      )}
-    >
-      {label}
-    </span>
   );
 }
 

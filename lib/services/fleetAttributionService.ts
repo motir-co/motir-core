@@ -5,9 +5,11 @@ import {
   type InventoryMachine,
   type InventoryVolume,
 } from '@motir/orchestrator';
+import { INSTALL_FLEET_SHARD_ID, INSTALL_FLEET_TAG } from '@/lib/ciFleet/installFleet';
 import {
   getFleetInventory,
   getOrchestrator,
+  installFleetInventory,
   inventoryForShard,
   isOrchestratorConfigured,
   legacyFleetLocationKey,
@@ -310,7 +312,29 @@ function accountInventories(accounts: readonly FleetShardDTO[]): AccountInventor
       alertFleetAttribution(new FleetInventoryUnavailableError(account.name, detailOf(err)));
     }
   }
+  const install = installFleetAccountInventory();
+  if (install) out.push(install);
   return out;
+}
+
+/**
+ * THE INSTALL FLEET'S LISTING (MOTIR-10794) — core's own account, scoped to the
+ * install fleet's tag, walked like an account with no owner. Its machines settle
+ * through the install fleet (the pseudo-account id), and an agent instance there
+ * is matched by its app, the fleet's tag. Its disks are not swept: no hoster
+ * account row names them. Null when no kind is listed; an unbuildable listing
+ * is alerted and skipped.
+ */
+function installFleetAccountInventory(): AccountInventory | null {
+  try {
+    const inventory = installFleetInventory();
+    return inventory
+      ? { shardId: INSTALL_FLEET_SHARD_ID, name: INSTALL_FLEET_TAG, inventory }
+      : null;
+  } catch (err) {
+    alertFleetAttribution(new FleetInventoryUnavailableError(INSTALL_FLEET_TAG, detailOf(err)));
+    return null;
+  }
 }
 
 function detailOf(err: unknown): string {

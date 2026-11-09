@@ -54,6 +54,17 @@ import { describe, expect, it } from 'vitest';
 //     not a CI-runner path, so it is outside the population by path — named in
 //     `OUT_OF_POPULATION`, which is asserted to hold exactly that one file and to
 //     still match, so it can never quietly excuse something else.
+//
+// ⚠️ ONE SANCTIONED READER, decided by the owner (Story MOTIR-10792 ·
+// MOTIR-10794): `lib/ciFleet/installFleet.ts` reads `isMeta` in
+// `isInstallOrganization`, the predicate that selects THE INSTALL FLEET — the
+// install's own org (the one meta org on cloud) runs its INDEX, AGENT HOST and
+// AGENT RUN in core's own account instead of a pool account. It never touches
+// the CI-runner path: `ci_runner` is not a kind the install fleet can take
+// (`installFleetTakesKind` answers false before the org is read), so Motir's CI
+// still goes through the pool exactly as a tenant's does, which is what this
+// guard protects. Named in `SANCTIONED_READERS`, asserted to hold exactly that one
+// file and to still match; every other fleet file stays free of `isMeta`.
 
 const root = process.cwd();
 
@@ -129,6 +140,11 @@ const EXCLUDED = ['lib/services/fleetOrgCiSettingService.ts'] as const;
  *  header. Exactly one entry, and it must still match. */
 const OUT_OF_POPULATION = ['lib/ciFleet/indexAllowance.ts'] as const;
 
+/** The install fleet's org predicate (MOTIR-10792) — the one sanctioned `isMeta`
+ *  reader under `lib/ciFleet/`, for the index, agent host and agent run only;
+ *  never on the CI-runner path. Exactly one entry, and it must still match. */
+const SANCTIONED_READERS = ['lib/ciFleet/installFleet.ts'] as const;
+
 /** The service, repository and GitHub-client files the card's coverage list
  *  names, plus the admin action — the pipeline the switch feeds. */
 const NAMED_PIPELINE_FILES = [
@@ -155,7 +171,7 @@ const NAMED_PIPELINE_FILES = [
 function c2Population(): string[] {
   const underFleet = trackedFiles('lib/ciFleet').filter((file) => CODE_FILE.test(file));
   const all = new Set<string>([...underFleet, ...NAMED_PIPELINE_FILES]);
-  for (const file of [...EXCLUDED, ...OUT_OF_POPULATION]) all.delete(file);
+  for (const file of [...EXCLUDED, ...OUT_OF_POPULATION, ...SANCTIONED_READERS]) all.delete(file);
   return [...all].sort();
 }
 
@@ -251,6 +267,17 @@ describe('C2 — the exception is singular and named', () => {
   it('the out-of-population file is exactly indexAllowance.ts, and it still matches', () => {
     expect([...OUT_OF_POPULATION]).toEqual(['lib/ciFleet/indexAllowance.ts']);
     expect(orgIdentityHits(read(OUT_OF_POPULATION[0])).length).toBeGreaterThan(0);
+  });
+
+  it('the sanctioned reader is exactly installFleet.ts, it still reads isMeta, and only isMeta', () => {
+    expect([...SANCTIONED_READERS]).toEqual(['lib/ciFleet/installFleet.ts']);
+    const hits = orgIdentityHits(read(SANCTIONED_READERS[0]));
+    expect(hits.length).toBeGreaterThan(0);
+    // No internalBilling and no org literal ride in on the exception.
+    expect(hits.every((hit) => hit.startsWith('reads `isMeta`'))).toBe(true);
+    // And the CI runner is not a kind it can take.
+    const source = stripComments(read(SANCTIONED_READERS[0]));
+    expect(source).not.toMatch(/'ci_runner'/);
   });
 });
 

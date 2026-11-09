@@ -174,6 +174,28 @@ export type ReconcileCandidate = GithubPullRequest & {
   deliveries: { workItemId: string; workspaceId: string }[];
 };
 
+/**
+ * The SET clauses that carry the stored mergeability reading into the `previous_*` pair
+ * (Bug MOTIR-10791) — moved there when the reading about to be written is about a
+ * DIFFERENT head and the stored one was DECIDED (neither null nor the host's `unknown`);
+ * left as they are otherwise. Postgres evaluates every SET expression against the row as
+ * it was before the statement, so the pair receives the reading being replaced.
+ *
+ * ⚠️ AN UNDECIDED READING IS NOT CARRIED. A push that is replaced before the host answers
+ * about it says nothing about whether the base merged, so the reading before it — the one
+ * the next push still answers — stays the previous one.
+ */
+function carryPreviousMergeability(nextHeadSha: string | null): Prisma.Sql {
+  const carry = Prisma.sql`(mergeable_state_head_sha IS NOT NULL
+    AND mergeable_state_head_sha IS DISTINCT FROM ${nextHeadSha}
+    AND mergeable_state IS NOT NULL
+    AND mergeable_state <> ${PENDING_MERGEABLE_STATE})`;
+  return Prisma.sql`previous_mergeable_state = CASE WHEN ${carry}
+      THEN mergeable_state ELSE previous_mergeable_state END,
+    previous_mergeable_state_head_sha = CASE WHEN ${carry}
+      THEN mergeable_state_head_sha ELSE previous_mergeable_state_head_sha END`;
+}
+
 export const githubPullRequestRepository = {
   /**
    * Every OPEN pull request Motir has neither merged nor queued — no `merge_outcome_ref`
@@ -601,16 +623,22 @@ export const githubPullRequestRepository = {
    *  about (MOTIR-5913, for bug MOTIR-5907). Written by whoever ASKED the host — the
    *  base-branch push re-evaluation, the press-time read, the reconcile tick — never
    *  from a webhook payload, which does not carry a conflict that the BASE caused.
-   *  Write path → `tx`. */
+   *  A reading about another head than the stored one's carries the stored reading into
+   *  `previousMergeableState` when it was decided (MOTIR-10791,
+   *  {@link carryPreviousMergeability}) — one raw statement, because the carry reads the
+   *  row it replaces. Write path → `tx`. */
   async setMergeability(
     pullRequestId: string,
     reading: { mergeableState: string | null; headSha: string | null },
     tx: Prisma.TransactionClient,
   ): Promise<void> {
-    await tx.githubPullRequest.update({
-      where: { id: pullRequestId },
-      data: { mergeableState: reading.mergeableState, mergeableStateHeadSha: reading.headSha },
-    });
+    await tx.$executeRaw`
+      UPDATE github_pull_request SET
+        ${carryPreviousMergeability(reading.headSha)},
+        mergeable_state = ${reading.mergeableState},
+        mergeable_state_head_sha = ${reading.headSha},
+        updated_at = now()
+      WHERE id = ${pullRequestId}`;
   },
 
   /** Store the host's HEAD commit (MOTIR-7005) — the commit `pullRequestHead` reads
@@ -631,23 +659,52 @@ export const githubPullRequestRepository = {
     return result.count;
   },
 
+  /** Record that the HOST confirmed CI had decided the WHOLE check set at `commitSha`
+   *  (Bug MOTIR-10797) — the marker `hasHeadDecidedBeforeRunningChecks` reads. Written only
+   *  while that commit IS the pull request's head (or the row has no stored head yet, when
+   *  the check rows' head stands in for it): a late reconcile about an older commit must not
+   *  replace the marker of the head it was pushed over. One statement; answers how many rows
+   *  it wrote (0 when the head has moved or the marker is already there). Write path → `tx`. */
+  async markCiDecided(
+    pullRequestId: string,
+    commitSha: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.githubPullRequest.updateMany({
+      where: {
+        id: pullRequestId,
+        AND: [
+          { OR: [{ headSha: null }, { headSha: commitSha }] },
+          // `OR` with the null arm spelled out: SQL's `<>` is not true of a NULL marker.
+          { OR: [{ ciDecidedSha: null }, { ciDecidedSha: { not: commitSha } }] },
+        ],
+      },
+      data: { ciDecidedSha: commitSha },
+    });
+    return result.count;
+  },
+
   /** Mark the reading OWED at a new head — a `synchronize` replaces the old head's
    *  reading, so its `dirty` cannot hold the new one (MOTIR-5913), with the host's
    *  "not computed yet" word AT that head rather than with nothing (MOTIR-7063): `null`
    *  read as "no conflict", and CI promoted a head nobody had asked about. The
    *  `pull-request/head-moved` re-read overwrites it with the host's answer. One
    *  statement, unconditional: a `NOT { … }` guard would skip exactly the never-read
-   *  row, whose NULL columns make the comparison unknown. Write path → `tx`. */
+   *  row, whose NULL columns make the comparison unknown. The decided reading it replaces
+   *  at another head is carried into `previousMergeableState` (MOTIR-10791) in the same
+   *  statement. Write path → `tx`. */
   async markMergeabilityPending(
     pullRequestId: string,
     headSha: string,
     tx: Prisma.TransactionClient,
   ): Promise<number> {
-    const result = await tx.githubPullRequest.updateMany({
-      where: { id: pullRequestId },
-      data: { mergeableState: PENDING_MERGEABLE_STATE, mergeableStateHeadSha: headSha },
-    });
-    return result.count;
+    return tx.$executeRaw`
+      UPDATE github_pull_request SET
+        ${carryPreviousMergeability(headSha)},
+        mergeable_state = ${PENDING_MERGEABLE_STATE},
+        mergeable_state_head_sha = ${headSha},
+        updated_at = now()
+      WHERE id = ${pullRequestId}`;
   },
 
   /** Record a merge MOTIR performed onto the pull request's row (MOTIR-5520;

@@ -318,10 +318,19 @@ export function toGateReviewPathDto(state: ReviewStateDTO): GateReviewPathDTO {
  * version, never the recording's. Design, decision and manual gates carry none. A card with
  * no delivery set has no version, so its line is null whatever the kind.
  */
-export function carriesReviewPath(
-  kind: string,
-): kind is 'pull_request_approval' | 'acceptance_result' {
-  return kind === 'pull_request_approval' || kind === 'acceptance_result';
+export const REVIEW_CARRYING_GATE_KINDS = ['pull_request_approval', 'acceptance_result'] as const;
+
+export type ReviewCarryingGateKind = (typeof REVIEW_CARRYING_GATE_KINDS)[number];
+
+/**
+ * ⚠️ ONE LIST, READ BY BOTH SIDES (Bug MOTIR-10734). The rows draw their review through this
+ * predicate, and the To approve watermark selects the cards whose review it watches
+ * (`approvalGateRepository.findAwaitingRoutedReviewCarryingWorkItemIds`) from the same constant. When
+ * MOTIR-10533 widened the rows to acceptance, the watermark kept its own copy of the old list,
+ * so a story run's acceptance row only changed to Reviewed on a reload.
+ */
+export function carriesReviewPath(kind: string): kind is ReviewCarryingGateKind {
+  return (REVIEW_CARRYING_GATE_KINDS as readonly string[]).includes(kind);
 }
 
 /**

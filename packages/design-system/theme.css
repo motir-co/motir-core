@@ -707,8 +707,15 @@
   --glass-chrome-alpha: 52%; /* sidebar / chrome translucency */
   --glass-input-alpha: 44%; /* form-control fill translucency */
   --glass-border-alpha: 72%; /* the glass RIM — a more visible lit edge */
-  --glass-wash: 42%; /* MUCH stronger canvas tint — glass needs vibrant colour
-                        behind it to refract; a near-white canvas looks flat */
+  /* The canvas tint. 12% is a CEILING set by contrast, not a taste (MOTIR-10707):
+     text sits straight on this canvas (page headers, empty states), so the
+     four AA inks have to clear 4.5:1 over its darkest point. Rendered at
+     1440x900 and 390x844 across all ten palettes in both modes, the worst
+     pixel — the bottom-right corner, where the link and accent washes
+     overlap — is 4.60:1 at 12% (sienna light, --el-accent-on-surface), 4.46:1
+     at 14% and 2.10:1 at the 42% this replaced. The vibrancy the panels refract
+     comes from --glass-saturate on the blur, which never touches canvas text. */
+  --glass-wash: 12%;
   --glass-saturate: 180%; /* punchier refraction (was a fixed 150%) */
   /* The specular SHEEN + RIM light — white, palette-agnostic (glass catches
      light regardless of hue); used by the material layer, never as a fill. */
@@ -1032,13 +1039,17 @@
    can carry the faint grid lines: built from currentColor at a very low alpha
    so it adapts to the active palette and sits BEHIND content (text never
    renders on it), keeping AA intact. Dark-first — on the dark theme this reads
-   as a Tron grid over the near-black canvas. */
+   as a Tron grid over the near-black canvas.
+   The lines are 5%, not 6%: where a horizontal and a vertical line cross, the
+   page takes both tints (1 - 0.94² = 11.6% of the ink at 6%), and that crossing
+   took --el-accent-on-surface to 4.46:1 in sienna light (Chromium 4.39:1).
+   At 5% the worst crossing is 4.63:1, sienna light again (MOTIR-10746). */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   body,
   [data-app-shell] {
     background-image:
-      linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-      linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+      linear-gradient(color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px),
+      linear-gradient(90deg, color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px);
     background-size: 32px 32px;
     background-position: center top;
   }
@@ -1114,8 +1125,14 @@
      Consumed only by the [data-style='aurora'] material rules below: how strong
      each aurora ribbon tints the canvas, the faint top-sheen on a surface, the
      glow-halo strengths, and how slowly the canvas drifts. ── */
-  --aurora-wash: 22%; /* primary ribbon tint over the page canvas */
-  --aurora-wash-soft: 15%; /* the cooler secondary ribbon (green/teal band) */
+  /* Ribbon tint strengths. The binding constraint is `--el-accent-on-surface`
+     sitting straight on the canvas where two ribbons overlap: at 22% / 15% it
+     fell to 3.63:1 rendered (sienna light), and the token gate's per-stop read
+     to 3.98:1. 10% / 7% is the strongest pair that holds every hard ink >= 4.5:1
+     rendered across all palettes, both modes, the whole drift and every
+     viewport (worst 4.52:1, sienna light) — MOTIR-10709. */
+  --aurora-wash: 10%; /* primary ribbon tint over the page canvas */
+  --aurora-wash-soft: 7%; /* the cooler secondary ribbon (green/teal band) */
   --aurora-sheen: 7%; /* faint lit-from-above sheen on an opaque surface */
   --aurora-glow: 22%; /* colour-glow halo strength on a card / popover */
   --aurora-glow-strong: 30%; /* the modal's slightly deeper halo */
@@ -2474,12 +2491,22 @@
      synthwave SKY / HORIZON / GROUND band strengths + the neon GRID line alpha
      and cell size (the Outrun floor), the chrome SPECULAR streak + bevel
      highlight/shade (mixed from the achromatic white/black keywords), and the
-     palette-derived glow. Bold by design — this style is dark-FIRST (the neon
-     horizon + grid read strongest on a dark palette), so the strengths run high.
+     palette-derived glow. The grid and the chrome run bold; the three CANVAS
+     washes do not, because they are the ground page text sits on.
+     ⚠️ THE CANVAS WASHES ARE CAPPED BY THE INKS, NOT BY TASTE (MOTIR-10708).
+     The canvas is a fixed backdrop, so every heading, caption and empty state
+     not on a card scrolls across all three bands, and the inks need 4.5:1 on
+     each at its peak. At 24% / 72% / 26% they measured as low as 1.01:1 (the
+     motir accent IS the ink colour, so a 72% accent band is ink on ink). The
+     ceiling across all 10 palettes x both modes is 15% (link), 16% (accent) and
+     17% (highlight), set by --el-accent-on-surface on the light grounds, which
+     starts at only 5.60:1 on the bare page. The values below keep 0.1 of
+     headroom: worst 4.72:1, sienna light. Raise one only with
+     tests/theme/stylePaletteModeContrast.test.ts green.
      ── */
-  --retro-sky: 24%; /* the upper-sky wash (cool, from --el-link) */
-  --retro-horizon: 72%; /* the bright sun/horizon GLOW band — the signature */
-  --retro-ground: 26%; /* the warm ground wash rising from the bottom */
+  --retro-sky: 12%; /* the upper-sky wash (cool, from --el-link) */
+  --retro-horizon: 14%; /* the sun/horizon GLOW band — the signature */
+  --retro-ground: 14%; /* the warm ground wash rising from the bottom */
   --retro-grid: 52%; /* the neon perspective-grid line alpha */
   --retro-grid-size: 60px; /* the grid cell size before the perspective tilt */
   --retro-spec: 44%; /* the bright diagonal SPECULAR streak across chrome */
@@ -2892,6 +2919,938 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Dense / Pro (MOTIR-10666). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/dense-pro.md. ─────────────────────────────────────────────────────── */
+[data-style='dense-pro'] {
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+  --radius-btn: 4px;
+  --radius-input: 4px;
+  --radius-card: 6px;
+  --radius-modal: 8px;
+  --radius-badge: 3px;
+  --radius-control: 3px;
+  --radius-kbd: 3px;
+  --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.03);
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06);
+  --shadow-elevated: 0 4px 8px -2px rgba(15, 15, 15, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: 0 12px 32px -8px rgba(15, 15, 15, 0.16);
+  --shadow-hero-mockup: 0 12px 24px -6px rgba(15, 15, 15, 0.16);
+  --spacing-btn-x: 12px;
+  --spacing-btn-y: 6px;
+  --spacing-btn-x-sm: 10px;
+  --spacing-btn-y-sm: 6px;
+  --spacing-input-x: 10px;
+  --spacing-input-y: 8px;
+  --spacing-card-padding: 16px;
+  --spacing-control-x: 6px;
+  --spacing-control-y: 4px;
+  --spacing-icon-btn: 3px;
+  --spacing-chip-x: 6px;
+  --spacing-kbd-x: 4px;
+  --spacing-kbd-y: 2px;
+  --spacing-tooltip-x: 6px;
+  --spacing-tooltip-y: 3px;
+  --height-btn-sm: 28px;
+  --height-btn-md: 32px;
+  --height-btn-lg: 40px;
+  --height-input: 36px;
+  --height-control: 32px;
+  --transition-duration: 100ms;
+  --transition-fast: 80ms;
+  --transition-slow: 140ms;
+  --active-scale: 0.99;
+  --hover-scale: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   High-Contrast / Accessible (MOTIR-10667). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/high-contrast-accessible.md. ─────────────────────────────────────────────────────── */
+[data-style='high-contrast-accessible'] {
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-btn: 4px;
+  --radius-input: 4px;
+  --radius-control: 4px;
+  --radius-kbd: 4px;
+  --radius-card: 6px;
+  --radius-modal: 8px;
+  --radius-badge: 4px;
+  --shadow-flat: none;
+  --shadow-subtle: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: none;
+  --shadow-hero-mockup: none;
+  --height-control: 44px;
+  --height-btn-sm: 44px;
+  --height-btn-md: 48px;
+  --height-btn-lg: 56px;
+  --height-input: 48px;
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 12px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 14px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 10px;
+  --spacing-card-padding: 24px;
+  --transition-duration: 0ms;
+  --transition-fast: 0ms;
+  --transition-slow: 0ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  .border {
+    border-width: 2px;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  :focus-visible:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  button,
+  [role='button'],
+  select,
+  summary,
+  textarea,
+  input:not([type='checkbox']):not([type='radio']) {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  input[type='checkbox'],
+  input[type='radio'] {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  .plan-with-ai-shimmer,
+  .plan-with-ai-fab-pulse {
+    animation: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Tonal / Elevated (MOTIR-10668). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/tonal-elevated.md. ─────────────────────────────────────────────────────── */
+[data-style='tonal-elevated'] {
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-btn: 10px;
+  --radius-input: 10px;
+  --radius-card: 14px;
+  --radius-modal: 20px;
+  --radius-badge: 9999px;
+  --radius-control: 8px;
+  --radius-kbd: 6px;
+  --spacing-btn-x: 18px;
+  --spacing-btn-y: 10px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+  --transition-duration: 180ms;
+  --transition-slow: 260ms;
+  --hover-scale: 1.01;
+  --active-scale: 0.98;
+  --shadow-subtle: 0 1px 2px rgba(20, 20, 30, 0.04);
+  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.05), 0 2px 6px -2px rgba(20, 20, 30, 0.07);
+  --shadow-elevated: 0 2px 4px rgba(20, 20, 30, 0.06), 0 10px 24px -12px rgba(20, 20, 30, 0.12);
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: 0 4px 10px rgba(20, 20, 30, 0.08), 0 20px 48px -16px rgba(20, 20, 30, 0.2);
+  --shadow-hero-mockup: 0 6px 14px rgba(20, 20, 30, 0.1), 0 26px 60px -18px rgba(20, 20, 30, 0.24);
+  --tonal-step-2: 4%;
+  --tonal-step-3: 6%;
+  --tonal-step-4: 12%;
+}
+[data-theme='dark'] [data-style='tonal-elevated'],
+[data-style='tonal-elevated'][data-theme='dark'] {
+  --shadow-subtle: 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.36), 0 1px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-elevated: 0 2px 4px rgba(0, 0, 0, 0.4), 0 6px 14px -8px rgba(0, 0, 0, 0.44);
+  --shadow-modal: 0 3px 8px rgba(0, 0, 0, 0.44), 0 12px 28px -12px rgba(0, 0, 0, 0.5);
+  --shadow-hero-mockup: 0 4px 10px rgba(0, 0, 0, 0.46), 0 16px 36px -14px rgba(0, 0, 0, 0.56);
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  :where([data-surface]:not([data-surface='page'], [data-surface='overlay'], [data-ai-cta])) {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+/* Rung 1 restated on its three named members, so the card, the rail and the top
+   bar are each an exact-selector rule the shell-chrome and contrast guards can
+   read. The `:where()` default above still carries every member the map does
+   not name. */
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='card'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='header'] {
+    background-color: var(--el-surface);
+    box-shadow: var(--shadow-card);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='popover'] {
+    background-color: color-mix(in srgb, var(--el-text) var(--tonal-step-2), var(--el-surface));
+    box-shadow: var(--shadow-elevated);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: color-mix(in srgb, var(--el-text) var(--tonal-step-3), var(--el-surface));
+    box-shadow: var(--shadow-modal);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: var(--el-page-bg);
+    box-shadow: inset 0 1px 2px color-mix(in srgb, var(--el-text) 10%, transparent);
+  }
+}
+@media (prefers-contrast: more) {
+  @scope ([data-style='tonal-elevated']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='sidebar'],
+    [data-surface='header'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+      background-color: var(--el-surface);
+      border-color: var(--el-border-strong);
+    }
+  }
+}
+@media (forced-colors: active) {
+  @scope ([data-style='tonal-elevated']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='sidebar'],
+    [data-surface='header'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'] {
+      background-color: var(--el-surface);
+      border-color: var(--el-border-strong);
+      box-shadow: none;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Claymorphism (MOTIR-10669). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/claymorphism.md. ─────────────────────────────────────────────────────── */
+[data-style='claymorphism'] {
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+  --radius-btn: 16px;
+  --radius-input: 16px;
+  --radius-card: 26px;
+  --radius-modal: 32px;
+  --radius-badge: 9999px;
+  --radius-control: 12px;
+  --radius-kbd: 8px;
+  --shadow-subtle: 0 1px 4px rgba(20, 20, 30, 0.06);
+  --shadow-card: 0 2px 18px rgba(20, 20, 30, 0.1);
+  --shadow-elevated: 0 6px 24px -4px rgba(20, 20, 30, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: 0 12px 40px -8px rgba(20, 20, 30, 0.1);
+  --shadow-hero-mockup: 0 18px 48px -12px rgba(20, 20, 30, 0.1);
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 12px;
+  --spacing-btn-x-sm: 16px;
+  --spacing-btn-y-sm: 8px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 12px;
+  --spacing-card-padding: 28px;
+  --spacing-control-x: 14px;
+  --spacing-control-y: 8px;
+  --spacing-chip-x: 12px;
+  --height-btn-sm: 36px;
+  --height-btn-md: 44px;
+  --height-btn-lg: 52px;
+  --height-input: 44px;
+  --height-control: 40px;
+  --transition-duration: 200ms;
+  --transition-slow: 300ms;
+  --hover-scale: 1;
+  --active-scale: 0.97;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --clay-inset: 3px;
+  --clay-inset-blur: 6px;
+  --clay-drop: 2px;
+  --clay-drop-blur: 18px;
+  --clay-light: rgba(255, 255, 255, 0.55);
+  --clay-shade: rgba(20, 20, 30, 0.16);
+  --clay-drop-ink: rgba(20, 20, 30, 0.1);
+}
+[data-theme='dark'] [data-style='claymorphism'],
+[data-style='claymorphism'][data-theme='dark'] {
+  --clay-light: rgba(255, 255, 255, 0.07);
+  --clay-shade: rgba(0, 0, 0, 0.42);
+  --clay-drop-ink: rgba(0, 0, 0, 0.46);
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-shade),
+      0 var(--clay-drop) var(--clay-drop-blur) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='modal'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset 0 calc(var(--clay-inset) + 1px) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * (var(--clay-inset) + 1px)) var(--clay-inset-blur) var(--clay-shade),
+      0 calc(var(--clay-drop) * 4) calc(var(--clay-drop-blur) * 2) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-color: var(--el-surface);
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+    box-shadow:
+      inset var(--clay-inset) 0 var(--clay-inset-blur) var(--clay-light),
+      inset calc(-1 * var(--clay-inset)) 0 var(--clay-inset-blur) var(--clay-shade),
+      var(--clay-drop) 0 var(--clay-drop-blur) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input'] {
+    background-color: var(--el-surface);
+    box-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-shade),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-light);
+  }
+}
+/* The softened edge colours only an editable, valid field: `data-surface` is on
+   the Input's wrapper, so an invalid or disabled field keeps the primitive's own
+   danger / disabled border colour. */
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-border) 60%, transparent);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card']:is(a, button, [role='button']):hover {
+    box-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-shade),
+      0 calc(var(--clay-drop) * 2) calc(var(--clay-drop-blur) + 6px) var(--clay-drop-ink);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card']:is(a, button, [role='button']):active {
+    box-shadow:
+      inset 0 calc(var(--clay-inset) * 2) var(--clay-inset-blur) var(--clay-shade),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-light);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='input'][data-state='disabled'] {
+    box-shadow: none;
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='card'][aria-disabled='true'] {
+    box-shadow: none;
+    border-color: var(--el-border);
+  }
+}
+@media (prefers-contrast: more) {
+  @scope ([data-style='claymorphism']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']),
+    [data-surface='sidebar'] {
+      border-color: var(--el-border-strong);
+      box-shadow: var(--shadow-card);
+    }
+  }
+}
+@media (forced-colors: active) {
+  @scope ([data-style='claymorphism']) to ([data-style]) {
+    [data-surface='card'],
+    [data-surface='popover'],
+    [data-surface='modal'],
+    [data-surface='input'],
+    [data-surface='sidebar'] {
+      border-color: var(--el-border-strong);
+      box-shadow: none;
+    }
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Bento (MOTIR-10670). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/bento.md. ─────────────────────────────────────────────────────── */
+[data-style='bento'] {
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-card: 20px;
+  --radius-modal: 20px;
+  --radius-btn: 12px;
+  --radius-input: 12px;
+  --radius-control: 10px;
+  --radius-badge: 10px;
+  --radius-kbd: 8px;
+  --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.03);
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.05);
+  --shadow-elevated: 0 2px 6px rgba(15, 15, 15, 0.07);
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: 0 12px 32px -8px rgba(15, 15, 15, 0.16);
+  --shadow-hero-mockup: 0 18px 40px -12px rgba(15, 15, 15, 0.18);
+  --height-control: 38px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 8px;
+  --spacing-chip-x: 12px;
+  --spacing-card-padding: 24px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+  --transition-duration: 180ms;
+  --transition-fast: 140ms;
+  --transition-slow: 260ms;
+  --active-scale: 0.99;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Editorial Print / Newspaper (MOTIR-10671). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/editorial-print.md. ─────────────────────────────────────────────────────── */
+[data-style='editorial-print'] {
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-btn: 0px;
+  --radius-input: 0px;
+  --radius-card: 0px;
+  --radius-modal: 0px;
+  --radius-badge: 0px;
+  --radius-control: 0px;
+  --radius-kbd: 0px;
+  --shadow-flat: none;
+  --shadow-subtle: none;
+  --shadow-card: none;
+  --shadow-elevated: none;
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: none;
+  --shadow-hero-mockup: none;
+  --spacing-btn-x: 16px;
+  --spacing-btn-y: 8px;
+  --spacing-btn-x-sm: 10px;
+  --spacing-btn-y-sm: 6px;
+  --spacing-input-x: 14px;
+  --spacing-input-y: 10px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 8px;
+  --spacing-control-y: 4px;
+  --spacing-icon-btn: 2px;
+  --spacing-chip-x: 8px;
+  --spacing-chip-y: 2px;
+  --spacing-kbd-x: 6px;
+  --spacing-kbd-y: 2px;
+  --spacing-tooltip-x: 8px;
+  --spacing-tooltip-y: 4px;
+  --height-btn-sm: 28px;
+  --height-btn-md: 36px;
+  --height-btn-lg: 44px;
+  --height-input: 40px;
+  --spacing-rail-inset: 0px;
+  --height-control: 32px;
+  --transition-duration: 90ms;
+  --transition-fast: 70ms;
+  --transition-slow: 140ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+}
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  .border {
+    border-width: 2px;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Art Deco (MOTIR-10672). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/art-deco.md. ─────────────────────────────────────────────────────── */
+[data-style='art-deco'] {
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-btn: 2px;
+  --radius-input: 2px;
+  --radius-card: 2px;
+  --radius-modal: 4px;
+  --radius-control: 2px;
+  --radius-badge: 0px;
+  --radius-kbd: 2px;
+  --shadow-subtle: 0 1px 1px rgba(15, 15, 15, 0.04);
+  --shadow-card: 0 1px 2px rgba(15, 15, 15, 0.06);
+  --shadow-elevated: 0 3px 8px -2px rgba(15, 15, 15, 0.1);
+  --spacing-shadow-elevated-drop: 0px;
+  --shadow-modal: 0 20px 44px -20px rgba(15, 15, 15, 0.24);
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 10px;
+  --spacing-card-padding: 24px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --height-control: 38px;
+  --transition-duration: 140ms;
+  --transition-slow: 260ms;
+  --hover-scale: 1;
+  --active-scale: 1;
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 2px;
+  --deco-rule-outer: 2px;
+  --deco-rule-inner: 1px;
+  --deco-rule-gap: 2px;
+  --deco-rule-entablature: 1px;
+  --deco-entablature-gap: 6px;
+  --deco-step: 8px;
+  --deco-step-modal: 12px;
+  --deco-light-angle: 115deg;
+  --deco-metal-light: 62%;
+  --deco-metal-shade: 34%;
+  --deco-edge-tint: 42%;
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='card'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    --deco-mark: color-mix(in srgb, var(--el-accent) 12%, var(--el-card));
+    --deco-band: calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner));
+    border-color: var(--deco-edge);
+    box-shadow:
+      inset 1px 1px 0 0 color-mix(in srgb, white var(--deco-metal-light), var(--deco-edge)),
+      inset -1px -1px 0 0 color-mix(in srgb, black var(--deco-metal-shade), var(--deco-edge)),
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-card),
+      inset 0 0 0 calc(var(--deco-band) - 1px) var(--deco-edge),
+      var(--shadow-card);
+    background-image:
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark));
+    background-repeat: no-repeat;
+    background-size:
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3),
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3),
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3),
+      calc(var(--deco-step) * 3) var(--deco-step),
+      calc(var(--deco-step) * 2) calc(var(--deco-step) * 2),
+      var(--deco-step) calc(var(--deco-step) * 3);
+    background-position:
+      left var(--deco-band) top var(--deco-band),
+      left var(--deco-band) top var(--deco-band),
+      left var(--deco-band) top var(--deco-band),
+      right var(--deco-band) top var(--deco-band),
+      right var(--deco-band) top var(--deco-band),
+      right var(--deco-band) top var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='popover'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    border-color: var(--deco-edge);
+    box-shadow:
+      inset 0 0 0 var(--deco-rule-gap) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-gap) + var(--deco-rule-inner)) var(--deco-edge),
+      var(--shadow-elevated);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='modal'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    --deco-mark: color-mix(in srgb, var(--el-accent) 12%, var(--el-page-bg));
+    --deco-band: calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner));
+    border-color: var(--deco-edge);
+    box-shadow:
+      inset 1px 1px 0 0 color-mix(in srgb, white var(--deco-metal-light), var(--deco-edge)),
+      inset -1px -1px 0 0 color-mix(in srgb, black var(--deco-metal-shade), var(--deco-edge)),
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-band) - 1px) var(--deco-edge),
+      inset 0 calc(var(--deco-band) + var(--deco-entablature-gap) - 1px) 0 0 var(--el-page-bg),
+      inset 0
+        calc(var(--deco-band) + var(--deco-entablature-gap) + var(--deco-rule-entablature) - 1px) 0
+        0 var(--deco-edge),
+      var(--shadow-modal);
+    background-image:
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark)),
+      linear-gradient(var(--deco-mark), var(--deco-mark));
+    background-repeat: no-repeat;
+    background-size:
+      calc(var(--deco-step-modal) * 3) var(--deco-step-modal),
+      calc(var(--deco-step-modal) * 2) calc(var(--deco-step-modal) * 2),
+      var(--deco-step-modal) calc(var(--deco-step-modal) * 3),
+      calc(var(--deco-step-modal) * 3) var(--deco-step-modal),
+      calc(var(--deco-step-modal) * 2) calc(var(--deco-step-modal) * 2),
+      var(--deco-step-modal) calc(var(--deco-step-modal) * 3);
+    background-position:
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      left var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band),
+      right var(--deco-band) bottom var(--deco-band);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    background-image: linear-gradient(
+      to left,
+      var(--el-sidebar-border) 0 var(--deco-rule-outer),
+      transparent var(--deco-rule-outer) calc(var(--deco-rule-outer) + var(--deco-rule-gap)),
+      var(--el-sidebar-border) calc(var(--deco-rule-outer) + var(--deco-rule-gap))
+        calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner)),
+      transparent calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner))
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='header'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    background-image: linear-gradient(
+      to top,
+      var(--deco-edge) 0 var(--deco-rule-outer),
+      transparent var(--deco-rule-outer) calc(var(--deco-rule-outer) + 3px),
+      var(--deco-edge) calc(var(--deco-rule-outer) + 3px)
+        calc(var(--deco-rule-outer) + 3px + var(--deco-rule-inner)),
+      transparent calc(var(--deco-rule-outer) + 3px + var(--deco-rule-inner))
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    box-shadow: inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge);
+  }
+}
+/* The tinted edge colours only an editable, valid field. `data-surface` is on the
+   Input's wrapper, so the error and disabled states are read from the wrapper
+   (`:has([aria-invalid])`, `data-state`), and on those the primitive's own
+   `border-(--el-danger)` / `border-(--el-input-disabled-border)` stands. */
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: var(--deco-edge, var(--el-border-strong));
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input']:focus-within {
+    box-shadow:
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
+        var(--deco-edge);
+  }
+}
+@media (hover: hover) {
+  @scope ([data-style='art-deco']) to ([data-style]) {
+    :is([data-surface='card'], [data-surface='input']):hover {
+      --deco-edge: color-mix(in srgb, var(--el-accent) 58%, var(--el-border-strong));
+    }
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='card']:is(a, button, [role='button']):active {
+    --deco-edge: color-mix(in srgb, var(--el-accent) 74%, var(--el-border-strong));
+    --deco-rule-inner: 2px;
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input'][data-state='disabled'] {
+    --deco-edge: var(--el-input-disabled-border);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='input']:has([aria-invalid='true']) {
+    --deco-edge: var(--el-danger);
+    box-shadow:
+      inset 0 0 0 calc(var(--deco-rule-outer) - 1px) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) - 1px) var(--el-page-bg),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner) - 1px)
+        var(--deco-edge);
+  }
+}
+/* The selected tint is a DEFAULT for rows that paint no selected state of their
+   own, so it sits in Tailwind's `components` layer: a control's own fill or ring
+   utility (`@layer utilities`) outranks it. Unlayered, it repainted the items
+   pager's current page (`bg-(--el-accent) text-(--el-accent-text)`) to about
+   1.13:1 and replaced every selected control's focus ring (MOTIR-10549 review). */
+@layer components {
+  @scope ([data-style='art-deco']) to ([data-style]) {
+    :is([aria-selected='true'], [aria-current='page']):not([data-surface]) {
+      background-color: color-mix(in srgb, var(--el-accent) 8%, var(--el-page-bg));
+      box-shadow: inset 2px 0 0 0 var(--el-accent);
+    }
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  :is([data-surface='card'], [data-surface='modal'], [data-surface='popover'])
+    [data-surface='card'] {
+    background-image: none;
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='overlay'] {
+    background-color: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--el-border-strong) 60%, var(--el-page-bg)) 72%,
+      transparent
+    );
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Memphis (MOTIR-10673). The token block overrides ONLY shape/feel tokens — never a
+   colour, element or font token (palette and type are their own axes). Any
+   material rule below is palette-DERIVED: every painted colour comes from
+   var(--el-*|--color-*), a color-mix() over them, or currentColor — never a hex
+   hue. See docs/styles/memphis.md. ─────────────────────────────────────────────────────── */
+[data-style='memphis'] {
+  --radius-xs: 0px;
+  --radius-sm: 2px;
+  --radius-md: 6px;
+  --radius-lg: 14px;
+  --radius-xl: 22px;
+  --radius-btn: 10px;
+  --radius-input: 2px;
+  --radius-card: 6px;
+  --radius-modal: 22px;
+  --radius-badge: 9999px;
+  --radius-control: 8px;
+  --radius-kbd: 3px;
+  --shadow-subtle: 2px 2px 0 0 rgba(15, 15, 15, 0.92);
+  --shadow-card: 5px 5px 0 0 rgba(15, 15, 15, 1);
+  --shadow-elevated: 7px 7px 0 0 rgba(15, 15, 15, 1);
+  --spacing-shadow-elevated-drop: 7px; /* the Y offset of --shadow-elevated above */
+  --shadow-modal: 9px 9px 0 0 rgba(15, 15, 15, 1);
+  --shadow-hero-mockup: 7px 7px 0 0 rgba(15, 15, 15, 1);
+  --spacing-btn-x: 20px;
+  --spacing-btn-y: 11px;
+  --spacing-btn-x-sm: 14px;
+  --spacing-btn-y-sm: 8px;
+  --spacing-input-x: 16px;
+  --spacing-input-y: 12px;
+  --spacing-card-padding: 26px;
+  --spacing-control-x: 12px;
+  --spacing-control-y: 7px;
+  --spacing-icon-btn: 6px;
+  --spacing-chip-x: 12px;
+  --spacing-chip-y: 2px;
+  --spacing-kbd-x: 6px;
+  --spacing-kbd-y: 2px;
+  --spacing-tooltip-x: 8px;
+  --spacing-tooltip-y: 4px;
+  --height-btn-sm: 34px;
+  --height-btn-md: 42px;
+  --height-btn-lg: 50px;
+  --height-input: 46px;
+  --height-control: 40px;
+  --transition-duration: 140ms;
+  --transition-fast: 90ms;
+  --transition-slow: 200ms;
+  --hover-scale: 1.01;
+  --active-scale: 0.97;
+  --focus-ring-width: 3px;
+  --focus-ring-offset: 2px;
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='card'],
+  [data-surface='popover'] {
+    border-width: 2px;
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--el-text) 86%, transparent);
+    border-radius: var(--radius-card) var(--radius-xl) var(--radius-card) var(--radius-xl);
+    box-shadow:
+      var(--shadow-card),
+      3px 3px 0 0 color-mix(in srgb, var(--el-accent) 70%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='modal'] {
+    border-width: 2px;
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--el-text) 86%, transparent);
+    border-radius: var(--radius-xl) var(--radius-card) var(--radius-xl) var(--radius-card);
+    box-shadow:
+      var(--shadow-modal),
+      4px 4px 0 0 color-mix(in srgb, var(--el-accent) 70%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='sidebar'] {
+    border-right-width: 2px;
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='input'] {
+    border-width: 2px;
+    border-style: solid;
+    border-radius: var(--radius-input);
+    box-shadow: var(--shadow-subtle);
+  }
+}
+/* The ink edge colours only an editable, valid field: `data-surface` is on the
+   Input's wrapper, so an invalid or disabled field keeps the primitive's own
+   danger / disabled border colour. */
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']) {
+    border-color: color-mix(in srgb, var(--el-text) 70%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='input']:not(:has([aria-invalid='true']), [data-state='disabled']):focus-within {
+    border-color: color-mix(in srgb, var(--el-text) 92%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='input'][data-state='disabled'] {
+    box-shadow: none;
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  body,
+  [data-app-shell] {
+    background-image:
+      radial-gradient(
+        circle at 9px 9px,
+        color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
+        transparent 3.5px
+      ),
+      radial-gradient(
+        circle at 29px 29px,
+        color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
+        transparent 2.5px
+      ),
+      repeating-linear-gradient(
+        45deg,
+        color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
+        transparent 2px 18px
+      );
+    background-size:
+      40px 40px,
+      40px 40px,
+      auto;
+    background-position:
+      0 0,
+      0 0,
+      0 0;
+    background-attachment: fixed;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    THE HERO AI CONTROL, PER STYLE (drawn by MOTIR-4742, wired by MOTIR-4743).
 
    The two controls that summon the planning workspace — the header pill
@@ -2986,9 +3945,11 @@
   }
 }
 
-/* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR, not a
-   preference: white is the lightest backdrop the light theme can put behind it,
-   so 86% accent composited over anything measures >= 4.87:1. */
+/* 4 · Glassmorphism — frosted translucency over the rim. 94% is a FLOOR, not a
+   preference: the page is the worst backdrop in either mode (the lightest under
+   the light theme's white label, the darkest under the dark theme's dark one),
+   and 94% accent composited over it measures >= 4.78:1 in every palette —
+   evergreen light is the binding pair. 86% measured 4.09:1 there (MOTIR-10707). */
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='ai-cta'] {
     border: 1px solid var(--glass-rim);
@@ -3005,7 +3966,7 @@
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     --plan-hero-fill: none;
-    background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+    background-color: color-mix(in srgb, var(--el-accent) 94%, transparent);
   }
 }
 @scope ([data-style='glassmorphism']) to ([data-style]) {
@@ -3066,21 +4027,29 @@
     letter-spacing: 0.04em;
   }
 }
+/* The pill's black share is bounded by the palettes whose label ink is DARK
+   (amber, candy, citrine and sienna in both modes; evergreen and motir dark):
+   black lowers their contrast instead of raising it. 6% / 5% black with the
+   base 14% highlight keeps all 20 palette x mode pairs at 4.5:1 or more;
+   sienna light is the tightest, at 4.62:1 (MOTIR-10710). */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     --plan-hero-fill: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--el-accent) 88%, black),
-      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%, black)
+      color-mix(in srgb, var(--el-accent) 94%, black),
+      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight)) 95%, black)
     );
   }
 }
+/* The orb's highlight wash is 15%, not 22%: over the lit first stop a 22% wash
+   took the glyph to 2.96:1 in cobalt dark, under the 3:1 non-text floor
+   (MOTIR-10710). `--orb-lit-mix` is the guarded stop and stays as it is. */
 @scope ([data-style='cybercore-y2k']) to ([data-style]) {
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     --plan-orb-fill:
       linear-gradient(
         160deg,
-        color-mix(in srgb, var(--el-highlight) 22%, transparent),
+        color-mix(in srgb, var(--el-highlight) 15%, transparent),
         transparent 55%
       ),
       radial-gradient(
@@ -3201,7 +4170,14 @@
    above the cap height, the label sits on the bevel BODY at 6.76:1 / 5.16:1, and
    the chrome still reads — a machined bevel IS a vertical light-to-dark ramp
    with a highlight on the crown. The `white` / `black` keywords are this style's
-   own sanctioned lightness mixes, not a hue. */
+   own sanctioned lightness mixes, not a hue.
+   ⚠️ THE BEVEL'S TWO ENDS ARE CAPPED BY THE LABEL (MOTIR-10708). The ink is
+   `--el-accent-text`, which each palette tunes against its bare accent, and in
+   amethyst dark that pair is only 4.99:1. Lightening the crown by 18% white took
+   it to 3.58:1 (white ink on a lighter fill), and darkening the base by 16%
+   black took sienna light to 3.87:1 (dark ink on a darker fill). At 4% white /
+   7% black the worst ends are 4.61:1 (amethyst dark, crown; sienna light, base).
+   The streak and the inset rim carry the chrome read. */
 @scope ([data-style='retrofuturism']) to ([data-style]) {
   [data-surface='ai-cta'] {
     border: 1px solid color-mix(in srgb, var(--el-accent-text) 30%, transparent);
@@ -3231,9 +4207,9 @@
       ),
       linear-gradient(
         180deg,
-        color-mix(in srgb, var(--el-accent) 82%, white) 0%,
+        color-mix(in srgb, var(--el-accent) 96%, white) 0%,
         var(--el-accent) 20%,
-        color-mix(in srgb, var(--el-accent) 84%, black) 100%
+        color-mix(in srgb, var(--el-accent) 93%, black) 100%
       );
   }
 }
@@ -3260,6 +4236,241 @@
         var(--el-accent) 56%,
         color-mix(in srgb, var(--el-accent) 68%, var(--el-highlight))
       );
+  }
+}
+
+/* 12 · Dense / Pro — see docs/styles/dense-pro.md § the hero AI control. */
+@scope ([data-style='dense-pro']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: 0 1px 2px 0 color-mix(in srgb, var(--el-accent) 22%, transparent);
+    --plan-orb-shadow: 0 1px 2px 0 color-mix(in srgb, var(--el-accent) 22%, transparent);
+    border: 1px solid color-mix(in srgb, var(--el-accent) 55%, var(--el-border-strong));
+  }
+}
+@scope ([data-style='dense-pro']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--el-accent) 92%, var(--el-highlight)),
+      var(--el-accent)
+    );
+  }
+}
+@scope ([data-style='dense-pro']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)) 0%,
+      var(--el-accent) 45%,
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-page-bg)) 100%
+    );
+  }
+}
+
+/* 13 · High-Contrast / Accessible — see docs/styles/high-contrast-accessible.md § the hero AI control. */
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 2px solid var(--el-border-strong);
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+@scope ([data-style='high-contrast-accessible']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 14 · Tonal / Elevated — see docs/styles/tonal-elevated.md § the hero AI control. */
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-text) var(--tonal-step-4), var(--el-accent));
+    --plan-hero-shadow:
+      0 6px 14px -4px color-mix(in srgb, var(--el-accent) 30%, transparent),
+      0 22px 44px -18px color-mix(in srgb, var(--el-accent) 40%, transparent);
+    --plan-orb-shadow:
+      0 6px 14px -4px color-mix(in srgb, var(--el-accent) 30%, transparent),
+      0 22px 44px -18px color-mix(in srgb, var(--el-accent) 40%, transparent);
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-accent) 92%, var(--el-surface)),
+      var(--el-accent)
+    );
+  }
+}
+@scope ([data-style='tonal-elevated']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+      var(--el-accent) 60%
+    );
+  }
+}
+
+/* 15 · Claymorphism — see docs/styles/claymorphism.md § the hero AI control. */
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    border: 1px solid color-mix(in srgb, var(--el-accent) 70%, var(--el-text));
+    --plan-hero-shadow:
+      inset 0 var(--clay-inset) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * var(--clay-inset)) var(--clay-inset-blur) var(--clay-shade),
+      0 var(--clay-drop) var(--clay-drop-blur) color-mix(in srgb, var(--el-accent) 30%, transparent);
+    --plan-orb-shadow:
+      inset 0 calc(var(--clay-inset) + 1px) var(--clay-inset-blur) var(--clay-light),
+      inset 0 calc(-1 * (var(--clay-inset) + 1px)) var(--clay-inset-blur) var(--clay-shade),
+      0 calc(var(--clay-drop) * 2) var(--clay-drop-blur)
+        color-mix(in srgb, var(--el-accent) 34%, transparent);
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--el-accent) 90%, var(--el-surface)),
+      var(--el-accent)
+    );
+  }
+}
+@scope ([data-style='claymorphism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)) 0%,
+      var(--el-accent) 55%,
+      color-mix(in srgb, var(--el-accent) 90%, var(--el-text)) 100%
+    );
+  }
+}
+
+/* 16 · Bento — see docs/styles/bento.md § the hero AI control. */
+@scope ([data-style='bento']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+  }
+}
+@scope ([data-style='bento']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+@scope ([data-style='bento']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: none;
+    background-color: var(--el-accent);
+  }
+}
+
+/* 17 · Editorial Print / Newspaper — see docs/styles/editorial-print.md § the hero AI control. */
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --plan-hero-shadow: none;
+    --plan-orb-shadow: none;
+    border: 2px solid var(--el-border);
+  }
+}
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: none;
+    background-color: var(--el-text);
+    color: var(--el-page-bg);
+  }
+}
+@scope ([data-style='editorial-print']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)),
+      var(--el-accent) 56%,
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-text))
+    );
+  }
+}
+
+/* 18 · Art Deco — see docs/styles/art-deco.md § the hero AI control. */
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'] {
+    --deco-edge: color-mix(
+      in srgb,
+      var(--el-accent) var(--deco-edge-tint),
+      var(--el-border-strong)
+    );
+    --plan-hero-shadow:
+      inset 0 0 0 var(--deco-rule-outer) var(--deco-edge),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap)) var(--el-accent),
+      inset 0 0 0 calc(var(--deco-rule-outer) + var(--deco-rule-gap) + var(--deco-rule-inner))
+        var(--deco-edge),
+      0 2px 0 0 color-mix(in srgb, var(--el-text) 60%, transparent);
+    --plan-orb-shadow:
+      inset 0 0 0 var(--deco-rule-outer) var(--deco-edge),
+      0 2px 0 0 color-mix(in srgb, var(--el-text) 60%, transparent);
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    border-radius: var(--radius-btn);
+    --plan-hero-fill: linear-gradient(
+      var(--deco-light-angle),
+      color-mix(in srgb, var(--el-accent) 96%, var(--el-accent-text)) 0 50%,
+      var(--el-accent) 50% 100%
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)) 0%,
+      var(--el-accent) 55%,
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-text)) 55% 100%
+    );
+  }
+}
+@scope ([data-style='art-deco']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb']::after {
+    content: '';
+    position: absolute;
+    inset: calc(var(--deco-rule-outer) + var(--deco-rule-gap));
+    border-radius: 9999px;
+    border: var(--deco-rule-inner) solid var(--deco-edge);
+    pointer-events: none;
+  }
+}
+
+/* 19 · Memphis — see docs/styles/memphis.md § the hero AI control. */
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    --plan-hero-fill: linear-gradient(
+      135deg,
+      var(--el-accent) 0%,
+      var(--el-accent) 86%,
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-highlight)) 100%
+    );
+    --plan-hero-shadow: 5px 5px 0 0 color-mix(in srgb, var(--el-text) 92%, transparent);
+  }
+}
+@scope ([data-style='memphis']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='orb'] {
+    --plan-orb-fill: radial-gradient(
+      circle at 33% 27%,
+      color-mix(in srgb, var(--el-accent-text) var(--orb-lit-mix), var(--el-accent)) 0%,
+      var(--el-accent) 60%,
+      color-mix(in srgb, var(--el-accent) 88%, var(--el-highlight)) 100%
+    );
+    --plan-orb-shadow: 4px 4px 0 0 color-mix(in srgb, var(--el-text) 92%, transparent);
   }
 }
 
@@ -3296,8 +4507,8 @@
 .style-vignette[data-style='cybercore-y2k'] > .sv-canvas {
   background-color: var(--el-page-bg);
   background-image:
-    linear-gradient(color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 1px, transparent 1px);
+    linear-gradient(color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, currentColor 5%, transparent) 1px, transparent 1px);
   background-size: 26px 26px;
 }
 /* Aurora's drifting ribbons, painted statically onto the preview swatch (the
@@ -3362,6 +4573,31 @@
     100% 100%,
     100% 100%;
   background-position: center bottom;
+}
+
+/* Memphis — the canvas pattern on the preview swatch (docs/styles/memphis.md). */
+.style-vignette[data-style='memphis'] > .sv-canvas {
+  background-color: var(--el-page-bg);
+  background-image:
+    radial-gradient(
+      circle at 9px 9px,
+      color-mix(in srgb, var(--el-accent) 11%, transparent) 3px,
+      transparent 3.5px
+    ),
+    radial-gradient(
+      circle at 29px 29px,
+      color-mix(in srgb, var(--el-highlight) 9%, transparent) 2px,
+      transparent 2.5px
+    ),
+    repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--el-link) 5%, transparent) 0 2px,
+      transparent 2px 18px
+    );
+  background-size:
+    40px 40px,
+    40px 40px,
+    auto;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

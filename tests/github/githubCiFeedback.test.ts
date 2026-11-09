@@ -999,7 +999,7 @@ describe('githubWebhookService — late pending deliveries (MOTIR-10456)', () =>
       recorded: [{ checkName: 'build', checkSuiteId: String(SUITE), conclusion: 'pending' }],
       tx: adminDb,
     });
-    expect(result).toEqual({ created: 2, settled: 1 });
+    expect(result).toEqual({ created: 2, settled: 1, decided: false });
     expect(await adminDb.githubCheckRun.findMany({ orderBy: { checkName: 'asc' } })).toMatchObject([
       { checkName: 'build', conclusion: 'success', conclusionAt: finished },
       { checkName: 'e2e', conclusion: 'pending', conclusionAt: null },

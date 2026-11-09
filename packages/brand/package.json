@@ -37,7 +37,7 @@
     "test:watch": "vitest"
   },
   "peerDependencies": {
-    "@motir/design-system": "^0.21.1",
+    "@motir/design-system": "^0.21.4",
     "react": "^19"
   },
   "devDependencies": {

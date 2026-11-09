@@ -536,6 +536,75 @@ describe('the CONVERSATION PHASE before the hand-off (MOTIR-8203)', () => {
   });
 });
 
+// PART 1's QUICK REPLY (MOTIR-10738). The conversation bubble says back what the
+// person asked for once the run's `conversation_ack` arrives, and keeps its keyed
+// line until then — or for good, when the reply never comes.
+describe('the conversation bubble draws the run’s QUICK REPLY (MOTIR-10738)', () => {
+  const CONVERSING =
+    'I’m working out what you’re asking for and where it fits in the project. I may ask you a question before I start planning.';
+  const ACK = 'You want export to offer CSV too. I’ll look at how export works before I plan it.';
+  const live = (over: Partial<PlanChangeConversationState> = {}) =>
+    stateWith({
+      phase: 'streaming',
+      review: null,
+      planId: 'plan_9',
+      jobId: 'job_9',
+      settledJobId: null,
+      ...over,
+    });
+
+  it('shows the reply once it has arrived for the running job', () => {
+    conversation.state = live({ conversationAck: { jobId: 'job_9', text: ACK } });
+    renderHost();
+    expect(screen.getByTestId('plan-conversation-phase').textContent).toBe(ACK);
+  });
+
+  it('keeps the keyed line until the reply arrives', () => {
+    conversation.state = live({ conversationAck: null });
+    renderHost();
+    expect(screen.getByTestId('plan-conversation-phase').textContent).toBe(CONVERSING);
+  });
+
+  it('ignores a reply that belongs to an older job', () => {
+    conversation.state = live({ jobId: 'job_10', conversationAck: { jobId: 'job_9', text: ACK } });
+    renderHost();
+    expect(screen.getByTestId('plan-conversation-phase').textContent).toBe(CONVERSING);
+  });
+
+  it('is gone at `target_settled`, reply or not', () => {
+    conversation.state = live({
+      settledJobId: 'job_9',
+      conversationAck: { jobId: 'job_9', text: ACK },
+    });
+    renderHost();
+    expect(screen.queryByTestId('plan-conversation-phase')).toBeNull();
+    expect(screen.getByTestId('plan-handoff')).toBeTruthy();
+  });
+
+  it('draws the reply as plain text — markup in it is not rendered', () => {
+    conversation.state = live({
+      conversationAck: { jobId: 'job_9', text: '**Bold** <b>tag</b>' },
+    });
+    renderHost();
+    const bubble = screen.getByTestId('plan-conversation-phase');
+    expect(bubble.textContent).toBe('**Bold** <b>tag</b>');
+    expect(bubble.querySelector('b, strong')).toBeNull();
+  });
+
+  it('a REOPENED viewer sees the reply of the run it is watching', () => {
+    conversation.state = stateWith({
+      phase: 'idle',
+      review: null,
+      planId: 'plan_9',
+      session: { ...session(), lastJobId: 'job_9' },
+      liveReview: review(null, { id: 'plan_9', status: 'generating', authorSource: 'native' }),
+      conversationAck: { jobId: 'job_9', text: ACK },
+    });
+    renderHost();
+    expect(screen.getByTestId('plan-conversation-phase').textContent).toBe(ACK);
+  });
+});
+
 describe('a REOPENED overlay mid-run shows what a live viewer sees (MOTIR-8203)', () => {
   const generating = (over: Partial<PlanReviewDto> = {}) =>
     review(null, { id: 'plan_9', status: 'generating', authorSource: 'native', ...over });

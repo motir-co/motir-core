@@ -188,7 +188,7 @@ export async function pinAgentToVersion(agentId: string, version: string): Promi
       app: row.flyApp!,
       machineId: row.machineId!,
       volumeId: row.volumeId!,
-      region: row.region,
+      region: row.region!,
       createdAt: row.createdAt,
     },
     imageRefOf(row.profileId, version),

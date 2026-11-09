@@ -640,3 +640,28 @@ export function queueExitStandsAtHead(
   if (!exit || !headSha) return false;
   return exit.requeuedAt === null && exit.headSha === headSha;
 }
+
+/**
+ * Was this pull request's latest merge-queue exit a FAILURE its current head was PUSHED TO
+ * ANSWER (Bug MOTIR-10791)? A `failure`, not re-queued, recorded at `answeredSha` — the last
+ * commit CI decided on before the head (`lastDecidedBeforeHead`) — and not at the head
+ * itself, where it would still STAND ({@link queueExitHoldsAtHead}).
+ *
+ * The exit row is durable, so this is what the To fix answer re-raises `queue_failed` from,
+ * Fixing, once a quick green at the new head has wiped the stored answer. Tying the exit to
+ * the last DECIDED commit is what retires it: a push that went green after the exit is a
+ * newer decided commit, so a later push answers that build, not the old exit.
+ */
+export function queueFailureAnsweredByHead(
+  exit: QueueExitFacts | null | undefined,
+  headSha: string | null | undefined,
+  answeredSha: string | null | undefined,
+): boolean {
+  if (!exit || !headSha || !answeredSha) return false;
+  return (
+    exit.requeuedAt === null &&
+    exit.disposition === 'failure' &&
+    exit.headSha !== headSha &&
+    exit.headSha === answeredSha
+  );
+}

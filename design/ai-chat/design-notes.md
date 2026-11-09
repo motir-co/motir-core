@@ -833,7 +833,7 @@ new numbers trustworthy.
 | 1   | **Warm Editorial** (base) | 135° `--el-accent` → `color-mix(--el-accent 86%, --el-highlight)` — **accent-dominant, see the base-fill finding below** | none                                                                                              | inner sheen + violet drop + pink aura (the component's own `var()` fallback)                                     | sans, 600, sentence case                | **5.97** / **4.64**     |
 | 2   | **Soft / Playful**        | as base                                                                                                                  | none                                                                                              | **pillowy stack**: a hard `0 7px 0 -1px` ledge in `color-mix(--el-accent 22%, --el-page-bg)` + a wide soft bloom | sans, **800**, sentence case            | **5.97** / **4.64**     |
 | 3   | **Swiss / Minimal-Flat**  | **flat solid `--el-accent`** — no gradient                                                                               | none                                                                                              | **none** (the style removes every shadow; depth is hairline + whitespace)                                        | sans, 700, **UPPERCASE**, `0.07em`      | **6.57** / **4.99**     |
-| 4   | **Glassmorphism**         | **frosted**: `color-mix(--el-accent 86%, transparent)` + `backdrop-filter: blur(var(--glass-blur))`                      | `1px` `var(--glass-rim)`                                                                          | inner rim sheen + diffuse lift                                                                                   | sans, 600, sentence case                | **4.87** / **5.73**     |
+| 4   | **Glassmorphism**         | **frosted**: `color-mix(--el-accent 94%, transparent)` + `backdrop-filter: blur(var(--glass-blur))`                      | `1px` `var(--glass-rim)`                                                                          | inner rim sheen + diffuse lift                                                                                   | sans, 600, sentence case                | **14.24** / **14.86**   |
 | 5   | **Neo-Brutalism**         | **flat solid `--el-accent`**                                                                                             | **2px solid `--el-text`**                                                                         | **hard offset, zero blur** — `4px 4px 0 var(--el-text)`                                                          | sans, 800, **UPPERCASE**                | **6.57** / **4.99**     |
 | 6   | **Cybercore / Y2K**       | dark HUD ground: `color-mix(--el-accent 88%, black)` → the highlight mix taken 78% to black                              | `1px` `color-mix(--el-highlight 70%, transparent)`                                                | **neon halo, no drop shadow**: `0 0 10px` / `0 0 26px -4px` over `--el-highlight` / `--el-accent`                | **mono** (`--font-mono`), 600, `0.04em` | **7.42** / **6.10**     |
 | 7   | **Aurora**                | base + a lit-from-within crown sheen at `--aurora-sheen`                                                                 | none                                                                                              | **colour halo** at `--aurora-glow`, no hard shadow                                                               | sans, 600, sentence case                | **5.97** / **4.64**     |
@@ -905,6 +905,16 @@ glass read carried by the blur + `--glass-rim` + the inner sheen rather than by 
 **86% is a floor, not a preference**: white is the lightest backdrop the light theme can put behind
 it (`--el-page-bg` is `#ffffff`), so 86% accent composited over anything is **≥ 4.87:1**.
 
+> **Amended by MOTIR-10707 (2026-11-08): the floor is now 94%.** The 86% figure was measured on
+> one palette. The style × palette × mode gate (`tests/theme/stylePaletteModeContrast.test.ts`,
+> MOTIR-10674) measures every palette, and at 86% `evergreen` light reads **4.09:1**. The page is
+> the worst backdrop in both modes (the lightest under the light theme's white label, the darkest
+> under the dark theme's dark one). Re-measured over it, with the label `--el-accent-text` on the
+> accent composited over `--el-page-bg`: 90% gives 4.45:1, 92% gives 4.58:1, and **94% gives
+> ≥ 4.78:1 in all ten palettes in both modes**. Evergreen light is the binding pair; the next lowest
+> are amethyst dark 5.46 and sienna light 5.57. The fill stays translucent. Row 4's ratios are the
+> default `motir` palette re-measured at 94% the same way.
+
 #### ⚠️ Row 8 reconciled — `3d-immersive` ADDS NOTHING to the shadow (AC 4)
 
 `3d-immersive` is the one style that already treats this control, and the rule below
@@ -959,6 +969,31 @@ is its depth, and the depth already ships.
 > nothing but a shadow. Every other style also moves a fill, a border or the
 > type, so its rule "worked" while its shadow silently did not.
 
+> **⚠️ AMENDED 2026-11-08 (MOTIR-10710) — row 6's pill and orb fills below were
+> re-measured across every palette, and three values changed.** The table above was
+> measured in the default `motir` palette only, taking the label ink as white, which holds in light only. Ten
+> palette × mode pairs paint a DARK `--el-accent-text` on the accent fill
+> (amber, candy, citrine and sienna in both modes; evergreen and motir dark), and for
+> those the mix toward `black` LOWERS the label's contrast instead of raising it.
+> `tests/theme/stylePaletteModeContrast.test.ts` (MOTIR-10674) measured the 2026-09
+> recipe at **3.18:1 in sienna light** (stop 2; stop 1 at 4.19:1) and **3.49:1 in
+> candy light**, and the orb's 22% highlight wash, composited over the lit first
+> stop, at **2.96:1 in cobalt dark** — under the 3:1 non-text floor.
+>
+> | Declaration | 2026-09                                                            | 2026-11-08                                                         |
+> | ----------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+> | pill stop 1 | `color-mix(--el-accent 88%, black)`                                | `color-mix(--el-accent 94%, black)`                                |
+> | pill stop 2 | `color-mix(color-mix(--el-accent 70%, --el-highlight) 78%, black)` | `color-mix(color-mix(--el-accent 86%, --el-highlight) 95%, black)` |
+> | orb wash    | `color-mix(--el-highlight 22%, transparent)`                       | `color-mix(--el-highlight 15%, transparent)`                       |
+>
+> The black share is bounded by sienna light, the tightest dark-ink pair: at
+> 6% / 5% black with the base fill's own 14% highlight share, every one of the 20
+> palette × mode pairs clears 4.5:1 on both stops, the lowest **4.62:1** (sienna
+> light, stop 2). The orb's lowest stop is now **3.04:1** (cobalt dark), with
+> `--orb-lit-mix` untouched. The block below carries the new values, and the
+> HUD character now rests on the neon border, the halo and the mono label more
+> than on the darkened fill.
+
 Paste with that translation. It follows the file's own `@scope` house form (the same one the
 glassmorphism, aurora, neumorphism and retrofuturism material layers use), reads
 only `--el-*` and the styles' own palette-agnostic scalars, and names no raw hex.
@@ -1005,7 +1040,7 @@ shape role.
   }
 }
 
-/* 4 · Glassmorphism — frosted translucency over the rim. 86% is a FLOOR. */
+/* 4 · Glassmorphism — frosted translucency over the rim. 94% is a FLOOR (MOTIR-10707). */
 @scope ([data-style='glassmorphism']) to ([data-style]) {
   [data-surface='ai-cta'] {
     border: 1px solid var(--glass-rim);
@@ -1017,7 +1052,7 @@ shape role.
   }
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     background-image: none;
-    background-color: color-mix(in srgb, var(--el-accent) 86%, transparent);
+    background-color: color-mix(in srgb, var(--el-accent) 94%, transparent);
   }
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     /* Crown-confined: across the whole circle this sheen lightens the
@@ -1068,15 +1103,15 @@ shape role.
   [data-surface='ai-cta'][data-ai-cta='pill'] {
     background-image: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--el-accent) 88%, black),
-      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 70%, var(--el-highlight)) 78%, black)
+      color-mix(in srgb, var(--el-accent) 94%, black),
+      color-mix(in srgb, color-mix(in srgb, var(--el-accent) 86%, var(--el-highlight)) 95%, black)
     );
   }
   [data-surface='ai-cta'][data-ai-cta='orb'] {
     background-image:
       linear-gradient(
         160deg,
-        color-mix(in srgb, var(--el-highlight) 22%, transparent),
+        color-mix(in srgb, var(--el-highlight) 15%, transparent),
         transparent 55%
       ),
       radial-gradient(
@@ -7449,3 +7484,75 @@ left in.
 - **GIVES:** the overlay banner build — the three elements, the failure-wins precedence, the copy
   keys. **TAKES:** nothing; the shipped faces, their resuming and _again_ states are composed as
   they ship.
+
+## ⭐ Retrofuturism's pill bevel, re-measured across every palette (2026-11-08 · MOTIR-10708)
+
+**This amends § _The CSS, verbatim — copyable into `theme.css` (AC 3)_, row 11 of § _The eleven
+rows_, and nothing else.** Only the retrofuturism pill's `background-image` changes: the bevel's
+crown and base. Every other declaration in that block, and every other style's row, stands as
+written. `tests/theme/aiCtaStyleSeam.test.ts` reads that block and then every later copyable block
+that names `data-surface='ai-cta'`, in document order, so the block below replaces the pill fill it
+names and the shipped rule is held to it.
+
+### What changes, in one sentence
+
+The bevel moves the accent by **4% `white`** at the crown and **7% `black`** at the base, where row 11
+said **18%** and **16%**, because the label must clear 4.5:1 on both ends in every palette and both
+modes, not only in the default one.
+
+### Why the row's figures did not catch it
+
+Row 11 was measured in the default `motir` palette, where the accent is near-black (light) or
+near-white (dark) and its label clears 16:1, so an 18% lightness swing is invisible to the ratio.
+`tests/theme/stylePaletteModeContrast.test.ts` (MOTIR-10674) measures the same fill against all ten
+palettes in both modes, and the label is `--el-accent-text`, which each palette tunes against its
+BARE accent. Where that pair starts close to the floor, any lightness swing in the wrong direction
+breaks it:
+
+| palette · mode    | `--el-accent-text` on bare `--el-accent` | crown at +18% white | base at +16% black |
+| ----------------- | ---------------------------------------- | ------------------- | ------------------ |
+| amethyst · dark   | 4.99                                     | **3.58** ✗          | passes             |
+| cobalt · dark     | 5.28                                     | **3.72** ✗          | passes             |
+| evergreen · light | 5.36                                     | **3.81** ✗          | passes             |
+| spectrum · dark   | 5.62                                     | **3.93** ✗          | passes             |
+| amethyst · light  | 6.57                                     | **4.49** ✗          | passes             |
+| sienna · light    | 5.29 (dark ink)                          | passes              | **3.87** ✗         |
+
+A white label goes down as the crown lightens; sienna's dark label goes down as the base darkens.
+At **4% / 7%** the worst crown is **4.61:1** (amethyst dark) and the worst base is **4.61:1**
+(sienna light). The bevel BODY, `--el-accent` at 20%, is untouched, so § _The eleven rows_' default-
+palette figures for row 11 (6.76 / 5.16 on the accent-dominant region) stand. The figures here are
+the gate's own resolver (tokens resolved per palette and mode, `color-mix()` folded, WCAG 2.x
+relative luminance) at each gradient stop, not a painted-pixel read.
+
+The chrome still reads: the crown-confined specular streak, the `--el-accent-text` inset rim and
+the `--retro-glow` lift carry it, and none of them changes.
+
+### The CSS, as amended — copyable into `theme.css`
+
+```css
+@scope ([data-style='retrofuturism']) to ([data-style]) {
+  [data-surface='ai-cta'][data-ai-cta='pill'] {
+    background-image:
+      linear-gradient(
+        104deg,
+        transparent 30%,
+        color-mix(in srgb, var(--el-accent-text) var(--retro-spec), transparent) 46%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--el-accent) 96%, white) 0%,
+        var(--el-accent) 20%,
+        color-mix(in srgb, var(--el-accent) 93%, black) 100%
+      );
+  }
+}
+```
+
+### What this section does not change
+
+- No other style's pill or orb, and not retrofuturism's orb, its border or its shadows.
+- The ink: the label stays `--el-accent-text` in every row.
+- No mock. The pill's shape, copy and placement are as drawn; only two mix percentages move, and the
+  shipped component renders them on the card.

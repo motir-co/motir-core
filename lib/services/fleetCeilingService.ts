@@ -105,6 +105,9 @@ export type FleetSlotVerdict =
       /** WHICH ACCOUNT of the fleet pool the container boots on (MOTIR-9421),
        *  as written on the slot; `null` means the process-wide Fly fleet. */
       fleetShardId: string | null;
+      /** The container boots on the install fleet (MOTIR-10794): no account,
+       *  no org cap. */
+      installFleet?: true;
     }
   /** This `(workload, ref)` already held a slot. Not an error: the take is
    *  idempotent, so a redelivery lands here rather than double-occupying. */
@@ -507,7 +510,15 @@ export const fleetCeilingService = {
         // workload is held to its own figure.
         const census = await this.orgCensus(organizationId, now, tx);
         const inFlight = census.byWorkload[request.workload];
-        if (cap !== null && inFlight >= cap.figure) {
+        // The install fleet (MOTIR-10794) takes no org cap, as an own account
+        // takes none: asked first, so its run is never told `plan_cap`.
+        const installFleet =
+          request.workload !== 'agent_instance' &&
+          (await fleetShardAdmissionService.installFleetTakesInTx(
+            { fleetKind: request.workload, organizationId },
+            tx,
+          ));
+        if (!installFleet && cap !== null && inFlight >= cap.figure) {
           return {
             outcome: 'deferred' as const,
             reason: 'plan_cap' as const,
@@ -524,11 +535,13 @@ export const fleetCeilingService = {
         const placement: ShardPlacement =
           request.workload === 'agent_instance'
             ? { shardId: null }
-            : await fleetShardAdmissionService.chooseInTx(
-                { fleetKind: request.workload, organizationId },
-                now,
-                tx,
-              );
+            : installFleet
+              ? { shardId: null, installFleet: true }
+              : await fleetShardAdmissionService.chooseInTx(
+                  { fleetKind: request.workload, organizationId },
+                  now,
+                  tx,
+                );
         if ('deferred' in placement) {
           return {
             outcome: 'deferred' as const,
@@ -557,8 +570,9 @@ export const fleetCeilingService = {
         return {
           outcome: 'reserved' as const,
           census,
-          pool: cap?.figure ?? null,
+          pool: installFleet ? null : (cap?.figure ?? null),
           fleetShardId: placement.shardId,
+          ...(installFleet ? { installFleet: true as const } : {}),
         };
       });
     } catch (err) {
