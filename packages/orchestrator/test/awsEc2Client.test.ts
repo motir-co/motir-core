@@ -451,14 +451,18 @@ describe('createEc2Api — the instance calls (MOTIR-9276)', () => {
     });
   });
 
-  it('reads the LATEST console output, decoded, and null when EC2 holds none yet', async () => {
+  it('reads the BUFFERED console output by default, the live one on request, decoded, and null when EC2 holds none yet', async () => {
     const line = 'MOTIR_INDEX_BOOT: image_pull_failed\n';
     const { sent, factory } = stub({
       GetConsoleOutputCommand: { Output: Buffer.from(line).toString('base64') },
     });
     const ec2 = createEc2Api(CONFIG, factory);
     expect(await ec2.getConsoleOutput('i-1')).toBe(line);
-    expect(sent[0]).toEqual({
+    // A stopped instance answers `Latest` empty, so the default must not send it
+    // (MOTIR-10805).
+    expect(sent[0]).toEqual({ command: 'GetConsoleOutputCommand', input: { InstanceId: 'i-1' } });
+    expect(await ec2.getConsoleOutput('i-1', { latest: true })).toBe(line);
+    expect(sent[1]).toEqual({
       command: 'GetConsoleOutputCommand',
       input: { InstanceId: 'i-1', Latest: true },
     });

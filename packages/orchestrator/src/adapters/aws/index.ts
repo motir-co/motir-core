@@ -92,6 +92,25 @@ const LIVE_STATES = ['pending', 'running', 'stopping', 'stopped'];
 /** States in which the VM has run and stopped (or is stopping): the job is over. */
 const TERMINAL_STATES = new Set(['shutting-down', 'stopping', 'stopped']);
 
+/**
+ * How long a STOPPED index VM whose console carries no marker yet is held
+ * non-terminal, measured from its stop (MOTIR-10805). EC2 posts an instance's
+ * buffered console output a few minutes AFTER a state transition — 4½ to 7
+ * minutes for the six index VMs read on 2026-11-09 — and a live (`Latest`) read
+ * of a stopped instance answers empty, so the marker the script wrote before its
+ * power-off is not readable at the moment the VM reads `stopped`. A stopped VM
+ * bills no compute, so waiting costs only supervision polls. Past the window the
+ * VM settles as a stop whose code was not observed.
+ */
+export const AWS_INDEX_CONSOLE_GRACE_MS = 10 * 60_000;
+
+/** When this process first saw each index VM `stopped` — the grace clock for a
+ *  stop whose `StateTransitionReason` carries no instant (an OS power-off). Kept
+ *  at module level because an adapter may be rebuilt per supervision pass; an
+ *  entry is dropped once its VM settles. A process restart only re-starts one
+ *  window, which supervision's own deadline still bounds. */
+const firstSeenStopped = new Map<string, number>();
+
 /** DescribeInstances / TerminateInstances on an id EC2 does not know. A
  *  terminated instance ages out to `NotFound`; a non-EC2 id is `Malformed`. */
 const GONE_CODES = new Set(['InvalidInstanceID.NotFound', 'InvalidInstanceID.Malformed']);
@@ -206,6 +225,11 @@ function isGone(err: unknown): boolean {
 
 function tagOf(instance: Ec2Instance, key: string): string | undefined {
   return instance.tags.find((t) => t.key === key)?.value;
+}
+
+/** Whether a console read holds either index marker on a line of its own. */
+function hasIndexMarker(output: string | null): boolean {
+  return consoleExitCode(output) !== null || consoleShowsPullFailure(output);
 }
 
 function isIndexInstance(instance: Ec2Instance): boolean {
@@ -535,10 +559,17 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
    */
   async function indexOutcome(
     instance: Ec2Instance,
-  ): Promise<{ imagePullFailed?: true; exitCode: number | null }> {
+  ): Promise<{ imagePullFailed?: true; exitCode: number | null; markerMissing?: true }> {
     let output: string | null;
     try {
+      // The BUFFERED output first: it is what EC2 holds for a stopped instance.
+      // The live read is only a fallback, for a Nitro instance whose buffer has
+      // not been posted yet (MOTIR-10805).
       output = await ec2.getConsoleOutput(instance.instanceId);
+      if (!hasIndexMarker(output)) {
+        const live = await ec2.getConsoleOutput(instance.instanceId, { latest: true });
+        if (hasIndexMarker(live)) output = live;
+      }
     } catch (err) {
       console.warn('[awsOrchestrator] could not read an index VM console', {
         instanceId: instance.instanceId,
@@ -547,7 +578,22 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
       return { exitCode: null };
     }
     if (consoleShowsPullFailure(output)) return { imagePullFailed: true, exitCode: null };
-    return { exitCode: consoleExitCode(output) };
+    const exitCode = consoleExitCode(output);
+    return exitCode === null ? { exitCode, markerMissing: true } : { exitCode };
+  }
+
+  /** Whether a stopped index VM with no marker on its console is still inside
+   *  {@link AWS_INDEX_CONSOLE_GRACE_MS} of its stop. */
+  function withinConsoleGrace(instance: Ec2Instance): boolean {
+    const at = now().getTime();
+    const stoppedAt =
+      transitionTimeOf(instance.stateTransitionReason)?.getTime() ??
+      firstSeenStopped.get(instance.instanceId) ??
+      at;
+    if (!firstSeenStopped.has(instance.instanceId)) {
+      firstSeenStopped.set(instance.instanceId, stoppedAt);
+    }
+    return at - stoppedAt < AWS_INDEX_CONSOLE_GRACE_MS;
   }
 
   function gone(handle: ContainerHandle): ContainerStatus {
@@ -621,8 +667,29 @@ export function createAwsOrchestrator(config: AwsOrchestratorConfig): ContainerO
         TERMINAL_STATES.has(instance.state) && !(index && instance.state === 'stopping');
       const stopped = instance.state === 'terminated' || terminal;
       // Only a stopped index VM is asked: one console read per stop, not per poll.
-      const outcome = stopped && index ? await indexOutcome(instance) : { exitCode: null };
-      if (instance.state === 'terminated') return { ...gone(handle), ...outcome };
+      const read = stopped && index ? await indexOutcome(instance) : { exitCode: null };
+      const { markerMissing, ...outcome } = read as typeof read & { markerMissing?: true };
+      if (instance.state === 'terminated') {
+        firstSeenStopped.delete(instance.instanceId);
+        return { ...gone(handle), ...outcome };
+      }
+      // A stopped index VM whose console holds no marker YET is not finished
+      // being read: EC2 posts the buffer minutes after the stop (MOTIR-10805).
+      // It stays non-terminal, so supervision polls again, until the marker
+      // arrives or the grace window closes.
+      if (markerMissing && instance.state === 'stopped' && withinConsoleGrace(instance)) {
+        return {
+          exitCode: null,
+          handleId: handle.id,
+          exists: true,
+          state: instance.state,
+          terminal: false,
+          createdAt: instance.launchTime ?? handle.createdAt,
+          startedAt: startedAtOf(instance),
+          stoppedAt: null,
+        };
+      }
+      if (terminal) firstSeenStopped.delete(instance.instanceId);
       return {
         ...outcome,
         handleId: handle.id,
