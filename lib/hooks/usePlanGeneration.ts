@@ -213,6 +213,11 @@ async function consumeStream(
   }
 }
 
+/** The job status a frame names. Only the job's own `status` frame
+ *  (`{ jobId, status }`) carries one at the top level: every PROGRESS frame is
+ *  nested under `data` (`{ jobId, seq, data }`, MOTIR-10878), and this stream
+ *  deliberately reads no progress payload, so it never unwraps one — a payload
+ *  that happens to carry a `status` field cannot be mistaken for the job's. */
 function statusOf(data: unknown): string | null {
   return (data as { status?: string } | null)?.status ?? null;
 }

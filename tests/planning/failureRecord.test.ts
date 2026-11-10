@@ -343,6 +343,24 @@ describe('the frame readers', () => {
     ).toBeNull();
     expect(parseWalkPosition(null)).toBeNull();
   });
+
+  // MOTIR-10878 — on motir-ai's real wire `walk_position` is a PROGRESS frame, so
+  // the position is nested under `data` beside the job id and seq.
+  it('walkPositionOf reads the position through motir-ai’s progress envelope', () => {
+    expect(
+      walkPositionOf({
+        event: 'walk_position',
+        data: {
+          jobId: 'job-1',
+          seq: 7,
+          data: { phase: 'author', target: 'planItem:x', targetTitle: 'Export', depth: 2 },
+        },
+      }),
+    ).toEqual({ phase: 'author', target: 'planItem:x', targetTitle: 'Export', depth: 2 });
+    expect(
+      walkPositionOf({ event: 'walk_position', data: { jobId: 'job-1', seq: 8, data: {} } }),
+    ).toBeNull();
+  });
 });
 
 describe('classifySessionCandidate — the second table', () => {

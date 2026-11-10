@@ -618,22 +618,57 @@ function explanationOutcomeAt(n: number): GenerateExplanationJobOutcome | null {
   return queue[Math.min(n, queue.length - 1)]!;
 }
 
+/**
+ * One SSE frame of `GET /v1/jobs/:id/stream`, in the shape motir-ai writes it
+ * (`motir-ai/src/app.ts`, MOTIR-10878). A PROGRESS frame — anything the job
+ * emitted (`token`, `explanation`, `search`, `walk_position`, …) — nests its
+ * payload: `{ jobId, seq, data: <payload> }`. The job's own `status` and `done`
+ * frames are flat: `{ jobId, status }` and `{ jobId }` (`timedOut: true` on a
+ * closed window). A flat progress frame here is how three browser readers that
+ * read the payload at the top level went unseen by every lane.
+ */
+function jobStreamBody(
+  jobId: string,
+  frames: ReadonlyArray<
+    | { progress: string; data: Record<string, unknown> }
+    | { status: string }
+    | { done: true; timedOut?: true }
+  >,
+): string {
+  const write = (event: string, data: unknown) =>
+    `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  let seq = 0;
+  return frames
+    .map((f) => {
+      if ('progress' in f) return write(f.progress, { jobId, seq: (seq += 1), data: f.data });
+      if ('status' in f) return write('status', { jobId, status: f.status });
+      return write('done', f.timedOut ? { jobId, timedOut: true } : { jobId });
+    })
+    .join('');
+}
+
+/** The job id a `GET /v1/jobs/:id/stream?…` path names. */
+function jobIdOfStreamPath(path: string): string {
+  return decodeURIComponent(path.split('?')[0]!.split('/').slice(-2)[0]!);
+}
+
 /** A declared draft as motir-ai streams it: two `token` deltas, then the terminal
  *  `explanation` frame, the `succeeded` status and the close. */
-function explanationStream(draft: GenerateExplanationJobOutcome): string {
+function explanationStream(jobId: string, draft: GenerateExplanationJobOutcome): string {
   const half = Math.ceil(draft.explanationMd.length / 2);
-  const frame = (event: string, data: unknown) =>
-    `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  return [
-    frame('token', { text: draft.explanationMd.slice(0, half) }),
-    frame('token', { text: draft.explanationMd.slice(half) }),
-    frame('explanation', {
-      explanationMd: draft.explanationMd,
-      ...(draft.language !== undefined ? { language: draft.language } : {}),
-    }),
-    frame('status', { status: 'succeeded' }),
-    frame('done', {}),
-  ].join('');
+  return jobStreamBody(jobId, [
+    { progress: 'token', data: { text: draft.explanationMd.slice(0, half) } },
+    { progress: 'token', data: { text: draft.explanationMd.slice(half) } },
+    {
+      progress: 'explanation',
+      data: {
+        explanationMd: draft.explanationMd,
+        ...(draft.language !== undefined ? { language: draft.language } : {}),
+      },
+    },
+    { status: 'succeeded' },
+    { done: true },
+  ]);
 }
 
 /** The author outcome for the `n`-th `author_bug` job, with the last entry repeating. */
@@ -890,9 +925,13 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       },
       method: 'GET',
     })
-    .reply(() => ({
+    .reply((req) => ({
       statusCode: 200,
-      data: `event: search\ndata: {}\n\nevent: status\ndata: {"status":"running"}\n\nevent: done\ndata: {"timedOut":true}\n\n`,
+      data: jobStreamBody(jobIdOfStreamPath(req.path), [
+        { progress: 'search', data: {} },
+        { status: 'running' },
+        { done: true, timedOut: true },
+      ]),
       responseOptions: { headers: { 'content-type': 'text/event-stream' } },
     }))
     .delay(HELD_WINDOW_MS)
@@ -906,7 +945,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
   pool
     .intercept({ path: (p) => /^\/v1\/jobs\/[^/]+\/stream(\?|$)/.test(p), method: 'GET' })
     .reply((req) => {
-      const id = decodeURIComponent(req.path.split('?')[0]!.split('/').slice(-2)[0]!);
+      const id = jobIdOfStreamPath(req.path);
       // A declared `generate_explanation` draft (MOTIR-8750) streams its tokens and its
       // terminal `explanation` frame; with none declared the reply below is unchanged.
       const explained = kindOf(id);
@@ -915,7 +954,7 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       if (draft) {
         return {
           statusCode: 200,
-          data: explanationStream(draft),
+          data: explanationStream(id, draft),
           responseOptions: { headers: { 'content-type': 'text/event-stream' } },
         };
       }
@@ -923,18 +962,32 @@ export function installAiJobsBoundaryMock(agent: MockAgent): void {
       // dead run: a terminal `status: failed` frame, then the close.
       const stop = planRunFails(id) ? planOutcomeAt(kindOf(id).index).walkStop : undefined;
       const position = stop
-        ? `event: walk_position\ndata: ${JSON.stringify({
-            phase: stop.phase,
-            target: stop.target,
-            targetTitle: stop.targetTitle ?? null,
-            depth: stop.depth,
-          })}\n\n`
-        : '';
+        ? [
+            {
+              progress: 'walk_position',
+              data: {
+                phase: stop.phase,
+                target: stop.target,
+                targetTitle: stop.targetTitle ?? null,
+                depth: stop.depth,
+              },
+            },
+          ]
+        : [];
       const data = planRunFails(id)
-        ? `event: search\ndata: {}\n\n${position}event: status\ndata: {"status":"failed"}\n\nevent: done\ndata: {}\n\n`
+        ? jobStreamBody(id, [
+            { progress: 'search', data: {} },
+            ...position,
+            { status: 'failed' },
+            { done: true },
+          ])
         : planRunReportsStatus(id)
-          ? `event: search\ndata: {}\n\nevent: status\ndata: {"status":"succeeded"}\n\nevent: done\ndata: {}\n\n`
-          : `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`;
+          ? jobStreamBody(id, [
+              { progress: 'search', data: {} },
+              { status: 'succeeded' },
+              { done: true },
+            ])
+          : jobStreamBody(id, [{ progress: 'search', data: {} }, { done: true }]);
       return {
         statusCode: 200,
         data,

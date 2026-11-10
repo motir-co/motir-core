@@ -2,6 +2,7 @@ import 'server-only';
 import { getJob } from '@/lib/ai/motirAiClient';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { parseWalkPosition, type JobWalkPosition } from '@/lib/planChange/failureRecord';
+import { unwrapProgressFrame } from '@/lib/ai/sseFrames';
 
 // Enrich a relayed job-stream frame with its terminal-failure REASON (Subtask
 // 8.1.8). The raw `/v1/jobs/:id/stream` SSE protocol emits a `status` frame
@@ -72,5 +73,8 @@ export function terminalStatusOf(frame: JobStreamEvent): 'failed' | 'canceled' |
 
 /** The position a `walk_position` progress frame names (MOTIR-7909), or null. */
 export function walkPositionOf(frame: JobStreamEvent): JobWalkPosition | null {
-  return frame.event === 'walk_position' ? parseWalkPosition(frame.data) : null;
+  // A PROGRESS frame: motir-ai nests the position under `data` (MOTIR-10878).
+  return frame.event === 'walk_position'
+    ? parseWalkPosition(unwrapProgressFrame(frame.data))
+    : null;
 }
