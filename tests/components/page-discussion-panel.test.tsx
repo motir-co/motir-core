@@ -270,7 +270,7 @@ describe('PageDiscussionPanel — reads', () => {
 
   it('draws the quote slot only for an inline thread', async () => {
     client.listPageComments.mockResolvedValueOnce(
-      list([thread(BO, [], { anchor: { quote: 'the rollout plan' } })]),
+      list([thread(BO, [], { anchor: { bytes: 'AQID', quote: 'the rollout plan' } })]),
     );
     await mountPanel();
     expect(screen.getByTestId('page-thread-quote').textContent).toBe('the rollout plan');

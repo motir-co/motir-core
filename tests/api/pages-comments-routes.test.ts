@@ -288,7 +288,7 @@ describe('POST /api/pages/[pageId]/comments', () => {
     });
   });
 
-  it('stores a base64 anchor’s bytes and answers only its quote', async () => {
+  it('stores a base64 anchor’s bytes and answers both parts, the bytes as stored', async () => {
     const f = await makeFixture();
     as(f.manager);
     const bytes = Uint8Array.from([0, 1, 254, 255, 9]);
@@ -298,10 +298,32 @@ describe('POST /api/pages/[pageId]/comments', () => {
     });
     expect(res.status).toBe(201);
     const body = await res.json();
-    expect(body.anchor).toEqual({ quote: 'the passage' });
+    expect(body.anchor).toEqual({ bytes: 'AAH+/wk=', quote: 'the passage' });
     const row = await adminDb.pageComment.findUniqueOrThrow({ where: { id: body.id } });
     expect([...row.anchor!]).toEqual([...bytes]);
+    expect([...Buffer.from(body.anchor.bytes, 'base64')]).toEqual([...row.anchor!]);
     expect(row.anchorQuote).toBe('the passage');
+  });
+
+  it('accepts back the bytes a read returned, storing them byte-identical', async () => {
+    const f = await makeFixture();
+    as(f.manager);
+    const bytes = Uint8Array.from([1, 0, 0, 0, 3, 250, 251, 252, 0, 128]);
+    const first = await (
+      await create(f.pageId, {
+        bodyMd: 'First',
+        anchor: { bytes: Buffer.from(bytes).toString('base64'), quote: 'the passage' },
+      })
+    ).json();
+    const again = await create(f.pageId, { bodyMd: 'Again', anchor: first.anchor });
+    expect(again.status).toBe(201);
+    const second = await again.json();
+    expect(second.anchor).toEqual(first.anchor);
+    const rows = await adminDb.pageComment.findMany({
+      where: { id: { in: [first.id, second.id] } },
+    });
+    expect(rows).toHaveLength(2);
+    for (const row of rows) expect([...row.anchor!]).toEqual([...bytes]);
   });
 
   it('answers 400 for malformed input, and the package’s own codes for blank content', async () => {

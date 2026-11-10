@@ -309,12 +309,13 @@ describe('page comments through the adapter', () => {
         anchor: { bytes: Uint8Array.from([0, 255, 3, 128]), quote: 'this sentence' },
       }),
     );
-    expect(inline.anchor).toEqual({ quote: 'this sentence' });
+    expect(inline.anchor).toEqual({ bytes: 'AP8DgA==', quote: 'this sentence' });
     const rows = await adminDb.pageComment.findMany({ orderBy: { createdAt: 'asc' } });
     expect(rows.map((r) => r.id)).toEqual([plain.id, inline.id]);
     expect(rows[0]).toMatchObject({ anchor: null, anchorQuote: null });
     expect([...rows[1]!.anchor!]).toEqual([0, 255, 3, 128]);
     expect(rows[1]!.anchorQuote).toBe('this sentence');
+    expect([...Buffer.from(inline.anchor!.bytes, 'base64')]).toEqual([...rows[1]!.anchor!]);
   });
 
   it('refuses every write on an archived page and still lists its threads', async () => {

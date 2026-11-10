@@ -356,7 +356,7 @@ describe('seam 1 — written through the routes, read back through the panel’s
     expect(unrouted).toEqual([]);
   });
 
-  it('stores an anchor’s bytes unchanged and lists only its quote; a page-level root has none', async () => {
+  it('stores an anchor’s bytes unchanged and lists both parts; a page-level root has none', async () => {
     const t = await makeTenant('anchor', 'PCA');
     const a = await memberOf(t, 'a', 'member');
     const bytes = Uint8Array.from([0, 1, 2, 250, 251, 252, 127, 128]);
@@ -367,7 +367,10 @@ describe('seam 1 — written through the routes, read back through the panel’s
 
     const open = await list(a, t.pageId, 'open');
     const byId = new Map(open.threads.map((th) => [th.id, th]));
-    expect(byId.get(anchored.id)!.anchor).toEqual({ quote: 'the second section' });
+    expect(byId.get(anchored.id)!.anchor).toEqual({
+      bytes: Buffer.from(bytes).toString('base64'),
+      quote: 'the second section',
+    });
     expect(byId.get(plain.id)!.anchor).toBeNull();
     const anchoredRow = await rowOf(anchored.id);
     expect(Buffer.from(anchoredRow.anchor!).equals(Buffer.from(bytes))).toBe(true);

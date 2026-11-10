@@ -23,7 +23,9 @@ import {
   reopenPageCommentThread,
   replyToPageComment,
   resolvePageCommentThread,
+  toPageCommentDto,
   type PageCommentActor,
+  type PageCommentRow,
 } from '../src';
 import { FixedClock, MemoryPageStore } from './fakes/memoryPageStore';
 
@@ -104,16 +106,27 @@ describe('createPageComment', () => {
     });
   });
 
-  it('stores an anchor’s bytes unchanged and returns only its quote', async () => {
+  it('stores an anchor’s bytes unchanged and returns both parts — the bytes as padded base64', async () => {
     const thread = await createPageComment(store, clock, {
       ...scope(),
       bodyMd: 'Inline',
       anchor: { bytes: Uint8Array.from([7, 8, 9]), quote: 'the quoted text' },
     });
-    expect(thread.anchor).toEqual({ quote: 'the quoted text' });
+    // [7, 8, 9] is "BwgJ" — and a two-byte value needs padding, below.
+    expect(thread.anchor).toEqual({ bytes: 'BwgJ', quote: 'the quoted text' });
     const stored = store.comments.get(thread.id)!;
     expect([...stored.anchor!]).toEqual([7, 8, 9]);
     expect(stored.anchorQuote).toBe('the quoted text');
+    expect([...Buffer.from(thread.anchor!.bytes, 'base64')]).toEqual([...stored.anchor!]);
+  });
+
+  it('emits STANDARD padded base64, never the cursors’ url-safe form', async () => {
+    const thread = await createPageComment(store, clock, {
+      ...scope(),
+      bodyMd: 'Inline',
+      anchor: { bytes: Uint8Array.from([251, 255]), quote: 'q' },
+    });
+    expect(thread.anchor!.bytes).toBe('+/8=');
   });
 
   it('refuses empty anchor bytes and a blank quote, writing nothing', async () => {
@@ -398,6 +411,65 @@ describe('the page a write lands on', () => {
       expect(err).toBeInstanceOf(PageNotFoundError);
       expect(err).toBeInstanceOf(PageError);
     }
+  });
+});
+
+describe('the anchor on a read', () => {
+  const inline = () =>
+    createPageComment(store, clock, {
+      ...scope(),
+      bodyMd: 'Inline',
+      anchor: { bytes: Uint8Array.from([1, 2, 3]), quote: 'the passage' },
+    });
+
+  it('lists an anchored root with both parts beside a page-level root, and its reply carries none', async () => {
+    const anchored = await inline();
+    const plain = await root('Page-level');
+    await reply(anchored.id, 'On the passage');
+    const page = await listPageCommentThreads(store, { ...scope(), status: 'open' });
+    const byId = new Map(page.threads.map((t) => [t.id, t]));
+    expect(byId.get(anchored.id)!.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+    expect(byId.get(plain.id)!.anchor).toBeNull();
+    expect(byId.get(anchored.id)!.replies.map((r) => r.anchor)).toEqual([null]);
+  });
+
+  it('keeps the anchor through resolve and reopen', async () => {
+    const anchored = await inline();
+    const resolved = await resolvePageCommentThread(store, clock, {
+      ...scope(),
+      commentId: anchored.id,
+    });
+    expect(resolved.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+    const done = await listPageCommentThreads(store, { ...scope(), status: 'resolved' });
+    expect(done.threads[0]!.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+    const reopened = await reopenPageCommentThread(store, { ...scope(), commentId: anchored.id });
+    expect(reopened.anchor).toEqual({ bytes: 'AQID', quote: 'the passage' });
+  });
+});
+
+describe('toPageCommentDto', () => {
+  const row = (anchor: Uint8Array | null, anchorQuote: string | null): PageCommentRow => ({
+    id: 'c1',
+    workspaceId: 'w1',
+    projectId: 'p1',
+    pageId,
+    parentCommentId: null,
+    authorId: 'u1',
+    author: { id: 'u1', name: 'Ada', image: null },
+    bodyMd: 'x',
+    editedAt: null,
+    createdAt: new Date(0),
+    resolvedAt: null,
+    resolvedById: null,
+    resolvedBy: null,
+    anchor,
+    anchorQuote,
+  });
+
+  it('answers a null anchor for a row carrying only one part, and never throws', () => {
+    expect(toPageCommentDto(row(Uint8Array.from([1]), null)).anchor).toBeNull();
+    expect(toPageCommentDto(row(null, 'orphan quote')).anchor).toBeNull();
+    expect(toPageCommentDto(row(null, null)).anchor).toBeNull();
   });
 });
 

@@ -77,10 +77,22 @@ export interface PageCommentDto {
   /** On a resolved root: who resolved it, `null` once that user is deleted. */
   readonly resolvedBy: PageCommentPersonDto | null;
   /**
-   * On an inline root: the text it quotes. The anchor's position bytes are not
-   * sent — the inline story adds what its highlight reads.
+   * On an inline root: the passage it is anchored to — `null` on a page-level
+   * root and on every reply.
    */
-  readonly anchor: { readonly quote: string } | null;
+  readonly anchor: PageCommentAnchorDto | null;
+}
+
+/**
+ * An inline root's anchor on the wire. `bytes` is the stored position pair,
+ * verbatim, as STANDARD padded base64 — the form the create door accepts, so
+ * a value read here can be posted back unchanged. Decoding it and resolving it
+ * against the page's document is the anchor codec's (`document/anchor.ts`).
+ */
+export interface PageCommentAnchorDto {
+  readonly bytes: string;
+  /** The text the passage held when the thread was started. */
+  readonly quote: string;
 }
 
 /** A thread: its root and every reply, oldest first. */
@@ -104,6 +116,19 @@ export interface DeletePageCommentResult {
 
 const iso = (at: Date | null): string | null => (at === null ? null : at.toISOString());
 
+/** Standard padded base64 of a byte string (not the cursors' base64url). */
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** Both parts or none: a row that broke the pair answers `null`, never half an anchor. */
+function toAnchorDto(row: PageCommentRow): PageCommentAnchorDto | null {
+  if (row.anchor === null || row.anchorQuote === null) return null;
+  return { bytes: bytesToBase64(row.anchor), quote: row.anchorQuote };
+}
+
 /** A stored comment as the panel reads it. */
 export function toPageCommentDto(row: PageCommentRow): PageCommentDto {
   return {
@@ -118,7 +143,7 @@ export function toPageCommentDto(row: PageCommentRow): PageCommentDto {
     resolvedBy: row.resolvedBy
       ? { id: row.resolvedBy.id, name: row.resolvedBy.name, image: row.resolvedBy.image }
       : null,
-    anchor: row.anchorQuote === null ? null : { quote: row.anchorQuote },
+    anchor: toAnchorDto(row),
   };
 }
 
