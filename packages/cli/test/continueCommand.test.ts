@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CommandResult, CommandRunner } from '../src/git.js';
+import { answerPrView } from './fakePullRequest.js';
 import type { DispatchPrompt, WorkItemContinueClaim, WorkItemDetail } from '../src/client.js';
 
 // `motir continue <key>` (Story MOTIR-6526 · MOTIR-6533). The session, the agent
@@ -74,7 +75,11 @@ let h: Harness;
  *  `rev-parse --abbrev-ref HEAD` with its branch. `onPath` pre-seeds a worktree. */
 function fakeGit(onPath: Record<string, string> = {}): CommandRunner {
   const worktrees = new Map(Object.entries(onPath));
-  return (_bin, args, cwd) => {
+  return (bin, args, cwd) => {
+    // The pull request the agent opened on the dead run's branch, which the run links
+    // (MOTIR-10877). Not recorded in `h.git`: it is `gh`, not git.
+    const pr = answerPrView(bin, args);
+    if (pr) return pr;
     h.git.push({ args, cwd });
     if (args[0] === 'rev-parse' && args[1] === '--verify')
       return { exitCode: 1, stdout: '', stderr: '' };
@@ -127,6 +132,9 @@ function setup(claims: WorkItemContinueClaim, promptOver: Partial<DispatchPrompt
       } as unknown as WorkItemDetail;
     },
     listWorkItemDesigns: async () => ({ designs: [] }),
+    linkPullRequest: async (args: unknown) => {
+      calls.push({ tool: 'link_pull_request', args });
+    },
     transitionStatus: async (args: unknown) => {
       calls.push({ tool: 'transition_status', args });
     },

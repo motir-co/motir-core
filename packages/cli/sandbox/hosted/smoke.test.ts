@@ -252,6 +252,12 @@ if (args[0] === 'pr' && args[1] === 'list') {
   const pr = { repo, head, number, url: 'https://github.com/' + repo + '/pull/' + number, draft: args.includes('--draft'), title: flag('--title'), body: flag('--body'), state: 'open' };
   state.prs.push(pr);
   out = pr.url;
+} else if (args[0] === 'pr' && args[1] === 'view') {
+  // The run reads the pull request it links (MOTIR-10877), by branch or by URL.
+  const ref = args[2];
+  const pr = state.prs.find((p) => p.repo === repo && (p.url === ref || p.head === ref) && p.state === 'open');
+  if (!pr) { fs.writeFileSync(store, JSON.stringify(state)); console.error('no pull requests found for ' + ref); process.exit(1); }
+  out = JSON.stringify({ url: pr.url, state: 'OPEN', headRefName: pr.head, headRefOid: '', baseRefName: 'main' });
 } else if (args[0] === 'pr' && args[1] === 'edit') {
   const pr = find(args[2]);
   if (pr) { pr.title = flag('--title') || pr.title; pr.body = flag('--body') || pr.body; }
