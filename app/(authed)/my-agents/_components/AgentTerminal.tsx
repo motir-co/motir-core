@@ -21,9 +21,9 @@ import type { TerminalSink } from './useAgentTerminal';
 // - Its colours are the theme's: the host carries `--el-code-bg` / `--el-code-text`
 //   and xterm is handed their RESOLVED values. xterm paints with concrete colours,
 //   not CSS variables, so they are resolved again whenever the applied theme
-//   changes (MOTIR-10857) — an explicit light/dark or palette switch on <html>,
-//   or the OS appearance while the page follows the system — and the open
-//   terminal follows light and dark like every code block.
+//   changes (MOTIR-10857) — a light/dark or palette switch on <html>, which is
+//   also how the OS appearance arrives while the page follows the system — and
+//   the open terminal follows light and dark like every code block.
 // - It fills its box, refits to whole cells on every size change, reports the new
 //   size (the hook sends `resize`) and shows `cols × rows` for a moment.
 // - It scrolls inside itself; a reader scrolled up is not yanked down, and
@@ -37,7 +37,7 @@ const SIZE_TAG_MS = 1_500;
 
 /** The <html> attributes that carry an explicit theme choice (`app/layout.tsx`, the theme context). */
 const THEME_ATTRIBUTES = ['data-theme', 'data-palette'];
-/** A page following the system changes theme through this query, with no attribute changing. */
+/** The OS appearance; watched as a backstop beside the attribute observer (see `watchTheme`). */
 const COLOR_SCHEME_QUERY = '(prefers-color-scheme: dark)';
 
 type TerminalColours = { background: string; foreground: string; cursor: string };
@@ -61,10 +61,14 @@ function resolveColours(el: HTMLElement, watchOnly: boolean): TerminalColours {
 
 /**
  * Calls `onChange` whenever the applied theme may have changed, and answers the
- * function that stops watching. Both routes are watched because either alone
- * misses a switch: an explicit choice changes an attribute on <html> (the
- * observer `components/brand/HeroWaves.tsx` keeps too), while a page following
- * the system changes only what `prefers-color-scheme` matches.
+ * function that stops watching. The attribute observer on <html> (the one
+ * `components/brand/HeroWaves.tsx` keeps too) is the route every switch takes
+ * today: the CSS keys its dark ramp on `[data-theme]`, and while the page follows
+ * the system the theme context writes the OS appearance to `data-theme` after
+ * `prefers-color-scheme` flips. The query is watched too, as a backstop for a
+ * surface whose colours follow it directly; when it fires before the attribute
+ * has been written, the colours have not changed yet and the caller's equality
+ * check makes it a no-op.
  */
 function watchTheme(onChange: () => void): () => void {
   const observer = new MutationObserver(onChange);

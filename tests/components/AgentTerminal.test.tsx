@@ -308,12 +308,34 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
     });
   });
 
-  it('following the system, an OS appearance change re-applies them with no attribute changing', async () => {
+  it('following the system, an OS appearance change re-applies them once the theme context writes it to <html>', async () => {
     const scheme = colorSchemeQuery();
     const styles = computedStyles(LIGHT);
     mount();
     await load();
     expect(scheme.matchMedia).toHaveBeenCalledWith('(prefers-color-scheme: dark)');
+    const before = term().options['theme'];
+
+    // The OS flips first; the CSS keys on `[data-theme]`, so nothing has changed yet.
+    act(() => scheme.flip());
+    expect(term().options['theme']).toBe(before);
+
+    // Then the theme context writes the resolved appearance, and the page's colours move.
+    Object.assign(styles, DARK);
+    document.documentElement.setAttribute('data-theme', 'dark');
+    await settle();
+    expect(term().options['theme']).toEqual({
+      background: DARK.backgroundColor,
+      foreground: DARK.color,
+      cursor: DARK.color,
+    });
+  });
+
+  it('the media query is a backstop: colours that follow it directly are re-applied on its change', async () => {
+    const scheme = colorSchemeQuery();
+    const styles = computedStyles(LIGHT);
+    mount();
+    await load();
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
 
     Object.assign(styles, DARK);
