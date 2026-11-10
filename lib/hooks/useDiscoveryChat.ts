@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useReducer, useRef } from 'react';
-import { drainSseFrames } from '@/lib/ai/sseFrames';
+import { drainSseFrames, unwrapProgressFrame } from '@/lib/ai/sseFrames';
 import { toDirectionDocView, type DirectionDocKind } from '@/lib/onboarding/directionDoc';
 import { mapRevisions } from '@/lib/onboarding/revisions';
 import type { DesignChoiceDTO, PreplanStateDTO } from '@/lib/dto/aiPreplan';
@@ -135,7 +135,10 @@ export function useDiscoveryChat(options: UseDiscoveryChatOptions = {}): UseDisc
         const { frames, rest } = drainSseFrames(buffer);
         buffer = rest;
         for (const { event, data } of frames) {
-          const frame = normalizeFrame(event, data);
+          // Every frame the discovery job emits (`assistant`, `state`, `docs`,
+          // `revisions`, …) is a PROGRESS frame, which motir-ai nests under `data`
+          // (MOTIR-10878); the job's own `status` frame passes through unchanged.
+          const frame = normalizeFrame(event, unwrapProgressFrame(data));
           if (!frame || !mountedRef.current) continue;
           dispatch({ type: 'frame', frame });
           if (frame.event === 'docs') {

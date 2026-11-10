@@ -198,4 +198,76 @@ describe('usePlanGeneration (MOTIR-1396)', () => {
     expect(result.current.version).toBe(version);
     unmount();
   });
+
+  // MOTIR-10878 — on motir-ai's real wire every PROGRESS frame nests its payload
+  // under `data` (`{ jobId, seq, data }`); the job's own `status`, `done` and the
+  // relay's `error` frames are flat. This stream reads only those flat frames, so
+  // a progress payload — even one naming a `status` — must change nothing.
+  function sseResponse(frames: Array<{ event: string; data: unknown }>): Response {
+    const body = frames
+      .map((f) => `event: ${f.event}\ndata: ${JSON.stringify(f.data)}\n\n`)
+      .join('');
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(c) {
+          c.enqueue(new TextEncoder().encode(body));
+          c.close();
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'text/event-stream' } },
+    );
+  }
+  const progress = (event: string, seq: number, payload: Record<string, unknown>) => ({
+    event,
+    data: { jobId: 'job_1', seq, data: payload },
+  });
+  function streaming(
+    frames: Array<{ event: string; data: unknown }>,
+    items = [] as ReturnType<typeof planReviewItem>[],
+  ) {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input);
+      if (url === '/api/ai/plan/generate') {
+        return Promise.resolve(jsonResponse(200, { jobId: 'job_1', planId: 'plan_1' }));
+      }
+      if (url.includes('/stream')) return Promise.resolve(sseResponse(frames));
+      return Promise.resolve(
+        jsonResponse(200, planReview(items, { id: 'plan_1', status: 'planned' })),
+      );
+    });
+  }
+
+  it('reads past nested progress frames to the flat error frame’s typed code (MOTIR-10878)', async () => {
+    streaming([
+      { event: 'status', data: { jobId: 'job_1', status: 'running' } },
+      progress('walk_position', 1, { phase: 'lay', target: null, depth: 0 }),
+      progress('status', 2, { status: 'succeeded', phase: 'laying' }),
+      { event: 'status', data: { jobId: 'job_1', status: 'failed' } },
+      { event: 'error', data: { code: OUT_OF_CREDITS_CODE, message: 'No credits.' } },
+    ]);
+    const { result, unmount } = renderHook(() => usePlanGeneration());
+    act(() => result.current.start());
+
+    await waitFor(() => expect(result.current.phase).toBe('out_of_credits'));
+    unmount();
+  });
+
+  it('a nested progress payload naming a failed status does not fail the run (MOTIR-10878)', async () => {
+    const item = planReviewItem({ planItemId: 'pi_1', nodeId: 'pi_1', title: 'Invoices' });
+    streaming(
+      [
+        progress('status', 1, { status: 'failed' }),
+        progress('search', 2, { query: 'invoices' }),
+        { event: 'status', data: { jobId: 'job_1', status: 'succeeded' } },
+        { event: 'done', data: { jobId: 'job_1' } },
+      ],
+      [item],
+    );
+    const { result, unmount } = renderHook(() => usePlanGeneration());
+    act(() => result.current.start());
+
+    await waitFor(() => expect(result.current.phase).toBe('planned'));
+    expect(result.current.items.map((i) => i.planItemId)).toEqual(['pi_1']);
+    unmount();
+  });
 });

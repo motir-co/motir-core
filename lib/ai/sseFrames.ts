@@ -35,6 +35,42 @@ export function parseSseFrame(frame: string): SseFrame | null {
   return { event, data };
 }
 
+const PROGRESS_ENVELOPE_KEYS: ReadonlySet<string> = new Set(['jobId', 'seq', 'data']);
+
+/**
+ * The payload of a motir-ai PROGRESS frame, read through its envelope
+ * (MOTIR-10878).
+ *
+ * motir-ai's `GET /v1/jobs/:id/stream` writes every progress frame as
+ * `{ jobId, seq, data: <payload> }` (`motir-ai/src/app.ts`, `flushProgress`), and
+ * core's stream routes relay that object unchanged. The job's own `status`
+ * (`{ jobId, status }`), `done` and `error` frames carry no envelope. A reader
+ * that wants the fields the job emitted (`token.text`, `docs.docs`, …) reads
+ * them here, never at the top level of the relayed frame.
+ *
+ * Only the exact envelope is unwrapped — a numeric `seq`, an object `data`, and
+ * no key beside `jobId` / `seq` / `data` — and the envelope's `jobId` and `seq`
+ * win over any the payload names. Every other shape (a job status frame, an
+ * `error` problem, a frame a test seam writes flat, a payload that is not an
+ * object) is returned unchanged. The rule is kept identical to the one MOTIR-10864
+ * gives the planning streams' `consumeStream` (`lib/planning/planEditsClient.ts`).
+ */
+export function unwrapProgressFrame(data: unknown): unknown {
+  if (!isRecord(data) || typeof data['seq'] !== 'number') return data;
+  const payload = data['data'];
+  if (!isRecord(payload)) return data;
+  if (Object.keys(data).some((key) => !PROGRESS_ENVELOPE_KEYS.has(key))) return data;
+  return {
+    ...payload,
+    ...(data['jobId'] !== undefined ? { jobId: data['jobId'] } : {}),
+    seq: data['seq'],
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 /** Split a decoded chunk buffer into complete frames (separated by a blank
  *  line), returning the parsed frames + the unconsumed remainder to carry into
  *  the next read. */
