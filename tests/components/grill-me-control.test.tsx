@@ -342,6 +342,45 @@ describe('Grill me — the route', () => {
     ]);
   });
 
+  it('a typed message is not a second answer to a question whose read failed (MOTIR-10865)', async () => {
+    const turnOf = (
+      seq: number,
+      role: 'person' | 'planner',
+      extra: Partial<SharpenSessionDto['turns'][number]> = {},
+    ): SharpenSessionDto['turns'][number] => ({
+      id: `st${seq}`,
+      seq,
+      role,
+      action: role === 'person' ? 'answer' : null,
+      body: role === 'person' ? 'Everyone in the project' : 'Who can use a shared preset?',
+      readingId: null,
+      jobId: `sj${seq}`,
+      failed: false,
+      outOfCredits: false,
+      createdAt: '2026-10-13T10:00:00.000Z',
+      ...extra,
+    });
+    const turns = [
+      turnOf(1, 'person', { action: 'start', body: 'start', jobId: 'sj1' }),
+      turnOf(2, 'planner', { jobId: 'sj1' }),
+      turnOf(3, 'person', { readingId: 'r1', jobId: 'sj3' }),
+      turnOf(4, 'planner', { jobId: 'sj3', failed: true, body: 'failed' }),
+    ];
+    // The stored question outlives the answer until the next planner turn lands.
+    client.settleSharpen.mockResolvedValue({ outcome: 'failed', session: sharpen({ turns }) });
+    await grilling();
+    expect(await screen.findByTestId('sharpen-error')).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: 'Or type your own answer…' })).toBeNull();
+    const field = screen.getByRole('textbox');
+    fireEvent.change(field, { target: { value: 'Admins only' } });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+    });
+    // With no question open it is an ordinary message to the run, as during any read.
+    expect(client.sharpenAct).not.toHaveBeenCalled();
+    expect(onSend).toHaveBeenCalledWith('Admins only');
+  });
+
   it('switching it off while it grills is Stop grilling', async () => {
     await grilling();
     await screen.findByTestId('sharpen-question');

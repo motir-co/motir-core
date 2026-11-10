@@ -368,6 +368,58 @@ describe('the offer is held while the grilling is open', () => {
     expect(onSend).not.toHaveBeenCalled();
   });
 
+  it('sends nothing to a question already answered whose read failed (MOTIR-10865)', async () => {
+    const sharpenTurn = (
+      seq: number,
+      role: 'person' | 'planner',
+      extra: Partial<SharpenSessionDto['turns'][number]> = {},
+    ): SharpenSessionDto['turns'][number] => ({
+      id: `st${seq}`,
+      seq,
+      role,
+      action: role === 'person' ? 'answer' : null,
+      body: role === 'person' ? 'The columns on screen' : QUESTION.text,
+      readingId: null,
+      jobId: `sj${seq}`,
+      failed: false,
+      outOfCredits: false,
+      createdAt: GRILL_AT,
+      ...extra,
+    });
+    const start = sharpenTurn(1, 'person', { action: 'start', body: 'start' });
+    const asked = sharpenTurn(2, 'planner', { jobId: 'sj1' });
+    const answered = sharpenTurn(3, 'person', { readingId: 'r1', jobId: 'sj3' });
+    const failedRead = sharpenTurn(4, 'planner', { jobId: 'sj3', failed: true, body: 'failed' });
+    // The server keeps the answered question stored until the next planner turn.
+    client.openSharpen.mockResolvedValue({
+      outcome: 'sharpening',
+      jobId: 'sj3',
+      turnId: 'st3',
+      session: grilling({
+        turns: [start, asked, answered],
+        inFlight: { turnId: 'st3', jobId: 'sj3' },
+      }),
+    });
+    client.settleSharpen.mockResolvedValue({
+      outcome: 'failed',
+      session: grilling({ turns: [start, asked, answered, failedRead] }),
+    });
+    await offeredWithGrillOn();
+    expect(await screen.findByTestId('sharpen-error')).toBeTruthy();
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
+    // The composer no longer asks for an answer to it…
+    expect(screen.queryByRole('textbox', { name: 'Or type your own answer…' })).toBeNull();
+    const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: 'Only the visible columns' } });
+    await act(async () => {
+      fireEvent.keyDown(box, { key: 'Enter' });
+    });
+    // …and a typed message reaches nobody: no second answer, and no plan started.
+    expect(client.sharpenAct).not.toHaveBeenCalled();
+    expect(onSend).not.toHaveBeenCalled();
+    expect((box as HTMLTextAreaElement).value).toBe('Only the visible columns');
+  });
+
   it('gives up on grilling the offer when Stop is pressed on a failed open', async () => {
     client.openSharpen.mockRejectedValue(new Error('down'));
     await offeredWithGrillOn();

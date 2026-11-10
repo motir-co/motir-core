@@ -385,6 +385,38 @@ describe('act and settle', () => {
     expect(re.turnId).toBe(acted.turnId);
   });
 
+  it('refuses a second answer to a question whose read failed; Try again and Stop still work (MOTIR-10865)', async () => {
+    const { sessionId } = await openWithQuestion();
+    const acted = await aiSharpenService.act(sessionId, 'answer', { readingId: 'a' }, pctx);
+    jobs.results.set(acted.jobId!, { status: 'failed' });
+    expect((await aiSharpenService.settle(sessionId, acted.jobId!, pctx)).outcome).toBe('failed');
+    // The answered question is still the stored one: the next planner turn never landed.
+    expect((await aiSharpenService.get(sessionId, pctx)).pendingQuestion).toEqual(QUESTION);
+
+    const sent = jobs.submitted.length;
+    for (const [action, opts] of [
+      ['own_words', { text: 'Admins only' }],
+      ['answer', { readingId: 'a' }],
+      ['skip', {}],
+      ['you_decide', {}],
+    ] as const) {
+      await expect(aiSharpenService.act(sessionId, action, opts, pctx)).rejects.toBeInstanceOf(
+        errors.SharpenActionInvalidError,
+      );
+    }
+    expect(jobs.submitted).toHaveLength(sent);
+    const turns = (await aiSharpenService.get(sessionId, pctx)).turns;
+    expect(turns.filter((t) => t.role === 'person')).toHaveLength(2);
+
+    const re = await aiSharpenService.resubmit(sessionId, acted.turnId!, pctx);
+    expect(re.turnId).toBe(acted.turnId);
+    expect(jobs.submitted).toHaveLength(sent + 1);
+    jobs.results.set(re.jobId!, { status: 'failed' });
+    await aiSharpenService.settle(sessionId, re.jobId!, pctx);
+    const stopped = await aiSharpenService.act(sessionId, 'stop', {}, pctx);
+    expect(stopped.session.turns.at(-1)).toMatchObject({ role: 'person', action: 'stop' });
+  });
+
   it('says by name when credits ended the read (MOTIR-10235), and not for any other failure', async () => {
     const { sessionId } = await openWithQuestion();
     const acted = await aiSharpenService.act(sessionId, 'answer', { readingId: 'a' }, pctx);
