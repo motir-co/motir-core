@@ -65,6 +65,8 @@ interface FakeItem {
   sessionBranch: string | null;
   /** Who holds it — null is unclaimed (MOTIR-2427). */
   assigneeId: string | null;
+  /** Every repository it ships in, when more than its `targetRepo` (MOTIR-10888). */
+  repos?: string[];
 }
 
 function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
@@ -216,7 +218,8 @@ class FakeServer {
           targetRepo: item.targetRepo,
           workflowMode: branch ? 'session_lineage' : 'per_item_pr',
           sessionBranch: branch,
-        };
+          ...(item.repos ? { targetRepos: item.repos.map((name) => ({ name })) } : {}),
+        } as DispatchPrompt;
       },
       // The ATOMIC claim (MOTIR-3048) — one call that assigns AND flips, and
       // that can refuse. Answered by the server's own rule, so a snapshot item
@@ -901,6 +904,51 @@ describe('motir batch — previously-failed items', () => {
     expect(server.transitions.filter((t) => t.status === 'implemented')).toEqual([]);
     expect(server.links).toEqual([]);
     expect(printed()).toContain('PROD-1: the work is pushed, but no pull request could be linked');
+  });
+
+  // MOTIR-10888 — a card in two repositories where only the motir-core pull request links.
+  /** `gh` finds nothing in the motir-ai checkout; its remote branches are `aiBranches`. */
+  const secondRepository =
+    (aiBranches: string): CommandRunner =>
+    (bin, args, cwd) => {
+      const inAi = cwd.endsWith('motir-ai');
+      if (inAi && bin === 'gh') return { exitCode: 1, stdout: '', stderr: 'no pull requests' };
+      if (inAi && args[0] === 'ls-remote') return { exitCode: 0, stdout: aiBranches, stderr: '' };
+      return (
+        answerPrView(bin, args) ??
+        (args[0] === 'ls-remote'
+          ? { exitCode: 0, stdout: 'abc123\trefs/heads/subtask/pushed', stderr: '' }
+          : { exitCode: 0, stdout: '', stderr: '' })
+      );
+    };
+
+  it('one repository linked and another PUSHED but unlinked is a failure naming that branch (MOTIR-10888)', async () => {
+    mkdirSync(join(root, 'motir-ai'), { recursive: true });
+    const server = new FakeServer([leaf('idA', 'PROD-1', { repos: ['motir-core', 'motir-ai'] })]);
+    const { summary } = await drive(server, {
+      git: secondRepository('abc123\trefs/heads/subtask/pushed'),
+    });
+
+    expect(summary.records[0]).toEqual(
+      expect.objectContaining({
+        outcome: 'failed',
+        detail: 'no pull request linked: subtask/pushed',
+      }),
+    );
+    expect(server.links).toHaveLength(1);
+    expect(server.transitions.filter((t) => t.status === 'implemented')).toEqual([]);
+    expect(printed()).toContain(
+      'PROD-1: 1 pull request is linked, but pushed work in 1 more repository has none:',
+    );
+  });
+
+  it('a listed repository the run pushed NOTHING to does not hold the card, and is named (MOTIR-10888)', async () => {
+    mkdirSync(join(root, 'motir-ai'), { recursive: true });
+    const server = new FakeServer([leaf('idA', 'PROD-1', { repos: ['motir-core', 'motir-ai'] })]);
+    const { summary } = await drive(server, { git: secondRepository('') });
+
+    expect(summary.records[0]?.outcome).toBe('implemented');
+    expect(printed()).toContain('PROD-1: no work was pushed to this repository');
   });
 });
 

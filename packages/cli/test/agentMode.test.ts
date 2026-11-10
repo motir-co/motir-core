@@ -668,4 +668,100 @@ describe('an agent with NO Motir tools — the run delivers for it (MOTIR-10877)
     ]);
     expect(process.exitCode).toBe(1);
   });
+  // MOTIR-10888 — a card spanning two repositories, where only ONE pull request links. Motir
+  // completes a card on its LINKED pull requests alone, so a clean Implemented here would let
+  // the first merge close the card over the second repository's open work.
+  const BRANCH = 'subtask/PROD-7-add-the-thing';
+  const settledEvents = () =>
+    callsTo('append_events')
+      .flatMap(
+        (c) =>
+          (c.args as { events: { kind: string; disposition?: string; data?: unknown }[] }).events,
+      )
+      .filter((e) => e.kind === 'card_settled');
+  /** `gh` finds nothing in the motir-ai checkout; `ls-remote` there answers as `aiPushed` says. */
+  const secondRepository =
+    (aiPushed: boolean): CommandRunner =>
+    (bin, args, cwd) => {
+      const inAi = cwd.endsWith('motir-ai');
+      if (inAi && bin === 'gh')
+        return { exitCode: 1, stdout: '', stderr: 'no pull requests found' };
+      if (inAi && args[0] === 'ls-remote')
+        return aiPushed
+          ? ok(`abc1234def5678abc1234def5678abc1234def56\trefs/heads/${BRANCH}`)
+          : { exitCode: 2, stdout: '', stderr: '' };
+      return PUSHED(bin, args, cwd);
+    };
+
+  it('one repository linked and another PUSHED but unlinked stays In Progress, naming both (MOTIR-10888)', async () => {
+    h.legs = ['PROD-7'];
+    h.details = { 'PROD-7': detail('PROD-7') };
+    h.prompt = (k) => prompt(k, ['motir-core', 'motir-ai'], { workBranch: BRANCH });
+    runAgentMock.mockImplementation(async () => ({
+      exitCode: 0,
+      signal: null,
+      model: null,
+      pullRequests: [FAKE_PULL_REQUEST_URL],
+    }));
+
+    await runCommand('PROD-7', { runId: RUN }, { run: secondRepository(true) });
+
+    // The pull request that exists is linked — and the card is NOT moved.
+    expect(callsTo('link_pull_request')).toHaveLength(1);
+    expect(callsTo('transition_status')).toEqual([]);
+    expect(settledEvents()).toEqual([
+      expect.objectContaining({
+        disposition: 'failed',
+        data: {
+          reason: 'unlinked_pull_request',
+          branches: [
+            {
+              repository: 'motir-ai',
+              branch: BRANCH,
+              detail: `no open pull request was found for ${BRANCH}`,
+            },
+          ],
+          linked: [{ repository: 'acme/motir-core', url: FAKE_PULL_REQUEST_URL }],
+        },
+      }),
+    ]);
+    expect(callsTo('close_dispatch_run')).toEqual([
+      { tool: 'close_dispatch_run', args: { runId: RUN, stopReason: 'halted' } },
+    ]);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it('a listed repository the run pushed NOTHING to does not hold the card, and is recorded (MOTIR-10888)', async () => {
+    h.legs = ['PROD-7'];
+    h.details = { 'PROD-7': detail('PROD-7') };
+    h.prompt = (k) => prompt(k, ['motir-core', 'motir-ai'], { workBranch: BRANCH });
+    runAgentMock.mockImplementation(async () => ({
+      exitCode: 0,
+      signal: null,
+      model: null,
+      pullRequests: [FAKE_PULL_REQUEST_URL],
+    }));
+
+    await runCommand('PROD-7', { runId: RUN }, { run: secondRepository(false) });
+
+    expect(callsTo('transition_status')).toEqual([
+      { tool: 'transition_status', args: { key: 'PROD-7', status: 'implemented' } },
+    ]);
+    expect(settledEvents()).toEqual([
+      expect.objectContaining({
+        disposition: 'implemented',
+        data: {
+          unlinked: [
+            {
+              repository: 'motir-ai',
+              branch: BRANCH,
+              detail: `no open pull request was found for ${BRANCH}`,
+              pushed: false,
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(process.exitCode).toBeUndefined();
+  });
 });

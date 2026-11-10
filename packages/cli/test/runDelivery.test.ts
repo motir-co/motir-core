@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkItemDelivery } from '../src/client.js';
-import { pushedButUnlinked, renderNoLinkedPullRequest } from '../src/dispatch.js';
+import {
+  pushedButUnlinked,
+  renderNoLinkedPullRequest,
+  renderUnpushedRepositories,
+  unlinkedDeliveries,
+} from '../src/dispatch.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import {
   declareRunDelivery,
@@ -213,6 +218,7 @@ describe('declareRunDelivery — finding and linking the pull request', () => {
           repository: 'web',
           branch: BRANCH,
           reason: `no open pull request was found for ${BRANCH}`,
+          pushed: false,
         },
       ]);
       expect(h.links).toEqual([]);
@@ -228,13 +234,60 @@ describe('declareRunDelivery — finding and linking the pull request', () => {
 });
 
 describe('declareRunDelivery — what it could not link', () => {
-  it('names the branch it found no pull request on', async () => {
+  it('names the branch it found no pull request on, and that nothing was pushed to it', async () => {
     const h = harness();
     const delivery = await declareRunDelivery(h.input);
     expect(delivery.unlinked).toEqual([
-      { repository: 'web', branch: BRANCH, reason: `no open pull request was found for ${BRANCH}` },
+      {
+        repository: 'web',
+        branch: BRANCH,
+        reason: `no open pull request was found for ${BRANCH}`,
+        pushed: false,
+      },
     ]);
     expect(h.events).toEqual([]);
+  });
+
+  it('says the work IS pushed when the remote answers for the work branch (MOTIR-10888)', async () => {
+    const h = harness({
+      lsRemote: { [`origin refs/heads/${BRANCH}`]: `${SHA}\trefs/heads/${BRANCH}` },
+    });
+    expect((await declareRunDelivery(h.input)).unlinked).toEqual([
+      {
+        repository: 'web',
+        branch: BRANCH,
+        reason: `no open pull request was found for ${BRANCH}`,
+        pushed: true,
+      },
+    ]);
+  });
+
+  it('two repositories, one linked: the other is unlinked, pushed or not (MOTIR-10888)', async () => {
+    const API_BRANCH_HEAD = `${SHA}\trefs/heads/${BRANCH}`;
+    const h = harness({
+      targets: [
+        { targetRepo: 'web', cwd: '/web', repoPath: null },
+        { targetRepo: 'api', cwd: '/api', repoPath: null },
+      ],
+      pullRequests: [WEB],
+      prs: { [WEB]: prViewJson(BRANCH, WEB, SHA) },
+    });
+    // `ls-remote` answers only in the api checkout: its branch is pushed, with no pull request.
+    const scripted = h.input.run!;
+    h.input.run = (bin, args, cwd) =>
+      bin === 'git' && args[0] === 'ls-remote' && cwd === '/api'
+        ? ok(API_BRANCH_HEAD)
+        : scripted(bin, args, cwd);
+    const delivery = await declareRunDelivery(h.input);
+    expect(delivery.linked).toEqual([{ repository: 'acme/web', url: WEB, headSha: SHA }]);
+    expect(delivery.unlinked).toEqual([
+      {
+        repository: 'api',
+        branch: BRANCH,
+        reason: `no open pull request was found for ${BRANCH}`,
+        pushed: true,
+      },
+    ]);
   });
 
   it('says when the run names no branch to look on', async () => {
@@ -246,6 +299,7 @@ describe('declareRunDelivery — what it could not link', () => {
         repository: 'web',
         branch: null,
         reason: 'the run names no work branch to find a pull request on',
+        pushed: false,
       },
     ]);
   });
@@ -256,7 +310,13 @@ describe('declareRunDelivery — what it could not link', () => {
       lsRemote: { '--heads origin *PROD-7*': `abc\trefs/heads/${BRANCH}\n` },
     });
     expect((await declareRunDelivery(h.input)).unlinked).toEqual([
-      { repository: 'web', branch: BRANCH, reason: `no open pull request was found for ${BRANCH}` },
+      {
+        repository: 'web',
+        branch: BRANCH,
+        reason: `no open pull request was found for ${BRANCH}`,
+        // A remote branch naming the card IS the push.
+        pushed: true,
+      },
     ]);
   });
 
@@ -294,6 +354,7 @@ describe('declareRunDelivery — what it could not link', () => {
         repository: 'acme/web',
         branch: null,
         reason: `the head branch of ${WEB} could not be read`,
+        pushed: true,
       },
     ]);
     expect(h.links).toEqual([]);
@@ -309,6 +370,7 @@ describe('declareRunDelivery — what it could not link', () => {
         repository: 'acme/web',
         branch: BRANCH,
         reason: `linking ${WEB} was refused: the repository is not connected`,
+        pushed: true,
       },
     ]);
     expect(refused.events).toEqual([]);
@@ -384,37 +446,63 @@ describe('declareRunDelivery — the How to test', () => {
 });
 
 describe('pushedButUnlinked — what the leg is told', () => {
-  const unlinked = [{ repository: 'web', branch: BRANCH, reason: 'no open pull request' }];
+  const unlinked = [
+    { repository: 'web', branch: BRANCH, reason: 'no open pull request', pushed: true },
+  ];
+  const webLinked = { repository: 'acme/web', url: WEB, headSha: null };
 
   it('holds a run whose work reached the remote and linked nothing', () => {
     expect(
       pushedButUnlinked({
-        kind: 'succeeded',
         remote: 'pushed',
-        delivery: { linked: [], unlinked, howToTest: 'none' },
-      } as never),
+        delivery: { linked: [], unlinked },
+      }),
+    ).toBe(true);
+    // With nothing linked, the push check is the evidence, not each repository's flag.
+    expect(
+      pushedButUnlinked({
+        remote: 'pushed',
+        delivery: { linked: [], unlinked: [{ ...unlinked[0]!, pushed: false }] },
+      }),
     ).toBe(true);
   });
 
-  it('never holds a linked run, an unknown push, or a run with no delivery', () => {
-    const linked = {
-      linked: [{ repository: 'acme/web', url: WEB, headSha: null }],
-      unlinked: [],
-      howToTest: 'none',
+  it('holds a PARTIAL delivery: one repository linked, another pushed and unlinked (MOTIR-10888)', () => {
+    const api = { repository: 'api', branch: BRANCH, reason: 'no open pull request', pushed: true };
+    expect(
+      pushedButUnlinked({ remote: 'pushed', delivery: { linked: [webLinked], unlinked: [api] } }),
+    ).toBe(true);
+    // The repository's own remote is the evidence, so an `unknown` push check does not excuse it.
+    expect(
+      pushedButUnlinked({ remote: 'unknown', delivery: { linked: [webLinked], unlinked: [api] } }),
+    ).toBe(true);
+  });
+
+  it('lets a repository the run pushed NOTHING to pass, once another one linked (MOTIR-10888)', () => {
+    const idle = {
+      repository: 'api',
+      branch: BRANCH,
+      reason: 'no open pull request',
+      pushed: false,
     };
     expect(
-      pushedButUnlinked({ kind: 'succeeded', remote: 'pushed', delivery: linked } as never),
+      pushedButUnlinked({ remote: 'pushed', delivery: { linked: [webLinked], unlinked: [idle] } }),
+    ).toBe(false);
+    expect(unlinkedDeliveries({ linked: [webLinked], unlinked: [idle] })).toEqual([]);
+    expect(unlinkedDeliveries({ linked: [], unlinked: [idle] })).toEqual([idle]);
+  });
+
+  it('never holds a linked run, an unknown push, or a run with no delivery', () => {
+    expect(
+      pushedButUnlinked({ remote: 'pushed', delivery: { linked: [webLinked], unlinked: [] } }),
     ).toBe(false);
     expect(
       pushedButUnlinked({
-        kind: 'succeeded',
         remote: 'unknown',
-        delivery: { linked: [], unlinked, howToTest: 'none' },
-      } as never),
+        delivery: { linked: [], unlinked },
+      }),
     ).toBe(false);
-    expect(
-      pushedButUnlinked({ kind: 'succeeded', remote: 'pushed', delivery: null } as never),
-    ).toBe(false);
+    expect(pushedButUnlinked({ remote: 'pushed', delivery: null })).toBe(false);
     expect(pushedButUnlinked({})).toBe(false);
   });
 
@@ -423,9 +511,39 @@ describe('pushedButUnlinked — what the leg is told', () => {
       ...unlinked,
       { repository: null, branch: null, reason: 'the run names no work branch' },
     ]);
-    expect(text).toContain('PROD-7');
+    expect(text).toContain('PROD-7: the work is pushed, but no pull request could be linked');
     expect(text).toContain(BRANCH);
     expect(text).toContain('no open pull request');
-    expect(text).toContain('the run names no work branch');
+    expect(text).toContain('(unpinned) · (no branch) — the run names no work branch');
+  });
+
+  it('renders a partial delivery with the pull requests that DID link (MOTIR-10888)', () => {
+    const one = renderNoLinkedPullRequest('PROD-7', unlinked, [webLinked]);
+    expect(one).toContain(
+      'PROD-7: 1 pull request is linked, but pushed work in 1 more repository has none:',
+    );
+    expect(one).toContain(`web · ${BRANCH} — no open pull request`);
+    expect(one).toContain(`acme/web · ${WEB}`);
+    expect(one).toContain('the first merge would close it');
+    const two = renderNoLinkedPullRequest(
+      'PROD-7',
+      [...unlinked, { ...unlinked[0]!, repository: 'docs' }],
+      [webLinked, { repository: 'acme/api', url: API }],
+    );
+    expect(two).toContain(
+      '2 pull requests are linked, but pushed work in 2 more repositories have none:',
+    );
+  });
+
+  it('renders the repositories a delivered run pushed nothing to', () => {
+    expect(renderUnpushedRepositories('PROD-7', [{ repository: 'api', branch: BRANCH }])).toBe(
+      `PROD-7: no work was pushed to this repository, so it has no pull request:\n  api · ${BRANCH}`,
+    );
+    const two = renderUnpushedRepositories('PROD-7', [
+      { repository: 'api', branch: BRANCH },
+      { repository: null, branch: null },
+    ]);
+    expect(two).toContain('to these repositories, so they have no pull request:');
+    expect(two).toContain('(unpinned) · (no branch)');
   });
 });

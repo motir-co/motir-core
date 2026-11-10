@@ -387,3 +387,28 @@ the card sat at Implemented linked to nothing, so its merge would never close it
 | Local run, agent with no Motir MCP   | the CLI, from the file or `gh`      | the CLI posts `…/how-to-test`           |
 | Hosted run                           | the container's CLI, run credential | the container's CLI, run token          |
 | Run inside the user's agent instance | the instance's CLI, run credential  | the instance's CLI, run token           |
+
+## AMENDMENT 5 — a partial delivery is not Implemented either (MOTIR-10888, 2026-11-10)
+
+**What was wrong.** AMENDMENT 4's rule 4 held the card only when the run linked NO pull request.
+On a card in two repositories where one pull request linked and the other repository's pushed
+branch had none (`gh pr view` found nothing), the unlinked branch was dropped, the card went to
+Implemented, and nothing on the leg or the run named the repository. Motir completes a card on
+its LINKED pull requests alone (`changeRequestStatusSync.ts`, MOTIR-10135), so the first merge
+would close the card with the second repository's work still open, and the CI watch could not see
+that work.
+
+**What changes.**
+
+1. **Each unlinked repository says whether its work is on its remote** (`pushed`): its work branch
+   answers `git ls-remote`, a remote branch names the card, or a pull request for it was found.
+2. **With at least one pull request linked, a pushed repository with no linked pull request keeps
+   the card from Implemented**, exactly as rule 4 does with none linked: the card stays In
+   Progress, the leg settles `failed` with an `unlinked_pull_request` reason naming each such
+   branch beside the pull requests that did link (`linked`), the run closes `halted`, and
+   `motir run` exits 1. The CLI prints the branches to link by hand. `motir batch` records the card
+   failed with `no pull request linked: <branch>`.
+3. **A listed repository the run pushed NOTHING to holds nothing back.** Runs routinely find one
+   listed repository needs no change, which is why MOTIR-10135 stopped reading the repository set
+   as a promise. The card reaches Implemented, and its `card_settled` event carries the repository
+   under `unlinked` with `pushed: false`, so the run says it was left alone rather than forgotten.

@@ -9,6 +9,7 @@ import {
 import type { DispatchPrompt, DispatchWorkflowMode, WorkItemClaim } from './client.js';
 import { runRepoClones, type RepoClonePlanEntry } from './repoClone.js';
 import type { CommandRunner } from './git.js';
+import type { DeliveredRepository, UndeliveredRepository } from './runDelivery.js';
 
 // The PURE half of single dispatch (Story 7.9 · Subtask 7.9.3 · MOTIR-881):
 // where an item's agent runs, what the human is told about it, and how a
@@ -679,33 +680,97 @@ export function renderNothingPushed(key: string, dispatch: DispatchPrompt): stri
   ].join('\n');
 }
 
-/**
- * Whether a succeeded leg pushed work the run could link to NO pull request (MOTIR-10877) —
- * the one case the card must not be reported a clean Implemented: nothing would close it on
- * merge, and the CI watch would have nothing to watch. Only a push the check SAW counts (an
- * `unknown` remote is no evidence), and only a leg the run delivered itself (a session-lineage
- * leg's pull request is the loop's).
- */
-export function pushedButUnlinked(verdict: {
+/** The part of a dispatch-leg verdict the delivery rule reads. */
+interface DeliveryVerdict {
   remote?: 'pushed' | 'unknown';
-  delivery?: { linked: readonly unknown[] } | null;
-}): boolean {
-  return verdict.remote === 'pushed' && !!verdict.delivery && verdict.delivery.linked.length === 0;
+  delivery?: {
+    linked: readonly unknown[];
+    unlinked: readonly Pick<UndeliveredRepository, 'pushed'>[];
+  } | null;
 }
 
-/** What the human reads when the run pushed work and could link no pull request (MOTIR-10877). */
+/**
+ * The unlinked repositories that keep a pushed card from Implemented (MOTIR-10877 ·
+ * MOTIR-10888). With NOTHING linked, every one of them: the push check already saw the work
+ * on the remote, and a card linked to nothing is closed by nothing. With at least one pull
+ * request linked, only those whose work IS on their remote: a listed repository the run
+ * pushed nothing to needed no change, while a pushed one with no linked pull request is half
+ * the card's work that the first merge would close the card over — Motir completes a card on
+ * its LINKED pull requests alone (`changeRequestStatusSync.ts`, MOTIR-10135).
+ */
+export function unlinkedDeliveries<T extends Pick<UndeliveredRepository, 'pushed'>>(delivery: {
+  linked: readonly unknown[];
+  unlinked: readonly T[];
+}): T[] {
+  return delivery.linked.length === 0
+    ? [...delivery.unlinked]
+    : delivery.unlinked.filter((u) => u.pushed);
+}
+
+/**
+ * Whether a succeeded leg pushed work the run could not link to a pull request (MOTIR-10877),
+ * in ANY repository of the card (MOTIR-10888) — the case the card must not be reported a clean
+ * Implemented: nothing would close it on merge (or the first merge would close it over the
+ * unlinked work), and the CI watch would not see that work. With nothing linked, only a push
+ * the check SAW counts (an `unknown` remote is no evidence); with something linked, each
+ * unlinked repository's own remote is the evidence. Only a leg the run delivered itself
+ * counts (a session-lineage leg's pull request is the loop's).
+ */
+export function pushedButUnlinked<V extends DeliveryVerdict>(
+  verdict: V,
+): verdict is V & { delivery: NonNullable<V['delivery']> } {
+  const delivery = verdict.delivery;
+  if (!delivery) return false;
+  if (delivery.linked.length === 0) return verdict.remote === 'pushed';
+  return unlinkedDeliveries(delivery).length > 0;
+}
+
+/**
+ * What the human reads when the run pushed work it could not link (MOTIR-10877). `linked`
+ * names the pull requests that DID link, when some did (MOTIR-10888), so the reader knows
+ * which branches are left to link by hand.
+ */
 export function renderNoLinkedPullRequest(
   key: string,
-  unlinked: readonly { repository: string | null; branch: string | null; reason: string }[],
+  unlinked: readonly Pick<UndeliveredRepository, 'repository' | 'branch' | 'reason'>[],
+  linked: readonly Pick<DeliveredRepository, 'repository' | 'url'>[] = [],
+): string {
+  const branchLines = unlinked.map(
+    (u) => `  ${u.repository ?? '(unpinned)'} · ${u.branch ?? '(no branch)'} — ${u.reason}`,
+  );
+  if (linked.length === 0) {
+    return [
+      `${key}: the work is pushed, but no pull request could be linked to ${key}.`,
+      ...branchLines,
+      'The work item stays In Progress: an Implemented card with no linked pull request is',
+      'closed by nothing when the pull request merges. Open the pull request (or link the one',
+      `that exists) and move ${key} to Implemented, or re-run it with \`motir run ${key}\`.`,
+    ].join('\n');
+  }
+  return [
+    `${key}: ${linked.length} pull request${linked.length === 1 ? ' is' : 's are'} linked, but pushed work in ${unlinked.length} more ${unlinked.length === 1 ? 'repository has' : 'repositories have'} none:`,
+    ...branchLines,
+    'Linked:',
+    ...linked.map((d) => `  ${d.repository} · ${d.url}`),
+    `The work item stays In Progress: Motir completes ${key} when its LINKED pull requests`,
+    'merge, so the first merge would close it with the work above still open. Link the pull',
+    `request for each branch above (or open it) and move ${key} to Implemented, or re-run it`,
+    `with \`motir run ${key}\`.`,
+  ].join('\n');
+}
+
+/**
+ * The listed repositories a run that reached Implemented pushed nothing to (MOTIR-10888) — no
+ * pull request is expected from them, and saying so is what tells a person reading the run
+ * that a repository was left alone rather than forgotten.
+ */
+export function renderUnpushedRepositories(
+  key: string,
+  unlinked: readonly Pick<UndeliveredRepository, 'repository' | 'branch'>[],
 ): string {
   return [
-    `${key}: the work is pushed, but no pull request could be linked to ${key}.`,
-    ...unlinked.map(
-      (u) => `  ${u.repository ?? '(unpinned)'} · ${u.branch ?? '(no branch)'} — ${u.reason}`,
-    ),
-    'The work item stays In Progress: an Implemented card with no linked pull request is',
-    'closed by nothing when the pull request merges. Open the pull request (or link the one',
-    `that exists) and move ${key} to Implemented, or re-run it with \`motir run ${key}\`.`,
+    `${key}: no work was pushed to ${unlinked.length === 1 ? 'this repository' : 'these repositories'}, so ${unlinked.length === 1 ? 'it has' : 'they have'} no pull request:`,
+    ...unlinked.map((u) => `  ${u.repository ?? '(unpinned)'} · ${u.branch ?? '(no branch)'}`),
   ].join('\n');
 }
 
