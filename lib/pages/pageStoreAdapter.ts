@@ -2,10 +2,12 @@ import type { Prisma } from '@/generated/prisma/client';
 import type { PageStore } from '@motir/pages';
 import {
   toLockedPageRow,
+  toPageCommentRow,
   toPageRow,
   toPageVersionRow,
   toPageVersionWithBody,
 } from '@/lib/mappers/pageMappers';
+import { pageCommentRepository } from '@/lib/repositories/pageCommentRepository';
 import { pageRepository } from '@/lib/repositories/pageRepository';
 import { pageVersionRepository } from '@/lib/repositories/pageVersionRepository';
 import { pageWorkItemLinkRepository } from '@/lib/repositories/pageWorkItemLinkRepository';
@@ -216,6 +218,72 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
 
     async positionTaken(projectId, parent, position) {
       return pageRepository.positionTaken(projectId, parent, position, tx);
+    },
+
+    // ── Comments (Story MOTIR-10866 · MOTIR-10872) — `page_comment`, same `tx`. ──
+
+    async findPageCommentRoots(query) {
+      const records = await pageCommentRepository.findRoots(
+        {
+          pageId: query.pageId,
+          status: query.status,
+          order: query.order,
+          after: query.after ? { at: query.after.at, id: query.after.id } : null,
+          limit: query.limit,
+        },
+        tx,
+      );
+      return records.map(toPageCommentRow);
+    },
+
+    async findPageCommentReplies(rootIds) {
+      return (await pageCommentRepository.findReplies(rootIds, tx)).map(toPageCommentRow);
+    },
+
+    async countPageCommentRoots(pageId) {
+      return pageCommentRepository.countRoots(pageId, tx);
+    },
+
+    // The lock and the joined read are two statements in the same transaction:
+    // `FOR UPDATE` is raw SQL, and the author/resolver join is the client's.
+    async lockPageComment(commentId) {
+      if (!(await pageCommentRepository.lockById(commentId, tx))) return null;
+      const record = await pageCommentRepository.findById(commentId, tx);
+      return record ? toPageCommentRow(record) : null;
+    },
+
+    async insertPageComment(row) {
+      const record = await pageCommentRepository.insert(
+        {
+          workspaceId: row.workspaceId,
+          projectId: row.projectId,
+          pageId: row.pageId,
+          authorId: row.authorId,
+          parentCommentId: row.parentCommentId,
+          bodyMd: row.bodyMd,
+          createdAt: row.createdAt,
+          anchor: row.anchor ? new Uint8Array(row.anchor.bytes) : null,
+          anchorQuote: row.anchor ? row.anchor.quote : null,
+        },
+        tx,
+      );
+      return toPageCommentRow(record);
+    },
+
+    async updatePageCommentBody(commentId, bodyMd, editedAt) {
+      return toPageCommentRow(
+        await pageCommentRepository.updateBody(commentId, bodyMd, editedAt, tx),
+      );
+    },
+
+    async deletePageCommentRow(commentId) {
+      await pageCommentRepository.delete(commentId, tx);
+    },
+
+    async setPageCommentResolved(commentId, resolvedAt, resolvedById) {
+      return toPageCommentRow(
+        await pageCommentRepository.setResolved(commentId, resolvedAt, resolvedById, tx),
+      );
     },
   };
 }

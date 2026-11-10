@@ -253,6 +253,15 @@ export default defineConfig({
       'tests/api/pagesSearchRoute.test.ts',
       'tests/components/use-page-search.test.tsx',
       'tests/components/pages-search.test.tsx',
+      // Story MOTIR-10866 (discuss a page as a whole): the comment routes fall under
+      // this lane's `app/api/pages/*/*…/route.ts` globs and the Discussion panel under
+      // `app/**/pages/*/_components/*.tsx`, so the routes' and the panel's suites run
+      // here, with the service's and the story's integration gate (MOTIR-10875).
+      'tests/api/pages-comments-routes.test.ts',
+      'tests/services/pageCommentsService.integration.test.ts',
+      'tests/components/page-discussion-panel.test.tsx',
+      'tests/components/page-comments-client.test.ts',
+      'tests/integration/pageCommentsStoryGate.test.ts',
     ],
     coverage: {
       provider: 'v8',

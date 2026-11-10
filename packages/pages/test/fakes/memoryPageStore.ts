@@ -16,6 +16,11 @@ import {
   type PageVersionRow,
   type PageVersionUpdate,
   type PageVersionWithBody,
+  type PageCommentCounts,
+  type PageCommentInsert,
+  type PageCommentPerson,
+  type PageCommentRootsQuery,
+  type PageCommentRow,
 } from '../../src';
 
 /** A stored page in the fake: the row plus its body columns. */
@@ -43,6 +48,10 @@ export class MemoryPageStore implements PageStore {
   readonly folders = new Map<string, FolderRef>();
   /** Every stored version, in insertion order, across pages. */
   versions: PageVersionWithBody[] = [];
+  /** Every stored page comment, by id. */
+  readonly comments = new Map<string, PageCommentRow>();
+  /** The people a comment can name; an unknown id reads as `{ id, name: id }`. */
+  readonly people = new Map<string, PageCommentPerson>();
   readonly calls: { method: keyof PageStore; args: unknown[] }[] = [];
   private nextId = 0;
 
@@ -322,6 +331,10 @@ export class MemoryPageStore implements PageStore {
     for (const id of ids) this.pages.delete(id);
     // `page_version` cascades with its page.
     this.versions = this.versions.filter((v) => !doomed.has(v.pageId));
+    // So does `page_comment`.
+    for (const row of [...this.comments.values()]) {
+      if (doomed.has(row.pageId)) this.comments.delete(row.id);
+    }
   }
 
   async positionTaken(
@@ -331,6 +344,137 @@ export class MemoryPageStore implements PageStore {
   ): Promise<boolean> {
     this.record('positionTaken', projectId, parent, position);
     return this.level(projectId, parent).some((page) => page.position === position);
+  }
+
+  // ── Comments (MOTIR-10872) ──────────────────────────────────────────────
+
+  /** Registers a person a comment can name. */
+  addPerson(id: string, name: string, image: string | null = null): PageCommentPerson {
+    const person = { id, name, image };
+    this.people.set(id, person);
+    return person;
+  }
+
+  private person(id: string): PageCommentPerson {
+    return this.people.get(id) ?? { id, name: id, image: null };
+  }
+
+  /** A stored comment with its people re-joined, as a read returns it. */
+  private joined(row: PageCommentRow): PageCommentRow {
+    return {
+      ...row,
+      author: this.person(row.authorId),
+      resolvedBy: row.resolvedById === null ? null : this.person(row.resolvedById),
+    };
+  }
+
+  async findPageCommentRoots(query: PageCommentRootsQuery): Promise<PageCommentRow[]> {
+    this.record('findPageCommentRoots', query);
+    const keyOf = (row: PageCommentRow) =>
+      query.status === 'open' ? row.createdAt.getTime() : row.resolvedAt!.getTime();
+    const cmp = (a: PageCommentRow, b: PageCommentRow) => {
+      const d = keyOf(a) - keyOf(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+      return query.order === 'asc' ? d : -d;
+    };
+    const after = query.after;
+    return [...this.comments.values()]
+      .filter(
+        (row) =>
+          row.pageId === query.pageId &&
+          row.parentCommentId === null &&
+          (query.status === 'open') === (row.resolvedAt === null),
+      )
+      .filter((row) => {
+        if (after === null) return true;
+        const d =
+          keyOf(row) - after.at.getTime() || (row.id < after.id ? -1 : row.id > after.id ? 1 : 0);
+        return query.order === 'asc' ? d > 0 : d < 0;
+      })
+      .sort(cmp)
+      .slice(0, query.limit)
+      .map((row) => this.joined(row));
+  }
+
+  async findPageCommentReplies(rootIds: readonly string[]): Promise<PageCommentRow[]> {
+    this.record('findPageCommentReplies', rootIds);
+    const roots = new Set(rootIds);
+    return [...this.comments.values()]
+      .filter((row) => row.parentCommentId !== null && roots.has(row.parentCommentId))
+      .sort(
+        (a, b) =>
+          a.createdAt.getTime() - b.createdAt.getTime() || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      )
+      .map((row) => this.joined(row));
+  }
+
+  async countPageCommentRoots(pageId: string): Promise<PageCommentCounts> {
+    this.record('countPageCommentRoots', pageId);
+    const roots = [...this.comments.values()].filter(
+      (row) => row.pageId === pageId && row.parentCommentId === null,
+    );
+    const open = roots.filter((row) => row.resolvedAt === null).length;
+    return { open, resolved: roots.length - open };
+  }
+
+  async lockPageComment(commentId: string): Promise<PageCommentRow | null> {
+    this.record('lockPageComment', commentId);
+    const row = this.comments.get(commentId);
+    return row ? this.joined(row) : null;
+  }
+
+  async insertPageComment(row: PageCommentInsert): Promise<PageCommentRow> {
+    this.record('insertPageComment', row);
+    this.nextId += 1;
+    const stored: PageCommentRow = {
+      id: `comment-${this.nextId.toString().padStart(4, '0')}`,
+      workspaceId: row.workspaceId,
+      projectId: row.projectId,
+      pageId: row.pageId,
+      parentCommentId: row.parentCommentId,
+      authorId: row.authorId,
+      author: this.person(row.authorId),
+      bodyMd: row.bodyMd,
+      editedAt: null,
+      createdAt: row.createdAt,
+      resolvedAt: null,
+      resolvedById: null,
+      resolvedBy: null,
+      anchor: row.anchor ? new Uint8Array(row.anchor.bytes) : null,
+      anchorQuote: row.anchor ? row.anchor.quote : null,
+    };
+    this.comments.set(stored.id, stored);
+    return this.joined(stored);
+  }
+
+  async updatePageCommentBody(
+    commentId: string,
+    bodyMd: string,
+    editedAt: Date,
+  ): Promise<PageCommentRow> {
+    this.record('updatePageCommentBody', commentId, bodyMd, editedAt);
+    const next = { ...this.comments.get(commentId)!, bodyMd, editedAt };
+    this.comments.set(commentId, next);
+    return this.joined(next);
+  }
+
+  async deletePageCommentRow(commentId: string): Promise<void> {
+    this.record('deletePageCommentRow', commentId);
+    // `parent_comment_id` cascades: a root's replies go with it.
+    for (const row of [...this.comments.values()]) {
+      if (row.parentCommentId === commentId) this.comments.delete(row.id);
+    }
+    this.comments.delete(commentId);
+  }
+
+  async setPageCommentResolved(
+    commentId: string,
+    resolvedAt: Date | null,
+    resolvedById: string | null,
+  ): Promise<PageCommentRow> {
+    this.record('setPageCommentResolved', commentId, resolvedAt, resolvedById);
+    const next = { ...this.comments.get(commentId)!, resolvedAt, resolvedById };
+    this.comments.set(commentId, next);
+    return this.joined(next);
   }
 }
 
