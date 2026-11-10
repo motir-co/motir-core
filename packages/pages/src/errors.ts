@@ -275,3 +275,83 @@ export class PageHoldsFrozenVersionError extends PageError {
     this.name = 'PageHoldsFrozenVersionError';
   }
 }
+
+// ── Comments (Story MOTIR-10866 · MOTIR-10872) ─────────────────────────────
+
+/** A comment that does not exist, or belongs to another page. */
+export class PageCommentNotFoundError extends PageError {
+  readonly code = 'PAGE_COMMENT_NOT_FOUND' as const;
+  readonly status = 404 as const;
+  constructor(readonly commentId: string) {
+    super('Comment not found.');
+    this.name = 'PageCommentNotFoundError';
+  }
+}
+
+/** A reply to a reply. A page's threads are one level deep. */
+export class PageCommentReplyDepthError extends PageError {
+  readonly code = 'PAGE_COMMENT_REPLY_DEPTH_EXCEEDED' as const;
+  readonly status = 422 as const;
+  constructor(readonly parentCommentId: string) {
+    super('You can only reply to the first comment of a thread.');
+    this.name = 'PageCommentReplyDepthError';
+  }
+}
+
+/** An edit or a delete by someone who neither wrote the comment nor moderates comments. */
+export class PageCommentForbiddenError extends PageError {
+  readonly code = 'PAGE_COMMENT_FORBIDDEN' as const;
+  readonly status = 403 as const;
+  constructor(readonly action: 'edit' | 'delete') {
+    super(
+      action === 'edit'
+        ? 'Only the author or a comment moderator can edit this comment.'
+        : 'Only the author or a comment moderator can delete this comment.',
+    );
+    this.name = 'PageCommentForbiddenError';
+  }
+}
+
+/** A resolve or a reopen of a reply. Resolution belongs to the thread, held on its root. */
+export class PageCommentNotRootError extends PageError {
+  readonly code = 'PAGE_COMMENT_NOT_ROOT' as const;
+  readonly status = 422 as const;
+  constructor(readonly commentId: string) {
+    super('Only a thread can be resolved or reopened, not a reply in it.');
+    this.name = 'PageCommentNotRootError';
+  }
+}
+
+/** A comment body that is empty or whitespace only. */
+export class PageCommentBodyEmptyError extends PageError {
+  readonly code = 'PAGE_COMMENT_BODY_EMPTY' as const;
+  readonly status = 422 as const;
+  constructor() {
+    super('A comment cannot be empty.');
+    this.name = 'PageCommentBodyEmptyError';
+  }
+}
+
+/** An inline anchor with no position bytes, or a blank quote. */
+export class PageCommentAnchorInvalidError extends PageError {
+  readonly code = 'PAGE_COMMENT_ANCHOR_INVALID' as const;
+  readonly status = 400 as const;
+  constructor(readonly reason: 'empty_bytes' | 'blank_quote') {
+    super(
+      reason === 'empty_bytes'
+        ? 'The comment anchor has no position.'
+        : 'The comment anchor quotes no text.',
+    );
+    this.name = 'PageCommentAnchorInvalidError';
+  }
+}
+
+/** A thread-list cursor this package did not issue, or one issued for another list. */
+export class PageCommentCursorInvalidError extends PageError {
+  readonly code = 'PAGE_COMMENT_CURSOR_INVALID' as const;
+  readonly status = 400 as const;
+  constructor() {
+    super('The comment cursor is not valid. Pass back the nextCursor you were given.');
+    this.name = 'PageCommentCursorInvalidError';
+  }
+}
