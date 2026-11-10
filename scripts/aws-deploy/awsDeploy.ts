@@ -226,7 +226,8 @@ async function roll(
   } catch (err) {
     log(`roll: ${errorText(err)}`);
   }
-  await rollBack(aws, target.cluster, services, updated, log);
+  // The secret goes back FIRST: a task reads it only when it starts, and the
+  // rollback starts tasks. The restore never throws, so the rollback always runs.
   if (result.hostedAgentImage) {
     result.hostedAgentImage.restored = await restoreHostedAgentImage(
       aws,
@@ -235,6 +236,7 @@ async function roll(
       log,
     );
   }
+  await rollBack(aws, target.cluster, services, updated, log);
   const superseded = result.services.filter((s) => s.rolloutState === 'SUPERSEDED');
   if (superseded.length > 0) {
     const names = superseded.map((s) => s.name).join(', ');

@@ -19,7 +19,7 @@ The deploy also applies the hosted-agent image pin (MOTIR-10882).
 `<prefix>/core/motir-hosted-agent-image` secret, the `MOTIR_HOSTED_AGENT_IMAGE`
 the web and worker read. ECS reads a secret only when a task starts, so the
 roll is what makes the new tasks read it. A secret that already holds the pin is
-left alone. When the roll fails, the script puts the previous image back, so
+left alone. When the roll fails, the script puts the previous image back before it rolls back, so
 the rolled-back tasks boot what they booted before.
 
 Nobody edits the file by hand in the normal course. After every publish on

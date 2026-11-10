@@ -464,16 +464,17 @@ describe('the hosted-agent image pin (MOTIR-10882)', () => {
     expect(err.join('\n')).toContain('(was empty)');
   });
 
-  it('puts the previous image back when the roll fails, so the rolled-back tasks boot it', async () => {
+  it('puts the previous image back before rolling back, so the rolled-back tasks boot it', async () => {
     const { aws } = coreFleet();
     aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'FAILED' }));
     const { code, result } = await deploy(aws, PINNED);
     expect(code).toBe(1);
     expect(aws.secrets.get(HOSTED_AGENT_SECRET)).toBe(LIVE_AGENT);
+    // The rollback's updateService calls come last; the restore lands before them.
     const methods = aws.methods();
-    expect(methods.lastIndexOf('putSecretValue')).toBeGreaterThan(
-      methods.lastIndexOf('updateService'),
-    );
+    const restore = methods.lastIndexOf('putSecretValue');
+    expect(restore).toBeGreaterThan(methods.indexOf('updateService'));
+    expect(restore).toBeLessThan(methods.lastIndexOf('updateService'));
     expect(result).toMatchObject({
       recorded: false,
       hostedAgentImage: { previous: LIVE_AGENT, written: true, restored: true },
