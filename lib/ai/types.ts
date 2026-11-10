@@ -1474,6 +1474,55 @@ export interface PlannerReviewModelWriteResult {
   updatedAt: string;
 }
 
+/** A planning-side function an org may choose a model for (motir-ai MOTIR-10841). */
+export type OrgPlannerFunction = 'planning' | 'guide' | 'debug' | 'ask';
+
+/** One org override row, as `GET /v1/orgs/:coreOrganizationId/planner-model-overrides` answers it. */
+export interface OrgPlannerModelOverrideRowRead {
+  function: OrgPlannerFunction;
+  /** The stored model, or null when the org has no override for the function. */
+  model: string | null;
+  /** null when unset; false when the stored model is no longer offered for planning. */
+  offered: boolean | null;
+  /** True only while the org qualifies AND the stored model is offered. */
+  applies: boolean;
+  updatedAt: string | null;
+  updatedByCoreUserId: string | null;
+}
+
+/** The model a function resolves to for the org, and the layer it came from. */
+export interface OrgPlannerEffectiveModelRead {
+  function: OrgPlannerFunction;
+  model: string;
+  source: 'org' | 'function_default' | 'audience' | 'fallback';
+}
+
+/** `GET /v1/orgs/:coreOrganizationId/planner-model-overrides` (motir-ai MOTIR-10841). */
+export interface OrgPlannerModelOverridesRead {
+  /** False for an org motir-ai has never seen (or erased) — answered, never provisioned. */
+  known: boolean;
+  qualifies: boolean;
+  overrides: OrgPlannerModelOverrideRowRead[];
+  effective: OrgPlannerEffectiveModelRead[];
+  offered: PlannerOfferedModel[];
+}
+
+/** The `PUT /v1/orgs/:coreOrganizationId/planner-model-overrides` body. */
+export interface OrgPlannerModelOverrideWriteInput {
+  function: OrgPlannerFunction;
+  /** A model offered for planning, or null to clear the override. */
+  model: string | null;
+  actorCoreUserId: string;
+}
+
+/** What that PUT answers — previous → new, for the caller's record. */
+export interface OrgPlannerModelOverrideWriteResult {
+  function: OrgPlannerFunction;
+  previousModel: string | null;
+  model: string | null;
+  updatedAt: string;
+}
+
 /** The `PUT /v1/planner-model-settings` body. */
 export interface PlannerModelWriteInput {
   audience: PlannerAudience;

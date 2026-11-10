@@ -43,6 +43,7 @@ import {
   PlannerModelNotOfferedError,
   PlannerModelNotQualifiedError,
   PlannerModelUnreachableError,
+  OrgModelChoiceNotQualifiedError,
   AI_JOB_ABANDONED_PROBLEM_CODE,
   calculatorRefusalOf,
   calculatorUnavailableOf,
@@ -76,6 +77,9 @@ import type {
   PlannerModelWriteResult,
   PlannerReviewModelWriteInput,
   PlannerReviewModelWriteResult,
+  OrgPlannerModelOverridesRead,
+  OrgPlannerModelOverrideWriteInput,
+  OrgPlannerModelOverrideWriteResult,
   PreplanStateQuery,
   Problem,
   RawBillingHistoryResponse,
@@ -3064,6 +3068,106 @@ export async function setPlannerModel(
   const body = (await res.json().catch(() => null)) as PlannerModelWriteResult | null;
   if (!body || typeof body.previousModel !== 'string' || typeof body.model !== 'string') {
     throw new MotirAiUnavailableError('motir-ai answered a body that is not a planner-model write');
+  }
+  return body;
+}
+
+// ONE org's planning-side model overrides — Planning, Guide, Debug and Ask
+// (motir-ai MOTIR-10841, core MOTIR-10845). Keyed by motir-core's org id; an org
+// motir-ai has never seen is answered `known: false`, never provisioned. Like the
+// console's calls these THROW rather than degrade: the org room's service turns an
+// unavailable motir-ai into its own `unreadable` answer.
+
+function isOrgPlannerModelOverridesRead(body: unknown): body is OrgPlannerModelOverridesRead {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Record<string, unknown>;
+  return (
+    typeof b['known'] === 'boolean' &&
+    typeof b['qualifies'] === 'boolean' &&
+    Array.isArray(b['overrides']) &&
+    Array.isArray(b['effective']) &&
+    Array.isArray(b['offered'])
+  );
+}
+
+const orgOverridesPath = (url: string, coreOrganizationId: string) =>
+  `${url}/v1/orgs/${encodeURIComponent(coreOrganizationId)}/planner-model-overrides`;
+
+/**
+ * GET /v1/orgs/:coreOrganizationId/planner-model-overrides — the org's stored
+ * overrides, whether it qualifies, the effective model per function and the offered
+ * planning models.
+ *
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not the overrides shape; the §5 typed error for any other non-2xx.
+ */
+export async function getOrgPlannerModelOverrides(
+  coreOrganizationId: string,
+): Promise<OrgPlannerModelOverridesRead> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(orgOverridesPath(url, coreOrganizationId), {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body: unknown = await res.json().catch(() => null);
+  if (!isOrgPlannerModelOverridesRead(body)) {
+    throw new MotirAiUnavailableError(
+      'motir-ai answered a body that is not org planner-model overrides',
+    );
+  }
+  return body;
+}
+
+/**
+ * PUT /v1/orgs/:coreOrganizationId/planner-model-overrides — set or clear one
+ * function's override.
+ *
+ * @throws OrgModelChoiceNotQualifiedError for `permission_denied` (the org does not
+ *   qualify, or motir-ai has never seen it) — mapped BEFORE `errorFromProblem`,
+ *   which would read it as a rejected service credential.
+ * @throws PlannerModelNotOfferedError for `validation_error`, naming the model.
+ * @throws PlannerModelUnreachableError when its probe failed (`model_unreachable`).
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not an override write; the §5 typed error for any other non-2xx.
+ */
+export async function setOrgPlannerModelOverride(
+  coreOrganizationId: string,
+  input: OrgPlannerModelOverrideWriteInput,
+): Promise<OrgPlannerModelOverrideWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(orgOverridesPath(url, coreOrganizationId), {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  const named = input.model ?? '';
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'permission_denied') {
+      throw new OrgModelChoiceNotQualifiedError(coreOrganizationId);
+    }
+    if (problem.code === 'validation_error') {
+      throw new PlannerModelNotOfferedError(named, problem.detail);
+    }
+    if (problem.code === 'model_unreachable') {
+      throw new PlannerModelUnreachableError(
+        named,
+        unreachableReason(problem.detail, problem.title),
+      );
+    }
+    throw errorFromProblem(problem);
+  }
+  const body = (await res.json().catch(() => null)) as OrgPlannerModelOverrideWriteResult | null;
+  const modelOrNull = (v: unknown) => v === null || typeof v === 'string';
+  if (
+    !body ||
+    typeof body.function !== 'string' ||
+    !modelOrNull(body.previousModel) ||
+    !modelOrNull(body.model) ||
+    typeof body.updatedAt !== 'string'
+  ) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not an org override write');
   }
   return body;
 }
