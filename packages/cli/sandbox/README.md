@@ -1617,6 +1617,38 @@ Not in scope here, deliberately: signing / SBOM / provenance attestation (a real
 hardening concern, and its own decision — half of it would be worse than none),
 and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 
+### A partial release, and re-running one (MOTIR-10884)
+
+`cli-v0.17.2` built and smoke-tested all nine images, then GHCR refused six of
+the pushes with an intermittent `denied: permission_denied: write_package`. The
+run ended red, every check of the published set above was skipped because each
+needs every leg, and nothing said which images were missing. The lane now
+handles that in three places:
+
+- **A refused push is retried, and only a push.** Each image is built for both
+  architectures in one step and pushed in the next, through
+  [`push-with-retry.mjs`](smoke/push-with-retry.mjs): a registry refusal
+  (`denied`, `unauthorized`, a 5xx, a 429, a timeout) is retried up to three
+  times with a 30 s then 60 s backoff, re-pushing the image already built. A
+  build failure is never retried.
+- **`sandbox-complete` names what is missing.** Once every leg has ended,
+  however it ended, it asks the registry anonymously for each name's
+  `:<name>-<version>` tag ([`release-set.mjs verify`](smoke/release-set.mjs)) and
+  fails naming each image the release lacks.
+- **A re-run builds only the gap.** Before anything is built, the setup job asks
+  the same question (`release-set.mjs plan`) and the matrix runs only the
+  profiles that have no tag at this version; the base job is skipped when
+  `:base-<version>` exists. The digests already published are handed to the
+  verify jobs and the record, so they see the whole release. To finish a partial
+  release, re-run its tag's workflow run ("Re-run all jobs"), or dispatch
+  `Release sandbox images` on the tag ref:
+
+```sh
+gh workflow run release-sandbox.yml --ref cli-v<x.y.z>
+```
+
+A dispatch does not write the README record, which runs on a tag push only.
+
 ## Files
 
 | File                             | What it is                                                                                                                                                                                                                                                                                                                   |
