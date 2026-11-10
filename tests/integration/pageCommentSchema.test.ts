@@ -191,6 +191,16 @@ describe('page_comment — threads and cascades', () => {
     expect(left.map((r) => r.id)).toEqual([other.id]);
   });
 
+  it('leaves the root when a reply is deleted', async () => {
+    const { base } = await seed();
+    const root = await makeComment(base);
+    const reply = await makeComment({ ...base, parentCommentId: root.id });
+
+    await adminDb.pageComment.delete({ where: { id: reply.id } });
+
+    expect(await adminDb.pageComment.findUnique({ where: { id: root.id } })).not.toBeNull();
+  });
+
   it('deletes a page’s comments with the page', async () => {
     const { page, base } = await seed();
     const root = await makeComment(base);
