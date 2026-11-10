@@ -90,9 +90,13 @@ export async function stubAiAccess(page: Page): Promise<void> {
  * refused as `ERR_BLOCKED_BY_CLIENT`.
  */
 export async function routeJobStream(page: Page, sse: SseFrameServer): Promise<void> {
-  await page.route('**/api/work-items/*/ai/plan/*/stream', (route) =>
-    route.continue({ url: sse.url, headers: route.request().headers() }),
-  );
+  await page.route('**/api/work-items/*/ai/plan/*/stream', (route) => {
+    // The job the page subscribed to, so the server writes its frames under that
+    // job's id and numbers them per job, as motir-ai does (MOTIR-10880).
+    const jobId = /\/ai\/plan\/([^/]+)\/stream$/.exec(new URL(route.request().url()).pathname)?.[1];
+    const url = jobId ? `${sse.url}?jobId=${jobId}` : sse.url;
+    return route.continue({ url, headers: route.request().headers() });
+  });
 }
 
 /** Ask from the card's composer and wait for the run's stream to reach the frame

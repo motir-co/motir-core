@@ -31,6 +31,7 @@ import { signIn } from './_helpers/shell-session';
 import { persistAskTurn } from './_helpers/plan-session-turn';
 import { markProjectOnboarded } from './_helpers/ai-augment-replan-seed';
 import { seedFolderPlan, seedFolderRoadmap } from './_helpers/roadmap-seed';
+import { jobStreamBody } from './_helpers/job-stream-frames';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -92,10 +93,12 @@ async function stubAsk(page: Page, planId: string): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body:
-        `event: search\ndata: {}\n\n` +
-        `event: planned\ndata: {"proposed":2}\n\n` +
-        `event: done\ndata: {}\n\n`,
+      // motir-ai's wire: each progress frame in its `{ jobId, seq, data }` envelope.
+      body: jobStreamBody(JOB_ID, [
+        ['search', {}],
+        ['planned', { proposed: 2 }],
+        ['done', {}],
+      ]),
     });
   });
 }

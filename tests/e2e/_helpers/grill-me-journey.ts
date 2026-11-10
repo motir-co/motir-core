@@ -227,12 +227,10 @@ export async function ask(
   return { planId: plan.id, sessionId: session.id };
 }
 
-let frameSeq = 0;
-
-/** The run settles what it is planning: its conversation phase is over. */
+/** The run settles what it is planning: its conversation phase is over. The
+ *  frame server numbers it as motir-ai numbers a job's progress (MOTIR-10880). */
 export async function settleTarget(page: Page, sse: SseFrameServer): Promise<void> {
-  frameSeq += 1;
-  sse.write('target_settled', { seq: 1_000 + frameSeq });
+  sse.write('target_settled', {});
   await expect(handoff(page)).toBeVisible();
 }
 

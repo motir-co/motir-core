@@ -52,6 +52,7 @@ import {
   PLAN_CHANGE_JOB_ID,
 } from './_helpers/ai-augment-replan-seed';
 import { seedPlanningAnchorTree, PLANNING_ANCHOR_PASSWORD } from './_helpers/planning-anchor-seed';
+import { jobStreamBody } from './_helpers/job-stream-frames';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -142,7 +143,12 @@ async function stubStream(page: Page, jobId: string): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: `event: search\ndata: {}\n\nevent: planned\ndata: {"proposed":1}\n\nevent: done\ndata: {}\n\n`,
+      // motir-ai's wire: each progress frame in its `{ jobId, seq, data }` envelope.
+      body: jobStreamBody(jobId, [
+        ['search', {}],
+        ['planned', { proposed: 1 }],
+        ['done', {}],
+      ]),
     });
   });
 }
