@@ -117,7 +117,59 @@ async function benSession(fx: WorkItemFixture) {
   return user;
 }
 
-/** git/gh with the dead run's branch on origin and nothing else to say. */
+/**
+ * The pull request the continue's agent opened on the dead run's branch (MOTIR-10877): a
+ * repository the workspace connected (not pinned to the project, so the card stays unpinned and
+ * runs where it ran) with pull request #1, OPEN, and one passing check. The run now LINKS the
+ * pull request it finds with `gh pr view` and then watches its CI, so the world it runs in has
+ * to hold one — a green one, so the watch ends on its first read as it does on a green build.
+ */
+const PR_URL = 'https://github.com/moooon/web/pull/1';
+async function openedPullRequest(fx: WorkItemFixture, branch: string): Promise<void> {
+  const inst = await adminDb.githubInstallation.create({
+    data: {
+      installationId: `inst-${randomToken(8)}`,
+      workspaceId: fx.workspaceId,
+      accountLogin: 'moooon',
+      accountType: 'Organization',
+      provider: 'github',
+    },
+  });
+  const repo = await adminDb.githubRepo.create({
+    data: {
+      installationId: inst.id,
+      workspaceId: fx.workspaceId,
+      organizationId: fx.workspace.organizationId,
+      repoId: `repo-web-${randomToken(8)}`,
+      owner: 'moooon',
+      name: 'web',
+      defaultBranch: 'main',
+      archived: false,
+      provider: 'github',
+    },
+  });
+  const pr = await adminDb.githubPullRequest.create({
+    data: {
+      repoId: repo.id,
+      number: 1,
+      state: 'open',
+      merged: false,
+      headRef: branch,
+      baseRef: 'main',
+    },
+  });
+  await adminDb.githubCheckRun.create({
+    data: {
+      pullRequestId: pr.id,
+      commitSha: 'abc1234def5678abc1234def5678abc1234def56',
+      checkName: 'ci',
+      conclusion: 'success',
+      conclusionAt: new Date(),
+    },
+  });
+}
+
+/** git/gh with the dead run's branch on origin, and its open pull request for `gh pr view`. */
 function scriptedGit(branch: string, seen: string[]): CommandRunner {
   const worktrees = new Map<string, string>();
   const ok = (stdout = '') => ({ exitCode: 0, stdout, stderr: '' });
@@ -140,6 +192,19 @@ function scriptedGit(branch: string, seen: string[]): CommandRunner {
     if (bin === 'git' && args[0] === 'rev-list') return ok('1');
     if (bin === 'git' && (args[0] === 'ls-remote' || args[0] === 'log')) {
       return ok(`abc123\trefs/heads/${branch}`);
+    }
+    if (bin === 'gh' && args[0] === 'pr' && args[1] === 'view') {
+      return args[2] === branch || args[2] === PR_URL
+        ? ok(
+            JSON.stringify({
+              url: PR_URL,
+              state: 'OPEN',
+              headRefName: branch,
+              headRefOid: '',
+              baseRefName: 'main',
+            }),
+          )
+        : { exitCode: 1, stdout: '', stderr: 'no pull requests found' };
     }
     return ok();
   };
@@ -193,6 +258,7 @@ describe('motir continue <KEY> — against the real claim and prompt routes', ()
       branch,
     });
     const ben = await benSession(fx);
+    await openedPullRequest(fx, branch);
     const seen: string[] = [];
 
     await continueCommand(
@@ -228,6 +294,8 @@ describe('motir continue <KEY> — against the real claim and prompt routes', ()
     ).toBe(2);
     const closed = await adminDb.dispatchRun.findUniqueOrThrow({ where: { id: cont.id } });
     expect(closed.status).not.toBe('running');
+    // THE RUN LINKED the pull request its agent opened (MOTIR-10877), with its own credential.
+    expect(await adminDb.workItemDelivery.count({ where: { workItemId: card.id } })).toBe(1);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
