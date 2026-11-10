@@ -292,6 +292,72 @@ describe('the placement matrix — which card each question lands on (points 1�
   });
 });
 
+// ── a story run whose own pull requests merged before its video (MOTIR-10837) ───
+
+describe('a STORY run whose own pull requests ALL merged before the receipt was published (MOTIR-10837)', () => {
+  /** The story run, its one pull request already landed, its E2E child done. */
+  async function landedStoryRun(merged: boolean) {
+    const run = await storyRun('success');
+    await adminDb.githubPullRequest.update({
+      where: { id: run.pr.id },
+      data: { state: 'closed', merged },
+    });
+    await workItemsService.updateStatus(run.e2e.id, 'done', fx.ctx);
+    return run;
+  }
+
+  it('the publish asks the acceptance question ALONE, and approving it moves the story to done', async () => {
+    const { story, e2e } = await landedStoryRun(true);
+
+    const published = await publishVia(e2e.identifier, 'c0ffee1');
+    expect(published.isError, JSON.stringify(published)).toBeFalsy();
+    // No merge question: there is nothing left to land.
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'awaiting']]);
+
+    const acceptance = await adminDb.approvalGate.findFirstOrThrow({
+      where: { workItemId: story.id, kind: 'acceptance_result' },
+    });
+    await pullRequestMergeService.approveAndMerge(
+      { gateId: acceptance.id, source: 'ui', noteMd: null, stamp: DECIDED_WITHOUT_A_READER },
+      fx.ctx,
+    );
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } })).status).toBe(
+      'done',
+    );
+    expect(await gatesOn(story.id)).toEqual([['acceptance_result', 'approved']]);
+  });
+
+  it('a story run merged on the HOST with its acceptance question awaiting keeps that question — only the merge question is withdrawn', async () => {
+    const { story, e2e, pr } = await storyRun('success');
+    await workItemsService.updateStatus(e2e.id, 'done', fx.ctx);
+    await publishVia(e2e.identifier, 'c0ffee1');
+    expect(await gatesOn(story.id)).toEqual([
+      ['acceptance_result', 'awaiting'],
+      ['pull_request_approval', 'awaiting'],
+    ]);
+
+    await adminDb.githubPullRequest.update({
+      where: { id: pr.id },
+      data: { state: 'closed', merged: true },
+    });
+    await withWorkspaceContext(fx.ctx, (tx) => withdrawPullRequestApprovalGatesOnClose(pr.id, tx));
+
+    const rows = await adminDb.approvalGate.findMany({ where: { workItemId: story.id } });
+    expect(rows.map((g) => [g.kind, g.state, g.supersededCause]).sort()).toEqual([
+      ['acceptance_result', 'awaiting', null],
+      ['pull_request_approval', 'superseded', 'member_closed'],
+    ]);
+  });
+
+  it('a pull request CLOSED WITHOUT MERGING still holds the question back', async () => {
+    const { story, e2e } = await landedStoryRun(false);
+
+    const published = await publishVia(e2e.identifier, 'c0ffee1');
+    expect(published.isError, JSON.stringify(published)).toBeFalsy();
+    expect(await gatesOn(story.id)).toEqual([]);
+  });
+});
+
 // ── the lifecycles ──────────────────────────────────────────────────────────
 
 describe('the lifecycles', () => {

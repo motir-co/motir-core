@@ -245,8 +245,13 @@ export async function gateSetFor(
   // the predicate needs to know whether anything under the story is still open. One
   // recursive read, and only for a card holding a receipt and no delivery set: every other
   // card pays nothing.
+  //
+  // ⚠️ AND FOR A STORY RUN WHOSE EVERY DELIVERY HAS MERGED (Bug MOTIR-10837). Its merge
+  // question has nothing left to land, so the video cannot ride it; the predicate asks it
+  // as a finished story's, on this same settled-subtree input. (`every` over an empty set
+  // is the subtask-run case above.)
   const subtreeSettled =
-    currentReceipt !== null && deliveries.length === 0
+    currentReceipt !== null && deliveries.every((delivery) => delivery.pullRequest.merged === true)
       ? (await workItemRepository.findSubtreeMembersForValidity(item.id, item.workspaceId, tx))
           .filter((member) => member.id !== item.id)
           .every((member) =>
