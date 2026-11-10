@@ -263,4 +263,14 @@ describe('planningOutcomeOf — the arm the island’s suite leaves unread', () 
       planStatus: 'approved',
     });
   });
+
+  // Bug MOTIR-9006: being approved between two polls — the written outcome, and the row's
+  // door is the planning surface, where the approval's progress is drawn.
+  it('a plan being APPROVED between two polls is the written outcome, with its own status', () => {
+    expect(planningOutcomeOf({ status: 'approving', decisionReason: null })).toEqual({
+      chipKey: 'planned',
+      lineKey: 'plannedLine',
+      planStatus: 'approving',
+    });
+  });
 });

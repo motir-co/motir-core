@@ -4404,3 +4404,41 @@ neither `implemented → todo` nor `planning → implemented`.
 outcomes rather than predicting one: `To Do, Blocked, or In Progress (re-scoped while Implemented;
 decided when this plan is approved)`, or `<prior> (returned when this plan is approved)` for a card
 given back its own status.
+
+## AMENDMENT 29 — a plan being approved reads `approving` (bug MOTIR-9006, 2026-11-10)
+
+Approve materialized every proposal inside ONE transaction and wrote `approved` at its end, so under
+READ COMMITTED every other reader saw `planned` (and an `awaiting` gate) until the commit. A reader
+who closed the overlay mid-approve found the plan still _Waiting for approval_; re-opening it offered
+Approve, Decline, edit and revise on a plan halfway through being written, and each of those queued
+on the plan's lock and then failed — on Prisma's default budget as a bare P2028, or, for a revise,
+after dispatching a paid planning job.
+
+**§1 — the sixth member.** `PlanStatus` gains `approving`, with `Plan.approvingAt`. It is NOT a
+private column this time (contrast AMENDMENT 2's `decidedById` and MOTIR-3189's `decisionReason`):
+the state is one every reader must see and every writer must refuse, and a status member makes the
+existing `status === 'planned'` predicates refuse it with no change — the safe direction.
+
+**§2 — the claim.** An approve CLAIMS its plan (`planned` → `approving`) in a short transaction of its
+own, under the plan lock, after the revision-lease and status checks and a comparison of the press's
+stamp with the live digest (a stale press claims nothing; the door refuses it stale). The plan gate's
+handler runs it in `beforeTransaction`, so every door claims; the plain body runs it too. The long
+transaction then materializes ONLY the plan it claimed — `approvingAt` is the token — and its
+`approved` write clears the column. A rolled-back approve gives the claim back first
+(`approveFailure`), guarded in the UPDATE's WHERE on the token. A claim whose approver died is given
+back by the planning-lock sweep after `STALLED_APPROVAL_AFTER_MS` (`stalledPlanApprovalService`).
+
+**§3 — the refusals.** Every writer refuses an `approving` plan with `PLAN_APPROVING` (409,
+`PlanApprovingError`, a `PlanNotEditableError`) BEFORE taking the plan's lock — a plain read of the
+committed claim — because the approving transaction holds that lock for as long as materialize runs.
+The status-contract callers (`approvePlan`, the v1 plan-approval route) hear it as
+`PLAN_NOT_IN_EXPECTED_STATUS` with `planStatus: 'approving'`.
+
+**§4 — the predicate sweep this addendum's MOTIR-4129 lesson owes.** Every hardcoded `PlanStatus` list
+was classified by the question it asks. UNDECIDED (`approving` added): the session reads
+(`UNDECIDED_PLAN_STATUSES`), the plan hold (`holdsWhile` → `always`), the plan destination, the AI
+pending-plans boundary, the target-lock sweep's never-expire set. NOT a person's decision (left):
+`WAITING_PLAN_STATUSES`, `countAwaitingDecisionBySession`, the failure-list `has a plan waiting`
+arm, the lapsed-revision and revision-hold reads (an approving plan cannot hold a lease). SILENT:
+the work-item pending-plan notice (`WORK_ITEM_PENDING_PLAN_SILENT_STATUSES`) — the decision is made.
+The session list carries `approving` as a ROW state, not a filter segment: it lasts seconds.

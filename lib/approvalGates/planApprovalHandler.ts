@@ -7,7 +7,7 @@ import type {
   GateRoutingArgs,
 } from '@/lib/approvalGates/registry';
 import type { PlanGateHeldDTO } from '@/lib/dto/approvalGate';
-import type { ApprovePlanPreparation } from '@/lib/services/plansService';
+import type { ClaimedApprovePlan } from '@/lib/services/plansService';
 import {
   ApprovalGateStaleSubjectError,
   ApprovalGateVerbNotOfferedError,
@@ -15,6 +15,7 @@ import {
 import { planSubjectVersion } from '@/lib/approvalGates/planApprovalDigest';
 import { revisionLeaseOf, type RevisionLeaseRow } from '@/lib/planChange/revisionLease';
 import {
+  PlanApprovingError,
   PlanNotFoundError,
   PlanNotInExpectedStatusError,
   PlanRevisionInFlightError,
@@ -137,8 +138,17 @@ export async function readPlanGateHeld(
  * FIRST, a plan a revision holds (Bug MOTIR-8208). A revision re-opens its plan to
  * `generating`, so the status test alone would refuse it as not `planned` and drop
  * the reason that actually holds: who is revising it, and until when.
+ *
+ * ⚠️ AN APPROVE PASSES `claimedAt` (Bug MOTIR-9006): its own claim moved the plan to
+ * `approving` before this transaction opened, so the status it must find is that
+ * claim — `approveWithin` checks the token. A decline passes nothing, and a plan
+ * somebody else is approving is refused `PLAN_APPROVING`.
  */
-async function assertDecidable(plan: Plan, tx: Prisma.TransactionClient): Promise<Plan> {
+async function assertDecidable(
+  plan: Plan,
+  tx: Prisma.TransactionClient,
+  claimed = false,
+): Promise<Plan> {
   // A re-opening revision that LAPSED gives the plan back to `planned` first — the
   // lease is the authority, and a lapsed lease made the plan decidable before any
   // revision re-opened anything.
@@ -150,6 +160,8 @@ async function assertDecidable(plan: Plan, tx: Prisma.TransactionClient): Promis
   if (held) {
     throw new PlanRevisionInFlightError(plan.id, held.heldBy, new Date(held.expiresAt));
   }
+  if (claimed) return plan;
+  if (plan.status === 'approving') throw new PlanApprovingError(plan.id, plan.approvingAt);
   if (plan.status !== 'planned') {
     throw new PlanNotInExpectedStatusError(plan.id, plan.status, 'planned');
   }
@@ -221,34 +233,53 @@ export const planApprovalGateHandler: GateHandler<Plan> = {
   transactionBudget: { timeoutMs: 30_000, maxWaitMs: 10_000 },
 
   // APPROVE's pre-transaction phase — the reads that open their own context and the
-  // best-effort repository-set proposal (`approvePlan`'s, unchanged). A plan that is
+  // best-effort repository-set proposal (`approvePlan`'s, unchanged), then THE CLAIM
+  // (Bug MOTIR-9006): `approving` is committed before the door's long transaction
+  // opens, so every reader sees the approval while it materializes. A plan that is
   // gone prepares nothing: the verb then answers the stale-subject refusal.
-  async beforeTransaction({ subjectId, decision, ctx }: GateOutsideTransactionArgs) {
+  //
+  // DECLINE claims nothing, but a plan being approved is refused HERE, before the door
+  // takes the plan's lock — which the approving transaction holds for as long as it
+  // materializes, so a decline that reached it would only queue and then fail.
+  async beforeTransaction({ subjectId, decision, ctx, stamp }: GateOutsideTransactionArgs) {
+    const plans = await lazyPlansService();
+    if (decision === 'decline') {
+      await plans.refusePlanBeingApproved(subjectId, ctx);
+      return undefined;
+    }
     if (decision !== 'approve') return undefined;
+    let prep;
     try {
-      return await (await lazyPlansService()).prepareApprovePlan(subjectId, ctx);
+      prep = await plans.prepareApprovePlan(subjectId, ctx);
     } catch (err) {
       if (err instanceof PlanNotFoundError) return undefined;
       throw err;
     }
+    return plans.claimApprovePlan(prep, ctx, stamp ?? null);
   },
 
-  // The lazy `stale` backstop and the timeout's typed refusal — `approvePlan`'s
-  // post-rollback handling, applied to the door's rolled-back transaction.
+  // The claim given back, the lazy `stale` backstop and the timeout's typed refusal —
+  // `approvePlan`'s post-rollback handling, applied to the door's rolled-back transaction.
   async afterRollback(err: unknown, { decision, ctx, prepared }: GateOutsideTransactionArgs) {
     if (decision !== 'approve' || !prepared) return err;
-    return (await lazyPlansService()).approveFailure(err, prepared as ApprovePlanPreparation, ctx);
+    return (await lazyPlansService()).approveFailure(err, prepared as ClaimedApprovePlan, ctx);
   },
 
   /** APPROVE — materialize the plan exactly as `approvePlan` does (§11.4, §11.5). */
   async approve(args: GateEffectArgs): Promise<GateEffect> {
     const { gate, ctx, tx } = args;
     const found = await planOf(gate, tx);
-    if (!found || !args.prepared) throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
-    const plan = await assertDecidable(found, tx);
+    const prepared = args.prepared as ClaimedApprovePlan | undefined;
+    // No claim: the press's stamp had moved when the claim compared it, and the door's
+    // own stale refusal ran first — unless the proposals moved BACK in between, which
+    // is still a press against a version nobody claimed.
+    if (!found || !prepared?.claimedAt) {
+      throw new ApprovalGateStaleSubjectError(gate.id, ['subject']);
+    }
+    const plan = await assertDecidable(found, tx, true);
     const { afterCommit } = await (
       await lazyPlansService()
-    ).approvePlanWithin(tx, plan.id, ctx, args.prepared as ApprovePlanPreparation, {
+    ).approvePlanWithin(tx, plan.id, ctx, prepared, {
       provisionalProjectName: provisionalProjectNameOf(args),
     });
     return planDecisionEffect(afterCommit);

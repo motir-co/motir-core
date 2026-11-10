@@ -7436,9 +7436,22 @@ model ApiToken {
 /// carrying post-close drift used to break silently, by staying `planned` and
 /// failing at the button. Reachable only from `planned`; a `generating` plan is
 /// in front of nobody and has nothing to be stale about.
+///
+/// `approving` — an approve has CLAIMED the plan and is materializing it
+/// (Bug MOTIR-9006). Written in its own short transaction under the plan lock,
+/// after `planned` and the reader's stamp are checked, so every other reader
+/// sees it while the long materialize transaction is still open — under READ
+/// COMMITTED they saw `planned` until the commit, and the review UI offered
+/// Approve, edit and revise on a plan that was half written. NOT terminal and
+/// NOT a proposal any more: every writer refuses it at once with
+/// `PLAN_APPROVING` instead of queueing on the lock. Its exits are `approved`
+/// (the materialize committed) and back to `planned` (it failed, timed out, or
+/// the stalled-approval sweep released a claim whose approver died —
+/// `Plan.approvingAt` is its clock).
 enum PlanStatus {
   generating
   planned
+  approving
   stale
   approved
   declined
@@ -7665,6 +7678,13 @@ model Plan {
   /// reads null, so a consumer treats it as "not recorded" and falls back to the
   /// status. Never set on `approved` — an approval has one history.
   decisionReason       PlanDecisionReason?     @map("decision_reason")
+  /// WHEN an approve CLAIMED this plan (Bug MOTIR-9006) — set with
+  /// `status = approving`, cleared by the `approved` write or by a release back
+  /// to `planned`. It is also the claim's TOKEN: the materializing transaction
+  /// and the release both match on it, so an approve whose claim the
+  /// stalled-approval sweep already released can neither commit nor release a
+  /// later approver's claim. Null on every plan that is not `approving`.
+  approvingAt          DateTime?               @map("approving_at")
   /// The planning SESSION this plan belongs to (AMENDMENT 17 §5) — set at
   /// creation on every author path and NEVER re-pointed; a revision keeps it
   /// (only `sourceJobId` moves). Closes AMENDMENT 16 D5's `lastJobId` lookup.

@@ -306,6 +306,7 @@ describe('the plan-state filter', () => {
       generating: 0,
       waiting: 0,
       planned: 2,
+      approving: 0,
       stale: 0,
       approved: 1,
       declined: 0,

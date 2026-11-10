@@ -96,11 +96,13 @@ import {
   usePlanChangeConversation,
   narrateFrame,
   PLAN_GATE_POLL_MS,
+  APPROVING_POLL_MS,
+  phaseForPendingReview,
 } from '@/lib/hooks/usePlanChangeConversation';
 import { planGateView } from '@/lib/planning/planGateView';
 import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { PlanRequestError } from '@/lib/planning/planReviewClient';
-import { useDecidedGateState } from '@/lib/approvals/decidedGates';
+import { useDecidedGateState, useGatePressPending } from '@/lib/approvals/decidedGates';
 import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanReviewDto } from '@/lib/dto/planReview';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
@@ -168,6 +170,7 @@ const MATERIALIZED: PlanWithItemsDto = {
   itemCount: 1,
   createdAt: '2026-07-27T09:00:00.000Z',
   plannedAt: '2026-07-27T09:01:00.000Z',
+  approvingAt: null,
   decidedAt: '2026-07-27T09:05:00.000Z',
   decidedById: 'u1',
   decisionReason: null,
@@ -1609,3 +1612,196 @@ describe('usePlanChangeConversation — a revision lease taken ELSEWHERE reaches
 });
 
 const MATERIALIZED_REVIEW: PlanReviewDto = { ...REVIEW, status: 'approved' };
+
+describe('usePlanChangeConversation — a plan BEING APPROVED (Bug MOTIR-9006)', () => {
+  // Each case takes its own gate id: the decided-gates store is page-global.
+  function asked(gateId: string, over: Partial<PlanReviewDto> = {}): PlanReviewDto {
+    return {
+      ...REVIEW,
+      id: 'plan-1',
+      gate: {
+        id: gateId,
+        state: 'awaiting',
+        stamp: `stamp-${gateId}`,
+        held: null,
+        canDecide: true,
+      },
+      ...over,
+    };
+  }
+  const approvingRead = (gateId: string) => asked(gateId, { status: 'approving' });
+  const approvedRead = (gateId: string) =>
+    asked(gateId, {
+      status: 'approved',
+      items: [planReviewItem({ planItemId: 'pi_1', nodeId: 'wi_new', op: 'add' })],
+    });
+  const WATCH = { timeout: APPROVING_POLL_MS * 4 };
+
+  async function withProposal(review: PlanReviewDto, onApproved?: (r: unknown) => void) {
+    fetchReview.mockResolvedValue(review);
+    const hook = renderHook(() =>
+      usePlanChangeConversation(onApproved ? { onApproved: onApproved as never } : {}),
+    );
+    await waitFor(() => expect(hook.result.current.state.phase).toBe('idle'));
+    await act(async () => {
+      await hook.result.current.send('Add recurring invoices.');
+    });
+    expect(hook.result.current.state.review).toEqual(review);
+    return hook;
+  }
+  const decidedState = (gateId: string) =>
+    renderHook(() => useDecidedGateState(gateId)).result.current;
+  const pressPending = (gateId: string) =>
+    renderHook(() => useGatePressPending(gateId)).result.current;
+
+  it('files a pending review in `deciding` while it is being approved, `review` otherwise', () => {
+    expect(phaseForPendingReview(approvingRead('g'))).toBe('deciding');
+    expect(phaseForPendingReview(asked('g'))).toBe('review');
+  });
+
+  it('marks the press in flight for the To-approve row, and clears it once announced', async () => {
+    const { result } = await withProposal(asked('gate-press'));
+    let answer!: (v: PlanWithItemsDto) => void;
+    approve.mockReturnValueOnce(new Promise<PlanWithItemsDto>((r) => (answer = r)));
+
+    let pressing!: Promise<void>;
+    act(() => {
+      pressing = result.current.approve();
+    });
+    expect(pressPending('gate-press')).toBe(true);
+    await act(async () => {
+      answer(MATERIALIZED);
+      await pressing;
+    });
+    expect(pressPending('gate-press')).toBe(false);
+    expect(decidedState('gate-press')).toBe('approved');
+  });
+
+  it('⭐ CLOSED MID-APPROVE: the decision is still announced after the overlay unmounts', async () => {
+    const hook = await withProposal(asked('gate-unmounted'));
+    let answer!: (v: PlanWithItemsDto) => void;
+    approve.mockReturnValueOnce(new Promise<PlanWithItemsDto>((r) => (answer = r)));
+
+    let pressing!: Promise<void>;
+    act(() => {
+      pressing = hook.result.current.approve();
+    });
+    // The reader closes the overlay while the plan materializes.
+    hook.unmount();
+    await act(async () => {
+      answer(MATERIALIZED);
+      await pressing;
+    });
+
+    // The row under it settles without a refresh.
+    expect(decidedState('gate-unmounted')).toBe('approved');
+    expect(pressPending('gate-unmounted')).toBe(false);
+  });
+
+  it('a refused press clears its mark (the row returns to Review)', async () => {
+    const { result } = await withProposal(asked('gate-refused'));
+    approve.mockRejectedValueOnce(new PlanRequestError(500, null));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(pressPending('gate-refused')).toBe(false);
+    expect(result.current.state.phase).toBe('review');
+  });
+
+  it('PLAN_APPROVING on a press is not an error: it draws the approval in progress and watches it land', async () => {
+    const onApproved = vi.fn();
+    const { result } = await withProposal(asked('gate-adopt'), onApproved);
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_APPROVING'));
+    fetchReview.mockResolvedValueOnce(approvingRead('gate-adopt'));
+
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.phase).toBe('deciding');
+    expect(result.current.state.errorCode).toBeNull();
+    expect(result.current.state.review?.status).toBe('approving');
+
+    // The watch reads it again: still approving once, then approved.
+    fetchReview
+      .mockResolvedValueOnce(approvingRead('gate-adopt'))
+      .mockResolvedValueOnce(approvedRead('gate-adopt'));
+    await waitFor(() => expect(result.current.state.decided).toBe('accepted'), WATCH);
+    expect(result.current.state.phase).toBe('idle');
+    expect(result.current.state.planId).toBeNull();
+    expect(result.current.state.approved).toEqual({
+      created: ['wi_new'],
+      updated: [],
+      removed: [],
+    });
+    expect(onApproved).toHaveBeenCalledWith({ created: ['wi_new'], updated: [], removed: [] });
+    expect(decidedState('gate-adopt')).toBe('approved');
+  });
+
+  it('a watched approval that FAILED gives the review back, decidable', async () => {
+    const { result } = await withProposal(asked('gate-failed'));
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_APPROVING'));
+    fetchReview.mockResolvedValueOnce(approvingRead('gate-failed'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.phase).toBe('deciding');
+
+    // A failed read keeps watching; then the plan is back at `planned`.
+    fetchReview
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce(asked('gate-failed'));
+    await waitFor(() => expect(result.current.state.phase).toBe('review'), WATCH);
+    expect(result.current.state.review?.status).toBe('planned');
+    expect(result.current.state.decided).toBeNull();
+  });
+
+  it('a watched approval somebody DECLINED instead ends declined', async () => {
+    const { result } = await withProposal(asked('gate-watched-declined'));
+    decline.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_APPROVING'));
+    fetchReview.mockResolvedValueOnce(approvingRead('gate-watched-declined'));
+    await act(async () => {
+      await result.current.discard();
+    });
+    expect(result.current.state.phase).toBe('deciding');
+
+    fetchReview.mockResolvedValueOnce(
+      asked('gate-watched-declined', { status: 'declined', decisionReason: 'reviewed' }),
+    );
+    await waitFor(() => expect(result.current.state.decided).toBe('declined'), WATCH);
+    expect(result.current.state.phase).toBe('idle');
+  });
+
+  it('PLAN_APPROVING whose re-read finds it already decided reads as decided elsewhere', async () => {
+    const { result } = await withProposal(asked('gate-raced'));
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_APPROVING'));
+    fetchReview.mockResolvedValueOnce(approvedRead('gate-raced'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.phase).toBe('review');
+    expect(result.current.state.errorCode).toBe('decided');
+  });
+
+  it('PLAN_APPROVING whose re-read fails reads as decided elsewhere too', async () => {
+    const { result } = await withProposal(asked('gate-reread-fails'));
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_APPROVING'));
+    fetchReview.mockRejectedValueOnce(new Error('network down'));
+    await act(async () => {
+      await result.current.approve();
+    });
+    expect(result.current.state.errorCode).toBe('decided');
+  });
+
+  it('stops watching when the overlay unmounts', async () => {
+    const hook = await withProposal(asked('gate-watch-unmount'));
+    approve.mockRejectedValueOnce(new PlanRequestError(409, 'PLAN_APPROVING'));
+    fetchReview.mockResolvedValueOnce(approvingRead('gate-watch-unmount'));
+    await act(async () => {
+      await hook.result.current.approve();
+    });
+    const reads = fetchReview.mock.calls.length;
+    hook.unmount();
+    await new Promise((r) => setTimeout(r, APPROVING_POLL_MS * 2));
+    expect(fetchReview.mock.calls.length).toBe(reads);
+  });
+});

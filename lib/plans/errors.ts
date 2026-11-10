@@ -834,7 +834,7 @@ export class PlanItemFieldRejectedError extends Error {
  * act on being told no. → 409
  */
 export class PlanNotEditableError extends Error {
-  readonly code = 'PLAN_NOT_EDITABLE' as const;
+  readonly code: 'PLAN_NOT_EDITABLE' | 'PLAN_APPROVING' = 'PLAN_NOT_EDITABLE';
   constructor(
     readonly planId: string,
     readonly status: string,
@@ -848,6 +848,39 @@ export class PlanNotEditableError extends Error {
         ' Only a `generating` or `planned` plan is editable.',
     );
     this.name = 'PlanNotEditableError';
+  }
+}
+
+/**
+ * The plan is being APPROVED right now (Bug MOTIR-9006): an approve claimed it
+ * (`status = approving`) and is materializing its proposals. → 409
+ * `PLAN_APPROVING`.
+ *
+ * ⚠️ A SUBCLASS OF {@link PlanNotEditableError}, on purpose. An approving plan IS
+ * not editable — its proposals are becoming work items — so every surface that
+ * already answers a not-editable plan with a 409 (the plan routes, the planning
+ * conversation, the internal proposal doors, the MCP tool errors, the late-change
+ * refusal) answers this one the same way, with this code, without a second arm
+ * to keep in step. A caller that needs to tell the two apart reads `code`.
+ *
+ * It is raised BEFORE the plan row lock is taken: the approving transaction holds
+ * that lock for as long as materialize runs, so a writer that locked first would
+ * queue behind it and then fail on Prisma's default budget (P2028) — or, for a
+ * revise, dispatch a paid planning job first. `approvingSince` says how long it
+ * has run, which is what makes "try again in a moment" an instruction.
+ */
+export class PlanApprovingError extends PlanNotEditableError {
+  override readonly code = 'PLAN_APPROVING' as const;
+  constructor(
+    planId: string,
+    readonly approvingSince: Date | null,
+  ) {
+    super(planId, 'approving');
+    this.message =
+      `Plan ${planId} is being approved${approvingSince ? ` (since ${approvingSince.toISOString()})` : ''}: ` +
+      'its proposals are being written into work items. It cannot be edited, revised or decided again ' +
+      'while that runs. Read it again in a moment — it will be `approved`, or back to `planned` if the approval failed.';
+    this.name = 'PlanApprovingError';
   }
 }
 

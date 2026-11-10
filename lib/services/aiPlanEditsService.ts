@@ -20,6 +20,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {
   NoPlanForJobError,
+  PlanApprovingError,
   PlanNotEditableError,
   PlanNotFoundError,
   PlanRevisionInFlightError,
@@ -688,6 +689,12 @@ async function dispatchRevision(
   // decided plan, and a plan somebody is already revising — cost nothing: a
   // job dispatched and then refused is an AI call the org paid for and nobody
   // can read.
+  // A plan being APPROVED (Bug MOTIR-9006) is the case this check exists for: it read
+  // `planned` until the approve committed, so a revise pressed mid-approve dispatched
+  // a paid job that the lease then refused.
+  if (plan.status === 'approving') {
+    throw new PlanApprovingError(planId, plan.approvingAt ? new Date(plan.approvingAt) : null);
+  }
   if (plan.status !== 'generating' && plan.status !== 'planned') {
     throw new PlanNotEditableError(planId, plan.status);
   }

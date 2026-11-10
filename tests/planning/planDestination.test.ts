@@ -29,7 +29,13 @@ function call(over: Partial<PlanRowDestinationInput> = {}): PlanRowDestination {
   });
 }
 
-const UNDECIDED = ['generating', 'planned', 'stale'] as const satisfies readonly PlanStatusDto[];
+// `approving` (Bug MOTIR-9006) is undecided: the overlay draws its progress until it commits.
+const UNDECIDED = [
+  'generating',
+  'planned',
+  'approving',
+  'stale',
+] as const satisfies readonly PlanStatusDto[];
 const DECIDED = ['approved', 'declined'] as const satisfies readonly PlanStatusDto[];
 
 describe('the rule is TOTAL over PlanStatus', () => {

@@ -107,6 +107,10 @@ function StateChip({ state, label }: { state: PlanSessionStateDto; label: React.
       return <Pill tone="awaiting">{label}</Pill>;
     case 'planned':
       return <Pill status="planned">{label}</Pill>;
+    case 'approving':
+      // Being approved (Bug MOTIR-9006) — work in progress, so Generating's sky; it no
+      // longer waits for a decision, so it is not *Waiting for approval*'s lavender.
+      return <Pill severity="info">{label}</Pill>;
     case 'stale':
       return <Pill severity="danger">{label}</Pill>;
     case 'approved':
@@ -405,6 +409,7 @@ export function SessionRow({
     view.latestPlan !== null &&
     (view.latestPlan.status === 'generating' ||
       view.latestPlan.status === 'planned' ||
+      view.latestPlan.status === 'approving' ||
       view.latestPlan.status === 'stale');
   const closedRead = view.state === 'closed' && !isVisitor && !latestUndecided;
   const destination: PlanRowDestination | null = closedRead

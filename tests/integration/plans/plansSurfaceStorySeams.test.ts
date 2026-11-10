@@ -355,6 +355,7 @@ describe('GUARD: totality over the status vocabulary', () => {
     // forget. This asserts the runtime half of that.
     expect([...PLAN_STATUS_DTO_VALUES].sort()).toEqual([
       'approved',
+      'approving',
       'declined',
       'generating',
       'planned',

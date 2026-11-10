@@ -60,9 +60,12 @@ describe('the vocabulary — one edit, and every derived surface follows', () =>
     // and renders in that order, and `stale` is a DETOUR off `planned` — the only
     // status it is reachable from — rather than an ending, so it belongs before
     // the two terminal members (Part XI §4).
+    // `approving` (Bug MOTIR-9006) is the step from `planned` to `approved`; it sits
+    // right after `planned`, before the detour `stale` and the two terminal members.
     expect([...PLAN_STATUS_DTO_VALUES]).toEqual([
       'generating',
       'planned',
+      'approving',
       'stale',
       'approved',
       'declined',

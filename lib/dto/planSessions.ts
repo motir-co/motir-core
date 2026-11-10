@@ -23,6 +23,7 @@ export const PLAN_SESSION_STATE_VALUES = [
   'generating',
   'waiting',
   'planned',
+  'approving',
   'stale',
   'approved',
   'declined',
@@ -31,8 +32,8 @@ export const PLAN_SESSION_STATE_VALUES = [
 
 export type PlanSessionStateDto = (typeof PLAN_SESSION_STATE_VALUES)[number];
 
-/** A state a LISTED session can hold — every row state but `none` (MOTIR-9301). */
-export type PlanSessionFilterDto = Exclude<PlanSessionStateDto, 'none'>;
+/** A state the list FILTERS by — every row state but `none` (MOTIR-9301) and `approving` (MOTIR-9006). */
+export type PlanSessionFilterDto = Exclude<PlanSessionStateDto, 'none' | 'approving'>;
 
 /**
  * The Plans list's FILTER vocabulary (MOTIR-9301): the row vocabulary without `none`.
@@ -42,9 +43,17 @@ export type PlanSessionFilterDto = Exclude<PlanSessionStateDto, 'none'>;
  * and its row chip still labels it — so it is the filter set that narrows, never the
  * row set. One vocabulary, split by which door asks; DERIVED, so order and membership
  * follow the row array with no second literal.
+ *
+ * ⚠️ `approving` IS NOT A SEGMENT EITHER (Bug MOTIR-9006). It is a true row state — a
+ * session whose plan is being materialized reads *Approving…*, not *Waiting for
+ * approval* — but it lasts for the seconds an approve takes, so a filter for it would
+ * nearly always be empty and would empty itself under the reader. Its count is still
+ * kept (the counts are total over the ROW vocabulary).
  */
 export const PLAN_SESSION_FILTER_VALUES: readonly PlanSessionFilterDto[] =
-  PLAN_SESSION_STATE_VALUES.filter((s): s is PlanSessionFilterDto => s !== 'none');
+  PLAN_SESSION_STATE_VALUES.filter(
+    (s): s is PlanSessionFilterDto => s !== 'none' && s !== 'approving',
+  );
 
 /**
  * WHY a session ended (AMENDMENT 23 §1) — `PlanSessionEndReason`, mirrored so

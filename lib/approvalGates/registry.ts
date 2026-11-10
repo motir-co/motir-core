@@ -11,6 +11,7 @@ import type { ConfirmedRecord } from '@/lib/approvalGates/decisionConfirmationRe
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import type { DecisionStamp } from '@/lib/approvalGates/stamp';
 import { ApprovalGateKindUnregisteredError } from '@/lib/approvalGates/errors';
 import { acceptanceResultGateHandler } from '@/lib/approvalGates/acceptanceResultHandler';
 import { agentReviewGateHandler } from '@/lib/approvalGates/agentReviewHandler';
@@ -343,6 +344,14 @@ export interface GateOutsideTransactionArgs {
   prepared?: unknown;
   /** See {@link GateEffectArgs.effectOptions}. */
   effectOptions?: Readonly<Record<string, unknown>>;
+  /**
+   * The stamp the press carried (Bug MOTIR-9006), for a kind that CLAIMS its subject
+   * before the door's transaction — a plan's approve writes `approving` in a short
+   * transaction of its own so readers see the approval while it materializes, and it
+   * claims nothing for a press whose stamp has already moved. The door still makes the
+   * authoritative comparison under its lock; this is never a substitute for it.
+   */
+  stamp?: DecisionStamp | symbol;
 }
 
 /**

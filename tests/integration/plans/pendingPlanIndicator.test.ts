@@ -154,7 +154,7 @@ describe('the status set is TOTAL over PlanStatus, and is NOT the boundary’s',
     expect([...PLAN_STATUS_DTO_VALUES].sort()).toEqual([...announced, ...silent].sort());
   });
 
-  it('differs from AI_PENDING_PLAN_STATUSES on exactly `generating`', () => {
+  it('differs from AI_PENDING_PLAN_STATUSES on exactly `generating` and `approving`', () => {
     // The boundary asks "is a run in flight for this PROJECT?" and admits
     // `generating`; the item page asks "is a decision pending about THIS card?"
     // and does not. Reusing the one for the other is the mistake the constant
@@ -162,7 +162,9 @@ describe('the status set is TOTAL over PlanStatus, and is NOT the boundary’s',
     // makes them equal is a red test rather than a silent widening.
     const boundary = new Set<string>(AI_PENDING_PLAN_STATUSES);
     const page = new Set<string>(WORK_ITEM_PENDING_PLAN_STATUSES);
-    expect([...boundary].filter((s) => !page.has(s))).toEqual(['generating']);
+    // `approving` (Bug MOTIR-9006) too: its proposals are still work in flight for a
+    // planner, but the decision about the card is already made.
+    expect([...boundary].filter((s) => !page.has(s))).toEqual(['generating', 'approving']);
     expect([...page].filter((s) => !boundary.has(s))).toEqual([]);
   });
 });

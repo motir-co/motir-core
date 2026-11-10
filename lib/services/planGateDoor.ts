@@ -7,6 +7,7 @@ import {
   ApprovalGateSupersededError,
 } from '@/lib/approvalGates/errors';
 import {
+  PlanApprovingError,
   PlanDecisionStampRequiredError,
   PlanNotDecidableYetError,
   PlanNotFoundError,
@@ -135,6 +136,12 @@ export async function asPlanStatusRefusal(
   planId: string,
   ctx: ServiceContext,
 ): Promise<unknown> {
+  // ANOTHER PRESS IS APPROVING IT (Bug MOTIR-9006): for these callers that is the plan's
+  // status too — `approving`, which a loop reads as *not decidable by me* exactly as it
+  // reads a decided one. No re-read: the refusal already says what the status is.
+  if (err instanceof PlanApprovingError) {
+    return new PlanNotInExpectedStatusError(planId, 'approving', 'planned');
+  }
   if (
     !(err instanceof ApprovalGateAlreadyDecidedError) &&
     !(err instanceof ApprovalGateSupersededError)

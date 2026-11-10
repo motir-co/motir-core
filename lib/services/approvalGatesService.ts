@@ -2279,6 +2279,7 @@ export const approvalGatesService = {
       decision: input.decision,
       ctx,
       effectOptions: options.effectOptions,
+      stamp: input.stamp,
     };
     const prepared =
       handler.beforeTransaction && preread.gate.state === 'awaiting'

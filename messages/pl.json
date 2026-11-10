@@ -8471,6 +8471,7 @@
     "status": {
       "generating": "Generowanie",
       "planned": "Zaplanowany",
+      "approving": "Zatwierdzanie…",
       "stale": "Nieaktualny",
       "approved": "Zatwierdzony",
       "declined": "Odrzucony"
@@ -8518,6 +8519,7 @@
         "none": "Brak planu",
         "generating": "Pisanie",
         "planned": "Czeka na zatwierdzenie",
+        "approving": "Zatwierdzanie…",
         "stale": "Nieaktualny",
         "approved": "Zatwierdzony",
         "declined": "Odrzucony",
@@ -15436,6 +15438,7 @@
       "planState": {
         "generating": "Motir AI nadal pisze ten plan.",
         "planned": "Ten plan czeka na zatwierdzenie.",
+        "approving": "Ten plan jest zatwierdzany.",
         "stale": "Ten plan wymaga uwagi, zanim będzie można go zatwierdzić."
       },
       "reviewPlan": "Przejrzyj plan",
@@ -15723,6 +15726,8 @@
         },
         "rewriting": "Przepisywany",
         "rewritingTitle": "Motir AI pisze nową wersję tego planu. Możesz go zatwierdzić lub odrzucić, gdy skończy.",
+        "approving": "Zatwierdzanie…",
+        "approvingTitle": "Ten plan został zatwierdzony, a jego propozycje są zapisywane jako elementy pracy. Po zakończeniu będzie oznaczony jako Zatwierdzony.",
         "reviewRow": "Przejrzyj plan — {sentence}",
         "declinedNoReason": "Odrzucono bez podania powodu · w <mono>{version}</mono>"
       },

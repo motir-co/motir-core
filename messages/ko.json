@@ -8465,6 +8465,7 @@
     "status": {
       "generating": "생성 중",
       "planned": "계획됨",
+      "approving": "승인 중…",
       "stale": "오래됨",
       "approved": "승인됨",
       "declined": "거절됨"
@@ -8512,6 +8513,7 @@
         "none": "아직 계획 없음",
         "generating": "작성 중",
         "planned": "승인 대기 중",
+        "approving": "승인 중…",
         "stale": "오래됨",
         "approved": "승인됨",
         "declined": "거절됨",
@@ -15430,6 +15432,7 @@
       "planState": {
         "generating": "Motir AI가 아직 이 계획을 작성하고 있습니다.",
         "planned": "이 계획은 승인을 기다리고 있습니다.",
+        "approving": "이 계획을 승인하는 중입니다.",
         "stale": "이 계획은 승인하기 전에 확인이 필요합니다."
       },
       "reviewPlan": "계획 검토",
@@ -15717,6 +15720,8 @@
         },
         "rewriting": "다시 작성하는 중",
         "rewritingTitle": "Motir AI가 이 계획의 새 버전을 작성하고 있습니다. 완료되면 승인하거나 거절할 수 있습니다.",
+        "approving": "승인 중…",
+        "approvingTitle": "이 계획이 승인되어 제안을 작업 항목으로 작성하고 있습니다. 완료되면 승인됨으로 표시됩니다.",
         "reviewRow": "계획 검토 — {sentence}",
         "declinedNoReason": "사유 없이 거절됨 · <mono>{version}</mono> 기준"
       },

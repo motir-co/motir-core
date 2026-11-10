@@ -798,6 +798,7 @@ describe('the To-approve ROW’s subject summary for a plan gate', () => {
       proposalCount: 3,
       author: { source: 'mcp', harness: 'Claude Code', origin: 'user' },
       held: null,
+      approving: false,
     });
   });
 

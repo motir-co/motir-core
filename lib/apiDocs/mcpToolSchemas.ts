@@ -3485,7 +3485,10 @@ export const MCP_TOOL_INPUT_SCHEMAS: Record<keyof typeof TOOL_PERMISSIONS, McpTo
       },
       status: {
         type: 'array',
-        items: { type: 'string', enum: ['generating', 'planned', 'stale', 'approved', 'declined'] },
+        items: {
+          type: 'string',
+          enum: ['generating', 'planned', 'approving', 'stale', 'approved', 'declined'],
+        },
         description:
           'OPTIONAL. Only plans in these statuses. A declined plan carries its `decisionReason` (`reviewed`, `discarded` or `abandoned`).',
       },

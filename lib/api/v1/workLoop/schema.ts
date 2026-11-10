@@ -1194,8 +1194,20 @@ export function planStatusUrl(planId: string): string {
  *  approvable nor decided: the plan reached a reviewer and can no longer be
  *  approved, because a `modify`/`remove` target reached a terminal status after
  *  the plan closed. A client asking *is this decided?* must NOT read it as one —
- *  the plan is live and awaiting action, and the drift can reverse. */
-export const planStatusSchema = z.enum(['generating', 'planned', 'stale', 'approved', 'declined']);
+ *  the plan is live and awaiting action, and the drift can reverse.
+ *
+ *  `approving` (Bug MOTIR-9006) is an approve IN PROGRESS: a person approved the
+ *  plan and its proposals are being written into work items. Not decided yet and no
+ *  longer a proposal — a loop waits on it as it waits on `generating`; it ends at
+ *  `approved`, or back at `planned` if the approval failed. */
+export const planStatusSchema = z.enum([
+  'generating',
+  'planned',
+  'approving',
+  'stale',
+  'approved',
+  'declined',
+]);
 
 /** WHY the plan was started — someone clicked, or the cadence watcher fired. */
 export const planOriginSchema = z.enum(['user', 'cadence']);

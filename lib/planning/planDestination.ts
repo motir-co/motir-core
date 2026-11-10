@@ -143,8 +143,10 @@ export function planRowDestination({
   switch (planStatus) {
     case 'generating':
     case 'planned':
+    case 'approving':
     case 'stale':
-      // UNDECIDED. The session is the whole test.
+      // UNDECIDED — `approving` too (Bug MOTIR-9006): the overlay is where its progress
+      // is drawn until the approval commits. The session is the whole test.
       return sessionId === null
         ? { kind: 'plan-page', href: planPage, reason: 'no-session' }
         : {

@@ -8471,6 +8471,7 @@
     "status": {
       "generating": "Wird generiert",
       "planned": "Geplant",
+      "approving": "Wird genehmigt…",
       "stale": "Veraltet",
       "approved": "Genehmigt",
       "declined": "Abgelehnt"
@@ -8518,6 +8519,7 @@
         "none": "Noch kein Plan",
         "generating": "Wird geschrieben",
         "planned": "Wartet auf Genehmigung",
+        "approving": "Wird genehmigt…",
         "stale": "Veraltet",
         "approved": "Genehmigt",
         "declined": "Abgelehnt",
@@ -15436,6 +15438,7 @@
       "planState": {
         "generating": "Motir AI schreibt diesen Plan noch.",
         "planned": "Dieser Plan wartet auf Genehmigung.",
+        "approving": "Dieser Plan wird genehmigt.",
         "stale": "Dieser Plan muss überarbeitet werden, bevor er genehmigt werden kann."
       },
       "reviewPlan": "Plan prüfen",
@@ -15723,6 +15726,8 @@
         },
         "rewriting": "Wird neu geschrieben",
         "rewritingTitle": "Motir AI schreibt eine neue Version dieses Plans. Sie können sie genehmigen oder ablehnen, wenn sie fertig ist.",
+        "approving": "Wird genehmigt…",
+        "approvingTitle": "Dieser Plan wurde genehmigt, und seine Vorschläge werden in Arbeitselemente geschrieben. Danach wird er als Genehmigt angezeigt.",
         "reviewRow": "Plan prüfen — {sentence}",
         "declinedNoReason": "Ohne Begründung abgelehnt · bei <mono>{version}</mono>"
       },
