@@ -28,6 +28,7 @@ const LABELS = {
   navMonitoring: 'Monitoring',
   navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
+  navServices: en.platformAdmin.shell.navServices,
   navCapacity: en.platformAdmin.shell.navCapacity,
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
@@ -70,7 +71,8 @@ describe('the Fleet settings row', () => {
       .map((link) => link.textContent?.trim());
     expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navJobs);
     expect(names[names.indexOf(LABELS.navJobs) + 1]).toBe(LABELS.navFleetSettings);
-    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navCapacity);
+    // Services (MOTIR-10890) follows it, then Provider capacity.
+    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navServices);
   });
 
   it.each(['support', 'operator'] as const)('is absent for %s', (role) => {

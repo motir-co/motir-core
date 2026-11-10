@@ -10743,6 +10743,7 @@
       "navIdeas": "创意",
       "navRunModels": "托管运行模型",
       "navFleetSettings": "集群设置",
+      "navServices": "服务",
       "navCapacity": "服务商容量",
       "navJobs": "任务",
       "navStarters": "启动模板"
@@ -13535,6 +13536,103 @@
           "body": "无法读取新智能体的创建位置，因此不显示任何状态，也不提供开关。这是读取错误 —— 没有任何更改，也不会猜测任何值。",
           "retry": "重试"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "运维 · 服务",
+      "title": "服务",
+      "subtitle": "Motir 自身在其 AWS 账户（{account}）中运行的内容：集群 {cluster} 中的每个 ECS 服务、其任务及规格，并与该账户的 Fargate vCPU 配额对比。每次加载页面时从 AWS 读取。只读。",
+      "accountUnknown": "—",
+      "readAt": "从 AWS 读取于{age} · {time} UTC",
+      "readFailedAt": "AWS 读取失败，时间 {time} UTC",
+      "card": {
+        "title": "ECS 服务 · 集群 {cluster}",
+        "subtitle": "集群 {cluster} 中运行在 Fargate 上的每个服务、其运行中的任务及规格，以及与 Fargate vCPU 配额对比的总计"
+      },
+      "pill": {
+        "count": "{count, plural, other {# 个服务}}",
+        "rolling": "{count} 个正在发布",
+        "rolloutFailed": "{count, plural, other {# 次发布失败}}",
+        "short": "{count, plural, other {# 个服务任务不足}}"
+      },
+      "verdict": {
+        "under": "占 Fargate 配额的 {percent}%",
+        "over70": "超过 Fargate 配额的 70%",
+        "atQuota": "已达 Fargate 配额",
+        "notRead": "未读取 Fargate 配额",
+        "notReadLabel": "Fargate 配额未从 AWS 读取",
+        "clusterNotRead": "未读取集群"
+      },
+      "col": {
+        "service": "服务",
+        "tasks": "任务",
+        "vcpuPerTask": "每任务 vCPU",
+        "memoryPerTask": "每任务内存",
+        "vcpu": "vCPU",
+        "deployment": "部署状态"
+      },
+      "caption": "集群 {cluster} 中的 ECS 服务，以及与 Fargate 按需 vCPU 配额对比的总计",
+      "taskDefinition": "任务定义 {family}:{revision}",
+      "tasks": {
+        "running": "{n} 个运行中",
+        "partial": "{running}/{desired} 个运行中",
+        "rolling": "期望 {desired} · 旧 {old} + 新 {new}",
+        "notStarted": "{n} 个未启动",
+        "scaledToZero": "已缩容至 0"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
+      },
+      "deploy": {
+        "steady": "稳定",
+        "onRevision": "修订版 {revision}",
+        "notRolling": "未在发布",
+        "rolling": "发布 · 进行中",
+        "rollingDetail": "修订版 {from} → {to} · 新任务 {new}/{desired} 已启动",
+        "failed": "发布失败",
+        "failedDetail": "修订版 {to} 已停止 · 仍在 {from}",
+        "started": "开始于{age}"
+      },
+      "total": {
+        "label": "总计",
+        "services": "{count, plural, other {# 个服务}}",
+        "desired": "期望 {n}",
+        "inUse": "使用中",
+        "share": "占 Fargate 配额的 {percent}%",
+        "toGo": "距 70% 还有 {n} vCPU",
+        "over70": "超过 70%",
+        "leftBeforeQuota": "距配额还剩 {n} vCPU",
+        "atQuota": "已达配额",
+        "noneLeft": "没有剩余 vCPU · 新任务将无法启动",
+        "overBy": "超出 {n} vCPU · 新任务将无法启动",
+        "shareNotKnown": "占 Fargate 配额的比例 · 配额未读取时未知"
+      },
+      "quota": {
+        "label": "Fargate 配额",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "读取于{age}",
+        "notRead": "未读取",
+        "notReadLabel": "配额未从 AWS 读取",
+        "lastRead": "上次读取于{age}",
+        "neverRead": "从未读取",
+        "body": "此账户和区域的 Fargate 上限。集群的 EC2 机器计入单独的 EC2 配额，见集群状态。",
+        "bodyNotRead": "Service Quotas 没有响应，因此不显示配额占比。使用中的 vCPU 由集群测得，仍显示为数字。"
+      },
+      "notAvailable": "不可用",
+      "error": {
+        "title": "ECS 没有响应",
+        "body": "暂时无法读取集群 {cluster}，因此不显示任何服务和总计，也不会用之前的数字代替。{last}请刷新重试。",
+        "lastRead": "上次读取于{age}，时间 {time} UTC。",
+        "neverRead": "没有之前的读取记录。"
+      },
+      "loading": "正在从 AWS 读取集群和 Fargate 配额…",
+      "readOnly": "只读。要扩缩、重启或部署服务，请使用其部署工作流或 AWS 控制台。各行从集群读取，因此新服务会在下次加载时出现。",
+      "phone": {
+        "listLabel": "集群 {cluster} 中的 ECS 服务",
+        "perTask": "每任务"
       }
     },
     "capacity": {

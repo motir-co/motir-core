@@ -10749,6 +10749,7 @@
       "navIdeas": "アイデア",
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
+      "navServices": "サービス",
       "navCapacity": "プロバイダーの容量",
       "navJobs": "ジョブ",
       "navStarters": "スターター"
@@ -13541,6 +13542,103 @@
           "body": "新しいエージェントの作成先を読み取れなかったため、状態は表示されず、スイッチも提供されません。これは読み取りエラーです — 何も変更されておらず、値も推測していません。",
           "retry": "再試行"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "運用 · サービス",
+      "title": "サービス",
+      "subtitle": "Motir 自身が自社の AWS アカウント（{account}）で実行しているもの：クラスター {cluster} のすべての ECS サービス、そのタスクとサイズを、アカウントの Fargate vCPU クォータと比べて表示します。ページを読み込むたびに AWS から読み込みます。読み取り専用です。",
+      "accountUnknown": "—",
+      "readAt": "AWS から読み込み {age} · {time} UTC",
+      "readFailedAt": "AWS の読み込みに失敗しました（{time} UTC）",
+      "card": {
+        "title": "ECS サービス · クラスター {cluster}",
+        "subtitle": "Fargate 上のクラスター {cluster} のすべてのサービス、実行中のタスクとそのサイズ、および Fargate vCPU クォータに対する合計"
+      },
+      "pill": {
+        "count": "{count, plural, other {# 件のサービス}}",
+        "rolling": "{count} 件ロールアウト中",
+        "rolloutFailed": "{count, plural, other {# 件のロールアウトが失敗}}",
+        "short": "{count, plural, other {# 件のサービスでタスクが不足}}"
+      },
+      "verdict": {
+        "under": "Fargate クォータの {percent}%",
+        "over70": "Fargate クォータの 70% 超",
+        "atQuota": "Fargate クォータに到達",
+        "notRead": "Fargate クォータ未読み込み",
+        "notReadLabel": "Fargate クォータは AWS から読み込まれていません",
+        "clusterNotRead": "クラスター未読み込み"
+      },
+      "col": {
+        "service": "サービス",
+        "tasks": "タスク",
+        "vcpuPerTask": "タスクあたりの vCPU",
+        "memoryPerTask": "タスクあたりのメモリ",
+        "vcpu": "vCPU",
+        "deployment": "デプロイ"
+      },
+      "caption": "クラスター {cluster} の ECS サービスと、Fargate オンデマンド vCPU クォータに対する合計",
+      "taskDefinition": "タスク定義 {family}:{revision}",
+      "tasks": {
+        "running": "{n} 件実行中",
+        "partial": "{desired} 件中 {running} 件実行中",
+        "rolling": "必要数 {desired} · 旧 {old} + 新 {new}",
+        "notStarted": "{n} 件未起動",
+        "scaledToZero": "0 にスケール済み"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
+      },
+      "deploy": {
+        "steady": "安定",
+        "onRevision": "リビジョン {revision}",
+        "notRolling": "ロールアウトなし",
+        "rolling": "ロールアウト · 進行中",
+        "rollingDetail": "リビジョン {from} → {to} · 新規 {desired} 件中 {new} 件起動",
+        "failed": "ロールアウト失敗",
+        "failedDetail": "リビジョン {to} は停止 · {from} のまま",
+        "started": "開始 {age}"
+      },
+      "total": {
+        "label": "合計",
+        "services": "{count, plural, other {# 件のサービス}}",
+        "desired": "必要数 {n}",
+        "inUse": "使用中",
+        "share": "Fargate クォータの {percent}%",
+        "toGo": "70% まであと {n} vCPU",
+        "over70": "70% 超",
+        "leftBeforeQuota": "クォータまであと {n} vCPU",
+        "atQuota": "クォータに到達",
+        "noneLeft": "空き vCPU なし · 新しいタスクは起動しません",
+        "overBy": "{n} vCPU 超過 · 新しいタスクは起動しません",
+        "shareNotKnown": "Fargate クォータに対する割合 · クォータを読み込むまで不明"
+      },
+      "quota": {
+        "label": "Fargate クォータ",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "読み込み {age}",
+        "notRead": "未読み込み",
+        "notReadLabel": "クォータは AWS から読み込まれていません",
+        "lastRead": "最終読み込み {age}",
+        "neverRead": "一度も読み込まれていません",
+        "body": "このアカウントとリージョンの Fargate の上限です。フリートの EC2 マシンは別の EC2 クォータに数えられ、フリートの状態に表示されます。",
+        "bodyNotRead": "Service Quotas が応答しなかったため、クォータに対する割合は表示されません。使用中の vCPU はクラスターから測定され、数値のまま表示されます。"
+      },
+      "notAvailable": "利用不可",
+      "error": {
+        "title": "ECS が応答しませんでした",
+        "body": "クラスター {cluster} を今は読み込めなかったため、サービスも合計も表示せず、以前の数値で代用もしません。{last} 再読み込みしてもう一度お試しください。",
+        "lastRead": "最終読み込みは {age}、{time} UTC です。",
+        "neverRead": "以前の読み込みの記録はありません。"
+      },
+      "loading": "AWS からクラスターと Fargate クォータを読み込んでいます…",
+      "readOnly": "読み取り専用です。サービスのスケール、再起動、デプロイには、そのデプロイワークフローか AWS コンソールを使用してください。行はクラスターから取得するため、新しいサービスは次の読み込みで表示されます。",
+      "phone": {
+        "listLabel": "クラスター {cluster} の ECS サービス",
+        "perTask": "タスクあたり"
       }
     },
     "capacity": {

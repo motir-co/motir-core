@@ -10752,6 +10752,7 @@
       "navIdeas": "Idées",
       "navRunModels": "Modèles des exécutions hébergées",
       "navFleetSettings": "Paramètres de la flotte",
+      "navServices": "Services",
       "navCapacity": "Capacité des fournisseurs",
       "navJobs": "Tâches",
       "navStarters": "Starters"
@@ -13544,6 +13545,103 @@
           "body": "L’endroit où les nouveaux agents sont créés n’a pas pu être lu, donc aucun état n’est affiché et aucun interrupteur n’est proposé. Il s’agit d’une erreur de lecture : rien n’a changé, et aucune valeur n’est devinée.",
           "retry": "Réessayer"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "Opérations · Services",
+      "title": "Services",
+      "subtitle": "Ce que Motir exécute lui-même dans son compte AWS ({account}) : chaque service ECS du cluster {cluster}, ses tâches et leur taille, face au quota de vCPU Fargate du compte. Lu depuis AWS à chaque chargement de la page. Lecture seule.",
+      "accountUnknown": "—",
+      "readAt": "Lu depuis AWS {age} · {time} UTC",
+      "readFailedAt": "Échec de la lecture AWS à {time} UTC",
+      "card": {
+        "title": "Services ECS · cluster {cluster}",
+        "subtitle": "Chaque service du cluster {cluster} sur Fargate, ses tâches en cours et leur taille, et le total face au quota de vCPU Fargate"
+      },
+      "pill": {
+        "count": "{count, plural, one {# service} other {# services}}",
+        "rolling": "{count} en déploiement",
+        "rolloutFailed": "{count, plural, one {# déploiement échoué} other {# déploiements échoués}}",
+        "short": "{count, plural, one {# service à court de tâches} other {# services à court de tâches}}"
+      },
+      "verdict": {
+        "under": "{percent} % du quota Fargate",
+        "over70": "Plus de 70 % du quota Fargate",
+        "atQuota": "Au quota Fargate",
+        "notRead": "Quota Fargate non lu",
+        "notReadLabel": "Quota Fargate non lu depuis AWS",
+        "clusterNotRead": "Cluster non lu"
+      },
+      "col": {
+        "service": "Service",
+        "tasks": "Tâches",
+        "vcpuPerTask": "vCPU par tâche",
+        "memoryPerTask": "Mémoire par tâche",
+        "vcpu": "vCPU",
+        "deployment": "Déploiement"
+      },
+      "caption": "Services ECS du cluster {cluster}, avec le total face au quota de vCPU Fargate On-Demand",
+      "taskDefinition": "définition de tâche {family}:{revision}",
+      "tasks": {
+        "running": "{n} en cours",
+        "partial": "{running} sur {desired} en cours",
+        "rolling": "souhaitées {desired} · {old} anciennes + {new} nouvelles",
+        "notStarted": "{n} non démarrées",
+        "scaledToZero": "Mis à l’échelle à 0"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} Mo",
+        "gb": "{n} Go"
+      },
+      "deploy": {
+        "steady": "Stable",
+        "onRevision": "sur la révision {revision}",
+        "notRolling": "Aucun déploiement",
+        "rolling": "Déploiement · en cours",
+        "rollingDetail": "révision {from} → {to} · {new} sur {desired} nouvelles actives",
+        "failed": "Déploiement échoué",
+        "failedDetail": "révision {to} arrêtée · toujours sur {from}",
+        "started": "démarré {age}"
+      },
+      "total": {
+        "label": "Total",
+        "services": "{count, plural, one {# service} other {# services}}",
+        "desired": "souhaitées {n}",
+        "inUse": "utilisées",
+        "share": "{percent} % du quota Fargate",
+        "toGo": "encore {n} vCPU avant 70 %",
+        "over70": "Plus de 70 %",
+        "leftBeforeQuota": "encore {n} vCPU avant le quota",
+        "atQuota": "Au quota",
+        "noneLeft": "aucune vCPU restante · une nouvelle tâche ne démarrera pas",
+        "overBy": "{n} vCPU au-delà · une nouvelle tâche ne démarrera pas",
+        "shareNotKnown": "du quota Fargate · inconnu tant que le quota n’est pas lu"
+      },
+      "quota": {
+        "label": "Quota Fargate",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "lu {age}",
+        "notRead": "Non lu",
+        "notReadLabel": "Quota non lu depuis AWS",
+        "lastRead": "dernière lecture {age}",
+        "neverRead": "jamais lu",
+        "body": "La limite Fargate de ce compte et de cette région. Les machines EC2 de la flotte relèvent d’un quota EC2 distinct, sur État de la flotte.",
+        "bodyNotRead": "Service Quotas n’a pas répondu, la part du quota n’est donc pas affichée. Les vCPU utilisées sont mesurées sur le cluster et restent un chiffre."
+      },
+      "notAvailable": "Non disponible",
+      "error": {
+        "title": "ECS n’a pas répondu",
+        "body": "Le cluster {cluster} n’a pas pu être lu pour l’instant : aucun service ni aucun total n’est affiché, et aucun chiffre antérieur ne les remplace. {last} Rechargez pour réessayer.",
+        "lastRead": "Dernière lecture {age}, à {time} UTC.",
+        "neverRead": "Aucune lecture antérieure n’est enregistrée."
+      },
+      "loading": "Lecture du cluster et du quota Fargate depuis AWS…",
+      "readOnly": "Lecture seule. Pour mettre à l’échelle, redémarrer ou déployer un service, utilisez son workflow de déploiement ou la console AWS. Les lignes sont lues depuis le cluster : un nouveau service apparaît au chargement suivant.",
+      "phone": {
+        "listLabel": "Services ECS du cluster {cluster}",
+        "perTask": "Par tâche"
       }
     },
     "capacity": {
