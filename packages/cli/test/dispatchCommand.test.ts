@@ -35,6 +35,7 @@ vi.mock('../src/session.js', () => ({
 const { doneCommand, nextCommand, runCommand } = await import('../src/commands/dispatch.js');
 
 import type { CommandResult, CommandRunner } from '../src/git.js';
+import { answerPrView } from './fakePullRequest.js';
 
 // The git runners the push check (MOTIR-3004) is scripted with. `implemented`
 // claims the code is on the remote, so every recording path asks git first —
@@ -42,7 +43,10 @@ import type { CommandResult, CommandRunner } from '../src/git.js';
 // without a real remote.
 const okResult = (stdout: string): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
 /** A remote that carries this card's branch, and a session branch carrying its commit. */
-const PUSHED: CommandRunner = (_bin, args) => {
+const PUSHED: CommandRunner = (bin, args) => {
+  // The pull request the agent opened, which the run links (MOTIR-10877).
+  const pr = answerPrView(bin, args);
+  if (pr) return pr;
   if (args[0] === 'ls-remote') return okResult('abc123\trefs/heads/subtask/PROD-7-add-the-thing');
   if (args[0] === 'log') return okResult('abc123');
   return okResult('');
@@ -167,6 +171,9 @@ function setup(
     getWorkItem: async (key: string) => {
       calls.push({ tool: 'get_work_item', args: key });
       return opts.detail ?? workItem();
+    },
+    linkPullRequest: async (args: unknown) => {
+      calls.push({ tool: 'link_pull_request', args });
     },
     transitionStatus: async (args: { key: string; status: string }) => {
       calls.push({ tool: 'transition_status', args });
@@ -314,12 +321,17 @@ describe('motir next --agent', () => {
     //    `deliveries: []` here, so the watch finds nothing to watch and returns
     //    after exactly ONE read. A project with a CI mirror pays more, and pays
     //    it deliberately.
+    //
+    // And between them the run's own DELIVERY (MOTIR-10877): it finds the pull request the
+    // agent opened and LINKS it — before the transition, so the card it moves to Implemented
+    // is one its merge will close.
     expect(toolNames()).toEqual([
       'whoami',
       'next_ready',
       'claim',
       'dispatch_prompt',
       'get_work_item',
+      'link_pull_request',
       'transition_status',
       'get_work_item',
     ]);
@@ -1094,11 +1106,15 @@ describe('a PARTIALLY DELIVERED card — the run says so (MOTIR-3136)', () => {
     await nextCommand({ agent: 'claude' });
 
     const names = toolNames();
+    // The second `get_work_item` is the delivery read (MOTIR-10877): this checkout has no
+    // remote to find a pull request on, so the run asks whether the agent linked one itself.
+    // Nothing is linked, and the push check, having no evidence, does not hold the card.
     expect(names).toEqual([
       'whoami',
       'next_ready',
       'claim',
       'dispatch_prompt',
+      'get_work_item',
       'get_work_item',
       'transition_status',
       'get_work_item',

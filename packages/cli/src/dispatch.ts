@@ -680,6 +680,36 @@ export function renderNothingPushed(key: string, dispatch: DispatchPrompt): stri
 }
 
 /**
+ * Whether a succeeded leg pushed work the run could link to NO pull request (MOTIR-10877) —
+ * the one case the card must not be reported a clean Implemented: nothing would close it on
+ * merge, and the CI watch would have nothing to watch. Only a push the check SAW counts (an
+ * `unknown` remote is no evidence), and only a leg the run delivered itself (a session-lineage
+ * leg's pull request is the loop's).
+ */
+export function pushedButUnlinked(verdict: {
+  remote?: 'pushed' | 'unknown';
+  delivery?: { linked: readonly unknown[] } | null;
+}): boolean {
+  return verdict.remote === 'pushed' && !!verdict.delivery && verdict.delivery.linked.length === 0;
+}
+
+/** What the human reads when the run pushed work and could link no pull request (MOTIR-10877). */
+export function renderNoLinkedPullRequest(
+  key: string,
+  unlinked: readonly { repository: string | null; branch: string | null; reason: string }[],
+): string {
+  return [
+    `${key}: the work is pushed, but no pull request could be linked to ${key}.`,
+    ...unlinked.map(
+      (u) => `  ${u.repository ?? '(unpinned)'} · ${u.branch ?? '(no branch)'} — ${u.reason}`,
+    ),
+    'The work item stays In Progress: an Implemented card with no linked pull request is',
+    'closed by nothing when the pull request merges. Open the pull request (or link the one',
+    `that exists) and move ${key} to Implemented, or re-run it with \`motir run ${key}\`.`,
+  ].join('\n');
+}
+
+/**
  * What the human should do after the agent FAILS. The item deliberately stays
  * `in_progress` — the work was started and is half-done, so silently reverting
  * it to `todo` would hide that. It is added to the session exclude list instead,

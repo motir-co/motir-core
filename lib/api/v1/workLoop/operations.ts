@@ -38,6 +38,8 @@ import {
 import {
   runDiscrepancyAcknowledgementSchema,
   runDiscrepancyBodySchema,
+  runHowToTestAcknowledgementSchema,
+  runHowToTestBodySchema,
   runStopReportAcknowledgementSchema,
   runStopReportBodySchema,
 } from '@/lib/api/v1/workLoop/runAgentReports';
@@ -152,6 +154,22 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
           'Absent means no: the decisions are recorded through `record_run_discrepancy` and ' +
           'listed in the pull request, and the file route is not named, because a client that ' +
           'does not post them would drop them. ⚠️ It changes the TEXT only.',
+        schema: z.string(),
+      },
+      {
+        name: 'agentReportDelivery',
+        in: 'query',
+        required: false,
+        description:
+          '`1` when the CLIENT that will launch the agent also DELIVERS what the agent writes ' +
+          'into `$MOTIR_AGENT_REPORT` as `pullRequests` and `howToTest` (MOTIR-10877): it links ' +
+          'each pull request to the card and publishes the How to test with the run\u2019s ' +
+          'credential, before the card moves to Implemented. With it, and with `agentReport`, a ' +
+          'card that opens its own pull request tells an agent with no Motir tools to put the ' +
+          'pull request URL and its How to test in that file. Absent means no: the link and ' +
+          'the How to test go through `link_pull_request` and `publish_test_instructions` only, ' +
+          'because a client that does not post them would drop them. ⚠️ It changes the TEXT ' +
+          'only.',
         schema: z.string(),
       },
       {
@@ -1192,6 +1210,46 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     errorStatuses: [403, 404, 409, 422],
   }),
   defineOperation({
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/how-to-test',
+    operationId: 'publishDispatchRunHowToTest',
+    summary: 'Publish the How to test of a card a run delivered',
+    description:
+      'The RUN publishes the HOW TO TEST of `key`, a card it holds as an open leg — the same ' +
+      'record as the `publish_test_instructions` MCP tool, sent by the CLI with the run\u2019s ' +
+      'own credential after the agent exits, from the body the agent wrote into its ' +
+      'self-report and the head commit the run pushed to each repository. The record is ' +
+      'attributed to THIS run and becomes the card\u2019s current How to test; the earlier one ' +
+      'stays as history. The same body from the same run changes nothing (`created: false`). A ' +
+      'card that is not an open leg of the run is refused `UNKNOWN_DISPATCH_RUN_CARD`. Only the ' +
+      'operator who opened the run may publish for it.',
+    permission: 'work_item:edit',
+    parameters: [
+      {
+        name: 'id',
+        in: 'path',
+        required: true,
+        description: 'The dispatch run\u2019s id, as `openDispatchRun` returned it.',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: runHowToTestBodySchema,
+      description: 'The run target, its How to test, and each repository\u2019s pushed head.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: runHowToTestAcknowledgementSchema },
+      description: 'The acknowledgement: the record that is current, and whether it is new.',
+    },
+    // 403 for a run token naming another run, or a caller who may not edit the card;
+    // 404 for an unknown, cross-workspace or another operator's run, or an unknown card;
+    // 409 when the run is closed; 422 for a malformed body, a refused record (a cap, a
+    // repository outside the project, a malformed commit), or a card that is not an open
+    // leg of the run.
+    errorStatuses: [403, 404, 409, 422],
+  }),
+  defineOperation({
     method: 'GET',
     path: '/api/v1/dispatch-runs/{id}/close-out-prompt',
     operationId: 'getDispatchRunCloseOutPrompt',
@@ -1434,6 +1492,7 @@ export const WORK_LOOP_COMPONENTS: Readonly<Record<string, ZodType>> = {
   UnbuildableReportAcknowledgement: unbuildableReportAcknowledgementSchema,
   RunDiscrepancyAcknowledgement: runDiscrepancyAcknowledgementSchema,
   RunStopReportAcknowledgement: runStopReportAcknowledgementSchema,
+  RunHowToTestAcknowledgement: runHowToTestAcknowledgementSchema,
   ActivityEntry: activityEntrySchema,
   DispatchRun: dispatchRunSchema,
   DispatchRunCard: dispatchRunCardSchema,

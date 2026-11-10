@@ -1197,12 +1197,13 @@ describe('single dispatch — motir next / run / done', () => {
     // CLI assembles no prompt grammar of its own.
     // The CLI declares it posts the self-report file (`agentReport=1`,
     // MOTIR-8810) and the decisions in it (`agentReportDecisions=1`,
-    // MOTIR-10000), so the server text it receives is the file-route rendering.
+    // MOTIR-10000) and the pull request and How to test in it (`agentReportDelivery=1`,
+    // MOTIR-10877), so the server text it receives is the file-route rendering.
     const expected = await dispatchPromptService.getDispatchPrompt(
       fx.projectId,
       item.identifier,
       fx.ctx,
-      { runnerPostsAgentReport: true, runnerPostsDecisions: true },
+      { runnerPostsAgentReport: true, runnerPostsDecisions: true, runnerPostsDelivery: true },
     );
     expect(next.stdout).toBe(expected.prompt);
     // Diagnostics go to stderr, so `motir next --print | pbcopy` pipes the prompt

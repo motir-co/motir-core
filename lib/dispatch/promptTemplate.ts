@@ -567,6 +567,15 @@ export interface DispatchPromptSource {
    * would drop them, so it is a capability of its own.
    */
   runnerPostsDecisions?: boolean;
+  /**
+   * Does that runner ALSO deliver what the agent writes into `$MOTIR_AGENT_REPORT` as
+   * `pullRequests` and `howToTest` (MOTIR-10877) — link each pull request to the card and
+   * publish the How to test with the run's credential, before the card moves to Implemented?
+   * Only `true` together with {@link runnerPostsAgentReport} names those file routes, and only
+   * on a card that opens its OWN pull request and is its own run target
+   * ({@link namesDeliveryFileRoute}); a CLI that predates the delivery would drop them.
+   */
+  runnerPostsDelivery?: boolean;
 }
 
 /** The assembled prompt plus the workflow variant it ended up carrying. */
@@ -1979,6 +1988,7 @@ function multiRepoPrBlocks(
         trailer: [
           'ONCE PER REPOSITORY — each repository has its own pull request, so each',
           'needs its own call; the item completes only when they have all merged.',
+          ...noToolsLinkTrailer(src),
         ],
       }),
     );
@@ -2122,6 +2132,43 @@ export const LINKING_RATIONALE = [
   'clears it — it goes green on the link itself, so you do not need to push again.',
 ];
 
+/**
+ * Does this prompt name the DELIVERY file route (MOTIR-10877)? An agent with no Motir tools — a
+ * hosted run, a run inside an agent instance — cannot call `link_pull_request`,
+ * `publish_test_instructions` or `transition_status`, so it opened its pull request and the
+ * card went to Implemented linked to nothing, with no How to test. The runner now does those
+ * writes from `$MOTIR_AGENT_REPORT`, and the prompt says so — but ONLY where all three hold:
+ *
+ *   - the runner declared it delivers (`runnerPostsDelivery` beside `runnerPostsAgentReport`),
+ *     because a runner that does not would drop what the agent wrote;
+ *   - the card opens its OWN pull request (no session branch): a session pull request is the
+ *     loop's, which links it itself;
+ *   - the card is its own RUN TARGET: a scoped run's child publishes no How to test.
+ */
+export function namesDeliveryFileRoute(
+  src: DispatchPromptSource,
+  sessionBranch: string | null,
+): boolean {
+  return (
+    src.runnerPostsAgentReport === true &&
+    src.runnerPostsDelivery === true &&
+    sessionBranch === null &&
+    !(src.runTargetKey && src.runTargetKey !== src.key)
+  );
+}
+
+/** The GIT WORKFLOW's pointer to the delivery file route, for {@link linkingStep}'s trailer. */
+function noToolsLinkTrailer(src: DispatchPromptSource): string[] {
+  return namesDeliveryFileRoute(src, null)
+    ? [
+        'NO MOTIR TOOLS? If the link_pull_request tool is not available to you and',
+        'the environment variable MOTIR_AGENT_REPORT is set, put the pull request URL',
+        'into that JSON file as "pullRequests" instead (FINISHED step 4 shows how):',
+        'the run links it when you exit.',
+      ]
+    : [];
+}
+
 /** The linking STEP, in the shape the surrounding list needs: `indent` for the
  *  per-repository blocks, which are nested one level. */
 export function linkingStep(
@@ -2175,7 +2222,7 @@ function perItemPrWorkflow(src: DispatchPromptSource): string[] {
     `   ${src.key} in the TITLE as well — a human scanning a pull-request list`,
     '   reads it there — but the title is a LABEL, not what links the pull',
     '   request. Step 6 is what links it.',
-    ...linkingStep(src, branch, 6),
+    ...linkingStep(src, branch, 6, { trailer: noToolsLinkTrailer(src) }),
     '7. STOP at the open pull request. Do not merge it and do not delete the branch.',
   ];
 }
@@ -2362,6 +2409,8 @@ function decisionOutcomeProtocol(src: DispatchPromptSource): string[] {
 
 function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null): string[] {
   const policy = src.findingsPolicy ?? FULL_FINDINGS_POLICY;
+  // MOTIR-10877: the delivery file route, for an agent with no Motir tools.
+  const delivery = namesDeliveryFileRoute(src, sessionBranch);
   // ⚠️ THIS BLOCK USED TO CONTRADICT THE SESSION-LINEAGE GRAMMAR, IN ONE PROMPT
   // (found while running MOTIR-3655, fixed here by MOTIR-3678). It renders for
   // BOTH grammars and took only `src`, so it could not vary — and it said
@@ -2400,9 +2449,11 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '       pull request) — once per repository if this item ships in more than',
     '       one. The link is the only association a pull request has; the key in',
     '       the branch and the title is a label Motir does not parse.',
-    ...howToTestStep(src),
+    ...(delivery ? noToolsLinkLines(src) : []),
+    ...howToTestStep(src, delivery),
     `    5. move ${src.key} to Implemented with the transition_status tool`,
     `       (key ${src.key}, status implemented)`,
+    ...(delivery ? noToolsTransitionLines(src) : []),
     '',
     '  Implemented means THE CODE IS ON THE REMOTE — not "I finished typing".',
     '  Transitioning before the push would make the card assert built work that',
@@ -2472,7 +2523,7 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
  * Rendered only where the outcome protocol renders — a MANUAL item opens no pull
  * request and gets no protocol at all, so it gets no step.
  */
-function howToTestStep(src: DispatchPromptSource): string[] {
+function howToTestStep(src: DispatchPromptSource, delivery = false): string[] {
   if (src.runTargetKey && src.runTargetKey !== src.key) {
     return [
       `    4b. do NOT publish How to test for ${src.key}. This item is part of a run`,
@@ -2501,6 +2552,48 @@ function howToTestStep(src: DispatchPromptSource): string[] {
     '        the whole corrected text (the new version supersedes; the old one',
     '        stays as history). A commit that changes none of them needs no new',
     '        publish.',
+    ...(delivery
+      ? [
+          `        NO MOTIR TOOLS? If the ${HOW_TO_TEST_TOOL_NAME} tool is not available`,
+          '        to you and MOTIR_AGENT_REPORT is set, put the SAME Markdown into that',
+          '        JSON file instead, as "howToTest" — its "bodyMd", and a "previewPath"',
+          '        only when there is one:',
+          '',
+          '         {"model": "<as above>", "pullRequests": ["<as above>"], "howToTest": {"bodyMd": "## Locally\\n…", "previewPath": "/…"}}',
+          '',
+          `        The run publishes it on ${src.key} with each repository's pushed head`,
+          '        commit when you exit, so name no commit there.',
+        ]
+      : []),
+  ];
+}
+
+/**
+ * FINISHED step 4's NO MOTIR TOOLS route (MOTIR-10877): the pull request URL into
+ * `$MOTIR_AGENT_REPORT` as `pullRequests`, which the runner links with the run's credential.
+ * Rendered only where {@link namesDeliveryFileRoute} holds.
+ */
+function noToolsLinkLines(src: DispatchPromptSource): string[] {
+  return [
+    '       NO MOTIR TOOLS? If the link_pull_request tool is not available to you',
+    '       (a hosted run, or a run inside an agent, gives you none) and the',
+    '       environment variable MOTIR_AGENT_REPORT is set, put the URL of each pull',
+    '       request you opened into the JSON file at that path instead, as',
+    '       "pullRequests" beside "model":',
+    '',
+    '         {"model": "<as above>", "pullRequests": ["https://github.com/<owner>/<repo>/pull/<n>"]}',
+    '',
+    `       and the run links each one to ${src.key} when you exit, before the card`,
+    '       moves to Implemented.',
+  ];
+}
+
+/** FINISHED step 5's NO MOTIR TOOLS line (MOTIR-10877): the runner owns the move then. */
+function noToolsTransitionLines(src: DispatchPromptSource): string[] {
+  return [
+    '       NO MOTIR TOOLS? Without the transition_status tool, leave the status to',
+    `       the run: it moves ${src.key} to Implemented itself once your pull request`,
+    '       is linked, and leaves it In Progress when it could link none.',
   ];
 }
 
@@ -3462,7 +3555,7 @@ function continueWorkflow(
     `7. Push ${branch}. Open a pull request against main ONLY if none is open for it`,
     `   (\`gh pr list --head ${branch}\`) — a continue never opens a second one. Put`,
     `   ${src.key} in the TITLE as well, as a label.`,
-    ...linkingStep(src, branch, 8),
+    ...linkingStep(src, branch, 8, { trailer: noToolsLinkTrailer(src) }),
     '9. STOP at the open pull request. Do not merge it and do not delete the branch.',
   ];
 }
@@ -3520,6 +3613,7 @@ function multiRepoContinueWorkflow(
               trailer: [
                 'ONCE PER REPOSITORY — each repository has its own pull request, so each',
                 'needs its own call; the item completes only when they have all merged.',
+                ...noToolsLinkTrailer(src),
               ],
             }),
           ]),

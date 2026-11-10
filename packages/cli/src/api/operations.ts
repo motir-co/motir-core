@@ -54,7 +54,7 @@ export const API_MAJOR = 1;
  * compatible by construction and only a server BELOW it can be missing
  * something this client was generated to expect.
  */
-export const GENERATED_AGAINST = "1.83.0";
+export const GENERATED_AGAINST = "1.84.0";
 
 /** Every declared operation, keyed by `operationId`. */
 export const V1_OPERATIONS = {
@@ -512,6 +512,13 @@ export const V1_OPERATIONS = {
     permission: "ai:plan",
     successStatus: 200,
     responseComponent: "PlanSession",
+  },
+  "publishDispatchRunHowToTest": {
+    method: "POST",
+    path: "/api/v1/dispatch-runs/{id}/how-to-test",
+    permission: "work_item:edit",
+    successStatus: 200,
+    responseComponent: "RunHowToTestAcknowledgement",
   },
   "recordDispatchRunDiscrepancy": {
     method: "POST",

@@ -13,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { resolveFakeClaim } from './helpers/fakeClaim.js';
+import { answerPrView, FAKE_PULL_REQUEST_URL } from './fakePullRequest.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import type { DispatchPrompt, WorkItemDetail } from '../src/client.js';
 import type { RunAgentOptions } from '../src/agentRun.js';
@@ -126,6 +127,14 @@ vi.mock('../src/client.js', async (importOriginal) => {
       record('link_pull_request', args);
       return {};
     }
+    // The run's own delivery (MOTIR-10877): the link, and the How to test on the run's door.
+    async linkPullRequest(args: unknown) {
+      record('link_pull_request', args);
+    }
+    async publishDispatchRunHowToTest(args: unknown) {
+      record('publish_how_to_test', args);
+      return { testInstructionsId: 'ti_1', created: true };
+    }
     async workItemHowToTest() {
       return { record: null };
     }
@@ -157,7 +166,10 @@ const SERVER = 'https://motir.test';
 const RUN_TOKEN = 'mrt_run_secret';
 
 const ok = (stdout = ''): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
-const PUSHED: CommandRunner = (_bin, args) => {
+const PUSHED: CommandRunner = (bin, args) => {
+  // The pull request the agent opened, which the run links (MOTIR-10877).
+  const pr = answerPrView(bin, args);
+  if (pr) return pr;
   if (args[0] === 'ls-remote') return ok('abc123\trefs/heads/motir/auto-x');
   if (args[0] === 'log' || args[0] === 'rev-list') return ok(args[1] === '--count' ? '1' : 'abc');
   return ok('');
@@ -553,5 +565,107 @@ describe('motir run in agent mode — adopt, the image’s own agent, and a clea
       /is for run cmrun_other, not cmrun_agent_1/,
     );
     expect(h.calls).toEqual([]);
+  });
+});
+
+describe('an agent with NO Motir tools — the run delivers for it (MOTIR-10877)', () => {
+  it('links the pull request the agent opened, publishes its How to test, and only then moves the card', async () => {
+    h.legs = ['PROD-7'];
+    h.details = { 'PROD-7': detail('PROD-7') };
+    h.prompt = (k) => prompt(k, ['motir-core'], { workBranch: 'subtask/PROD-7-add-the-thing' });
+    // The agent could call none of `link_pull_request`, `publish_test_instructions` or
+    // `transition_status`: it wrote the pull request and its How to test into its self-report.
+    runAgentMock.mockImplementation(async () => ({
+      exitCode: 0,
+      signal: null,
+      model: 'claude-opus-5-5',
+      pullRequests: [FAKE_PULL_REQUEST_URL],
+      howToTest: { bodyMd: '## Locally\n\n```sh\npnpm test\n```', previewPath: null },
+    }));
+
+    await runCommand('PROD-7', { runId: RUN }, { run: PUSHED });
+
+    // The link, with the head and base `gh` read off the pull request itself.
+    expect(callsTo('link_pull_request')).toEqual([
+      {
+        tool: 'link_pull_request',
+        args: {
+          key: 'PROD-7',
+          url: FAKE_PULL_REQUEST_URL,
+          headRef: 'subtask/PROD-7-add-the-thing',
+          baseRef: 'main',
+        },
+      },
+    ]);
+    // The How to test, on the RUN's door, with the repository's pushed head.
+    expect(callsTo('publish_how_to_test')).toEqual([
+      {
+        tool: 'publish_how_to_test',
+        args: {
+          runId: RUN,
+          key: 'PROD-7',
+          bodyMd: '## Locally\n\n```sh\npnpm test\n```',
+          repos: [
+            { repo: 'acme/motir-core', commitSha: 'abc1234def5678abc1234def5678abc1234def56' },
+          ],
+        },
+      },
+    ]);
+    // …and the ORDER is the point: linked, then How to test, then Implemented.
+    const link = tools().indexOf('link_pull_request');
+    const howToTest = tools().indexOf('publish_how_to_test');
+    const transition = tools().indexOf('transition_status');
+    expect(link).toBeGreaterThan(-1);
+    expect(link).toBeLessThan(howToTest);
+    expect(howToTest).toBeLessThan(transition);
+    expect(callsTo('transition_status')).toEqual([
+      { tool: 'transition_status', args: { key: 'PROD-7', status: 'implemented' } },
+    ]);
+    // One `delivery_linked` per repository, on the run, before the card settles.
+    const kinds = eventKinds();
+    expect(kinds.filter((k) => k === 'delivery_linked')).toHaveLength(1);
+    expect(kinds.indexOf('delivery_linked')).toBeLessThan(kinds.indexOf('card_settled'));
+    expect(process.exitCode).toBeUndefined();
+  });
+
+  it('pushed work with NO pull request to link stays In Progress, and the leg names the branch', async () => {
+    h.legs = ['PROD-7'];
+    h.details = { 'PROD-7': detail('PROD-7') };
+    h.prompt = (k) => prompt(k, ['motir-core'], { workBranch: 'subtask/PROD-7-add-the-thing' });
+    // The branch is on the remote, and `gh` finds no pull request on it.
+    const noPullRequest: CommandRunner = (bin, args, cwd) =>
+      bin === 'gh'
+        ? { exitCode: 1, stdout: '', stderr: 'no pull requests found' }
+        : PUSHED(bin, args, cwd);
+
+    await runCommand('PROD-7', { runId: RUN }, { run: noPullRequest });
+
+    expect(callsTo('link_pull_request')).toEqual([]);
+    expect(callsTo('transition_status')).toEqual([]);
+    const settled = callsTo('append_events')
+      .flatMap(
+        (c) =>
+          (c.args as { events: { kind: string; disposition?: string; data?: unknown }[] }).events,
+      )
+      .filter((e) => e.kind === 'card_settled');
+    expect(settled).toEqual([
+      expect.objectContaining({
+        disposition: 'failed',
+        data: {
+          reason: 'no_linked_pull_request',
+          branches: [
+            {
+              repository: 'motir-core',
+              branch: 'subtask/PROD-7-add-the-thing',
+              detail: 'no open pull request was found for subtask/PROD-7-add-the-thing',
+            },
+          ],
+        },
+      }),
+    ]);
+    expect(callsTo('close_dispatch_run')).toEqual([
+      { tool: 'close_dispatch_run', args: { runId: RUN, stopReason: 'halted' } },
+    ]);
+    expect(process.exitCode).toBe(1);
   });
 });

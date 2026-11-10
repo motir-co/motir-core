@@ -769,6 +769,17 @@ describe('every operation’s REAL response validates against its declared schem
       }),
       { id: runId },
     );
+    // The run's HOW TO TEST (MOTIR-10877), on the same open leg: what a tool-less agent wrote
+    // into `$MOTIR_AGENT_REPORT`, published with the run's own credential.
+    await drive(
+      'publishDispatchRunHowToTest',
+      () => import('@/app/api/v1/dispatch-runs/[id]/how-to-test/route'),
+      send(`/api/v1/dispatch-runs/${runId}/how-to-test`, 'POST', {
+        key: runCard,
+        bodyMd: '## How to test\n\nRun `pnpm test`; it passes.',
+      }),
+      { id: runId },
+    );
     await drive(
       'reportDispatchRunStop',
       () => import('@/app/api/v1/dispatch-runs/[id]/stop/route'),

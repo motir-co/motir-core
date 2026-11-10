@@ -202,6 +202,12 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'sibling `record_run_discrepancy` answers the same `{ commentId, recorded }` ' +
     'acknowledgement, and is exempt from the payload guard because an acknowledgement represents ' +
     'no resource (`EXEMPT_TOOLS`), so there is no probed payload to compare this against.',
+  RunHowToTestAcknowledgement:
+    'The run’s HOW TO TEST (MOTIR-10877) is posted over `/api/v1` by the `motir` CLI around ' +
+    'the agent, on the run’s own credential, which `verifyMcpToken` refuses. Its MCP sibling ' +
+    '`publish_test_instructions` writes the same record and answers a fuller result; the ' +
+    '`{ testInstructionsId, created }` acknowledgement represents no resource of its own, so ' +
+    'there is no probed payload to compare it against.',
   RunStopReportAcknowledgement:
     'The run’s STOP report (MOTIR-8722) is posted over `/api/v1` by the `motir` CLI around the ' +
     'agent, on the run’s own credential, which `verifyMcpToken` refuses. It has no MCP sibling: ' +

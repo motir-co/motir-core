@@ -343,3 +343,47 @@ does not. The declaration is sent only by code that does the posting.
 **The rule this leaves.** A prompt change that routes work through the runner is a contract with
 a CLI release that ships after the server. It renders behind the client's own declaration, never
 on the assumption that the CLI on `main` is the CLI people run.
+
+## AMENDMENT 4 — the pull request link and How to test reach the server too (MOTIR-10877, 2026-11-10)
+
+**What was wrong.** AMENDMENTS 1 to 3 gave the run doors to what an agent _reports_. The two calls
+that _deliver_ a card were still MCP-only: `link_pull_request` and `publish_test_instructions`. An
+agent with no Motir tools (a hosted run, or a run inside the user's agent instance) opened its
+pull request and could make neither call. The CLI then moved the card to Implemented anyway. The
+CI watch found no delivery to watch (`ci_verdict` `nothing`), no How to test was published, and
+the card sat at Implemented linked to nothing, so its merge would never close it.
+
+**What changes.**
+
+1. **The CLI links the pull request itself**, in the shared dispatch leg (`runDelivery.ts`), after
+   the agent exits and before any caller moves the card. For each repository it takes the URL the
+   agent wrote into `$MOTIR_AGENT_REPORT` as `"pullRequests"`, or else the work branch's open pull
+   request (`gh pr view <branch>`, through the run's own `gh` shim and git credential), and links
+   it through `POST /api/v1/work-items/{key}/pull-requests`, the door the session close-out
+   already uses. A pull request the card already delivers (an agent _with_ the tools linked it)
+   counts as linked with no second call. Each link is a `delivery_linked` event on the leg.
+2. **The CLI publishes the How to test** the agent wrote as `"howToTest"` (`bodyMd`, and
+   `previewPath` when there is one) through a new run door,
+   `POST /api/v1/dispatch-runs/{id}/how-to-test` (`work_item:edit`, `own_run`). It is the same
+   record `publish_test_instructions` writes, attributed to THIS run and refused unless the run is
+   the caller's own, still running, and holds the card as an open leg. The CLI sends each
+   repository's pushed head commit, which it reads itself (`headRefOid`, else `git ls-remote`)
+   rather than taking from the agent.
+3. **The order is link, then How to test, then Implemented**, so the transition and the CI watch
+   that follow read a linked card.
+4. **A run that pushed work but could link no pull request does not report a clean
+   Implemented.** The card stays In Progress, the leg settles `failed` with a
+   `no_linked_pull_request` reason naming each branch, the run closes `halted`, and `motir run`
+   exits 1. `motir batch` records the card as failed with `no pull request linked: <branch>`.
+5. **The prompt names the file route only where it is true** (AMENDMENT 3's rule): behind a new
+   declaration, `agentReportDelivery=1`, beside `agentReport=1`; only for a card that opens its own
+   pull request (no session branch, whose pull request the loop links); and only for a card that
+   is its own run target (a scoped run's child publishes no How to test). The MCP
+   `dispatch_prompt` tool never declares it.
+
+| Lane                                 | Pull request link                   | How to test                             |
+| ------------------------------------ | ----------------------------------- | --------------------------------------- |
+| Local run, agent with a Motir MCP    | the agent's `link_pull_request`     | the agent's `publish_test_instructions` |
+| Local run, agent with no Motir MCP   | the CLI, from the file or `gh`      | the CLI posts `…/how-to-test`           |
+| Hosted run                           | the container's CLI, run credential | the container's CLI, run token          |
+| Run inside the user's agent instance | the instance's CLI, run credential  | the instance's CLI, run token           |

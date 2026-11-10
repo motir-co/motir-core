@@ -11,6 +11,7 @@ import {
   HOW_TO_TEST_TOOL_NAME,
   LINKING_RATIONALE,
   LIST_DESIGNS_TOOL_NAME,
+  namesDeliveryFileRoute,
   NO_INJECTIONS,
   parseFindingsPolicy,
   RECORD_DISCREPANCY_TOOL_NAME,
@@ -3587,5 +3588,82 @@ describe('DECIDE WHAT THE CARD LEAVES OPEN — a run never asks, decides by best
       expect(outcome).not.toContain(HEADING);
       expect(outcome).not.toContain('decisions');
     }
+  });
+});
+
+// ─── A tool-less agent's DELIVERY (MOTIR-10877) ─────────────────────────────
+//
+// An agent with no Motir tools cannot call link_pull_request or publish_test_instructions, so a
+// runner that declares it delivers (`agentReportDelivery`) takes the pull request URL and the How
+// to test from `$MOTIR_AGENT_REPORT` and makes those calls itself. The prompt names that file
+// route ONLY where it is true: the runner declared it, the card opens its own pull request, and
+// the card is its own run target.
+describe('the NO MOTIR TOOLS delivery route (MOTIR-10877)', () => {
+  const DELIVERS = { runnerPostsAgentReport: true, runnerPostsDelivery: true } as const;
+  const LINK_ROUTE = '"pullRequests" beside "model"';
+  const HOW_TO_TEST_ROUTE = 'JSON file instead, as "howToTest"';
+  const TRANSITION_ROUTE = 'NO MOTIR TOOLS? Without the transition_status tool, leave the status';
+  const GIT_ROUTE = 'into that JSON file as "pullRequests" instead (FINISHED step 4 shows how):';
+
+  it('names the pull request URL, the How to test and the run-owned move to a delivering runner', () => {
+    const { prompt } = assembleDispatchPrompt(source(DELIVERS));
+    expect(prompt).toContain(LINK_ROUTE);
+    expect(prompt).toContain(
+      '         {"model": "<as above>", "pullRequests": ["https://github.com/<owner>/<repo>/pull/<n>"]}',
+    );
+    expect(prompt).toContain(
+      '       and the run links each one to PROD-7 when you exit, before the card',
+    );
+    expect(prompt).toContain(HOW_TO_TEST_ROUTE);
+    expect(prompt).toContain(
+      "        The run publishes it on PROD-7 with each repository's pushed head",
+    );
+    expect(prompt).toContain(TRANSITION_ROUTE);
+    expect(prompt).toContain(GIT_ROUTE);
+    // The order the run keeps: link (step 4), How to test (4b), then the move (step 5).
+    expect(prompt.indexOf(LINK_ROUTE)).toBeLessThan(prompt.indexOf(HOW_TO_TEST_ROUTE));
+    expect(prompt.indexOf(HOW_TO_TEST_ROUTE)).toBeLessThan(prompt.indexOf(TRANSITION_ROUTE));
+  });
+
+  it('names none of it to a runner that has not declared it delivers', () => {
+    for (const over of [
+      { runnerPostsAgentReport: true },
+      { runnerPostsDelivery: true },
+      { runnerPostsAgentReport: true, runnerPostsDecisions: true },
+      {},
+    ] as Partial<DispatchPromptSource>[]) {
+      const { prompt } = assembleDispatchPrompt(source(over));
+      for (const route of [LINK_ROUTE, HOW_TO_TEST_ROUTE, TRANSITION_ROUTE, GIT_ROUTE]) {
+        expect(prompt).not.toContain(route);
+      }
+    }
+  });
+
+  it('names none of it on a session lineage — the loop links the session pull request', () => {
+    const { prompt } = assembleDispatchPrompt(
+      source({ ...DELIVERS, sessionBranch: 'motir/auto-20260913-120000', runTargetKey: null }),
+    );
+    for (const route of [LINK_ROUTE, HOW_TO_TEST_ROUTE, TRANSITION_ROUTE]) {
+      expect(prompt).not.toContain(route);
+    }
+  });
+
+  it('names none of it to a scoped run’s child, which publishes no How to test', () => {
+    const { prompt } = assembleDispatchPrompt(source({ ...DELIVERS, runTargetKey: 'PROD-1' }));
+    for (const route of [LINK_ROUTE, HOW_TO_TEST_ROUTE, TRANSITION_ROUTE, GIT_ROUTE]) {
+      expect(prompt).not.toContain(route);
+    }
+  });
+
+  it('namesDeliveryFileRoute holds only with both flags, no session branch and its own target', () => {
+    expect(namesDeliveryFileRoute(source(DELIVERS), null)).toBe(true);
+    expect(namesDeliveryFileRoute(source({ ...DELIVERS, runTargetKey: 'PROD-7' }), null)).toBe(
+      true,
+    );
+    expect(namesDeliveryFileRoute(source(DELIVERS), 'motir/run-1')).toBe(false);
+    expect(namesDeliveryFileRoute(source({ ...DELIVERS, runTargetKey: 'PROD-1' }), null)).toBe(
+      false,
+    );
+    expect(namesDeliveryFileRoute(source({ runnerPostsAgentReport: true }), null)).toBe(false);
   });
 });

@@ -2490,6 +2490,14 @@ Requires the work-item edit permission (`work_item:edit`) — linking a pull
 request to a card is editing that card. It is already in the CLI's fixed grant,
 so a dispatched agent can call it.
 
+**A dispatched agent with no Motir tools does not call it** (MOTIR-10877,
+`run-found-trigger-dispatched-path.md` AMENDMENT 4). A hosted or agent-instance run's agent
+holds no Motir token, so it writes each pull request URL into `$MOTIR_AGENT_REPORT` as
+`"pullRequests"`, and the CLI links it when the agent exits, before the card moves to
+Implemented. With no URL in the file, the CLI links the work branch's open pull request. A run
+that pushed work and could link no pull request leaves the card In Progress and says which
+branch.
+
 #### `unlink_pull_request`
 
 **Undo ONE `link_pull_request`** — remove the delivery recorded between this work
@@ -2926,6 +2934,13 @@ commitSha }], bodyBytes, created, isCurrent, dispatchRunId, createdAt }`.
 
 **Permission** — `work_item:edit`, the key the evidence publishers above assert
 and one `CLI_TOKEN_GRANT` already carries. The grant is **not** widened.
+
+**A dispatched agent with no Motir tools does not call it** (MOTIR-10877,
+`run-found-trigger-dispatched-path.md` AMENDMENT 4). It writes the same Markdown into
+`$MOTIR_AGENT_REPORT` as `"howToTest"` (`bodyMd`, and `previewPath` when there is one), and the
+CLI publishes it with the run's own credential through
+`POST /api/v1/dispatch-runs/{id}/how-to-test`, after linking the pull request and with each
+repository's pushed head commit, which the CLI reads itself.
 
 #### `link_work_items`
 

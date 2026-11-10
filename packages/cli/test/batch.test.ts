@@ -19,6 +19,7 @@ import {
 import { parseMax } from '../src/commands/auto.js';
 import { addExclude, readExcludes } from '../src/sessionExcludes.js';
 import type { CommandRunner } from '../src/git.js';
+import { answerPrView } from './fakePullRequest.js';
 import { CliError, ContainerHasOpenChildrenError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
 import { parseAgentCommand } from '../src/agentProfiles.js';
@@ -115,6 +116,8 @@ class FakeServer {
   refuseTransitionFor: ((args: { key: string; status: string }) => Error | null) | null = null;
   /** Every key the reconcile read back, in order. */
   readonly readBackCalls: string[] = [];
+  /** The pull requests the run linked (MOTIR-10877). */
+  readonly links: { key: string; url?: string }[] = [];
 
   constructor(private readonly items: FakeItem[]) {}
 
@@ -249,6 +252,10 @@ class FakeServer {
         const item = this.byKey(key);
         return { item: { identifier: item.key, status: item.status } };
       },
+      // The run links the pull request the agent opened (MOTIR-10877).
+      linkPullRequest: async (args: { key: string; url?: string }) => {
+        this.links.push(args);
+      },
       transitionStatus: async (args: { key: string; status: string }) => {
         if (this.readOnly) {
           throw new CliError('FORBIDDEN: this token cannot write to the project.');
@@ -365,10 +372,12 @@ async function drive(
     // answers with a ref unless a test says the agent pushed nothing.
     run:
       drives.git ??
-      ((_bin: string, args: string[]) =>
-        args[0] === 'ls-remote'
+      ((bin: string, args: string[]) =>
+        // …and the pull request the agent opened, which the run links (MOTIR-10877).
+        answerPrView(bin, args) ??
+        (args[0] === 'ls-remote'
           ? { exitCode: 0, stdout: 'abc123\trefs/heads/subtask/pushed', stderr: '' }
-          : { exitCode: 0, stdout: '', stderr: '' }),
+          : { exitCode: 0, stdout: '', stderr: '' })),
     ...(drives.afterCard ? { afterCard: drives.afterCard } : {}),
     ...(drives.reporter ? { reporter: drives.reporter } : {}),
   };
@@ -872,6 +881,26 @@ describe('motir batch — previously-failed items', () => {
     server.byKey('PROD-1').status = 'todo';
     await drive(server, { opts: { reset: true } });
     expect(readExcludes('https://app.motir.co', 'PROD')).toEqual([]);
+  });
+
+  it('PUSHED but linked to nothing is a failure naming the branch — never Implemented (MOTIR-10877)', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    const { summary } = await drive(server, {
+      opts: { keepGoing: true },
+      // The agent pushed; `gh` finds no pull request for any branch.
+      git: (bin, args) =>
+        bin === 'gh'
+          ? { exitCode: 1, stdout: '', stderr: 'no pull requests found' }
+          : args[0] === 'ls-remote'
+            ? { exitCode: 0, stdout: 'abc123\trefs/heads/subtask/pushed', stderr: '' }
+            : { exitCode: 0, stdout: '', stderr: '' },
+    });
+
+    expect(summary.records.map((r) => r.outcome)).toEqual(['failed', 'failed']);
+    expect(summary.records[0]?.detail).toBe('no pull request linked: subtask/pushed');
+    expect(server.transitions.filter((t) => t.status === 'implemented')).toEqual([]);
+    expect(server.links).toEqual([]);
+    expect(printed()).toContain('PROD-1: the work is pushed, but no pull request could be linked');
   });
 });
 

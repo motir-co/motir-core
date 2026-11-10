@@ -8,6 +8,12 @@ import {
 } from '@/lib/repositories/testInstructionsRepository';
 import { testInstructionsRepoRepository } from '@/lib/repositories/testInstructionsRepoRepository';
 import { dispatchRunRepository } from '@/lib/repositories/dispatchRunRepository';
+import { dispatchRunCardRepository } from '@/lib/repositories/dispatchRunCardRepository';
+import {
+  DispatchRunNotFoundError,
+  DispatchRunTerminalError,
+  UnknownDispatchRunCardError,
+} from '@/lib/dispatchRuns/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { normalizeCommitSha } from '@/lib/git/commitSha';
@@ -81,6 +87,14 @@ export interface PublishTestInstructionsInput {
    * another run's.
    */
   attributeToRunningDispatch?: boolean;
+  /**
+   * The RUN door's run (MOTIR-10877, `POST /api/v1/dispatch-runs/{id}/how-to-test`): the
+   * record is attributed to THIS run, which must be running, opened by the caller, and hold
+   * the item as an OPEN leg — all read under the run row's lock, in the publish's own
+   * transaction. Set only by the server from a validated path; it wins over
+   * {@link attributeToRunningDispatch}.
+   */
+  forRunId?: string;
 }
 
 /** One validated, normalised repository section (its repository not yet resolved). */
@@ -263,6 +277,25 @@ async function resolveProjectRepoSections(
   });
 }
 
+/**
+ * The run door's guard (MOTIR-10877): the run is the caller's own, still running, and holds
+ * the item as an open leg. The run row is locked first, as every run write locks it. An
+ * unknown run and another operator's answer the same 404; a card the run does not hold, or
+ * whose leg has settled, is `UNKNOWN_DISPATCH_RUN_CARD`.
+ */
+async function assertOpenLegOfRun(
+  runId: string,
+  item: { id: string; identifier: string },
+  ctx: ServiceContext,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const run = await dispatchRunRepository.findTerminalStateForUpdate(runId, tx);
+  if (!run || run.createdById !== ctx.userId) throw new DispatchRunNotFoundError(runId);
+  if (run.status !== 'running') throw new DispatchRunTerminalError(runId, run.status);
+  const leg = await dispatchRunCardRepository.findByRunAndWorkItem(runId, item.id, tx);
+  if (!leg || leg.endedAt !== null) throw new UnknownDispatchRunCardError(item.identifier);
+}
+
 export const testInstructionsService = {
   /**
    * Write a run's HOW TO TEST record onto its run target, making it the
@@ -305,13 +338,19 @@ export const testInstructionsService = {
         { userId: ctx.userId, workspaceId: ctx.workspaceId },
         async (tx) => {
           const repos = await resolveProjectRepoSections(item.projectId, content.repos, ctx, tx);
+          // The run door's run, locked FIRST — the order every run write takes (MOTIR-10877).
+          if (input.forRunId !== undefined) {
+            await assertOpenLegOfRun(input.forRunId, item, ctx, tx);
+          }
           // Serialise every publish for this item BEFORE the read that decides.
           const locked = await workItemRepository.lockById(item.id, tx);
           if (!locked) throw new TestInstructionsWorkItemNotFoundError(input.workItemId);
 
-          const dispatchRunId = input.attributeToRunningDispatch
-            ? await dispatchRunRepository.findLatestRunningIdForWorkItem(item.id, tx)
-            : null;
+          const dispatchRunId =
+            input.forRunId ??
+            (input.attributeToRunningDispatch
+              ? await dispatchRunRepository.findLatestRunningIdForWorkItem(item.id, tx)
+              : null);
 
           const current = await testInstructionsRepository.findCurrentForWorkItem(item.id, tx);
           if (
