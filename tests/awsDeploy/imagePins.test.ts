@@ -200,6 +200,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     expect(code).toBe(0);
     expect(aws.secrets.get(SECRET)).toBe(V026);
     expect(result?.['pins']).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'written' },
       { name: 'motir-runner-image', value: V026, state: 'written' },
     ]);
     const methods = aws.methods();
@@ -214,10 +215,17 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
     expect(code).toBe(1);
     expect(aws.secrets.get(SECRET)).toBe(V024);
+    // The hosted-agent secret held nothing before, so there is nothing to put back.
     expect(result?.['pins']).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'written' },
       { name: 'motir-runner-image', value: V026, state: 'restored' },
     ]);
     expect(result?.['recorded']).toBe(false);
+    // The restore lands before the rollback's updateService calls start tasks (MOTIR-10882).
+    const methods = aws.methods();
+    const restore = methods.lastIndexOf('putSecretValue');
+    expect(restore).toBeGreaterThan(methods.indexOf('updateService'));
+    expect(restore).toBeLessThan(methods.lastIndexOf('updateService'));
   });
 
   it('stops before any service changes when the secret write is refused', async () => {
@@ -236,6 +244,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
     const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
     expect(code).toBe(0);
     expect(result?.['pins']).toEqual([
+      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'not_granted' },
       { name: 'motir-runner-image', value: V026, state: 'not_granted' },
     ]);
     expect(aws.methods()).toContain('updateService');
