@@ -14359,6 +14359,12 @@
         "override": "Remplacement du projet pour <b>{difficulty}</b>",
         "fromLeaves": "Difficulté la plus élevée parmi ses feuilles : <b>{difficulty}</b>",
         "overrideFromLeaves": "Remplacement du projet pour <b>{difficulty}</b>, la difficulté la plus élevée parmi ses feuilles",
+        "orgLevel": "Valeur de l’organisation pour <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Valeur de l’organisation pour <b>{difficulty}</b>, la difficulté la plus élevée parmi ses feuilles",
+        "orgDesign": "<b>Modèle d’exécution de design de l’organisation</b> : un élément de design",
+        "orgDesignFromLeaves": "<b>Modèle d’exécution de design de l’organisation</b> : chaque feuille non terminée est un élément de design",
+        "platformDesign": "<b>Modèle d’exécution de design</b> : un élément de design",
+        "platformDesignFromLeaves": "<b>Modèle d’exécution de design</b> : chaque feuille non terminée est un élément de design",
         "noCapacityTag": "Aucune capacité",
         "noCapacityReason": "Aucune capacité d'exécution d'agent pour le moment. Réessayez dans un instant.",
         "allHeldBody": "Aucun modèle n'a de capacité d'exécution d'agent pour le moment. Réessayez dans un instant ; les exécutions locales ne sont pas affectées."

@@ -14356,6 +14356,12 @@
         "override": "Project override for <b>{difficulty}</b>",
         "fromLeaves": "Highest difficulty among its leaves: <b>{difficulty}</b>",
         "overrideFromLeaves": "Project override for <b>{difficulty}</b>, the highest difficulty among its leaves",
+        "orgLevel": "Organisation default for <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Organisation default for <b>{difficulty}</b>, the highest difficulty among its leaves",
+        "orgDesign": "<b>Organisation design-run model</b>: a design work item",
+        "orgDesignFromLeaves": "<b>Organisation design-run model</b>: every unfinished leaf is a design work item",
+        "platformDesign": "<b>Design-run model</b>: a design work item",
+        "platformDesignFromLeaves": "<b>Design-run model</b>: every unfinished leaf is a design work item",
         "noCapacityTag": "No capacity",
         "noCapacityReason": "No agent-run capacity right now. Try again shortly.",
         "allHeldBody": "No model has agent-run capacity right now. Try again shortly; local runs are unaffected."

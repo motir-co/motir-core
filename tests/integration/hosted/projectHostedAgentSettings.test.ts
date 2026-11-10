@@ -100,6 +100,7 @@ describe('projectHostedAgentSettingsService.get', () => {
       override: null,
       overrideOffered: true,
       platformDefault: 'claude-sonnet-5-5',
+      inheritedFrom: 'platform',
       effective: 'claude-sonnet-5-5',
       source: 'platform_level',
     });
@@ -258,6 +259,7 @@ describe('projectHostedAgentSettingsService.resolveForWorkItem', () => {
       source: 'override',
       difficulty: 'low',
       fromLeaves: false,
+      design: false,
     });
   });
 
@@ -269,6 +271,7 @@ describe('projectHostedAgentSettingsService.resolveForWorkItem', () => {
       source: 'platform_default',
       difficulty: null,
       fromLeaves: false,
+      design: false,
     });
   });
 
@@ -298,6 +301,7 @@ describe('projectHostedAgentSettingsService.resolveForWorkItem', () => {
       source: 'override',
       difficulty: 'medium',
       fromLeaves: true,
+      design: false,
     });
 
     // Reopen the high leaf: it now counts.

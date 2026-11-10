@@ -39,13 +39,34 @@ import type { HostedModel, HostedModelsState, HostedResolvedModel } from './host
 // never truncates; both come back the moment the verdict clears. The selection
 // never moves off a held model: the DOOR holds its button (`HostedHeldLine`).
 
-/** The line's message key — a leaf's own difficulty or a parent's leaves', and who chose. */
-function provenanceKey(
-  r: HostedResolvedModel,
-): 'fromDifficulty' | 'override' | 'fromLeaves' | 'overrideFromLeaves' {
-  const override = r.source === 'override';
-  if (r.fromLeaves) return override ? 'overrideFromLeaves' : 'fromLeaves';
-  return override ? 'override' : 'fromDifficulty';
+/** The line's message key — a leaf's own difficulty or a parent's leaves', and who
+ *  chose: the project, the organisation (MOTIR-10843) or the platform, or the
+ *  design-run model of the organisation or the platform. */
+type ProvenanceKey =
+  | 'fromDifficulty'
+  | 'override'
+  | 'fromLeaves'
+  | 'overrideFromLeaves'
+  | 'orgLevel'
+  | 'orgLevelFromLeaves'
+  | 'orgDesign'
+  | 'orgDesignFromLeaves'
+  | 'platformDesign'
+  | 'platformDesignFromLeaves';
+
+function provenanceKey(r: HostedResolvedModel): ProvenanceKey {
+  switch (r.source) {
+    case 'org_design':
+      return r.fromLeaves ? 'orgDesignFromLeaves' : 'orgDesign';
+    case 'platform_design':
+      return r.fromLeaves ? 'platformDesignFromLeaves' : 'platformDesign';
+    case 'org_level':
+      return r.fromLeaves ? 'orgLevelFromLeaves' : 'orgLevel';
+    case 'override':
+      return r.fromLeaves ? 'overrideFromLeaves' : 'override';
+    default:
+      return r.fromLeaves ? 'fromLeaves' : 'fromDifficulty';
+  }
 }
 
 function useDifficultyLabel(r: HostedResolvedModel | null): string {

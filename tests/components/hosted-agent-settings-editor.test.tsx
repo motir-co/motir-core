@@ -28,6 +28,8 @@ const OFFER = {
     medium: 'claude-opus-5-5',
     high: 'claude-opus-5-5',
   },
+  reviewAgentDefault: null as string | null,
+  designRunDefault: null as string | null,
 };
 
 function settings(
@@ -291,6 +293,8 @@ describe('HostedAgentSettingsEditor — loading, unavailable, empty (panels 6, 7
           models: [],
           default: null,
           defaultsByDifficulty: { trivial: null, low: null, medium: null, high: null },
+          reviewAgentDefault: null,
+          designRunDefault: null,
         } as unknown as typeof OFFER),
       ),
     );

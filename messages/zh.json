@@ -14350,6 +14350,12 @@
         "override": "项目为<b>{difficulty}</b>难度设置的模型",
         "fromLeaves": "其子项中的最高难度：<b>{difficulty}</b>",
         "overrideFromLeaves": "项目为<b>{difficulty}</b>难度设置的模型（其子项中的最高难度）",
+        "orgLevel": "组织为<b>{difficulty}</b>难度设置的默认模型",
+        "orgLevelFromLeaves": "组织为<b>{difficulty}</b>难度设置的默认模型（其子项中的最高难度）",
+        "orgDesign": "<b>组织的设计运行模型</b>：设计类工作项",
+        "orgDesignFromLeaves": "<b>组织的设计运行模型</b>：所有未完成的子项都是设计类工作项",
+        "platformDesign": "<b>设计运行模型</b>：设计类工作项",
+        "platformDesignFromLeaves": "<b>设计运行模型</b>：所有未完成的子项都是设计类工作项",
         "noCapacityTag": "暂无容量",
         "noCapacityReason": "目前没有智能体运行容量，请稍后再试。",
         "allHeldBody": "目前没有模型有智能体运行容量。请稍后再试；本地运行不受影响。"

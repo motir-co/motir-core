@@ -2901,6 +2901,11 @@ export type AgentModelsRead =
       models: AgentModel[];
       default: string | null;
       defaultsByDifficulty: AgentModelDefaultsByDifficulty;
+      /** The platform review-agent model (motir-ai MOTIR-10840) — null when unset or
+       *  not offered, and for an older motir-ai that serves no such field. */
+      reviewAgentDefault: string | null;
+      /** The platform design-run model (MOTIR-10840) — null as above. */
+      designRunDefault: string | null;
     }
   | { state: 'unavailable'; reason: string };
 
@@ -2939,7 +2944,15 @@ function parseAgentModels(body: unknown): AgentModelsRead | null {
     models,
     default: defaultId,
     defaultsByDifficulty,
-  } = body as { models?: unknown; default?: unknown; defaultsByDifficulty?: unknown };
+    reviewAgentDefault,
+    designRunDefault,
+  } = body as {
+    models?: unknown;
+    default?: unknown;
+    defaultsByDifficulty?: unknown;
+    reviewAgentDefault?: unknown;
+    designRunDefault?: unknown;
+  };
   if (!Array.isArray(models)) return null;
   const parsed: AgentModel[] = [];
   for (const m of models) {
@@ -2950,11 +2963,17 @@ function parseAgentModels(body: unknown): AgentModelsRead | null {
   if (defaultId !== null && defaultId !== undefined && typeof defaultId !== 'string') return null;
   const byDifficulty = parseDefaultsByDifficulty(defaultsByDifficulty);
   if (!byDifficulty) return null;
+  // Both run-side defaults are ADDITIVE (MOTIR-10840): missing reads null, as
+  // `default` does; a present value that is neither a string nor null is malformed.
+  const optionalId = (v: unknown) => v === undefined || v === null || typeof v === 'string';
+  if (!optionalId(reviewAgentDefault) || !optionalId(designRunDefault)) return null;
   return {
     state: 'ok',
     models: parsed,
     default: defaultId ?? null,
     defaultsByDifficulty: byDifficulty,
+    reviewAgentDefault: (reviewAgentDefault as string | null | undefined) || null,
+    designRunDefault: (designRunDefault as string | null | undefined) || null,
   };
 }
 

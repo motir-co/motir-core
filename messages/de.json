@@ -14359,6 +14359,12 @@
         "override": "Projektvorgabe für <b>{difficulty}</b>",
         "fromLeaves": "Höchster Schwierigkeitsgrad unter seinen Blattelementen: <b>{difficulty}</b>",
         "overrideFromLeaves": "Projektvorgabe für <b>{difficulty}</b>, den höchsten Schwierigkeitsgrad unter seinen Blattelementen",
+        "orgLevel": "Organisationsvorgabe für <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Organisationsvorgabe für <b>{difficulty}</b>, den höchsten Schwierigkeitsgrad unter seinen Blattelementen",
+        "orgDesign": "<b>Design-Lauf-Modell der Organisation</b>: ein Design-Element",
+        "orgDesignFromLeaves": "<b>Design-Lauf-Modell der Organisation</b>: jedes offene Blattelement ist ein Design-Element",
+        "platformDesign": "<b>Design-Lauf-Modell</b>: ein Design-Element",
+        "platformDesignFromLeaves": "<b>Design-Lauf-Modell</b>: jedes offene Blattelement ist ein Design-Element",
         "noCapacityTag": "Keine Kapazität",
         "noCapacityReason": "Derzeit keine Kapazität für Agentenläufe. Versuchen Sie es in Kürze erneut.",
         "allHeldBody": "Derzeit hat kein Modell Kapazität für Agentenläufe. Versuchen Sie es in Kürze erneut; lokale Läufe sind nicht betroffen."

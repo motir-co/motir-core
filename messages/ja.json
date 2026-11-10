@@ -14356,6 +14356,12 @@
         "override": "<b>{difficulty}</b> に対するプロジェクトの上書き設定",
         "fromLeaves": "末端項目の中で最も高い難易度：<b>{difficulty}</b>",
         "overrideFromLeaves": "末端項目の中で最も高い難易度である <b>{difficulty}</b> に対するプロジェクトの上書き設定",
+        "orgLevel": "<b>{difficulty}</b> に対する組織の既定",
+        "orgLevelFromLeaves": "末端項目の中で最も高い難易度である <b>{difficulty}</b> に対する組織の既定",
+        "orgDesign": "<b>組織のデザイン実行モデル</b>：デザイン項目",
+        "orgDesignFromLeaves": "<b>組織のデザイン実行モデル</b>：未完了の末端項目がすべてデザイン項目",
+        "platformDesign": "<b>デザイン実行モデル</b>：デザイン項目",
+        "platformDesignFromLeaves": "<b>デザイン実行モデル</b>：未完了の末端項目がすべてデザイン項目",
         "noCapacityTag": "容量なし",
         "noCapacityReason": "現在エージェント実行の容量がありません。しばらくしてからもう一度お試しください。",
         "allHeldBody": "現在エージェント実行の容量があるモデルはありません。しばらくしてからもう一度お試しください。ローカルでの実行には影響しません。"

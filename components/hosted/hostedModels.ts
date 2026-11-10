@@ -136,8 +136,9 @@ export function withoutResolution(models: HostedModelsState): HostedModelsState 
 
 /**
  * The resolution the picker's line describes for `value`, or null when there is
- * no line: nothing resolved, a source that is not about difficulty
- * (`platform_default` / `first_offered` — today's *Default* label stands), or a
+ * no line: nothing resolved, a source that is neither about difficulty nor the
+ * design run (`platform_default` / `first_offered` — today's *Default* label
+ * stands), a level source with no difficulty, or a
  * value that is not the resolved model (the person picked another; design F6).
  */
 export function provenanceFor(
@@ -146,13 +147,24 @@ export function provenanceFor(
 ): HostedResolvedModel | null {
   if (models.state !== 'ok' || !models.resolved || value === null) return null;
   const r = models.resolved;
-  if (r.difficulty === null) return null;
-  if (r.source !== 'override' && r.source !== 'platform_level') return null;
+  // A design-run source names the design run, not a difficulty (MOTIR-10843).
+  const designSource = r.source === 'org_design' || r.source === 'platform_design';
+  const levelSource =
+    r.source === 'override' || r.source === 'org_level' || r.source === 'platform_level';
+  if (!designSource && !(levelSource && r.difficulty !== null)) return null;
   if (r.model !== value || !models.models.some((m) => m.id === value)) return null;
   return r;
 }
 
-const SOURCES = new Set(['override', 'platform_level', 'platform_default', 'first_offered']);
+const SOURCES = new Set([
+  'org_design',
+  'platform_design',
+  'override',
+  'org_level',
+  'platform_level',
+  'platform_default',
+  'first_offered',
+]);
 
 /** The wire `resolved` → the client's, or null when it is absent or malformed. */
 function resolvedOf(v: unknown): HostedResolvedModel | null {
@@ -166,6 +178,7 @@ function resolvedOf(v: unknown): HostedResolvedModel | null {
     source: o.source as HostedResolvedModel['source'],
     difficulty: isWorkItemDifficulty(o.difficulty) ? o.difficulty : null,
     fromLeaves: o.fromLeaves === true,
+    design: o.design === true,
   };
 }
 

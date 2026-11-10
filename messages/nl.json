@@ -14359,6 +14359,12 @@
         "override": "Projectoverschrijving voor <b>{difficulty}</b>",
         "fromLeaves": "Hoogste moeilijkheid onder de onderliggende items: <b>{difficulty}</b>",
         "overrideFromLeaves": "Projectoverschrijving voor <b>{difficulty}</b>, de hoogste moeilijkheid onder de onderliggende items",
+        "orgLevel": "Organisatiestandaard voor <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Organisatiestandaard voor <b>{difficulty}</b>, de hoogste moeilijkheid onder de onderliggende items",
+        "orgDesign": "<b>Ontwerprunmodel van de organisatie</b>: een ontwerpitem",
+        "orgDesignFromLeaves": "<b>Ontwerprunmodel van de organisatie</b>: elk onafgerond onderliggend item is een ontwerpitem",
+        "platformDesign": "<b>Ontwerprunmodel</b>: een ontwerpitem",
+        "platformDesignFromLeaves": "<b>Ontwerprunmodel</b>: elk onafgerond onderliggend item is een ontwerpitem",
         "noCapacityTag": "Geen capaciteit",
         "noCapacityReason": "Nu geen capaciteit voor agentruns. Probeer het zo opnieuw.",
         "allHeldBody": "Geen enkel model heeft nu capaciteit voor agentruns. Probeer het zo opnieuw; lokale runs worden niet beïnvloed."

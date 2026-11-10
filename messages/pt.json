@@ -14359,6 +14359,12 @@
         "override": "Substituição do projeto para <b>{difficulty}</b>",
         "fromLeaves": "Maior dificuldade entre as folhas: <b>{difficulty}</b>",
         "overrideFromLeaves": "Substituição do projeto para <b>{difficulty}</b>, a maior dificuldade entre as folhas",
+        "orgLevel": "Padrão da organização para <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Padrão da organização para <b>{difficulty}</b>, a maior dificuldade entre as folhas",
+        "orgDesign": "<b>Modelo de execução de design da organização</b>: um item de design",
+        "orgDesignFromLeaves": "<b>Modelo de execução de design da organização</b>: cada folha não concluída é um item de design",
+        "platformDesign": "<b>Modelo de execução de design</b>: um item de design",
+        "platformDesignFromLeaves": "<b>Modelo de execução de design</b>: cada folha não concluída é um item de design",
         "noCapacityTag": "Sem capacidade",
         "noCapacityReason": "Sem capacidade para execuções de agente agora. Tente novamente em breve.",
         "allHeldBody": "Nenhum modelo tem capacidade para execuções de agente agora. Tente novamente em breve; as execuções locais não são afetadas."

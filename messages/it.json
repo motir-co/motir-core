@@ -14359,6 +14359,12 @@
         "override": "Impostazione del progetto per <b>{difficulty}</b>",
         "fromLeaves": "Difficoltà più alta tra le sue foglie: <b>{difficulty}</b>",
         "overrideFromLeaves": "Impostazione del progetto per <b>{difficulty}</b>, la difficoltà più alta tra le sue foglie",
+        "orgLevel": "Impostazione dell’organizzazione per <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Impostazione dell’organizzazione per <b>{difficulty}</b>, la difficoltà più alta tra le sue foglie",
+        "orgDesign": "<b>Modello di esecuzione design dell’organizzazione</b>: un elemento di design",
+        "orgDesignFromLeaves": "<b>Modello di esecuzione design dell’organizzazione</b>: ogni foglia non completata è un elemento di design",
+        "platformDesign": "<b>Modello di esecuzione design</b>: un elemento di design",
+        "platformDesignFromLeaves": "<b>Modello di esecuzione design</b>: ogni foglia non completata è un elemento di design",
         "noCapacityTag": "Nessuna capacità",
         "noCapacityReason": "Al momento non c’è capacità per le esecuzioni dell’agente. Riprova tra poco.",
         "allHeldBody": "Al momento nessun modello ha capacità per le esecuzioni dell’agente. Riprova tra poco; le esecuzioni locali non sono interessate."

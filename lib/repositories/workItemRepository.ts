@@ -3306,31 +3306,32 @@ export const workItemRepository = {
    * status, so a leaf card answers its own difficulty. Archived / triage rows are
    * excluded on both the anchor and the recursive step, and the walk is
    * `workspaceId`-gated (finding #26). `difficulty` is null for a leaf that
-   * carries none.
+   * carries none. Each row also carries the leaf's `type`, which decides whether
+   * the card is a DESIGN run (MOTIR-10843: every unfinished leaf a `design` card).
    */
   async findUnfinishedLeafDifficulties(
     rootId: string,
     workspaceId: string,
     tx?: Prisma.TransactionClient,
-  ): Promise<{ difficulty: WorkItemDifficulty | null }[]> {
+  ): Promise<{ difficulty: WorkItemDifficulty | null; type: string | null }[]> {
     const client = tx ?? dbRead;
-    return client.$queryRaw<{ difficulty: WorkItemDifficulty | null }[]>`
+    return client.$queryRaw<{ difficulty: WorkItemDifficulty | null; type: string | null }[]>`
       WITH RECURSIVE subtree AS (
-        SELECT w."id", w."projectId", w."status", w."difficulty"
+        SELECT w."id", w."projectId", w."status", w."difficulty", w."type"
           FROM "work_item" w
           WHERE w."id" = ${rootId}
             AND w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
             AND w."triagedAt" IS NULL
         UNION ALL
-        SELECT w."id", w."projectId", w."status", w."difficulty"
+        SELECT w."id", w."projectId", w."status", w."difficulty", w."type"
           FROM "work_item" w
           JOIN subtree s ON w."parentId" = s."id"
           WHERE w."workspaceId" = ${workspaceId}
             AND w."archivedAt" IS NULL
             AND w."triagedAt" IS NULL
       )
-      SELECT s."difficulty"::text AS "difficulty"
+      SELECT s."difficulty"::text AS "difficulty", s."type"::text AS "type"
         FROM subtree s
         LEFT JOIN "workflow_status" ws
               ON ws."project_id" = s."projectId" AND ws."key" = s."status"

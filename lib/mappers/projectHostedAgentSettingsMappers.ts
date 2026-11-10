@@ -8,6 +8,7 @@ import {
   resolveHostedModel,
   type HostedModelOffer,
   type HostedModelsByDifficulty,
+  type OrgHostedModelLayer,
 } from '@/lib/hosted/resolveHostedModel';
 import type { ProjectHostedModelOverridesRow } from '@/lib/repositories/projectRepository';
 
@@ -49,18 +50,27 @@ export function toProjectHostedAgentSettingsDto(
     id,
     provider: '',
   })),
+  /** The organisation's run-side layer while it qualifies (MOTIR-10843), else null. */
+  org: OrgHostedModelLayer | null = null,
 ): ProjectHostedAgentSettingsDto {
   const overrides = toHostedModelOverrides(row);
-  const noDifficulty = resolveHostedModel({ difficulty: null, overrides, offered });
+  const resolve = (difficulty: WorkItemDifficultyDto | null) =>
+    resolveHostedModel({ difficulty, overrides, offered, org, design: false });
+  const noDifficulty = resolve(null);
   return {
     levels: WORK_ITEM_DIFFICULTIES.map((level) => {
       const override = overrides[level];
-      const resolved = resolveHostedModel({ difficulty: level, overrides, offered });
+      const resolved = resolve(level);
+      // What the level INHERITS with no project override: the organisation's own
+      // choice while it qualifies and it is offered, else the platform level.
+      const orgChoice = org?.levels[level] ?? null;
+      const fromOrg = orgChoice !== null && offered.models.includes(orgChoice);
       return {
         level,
         override,
         overrideOffered: override === null || offered.models.includes(override),
-        platformDefault: offered.defaultsByDifficulty[level],
+        platformDefault: fromOrg ? orgChoice : offered.defaultsByDifficulty[level],
+        inheritedFrom: fromOrg ? ('organization' as const) : ('platform' as const),
         effective: resolved?.model ?? null,
         source: resolved?.source ?? null,
       };

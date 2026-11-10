@@ -7,6 +7,7 @@ import {
   type AgentModelDefaultsByDifficulty,
 } from '@/lib/ai/motirAiClient';
 import { platformRunModelRepository } from '@/lib/repositories/platformRunModelRepository';
+import { resolveReviewModel, type OrgHostedModelLayer } from '@/lib/hosted/resolveHostedModel';
 import {
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
@@ -42,6 +43,10 @@ export type OfferedModels =
       default: string | null;
       /** motir-ai's platform default per difficulty level (MOTIR-6993). */
       defaultsByDifficulty: AgentModelDefaultsByDifficulty;
+      /** The platform review-agent model (MOTIR-10843) — null when unset or unlisted. */
+      reviewAgentDefault: string | null;
+      /** The platform design-run model (MOTIR-10843) — null when unset or unlisted. */
+      designRunDefault: string | null;
     }
   | { state: 'unavailable' };
 
@@ -79,6 +84,8 @@ async function readOffer(): Promise<AgentModelsRead> {
       medium: keep(read.defaultsByDifficulty.medium),
       high: keep(read.defaultsByDifficulty.high),
     },
+    reviewAgentDefault: keep(read.reviewAgentDefault),
+    designRunDefault: keep(read.designRunDefault),
   };
 }
 
@@ -96,6 +103,8 @@ export const hostedRunModelService = {
       models: read.models,
       default: read.default,
       defaultsByDifficulty: read.defaultsByDifficulty,
+      reviewAgentDefault: read.reviewAgentDefault,
+      designRunDefault: read.designRunDefault,
     };
   },
 
@@ -129,6 +138,26 @@ export const hostedRunModelService = {
       (read.default ? read.models.find((m) => m.id === read.default) : undefined) ?? read.models[0];
     if (!chosen) throw new HostedNoModelOfferedError();
     return chosen;
+  },
+
+  /**
+   * The model a hosted REVIEW is asked to run on (MOTIR-10843): the organisation's
+   * review-agent model while it qualifies (`org` non-null) and it is offered, else
+   * the platform review-agent model, else `undefined` — the review then takes
+   * {@link defaultOffered}, exactly as before. Never throws for an unanswered
+   * offer: the start path's own model step refuses that.
+   */
+  async reviewModelFor(
+    org: Pick<OrgHostedModelLayer, 'review'> | null,
+  ): Promise<string | undefined> {
+    const read = await readOffer();
+    if (read.state === 'unavailable') return undefined;
+    return (
+      resolveReviewModel(
+        { models: read.models.map((m) => m.id), reviewAgentDefault: read.reviewAgentDefault },
+        org,
+      )?.model ?? undefined
+    );
   },
 
   toOpenCodeModel,

@@ -14359,6 +14359,12 @@
         "override": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>",
         "fromLeaves": "Najwyższa trudność wśród jego liści: <b>{difficulty}</b>",
         "overrideFromLeaves": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>, najwyższej trudności wśród jego liści",
+        "orgLevel": "Domyślne ustawienie organizacji dla poziomu <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Domyślne ustawienie organizacji dla poziomu <b>{difficulty}</b>, najwyższej trudności wśród jego liści",
+        "orgDesign": "<b>Model przebiegu projektowego organizacji</b>: element projektowy",
+        "orgDesignFromLeaves": "<b>Model przebiegu projektowego organizacji</b>: każdy nieukończony liść jest elementem projektowym",
+        "platformDesign": "<b>Model przebiegu projektowego</b>: element projektowy",
+        "platformDesignFromLeaves": "<b>Model przebiegu projektowego</b>: każdy nieukończony liść jest elementem projektowym",
         "noCapacityTag": "Brak przepustowości",
         "noCapacityReason": "Brak przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę.",
         "allHeldBody": "Żaden model nie ma teraz przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę; nie dotyczy to uruchomień lokalnych."

@@ -14353,6 +14353,12 @@
         "override": "<b>{difficulty}</b>에 대한 프로젝트 재정의",
         "fromLeaves": "하위 리프 항목 중 가장 높은 난이도: <b>{difficulty}</b>",
         "overrideFromLeaves": "하위 리프 항목 중 가장 높은 난이도인 <b>{difficulty}</b>에 대한 프로젝트 재정의",
+        "orgLevel": "<b>{difficulty}</b>에 대한 조직 기본값",
+        "orgLevelFromLeaves": "하위 리프 항목 중 가장 높은 난이도인 <b>{difficulty}</b>에 대한 조직 기본값",
+        "orgDesign": "<b>조직 디자인 실행 모델</b>: 디자인 항목",
+        "orgDesignFromLeaves": "<b>조직 디자인 실행 모델</b>: 완료되지 않은 모든 리프 항목이 디자인 항목",
+        "platformDesign": "<b>디자인 실행 모델</b>: 디자인 항목",
+        "platformDesignFromLeaves": "<b>디자인 실행 모델</b>: 완료되지 않은 모든 리프 항목이 디자인 항목",
         "noCapacityTag": "용량 없음",
         "noCapacityReason": "지금은 에이전트 실행 용량이 없습니다. 잠시 후 다시 시도하세요.",
         "allHeldBody": "지금은 에이전트 실행 용량이 있는 모델이 없습니다. 잠시 후 다시 시도하세요. 로컬 실행에는 영향이 없습니다."

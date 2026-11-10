@@ -62,6 +62,9 @@ export function offerOf(dto: ProjectHostedAgentSettingsDto): HostedModelOffer {
     models: dto.offeredModels,
     default: dto.noDifficulty.source === 'platform_default' ? dto.noDifficulty.effective : null,
     defaultsByDifficulty,
+    // The room resolves non-design leaves only, so neither run-side default applies.
+    reviewAgentDefault: null,
+    designRunDefault: null,
   };
 }
 
@@ -69,7 +72,15 @@ export function offerOf(dto: ProjectHostedAgentSettingsDto): HostedModelOffer {
 export function rowView(dto: ProjectHostedAgentSettingsDto, overrides: Overrides, level: Level) {
   const offer = offerOf(dto);
   const override = overrides[level];
-  const resolved = resolveHostedModel({ difficulty: level, overrides, offered: offer });
+  // `platformDefault` already folds in the organisation's choice (MOTIR-10843), so
+  // the org layer is not passed a second time.
+  const resolved = resolveHostedModel({
+    difficulty: level,
+    overrides,
+    offered: offer,
+    org: null,
+    design: false,
+  });
   return {
     effective: resolved?.model ?? null,
     isOverride: resolved?.source === 'override',

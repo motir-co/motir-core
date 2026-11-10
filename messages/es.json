@@ -14359,6 +14359,12 @@
         "override": "Valor del proyecto para <b>{difficulty}</b>",
         "fromLeaves": "Mayor dificultad entre sus hojas: <b>{difficulty}</b>",
         "overrideFromLeaves": "Valor del proyecto para <b>{difficulty}</b>, la mayor dificultad entre sus hojas",
+        "orgLevel": "Valor de la organización para <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Valor de la organización para <b>{difficulty}</b>, la mayor dificultad entre sus hojas",
+        "orgDesign": "<b>Modelo de ejecución de diseño de la organización</b>: un elemento de diseño",
+        "orgDesignFromLeaves": "<b>Modelo de ejecución de diseño de la organización</b>: cada hoja sin terminar es un elemento de diseño",
+        "platformDesign": "<b>Modelo de ejecución de diseño</b>: un elemento de diseño",
+        "platformDesignFromLeaves": "<b>Modelo de ejecución de diseño</b>: cada hoja sin terminar es un elemento de diseño",
         "noCapacityTag": "Sin capacidad",
         "noCapacityReason": "Sin capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve.",
         "allHeldBody": "Ningún modelo tiene capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve; las ejecuciones locales no se ven afectadas."

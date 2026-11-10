@@ -262,6 +262,7 @@ describe('GET /api/hosted-runs/models?workItem=', () => {
         source: 'override',
         difficulty: 'high',
         fromLeaves: false,
+        design: false,
       },
     });
   });

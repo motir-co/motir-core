@@ -58,6 +58,10 @@ export interface HostedRunModelsFixture {
    *  beside the Claude ones). An id not named here is `anthropic`, so a fixture
    *  that predates the field answers exactly as it did. */
   providers?: Record<string, string>;
+  /** The platform review-agent and design-run models (story MOTIR-10838 ·
+   *  MOTIR-10843). Omitted → the field is absent, as an older motir-ai serves it. */
+  reviewAgentDefault?: string | null;
+  designRunDefault?: string | null;
 }
 
 export interface HostedRunUsageFixture {
@@ -220,6 +224,10 @@ export function installHostedRunMock(agent: MockAgent): void {
           ...(fx?.defaultsByDifficulty !== undefined
             ? { defaultsByDifficulty: fx.defaultsByDifficulty }
             : {}),
+          ...(fx?.reviewAgentDefault !== undefined
+            ? { reviewAgentDefault: fx.reviewAgentDefault }
+            : {}),
+          ...(fx?.designRunDefault !== undefined ? { designRunDefault: fx.designRunDefault } : {}),
         });
       })
       .persist();

@@ -68,7 +68,15 @@ interface Call {
 
 interface Stub {
   /** The offered list. `default: null` names none; `status` ≠ 200 is motir-ai down. */
-  models?: { status?: number; ids?: string[]; default?: string | null };
+  models?: {
+    status?: number;
+    ids?: string[];
+    default?: string | null;
+    /** The platform review-agent model (MOTIR-10843); omitted = not sent. */
+    reviewAgentDefault?: string | null;
+  };
+  /** The tier `/v1/admin/orgs/tiers` answers for every org asked (MOTIR-10843). */
+  tierKey?: string | null;
   mayRun?: boolean;
   /** `GET /repos/moooon/acme/installation`: its status, and its `contents` level. */
   installation?: { status?: number; contents?: string };
@@ -101,6 +109,15 @@ function stub(s: Stub = {}): void {
             provider: id.startsWith('deepseek') ? 'deepseek' : 'anthropic',
           })),
           default: s.models?.default === undefined ? (ids[0] ?? null) : s.models.default,
+          ...(s.models?.reviewAgentDefault !== undefined
+            ? { reviewAgentDefault: s.models.reviewAgentDefault }
+            : {}),
+        });
+      }
+      if (url === `${AI}/v1/admin/orgs/tiers`) {
+        const ids = (body?.['coreOrganizationIds'] as string[] | undefined) ?? [];
+        return json(200, {
+          orgs: ids.map((id) => ({ coreOrganizationId: id, tierKey: s.tierKey ?? null })),
         });
       }
       if (url === `${AI}/v1/credits/agent-run-check`) {
@@ -508,6 +525,40 @@ describe('a refusal before the boot is written onto the gate, which stays awaiti
   it('the model is the list’s default, else the first offered', async () => {
     const { s, request } = await reviewing('first-offered', 89);
     stub({ models: { ids: ['claude-sonnet-5', MODEL], default: null } });
+
+    await agentReviewStartService.startRequested(request);
+    const [run] = await runRows(s.workspace.id);
+    expect(run!.model).toBe('claude-sonnet-5');
+  });
+
+  it("the model is the qualifying org's review-agent model, else the platform's (MOTIR-10843)", async () => {
+    const { s, request } = await reviewing('org-review-model', 91);
+    const ids = [MODEL, 'claude-sonnet-5', 'claude-fable-5-1'];
+    await adminDb.organization.update({
+      where: { id: s.workspace.organizationId },
+      data: { hostedReviewModel: 'claude-fable-5-1' },
+    });
+    stub({ models: { ids, reviewAgentDefault: 'claude-sonnet-5' }, tierKey: 'pro' });
+
+    await agentReviewStartService.startRequested(request);
+    const [run] = await runRows(s.workspace.id);
+    expect(run!.model).toBe('claude-fable-5-1');
+    expect(fakeOrchestrator.specs.at(-1)!.env['MOTIR_MODEL']).toBe('anthropic/claude-fable-5-1');
+  });
+
+  it('an org on Standard reviews on the platform review-agent model, its own choice kept', async () => {
+    const { s, request } = await reviewing('standard-review-model', 92);
+    await adminDb.organization.update({
+      where: { id: s.workspace.organizationId },
+      data: { hostedReviewModel: 'claude-fable-5-1' },
+    });
+    stub({
+      models: {
+        ids: [MODEL, 'claude-sonnet-5', 'claude-fable-5-1'],
+        reviewAgentDefault: 'claude-sonnet-5',
+      },
+      tierKey: 'standard',
+    });
 
     await agentReviewStartService.startRequested(request);
     const [run] = await runRows(s.workspace.id);
