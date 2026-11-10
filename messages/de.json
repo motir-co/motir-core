@@ -4119,6 +4119,7 @@
         },
         "organization": "Organisation",
         "git": "Git",
+        "aiModels": "KI-Modelle",
         "members": "Mitglieder",
         "security": "Sicherheit",
         "usage": "Nutzung & Kosten",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Das Stoppergebnis schließen"
         },
         "forbidden": "Nur ein Eigentümer oder Admin kann die Flottenarbeit dieser Organisation stoppen."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Einstellungen",
+        "title": "KI-Modelle",
+        "lead": "Welches Modell jede Motir AI-Funktion in {org} verwendet. Eine Änderung gilt ab dem nächsten Job oder Lauf.",
+        "card": {
+          "title": "Modelle nach Funktion",
+          "subtitle": "Jede Funktion verwendet den Plattformstandard, bis Ihre Organisation ein anderes Modell wählt.",
+          "subtitleMeta": "{org} ist die Meta-Organisation von Motir und wählt ihre Modelle daher in jedem Tarif selbst."
+        },
+        "group": {
+          "planning": {
+            "title": "Planungsseitig",
+            "list": "Aus der Planungsmodell-Liste der Plattform gewählt"
+          },
+          "runs": {
+            "title": "Laufseitig",
+            "list": "Aus der Laufmodell-Liste der Plattform gewählt"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planung",
+            "desc": "Jede Sitzung eines Plans: der Durchlauf und seine Reparaturen"
+          },
+          "guide": {
+            "name": "Anleitung",
+            "desc": "„Führe mich durch“ bei einem Arbeitselement, das eine Person erledigt"
+          },
+          "debug": {
+            "name": "Debug",
+            "desc": "Motir AI diagnostiziert einen Defekt zu einem Fehler"
+          },
+          "ask": {
+            "name": "Fragen",
+            "desc": "Die Motir AI-Unterhaltung und „Grill me“"
+          },
+          "review": {
+            "name": "Review-Agent",
+            "desc": "Gehostete Reviews. Ob ein Projekt mit einem Agenten prüft, bleibt in seinen Genehmigungseinstellungen."
+          },
+          "design": {
+            "name": "Design-Lauf",
+            "desc": "Ein gehosteter Lauf auf einem Design-Arbeitselement"
+          }
+        },
+        "agentRun": {
+          "name": "Agentenlauf",
+          "desc": "Gehostete Build-Läufe nach der Schwierigkeit des Arbeitselements. Die eigene Überschreibung eines Projekts für eine Schwierigkeit hat weiterhin Vorrang vor der der Organisation."
+        },
+        "modelFor": "Modell für {function}",
+        "loadingTrigger": "Modelle werden geladen…",
+        "byDifficulty": "Richtet sich nach der Schwierigkeit des Arbeitselements",
+        "platformDefaultPending": "Der Plattformstandard",
+        "optionDefault": "Plattformstandard",
+        "source": {
+          "org": "Wahl der Organisation",
+          "inherits": "Erbt den Plattformstandard"
+        },
+        "clear": "Löschen",
+        "clearAria": "Die Wahl für {function} löschen",
+        "staged": "Noch nicht gespeichert",
+        "withdrawnChip": "Nicht mehr angeboten",
+        "withdrawn": {
+          "edit": "<id>{model}</id> wird nicht mehr angeboten, daher fällt {function} auf den Plattformstandard <mono>{fallback}</mono> zurück, bis Sie ein anderes wählen.",
+          "read": "<id>{model}</id> wird nicht mehr angeboten, daher fällt {function} auf den Plattformstandard <mono>{fallback}</mono> zurück, bis ein Inhaber oder Admin ein anderes wählt.",
+          "editNoFallback": "<id>{model}</id> wird nicht mehr angeboten, daher fällt {function} auf den Plattformstandard zurück, bis Sie ein anderes wählen.",
+          "readNoFallback": "<id>{model}</id> wird nicht mehr angeboten, daher fällt {function} auf den Plattformstandard zurück, bis ein Inhaber oder Admin ein anderes wählt."
+        },
+        "refused": {
+          "notOffered": "Nicht gespeichert: <mono>{model}</mono> wurde für {function} nicht mehr angeboten, bevor die Speicherung ankam. {function} behält sein aktuelles Modell; wählen Sie ein anderes.",
+          "unreachable": "Nicht gespeichert: <mono>{model}</mono> ist gerade nicht erreichbar, daher behält {function} sein aktuelles Modell. Versuchen Sie es erneut oder wählen Sie ein anderes.",
+          "failed": "Nicht gespeichert: {function} konnte nicht gespeichert werden. Es behält sein aktuelles Modell; versuchen Sie es erneut."
+        },
+        "precedence": {
+          "body": "<b>Welches Modell ein Job verwendet</b>, der erste Treffer gilt: die Auswahl der Person bei „Gehostet ausführen“ → die eigene Überschreibung des Projekts (nur Agentenlauf) → die Wahl von {org} → der Plattformstandard.",
+          "cost": "Jedes Modell wird zu seinem eigenen Satz abgerechnet, daher verbraucht ein stärkeres Modell mehr Guthaben von {org}."
+        },
+        "footer": {
+          "dirtyHint": "Sie haben nicht gespeicherte Änderungen.",
+          "cancel": "Abbrechen",
+          "save": "Änderungen speichern"
+        },
+        "saved": {
+          "title": "KI-Modelle gespeichert",
+          "description": "{org} verwendet sie ab dem nächsten Job oder Lauf."
+        },
+        "locked": {
+          "title": "Die Modellwahl ist Teil von Pro und höher",
+          "body": "{org} ist im Tarif {plan}. Ab Pro wählt ein Inhaber oder Admin, welches Modell jede Motir AI-Funktion für die ganze Organisation verwendet. Bis dahin verwendet jede Funktion den Plattformstandard.",
+          "bodyNoPlan": "Ab Pro wählt ein Inhaber oder Admin, welches Modell jede Motir AI-Funktion für die ganze Organisation verwendet. Bis dahin verwendet jede Funktion in {org} den Plattformstandard.",
+          "notApplying": "Die gespeicherten Auswahlen von {org} bleiben erhalten. Sie gelten wieder, sobald die Organisation zu Pro oder höher wechselt.",
+          "seePlans": "Tarife ansehen"
+        },
+        "readOnly": "Nur ein Inhaber oder Admin von {org} kann diese ändern.",
+        "unavailable": {
+          "body": "Die KI-Modelle konnten nicht geladen werden, daher wird kein Modell angezeigt und nichts kann gespeichert werden. Es hat sich nichts geändert.",
+          "retry": "Erneut versuchen"
+        }
       }
     },
     "gitAccounts": {

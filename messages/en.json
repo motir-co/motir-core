@@ -4119,6 +4119,7 @@
         },
         "organization": "Organisation",
         "git": "Git",
+        "aiModels": "AI models",
         "members": "Members",
         "security": "Security",
         "usage": "Usage & cost",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Dismiss the stop result"
         },
         "forbidden": "Only an owner or admin can stop this organization’s fleet work."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Settings",
+        "title": "AI models",
+        "lead": "Which model each Motir AI function uses across {org}. A change applies from the next job or run.",
+        "card": {
+          "title": "Models by function",
+          "subtitle": "Each function uses the platform default until your organisation chooses another.",
+          "subtitleMeta": "{org} is Motir’s meta organisation, so it chooses its own models on any plan."
+        },
+        "group": {
+          "planning": {
+            "title": "Planning-side",
+            "list": "Chosen from the platform’s planning-model list"
+          },
+          "runs": {
+            "title": "Run-side",
+            "list": "Chosen from the platform’s run-model list"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planning",
+            "desc": "Every session of a plan: the walk and its repairs"
+          },
+          "guide": {
+            "name": "Guide",
+            "desc": "Guide me through, on a work item a person does"
+          },
+          "debug": {
+            "name": "Debug",
+            "desc": "Motir AI diagnosing a defect into a bug"
+          },
+          "ask": {
+            "name": "Ask",
+            "desc": "The Motir AI conversation and Grill me"
+          },
+          "review": {
+            "name": "Review agent",
+            "desc": "Hosted reviews. Whether a project reviews with an agent stays in its Approvals settings."
+          },
+          "design": {
+            "name": "Design run",
+            "desc": "A hosted run on a design work item"
+          }
+        },
+        "agentRun": {
+          "name": "Agent run",
+          "desc": "Hosted build runs, by the work item’s difficulty. A project’s own override for a difficulty still wins over the organisation’s."
+        },
+        "modelFor": "Model for {function}",
+        "loadingTrigger": "Loading models…",
+        "byDifficulty": "Follows the work item’s difficulty",
+        "platformDefaultPending": "The platform default",
+        "optionDefault": "Platform default",
+        "source": {
+          "org": "Organisation choice",
+          "inherits": "Inherits platform default"
+        },
+        "clear": "Clear",
+        "clearAria": "Clear the {function} choice",
+        "staged": "Not saved yet",
+        "withdrawnChip": "No longer offered",
+        "withdrawn": {
+          "edit": "<id>{model}</id> is no longer offered, so {function} falls back to the platform default, <mono>{fallback}</mono>, until you choose another.",
+          "read": "<id>{model}</id> is no longer offered, so {function} falls back to the platform default, <mono>{fallback}</mono>, until an owner or admin chooses another.",
+          "editNoFallback": "<id>{model}</id> is no longer offered, so {function} falls back to the platform default until you choose another.",
+          "readNoFallback": "<id>{model}</id> is no longer offered, so {function} falls back to the platform default until an owner or admin chooses another."
+        },
+        "refused": {
+          "notOffered": "Not saved: <mono>{model}</mono> stopped being offered for {function} before the save reached it. {function} keeps its current model; choose another.",
+          "unreachable": "Not saved: <mono>{model}</mono> cannot be reached right now, so {function} keeps its current model. Try again, or choose another.",
+          "failed": "Not saved: {function} could not be saved. It keeps its current model; try again."
+        },
+        "precedence": {
+          "body": "<b>Which model a job uses</b>, first match wins: the person’s pick on Run hosted → the project’s own override (agent run only) → {org}’s choice → the platform default.",
+          "cost": "Each model is billed at its own rate, so a stronger model uses more of {org}’s credits."
+        },
+        "footer": {
+          "dirtyHint": "You have unsaved changes.",
+          "cancel": "Cancel",
+          "save": "Save changes"
+        },
+        "saved": {
+          "title": "AI models saved",
+          "description": "{org} uses them from the next job or run."
+        },
+        "locked": {
+          "title": "Choosing models is part of Pro and above",
+          "body": "{org} is on {plan}. On Pro and above, an owner or admin chooses which model each Motir AI function uses for the whole organisation. Until then every function uses the platform default.",
+          "bodyNoPlan": "On Pro and above, an owner or admin chooses which model each Motir AI function uses for the whole organisation. Until then every function in {org} uses the platform default.",
+          "notApplying": "{org}’s saved choices are kept. They apply again when it moves to Pro or above.",
+          "seePlans": "See plans"
+        },
+        "readOnly": "Only an owner or admin of {org} can change these.",
+        "unavailable": {
+          "body": "Couldn’t load the AI models, so no model is shown and nothing can be saved. Nothing has changed.",
+          "retry": "Try again"
+        }
       }
     },
     "gitAccounts": {

@@ -4119,6 +4119,7 @@
         },
         "organization": "Organización",
         "git": "Git",
+        "aiModels": "Modelos de IA",
         "members": "Miembros",
         "security": "Seguridad",
         "usage": "Uso y coste",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Descartar el resultado de la detención"
         },
         "forbidden": "Solo un propietario o administrador puede detener el trabajo de la flota de esta organización."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Configuración",
+        "title": "Modelos de IA",
+        "lead": "Qué modelo usa cada función de Motir AI en {org}. Un cambio se aplica desde el siguiente trabajo o ejecución.",
+        "card": {
+          "title": "Modelos por función",
+          "subtitle": "Cada función usa el predeterminado de la plataforma hasta que tu organización elija otro.",
+          "subtitleMeta": "{org} es la organización meta de Motir, así que elige sus propios modelos en cualquier plan."
+        },
+        "group": {
+          "planning": {
+            "title": "Lado de planificación",
+            "list": "Elegido de la lista de modelos de planificación de la plataforma"
+          },
+          "runs": {
+            "title": "Lado de ejecución",
+            "list": "Elegido de la lista de modelos de ejecución de la plataforma"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planificación",
+            "desc": "Cada sesión de un plan: el recorrido y sus reparaciones"
+          },
+          "guide": {
+            "name": "Guía",
+            "desc": "Guíame, en un elemento de trabajo que hace una persona"
+          },
+          "debug": {
+            "name": "Depuración",
+            "desc": "Motir AI diagnosticando un defecto en un error"
+          },
+          "ask": {
+            "name": "Preguntar",
+            "desc": "La conversación de Motir AI y Grill me"
+          },
+          "review": {
+            "name": "Agente de revisión",
+            "desc": "Revisiones alojadas. Si un proyecto revisa con un agente sigue en su configuración de Aprobaciones."
+          },
+          "design": {
+            "name": "Ejecución de diseño",
+            "desc": "Una ejecución alojada en un elemento de trabajo de diseño"
+          }
+        },
+        "agentRun": {
+          "name": "Ejecución de agente",
+          "desc": "Ejecuciones de compilación alojadas, según la dificultad del elemento de trabajo. La anulación propia de un proyecto para una dificultad sigue prevaleciendo sobre la de la organización."
+        },
+        "modelFor": "Modelo para {function}",
+        "loadingTrigger": "Cargando modelos…",
+        "byDifficulty": "Sigue la dificultad del elemento de trabajo",
+        "platformDefaultPending": "El predeterminado de la plataforma",
+        "optionDefault": "Predeterminado de la plataforma",
+        "source": {
+          "org": "Elección de la organización",
+          "inherits": "Hereda el predeterminado de la plataforma"
+        },
+        "clear": "Borrar",
+        "clearAria": "Borrar la elección de {function}",
+        "staged": "Aún sin guardar",
+        "withdrawnChip": "Ya no se ofrece",
+        "withdrawn": {
+          "edit": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma, <mono>{fallback}</mono>, hasta que elijas otro.",
+          "read": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma, <mono>{fallback}</mono>, hasta que un propietario o administrador elija otro.",
+          "editNoFallback": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma hasta que elijas otro.",
+          "readNoFallback": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma hasta que un propietario o administrador elija otro."
+        },
+        "refused": {
+          "notOffered": "No guardado: <mono>{model}</mono> dejó de ofrecerse para {function} antes de que llegara el guardado. {function} conserva su modelo actual; elige otro.",
+          "unreachable": "No guardado: no se puede contactar con <mono>{model}</mono> ahora mismo, así que {function} conserva su modelo actual. Inténtalo de nuevo o elige otro.",
+          "failed": "No guardado: no se pudo guardar {function}. Conserva su modelo actual; inténtalo de nuevo."
+        },
+        "precedence": {
+          "body": "<b>Qué modelo usa un trabajo</b>, gana la primera coincidencia: la elección de la persona en Ejecutar alojado → la anulación propia del proyecto (solo ejecución de agente) → la elección de {org} → el predeterminado de la plataforma.",
+          "cost": "Cada modelo se factura a su propia tarifa, así que un modelo más potente usa más créditos de {org}."
+        },
+        "footer": {
+          "dirtyHint": "Tienes cambios sin guardar.",
+          "cancel": "Cancelar",
+          "save": "Guardar cambios"
+        },
+        "saved": {
+          "title": "Modelos de IA guardados",
+          "description": "{org} los usa desde el siguiente trabajo o ejecución."
+        },
+        "locked": {
+          "title": "Elegir modelos forma parte de Pro y superiores",
+          "body": "{org} está en {plan}. En Pro y superiores, un propietario o administrador elige qué modelo usa cada función de Motir AI para toda la organización. Hasta entonces, cada función usa el predeterminado de la plataforma.",
+          "bodyNoPlan": "En Pro y superiores, un propietario o administrador elige qué modelo usa cada función de Motir AI para toda la organización. Hasta entonces, cada función de {org} usa el predeterminado de la plataforma.",
+          "notApplying": "Las elecciones guardadas de {org} se conservan. Vuelven a aplicarse cuando pase a Pro o superior.",
+          "seePlans": "Ver planes"
+        },
+        "readOnly": "Solo un propietario o administrador de {org} puede cambiarlos.",
+        "unavailable": {
+          "body": "No se pudieron cargar los modelos de IA, así que no se muestra ningún modelo y no se puede guardar nada. No ha cambiado nada.",
+          "retry": "Intentar de nuevo"
+        }
       }
     },
     "gitAccounts": {

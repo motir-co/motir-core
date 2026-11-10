@@ -593,16 +593,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //  MOTIR-2896 built the route group, so the row expired and is gone — the
   //  mechanism working exactly as its sibling comment below describes.)
   {
-    file: 'design/org-admin/design-notes.md',
-    address: '/settings/organization/ai-models',
-    why: 'Forward-looking: the organisation AI models room is drawn before its page is built. Delete this row in the change that adds app/(authed)/settings/organization/ai-models/page.tsx.',
-  },
-  {
-    file: 'design/org-admin/org-admin--ai-models.mock.html',
-    address: '/settings/organization/ai-models',
-    why: 'Forward-looking: the AI models rail row links the room before its page is built. Delete this row with the one above.',
-  },
-  {
     file: 'design/roadmap/design-notes.md',
     address: '/projects/[key]/direction/[tier]',
     why: 'Forward-looking, and the asset says so inline ("NEW — no shipped route yet"). The tier doc shipped at /direction/[tier].',

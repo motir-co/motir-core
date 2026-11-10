@@ -56,6 +56,10 @@ const BILLING_SURFACES: ReadonlyArray<readonly [file: string, why: string]> = [
     'app/(authed)/settings/organization/fleet/page.tsx',
     'Settings › Organization › Fleet (MOTIR-10369) — the org’s fleet work and its stops; there is no fleet meter off-cloud, so it 404s there',
   ],
+  [
+    'app/(authed)/settings/organization/ai-models/page.tsx',
+    'Settings › Organization › AI models (MOTIR-10846) — whether an org may choose its models depends on its plan tier, which exists only on a billing build, so it 404s off it',
+  ],
   ['lib/billing/seatSync.ts', 'pushes seat counts to the billing provider'],
   ['lib/ciMetering/config.ts', 'the CI cost-metering configuration'],
   ['lib/services/billingService.ts', 'checkout, portal, subscriptions'],

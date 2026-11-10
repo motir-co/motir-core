@@ -4119,6 +4119,7 @@
         },
         "organization": "Organisation",
         "git": "Git",
+        "aiModels": "Modèles d’IA",
         "members": "Membres",
         "security": "Sécurité",
         "usage": "Utilisation et coûts",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Fermer le résultat de l’arrêt"
         },
         "forbidden": "Seul un propriétaire ou un administrateur peut arrêter le travail de la flotte de cette organisation."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Paramètres",
+        "title": "Modèles d’IA",
+        "lead": "Le modèle qu’utilise chaque fonction de Motir AI dans {org}. Un changement s’applique à partir de la prochaine tâche ou exécution.",
+        "card": {
+          "title": "Modèles par fonction",
+          "subtitle": "Chaque fonction utilise la valeur par défaut de la plateforme jusqu’à ce que votre organisation en choisisse une autre.",
+          "subtitleMeta": "{org} est l’organisation méta de Motir : elle choisit donc ses propres modèles quelle que soit l’offre."
+        },
+        "group": {
+          "planning": {
+            "title": "Côté planification",
+            "list": "Choisis dans la liste des modèles de planification de la plateforme"
+          },
+          "runs": {
+            "title": "Côté exécution",
+            "list": "Choisis dans la liste des modèles d’exécution de la plateforme"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planification",
+            "desc": "Chaque session d’un plan : le parcours et ses réparations"
+          },
+          "guide": {
+            "name": "Guide",
+            "desc": "Guide-moi, sur un élément de travail qu’une personne réalise"
+          },
+          "debug": {
+            "name": "Débogage",
+            "desc": "Motir AI qui diagnostique un défaut en bug"
+          },
+          "ask": {
+            "name": "Question",
+            "desc": "La conversation Motir AI et Grill me"
+          },
+          "review": {
+            "name": "Agent de revue",
+            "desc": "Revues hébergées. Le fait qu’un projet fasse ses revues avec un agent reste dans ses paramètres d’approbation."
+          },
+          "design": {
+            "name": "Exécution de design",
+            "desc": "Une exécution hébergée sur un élément de travail de design"
+          }
+        },
+        "agentRun": {
+          "name": "Exécution d’agent",
+          "desc": "Exécutions de build hébergées, selon la difficulté de l’élément de travail. Le remplacement propre d’un projet pour une difficulté l’emporte toujours sur celui de l’organisation."
+        },
+        "modelFor": "Modèle pour {function}",
+        "loadingTrigger": "Chargement des modèles…",
+        "byDifficulty": "Suit la difficulté de l’élément de travail",
+        "platformDefaultPending": "La valeur par défaut de la plateforme",
+        "optionDefault": "Valeur par défaut de la plateforme",
+        "source": {
+          "org": "Choix de l’organisation",
+          "inherits": "Hérite de la valeur par défaut de la plateforme"
+        },
+        "clear": "Effacer",
+        "clearAria": "Effacer le choix pour {function}",
+        "staged": "Pas encore enregistré",
+        "withdrawnChip": "N’est plus proposé",
+        "withdrawn": {
+          "edit": "<id>{model}</id> n’est plus proposé : {function} revient donc à la valeur par défaut de la plateforme, <mono>{fallback}</mono>, jusqu’à ce que vous en choisissiez un autre.",
+          "read": "<id>{model}</id> n’est plus proposé : {function} revient donc à la valeur par défaut de la plateforme, <mono>{fallback}</mono>, jusqu’à ce qu’un propriétaire ou un administrateur en choisisse un autre.",
+          "editNoFallback": "<id>{model}</id> n’est plus proposé : {function} revient donc à la valeur par défaut de la plateforme jusqu’à ce que vous en choisissiez un autre.",
+          "readNoFallback": "<id>{model}</id> n’est plus proposé : {function} revient donc à la valeur par défaut de la plateforme jusqu’à ce qu’un propriétaire ou un administrateur en choisisse un autre."
+        },
+        "refused": {
+          "notOffered": "Non enregistré : <mono>{model}</mono> a cessé d’être proposé pour {function} avant que l’enregistrement n’arrive. {function} garde son modèle actuel ; choisissez-en un autre.",
+          "unreachable": "Non enregistré : <mono>{model}</mono> est injoignable pour le moment, {function} garde donc son modèle actuel. Réessayez ou choisissez-en un autre.",
+          "failed": "Non enregistré : {function} n’a pas pu être enregistré. Il garde son modèle actuel ; réessayez."
+        },
+        "precedence": {
+          "body": "<b>Le modèle qu’utilise une tâche</b>, la première correspondance l’emporte : le choix de la personne dans Exécuter en hébergé → le remplacement propre du projet (exécution d’agent uniquement) → le choix de {org} → la valeur par défaut de la plateforme.",
+          "cost": "Chaque modèle est facturé à son propre tarif : un modèle plus puissant consomme donc davantage de crédits de {org}."
+        },
+        "footer": {
+          "dirtyHint": "Vous avez des modifications non enregistrées.",
+          "cancel": "Annuler",
+          "save": "Enregistrer les modifications"
+        },
+        "saved": {
+          "title": "Modèles d’IA enregistrés",
+          "description": "{org} les utilise à partir de la prochaine tâche ou exécution."
+        },
+        "locked": {
+          "title": "Le choix des modèles fait partie de Pro et au-delà",
+          "body": "{org} est sur l’offre {plan}. À partir de Pro, un propriétaire ou un administrateur choisit le modèle qu’utilise chaque fonction de Motir AI pour toute l’organisation. D’ici là, chaque fonction utilise la valeur par défaut de la plateforme.",
+          "bodyNoPlan": "À partir de Pro, un propriétaire ou un administrateur choisit le modèle qu’utilise chaque fonction de Motir AI pour toute l’organisation. D’ici là, chaque fonction de {org} utilise la valeur par défaut de la plateforme.",
+          "notApplying": "Les choix enregistrés de {org} sont conservés. Ils s’appliquent de nouveau lorsqu’elle passe à Pro ou au-delà.",
+          "seePlans": "Voir les offres"
+        },
+        "readOnly": "Seul un propriétaire ou un administrateur de {org} peut les modifier.",
+        "unavailable": {
+          "body": "Impossible de charger les modèles d’IA : aucun modèle n’est affiché et rien ne peut être enregistré. Rien n’a changé.",
+          "retry": "Réessayer"
+        }
       }
     },
     "gitAccounts": {

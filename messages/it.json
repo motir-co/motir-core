@@ -4119,6 +4119,7 @@
         },
         "organization": "Organizzazione",
         "git": "Git",
+        "aiModels": "Modelli IA",
         "members": "Membri",
         "security": "Sicurezza",
         "usage": "Utilizzo e costi",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Chiudi il risultato dell’arresto"
         },
         "forbidden": "Solo un proprietario o un amministratore può fermare il lavoro della flotta di questa organizzazione."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Impostazioni",
+        "title": "Modelli IA",
+        "lead": "Quale modello usa ogni funzione di Motir AI in {org}. Una modifica si applica dal prossimo job o esecuzione.",
+        "card": {
+          "title": "Modelli per funzione",
+          "subtitle": "Ogni funzione usa il predefinito della piattaforma finché la tua organizzazione non ne sceglie un altro.",
+          "subtitleMeta": "{org} è l’organizzazione meta di Motir, quindi sceglie i propri modelli con qualsiasi piano."
+        },
+        "group": {
+          "planning": {
+            "title": "Lato pianificazione",
+            "list": "Scelto dall’elenco dei modelli di pianificazione della piattaforma"
+          },
+          "runs": {
+            "title": "Lato esecuzione",
+            "list": "Scelto dall’elenco dei modelli di esecuzione della piattaforma"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Pianificazione",
+            "desc": "Ogni sessione di un piano: il percorso e le sue riparazioni"
+          },
+          "guide": {
+            "name": "Guida",
+            "desc": "Guidami, su un elemento di lavoro svolto da una persona"
+          },
+          "debug": {
+            "name": "Debug",
+            "desc": "Motir AI che diagnostica un difetto in un bug"
+          },
+          "ask": {
+            "name": "Chiedi",
+            "desc": "La conversazione con Motir AI e Grill me"
+          },
+          "review": {
+            "name": "Agente di revisione",
+            "desc": "Revisioni ospitate. Se un progetto revisiona con un agente resta nelle sue impostazioni di Approvazioni."
+          },
+          "design": {
+            "name": "Esecuzione di design",
+            "desc": "Un’esecuzione ospitata su un elemento di lavoro di design"
+          }
+        },
+        "agentRun": {
+          "name": "Esecuzione dell’agente",
+          "desc": "Esecuzioni di build ospitate, in base alla difficoltà dell’elemento di lavoro. La sostituzione propria di un progetto per una difficoltà prevale ancora su quella dell’organizzazione."
+        },
+        "modelFor": "Modello per {function}",
+        "loadingTrigger": "Caricamento dei modelli…",
+        "byDifficulty": "Segue la difficoltà dell’elemento di lavoro",
+        "platformDefaultPending": "Il predefinito della piattaforma",
+        "optionDefault": "Predefinito della piattaforma",
+        "source": {
+          "org": "Scelta dell’organizzazione",
+          "inherits": "Eredita il predefinito della piattaforma"
+        },
+        "clear": "Cancella",
+        "clearAria": "Cancella la scelta per {function}",
+        "staged": "Non ancora salvato",
+        "withdrawnChip": "Non più offerto",
+        "withdrawn": {
+          "edit": "<id>{model}</id> non è più offerto, quindi {function} torna al predefinito della piattaforma, <mono>{fallback}</mono>, finché non ne scegli un altro.",
+          "read": "<id>{model}</id> non è più offerto, quindi {function} torna al predefinito della piattaforma, <mono>{fallback}</mono>, finché un proprietario o un amministratore non ne sceglie un altro.",
+          "editNoFallback": "<id>{model}</id> non è più offerto, quindi {function} torna al predefinito della piattaforma finché non ne scegli un altro.",
+          "readNoFallback": "<id>{model}</id> non è più offerto, quindi {function} torna al predefinito della piattaforma finché un proprietario o un amministratore non ne sceglie un altro."
+        },
+        "refused": {
+          "notOffered": "Non salvato: <mono>{model}</mono> ha smesso di essere offerto per {function} prima che arrivasse il salvataggio. {function} mantiene il modello attuale; scegline un altro.",
+          "unreachable": "Non salvato: <mono>{model}</mono> non è raggiungibile al momento, quindi {function} mantiene il modello attuale. Riprova o scegline un altro.",
+          "failed": "Non salvato: non è stato possibile salvare {function}. Mantiene il modello attuale; riprova."
+        },
+        "precedence": {
+          "body": "<b>Quale modello usa un job</b>, vince la prima corrispondenza: la scelta della persona in Esegui in hosting → la sostituzione propria del progetto (solo esecuzione dell’agente) → la scelta di {org} → il predefinito della piattaforma.",
+          "cost": "Ogni modello è fatturato alla propria tariffa, quindi un modello più potente usa più crediti di {org}."
+        },
+        "footer": {
+          "dirtyHint": "Hai modifiche non salvate.",
+          "cancel": "Annulla",
+          "save": "Salva modifiche"
+        },
+        "saved": {
+          "title": "Modelli IA salvati",
+          "description": "{org} li usa dal prossimo job o esecuzione."
+        },
+        "locked": {
+          "title": "La scelta dei modelli fa parte di Pro e superiori",
+          "body": "{org} è sul piano {plan}. Da Pro in su, un proprietario o un amministratore sceglie quale modello usa ogni funzione di Motir AI per l’intera organizzazione. Fino ad allora ogni funzione usa il predefinito della piattaforma.",
+          "bodyNoPlan": "Da Pro in su, un proprietario o un amministratore sceglie quale modello usa ogni funzione di Motir AI per l’intera organizzazione. Fino ad allora ogni funzione di {org} usa il predefinito della piattaforma.",
+          "notApplying": "Le scelte salvate di {org} vengono conservate. Tornano ad applicarsi quando passa a Pro o superiore.",
+          "seePlans": "Vedi i piani"
+        },
+        "readOnly": "Solo un proprietario o un amministratore di {org} può modificarli.",
+        "unavailable": {
+          "body": "Impossibile caricare i modelli IA, quindi non viene mostrato alcun modello e non si può salvare nulla. Non è cambiato nulla.",
+          "retry": "Riprova"
+        }
       }
     },
     "gitAccounts": {

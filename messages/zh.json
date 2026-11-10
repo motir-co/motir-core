@@ -4119,6 +4119,7 @@
         },
         "organization": "组织",
         "git": "Git",
+        "aiModels": "AI 模型",
         "members": "成员",
         "security": "安全",
         "usage": "用量与费用",
@@ -4316,6 +4317,105 @@
           "dismissAria": "关闭停止结果"
         },
         "forbidden": "只有所有者或管理员可以停止此组织的集群工作。"
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · 设置",
+        "title": "AI 模型",
+        "lead": "{org} 中每项 Motir AI 功能使用的模型。更改从下一个作业或运行开始生效。",
+        "card": {
+          "title": "按功能选择模型",
+          "subtitle": "在你的组织选择其他模型之前，每项功能都使用平台默认模型。",
+          "subtitleMeta": "{org} 是 Motir 的元组织，因此在任何套餐下都可以自行选择模型。"
+        },
+        "group": {
+          "planning": {
+            "title": "规划侧",
+            "list": "从平台的规划模型列表中选择"
+          },
+          "runs": {
+            "title": "运行侧",
+            "list": "从平台的运行模型列表中选择"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "规划",
+            "desc": "计划的每个会话：遍历及其修复"
+          },
+          "guide": {
+            "name": "引导",
+            "desc": "在由人完成的工作项上使用“带我完成”"
+          },
+          "debug": {
+            "name": "调试",
+            "desc": "Motir AI 将缺陷诊断为缺陷单"
+          },
+          "ask": {
+            "name": "提问",
+            "desc": "Motir AI 对话和 Grill me"
+          },
+          "review": {
+            "name": "评审智能体",
+            "desc": "托管评审。项目是否使用智能体评审仍在其审批设置中。"
+          },
+          "design": {
+            "name": "设计运行",
+            "desc": "在设计工作项上的托管运行"
+          }
+        },
+        "agentRun": {
+          "name": "智能体运行",
+          "desc": "按工作项难度划分的托管构建运行。项目针对某个难度的自身覆盖仍优先于组织的选择。"
+        },
+        "modelFor": "{function}的模型",
+        "loadingTrigger": "正在加载模型…",
+        "byDifficulty": "跟随工作项的难度",
+        "platformDefaultPending": "平台默认模型",
+        "optionDefault": "平台默认",
+        "source": {
+          "org": "组织的选择",
+          "inherits": "继承平台默认"
+        },
+        "clear": "清除",
+        "clearAria": "清除{function}的选择",
+        "staged": "尚未保存",
+        "withdrawnChip": "已不再提供",
+        "withdrawn": {
+          "edit": "<id>{model}</id> 已不再提供，因此在你选择其他模型之前，{function}会回退到平台默认模型 <mono>{fallback}</mono>。",
+          "read": "<id>{model}</id> 已不再提供，因此在所有者或管理员选择其他模型之前，{function}会回退到平台默认模型 <mono>{fallback}</mono>。",
+          "editNoFallback": "<id>{model}</id> 已不再提供，因此在你选择其他模型之前，{function}会回退到平台默认模型。",
+          "readNoFallback": "<id>{model}</id> 已不再提供，因此在所有者或管理员选择其他模型之前，{function}会回退到平台默认模型。"
+        },
+        "refused": {
+          "notOffered": "未保存：在保存送达之前，<mono>{model}</mono> 已不再为{function}提供。{function}保留当前模型；请选择其他模型。",
+          "unreachable": "未保存：目前无法连接 <mono>{model}</mono>，因此{function}保留当前模型。请重试或选择其他模型。",
+          "failed": "未保存：无法保存{function}。它保留当前模型；请重试。"
+        },
+        "precedence": {
+          "body": "<b>作业使用哪个模型</b>，以第一个匹配项为准：本人在“托管运行”中的选择 → 项目自身的覆盖（仅限智能体运行）→ {org} 的选择 → 平台默认模型。",
+          "cost": "每个模型按其自身费率计费，因此更强的模型会消耗 {org} 更多的额度。"
+        },
+        "footer": {
+          "dirtyHint": "你有未保存的更改。",
+          "cancel": "取消",
+          "save": "保存更改"
+        },
+        "saved": {
+          "title": "AI 模型已保存",
+          "description": "{org} 将从下一个作业或运行开始使用它们。"
+        },
+        "locked": {
+          "title": "选择模型属于 Pro 及以上套餐",
+          "body": "{org} 当前使用 {plan} 套餐。在 Pro 及以上套餐中，所有者或管理员可以为整个组织选择每项 Motir AI 功能使用的模型。在此之前，每项功能都使用平台默认模型。",
+          "bodyNoPlan": "在 Pro 及以上套餐中，所有者或管理员可以为整个组织选择每项 Motir AI 功能使用的模型。在此之前，{org} 的每项功能都使用平台默认模型。",
+          "notApplying": "{org} 已保存的选择会被保留。升级到 Pro 或更高套餐后将再次生效。",
+          "seePlans": "查看套餐"
+        },
+        "readOnly": "只有 {org} 的所有者或管理员可以更改这些设置。",
+        "unavailable": {
+          "body": "无法加载 AI 模型，因此不显示任何模型，也无法保存任何内容。没有任何更改。",
+          "retry": "重试"
+        }
       }
     },
     "gitAccounts": {

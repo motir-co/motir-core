@@ -4119,6 +4119,7 @@
         },
         "organization": "Organisatie",
         "git": "Git",
+        "aiModels": "AI-modellen",
         "members": "Leden",
         "security": "Beveiliging",
         "usage": "Gebruik en kosten",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Het stopresultaat sluiten"
         },
         "forbidden": "Alleen een eigenaar of beheerder kan het vlootwerk van deze organisatie stoppen."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Instellingen",
+        "title": "AI-modellen",
+        "lead": "Welk model elke Motir AI-functie gebruikt binnen {org}. Een wijziging geldt vanaf de volgende taak of run.",
+        "card": {
+          "title": "Modellen per functie",
+          "subtitle": "Elke functie gebruikt de platformstandaard totdat je organisatie een ander kiest.",
+          "subtitleMeta": "{org} is de meta-organisatie van Motir en kiest daarom bij elk abonnement zijn eigen modellen."
+        },
+        "group": {
+          "planning": {
+            "title": "Planningskant",
+            "list": "Gekozen uit de lijst met planningsmodellen van het platform"
+          },
+          "runs": {
+            "title": "Runkant",
+            "list": "Gekozen uit de lijst met runmodellen van het platform"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planning",
+            "desc": "Elke sessie van een plan: de doorloop en de reparaties"
+          },
+          "guide": {
+            "name": "Begeleiding",
+            "desc": "Begeleid me, bij een werkitem dat een persoon uitvoert"
+          },
+          "debug": {
+            "name": "Debug",
+            "desc": "Motir AI die een defect diagnosticeert tot een bug"
+          },
+          "ask": {
+            "name": "Vragen",
+            "desc": "Het Motir AI-gesprek en Grill me"
+          },
+          "review": {
+            "name": "Review-agent",
+            "desc": "Gehoste reviews. Of een project met een agent reviewt, blijft in de goedkeuringsinstellingen ervan."
+          },
+          "design": {
+            "name": "Ontwerprun",
+            "desc": "Een gehoste run op een ontwerpwerkitem"
+          }
+        },
+        "agentRun": {
+          "name": "Agentrun",
+          "desc": "Gehoste buildruns, op basis van de moeilijkheid van het werkitem. De eigen overschrijving van een project voor een moeilijkheid gaat nog steeds voor die van de organisatie."
+        },
+        "modelFor": "Model voor {function}",
+        "loadingTrigger": "Modellen laden…",
+        "byDifficulty": "Volgt de moeilijkheid van het werkitem",
+        "platformDefaultPending": "De platformstandaard",
+        "optionDefault": "Platformstandaard",
+        "source": {
+          "org": "Keuze van de organisatie",
+          "inherits": "Neemt de platformstandaard over"
+        },
+        "clear": "Wissen",
+        "clearAria": "De keuze voor {function} wissen",
+        "staged": "Nog niet opgeslagen",
+        "withdrawnChip": "Niet meer aangeboden",
+        "withdrawn": {
+          "edit": "<id>{model}</id> wordt niet meer aangeboden, dus {function} valt terug op de platformstandaard, <mono>{fallback}</mono>, totdat je een ander kiest.",
+          "read": "<id>{model}</id> wordt niet meer aangeboden, dus {function} valt terug op de platformstandaard, <mono>{fallback}</mono>, totdat een eigenaar of beheerder een ander kiest.",
+          "editNoFallback": "<id>{model}</id> wordt niet meer aangeboden, dus {function} valt terug op de platformstandaard totdat je een ander kiest.",
+          "readNoFallback": "<id>{model}</id> wordt niet meer aangeboden, dus {function} valt terug op de platformstandaard totdat een eigenaar of beheerder een ander kiest."
+        },
+        "refused": {
+          "notOffered": "Niet opgeslagen: <mono>{model}</mono> werd niet meer aangeboden voor {function} voordat het opslaan aankwam. {function} houdt zijn huidige model; kies een ander.",
+          "unreachable": "Niet opgeslagen: <mono>{model}</mono> is nu niet bereikbaar, dus {function} houdt zijn huidige model. Probeer het opnieuw of kies een ander.",
+          "failed": "Niet opgeslagen: {function} kon niet worden opgeslagen. Het houdt zijn huidige model; probeer het opnieuw."
+        },
+        "precedence": {
+          "body": "<b>Welk model een taak gebruikt</b>, de eerste overeenkomst wint: de keuze van de persoon bij Gehost uitvoeren → de eigen overschrijving van het project (alleen agentrun) → de keuze van {org} → de platformstandaard.",
+          "cost": "Elk model wordt tegen een eigen tarief gefactureerd, dus een sterker model verbruikt meer tegoed van {org}."
+        },
+        "footer": {
+          "dirtyHint": "Je hebt niet-opgeslagen wijzigingen.",
+          "cancel": "Annuleren",
+          "save": "Wijzigingen opslaan"
+        },
+        "saved": {
+          "title": "AI-modellen opgeslagen",
+          "description": "{org} gebruikt ze vanaf de volgende taak of run."
+        },
+        "locked": {
+          "title": "Modellen kiezen hoort bij Pro en hoger",
+          "body": "{org} heeft het abonnement {plan}. Vanaf Pro kiest een eigenaar of beheerder welk model elke Motir AI-functie voor de hele organisatie gebruikt. Tot die tijd gebruikt elke functie de platformstandaard.",
+          "bodyNoPlan": "Vanaf Pro kiest een eigenaar of beheerder welk model elke Motir AI-functie voor de hele organisatie gebruikt. Tot die tijd gebruikt elke functie in {org} de platformstandaard.",
+          "notApplying": "De opgeslagen keuzes van {org} blijven bewaard. Ze gelden weer zodra de organisatie naar Pro of hoger gaat.",
+          "seePlans": "Abonnementen bekijken"
+        },
+        "readOnly": "Alleen een eigenaar of beheerder van {org} kan deze wijzigen.",
+        "unavailable": {
+          "body": "De AI-modellen konden niet worden geladen, dus er wordt geen model getoond en er kan niets worden opgeslagen. Er is niets gewijzigd.",
+          "retry": "Opnieuw proberen"
+        }
       }
     },
     "gitAccounts": {
