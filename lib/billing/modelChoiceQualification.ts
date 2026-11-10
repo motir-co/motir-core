@@ -4,7 +4,7 @@
 // every resolution: an org that drops to Standard keeps its stored choices, which
 // simply stop being read, and they apply again when it returns.
 //
-// The tier key is motir-ai's (`fetchOrgTiers`); `null` means no tier, or one that
+// The tier key is motir-ai's (`POST /v1/admin/orgs/tiers`); `null` means no tier, or one that
 // could not be read — both resolve as not qualifying, so a run falls to the
 // platform default rather than being refused. motir-ai holds the same rule for
 // the planning-side functions (`orgQualifiesForModelChoice`).

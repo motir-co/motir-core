@@ -380,7 +380,7 @@ export function installHostedRunMock(agent: MockAgent): void {
         });
       })
       .persist();
-    // motir-core's org TIER read (`fetchOrgTiers`), from the tier fixture the
+    // motir-core's org TIER read (`POST /v1/admin/orgs/tiers`), from the tier fixture the
     // planner-model seam's org override read also answers from — so the room and
     // the run-side resolver cannot disagree (`lib/test-org-tier-fixture.ts`). No
     // earlier seam claims this path.
