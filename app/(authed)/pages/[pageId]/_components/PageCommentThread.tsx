@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from 'next-intl';
 import { CircleCheck, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PageCommentThreadDto } from '@/lib/pages';
 import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
 import { PageCommentItem } from './PageCommentItem';
@@ -30,6 +31,8 @@ export interface PageCommentThreadProps {
   canModerate: boolean;
   currentUserId: string;
   mentionCandidates: MentionCandidate[];
+  /** The work items the page's threads link (the list read's `workItemRefs`). */
+  workItemRefs: WorkItemRefMap;
   /** A failed Resolve / Reopen, shown at the thread's foot. */
   error?: string | null;
   onReply: (bodyMd: string) => Promise<string | null>;
@@ -45,6 +48,7 @@ export function PageCommentThread({
   canModerate,
   currentUserId,
   mentionCandidates,
+  workItemRefs,
   error = null,
   onReply,
   onEdit,
@@ -89,6 +93,7 @@ export function PageCommentThread({
         canModerate={moderates}
         currentUserId={currentUserId}
         mentionCandidates={mentionCandidates}
+        workItemRefs={workItemRefs}
         onStartReply={() => setReplying(true)}
         onEdit={(bodyMd) => onEdit(thread.id, bodyMd)}
         onDelete={() => onDelete(thread.id)}
@@ -105,6 +110,7 @@ export function PageCommentThread({
                     canModerate={moderates}
                     currentUserId={currentUserId}
                     mentionCandidates={mentionCandidates}
+                    workItemRefs={workItemRefs}
                     onEdit={(bodyMd) => onEdit(reply.id, bodyMd)}
                     onDelete={() => onDelete(reply.id)}
                   />

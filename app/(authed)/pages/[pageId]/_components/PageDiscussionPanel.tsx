@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Segmented } from '@/components/ui/Segmented';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import type { PageCommentDto, PageCommentThreadDto } from '@/lib/pages';
 import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
 import {
@@ -156,6 +158,11 @@ export function PageDiscussionPanel({
   const [counts, setCounts] = useState<Record<ListKind, number> | null>(null);
   const [capabilities, setCapabilities] = useState<PageDiscussionCapabilities | null>(null);
   const [threadErrors, setThreadErrors] = useState<Readonly<Record<string, string>>>({});
+  /**
+   * Every work item a list read has resolved for these threads' `motir:` tokens,
+   * merged across reads (both lists, Load more) so a chip never flips back to deleted.
+   */
+  const [workItemRefs, setWorkItemRefs] = useState<WorkItemRefMap>({});
   const closeRef = useRef<HTMLButtonElement>(null);
   const alive = useRef(true);
   const listSeq = useRef<Record<ListKind, number>>({ open: 0, resolved: 0 });
@@ -208,6 +215,7 @@ export function PageDiscussionPanel({
       }));
       setCounts(res.data.counts);
       setCapabilities(res.data.capabilities);
+      setWorkItemRefs((prev) => ({ ...prev, ...res.data.workItemRefs }));
     },
     [],
   );
@@ -272,6 +280,17 @@ export function PageDiscussionPanel({
     });
     setCounts(res.data.counts);
     setCapabilities(res.data.capabilities);
+    setWorkItemRefs((prev) => ({ ...prev, ...res.data.workItemRefs }));
+  };
+
+  /**
+   * A write answers its comment without `workItemRefs`, so a body that links a work
+   * item no read has resolved yet is followed by a read of the Open list (the only
+   * list that takes writes), whose answer carries the summary. A body that links
+   * nothing new costs no request.
+   */
+  const followLinks = (bodyMd: string) => {
+    if (parseWorkItemTokenIds(bodyMd).some((id) => !(id in workItemRefs))) fetchList('open');
   };
 
   // The control's chip follows the open count.
@@ -332,6 +351,7 @@ export function PageDiscussionPanel({
         : { ...prev, open: { ...prev.open, threads: [thread, ...prev.open.threads] } },
     );
     adjustCounts({ open: 1 });
+    followLinks(thread.bodyMd);
     return null;
   }
 
@@ -346,6 +366,7 @@ export function PageDiscussionPanel({
           : { ...thread, replies: [...thread.replies, reply] },
       ),
     );
+    followLinks(reply.bodyMd);
     return null;
   }
 
@@ -370,6 +391,7 @@ export function PageDiscussionPanel({
             },
       ),
     );
+    followLinks(edited.bodyMd);
     return null;
   }
 
@@ -520,6 +542,7 @@ export function PageDiscussionPanel({
                       canModerate={canModerate}
                       currentUserId={currentUserId}
                       mentionCandidates={mentionCandidates}
+                      workItemRefs={workItemRefs}
                       error={threadErrors[thread.id] ?? null}
                       onReply={(bodyMd) => submitReply(thread.id, bodyMd)}
                       onEdit={(commentId, bodyMd) => submitEdit(thread.id, commentId, bodyMd)}

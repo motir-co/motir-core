@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { MarkdownView } from '@/components/ui/MarkdownView';
 import { Popover } from '@/components/ui/Popover';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { PageCommentDto } from '@/lib/pages';
 import { Avatar } from '@/app/(authed)/items/_components/issueCellPrimitives';
 import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
@@ -34,6 +35,8 @@ export interface PageCommentItemProps {
   canModerate: boolean;
   currentUserId: string;
   mentionCandidates: MentionCandidate[];
+  /** The work items the thread's bodies link, so each `motir:` token draws as a card chip. */
+  workItemRefs: WorkItemRefMap;
   /** Roots only: open the reply composer. A reply has no Reply control. */
   onStartReply?: () => void;
   onEdit: (bodyMd: string) => Promise<string | null>;
@@ -50,6 +53,7 @@ export function PageCommentItem({
   canModerate,
   currentUserId,
   mentionCandidates,
+  workItemRefs,
   onStartReply,
   onEdit,
   onDelete,
@@ -129,7 +133,7 @@ export function PageCommentItem({
             onCancel={closeEdit}
           />
         ) : (
-          <MarkdownView value={comment.bodyMd} className="text-sm" />
+          <MarkdownView value={comment.bodyMd} className="text-sm" workItemRefs={workItemRefs} />
         )}
 
         {!editing && canComment && (onStartReply || canModify) ? (

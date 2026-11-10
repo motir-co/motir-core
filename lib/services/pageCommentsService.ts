@@ -21,6 +21,8 @@ import {
 } from '@/lib/pages';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
+import { resolveMarkdownBodiesWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 
@@ -51,6 +53,12 @@ export interface PageCommentCapabilities {
 /** The list's answer: the package's page of threads, and what the caller may do. */
 export interface PageCommentThreadsResponse extends PageCommentThreadsPage {
   readonly capabilities: PageCommentCapabilities;
+  /**
+   * The live summaries of the work items this page of threads links with a
+   * `motir:` token, keyed by id, so `MarkdownView` draws each as a card chip rather
+   * than as a deleted item (bug MOTIR-10023's rule). It is `{}` when no body links one.
+   */
+  readonly workItemRefs: WorkItemRefMap;
 }
 
 interface PageScope {
@@ -120,7 +128,7 @@ export const pageCommentsService = {
     ctx: ServiceContext,
     input: ListPageThreadsInput,
   ): Promise<PageCommentThreadsResponse> {
-    return withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
+    const answer = await withWorkspaceContext(scopeTo(ctx, input.projectId), async (tx) => {
       await projectAccessService.assertCanViewPages(input.projectId, ctx, tx);
       const caps = await projectAccessService.getCommentCapabilities(input.projectId, ctx, tx);
       const store = pageStoreFor(tx);
@@ -142,6 +150,13 @@ export const pageCommentsService = {
         capabilities: { canComment: caps.canComment && live, canModerate: caps.canModerate },
       };
     });
+    // Resolved after the read, in its own reads: the summaries are the reader's
+    // view of the WORK ITEMS, which the page's transaction does not need to hold.
+    const bodies = answer.threads.flatMap((thread) => [
+      thread.bodyMd,
+      ...thread.replies.map((reply) => reply.bodyMd),
+    ]);
+    return { ...answer, workItemRefs: await resolveMarkdownBodiesWorkItemRefs(bodies, ctx) };
   },
 
   /** Start a thread; an `anchor` makes it inline (the epic's inline story). */

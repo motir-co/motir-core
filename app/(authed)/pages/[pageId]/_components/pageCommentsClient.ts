@@ -6,6 +6,7 @@ import type {
   PageCommentThreadsPage,
   PageCommentThreadStatus,
 } from '@/lib/pages';
+import type { WorkItemRefMap } from '@/lib/dto/workItems';
 
 // The page discussion's NETWORK HELPERS (Story MOTIR-10866 · MOTIR-10874): one
 // typed call per comment route under `/api/pages/<id>/comments`. Directive-free
@@ -27,6 +28,8 @@ export interface PageDiscussionCapabilities {
 /** `GET …/comments` — one page of threads, both counts and the caller's capabilities. */
 export interface PageDiscussionList extends PageCommentThreadsPage {
   readonly capabilities: PageDiscussionCapabilities;
+  /** The work items these threads link, so each `motir:` token draws as a card chip. */
+  readonly workItemRefs: WorkItemRefMap;
 }
 
 export interface PageCommentRefusal {

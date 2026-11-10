@@ -3,6 +3,7 @@ import { Suspense } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
+import type { WorkItemRefMap, WorkItemRefSummaryDto } from '@/lib/dto/workItems';
 import type { PageCommentDto, PageCommentThreadDto } from '@/lib/pages';
 import type {
   PageCommentResult,
@@ -64,6 +65,8 @@ vi.mock('@/components/ui/MarkdownEditor', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
+  // A `motir:` card chip reads the path for its quick-view link.
+  usePathname: () => '/pages/page-1',
 }));
 
 // For the PageView block: the editor, the strip, the quick view and History's
@@ -125,6 +128,7 @@ function list(
       nextCursor: null,
       counts: { open: threads.length, resolved: 0 },
       capabilities: { canComment: true, canModerate: false },
+      workItemRefs: {},
       ...overrides,
     },
   };
@@ -714,6 +718,150 @@ describe('PageDiscussionPanel — resolve and reopen', () => {
     expect(within(threadOf(BO.name)).getByRole('alert').textContent).toBe(
       'This comment no longer exists.',
     );
+  });
+});
+
+// ── Work-item links (bug MOTIR-10023's rule) ─────────────────────────────────
+
+const LINKED: WorkItemRefSummaryDto = {
+  accessible: true,
+  id: 'wi_live',
+  identifier: 'MOTIR-706',
+  title: 'The seed registry',
+  kind: 'subtask',
+  archived: false,
+  status: { key: 'done', label: 'Done', category: 'done' },
+  type: null,
+  assignee: null,
+};
+const LATER: WorkItemRefSummaryDto = { ...LINKED, id: 'wi_later', identifier: 'MOTIR-707' };
+const REFS: WorkItemRefMap = { wi_live: LINKED };
+
+function chipFor(root: HTMLElement, key: string): Element {
+  const chip = Array.from(root.querySelectorAll('.wi-chip')).find((el) =>
+    el.querySelector('.wi-key')?.textContent?.includes(key),
+  );
+  expect(chip, `a chip for ${key}`).toBeTruthy();
+  return chip!;
+}
+
+describe('PageDiscussionPanel — work-item links', () => {
+  it('draws a linked card from the list read in a root and a reply, and a missing one as deleted', async () => {
+    const reply = comment(BO, { bodyMd: 'Same as [MOTIR-706](motir:wi_live).' });
+    const root = thread(ME, [reply], {
+      bodyMd: 'See [MOTIR-706](motir:wi_live) and [MOTIR-1](motir:wi_gone).',
+    });
+    client.listPageComments.mockResolvedValueOnce(list([root], { workItemRefs: REFS }));
+    await mountPanel();
+    const item = within(openList()).getAllByRole('listitem')[0]!;
+    const rootChip = chipFor(screen.getByTestId(`page-comment-${root.id}`), 'MOTIR-706');
+    expect(rootChip.classList.contains('is-deleted')).toBe(false);
+    expect(rootChip.textContent).toContain('The seed registry');
+    expect(chipFor(item, 'MOTIR-1').classList.contains('is-deleted')).toBe(true);
+    const replyChip = chipFor(screen.getByTestId(`page-comment-${reply.id}`), 'MOTIR-706');
+    expect(replyChip.classList.contains('is-deleted')).toBe(false);
+  });
+
+  it('keeps the links a Load more resolved beside those of the first read', async () => {
+    const a = thread(ME, [], { bodyMd: 'First [MOTIR-706](motir:wi_live).' });
+    const b = thread(BO, [], { bodyMd: 'Later [MOTIR-707](motir:wi_later).' });
+    client.listPageComments.mockResolvedValueOnce(
+      list([a], { nextCursor: 'cur-1', counts: { open: 2, resolved: 0 }, workItemRefs: REFS }),
+    );
+    await mountPanel();
+    client.listPageComments.mockResolvedValueOnce(
+      list([b], { counts: { open: 2, resolved: 0 }, workItemRefs: { wi_later: LATER } }),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Load more threads' })),
+    );
+    for (const [id, key] of [
+      [a.id, 'MOTIR-706'],
+      [b.id, 'MOTIR-707'],
+    ] as const) {
+      const chip = chipFor(screen.getByTestId(`page-comment-${id}`), key);
+      expect(chip.classList.contains('is-deleted')).toBe(false);
+    }
+  });
+
+  it('reads the Open list again after a write that links a card no read has resolved', async () => {
+    client.listPageComments.mockResolvedValueOnce(list([], { workItemRefs: REFS }));
+    await mountPanel();
+    expect(client.listPageComments).toHaveBeenCalledTimes(1);
+
+    // A body linking only resolved cards, or none, costs no read.
+    fireEvent.click(screen.getByRole('button', { name: 'Add a comment…' }));
+    let box = screen.getByRole('textbox', { name: 'Comment on this page' });
+    const known = thread(ME, [], { bodyMd: 'As [MOTIR-706](motir:wi_live) says.' });
+    fireEvent.change(box, { target: { value: known.bodyMd } });
+    client.createPageComment.mockResolvedValueOnce(ok(known));
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Comment' })));
+    expect(client.listPageComments).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add a comment…' }));
+    box = screen.getByRole('textbox', { name: 'Comment on this page' });
+    const fresh = thread(ME, [], { bodyMd: 'Blocked by [MOTIR-707](motir:wi_later).' });
+    fireEvent.change(box, { target: { value: fresh.bodyMd } });
+    client.createPageComment.mockResolvedValueOnce(ok(fresh));
+    client.listPageComments.mockResolvedValueOnce(
+      list([fresh, known], { workItemRefs: { wi_later: LATER } }),
+    );
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Comment' })));
+    expect(client.listPageComments).toHaveBeenCalledTimes(2);
+    expect(client.listPageComments).toHaveBeenLastCalledWith('page-1', {
+      status: 'open',
+      order: 'desc',
+    });
+    await waitFor(() =>
+      expect(
+        chipFor(screen.getByTestId(`page-comment-${fresh.id}`), 'MOTIR-707').classList.contains(
+          'is-deleted',
+        ),
+      ).toBe(false),
+    );
+    // The earlier read's summary is kept beside the new one.
+    expect(
+      chipFor(screen.getByTestId(`page-comment-${known.id}`), 'MOTIR-706').classList.contains(
+        'is-deleted',
+      ),
+    ).toBe(false);
+  });
+
+  it('follows a reply and an edit that link a new card the same way', async () => {
+    const root = thread(BO);
+    client.listPageComments.mockResolvedValueOnce(list([root]));
+    await mountPanel();
+    const row = screen.getByTestId(`page-thread-${root.id}`);
+    fireEvent.click(within(row).getByRole('button', { name: 'Reply' }));
+    const box = within(row).getByRole('textbox', { name: 'Write a reply' });
+    const reply = comment(ME, {
+      parentCommentId: root.id,
+      bodyMd: 'Tracked in [MOTIR-706](motir:wi_live).',
+    });
+    fireEvent.change(box, { target: { value: reply.bodyMd } });
+    client.replyToPageComment.mockResolvedValueOnce(ok(reply));
+    client.listPageComments.mockResolvedValueOnce(
+      list([{ ...root, replies: [reply] }], { workItemRefs: REFS }),
+    );
+    const submit = within(row).getAllByRole('button', { name: 'Reply' });
+    await act(async () => fireEvent.click(submit[submit.length - 1]!));
+    expect(client.listPageComments).toHaveBeenCalledTimes(2);
+
+    const mine = screen.getByTestId(`page-comment-${reply.id}`);
+    fireEvent.click(within(mine).getByRole('button', { name: 'Edit' }));
+    const edit = within(mine).getByRole('textbox', { name: 'Edit comment' });
+    const edited = {
+      ...reply,
+      bodyMd: 'Now [MOTIR-707](motir:wi_later).',
+      editedAt: reply.createdAt,
+    };
+    fireEvent.change(edit, { target: { value: edited.bodyMd } });
+    client.editPageComment.mockResolvedValueOnce(ok(edited));
+    client.listPageComments.mockResolvedValueOnce(
+      list([{ ...root, replies: [edited] }], { workItemRefs: { wi_later: LATER } }),
+    );
+    await act(async () => fireEvent.click(within(mine).getByRole('button', { name: 'Save' })));
+    expect(client.listPageComments).toHaveBeenCalledTimes(3);
   });
 });
 

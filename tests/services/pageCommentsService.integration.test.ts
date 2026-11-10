@@ -12,6 +12,7 @@ import { pageCommentsService } from '@/lib/services/pageCommentsService';
 import { pagesService } from '@/lib/services/pagesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
+import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
@@ -100,6 +101,41 @@ const snapshot = () =>
   });
 
 describe('pageCommentsService — reads', () => {
+  it('answers the work items the listed bodies link, roots and replies alike', async () => {
+    const f = await makeFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: f.projectId, kind: 'task', title: 'Rotate the keys' },
+      f.owner,
+    );
+    const other = await workItemsService.createWorkItem(
+      { projectId: f.projectId, kind: 'task', title: 'Ship the notes' },
+      f.owner,
+    );
+    const plain = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Hi' });
+    expect(
+      (await pageCommentsService.listPageThreads(f.owner, { ...on(f), status: 'open' }))
+        .workItemRefs,
+    ).toEqual({});
+
+    const root = await pageCommentsService.postPageComment(f.owner, {
+      ...on(f),
+      bodyMd: `Blocked by [${item.identifier}](motir:${item.id}).`,
+    });
+    await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: `And [${other.identifier}](motir:${other.id}).`,
+    });
+    const listed = await pageCommentsService.listPageThreads(f.owner, { ...on(f), status: 'open' });
+    expect(listed.threads.map((t) => t.id)).toEqual(expect.arrayContaining([root.id, plain.id]));
+    expect(listed.workItemRefs[other.id]).toMatchObject({ identifier: other.identifier });
+    expect(listed.workItemRefs[item.id]).toMatchObject({
+      accessible: true,
+      identifier: item.identifier,
+      title: 'Rotate the keys',
+    });
+  });
+
   it('a viewer reads with no write capabilities; a member may comment; the owner moderates', async () => {
     const f = await makeFixture();
     const viewer = await actorAs(f, 'viewer', 'viewer');
