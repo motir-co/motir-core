@@ -104,23 +104,34 @@ export function resolveHostedModel({
   return first === undefined ? null : { model: first, source: 'first_offered' };
 }
 
+/** Why a hosted review's model won. */
+export type ReviewModelSource =
+  | 'org_review'
+  | 'platform_review'
+  | 'platform_default'
+  | 'first_offered';
+
 /**
- * The model a hosted REVIEW runs on when nobody chooses (MOTIR-10843): the
- * organisation's review-agent model while it qualifies and it is offered, else the
- * platform review-agent model, else null — the caller then takes the run default
- * (`hostedRunModelService.defaultOffered()`).
+ * The model a hosted REVIEW runs on when nobody chooses (MOTIR-10843; its order is
+ * shared with the org room's review row, MOTIR-10850): the organisation's
+ * review-agent model while it qualifies and it is offered, else the platform
+ * review-agent model, else the platform `default`, else the first offered model —
+ * the same last two steps `hostedRunModelService.defaultOffered()` takes. Null only
+ * when nothing is offered.
  */
 export function resolveReviewModel(
-  offered: Pick<HostedModelOffer, 'models' | 'reviewAgentDefault'>,
+  offered: Pick<HostedModelOffer, 'models' | 'reviewAgentDefault' | 'default'>,
   org: Pick<OrgHostedModelLayer, 'review'> | null,
-): { model: string; source: 'org_review' | 'platform_review' } | null {
+): { model: string; source: ReviewModelSource } | null {
   const isOffered = (id: string | null | undefined): id is string =>
     typeof id === 'string' && offered.models.includes(id);
   if (isOffered(org?.review)) return { model: org.review, source: 'org_review' };
   if (isOffered(offered.reviewAgentDefault)) {
     return { model: offered.reviewAgentDefault, source: 'platform_review' };
   }
-  return null;
+  if (isOffered(offered.default)) return { model: offered.default, source: 'platform_default' };
+  const first = offered.models[0];
+  return first === undefined ? null : { model: first, source: 'first_offered' };
 }
 
 /**

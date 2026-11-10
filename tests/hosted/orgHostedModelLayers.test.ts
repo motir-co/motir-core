@@ -192,15 +192,19 @@ describe('resolveReviewModel', () => {
     });
   });
 
-  it('skips a withdrawn value at each layer, answering null when neither is offered', () => {
+  it('skips a withdrawn value at each layer, down to the platform default and the first offered', () => {
     expect(resolveReviewModel(offer(), org({ review: 'm-gone' }))).toEqual({
       model: PLATFORM_REVIEW,
       source: 'platform_review',
     });
     expect(
       resolveReviewModel(offer({ reviewAgentDefault: 'm-gone' }), org({ review: 'm-gone' })),
-    ).toBeNull();
-    expect(resolveReviewModel(offer({ reviewAgentDefault: null }), null)).toBeNull();
+    ).toEqual({ model: DEFAULT, source: 'platform_default' });
+    expect(resolveReviewModel(offer({ reviewAgentDefault: null, default: null }), null)).toEqual({
+      model: DEFAULT,
+      source: 'first_offered',
+    });
+    expect(resolveReviewModel(offer({ models: [] }), org())).toBeNull();
   });
 });
 

@@ -59,3 +59,63 @@ export interface OrgPlannerModelWriteDTO {
   model: string | null;
   updatedAt: string;
 }
+
+// ── The run-side half (MOTIR-10850) ─────────────────────────────────────────────
+// The org's own hosted-run models: a default per difficulty, the review agent and
+// the design run. motir-core stores them (six `organization` columns); the room
+// reads and writes them through `/ai-models/runs`.
+
+/** The run-side rows, in the room's order. */
+export const ORG_RUN_MODEL_KEYS = ['trivial', 'low', 'medium', 'high', 'review', 'design'] as const;
+export type OrgRunModelKeyDTO = (typeof ORG_RUN_MODEL_KEYS)[number];
+
+export function isOrgRunModelKey(value: unknown): value is OrgRunModelKeyDTO {
+  return typeof value === 'string' && (ORG_RUN_MODEL_KEYS as readonly string[]).includes(value);
+}
+
+/**
+ * Where a run-side row's effective model comes from. `difficulty_mapping` is the
+ * design row with neither an org nor a platform design-run model: such a run takes
+ * the card's difficulty, which a room row does not have.
+ */
+export type OrgRunModelSourceDTO =
+  | 'org_level'
+  | 'org_review'
+  | 'org_design'
+  | 'platform_level'
+  | 'platform_review'
+  | 'platform_design'
+  | 'platform_default'
+  | 'first_offered'
+  | 'difficulty_mapping';
+
+/** One run-side row while the org qualifies. */
+export interface OrgRunModelRowDTO {
+  key: OrgRunModelKeyDTO;
+  /** The org's stored choice, or null when it inherits. */
+  model: string | null;
+  /** True only for a stored choice no longer on the run-model offer. */
+  withdrawn: boolean;
+  /** What a run uses with no person's pick and no project override; null when none. */
+  effectiveModel: string | null;
+  effectiveSource: OrgRunModelSourceDTO | null;
+}
+
+/** The run-side read: the same three states and `canEdit` rule as the planning side. */
+export type OrgRunModelsDTO =
+  | {
+      state: 'ready';
+      canEdit: boolean;
+      rows: OrgRunModelRowDTO[];
+      offered: OrgOfferedModelDTO[];
+    }
+  | { state: 'locked'; canEdit: false; keptChoices: boolean }
+  | { state: 'unreadable'; canEdit: false };
+
+/** A saved run-side change, previous → new, with the row recomputed from the write. */
+export interface OrgRunModelWriteDTO {
+  key: OrgRunModelKeyDTO;
+  previousModel: string | null;
+  model: string | null;
+  row: OrgRunModelRowDTO;
+}

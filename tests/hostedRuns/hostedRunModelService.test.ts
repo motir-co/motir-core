@@ -482,12 +482,12 @@ describe('the review-agent and design-run defaults (MOTIR-10843)', () => {
     expect(await hostedRunModelService.reviewModelFor(null)).toBe('claude-opus-5-5');
   });
 
-  it('reviewModelFor answers undefined when neither is set, or motir-ai is unreachable', async () => {
+  it('reviewModelFor falls to the default with neither set, and answers undefined unreachable', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => json(LIST)),
     );
-    expect(await hostedRunModelService.reviewModelFor(null)).toBeUndefined();
+    expect(await hostedRunModelService.reviewModelFor(null)).toBe(LIST.default);
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => json({}, 503)),
