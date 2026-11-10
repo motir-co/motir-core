@@ -205,11 +205,15 @@ export default async function PageAtItsAddress({ params }: Params) {
   if ('error' in read) throw read.error;
   if (!read.loaded) notFound();
   const { page, viewerId } = read.loaded;
-  const scope = await loadScope();
   // `work_item:edit`, for the Linked work items strip (MOTIR-9200): its own value, so
-  // the strip can paint before its read answers. `page.canEdit` is `page:edit`.
-  const context = await loadContext();
-  const held = await context.permissions();
+  // the strip can paint before its read answers. `page.canEdit` is `page:edit`. The
+  // scope, the context and the reader's permissions settle in ONE wave — both
+  // loaders are request-cached, so the context is read once (MOTIR-3449).
+  const [scope, context, held] = await Promise.all([
+    loadScope(),
+    loadContext(),
+    loadContext().then((c) => c.permissions()),
+  ]);
   const canLinkWorkItems = page.archivedAt === null && held.has('work_item:edit');
   // An archived ROOT's banner says how many sub-pages left with it (MOTIR-7423);
   // read after the gate, and only for that case. A sub-page's banner names its
