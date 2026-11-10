@@ -27,7 +27,8 @@ template's parameters (those without a default are required) and outputs.
   parameters (the repository id, the `appRef`), so applying a template again
   updates in place and never makes a second copy.
 - **Every IAM role a template creates is named `motir-…`, at most 64
-  characters** — `motir-<appRef>-fn` for a function, `motir-<appRef>-exec` and
+  characters** — `motir-<appRef>-fn` for a function and `motir-<appRef>-door` for
+  its front door, `motir-<appRef>-exec` and
   `motir-<appRef>-task` for a container — except the two push roles, whose names
   the decision fixes: `mh-<rid>-preview-push` and `mh-<rid>-production-push`.
 - The ECR repositories are `mh/<rid>/preview` and `mh/<rid>/production`.
@@ -87,6 +88,21 @@ the existing provider must be removed or imported first.
   `# <release secrets>`); a function's entrypoint loads the secret by ARN.
 - Secret names carry the stack id's unique suffix, so a re-created stack never
   collides with a secret still scheduled for deletion.
+
+## The function's front door
+
+A function release is reached through its FRONT DOOR (MOTIR-10129, to the
+decision MOTIR-10128), never through its own URL: a second, small function
+`<appRef>-front-door` on a public function URL. It admits a request only when
+its `X-Motir-Origin-Secret` header equals the `OriginSecret` parameter (the
+caller derives it, as it does a container's), removes the header and invokes
+the function's `live` alias with the same event; anything else is a 403 that
+never reaches the app. So every forwarder presents the same credential to a
+function as to a container, and no credential for this account is ever held
+outside it. The function's own IAM-auth URL stays, for the forwarder principal
+alone. The front door publishes a version per `FrontDoorRevision` (a hash of the
+secret and the template) behind its own `live`, which carries provisioned
+concurrency when the app is always on.
 
 ## Rollback
 

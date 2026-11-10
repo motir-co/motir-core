@@ -1,4 +1,6 @@
+import { createHash } from 'node:crypto';
 import { hostingAppNames } from '../../../../hosting/names';
+import { deriveOriginSecret } from '../../../../hosting/originSecret';
 import type {
   HostingEnvironment,
   ReleaseEnvVar,
@@ -25,6 +27,15 @@ import { FUNCTION_DURATION_METRIC, functionComputeUsage } from './usage';
 // is the Lambda function `mh-<rid>` / `mh-<rid>-pr<n>`, running the image through
 // the AWS Lambda Web Adapter in the tenant VPC, with a version per release behind
 // the alias `live` and an IAM-auth function URL only the forwarder may invoke.
+//
+// The release is REACHED through its FRONT DOOR (MOTIR-10129, to the decision
+// MOTIR-10128): a small function on a public URL, in the same stack, that admits
+// only a request carrying the app's `X-Motir-Origin-Secret` — derived here by
+// `deriveOriginSecret`, exactly as a container's is — and invokes `live` with
+// it. So a function release describes the front door's URL and `origin_secret`,
+// and the edge never needs a credential for the tenant's account. A stack
+// applied before the front door existed has only the IAM URL until its next
+// deploy, and describes that with `aws_sigv4`.
 //
 // The release stack (`function-release.yaml`, `motir-release-<appRef>`) owns the
 // function, its versions, the alias, the URL, provisioned concurrency and the
@@ -70,6 +81,9 @@ export interface DeployFunctionReleaseInput extends FunctionReleaseTarget {
   readonly network: Pick<TenantNetwork, 'privateSubnetIds' | 'appSecurityGroupId'>;
   /** The forwarder's IAM principal, the only one that may invoke the URL. */
   readonly invokePrincipalArn: string;
+  /** The key the app's origin secret is derived from (`deriveOriginSecret`);
+   *  the front door admits only a request carrying that secret. */
+  readonly originSecretKey: string;
   /** The environment's database secret, passed by ARN only. */
   readonly database?: EnvironmentDatabaseReference | null;
 }
@@ -80,7 +94,7 @@ export interface FunctionRelease {
   readonly appRef: string;
   readonly stackName: string;
   readonly releaseId: string;
-  /** The function URL (`AuthType AWS_IAM`). */
+  /** The front door's URL, which admits the origin secret. */
   readonly upstreamAddress: string;
   readonly liveVersion: string;
   readonly previousVersion: string | null;
@@ -91,7 +105,7 @@ export interface FunctionReleaseDescription {
   readonly releaseId: string | null;
   readonly previousReleaseId: string | null;
   readonly upstreamAddress: string | null;
-  readonly originCredential: 'aws_sigv4' | 'none';
+  readonly originCredential: 'origin_secret' | 'aws_sigv4' | 'none';
 }
 
 export interface FunctionUsageInput extends FunctionReleaseTarget {
@@ -107,6 +121,32 @@ export function functionReleaseNames(
 ): { appRef: string; stackName: string } {
   const { appRef } = hostingAppNames('mh-', repositoryId, environment);
   return { appRef, stackName: `motir-release-${appRef}` };
+}
+
+/**
+ * The front door's `FrontDoorRevision`: a hash of the origin secret and the
+ * rendered template, so a rotated key or a changed handler publishes a new front
+ * door version (a version reads the environment it was published with). The
+ * secret cannot be read back from it.
+ */
+export function frontDoorRevision(originSecret: string, template: string): string {
+  return createHash('sha256')
+    .update(JSON.stringify([originSecret, template]))
+    .digest('hex');
+}
+
+/** Where a forwarder reaches a release stack's outputs, and with what: the
+ *  front door with the origin secret, else — a stack applied before the front
+ *  door existed — the IAM function URL with SigV4. */
+export function functionUpstream(outputs: Readonly<Record<string, string>>): {
+  upstreamAddress: string | null;
+  originCredential: FunctionReleaseDescription['originCredential'];
+} {
+  const frontDoor = outputs['FrontDoorUrl'];
+  if (frontDoor) return { upstreamAddress: frontDoor, originCredential: 'origin_secret' };
+  const url = outputs['FunctionUrl'];
+  if (url) return { upstreamAddress: url, originCredential: 'aws_sigv4' };
+  return { upstreamAddress: null, originCredential: 'none' };
 }
 
 /** The version a rollback would restore, from the versions and `live`. */
@@ -142,6 +182,7 @@ export async function deployFunctionRelease(
     readTenantStackTemplate('function-release.yaml'),
     split.plain,
   );
+  const originSecret = deriveOriginSecret(input.originSecretKey, appRef);
   const parameters = (hash: string) => ({
     OrganizationId: account.organizationId,
     RepositoryId: repositoryId,
@@ -156,6 +197,8 @@ export async function deployFunctionRelease(
     DatabaseSecretArn: databaseSecretArn,
     ConfigHash: hash,
     InvokePrincipalArn: input.invokePrincipalArn,
+    OriginSecret: originSecret,
+    FrontDoorRevision: frontDoorRevision(originSecret, template),
   });
   const apply = (hash: string) =>
     account.runner.applyStack({
@@ -181,7 +224,7 @@ export async function deployFunctionRelease(
   // 3. Publish.
   const published = (await apply(configHash)).outputs;
   const liveVersion = stackOutput(stackName, published, 'LiveVersion');
-  const upstreamAddress = stackOutput(stackName, published, 'FunctionUrl');
+  const upstreamAddress = stackOutput(stackName, published, 'FrontDoorUrl');
 
   // 4. `live` on the stack's version, whatever a rollback did to it.
   const { lambda } = account.clients;
@@ -214,11 +257,7 @@ export async function describeFunctionRelease(
   const { appRef, stackName } = functionReleaseNames(target.repositoryId, target.environment);
   const stack = await target.account.runner.describeStack(stackName);
   if (!stack || stack.status.startsWith('DELETE_IN_PROGRESS')) return DESTROYED;
-  const url = stack.outputs['FunctionUrl'] ?? null;
-  const address = {
-    upstreamAddress: url,
-    originCredential: url ? ('aws_sigv4' as const) : ('none' as const),
-  };
+  const address = functionUpstream(stack.outputs);
   const failed = stack.status.endsWith('_FAILED') || stack.status === 'ROLLBACK_COMPLETE';
   if (failed || !stack.outputs['LiveVersion']) {
     return {
@@ -257,7 +296,7 @@ export async function rollbackFunctionRelease(
 ): Promise<FunctionRelease> {
   const { appRef, stackName } = functionReleaseNames(target.repositoryId, target.environment);
   const stack = await target.account.runner.describeStack(stackName);
-  const upstreamAddress = stack?.outputs['FunctionUrl'];
+  const upstreamAddress = stack ? functionUpstream(stack.outputs).upstreamAddress : null;
   if (!upstreamAddress) throw new NoPreviousFunctionVersionError(appRef);
   const { lambda } = target.account.clients;
   const live = await lambda.getAlias(appRef, LIVE_ALIAS);

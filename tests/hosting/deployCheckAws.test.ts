@@ -64,6 +64,9 @@ interface HarnessOptions {
   readonly failExec?: (exec: Exec) => boolean;
   /** Mint the fake's own (secret) credential instead of the federated one. */
   readonly secretCredential?: boolean;
+  /** Describe every release `aws_sigv4`, as a function stack applied before its
+   *  front door (MOTIR-10129) still is. */
+  readonly legacySigV4?: boolean;
 }
 
 function harness(options: HarnessOptions = {}) {
@@ -85,6 +88,13 @@ function harness(options: HarnessOptions = {}) {
           calls.push('ensureApp');
           const app = await target.ensureApp(input);
           return { ...app, pushNamespace: `mh/${input.repositoryId}/production` };
+        };
+      }
+      if (prop === 'describe' && options.legacySigV4) {
+        return async (handle: Parameters<HostingDeployPort['describe']>[0]) => {
+          calls.push('describe');
+          const description = await target.describe(handle);
+          return { ...description, originCredential: 'aws_sigv4' as const };
         };
       }
       const value = Reflect.get(target, prop, receiver) as unknown;
@@ -236,7 +246,8 @@ describe.each([
   {
     shape: 'function' as const,
     host: `${APP}.lambda-url.fake.invalid`,
-    credential: 'aws_sigv4',
+    // Through its front door (MOTIR-10129), as a container through its rule.
+    credential: 'origin_secret',
     unit: 'lambda',
   },
   {
@@ -544,11 +555,23 @@ describe('page', () => {
     const h = harness({ page: async () => new Response(null, { status: 502 }) });
     await h.run('deploy', ...base('function'));
     expect(await h.run('page', ...base('function'))).toBe(1);
-    expect(h.signed.length).toBe(DEPLOY_CHECK_PAGE_ATTEMPTS * 2);
+    expect(h.plain.length).toBe(DEPLOY_CHECK_PAGE_ATTEMPTS * 2);
     expect(h.block('refused')).toMatchObject({
       error: 'DEPLOY_CHECK_PAGE_FAILED',
       message: expect.stringMatching(/health answered 502/),
     });
+  });
+
+  it('signs, and sends no secret to, a function stack applied before its front door', async () => {
+    const h = harness({ legacySigV4: true });
+    await h.run('deploy', ...base('function'));
+    expect(await h.run('page', ...base('function'))).toBe(0);
+    expect(h.block('page')).toMatchObject({ originCredential: 'aws_sigv4', health: '200' });
+    expect(h.signed).toEqual([
+      `https://${APP}.lambda-url.fake.invalid/health`,
+      `https://${APP}.lambda-url.fake.invalid/row`,
+    ]);
+    expect(h.plain).toEqual([]);
   });
 
   it('fails when the release cannot be reached at all', async () => {

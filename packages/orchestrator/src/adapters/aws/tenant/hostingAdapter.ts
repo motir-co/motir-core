@@ -366,6 +366,7 @@ export function createAwsHostingDeployPort(deps: AwsHostingDeps): HostingDeployP
                 ...common,
                 network,
                 invokePrincipalArn: deps.forwarderPrincipalArn,
+                originSecretKey: deps.originSecretKey,
               })
             ).releaseId
           : (

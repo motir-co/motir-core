@@ -91,9 +91,14 @@ export function shapeOfReleaseStack(
   return null;
 }
 
-/** What a forwarder sends to a release of that shape (MOTIR-5769 §4). */
-export function originCredentialOf(shape: ReleaseShape): OriginCredentialKind {
-  return shape === 'function' ? 'aws_sigv4' : 'origin_secret';
+/** What a forwarder sends to a release of that shape (MOTIR-5769 §4, amended
+ *  by the decision MOTIR-10128): the origin secret for both. A container is
+ *  reached through the load balancer's rule that matches it; a function, since
+ *  MOTIR-10129, through its FRONT DOOR — the stack's public proxy function that
+ *  verifies it and only then invokes the function — so neither shape needs the
+ *  forwarder to sign with a tenant-account credential. */
+export function originCredentialOf(_shape: ReleaseShape): OriginCredentialKind {
+  return 'origin_secret';
 }
 
 /** A shape module's description as the port's. */

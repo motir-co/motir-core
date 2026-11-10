@@ -8,9 +8,10 @@
  *   release2  deploy release 2 of the same image (MOTIR_DEPLOY_CHECK_RELEASE=2)
  *   rollback  roll back to the previous release and print which one serves
  *   status    print which release serves, from the port
- *   probe     GET the health path with the app's derived X-Motir-Origin-Secret
- *             and without it; print both status lines (never the secret) and
- *             fail unless they are 2xx and 403 (MOTIR-9947)
+ *   probe     GET the health path with the app's derived X-Motir-Origin-Secret,
+ *             without it, and with a wrong value; print the three status lines
+ *             (never the secret) and fail unless they are 2xx, 403 and 403
+ *             (MOTIR-9947; on AWS, either shape — MOTIR-10129)
  *   report    GET / on the serving release and print the lines it answers — the
  *             env-reporting fixture's GREETING value and API_KEY presence
  *             (MOTIR-9965); fail unless it is 2xx
@@ -28,8 +29,10 @@
  *   push      build the fixture app as release 1 and 2 and push both to
  *             mh/<id>/production under `--aws-profile`
  *   page      GET the serving release's /health and /row with its origin
- *             credential (SigV4 for a function, the origin secret for a
- *             container); release2 and rollback run it too
+ *             credential — the origin secret, for a function through its front
+ *             door (MOTIR-10129) as for a container, and SigV4 only for a
+ *             function stack from before the front door; release2 and rollback
+ *             run it too
  *   no-shape  deploy with no shape, which the port must refuse, and list the
  *             app's releases, which must be none
  *   all       converge, push, deploy, page, release2, rollback, destroy

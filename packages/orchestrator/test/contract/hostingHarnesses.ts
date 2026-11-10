@@ -113,7 +113,9 @@ export function fakeAwsHarness(shape: ReleaseShape): FakeAwsHarness {
     fake,
     shape,
     idle: shape === 'container' ? { mode: 'always_on' } : SUSPEND,
-    originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
+    // Both AWS shapes take the origin secret: a function through its front
+    // door (MOTIR-10129), a container through the load balancer's rule.
+    originCredential: 'origin_secret',
     advanceSeconds: (s) => fake.advanceSeconds(s),
     failNextDestroy: (_appRef, operation) => fake.failNext(operation),
     runtimeOf(appRef) {
@@ -196,9 +198,11 @@ export function awsHarness(shape: ReleaseShape): HostingHarness {
     port: h.port,
     shape,
     idle: shape === 'container' ? { mode: 'always_on' } : SUSPEND,
-    originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
-    // A function URL is a host AWS generates; a container answers on the
-    // account's load balancer.
+    // Both AWS shapes take the origin secret: a function through its front
+    // door (MOTIR-10129), a container through the load balancer's rule.
+    originCredential: 'origin_secret',
+    // A function's front door URL is a host AWS generates; a container answers
+    // on the account's load balancer.
     upstream: () =>
       shape === 'function'
         ? new RegExp(`^https://[0-9a-f]{32}\\.lambda-url\\.${AWS_REGION}\\.on\\.aws/$`)
