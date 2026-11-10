@@ -568,6 +568,10 @@ export async function statusOf(
   });
 }
 
+/** The value `probe` sends as a wrong origin secret: never any app's, since a
+ *  derived secret is 64 hex characters. */
+export const DEPLOY_CHECK_WRONG_SECRET = 'not-the-origin-secret';
+
 export const statusLine = (res: Response): string => `${res.status} ${res.statusText}`.trim();
 
 async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promise<void> {
@@ -587,12 +591,19 @@ async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promis
     headers: secret ? { [ORIGIN_SECRET_HEADER]: secret } : {},
   });
   const withoutSecret = await deps.fetch(url, { headers: {} });
+  // A value that is not the app's secret, as a forwarder that guessed would send
+  // it: the guard, the load-balancer rule and the function's front door
+  // (MOTIR-10129) must refuse it exactly as they refuse no header.
+  const withWrongSecret = await deps.fetch(url, {
+    headers: { [ORIGIN_SECRET_HEADER]: DEPLOY_CHECK_WRONG_SECRET },
+  });
   deps.print('probe', {
     app: appRef,
     url,
     originCredential: description.originCredential,
     withSecret: statusLine(withSecret),
     withoutSecret: statusLine(withoutSecret),
+    withWrongSecret: statusLine(withWrongSecret),
   });
   if (!guarded) {
     throw new DeployCheckProbeFailedError(
@@ -604,6 +615,11 @@ async function probe(deps: DeployCheckDeps, options: DeployCheckOptions): Promis
   }
   if (withoutSecret.status !== 403) {
     throw new DeployCheckProbeFailedError(`without the secret it answered ${withoutSecret.status}`);
+  }
+  if (withWrongSecret.status !== 403) {
+    throw new DeployCheckProbeFailedError(
+      `with a wrong secret it answered ${withWrongSecret.status}`,
+    );
   }
 }
 

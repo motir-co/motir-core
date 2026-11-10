@@ -193,17 +193,12 @@ export interface FakeHostingOptions {
   readonly shareAcrossProcesses?: boolean;
 }
 
-/** The origin credential a forwarder sends to a release of that target and
- *  shape (MOTIR-5769 §4): Fly's guard and an AWS container's load-balancer rule
- *  check the origin secret; a serverless release and an AWS function URL are
- *  IAM-authorised (SigV4). */
-function originCredentialFor(
-  target: HostingDeployTarget,
-  shape: ReleaseShape | undefined,
-): OriginCredentialKind {
-  if (target === 'fly') return 'origin_secret';
-  if (target === 'serverless') return 'aws_sigv4';
-  return shape === 'function' ? 'aws_sigv4' : 'origin_secret';
+/** The origin credential a forwarder sends to a release of that target
+ *  (MOTIR-5769 §4, amended by MOTIR-10128): Fly's guard, an AWS container's
+ *  load-balancer rule and an AWS function's front door (MOTIR-10129) check the
+ *  origin secret; a serverless release is IAM-authorised (SigV4). */
+function originCredentialFor(target: HostingDeployTarget): OriginCredentialKind {
+  return target === 'serverless' ? 'aws_sigv4' : 'origin_secret';
 }
 
 /** Where the fake says a release answers: the shape's own host on AWS. */
@@ -523,7 +518,7 @@ export function createFakeHostingDeployPort(
           releaseId: app.pending.releaseId,
           previousReleaseId: app.live?.releaseId ?? null,
           upstreamAddress: null,
-          originCredential: originCredentialFor(target, app.pending.shape),
+          originCredential: originCredentialFor(target),
         };
       }
       if (!app || !app.live) {
@@ -543,7 +538,7 @@ export function createFakeHostingDeployPort(
         // As the real adapters: a Fly release sits behind the origin-secret
         // guard (MOTIR-9947), a serverless one behind a SigV4-signed function
         // URL (MOTIR-9972), an AWS release behind its shape's credential.
-        originCredential: originCredentialFor(target, app.live.shape),
+        originCredential: originCredentialFor(target),
       };
     },
 

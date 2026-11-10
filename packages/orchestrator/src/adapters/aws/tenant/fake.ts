@@ -487,7 +487,10 @@ export interface FakeFunction {
   stackDescription: string | null;
   /** Where `live` points, which a rollback moves outside the stack. */
   alias: string | null;
+  /** The function's own IAM-auth URL. */
   readonly url: string;
+  /** Its front door's public URL (MOTIR-10129), the one a forwarder reaches. */
+  readonly frontDoorUrl: string;
   readonly arn: string;
 }
 
@@ -538,13 +541,15 @@ export function createFakeTenantLambda(accountId: string, region: string): FakeT
       const name = parameters['AppRef']!;
       let fn = functions.get(name);
       if (!fn) {
-        const id = createHash('sha256').update(`${name}:${generation}`).digest('hex').slice(0, 32);
+        const idOf = (seed: string) => createHash('sha256').update(seed).digest('hex').slice(0, 32);
+        const id = idOf(`${name}:${generation}`);
         fn = {
           versions: new Map(),
           stackVersion: null,
           stackDescription: null,
           alias: null,
           url: `https://${id}.lambda-url.${region}.on.aws/`,
+          frontDoorUrl: `https://${idOf(`${name}:${generation}:front-door`)}.lambda-url.${region}.on.aws/`,
           arn: `arn:aws:lambda:${region}:${accountId}:function:${name}`,
         };
         functions.set(name, fn);
@@ -564,7 +569,12 @@ export function createFakeTenantLambda(accountId: string, region: string): FakeT
         fn.stackDescription = description;
       }
       fn.alias = fn.stackVersion;
-      return { ...outputs, FunctionUrl: fn.url, LiveVersion: fn.stackVersion! };
+      return {
+        ...outputs,
+        FunctionUrl: fn.url,
+        LiveVersion: fn.stackVersion!,
+        FrontDoorUrl: fn.frontDoorUrl,
+      };
     },
     removeFunction(functionName) {
       functions.delete(functionName);

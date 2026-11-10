@@ -13,7 +13,11 @@ Description: >-
   whose value the caller writes as the secret version ConfigHash names. A first
   apply with an empty ConfigHash creates the function unpublished, so the caller
   can write that value before any version (and its provisioned concurrency)
-  starts.
+  starts. A FRONT DOOR (MOTIR-10129, to MOTIR-10128) is what every forwarder
+  reaches: a small function on a public URL that admits a request only when it
+  carries the app's X-Motir-Origin-Secret, strips the header and invokes `live`
+  with the same event, so the edge presents one credential kind for every
+  release and no tenant-account credential leaves this account.
 
 Parameters:
   OrganizationId:
@@ -67,6 +71,18 @@ Parameters:
   InvokePrincipalArn:
     Type: String
     Description: The forwarder's IAM principal, the only one allowed to invoke the URL.
+  OriginSecret:
+    Type: String
+    NoEcho: true
+    Description: >-
+      The app's origin secret, derived by the caller (deriveOriginSecret); never
+      computed here. The front door admits only a request carrying it.
+  FrontDoorRevision:
+    Type: String
+    Default: ''
+    Description: >-
+      A hash of the origin secret and this template, from the caller; a change
+      publishes a new front door version, so a rotated key reaches `live`.
 
 Conditions:
   AlwaysOn: !Equals [!Ref IdlePolicy, always_on]
@@ -222,6 +238,162 @@ Resources:
       InvokedViaFunctionUrl: true
       Principal: !Ref InvokePrincipalArn
 
+  # THE FRONT DOOR (MOTIR-10129). The decision MOTIR-10128 has every forwarder
+  # present the origin secret, so the IAM URL above is not what the edge calls:
+  # this function is. Outside the VPC (it calls only the Lambda API), on arm64,
+  # with a timeout above the app's so the app's own timeout answers first. It
+  # holds no credential but its role's one grant: invoke `live`.
+  FrontDoorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: Published
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${AppRef}-front-door
+      RetentionInDays: 30
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  FrontDoorRole:
+    Type: AWS::IAM::Role
+    Condition: Published
+    Properties:
+      RoleName: !Sub motir-${AppRef}-door
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: front-door
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub ${FrontDoorLogGroup.Arn}
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !Ref LiveAlias
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # The handler, inline (the runtime writes it as index.js). For every request:
+  # X-Motir-Origin-Secret missing or wrong -> 403, empty body, and `live` is NOT
+  # invoked; right -> the header is removed and `live` is invoked once (no SDK
+  # retry, so a request is never run twice) with the same function URL event,
+  # whose answer is the response. A failed invoke is a 502. The comparison is
+  # constant-time over SHA-256 digests, as the hosting guard's is; the secret is
+  # never logged.
+  FrontDoorFunction:
+    Type: AWS::Lambda::Function
+    Condition: Published
+    Properties:
+      FunctionName: !Sub ${AppRef}-front-door
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Architectures: [arm64]
+      MemorySize: 512
+      Timeout: 70
+      Role: !GetAtt FrontDoorRole.Arn
+      LoggingConfig:
+        LogGroup: !Ref FrontDoorLogGroup
+      Environment:
+        Variables:
+          MOTIR_FRONT_DOOR_SECRET: !Ref OriginSecret
+          MOTIR_FRONT_DOOR_TARGET: !Ref LiveAlias
+      Code:
+        ZipFile: |
+          'use strict';
+          const { createHash, timingSafeEqual } = require('node:crypto');
+          const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
+          const HEADER = 'x-motir-origin-secret';
+          const digest = (value) => createHash('sha256').update(value).digest();
+          const empty = (statusCode) => ({ statusCode, headers: { 'content-length': '0' }, body: '' });
+          let client;
+          exports.handler = async (event) => {
+            const headers = { ...(event.headers || {}) };
+            const given = headers[HEADER];
+            const secret = process.env.MOTIR_FRONT_DOOR_SECRET || '';
+            if (typeof given !== 'string' || !secret || !timingSafeEqual(digest(given), digest(secret))) {
+              return empty(403);
+            }
+            delete headers[HEADER];
+            client = client || new LambdaClient({ maxAttempts: 1 });
+            let answer;
+            try {
+              answer = await client.send(new InvokeCommand({
+                FunctionName: process.env.MOTIR_FRONT_DOOR_TARGET,
+                Payload: JSON.stringify({ ...event, headers }),
+              }));
+            } catch (err) {
+              console.error('front door: invoke failed', err && err.name);
+              return empty(502);
+            }
+            if (answer.FunctionError || !answer.Payload) {
+              console.error('front door: the app failed', answer.FunctionError || 'no payload');
+              return empty(502);
+            }
+            return JSON.parse(Buffer.from(answer.Payload).toString('utf8'));
+          };
+      Tags:
+        - { Key: 'motir:organization', Value: !Ref OrganizationId }
+        - { Key: 'motir:repository', Value: !Ref RepositoryId }
+
+  # A version per revision (the origin secret and this template), behind its
+  # own `live`, so provisioned concurrency can keep an always-on app's front
+  # door warm too. A replaced front door version is not kept: a rollback moves
+  # the app's `live`, never this one.
+  FrontDoorVersion:
+    Type: AWS::Lambda::Version
+    Condition: Published
+    Properties:
+      FunctionName: !Ref FrontDoorFunction
+      Description: !Sub front door ${FrontDoorRevision}
+
+  FrontDoorAlias:
+    Type: AWS::Lambda::Alias
+    Condition: Published
+    Properties:
+      FunctionName: !Ref FrontDoorFunction
+      Name: live
+      FunctionVersion: !GetAtt FrontDoorVersion.Version
+      ProvisionedConcurrencyConfig: !If
+        - AlwaysOn
+        - ProvisionedConcurrentExecutions: 1
+        - !Ref AWS::NoValue
+
+  # Public: the origin secret is the credential, checked by the handler. A
+  # public URL created since October 2025 needs both actions granted to `*`.
+  FrontDoorUrl:
+    Type: AWS::Lambda::Url
+    Condition: Published
+    DependsOn: FrontDoorAlias
+    Properties:
+      TargetFunctionArn: !Ref FrontDoorFunction
+      Qualifier: live
+      AuthType: NONE
+      InvokeMode: BUFFERED
+
+  FrontDoorPublicUrl:
+    Type: AWS::Lambda::Permission
+    Condition: Published
+    Properties:
+      Action: lambda:InvokeFunctionUrl
+      FunctionName: !Ref FrontDoorAlias
+      FunctionUrlAuthType: NONE
+      Principal: '*'
+
+  FrontDoorPublicInvoke:
+    Type: AWS::Lambda::Permission
+    Condition: Published
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref FrontDoorAlias
+      InvokedViaFunctionUrl: true
+      Principal: '*'
+
 Outputs:
   FunctionName:
     Value: !Ref Function
@@ -235,3 +407,6 @@ Outputs:
   LiveVersion:
     Condition: Published
     Value: !GetAtt Version.Version
+  FrontDoorUrl:
+    Condition: Published
+    Value: !GetAtt FrontDoorUrl.FunctionUrl

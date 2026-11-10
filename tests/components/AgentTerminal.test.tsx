@@ -12,6 +12,9 @@ import type { TerminalSink } from '@/app/(authed)/my-agents/_components/useAgent
 // lost, the `cols × rows` tag shows for a moment on a real resize (never on the
 // first fit), a reader scrolled up is offered Jump to latest rather than yanked
 // down, and the theme falls back to the system colours when the host resolves none.
+// MOTIR-10857: an OPEN terminal follows a theme switch — an explicit light/dark or
+// palette change on <html>, or the OS appearance while the page follows the system —
+// and stops watching once it closes.
 
 const xterm = vi.hoisted(() => ({
   instances: [] as Array<{
@@ -106,6 +109,8 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.restoreAllMocks();
+  document.documentElement.removeAttribute('data-theme');
+  document.documentElement.removeAttribute('data-palette');
 });
 
 /** Let the dynamic xterm imports resolve and the terminal open. */
@@ -187,9 +192,70 @@ describe('AgentTerminal — the theme', () => {
     expect(term().options).toMatchObject({
       fontFamily: 'monospace',
       cursorBlink: true,
-      theme: { background: 'Canvas', foreground: 'CanvasText', cursor: 'CanvasText' },
+      theme: {
+        background: 'Canvas',
+        foreground: 'CanvasText',
+        cursor: 'CanvasText',
+        selectionBackground: 'Highlight',
+        selectionInactiveBackground: 'Highlight',
+      },
     });
   });
+
+  // MOTIR-10856: left unset, xterm 6 paints its own white at 30% — invisible on
+  // the light code ground. The selection is the code ground's own selection
+  // tokens, as the browser resolved them on two hidden swatches.
+  it('passes the resolved code-selection tokens to xterm, focused and unfocused', async () => {
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((node: Element) => {
+      const cls = node.getAttribute('class') ?? '';
+      const fill = cls.includes('bg-(--el-code-selection-inactive-bg)')
+        ? 'rgb(214, 210, 238)'
+        : cls.includes('bg-(--el-code-selection-bg)')
+          ? 'rgb(196, 190, 235)'
+          : cls.includes('bg-(--el-code-bg)')
+            ? 'rgb(243, 244, 246)'
+            : '';
+      return {
+        ...real(node),
+        color: 'rgb(55, 53, 47)',
+        fontFamily: 'JetBrains Mono',
+        backgroundColor: fill,
+      } as CSSStyleDeclaration;
+    });
+    const { container } = mount();
+    await load();
+    expect(term().options['theme']).toEqual({
+      background: 'rgb(243, 244, 246)',
+      foreground: 'rgb(55, 53, 47)',
+      cursor: 'rgb(55, 53, 47)',
+      selectionBackground: 'rgb(196, 190, 235)',
+      selectionInactiveBackground: 'rgb(214, 210, 238)',
+    });
+    // The swatches are never seen or read out.
+    const swatches = container.querySelectorAll('span[hidden]');
+    expect([...swatches].map((s) => s.className)).toEqual([
+      'bg-(--el-code-selection-bg)',
+      'bg-(--el-code-selection-inactive-bg)',
+    ]);
+  });
+
+  it.each(['transparent', 'rgba(0, 0, 0, 0)'])(
+    'a selection token that resolves to %s falls back to the system Highlight, never to xterm’s default',
+    async (unresolved) => {
+      vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+        color: 'rgb(1, 2, 3)',
+        fontFamily: 'JetBrains Mono',
+        backgroundColor: unresolved,
+      } as CSSStyleDeclaration);
+      mount();
+      await load();
+      expect(term().options['theme']).toMatchObject({
+        selectionBackground: 'Highlight',
+        selectionInactiveBackground: 'Highlight',
+      });
+    },
+  );
 
   it('watch-only draws no caret — the cursor is painted in the paper — and takes no key', async () => {
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
@@ -215,6 +281,246 @@ describe('AgentTerminal — the theme', () => {
     rerender(<AgentTerminal {...props} inputEnabled={false} dimmed />);
     expect(term().options['disableStdin']).toBe(true);
     expect(screen.getByTestId('agent-terminal').className).toContain('opacity-60');
+  });
+});
+
+/**
+ * The computed styles the terminal reads, as one mutable record: a "theme switch"
+ * is these values changing and then the page telling the terminal about it.
+ */
+function computedStyles(initial: Palette) {
+  const styles = { fontFamily: 'JetBrains Mono', ...initial };
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((node: Element) => {
+    // The two selection swatches resolve their own tokens (MOTIR-10856).
+    const cls = node.getAttribute('class') ?? '';
+    const backgroundColor = cls.includes('bg-(--el-code-selection-inactive-bg)')
+      ? styles.inactiveSelection
+      : cls.includes('bg-(--el-code-selection-bg)')
+        ? styles.selection
+        : styles.backgroundColor;
+    return { ...styles, backgroundColor } as unknown as CSSStyleDeclaration;
+  });
+  return styles;
+}
+
+type Palette = {
+  color: string;
+  backgroundColor: string;
+  selection: string;
+  inactiveSelection: string;
+};
+
+/** A controllable `prefers-color-scheme` query: `flip()` is the OS appearance changing. */
+function colorSchemeQuery() {
+  const listeners = new Set<(e: MediaQueryListEvent) => void>();
+  const removed: unknown[] = [];
+  const query = {
+    matches: false,
+    media: '(prefers-color-scheme: dark)',
+    addEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) => listeners.add(cb),
+    removeEventListener: (_: string, cb: (e: MediaQueryListEvent) => void) => {
+      removed.push(cb);
+      listeners.delete(cb);
+    },
+  };
+  const matchMedia = vi
+    .spyOn(window, 'matchMedia')
+    .mockImplementation(() => query as unknown as MediaQueryList);
+  return {
+    matchMedia,
+    listeners,
+    removed,
+    flip() {
+      query.matches = !query.matches;
+      for (const cb of [...listeners]) cb({ matches: query.matches } as MediaQueryListEvent);
+    },
+  };
+}
+
+/** MutationObserver records are delivered after the write; let them land. */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+const LIGHT: Palette = {
+  color: 'rgb(20, 20, 20)',
+  backgroundColor: 'rgb(240, 240, 240)',
+  selection: 'rgb(196, 190, 235)',
+  inactiveSelection: 'rgb(214, 210, 238)',
+};
+const DARK: Palette = {
+  color: 'rgb(230, 230, 230)',
+  backgroundColor: 'rgb(30, 30, 30)',
+  selection: 'rgb(60, 52, 112)',
+  inactiveSelection: 'rgb(48, 43, 85)',
+};
+
+describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
+  it('an explicit light → dark switch on <html> re-applies the paper and ink to the open terminal', async () => {
+    const styles = computedStyles(LIGHT);
+    mount();
+    await load();
+    expect(term().options['theme']).toEqual({
+      background: LIGHT.backgroundColor,
+      foreground: LIGHT.color,
+      cursor: LIGHT.color,
+      selectionBackground: LIGHT.selection,
+      selectionInactiveBackground: LIGHT.inactiveSelection,
+    });
+
+    Object.assign(styles, DARK);
+    document.documentElement.setAttribute('data-theme', 'dark');
+    await settle();
+    expect(term().options['theme']).toEqual({
+      background: DARK.backgroundColor,
+      foreground: DARK.color,
+      cursor: DARK.color,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
+    });
+    // The same terminal, not a reopened one.
+    expect(xterm.instances).toHaveLength(1);
+  });
+
+  it('a palette switch re-applies them too', async () => {
+    const styles = computedStyles(LIGHT);
+    mount();
+    await load();
+    Object.assign(styles, {
+      color: 'rgb(1, 50, 90)',
+      backgroundColor: 'rgb(220, 235, 250)',
+      selection: 'rgb(150, 180, 230)',
+    });
+    document.documentElement.setAttribute('data-palette', 'cobalt');
+    await settle();
+    expect(term().options['theme']).toMatchObject({
+      background: 'rgb(220, 235, 250)',
+      foreground: 'rgb(1, 50, 90)',
+      selectionBackground: 'rgb(150, 180, 230)',
+    });
+  });
+
+  it('following the system, an OS appearance change re-applies them once the theme context writes it to <html>', async () => {
+    const scheme = colorSchemeQuery();
+    const styles = computedStyles(LIGHT);
+    mount();
+    await load();
+    expect(scheme.matchMedia).toHaveBeenCalledWith('(prefers-color-scheme: dark)');
+    const before = term().options['theme'];
+
+    // The OS flips first; the CSS keys on `[data-theme]`, so nothing has changed yet.
+    act(() => scheme.flip());
+    expect(term().options['theme']).toBe(before);
+
+    // Then the theme context writes the resolved appearance, and the page's colours move.
+    Object.assign(styles, DARK);
+    document.documentElement.setAttribute('data-theme', 'dark');
+    await settle();
+    expect(term().options['theme']).toEqual({
+      background: DARK.backgroundColor,
+      foreground: DARK.color,
+      cursor: DARK.color,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
+    });
+  });
+
+  it('the media query is a backstop: colours that follow it directly are re-applied on its change', async () => {
+    const scheme = colorSchemeQuery();
+    const styles = computedStyles(LIGHT);
+    mount();
+    await load();
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
+
+    Object.assign(styles, DARK);
+    act(() => scheme.flip());
+    expect(term().options['theme']).toEqual({
+      background: DARK.backgroundColor,
+      foreground: DARK.color,
+      cursor: DARK.color,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
+    });
+    // And back again.
+    Object.assign(styles, LIGHT);
+    act(() => scheme.flip());
+    expect(term().options['theme']).toMatchObject({ background: LIGHT.backgroundColor });
+  });
+
+  it('a browser with no matchMedia still follows an explicit switch', async () => {
+    const original = window.matchMedia;
+    Object.defineProperty(window, 'matchMedia', { configurable: true, value: undefined });
+    try {
+      const styles = computedStyles(LIGHT);
+      mount();
+      await load();
+      Object.assign(styles, DARK);
+      document.documentElement.setAttribute('data-theme', 'dark');
+      await settle();
+      expect(term().options['theme']).toMatchObject({ background: DARK.backgroundColor });
+    } finally {
+      Object.defineProperty(window, 'matchMedia', { configurable: true, value: original });
+    }
+  });
+
+  it('a watch-only terminal keeps its cursor painted in the NEW paper', async () => {
+    const styles = computedStyles(LIGHT);
+    mount({ watchOnly: true, inputEnabled: false });
+    await load();
+    expect(term().options['theme']).toMatchObject({ cursor: LIGHT.backgroundColor });
+    Object.assign(styles, DARK);
+    document.documentElement.setAttribute('data-theme', 'dark');
+    await settle();
+    expect(term().options['theme']).toEqual({
+      background: DARK.backgroundColor,
+      foreground: DARK.color,
+      cursor: DARK.backgroundColor,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
+    });
+  });
+
+  it('a change that resolves the same colours leaves the theme as it was', async () => {
+    computedStyles(LIGHT);
+    mount();
+    await load();
+    const before = term().options['theme'];
+    document.documentElement.setAttribute('data-theme', 'light');
+    await settle();
+    expect(term().options['theme']).toBe(before);
+  });
+
+  it('closing the terminal stops watching both routes', async () => {
+    const scheme = colorSchemeQuery();
+    const disconnect = vi.spyOn(MutationObserver.prototype, 'disconnect');
+    const styles = computedStyles(LIGHT);
+    const { unmount } = mount();
+    await load();
+    expect(scheme.listeners.size).toBe(1);
+    const [listener] = [...scheme.listeners];
+    const t = term();
+    const themeAtClose = t.options['theme'];
+
+    unmount();
+    expect(scheme.removed).toEqual([listener]);
+    expect(scheme.listeners.size).toBe(0);
+    expect(disconnect).toHaveBeenCalled();
+
+    // A switch after closing reaches nothing.
+    Object.assign(styles, DARK);
+    document.documentElement.setAttribute('data-theme', 'dark');
+    await settle();
+    expect(t.options['theme']).toBe(themeAtClose);
+  });
+
+  it('closed before xterm loads: nothing is ever watched', async () => {
+    const scheme = colorSchemeQuery();
+    const { unmount } = mount();
+    unmount();
+    await load();
+    expect(scheme.matchMedia).not.toHaveBeenCalled();
   });
 });
 

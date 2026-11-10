@@ -15,8 +15,10 @@ import {
   awsReleaseId,
   createAwsHostingDeployPort,
   createFakeTenantClients,
+  deriveOriginSecret,
   fakeGeneratedPassword,
   hostingAppNames,
+  originCredentialOf,
   parseAwsAppRef,
   portReleaseId,
   shapeOfProviderRef,
@@ -168,7 +170,7 @@ describe.each<ReleaseShape>(['function', 'container'])('the %s shape', (shape) =
       state: 'healthy',
       releaseId: handle.releaseId,
       previousReleaseId: null,
-      originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
+      originCredential: 'origin_secret',
     });
     expect(description.upstreamAddress).toMatch(/^https?:\/\//);
     expect(h.clientsFor.every((c) => c.accountId === ACCOUNT && c.region === REGION)).toBe(true);
@@ -208,7 +210,7 @@ describe.each<ReleaseShape>(['function', 'container'])('the %s shape', (shape) =
       releaseId: held.releaseId,
       previousReleaseId: null,
       upstreamAddress: null,
-      originCredential: shape === 'function' ? 'aws_sigv4' : 'origin_secret',
+      originCredential: 'origin_secret',
     });
     expect(h.accountAsks).toEqual([ORG, ORG]);
     expect(h.clientsFor).toEqual([]);
@@ -595,5 +597,49 @@ describe('the release-id helpers', () => {
       const source = readFileSync(join(__dirname, '../src/adapters/aws/tenant', file), 'utf8');
       expect(source).not.toMatch(/@aws-sdk/);
     }
+  });
+});
+
+describe('the function front door (MOTIR-10129, to MOTIR-10128)', () => {
+  it('answers origin_secret for both shapes', () => {
+    expect(originCredentialOf('function')).toBe('origin_secret');
+    expect(originCredentialOf('container')).toBe('origin_secret');
+  });
+
+  it('holds a function release while the account is not ready with origin_secret', async () => {
+    const h = harness({ ready: false });
+    const held = await h.port.deploy(release('function'));
+    expect((await h.port.describe(held)).originCredential).toBe('origin_secret');
+  });
+
+  it('describes a function release at its front door with the origin secret it was given', async () => {
+    const h = harness();
+    const handle = await h.port.deploy(release('function'));
+    const fn = h.clients.lambda.functions.get(APP)!;
+    expect(await h.port.describe(handle)).toEqual({
+      state: 'healthy',
+      releaseId: awsReleaseId(APP, 1),
+      previousReleaseId: null,
+      upstreamAddress: fn.frontDoorUrl,
+      originCredential: 'origin_secret',
+    });
+    expect(fn.frontDoorUrl).toMatch(/^https:\/\/[a-f0-9]+\.lambda-url\.us-east-1\.on\.aws\/$/);
+    expect(fn.frontDoorUrl).not.toBe(fn.url);
+    // The secret the front door admits is the one every forwarder derives.
+    const stack = h.clients.cloudformation.stacks.get(releaseStack())!;
+    expect(stack.parameters['OriginSecret']).toBe(deriveOriginSecret(KEY, APP));
+    expectNoSecret(h, handle, await h.port.describe(handle));
+  });
+
+  it('leaves a container release described exactly as before', async () => {
+    const h = harness();
+    const handle = await h.port.deploy(release('container'));
+    expect(await h.port.describe(handle)).toEqual({
+      state: 'healthy',
+      releaseId: awsReleaseId(APP, 1),
+      previousReleaseId: null,
+      upstreamAddress: expect.stringMatching(/^http:\/\//),
+      originCredential: 'origin_secret',
+    });
   });
 });

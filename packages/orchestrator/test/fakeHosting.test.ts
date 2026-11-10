@@ -148,10 +148,11 @@ describe('the fake hosting deploy port', () => {
     expect((await port.ensureApp({ repositoryId: 'r', environment: PRODUCTION })).appRef).toBe(
       'x-r',
     );
-    // An AWS release answers with its shape's credential and host.
+    // An AWS release answers at its shape's host, with the origin secret for
+    // both: a function through its front door (MOTIR-10129).
     const fn = await port.deploy({ ...input('x-r', PRODUCTION), shape: 'function' });
     expect(await port.describe(fn)).toMatchObject({
-      originCredential: 'aws_sigv4',
+      originCredential: 'origin_secret',
       upstreamAddress: 'https://x-r.lambda-url.fake.invalid',
     });
     const box = await port.deploy({

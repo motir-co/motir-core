@@ -1,3 +1,4 @@
+import * as crypto from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -17,11 +18,15 @@ import {
   createStackRunner,
   createTenantClients,
   deployFunctionRelease,
+  deriveOriginSecret,
   describeFunctionRelease,
   destroyFunctionRelease,
+  frontDoorRevision,
   functionComputeUsage,
   functionReleaseNames,
+  functionUpstream,
   functionUsageSince,
+  ORIGIN_SECRET_HEADER,
   previousFunctionVersion,
   readTenantStackTemplate,
   releaseConfigHash,
@@ -56,6 +61,7 @@ const IMAGE_B = '210987654321.dkr.ecr.us-east-1.amazonaws.com/mh/cmrepo1/product
 const DATABASE_ARN =
   'arn:aws:secretsmanager:us-east-1:210987654321:secret:motir/cmrepo1/production/database-g1';
 const SECRET_VALUE = 'sk_live_do_not_leak_4242';
+const KEY = 'origin-key-do-not-leak';
 const noSleep = async () => undefined;
 
 function account(start = new Date('2026-10-01T00:00:00Z')) {
@@ -85,6 +91,7 @@ function input(
     ],
     network: { privateSubnetIds: ['subnet-a', 'subnet-b'], appSecurityGroupId: 'sg-app' },
     invokePrincipalArn: FORWARDER,
+    originSecretKey: KEY,
     database: { secretArn: DATABASE_ARN, variable: 'DATABASE_URL' },
     ...overrides,
   };
@@ -99,7 +106,7 @@ const stackWrites = (a: Account) =>
   a.cloudformation.calls.filter((c) => /^(create|update)Stack:/.test(c));
 
 describe('deployFunctionRelease', () => {
-  it('applies function-release.yaml under the README stack name, tagged, and returns the URL', async () => {
+  it('applies function-release.yaml under the README stack name, tagged, and returns the front door URL', async () => {
     const a = account();
     const release = await deployFunctionRelease(input(a));
     const fn = a.lambda.functions.get('mh-cmrepo1')!;
@@ -108,7 +115,7 @@ describe('deployFunctionRelease', () => {
       appRef: 'mh-cmrepo1',
       stackName: STACK,
       releaseId: '1',
-      upstreamAddress: fn.url,
+      upstreamAddress: fn.frontDoorUrl,
       liveVersion: '1',
       previousVersion: null,
     });
@@ -130,8 +137,13 @@ describe('deployFunctionRelease', () => {
       AppSecurityGroupId: 'sg-app',
       DatabaseSecretArn: DATABASE_ARN,
       InvokePrincipalArn: FORWARDER,
+      // The front door admits exactly the secret every forwarder derives.
+      OriginSecret: deriveOriginSecret(KEY, 'mh-cmrepo1'),
     });
     expect(stack.parameters['ConfigHash']).toMatch(/^[a-f0-9]{64}$/);
+    expect(stack.parameters['FrontDoorRevision']).toBe(
+      frontDoorRevision(deriveOriginSecret(KEY, 'mh-cmrepo1'), stack.templateBody),
+    );
     // The template it applied: an x86_64 image function of 1,769 MB in the VPC,
     // the Web Adapter's port and readiness path from the parameters.
     const body = stack.templateBody;
@@ -322,7 +334,7 @@ describe('rollbackFunctionRelease', () => {
       releaseId: '1',
       previousReleaseId: '2',
       upstreamAddress: second.upstreamAddress,
-      originCredential: 'aws_sigv4',
+      originCredential: 'origin_secret',
     });
 
     // Rolling back again restores the release the rollback replaced.
@@ -368,7 +380,7 @@ describe('rollbackFunctionRelease', () => {
 });
 
 describe('describeFunctionRelease', () => {
-  it('reports aws_sigv4 and the URL the forwarder signs for, IAM-auth for the forwarder only', async () => {
+  it('reports the front door and origin_secret; the function URL stays IAM-auth for the forwarder only', async () => {
     const a = account();
     const release = await deployFunctionRelease(input(a));
     expect(await describeFunctionRelease(target(a))).toEqual({
@@ -376,8 +388,9 @@ describe('describeFunctionRelease', () => {
       releaseId: '1',
       previousReleaseId: null,
       upstreamAddress: release.upstreamAddress,
-      originCredential: 'aws_sigv4',
+      originCredential: 'origin_secret',
     });
+    expect(release.upstreamAddress).toBe(a.lambda.functions.get('mh-cmrepo1')!.frontDoorUrl);
     const template = readTenantStackTemplate('function-release.yaml');
     const url = template.slice(
       template.indexOf('  FunctionUrl:'),
@@ -396,7 +409,7 @@ describe('describeFunctionRelease', () => {
     // only through the URL (MOTIR-10304).
     const invokeFunction = template.slice(
       template.indexOf('  ForwarderInvokeFunction:'),
-      template.indexOf('Outputs:'),
+      template.indexOf('  # THE FRONT DOOR'),
     );
     expect(invokeFunction).toContain('Condition: Published');
     expect(invokeFunction).toContain('Action: lambda:InvokeFunction\n');
@@ -452,6 +465,197 @@ describe('describeFunctionRelease', () => {
     await deployFunctionRelease(input(a));
     a.lambda.functions.get('mh-cmrepo1')!.alias = null;
     expect((await describeFunctionRelease(target(a))).releaseId).toBe('1');
+  });
+});
+
+describe('the front door (MOTIR-10129, to the decision MOTIR-10128)', () => {
+  /** The handler exactly as the stack ships it: the template's inline
+   *  `ZipFile`, which the runtime writes as index.js. */
+  function frontDoorSource(): string {
+    const lines = readTenantStackTemplate('function-release.yaml').split('\n');
+    const at = lines.findIndex((line) => line.trim() === 'ZipFile: |');
+    expect(at).toBeGreaterThan(0);
+    const first = lines[at + 1]!;
+    const indent = first.length - first.trimStart().length;
+    const body: string[] = [];
+    for (const line of lines.slice(at + 1)) {
+      if (line.trim() !== '' && line.length - line.trimStart().length < indent) break;
+      body.push(line.slice(indent));
+    }
+    return body.join('\n');
+  }
+
+  type Answer = { FunctionError?: string; Payload?: Uint8Array };
+  type Handler = (event: Record<string, unknown>) => Promise<Record<string, unknown>>;
+
+  /** Load the shipped handler with the Lambda SDK replaced by a recorder. */
+  function loadFrontDoor(env: Record<string, string>, invoke: () => Promise<Answer>) {
+    const sent: Array<{ FunctionName: string; Payload: string }> = [];
+    const configs: unknown[] = [];
+    const errors: unknown[][] = [];
+    class LambdaClient {
+      constructor(config: unknown) {
+        configs.push(config);
+      }
+      async send(command: { input: { FunctionName: string; Payload: string } }) {
+        sent.push(command.input);
+        return invoke();
+      }
+    }
+    class InvokeCommand {
+      constructor(readonly input: unknown) {}
+    }
+    const modules: Record<string, unknown> = {
+      'node:crypto': crypto,
+      '@aws-sdk/client-lambda': { LambdaClient, InvokeCommand },
+    };
+    const cjs = { exports: {} as { handler?: Handler } };
+    const load = new Function(
+      'require',
+      'exports',
+      'module',
+      'process',
+      'Buffer',
+      'console',
+      frontDoorSource(),
+    );
+    load(
+      (name: string) => {
+        if (!(name in modules)) throw new Error(`the front door required ${name}`);
+        return modules[name];
+      },
+      cjs.exports,
+      cjs,
+      { env },
+      Buffer,
+      { error: (...args: unknown[]) => errors.push(args) },
+    );
+    return { handler: cjs.exports.handler!, sent, configs, errors };
+  }
+
+  const APP = 'mh-cmrepo1';
+  const ALIAS = 'arn:aws:lambda:us-east-1:210987654321:function:mh-cmrepo1:live';
+  const SECRET = deriveOriginSecret(KEY, APP);
+  const event = (headers: Record<string, string>) => ({
+    version: '2.0',
+    rawPath: '/cart/items',
+    rawQueryString: 'page=2&sort=asc',
+    cookies: ['session=abc', 'theme=dark'],
+    headers: {
+      host: 'front.lambda-url.us-east-1.on.aws',
+      'content-type': 'application/json',
+      'x-forwarded-host': 'shop.example.com',
+      ...headers,
+    },
+    requestContext: { http: { method: 'POST', path: '/cart/items' } },
+    body: Buffer.from('{"sku":42}').toString('base64'),
+    isBase64Encoded: true,
+  });
+  const appAnswer = {
+    statusCode: 201,
+    headers: { 'content-type': 'application/json' },
+    cookies: ['cart=1'],
+    body: '{"ok":true}',
+    isBase64Encoded: false,
+  };
+  const ok = async (): Promise<Answer> => ({
+    Payload: new TextEncoder().encode(JSON.stringify(appAnswer)),
+  });
+  const env = { MOTIR_FRONT_DOOR_SECRET: SECRET, MOTIR_FRONT_DOOR_TARGET: ALIAS };
+  const refused = { statusCode: 403, headers: { 'content-length': '0' }, body: '' };
+
+  it('refuses a request with no X-Motir-Origin-Secret without invoking the function', async () => {
+    const door = loadFrontDoor(env, ok);
+    expect(await door.handler(event({}))).toEqual(refused);
+    expect(door.sent).toEqual([]);
+  });
+
+  it('refuses a wrong value, and the secret of another app, without invoking the function', async () => {
+    const door = loadFrontDoor(env, ok);
+    for (const value of ['wrong', '', SECRET.slice(1), deriveOriginSecret(KEY, 'mh-cmother1')]) {
+      expect(await door.handler(event({ [ORIGIN_SECRET_HEADER.toLowerCase()]: value }))).toEqual(
+        refused,
+      );
+    }
+    // A front door deployed without its secret admits nothing.
+    const bare = loadFrontDoor({ ...env, MOTIR_FRONT_DOOR_SECRET: '' }, ok);
+    expect(await bare.handler(event({ 'x-motir-origin-secret': '' }))).toEqual(refused);
+    expect([...door.sent, ...bare.sent]).toEqual([]);
+  });
+
+  it('admits deriveOriginSecret(key, appRef) and hands the function the request intact, less the header', async () => {
+    // The secret the stack is given for that app, from a real deploy.
+    const a = account();
+    await deployFunctionRelease(input(a));
+    const given = a.cloudformation.stacks.get(STACK)!.parameters['OriginSecret']!;
+    expect(given).toBe(SECRET);
+
+    const door = loadFrontDoor({ ...env, MOTIR_FRONT_DOOR_SECRET: given }, ok);
+    const request = event({ 'x-motir-origin-secret': SECRET });
+    expect(await door.handler(request)).toEqual(appAnswer);
+    expect(door.sent).toHaveLength(1);
+    expect(door.sent[0]!.FunctionName).toBe(ALIAS);
+    const forwarded = JSON.parse(door.sent[0]!.Payload) as ReturnType<typeof event>;
+    const rest: Record<string, string> = { ...request.headers };
+    delete rest['x-motir-origin-secret'];
+    expect(forwarded).toEqual({ ...request, headers: rest });
+    expect(forwarded.headers['x-forwarded-host']).toBe('shop.example.com');
+    // One attempt only: a retried invoke would run a request twice.
+    expect(door.configs).toEqual([{ maxAttempts: 1 }]);
+  });
+
+  it('answers 502 when the function fails or cannot be invoked, naming no secret', async () => {
+    const failed = loadFrontDoor(env, async () => ({ FunctionError: 'Unhandled' }));
+    const request = event({ 'x-motir-origin-secret': SECRET });
+    expect(await failed.handler(request)).toEqual({ ...refused, statusCode: 502 });
+    const thrown = loadFrontDoor(env, async () => {
+      throw Object.assign(new Error('Rate exceeded'), { name: 'TooManyRequestsException' });
+    });
+    expect(await thrown.handler(request)).toEqual({ ...refused, statusCode: 502 });
+    const logged = JSON.stringify([...failed.errors, ...thrown.errors]);
+    expect(logged).toContain('TooManyRequestsException');
+    expect(logged).not.toContain(SECRET);
+  });
+
+  it('is reached at FrontDoorUrl with origin_secret; a stack from before it at FunctionUrl with SigV4', () => {
+    const front = 'https://front.lambda-url.us-east-1.on.aws/';
+    const iam = 'https://iam.lambda-url.us-east-1.on.aws/';
+    expect(functionUpstream({ FunctionUrl: iam, FrontDoorUrl: front })).toEqual({
+      upstreamAddress: front,
+      originCredential: 'origin_secret',
+    });
+    expect(functionUpstream({ FunctionUrl: iam })).toEqual({
+      upstreamAddress: iam,
+      originCredential: 'aws_sigv4',
+    });
+    expect(functionUpstream({})).toEqual({ upstreamAddress: null, originCredential: 'none' });
+  });
+
+  it('describes and rolls back a stack applied before the front door at its IAM URL', async () => {
+    const a = account();
+    await deployFunctionRelease(input(a));
+    await deployFunctionRelease(input(a, { imageUri: IMAGE_B }));
+    const stack = a.cloudformation.stacks.get(STACK)!;
+    const { FrontDoorUrl: _front, ...before } = stack.outputs;
+    stack.outputs = before;
+    const fn = a.lambda.functions.get('mh-cmrepo1')!;
+    expect(await describeFunctionRelease(target(a))).toMatchObject({
+      upstreamAddress: fn.url,
+      originCredential: 'aws_sigv4',
+    });
+    expect((await rollbackFunctionRelease(target(a))).upstreamAddress).toBe(fn.url);
+  });
+
+  it('publishes a new front door revision when the key rotates, never carrying the secret', async () => {
+    const a = account();
+    await deployFunctionRelease(input(a));
+    const first = a.cloudformation.stacks.get(STACK)!.parameters['FrontDoorRevision']!;
+    await deployFunctionRelease(input(a, { originSecretKey: 'rotated-key' }));
+    const params = a.cloudformation.stacks.get(STACK)!.parameters;
+    expect(params['FrontDoorRevision']).not.toBe(first);
+    expect(params['OriginSecret']).toBe(deriveOriginSecret('rotated-key', 'mh-cmrepo1'));
+    expect(first).toMatch(/^[a-f0-9]{64}$/);
+    expect(first).not.toContain(deriveOriginSecret(KEY, 'mh-cmrepo1'));
   });
 });
 

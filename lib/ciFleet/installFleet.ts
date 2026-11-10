@@ -47,6 +47,17 @@ export function isInstallFleetShardId(id: string | null | undefined): boolean {
 }
 
 /**
+ * What a `fleet_shard_id` column records for the account a container booted on:
+ * the account's id, or null for the install fleet and the process-wide fleet —
+ * the never-written contract above (MOTIR-10858). The pseudo-account id has no
+ * `fleet_shard` row, so writing it would break the column's foreign key.
+ */
+export function fleetShardIdForColumn(id: string | null | undefined): string | null {
+  if (id === null || id === undefined || isInstallFleetShardId(id)) return null;
+  return id;
+}
+
+/**
  * Was this container placed on the install fleet? Its row records no account
  * (`fleet_shard_id` is null) and its handle's app is the install fleet's tag
  * (MOTIR-10794). A null account with any other app is the process-wide lane.
