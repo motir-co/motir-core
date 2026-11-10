@@ -59,6 +59,7 @@ import { ciRunnerBootService } from '@/lib/services/ciRunnerBootService';
 import { ciRunnerReconcileService } from '@/lib/services/ciRunnerReconcileService';
 import { jobScheduleHealthService } from '@/lib/services/jobScheduleHealthService';
 import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
+import { hostedAgentImageLagProbeService } from '@/lib/services/hostedAgentImageLagProbeService';
 import { indexRebuildStreakService } from '@/lib/services/indexRebuildStreakService';
 import { monitorConfigPreflightService } from '@/lib/services/monitorConfigPreflightService';
 import { credentialExpiryService } from '@/lib/services/credentialExpiryService';
@@ -168,6 +169,9 @@ export const jobServices = {
   hostedRun: hostedRunService,
   jobScheduleHealth: jobScheduleHealthService,
   fleetPreflight: fleetPreflightService,
+  // The hosted-agent image lag probe (MOTIR-10882) — a newer `main` build of the
+  // hosted-agent image left unpinned for more than a day.
+  hostedAgentImageLag: hostedAgentImageLagProbeService,
   // The rebuild-streak probe (MOTIR-5027) — the daily check's fifth, and the
   // only one that reads the LEDGER rather than a registry or an address.
   indexRebuildStreak: indexRebuildStreakService,

@@ -2,8 +2,9 @@ name: AWS deploy
 
 # The AWS deploy of motir-core (Story MOTIR-9709, card MOTIR-9928;
 # docs/aws-deploy.md). Every push to `main` builds the image, pushes it to ECR,
-# and hands its DIGEST to `pnpm deploy:aws`, which migrates, rolls web, worker
-# and relay, and records the digest only when every service completed.
+# and hands its DIGEST to `pnpm deploy:aws`, which migrates, writes the pinned
+# hosted-agent image into its secret (MOTIR-10882), rolls web, worker and relay,
+# and records the digest only when every service completed.
 #
 # ⚠️ INDEPENDENT OF THE FLY DEPLOY BY CONSTRUCTION. The Fly deploy is the
 # `deploy` job of the CI workflow. This file shares no job with it, waits on
@@ -146,6 +147,12 @@ jobs:
 
       # `--no-roll` only while `AWS_DEPLOY_NO_ROLL` is `true`: the first run,
       # before the services exist (docs/aws-deploy.md, The first run).
+      #
+      # `--hosted-agent-pin` (MOTIR-10882): the deploy writes the image this
+      # commit's pin file names into the hosted-agent image secret after the
+      # migrate and before the roll, because ECS reads a secret only when a task
+      # starts. The hosted-agent image lane opens the pull request that moves the
+      # pin; merging it is the deliberate pin, and reverting it rolls back.
       - name: Deploy
         if: steps.gate.outputs.deploy == 'true'
         env:
@@ -153,7 +160,8 @@ jobs:
           NO_ROLL: ${{ vars.AWS_DEPLOY_NO_ROLL == 'true' && '--no-roll' || '' }}
         run: |
           set -euo pipefail
-          pnpm --silent deploy:aws --digest "$DIGEST" $NO_ROLL | tee /tmp/aws-deploy.json
+          pin=infra/hosted-agent-image.ref
+          pnpm --silent deploy:aws --hosted-agent-pin "$pin" --digest "$DIGEST" $NO_ROLL | tee /tmp/aws-deploy.json
           {
             echo "Result:"
             echo '```json'

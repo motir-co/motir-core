@@ -12,6 +12,13 @@
 #     boots a digest (`MOTIR_HOSTED_AGENT_IMAGE`, docs/decisions/hosted-agent-run.md
 #     §6), never a tag. The push is a LATER STEP of the job that just proved the
 #     image, so a green build is the publish gate.
+#   - after that publish: the `pin` job opens (or updates) ONE pull request that
+#     writes the new digest into `infra/hosted-agent-image.ref` (MOTIR-10882).
+#     The publish alone changes nothing production boots: merging that pull
+#     request is the deliberate pin, the AWS deploy writes the file's image into
+#     the `MOTIR_HOSTED_AGENT_IMAGE` secret before it rolls, and reverting it is
+#     the rollback. Before this job the digest was only printed, and a person
+#     re-pinned by hand — which is how production ran a five-week-old CLI.
 #
 # ── What it gates on ────────────────────────────────────────────────────────
 # Since MOTIR-6560 the image runs the Motir CLI built from THIS checkout, so its
@@ -78,6 +85,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+    # The published digest, for the `pin` job. Empty on a pull request.
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v6
       - uses: ./.github/actions/buildx
@@ -195,3 +205,95 @@ jobs:
             echo
             echo 'Set `MOTIR_HOSTED_AGENT_IMAGE` to this reference — a digest, never a tag.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── The pin pull request (MOTIR-10882) ─────────────────────────────────────
+  #
+  # The file it writes is OUTSIDE this lane's `paths:` on purpose: a pin kept
+  # under `packages/cli/**` would make merging every bump publish a new image
+  # and open the next bump. `hosted-agent-pin.yml` is that pull request's own
+  # check: it pulls the pinned image anonymously, as an agent-runner VM does, and
+  # runs this lane's smoke test and provider probe against it.
+  #
+  # ONE branch for every bump: a newer publish force-pushes it, so the open pull
+  # request always names the newest image and an older one is never merged
+  # after it. The lane's concurrency group is never cancelled on `main`, so two
+  # publishes write the branch in the order they ran.
+  #
+  # The App token, not GITHUB_TOKEN, for the reasons `release-sandbox.yml`'s
+  # `readme` job states: the automatic token cannot open a pull request here,
+  # and a pull request it pushed would run no checks and could never leave the
+  # merge queue.
+  pin:
+    name: Open the pin pull request
+    needs: hosted-agent-image
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # No run on record — the job is new (MOTIR-10882). It checks out, writes one
+    # line and opens a pull request: the 10-minute short-job floor, stated as a
+    # floor rather than a measurement.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      PIN_FILE: infra/hosted-agent-image.ref
+      PIN_BRANCH: chore/hosted-agent-image-pin
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          # `main`, not this run's commit: the pull request is cut from the
+          # newest main, so it carries nothing but the pin.
+          ref: main
+      - name: Write the published digest into the pin file
+        id: write
+        env:
+          REFERENCE: ${{ env.IMAGE }}@${{ needs.hosted-agent-image.outputs.digest }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$REFERENCE" =~ ^ghcr\.io/motir-co/motir-hosted-agent@sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::not a pinnable image reference: '$REFERENCE'"
+            exit 1
+          fi
+          printf '%s\n' "$REFERENCE" > "$PIN_FILE"
+          if git diff --quiet -- "$PIN_FILE"; then
+            echo "::notice::$PIN_FILE already pins $REFERENCE"
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open or update the pin pull request
+        if: ${{ steps.write.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REFERENCE: ${{ env.IMAGE }}@${{ needs.hosted-agent-image.outputs.digest }}
+          BUILT_FROM: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # Authored as Yue with NO co-author trailer: motir-core's `license/cla`
+          # check has that one signatory (release-sandbox.yml does the same).
+          git config user.name 'Zhu Yue'
+          git config user.email 'zhuyue11@gmail.com'
+          title="chore(hosted-agent): pin the hosted-agent image built from ${BUILT_FROM:0:12}"
+          git commit --author='Zhu Yue <zhuyue11@gmail.com>' -m "$title" \
+            -m "Written by the hosted-agent image lane (MOTIR-10882): ${REFERENCE}, published from ${BUILT_FROM}." \
+            -- "$PIN_FILE"
+          git push --force origin "HEAD:${PIN_BRANCH}"
+          body="$(printf '%s\n' \
+            "Opened by the hosted-agent image lane ([run](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})) after it proved and published \`${REFERENCE}\`, built from ${BUILT_FROM}." \
+            '' \
+            "Merging pins it: the next AWS deploy writes it into the \`MOTIR_HOSTED_AGENT_IMAGE\` secret before it rolls the web and worker, and every hosted run after that boots it. Reverting this pull request rolls the pin back." \
+            '' \
+            "The \`Hosted agent pin\` check pulls this image anonymously and runs the smoke test and the offline provider probe against it. A newer publish force-pushes this branch, so this pull request always names the newest image.")"
+          existing="$(gh pr list --head "$PIN_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body "$body"
+            echo "::notice::Updated pin pull request #${existing} to ${REFERENCE}."
+            exit 0
+          fi
+          gh pr create --base main --head "$PIN_BRANCH" --title "$title" --body "$body"
+          echo "::notice::Opened the pin pull request for ${REFERENCE}."

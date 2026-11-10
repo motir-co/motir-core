@@ -14,6 +14,7 @@ import type {
   RunnerImageUnreleasedChangeDTO,
 } from '@/lib/dto/runnerImageFreshness';
 import type { RunnerVersionSupportVerdictDTO } from '@/lib/dto/runnerVersionSupport';
+import type { HostedAgentImageLagVerdictDTO } from '@/lib/dto/hostedAgentImageLag';
 import { runnerVersionSentence } from '@/lib/ciFleet/runnerVersionSupport';
 import {
   PROBE_INDETERMINATE_STREAK_CODE,
@@ -252,6 +253,12 @@ export interface DailyHealthCheckResult {
    *  beside the other two. A deployment that runs no hosted agent reports
    *  `not_applicable`. */
   hostedAgentImage: FleetBootableVerdict;
+  /** Whether the pinned hosted-agent image follows the newest one the image lane
+   *  published on `main` (MOTIR-10882) — recorded on the healthy tick too, so the
+   *  ledger answers "how far behind was the hosted agent yesterday?". `pending`
+   *  (a newer build whose pin pull request is still open) is distinguishable
+   *  from `current` and from a `lagging` that fails the run. */
+  hostedAgentImageLag: HostedAgentImageLagVerdictDTO;
   /** Whether the address an index container would be GIVEN for motir-ai can work
    *  for it (MOTIR-4518) — recorded on the healthy tick too, so the ledger can
    *  answer "was the container's motir-ai address sane yesterday?". A deployment
@@ -406,6 +413,31 @@ export class HostedAgentImageUnpullableError extends Error {
         `GHCR (docs/decisions/hosted-agent-run.md §6, docs/decisions/fleet-image-pull.md §1).`,
     );
     this.name = 'HostedAgentImageUnpullableError';
+  }
+}
+
+/**
+ * Thrown when a newer `main` build of the HOSTED-AGENT image has gone unpinned
+ * for more than a day, or the pin is more than a week behind it (MOTIR-10882).
+ * Its own error, because the fix is to MERGE A PULL REQUEST: the image lane opens
+ * one after every publish, and the AWS deploy applies the pin it writes.
+ */
+export class HostedAgentImageLaggingError extends Error {
+  constructor(readonly verdict: Extract<HostedAgentImageLagVerdictDTO, { verdict: 'lagging' }>) {
+    const { pinned, main, lag } = verdict;
+    const behind =
+      lag.behindHours === null
+        ? ''
+        : `, ${String(lag.behindHours)} h newer than the pinned build (${lag.pinnedCreatedAt ?? '?'})`;
+    super(
+      `Hosted runs boot a hosted-agent image behind main: ${pinned} is pinned, while ` +
+        `${main.reference} has been ${main.digest} for ${String(lag.unpinnedHours)} h` +
+        `${behind}. A merged CLI fix does not reach a hosted run until the pin moves. Merge ` +
+        `the open "pin the hosted-agent image" pull request (branch chore/hosted-agent-image-pin, ` +
+        `opened by .github/workflows/hosted-agent-image.yml); the next AWS deploy writes the ` +
+        `pin into MOTIR_HOSTED_AGENT_IMAGE before it rolls (docs/decisions/hosted-agent-run.md §6).`,
+    );
+    this.name = 'HostedAgentImageLaggingError';
   }
 }
 
@@ -787,6 +819,10 @@ export const DAILY_HEALTH_CHECK_PROBES: {
   fleet: { step: 'fleet-boot-preflight', describeIndeterminate: describeImage },
   indexFleet: { step: 'index-fleet-boot-preflight', describeIndeterminate: describeImage },
   hostedAgentImage: { step: 'hosted-agent-image-preflight', describeIndeterminate: describeImage },
+  hostedAgentImageLag: {
+    step: 'hosted-agent-image-lag',
+    describeIndeterminate: (v) => ({ phase: v.phase, detail: `${v.reference}: ${v.detail}` }),
+  },
   indexContainerAi: {
     step: 'index-container-ai-address',
     describeIndeterminate: (v) => ({ phase: 'address', detail: `${v.address}: ${v.detail}` }),
@@ -933,6 +969,9 @@ export const dailyHealthCheck = defineJob(
     const hostedAgentImage = await ctx.step.run('hosted-agent-image-preflight', () =>
       services.fleetPreflight.checkHostedAgentImage(),
     );
+    const hostedAgentImageLag = await ctx.step.run('hosted-agent-image-lag', () =>
+      services.hostedAgentImageLag.check(),
+    );
     const indexContainerAi = await ctx.step.run('index-container-ai-address', () =>
       services.fleetPreflight.checkIndexContainerAiAddress(),
     );
@@ -966,6 +1005,7 @@ export const dailyHealthCheck = defineJob(
       fleet,
       indexFleet,
       hostedAgentImage,
+      hostedAgentImageLag,
       indexContainerAi,
       fleetOrigins,
       indexRebuildStreak,
@@ -1111,6 +1151,14 @@ export const dailyHealthCheck = defineJob(
     // The AMI arm (MOTIR-10395) is loud on the same terms: `stale` only.
     if (runnerImageFreshness.ami.state === 'stale') {
       throw new RunnerAmiStaleError(runnerImageFreshness.ami);
+    }
+
+    // The HOSTED-AGENT PIN (MOTIR-10882), on the freshness probes' terms: only
+    // `lagging` is loud. `pending` is a pin pull request not yet merged inside
+    // its day, `indeterminate` a registry that did not answer, `not_applicable` a
+    // deployment with no hosted agent. All are on the row either way.
+    if (hostedAgentImageLag.verdict === 'lagging') {
+      throw new HostedAgentImageLaggingError(hostedAgentImageLag);
     }
 
     // The STREAK, reported last: every definite fault above is the more

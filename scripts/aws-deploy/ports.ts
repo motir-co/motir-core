@@ -26,6 +26,11 @@ import {
   type Task,
   type TaskDefinition,
 } from '@aws-sdk/client-ecs';
+import {
+  GetSecretValueCommand,
+  PutSecretValueCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 
 /**
@@ -46,6 +51,9 @@ export const GRANTED_ACTIONS = [
   'ecs:DescribeServices',
   'ecs:UpdateService',
   'logs:GetLogEvents',
+  // MOTIR-10882: the hosted-agent image secret, and only that one.
+  'secretsmanager:GetSecretValue',
+  'secretsmanager:PutSecretValue',
 ] as const;
 
 export type GrantedAction = (typeof GRANTED_ACTIONS)[number];
@@ -56,6 +64,10 @@ export type RegisterTaskDefinitionInput = RegisterTaskDefinitionCommandInput;
 export interface DeployAws {
   getParameter(name: string): Promise<string | undefined>;
   putParameter(name: string, value: string): Promise<void>;
+  /** A secret's current string value; `undefined` when it holds none. */
+  getSecretValue(name: string): Promise<string | undefined>;
+  /** Write a secret's new current version. */
+  putSecretValue(name: string, value: string): Promise<void>;
   /** Whether the repository holds an image with this digest. */
   imageExists(repositoryName: string, digest: string): Promise<boolean>;
   describeTaskDefinition(familyOrArn: string): Promise<TaskDefinition>;
@@ -78,6 +90,8 @@ export interface DeployAws {
 export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, GrantedAction> = {
   getParameter: 'ssm:GetParameter',
   putParameter: 'ssm:PutParameter',
+  getSecretValue: 'secretsmanager:GetSecretValue',
+  putSecretValue: 'secretsmanager:PutSecretValue',
   imageExists: 'ecr:DescribeImages',
   describeTaskDefinition: 'ecs:DescribeTaskDefinition',
   registerTaskDefinition: 'ecs:RegisterTaskDefinition',
@@ -99,6 +113,7 @@ export function awsSdkPorts(region: string): DeployAws {
   const ssm = new SSMClient({ region });
   const ecr = new ECRClient({ region });
   const logs = new CloudWatchLogsClient({ region });
+  const secrets = new SecretsManagerClient({ region });
   return {
     async getParameter(name) {
       const out = await ssm.send(new GetParameterCommand({ Name: name }));
@@ -106,6 +121,13 @@ export function awsSdkPorts(region: string): DeployAws {
     },
     async putParameter(name, value) {
       await ssm.send(new PutParameterCommand({ Name: name, Value: value, Overwrite: true }));
+    },
+    async getSecretValue(name) {
+      const out = await secrets.send(new GetSecretValueCommand({ SecretId: name }));
+      return out.SecretString;
+    },
+    async putSecretValue(name, value) {
+      await secrets.send(new PutSecretValueCommand({ SecretId: name, SecretString: value }));
     },
     async imageExists(repositoryName, digest) {
       try {

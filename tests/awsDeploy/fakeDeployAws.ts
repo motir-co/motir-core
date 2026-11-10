@@ -16,6 +16,10 @@ export const PREFIX = 'motir-prod';
 export const CLUSTER = 'motir-prod-core';
 export const SECRET_ARN = `arn:aws:secretsmanager:us-east-1:${ACCOUNT}:secret:motir-prod/core/database-owner-AbCdEf`;
 export const DATABASE_URL = 'postgresql://owner:hunter2@db.internal:5432/motir_core';
+/** The hosted-agent image secret (MOTIR-10882), and two images it can hold. */
+export const HOSTED_AGENT_SECRET = `${PREFIX}/core/motir-hosted-agent-image`;
+export const PINNED_AGENT = `ghcr.io/motir-co/motir-hosted-agent@sha256:${'b'.repeat(64)}`;
+export const LIVE_AGENT = `ghcr.io/motir-co/motir-hosted-agent@sha256:${'c'.repeat(64)}`;
 
 export const TARGET = {
   cluster: CLUSTER,
@@ -93,6 +97,9 @@ export class FakeDeployAws implements DeployAws {
   readonly calls: string[][] = [];
   readonly registered: RegisterTaskDefinitionInput[] = [];
   readonly params = new Map<string, string>();
+  readonly secrets = new Map<string, string>([[HOSTED_AGENT_SECRET, LIVE_AGENT]]);
+  /** Set to make every putSecretValue reject. */
+  failSecretPut = false;
   readonly images = new Set<string>([`motir-prod/motir-core|${DIGEST}`]);
   readonly logLines: string[] = [];
   migrate: MigrateScript = migrateExits(0);
@@ -174,6 +181,18 @@ export class FakeDeployAws implements DeployAws {
   putParameter(name: string, value: string) {
     this.record('putParameter', name, value);
     this.params.set(name, value);
+    return Promise.resolve();
+  }
+
+  getSecretValue(name: string) {
+    this.record('getSecretValue', name);
+    return Promise.resolve(this.secrets.get(name));
+  }
+
+  putSecretValue(name: string, value: string) {
+    this.record('putSecretValue', name, value);
+    if (this.failSecretPut) return Promise.reject(new Error('AccessDeniedException'));
+    this.secrets.set(name, value);
     return Promise.resolve();
   }
 

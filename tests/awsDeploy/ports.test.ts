@@ -1,6 +1,7 @@
 import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
 import { ECRClient, ImageNotFoundException } from '@aws-sdk/client-ecr';
 import { ECSClient } from '@aws-sdk/client-ecs';
+import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SSMClient } from '@aws-sdk/client-ssm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { awsSdkPorts } from '@/scripts/aws-deploy/ports';
@@ -13,7 +14,13 @@ type Responder = (command: string, input: Record<string, unknown>) => unknown;
 
 function stubClients(respond: Responder) {
   const sent: Sent[] = [];
-  for (const client of [ECSClient, SSMClient, ECRClient, CloudWatchLogsClient]) {
+  for (const client of [
+    ECSClient,
+    SSMClient,
+    ECRClient,
+    CloudWatchLogsClient,
+    SecretsManagerClient,
+  ]) {
     vi.spyOn(client.prototype, 'send').mockImplementation(((command: {
       constructor: { name: string };
       input: Record<string, unknown>;
@@ -45,6 +52,30 @@ describe('awsSdkPorts', () => {
     expect(sent).toEqual([
       { command: 'GetParameterCommand', input: { Name: '/p' } },
       { command: 'PutParameterCommand', input: { Name: '/p', Value: 'w', Overwrite: true } },
+    ]);
+  });
+
+  it('reads and writes the hosted-agent image secret by name, one command each (MOTIR-10882)', async () => {
+    const sent = stubClients((c) =>
+      c === 'GetSecretValueCommand' ? { SecretString: 'ghcr.io/x@sha256:1' } : {},
+    );
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.getSecretValue('motir/core/motir-hosted-agent-image')).toBe(
+      'ghcr.io/x@sha256:1',
+    );
+    await ports.putSecretValue('motir/core/motir-hosted-agent-image', 'ghcr.io/x@sha256:2');
+    expect(sent).toEqual([
+      {
+        command: 'GetSecretValueCommand',
+        input: { SecretId: 'motir/core/motir-hosted-agent-image' },
+      },
+      {
+        command: 'PutSecretValueCommand',
+        input: {
+          SecretId: 'motir/core/motir-hosted-agent-image',
+          SecretString: 'ghcr.io/x@sha256:2',
+        },
+      },
     ]);
   });
 
