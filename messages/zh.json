@@ -8462,6 +8462,7 @@
     "status": {
       "generating": "生成中",
       "planned": "已规划",
+      "approving": "正在批准…",
       "stale": "已过期",
       "approved": "已批准",
       "declined": "已拒绝"
@@ -8509,6 +8510,7 @@
         "none": "尚无计划",
         "generating": "撰写中",
         "planned": "等待批准",
+        "approving": "正在批准…",
         "stale": "已过时",
         "approved": "已批准",
         "declined": "已拒绝",
@@ -15427,6 +15429,7 @@
       "planState": {
         "generating": "Motir AI 正在撰写该计划。",
         "planned": "该计划正在等待审批。",
+        "approving": "该计划正在批准中。",
         "stale": "该计划需要先处理，然后才能批准。"
       },
       "reviewPlan": "审阅计划",
@@ -15714,6 +15717,8 @@
         },
         "rewriting": "正在改写",
         "rewritingTitle": "Motir AI 正在编写此计划的新版本。完成后即可批准或拒绝。",
+        "approving": "正在批准…",
+        "approvingTitle": "此计划已获批准，其提案正在写入工作项。完成后将显示为已批准。",
         "reviewRow": "审阅计划 — {sentence}",
         "declinedNoReason": "未说明原因即拒绝 · 版本 <mono>{version}</mono>"
       },

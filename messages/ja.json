@@ -8468,6 +8468,7 @@
     "status": {
       "generating": "生成中",
       "planned": "計画済み",
+      "approving": "承認中…",
       "stale": "古い状態",
       "approved": "承認済み",
       "declined": "却下"
@@ -8515,6 +8516,7 @@
         "none": "計画はまだありません",
         "generating": "作成中",
         "planned": "承認待ち",
+        "approving": "承認中…",
         "stale": "古い状態",
         "approved": "承認済み",
         "declined": "却下",
@@ -15433,6 +15435,7 @@
       "planState": {
         "generating": "Motir AI がまだこの計画を作成しています。",
         "planned": "この計画は承認を待っています。",
+        "approving": "この計画は承認処理中です。",
         "stale": "この計画は承認する前に対応が必要です。"
       },
       "reviewPlan": "計画を確認",
@@ -15720,6 +15723,8 @@
         },
         "rewriting": "書き直し中",
         "rewritingTitle": "Motir AI がこの計画の新しいバージョンを作成しています。完了したら承認または却下できます。",
+        "approving": "承認中…",
+        "approvingTitle": "この計画は承認され、提案を作業項目として書き込んでいます。完了すると「承認済み」と表示されます。",
         "reviewRow": "計画を確認 — {sentence}",
         "declinedNoReason": "理由なしで却下 · <mono>{version}</mono> について"
       },

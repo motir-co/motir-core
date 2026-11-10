@@ -75,6 +75,7 @@ import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsServ
 import { pageEmbeddingsService } from '@/lib/services/pageEmbeddingsService';
 import { planTargetLockService } from '@/lib/services/planTargetLockService';
 import { planSessionEndService } from '@/lib/services/planSessionEndService';
+import { stalledPlanApprovalService } from '@/lib/services/stalledPlanApprovalService';
 import { planningSessionGateService } from '@/lib/services/planningSessionGateService';
 import { impersonationService } from '@/lib/services/impersonationService';
 import { codeGraphDriftService } from '@/lib/services/codeGraphDriftService';
@@ -200,6 +201,8 @@ export const jobServices = {
   pageEmbeddings: pageEmbeddingsService,
   planTargetLock: planTargetLockService,
   planSessionEnd: planSessionEndService,
+  // Bug MOTIR-9006 — an approval whose approver died gives its plan back.
+  stalledPlanApproval: stalledPlanApprovalService,
   planningSessionGate: planningSessionGateService,
   // Staff "View as" sessions (MOTIR-749): the expiry sweep records the end of a
   // session nobody came back to.

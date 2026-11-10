@@ -249,6 +249,7 @@ describe('a CARD-LESS (`plan_approval`) row', () => {
           proposalCount: 2,
           author: { source: 'mcp', harness: 'Claude Code', origin: 'user' },
           held: null,
+          approving: false,
         },
         'en',
       ),

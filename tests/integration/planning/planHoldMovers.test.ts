@@ -190,6 +190,20 @@ describe('the up-front read agrees with the guard — and the PlanStatus checkli
       },
     ],
     [
+      // Bug MOTIR-9006 — being approved holds until the approval commits.
+      'approving — holds',
+      true,
+      async () => {
+        const c = await seedCard();
+        const planId = await plannedModify(c.id);
+        await adminDb.plan.update({
+          where: { id: planId },
+          data: { status: 'approving', approvingAt: new Date() },
+        });
+        return c;
+      },
+    ],
+    [
       'stale — holds',
       true,
       async () => {
@@ -344,7 +358,7 @@ describe('the up-front read agrees with the guard — and the PlanStatus checkli
   it('the checklist is TOTAL — the shapes above name every PlanStatus member', () => {
     const named = new Set(
       SHAPES.map(([label]) => label.split(/[ ,]/)[0]).filter((w) =>
-        ['generating', 'planned', 'stale', 'approved', 'declined'].includes(w!),
+        ['generating', 'planned', 'approving', 'stale', 'approved', 'declined'].includes(w!),
       ),
     );
     // Read from the Prisma enum, not listed, so a sixth member fails here.

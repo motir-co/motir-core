@@ -8468,6 +8468,7 @@
     "status": {
       "generating": "Generating",
       "planned": "Planned",
+      "approving": "Approving…",
       "stale": "Stale",
       "approved": "Approved",
       "declined": "Declined"
@@ -8515,6 +8516,7 @@
         "none": "No plan yet",
         "generating": "Writing",
         "planned": "Waiting for approval",
+        "approving": "Approving…",
         "stale": "Stale",
         "approved": "Approved",
         "declined": "Declined",
@@ -15433,6 +15435,7 @@
       "planState": {
         "generating": "Motir AI is still writing this plan.",
         "planned": "This plan is waiting for approval.",
+        "approving": "This plan is being approved.",
         "stale": "This plan needs attention before it can be approved."
       },
       "reviewPlan": "Review plan",
@@ -15720,6 +15723,8 @@
         },
         "rewriting": "Being rewritten",
         "rewritingTitle": "Motir AI is writing a new version of this plan. You can approve or decline it when it finishes.",
+        "approving": "Approving…",
+        "approvingTitle": "This plan was approved and its proposals are being written into work items. It reads Approved when that finishes.",
         "reviewRow": "Review plan — {sentence}",
         "declinedNoReason": "Declined without a reason · on <mono>{version}</mono>"
       },

@@ -43,7 +43,8 @@ vi.mock('next/link', () => ({
 
 const { ApprovalRow } = await import('@/components/approvals/ApprovalRow');
 const { ApprovalsList } = await import('@/app/(authed)/workbench/_components/ApprovalsList');
-const { announceGateDecided } = await import('@/lib/approvals/decidedGates');
+const { announceGateDecided, clearGatePressPending, markGatePressPending } =
+  await import('@/lib/approvals/decidedGates');
 
 const row = en.approvalGate.planApproval.row;
 
@@ -59,6 +60,7 @@ function subject(over: Partial<PlanApprovalSubjectSummaryDTO> = {}): PlanApprova
     proposalCount: 6,
     author: { source: 'native', harness: null, origin: 'user' },
     held: null,
+    approving: false,
     ...over,
   };
 }
@@ -298,6 +300,36 @@ describe('the STATES in To approve (Panel 2)', () => {
     expect(screen.queryByText(en.workbench.approvals.live.decidedElsewhere)).toBeNull();
     fireEvent.click(door());
     expect(shallowPush).toHaveBeenCalledTimes(1);
+  });
+
+  // Bug MOTIR-9006 — the gate stays `awaiting` until an approval commits, so a plan being
+  // approved used to offer Review on a plan halfway through being written.
+  it('BEING APPROVED (the read says so): *Approving…* with its reason, no verb — the row still opens', () => {
+    renderWithIntl(
+      <ApprovalRow record={{ section: 'awaiting', row: waiting({ approving: true }) }} />,
+    );
+    const pill = screen.getByText(row.approving);
+    expect(pill.className).toContain('bg-(--el-tint-sky)');
+    expect(pill.getAttribute('title')).toBe(row.approvingTitle);
+    expect(screen.queryByRole('button')).toBeNull();
+    fireEvent.click(door());
+    expect(shallowPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('BEING APPROVED from THIS page: the press in flight reads *Approving…* before any re-read', () => {
+    const r = waiting();
+    renderWithIntl(<ApprovalRow record={{ section: 'awaiting', row: r }} />);
+    expect(screen.getByRole('button', { name: 'Review' })).toBeTruthy();
+    act(() => markGatePressPending(r.gateId));
+    expect(screen.getByText(row.approving)).toBeTruthy();
+    expect(screen.queryByRole('button')).toBeNull();
+    // …and the decision, once announced, settles it — Approved, not Approving.
+    act(() => {
+      announceGateDecided({ gate: gateDto(r.gateId, 'approved'), filesKept: null });
+      clearGatePressPending(r.gateId);
+    });
+    expect(screen.queryByText(row.approving)).toBeNull();
+    expect(screen.getByText(en.approvalGate.state.approved)).toBeTruthy();
   });
 
   it('see but not decide: the shipped Awaiting pill, no button', () => {

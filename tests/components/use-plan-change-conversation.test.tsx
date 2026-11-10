@@ -163,6 +163,7 @@ const MATERIALIZED: PlanWithItemsDto = {
   itemCount: 1,
   createdAt: '2026-07-27T09:00:00.000Z',
   plannedAt: '2026-07-27T09:01:00.000Z',
+  approvingAt: null,
   decidedAt: '2026-07-27T09:05:00.000Z',
   decidedById: 'u1',
   decisionReason: null,

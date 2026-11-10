@@ -17,7 +17,11 @@ import {
   mergeNarrationEntries,
   narrationEarlierCount,
 } from '@/components/planning/planNarration';
-import { announceGateStateDecided } from '@/lib/approvals/decidedGates';
+import {
+  announceGateStateDecided,
+  clearGatePressPending,
+  markGatePressPending,
+} from '@/lib/approvals/decidedGates';
 import type { PlanItemOutcome } from '@/components/planning/PlanItemNode';
 import { useGeneratingPlanPoll } from '@/lib/hooks/useGeneratingPlanPoll';
 import {
@@ -83,11 +87,13 @@ import {
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
 import {
+  isApprovingReview,
   planDecisionErrorCode,
   planDecisionRefusal,
   type PlanDecisionRefusal,
   readPendingProposal,
   summarizePlanApproval,
+  summarizeReviewApproval,
   type PlanApproveSummary,
 } from '@/lib/planning/planReview';
 import {
@@ -956,6 +962,22 @@ function announcePlanGateDecided(
   announceGateStateDecided(gate.id, state);
 }
 
+/**
+ * How often a re-opened plan that is BEING APPROVED is read again until the approval
+ * lands (Bug MOTIR-9006). An ordinary approve takes ~5s and the transaction's budget
+ * caps one at ~40s, so a short interval keeps the wait honest without a hot loop.
+ */
+export const APPROVING_POLL_MS = 1_500;
+
+/**
+ * The phase a pending review is filed in: `review` when it is decidable, `deciding`
+ * when it is being approved right now (Bug MOTIR-9006) — the overlay then draws the
+ * approve in progress with every verb disabled, and watches the plan until it lands.
+ */
+export function phaseForPendingReview(review: PlanReviewDto): 'review' | 'deciding' {
+  return isApprovingReview(review) ? 'deciding' : 'review';
+}
+
 /** A send refused because another holder has the card (AMENDMENT 23 §4): the
  *  refusal's holder and free-by, from the `409 PLAN_TARGET_LOCKED` body. */
 export function targetHeldFrom(err: unknown): PlanTargetHeldByDto | null {
@@ -1541,7 +1563,11 @@ export function usePlanChangeConversation({
             }
             return;
           }
-          setState((s) => ({ ...s, phase: 'review', review: fileReview(s.review, pending) }));
+          setState((s) => ({
+            ...s,
+            phase: phaseForPendingReview(pending),
+            review: fileReview(s.review, pending),
+          }));
         } catch (err) {
           if (err instanceof DOMException && err.name === 'AbortError') return;
           if (!mountedRef.current) return;
@@ -1685,7 +1711,7 @@ export function usePlanChangeConversation({
         ...s,
         review: fileReview(s.review, pending),
         decided: null,
-        phase: 'review',
+        phase: phaseForPendingReview(pending),
       }));
     } else {
       setLivePlanId(planId);
@@ -3301,6 +3327,30 @@ export function usePlanChangeConversation({
   }, []);
 
   /**
+   * A press refused because the plan is ALREADY BEING APPROVED (Bug MOTIR-9006) — by
+   * another tab, or by a press this screen lost track of. Not an error to show: re-read
+   * the plan and, while it is still `approving`, draw the approval in progress, which the
+   * watch below follows until it lands. Answers whether it took the refusal over.
+   */
+  const adoptApprovalInProgress = useCallback(async (planId: string, err: unknown) => {
+    if (!(err instanceof PlanRequestError) || err.code !== 'PLAN_APPROVING') return false;
+    let fresh: PlanReviewDto | null = null;
+    try {
+      fresh = await fetchPlanReview(planId);
+    } catch {
+      return false;
+    }
+    if (!mountedRef.current || !isApprovingReview(fresh)) return false;
+    const approving = fresh;
+    setState((s) =>
+      s.planId === planId
+        ? { ...s, phase: 'deciding', review: fileReview(s.review, approving), errorCode: null }
+        : s,
+    );
+    return true;
+  }, []);
+
+  /**
    * PERSIST the proposal — `POST /api/plans/[id]/approve`, which decides the plan's
    * gate through the one decide door (MOTIR-6038) and `materialize`s it, behind the
    * 7.12.5 persist gate. It is the SAME operation `/plans/[id]` performs, on the same
@@ -3311,6 +3361,11 @@ export function usePlanChangeConversation({
     const { planId, review } = stateRef.current;
     if (!planId) return;
     setState((s) => ({ ...s, phase: 'deciding', errorCode: null }));
+    // THE PRESS IS IN FLIGHT ON THIS PAGE (Bug MOTIR-9006): the To-approve row under the
+    // overlay reads *Approving…* from it until the decision is announced, even when the
+    // overlay is closed while the approval runs — the press is not aborted by a close.
+    const gateId = review?.gate?.state === 'awaiting' ? review.gate.id : null;
+    if (gateId) markGatePressPending(gateId);
 
     try {
       const approved = summarizePlanApproval(
@@ -3335,6 +3390,15 @@ export function usePlanChangeConversation({
       } catch {
         /* keep the pre-decision review rather than losing the overlay entirely */
       }
+      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XXII §22.2, § 20's rule). The
+      // To-approve list under this overlay is a client island `router.refresh()` cannot
+      // reach, so an asked plan's decision travels through the decided-gates store.
+      //
+      // ⚠️ BEFORE THE MOUNT CHECK (Bug MOTIR-9006). The decision is the PAGE's news, not
+      // this overlay's: a reader who closed the overlay while a large plan materialized
+      // still has the row under it, and it kept reading *Review* after the commit.
+      announcePlanGateDecided(review, 'approved');
+      if (gateId) clearGatePressPending(gateId);
       if (!mountedRef.current) return;
       setState((s) => ({
         ...s,
@@ -3351,13 +3415,11 @@ export function usePlanChangeConversation({
         progress: null,
         errorCode: null,
       }));
-      // THE ROW SETTLES IN PLACE (MOTIR-6037; design Part XXII §22.2, § 20's rule). The
-      // To-approve list under this overlay is a client island `router.refresh()` cannot
-      // reach, so an asked plan's decision travels through the decided-gates store.
-      announcePlanGateDecided(review, 'approved');
       approvedCbRef.current?.(approved);
     } catch (err) {
+      if (gateId) clearGatePressPending(gateId);
       if (!mountedRef.current) return;
+      if (await adoptApprovalInProgress(planId, err)) return;
       setState((s) => ({
         ...s,
         phase: 'review',
@@ -3366,7 +3428,79 @@ export function usePlanChangeConversation({
       }));
       await rereadAfterRefusal(planId, err);
     }
-  }, [rereadAfterRefusal]);
+  }, [rereadAfterRefusal, adoptApprovalInProgress]);
+
+  // AN APPROVAL IN PROGRESS, RE-ENTERED (Bug MOTIR-9006). A plan somebody approved —
+  // here before the overlay was closed, or in another tab — reads `approving` while its
+  // proposals are written into work items, and the open path files it in `deciding`
+  // (`phaseForPendingReview`): the approve's progress is drawn and every verb is
+  // disabled. This watches it until it lands. `approved` settles exactly as a press made
+  // here does; back at `planned` / `stale` (the approval failed and gave the plan back),
+  // the review is decidable again; `declined` ends it. A failed read keeps watching.
+  //
+  // Never for a press made on THIS screen: its review in hand was read while the plan
+  // was `planned`, so the id below is null and the press's own answer settles it.
+  const watchedApprovalId =
+    state.phase === 'deciding' && state.review && isApprovingReview(state.review)
+      ? state.review.id
+      : null;
+  useEffect(() => {
+    if (!watchedApprovalId) return;
+    const planId = watchedApprovalId;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const settle = (fresh: PlanReviewDto) => {
+      if (fresh.status === 'approved') {
+        const approved = summarizeReviewApproval(fresh);
+        announcePlanGateDecided(stateRef.current.review, 'approved');
+        setState((s) => ({
+          ...s,
+          phase: 'idle',
+          review: fileReview(s.review, fresh),
+          decided: 'accepted',
+          jobId: null,
+          planId: null,
+          approved,
+          progress: null,
+          errorCode: null,
+        }));
+        approvedCbRef.current?.(approved);
+        return;
+      }
+      if (fresh.status === 'declined') {
+        setState((s) => ({
+          ...s,
+          phase: 'idle',
+          review: fileReview(s.review, fresh),
+          decided: 'declined',
+          jobId: null,
+          planId: null,
+          progress: null,
+        }));
+        return;
+      }
+      setState((s) => ({ ...s, phase: 'review', review: fileReview(s.review, fresh) }));
+    };
+    const tick = async () => {
+      let fresh: PlanReviewDto | null = null;
+      try {
+        fresh = await fetchPlanReview(planId, controller.signal);
+      } catch {
+        /* keep watching — the next read may land */
+      }
+      if (controller.signal.aborted || !mountedRef.current) return;
+      if (fresh && !isApprovingReview(fresh)) {
+        settle(fresh);
+        return;
+      }
+      timer = setTimeout(() => void tick(), APPROVING_POLL_MS);
+    };
+    timer = setTimeout(() => void tick(), APPROVING_POLL_MS);
+    return () => {
+      controller.abort();
+      if (timer) clearTimeout(timer);
+    };
+  }, [watchedApprovalId]);
 
   /**
    * DISCARD the proposal — `POST /api/plans/[id]/decline`, which drops the
@@ -3403,6 +3537,8 @@ export function usePlanChangeConversation({
         }));
       } catch (err) {
         if (!mountedRef.current) return;
+        // A decline pressed while somebody's approve is being written (Bug MOTIR-9006).
+        if (planId && (await adoptApprovalInProgress(planId, err))) return;
         // The proposal is still pending — say so and leave it decidable, rather
         // than clearing a canvas the server still considers awaiting a decision.
         setState((s) => ({
@@ -3414,7 +3550,7 @@ export function usePlanChangeConversation({
         if (planId) await rereadAfterRefusal(planId, err);
       }
     },
-    [rereadAfterRefusal],
+    [rereadAfterRefusal, adoptApprovalInProgress],
   );
 
   const dismissError = useCallback(() => {

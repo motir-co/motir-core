@@ -1206,8 +1206,18 @@
  *   `bugs` is the 1.81.0 body, answered as before with `bugs: []`.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.82.0` after `1.81.0` above.
+ * - `1.83.0` — MOTIR-9006 adds `approving` to `PlanStatus` (every `planStatusSchema`
+ *   read: the plan reads, the plan-approval read, the plan list's `status` filter). It is
+ *   an approve IN PROGRESS — a person approved the plan and its proposals are being
+ *   materialized — which every reader used to see as `planned` until the commit. A
+ *   decision on an `approving` plan, and any edit of it, is refused `409 PLAN_APPROVING`.
  *
- * - `1.83.0` — MOTIR-10877 adds `publishDispatchRunHowToTest`
+ *   Additive: a new member of an enum every client must tolerate unknown members of, and
+ *   a new code for a new condition (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.83.0` after `1.82.0` above.
+ *
+ * - `1.84.0` — MOTIR-10877 adds `publishDispatchRunHowToTest`
  *   (`POST /api/v1/dispatch-runs/{id}/how-to-test`, `work_item:edit`, body
  *   `{ key, bodyMd, previewPath?, repos? }`, `200` with `RunHowToTestAcknowledgement` —
  *   `{ testInstructionsId, created }`): the CLI publishes the run target's How to test with
@@ -1221,6 +1231,6 @@
  *   Additive: one new operation, one new component, one optional query parameter and codes
  *   for new conditions (§8's allowed list).
  *
- *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.83.0` after `1.82.0` above.
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.84.0` after `1.83.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.83.0';
+export const V1_CONTRACT_VERSION = '1.84.0';

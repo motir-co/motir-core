@@ -97,6 +97,7 @@ function approvalSubject(facts: PlanFacts): PlanApprovalSubjectSummaryDTO {
     proposalCount: 4,
     author: { source: 'native', harness: null, origin: 'user' },
     held: null,
+    approving: false,
   };
 }
 

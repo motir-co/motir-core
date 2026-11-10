@@ -1060,6 +1060,9 @@ describe('the work-loop payloads', () => {
       plannedAt: null,
       decidedAt: null,
       decidedById: 'user-1',
+      // WHEN an approve claimed the plan (MOTIR-9006) — MCP's own field, null
+      // unless the plan is `approving`.
+      approvingAt: null,
       createdById: 'requester-1',
       // WHO asked and WHO authored (MOTIR-2986) — MCP's own fields, extended here
       // beside `decidedById` for the same reason and deliberately NOT added to
@@ -1109,6 +1112,7 @@ describe('the work-loop payloads', () => {
       plannedAt: null,
       decidedAt: null,
       decidedById: null,
+      approvingAt: null,
       createdById: null,
       authorSource: 'mcp' as const,
       authorHarness: null,

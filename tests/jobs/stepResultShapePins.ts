@@ -714,6 +714,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     // sweep gives a plan whose revision lease lapsed back to `planned`.
     shape: '{ planIds: Array<string>; restored: number }',
   },
+  'release-stalled-plan-approvals': {
+    file: 'lib/jobs/definitions/planTargetLockSweep.ts',
+    // Added by MOTIR-9006: an approve claims its plan (`approving`) before it
+    // materializes, so the lock sweep gives back a claim whose approver died.
+    shape: '{ planIds: Array<string>; released: number }',
+  },
   // MOTIR-10091 — the requirement page of a confirmed plan offer, written after the start.
   'requirement-page-write': {
     file: 'lib/jobs/definitions/planOfferRequirementPage.ts',

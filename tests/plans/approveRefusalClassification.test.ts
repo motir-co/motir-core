@@ -33,10 +33,14 @@ import { APPROVE_REFUSALS, refusalId } from '@/lib/plans/approveRefusals';
 
 const ROOT = process.cwd();
 
-/** Every `readonly code = 'X' as const` an error module declares. */
+/** Every `readonly code = 'X' as const` an error module declares — and the one base
+ *  class whose code is WIDENED for its subclass (`PlanNotEditableError`, MOTIR-9006:
+ *  `readonly code: 'A' | 'B' = 'A'`), plus the subclass's `override` of it. */
 function declaredCodes(relativePath: string): string[] {
   const source = readFileSync(join(ROOT, relativePath), 'utf8');
-  const codes = [...source.matchAll(/readonly code = '([A-Z_]+)' as const/g)].map((m) => m[1]!);
+  const codes = [
+    ...source.matchAll(/(?:override )?readonly code(?:: [^=]+)? = '([A-Z_]+)'(?: as const)?;/g),
+  ].map((m) => m[1]!);
   return [...new Set(codes)];
 }
 

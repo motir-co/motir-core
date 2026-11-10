@@ -13,6 +13,7 @@ const EXPIRED: PlanHoldLock = { planId: 'plan_1', expiresAt: new Date('2026-09-2
 const EXPECTED: Record<PlanStatusDto, boolean> = {
   generating: true,
   planned: true,
+  approving: true,
   stale: true,
   approved: false,
   declined: false,

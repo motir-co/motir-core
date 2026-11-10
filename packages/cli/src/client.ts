@@ -1013,8 +1013,11 @@ export interface PlanOutcome {
    *  reached a terminal status after the plan closed. It is NOT decided and NOT
    *  declined — the plan is live, and if the drift reverses it returns to
    *  `planned` on its own. A caller asking *is this over?* must not read it as
-   *  an ending; a caller asking *can I approve this?* must read it as a no. */
-  status: 'generating' | 'planned' | 'stale' | 'approved' | 'declined';
+   *  an ending; a caller asking *can I approve this?* must read it as a no.
+   *  SIX since MOTIR-9006: `approving` is an approve IN PROGRESS — its proposals are
+   *  being written into work items. Not over yet (it ends `approved`, or back at
+   *  `planned` if the approval failed), and not approvable again. */
+  status: 'generating' | 'planned' | 'approving' | 'stale' | 'approved' | 'declined';
   origin: string;
   jobId: string | null;
   itemCount: number;
@@ -1076,8 +1079,11 @@ export interface PlanWithItems {
    *  reached a terminal status after the plan closed. It is NOT decided and NOT
    *  declined — the plan is live, and if the drift reverses it returns to
    *  `planned` on its own. A caller asking *is this over?* must not read it as
-   *  an ending; a caller asking *can I approve this?* must read it as a no. */
-  status: 'generating' | 'planned' | 'stale' | 'approved' | 'declined';
+   *  an ending; a caller asking *can I approve this?* must read it as a no.
+   *  SIX since MOTIR-9006: `approving` is an approve IN PROGRESS — its proposals are
+   *  being written into work items. Not over yet (it ends `approved`, or back at
+   *  `planned` if the approval failed), and not approvable again. */
+  status: 'generating' | 'planned' | 'approving' | 'stale' | 'approved' | 'declined';
   title: string | null;
   summary: string | null;
   sourceJobId: string | null;

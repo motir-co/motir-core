@@ -437,6 +437,9 @@ export interface OrgContextResponse {
 export const AI_PENDING_PLAN_STATUSES = [
   'generating',
   'planned',
+  // Being materialized (Bug MOTIR-9006): its proposals are not in the tree yet, so a
+  // planner must still see them as work in flight rather than propose them again.
+  'approving',
   'stale',
 ] as const satisfies readonly PlanStatusDto[];
 

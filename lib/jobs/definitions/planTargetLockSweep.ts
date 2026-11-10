@@ -79,6 +79,12 @@ export const planTargetLockSweep = defineJob(
     await ctx.step.run('release-lapsed-plan-revisions', () =>
       services.planSessionEnd.releaseLapsedRevisions(),
     );
+    // An approval whose approver died between its claim and its commit gives its plan
+    // back to `planned` (Bug MOTIR-9006), so a plan never reads *Approving…* for longer
+    // than the stalled-approval bound plus one interval.
+    await ctx.step.run('release-stalled-plan-approvals', () =>
+      services.stalledPlanApproval.releaseStalledApprovals(),
+    );
     const released = await ctx.step.run('release-expired-planning-locks', () =>
       services.planTargetLock.releaseExpired(),
     );

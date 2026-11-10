@@ -1237,7 +1237,9 @@ export const planTargetLockService = {
         // had it open would have its targets swept back to claimable after the
         // window: the failure the park exists to prevent, by the one status D9
         // forgot to name.
-        if (planStatus === 'planned' || planStatus === 'stale') {
+        // …nor an `approving` one's (Bug MOTIR-9006): the approve's own commit releases
+        // its targets, and a failed one hands the plan back to `planned`, which keeps them.
+        if (planStatus === 'planned' || planStatus === 'stale' || planStatus === 'approving') {
           entries.push({ workItemId: lock.workItemId, outcome: 'plan_awaiting_review' });
           continue;
         }

@@ -5,11 +5,14 @@ import {
   PlanRequestError,
 } from '@/lib/planning/planReviewClient';
 import {
+  isApprovingReview,
   isPlanDecisionRefusal,
+  isProposedReview,
   planDecisionErrorCode,
   planDecisionRefusal,
   readPendingProposal,
   summarizePlanApproval,
+  summarizeReviewApproval,
 } from '@/lib/planning/planReview';
 import { planReview, planReviewItem } from '../helpers/planReview';
 import type { PlanWithItemsDto } from '@/lib/dto/plans';
@@ -70,6 +73,39 @@ describe('readPendingProposal', () => {
     respond({ code: 'PLAN_NOT_FOUND' }, 404);
 
     await expect(readPendingProposal('plan_1')).rejects.toBeInstanceOf(PlanRequestError);
+  });
+});
+
+// Bug MOTIR-9006 — a plan BEING APPROVED is still drawn (the reader is looking at its
+// proposals) but is not decidable: the surface shows the approve in progress.
+describe('a plan being approved', () => {
+  it('is proposed — the pending read returns it — and is the one approving review', async () => {
+    const review = planReview([planReviewItem()], { status: 'approving' });
+    expect(isProposedReview(review)).toBe(true);
+    expect(isApprovingReview(review)).toBe(true);
+    expect(isApprovingReview(planReview([planReviewItem()]))).toBe(false);
+    respond(review);
+    expect((await readPendingProposal('plan_1'))?.status).toBe('approving');
+  });
+
+  it('a press refused PLAN_APPROVING reads as decided — somebody else is approving it', () => {
+    expect(planDecisionErrorCode(new PlanRequestError(409, 'PLAN_APPROVING'))).toBe('decided');
+  });
+
+  it('summarizeReviewApproval reads the outcome off a decided review, by work-item node id', () => {
+    const review = planReview(
+      [
+        planReviewItem({ planItemId: 'pi_1', nodeId: 'wi_1', op: 'add' }),
+        planReviewItem({ planItemId: 'pi_2', nodeId: 'wi_2', op: 'modify' }),
+        planReviewItem({ planItemId: 'pi_3', nodeId: 'wi_3', op: 'remove' }),
+      ],
+      { status: 'approved' },
+    );
+    expect(summarizeReviewApproval(review)).toEqual({
+      created: ['wi_1'],
+      updated: ['wi_2'],
+      removed: ['wi_3'],
+    });
   });
 });
 

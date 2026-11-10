@@ -368,6 +368,54 @@ describe('§4 — a `stale` plan’s lock never expires', () => {
   );
 });
 
+// Bug MOTIR-9006 — a plan BEING APPROVED holds its cards until the approval commits, and
+// its lock outlives the window exactly as a `planned` one's does.
+describe('an `approving` plan holds its cards', () => {
+  it(
+    'leaves an expired `approving` lock in place and reports it as awaiting review',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      const planId = await plannedModify(card.id);
+      await adminDb.plan.update({
+        where: { id: planId },
+        data: { status: 'approving', approvingAt: new Date() },
+      });
+      await adminDb.planTargetLock.update({
+        where: { workItemId: card.id },
+        data: { expiresAt: new Date(Date.now() - 60_000) },
+      });
+
+      const out = await planTargetLockService.releaseExpired();
+
+      expect(out.entries).toEqual([{ workItemId: card.id, outcome: 'plan_awaiting_review' }]);
+      expect(await lockFor(card.id)).not.toBeNull();
+    },
+  );
+
+  it(
+    'MCP `transition_status` says the plan is being approved',
+    { timeout: DB_TEST_TIMEOUT_MS },
+    async () => {
+      const card = await seedCard();
+      const planId = await plannedModify(card.id);
+      await adminDb.plan.update({
+        where: { id: planId },
+        data: { status: 'approving', approvingAt: new Date() },
+      });
+
+      const res = await runTransitionStatus(
+        { key: card.identifier, status: 'In Progress' },
+        fx.ctx,
+      );
+
+      expect(res.isError).toBe(true);
+      expect(JSON.stringify(res.content)).toContain(`Plan ${planId} is being approved`);
+      expect(await statusOf(card.id)).toBe(PLANNING_STATUS_KEY);
+    },
+  );
+});
+
 describe('readPlanHold — the up-front read', () => {
   it('returns the DTO for a held card', { timeout: DB_TEST_TIMEOUT_MS }, async () => {
     const card = await seedCard();

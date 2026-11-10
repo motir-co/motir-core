@@ -224,6 +224,7 @@ const SUMMARY_LOADERS: Record<RegisteredGateKind, SummaryLoader> = {
           origin: plan.origin,
         },
         held: planGateHeldOf(trails.get(plan.id) ?? [], now),
+        approving: plan.status === 'approving',
       };
       out.set(plan.id, summary);
     }
