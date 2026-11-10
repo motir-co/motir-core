@@ -34,7 +34,13 @@ const { FleetClient } =
 const { FLEET_POLL_MS } =
   await import('@/app/(authed)/settings/organization/fleet/_components/useFleetRead');
 
-const NOW = Date.now();
+// A FIXED local midday, never the real clock: the page words a stop as "today",
+// "yesterday" or its weekday against `new Date()`, so a fixture built from
+// `Date.now()` flips day when a shard reaches it just after midnight (CI runs in
+// UTC) — `ago(2)` lands on yesterday (MOTIR-10851). `beforeEach` pins the
+// page's clock to the same instant; the polling tests' `vi.useFakeTimers` start
+// from it, and `afterEach`'s `vi.useRealTimers` releases it.
+const NOW = new Date(2026, 10, 10, 12, 0, 0).getTime();
 const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 const figure = (inUse: number | null, cap: number | null) => ({
   figure: cap,
@@ -161,6 +167,7 @@ const EMPTY: Partial<OrgFleetDTO> = {
 const fetchMock = vi.fn();
 
 beforeEach(() => {
+  vi.setSystemTime(NOW);
   fetchMock.mockReset();
   vi.stubGlobal('fetch', fetchMock);
 });
