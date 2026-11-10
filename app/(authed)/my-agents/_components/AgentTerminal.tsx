@@ -18,9 +18,10 @@ import type { TerminalSink } from './useAgentTerminal';
 // THE TERMINAL (Story MOTIR-6861 · MOTIR-6941; `design/my-agents/design-notes.md`
 // § the agent panel, panel 5) — xterm.js on the design system's code ground.
 //
-// - Its colours are the theme's: the host carries `--el-code-bg` / `--el-code-text`
-//   and xterm draws on a transparent background with the host's resolved ink, so
-//   it follows light and dark like every code block.
+// - Its colours are the theme's: the region carries `--el-code-bg` / `--el-code-text`
+//   and xterm draws on the region's resolved paper with the host's resolved ink and
+//   the code ground's selection colours (`terminalTheme` below), so it follows
+//   light and dark like every code block.
 // - It fills its box, refits to whole cells on every size change, reports the new
 //   size (the hook sends `resize`) and shows `cols × rows` for a moment.
 // - It scrolls inside itself; a reader scrolled up is not yanked down, and
@@ -31,6 +32,44 @@ import type { TerminalSink } from './useAgentTerminal';
 
 /** How long the `cols × rows` tag stays after a resize. */
 const SIZE_TAG_MS = 1_500;
+
+/** A computed fill, or `fallback` when the token resolved to nothing (or to transparent). */
+function resolvedFill(node: Element | null, fallback: string): string {
+  const fill = node ? getComputedStyle(node).backgroundColor : '';
+  return fill && fill !== 'transparent' && fill !== 'rgba(0, 0, 0, 0)' ? fill : fallback;
+}
+
+/**
+ * The xterm theme, every colour read off the design system as the browser
+ * resolved it — no hue is invented here.
+ *
+ * - INK is the host's `--el-code-text` (a computed `color` is always concrete).
+ * - PAPER is the region's `--el-code-bg`, handed over as a concrete colour: a
+ *   transparent theme background is not honoured by xterm's viewport, which then
+ *   paints its own black under the ink — the dark-on-black the acceptance
+ *   recording caught (MOTIR-6943).
+ * - The SELECTION is `--el-code-selection-bg` (focused) and
+ *   `--el-code-selection-inactive-bg` (unfocused), read off two hidden swatches.
+ *   Left unset, xterm 6 paints its own white at 30%, which on the light code
+ *   ground is all but invisible (MOTIR-10856). The selected text keeps its ink.
+ * - A watch-only terminal draws no caret: its cursor is painted in the paper.
+ */
+function terminalTheme(
+  host: HTMLElement,
+  swatches: { selection: Element | null; inactiveSelection: Element | null },
+  watchOnly: boolean,
+) {
+  const ink = getComputedStyle(host).color || 'CanvasText';
+  const paper =
+    (host.parentElement && getComputedStyle(host.parentElement).backgroundColor) || 'Canvas';
+  return {
+    background: paper,
+    foreground: ink,
+    cursor: watchOnly ? paper : ink,
+    selectionBackground: resolvedFill(swatches.selection, 'Highlight'),
+    selectionInactiveBackground: resolvedFill(swatches.inactiveSelection, 'Highlight'),
+  };
+}
 
 export function AgentTerminal({
   sinkRef,
@@ -62,6 +101,8 @@ export function AgentTerminal({
   watchOnly?: boolean;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
+  const selectionSwatch = useRef<HTMLSpanElement | null>(null);
+  const inactiveSelectionSwatch = useRef<HTMLSpanElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const handlers = useRef({ onData, onResize });
   const sizeLabelRef = useRef(sizeLabel);
@@ -121,15 +162,6 @@ export function AgentTerminal({
       ]);
       if (disposed) return;
       const style = getComputedStyle(el);
-      // The host's resolved `--el-code-text` (a computed `color` is always a
-      // concrete value in a browser); no hue is invented here.
-      const ink = style.color || 'CanvasText';
-      // The PAPER is the region's resolved `--el-code-bg`, handed to xterm as a
-      // concrete colour. A transparent theme background is not honoured by
-      // xterm's viewport, which then paints its own black under the ink — the
-      // dark-on-black the acceptance recording caught (MOTIR-6943).
-      const paper =
-        (el.parentElement && getComputedStyle(el.parentElement).backgroundColor) || 'Canvas';
       const t = new XTerm({
         // Whatever input state was asked for before xterm loaded holds from the start.
         disableStdin: !inputRef.current,
@@ -144,8 +176,14 @@ export function AgentTerminal({
         fontSize: 12,
         lineHeight: 1.2,
         scrollback: 5_000,
-        // A watch-only terminal draws no caret: its cursor is painted in the paper.
-        theme: { background: paper, foreground: ink, cursor: watchOnlyRef.current ? paper : ink },
+        theme: terminalTheme(
+          el,
+          {
+            selection: selectionSwatch.current,
+            inactiveSelection: inactiveSelectionSwatch.current,
+          },
+          watchOnlyRef.current,
+        ),
       });
       fit = new Fit();
       t.loadAddon(fit);
@@ -199,6 +237,9 @@ export function AgentTerminal({
       aria-label={label}
       className="relative min-h-0 flex-1 bg-(--el-code-bg) font-mono text-(--el-code-text)"
     >
+      {/* The selection colours, resolved by the browser and read once xterm loads. */}
+      <span ref={selectionSwatch} hidden className="bg-(--el-code-selection-bg)" />
+      <span ref={inactiveSelectionSwatch} hidden className="bg-(--el-code-selection-inactive-bg)" />
       <div
         ref={host}
         data-testid="agent-terminal"

@@ -5271,6 +5271,15 @@
   /* ── Code/mono (used by /tokens reference route) ───────────────── */
   --el-code-bg: var(--color-muted);
   --el-code-text: var(--color-charcoal);
+  /* Selected TEXT on the code ground — the agent terminal's selection
+     (MOTIR-10856). Not --el-selection-bg: that sky tint marks a selected ROW and
+     sits 1.00–1.27:1 from --el-code-bg, invisible as a text highlight. The
+     palette's own primary pulled into the code ground: active ≥ 1.47:1 and
+     inactive (the terminal unfocused) ≥ 1.26:1 from the ground, with
+     --el-code-text ≥ 4.89:1 / ≥ 6.45:1 on them, in every palette × theme
+     (tests/theme/codeSelectionInks.test.ts). */
+  --el-code-selection-bg: color-mix(in srgb, var(--color-primary) 30%, var(--el-code-bg));
+  --el-code-selection-inactive-bg: color-mix(in srgb, var(--color-primary) 20%, var(--el-code-bg));
 
   /* ── App shell — sidebar (Subtask 1.5.2). The shell mockup paints the
      sidebar rail on $--surface and the content area on $--background; the
