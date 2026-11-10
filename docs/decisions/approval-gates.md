@@ -215,6 +215,12 @@
   mechanics this record fixes so the sibling cards agree are marked **DECIDED
   BY THE PLANNER**.
 
+- **AMENDED 2026-11-10 (MOTIR-10837), at §1's MOTIR-5903 amendment — a story run
+  whose own pull requests have ALL merged.** Its acceptance question is asked as a
+  subtask run's is, once nothing under the story is open: the story-run row's
+  _"every member could be merged now"_ needs a member still open, so a receipt
+  published after the last merge was asked of nobody. Additive, nothing struck.
+
 - **CLOSED OUT 2026-09-10 (MOTIR-4795).** Everything Story MOTIR-4778 ships has
   landed, and **_What SHIPPED — the dated close-out_** below records the three
   places the implementation diverged from this record, plus what has NOT shipped
@@ -702,6 +708,44 @@ in_progress` through its own path, so an acceptance decision is invisible to
 > wake, and the withdraw on a push), `tests/attachments/acceptance-gate.test.ts`,
 > and `tests/e2e/acceptance-gate.spec.ts`'s single-card and not-yet-green
 > chapters.
+
+> ### §1 — AMENDMENT (MOTIR-10837, 2026-11-10): a story run whose own pull requests have ALL merged is asked as a finished story
+>
+> **The hole.** The MOTIR-5903 amendment's story-run row asks the acceptance
+> question exactly when _"every member of the story's set could be merged now"_,
+> and `resolveGateSet` read that through the merge question's own test, which also
+> requires at least one member still OPEN — right for the merge question, because a
+> set with nothing left to land asks nothing. So once every member had merged, the
+> story was still a story run and the acceptance question could never be owed. A
+> receipt recorded after the story's code landed (Bug
+> [MOTIR-10837](motir:cmw9xnsdj00do01adhuf712lv), found on MOTIR-10552, whose video
+> was recorded by a later task after motir-core#4104 merged) had no gate, whatever
+> the story's status, and nothing could approve it.
+>
+> **The rule.** A story run whose EVERY member has merged has no merge question for
+> its video to ride, so it is a FINISHED story: its acceptance question is owed once
+> every live descendant is in the done category — the subtask-run row's condition —
+> and the `in_review` and refused-at-this-version conditions, which exist because the
+> video rides the merge question, do not apply. A story run with ANY member still open
+> keeps the story-run row exactly as it was, and a member CLOSED WITHOUT MERGING is not
+> merged, so it keeps the story-run row too, where it is not mergeable either and
+> still holds the question back.
+>
+> **Why this is the row, not a new one.** It is the shape the question's own
+> handler already read: `acceptanceResultHandler` treats a story with no OPEN
+> delivery of its own as finished (`hasOpenOwnDelivery`) and writes `done` on the
+> press once the subtree is settled, and the verdict offer reads the same function.
+> The predicate now agrees with the press about which stories those are.
+>
+> **One consequence, deliberate.** A story run merged on the HOST while its
+> acceptance question awaits, with nothing under it open, no longer has that question
+> withdrawn by the close (`member_closed` still withdraws the merge question): it is
+> still owed, so §6d rule 1 holds the merge's `done` for it and the approval writes
+> `done`, instead of the merge closing the story around an unanswered receipt.
+>
+> Pinned by `tests/approvalGates/gateSet.test.ts` (_a STORY RUN whose own pull
+> requests have ALL merged_) and `tests/approvalGates/acceptanceStoryGate.test.ts`
+> (the publish after the merge, the host merge, and the closed-unmerged member).
 
 > ### §1 — AMENDMENT (MOTIR-5887, 2026-09-21): `decision_choice` is REGISTERED — keyed on `type: choice`, its verbs are the OPTIONS plus one refusal, its subject is a parsed section of the body, and its record stamps the pick
 >
