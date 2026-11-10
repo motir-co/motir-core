@@ -38,6 +38,7 @@ import { useGrillOptIn } from '@/components/planning/useGrillOptIn';
 import { grillFailedAfterHandoff } from '@/lib/planning/grillHandoff';
 import { MOTIR_AI_UNAVAILABLE } from '@/lib/planning/submitStartingUp';
 import {
+  openQuestion,
   useGrillSession,
   type GrillOffer,
   type OfferHold,
@@ -890,12 +891,13 @@ export function PlanChangeRail({
   // The session's question, on the rail's question surface — only in the
   // conversation phase. The hand-off hides it; what was settled stays stored.
   // Before planning, the conversation grilling's own question takes that place.
-  const grillQuestion =
-    conversing && grill.session?.status === 'open' ? (grill.session.pendingQuestion ?? null) : null;
+  // Both read the question still OPEN, never the stored one: the server keeps
+  // `pendingQuestion` until the next planner turn replaces it, so after an answer
+  // whose read failed the stored question is one the person already answered, and
+  // routing a typed message to it would store a second answer (MOTIR-10865).
+  const grillQuestion = conversing && grill.session ? openQuestion(grill.session) : null;
   const convQuestion =
-    convHold === 'held' && convGrillSession?.status === 'open'
-      ? (convGrillSession.pendingQuestion ?? null)
-      : null;
+    convHold === 'held' && convGrillSession ? openQuestion(convGrillSession) : null;
   /** The plan offer row's inputs for the answer turn at `i` (MOTIR-9294). */
   const planOfferPropsFor = (
     turn: PlanChangeTurnDto,

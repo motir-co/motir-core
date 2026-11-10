@@ -63,6 +63,24 @@ export function inFlightTurn(turns: readonly SharpenTurn[]): SharpenTurn | null 
   return answered ? null : latest;
 }
 
+/** True when the person has already acted on the question the last planner turn
+ *  asked: a person turn follows the latest planner turn that did not fail. The
+ *  stored `pendingQuestion` outlives that act until the next planner turn lands,
+ *  so a failed read leaves it set on a question that is answered (MOTIR-10865).
+ *  The client's `openQuestion` reads the same rule off the DTO. */
+export function questionActedOn(turns: readonly SharpenTurn[]): boolean {
+  let asked = -1;
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const t = turns[i]!;
+    if (t.role === 'planner' && !isFailedRecord(t.record)) {
+      asked = i;
+      break;
+    }
+  }
+  if (asked < 0) return false;
+  return turns.slice(asked + 1).some((t) => t.role === 'person');
+}
+
 export function toSharpenSessionDto(
   row: SharpenSession,
   turns: readonly SharpenTurn[],

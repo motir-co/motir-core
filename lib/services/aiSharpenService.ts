@@ -24,6 +24,7 @@ import type {
 import {
   inFlightTurn,
   isFailedRecord,
+  questionActedOn,
   SHARPEN_OUT_OF_CREDITS_REASON,
   toCarriedAnswers,
   toSharpenSessionDto,
@@ -659,6 +660,13 @@ async function actWrite(
     }
     const inFlight = inFlightTurn(before);
     if (inFlight && action !== 'stop') throw new SharpenTurnInFlightError(inFlight.id);
+    // A failed read leaves the answered question stored; answering it again would
+    // store a second answer to it. Try again re-runs the read (MOTIR-10865).
+    if (action !== 'stop' && questionActedOn(before)) {
+      throw new SharpenActionInvalidError(
+        'This question was already answered: try its read again instead of answering it twice.',
+      );
+    }
     const turn = await appendPersonTurn(row, validateAction(row, action, opts), ctx, tx);
     return { row, before, turn };
   });
