@@ -770,9 +770,37 @@ if (args[0] === 'pr' && args[1] === 'create') {
   const state = readState();
   const head = args[args.indexOf('--head') + 1] ?? 'branch';
   const url = 'https://github.test/motir/pull/1?head=' + head;
-  state[keyOf()] = { url, branch: head };
+  // The checkout's origin too, so \`pr view\` can answer per REPOSITORY from any checkout of
+  // it, as the real \`gh\` does (the run reads it from the main checkout, not the worktree).
+  let origin = null;
+  try {
+    const { execFileSync } = await import('node:child_process');
+    origin = execFileSync('git', ['config', '--get', 'remote.origin.url'], { encoding: 'utf8' }).trim();
+  } catch {}
+  state[keyOf()] = { url, branch: head, origin };
   writeFileSync(stateFile, JSON.stringify(state));
   process.stdout.write(url + '\\n');
+  process.exit(0);
+}
+// \`gh pr view <branch> --json …\` — the run reading the pull request the agent opened, so it
+// can LINK it (MOTIR-10877). Answers what \`pr create\` recorded for this REPOSITORY (its
+// origin) and branch, as \`https://github.com/moooon/<origin's name>/pull/<n>\`, numbered per
+// repository from 1: the link door resolves the connected repository from the URL, which the
+// create URL above does not name. A suite whose run then watches CI seeds that pull request's
+// checks so the watch has a verdict to read.
+if (args[0] === 'pr' && args[1] === 'view') {
+  const { execFileSync } = await import('node:child_process');
+  let origin = null;
+  try {
+    origin = execFileSync('git', ['config', '--get', 'remote.origin.url'], { encoding: 'utf8' }).trim();
+  } catch {}
+  const entries = Object.values(readState());
+  const at = entries.findIndex((e) => e.branch === args[2] && origin !== null && e.origin === origin);
+  if (at < 0) { process.stderr.write('no pull requests found for branch "' + args[2] + '"\\n'); process.exit(1); }
+  const name = origin.replace(/\\/+$/, '').split('/').pop().replace(/\\.git$/, '');
+  // Numbered per repository, from 1, in the order the agent opened them.
+  const number = entries.slice(0, at + 1).filter((e) => e.origin === origin).length;
+  process.stdout.write(JSON.stringify({ url: 'https://github.com/moooon/' + name + '/pull/' + number, state: 'OPEN', headRefName: entries[at].branch, headRefOid: '', baseRefName: 'main' }) + '\\n');
   process.exit(0);
 }
 // \`gh pr edit <branch> --title … --body …\` — the close-out rewriting what the
