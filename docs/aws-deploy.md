@@ -48,11 +48,27 @@ still holds its placeholder:
    recorded digest.
 4. Delete `AWS_DEPLOY_NO_ROLL`. Every later merge rolls the services.
 
+## Image pins
+
+The deploy also passes `--pins infra/image-pins`. Each file there is one image
+pin: its name is a secret under `<prefix>/core/`, and its line is a
+pull-by-digest reference (MOTIR-10883, `infra/image-pins/README.md`). After the
+migrate task and before the roll, the script writes each pin whose secret holds
+another value, so the tasks the roll starts read it; ECS reads secrets only at
+task start. A failed roll puts the previous value back beside the services. The
+directory is the only place a pin is written: a release lane opens the pull
+request that changes it, and reverting that pull request rolls it back.
+
+The deploy role needs motir-infra's `WriteImagePins` statement for this. Until
+it is deployed the pin reads `not_granted` on the result line and the services
+roll as before.
+
 ## Reading a run
 
 The job summary shows the digest and, on success, the deploy script's JSON
 result line:
-`{ digest, migrate: { taskArn, exitCode }, services: [{ name, taskDefinition, rolloutState }], recorded }`.
+`{ digest, migrate: { taskArn, exitCode }, services: [{ name, taskDefinition, rolloutState }], pins: [{ name, value, state }], recorded }`,
+where a pin's `state` is `written`, `unchanged`, `not_granted` or `restored`.
 On a failure the step log shows why (a migrate exit code or stop reason with
 the last 50 migrate log lines, or the services' rollout states) and that every
 service is back on its previous revision.

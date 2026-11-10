@@ -146,6 +146,11 @@ jobs:
 
       # `--no-roll` only while `AWS_DEPLOY_NO_ROLL` is `true`: the first run,
       # before the services exist (docs/aws-deploy.md, The first run).
+      #
+      # `--pins` writes each image pin in `infra/image-pins/` into its secret
+      # after the migrate task and before the roll, so the tasks the roll starts
+      # read it (MOTIR-10883). The checkout is this commit, so a merged bump pull
+      # request is applied by its own deploy, and a revert by the revert's.
       - name: Deploy
         if: steps.gate.outputs.deploy == 'true'
         env:
@@ -153,7 +158,7 @@ jobs:
           NO_ROLL: ${{ vars.AWS_DEPLOY_NO_ROLL == 'true' && '--no-roll' || '' }}
         run: |
           set -euo pipefail
-          pnpm --silent deploy:aws --digest "$DIGEST" $NO_ROLL | tee /tmp/aws-deploy.json
+          pnpm --silent deploy:aws --digest "$DIGEST" $NO_ROLL --pins infra/image-pins | tee /tmp/aws-deploy.json
           {
             echo "Result:"
             echo '```json'

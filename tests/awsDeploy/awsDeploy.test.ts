@@ -95,6 +95,7 @@ describe('a successful deploy', () => {
           rolloutState: 'COMPLETED',
         },
       ],
+      pins: [],
       recorded: true,
     });
     expect(aws.params.get(DIGEST_PARAM)).toBe(DIGEST);
@@ -438,6 +439,9 @@ describe('the grant and the credentials', () => {
         'ecs:StopTask',
         'ecs:UpdateService',
         'logs:GetLogEvents',
+        // The image pins (MOTIR-10883): motir-infra's `WriteImagePins` statement.
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:PutSecretValue',
         'ssm:GetParameter',
         'ssm:PutParameter',
       ].sort(),
@@ -459,11 +463,16 @@ describe('parseDeployArgs', () => {
       digest: DIGEST,
       timeoutMs: 20 * 60_000,
       noRoll: false,
+      pinsDir: null,
     });
     expect(parseDeployArgs(['--digest', DIGEST, '--timeout-minutes', '5', '--no-roll'])).toEqual({
       digest: DIGEST,
       timeoutMs: 5 * 60_000,
       noRoll: true,
+      pinsDir: null,
+    });
+    expect(parseDeployArgs(['--digest', DIGEST, '--pins', 'infra/image-pins'])).toMatchObject({
+      pinsDir: 'infra/image-pins',
     });
   });
 });
