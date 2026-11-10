@@ -3,8 +3,9 @@
 import { lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
-import { History, Info, TriangleAlert } from 'lucide-react';
+import { History, Info, MessageSquare, TriangleAlert } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import { useToast } from '@/components/ui/Toast';
 import type { PageSaveStatus } from '@/components/pages/PageEditorHost';
 import {
@@ -18,6 +19,7 @@ import { cn } from '@/lib/utils/cn';
 import { HistoryNotice, PageHistoryPanel } from './PageHistoryPanel';
 import { LinkedWorkItemsStrip } from './LinkedWorkItemsStrip';
 import { PageActionsMenu } from './PageActionsMenu';
+import { PageDiscussionPanel } from './PageDiscussionPanel';
 import { PageVersionRestore, type RestoreRefusal } from './PageVersionRestore';
 import { PageVersionView } from './PageVersionView';
 
@@ -66,6 +68,15 @@ export interface PageViewProps {
   page: PageViewPage;
   /** The reader's user id, so their own versions read "You" in the history. */
   viewerId: string;
+  /** The reader's display name — the discussion composer's avatar. */
+  viewerName?: string;
+  /**
+   * The mention picker's roster for the discussion (MOTIR-10874) — the project's
+   * members, handed only to a reader who holds `comment:add` on a live page.
+   */
+  mentionCandidates?: MentionCandidate[];
+  /** Open threads on the page, read on the server, for the Discussion control's chip. */
+  openThreadCount?: number;
   /** `PAGE_TITLE_MAX_LENGTH`, handed down so this client file imports no package. */
   titleMaxLength: number;
 }
@@ -76,12 +87,23 @@ export const TITLE_RENAME_QUIET_MS = 800;
 /** The heading's size and place, shared by the field and the read-only `<h1>`. */
 const TITLE_CLASS = 'block w-full font-serif text-2xl leading-8 font-semibold text-(--el-text)';
 
+/** No roster: the reader holds no `comment:add` here, or the page is archived. */
+const EMPTY_ROSTER: MentionCandidate[] = [];
+
 type RenameError = { kind: 'tooLong'; limit: number } | { kind: 'failed' } | null;
 
-export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
+export function PageView({
+  page,
+  viewerId,
+  viewerName = '',
+  mentionCandidates = EMPTY_ROSTER,
+  openThreadCount = 0,
+  titleMaxLength,
+}: PageViewProps) {
   const t = useTranslations('pages');
   const rootRef = useRef<HTMLDivElement>(null);
   const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const discussionButtonRef = useRef<HTMLButtonElement>(null);
 
   // ── History (Story MOTIR-5754 · MOTIR-7387) ──────────────────────────────
   // The panel's open state, the version shown in compare, and the "version is
@@ -118,18 +140,48 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
   /** The row a restore just added, tinted until the next press. */
   const [freshNumber, setFreshNumber] = useState<number | null>(null);
 
-  const closeHistory = useCallback(() => {
+  // ── Discussion (Story MOTIR-10866 · MOTIR-10874) ─────────────────────────
+  // The panel shares History's right-hand column, and only one of the two is
+  // open at a time: opening either closes the other. The control's open count
+  // is owned here, seeded by the server's read, so the panel's writes move it.
+  const [discussionOpen, setDiscussionOpen] = useState(false);
+  const [openCount, setOpenCount] = useState(openThreadCount);
+
+  /** History closed, with its compare and notices — focus is the caller's. */
+  const resetHistory = useCallback(() => {
     setHistoryOpen(false);
     setSelected(null);
     setGoneNumber(null);
     setRefusal(null);
     setFreshNumber(null);
+  }, []);
+
+  const closeHistory = useCallback(() => {
+    resetHistory();
     historyButtonRef.current?.focus();
+  }, [resetHistory]);
+
+  const closeDiscussion = useCallback(() => {
+    setDiscussionOpen(false);
+    discussionButtonRef.current?.focus();
   }, []);
 
   const toggleHistory = () => {
-    if (historyOpen) closeHistory();
-    else setHistoryOpen(true);
+    if (historyOpen) {
+      closeHistory();
+      return;
+    }
+    setDiscussionOpen(false);
+    setHistoryOpen(true);
+  };
+
+  const toggleDiscussion = () => {
+    if (discussionOpen) {
+      closeDiscussion();
+      return;
+    }
+    resetHistory();
+    setDiscussionOpen(true);
   };
 
   const select = useCallback((number: number | null) => {
@@ -205,7 +257,11 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
     ) : null;
 
   return (
-    <div ref={rootRef} data-history-open={historyOpen || undefined} className="flex gap-6">
+    <div
+      ref={rootRef}
+      data-side-panel-open={historyOpen || discussionOpen || undefined}
+      className="flex gap-6"
+    >
       <div className="flex min-w-0 flex-1 flex-col">
         {archived ? (
           <div className="mt-3">
@@ -233,6 +289,35 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
               <h1 className={`mt-3 ${TITLE_CLASS}`}>{page.title || t('untitled')}</h1>
             )}
           </div>
+          <Button
+            ref={discussionButtonRef}
+            variant="secondary"
+            size="sm"
+            leftIcon={<MessageSquare className="h-4 w-4" />}
+            aria-expanded={discussionOpen}
+            aria-controls="page-discussion"
+            aria-label={
+              openCount > 0
+                ? `${t('discussion.open')}, ${t('discussion.openCount', { count: openCount })}`
+                : undefined
+            }
+            onClick={toggleDiscussion}
+            className={cn(
+              'mt-3 shrink-0',
+              discussionOpen && 'border-(--el-border-strong) bg-(--el-surface)',
+            )}
+          >
+            {t('discussion.open')}
+            {openCount > 0 ? (
+              <span
+                aria-hidden
+                data-testid="page-discussion-count"
+                className="ml-0.5 inline-flex min-w-5 items-center justify-center rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x-4) text-[11.5px] font-semibold text-(--el-text-secondary) tabular-nums"
+              >
+                {openCount}
+              </span>
+            ) : null}
+          </Button>
           <Button
             ref={historyButtonRef}
             variant="secondary"
@@ -360,6 +445,17 @@ export function PageView({ page, viewerId, titleMaxLength }: PageViewProps) {
               <HistoryNotice>{t('history.refusal.gone', { number: goneNumber })}</HistoryNotice>
             ) : null
           }
+        />
+      ) : null}
+      {discussionOpen ? (
+        <PageDiscussionPanel
+          pageId={page.id}
+          archived={archived !== null}
+          currentUserId={viewerId}
+          currentUserName={viewerName}
+          mentionCandidates={archived ? EMPTY_ROSTER : mentionCandidates}
+          onClose={closeDiscussion}
+          onOpenCountChange={setOpenCount}
         />
       ) : null}
       {/* A chip's click opens the item's quick-view peek (`?peek=<key>`), as it

@@ -2,7 +2,8 @@ import { cache, Suspense } from 'react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
-import { memberPageContext, pageScope } from '@/lib/pages/projectPageContext';
+import { memberPageContext, pageMembers, pageScope } from '@/lib/pages/projectPageContext';
+import { pageCommentsService } from '@/lib/services/pageCommentsService';
 import { pagesService } from '@/lib/services/pagesService';
 import { PAGE_TITLE_MAX_LENGTH, PageNotFoundError } from '@/lib/pages';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -133,6 +134,47 @@ async function loadSubPageCount(pageId: string): Promise<number> {
   }
 }
 
+/**
+ * The page's OPEN thread count for the Discussion control's chip (MOTIR-10874) —
+ * `0` when it cannot be read, which costs the chip, not the page. The panel reads
+ * its own lists when it opens.
+ */
+async function loadOpenThreadCount(pageId: string): Promise<number> {
+  const scope = await loadScope();
+  try {
+    const read = await pageCommentsService.listPageThreads(scope.service, {
+      projectId: scope.projectId,
+      pageId,
+      status: 'open',
+      limit: 1,
+    });
+    return read.counts.open;
+  } catch (err) {
+    console.error('[pages] the open discussion count could not be read', err);
+    return 0;
+  }
+}
+
+/**
+ * The discussion's mention roster (MOTIR-10874): the project's members as the
+ * item page's composer takes them — and only for a reader who holds
+ * `comment:add` on a LIVE page. Anyone else is handed none, so no roster of
+ * people crosses the wire for a control they do not have (MOTIR-6646). A roster
+ * that cannot be read costs the picker, not the page.
+ */
+async function loadMentionRoster(
+  canComment: boolean,
+): Promise<{ id: string; name: string; email: string }[]> {
+  if (!canComment) return [];
+  try {
+    const members = await pageMembers(await loadScope());
+    return members.map((m) => ({ id: m.userId, name: m.name, email: m.email }));
+  } catch (err) {
+    console.error('[pages] the mention roster could not be read', err);
+    return [];
+  }
+}
+
 /** The rows open on arrival, root-first: the trail's folders, then its pages. */
 function expandedPathOf(trail: PageTrailDto | null): string[] {
   if (!trail) return [];
@@ -166,14 +208,19 @@ export default async function PageAtItsAddress({ params }: Params) {
   const scope = await loadScope();
   // `work_item:edit`, for the Linked work items strip (MOTIR-9200): its own value, so
   // the strip can paint before its read answers. `page.canEdit` is `page:edit`.
-  const canLinkWorkItems =
-    page.archivedAt === null && (await (await loadContext()).permissions()).has('work_item:edit');
+  const context = await loadContext();
+  const held = await context.permissions();
+  const canLinkWorkItems = page.archivedAt === null && held.has('work_item:edit');
   // An archived ROOT's banner says how many sub-pages left with it (MOTIR-7423);
   // read after the gate, and only for that case. A sub-page's banner names its
   // root instead, and a live page needs no count until someone asks to archive it.
   const archivedRoot =
     page.archivedAt !== null && (page.archiveRoot === null || page.archiveRoot.id === page.id);
-  const subPageCount = archivedRoot ? await loadSubPageCount(page.id) : 0;
+  const [subPageCount, openThreadCount, mentionCandidates] = await Promise.all([
+    archivedRoot ? loadSubPageCount(page.id) : 0,
+    loadOpenThreadCount(page.id),
+    loadMentionRoster(page.archivedAt === null && held.has('comment:add')),
+  ]);
 
   return (
     <PageSidebarLayout
@@ -197,6 +244,9 @@ export default async function PageAtItsAddress({ params }: Params) {
         <PageView
           key={page.id}
           viewerId={viewerId}
+          viewerName={context.actorName ?? ''}
+          mentionCandidates={mentionCandidates}
+          openThreadCount={openThreadCount}
           page={{
             id: page.id,
             title: page.title,
