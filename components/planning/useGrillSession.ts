@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import type { SharpenAction } from '@/lib/ai/types';
+import type { SharpenAction, SharpenQuestion } from '@/lib/ai/types';
 import type { SharpenDoorResult, SharpenSessionDto } from '@/lib/dto/sharpen';
 import {
   getLatestConversationSharpen,
@@ -126,6 +126,21 @@ export function endedOutOfCredits(session: SharpenSessionDto): boolean {
 /** The person already asked to stop this session: its stop turn is stored. */
 export function stopAsked(session: SharpenSessionDto): boolean {
   return session.turns.some((t) => t.role === 'person' && t.action === 'stop');
+}
+
+/** The question still waiting on the person — the stored `pendingQuestion` only
+ *  while nothing the person said follows the planner turn that asked it.
+ *
+ *  The server keeps `pendingQuestion` until the NEXT planner turn replaces it, so
+ *  for the whole read that follows an answer, a skip, You decide or a stop, the
+ *  stored question is one the person has already acted on (MOTIR-10862). A
+ *  session with no planner turn yet keeps the stored question as it is. */
+export function openQuestion(session: SharpenSessionDto): SharpenQuestion | null {
+  if (session.status !== 'open' || !session.pendingQuestion) return null;
+  const asked = session.turns.findLastIndex((t) => t.role === 'planner' && !t.failed);
+  if (asked < 0) return session.pendingQuestion;
+  const actedOn = session.turns.slice(asked + 1).some((t) => t.role === 'person');
+  return actedOn ? null : session.pendingQuestion;
 }
 
 /** The person turn a failed planner turn answers — the one Try again re-runs. */

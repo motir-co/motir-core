@@ -15,7 +15,7 @@ import { SharpenQuestionTurn } from '@/components/planning/SharpenQuestionTurn';
 import { SharpenSummary } from '@/components/planning/SharpenSummary';
 import type { SharpenAction, SharpenAssumption } from '@/lib/ai/types';
 import type { SharpenSessionDto, SharpenTurnDto } from '@/lib/dto/sharpen';
-import { stopAsked, type GrillError } from '@/components/planning/useGrillSession';
+import { openQuestion, stopAsked, type GrillError } from '@/components/planning/useGrillSession';
 
 // THE GRILLING, IN THE RAIL'S CONVERSATION PHASE (Task MOTIR-1101 · Subtask
 // MOTIR-8177; design G3–G5, panels 3–11).
@@ -126,7 +126,10 @@ export function SharpenThread({
   const t = useTranslations('sharpen');
   const conversationScope = session.scope.kind === 'conversation';
   const tc = useTranslations('planningWorkspace.conversation');
-  const pendingQuestion = session.status === 'open' ? session.pendingQuestion : null;
+  // A question the person has answered is history, though the stored one lingers
+  // until the next turn lands: drawn in order above its answer, with no reply row
+  // (MOTIR-10862).
+  const pendingQuestion = openQuestion(session);
 
   // The planner turn that IS the pending question is drawn with its reply row
   // below, not in the history.

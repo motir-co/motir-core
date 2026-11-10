@@ -449,3 +449,118 @@ describe('what the grilling says while it reads', () => {
     );
   });
 });
+
+// ── AN ANSWERED QUESTION WHILE THE NEXT TURN IS READ (MOTIR-10862) ────────────
+// The server keeps `pendingQuestion` set until the next planner turn replaces it,
+// so for the whole read the answered question is still the stored one. It is drawn
+// in the history, above the answer, and the reply row is gone.
+describe('an answered question while the next turn is read', () => {
+  const Q1 = { ...QUESTION, id: 'q1', text: 'Who can use a shared preset?', because: null };
+  const answered = (answer: SharpenTurnDto, extra: Partial<SharpenSessionDto> = {}) =>
+    session({
+      pendingQuestion: Q1,
+      inFlight: { turnId: answer.id, jobId: 'job-2' },
+      notes: [{ jobId: 'job-2', body: 'Reading the review gate.' }],
+      turns: [
+        turn('person', 'Start.', { action: 'start', jobId: 'job-1' }),
+        turn('planner', Q1.text, { jobId: 'job-1' }),
+        answer,
+      ],
+      ...extra,
+    });
+  const order = (...needles: string[]) => {
+    const thread = screen.getByTestId('sharpen-thread').textContent ?? '';
+    const at = needles.map((n) => thread.indexOf(n));
+    expect(at.every((i) => i >= 0)).toBe(true);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+  };
+
+  it.each([
+    ['a picked reading', 'answer', 'Keep copies', 'Keep copies'],
+    ['an own-words answer', 'own_words', 'Then it is 3 settings', 'Then it is 3 settings'],
+    ['You decide', 'you_decide', 'You decide.', 'You decide'],
+  ] as const)('draws the question, then %s, then the read’s notes', (_, action, body, drawn) => {
+    render({
+      pending: true,
+      session: answered(turn('person', body, { action, jobId: 'job-2' }), {
+        ...(action === 'you_decide'
+          ? {
+              assumptions: [
+                {
+                  questionId: 'q1',
+                  question: Q1.text,
+                  recommendation: 'Remove everywhere',
+                  why: '',
+                  source: 'planner' as const,
+                },
+              ],
+            }
+          : {}),
+      }),
+    });
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
+    for (const id of ['sharpen-reading-ra', 'sharpen-skip', 'sharpen-you-decide']) {
+      expect(screen.queryByTestId(id)).toBeNull();
+    }
+    order('asking · question 1', Q1.text, drawn, 'Reading the review gate.');
+    if (action === 'you_decide') order(Q1.text, 'Remove everywhere', 'Reading the review gate.');
+    // Stop stays reachable: no question on screen carries it now.
+    expect(screen.getAllByTestId('sharpen-stop')).toHaveLength(1);
+  });
+
+  it('draws a skipped question above its marker', () => {
+    render({
+      pending: true,
+      session: answered(turn('person', 'Skip.', { action: 'skip', jobId: 'job-2' })),
+    });
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
+    order(Q1.text, 'Skipped — the planner will assume this one.');
+  });
+
+  it('numbers the next question after the answered one once it lands', () => {
+    render({
+      session: answered(turn('person', 'Keep copies', { action: 'answer', jobId: 'job-2' }), {
+        inFlight: null,
+        pendingQuestion: QUESTION,
+        turns: [
+          turn('person', 'Start.', { action: 'start', jobId: 'job-1' }),
+          turn('planner', Q1.text, { jobId: 'job-1' }),
+          turn('person', 'Keep copies', { action: 'answer', jobId: 'job-2' }),
+          turn('planner', QUESTION.text, { jobId: 'job-2' }),
+        ],
+      }),
+    });
+    expect(screen.getAllByTestId('sharpen-question')).toHaveLength(1);
+    expect(screen.getByTestId('sharpen-question').textContent).toContain('asking · question 2');
+    order(Q1.text, 'Keep copies', QUESTION.text);
+  });
+
+  it('keeps a stored question that no planner turn has drawn yet', () => {
+    render({
+      session: session({
+        pendingQuestion: Q1,
+        turns: [turn('person', 'Start.', { action: 'start', jobId: 'job-1' })],
+      }),
+    });
+    expect(screen.getByTestId('sharpen-question').textContent).toContain('asking · question 1');
+  });
+
+  it('offers Stop under a failed read of the answer, with no question left to carry it', () => {
+    render({
+      error: 'failed',
+      session: session({
+        scope: { kind: 'conversation', conversationId: 'c1' },
+        pendingQuestion: Q1,
+        turns: [
+          turn('person', 'Start.', { action: 'start', jobId: 'job-1' }),
+          turn('planner', Q1.text, { jobId: 'job-1' }),
+          turn('person', 'Keep copies', { action: 'answer', jobId: 'job-2' }),
+          turn('planner', '', { jobId: 'job-2', failed: true }),
+        ],
+      }),
+    });
+    expect(screen.queryByTestId('sharpen-question')).toBeNull();
+    order(Q1.text, 'Keep copies');
+    expect(screen.getAllByTestId('sharpen-stop')).toHaveLength(1);
+  });
+});
