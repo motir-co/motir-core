@@ -638,7 +638,10 @@ test('platform defaults, a Standard org locked, a Pro org choosing its models, a
     const saved = roomSave(page, w.orgId, 'planning', 'guide');
     await main(page).getByTestId('org-ai-models-save').click();
     expect((await saved).status()).toBe(200);
-    await expect(page.getByText(room.saved.title)).toBeVisible();
+    // The toast renders outside `main`, in Radix's named notifications region.
+    await expect(
+      page.getByRole('region', { name: /^Notifications/ }).getByText(room.saved.title),
+    ).toBeVisible();
     await expect(main(page).getByTestId('org-ai-models-source-guide')).toHaveText(room.source.org);
     expect(readPlannerModelFixture().orgOverrides?.[w.orgId]?.guide).toMatchObject({
       model: PLAN_GUIDE,
