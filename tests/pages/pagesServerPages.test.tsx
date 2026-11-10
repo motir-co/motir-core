@@ -67,6 +67,8 @@ const { PageSidebarLayout } = await import('@/components/pages/tree/PageSidebarL
 const { foldersService } = await import('@/lib/services/foldersService');
 const { PAGE_TITLE_MAX_LENGTH } = await import('@/lib/pages');
 const { pagesService } = await import('@/lib/services/pagesService');
+const { pageCommentsService } = await import('@/lib/services/pageCommentsService');
+const { assignableMembersService } = await import('@/lib/services/assignableMembersService');
 const { projectsService } = await import('@/lib/services/projectsService');
 const { usersService } = await import('@/lib/services/usersService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
@@ -456,6 +458,85 @@ describe('/pages/<id> — the page at its address', () => {
   it('an anonymous reader is sent to sign in', async () => {
     reader.current = null;
     await expect(renderTree(AddressPage.default, params('any'))).rejects.toBeInstanceOf(Redirect);
+  });
+});
+
+describe('/pages/<id> — the discussion’s server reads (MOTIR-10874)', () => {
+  type DiscussionProps = {
+    viewerName: string;
+    mentionCandidates: { id: string; name: string; email: string }[];
+    openThreadCount: number;
+  };
+
+  it('hands a member the roster and the open count; a viewer and an archived page no roster', async () => {
+    const f = await makeFixture();
+    const projectId = f.manager.projectId;
+    const page = await pagesService.createPage(f.manager, { projectId, title: 'Runbook' });
+    const one = await pageCommentsService.postPageComment(f.manager, {
+      projectId,
+      pageId: page.id,
+      bodyMd: 'First',
+    });
+    await pageCommentsService.postPageComment(f.manager, {
+      projectId,
+      pageId: page.id,
+      bodyMd: 'Second',
+    });
+    await pageCommentsService.resolvePageThread(f.manager, {
+      projectId,
+      pageId: page.id,
+      commentId: one.id,
+    });
+
+    reader.current = await readerAs(f, 'member', 'member');
+    const asMember = findFirst<DiscussionProps>(
+      await renderTree(AddressPage.default, params(page.id)),
+      PageView,
+    )!;
+    expect(asMember.props.openThreadCount).toBe(1);
+    expect(asMember.props.viewerName).toBe('Reader');
+    expect(asMember.props.mentionCandidates.map((m) => m.id)).toContain(f.manager.userId);
+    expect(asMember.props.mentionCandidates[0]).toEqual({
+      id: expect.any(String),
+      name: expect.any(String),
+      email: expect.stringContaining('@'),
+    });
+
+    reader.current = await readerAs(f, 'viewer', 'viewer');
+    const asViewer = findFirst<DiscussionProps>(
+      await renderTree(AddressPage.default, params(page.id)),
+      PageView,
+    )!;
+    expect(asViewer.props.mentionCandidates).toEqual([]);
+    expect(asViewer.props.openThreadCount).toBe(1);
+
+    await pagesService.archivePage(f.manager, { projectId, pageId: page.id });
+    reader.current = f.manager;
+    const archived = findFirst<DiscussionProps>(
+      await renderTree(AddressPage.default, params(page.id)),
+      PageView,
+    )!;
+    expect(archived.props.mentionCandidates).toEqual([]);
+    expect(archived.props.openThreadCount).toBe(1);
+  });
+
+  it('a count or roster that cannot be read costs the chip or the picker, not the page', async () => {
+    const f = await makeFixture();
+    const page = await pagesService.createPage(f.manager, {
+      projectId: f.manager.projectId,
+      title: 'Runbook',
+    });
+    reader.current = f.manager;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(pageCommentsService, 'listPageThreads').mockRejectedValueOnce(new Error('down'));
+    vi.spyOn(assignableMembersService, 'list').mockRejectedValueOnce(new Error('down'));
+    const view = findFirst<DiscussionProps>(
+      await renderTree(AddressPage.default, params(page.id)),
+      PageView,
+    )!;
+    expect(view.props.openThreadCount).toBe(0);
+    expect(view.props.mentionCandidates).toEqual([]);
+    expect(error).toHaveBeenCalledTimes(2);
   });
 });
 

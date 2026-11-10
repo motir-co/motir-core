@@ -137,6 +137,20 @@ describe('the verdicts', () => {
       model: 'claude-opus-5',
       sessionId: null,
       suspects: [],
+      // The push check SAW the branch, and the run found no pull request on it to link
+      // (MOTIR-10877): this git answers `gh` with nothing.
+      remote: 'pushed',
+      delivery: {
+        linked: [],
+        unlinked: [
+          {
+            repository: 'motir-core',
+            branch: 'subtask/PROD-1',
+            reason: 'no open pull request was found for subtask/PROD-1',
+          },
+        ],
+        howToTest: 'none',
+      },
     });
   });
 

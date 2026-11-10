@@ -7,7 +7,8 @@
 # There is deliberately NO push-to-main trigger. The fleet consumes a DIGEST
 # (§7.2), so an image that re-published on every merge would produce a stream of
 # digests nobody pinned and would not change what the deployment boots anyway —
-# `MOTIR_RUNNER_IMAGE` only moves when a human moves it (MOTIR-1979).
+# `MOTIR_RUNNER_IMAGE` moves only when the pin pull request this lane opens is
+# merged (MOTIR-10883, the `pin` job below).
 #
 # ⚠️ A tag-triggered lane replays the TAG'S tree, not `main`. A fix pushed to
 # `main` after a red release does nothing until the tag MOVES:
@@ -18,13 +19,21 @@
 #   2. git tag runner-v<x.y.z> && git push origin runner-v<x.y.z>
 #   3. this workflow builds, asserts, proves, publishes, then pulls the image
 #      back BY DIGEST and re-asserts it
-#   4. copy the digest from the job summary into MOTIR-1979 / the deployment's
-#      `MOTIR_RUNNER_IMAGE`
+#   4. the `pin` job opens (or updates) ONE pull request that writes the
+#      published reference into `infra/image-pins/motir-runner-image`
+#      (MOTIR-10883). Merging it is the deliberate pin; the AWS deploy of that
+#      merge writes it into `motir/core/motir-runner-image` before it rolls the
+#      services (`infra/image-pins/README.md`).
 #
-# Skipping steps 2-4 after a merged image change is what the daily health
-# check's `runner-image-freshness` step reports (MOTIR-10393): it fails while the
-# pinned image was built from a commit without the newest change to an input in
-# `lib/ciFleet/runnerImageSources.ts`, naming both commits.
+# Step 4 used to be a person copying the digest out of the job summary into the
+# secret, one manual card per release (MOTIR-8719). It lapsed for two releases
+# (runner-v0.2.5 and v0.2.6), and the daily health check was red for days.
+#
+# Skipping step 2 after a merged image change, or leaving step 4's pull request
+# unmerged, is what the daily health check's `runner-image-freshness` step
+# reports (MOTIR-10393): it fails while the pinned image was built from a commit
+# without the newest change to an input in `lib/ciFleet/runnerImageSources.ts`,
+# naming both commits.
 #
 # `workflow_dispatch` with `dry_run: true` runs the whole lane WITHOUT pushing —
 # how you validate a change to the release path without minting a version.
@@ -84,3 +93,103 @@ jobs:
     with:
       publish: ${{ github.event_name == 'push' || !inputs.dry_run }}
       version: ${{ needs.version.outputs.version }}
+
+  # ── The pin pull request (MOTIR-10883) ───────────────────────────────────────
+  #
+  # Writes the reference the release just published, pulled back and re-asserted
+  # by digest, into the one file production's `MOTIR_RUNNER_IMAGE` is deployed
+  # from, and opens it as a pull request. It does not set the secret: the AWS
+  # deploy of the merge does, so what production boots changes only on a merge.
+  #
+  # ⚠️ THE APP TOKEN, NOT `GITHUB_TOKEN`, for the reasons `release-sandbox.yml`'s
+  # `readme` job records: the automatic token may not open a pull request here,
+  # and a branch it pushed would run no checks, so the pull request could never
+  # leave the merge queue. The App's pull request is a bot's, which the Motir
+  # work-item link check exempts.
+  #
+  # ⚠️ ONE BRANCH FOR EVERY RELEASE. A newer tag force-pushes the same branch,
+  # so an unmerged pin is replaced by the newer one rather than left beside it.
+  pin:
+    name: Open the pin pull request
+    needs: [version, release]
+    # A dry run publishes nothing, so there is no reference to pin.
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # NO run on record — the job is new. A checkout of `main`, one file write and
+    # a pull-request call: the 10-minute short-job floor, stated as a floor.
+    timeout-minutes: 10
+    # Two tags released close together must not push the branch at once.
+    concurrency:
+      group: runner-image-pin
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v6
+        with:
+          # `main`, NOT the tag: the pin belongs on the branch, and writing the
+          # tag's tree would revert whatever `main` has learned since.
+          ref: main
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Write the published reference into the pin
+        id: write
+        env:
+          DIGEST: ${{ needs.release.outputs.digest }}
+          IMAGE: ghcr.io/motir-co/motir-ci-runner
+          PIN: infra/image-pins/motir-runner-image
+        run: |
+          set -euo pipefail
+          if ! [[ "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo "::error::the release published no digest ('${DIGEST}'), so there is nothing to pin."
+            exit 1
+          fi
+          ref="${IMAGE}@${DIGEST}"
+          printf '%s\n' "$ref" > "$PIN"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          if git diff --quiet -- "$PIN"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${PIN} already holds ${ref}; no pull request to open."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open or update the pin pull request
+        if: ${{ steps.write.outputs.changed == 'true' }}
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+          REF: ${{ steps.write.outputs.ref }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PIN: infra/image-pins/motir-runner-image
+        run: |
+          set -euo pipefail
+          # Authored as Yue with NO co-author trailer: `license/cla` has that one
+          # signatory, the same authorship every other commit here carries.
+          git config user.name 'Zhu Yue'
+          git config user.email 'zhuyue11@gmail.com'
+          title="chore(ci-runner): pin MOTIR_RUNNER_IMAGE to runner-v${VERSION}"
+          git commit --author='Zhu Yue <zhuyue11@gmail.com>' -m "$title" \
+            -m "Written by the runner image release lane (MOTIR-10883) from the digest runner-v${VERSION} published and pulled back: ${REF}" \
+            -- "$PIN"
+          # Force is confined to this branch, which holds only the pin and was
+          # just rebuilt from a fresh checkout of main.
+          branch='chore/runner-image-pin'
+          git push --force origin "HEAD:${branch}"
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          body="$(printf '%s\n' \
+            "Opened by the runner image release lane for \`runner-v${VERSION}\` ([run](${run_url}))." \
+            '' \
+            "It sets \`${PIN}\` to \`${REF}\`, the digest the release published and then pulled back and re-asserted." \
+            '' \
+            "**Merging it is the pin.** The AWS deploy of the merge writes the reference into \`motir/core/motir-runner-image\` before it rolls web, worker and relay (\`infra/image-pins/README.md\`). Reverting it rolls the pin back.")"
+          existing="$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --title "$title" --body "$body"
+            echo "::notice::Updated pull request #${existing} to pin runner-v${VERSION}."
+            exit 0
+          fi
+          gh pr create --base main --head "$branch" --title "$title" --body "$body"
+          echo "::notice::Opened the pull request that pins runner-v${VERSION}."

@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import { HOSTED_AGENT_PIN_FILE, parseHostedAgentPin } from '@/scripts/aws-deploy/hostedAgentPin';
 
 // MOTIR-9928: the AWS deploy workflow. Workflow YAML is neither type-checked nor
 // executed by any suite, so the properties the card promises are pinned here by
@@ -160,18 +159,16 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(deploy.run).toContain('--digest "$DIGEST" $NO_ROLL');
   });
 
-  // MOTIR-10882 — the deploy applies the checked-in hosted-agent pin. The script
-  // writes the secret between the migrate and the roll (awsDeploy.test.ts); this
-  // pins that the workflow hands it THIS commit's pin file, the one the image
-  // lane's bump pull request rewrites.
-  it('hands the deploy the checked-in hosted-agent pin file, and that file exists', () => {
+  // MOTIR-10883: the deploy writes every image pin in `infra/image-pins/` into its
+  // secret before it rolls, from THIS commit's checkout, so a merged pin pull
+  // request is applied by its own deploy and a revert by the revert's.
+  it('hands the deploy the checked-in image pins, on the gated roll step, from this commit', () => {
     const deploy = steps[stepIndex((s) => !!s.run?.includes('deploy:aws'))]!;
-    expect(deploy.run).toContain('pin=infra/hosted-agent-image.ref');
-    expect(deploy.run).toContain('deploy:aws --hosted-agent-pin "$pin" --digest "$DIGEST"');
-    expect(HOSTED_AGENT_PIN_FILE).toBe('infra/hosted-agent-image.ref');
-    expect(() => parseHostedAgentPin(readFileSync(HOSTED_AGENT_PIN_FILE, 'utf8'))).not.toThrow();
-    // The checkout step is the one that puts the file there: the deploy reads the commit's own.
-    expect(stepIndex((s) => !!s.uses?.startsWith('actions/checkout@'))).toBe(0);
+    expect(deploy.run).toContain('--pins infra/image-pins');
+    expect(deploy.if).toBe("steps.gate.outputs.deploy == 'true'");
+    const checkout = steps[stepIndex((s) => !!s.uses?.startsWith('actions/checkout@'))]!;
+    expect(checkout.with?.ref).toBeUndefined();
+    expect(code.match(/deploy:aws/g)).toHaveLength(1);
   });
 
   it('writes the digest and the result line to the job summary', () => {

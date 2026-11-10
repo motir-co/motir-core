@@ -3,18 +3,27 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import {
-  HOSTED_AGENT_IMAGE_REPOSITORY,
-  HOSTED_AGENT_PIN_FILE,
-  HOSTED_AGENT_PIN_PATTERN,
-  hostedAgentImageSecretName,
-  parseHostedAgentPin,
-} from '@/scripts/aws-deploy/hostedAgentPin';
+  IMAGE_PINS_DIR,
+  IMAGE_REF_PATTERN,
+  PINNED_SECRETS,
+  parseImagePins,
+  pinSecretId,
+} from '@/scripts/aws-deploy/imagePins';
 
-// MOTIR-10882 — the hosted-agent image pin moves with `main`. The deploy's write
-// is pinned in `awsDeploy.test.ts` and its workflow step in `workflow.test.ts`;
-// this file pins the other half: the image lane opens the bump pull request
-// after every publish, that pull request has a check that proves the pinned
-// image, and the pin file is outside the lane's trigger so a bump cannot loop.
+// MOTIR-10882 — the hosted-agent image pin moves with `main`. It is one of
+// MOTIR-10883's image pins, so the deploy's write is pinned in
+// `imagePins.test.ts`; this file pins the other half: the image lane opens the
+// bump pull request after every publish, that pull request has a check that
+// proves the pinned image, and the pin file is outside the lane's trigger so a
+// bump cannot loop.
+
+/** The pin: its secret's name under `<prefix>/core/`, as a file in the pins directory. */
+const PIN_NAME = 'motir-hosted-agent-image';
+const PIN_FILE = `${IMAGE_PINS_DIR}/${PIN_NAME}`;
+/** The repository production boots the hosted agent from (public on GHCR). */
+const REPOSITORY = 'ghcr.io/motir-co/motir-hosted-agent';
+/** The lane's and the check's rule: that repository by digest, stricter than the deploy's. */
+const PIN_PATTERN = /^ghcr\.io\/motir-co\/motir-hosted-agent@sha256:[a-f0-9]{64}$/;
 
 interface Step {
   id?: string;
@@ -43,30 +52,27 @@ const WORKFLOWS = join(process.cwd(), '.github/workflows');
 const load = (file: string) => parse(readFileSync(join(WORKFLOWS, file), 'utf8')) as Workflow;
 const lane = load('hosted-agent-image.yml');
 /** The deploy's pin pattern as a bash `[[ =~ ]]` writes it: anchored, `/` unescaped. */
-const BASH_PATTERN = HOSTED_AGENT_PIN_PATTERN.source.replaceAll('\\/', '/');
+const BASH_PATTERN = PIN_PATTERN.source.replaceAll('\\/', '/');
 const check = load('hosted-agent-pin.yml');
 
 describe('the pin file', () => {
   it('is checked in, one line, naming the public hosted-agent repository by digest', () => {
-    const text = readFileSync(HOSTED_AGENT_PIN_FILE, 'utf8');
+    const text = readFileSync(PIN_FILE, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
-    expect(parseHostedAgentPin(text).startsWith(`${HOSTED_AGENT_IMAGE_REPOSITORY}@sha256:`)).toBe(
-      true,
-    );
+    expect(text.trimEnd().split('\n')).toHaveLength(1);
+    expect(PIN_PATTERN.test(text.trimEnd())).toBe(true);
   });
 
-  it('accepts a pin with or without its trailing newline, and nothing else', () => {
-    const pin = `${HOSTED_AGENT_IMAGE_REPOSITORY}@sha256:${'a'.repeat(64)}`;
-    expect(parseHostedAgentPin(pin)).toBe(pin);
-    expect(parseHostedAgentPin(`${pin}\n`)).toBe(pin);
-    expect(() => parseHostedAgentPin(`${pin}\n\n`)).toThrow(/exactly one line, not 2/);
-    expect(() => parseHostedAgentPin(` ${pin}`)).toThrow(/must name/);
-    expect(() => parseHostedAgentPin(`${pin.toUpperCase()}`)).toThrow(/must name/);
-    expect(HOSTED_AGENT_PIN_PATTERN.test(`${HOSTED_AGENT_IMAGE_REPOSITORY}:main`)).toBe(false);
-  });
-
-  it("names the secret motir-infra's manifest creates for MOTIR_HOSTED_AGENT_IMAGE", () => {
-    expect(hostedAgentImageSecretName('motir')).toBe('motir/core/motir-hosted-agent-image');
+  it('is a pinned secret the deploy writes, and every pin the lane accepts the deploy accepts', () => {
+    expect(PINNED_SECRETS).toContain(PIN_NAME);
+    expect(pinSecretId('motir', PIN_NAME)).toBe('motir/core/motir-hosted-agent-image');
+    const pin = `${REPOSITORY}@sha256:${'a'.repeat(64)}`;
+    expect(parseImagePins([{ name: PIN_NAME, content: `${pin}\n` }])).toEqual([
+      { name: PIN_NAME, value: pin },
+    ]);
+    expect(IMAGE_REF_PATTERN.test(pin)).toBe(true);
+    expect(PIN_PATTERN.test(`${REPOSITORY}:main`)).toBe(false);
+    expect(PIN_PATTERN.test(pin.toUpperCase())).toBe(false);
   });
 
   it("is outside the image lane's trigger, so merging a bump publishes nothing", () => {
@@ -75,8 +81,8 @@ describe('the pin file', () => {
       expect(paths.length).toBeGreaterThan(0);
       for (const path of paths) {
         const prefix = path.replace(/\*\*$/, '');
-        expect(HOSTED_AGENT_PIN_FILE.startsWith(prefix) && prefix !== path).toBe(false);
-        expect(path).not.toBe(HOSTED_AGENT_PIN_FILE);
+        expect(PIN_FILE.startsWith(prefix) && prefix !== path).toBe(false);
+        expect(path).not.toBe(PIN_FILE);
       }
     }
   });
@@ -104,14 +110,14 @@ describe("the image lane's pin job", () => {
 
   it('writes the pin file the deploy reads, on one fixed branch', () => {
     expect(pin.env).toEqual({
-      PIN_FILE: HOSTED_AGENT_PIN_FILE,
+      PIN_FILE: PIN_FILE,
       PIN_BRANCH: 'chore/hosted-agent-image-pin',
     });
     const write = step((s) => s.id === 'write');
     expect(write.env?.REFERENCE).toBe(
       '${{ env.IMAGE }}@${{ needs.hosted-agent-image.outputs.digest }}',
     );
-    expect(lane.env?.IMAGE).toBe(HOSTED_AGENT_IMAGE_REPOSITORY);
+    expect(lane.env?.IMAGE).toBe(REPOSITORY);
     expect(write.run).toContain(`printf '%s\\n' "$REFERENCE" > "$PIN_FILE"`);
     // The same rule the deploy applies, so the lane never writes a pin the deploy refuses.
     expect(write.run).toContain(BASH_PATTERN);
@@ -144,7 +150,7 @@ describe("the pin pull request's own check", () => {
   const run = job.steps.map((s) => s.run ?? '').join('\n');
 
   it('runs on a pull request that changes the pin file', () => {
-    expect(check.on.pull_request?.paths).toContain(HOSTED_AGENT_PIN_FILE);
+    expect(check.on.pull_request?.paths).toContain(PIN_FILE);
     expect(job.permissions).toEqual({ contents: 'read' });
   });
 

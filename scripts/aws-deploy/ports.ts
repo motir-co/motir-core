@@ -29,6 +29,7 @@ import {
 import {
   GetSecretValueCommand,
   PutSecretValueCommand,
+  ResourceNotFoundException,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
 import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
@@ -51,7 +52,8 @@ export const GRANTED_ACTIONS = [
   'ecs:DescribeServices',
   'ecs:UpdateService',
   'logs:GetLogEvents',
-  // MOTIR-10882: the hosted-agent image secret, and only that one.
+  // The image pins only (MOTIR-10883, `imagePins.ts`); motir-infra grants them on
+  // those secrets alone, with the secrets key through Secrets Manager.
   'secretsmanager:GetSecretValue',
   'secretsmanager:PutSecretValue',
 ] as const;
@@ -60,14 +62,16 @@ export type GrantedAction = (typeof GRANTED_ACTIONS)[number];
 
 export type RegisterTaskDefinitionInput = RegisterTaskDefinitionCommandInput;
 
+/**
+ * A secret's current value, or that the role may not read it. `value` is
+ * undefined for a secret with no current version.
+ */
+export type SecretRead = { state: 'granted'; value: string | undefined } | { state: 'not_granted' };
+
 /** One method per AWS call the script makes, plus the clock it waits on. */
 export interface DeployAws {
   getParameter(name: string): Promise<string | undefined>;
   putParameter(name: string, value: string): Promise<void>;
-  /** A secret's current string value; `undefined` when it holds none. */
-  getSecretValue(name: string): Promise<string | undefined>;
-  /** Write a secret's new current version. */
-  putSecretValue(name: string, value: string): Promise<void>;
   /** Whether the repository holds an image with this digest. */
   imageExists(repositoryName: string, digest: string): Promise<boolean>;
   describeTaskDefinition(familyOrArn: string): Promise<TaskDefinition>;
@@ -82,6 +86,10 @@ export interface DeployAws {
   updateService(cluster: string, service: string, taskDefinition: string): Promise<void>;
   /** The last `limit` lines of a log stream, oldest first. */
   tailLog(group: string, stream: string, limit: number): Promise<string[]>;
+  /** A secret's current string; `not_granted` when the role is refused it. */
+  getSecretValue(secretId: string): Promise<SecretRead>;
+  /** Make `value` the secret's current version. */
+  putSecretValue(secretId: string, value: string): Promise<void>;
   sleep(ms: number): Promise<void>;
   now(): number;
 }
@@ -90,8 +98,6 @@ export interface DeployAws {
 export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, GrantedAction> = {
   getParameter: 'ssm:GetParameter',
   putParameter: 'ssm:PutParameter',
-  getSecretValue: 'secretsmanager:GetSecretValue',
-  putSecretValue: 'secretsmanager:PutSecretValue',
   imageExists: 'ecr:DescribeImages',
   describeTaskDefinition: 'ecs:DescribeTaskDefinition',
   registerTaskDefinition: 'ecs:RegisterTaskDefinition',
@@ -102,6 +108,8 @@ export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, Grante
   describeServices: 'ecs:DescribeServices',
   updateService: 'ecs:UpdateService',
   tailLog: 'logs:GetLogEvents',
+  getSecretValue: 'secretsmanager:GetSecretValue',
+  putSecretValue: 'secretsmanager:PutSecretValue',
 };
 
 /** DescribeServices takes at most this many services per call. */
@@ -121,13 +129,6 @@ export function awsSdkPorts(region: string): DeployAws {
     },
     async putParameter(name, value) {
       await ssm.send(new PutParameterCommand({ Name: name, Value: value, Overwrite: true }));
-    },
-    async getSecretValue(name) {
-      const out = await secrets.send(new GetSecretValueCommand({ SecretId: name }));
-      return out.SecretString;
-    },
-    async putSecretValue(name, value) {
-      await secrets.send(new PutSecretValueCommand({ SecretId: name, SecretString: value }));
     },
     async imageExists(repositoryName, digest) {
       try {
@@ -201,6 +202,22 @@ export function awsSdkPorts(region: string): DeployAws {
         }),
       );
       return (out.events ?? []).map((e) => e.message ?? '');
+    },
+    async getSecretValue(secretId) {
+      try {
+        const out = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
+        return { state: 'granted', value: out.SecretString };
+      } catch (err) {
+        if (err instanceof ResourceNotFoundException) return { state: 'granted', value: undefined };
+        // A refusal by IAM or by the key arrives as this name, from either service.
+        if (err instanceof Error && err.name === 'AccessDeniedException') {
+          return { state: 'not_granted' };
+        }
+        throw err;
+      }
+    },
+    async putSecretValue(secretId, value) {
+      await secrets.send(new PutSecretValueCommand({ SecretId: secretId, SecretString: value }));
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now(),

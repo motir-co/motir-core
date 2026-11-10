@@ -266,6 +266,75 @@ describe('the model self-report', () => {
     expect(many.decisions).toHaveLength(20);
   });
 
+  it('reads the pull requests the agent opened — GitHub URLs only, deduped, at most 8 (MOTIR-10877)', async () => {
+    const url = 'https://github.com/acme/web/pull/7';
+    const result = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({
+          pullRequests: [
+            ` ${url}/ `,
+            url,
+            'https://github.com/acme/api/pull/3',
+            'https://gitlab.com/acme/web/-/merge_requests/1',
+            'https://github.com/acme/web/issues/7',
+            42,
+          ],
+        }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.pullRequests).toEqual([url, 'https://github.com/acme/api/pull/3']);
+    for (const body of ['{"pullRequests":[]}', '{"pullRequests":"x"}', '{"model":"m-1"}']) {
+      const none = await runAgent({ command: reportingAgent(body), prompt: PROMPT, cwd: work });
+      expect(none.pullRequests, body).toBeNull();
+    }
+    const many = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({
+          pullRequests: Array.from(
+            { length: 12 },
+            (_, n) => `https://github.com/a/b/pull/${n + 1}`,
+          ),
+        }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(many.pullRequests).toHaveLength(8);
+  });
+
+  it('reads the How to test the agent wrote, and drops what the run could not publish (MOTIR-10877)', async () => {
+    const result = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({ howToTest: { bodyMd: '## Locally', previewPath: '/items/PROD-7' } }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.howToTest).toEqual({ bodyMd: '## Locally', previewPath: '/items/PROD-7' });
+
+    // A path that is not a path on the preview host is dropped; the body is kept.
+    const pathless = await runAgent({
+      command: reportingAgent(
+        JSON.stringify({ howToTest: { bodyMd: '## Locally', previewPath: 'items/PROD-7' } }),
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(pathless.howToTest).toEqual({ bodyMd: '## Locally', previewPath: null });
+
+    for (const body of [
+      '{"howToTest":{"bodyMd":"   "}}',
+      '{"howToTest":"## Locally"}',
+      `{"howToTest":{"bodyMd":"${'x'.repeat(40 * 1024)}"}}`,
+      '{"model":"m-1"}',
+    ]) {
+      const none = await runAgent({ command: reportingAgent(body), prompt: PROMPT, cwd: work });
+      expect(none.howToTest, body.slice(0, 40)).toBeNull();
+    }
+  });
+
   it('reads a STOP: its comment falls back to the `unbuildable` text, the brief is kept (MOTIR-8722)', async () => {
     const result = await runAgent({
       command: reportingAgent(
@@ -450,6 +519,8 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
       discrepancy: null,
       decisions: null,
       stop: null,
+      pullRequests: null,
+      howToTest: null,
     });
   });
 });

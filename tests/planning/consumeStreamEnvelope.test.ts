@@ -2,7 +2,7 @@
 // and core relays it unchanged. The one browser consumer flattens it, so a reader that
 // reads `data.text` on a `note` reads the session's sentence and not `undefined`.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { consumeStream, unwrapProgressFrame } from '@/lib/planning/planEditsClient';
+import { consumeStream } from '@/lib/planning/planEditsClient';
 import { narrateFrame, withAskAct } from '@/lib/hooks/usePlanChangeConversation';
 
 const enc = new TextEncoder();
@@ -24,33 +24,6 @@ function sseResponse(body: string): Response {
 }
 
 afterEach(() => vi.unstubAllGlobals());
-
-describe('unwrapProgressFrame', () => {
-  it("flattens motir-ai's envelope: the payload's fields, with jobId and seq beside them", () => {
-    expect(
-      unwrapProgressFrame({ jobId: 'j', seq: 3, data: { text: 'Reading the plan.' } }),
-    ).toEqual({ text: 'Reading the plan.', jobId: 'j', seq: 3 });
-    // The envelope's seq is the one the re-subscribe dedupe reads, so it wins.
-    expect(unwrapProgressFrame({ seq: 4, data: { seq: 99, n: 1 } })).toEqual({ seq: 4, n: 1 });
-  });
-
-  it('returns every other shape as it came', () => {
-    const flat = { act: 'author', text: 'billing already owns this' };
-    const odd = [
-      flat,
-      { jobId: 'j', status: 'running' },
-      { jobId: 'j', seq: 1, data: 'a string payload' },
-      { jobId: 'j', seq: 1, data: [1, 2] },
-      { jobId: 'j', seq: 1, data: null },
-      { jobId: 'j', seq: '1', data: { text: 'x' } },
-      { jobId: 'j', seq: 1, data: { text: 'x' }, timedOut: true },
-      [1, 2],
-      'raw',
-      null,
-    ];
-    for (const shape of odd) expect(unwrapProgressFrame(shape)).toBe(shape);
-  });
-});
 
 describe('consumeStream over the real wire', () => {
   it("hands every note's sentence to the reader, in order — the reported job's 16 calls", async () => {

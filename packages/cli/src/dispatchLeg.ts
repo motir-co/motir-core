@@ -14,6 +14,7 @@ import { createLegLogTee } from './agentLogTee.js';
 import { fetchPresignedAsset, materializeDesignsFor } from './designFiles.js';
 import { nullDispatchRunReporter, type DispatchRunReporter } from './dispatchRunReporter.js';
 import { legBranches, startCheckpoints, type LegBranch } from './checkpoint.js';
+import { declareRunDelivery, type RunDelivery } from './runDelivery.js';
 
 // THE DISPATCH LEG (Story MOTIR-3655 · MOTIR-3695) — the one implementation of
 // "materialize, spawn the agent, and decide what actually happened."
@@ -82,10 +83,22 @@ export type DispatchLegVerdict =
       /** The agent's own session id (MOTIR-9048) — what the CI watch resumes; null when it reported none. */
       sessionId: string | null;
       suspects: SuspectDispatch[];
+      /**
+       * Whether the push check SAW the work on the remote (`pushed`) or could not tell
+       * (`unknown` — no git repository to ask). Only `pushed` makes "no pull request linked"
+       * a finding: a run with no evidence either way must not contradict its agent.
+       */
+      remote?: 'pushed' | 'unknown';
+      /**
+       * What the run linked and published itself (MOTIR-10877) — null on a session-lineage
+       * leg, whose pull request is the loop's to link. See `runDelivery.ts`.
+       */
+      delivery?: RunDelivery | null;
     };
 
 export interface DispatchLegInput {
-  client: Pick<MotirClient, 'getWorkItem' | 'listWorkItemDesigns'>;
+  client: Pick<MotirClient, 'getWorkItem' | 'listWorkItemDesigns'> &
+    Partial<Pick<MotirClient, 'linkPullRequest'>>;
   /** The link root, for `materializeDispatchCheckouts`. */
   rootDir: string;
   key: string;
@@ -293,20 +306,47 @@ export async function runDispatchLeg(input: DispatchLegInput): Promise<DispatchL
   if (await agentSubmittedReplan(client, key)) return settle({ kind: 'replan_submitted' });
 
   // ⚠️ EXIT 0 IS NOT A PUSH (MOTIR-3004).
-  if (
-    workReachedRemote(primary.cwd, key, input.sessionBranch, input.run ?? execCommand) === 'nothing'
-  ) {
-    return settle({ kind: 'nothing_pushed' });
-  }
+  const remote = workReachedRemote(primary.cwd, key, input.sessionBranch, input.run ?? execCommand);
+  if (remote === 'nothing') return settle({ kind: 'nothing_pushed' });
 
   // EVERY repository of the set, not only the primary (MOTIR-3133): a card whose
   // second half had no checkout to happen in is exactly the run that otherwise
   // exits 0 with half the work missing.
   const suspects = over.map((t) => checkBootstrapCheckout(t)).filter((s) => s !== null);
+
+  // ⚠️ THE RUN DECLARES ITS OWN DELIVERY (MOTIR-10877), BEFORE ANY CALLER MOVES THE CARD.
+  // An agent with no Motir tools opened its pull request and could neither link it nor
+  // publish How to test; the card then went to Implemented linked to nothing. The CLI links
+  // each pull request and publishes the How to test the agent wrote, with the run's
+  // credential, here — so the transition and the CI watch that follow read a linked card. A
+  // session-lineage leg is left alone: its pull request is the loop's, and the loop links it.
+  const delivery =
+    dispatch.workflowMode === 'session_lineage'
+      ? null
+      : await declareRunDelivery({
+          key,
+          dispatch,
+          targets: over,
+          ...(input.branches ? { branches: input.branches } : {}),
+          pullRequests: result.pullRequests ?? [],
+          howToTest: result.howToTest ?? null,
+          client: {
+            getWorkItem: (k) => client.getWorkItem(k),
+            linkPullRequest: (args) =>
+              client.linkPullRequest
+                ? client.linkPullRequest(args)
+                : Promise.reject(new Error('this client cannot link a pull request')),
+          },
+          reporter,
+          ...(input.run ? { run: input.run } : {}),
+        });
+
   return settle({
     kind: 'succeeded',
     model: result.model ?? null,
     sessionId: result.sessionId ?? null,
     suspects,
+    remote,
+    delivery,
   });
 }

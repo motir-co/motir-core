@@ -8,7 +8,8 @@ import type { PagePlacement } from './types';
 //
 // Only the methods the shipped procedures call are here. Later stories add
 // their own with the procedures that call them: the version methods
-// (MOTIR-5754 · §6). The placement methods (`findFolder`, `findSubtree`,
+// (MOTIR-5754 · §6) and the comment methods (MOTIR-10866 · MOTIR-10872). The
+// placement methods (`findFolder`, `findSubtree`,
 // `siblingNeighbours`, `updatePlacement`, `rebaseDescendants`) are the page
 // tree's (MOTIR-5753 · MOTIR-7368); `setArchived`, `findArchiveSet`,
 // `deletePages` and `positionTaken` are archive's (MOTIR-5755 · MOTIR-7418, §7).
@@ -173,6 +174,93 @@ export interface PageVersionUpdate {
   readonly savedAt: Date;
 }
 
+// ── Comments (Story MOTIR-10866 · MOTIR-10872) — `page_comment` ─────────────
+
+/** A person a comment names — its author or its resolver — as the panel shows them. */
+export interface PageCommentPerson {
+  readonly id: string;
+  readonly name: string;
+  readonly image: string | null;
+}
+
+/** One page comment, root or reply, with its author and resolver joined. */
+export interface PageCommentRow {
+  readonly id: string;
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly pageId: string;
+  /** The thread's root; `null` on a root. Replies are one level deep. */
+  readonly parentCommentId: string | null;
+  readonly authorId: string;
+  readonly author: PageCommentPerson;
+  readonly bodyMd: string;
+  /** Set by an edit that changed the body; `null` while never edited. */
+  readonly editedAt: Date | null;
+  readonly createdAt: Date;
+  /** When the thread was resolved — on a root only; `null` while open. */
+  readonly resolvedAt: Date | null;
+  /** Who resolved it; `null` while open, or once that user is deleted. */
+  readonly resolvedById: string | null;
+  readonly resolvedBy: PageCommentPerson | null;
+  /** The inline anchor's encoded positions (the inline story's codec); `null` on a page-level comment. */
+  readonly anchor: Uint8Array | null;
+  /** The text the anchor quoted; set exactly when `anchor` is. */
+  readonly anchorQuote: string | null;
+}
+
+/**
+ * An inline anchor as a create carries it — one object, so it is both or
+ * neither by type (`page_comment_anchor_pairing`). `bytes` is opaque here.
+ */
+export interface PageCommentAnchorInput {
+  readonly bytes: Uint8Array;
+  readonly quote: string;
+}
+
+/** A new comment, as `insertPageComment` writes it — its page's tenancy stamped on it. */
+export interface PageCommentInsert {
+  readonly workspaceId: string;
+  readonly projectId: string;
+  readonly pageId: string;
+  readonly authorId: string;
+  readonly parentCommentId: string | null;
+  readonly bodyMd: string;
+  readonly createdAt: Date;
+  /** A root's anchor; always `null` on a reply. */
+  readonly anchor: PageCommentAnchorInput | null;
+}
+
+/** Which of a page's threads a list reads. */
+export type PageCommentThreadStatus = 'open' | 'resolved';
+
+/** The direction a root list runs along its key. */
+export type PageCommentOrder = 'asc' | 'desc';
+
+/**
+ * The keyset a root list pages on: `(createdAt, id)` for open roots,
+ * `(resolvedAt, id)` for resolved ones — the two partial indexes' keys.
+ */
+export interface PageCommentRootKey {
+  readonly at: Date;
+  readonly id: string;
+}
+
+/** One page of a page's roots. */
+export interface PageCommentRootsQuery {
+  readonly pageId: string;
+  readonly status: PageCommentThreadStatus;
+  readonly order: PageCommentOrder;
+  /** The last root already served; `null` for the first page. Strictly after it, in `order`. */
+  readonly after: PageCommentRootKey | null;
+  readonly limit: number;
+}
+
+/** How many roots a page has in each list. */
+export interface PageCommentCounts {
+  readonly open: number;
+  readonly resolved: number;
+}
+
 /** The page persistence port — one instance per transaction. */
 export interface PageStore {
   /** Reads one page `FOR UPDATE`, body state included; `null` if absent or out of scope. */
@@ -283,6 +371,29 @@ export interface PageStore {
   deletePages(ids: readonly string[]): Promise<void>;
   /** Whether a LIVE page at one parent's level already holds `position`. */
   positionTaken(projectId: string, parent: PagePlacement, position: string): Promise<boolean>;
+
+  // ── Comments (MOTIR-10872). Rows come back with author and resolver joined. ──
+
+  /** One page of a page's ROOTS (replies never), in the query's list, order and window. */
+  findPageCommentRoots(query: PageCommentRootsQuery): Promise<PageCommentRow[]>;
+  /** Every reply of the given roots, oldest first by `(createdAt, id)`. */
+  findPageCommentReplies(rootIds: readonly string[]): Promise<PageCommentRow[]>;
+  /** How many open and resolved roots a page has. */
+  countPageCommentRoots(pageId: string): Promise<PageCommentCounts>;
+  /** Reads one comment `FOR UPDATE`; `null` if absent or out of scope. */
+  lockPageComment(commentId: string): Promise<PageCommentRow | null>;
+  /** Creates a comment, root or reply. */
+  insertPageComment(row: PageCommentInsert): Promise<PageCommentRow>;
+  /** Replaces a comment's body and stamps `editedAt`. */
+  updatePageCommentBody(commentId: string, bodyMd: string, editedAt: Date): Promise<PageCommentRow>;
+  /** Deletes one comment; a root's replies go with it (`parent_comment_id` cascades). */
+  deletePageCommentRow(commentId: string): Promise<void>;
+  /** Stamps (or, with two `null`s, clears) a root's resolved state. */
+  setPageCommentResolved(
+    commentId: string,
+    resolvedAt: Date | null,
+    resolvedById: string | null,
+  ): Promise<PageCommentRow>;
 }
 
 /** The time source, injected so time-dependent rules are testable without fake timers. */

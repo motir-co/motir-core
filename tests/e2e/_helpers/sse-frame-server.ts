@@ -10,10 +10,18 @@
 // `consumeStream` reads a real, incremental `text/event-stream` response.
 //
 // It is a test seam, not a planner: what it writes is exactly what the spec
-// hands it, in the shape of `lib/planning/planChangeFrames.ts`'s contract.
+// hands it, in the shape of `lib/planning/planChangeFrames.ts`'s contract, and
+// on motir-ai's wire (MOTIR-10880): a progress frame goes out inside the
+// `{ jobId, seq, data }` envelope, numbered per job, and `status` / `done` /
+// `error` go out flat (`./job-stream-frames.ts`). The job id is the one the
+// re-targeted request names in its `jobId` query (`routeJobStream`).
 
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { isUnenvelopedEvent, jobStreamFrame } from './job-stream-frames';
+
+/** The job id a connection is written under when its request names none. */
+const UNNAMED_JOB = 'sse-frame-server-job';
 
 export interface SseFrameServer {
   /** The address a re-targeted request is sent to. */
@@ -21,7 +29,9 @@ export interface SseFrameServer {
   /** Resolves with the NEXT connection the browser opens (armed before the
    *  action that opens it, like any `waitForResponse`). */
   nextConnection(): Promise<void>;
-  /** Write one frame to the current connection. */
+  /** Write one frame to the current connection: `data` is the payload the job
+   *  emitted, and a progress frame is sent inside motir-ai's envelope with the
+   *  job's next `seq`. */
   write(event: string, data: unknown): void;
   /** Write `done` and close the current connection. */
   done(): void;
@@ -30,6 +40,10 @@ export interface SseFrameServer {
 
 export async function startSseFrameServer(): Promise<SseFrameServer> {
   let current: ServerResponse | null = null;
+  let currentJobId = UNNAMED_JOB;
+  // motir-ai numbers a job's progress rows, and a re-subscribe to the same job
+  // continues them — so the count is kept per job, across connections.
+  const seqByJob = new Map<string, number>();
   const waiters: (() => void)[] = [];
 
   const server: Server = createServer((req: IncomingMessage, res: ServerResponse) => {
@@ -62,6 +76,8 @@ export async function startSseFrameServer(): Promise<SseFrameServer> {
     // Headers out NOW, so the page's `fetch` resolves while nothing is written.
     res.flushHeaders();
     current = res;
+    currentJobId =
+      new URL(req.url ?? '/', 'http://127.0.0.1').searchParams.get('jobId') ?? UNNAMED_JOB;
     for (const wake of waiters.splice(0)) wake();
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -76,7 +92,10 @@ export async function startSseFrameServer(): Promise<SseFrameServer> {
     url: `http://127.0.0.1:${port}/stream`,
     nextConnection: () => new Promise<void>((resolve) => waiters.push(resolve)),
     write(event, data) {
-      live().write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+      const res = live();
+      let seq = seqByJob.get(currentJobId) ?? 0;
+      if (!isUnenvelopedEvent(event)) seqByJob.set(currentJobId, (seq += 1));
+      res.write(jobStreamFrame(event, data, currentJobId, seq));
     },
     done() {
       const res = live();

@@ -1,5 +1,5 @@
 # The HOSTED-AGENT PIN check (MOTIR-10882): the check of the pull request that
-# moves `infra/hosted-agent-image.ref`, the one place production's
+# moves `infra/image-pins/motir-hosted-agent-image`, the one place production's
 # `MOTIR_HOSTED_AGENT_IMAGE` is written down.
 #
 # `hosted-agent-image.yml` proves an image from SOURCE before it publishes it,
@@ -20,7 +20,7 @@ name: Hosted agent pin
 on:
   pull_request:
     paths:
-      - 'infra/hosted-agent-image.ref'
+      - 'infra/image-pins/motir-hosted-agent-image'
       - '.github/workflows/hosted-agent-pin.yml'
 
 concurrency:
@@ -43,7 +43,7 @@ jobs:
         id: pin
         run: |
           set -euo pipefail
-          file=infra/hosted-agent-image.ref
+          file=infra/image-pins/motir-hosted-agent-image
           if [ "$(grep -c '' "$file")" -ne 1 ]; then
             echo "::error::$file must hold exactly one line"
             exit 1

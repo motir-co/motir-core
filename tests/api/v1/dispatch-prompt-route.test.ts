@@ -284,6 +284,21 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     expect(alone).toContain('DECIDE WHAT THE CARD LEAVES OPEN — never ask');
   });
 
+  it('names the delivery file route only for `?agentReport=1&agentReportDelivery=1` (MOTIR-10877)', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const item = await makeItem(caller, 'a cli that links for a tool-less agent');
+
+    const both = (await prompt(caller, item.identifier, '?agentReport=1&agentReportDelivery=1'))
+      .prompt;
+    expect(both).toContain('"pullRequests" beside "model"');
+    expect(both).toContain('JSON file instead, as "howToTest"');
+
+    // The delivery flag alone is a runner that reads no self-report file at all.
+    const alone = (await prompt(caller, item.identifier, '?agentReportDelivery=1')).prompt;
+    expect(alone).not.toContain('"pullRequests"');
+    expect(alone).not.toContain('"howToTest"');
+  });
+
   // ── ?autoApproveReplan (MOTIR-4085) ─────────────────────────────────────
   //
   // The OTHER prompt parameter, and it is a different KIND of thing from the one

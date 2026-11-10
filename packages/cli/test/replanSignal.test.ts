@@ -7,6 +7,7 @@ import { batchCommand } from '../src/commands/batch.js';
 import { nextCommand, runCommand } from '../src/commands/dispatch.js';
 import { setCredential } from '../src/config/userConfig.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
+import { answerPrView } from './fakePullRequest.js';
 import {
   startTestServer,
   v1Claim,
@@ -293,6 +294,8 @@ function gitRunner(): { run: CommandRunner; log: string[] } {
   const run: CommandRunner = (bin, args) => {
     log.push(`${bin} ${args.join(' ')}`);
     const ok = (stdout: string): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
+    const pr = answerPrView(bin, args);
+    if (pr) return pr;
     if (bin === 'git' && args[0] === 'ls-remote') return ok('abc123\trefs/heads/subtask/PROD-7');
     if (bin === 'git' && args[0] === 'log') return ok('abc123');
     if (bin === 'git' && args[0] === 'rev-parse') return { exitCode: 1, stdout: '', stderr: '' };

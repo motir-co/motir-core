@@ -1,5 +1,5 @@
 /**
- * `pnpm deploy:aws --digest sha256:<64 hex> [--hosted-agent-pin <file>] [--timeout-minutes 20] [--no-roll]`
+ * `pnpm deploy:aws --digest sha256:<64 hex> [--timeout-minutes 20] [--no-roll]`
  * (Story MOTIR-9709 · MOTIR-9927) — deploy an image CI has already pushed to ECR
  * onto core's Fargate services, in the one order that is safe:
  *
@@ -8,19 +8,16 @@
  *      anything changes when none does or one runs a breach revision
  *      (MOTIR-10093) — the roll clones each service's live revision;
  *   3. run the migrate task from it once; only exit 0 continues;
- *   3b. with `--hosted-agent-pin`, write the image that file pins into the
- *      `<prefix>/core/motir-hosted-agent-image` secret (MOTIR-10882). ECS reads a
- *      secret only when a task STARTS, so the write comes before the roll, and the
- *      roll is what makes the new web and worker tasks read it;
- *   4. roll the services onto it and wait for every PRIMARY deployment to complete;
- *   5. on a failure or a timeout, put each back on the revision it ran before,
+ *   4. with `--pins <dir>`, write each image pin into its secret (MOTIR-10883,
+ *      `imagePins.ts`), so the tasks the roll starts read the new value;
+ *   5. roll the services onto it and wait for every PRIMARY deployment to complete;
+ *   6. on a failure or a timeout, put each back on the revision it ran before,
  *      except a service another deployer moved meanwhile (MOTIR-10117), which
- *      stays where that deployer put it — and put the secret back on the image it
- *      held, so a task the rollback starts boots what it booted before;
- *   6. only then record the digest in `/<prefix>/core/image-digest`, which the
+ *      stays where that deployer put it, and put each pin back as it was;
+ *   7. only then record the digest in `/<prefix>/core/image-digest`, which the
  *      next motir-infra deploy builds the services from.
  *
- * `--no-roll` runs 1, 3, 3b and 6 only: the first deploy, before the services exist.
+ * `--no-roll` runs 1, 3 and 7 only: the first deploy, before the services exist.
  *
  * It reads `AWS_REGION` and `AWS_DEPLOY_NAME_PREFIX` and nothing else from the
  * environment; the deploy role's credentials reach the SDK through its default
@@ -28,7 +25,6 @@
  *
  * Exit codes: 0 when the digest is recorded, 1 otherwise.
  */
-import { readFileSync } from 'node:fs';
 import { parseArgs } from 'node:util';
 import { pathToFileURL } from 'node:url';
 import { awsSdkPorts, type DeployAws } from './ports';
@@ -41,7 +37,7 @@ import {
   type RolledService,
 } from './rollingDeploy';
 import { ecrRepositoryName, imageRepository } from './taskDefinitions';
-import { hostedAgentImageSecretName, parseHostedAgentPin } from './hostedAgentPin';
+import { applyPins, readImagePins, restorePins, type AppliedPin, type ImagePin } from './imagePins';
 
 export const EXIT_OK = 0;
 export const EXIT_ERROR = 1;
@@ -50,8 +46,7 @@ export const DIGEST_PATTERN = /^sha256:[a-f0-9]{64}$/;
 const DEFAULT_TIMEOUT_MINUTES = 20;
 
 export const USAGE =
-  'usage: deploy:aws --digest sha256:<64 hex> [--hosted-agent-pin <file>]' +
-  ' [--timeout-minutes <n>] [--no-roll]' +
+  'usage: deploy:aws --digest sha256:<64 hex> [--timeout-minutes <n>] [--no-roll] [--pins <dir>]' +
   ' (env: AWS_REGION, AWS_DEPLOY_NAME_PREFIX)';
 
 /** The parameter names motir-infra's `lib/config/core-deploy.ts` and `fargate-service.ts` use. */
@@ -68,28 +63,15 @@ export interface DeployOptions {
   timeoutMs: number;
   noRoll: boolean;
   namePrefix: string;
-  /** The image the pin file names, or null when no pin file was passed. */
-  hostedAgentImage: string | null;
-}
-
-/** What the deploy did to the hosted-agent image secret (MOTIR-10882). */
-export interface HostedAgentImageResult {
-  /** The image the pin file names. */
-  image: string;
-  /** What the secret held before; null when it held no string. */
-  previous: string | null;
-  /** Whether this deploy wrote it (false when it already held the pin). */
-  written: boolean;
-  /** Whether a failed roll put `previous` back. */
-  restored: boolean;
+  /** The image pins to write before the roll; none without `--pins`. */
+  pins: readonly ImagePin[];
 }
 
 export interface DeployResult {
   digest: string;
   migrate: { taskArn: string | null; exitCode: number | null } | null;
   services: RolledService[];
-  /** Null when no pin file was passed, or the deploy stopped before writing it. */
-  hostedAgentImage: HostedAgentImageResult | null;
+  pins: AppliedPin[];
   recorded: boolean;
 }
 
@@ -102,7 +84,7 @@ export function parseDeployArgs(argv: string[]) {
         digest: { type: 'string' },
         'timeout-minutes': { type: 'string' },
         'no-roll': { type: 'boolean' },
-        'hosted-agent-pin': { type: 'string' },
+        pins: { type: 'string' },
       },
       strict: true,
       allowPositionals: false,
@@ -113,7 +95,7 @@ export function parseDeployArgs(argv: string[]) {
       digest: values.digest,
       timeoutMs: minutes * 60_000,
       noRoll: !!values['no-roll'],
-      hostedAgentPin: values['hosted-agent-pin'] ?? null,
+      pinsDir: values.pins ?? null,
     };
   } catch {
     return null;
@@ -150,7 +132,7 @@ async function verifyImage(aws: DeployAws, target: DeployTarget, digest: string)
 }
 
 /**
- * Step 6, and the only write of the digest. Reached only from `deploy` after
+ * Step 7, and the only write of the digest. Reached only from `deploy` after
  * the migrate task exited 0 and every rolled service completed.
  */
 async function recordDigest(aws: DeployAws, prefix: string, digest: string): Promise<true> {
@@ -158,49 +140,7 @@ async function recordDigest(aws: DeployAws, prefix: string, digest: string): Pro
   return true;
 }
 
-/**
- * Step 3b: make the secret hold the pinned image. Read first, so a deploy whose
- * pin has not moved writes no new secret version, and so a failed roll knows
- * what to put back.
- */
-async function writeHostedAgentImage(
-  aws: DeployAws,
-  prefix: string,
-  image: string,
-  log: DeployLog,
-): Promise<HostedAgentImageResult> {
-  const name = hostedAgentImageSecretName(prefix);
-  const previous = (await aws.getSecretValue(name)) ?? null;
-  if (previous === image) {
-    log(`hosted-agent image: ${name} already holds ${image}`);
-    return { image, previous, written: false, restored: false };
-  }
-  await aws.putSecretValue(name, image);
-  log(`hosted-agent image: ${name} now holds ${image} (was ${previous ?? 'empty'})`);
-  return { image, previous, written: true, restored: false };
-}
-
-/** After a failed roll: the secret back on what it held. Never throws; `false` when it could not. */
-async function restoreHostedAgentImage(
-  aws: DeployAws,
-  prefix: string,
-  pin: HostedAgentImageResult,
-  log: DeployLog,
-): Promise<boolean> {
-  if (!pin.written || pin.previous === null) return false;
-  try {
-    await aws.putSecretValue(hostedAgentImageSecretName(prefix), pin.previous);
-    log(`hosted-agent image: put back ${pin.previous}`);
-    return true;
-  } catch (err) {
-    log(`hosted-agent image: could not put back ${pin.previous}: ${errorText(err)}`);
-    return false;
-  }
-}
-
-const errorText = (err: unknown) => (err instanceof Error ? err.message : 'failed');
-
-/** Steps 4 and 5; `null` on success, else why the roll failed. */
+/** Steps 4 to 6; `null` on success, else why the roll failed. */
 async function roll(
   aws: DeployAws,
   target: DeployTarget,
@@ -210,6 +150,8 @@ async function roll(
   result: DeployResult,
   log: DeployLog,
 ): Promise<string | null> {
+  const pinned = await applyPins(aws, options.namePrefix, options.pins, log);
+  result.pins = pinned.applied;
   const updated = new Map<string, string>();
   try {
     const rolled = await rollServices(
@@ -224,18 +166,11 @@ async function roll(
     result.services = rolled.services;
     if (rolled.ok) return null;
   } catch (err) {
-    log(`roll: ${errorText(err)}`);
+    log(`roll: ${err instanceof Error ? err.message : 'failed'}`);
   }
-  // The secret goes back FIRST: a task reads it only when it starts, and the
-  // rollback starts tasks. The restore never throws, so the rollback always runs.
-  if (result.hostedAgentImage) {
-    result.hostedAgentImage.restored = await restoreHostedAgentImage(
-      aws,
-      options.namePrefix,
-      result.hostedAgentImage,
-      log,
-    );
-  }
+  // The pins go back FIRST: a task reads a secret only when it starts, and the
+  // rollback starts tasks. restorePins never throws, so the rollback always runs.
+  await restorePins(aws, options.namePrefix, pinned.applied, pinned.previous, log);
   await rollBack(aws, target.cluster, services, updated, log);
   const superseded = result.services.filter((s) => s.rolloutState === 'SUPERSEDED');
   if (superseded.length > 0) {
@@ -249,7 +184,7 @@ async function roll(
   return 'the roll did not complete; every service is back on its previous revision';
 }
 
-/** Steps 1 to 6 against `aws`. Fills `result` as it goes; throws on an AWS error. */
+/** Steps 1 to 7 against `aws`. Fills `result` as it goes; throws on an AWS error. */
 async function deploy(
   aws: DeployAws,
   options: DeployOptions,
@@ -268,14 +203,6 @@ async function deploy(
   const migrate: MigrateResult = await runMigrate(aws, target, image, options.timeoutMs, log);
   result.migrate = { taskArn: migrate.taskArn, exitCode: migrate.exitCode };
   if (!migrate.ok) return `migrate ${migrate.reason}; no service changed`;
-  if (options.hostedAgentImage) {
-    result.hostedAgentImage = await writeHostedAgentImage(
-      aws,
-      options.namePrefix,
-      options.hostedAgentImage,
-      log,
-    );
-  }
   if (!options.noRoll) {
     const failure = await roll(aws, target, services, image, options, result, log);
     if (failure) return failure;
@@ -294,7 +221,7 @@ export async function runDeploy(
     digest: options.digest,
     migrate: null,
     services: [],
-    hostedAgentImage: null,
+    pins: [],
     recorded: false,
   };
   let failure: string | null;
@@ -314,7 +241,6 @@ export async function main(
   env: Readonly<Record<string, string | undefined>>,
   io: DeployIo,
   ports: (region: string) => DeployAws = awsSdkPorts,
-  readFile: (path: string) => string = (path) => readFileSync(path, 'utf8'),
 ): Promise<number> {
   const parsed = parseDeployArgs(argv);
   const region = env.AWS_REGION;
@@ -327,18 +253,15 @@ export async function main(
     io.err(`error: --digest must match ${DIGEST_PATTERN.source}`);
     return EXIT_ERROR;
   }
-  // The pin is read and checked before any AWS call, so a malformed one changes nothing.
-  let hostedAgentImage: string | null = null;
-  if (parsed.hostedAgentPin !== null) {
-    try {
-      hostedAgentImage = parseHostedAgentPin(readFile(parsed.hostedAgentPin));
-    } catch (err) {
-      io.err(`error: --hosted-agent-pin: ${errorText(err)}`);
-      return EXIT_ERROR;
-    }
+  const { pinsDir, ...rest } = parsed;
+  let pins: ImagePin[] = [];
+  try {
+    if (pinsDir) pins = readImagePins(pinsDir);
+  } catch (err) {
+    io.err(`error: --pins ${pinsDir}: ${err instanceof Error ? err.message : 'unreadable'}`);
+    return EXIT_ERROR;
   }
-  const { hostedAgentPin: _pin, ...flags } = parsed;
-  return runDeploy({ ...flags, namePrefix, hostedAgentImage }, ports(region), io);
+  return runDeploy({ ...rest, namePrefix, pins }, ports(region), io);
 }
 
 /** Where the entry writes: the JSON line to stdout, progress to stderr. */

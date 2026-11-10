@@ -17,7 +17,13 @@ import type {
 } from '@/lib/dto/pages';
 import type { FolderTreeRow } from '@/lib/mappers/folderMappers';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
-import type { LockedPageRow, PageRow, PageVersionRow, PageVersionWithBody } from '@/lib/pages';
+import type {
+  LockedPageRow,
+  PageCommentRow,
+  PageRow,
+  PageVersionRow,
+  PageVersionWithBody,
+} from '@/lib/pages';
 
 // Page rows ↔ `@motir/pages`' port rows (Story MOTIR-5752 · MOTIR-7276).
 //
@@ -104,6 +110,82 @@ export function toLockedPageRow(record: PageLockedRecord): LockedPageRow {
 /** A `bytea` column as a plain `Uint8Array` (pg hands back a `Buffer`). */
 function toBytes(body: Uint8Array): Uint8Array {
   return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+}
+
+// ── Comments (Story MOTIR-10866 · MOTIR-10872) ───────────────────────────────
+
+/** The person columns a comment read joins — the work-item comment author's shape. */
+const PAGE_COMMENT_PERSON_SELECT = { id: true, name: true, image: true } as const;
+
+/** The columns every page-comment read selects, author and resolver joined. */
+export const PAGE_COMMENT_RECORD_SELECT = {
+  id: true,
+  workspaceId: true,
+  projectId: true,
+  pageId: true,
+  parentCommentId: true,
+  authorId: true,
+  bodyMd: true,
+  editedAt: true,
+  createdAt: true,
+  resolvedAt: true,
+  resolvedById: true,
+  anchor: true,
+  anchorQuote: true,
+  author: { select: PAGE_COMMENT_PERSON_SELECT },
+  resolvedBy: { select: PAGE_COMMENT_PERSON_SELECT },
+} as const;
+
+interface PageCommentPersonRecord {
+  id: string;
+  name: string;
+  image: string | null;
+}
+
+/** A page-comment read, as `PAGE_COMMENT_RECORD_SELECT` returns it. */
+export interface PageCommentRecord {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  pageId: string;
+  parentCommentId: string | null;
+  authorId: string;
+  bodyMd: string;
+  editedAt: Date | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
+  resolvedById: string | null;
+  anchor: Uint8Array | null;
+  anchorQuote: string | null;
+  author: PageCommentPersonRecord;
+  resolvedBy: PageCommentPersonRecord | null;
+}
+
+const toPerson = (person: PageCommentPersonRecord) => ({
+  id: person.id,
+  name: person.name,
+  image: person.image,
+});
+
+/** A stored comment as the package reads it, the `bytea` anchor as a plain `Uint8Array`. */
+export function toPageCommentRow(record: PageCommentRecord): PageCommentRow {
+  return {
+    id: record.id,
+    workspaceId: record.workspaceId,
+    projectId: record.projectId,
+    pageId: record.pageId,
+    parentCommentId: record.parentCommentId,
+    authorId: record.authorId,
+    author: toPerson(record.author),
+    bodyMd: record.bodyMd,
+    editedAt: record.editedAt,
+    createdAt: record.createdAt,
+    resolvedAt: record.resolvedAt,
+    resolvedById: record.resolvedById,
+    resolvedBy: record.resolvedBy ? toPerson(record.resolvedBy) : null,
+    anchor: record.anchor === null ? null : toBytes(record.anchor),
+    anchorQuote: record.anchorQuote,
+  };
 }
 
 // ── Versions (Story MOTIR-5754 · MOTIR-7384) ─────────────────────────────────

@@ -891,3 +891,60 @@ describe('classifyReportingFailure', () => {
     expect(classifyReportingFailure(err)).toBe(expected);
   });
 });
+
+describe('the How to test a tool-less agent wrote (MOTIR-10877)', () => {
+  const BODY = { bodyMd: '## Locally', repos: [{ repo: 'acme/web', commitSha: 'abc1234' }] };
+
+  it('publishes it on the run it holds and answers true', async () => {
+    const calls: unknown[] = [];
+    const { client } = fakeClient({
+      async publishDispatchRunHowToTest(args) {
+        calls.push(args);
+        return { testInstructionsId: 'ti_1', created: true };
+      },
+    });
+    const reporter = createDispatchRunReporter({ client });
+    await reporter.open(OPEN);
+    await expect(reporter.publishHowToTest!('PROD-1', BODY)).resolves.toBe(true);
+    expect(calls).toEqual([{ runId: 'run_1', key: 'PROD-1', ...BODY }]);
+  });
+
+  it('answers false — and sends nothing — with no run held, after the close, or with no door', async () => {
+    let sent = 0;
+    const { client } = fakeClient({
+      async publishDispatchRunHowToTest() {
+        sent += 1;
+        return { testInstructionsId: 'ti_1', created: true };
+      },
+    });
+    const idle = createDispatchRunReporter({ client });
+    await expect(idle.publishHowToTest!('PROD-1', BODY)).resolves.toBe(false);
+
+    const closed = createDispatchRunReporter({ client });
+    await closed.open(OPEN);
+    await closed.close('completed');
+    await expect(closed.publishHowToTest!('PROD-1', BODY)).resolves.toBe(false);
+    expect(sent).toBe(0);
+
+    const { client: older } = fakeClient({});
+    const withoutDoor = createDispatchRunReporter({ client: older });
+    await withoutDoor.open(OPEN);
+    await expect(withoutDoor.publishHowToTest!('PROD-1', BODY)).resolves.toBe(false);
+  });
+
+  it('a refused publish warns, naming why, answers false, and takes nothing down', async () => {
+    const warnings: string[] = [];
+    const { client } = fakeClient({
+      async publishDispatchRunHowToTest() {
+        throw new Error('the repository is not connected');
+      },
+    });
+    const reporter = createDispatchRunReporter({ client, warn: (m) => warnings.push(m) });
+    await reporter.open(OPEN);
+    await expect(reporter.publishHowToTest!('PROD-1', BODY)).resolves.toBe(false);
+    expect(warnings).toEqual([
+      'motir: could not publish How to test on PROD-1 in Motir (the repository is not connected). The run continues.',
+    ]);
+    expect(reporter.offline).toBe(false);
+  });
+});

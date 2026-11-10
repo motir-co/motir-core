@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveFakeClaim } from './helpers/fakeClaim.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
+import { answerPrView } from './fakePullRequest.js';
 import type { DispatchPrompt, DispatchRunView, WorkItemDetail } from '../src/client.js';
 import {
   assertAdoptsLeaf,
@@ -110,6 +111,9 @@ const RUN = 'cmrun_hosted_1';
 const ok = (stdout = ''): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
 /** The agent pushed: the remote carries the branch, the session branch a commit. */
 const PUSHED: CommandRunner = (bin, args) => {
+  // The pull request the agent opened, which the run links (MOTIR-10877).
+  const pr = answerPrView(bin, args);
+  if (pr) return pr;
   if (args[0] === 'ls-remote') return ok('abc123\trefs/heads/motir/auto-x');
   if (args[0] === 'log' || args[0] === 'rev-list') return ok(args[1] === '--count' ? '1' : 'abc');
   if (bin === 'gh' && args[1] === 'create')
@@ -233,6 +237,10 @@ function setup(opts: {
     linkWorkItemPullRequest: async (args: unknown) => {
       record('link_pull_request', args);
       return {};
+    },
+    // The run's own delivery (MOTIR-10877).
+    linkPullRequest: async (args: unknown) => {
+      record('link_pull_request', args);
     },
     workItemHowToTest: async () => ({ record: null }),
     dispatchRunCloseOutPrompt: async () => {

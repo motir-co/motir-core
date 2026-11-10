@@ -696,7 +696,9 @@ export class FleetImageCoverageGapError extends Error {
  * contain it (MOTIR-10393): the fix is on the default branch and the fleet boots
  * the old image. The message names the pinned image, its build commit, each
  * unreleased commit and the release step, because it is the whole DLQ row an
- * operator reads. Releasing and pinning stay a person's step.
+ * operator reads. Releasing stays a person's step (pushing the tag); the
+ * release lane then opens the pull request that pins the digest, and the AWS
+ * deploy of its merge writes MOTIR_RUNNER_IMAGE (MOTIR-10883).
  */
 /** One stale pin's changes, as the error sentences list them. */
 function describeUnreleased(unreleased: readonly RunnerImageUnreleasedChangeDTO[], what: string) {
@@ -734,8 +736,9 @@ export class RunnerImageStaleError extends Error {
         `which does not contain ${unreleased.length} merged change(s) to the image: ` +
         `${describeUnreleased(unreleased, 'image')}. ` +
         `The fleet still boots the old image. Release it — \`git tag runner-v<next> ${newest} && ` +
-        `git push origin runner-v<next>\` (.github/workflows/release-runner-image.yml) — then set ` +
-        `MOTIR_RUNNER_IMAGE to the digest the release's job summary prints.` +
+        `git push origin runner-v<next>\` (.github/workflows/release-runner-image.yml) — then merge ` +
+        `the pull request the release opens on chore/runner-image-pin; the AWS deploy of that merge ` +
+        `sets MOTIR_RUNNER_IMAGE to the digest it pins (infra/image-pins/README.md).` +
         // Both pins can be stale at once; one run names both (MOTIR-10395).
         (verdict.ami.state === 'stale' ? ` ${amiStaleSentence(verdict.ami)}` : ''),
     );

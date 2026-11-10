@@ -247,6 +247,15 @@ export const RUN_TOKEN_ROUTES: readonly RunTokenRoute[] = [
     calledBy: 'cli',
   },
   {
+    // The run target's How to test (MOTIR-10877) — the agent writes it into its self-report,
+    // having no Motir tools here, and the CLI publishes it with the run's credential.
+    operationId: 'publishDispatchRunHowToTest',
+    method: 'POST',
+    path: '/api/v1/dispatch-runs/{id}/how-to-test',
+    binding: 'own_run',
+    calledBy: 'cli',
+  },
+  {
     operationId: 'issueDispatchRunGitCredentials',
     method: 'POST',
     path: '/api/v1/dispatch-runs/{id}/git-credential',

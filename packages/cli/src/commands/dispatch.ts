@@ -57,6 +57,8 @@ import {
   renderAgentFailure,
   renderAgentSuccess,
   renderClaimRefusal,
+  pushedButUnlinked,
+  renderNoLinkedPullRequest,
   renderNothingPushed,
   renderFindingsPolicy,
   renderReplanSubmitted,
@@ -627,6 +629,33 @@ export async function deliver(input: DeliverInput): Promise<void> {
       info('');
       info(renderNothingPushed(key, dispatch));
       await reporter.close('completed');
+      return;
+    }
+
+    // ⚠️ PUSHED, BUT LINKED TO NOTHING (MOTIR-10877). The leg linked every pull request it
+    // could find (`runDelivery.ts`); one that found none must not report a clean
+    // Implemented — that is the card nothing closes on merge and no CI watch can see. The
+    // leg records why, naming each branch, and the card stays In Progress.
+    if (pushedButUnlinked(verdict)) {
+      const unlinked = verdict.delivery?.unlinked ?? [];
+      addExclude(serverUrl, projectKey, { key });
+      reporter.event({
+        kind: 'card_settled',
+        workItemKey: key,
+        disposition: 'failed',
+        data: {
+          reason: 'no_linked_pull_request',
+          branches: unlinked.map((u) => ({
+            repository: u.repository,
+            branch: u.branch,
+            detail: u.reason,
+          })),
+        },
+      });
+      info('');
+      info(renderNoLinkedPullRequest(key, unlinked));
+      await reporter.close('halted');
+      process.exitCode = 1;
       return;
     }
 

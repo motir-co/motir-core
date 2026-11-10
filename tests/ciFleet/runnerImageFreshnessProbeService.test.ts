@@ -198,7 +198,11 @@ describe('runnerImageFreshnessProbeService.check', () => {
       `git tag runner-v<next> ${SCRIPT_CHANGE} && git push origin runner-v<next>`,
     );
     expect(error.message).toContain('.github/workflows/release-runner-image.yml');
-    expect(error.message).toContain('set MOTIR_RUNNER_IMAGE to the digest');
+    // The pin is a pull request the release opens, not a secret a person sets (MOTIR-10883).
+    expect(error.message).toContain(
+      'merge the pull request the release opens on chore/runner-image-pin',
+    );
+    expect(error.message).toContain('sets MOTIR_RUNNER_IMAGE to the digest it pins');
   });
 
   it('is CURRENT when the build contains the newest change to every input (criterion 2)', async () => {

@@ -1,6 +1,7 @@
 // Client-side Server-Sent-Events frame parsing — shared by every browser
-// consumer of a motir-ai job stream (the `useExplanationDraft` draft hook and the
-// `useDiscoveryChat` onboarding loop). The server side has its own parser in
+// consumer of a motir-ai job stream (the `useExplanationDraft` draft hook, the
+// `useDiscoveryChat` onboarding loop, and — for the progress-envelope unwrap —
+// the planning streams' `consumeStream`). The server side has its own parser in
 // `lib/ai/motirAiClient.ts` (Node stream); this is the DOM `fetch().body` reader
 // counterpart. Pure + browser-safe (no imports) so it unit-tests trivially.
 //
@@ -52,8 +53,11 @@ const PROGRESS_ENVELOPE_KEYS: ReadonlySet<string> = new Set(['jobId', 'seq', 'da
  * no key beside `jobId` / `seq` / `data` — and the envelope's `jobId` and `seq`
  * win over any the payload names. Every other shape (a job status frame, an
  * `error` problem, a frame a test seam writes flat, a payload that is not an
- * object) is returned unchanged. The rule is kept identical to the one MOTIR-10864
- * gives the planning streams' `consumeStream` (`lib/planning/planEditsClient.ts`).
+ * object) is returned unchanged.
+ *
+ * It is the ONE copy of the rule (MOTIR-10880): the planning streams'
+ * `consumeStream` (`lib/planning/planEditsClient.ts`), the job-stream hooks and
+ * the server-side `walkPositionOf` all read a relayed frame through it.
  */
 export function unwrapProgressFrame(data: unknown): unknown {
   if (!isRecord(data) || typeof data['seq'] !== 'number') return data;

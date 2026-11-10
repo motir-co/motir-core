@@ -9,28 +9,6 @@ migrate task, rolls web, worker and relay, and records the digest in
 `/<prefix>/core/image-digest` only when every service has completed. Any
 failure leaves the previous tasks serving.
 
-## The hosted-agent image pin
-
-The deploy also applies the hosted-agent image pin (MOTIR-10882).
-`infra/hosted-agent-image.ref` holds the one image every hosted run boots,
-`ghcr.io/motir-co/motir-hosted-agent@sha256:…`, and the workflow passes it as
-`--hosted-agent-pin infra/hosted-agent-image.ref`. After the migrate task exits
-0 and before the roll, the script writes that image into the
-`<prefix>/core/motir-hosted-agent-image` secret, the `MOTIR_HOSTED_AGENT_IMAGE`
-the web and worker read. ECS reads a secret only when a task starts, so the
-roll is what makes the new tasks read it. A secret that already holds the pin is
-left alone. When the roll fails, the script puts the previous image back before it rolls back, so
-the rolled-back tasks boot what they booted before.
-
-Nobody edits the file by hand in the normal course. After every publish on
-`main`, `.github/workflows/hosted-agent-image.yml`'s `pin` job opens or updates
-one pull request on the branch `chore/hosted-agent-image-pin` that writes the
-new digest into it, and `.github/workflows/hosted-agent-pin.yml` pulls that
-image anonymously and runs the smoke test and the provider probe against it.
-Merging the pull request is the deliberate pin. Reverting it is the rollback.
-The daily health check fails when a newer `main` build has gone unpinned for
-more than a day, or the pin is more than a week behind it.
-
 ## Independent of the Fly deploy
 
 The workflow is independent of the Fly deploy, which is the `deploy` job of
@@ -70,11 +48,31 @@ still holds its placeholder:
    recorded digest.
 4. Delete `AWS_DEPLOY_NO_ROLL`. Every later merge rolls the services.
 
+## Image pins
+
+The deploy also passes `--pins infra/image-pins`. Each file there is one image
+pin: its name is a secret under `<prefix>/core/`, and its line is a
+pull-by-digest reference (MOTIR-10883, `infra/image-pins/README.md`). After the
+migrate task and before the roll, the script writes each pin whose secret holds
+another value, so the tasks the roll starts read it; ECS reads secrets only at
+task start. A failed roll puts the previous value back before it rolls the
+services back, so the tasks the rollback starts read the old image. The
+directory is the only place a pin is written: a release lane opens the pull
+request that changes it, and reverting that pull request rolls it back. The
+pins are `motir-runner-image` (MOTIR-10883) and `motir-hosted-agent-image`
+(MOTIR-10882); the daily health check's `hosted-agent-image-lag` step fails when
+the hosted-agent pin lags `main`'s newest build.
+
+The deploy role needs motir-infra's `WriteImagePins` statement for this. Until
+it is deployed the pin reads `not_granted` on the result line and the services
+roll as before.
+
 ## Reading a run
 
 The job summary shows the digest and, on success, the deploy script's JSON
 result line:
-`{ digest, migrate: { taskArn, exitCode }, services: [{ name, taskDefinition, rolloutState }], hostedAgentImage: { image, previous, written, restored }, recorded }`.
+`{ digest, migrate: { taskArn, exitCode }, services: [{ name, taskDefinition, rolloutState }], pins: [{ name, value, state }], recorded }`,
+where a pin's `state` is `written`, `unchanged`, `not_granted` or `restored`.
 On a failure the step log shows why (a migrate exit code or stop reason with
 the last 50 migrate log lines, or the services' rollout states) and that every
 service is back on its previous revision.

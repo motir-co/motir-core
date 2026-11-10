@@ -635,6 +635,40 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[2]?.body).toEqual({ key: 'PROD-1', comment: 'x', toPlanning: false });
   });
 
+  // ── The run's How to test (MOTIR-10877) ───────────────────────────────────
+  it('publishes a run’s How to test on the run’s own path, leaving out what is empty', async () => {
+    server.scriptV1({
+      'POST /api/v1/dispatch-runs/{id}/how-to-test': {
+        body: { testInstructionsId: 'ti_1', created: true },
+      },
+    });
+    const repos = [{ repo: 'acme/web', commitSha: 'abc1234' }];
+    await expect(
+      connected().publishDispatchRunHowToTest({
+        runId: 'run_1',
+        key: 'PROD-1',
+        bodyMd: '## Locally',
+        previewPath: '/items/PROD-1',
+        repos,
+      }),
+    ).resolves.toEqual({ testInstructionsId: 'ti_1', created: true });
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/dispatch-runs/run_1/how-to-test');
+    expect(server.v1Calls[0]?.body).toEqual({
+      key: 'PROD-1',
+      bodyMd: '## Locally',
+      previewPath: '/items/PROD-1',
+      repos,
+    });
+
+    await connected().publishDispatchRunHowToTest({
+      runId: 'run_1',
+      key: 'PROD-1',
+      bodyMd: '## Locally',
+      repos: [],
+    });
+    expect(server.v1Calls[1]?.body).toEqual({ key: 'PROD-1', bodyMd: '## Locally' });
+  });
+
   // ── The REPAIR claim (MOTIR-5464 / MOTIR-5465) ────────────────────────────
   it('claims a REPAIR on the work item’s own path and restates every pull request', async () => {
     const pullRequest = {

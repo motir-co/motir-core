@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { jobStreamBody } from './job-stream-frames';
 
 // The onboarding specs' BROWSER-SIDE stubs (Story MOTIR-8238 · MOTIR-8257),
 // shared so a new walk does not copy them.
@@ -116,15 +117,20 @@ export const FULL_PREPLAN = {
   },
 };
 
-/** The conductor SSE: an assistant turn + one docs frame announcing all four tiers. */
-export const CONDUCTOR_SSE =
-  `event: assistant\ndata: ${JSON.stringify({ text: "Here's the direction I've put together." })}\n\n` +
-  `event: docs\ndata: ${JSON.stringify({
-    docs: TIERS.map((kind, i) => ({ id: `d${i + 1}`, kind, version: 1 })),
-  })}\n\n`;
+/** The conductor job `stubDiscoveryApi`'s chat door answers with. */
+const CONDUCTOR_JOB_ID = 'job_test';
+
+/** The conductor SSE: an assistant turn + one docs frame announcing all four tiers,
+ *  on motir-ai's wire — each in its `{ jobId, seq, data }` envelope (MOTIR-10880). */
+export const CONDUCTOR_SSE = jobStreamBody(CONDUCTOR_JOB_ID, [
+  ['assistant', { text: "Here's the direction I've put together." }],
+  ['docs', { docs: TIERS.map((kind, i) => ({ id: `d${i + 1}`, kind, version: 1 })) }],
+]);
 
 /** A conductor turn that only replies: no tiers, so the loop stays on the hub. */
-export const CONDUCTOR_REPLY_SSE = `event: assistant\ndata: ${JSON.stringify({ text: 'Who is it for?' })}\n\n`;
+export const CONDUCTOR_REPLY_SSE = jobStreamBody(CONDUCTOR_JOB_ID, [
+  ['assistant', { text: 'Who is it for?' }],
+]);
 
 /**
  * Stub the three motir-ai-backed endpoints. Pre-plan returns the EMPTY state
@@ -157,7 +163,7 @@ export async function stubDiscoveryApi(
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ jobId: 'job_test' }),
+      body: JSON.stringify({ jobId: CONDUCTOR_JOB_ID }),
     });
   });
 

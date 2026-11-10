@@ -71,23 +71,25 @@ import {
   waitForSeedJobsToSettle,
   type AiCadenceSeed,
 } from './_helpers/ai-cadence-seed';
+import { jobStreamBody } from './_helpers/job-stream-frames';
 
 test.describe.configure({ timeout: 180_000 });
 
 // ── Stub the browser→motir-ai sprint-planning boundary ───────────────────────
 
-/** The two SSE frames the shipped `plan_sprint` handler emits, then `done`. */
+/** The two SSE frames the shipped `plan_sprint` handler emits, then `done` — on
+ *  motir-ai's wire, each progress frame in its `{ jobId, seq, data }` envelope. */
 function sprintPlanSse(itemCount: number, sprintCount: number): string {
   const packed = {
     sprintLengthDays: SPRINT_LENGTH_DAYS,
     capacityMinutes: SPRINT_LENGTH_DAYS * 240,
     sprints: sprintCount,
   };
-  return (
-    `event: read\ndata: ${JSON.stringify({ packing: itemCount })}\n\n` +
-    `event: packed\ndata: ${JSON.stringify(packed)}\n\n` +
-    `event: done\ndata: {}\n\n`
-  );
+  return jobStreamBody(SPRINT_JOB_ID, [
+    ['read', { packing: itemCount }],
+    ['packed', packed],
+    ['done', {}],
+  ]);
 }
 
 /**

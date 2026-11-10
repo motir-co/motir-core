@@ -10,6 +10,7 @@ import { buildProgram } from '../src/program.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
+import { answerPrView } from './fakePullRequest.js';
 import {
   startTestServer,
   v1Detail,
@@ -124,6 +125,8 @@ const AGENT = { agent: `${process.execPath} -e ""` };
 /** A git runner that answers like a repo whose work reached the remote. */
 const PUSHED: CommandRunner = (bin, args) => {
   const ok = (stdout: string): CommandResult => ({ exitCode: 0, stdout, stderr: '' });
+  const pr = answerPrView(bin, args);
+  if (pr) return pr;
   if (bin === 'git' && args[0] === 'ls-remote') return ok('abc\trefs/heads/subtask/PROD-7');
   if (bin === 'git' && args[0] === 'log') return ok('abc');
   if (bin === 'git' && args[0] === 'rev-parse') return { exitCode: 1, stdout: '', stderr: '' };
@@ -353,7 +356,7 @@ describe('no flag changes a default', () => {
     // `agentReport` and `agentReportDecisions` are not flags: every prompt read
     // declares that this CLI posts the agent's self-report (MOTIR-8810) and the
     // decisions in it (MOTIR-10000), so they are the keys always present.
-    expect(queries).toEqual([['agentReport', 'agentReportDecisions']]);
+    expect(queries).toEqual([['agentReport', 'agentReportDecisions', 'agentReportDelivery']]);
   });
 
   it('rejects an unknown findings flag rather than ignoring it', () => {

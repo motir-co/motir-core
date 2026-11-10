@@ -13,7 +13,7 @@
 #     §6), never a tag. The push is a LATER STEP of the job that just proved the
 #     image, so a green build is the publish gate.
 #   - after that publish: the `pin` job opens (or updates) ONE pull request that
-#     writes the new digest into `infra/hosted-agent-image.ref` (MOTIR-10882).
+#     writes the new digest into `infra/image-pins/motir-hosted-agent-image` (MOTIR-10882).
 #     The publish alone changes nothing production boots: merging that pull
 #     request is the deliberate pin, the AWS deploy writes the file's image into
 #     the `MOTIR_HOSTED_AGENT_IMAGE` secret before it rolls, and reverting it is
@@ -235,7 +235,7 @@ jobs:
     permissions:
       contents: read
     env:
-      PIN_FILE: infra/hosted-agent-image.ref
+      PIN_FILE: infra/image-pins/motir-hosted-agent-image
       PIN_BRANCH: chore/hosted-agent-image-pin
     steps:
       - uses: actions/create-github-app-token@v2

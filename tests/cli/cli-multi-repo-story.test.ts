@@ -185,6 +185,27 @@ async function recordMerge(repoId: string, workItemId: string, number: number) {
   });
 }
 
+/**
+ * Pull request #1 on `repoId`, OPEN with one passing check — the one the fake `gh` names for
+ * that repository's first `pr create`. The run now LINKS the pull request its agent opened and
+ * then watches its CI (MOTIR-10877); seeding a green check is what lets that watch end on its
+ * first read, as a green build would, instead of waiting on CI that nobody in this harness runs.
+ */
+async function seedPassingPullRequest(repoId: string): Promise<void> {
+  const row = await adminDb.githubPullRequest.create({
+    data: { repoId, number: 1, state: 'open', merged: false, headRef: 'seeded', baseRef: 'main' },
+  });
+  await adminDb.githubCheckRun.create({
+    data: {
+      pullRequestId: row.id,
+      commitSha: 'abc1234def5678abc1234def5678abc1234def56',
+      checkName: 'ci',
+      conclusion: 'success',
+      conclusionAt: new Date(),
+    },
+  });
+}
+
 interface TwoRepoWorld {
   fx: WorkItemFixture;
   core: LocalRepo;
@@ -197,7 +218,9 @@ interface TwoRepoWorld {
 async function twoRepoWorld(): Promise<TwoRepoWorld> {
   const fx = await linkedProject();
   const coreId = await connectRepo(fx, 'motir-core');
-  await connectRepo(fx, 'motir-ai');
+  const aiId = await connectRepo(fx, 'motir-ai');
+  await seedPassingPullRequest(coreId);
+  await seedPassingPullRequest(aiId);
   const core = makeLocalRepo(ws.root, 'motir-core');
   const ai = makeLocalRepo(ws.root, 'motir-ai');
   return { fx, core, ai, coreId, gh: installFakeGh(ws.binDir) };
@@ -283,7 +306,7 @@ describe('a two-repository card, end to end through the BUILT binary', () => {
     // 6 — warning, not refusal. The operator is the one who knows whether that
     //     half is already merged or whether their checkout lives elsewhere.
     const fx = await linkedProject();
-    await connectRepo(fx, 'motir-core');
+    await seedPassingPullRequest(await connectRepo(fx, 'motir-core'));
     // ⚠️ Un-addressable ON PURPOSE (MOTIR-3588). A missing checkout Motir CAN
     // clone is now materialized before the agent starts, which is the fix; the
     // half-done run this test is about survives only where there is nothing to
@@ -320,7 +343,7 @@ describe('the SINGLE-repository control, through the same harness', () => {
     // 7 — every card in the tenant today pins one repository, and none of them
     //     may be able to tell that this shipped.
     const fx = await linkedProject();
-    await connectRepo(fx, 'motir-core');
+    await seedPassingPullRequest(await connectRepo(fx, 'motir-core'));
     const core = makeLocalRepo(ws.root, 'motir-core');
     const gh = installFakeGh(ws.binDir);
     const agent = writeFakeAgent(join(ws.root, '.agent'));

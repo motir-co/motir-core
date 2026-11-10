@@ -16,10 +16,7 @@ import {
   DATABASE_URL,
   DIGEST,
   FakeDeployAws,
-  HOSTED_AGENT_SECRET,
-  LIVE_AGENT,
   OLD_DIGEST,
-  PINNED_AGENT,
   OTHER_REPO,
   PREFIX,
   SECRET_ARN,
@@ -33,43 +30,19 @@ import {
 
 const ENV = { AWS_REGION: 'us-east-1', AWS_DEPLOY_NAME_PREFIX: PREFIX };
 const DIGEST_PARAM = imageDigestParameterName(PREFIX);
-const CHANGES = [
-  'registerTaskDefinition',
-  'runTask',
-  'updateService',
-  'putParameter',
-  'putSecretValue',
-];
-/** The pin file the workflow passes, and a reader that serves it (MOTIR-10882). */
-const PIN_FILE = 'infra/hosted-agent-image.ref';
-const PINNED = ['--digest', DIGEST, '--hosted-agent-pin', PIN_FILE];
-const pinFiles = (text: string) => (path: string) => {
-  if (path !== PIN_FILE) throw new Error(`ENOENT: no such file, open '${path}'`);
-  return text;
-};
+const CHANGES = ['registerTaskDefinition', 'runTask', 'updateService', 'putParameter'];
 
 /** Every action issued across this file, held to the grant at the end. */
 const issued = new Set<string>();
 
-async function deploy(
-  aws: FakeDeployAws,
-  argv: string[] = ['--digest', DIGEST],
-  env = ENV,
-  readFile = pinFiles(`${PINNED_AGENT}\n`),
-) {
+async function deploy(aws: FakeDeployAws, argv: string[] = ['--digest', DIGEST], env = ENV) {
   const out: string[] = [];
   const err: string[] = [];
   const regions: string[] = [];
-  const code = await main(
-    argv,
-    env,
-    { out: (l) => out.push(l), err: (l) => err.push(l) },
-    (r) => {
-      regions.push(r);
-      return aws;
-    },
-    readFile,
-  );
+  const code = await main(argv, env, { out: (l) => out.push(l), err: (l) => err.push(l) }, (r) => {
+    regions.push(r);
+    return aws;
+  });
   for (const action of aws.actions()) issued.add(action);
   const both = [...out, ...err].join('\n');
   expect(both).not.toContain(DATABASE_URL);
@@ -122,7 +95,7 @@ describe('a successful deploy', () => {
           rolloutState: 'COMPLETED',
         },
       ],
-      hostedAgentImage: null,
+      pins: [],
       recorded: true,
     });
     expect(aws.params.get(DIGEST_PARAM)).toBe(DIGEST);
@@ -415,195 +388,6 @@ describe('--no-roll', () => {
   });
 });
 
-describe('the hosted-agent image pin (MOTIR-10882)', () => {
-  const secretCalls = (aws: FakeDeployAws) =>
-    aws.calls.filter(([m]) => m === 'getSecretValue' || m === 'putSecretValue');
-
-  it('writes the pinned image into the secret after the migrate and before the first roll', async () => {
-    const { aws } = coreFleet();
-    const { code, result, err } = await deploy(aws, PINNED);
-    expect(code).toBe(0);
-    expect(aws.secrets.get(HOSTED_AGENT_SECRET)).toBe(PINNED_AGENT);
-    expect(secretCalls(aws)).toEqual([
-      ['getSecretValue', HOSTED_AGENT_SECRET],
-      ['putSecretValue', HOSTED_AGENT_SECRET, PINNED_AGENT],
-    ]);
-    const methods = aws.methods();
-    expect(methods.lastIndexOf('describeTask')).toBeLessThan(methods.indexOf('putSecretValue'));
-    expect(methods.indexOf('putSecretValue')).toBeLessThan(methods.indexOf('updateService'));
-    expect(result).toMatchObject({
-      recorded: true,
-      hostedAgentImage: {
-        image: PINNED_AGENT,
-        previous: LIVE_AGENT,
-        written: true,
-        restored: false,
-      },
-    });
-    expect(err.join('\n')).toContain(`${HOSTED_AGENT_SECRET} now holds ${PINNED_AGENT}`);
-  });
-
-  it('writes no new secret version when the secret already holds the pin', async () => {
-    const { aws } = coreFleet();
-    aws.secrets.set(HOSTED_AGENT_SECRET, PINNED_AGENT);
-    const { code, result } = await deploy(aws, PINNED);
-    expect(code).toBe(0);
-    expect(aws.methods()).not.toContain('putSecretValue');
-    expect(result).toMatchObject({
-      hostedAgentImage: { previous: PINNED_AGENT, written: false, restored: false },
-    });
-  });
-
-  it('writes a secret that held no string, and reports it as empty', async () => {
-    const { aws } = coreFleet();
-    aws.secrets.delete(HOSTED_AGENT_SECRET);
-    const { code, result, err } = await deploy(aws, PINNED);
-    expect(code).toBe(0);
-    expect(aws.secrets.get(HOSTED_AGENT_SECRET)).toBe(PINNED_AGENT);
-    expect(result).toMatchObject({ hostedAgentImage: { previous: null, written: true } });
-    expect(err.join('\n')).toContain('(was empty)');
-  });
-
-  it('puts the previous image back before rolling back, so the rolled-back tasks boot it', async () => {
-    const { aws } = coreFleet();
-    aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'FAILED' }));
-    const { code, result } = await deploy(aws, PINNED);
-    expect(code).toBe(1);
-    expect(aws.secrets.get(HOSTED_AGENT_SECRET)).toBe(LIVE_AGENT);
-    // The rollback's updateService calls come last; the restore lands before them.
-    const methods = aws.methods();
-    const restore = methods.lastIndexOf('putSecretValue');
-    expect(restore).toBeGreaterThan(methods.indexOf('updateService'));
-    expect(restore).toBeLessThan(methods.lastIndexOf('updateService'));
-    expect(result).toMatchObject({
-      recorded: false,
-      hostedAgentImage: { previous: LIVE_AGENT, written: true, restored: true },
-    });
-  });
-
-  it('leaves the secret alone after a failed roll when it wrote nothing', async () => {
-    const { aws } = coreFleet();
-    aws.secrets.set(HOSTED_AGENT_SECRET, PINNED_AGENT);
-    aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'FAILED' }));
-    const { code, result } = await deploy(aws, PINNED);
-    expect(code).toBe(1);
-    expect(aws.methods()).not.toContain('putSecretValue');
-    expect(result).toMatchObject({ hostedAgentImage: { written: false, restored: false } });
-  });
-
-  it('does not restore an empty previous value, and says the roll failed', async () => {
-    const { aws } = coreFleet();
-    aws.secrets.delete(HOSTED_AGENT_SECRET);
-    aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'FAILED' }));
-    const { code, result } = await deploy(aws, PINNED);
-    expect(code).toBe(1);
-    expect(aws.methods().filter((m) => m === 'putSecretValue')).toHaveLength(1);
-    expect(result).toMatchObject({ hostedAgentImage: { previous: null, restored: false } });
-  });
-
-  it('reports a restore AWS refused, and still fails the roll with its own reason', async () => {
-    const { aws } = coreFleet();
-    aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'FAILED' }));
-    const put = aws.putSecretValue.bind(aws);
-    let puts = 0;
-    aws.putSecretValue = (name, value) =>
-      ++puts === 1 ? put(name, value) : Promise.reject(new Error('AccessDeniedException'));
-    const { code, err, result } = await deploy(aws, PINNED);
-    expect(code).toBe(1);
-    expect(err.join('\n')).toContain(`could not put back ${LIVE_AGENT}: AccessDeniedException`);
-    expect(err.at(-1)).toMatch(/every service is back on its previous revision/);
-    expect(result).toMatchObject({ hostedAgentImage: { restored: false } });
-  });
-
-  it('reports a non-Error restore refusal generically', async () => {
-    const { aws } = coreFleet();
-    aws.rollouts.set('worker', (_p, to) => ({ primary: to, state: 'FAILED' }));
-    const put = aws.putSecretValue.bind(aws);
-    let puts = 0;
-    aws.putSecretValue = (name, value) =>
-      ++puts === 1 ? put(name, value) : Promise.reject('boom' as unknown as Error);
-    const { err } = await deploy(aws, PINNED);
-    expect(err.join('\n')).toContain(`could not put back ${LIVE_AGENT}: failed`);
-  });
-
-  it('fails without rolling anything when the secret write is refused', async () => {
-    const { aws } = coreFleet();
-    aws.failSecretPut = true;
-    const { code, err, result } = await deploy(aws, PINNED);
-    expect(code).toBe(1);
-    expect(aws.methods()).not.toContain('updateService');
-    expect(aws.methods()).not.toContain('putParameter');
-    expect(err.at(-1)).toBe('error: Error: AccessDeniedException');
-    expect(result).toMatchObject({ recorded: false, hostedAgentImage: null });
-  });
-
-  it('writes the secret on a --no-roll deploy too', async () => {
-    const aws = new FakeDeployAws();
-    const { code } = await deploy(aws, [...PINNED, '--no-roll']);
-    expect(code).toBe(0);
-    expect(aws.secrets.get(HOSTED_AGENT_SECRET)).toBe(PINNED_AGENT);
-  });
-
-  it('touches no secret when the migrate fails', async () => {
-    const aws = new FakeDeployAws();
-    aws.migrate = migrateExits(1);
-    const { code } = await deploy(aws, [...PINNED, '--no-roll']);
-    expect(code).toBe(1);
-    expect(secretCalls(aws)).toEqual([]);
-  });
-
-  it('touches no secret without --hosted-agent-pin', async () => {
-    const { aws } = coreFleet();
-    await deploy(aws);
-    expect(secretCalls(aws)).toEqual([]);
-  });
-
-  it.each([
-    ['two lines', `${PINNED_AGENT}\n${LIVE_AGENT}\n`, /exactly one line, not 2/],
-    ['an empty file', '', /exactly one line, not 0/],
-    ['a tag', 'ghcr.io/motir-co/motir-hosted-agent:main\n', /must name ghcr\.io/],
-    ['another repository', `ghcr.io/motir-co/motir-sandbox@sha256:${'b'.repeat(64)}`, /must name/],
-  ])('refuses a pin file holding %s before any AWS call', async (_case, text, message) => {
-    const { aws } = coreFleet();
-    const { code, err } = await deploy(aws, PINNED, ENV, pinFiles(text));
-    expect(code).toBe(1);
-    expect(aws.calls).toEqual([]);
-    expect(err.at(-1)).toMatch(message);
-    expect(err.at(-1)).toMatch(/^error: --hosted-agent-pin: /);
-  });
-
-  it('refuses a pin file it cannot read before any AWS call', async () => {
-    const { aws } = coreFleet();
-    const { code, err } = await deploy(aws, ['--digest', DIGEST, '--hosted-agent-pin', 'nope']);
-    expect(code).toBe(1);
-    expect(aws.calls).toEqual([]);
-    expect(err.at(-1)).toMatch(/ENOENT/);
-  });
-
-  it('reports a non-Error read failure generically', async () => {
-    const { aws } = coreFleet();
-    const { err } = await deploy(aws, PINNED, ENV, () => {
-      throw 'boom' as unknown as Error;
-    });
-    expect(err.at(-1)).toBe('error: --hosted-agent-pin: failed');
-  });
-
-  it('reads the real pin file from disk by default, and the checked-in pin is well formed', async () => {
-    const aws = new FakeDeployAws();
-    const out: string[] = [];
-    const code = await main(
-      [...PINNED, '--no-roll'],
-      ENV,
-      { out: (l) => out.push(l), err: () => undefined },
-      () => aws,
-    );
-    expect(code).toBe(0);
-    const written = aws.secrets.get(HOSTED_AGENT_SECRET);
-    expect(written).toBe(readFileSync(PIN_FILE, 'utf8').trim());
-    for (const action of aws.actions()) issued.add(action);
-  });
-});
-
 describe('the grant and the credentials', () => {
   it('reports a non-Error throw generically', async () => {
     const aws = new FakeDeployAws();
@@ -655,10 +439,11 @@ describe('the grant and the credentials', () => {
         'ecs:StopTask',
         'ecs:UpdateService',
         'logs:GetLogEvents',
-        'ssm:GetParameter',
-        'ssm:PutParameter',
+        // The image pins (MOTIR-10883): motir-infra's `WriteImagePins` statement.
         'secretsmanager:GetSecretValue',
         'secretsmanager:PutSecretValue',
+        'ssm:GetParameter',
+        'ssm:PutParameter',
       ].sort(),
     );
   });
@@ -678,16 +463,16 @@ describe('parseDeployArgs', () => {
       digest: DIGEST,
       timeoutMs: 20 * 60_000,
       noRoll: false,
-      hostedAgentPin: null,
+      pinsDir: null,
     });
     expect(parseDeployArgs(['--digest', DIGEST, '--timeout-minutes', '5', '--no-roll'])).toEqual({
       digest: DIGEST,
       timeoutMs: 5 * 60_000,
       noRoll: true,
-      hostedAgentPin: null,
+      pinsDir: null,
     });
-    expect(parseDeployArgs(['--digest', DIGEST, '--hosted-agent-pin', PIN_FILE])).toMatchObject({
-      hostedAgentPin: PIN_FILE,
+    expect(parseDeployArgs(['--digest', DIGEST, '--pins', 'infra/image-pins'])).toMatchObject({
+      pinsDir: 'infra/image-pins',
     });
   });
 });

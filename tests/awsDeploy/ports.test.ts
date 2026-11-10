@@ -1,7 +1,7 @@
 import { CloudWatchLogsClient } from '@aws-sdk/client-cloudwatch-logs';
 import { ECRClient, ImageNotFoundException } from '@aws-sdk/client-ecr';
 import { ECSClient } from '@aws-sdk/client-ecs';
-import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
+import { ResourceNotFoundException, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SSMClient } from '@aws-sdk/client-ssm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { awsSdkPorts } from '@/scripts/aws-deploy/ports';
@@ -42,6 +42,43 @@ afterEach(() => {
 });
 
 describe('awsSdkPorts', () => {
+  // MOTIR-10883 — the image pins' secret reads and writes.
+  it('reads a secret, writes one, and reads a missing secret as granted and empty', async () => {
+    let missing = false;
+    const sent = stubClients((c) => {
+      if (missing) throw new ResourceNotFoundException({ message: 'no', $metadata: {} });
+      return c === 'GetSecretValueCommand' ? { SecretString: 'ref' } : {};
+    });
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.getSecretValue('motir/core/x')).toEqual({ state: 'granted', value: 'ref' });
+    await ports.putSecretValue('motir/core/x', 'new');
+    expect(sent).toEqual([
+      { command: 'GetSecretValueCommand', input: { SecretId: 'motir/core/x' } },
+      {
+        command: 'PutSecretValueCommand',
+        input: { SecretId: 'motir/core/x', SecretString: 'new' },
+      },
+    ]);
+    missing = true;
+    expect(await ports.getSecretValue('motir/core/x')).toEqual({
+      state: 'granted',
+      value: undefined,
+    });
+  });
+
+  it('reads an AccessDenied secret as not granted, and rethrows any other error', async () => {
+    let name = 'AccessDeniedException';
+    stubClients(() => {
+      const err = new Error('refused');
+      err.name = name;
+      throw err;
+    });
+    const ports = awsSdkPorts('us-east-1');
+    expect(await ports.getSecretValue('s')).toEqual({ state: 'not_granted' });
+    name = 'ThrottlingException';
+    await expect(ports.getSecretValue('s')).rejects.toThrow('refused');
+  });
+
   it('reads and overwrites a parameter, with no type or tags on the write', async () => {
     const sent = stubClients((c) =>
       c === 'GetParameterCommand' ? { Parameter: { Value: 'v' } } : {},
@@ -52,30 +89,6 @@ describe('awsSdkPorts', () => {
     expect(sent).toEqual([
       { command: 'GetParameterCommand', input: { Name: '/p' } },
       { command: 'PutParameterCommand', input: { Name: '/p', Value: 'w', Overwrite: true } },
-    ]);
-  });
-
-  it('reads and writes the hosted-agent image secret by name, one command each (MOTIR-10882)', async () => {
-    const sent = stubClients((c) =>
-      c === 'GetSecretValueCommand' ? { SecretString: 'ghcr.io/x@sha256:1' } : {},
-    );
-    const ports = awsSdkPorts('us-east-1');
-    expect(await ports.getSecretValue('motir/core/motir-hosted-agent-image')).toBe(
-      'ghcr.io/x@sha256:1',
-    );
-    await ports.putSecretValue('motir/core/motir-hosted-agent-image', 'ghcr.io/x@sha256:2');
-    expect(sent).toEqual([
-      {
-        command: 'GetSecretValueCommand',
-        input: { SecretId: 'motir/core/motir-hosted-agent-image' },
-      },
-      {
-        command: 'PutSecretValueCommand',
-        input: {
-          SecretId: 'motir/core/motir-hosted-agent-image',
-          SecretString: 'ghcr.io/x@sha256:2',
-        },
-      },
     ]);
   });
 
