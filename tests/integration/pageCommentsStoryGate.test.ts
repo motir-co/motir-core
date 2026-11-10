@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Prisma, WorkspaceRole } from '@/generated/prisma/client';
+import type { PageCommentResult } from '@/app/(authed)/pages/[pageId]/_components/pageCommentsClient';
 
 // STORY MOTIR-10866's INTEGRATION GATE (MOTIR-10875) — page-level DISCUSSION,
 // assembled, on real Postgres, through the real doors.
@@ -268,7 +269,10 @@ async function postAnchored(pageId: string, bodyMd: string, bytes: Uint8Array, q
 }
 
 /** All six writes, through the panel client, against one root. */
-function everyWrite(pageId: string, rootId: string) {
+/** Each of the six writes, typed by what every one of them answers on a refusal. */
+type AnyWrite = () => Promise<PageCommentResult<unknown>>;
+
+function everyWrite(pageId: string, rootId: string): Record<string, AnyWrite> {
   return {
     create: () => client.createPageComment(pageId, 'new'),
     reply: () => client.replyToPageComment(pageId, rootId, 'reply'),

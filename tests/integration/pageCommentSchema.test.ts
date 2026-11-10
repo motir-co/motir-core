@@ -133,7 +133,7 @@ async function makeComment(args: {
   bodyMd?: string;
   resolvedAt?: Date | null;
   resolvedById?: string | null;
-  anchor?: Uint8Array | null;
+  anchor?: Uint8Array<ArrayBuffer> | null;
   anchorQuote?: string | null;
 }) {
   return adminDb.pageComment.create({

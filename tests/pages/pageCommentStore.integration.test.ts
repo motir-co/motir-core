@@ -20,6 +20,7 @@ import {
   systemClock,
   type Clock,
   type PageCommentActor,
+  type PageCommentDto,
 } from '@/lib/pages';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
@@ -225,7 +226,7 @@ describe('page comments through the adapter', () => {
     const root = await inTenant(t, t.ownerId, (st) =>
       createPageComment(st, clock, { ...s, bodyMd: 'Root' }),
     );
-    const replies = [];
+    const replies: PageCommentDto[] = [];
     for (const body of ['one', 'two', 'three']) {
       replies.push(
         await inTenant(t, t.ownerId, (st) =>
