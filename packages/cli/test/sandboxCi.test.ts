@@ -563,6 +563,105 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
     expect(images).toContain('No digest was published for');
   });
 
+  // ── A release that half-publishes says so, and a re-run finishes it (MOTIR-10884)
+  // `cli-v0.17.2` lost six of nine pushes to an intermittent GHCR `denied`, every
+  // check of the published set was SKIPPED because it needed every leg, and the
+  // re-run rebuilt all nine and moved three immutable tags. These pin the three
+  // fixes: the push is retried apart from the build, a job that names what is
+  // missing runs whatever the legs did, and a re-run builds only what is missing.
+  describe('and survives a refused push, names a partial release, and re-publishes only the gap', () => {
+    const jobOf = (source: string, id: string): string => {
+      const lines = source.split('\n').filter((line) => !line.trim().startsWith('#'));
+      const start = lines.findIndex((line) => line === `  ${id}:`);
+      if (start === -1) throw new Error(`sandbox-images.yml has no \`${id}:\` job`);
+      const after = lines.slice(start + 1);
+      const end = after.findIndex((line) => /^ {2}[A-Za-z0-9_-]+:$/.test(line));
+      return [lines[start], ...(end === -1 ? after : after.slice(0, end))].join('\n');
+    };
+    const base = jobOf(images, 'sandbox-smoke');
+    const legs = jobOf(images, 'sandbox-profiles');
+    const setup = jobOf(images, 'sandbox-profiles-matrix');
+    const complete = jobOf(images, 'sandbox-complete');
+
+    it.each([
+      [
+        'base',
+        base,
+        '- name: Build the base image for both architectures',
+        '- name: Push the base image',
+      ],
+      [
+        'profile',
+        legs,
+        '- name: Build ${{ matrix.profile.id }} for both architectures',
+        '- name: Push ${{ matrix.profile.id }}',
+      ],
+    ])('builds the %s image ONCE, then pushes it through the retry', (_name, job, build, push) => {
+      const built = job.indexOf(build);
+      const pushed = job.indexOf(push);
+      expect(built, 'a separate two-platform build step').toBeGreaterThan(-1);
+      expect(pushed).toBeGreaterThan(built);
+      const buildStep = job.slice(built, pushed);
+      const pushStep = job.slice(pushed);
+      // The build pushes nothing, so a failure there is a build failure and is
+      // never retried; the cache it writes cannot fail the release either.
+      expect(buildStep).not.toContain('push: true');
+      expect(buildStep).toContain('platforms: linux/amd64,linux/arm64');
+      expect(buildStep).toMatch(/cache-to: type=gha,[^\n]*,ignore-error=true/);
+      // The push is the script around the push COMMAND, reading the digest the
+      // record step needs from buildx's metadata file.
+      expect(pushStep).toContain('node packages/cli/sandbox/smoke/push-with-retry.mjs');
+      expect(pushStep).toContain('--github-output "$GITHUB_OUTPUT"');
+      expect(pushStep).toContain('-- docker buildx build');
+      expect(pushStep).toContain('--platform linux/amd64,linux/arm64');
+      expect(pushStep).toContain('--push');
+      expect(pushStep).toContain('id: push');
+      expect(pushStep).not.toContain('docker/build-push-action');
+    });
+
+    it('plans the release from the registry, and skips what this version already has', () => {
+      expect(setup).toContain('node packages/cli/sandbox/smoke/release-set.mjs plan');
+      expect(setup).toContain('--digests "$DIGESTS"');
+      expect(setup).toContain(
+        'profiles: ${{ inputs.publish && steps.plan.outputs.profiles || steps.read.outputs.profiles }}',
+      );
+      // The already-published digests join the same artifact family the verify
+      // jobs and the README record read, so they see the WHOLE release.
+      expect(setup).toContain('name: sandbox-digest-already-published');
+      // ...and the pull-back still checks every image, not only the ones this run pushed.
+      expect(setup).toContain('all_profiles: ${{ steps.read.outputs.profiles }}');
+      expect(jobOf(images, 'sandbox-published')).toContain(
+        'PROFILES: ${{ needs.sandbox-profiles-matrix.outputs.all_profiles }}',
+      );
+      expect(base).toContain('needs: sandbox-profiles-matrix');
+      expect(base).toContain(
+        "if: ${{ !inputs.publish || needs.sandbox-profiles-matrix.outputs.base_published != 'true' }}",
+      );
+      // An empty matrix is a hard error, so a fully published re-run skips the legs.
+      expect(legs).toContain("if: ${{ needs.sandbox-profiles-matrix.outputs.profiles != '[]' }}");
+    });
+
+    it('names every missing image in a job that runs however the legs ended', () => {
+      expect(complete).toContain('if: ${{ inputs.publish && !cancelled() }}');
+      expect(complete).toContain(
+        'needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]',
+      );
+      expect(complete).toContain('node packages/cli/sandbox/smoke/release-set.mjs verify');
+      expect(complete).toContain('--profiles packages/cli/sandbox/smoke/profiles.json');
+      // Anonymous, like `sandbox-public`: the consumer's question.
+      expect(complete).not.toContain('docker/login-action');
+      expect(complete).not.toContain('packages:');
+      expect(complete).toMatch(/permissions:\n\s+contents: read\n/);
+    });
+
+    it('ships both scripts with a typed contract, like their neighbours', () => {
+      for (const name of ['push-with-retry', 'release-set']) {
+        expect(existsSync(join(SMOKE_DIR, `${name}.mjs`))).toBe(true);
+        expect(existsSync(join(SMOKE_DIR, `${name}.d.mts`))).toBe(true);
+      }
+    });
+  });
+
   // ── The consumer's question (MOTIR-2010) ─────────────────────────────────
   // `sandbox-published` above pulls as the PUBLISHER, for whom a private package
   // is pullable — which is how `cli-v0.1.0` shipped nine images that no user
@@ -586,7 +685,9 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
     })();
 
     it('runs on the release lane only, after everything has been published', () => {
-      expect(publicJob).toContain('if: ${{ inputs.publish }}');
+      // `!failure()` so a re-run that SKIPPED an already-published job still
+      // asks (MOTIR-10884); still the release lane only.
+      expect(publicJob).toContain('if: ${{ inputs.publish && !cancelled() && !failure() }}');
       expect(publicJob).toContain(
         'needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]',
       );
@@ -638,7 +739,7 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
     })();
 
     it('runs on the release lane only, after everything has been published', () => {
-      expect(commandsJob).toContain('if: ${{ inputs.publish }}');
+      expect(commandsJob).toContain('if: ${{ inputs.publish && !cancelled() && !failure() }}');
       expect(commandsJob).toContain(
         'needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]',
       );

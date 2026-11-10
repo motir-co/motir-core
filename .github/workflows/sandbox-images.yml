@@ -48,6 +48,12 @@ jobs:
   # ── The base image + the two in-container suites ───────────────────────────
   sandbox-smoke:
     name: Sandbox smoke (loop + failure + confinement)
+    # The release plan below says whether `:base-<version>` is already in the
+    # registry (MOTIR-10884). A re-run of a tag whose base landed skips this job
+    # rather than rebuilding it and moving an immutable tag to new bytes. On the
+    # pull-request lane the plan publishes nothing and this always runs.
+    needs: sandbox-profiles-matrix
+    if: ${{ !inputs.publish || needs.sandbox-profiles-matrix.outputs.base_published != 'true' }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Sized on the RELEASE lane, which is the slow one: it also runs the
     # two-platform "Push the base image" step below. `ci.yml` and
@@ -193,26 +199,58 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push the base image
+      # ── BUILD, then PUSH, as two steps (MOTIR-10884) ─────────────────────
+      #
+      # They used to be one `build-push-action` step with `push: true`, so a push
+      # GHCR refused failed the job outright: `cli-v0.17.2` built and smoked all
+      # nine images and then lost six of them to an intermittent
+      # `denied: permission_denied: write_package`. Split, the expensive part —
+      # the two-platform build, arm64 under QEMU — happens ONCE, here, and a
+      # failure in it is a build failure that nothing retries.
+      #
+      # `ignore-error=true` on the cache export: the cache is an optimisation,
+      # and on `cli-v0.17.2`'s re-run the `codex` leg pushed its image and then
+      # failed the whole step on `exporting to GitHub Actions Cache: ...
+      # BlobNotFound`. A cache that cannot be written must not fail a release.
+      - name: Build the base image for both architectures
         if: ${{ inputs.publish }}
-        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: packages/cli/sandbox/Dockerfile
           build-args: AGENT=base
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:base
-            ${{ env.IMAGE }}:base-${{ steps.ver.outputs.version }}
           # amd64 comes straight from the scope the smoke build just wrote; only
           # the arm64 half is new work. Its own scope so the two platform sets
           # never overwrite each other's manifest.
           cache-from: |
             type=gha,scope=sandbox-base
             type=gha,scope=sandbox-base-multiarch
-          cache-to: type=gha,scope=sandbox-base-multiarch,mode=max
+          cache-to: type=gha,scope=sandbox-base-multiarch,mode=max,ignore-error=true
+      # The push re-runs the same build on the same builder, which its local
+      # cache answers entirely, and exports it to the registry. It is a plain
+      # `docker buildx build` rather than the action because the retry wraps the
+      # COMMAND: `push-with-retry.mjs` retries a registry refusal (denied, 5xx,
+      # 429, a timeout) with backoff and fails at once on anything else. It
+      # names no `type=gha` cache — a `run:` step is not handed the cache
+      # service's token — and needs none, since the build above is local.
+      - name: Push the base image
+        if: ${{ inputs.publish }}
+        id: push
+        run: |
+          node packages/cli/sandbox/smoke/push-with-retry.mjs \
+            --label base \
+            --metadata-file "$RUNNER_TEMP/push-metadata.json" \
+            --github-output "$GITHUB_OUTPUT" \
+            -- docker buildx build \
+              --file packages/cli/sandbox/Dockerfile \
+              --build-arg AGENT=base \
+              --platform linux/amd64,linux/arm64 \
+              --tag "${{ env.IMAGE }}:base" \
+              --tag "${{ env.IMAGE }}:base-${{ steps.ver.outputs.version }}" \
+              --metadata-file "$RUNNER_TEMP/push-metadata.json" \
+              --push \
+              .
       - name: Record the published digest
         if: ${{ inputs.publish }}
         run: |
@@ -230,10 +268,17 @@ jobs:
     name: Sandbox profile matrix (setup)
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.2–0.4 min across 14 runs → 10 (~29x, the short-job floor).
-    # It emits the profile matrix and nothing else.
+    # It emits the profile matrix and, on the release lane, the release plan:
+    # nine anonymous manifest reads, a few seconds more (MOTIR-10884).
     timeout-minutes: 10
     outputs:
-      profiles: ${{ steps.read.outputs.profiles }}
+      # The release lane reads the PLAN (only the missing profiles); the
+      # pull-request lane, which publishes nothing, reads the whole table.
+      profiles: ${{ inputs.publish && steps.plan.outputs.profiles || steps.read.outputs.profiles }}
+      base_published: ${{ inputs.publish && steps.plan.outputs.base_published || 'false' }}
+      # The WHOLE table, whatever the plan skipped — what the verify job pulls
+      # back, so an image published by an earlier run of this tag is still checked.
+      all_profiles: ${{ steps.read.outputs.profiles }}
     steps:
       - uses: actions/checkout@v6
       # The matrix is READ from the profile table rather than restated here, so
@@ -245,9 +290,48 @@ jobs:
           profiles=$(node -e "const {profiles}=require('./packages/cli/sandbox/smoke/profiles.json');console.log(JSON.stringify(profiles))")
           echo "profiles=$profiles" >> "$GITHUB_OUTPUT"
 
+      # ── The RELEASE PLAN: build only what this version does not have yet ──
+      # (MOTIR-10884). A re-run of a tag — a `workflow_dispatch`, or "Re-run all
+      # jobs" after a partial release — asks the registry, anonymously, which
+      # `:<name>-<version>` tags already exist, and the matrix below runs only
+      # the profiles that are missing. `cli-v0.17.2`'s re-run had no such plan:
+      # it rebuilt every image, re-pushed the three that had landed, and moved
+      # their immutable tags to new bytes.
+      #
+      # The digests of what is already published are uploaded as one more
+      # `sandbox-digest-*` artifact, so the verify jobs and the README record
+      # see the WHOLE release, not only the part this run pushed. A registry
+      # that cannot be asked stops the release here (exit 2) rather than
+      # guessing either way.
+      - name: Resolve the @motir/cli version
+        if: ${{ inputs.publish }}
+        id: ver
+        run: echo "version=$(node -p "require('./packages/cli/package.json').version")" >> "$GITHUB_OUTPUT"
+      - name: Plan the release — skip every image already published at this version
+        if: ${{ inputs.publish }}
+        id: plan
+        run: |
+          node packages/cli/sandbox/smoke/release-set.mjs plan \
+            --image "$IMAGE" \
+            --version "${{ steps.ver.outputs.version }}" \
+            --profiles packages/cli/sandbox/smoke/profiles.json \
+            --digests "$DIGESTS" \
+            --github-output "$GITHUB_OUTPUT" \
+            --summary "$GITHUB_STEP_SUMMARY"
+      - name: Upload the digests already published
+        if: ${{ inputs.publish && steps.plan.outputs.published != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: sandbox-digest-already-published
+          path: ${{ env.DIGESTS }}
+          retention-days: 7
+
   sandbox-profiles:
     name: Sandbox profile ${{ matrix.profile.id }} (tier ${{ matrix.profile.tier }})
     needs: sandbox-profiles-matrix
+    # A re-run of a tag whose every profile is already published plans an EMPTY
+    # matrix, and an empty matrix is a hard error rather than zero legs.
+    if: ${{ needs.sandbox-profiles-matrix.outputs.profiles != '[]' }}
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 2.6–16.7 min across 112 legs (eight profiles × 14 runs of both
     # callers) → 50 (~3x on the worst, `aider` (tier 2) at 16.68 min on ci.yml
@@ -358,24 +442,39 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push ${{ matrix.profile.id }}
+      # Build once, push with a retry — the same split, for the same reasons, as
+      # the base job above (MOTIR-10884): a refused push is retried without a
+      # rebuild, and a build failure is never retried.
+      - name: Build ${{ matrix.profile.id }} for both architectures
         if: ${{ inputs.publish }}
-        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: packages/cli/sandbox/Dockerfile
           build-args: AGENT=${{ matrix.profile.id }}
           platforms: linux/amd64,linux/arm64
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:${{ matrix.profile.id }}
-            ${{ env.IMAGE }}:${{ matrix.profile.id }}-${{ steps.ver.outputs.version }}
           cache-from: |
             type=gha,scope=sandbox-base
             type=gha,scope=sandbox-${{ matrix.profile.id }}
             type=gha,scope=sandbox-${{ matrix.profile.id }}-multiarch
-          cache-to: type=gha,scope=sandbox-${{ matrix.profile.id }}-multiarch,mode=max
+          cache-to: type=gha,scope=sandbox-${{ matrix.profile.id }}-multiarch,mode=max,ignore-error=true
+      - name: Push ${{ matrix.profile.id }}
+        if: ${{ inputs.publish }}
+        id: push
+        run: |
+          node packages/cli/sandbox/smoke/push-with-retry.mjs \
+            --label "${{ matrix.profile.id }}" \
+            --metadata-file "$RUNNER_TEMP/push-metadata.json" \
+            --github-output "$GITHUB_OUTPUT" \
+            -- docker buildx build \
+              --file packages/cli/sandbox/Dockerfile \
+              --build-arg AGENT=${{ matrix.profile.id }} \
+              --platform linux/amd64,linux/arm64 \
+              --tag "${{ env.IMAGE }}:${{ matrix.profile.id }}" \
+              --tag "${{ env.IMAGE }}:${{ matrix.profile.id }}-${{ steps.ver.outputs.version }}" \
+              --metadata-file "$RUNNER_TEMP/push-metadata.json" \
+              --push \
+              .
       - name: Record the published digest
         if: ${{ inputs.publish }}
         run: |
@@ -403,7 +502,9 @@ jobs:
   # one into that one.
   sandbox-published:
     name: Verify the published images
-    if: ${{ inputs.publish }}
+    # `!failure()` rather than a bare `inputs.publish`: on a re-run that skipped
+    # an already-published job, a SKIPPED need must not skip this check too.
+    if: ${{ inputs.publish && !cancelled() && !failure() }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 1.1–1.8 min across five runs → 10 (~6x, the short-job floor).
@@ -424,7 +525,7 @@ jobs:
           path: digests
       - name: Pull every published image BY DIGEST and run `motir --version`
         env:
-          PROFILES: ${{ needs.sandbox-profiles-matrix.outputs.profiles }}
+          PROFILES: ${{ needs.sandbox-profiles-matrix.outputs.all_profiles }}
         run: |
           set -euo pipefail
           expected=$(node -e "console.log(['base',...JSON.parse(process.env.PROFILES).map(p=>p.id)].join(' '))")
@@ -474,7 +575,9 @@ jobs:
   # answer being hunted, so it would otherwise be believed.
   sandbox-public:
     name: Verify the published images pull ANONYMOUSLY
-    if: ${{ inputs.publish }}
+    # `!failure()` rather than a bare `inputs.publish`: on a re-run that skipped
+    # an already-published job, a SKIPPED need must not skip this check too.
+    if: ${{ inputs.publish && !cancelled() && !failure() }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.5–0.6 min across three runs → 10 (~17x, the short-job floor).
@@ -539,7 +642,9 @@ jobs:
   # what lets a human run it mid-investigation from any shell.
   sandbox-commands:
     name: Verify the published CLI has every command the docs name
-    if: ${{ inputs.publish }}
+    # `!failure()` rather than a bare `inputs.publish`: on a re-run that skipped
+    # an already-published job, a SKIPPED need must not skip this check too.
+    if: ${{ inputs.publish && !cancelled() && !failure() }}
     needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
     runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
     # Observed 0.5 min on run 31529928332 → 10 (~22x, the short-job floor).
@@ -559,3 +664,40 @@ jobs:
           path: digests
       - name: Assert every documented command is IN the published images
         run: node packages/cli/sandbox/smoke/assert-commands.mjs --image "$IMAGE" --digests digests
+
+  # ── Is the WHOLE release in the registry? (MOTIR-10884) ────────────────────
+  # Every job above that checks what was published `needs` every leg, so a
+  # release that lost one push skips them all, and the run says only "six legs
+  # red" — never which images the release is missing. That is how `cli-v0.17.2`
+  # ended: three of nine published, the verify, public, commands and README jobs
+  # all skipped, and new `claude` / `codex` / `opencode` agents still on 0.17.1.
+  #
+  # This job runs once every leg has ENDED, however it ended (`!cancelled()`,
+  # never a bare success), and asks the registry the consumer's question for each
+  # name in `profiles.json` plus the base: is there a `:<name>-<version>` tag? It
+  # fails naming each one that is missing. It reads the registry rather than this
+  # run's artifacts so a name published by an EARLIER run of the same tag counts,
+  # which is what lets a re-run that pushed only the missing images end green.
+  #
+  # Anonymous, like `sandbox-public`: no login and no `packages:` scope, because
+  # the question is whether the release reached the people it is for.
+  sandbox-complete:
+    name: Verify every image is published at the release version
+    if: ${{ inputs.publish && !cancelled() }}
+    needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles]
+    runs-on: ${{ vars.MOTIR_RUNNER || 'ubuntu-latest' }}
+    # New with MOTIR-10884, so no run on record: nine anonymous manifest reads
+    # and a control probe, the same work `sandbox-public` does in 0.5–0.6 min →
+    # 10, the short-job floor.
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Name every image with no <name>-<version> tag
+        run: |
+          node packages/cli/sandbox/smoke/release-set.mjs verify \
+            --image "$IMAGE" \
+            --version "$(node -p "require('./packages/cli/package.json').version")" \
+            --profiles packages/cli/sandbox/smoke/profiles.json \
+            --summary "$GITHUB_STEP_SUMMARY"
