@@ -30,7 +30,9 @@ import { USER_DATA_MAX_BYTES } from './userData';
 //      instance's own id as its machine id — see {@link MACHINE_ID_ENV_KEYS})
 //      to a mode-600 file;
 //   3. starts the image FRESH — the previous boot's container is removed — with
-//      the home mounted, as the terminal's command or the idle command.
+//      the home mounted, as the terminal's command or the idle command — as ROOT,
+//      dropping to the image's own user for the main process (see
+//      {@link DROP_TO_IMAGE_USER_SH}).
 //
 // That is the port's rule that a wake is a cold boot with the volume intact, and
 // it is what makes a rewritten document take effect at the next start.
@@ -192,14 +194,60 @@ const WRITE_TLS_PY = [
   '        os.fdopen(fd, "w").write(h[key])',
 ].join('\n');
 
+/**
+ * The container's own first act when the image names a non-root user
+ * (MOTIR-10836): hand the mounted home to that user, then become it and exec the
+ * image's entrypoint with the command. Arguments: the image user, the mount path,
+ * then the main process's argv.
+ *
+ * WHY THE CONTAINER STARTS AS ROOT. Every command Motir sends into an instance is
+ * `runuser -u node -- …` (`lib/agentInstances/`), which only root may call. Fly's
+ * machine exec runs as root; on AWS the exec is the host agent's `docker exec`
+ * with no `-u` (`infra/hoster-host-agent/src/exec.ts`), and `docker exec` runs as
+ * the CONTAINER's user. So the container is started `--user 0`, which makes every
+ * exec root exactly as on Fly, while the main process still runs as the image's
+ * user, as it does on Fly. The host agent is baked into the hoster AMI, so fixing
+ * it here ships with a deploy and reaches an existing instance on its next boot.
+ *
+ * WHY THE CHOWN. A new home disk is formatted by this script, and a fresh ext4
+ * root is `root:root 755`, so the image user could write nothing into its own
+ * home. Only the mount point itself is chowned — never recursively: whatever is
+ * inside is the user's, written by the user.
+ *
+ * The user may be a name or a uid; `getent` resolves either to the name `runuser`
+ * needs, and a user the image does not know is refused rather than run as root.
+ */
+export const DROP_TO_IMAGE_USER_SH = [
+  'set -e',
+  'u="$1"; m="$2"; shift 2',
+  'name=$(getent passwd "$u" | cut -d: -f1)',
+  '[ -n "$name" ] || { echo "motir: the image user $u has no passwd entry" >&2; exit 1; }',
+  'chown "$name:" "$m"',
+  'exec runuser -u "$name" -- "$@"',
+].join('\n');
+
+/** The `$0` the drop script runs under — what `ps` shows for it. */
+export const DROP_TO_IMAGE_USER_ARGV0 = 'motir-boot';
+
+// Starts the container. The image's config (its user, entrypoint and default
+// command) is read from the PULLED image, never assumed: an image that runs as
+// root starts exactly as before, and one with a user starts as root behind the
+// drop script, its own entrypoint and default command kept.
 const RUN_PY = [
   'import json, os, subprocess',
   `c = json.load(open(${JSON.stringify(PERSISTENT_CONFIG_FILE)}))`,
   'cmd = (c.get("terminal") or {}).get("command") or c.get("idleCommand") or []',
   'm = c["mountPath"]',
   'subprocess.run(["docker", "pull", c["image"]], check=True)',
-  `os.execvp("docker", ["docker", "run", "-d", "--name", ${JSON.stringify(PERSISTENT_CONTAINER_NAME)}, "--restart", "no", "--env-file", ${JSON.stringify(PERSISTENT_ENV_FILE)}, "-v", m + ":" + m, c["image"], *cmd])`,
-].join('; ');
+  'inspect = ["docker", "image", "inspect", "--format", "{{json .Config}}", c["image"]]',
+  'image = json.loads(subprocess.run(inspect, check=True, capture_output=True, text=True).stdout) or {}',
+  'user = (image.get("User") or "").split(":")[0]',
+  `run = ["docker", "run", "-d", "--name", ${JSON.stringify(PERSISTENT_CONTAINER_NAME)}, "--restart", "no", "--env-file", ${JSON.stringify(PERSISTENT_ENV_FILE)}, "-v", m + ":" + m]`,
+  'if user in ("", "root", "0"):',
+  '    os.execvp("docker", run + [c["image"], *cmd])',
+  'main = (image.get("Entrypoint") or []) + (cmd or image.get("Cmd") or [])',
+  `os.execvp("docker", run + ["--user", "0", "--entrypoint", "sh", c["image"], "-c", ${JSON.stringify(DROP_TO_IMAGE_USER_SH)}, ${JSON.stringify(DROP_TO_IMAGE_USER_ARGV0)}, user, m, *main])`,
+].join('\n');
 
 /** The per-boot script, carrying `document` (base64 JSON) on its marker line. */
 function bootScript(document: string): string {
@@ -246,7 +294,9 @@ function bootScript(document: string): string {
     '',
     '# The agent, FRESH on every boot: the pinned image, the home mounted.',
     `docker rm -f ${PERSISTENT_CONTAINER_NAME} >/dev/null 2>&1 || true`,
-    `python3 -c '${RUN_PY}'`,
+    "python3 - <<'MOTIR_RUN'",
+    RUN_PY,
+    'MOTIR_RUN',
     '',
   ].join('\n');
 }
