@@ -20,8 +20,11 @@
 # agent-authored customer code, and a mutable tag under that workload is the
 # supply-chain hole the whole ephemerality posture was bought to close. A tag
 # that moved between the boot decision and the pull would silently change what
-# ran. So the publish job prints `sha256:…` into the job summary, and MOTIR-1979
-# sets that exact string in the deployment.
+# ran. So the publish job emits `sha256:…` as its `digest` output (and prints it
+# into the job summary), and `release-runner-image.yml`'s `pin` job opens the
+# pull request that writes that exact reference into
+# `infra/image-pins/motir-runner-image`, which the AWS deploy applies
+# (MOTIR-10883).
 #
 # NOT here: signing, SBOM, provenance attestation — the same deliberate omission
 # `sandbox-images.yml` records, and its own decision.
@@ -414,6 +417,6 @@ jobs:
             echo "| Digest | \`${digest}\` |"
             echo "| Pull by digest | \`${ref}\` |"
             echo
-            echo "**Set \`MOTIR_RUNNER_IMAGE\` to \`${ref}\`** — the digest, never a tag (§7.2)."
-            echo "MOTIR-1979 is the card that sets it in the deployment."
+            echo "\`MOTIR_RUNNER_IMAGE\` takes \`${ref}\` — the digest, never a tag (§7.2)."
+            echo "The release lane's \`pin\` job opens the pull request that pins it (MOTIR-10883)."
           } >> "$GITHUB_STEP_SUMMARY"
