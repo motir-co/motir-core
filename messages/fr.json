@@ -10832,6 +10832,12 @@
               "disable": "A désactivé une leçon de planification",
               "promote": "A promu une leçon de planification",
               "retention_set": "A modifié la fenêtre de retrait des leçons"
+            },
+            "planner_function_model": {
+              "set": "A modifié un modèle Guide, Debug ou Ask"
+            },
+            "run_model_default": {
+              "set": "A modifié un modèle par défaut côté exécution"
             }
           },
           "fleet": {
@@ -11518,17 +11524,17 @@
     "aiPlanning": {
       "breadcrumb": "Plateforme · Planification par IA",
       "title": "Planification par IA",
-      "subtitle": "Le modèle avec lequel Motir planifie, pour chacun des trois publics. Une modification s'applique à partir de la prochaine tâche de planification de chaque organisation de ce public.",
+      "subtitle": "Quel modèle utilisent les fonctions de planification de Motir : la planification pour chacun des trois publics, et une valeur par défaut de plateforme pour Guide, Debug et Ask. Une modification s'applique dès la tâche suivante pour chaque organisation qui n'a pas fait son propre choix.",
       "precedence": "Une organisation à la fois méta et interne suit la ligne méta.",
       "tenantSecretLead": "Les tenants ne voient jamais ce choix.",
       "tenantSecretBody": "Aucune page tenant, vue d'utilisation ni aucun plan ne nomme le modèle qui a planifié.",
       "card": {
-        "title": "Modèle de planification par public",
-        "subtitle": "Chaque tâche de planification détermine son modèle à partir de l'organisation pour laquelle elle s'exécute : méta, puis interne, puis client.",
-        "count": "3 publics"
+        "title": "Modèles côté planification",
+        "subtitle": "La planification détermine son modèle d'après le public de l'organisation : méta, puis interne, puis client. Guide, Debug et Ask ont chacun une valeur par défaut de plateforme, ou héritent du modèle de ce public. Une organisation en Pro ou au-delà peut choisir le sien.",
+        "count": "7 paramètres"
       },
       "col": {
-        "audience": "Public",
+        "audience": "S'applique à",
         "model": "Modèle",
         "lastChanged": "Dernière modification",
         "action": "Action"
@@ -11556,7 +11562,8 @@
         "seeded": "Valeur par défaut initiale · jamais modifiée",
         "by": "Modifié {when} par {who}",
         "byUnknown": "Modifié {when}",
-        "justNowByYou": "Modifié à l'instant par vous"
+        "justNowByYou": "Modifié à l'instant par vous",
+        "neverSet": "Jamais défini"
       },
       "confirm": {
         "title": "Changer le modèle de planification pour {audience} ?",
@@ -11615,6 +11622,39 @@
         "savedTitle": "Modèle de revue modifié",
         "savedBody": "Les revues de la simulation utilisent {model} dès la prochaine tâche de planification.",
         "unchanged": "La revue de la simulation utilise déjà {model}."
+      },
+      "group": {
+        "audiences": "Planification · par public",
+        "functions": "Guide · Debug · Ask · valeurs par défaut de la plateforme",
+        "review": "Revue de la simulation · plateforme uniquement"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Me guider pas à pas",
+          "confirmBody": "{from} → {to}. S'applique dès la prochaine étape Guide pour chaque organisation qui n'a pas fait son propre choix. Les étapes Guide en cours se terminent avec le modèle avec lequel elles ont commencé.",
+          "savedBody": "Les étapes Guide utilisent désormais {model} pour chaque organisation sans choix propre."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Diagnostiquer un défaut en bug",
+          "confirmBody": "{from} → {to}. S'applique dès le prochain diagnostic Debug pour chaque organisation qui n'a pas fait son propre choix. Les diagnostics Debug en cours se terminent avec le modèle avec lequel ils ont commencé.",
+          "savedBody": "Les diagnostics Debug utilisent désormais {model} pour chaque organisation sans choix propre."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "La conversation Motir AI et Grill me",
+          "confirmBody": "{from} → {to}. S'applique dès le prochain tour de conversation Ask pour chaque organisation qui n'a pas fait son propre choix. Les tours de conversation Ask en cours se terminent avec le modèle avec lequel ils ont commencé.",
+          "savedBody": "Les tours de conversation Ask utilisent désormais {model} pour chaque organisation sans choix propre."
+        },
+        "inherits": "Hérite — le modèle de planification du public",
+        "inheritsDesc": "Suit le modèle de planification du public de l'organisation",
+        "pickerAria": "Modèle pour {name}",
+        "withdrawnBody": "{name} revient au modèle de planification du public jusqu'à ce que vous en choisissiez un autre.",
+        "withdrawnBodyReadOnly": "{name} revient au modèle de planification du public jusqu'à ce qu'un superadministrateur en choisisse un autre.",
+        "confirmTitle": "Modifier le modèle de plateforme de {name} ?",
+        "savedTitle": "Modèle de {name} modifié",
+        "unchanged": "{name} utilise déjà {model}."
       }
     },
     "lessons": {
@@ -12864,7 +12904,9 @@
         "inUseParts": {
           "platformDefault": "C'est la valeur par défaut de la plateforme Motir pour {levels}. ",
           "projects": "{n, plural, one {# projet l'utilise} other {# projets l'utilisent}} : {list}.",
-          "projectEntry": "{name} ({key}) pour {levels}"
+          "projectEntry": "{name} ({key}) pour {levels}",
+          "platformReview": "C'est la valeur par défaut de plateforme de Motir pour l'agent de revue. ",
+          "platformDesign": "C'est la valeur par défaut de plateforme de Motir pour les exécutions de design. "
         },
         "notListed": "Non retiré : {model} n'est plus listé."
       },
@@ -12878,6 +12920,83 @@
       "unavailable": {
         "title": "Impossible de charger les modèles des exécutions hébergées",
         "body": "motir-ai n'a pas répondu : on ignore donc si chaque modèle listé est proposé, et aucune liste n'est affichée. Rien n'a changé."
+      },
+      "defaults": {
+        "title": "Valeurs par défaut côté exécution",
+        "subtitle": "Le modèle avec lequel démarre une revue hébergée, une exécution de design ou une exécution d'agent quand ni la personne, ni le projet, ni l'organisation n'en a choisi. Choisi dans la liste ci-dessus.",
+        "count": "6 paramètres",
+        "col": {
+          "function": "Fonction"
+        },
+        "row": {
+          "review": {
+            "name": "Agent de revue",
+            "desc": "Revues hébergées"
+          },
+          "design": {
+            "name": "Exécution de design",
+            "desc": "Une exécution hébergée sur un élément de travail de design"
+          },
+          "trivial": {
+            "name": "Exécution d'agent · Triviale",
+            "desc": "Exécutions de build hébergées sur un élément de travail trivial"
+          },
+          "low": {
+            "name": "Exécution d'agent · Faible",
+            "desc": "Exécutions de build hébergées sur un élément de travail de difficulté faible"
+          },
+          "medium": {
+            "name": "Exécution d'agent · Moyenne",
+            "desc": "Exécutions de build hébergées sur un élément de travail de difficulté moyenne"
+          },
+          "high": {
+            "name": "Exécution d'agent · Élevée",
+            "desc": "Exécutions de build hébergées sur un élément de travail de difficulté élevée"
+          }
+        },
+        "inherits": {
+          "review": "Hérite — la valeur par défaut d'exécution",
+          "reviewWith": "Hérite — la valeur par défaut d'exécution ({model})",
+          "design": "Hérite — la difficulté de l'élément de travail",
+          "level": "Hérite — la valeur de l'environnement",
+          "levelWith": "Hérite — la valeur de l'environnement ({model})"
+        },
+        "fallsBack": {
+          "review": "la valeur par défaut d'exécution",
+          "design": "la difficulté de l'élément de travail",
+          "level": "la valeur de l'environnement"
+        },
+        "defaultGroup": "Par défaut",
+        "pickerAria": "Modèle par défaut de {name}",
+        "pickerFoot": "Uniquement les modèles de la liste ci-dessus que motir-ai propose pour les exécutions hébergées.",
+        "changed": {
+          "seededFromEnv": "Repris de l'environnement · jamais modifié",
+          "neverSet": "Jamais défini"
+        },
+        "withdrawn": {
+          "chip": "N'est plus proposé",
+          "body": "{name} revient à {what} jusqu'à ce que vous en choisissiez un autre.",
+          "bodyReadOnly": "{name} revient à {what} jusqu'à ce qu'un superadministrateur en choisisse un autre."
+        },
+        "refused": "{model} n'est plus proposé pour les exécutions hébergées ou n'est pas dans la liste, il n'a donc pas été enregistré. La page a été actualisée — choisissez un autre modèle.",
+        "confirmTitle": "Modifier le modèle de plateforme de {name} ?",
+        "confirmBody": {
+          "review": "{from} → {to}. S'applique dès la prochaine revue pour chaque organisation qui n'a pas fait son propre choix. Les revues en cours se terminent avec le modèle avec lequel elles ont commencé.",
+          "design": "{from} → {to}. S'applique dès la prochaine exécution de design pour chaque organisation qui n'a pas fait son propre choix. Les exécutions de design en cours se terminent avec le modèle avec lequel elles ont commencé.",
+          "level": "{from} → {to}. S'applique dès la prochaine exécution pour chaque organisation qui n'a pas fait son propre choix. Les exécutions en cours se terminent avec le modèle avec lequel elles ont commencé."
+        },
+        "savedTitle": "Modèle de {name} modifié",
+        "savedBody": {
+          "review": "Les revues utilisent désormais {model} pour chaque organisation sans choix propre.",
+          "design": "Les exécutions de design utilisent désormais {model} pour chaque organisation sans choix propre.",
+          "level": "Les exécutions utilisent désormais {model} pour chaque organisation sans choix propre."
+        },
+        "unchanged": "{name} est déjà {model}.",
+        "unavailable": {
+          "title": "Impossible de charger les valeurs par défaut côté exécution",
+          "body": "Le service de planification (motir-ai) n'a pas répondu, aucune valeur par défaut n'est donc affichée. Rien n'a changé, et aucune valeur n'est devinée.",
+          "retry": "Réessayer"
+        }
       }
     },
     "ideas": {

@@ -185,6 +185,20 @@ export class PlannerModelUnreachableError extends MotirAiError {
   }
 }
 
+// A run-side platform default write named a model motir-ai would not store
+// (`PUT /v1/admin/run-model-defaults` → `validation_error`; MOTIR-10840): not in
+// the run-model list motir-core sent, or no longer offered for agent runs.
+export class RunModelDefaultNotOfferedError extends MotirAiError {
+  readonly code = 'RUN_MODEL_DEFAULT_NOT_OFFERED' as const;
+  constructor(
+    readonly model: string,
+    detail?: string,
+  ) {
+    super(`"${model}" is not offered for hosted runs${detail ? `: ${detail}` : ''}`);
+    this.name = 'RunModelDefaultNotOfferedError';
+  }
+}
+
 // An ORG model-choice write motir-ai refused because the org does not qualify
 // (`PUT /v1/orgs/:id/planner-model-overrides` → `permission_denied`; MOTIR-10845):
 // below Pro and not the meta org, or an org motir-ai has never seen. The client

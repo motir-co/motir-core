@@ -16,6 +16,8 @@ import {
   MissingAuditReasonError,
   NotPlatformStaffError,
   PlannerAudienceUnknownError,
+  PlannerFunctionModelUnchangedError,
+  PlannerFunctionUnknownError,
   PlannerModelListModelMissingError,
   PlannerModelUnchangedError,
   PlannerReviewModelUnchangedError,
@@ -115,6 +117,42 @@ export async function setPlannerReviewModelAction(
     if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
     if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
     console.error('[admin] review-model action failed', err);
+    return { ok: false, code: 'FAILED' };
+  }
+}
+
+/**
+ * The GUIDE / DEBUG / ASK platform-default write (MOTIR-10844): `model` is a
+ * planning-list model, or `null` to inherit the audience's Planning model. The
+ * same transport shape, gate twice and result codes as the review row's action.
+ */
+export async function setPlannerFunctionModelAction(
+  fn: string,
+  model: string | null,
+  reason: string,
+): Promise<PlannerModelActionResult> {
+  try {
+    const principal = await requirePlatformStaff('superadmin');
+    await platformPlannerModelService.setFunctionModel(principal, fn, model, reason);
+    revalidatePath('/admin/ai-planning');
+    return { ok: true };
+  } catch (err) {
+    if (err instanceof PlannerModelNotOfferedError) {
+      revalidatePath('/admin/ai-planning');
+      return { ok: false, code: 'NOT_OFFERED' };
+    }
+    if (err instanceof PlannerModelUnreachableError) {
+      return { ok: false, code: 'UNREACHABLE', reason: err.reason };
+    }
+    if (err instanceof PlannerFunctionModelUnchangedError) return { ok: false, code: 'UNCHANGED' };
+    if (err instanceof MotirAiUnavailableError) return { ok: false, code: 'UNAVAILABLE' };
+    if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
+    if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
+    if (err instanceof PlannerFunctionUnknownError) {
+      console.error('[admin] function-model action got an unknown function', JSON.stringify(fn));
+      return { ok: false, code: 'FAILED' };
+    }
+    console.error('[admin] function-model action failed', { fn }, err);
     return { ok: false, code: 'FAILED' };
   }
 }

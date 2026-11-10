@@ -10829,6 +10829,12 @@
               "disable": "Switched a planning lesson off",
               "promote": "Promoted a planning lesson",
               "retention_set": "Changed the lesson retirement window"
+            },
+            "planner_function_model": {
+              "set": "Changed a Guide, Debug or Ask model"
+            },
+            "run_model_default": {
+              "set": "Changed a run-side default model"
             }
           },
           "fleet": {
@@ -11515,17 +11521,17 @@
     "aiPlanning": {
       "breadcrumb": "Platform · AI planning",
       "title": "AI planning",
-      "subtitle": "Which model Motir plans with, for each of three audiences. A change applies from the next planning job for every organisation in that audience.",
+      "subtitle": "Which model Motir’s planning-side functions use: planning for each of three audiences, and one platform default each for Guide, Debug and Ask. A change applies from the next job for every organisation that has not chosen its own.",
       "precedence": "An organisation that is both meta and internal follows the meta row.",
       "tenantSecretLead": "Tenants never see this choice.",
       "tenantSecretBody": "No tenant page, usage view or plan names the model that planned.",
       "card": {
-        "title": "Planning model by audience",
-        "subtitle": "Every planning job resolves its model from the organisation it runs for: meta, then internal, then customer.",
-        "count": "3 audiences"
+        "title": "Planning-side models",
+        "subtitle": "Planning resolves its model from the organisation’s audience: meta, then internal, then customer. Guide, Debug and Ask each have one platform default, or inherit that audience model. An organisation on Pro or above may choose its own.",
+        "count": "7 settings"
       },
       "col": {
-        "audience": "Audience",
+        "audience": "Applies to",
         "model": "Model",
         "lastChanged": "Last changed",
         "action": "Action"
@@ -11553,7 +11559,8 @@
         "seeded": "Seeded default · never changed",
         "by": "Changed {when} by {who}",
         "byUnknown": "Changed {when}",
-        "justNowByYou": "Changed just now by you"
+        "justNowByYou": "Changed just now by you",
+        "neverSet": "Never set"
       },
       "confirm": {
         "title": "Change the planning model for {audience}?",
@@ -11612,6 +11619,39 @@
         "savedTitle": "Review model changed",
         "savedBody": "Dry-run reviews now run on {model} from the next plan job.",
         "unchanged": "The dry-run review already runs on {model}."
+      },
+      "group": {
+        "audiences": "Planning · by audience",
+        "functions": "Guide · Debug · Ask · platform defaults",
+        "review": "Dry-run review · platform only"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Guide me through turns",
+          "confirmBody": "{from} → {to}. Applies from the next Guide turn for every organisation that has not chosen its own. Guide turns already running finish on the model they started with.",
+          "savedBody": "Guide turns now run on {model} for every organisation without its own choice."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Diagnosing a defect into a bug",
+          "confirmBody": "{from} → {to}. Applies from the next Debug diagnosis for every organisation that has not chosen its own. Debug diagnoses already running finish on the model they started with.",
+          "savedBody": "Debug diagnoses now run on {model} for every organisation without its own choice."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "The Motir AI conversation and Grill me",
+          "confirmBody": "{from} → {to}. Applies from the next Ask conversation turn for every organisation that has not chosen its own. Ask conversation turns already running finish on the model they started with.",
+          "savedBody": "Ask conversation turns now run on {model} for every organisation without its own choice."
+        },
+        "inherits": "Inherits — the audience’s planning model",
+        "inheritsDesc": "Follows the planning model of the organisation’s audience",
+        "pickerAria": "Model for {name}",
+        "withdrawnBody": "{name} falls back to the audience’s planning model until you choose another.",
+        "withdrawnBodyReadOnly": "{name} falls back to the audience’s planning model until a superadmin chooses another.",
+        "confirmTitle": "Change the platform {name} model?",
+        "savedTitle": "{name} model changed",
+        "unchanged": "{name} already runs on {model}."
       }
     },
     "lessons": {
@@ -12861,7 +12901,9 @@
         "inUseParts": {
           "platformDefault": "It is Motir’s platform default for {levels}. ",
           "projects": "{n, plural, one {# project uses it} other {# projects use it}}: {list}.",
-          "projectEntry": "{name} ({key}) for {levels}"
+          "projectEntry": "{name} ({key}) for {levels}",
+          "platformReview": "It is Motir’s platform review-agent default. ",
+          "platformDesign": "It is Motir’s platform design-run default. "
         },
         "notListed": "Not removed: {model} is no longer listed."
       },
@@ -12875,6 +12917,83 @@
       "unavailable": {
         "title": "Couldn’t load hosted-run models",
         "body": "motir-ai didn’t respond, so whether each listed model is offered is unknown and no list is shown. Nothing has changed."
+      },
+      "defaults": {
+        "title": "Run-side defaults",
+        "subtitle": "The model a hosted review, design run or agent run starts on when neither the person, the project nor the organisation chose one. Chosen from the list above.",
+        "count": "6 settings",
+        "col": {
+          "function": "Function"
+        },
+        "row": {
+          "review": {
+            "name": "Review agent",
+            "desc": "Hosted reviews"
+          },
+          "design": {
+            "name": "Design run",
+            "desc": "A hosted run on a design work item"
+          },
+          "trivial": {
+            "name": "Agent run · Trivial",
+            "desc": "Hosted build runs on a trivial work item"
+          },
+          "low": {
+            "name": "Agent run · Low",
+            "desc": "Hosted build runs on a low work item"
+          },
+          "medium": {
+            "name": "Agent run · Medium",
+            "desc": "Hosted build runs on a medium work item"
+          },
+          "high": {
+            "name": "Agent run · High",
+            "desc": "Hosted build runs on a high work item"
+          }
+        },
+        "inherits": {
+          "review": "Inherits — the run default",
+          "reviewWith": "Inherits — the run default ({model})",
+          "design": "Inherits — the work item’s difficulty",
+          "level": "Inherits — the environment value",
+          "levelWith": "Inherits — the environment value ({model})"
+        },
+        "fallsBack": {
+          "review": "the run default",
+          "design": "the work item’s difficulty",
+          "level": "the environment value"
+        },
+        "defaultGroup": "Default",
+        "pickerAria": "{name} default model",
+        "pickerFoot": "Only models on the list above that motir-ai offers for hosted runs.",
+        "changed": {
+          "seededFromEnv": "Seeded from the environment · never changed",
+          "neverSet": "Never set"
+        },
+        "withdrawn": {
+          "chip": "No longer offered",
+          "body": "{name} falls back to {what} until you choose another.",
+          "bodyReadOnly": "{name} falls back to {what} until a superadmin chooses another."
+        },
+        "refused": "{model} is no longer offered for hosted runs or not on the list, so it was not saved. The page has been refreshed — choose another model.",
+        "confirmTitle": "Change the platform {name} model?",
+        "confirmBody": {
+          "review": "{from} → {to}. Applies from the next review for every organisation that has not chosen its own. Reviews already running finish on the model they started with.",
+          "design": "{from} → {to}. Applies from the next design run for every organisation that has not chosen its own. Design runs already running finish on the model they started with.",
+          "level": "{from} → {to}. Applies from the next run for every organisation that has not chosen its own. Runs already running finish on the model they started with."
+        },
+        "savedTitle": "{name} model changed",
+        "savedBody": {
+          "review": "Reviews now run on {model} for every organisation without its own choice.",
+          "design": "Design runs now run on {model} for every organisation without its own choice.",
+          "level": "Runs now run on {model} for every organisation without its own choice."
+        },
+        "unchanged": "{name} is already {model}.",
+        "unavailable": {
+          "title": "Couldn’t load the run-side defaults",
+          "body": "The planning service (motir-ai) didn’t respond, so no default is shown. Nothing has changed, and no value is guessed.",
+          "retry": "Retry"
+        }
       }
     },
     "ideas": {

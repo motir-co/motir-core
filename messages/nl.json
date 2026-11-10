@@ -10832,6 +10832,12 @@
               "disable": "Een planningsles uitgezet",
               "promote": "Een planningsles gepromoveerd",
               "retention_set": "De termijn voor het intrekken van lessen gewijzigd"
+            },
+            "planner_function_model": {
+              "set": "Een Guide-, Debug- of Ask-model gewijzigd"
+            },
+            "run_model_default": {
+              "set": "Een standaardmodel aan de runkant gewijzigd"
             }
           },
           "fleet": {
@@ -11518,17 +11524,17 @@
     "aiPlanning": {
       "breadcrumb": "Platform · AI-planning",
       "title": "AI-planning",
-      "subtitle": "Met welk model Motir plant, voor elk van drie doelgroepen. Een wijziging geldt vanaf de volgende planningstaak voor elke organisatie in die doelgroep.",
+      "subtitle": "Welk model de planningsfuncties van Motir gebruiken: planning voor elk van drie doelgroepen, en één platformstandaard voor Guide, Debug en Ask. Een wijziging geldt vanaf de volgende job voor elke organisatie die niet zelf heeft gekozen.",
       "precedence": "Een organisatie die zowel meta als intern is, volgt de meta-rij.",
       "tenantSecretLead": "Tenants zien deze keuze nooit.",
       "tenantSecretBody": "Geen tenantpagina, gebruiksweergave of plan noemt het model dat heeft gepland.",
       "card": {
-        "title": "Planningsmodel per doelgroep",
-        "subtitle": "Elke planningstaak bepaalt zijn model op basis van de organisatie waarvoor hij draait: meta, dan intern, dan klant.",
-        "count": "3 doelgroepen"
+        "title": "Modellen aan de planningskant",
+        "subtitle": "Planning bepaalt het model aan de hand van de doelgroep van de organisatie: meta, dan intern, dan klant. Guide, Debug en Ask hebben elk één platformstandaard, of nemen het model van die doelgroep over. Een organisatie op Pro of hoger kan zelf kiezen.",
+        "count": "7 instellingen"
       },
       "col": {
-        "audience": "Doelgroep",
+        "audience": "Geldt voor",
         "model": "Model",
         "lastChanged": "Laatst gewijzigd",
         "action": "Actie"
@@ -11556,7 +11562,8 @@
         "seeded": "Standaard ingesteld · nooit gewijzigd",
         "by": "Gewijzigd {when} door {who}",
         "byUnknown": "Gewijzigd {when}",
-        "justNowByYou": "Zojuist door jou gewijzigd"
+        "justNowByYou": "Zojuist door jou gewijzigd",
+        "neverSet": "Nooit ingesteld"
       },
       "confirm": {
         "title": "Het planningsmodel voor {audience} wijzigen?",
@@ -11615,6 +11622,39 @@
         "savedTitle": "Beoordelingsmodel gewijzigd",
         "savedBody": "Beoordelingen van de proefrun draaien vanaf de volgende planningstaak op {model}.",
         "unchanged": "De beoordeling van de proefrun draait al op {model}."
+      },
+      "group": {
+        "audiences": "Planning · per doelgroep",
+        "functions": "Guide · Debug · Ask · platformstandaarden",
+        "review": "Beoordeling van de proefrun · alleen platform"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Begeleid me stap voor stap",
+          "confirmBody": "{from} → {to}. Geldt vanaf de volgende Guide-stap voor elke organisatie die niet zelf heeft gekozen. Guide-stappen die al lopen, eindigen op het model waarmee ze begonnen.",
+          "savedBody": "Guide-stappen draaien nu op {model} voor elke organisatie zonder eigen keuze."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Een defect diagnosticeren tot een bug",
+          "confirmBody": "{from} → {to}. Geldt vanaf de volgende Debug-diagnose voor elke organisatie die niet zelf heeft gekozen. Debug-diagnoses die al lopen, eindigen op het model waarmee ze begonnen.",
+          "savedBody": "Debug-diagnoses draaien nu op {model} voor elke organisatie zonder eigen keuze."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "Het Motir AI-gesprek en Grill me",
+          "confirmBody": "{from} → {to}. Geldt vanaf de volgende Ask-gespreksbeurt voor elke organisatie die niet zelf heeft gekozen. Ask-gespreksbeurten die al lopen, eindigen op het model waarmee ze begonnen.",
+          "savedBody": "Ask-gespreksbeurten draaien nu op {model} voor elke organisatie zonder eigen keuze."
+        },
+        "inherits": "Neemt over — het planningsmodel van de doelgroep",
+        "inheritsDesc": "Volgt het planningsmodel van de doelgroep van de organisatie",
+        "pickerAria": "Model voor {name}",
+        "withdrawnBody": "{name} valt terug op het planningsmodel van de doelgroep totdat je een ander kiest.",
+        "withdrawnBodyReadOnly": "{name} valt terug op het planningsmodel van de doelgroep totdat een superadmin een ander kiest.",
+        "confirmTitle": "Het platformmodel voor {name} wijzigen?",
+        "savedTitle": "Model voor {name} gewijzigd",
+        "unchanged": "{name} draait al op {model}."
       }
     },
     "lessons": {
@@ -12864,7 +12904,9 @@
         "inUseParts": {
           "platformDefault": "Het is de platformstandaard van Motir voor {levels}. ",
           "projects": "{n, plural, one {# project gebruikt het} other {# projecten gebruiken het}}: {list}.",
-          "projectEntry": "{name} ({key}) voor {levels}"
+          "projectEntry": "{name} ({key}) voor {levels}",
+          "platformReview": "Het is de platformstandaard van Motir voor de beoordelingsagent. ",
+          "platformDesign": "Het is de platformstandaard van Motir voor ontwerpruns. "
         },
         "notListed": "Niet verwijderd: {model} staat niet meer in de lijst."
       },
@@ -12878,6 +12920,83 @@
       "unavailable": {
         "title": "Kan de modellen voor gehoste runs niet laden",
         "body": "motir-ai reageerde niet, dus het is onbekend of elk model in de lijst wordt aangeboden en er wordt geen lijst getoond. Er is niets gewijzigd."
+      },
+      "defaults": {
+        "title": "Standaarden aan de runkant",
+        "subtitle": "Het model waarmee een gehoste beoordeling, ontwerprun of agentrun start als noch de persoon, noch het project, noch de organisatie er een koos. Gekozen uit de lijst hierboven.",
+        "count": "6 instellingen",
+        "col": {
+          "function": "Functie"
+        },
+        "row": {
+          "review": {
+            "name": "Beoordelingsagent",
+            "desc": "Gehoste beoordelingen"
+          },
+          "design": {
+            "name": "Ontwerprun",
+            "desc": "Een gehoste run op een ontwerp-werkitem"
+          },
+          "trivial": {
+            "name": "Agentrun · Triviaal",
+            "desc": "Gehoste build-runs op een triviaal werkitem"
+          },
+          "low": {
+            "name": "Agentrun · Laag",
+            "desc": "Gehoste build-runs op een werkitem met lage moeilijkheid"
+          },
+          "medium": {
+            "name": "Agentrun · Gemiddeld",
+            "desc": "Gehoste build-runs op een werkitem met gemiddelde moeilijkheid"
+          },
+          "high": {
+            "name": "Agentrun · Hoog",
+            "desc": "Gehoste build-runs op een werkitem met hoge moeilijkheid"
+          }
+        },
+        "inherits": {
+          "review": "Neemt over — de runstandaard",
+          "reviewWith": "Neemt over — de runstandaard ({model})",
+          "design": "Neemt over — de moeilijkheid van het werkitem",
+          "level": "Neemt over — de waarde uit de omgeving",
+          "levelWith": "Neemt over — de waarde uit de omgeving ({model})"
+        },
+        "fallsBack": {
+          "review": "de runstandaard",
+          "design": "de moeilijkheid van het werkitem",
+          "level": "de waarde uit de omgeving"
+        },
+        "defaultGroup": "Standaard",
+        "pickerAria": "Standaardmodel voor {name}",
+        "pickerFoot": "Alleen modellen uit de lijst hierboven die motir-ai aanbiedt voor gehoste runs.",
+        "changed": {
+          "seededFromEnv": "Uit de omgeving overgenomen · nooit gewijzigd",
+          "neverSet": "Nooit ingesteld"
+        },
+        "withdrawn": {
+          "chip": "Niet meer aangeboden",
+          "body": "{name} valt terug op {what} totdat je een ander kiest.",
+          "bodyReadOnly": "{name} valt terug op {what} totdat een superadmin een ander kiest."
+        },
+        "refused": "{model} wordt niet meer aangeboden voor gehoste runs of staat niet op de lijst, dus het is niet opgeslagen. De pagina is vernieuwd — kies een ander model.",
+        "confirmTitle": "Het platformmodel voor {name} wijzigen?",
+        "confirmBody": {
+          "review": "{from} → {to}. Geldt vanaf de volgende beoordeling voor elke organisatie die niet zelf heeft gekozen. Beoordelingen die al lopen, eindigen op het model waarmee ze begonnen.",
+          "design": "{from} → {to}. Geldt vanaf de volgende ontwerprun voor elke organisatie die niet zelf heeft gekozen. Ontwerpruns die al lopen, eindigen op het model waarmee ze begonnen.",
+          "level": "{from} → {to}. Geldt vanaf de volgende run voor elke organisatie die niet zelf heeft gekozen. Runs die al lopen, eindigen op het model waarmee ze begonnen."
+        },
+        "savedTitle": "Model voor {name} gewijzigd",
+        "savedBody": {
+          "review": "Beoordelingen draaien nu op {model} voor elke organisatie zonder eigen keuze.",
+          "design": "Ontwerpruns draaien nu op {model} voor elke organisatie zonder eigen keuze.",
+          "level": "Runs draaien nu op {model} voor elke organisatie zonder eigen keuze."
+        },
+        "unchanged": "{name} is al {model}.",
+        "unavailable": {
+          "title": "De standaarden aan de runkant konden niet worden geladen",
+          "body": "De planningsservice (motir-ai) reageerde niet, dus er wordt geen standaard getoond. Er is niets gewijzigd en er wordt geen waarde geraden.",
+          "retry": "Opnieuw proberen"
+        }
       }
     },
     "ideas": {

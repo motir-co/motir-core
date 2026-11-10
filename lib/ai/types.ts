@@ -1451,13 +1451,105 @@ export interface PlannerReviewModelRead {
   updatedByCoreUserId: string | null;
 }
 
+/** A planning-side function with one platform default (motir-ai MOTIR-10841). */
+export type PlannerDefaultFunction = 'guide' | 'debug' | 'ask';
+export const PLANNER_DEFAULT_FUNCTIONS: readonly PlannerDefaultFunction[] = [
+  'guide',
+  'debug',
+  'ask',
+];
+
+/** One function's platform default, as `GET /v1/planner-model-settings` serves it. */
+export interface PlannerFunctionDefaultRead {
+  function: PlannerDefaultFunction;
+  /** The stored model, or null: the function follows the audience's Planning model. */
+  model: string | null;
+  /** Null while unset; false once the stored model is no longer offered. */
+  offered: boolean | null;
+  /** Null until first set. */
+  updatedAt: string | null;
+  updatedByCoreUserId: string | null;
+}
+
 /** The raw `GET /v1/planner-model-settings` body. */
 export interface PlannerModelSettingsRead {
   settings: PlannerModelSettingRead[];
   /** Absent from a motir-ai that predates MOTIR-10632; the console then shows no
    *  review row rather than a guessed one. */
   review?: PlannerReviewModelRead;
+  /** Absent from a motir-ai that predates MOTIR-10841; read as no function rows. */
+  functions?: PlannerFunctionDefaultRead[];
   offered: PlannerOfferedModel[];
+}
+
+/** The `PUT /v1/planner-model-settings/functions` body (motir-ai MOTIR-10841). */
+export interface PlannerFunctionModelWriteInput {
+  function: PlannerDefaultFunction;
+  /** A planning-offered model, or null to inherit the audience's Planning model. */
+  model: string | null;
+  actorCoreUserId: string;
+}
+
+/** Its answer, `previousModel` read under motir-ai's row lock. */
+export interface PlannerFunctionModelWriteResult {
+  function: PlannerDefaultFunction;
+  previousModel: string | null;
+  model: string | null;
+  updatedAt: string;
+}
+
+/** A run-side platform default (motir-ai MOTIR-10840): a difficulty level, the review agent or the design run. */
+export type RunModelDefaultKey = 'trivial' | 'low' | 'medium' | 'high' | 'review' | 'design';
+export const RUN_MODEL_DEFAULT_KEYS: readonly RunModelDefaultKey[] = [
+  'trivial',
+  'low',
+  'medium',
+  'high',
+  'review',
+  'design',
+];
+
+/** One run-side default as `GET /v1/admin/run-model-defaults` serves it. */
+export interface RunModelDefaultRead {
+  key: RunModelDefaultKey;
+  /** The stored model, or null: inherit (a level its env/code value, review the run
+   *  default, design the difficulty mapping). */
+  model: string | null;
+  /** Null while unset; false once the stored model is no longer offered. */
+  offered: boolean | null;
+  /** What `GET /v1/agent-models` answers for this key now. */
+  effectiveModel: string | null;
+  updatedAt: string;
+  /** Null on a seeded row nobody has changed. */
+  updatedByCoreUserId: string | null;
+}
+
+/** The raw `GET /v1/admin/run-model-defaults` body. */
+export interface RunModelDefaultsRead {
+  settings: RunModelDefaultRead[];
+  models: { id: string; provider: string }[];
+}
+
+/** The `PUT /v1/admin/run-model-defaults` body. */
+export interface RunModelDefaultWriteInput {
+  key: RunModelDefaultKey;
+  model: string | null;
+  actorCoreUserId: string;
+  /** motir-core's run-model list: a model outside it is refused by name. */
+  allowedModels?: string[];
+}
+
+/** Its answer: the row as `GET` shows it, and the from → to (`null` when nothing changed). */
+export interface RunModelDefaultWriteResult {
+  setting: RunModelDefaultRead;
+  audit: {
+    action: 'ai.run_model_default.set';
+    actorCoreUserId: string;
+    at: string;
+    key: RunModelDefaultKey;
+    before: { model: string | null };
+    after: { model: string | null };
+  } | null;
 }
 
 /** The `PUT /v1/planner-model-settings/review` body (motir-ai MOTIR-10632). */

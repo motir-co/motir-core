@@ -231,6 +231,38 @@ export function installHostedRunMock(agent: MockAgent): void {
         });
       })
       .persist();
+    // The console's run-side defaults read (MOTIR-10844), from the same fixture:
+    // the four levels as the offer's per-difficulty defaults, the review-agent and
+    // design-run defaults UNSET unless the fixture names them. The run-model
+    // list's remove reads it, so a spec that removes run models stays green.
+    pool
+      .intercept({ path: '/v1/admin/run-model-defaults', method: 'GET' })
+      .reply((): MockReply => {
+        const fx = readFixture().models;
+        const status = fx?.status ?? 200;
+        if (status !== 200) return reply(status, { code: 'internal_error' });
+        const ids = fx?.ids ?? [DEFAULT_MODEL_ID];
+        const row = (key: string, model: string | null | undefined) => ({
+          key,
+          model: model ?? null,
+          offered: model == null ? null : ids.includes(model),
+          effectiveModel: model != null && ids.includes(model) ? model : null,
+          updatedAt: '1970-01-01T00:00:00.000Z',
+          updatedByCoreUserId: null,
+        });
+        const levels = (['trivial', 'low', 'medium', 'high'] as const).map((l) =>
+          row(l, fx?.defaultsByDifficulty?.[l]),
+        );
+        return reply(200, {
+          settings: [
+            ...levels,
+            row('review', fx?.reviewAgentDefault),
+            row('design', fx?.designRunDefault),
+          ],
+          models: ids.map((id) => ({ id, provider: fx?.providers?.[id] ?? 'anthropic' })),
+        });
+      })
+      .persist();
     pool
       .intercept({ path: '/v1/credits/agent-run-check', method: 'POST' })
       .reply((req: MockRequest): MockReply => {

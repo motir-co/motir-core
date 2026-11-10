@@ -10832,6 +10832,12 @@
               "disable": "Planungslektion deaktiviert",
               "promote": "Planungslektion hochgestuft",
               "retention_set": "Zeitraum bis zur Ausmusterung von Lektionen geändert"
+            },
+            "planner_function_model": {
+              "set": "Ein Guide-, Debug- oder Ask-Modell geändert"
+            },
+            "run_model_default": {
+              "set": "Ein ausführungsseitiges Standardmodell geändert"
             }
           },
           "fleet": {
@@ -11518,17 +11524,17 @@
     "aiPlanning": {
       "breadcrumb": "Plattform · AI-Planung",
       "title": "AI-Planung",
-      "subtitle": "Mit welchem Modell Motir plant, für jede von drei Zielgruppen. Eine Änderung gilt ab dem nächsten Planungsjob für jede Organisation dieser Zielgruppe.",
+      "subtitle": "Welches Modell die planungsseitigen Funktionen von Motir verwenden: die Planung für jede von drei Zielgruppen und je ein Plattform-Standard für Guide, Debug und Ask. Eine Änderung gilt ab dem nächsten Job für jede Organisation, die keine eigene Wahl getroffen hat.",
       "precedence": "Eine Organisation, die sowohl Meta als auch intern ist, folgt der Meta-Zeile.",
       "tenantSecretLead": "Mandanten sehen diese Wahl nie.",
       "tenantSecretBody": "Keine Mandantenseite, keine Nutzungsansicht und kein Plan nennt das Modell, das geplant hat.",
       "card": {
-        "title": "Planungsmodell nach Zielgruppe",
-        "subtitle": "Jeder Planungsjob ermittelt sein Modell aus der Organisation, für die er läuft: Meta, dann intern, dann Kunde.",
-        "count": "3 Zielgruppen"
+        "title": "Planungsseitige Modelle",
+        "subtitle": "Die Planung ermittelt ihr Modell aus der Zielgruppe der Organisation: Meta, dann intern, dann Kunde. Guide, Debug und Ask haben je einen Plattform-Standard oder übernehmen das Modell dieser Zielgruppe. Eine Organisation ab Pro kann ihre eigene Wahl treffen.",
+        "count": "7 Einstellungen"
       },
       "col": {
-        "audience": "Zielgruppe",
+        "audience": "Gilt für",
         "model": "Modell",
         "lastChanged": "Zuletzt geändert",
         "action": "Aktion"
@@ -11556,7 +11562,8 @@
         "seeded": "Voreingestellter Standard · nie geändert",
         "by": "Geändert {when} von {who}",
         "byUnknown": "Geändert {when}",
-        "justNowByYou": "Gerade von Ihnen geändert"
+        "justNowByYou": "Gerade von Ihnen geändert",
+        "neverSet": "Nie festgelegt"
       },
       "confirm": {
         "title": "Planungsmodell für {audience} ändern?",
@@ -11615,6 +11622,39 @@
         "savedTitle": "Prüfmodell geändert",
         "savedBody": "Testlauf-Prüfungen laufen ab dem nächsten Planungsjob mit {model}.",
         "unchanged": "Die Testlauf-Prüfung läuft bereits mit {model}."
+      },
+      "group": {
+        "audiences": "Planung · nach Zielgruppe",
+        "functions": "Guide · Debug · Ask · Plattform-Standards",
+        "review": "Testlauf-Prüfung · nur Plattform"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Schritt-für-Schritt-Anleitungen",
+          "confirmBody": "{from} → {to}. Gilt ab dem nächsten Guide-Schritt für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Guide-Schritte enden mit dem Modell, mit dem sie begonnen haben.",
+          "savedBody": "Guide-Schritte laufen jetzt mit {model} für jede Organisation ohne eigene Wahl."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Einen Defekt zu einem Bug diagnostizieren",
+          "confirmBody": "{from} → {to}. Gilt ab der nächsten Debug-Diagnose für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Debug-Diagnosen enden mit dem Modell, mit dem sie begonnen haben.",
+          "savedBody": "Debug-Diagnosen laufen jetzt mit {model} für jede Organisation ohne eigene Wahl."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "Die Motir AI-Unterhaltung und Grill me",
+          "confirmBody": "{from} → {to}. Gilt ab dem nächsten Ask-Gesprächsschritt für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Ask-Gesprächsschritte enden mit dem Modell, mit dem sie begonnen haben.",
+          "savedBody": "Ask-Gesprächsschritte laufen jetzt mit {model} für jede Organisation ohne eigene Wahl."
+        },
+        "inherits": "Übernimmt – das Planungsmodell der Zielgruppe",
+        "inheritsDesc": "Folgt dem Planungsmodell der Zielgruppe der Organisation",
+        "pickerAria": "Modell für {name}",
+        "withdrawnBody": "{name} fällt auf das Planungsmodell der Zielgruppe zurück, bis Sie ein anderes wählen.",
+        "withdrawnBodyReadOnly": "{name} fällt auf das Planungsmodell der Zielgruppe zurück, bis ein Superadmin ein anderes wählt.",
+        "confirmTitle": "Das Plattform-Modell für {name} ändern?",
+        "savedTitle": "Modell für {name} geändert",
+        "unchanged": "{name} läuft bereits mit {model}."
       }
     },
     "lessons": {
@@ -12864,7 +12904,9 @@
         "inUseParts": {
           "platformDefault": "Es ist der Plattform-Standard von Motir für {levels}. ",
           "projects": "{n, plural, one {# Projekt verwendet es} other {# Projekte verwenden es}}: {list}.",
-          "projectEntry": "{name} ({key}) für {levels}"
+          "projectEntry": "{name} ({key}) für {levels}",
+          "platformReview": "Es ist der Plattform-Standard von Motir für den Review-Agenten. ",
+          "platformDesign": "Es ist der Plattform-Standard von Motir für Design-Läufe. "
         },
         "notListed": "Nicht entfernt: {model} ist nicht mehr aufgeführt."
       },
@@ -12878,6 +12920,83 @@
       "unavailable": {
         "title": "Modelle für gehostete Läufe konnten nicht geladen werden",
         "body": "motir-ai hat nicht geantwortet, daher ist unbekannt, ob jedes aufgeführte Modell angeboten wird, und es wird keine Liste angezeigt. Es hat sich nichts geändert."
+      },
+      "defaults": {
+        "title": "Ausführungsseitige Standards",
+        "subtitle": "Das Modell, mit dem eine gehostete Prüfung, ein Design-Lauf oder ein Agent-Lauf startet, wenn weder die Person noch das Projekt noch die Organisation eines gewählt hat. Gewählt aus der Liste oben.",
+        "count": "6 Einstellungen",
+        "col": {
+          "function": "Funktion"
+        },
+        "row": {
+          "review": {
+            "name": "Review-Agent",
+            "desc": "Gehostete Prüfungen"
+          },
+          "design": {
+            "name": "Design-Lauf",
+            "desc": "Ein gehosteter Lauf auf einem Design-Arbeitselement"
+          },
+          "trivial": {
+            "name": "Agent-Lauf · Trivial",
+            "desc": "Gehostete Build-Läufe auf einem trivialen Arbeitselement"
+          },
+          "low": {
+            "name": "Agent-Lauf · Niedrig",
+            "desc": "Gehostete Build-Läufe auf einem Arbeitselement mit niedriger Schwierigkeit"
+          },
+          "medium": {
+            "name": "Agent-Lauf · Mittel",
+            "desc": "Gehostete Build-Läufe auf einem Arbeitselement mit mittlerer Schwierigkeit"
+          },
+          "high": {
+            "name": "Agent-Lauf · Hoch",
+            "desc": "Gehostete Build-Läufe auf einem Arbeitselement mit hoher Schwierigkeit"
+          }
+        },
+        "inherits": {
+          "review": "Übernimmt – den Lauf-Standard",
+          "reviewWith": "Übernimmt – den Lauf-Standard ({model})",
+          "design": "Übernimmt – die Schwierigkeit des Arbeitselements",
+          "level": "Übernimmt – den Wert aus der Umgebung",
+          "levelWith": "Übernimmt – den Wert aus der Umgebung ({model})"
+        },
+        "fallsBack": {
+          "review": "den Lauf-Standard",
+          "design": "die Schwierigkeit des Arbeitselements",
+          "level": "den Wert aus der Umgebung"
+        },
+        "defaultGroup": "Standard",
+        "pickerAria": "Standardmodell für {name}",
+        "pickerFoot": "Nur Modelle aus der Liste oben, die motir-ai für gehostete Läufe anbietet.",
+        "changed": {
+          "seededFromEnv": "Aus der Umgebung übernommen · nie geändert",
+          "neverSet": "Nie festgelegt"
+        },
+        "withdrawn": {
+          "chip": "Nicht mehr angeboten",
+          "body": "{name} fällt auf {what} zurück, bis Sie ein anderes wählen.",
+          "bodyReadOnly": "{name} fällt auf {what} zurück, bis ein Superadmin ein anderes wählt."
+        },
+        "refused": "{model} wird für gehostete Läufe nicht mehr angeboten oder steht nicht auf der Liste und wurde daher nicht gespeichert. Die Seite wurde aktualisiert – wählen Sie ein anderes Modell.",
+        "confirmTitle": "Das Plattform-Modell für {name} ändern?",
+        "confirmBody": {
+          "review": "{from} → {to}. Gilt ab der nächsten Prüfung für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Prüfungen enden mit dem Modell, mit dem sie begonnen haben.",
+          "design": "{from} → {to}. Gilt ab dem nächsten Design-Lauf für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Design-Läufe enden mit dem Modell, mit dem sie begonnen haben.",
+          "level": "{from} → {to}. Gilt ab dem nächsten Lauf für jede Organisation, die keine eigene Wahl getroffen hat. Bereits laufende Läufe enden mit dem Modell, mit dem sie begonnen haben."
+        },
+        "savedTitle": "Modell für {name} geändert",
+        "savedBody": {
+          "review": "Prüfungen laufen jetzt mit {model} für jede Organisation ohne eigene Wahl.",
+          "design": "Design-Läufe laufen jetzt mit {model} für jede Organisation ohne eigene Wahl.",
+          "level": "Läufe laufen jetzt mit {model} für jede Organisation ohne eigene Wahl."
+        },
+        "unchanged": "{name} ist bereits {model}.",
+        "unavailable": {
+          "title": "Die ausführungsseitigen Standards konnten nicht geladen werden",
+          "body": "Der Planungsdienst (motir-ai) hat nicht geantwortet, daher wird kein Standard angezeigt. Nichts wurde geändert, und kein Wert wird geraten.",
+          "retry": "Erneut versuchen"
+        }
       }
     },
     "ideas": {

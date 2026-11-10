@@ -44,6 +44,7 @@ import {
   PlannerModelNotQualifiedError,
   PlannerModelUnreachableError,
   OrgModelChoiceNotQualifiedError,
+  RunModelDefaultNotOfferedError,
   AI_JOB_ABANDONED_PROBLEM_CODE,
   calculatorRefusalOf,
   calculatorUnavailableOf,
@@ -72,8 +73,15 @@ import type {
   PlannerModelListEntryRead,
   PlannerModelListRead,
   PlannerModelListWriteInput,
+  PlannerFunctionDefaultRead,
+  PlannerFunctionModelWriteInput,
+  PlannerFunctionModelWriteResult,
   PlannerModelSettingsRead,
   PlannerModelWriteInput,
+  RunModelDefaultRead,
+  RunModelDefaultsRead,
+  RunModelDefaultWriteInput,
+  RunModelDefaultWriteResult,
   PlannerModelWriteResult,
   PlannerReviewModelWriteInput,
   PlannerReviewModelWriteResult,
@@ -96,7 +104,12 @@ import type {
   UsageQuery,
 } from './types';
 import { parseJobWalkStop } from '@/lib/planChange/failureRecord';
-import { PLANNER_MODEL_LIST_REASONS, type PlannerModelListReason } from './types';
+import {
+  PLANNER_DEFAULT_FUNCTIONS,
+  PLANNER_MODEL_LIST_REASONS,
+  RUN_MODEL_DEFAULT_KEYS,
+  type PlannerModelListReason,
+} from './types';
 import type { CategoryFigures, SpendCategory } from '@/lib/platform/spend';
 
 // The actor a job runs on behalf of — the read-back token is minted for them, so
@@ -3011,10 +3024,33 @@ export async function getAgentModels(): Promise<AgentModelsRead> {
 // THROW rather than degrade: the console shows an error card with retry when
 // motir-ai cannot answer, so a guessed value is never drawn.
 
+const isModelOrNull = (v: unknown): v is string | null => v === null || typeof v === 'string';
+
+function isPlannerFunctionDefault(value: unknown): value is PlannerFunctionDefaultRead {
+  if (!value || typeof value !== 'object') return false;
+  const f = value as Record<string, unknown>;
+  return (
+    (PLANNER_DEFAULT_FUNCTIONS as readonly unknown[]).includes(f['function']) &&
+    isModelOrNull(f['model']) &&
+    (f['offered'] === null || typeof f['offered'] === 'boolean') &&
+    isModelOrNull(f['updatedAt']) &&
+    isModelOrNull(f['updatedByCoreUserId'])
+  );
+}
+
 function isPlannerModelSettingsRead(body: unknown): body is PlannerModelSettingsRead {
   if (!body || typeof body !== 'object') return false;
-  const { settings, offered } = body as { settings?: unknown; offered?: unknown };
-  return Array.isArray(settings) && Array.isArray(offered);
+  const { settings, offered, functions } = body as {
+    settings?: unknown;
+    offered?: unknown;
+    functions?: unknown;
+  };
+  // `functions` (motir-ai MOTIR-10841) is additive: absent reads as no rows, but a
+  // present list that is not the shape is an answer we cannot draw.
+  const functionsOk =
+    functions === undefined ||
+    (Array.isArray(functions) && functions.every(isPlannerFunctionDefault));
+  return Array.isArray(settings) && Array.isArray(offered) && functionsOk;
 }
 
 /**
@@ -3233,6 +3269,155 @@ export async function setPlannerReviewModel(
     typeof body.updatedAt !== 'string'
   ) {
     throw new MotirAiUnavailableError('motir-ai answered a body that is not a review-model write');
+  }
+  return body;
+}
+
+/**
+ * PUT /v1/planner-model-settings/functions — set Guide's, Debug's or Ask's
+ * platform default (motir-ai MOTIR-10841): a model offered for planning, or
+ * `null` to follow the audience's Planning model.
+ *
+ * @throws PlannerModelNotOfferedError when motir-ai answers `validation_error`.
+ * @throws PlannerModelUnreachableError when its reachability probe failed.
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that
+ *   is not a function-model write; the §5 typed error for any other non-2xx.
+ */
+export async function setPlannerFunctionModel(
+  input: PlannerFunctionModelWriteInput,
+): Promise<PlannerFunctionModelWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/planner-model-settings/functions`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  const named = input.model ?? '';
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'validation_error') {
+      throw new PlannerModelNotOfferedError(named, problem.detail);
+    }
+    if (problem.code === 'model_unreachable') {
+      throw new PlannerModelUnreachableError(
+        named,
+        unreachableReason(problem.detail, problem.title),
+      );
+    }
+    throw errorFromProblem(problem);
+  }
+  const body = (await res.json().catch(() => null)) as PlannerFunctionModelWriteResult | null;
+  if (
+    !body ||
+    body.function !== input.function ||
+    !isModelOrNull(body.previousModel) ||
+    !isModelOrNull(body.model) ||
+    typeof body.updatedAt !== 'string'
+  ) {
+    throw new MotirAiUnavailableError(
+      'motir-ai answered a body that is not a function-model write',
+    );
+  }
+  return body;
+}
+
+// ── The run-side platform defaults (Story MOTIR-10838 · motir-ai MOTIR-10840) ──
+//
+// The model a hosted review, a design run or an agent run of each difficulty
+// starts on when nobody below the platform chose one. Read and written for the
+// operator console only (`platformRunModelDefaultsService`); like the planner
+// settings these THROW, so the console shows its unavailable card rather than a
+// guessed value.
+
+function isRunModelDefault(value: unknown): value is RunModelDefaultRead {
+  if (!value || typeof value !== 'object') return false;
+  const r = value as Record<string, unknown>;
+  return (
+    (RUN_MODEL_DEFAULT_KEYS as readonly unknown[]).includes(r['key']) &&
+    isModelOrNull(r['model']) &&
+    (r['offered'] === null || typeof r['offered'] === 'boolean') &&
+    isModelOrNull(r['effectiveModel']) &&
+    typeof r['updatedAt'] === 'string' &&
+    isModelOrNull(r['updatedByCoreUserId'])
+  );
+}
+
+function isRunModelDefaultsRead(body: unknown): body is RunModelDefaultsRead {
+  if (!body || typeof body !== 'object') return false;
+  const { settings, models } = body as { settings?: unknown; models?: unknown };
+  return (
+    Array.isArray(settings) &&
+    settings.every(isRunModelDefault) &&
+    Array.isArray(models) &&
+    models.every(
+      (m) =>
+        !!m &&
+        typeof m === 'object' &&
+        typeof (m as Record<string, unknown>)['id'] === 'string' &&
+        typeof (m as Record<string, unknown>)['provider'] === 'string',
+    )
+  );
+}
+
+/**
+ * GET /v1/admin/run-model-defaults — the six run-side defaults, in the order
+ * trivial, low, medium, high, review, design, and the models offered for runs.
+ *
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not the defaults shape; the §5 typed error for any other non-2xx.
+ */
+export async function getRunModelDefaults(): Promise<RunModelDefaultsRead> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/run-model-defaults`, {
+    method: 'GET',
+    headers: authHeaders(serviceToken),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+  const body: unknown = await res.json().catch(() => null);
+  if (!isRunModelDefaultsRead(body)) {
+    throw new MotirAiUnavailableError('motir-ai answered a body that is not run-model defaults');
+  }
+  return body;
+}
+
+/**
+ * PUT /v1/admin/run-model-defaults — set one run-side default, or clear it
+ * (`model: null`) so it inherits again. `audit` is null when nothing changed.
+ *
+ * @throws RunModelDefaultNotOfferedError when motir-ai answers `validation_error`.
+ * @throws MotirAiUnavailableError on a transport failure, a 5xx or a body that is
+ *   not a run-model-default write; the §5 typed error for any other non-2xx.
+ */
+export async function setRunModelDefault(
+  input: RunModelDefaultWriteInput,
+): Promise<RunModelDefaultWriteResult> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/admin/run-model-defaults`, {
+    method: 'PUT',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const problem = await readProblem(res);
+    if (problem.code === 'validation_error') {
+      throw new RunModelDefaultNotOfferedError(input.model ?? '', problem.detail);
+    }
+    throw errorFromProblem(problem);
+  }
+  const body = (await res.json().catch(() => null)) as RunModelDefaultWriteResult | null;
+  const audit = body?.audit;
+  const auditOk =
+    audit === null ||
+    (!!audit &&
+      typeof audit === 'object' &&
+      audit.key === input.key &&
+      typeof audit.at === 'string' &&
+      isModelOrNull(audit.before?.model) &&
+      isModelOrNull(audit.after?.model));
+  if (!body || !isRunModelDefault(body.setting) || body.setting.key !== input.key || !auditOk) {
+    throw new MotirAiUnavailableError(
+      'motir-ai answered a body that is not a run-model-default write',
+    );
   }
   return body;
 }

@@ -200,6 +200,8 @@ describe('the reason rule', () => {
     'ai.planner_model.set': 'required',
     // The dry-run review model (MOTIR-10632): a write, audited like the audience change.
     'ai.planner_review_model.set': 'required',
+    // Guide / Debug / Ask platform defaults (MOTIR-10844).
+    'ai.planner_function_model.set': 'required',
     // The planning-model list (Story MOTIR-7521 · MOTIR-7524) — same degree.
     'ai.planner_model_list.add': 'required',
     'ai.planner_model_list.remove': 'required',
@@ -207,6 +209,8 @@ describe('the reason rule', () => {
     'ai.run_model_list.seed': 'required',
     'ai.run_model_list.add': 'required',
     'ai.run_model_list.remove': 'required',
+    // The run-side platform defaults (MOTIR-10844).
+    'ai.run_model_default.set': 'required',
     // The planning-lesson curate acts (Story MOTIR-1408 · MOTIR-1411) — each
     // changes what a planner is told, so each carries a reason.
     'ai.lesson.edit': 'required',

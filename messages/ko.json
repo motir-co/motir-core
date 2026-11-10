@@ -10826,6 +10826,12 @@
               "disable": "계획 교훈 끔",
               "promote": "계획 교훈 승격함",
               "retention_set": "교훈 폐기 기간 변경함"
+            },
+            "planner_function_model": {
+              "set": "Guide, Debug 또는 Ask 모델 변경"
+            },
+            "run_model_default": {
+              "set": "실행 측 기본 모델 변경"
             }
           },
           "fleet": {
@@ -11512,17 +11518,17 @@
     "aiPlanning": {
       "breadcrumb": "플랫폼 · AI 계획",
       "title": "AI 계획",
-      "subtitle": "세 가지 대상별로 Motir가 계획에 사용하는 모델입니다. 변경 사항은 해당 대상에 속한 모든 조직의 다음 계획 작업부터 적용됩니다.",
+      "subtitle": "Motir의 계획 측 기능이 사용하는 모델입니다. 세 대상 각각의 계획, 그리고 Guide, Debug, Ask 각각에 하나의 플랫폼 기본값이 있습니다. 변경 사항은 자체 선택이 없는 모든 조직에 다음 작업부터 적용됩니다.",
       "precedence": "메타이면서 내부인 조직은 메타 행을 따릅니다.",
       "tenantSecretLead": "테넌트는 이 선택을 볼 수 없습니다.",
       "tenantSecretBody": "어떤 테넌트 페이지, 사용량 보기, 계획에도 계획에 사용된 모델 이름이 표시되지 않습니다.",
       "card": {
-        "title": "대상별 계획 모델",
-        "subtitle": "모든 계획 작업은 실행 대상 조직에 따라 모델을 결정합니다: 메타, 그다음 내부, 그다음 고객.",
-        "count": "대상 3개"
+        "title": "계획 측 모델",
+        "subtitle": "계획은 조직의 대상에서 모델을 결정합니다. 메타, 그다음 내부, 그다음 고객 순입니다. Guide, Debug, Ask는 각각 하나의 플랫폼 기본값을 가지거나 해당 대상의 모델을 상속합니다. Pro 이상 조직은 직접 선택할 수 있습니다.",
+        "count": "설정 7개"
       },
       "col": {
-        "audience": "대상",
+        "audience": "적용 대상",
         "model": "모델",
         "lastChanged": "마지막 변경",
         "action": "작업"
@@ -11550,7 +11556,8 @@
         "seeded": "초기 기본값 · 변경된 적 없음",
         "by": "{when} {who} 님이 변경함",
         "byUnknown": "{when} 변경됨",
-        "justNowByYou": "방금 내가 변경함"
+        "justNowByYou": "방금 내가 변경함",
+        "neverSet": "설정된 적 없음"
       },
       "confirm": {
         "title": "{audience}의 계획 모델을 변경하시겠습니까?",
@@ -11609,6 +11616,39 @@
         "savedTitle": "검토 모델이 변경되었습니다",
         "savedBody": "다음 계획 작업부터 시험 실행 검토는 {model}(으)로 실행됩니다.",
         "unchanged": "시험 실행 검토는 이미 {model}(으)로 실행되고 있습니다."
+      },
+      "group": {
+        "audiences": "계획 · 대상별",
+        "functions": "Guide · Debug · Ask · 플랫폼 기본값",
+        "review": "시험 실행 검토 · 플랫폼 전용"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "단계별로 안내받기",
+          "confirmBody": "{from} → {to}. 자체 선택이 없는 모든 조직에 다음 Guide 단계부터 적용됩니다. 이미 진행 중인 Guide 단계는 시작할 때의 모델로 끝납니다.",
+          "savedBody": "이제 자체 선택이 없는 모든 조직의 Guide 단계가 {model}(으)로 실행됩니다."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "결함을 진단해 버그로 만들기",
+          "confirmBody": "{from} → {to}. 자체 선택이 없는 모든 조직에 다음 Debug 진단부터 적용됩니다. 이미 진행 중인 Debug 진단은 시작할 때의 모델로 끝납니다.",
+          "savedBody": "이제 자체 선택이 없는 모든 조직의 Debug 진단이 {model}(으)로 실행됩니다."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "Motir AI 대화와 Grill me",
+          "confirmBody": "{from} → {to}. 자체 선택이 없는 모든 조직에 다음 Ask 대화 차례부터 적용됩니다. 이미 진행 중인 Ask 대화 차례는 시작할 때의 모델로 끝납니다.",
+          "savedBody": "이제 자체 선택이 없는 모든 조직의 Ask 대화 차례가 {model}(으)로 실행됩니다."
+        },
+        "inherits": "상속 — 대상의 계획 모델",
+        "inheritsDesc": "조직 대상의 계획 모델을 따릅니다",
+        "pickerAria": "{name} 모델",
+        "withdrawnBody": "다른 모델을 선택할 때까지 {name}은(는) 대상의 계획 모델로 대체됩니다.",
+        "withdrawnBodyReadOnly": "최고 관리자가 다른 모델을 선택할 때까지 {name}은(는) 대상의 계획 모델로 대체됩니다.",
+        "confirmTitle": "플랫폼 {name} 모델을 변경하시겠습니까?",
+        "savedTitle": "{name} 모델이 변경됨",
+        "unchanged": "{name}은(는) 이미 {model}(으)로 실행됩니다."
       }
     },
     "lessons": {
@@ -12858,7 +12898,9 @@
         "inUseParts": {
           "platformDefault": "{levels}에 대한 Motir 플랫폼 기본값입니다. ",
           "projects": "{n, plural, other {프로젝트 #개에서 사용 중입니다}}: {list}.",
-          "projectEntry": "{name}({key}), {levels}"
+          "projectEntry": "{name}({key}), {levels}",
+          "platformReview": "Motir의 리뷰 에이전트 플랫폼 기본값입니다. ",
+          "platformDesign": "Motir의 디자인 실행 플랫폼 기본값입니다. "
         },
         "notListed": "제거되지 않았습니다: {model}은(는) 더 이상 목록에 없습니다."
       },
@@ -12872,6 +12914,83 @@
       "unavailable": {
         "title": "호스팅 실행 모델을 불러오지 못했습니다",
         "body": "motir-ai가 응답하지 않아 목록의 각 모델이 제공되는지 알 수 없으므로 목록을 표시하지 않습니다. 변경된 내용은 없습니다."
+      },
+      "defaults": {
+        "title": "실행 측 기본값",
+        "subtitle": "개인, 프로젝트, 조직 중 누구도 모델을 선택하지 않았을 때 호스팅 리뷰, 디자인 실행, 에이전트 실행이 시작하는 모델입니다. 위 목록에서 선택합니다.",
+        "count": "설정 6개",
+        "col": {
+          "function": "기능"
+        },
+        "row": {
+          "review": {
+            "name": "리뷰 에이전트",
+            "desc": "호스팅 리뷰"
+          },
+          "design": {
+            "name": "디자인 실행",
+            "desc": "디자인 작업 항목에 대한 호스팅 실행"
+          },
+          "trivial": {
+            "name": "에이전트 실행 · 매우 쉬움",
+            "desc": "매우 쉬운 작업 항목에 대한 호스팅 빌드 실행"
+          },
+          "low": {
+            "name": "에이전트 실행 · 낮음",
+            "desc": "난이도가 낮은 작업 항목에 대한 호스팅 빌드 실행"
+          },
+          "medium": {
+            "name": "에이전트 실행 · 중간",
+            "desc": "난이도가 중간인 작업 항목에 대한 호스팅 빌드 실행"
+          },
+          "high": {
+            "name": "에이전트 실행 · 높음",
+            "desc": "난이도가 높은 작업 항목에 대한 호스팅 빌드 실행"
+          }
+        },
+        "inherits": {
+          "review": "상속 — 실행 기본값",
+          "reviewWith": "상속 — 실행 기본값({model})",
+          "design": "상속 — 작업 항목의 난이도",
+          "level": "상속 — 환경 값",
+          "levelWith": "상속 — 환경 값({model})"
+        },
+        "fallsBack": {
+          "review": "실행 기본값",
+          "design": "작업 항목의 난이도",
+          "level": "환경 값"
+        },
+        "defaultGroup": "기본값",
+        "pickerAria": "{name} 기본 모델",
+        "pickerFoot": "위 목록에 있고 motir-ai가 호스팅 실행용으로 제공하는 모델만 표시됩니다.",
+        "changed": {
+          "seededFromEnv": "환경에서 설정됨 · 변경된 적 없음",
+          "neverSet": "설정된 적 없음"
+        },
+        "withdrawn": {
+          "chip": "더 이상 제공되지 않음",
+          "body": "다른 모델을 선택할 때까지 {name}은(는) {what}(으)로 대체됩니다.",
+          "bodyReadOnly": "최고 관리자가 다른 모델을 선택할 때까지 {name}은(는) {what}(으)로 대체됩니다."
+        },
+        "refused": "{model}은(는) 더 이상 호스팅 실행용으로 제공되지 않거나 목록에 없어 저장되지 않았습니다. 페이지를 새로 고쳤습니다. 다른 모델을 선택하세요.",
+        "confirmTitle": "플랫폼 {name} 모델을 변경하시겠습니까?",
+        "confirmBody": {
+          "review": "{from} → {to}. 자체 선택이 없는 모든 조직에 다음 리뷰부터 적용됩니다. 이미 진행 중인 리뷰는 시작할 때의 모델로 끝납니다.",
+          "design": "{from} → {to}. 자체 선택이 없는 모든 조직에 다음 디자인 실행부터 적용됩니다. 이미 진행 중인 디자인 실행은 시작할 때의 모델로 끝납니다.",
+          "level": "{from} → {to}. 자체 선택이 없는 모든 조직에 다음 실행부터 적용됩니다. 이미 진행 중인 실행은 시작할 때의 모델로 끝납니다."
+        },
+        "savedTitle": "{name} 모델이 변경됨",
+        "savedBody": {
+          "review": "이제 자체 선택이 없는 모든 조직의 리뷰가 {model}(으)로 실행됩니다.",
+          "design": "이제 자체 선택이 없는 모든 조직의 디자인 실행이 {model}(으)로 실행됩니다.",
+          "level": "이제 자체 선택이 없는 모든 조직의 실행이 {model}(으)로 진행됩니다."
+        },
+        "unchanged": "{name}은(는) 이미 {model}입니다.",
+        "unavailable": {
+          "title": "실행 측 기본값을 불러올 수 없습니다",
+          "body": "계획 서비스(motir-ai)가 응답하지 않아 기본값을 표시하지 않습니다. 변경된 것은 없으며 어떤 값도 추측하지 않습니다.",
+          "retry": "다시 시도"
+        }
       }
     },
     "ideas": {

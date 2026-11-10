@@ -61,8 +61,34 @@ let offered: { id: string; provider: string }[] = [];
 let defaults: Record<Level, string | null> = { trivial: null, low: null, medium: null, high: null };
 let motirAiDown = false;
 
-const fetchStub = vi.fn(async () => {
+/** The run-side review-agent and design-run defaults (MOTIR-10844) the stub stores. */
+let roleDefaults: { review: string | null; design: string | null } = { review: null, design: null };
+let runDefaultsDown = false;
+
+const fetchStub = vi.fn(async (url: string) => {
   if (motirAiDown) throw new TypeError('fetch failed');
+  if (url.endsWith('/v1/admin/run-model-defaults')) {
+    if (runDefaultsDown) throw new TypeError('fetch failed');
+    const row = (key: string, model: string | null) => ({
+      key,
+      model,
+      offered: model === null ? null : true,
+      effectiveModel: model,
+      updatedAt: '1970-01-01T00:00:00.000Z',
+      updatedByCoreUserId: null,
+    });
+    return new Response(
+      JSON.stringify({
+        settings: [
+          ...(['trivial', 'low', 'medium', 'high'] as const).map((l) => row(l, defaults[l])),
+          row('review', roleDefaults.review),
+          row('design', roleDefaults.design),
+        ],
+        models: offered,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
   return new Response(
     JSON.stringify({ models: offered, default: null, defaultsByDifficulty: defaults }),
     { status: 200, headers: { 'content-type': 'application/json' } },
@@ -88,6 +114,8 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', fetchStub);
   fetchStub.mockClear();
   motirAiDown = false;
+  roleDefaults = { review: null, design: null };
+  runDefaultsDown = false;
   offered = [
     { id: 'claude-opus-5-5', provider: 'anthropic' },
     { id: 'claude-sonnet-5-5', provider: 'anthropic' },
@@ -364,6 +392,31 @@ describe('removeModel — refused while anything uses the model', () => {
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(RunModelInUseError);
     expect(err).toMatchObject({ platformLevels: ['medium', 'high'], projects: [] });
+  });
+
+  it('refuses a model the platform review-agent or design-run default stores, naming each', async () => {
+    roleDefaults = { review: 'glm-5.2', design: 'glm-5.2' };
+    const before = (await auditRows()).length;
+    const err = await platformRunModelService
+      .removeModel(currentPrincipal!, 'glm-5.2', 'retire')
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RunModelInUseError);
+    expect(err).toMatchObject({ platformLevels: [], platformRoles: ['review', 'design'] });
+    expect((err as Error).message).toContain('the platform review-agent default');
+    expect((err as Error).message).toContain('the platform design-run default');
+    expect(await auditRows()).toHaveLength(before);
+    roleDefaults = { review: null, design: 'glm-5.2' };
+    await expect(
+      platformRunModelService.removeModel(currentPrincipal!, 'glm-5.2', 'retire'),
+    ).rejects.toMatchObject({ platformRoles: ['design'] });
+  });
+
+  it('a run-model-defaults read motir-ai cannot answer refuses the remove as unavailable', async () => {
+    runDefaultsDown = true;
+    await expect(
+      platformRunModelService.removeModel(currentPrincipal!, 'glm-5.2', 'retire'),
+    ).rejects.toBeInstanceOf(HostedModelsUnavailableError);
+    expect(await listed()).toContain('glm-5.2');
   });
 
   it('refuses a model that is not listed', async () => {

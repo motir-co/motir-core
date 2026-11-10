@@ -173,6 +173,7 @@ describe('RunModelList', () => {
       ok: false,
       code: 'IN_USE',
       platformLevels: ['high', 'medium'],
+      platformRoles: [],
       projects: [
         { projectKey: 'ACME', projectName: 'Acme', levels: ['high'] },
         { projectKey: 'BETA', projectName: 'Beta', levels: ['low', 'trivial'] },
@@ -186,11 +187,28 @@ describe('RunModelList', () => {
     );
   });
 
+  it('refused in use by the review-agent and design-run defaults — each named (MOTIR-10844)', async () => {
+    removeRunModelAction.mockResolvedValueOnce({
+      ok: false,
+      code: 'IN_USE',
+      platformLevels: [],
+      platformRoles: ['review', 'design'],
+      projects: [],
+    });
+    renderList(list());
+    await removeWith('claude-opus-5-5', 'tidy');
+    expect(within(rowOf('claude-opus-5-5')).getByRole('alert').textContent).toBe(
+      'Not removed: claude-opus-5-5 is in use. It is Motir’s platform review-agent default. ' +
+        'It is Motir’s platform design-run default.  Change those first.',
+    );
+  });
+
   it('refused in use by projects alone — no platform-default clause', async () => {
     removeRunModelAction.mockResolvedValueOnce({
       ok: false,
       code: 'IN_USE',
       platformLevels: [],
+      platformRoles: [],
       projects: [{ projectKey: 'ACME', projectName: 'Acme', levels: ['high'] }],
     });
     renderList(list());

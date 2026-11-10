@@ -1,13 +1,17 @@
 import type { User } from '@/generated/prisma/client';
 import {
   PLANNER_AUDIENCES,
+  PLANNER_DEFAULT_FUNCTIONS,
   PLANNER_MODEL_FALLBACK,
+  type PlannerFunctionModelWriteResult,
   type PlannerModelListRead,
   type PlannerModelSettingsRead,
   type PlannerModelWriteResult,
   type PlannerReviewModelWriteResult,
 } from '@/lib/ai/types';
 import type {
+  PlatformPlannerFunctionModelWriteDTO,
+  PlatformPlannerFunctionRowDTO,
   PlatformPlannerModelListDTO,
   PlatformPlannerModelRowDTO,
   PlatformPlannerModelSettingsDTO,
@@ -56,9 +60,23 @@ export function toPlatformPlannerModelSettingsDTO(
         seeded: !read.review.updatedByCoreUserId,
       }
     : null;
+  const functions: PlatformPlannerFunctionRowDTO[] = [];
+  for (const fn of PLANNER_DEFAULT_FUNCTIONS) {
+    const f = read.functions?.find((x) => x.function === fn);
+    if (!f) continue;
+    functions.push({
+      function: fn,
+      model: f.model,
+      offered: f.offered,
+      updatedAt: f.updatedAt,
+      updatedBy: f.updatedByCoreUserId ? (nameById.get(f.updatedByCoreUserId) ?? null) : null,
+      seeded: !f.updatedByCoreUserId,
+    });
+  }
   return {
     rows,
     review,
+    functions,
     offered: read.offered.map((m) => ({ id: m.id, provider: m.provider })),
     canEdit,
   };
@@ -70,6 +88,19 @@ export function toPlatformPlannerReviewModelWriteDTO(
   fromModel: string | null,
 ): PlatformPlannerReviewModelWriteDTO {
   return { fromModel, toModel: result.model, updatedAt: result.updatedAt };
+}
+
+/** motir-ai's function-default write answer → the console DTO (MOTIR-10844). */
+export function toPlatformPlannerFunctionModelWriteDTO(
+  result: PlannerFunctionModelWriteResult,
+  fromModel: string | null,
+): PlatformPlannerFunctionModelWriteDTO {
+  return {
+    function: result.function,
+    fromModel,
+    toModel: result.model,
+    updatedAt: result.updatedAt,
+  };
 }
 
 /** motir-ai's write answer → the console DTO, with `fromModel` as core audited it. */
