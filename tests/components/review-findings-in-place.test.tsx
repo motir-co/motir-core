@@ -451,7 +451,6 @@ describe('the doors open the review in place, only on the Workbench (§ 42.3, F0
               at: '2026-11-05T13:34:00Z',
               commits: [],
             },
-            container: null,
             recordRef: { kind: 'record', id: 'rec-1' },
           }}
         />

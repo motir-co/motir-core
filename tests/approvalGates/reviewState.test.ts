@@ -10,7 +10,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 //
 // What a plausible wrong read model passes, pinned hardest:
 //   - an answer earned at one head carrying over to the next;
-//   - a Done or cancelled run target counted in a container;
+//   - a container answered from its children (it reads the asked cards only);
 //   - a second notification for the same gate on a retry;
 //   - one query per card, and a card of another workspace answered.
 
@@ -459,6 +459,7 @@ async function teammate(
 
 const { reviewStateService } = await import('@/lib/services/reviewStateService');
 const { reviewStateRepository } = await import('@/lib/repositories/reviewStateRepository');
+const { withWorkspaceContext } = await import('@/lib/workspaces/context');
 const { reviewToRunService } = await import('@/lib/services/reviewToRunService');
 const { approvalGatesService } = await import('@/lib/services/approvalGatesService');
 
@@ -769,8 +770,11 @@ describe('the author-of-every-PR fact', () => {
 
 // ── A container ───────────────────────────────────────────────────────────────
 
+// A container wears no review state of its own and the read never walks into its tree: the
+// *n of m reviewed* count was dropped after it read every card under a page's epics and ran
+// `/items` past its transaction limit.
 describe('a container', () => {
-  it('counts the open run targets in its tree that passed at their current version', async () => {
+  it('is answered from its own rows only — its reviewed children are never read', async () => {
     const s = await makeScenario('tree');
     await adminDb.project.update({
       where: { id: s.project.id },
@@ -781,73 +785,15 @@ describe('a container', () => {
       s.ctx,
     );
     const a = await deliveredChild(s, story.id, 92, 'task');
-    const b = await deliveredChild(s, story.id, 93);
-    const cancelled = await deliveredChild(s, story.id, 94);
-    await adminDb.workItem.update({ where: { id: cancelled.id }, data: { status: 'cancelled' } });
-    // A card built onto its parent's pull request is reviewed as that parent: not counted.
-    const rider = await workItemsService.createWorkItem(
-      { projectId: s.project.id, kind: 'subtask', title: 'Rider', parentId: a.id },
-      s.ctx,
-    );
-    await linkPrByIdentifier({
-      identifier: rider.identifier,
-      owner: 'moooon',
-      name: 'acme',
-      number: 92,
-      headRef: `subtask/${a.identifier}-92`,
-    });
-    // A card with no pull request of its own is no run target either.
-    await workItemsService.createWorkItem(
-      { projectId: s.project.id, kind: 'subtask', title: 'Bare', parentId: story.id },
-      s.ctx,
-    );
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 0,
-      total: 2,
-      allPassed: false,
-    });
-    // A card with its own pull request under a card with none is a run target of its own.
-    const mid = await workItemsService.createWorkItem(
-      { projectId: s.project.id, kind: 'task', title: 'Mid', parentId: story.id },
-      s.ctx,
-    );
-    const deep = await deliveredChild(s, mid.id, 124);
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 0,
-      total: 3,
-      allPassed: false,
-    });
-    await adminDb.workItem.update({ where: { id: deep.id }, data: { archivedAt: new Date() } });
-    expect((await stateOf(s, story.id))?.container, 'an archived card is not open').toEqual({
-      passed: 0,
-      total: 2,
-      allPassed: false,
-    });
-
     await reviewVerdictService.submit(s.project.id, a.identifier, input(versionOf(92)), s.ctx);
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 1,
-      total: 2,
-      allPassed: false,
-    });
 
-    await reviewVerdictService.submit(s.project.id, b.identifier, input(versionOf(93)), s.ctx);
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 2,
-      total: 2,
-      allPassed: true,
-    });
-
-    // A leaf has no container count; a card with a child riding its pull request counts itself.
-    expect((await stateOf(s, b.id))?.container).toBeNull();
-    expect((await stateOf(s, a.id))?.container).toEqual({ passed: 1, total: 1, allPassed: true });
-    // A push on one target makes the container n of m again.
-    await pushTo(b.identifier, 93, 'sha-b');
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 1,
-      total: 2,
-      allPassed: false,
-    });
+    const deliveries = vi.spyOn(reviewStateRepository, 'listDeliveries');
+    const state = await stateOf(s, story.id);
+    expect(state).toMatchObject({ currentVersion: null, marker: null, reviewed: null });
+    expect(deliveries).toHaveBeenCalledWith([story.id], expect.anything());
+    expect(await reviewStateService.cardReviewsFor(s.project.id, [story.id], s.ctx)).toEqual({});
+    // The child itself still reads Reviewed.
+    expect((await stateOf(s, a.id))?.reviewed).not.toBeNull();
   });
 });
 
@@ -956,7 +902,6 @@ describe('a page of cards', () => {
     ];
     const spies = (
       [
-        'listSubtrees',
         'listCards',
         'listDeliveries',
         'listAgentReviewGates',
@@ -1017,6 +962,43 @@ describe('a page of cards', () => {
   });
 });
 
+// THE HEAD OF A PULL REQUEST WITH NO STORED HEAD — the check rows' head, computed in the
+// database (the `/items` timeout): never the check rows themselves, which a whole project's
+// tree read loaded by the hundred thousand.
+describe('a pull request with no stored head', () => {
+  it('reads its head from the check rows — the commit first seen last — without loading them', async () => {
+    const { s, item } = await deliveredGateOff('headless', 131);
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({ where: { number: 131 } });
+    const [row] = await adminDb.githubCheckRun.findMany({ where: { pullRequestId: pr.id } });
+    expect(row, 'the green verdict stored a check row').toBeDefined();
+    const { id: _id, ...base } = row!;
+    // sha-b first seen after sha-a; a LATER row at sha-a (a re-run) does not make it the head.
+    await adminDb.githubCheckRun.create({
+      data: { ...base, commitSha: 'sha-b', createdAt: new Date(row!.createdAt.getTime() + 1000) },
+    });
+    await adminDb.githubCheckRun.create({
+      data: {
+        ...base,
+        checkName: `${base.checkName}-rerun`,
+        createdAt: new Date(row!.createdAt.getTime() + 2000),
+      },
+    });
+    await adminDb.githubPullRequest.update({ where: { id: pr.id }, data: { headSha: null } });
+
+    expect((await stateOf(s, item.id))?.currentVersion).toBe(versionOf(131, 'sha-b'));
+    const deliveries = await withWorkspaceContext(s.ctx, (tx) =>
+      reviewStateRepository.listDeliveries([item.id], tx),
+    );
+    expect(deliveries.map((d) => [d.pullRequest.headSha, d.pullRequest.checkRuns])).toEqual([
+      ['sha-b', []],
+    ]);
+
+    // No stored head and no check rows: the version stays unknown.
+    await adminDb.githubCheckRun.deleteMany({ where: { pullRequestId: pr.id } });
+    expect((await stateOf(s, item.id))?.currentVersion).toBeNull();
+  });
+});
+
 describe('access and the edges', () => {
   it('answers nothing on a project the reader may not browse', async () => {
     const { s, item } = await deliveredGateOff('private', 126);
@@ -1046,7 +1028,6 @@ describe('access and the edges', () => {
 
   it('every batch read answers an empty set without a query', async () => {
     const tx = {} as never;
-    expect(await reviewStateRepository.listSubtrees([], 'p', tx)).toEqual([]);
     expect(await reviewStateRepository.listCards([], tx)).toEqual([]);
     expect(await reviewStateRepository.listDeliveries([], tx)).toEqual([]);
     expect(await reviewStateRepository.listAgentReviewGates([], tx)).toEqual([]);
@@ -1078,7 +1059,6 @@ describe('the surfaces’ read — cardReviewsFor and the board', () => {
     expect(map[item.id]).toMatchObject({
       identifier: item.identifier,
       marker: null,
-      container: null,
       reviewed: { commits: [{ repo: 'moooon/acme', number: 128, headSha: 'sha-a' }] },
       recordRef: { kind: 'record' },
     });

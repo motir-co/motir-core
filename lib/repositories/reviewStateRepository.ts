@@ -11,14 +11,6 @@ import type { WorkItemDeliveryWithChecks } from '@/lib/repositories/workItemDeli
 // RLS-gated on it, so a card of another workspace is never read — and an UNBOUND read would
 // answer "no review", which reads exactly like a card nobody reviewed.
 
-/** One card of a subtree walk, rooted at one of the asked cards. */
-export interface ReviewStateTreeRow {
-  rootId: string;
-  id: string;
-  parentId: string | null;
-  depth: number;
-}
-
 /** A card, with what the review state reads of it. */
 export interface ReviewStateCardRow {
   id: string;
@@ -47,31 +39,6 @@ export type ReviewStateDismissalRow = Prisma.ReviewDismissalGetPayload<{
 }>;
 
 export const reviewStateRepository = {
-  /**
-   * Every card under each root, the root included, in ONE recursive query. A card whose
-   * project is not `projectId` is not walked into.
-   */
-  async listSubtrees(
-    rootIds: readonly string[],
-    projectId: string,
-    tx: Prisma.TransactionClient,
-  ): Promise<ReviewStateTreeRow[]> {
-    if (rootIds.length === 0) return [];
-    return tx.$queryRaw<ReviewStateTreeRow[]>`
-      WITH RECURSIVE subtree AS (
-        SELECT w."id" AS "rootId", w."id", w."parentId", 0 AS depth
-          FROM "work_item" w
-          WHERE w."id" = ANY(${[...rootIds]}::text[]) AND w."projectId" = ${projectId}
-        UNION ALL
-        SELECT s."rootId", w."id", w."parentId", s.depth + 1
-          FROM "work_item" w
-          JOIN subtree s ON w."parentId" = s."id"
-          WHERE w."projectId" = ${projectId}
-      )
-      SELECT "rootId", "id", "parentId", depth::int AS "depth" FROM subtree
-      ORDER BY "rootId", depth`;
-  },
-
   /** The cards themselves, in ONE query. */
   async listCards(
     ids: readonly string[],
@@ -92,17 +59,57 @@ export const reviewStateRepository = {
     });
   },
 
-  /** Every delivery of the cards, with its pull request, check rows and repository. */
+  /**
+   * Every delivery of the cards, with its pull request and repository — and NO check rows.
+   *
+   * ⚠️ THE CHECK ROWS ARE NEVER LOADED HERE. The read model needs a pull request's check
+   * rows for one thing only: the head of a row with no stored `headSha`
+   * (`pullRequestHead`'s fallback — the commit whose EARLIEST row is the newest). Loading
+   * every row to answer that put ~450k check rows (82 MB) into one `/items` read of the
+   * MOTIR project and ran its workspace transaction past Prisma's 5 s limit. So the
+   * fallback head is computed in the database, for the head-less pull requests only, and
+   * written into `headSha` of the returned row — `checkRuns` is always empty, and nothing
+   * downstream of `readReviewStates` reads it.
+   */
   async listDeliveries(
     workItemIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<WorkItemDeliveryWithChecks[]> {
     if (workItemIds.length === 0) return [];
-    return tx.workItemDelivery.findMany({
+    const rows = await tx.workItemDelivery.findMany({
       where: { workItemId: { in: [...workItemIds] } },
-      include: { pullRequest: { include: { checkRuns: true } }, repo: true },
+      include: { pullRequest: true, repo: true },
       orderBy: [{ workItemId: 'asc' }, { createdAt: 'asc' }],
     });
+    const headless = [
+      ...new Set(
+        rows.flatMap((row) =>
+          row.pullRequest && !row.pullRequest.headSha ? [row.pullRequest.id] : [],
+        ),
+      ),
+    ];
+    const fallbackHead = new Map<string, string>();
+    if (headless.length > 0) {
+      const heads = await tx.$queryRaw<{ pullRequestId: string; commitSha: string }[]>`
+        SELECT DISTINCT ON (s."pull_request_id")
+               s."pull_request_id" AS "pullRequestId", s."commit_sha" AS "commitSha"
+          FROM (
+            SELECT c."pull_request_id", c."commit_sha", min(c."created_at") AS "firstSeen"
+              FROM "github_check_run" c
+              WHERE c."pull_request_id" = ANY(${headless}::text[])
+              GROUP BY c."pull_request_id", c."commit_sha"
+          ) s
+          ORDER BY s."pull_request_id", s."firstSeen" DESC, s."commit_sha" DESC`;
+      for (const head of heads) fallbackHead.set(head.pullRequestId, head.commitSha);
+    }
+    return rows.map((row) => ({
+      ...row,
+      pullRequest: row.pullRequest && {
+        ...row.pullRequest,
+        headSha: row.pullRequest.headSha || (fallbackHead.get(row.pullRequest.id) ?? null),
+        checkRuns: [],
+      },
+    }));
   },
 
   /** Every `agent_review` gate of the cards, any state, newest first. */
@@ -193,12 +200,12 @@ export const reviewStateRepository = {
    * that writes no `approval_gate` row — a gate-off pass, a GitHub approval at the head —
    * still moves the tab and the open row re-reads its review line and badge.
    *
-   * ⚠️ THE SAME ROWS THE READ MODEL DERIVES FROM, over the same subtree. `readReviewStates`
-   * answers a card from its whole subtree in its own project (`listSubtrees`: a container's
-   * badge counts its children's reviews), from these tables: the verdict records, the
+   * ⚠️ THE SAME ROWS THE READ MODEL DERIVES FROM, over the same cards. `readReviewStates`
+   * answers a card from its own rows only (no subtree since the container count was
+   * dropped), from these tables: the verdict records, the
    * dismissals, the deliveries, the `agent_review` gates and the GitHub reviews of the
    * delivered pull requests. A
-   * reading over fewer tables, or over the root alone, is a row that goes stale on exactly
+   * reading over fewer tables is a row that goes stale on exactly
    * the write it left out — with nothing red, because a reload still draws it right.
    *
    * ⚠️ AND IT IS A SIGNAL, NEVER CONTENT: a count and an instant, no ids. The count is what
@@ -217,43 +224,35 @@ export const reviewStateRepository = {
    * Required `tx`, bound to the reader's workspace: every table is RLS-gated, and an
    * unbound read answers zero rows — which reads as *nothing reviewed*.
    */
-  async watermarkReviewsOfSubtrees(
-    rootIds: readonly string[],
+  async watermarkReviewsOfCards(
+    workItemIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<{ count: number; latest: Date | null }> {
-    if (rootIds.length === 0) return { count: 0, latest: null };
+    if (workItemIds.length === 0) return { count: 0, latest: null };
     const [row] = await tx.$queryRaw<{ count: number; latest: Date | null }[]>`
-      WITH RECURSIVE subtree AS (
-        SELECT w."id", w."projectId"
-          FROM "work_item" w
-          WHERE w."id" = ANY(${[...rootIds]}::text[])
-        UNION
-        SELECT c."id", c."projectId"
-          FROM "work_item" c
-          JOIN subtree s ON c."parentId" = s."id" AND c."projectId" = s."projectId"
-      ),
+      WITH cards AS (SELECT unnest(${[...workItemIds]}::text[]) AS "id"),
       reviewed AS (
         SELECT r."created_at" AS "at"
           FROM "review_verdict_record" r
-          WHERE r."work_item_id" IN (SELECT "id" FROM subtree)
+          WHERE r."work_item_id" IN (SELECT "id" FROM cards)
         UNION ALL
         SELECT d."created_at"
           FROM "review_dismissal" d
-          WHERE d."work_item_id" IN (SELECT "id" FROM subtree)
+          WHERE d."work_item_id" IN (SELECT "id" FROM cards)
         UNION ALL
         SELECT del."created_at"
           FROM "work_item_delivery" del
-          WHERE del."work_item_id" IN (SELECT "id" FROM subtree)
+          WHERE del."work_item_id" IN (SELECT "id" FROM cards)
         UNION ALL
         SELECT a."updated_at"
           FROM "approval_gate" a
-          WHERE a."work_item_id" IN (SELECT "id" FROM subtree)
+          WHERE a."work_item_id" IN (SELECT "id" FROM cards)
             AND a."kind" = 'agent_review'
         UNION ALL
         SELECT g."updated_at"
           FROM "github_pull_request_review" g
           JOIN "work_item_delivery" gd ON gd."github_pull_request_id" = g."github_pull_request_id"
-          WHERE gd."work_item_id" IN (SELECT "id" FROM subtree)
+          WHERE gd."work_item_id" IN (SELECT "id" FROM cards)
       )
       SELECT count(*)::int AS "count", max("at") AS "latest" FROM reviewed`;
     /* v8 ignore next -- an aggregate with no GROUP BY always answers exactly one row. */

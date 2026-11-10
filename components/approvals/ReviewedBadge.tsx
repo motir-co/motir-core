@@ -13,18 +13,19 @@ import type { CardReviewDTO, ReviewReviewerDTO } from '@/lib/dto/reviewState';
 
 // THE REVIEWED BADGE (Story MOTIR-10327 · MOTIR-10341; `design/github/design-notes.md`
 // § 32.3, `design/work-items/decision-waiting--review-path.mock.html` M5, M6, M8, M10, M11) —
-// one component, two forms, and the container form; exported for the To approve row too.
+// one component, two forms; exported for the To approve row too.
 //
 //   · label — `Pill severity="success"` · the icon pair · *Reviewed*: the board card (after
 //     the slot, before the CI badge) and the item header (after the marker);
 //   · glyph — an 18px mint disc in the List / Tree status cell, `role="img"`, FOCUSABLE;
-//   · container — every open run target passed: the label form, named *Every part
-//     reviewed…*; otherwise a NEUTRAL pill · `Bot` · *{done} of {total} reviewed*, never the
-//     success tint.
+//
+// A container wears no badge of its own: the *n of m reviewed* container form was dropped
+// (its count read every card under a page's epics and ran `/items` past its transaction
+// limit).
 //
 // ⚠️ IT DRAWS ONLY WHAT IT IS GIVEN. The read model returns `reviewed` only at the current
-// delivery-set version and never for a Done card, and a container's count only over its
-// open run targets — so a push or a Done card simply hand it nothing.
+// delivery-set version and never for a Done card — so a push or a Done card simply hand it
+// nothing.
 //
 // ⚠️ THE CARD OPENS ON POINTER HOVER **OR KEYBOARD FOCUS** (§ 32.3), closes on Escape or
 // when focus leaves it, and is the badge's `aria-describedby`. On the board card the badge
@@ -180,54 +181,6 @@ export function ReviewedBadge({
   id?: string;
 }) {
   const t = useTranslations('approvalGate.reviewPath.badge');
-
-  // THE CONTAINER FORM (M6, M11) — the count over the open run targets in its tree.
-  if (review.container) {
-    const { passed, total, allPassed } = review.container;
-    const name = allPassed ? t('containerAllName') : t('containerName', { done: passed, total });
-    if (form === 'glyph') {
-      return (
-        <span
-          id={id}
-          role="img"
-          aria-label={name}
-          title={name}
-          data-reviewed-badge={allPassed ? 'container_all' : 'container_some'}
-          className={cn(
-            'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full',
-            allPassed
-              ? 'bg-(--el-tint-mint) text-(--el-text-strong)'
-              : 'text-(--el-text-secondary)',
-          )}
-        >
-          {allPassed ? <ReviewedGlyph /> : <Bot className="h-3.5 w-3.5 shrink-0" aria-hidden />}
-        </span>
-      );
-    }
-    return allPassed ? (
-      <Pill
-        id={id}
-        severity="success"
-        title={name}
-        className="shrink-0"
-        data-reviewed-badge="container_all"
-      >
-        <ReviewedGlyph />
-        {t('reviewed')}
-      </Pill>
-    ) : (
-      <Pill
-        id={id}
-        tone="neutral"
-        title={name}
-        className="shrink-0"
-        data-reviewed-badge="container_some"
-      >
-        <Bot className="h-3 w-3 shrink-0" aria-hidden />
-        {t('container', { done: passed, total })}
-      </Pill>
-    );
-  }
 
   const reviewed = review.reviewed;
   if (!reviewed) return null;

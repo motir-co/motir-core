@@ -15705,9 +15705,6 @@
       "badge": {
         "reviewed": "Examiné",
         "reviewedName": "Examiné par un agent aux commits actuels",
-        "container": "{total, plural, one {{done} sur # examiné} other {{done} sur # examinés}}",
-        "containerName": "{total, plural, one {{done} partie sur # examinée par un agent à ses commits actuels} other {{done} parties sur # examinées par un agent à leurs commits actuels}}",
-        "containerAllName": "Chaque partie examinée par un agent à ses commits actuels",
         "card": {
           "hosted": "Examiné par l’agent hébergé de Motir",
           "own": "Examiné par l’agent de {name}",

@@ -187,7 +187,6 @@ const REVIEWED: CardReviewDTO = {
       { repo: 'acme/api', number: 41, headSha: '9b07de4bbbbbbbb' },
     ],
   },
-  container: null,
   recordRef: { kind: 'record', id: 'rec1' },
 };
 const NOW = new Date('2026-11-05T10:00:00.000Z');
@@ -327,60 +326,5 @@ describe('ReviewedBadge — reviewed', () => {
   it('is translated in zh', () => {
     render(<ReviewedBadge review={REVIEWED} />, { locale: 'zh', messages: zhMessages, now: NOW });
     expect(screen.getByRole('note').textContent).toBe('已审查');
-  });
-});
-
-describe('ReviewedBadge — container', () => {
-  const some: CardReviewDTO = {
-    ...REVIEWED,
-    reviewed: null,
-    container: { passed: 2, total: 3, allPassed: false },
-  };
-  const all: CardReviewDTO = {
-    ...REVIEWED,
-    reviewed: null,
-    container: { passed: 3, total: 3, allPassed: true },
-  };
-
-  it('a partial count is a NEUTRAL pill — never the success tint', () => {
-    render(<ReviewedBadge review={some} />);
-    const pill = document.querySelector('[data-reviewed-badge]') as HTMLElement;
-    expect(pill.getAttribute('data-reviewed-badge')).toBe('container_some');
-    expect(pill.textContent).toBe('2 of 3 reviewed');
-    expect(pill.getAttribute('title')).toBe(
-      '2 of 3 parts reviewed by an agent at their current commits',
-    );
-    expect(pill.className).not.toContain('success');
-  });
-
-  it('every part passed is the label form, named as such', () => {
-    render(<ReviewedBadge review={all} />);
-    const pill = document.querySelector('[data-reviewed-badge]') as HTMLElement;
-    expect(pill.getAttribute('data-reviewed-badge')).toBe('container_all');
-    expect(pill.textContent).toBe('Reviewed');
-    expect(pill.getAttribute('title')).toBe(
-      'Every part reviewed by an agent at its current commits',
-    );
-  });
-
-  it('the glyph forms: a bare Bot for a partial count, the mint disc for all', () => {
-    render(<ReviewedBadge review={some} form="glyph" />);
-    const partial = screen.getByRole('img', {
-      name: '2 of 3 parts reviewed by an agent at their current commits',
-    });
-    expect(partial.className).not.toContain('--el-tint-mint');
-    expect(partial.querySelector('.lucide-bot')).toBeTruthy();
-    cleanup();
-
-    render(<ReviewedBadge review={all} form="glyph" />);
-    expect(
-      screen.getByRole('img', { name: 'Every part reviewed by an agent at its current commits' })
-        .className,
-    ).toContain('--el-tint-mint');
-  });
-
-  it('counts in zh', () => {
-    render(<ReviewedBadge review={some} />, { locale: 'zh', messages: zhMessages });
-    expect(document.querySelector('[data-reviewed-badge]')?.textContent).toBe('已审查 2/3');
   });
 });

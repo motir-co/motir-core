@@ -15705,9 +15705,6 @@
       "badge": {
         "reviewed": "Revisionato",
         "reviewedName": "Revisionato da un agente ai commit attuali",
-        "container": "{total, plural, one {{done} di # revisionato} other {{done} di # revisionati}}",
-        "containerName": "{total, plural, one {{done} parte su # revisionata da un agente ai suoi commit attuali} other {{done} parti su # revisionate da un agente ai loro commit attuali}}",
-        "containerAllName": "Ogni parte revisionata da un agente ai suoi commit attuali",
         "card": {
           "hosted": "Revisionato dall'agente ospitato di Motir",
           "own": "Revisionato dall'agente di {name}",

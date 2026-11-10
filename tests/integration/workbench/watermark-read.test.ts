@@ -585,14 +585,14 @@ describe('COST — this read runs once a second per open Workbench', () => {
     ]);
   });
 
-  it('an approve-and-merge row costs ONE more: the review reading over its subtree', async () => {
+  it('an approve-and-merge row costs ONE more: the review reading over its cards', async () => {
     await gateOn({ title: 'Merge me', assigneeId: fx.ownerId, kind: 'pull_request_approval' });
 
     const seen = await statementsOf(() => workbenchWatermarkService.read(ctx()));
 
     // ⚠️ TWO statements for the review, never one per row: the cards come from one
     // `findMany` on the gate predicate, and their verdict records, dismissals, deliveries
-    // and GitHub reviews from ONE recursive raw query over their subtrees (MOTIR-10504).
+    // and GitHub reviews from ONE raw query over those cards (MOTIR-10504).
     expect(seen.slice(-2), REMEDY).toEqual(['approvalGate.findMany', '$queryRaw']);
     expect(seen).toHaveLength(20);
 

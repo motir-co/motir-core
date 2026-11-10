@@ -15696,9 +15696,6 @@
       "badge": {
         "reviewed": "已审查",
         "reviewedName": "已由智能体在当前提交上审查",
-        "container": "{total, plural, other {已审查 {done}/#}}",
-        "containerName": "{total, plural, other {# 个部分中有 {done} 个已由智能体在当前提交上审查}}",
-        "containerAllName": "每个部分都已由智能体在当前提交上审查",
         "card": {
           "hosted": "由 Motir 托管智能体审查",
           "own": "由 {name} 自己的智能体审查",

@@ -15705,9 +15705,6 @@
       "badge": {
         "reviewed": "Przejrzane",
         "reviewedName": "Przejrzane przez agenta przy bieżących commitach",
-        "container": "{total, plural, one {Przejrzano {done} z #} few {Przejrzano {done} z #} many {Przejrzano {done} z #} other {Przejrzano {done} z #}}",
-        "containerName": "{total, plural, one {{done} z # części przejrzana przez agenta przy bieżących commitach} few {{done} z # części przejrzanych przez agenta przy bieżących commitach} many {{done} z # części przejrzanych przez agenta przy bieżących commitach} other {{done} z # części przejrzanych przez agenta przy bieżących commitach}}",
-        "containerAllName": "Każda część przejrzana przez agenta przy bieżących commitach",
         "card": {
           "hosted": "Przejrzane przez hostowanego agenta Motir",
           "own": "Przejrzane przez własnego agenta użytkownika {name}",

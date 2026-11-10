@@ -916,7 +916,6 @@ describe('the header’s review marker (MOTIR-10341)', () => {
         identifier: 'PROD-1',
         marker: { kind: 'agent_reviewing' },
         reviewed: null,
-        container: null,
         recordRef: null,
       },
     });

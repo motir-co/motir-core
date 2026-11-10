@@ -441,17 +441,3 @@ export function deriveReviewState(facts: ReviewStateFacts): ReviewState {
     viewerIsRouted,
   };
 }
-
-/** A container's count over its open run targets: Reviewed only when every one passed. */
-export function containerReviewCount(targets: readonly { reviewed: boolean }[]): {
-  passed: number;
-  total: number;
-  allPassed: boolean;
-} {
-  const passed = targets.filter((t) => t.reviewed).length;
-  return {
-    passed,
-    total: targets.length,
-    allPassed: targets.length > 0 && passed === targets.length,
-  };
-}

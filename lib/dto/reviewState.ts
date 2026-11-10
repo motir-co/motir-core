@@ -75,14 +75,6 @@ export interface ReviewLineDTO {
   command: string | null;
 }
 
-/** A container's count over the open run targets in its tree (§ 32.3, container form). */
-export interface ReviewContainerDTO {
-  passed: number;
-  total: number;
-  /** Every open run target passed — the container reads Reviewed. */
-  allPassed: boolean;
-}
-
 export interface ReviewStateDTO {
   workItemId: string;
   identifier: string;
@@ -103,8 +95,6 @@ export interface ReviewStateDTO {
   sentBack: boolean;
   /** That send-back when it is a gate-off review record — the frame's Sent back band. */
   sentBackRecord: { recordId: string; findingsMd: string | null; at: string } | null;
-  /** For a card with children: the count over its open run targets; null for a leaf. */
-  container: ReviewContainerDTO | null;
   /** A review waiting to be run by the routed person's own agent, or null. */
   reviewToRun: { gateId: string; command: string } | null;
   /** The routed person opened EVERY pull request of the set on GitHub. */
@@ -174,7 +164,6 @@ function refDto(ref: ReviewRecordRef | null): ReviewRecordRefDTO | null {
 export function toReviewStateDto(
   card: { id: string; identifier: string },
   state: ReviewState,
-  container: ReviewContainerDTO | null,
 ): ReviewStateDTO {
   return {
     workItemId: card.id,
@@ -194,7 +183,6 @@ export function toReviewStateDto(
     sentBackRecord: state.sentBackRecord
       ? { ...state.sentBackRecord, at: state.sentBackRecord.at.toISOString() }
       : null,
-    container,
     reviewToRun: state.reviewToRun ? { ...state.reviewToRun } : null,
     authorOfEveryPr: state.authorOfEveryPr,
     routedTo: personDto(state.routedTo),
@@ -236,15 +224,15 @@ export type ApprovedReviewDTO =
 /**
  * WHAT A CARD SURFACE DRAWS OF THE REVIEW (MOTIR-10341; design notes § 32.1, § 32.3) — the
  * board card, the List / Tree status cell and the item header read only the marker, the
- * Reviewed state, the container count and the record its badge links to. Null when there is
- * nothing to draw, so a page carries an entry only for the cards that wear one.
+ * Reviewed state and the record its badge links to. Null when there is nothing to draw, so a
+ * page carries an entry only for the cards that wear one. A container wears neither of its
+ * own: the *n of m reviewed* count over its tree was dropped (it read every card under a
+ * page's epics and ran `/items` past its transaction limit).
  */
 export interface CardReviewDTO {
   identifier: string;
   marker: ReviewMarkerDTO | null;
   reviewed: ReviewStateDTO['reviewed'];
-  /** A container's count over its open run targets; never one with no target. */
-  container: ReviewContainerDTO | null;
   recordRef: ReviewRecordRefDTO | null;
 }
 
@@ -271,13 +259,11 @@ export type CardReviewMap = Record<string, CardReviewDTO>;
 
 /** The surfaces' slice of a review state; null when it draws nothing. */
 export function toCardReviewDto(state: ReviewStateDTO): CardReviewDTO | null {
-  const container = state.container && state.container.total > 0 ? state.container : null;
-  if (!state.marker && !state.reviewed && !container) return null;
+  if (!state.marker && !state.reviewed) return null;
   return {
     identifier: state.identifier,
     marker: state.marker,
     reviewed: state.reviewed,
-    container,
     recordRef: state.recordRef,
   };
 }
@@ -350,6 +336,6 @@ export function toApprovalRowReviewDto(state: ReviewStateDTO): ApprovalRowReview
   return {
     line: state.reviewLine,
     recordRef: state.recordRef,
-    badge: card && (card.reviewed || card.container) ? { ...card, marker: null } : null,
+    badge: card?.reviewed ? { ...card, marker: null } : null,
   };
 }
