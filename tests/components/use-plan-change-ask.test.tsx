@@ -57,7 +57,7 @@ vi.mock('@/lib/planning/planReviewClient', async (importOriginal) => {
 });
 
 import { usePlanChangeConversation } from '@/lib/hooks/usePlanChangeConversation';
-import { PlanEditsClientError } from '@/lib/planning/planEditsClient';
+import { consumeStream, PlanEditsClientError } from '@/lib/planning/planEditsClient';
 import { planReview, planReviewItem } from '../helpers/planReview';
 
 /** A promise a test resolves by hand — how a run is held mid-flight. */
@@ -237,6 +237,83 @@ describe('an ANSWER', () => {
     expect(result.current.state.progress).toBeNull();
     expect(result.current.state.session).toEqual(ANSWERED);
     expect(result.current.state.errorCode).toBeNull();
+  });
+});
+
+// MOTIR-10864 — the session's own sentences reach the rail as they arrive. The stream
+// here is the REAL `consumeStream` over a body written exactly as motir-ai writes it
+// (`{ jobId, seq, data: { text } }`), held open so each frame lands on its own.
+describe("the answering session's NOTES, live (MOTIR-10864)", () => {
+  /** A held SSE body: `push` writes one frame, `end` closes it. */
+  function heldWire() {
+    const enc = new TextEncoder();
+    let ctl!: ReadableStreamDefaultController<Uint8Array>;
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        ctl = c;
+      },
+    });
+    let seq = 0;
+    return {
+      response: { ok: true, body } as unknown as Response,
+      note: (text: string) => {
+        seq += 1;
+        const data = JSON.stringify({ jobId: 'ask-1', seq, data: { text } });
+        ctl.enqueue(enc.encode(`event: note\ndata: ${data}\n\n`));
+      },
+      end: () => {
+        ctl.enqueue(enc.encode(`event: done\ndata: {"jobId":"ask-1"}\n\n`));
+        ctl.close();
+      },
+    };
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('the first note replaces "Reading your request…", and each later one is added as it arrives', async () => {
+    const wire = heldWire();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => wire.response),
+    );
+    streamAsk.mockImplementation(
+      (
+        jobId: string,
+        signal: AbortSignal,
+        onError: (code: string | null) => void,
+        onDone: () => void,
+        onFrame?: (event: string, data: unknown) => void,
+      ) => consumeStream(`/api/ai/ask/${jobId}/stream`, signal, onError, onDone, onFrame),
+    );
+    const { result } = await mounted();
+
+    let sending!: Promise<void>;
+    act(() => {
+      sending = result.current.send('which stories are blocked?');
+    });
+    // The submit's own act comes first; the ask's opening act once the job is up.
+    await waitFor(() => expect(result.current.state.acts).toEqual([{ kind: 'reading' }]));
+    await waitFor(() => expect(streamAsk).toHaveBeenCalledTimes(1));
+
+    const sentences = Array.from({ length: 16 }, (_, i) => `Reading story ${i + 1} of the plan.`);
+    act(() => wire.note(sentences[0]!));
+    await waitFor(() =>
+      expect(result.current.state.acts).toEqual([{ kind: 'note', text: sentences[0] }]),
+    );
+    expect(result.current.state.progress).toEqual({ kind: 'note', text: sentences[0] });
+
+    for (let i = 1; i < sentences.length; i += 1) {
+      act(() => wire.note(sentences[i]!));
+      await waitFor(() => expect(result.current.state.acts).toHaveLength(i + 1));
+    }
+    expect(result.current.state.acts).toEqual(sentences.map((text) => ({ kind: 'note', text })));
+
+    await act(async () => {
+      wire.end();
+      await sending;
+    });
+    expect(result.current.state.phase).toBe('idle');
+    expect(result.current.state.session).toEqual(ANSWERED);
   });
 });
 
