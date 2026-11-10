@@ -31,7 +31,11 @@ import { execCommand, type CommandRunner } from './git.js';
 //
 // It never moves a status and never throws: what it returns is what the caller decides on. A
 // run whose work reached the remote but that could link NO pull request is not reported as a
-// clean Implemented — `dispatch.ts` reads `linked.length === 0` and says so on the leg.
+// clean Implemented — `dispatch.ts`'s `pushedButUnlinked` says so on the leg — and neither is a
+// multi-repository run that linked one repository's pull request while another repository's
+// pushed work stayed unlinked (MOTIR-10888): the status sync completes the card on its LINKED
+// pull requests alone, so the first merge would close it with the second repository's work
+// still open.
 
 /** A pull request the run found for one repository. */
 interface FoundPullRequest {
@@ -57,6 +61,14 @@ export interface UndeliveredRepository {
   repository: string | null;
   branch: string | null;
   reason: string;
+  /**
+   * Whether work for the card is on this repository's remote (MOTIR-10888): its work branch
+   * answers `git ls-remote`, a remote branch names the card, or a pull request was found. A
+   * repository of the set the run pushed NOTHING to is not a missing delivery — runs routinely
+   * find one listed repository needs nothing — so only a `pushed` one keeps a card that linked
+   * another repository's pull request from Implemented.
+   */
+  pushed: boolean;
 }
 
 export interface RunDelivery {
@@ -233,13 +245,25 @@ export async function declareRunDelivery(input: DeclareRunDeliveryInput): Promis
           data: { url: already.url, repository: already.repo, by: 'agent' },
         });
       } else {
+        // Where the card's work sits on this remote: the named work branch when the remote
+        // answers for it, else every remote branch naming the card — an agent that pushed to a
+        // differently named branch still pushed (MOTIR-10888 review).
+        const pushedOn =
+          branch && remoteHead(branch, cwd, run) !== null
+            ? [branch]
+            : branch
+              ? remoteBranchesNaming(key, cwd, run)
+              : searched;
+        const elsewhere = pushedOn.filter((b) => !searched.includes(b));
         unlinked.push({
           repository: name,
           branch: branch ?? searched[0] ?? null,
           reason:
-            searched.length > 0
+            (searched.length > 0
               ? `no open pull request was found for ${searched.join(', ')}`
-              : 'the run names no work branch to find a pull request on',
+              : 'the run names no work branch to find a pull request on') +
+            (elsewhere.length > 0 ? `; the work is on ${elsewhere.join(', ')}` : ''),
+          pushed: pushedOn.length > 0,
         });
       }
       continue;
@@ -250,6 +274,8 @@ export async function declareRunDelivery(input: DeclareRunDeliveryInput): Promis
         repository: found.repository,
         branch,
         reason: `the head branch of ${found.url} could not be read`,
+        // A pull request exists, so its head was pushed.
+        pushed: true,
       });
       continue;
     }
@@ -268,6 +294,7 @@ export async function declareRunDelivery(input: DeclareRunDeliveryInput): Promis
           repository: found.repository,
           branch: found.headRef,
           reason: `linking ${found.url} was refused: ${messageOf(err)}`,
+          pushed: true,
         });
         continue;
       }

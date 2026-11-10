@@ -22,6 +22,8 @@ import {
   renderClaimRefusal,
   renderFindingsPolicy,
   pushedButUnlinked,
+  unlinkedDeliveries,
+  renderUnpushedRepositories,
   renderNoLinkedPullRequest,
   renderNothingPushed,
   renderReplanSubmitted,
@@ -818,10 +820,13 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   }
 
   // ⚠️ PUSHED, BUT LINKED TO NOTHING (MOTIR-10877) — `motir run`'s rule, kept here too: a
-  // card nothing would close on merge is not Implemented. The detail names each branch.
+  // card nothing would close on merge is not Implemented. The detail names each branch. The
+  // same holds when only SOME repositories linked (MOTIR-10888): the first merge would close
+  // the card over the pushed work that has no linked pull request.
   if (pushedButUnlinked(verdict)) {
-    const unlinked = verdict.delivery?.unlinked ?? [];
-    info(renderNoLinkedPullRequest(entry.key, unlinked));
+    const delivery = verdict.delivery;
+    const unlinked = unlinkedDeliveries(delivery);
+    info(renderNoLinkedPullRequest(entry.key, unlinked, delivery.linked));
     return {
       kind: 'record',
       cwd: target.cwd,
@@ -865,5 +870,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     implementationModel: verdict.model,
   });
   info(`${entry.key}: Implemented via its own pull request — CI decides when it is reviewable.`);
+  const unpushed = verdict.delivery?.unlinked ?? [];
+  if (unpushed.length > 0) info(renderUnpushedRepositories(entry.key, unpushed));
   return { kind: 'record', record: { ...base, outcome: 'implemented' }, cwd: target.cwd };
 }

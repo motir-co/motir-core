@@ -58,6 +58,8 @@ import {
   renderAgentSuccess,
   renderClaimRefusal,
   pushedButUnlinked,
+  unlinkedDeliveries,
+  renderUnpushedRepositories,
   renderNoLinkedPullRequest,
   renderNothingPushed,
   renderFindingsPolicy,
@@ -636,24 +638,34 @@ export async function deliver(input: DeliverInput): Promise<void> {
     // could find (`runDelivery.ts`); one that found none must not report a clean
     // Implemented — that is the card nothing closes on merge and no CI watch can see. The
     // leg records why, naming each branch, and the card stays In Progress.
+    //
+    // ⚠️ AND A PARTIAL DELIVERY IS NOT IMPLEMENTED EITHER (MOTIR-10888). A card spanning two
+    // repositories whose second pull request could not be linked would complete on the first
+    // merge, because Motir completes a card on its LINKED pull requests alone — so the leg
+    // names each pushed-but-unlinked branch beside the pull requests that did link.
     if (pushedButUnlinked(verdict)) {
-      const unlinked = verdict.delivery?.unlinked ?? [];
+      const delivery = verdict.delivery;
+      const unlinked = unlinkedDeliveries(delivery);
+      const partial = delivery.linked.length > 0;
       addExclude(serverUrl, projectKey, { key });
       reporter.event({
         kind: 'card_settled',
         workItemKey: key,
         disposition: 'failed',
         data: {
-          reason: 'no_linked_pull_request',
+          reason: partial ? 'unlinked_pull_request' : 'no_linked_pull_request',
           branches: unlinked.map((u) => ({
             repository: u.repository,
             branch: u.branch,
             detail: u.reason,
           })),
+          ...(partial
+            ? { linked: delivery.linked.map((d) => ({ repository: d.repository, url: d.url })) }
+            : {}),
         },
       });
       info('');
-      info(renderNoLinkedPullRequest(key, unlinked));
+      info(renderNoLinkedPullRequest(key, unlinked, delivery.linked));
       await reporter.close('halted');
       process.exitCode = 1;
       return;
@@ -676,11 +688,26 @@ export async function deliver(input: DeliverInput): Promise<void> {
     } else {
       await client.transitionStatus({ key, status: IMPLEMENTED });
     }
+    // A listed repository the run pushed nothing to is recorded on the leg too (MOTIR-10888),
+    // so the run says it was left alone rather than leaving a reader to wonder.
+    const unpushed = verdict.delivery?.unlinked ?? [];
     reporter.event({
       kind: 'card_settled',
       workItemKey: key,
       disposition: 'implemented',
       ...(dispatch.sessionBranch ? { sessionBranch: dispatch.sessionBranch } : {}),
+      ...(unpushed.length > 0
+        ? {
+            data: {
+              unlinked: unpushed.map((u) => ({
+                repository: u.repository,
+                branch: u.branch,
+                detail: u.reason,
+                pushed: u.pushed,
+              })),
+            },
+          }
+        : {}),
     });
     removeExclude(serverUrl, projectKey, key);
 
@@ -694,6 +721,10 @@ export async function deliver(input: DeliverInput): Promise<void> {
     const suspects = verdict.suspects;
     info('');
     info(renderAgentSuccess(key, dispatch));
+    if (unpushed.length > 0) {
+      info('');
+      info(renderUnpushedRepositories(key, unpushed));
+    }
     for (const suspect of suspects) {
       info('');
       info(suspect.message);
