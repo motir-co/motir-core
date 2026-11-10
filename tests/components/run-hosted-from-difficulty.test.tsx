@@ -64,6 +64,7 @@ function resolved(over: Partial<HostedResolvedModel> = {}): HostedResolvedModel 
     source: 'platform_level',
     difficulty: 'high',
     fromLeaves: false,
+    design: false,
     ...over,
   };
 }
@@ -162,6 +163,38 @@ describe('the door opens on the resolved model and says why', () => {
     serve(resolved({ fromLeaves: true }));
     await mountDoor();
     expect(line()!.textContent).toBe('Highest difficulty among its leaves: High');
+  });
+
+  it.each([
+    [{ source: 'org_level' as const }, 'Organisation default for High'],
+    [
+      { source: 'org_level' as const, fromLeaves: true },
+      'Organisation default for High, the highest difficulty among its leaves',
+    ],
+    [
+      { source: 'org_design' as const, design: true },
+      'Organisation design-run model: a design work item',
+    ],
+    [
+      { source: 'org_design' as const, design: true, fromLeaves: true },
+      'Organisation design-run model: every unfinished leaf is a design work item',
+    ],
+    [{ source: 'platform_design' as const, design: true }, 'Design-run model: a design work item'],
+    [
+      { source: 'platform_design' as const, design: true, fromLeaves: true },
+      'Design-run model: every unfinished leaf is a design work item',
+    ],
+  ])('the organisation and design sources (MOTIR-10843): %o reads "%s"', async (over, text) => {
+    serve(resolved({ model: 'claude-fable-5-1', ...over }));
+    await mountDoor();
+    expect(trigger().textContent).toContain('claude-fable-5-1');
+    expect(line()!.textContent).toBe(text);
+  });
+
+  it('a design source carries its line even with no difficulty', async () => {
+    serve(resolved({ source: 'org_design', design: true, difficulty: null }));
+    await mountDoor();
+    expect(line()!.textContent).toBe('Organisation design-run model: a design work item');
   });
 
   it('a parent AND an override: the stated wording', async () => {

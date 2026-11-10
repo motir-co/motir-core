@@ -4119,6 +4119,7 @@
         },
         "organization": "Organización",
         "git": "Git",
+        "aiModels": "Modelos de IA",
         "members": "Miembros",
         "security": "Seguridad",
         "usage": "Uso y coste",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Descartar el resultado de la detención"
         },
         "forbidden": "Solo un propietario o administrador puede detener el trabajo de la flota de esta organización."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Configuración",
+        "title": "Modelos de IA",
+        "lead": "Qué modelo usa cada función de Motir AI en {org}. Un cambio se aplica desde el siguiente trabajo o ejecución.",
+        "card": {
+          "title": "Modelos por función",
+          "subtitle": "Cada función usa el predeterminado de la plataforma hasta que tu organización elija otro.",
+          "subtitleMeta": "{org} es la organización meta de Motir, así que elige sus propios modelos en cualquier plan."
+        },
+        "group": {
+          "planning": {
+            "title": "Lado de planificación",
+            "list": "Elegido de la lista de modelos de planificación de la plataforma"
+          },
+          "runs": {
+            "title": "Lado de ejecución",
+            "list": "Elegido de la lista de modelos de ejecución de la plataforma"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planificación",
+            "desc": "Cada sesión de un plan: el recorrido y sus reparaciones"
+          },
+          "guide": {
+            "name": "Guía",
+            "desc": "Guíame, en un elemento de trabajo que hace una persona"
+          },
+          "debug": {
+            "name": "Depuración",
+            "desc": "Motir AI diagnosticando un defecto en un error"
+          },
+          "ask": {
+            "name": "Preguntar",
+            "desc": "La conversación de Motir AI y Grill me"
+          },
+          "review": {
+            "name": "Agente de revisión",
+            "desc": "Revisiones alojadas. Si un proyecto revisa con un agente sigue en su configuración de Aprobaciones."
+          },
+          "design": {
+            "name": "Ejecución de diseño",
+            "desc": "Una ejecución alojada en un elemento de trabajo de diseño"
+          }
+        },
+        "agentRun": {
+          "name": "Ejecución de agente",
+          "desc": "Ejecuciones de compilación alojadas, según la dificultad del elemento de trabajo. La anulación propia de un proyecto para una dificultad sigue prevaleciendo sobre la de la organización."
+        },
+        "modelFor": "Modelo para {function}",
+        "loadingTrigger": "Cargando modelos…",
+        "byDifficulty": "Sigue la dificultad del elemento de trabajo",
+        "platformDefaultPending": "El predeterminado de la plataforma",
+        "optionDefault": "Predeterminado de la plataforma",
+        "source": {
+          "org": "Elección de la organización",
+          "inherits": "Hereda el predeterminado de la plataforma"
+        },
+        "clear": "Borrar",
+        "clearAria": "Borrar la elección de {function}",
+        "staged": "Aún sin guardar",
+        "withdrawnChip": "Ya no se ofrece",
+        "withdrawn": {
+          "edit": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma, <mono>{fallback}</mono>, hasta que elijas otro.",
+          "read": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma, <mono>{fallback}</mono>, hasta que un propietario o administrador elija otro.",
+          "editNoFallback": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma hasta que elijas otro.",
+          "readNoFallback": "<id>{model}</id> ya no se ofrece, así que {function} vuelve al predeterminado de la plataforma hasta que un propietario o administrador elija otro."
+        },
+        "refused": {
+          "notOffered": "No guardado: <mono>{model}</mono> dejó de ofrecerse para {function} antes de que llegara el guardado. {function} conserva su modelo actual; elige otro.",
+          "unreachable": "No guardado: no se puede contactar con <mono>{model}</mono> ahora mismo, así que {function} conserva su modelo actual. Inténtalo de nuevo o elige otro.",
+          "failed": "No guardado: no se pudo guardar {function}. Conserva su modelo actual; inténtalo de nuevo."
+        },
+        "precedence": {
+          "body": "<b>Qué modelo usa un trabajo</b>, gana la primera coincidencia: la elección de la persona en Ejecutar alojado → la anulación propia del proyecto (solo ejecución de agente) → la elección de {org} → el predeterminado de la plataforma.",
+          "cost": "Cada modelo se factura a su propia tarifa, así que un modelo más potente usa más créditos de {org}."
+        },
+        "footer": {
+          "dirtyHint": "Tienes cambios sin guardar.",
+          "cancel": "Cancelar",
+          "save": "Guardar cambios"
+        },
+        "saved": {
+          "title": "Modelos de IA guardados",
+          "description": "{org} los usa desde el siguiente trabajo o ejecución."
+        },
+        "locked": {
+          "title": "Elegir modelos forma parte de Pro y superiores",
+          "body": "{org} está en {plan}. En Pro y superiores, un propietario o administrador elige qué modelo usa cada función de Motir AI para toda la organización. Hasta entonces, cada función usa el predeterminado de la plataforma.",
+          "bodyNoPlan": "En Pro y superiores, un propietario o administrador elige qué modelo usa cada función de Motir AI para toda la organización. Hasta entonces, cada función de {org} usa el predeterminado de la plataforma.",
+          "notApplying": "Las elecciones guardadas de {org} se conservan. Vuelven a aplicarse cuando pase a Pro o superior.",
+          "seePlans": "Ver planes"
+        },
+        "readOnly": "Solo un propietario o administrador de {org} puede cambiarlos.",
+        "unavailable": {
+          "body": "No se pudieron cargar los modelos de IA, así que no se muestra ningún modelo y no se puede guardar nada. No ha cambiado nada.",
+          "retry": "Intentar de nuevo"
+        }
       }
     },
     "gitAccounts": {
@@ -10832,6 +10932,12 @@
               "disable": "Desactivó una lección de planificación",
               "promote": "Promovió una lección de planificación",
               "retention_set": "Cambió el periodo de retirada de lecciones"
+            },
+            "planner_function_model": {
+              "set": "Cambió un modelo de Guide, Debug o Ask"
+            },
+            "run_model_default": {
+              "set": "Cambió un modelo predeterminado de ejecución"
             }
           },
           "fleet": {
@@ -11518,17 +11624,17 @@
     "aiPlanning": {
       "breadcrumb": "Plataforma · Planificación con IA",
       "title": "Planificación con IA",
-      "subtitle": "Con qué modelo planifica Motir, para cada uno de los tres públicos. Un cambio se aplica a partir del siguiente trabajo de planificación para todas las organizaciones de ese público.",
+      "subtitle": "Qué modelo usan las funciones de planificación de Motir: la planificación para cada uno de tres públicos y un valor predeterminado de plataforma para Guide, Debug y Ask. Un cambio se aplica desde el siguiente trabajo para cada organización que no haya elegido el suyo.",
       "precedence": "Una organización que es meta e interna a la vez sigue la fila meta.",
       "tenantSecretLead": "Los inquilinos nunca ven esta elección.",
       "tenantSecretBody": "Ninguna página de inquilino, vista de uso ni plan nombra el modelo que planificó.",
       "card": {
-        "title": "Modelo de planificación por público",
-        "subtitle": "Cada trabajo de planificación resuelve su modelo a partir de la organización para la que se ejecuta: meta, luego interna, luego cliente.",
-        "count": "3 públicos"
+        "title": "Modelos de planificación",
+        "subtitle": "La planificación obtiene su modelo del público de la organización: meta, luego interna, luego cliente. Guide, Debug y Ask tienen cada uno un valor predeterminado de plataforma, o heredan el modelo de ese público. Una organización con Pro o superior puede elegir el suyo.",
+        "count": "7 ajustes"
       },
       "col": {
-        "audience": "Público",
+        "audience": "Se aplica a",
         "model": "Modelo",
         "lastChanged": "Último cambio",
         "action": "Acción"
@@ -11556,7 +11662,8 @@
         "seeded": "Valor predeterminado inicial · nunca cambiado",
         "by": "Cambiado {when} por {who}",
         "byUnknown": "Cambiado {when}",
-        "justNowByYou": "Cambiado ahora mismo por ti"
+        "justNowByYou": "Cambiado ahora mismo por ti",
+        "neverSet": "Nunca definido"
       },
       "confirm": {
         "title": "¿Cambiar el modelo de planificación de {audience}?",
@@ -11615,6 +11722,39 @@
         "savedTitle": "Modelo de revisión cambiado",
         "savedBody": "Las revisiones de la simulación usan {model} desde el siguiente trabajo de planificación.",
         "unchanged": "La revisión de la simulación ya usa {model}."
+      },
+      "group": {
+        "audiences": "Planificación · por público",
+        "functions": "Guide · Debug · Ask · predeterminados de plataforma",
+        "review": "Revisión de la simulación · solo plataforma"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Guíame paso a paso",
+          "confirmBody": "{from} → {to}. Se aplica desde el siguiente paso de Guide para cada organización que no haya elegido el suyo. Los pasos de Guide en curso terminan con el modelo con el que empezaron.",
+          "savedBody": "Los pasos de Guide ahora usan {model} para cada organización sin elección propia."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Diagnosticar un defecto como bug",
+          "confirmBody": "{from} → {to}. Se aplica desde el siguiente diagnóstico de Debug para cada organización que no haya elegido el suyo. Los diagnósticos de Debug en curso terminan con el modelo con el que empezaron.",
+          "savedBody": "Los diagnósticos de Debug ahora usan {model} para cada organización sin elección propia."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "La conversación con Motir AI y Grill me",
+          "confirmBody": "{from} → {to}. Se aplica desde el siguiente turno de conversación de Ask para cada organización que no haya elegido el suyo. Los turnos de conversación de Ask en curso terminan con el modelo con el que empezaron.",
+          "savedBody": "Los turnos de conversación de Ask ahora usan {model} para cada organización sin elección propia."
+        },
+        "inherits": "Hereda: el modelo de planificación del público",
+        "inheritsDesc": "Sigue el modelo de planificación del público de la organización",
+        "pickerAria": "Modelo para {name}",
+        "withdrawnBody": "{name} vuelve al modelo de planificación del público hasta que elijas otro.",
+        "withdrawnBodyReadOnly": "{name} vuelve al modelo de planificación del público hasta que un superadministrador elija otro.",
+        "confirmTitle": "¿Cambiar el modelo de plataforma de {name}?",
+        "savedTitle": "Modelo de {name} cambiado",
+        "unchanged": "{name} ya usa {model}."
       }
     },
     "lessons": {
@@ -12864,7 +13004,9 @@
         "inUseParts": {
           "platformDefault": "Es el predeterminado de la plataforma de Motir para {levels}. ",
           "projects": "{n, plural, one {# proyecto lo usa} other {# proyectos lo usan}}: {list}.",
-          "projectEntry": "{name} ({key}) para {levels}"
+          "projectEntry": "{name} ({key}) para {levels}",
+          "platformReview": "Es el predeterminado de plataforma de Motir para el agente de revisión. ",
+          "platformDesign": "Es el predeterminado de plataforma de Motir para las ejecuciones de diseño. "
         },
         "notListed": "No se quitó: {model} ya no está en la lista."
       },
@@ -12878,6 +13020,83 @@
       "unavailable": {
         "title": "No se pudieron cargar los modelos de ejecuciones alojadas",
         "body": "motir-ai no respondió, así que no se sabe si se ofrece cada modelo de la lista y no se muestra ninguna lista. No ha cambiado nada."
+      },
+      "defaults": {
+        "title": "Predeterminados de ejecución",
+        "subtitle": "El modelo con el que empieza una revisión alojada, una ejecución de diseño o una ejecución de agente cuando ni la persona, ni el proyecto ni la organización eligieron uno. Se elige de la lista de arriba.",
+        "count": "6 ajustes",
+        "col": {
+          "function": "Función"
+        },
+        "row": {
+          "review": {
+            "name": "Agente de revisión",
+            "desc": "Revisiones alojadas"
+          },
+          "design": {
+            "name": "Ejecución de diseño",
+            "desc": "Una ejecución alojada sobre un elemento de trabajo de diseño"
+          },
+          "trivial": {
+            "name": "Ejecución de agente · Trivial",
+            "desc": "Ejecuciones de compilación alojadas sobre un elemento de trabajo trivial"
+          },
+          "low": {
+            "name": "Ejecución de agente · Baja",
+            "desc": "Ejecuciones de compilación alojadas sobre un elemento de trabajo de dificultad baja"
+          },
+          "medium": {
+            "name": "Ejecución de agente · Media",
+            "desc": "Ejecuciones de compilación alojadas sobre un elemento de trabajo de dificultad media"
+          },
+          "high": {
+            "name": "Ejecución de agente · Alta",
+            "desc": "Ejecuciones de compilación alojadas sobre un elemento de trabajo de dificultad alta"
+          }
+        },
+        "inherits": {
+          "review": "Hereda: el predeterminado de ejecución",
+          "reviewWith": "Hereda: el predeterminado de ejecución ({model})",
+          "design": "Hereda: la dificultad del elemento de trabajo",
+          "level": "Hereda: el valor del entorno",
+          "levelWith": "Hereda: el valor del entorno ({model})"
+        },
+        "fallsBack": {
+          "review": "el predeterminado de ejecución",
+          "design": "la dificultad del elemento de trabajo",
+          "level": "el valor del entorno"
+        },
+        "defaultGroup": "Predeterminado",
+        "pickerAria": "Modelo predeterminado de {name}",
+        "pickerFoot": "Solo modelos de la lista de arriba que motir-ai ofrece para ejecuciones alojadas.",
+        "changed": {
+          "seededFromEnv": "Tomado del entorno · nunca cambiado",
+          "neverSet": "Nunca definido"
+        },
+        "withdrawn": {
+          "chip": "Ya no se ofrece",
+          "body": "{name} vuelve a {what} hasta que elijas otro.",
+          "bodyReadOnly": "{name} vuelve a {what} hasta que un superadministrador elija otro."
+        },
+        "refused": "{model} ya no se ofrece para ejecuciones alojadas o no está en la lista, así que no se guardó. La página se ha actualizado: elige otro modelo.",
+        "confirmTitle": "¿Cambiar el modelo de plataforma de {name}?",
+        "confirmBody": {
+          "review": "{from} → {to}. Se aplica desde la siguiente revisión para cada organización que no haya elegido el suyo. Las revisiones en curso terminan con el modelo con el que empezaron.",
+          "design": "{from} → {to}. Se aplica desde la siguiente ejecución de diseño para cada organización que no haya elegido el suyo. Las ejecuciones de diseño en curso terminan con el modelo con el que empezaron.",
+          "level": "{from} → {to}. Se aplica desde la siguiente ejecución para cada organización que no haya elegido el suyo. Las ejecuciones en curso terminan con el modelo con el que empezaron."
+        },
+        "savedTitle": "Modelo de {name} cambiado",
+        "savedBody": {
+          "review": "Las revisiones ahora usan {model} para cada organización sin elección propia.",
+          "design": "Las ejecuciones de diseño ahora usan {model} para cada organización sin elección propia.",
+          "level": "Las ejecuciones ahora usan {model} para cada organización sin elección propia."
+        },
+        "unchanged": "{name} ya es {model}.",
+        "unavailable": {
+          "title": "No se pudieron cargar los predeterminados de ejecución",
+          "body": "El servicio de planificación (motir-ai) no respondió, así que no se muestra ningún predeterminado. No ha cambiado nada y no se adivina ningún valor.",
+          "retry": "Reintentar"
+        }
       }
     },
     "ideas": {
@@ -14359,6 +14578,12 @@
         "override": "Valor del proyecto para <b>{difficulty}</b>",
         "fromLeaves": "Mayor dificultad entre sus hojas: <b>{difficulty}</b>",
         "overrideFromLeaves": "Valor del proyecto para <b>{difficulty}</b>, la mayor dificultad entre sus hojas",
+        "orgLevel": "Valor de la organización para <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Valor de la organización para <b>{difficulty}</b>, la mayor dificultad entre sus hojas",
+        "orgDesign": "<b>Modelo de ejecución de diseño de la organización</b>: un elemento de diseño",
+        "orgDesignFromLeaves": "<b>Modelo de ejecución de diseño de la organización</b>: cada hoja sin terminar es un elemento de diseño",
+        "platformDesign": "<b>Modelo de ejecución de diseño</b>: un elemento de diseño",
+        "platformDesignFromLeaves": "<b>Modelo de ejecución de diseño</b>: cada hoja sin terminar es un elemento de diseño",
         "noCapacityTag": "Sin capacidad",
         "noCapacityReason": "Sin capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve.",
         "allHeldBody": "Ningún modelo tiene capacidad para ejecuciones de agente ahora mismo. Vuelve a intentarlo en breve; las ejecuciones locales no se ven afectadas."

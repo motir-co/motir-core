@@ -1436,6 +1436,21 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
+  /// THIS ORGANISATION'S OWN RUN-SIDE MODELS (story MOTIR-10838 · MOTIR-10843),
+  /// beside the project's four `hostedModel*` overrides: the model a hosted build
+  /// run takes per leaf difficulty, a hosted review and a design run. NULL =
+  /// inherit the platform default. Bare gateway ids, nullable strings for the
+  /// project columns' reason (the vocabulary lives in motir-ai). Read only while
+  /// the org QUALIFIES (`orgQualifiesForHostedModelChoice`: meta, or a tier above
+  /// Standard), evaluated at every resolution, so an org that drops below Pro keeps
+  /// its values unread. A withdrawn id is skipped by `resolveHostedModel`.
+  hostedModelTrivial String? @map("hosted_model_trivial")
+  hostedModelLow     String? @map("hosted_model_low")
+  hostedModelMedium  String? @map("hosted_model_medium")
+  hostedModelHigh    String? @map("hosted_model_high")
+  hostedReviewModel  String? @map("hosted_review_model")
+  hostedDesignModel  String? @map("hosted_design_model")
+
   /// THIS ORGANISATION'S CI BURST OVERRIDE (MOTIR-9375 · MOTIR-9377; it was the
   /// org's own fleet pool, MOTIR-6907, until the fleet-capacity decision
   /// MOTIR-9357 retired that pool): how many CI runners the org may have in

@@ -22,6 +22,8 @@ const LIST = {
 
 /** What a motir-ai that predates MOTIR-6990 is read as: every level null. */
 const NO_LEVELS = { trivial: null, low: null, medium: null, high: null };
+/** A motir-ai that predates MOTIR-10840 sends neither role default: both read as null. */
+const NO_ROLES = { reviewAgentDefault: null, designRunDefault: null };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -68,6 +70,7 @@ describe('getAgentModels (the client read)', () => {
       state: 'ok',
       ...LIST,
       defaultsByDifficulty: NO_LEVELS,
+      ...NO_ROLES,
     });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://ai.test/v1/agent-models');
@@ -85,6 +88,7 @@ describe('getAgentModels (the client read)', () => {
       models: LIST.models,
       default: null,
       defaultsByDifficulty: NO_LEVELS,
+      ...NO_ROLES,
     });
   });
 
@@ -99,7 +103,12 @@ describe('getAgentModels (the client read)', () => {
       'fetch',
       vi.fn(async () => json({ ...LIST, defaultsByDifficulty })),
     );
-    expect(await getAgentModels()).toEqual({ state: 'ok', ...LIST, defaultsByDifficulty });
+    expect(await getAgentModels()).toEqual({
+      state: 'ok',
+      ...LIST,
+      defaultsByDifficulty,
+      ...NO_ROLES,
+    });
   });
 
   it('reads a defaultsByDifficulty with a level missing as that level null', async () => {
@@ -111,6 +120,20 @@ describe('getAgentModels (the client read)', () => {
     expect(read.state === 'ok' && read.defaultsByDifficulty).toEqual({
       ...NO_LEVELS,
       high: 'claude-opus-5-5',
+    });
+  });
+
+  it('carries the review-agent and design-run defaults through, a null as null (MOTIR-10843)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        json({ ...LIST, reviewAgentDefault: 'claude-opus-5-5', designRunDefault: null }),
+      ),
+    );
+    expect(await getAgentModels()).toMatchObject({
+      state: 'ok',
+      reviewAgentDefault: 'claude-opus-5-5',
+      designRunDefault: null,
     });
   });
 
@@ -130,6 +153,14 @@ describe('getAgentModels (the client read)', () => {
     [
       'a 2xx whose defaultsByDifficulty level is not a string',
       async () => json({ ...LIST, defaultsByDifficulty: { low: 7 } }),
+    ],
+    [
+      'a 2xx whose reviewAgentDefault is not a string',
+      async () => json({ ...LIST, reviewAgentDefault: 7 }),
+    ],
+    [
+      'a 2xx whose designRunDefault is not a string',
+      async () => json({ ...LIST, designRunDefault: { id: 'x' } }),
     ],
     ['a 2xx that is not JSON', async () => new Response('<html>', { status: 200 })],
   ])('answers unavailable — never an empty list — on %s', async (_name, impl) => {
@@ -181,6 +212,7 @@ describe('hostedRunModelService.listOfferedModels', () => {
       models: LIST.models,
       default: LIST.default,
       defaultsByDifficulty: NO_LEVELS,
+      ...NO_ROLES,
     });
   });
 
@@ -396,7 +428,7 @@ describe('the run-model list narrows the offer (MOTIR-7526; hosted-agent-run.md 
 
   it('a list never initialised narrows nothing — its first read seeds it with the whole offer', async () => {
     const offered = await hostedRunModelService.listOfferedModels();
-    expect(offered).toEqual({ state: 'ok', ...OFFER });
+    expect(offered).toEqual({ state: 'ok', ...OFFER, ...NO_ROLES });
   });
 
   it('motir-ai unavailable still reads unavailable, never an empty list', async () => {
@@ -409,5 +441,59 @@ describe('the run-model list narrows the offer (MOTIR-7526; hosted-agent-run.md 
     await expect(hostedRunModelService.assertOffered('claude-opus-5-5')).rejects.toBeInstanceOf(
       HostedModelsUnavailableError,
     );
+  });
+});
+
+describe('the review-agent and design-run defaults (MOTIR-10843)', () => {
+  const ROLES = {
+    ...LIST,
+    reviewAgentDefault: 'claude-opus-5-5',
+    designRunDefault: 'claude-sonnet-4-6',
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(ROLES)),
+    );
+  });
+
+  it('listOfferedModels passes both through when they are offered', async () => {
+    expect(await hostedRunModelService.listOfferedModels()).toMatchObject({
+      state: 'ok',
+      reviewAgentDefault: 'claude-opus-5-5',
+      designRunDefault: 'claude-sonnet-4-6',
+    });
+  });
+
+  it('a role default naming an unlisted model reads null, like a level default', async () => {
+    await listRunModels(['claude-opus-5-5']);
+    expect(await hostedRunModelService.listOfferedModels()).toMatchObject({
+      reviewAgentDefault: 'claude-opus-5-5',
+      designRunDefault: null,
+    });
+  });
+
+  it("reviewModelFor: the org's offered review model, else the platform's", async () => {
+    expect(await hostedRunModelService.reviewModelFor({ review: 'claude-sonnet-4-6' })).toBe(
+      'claude-sonnet-4-6',
+    );
+    expect(await hostedRunModelService.reviewModelFor({ review: 'gone' })).toBe('claude-opus-5-5');
+    expect(await hostedRunModelService.reviewModelFor(null)).toBe('claude-opus-5-5');
+  });
+
+  it('reviewModelFor falls to the default with neither set, and answers undefined unreachable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json(LIST)),
+    );
+    expect(await hostedRunModelService.reviewModelFor(null)).toBe(LIST.default);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => json({}, 503)),
+    );
+    expect(
+      await hostedRunModelService.reviewModelFor({ review: 'claude-opus-5-5' }),
+    ).toBeUndefined();
   });
 });

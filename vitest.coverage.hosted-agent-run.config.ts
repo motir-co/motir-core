@@ -71,6 +71,10 @@ export default defineConfig({
       'tests/integration/hosted/**/*.test.ts',
       'tests/hosted/resolveHostedModel.test.ts',
       'tests/hosted/projectHostedAgentSettingsMappers.test.ts',
+      // Story MOTIR-10838 · MOTIR-10843 — the organisation and design layers of the
+      // resolver, the review model, and who qualifies (the org-layer integration
+      // suite is matched by `tests/integration/hosted/**` above).
+      'tests/hosted/orgHostedModelLayers.test.ts',
       // Story MOTIR-1626 · MOTIR-6820 — the hosted REVIEW start, its end and its cancel:
       // `hostedRunService.startReview`, the review arms of the end path, the liveness read,
       // the read-level git check and `hostedRunModelService.defaultOffered`.
@@ -117,6 +121,9 @@ export default defineConfig({
         'lib/hosted/resolveHostedModel.ts',
         'lib/services/projectHostedAgentSettingsService.ts',
         'lib/mappers/projectHostedAgentSettingsMappers.ts',
+        // Story MOTIR-10838 · MOTIR-10843 — the org layer's read and the tier rule.
+        'lib/services/orgHostedModelResolutionService.ts',
+        'lib/billing/modelChoiceQualification.ts',
         // Story MOTIR-6864 · MOTIR-7028 — the start bar, Send to my agent and its
         // picker, the send's press, the header's Cancel, and a run in an agent's parts.
         'app/**/_components/StartBar.tsx',

@@ -4119,6 +4119,7 @@
         },
         "organization": "Organizacja",
         "git": "Git",
+        "aiModels": "Modele AI",
         "members": "Członkowie",
         "security": "Zabezpieczenia",
         "usage": "Użycie i koszty",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Zamknij wynik zatrzymania"
         },
         "forbidden": "Tylko właściciel lub administrator może zatrzymać pracę floty tej organizacji."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Ustawienia",
+        "title": "Modele AI",
+        "lead": "Jaki model używa każda funkcja Motir AI w {org}. Zmiana obowiązuje od następnego zadania lub uruchomienia.",
+        "card": {
+          "title": "Modele według funkcji",
+          "subtitle": "Każda funkcja używa domyślnego modelu platformy, dopóki Twoja organizacja nie wybierze innego.",
+          "subtitleMeta": "{org} jest metaorganizacją Motir, więc wybiera własne modele w każdym planie."
+        },
+        "group": {
+          "planning": {
+            "title": "Strona planowania",
+            "list": "Wybierane z listy modeli planowania platformy"
+          },
+          "runs": {
+            "title": "Strona uruchomień",
+            "list": "Wybierane z listy modeli uruchomień platformy"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planowanie",
+            "desc": "Każda sesja planu: przejście i jego naprawy"
+          },
+          "guide": {
+            "name": "Przewodnik",
+            "desc": "Przeprowadź mnie, przy elemencie pracy wykonywanym przez osobę"
+          },
+          "debug": {
+            "name": "Debugowanie",
+            "desc": "Motir AI diagnozuje defekt jako błąd"
+          },
+          "ask": {
+            "name": "Pytanie",
+            "desc": "Rozmowa z Motir AI i Grill me"
+          },
+          "review": {
+            "name": "Agent przeglądu",
+            "desc": "Hostowane przeglądy. To, czy projekt przegląda z agentem, pozostaje w jego ustawieniach zatwierdzeń."
+          },
+          "design": {
+            "name": "Uruchomienie projektu",
+            "desc": "Hostowane uruchomienie na elemencie pracy typu projekt"
+          }
+        },
+        "agentRun": {
+          "name": "Uruchomienie agenta",
+          "desc": "Hostowane uruchomienia kompilacji według trudności elementu pracy. Własne zastąpienie projektu dla danej trudności nadal ma pierwszeństwo przed wyborem organizacji."
+        },
+        "modelFor": "Model dla: {function}",
+        "loadingTrigger": "Ładowanie modeli…",
+        "byDifficulty": "Zależy od trudności elementu pracy",
+        "platformDefaultPending": "Domyślny model platformy",
+        "optionDefault": "Domyślny platformy",
+        "source": {
+          "org": "Wybór organizacji",
+          "inherits": "Dziedziczy domyślny model platformy"
+        },
+        "clear": "Wyczyść",
+        "clearAria": "Wyczyść wybór dla: {function}",
+        "staged": "Jeszcze niezapisane",
+        "withdrawnChip": "Już nieoferowany",
+        "withdrawn": {
+          "edit": "<id>{model}</id> nie jest już oferowany, więc {function} wraca do domyślnego modelu platformy, <mono>{fallback}</mono>, dopóki nie wybierzesz innego.",
+          "read": "<id>{model}</id> nie jest już oferowany, więc {function} wraca do domyślnego modelu platformy, <mono>{fallback}</mono>, dopóki właściciel lub administrator nie wybierze innego.",
+          "editNoFallback": "<id>{model}</id> nie jest już oferowany, więc {function} wraca do domyślnego modelu platformy, dopóki nie wybierzesz innego.",
+          "readNoFallback": "<id>{model}</id> nie jest już oferowany, więc {function} wraca do domyślnego modelu platformy, dopóki właściciel lub administrator nie wybierze innego."
+        },
+        "refused": {
+          "notOffered": "Nie zapisano: <mono>{model}</mono> przestał być oferowany dla {function}, zanim zapis dotarł. {function} zachowuje obecny model; wybierz inny.",
+          "unreachable": "Nie zapisano: <mono>{model}</mono> jest teraz nieosiągalny, więc {function} zachowuje obecny model. Spróbuj ponownie lub wybierz inny.",
+          "failed": "Nie zapisano: nie udało się zapisać {function}. Zachowuje obecny model; spróbuj ponownie."
+        },
+        "precedence": {
+          "body": "<b>Jakiego modelu używa zadanie</b>, wygrywa pierwsze dopasowanie: wybór osoby w Uruchom hostowane → własne zastąpienie projektu (tylko uruchomienie agenta) → wybór {org} → domyślny model platformy.",
+          "cost": "Każdy model jest rozliczany według własnej stawki, więc mocniejszy model zużywa więcej kredytów {org}."
+        },
+        "footer": {
+          "dirtyHint": "Masz niezapisane zmiany.",
+          "cancel": "Anuluj",
+          "save": "Zapisz zmiany"
+        },
+        "saved": {
+          "title": "Zapisano modele AI",
+          "description": "{org} używa ich od następnego zadania lub uruchomienia."
+        },
+        "locked": {
+          "title": "Wybór modeli jest częścią planu Pro i wyższych",
+          "body": "{org} ma plan {plan}. W planie Pro i wyższych właściciel lub administrator wybiera, jakiego modelu używa każda funkcja Motir AI w całej organizacji. Do tego czasu każda funkcja używa domyślnego modelu platformy.",
+          "bodyNoPlan": "W planie Pro i wyższych właściciel lub administrator wybiera, jakiego modelu używa każda funkcja Motir AI w całej organizacji. Do tego czasu każda funkcja w {org} używa domyślnego modelu platformy.",
+          "notApplying": "Zapisane wybory {org} są zachowane. Zaczną znowu obowiązywać po przejściu na plan Pro lub wyższy.",
+          "seePlans": "Zobacz plany"
+        },
+        "readOnly": "Tylko właściciel lub administrator {org} może je zmienić.",
+        "unavailable": {
+          "body": "Nie udało się wczytać modeli AI, więc żaden model nie jest pokazany i nic nie można zapisać. Nic się nie zmieniło.",
+          "retry": "Spróbuj ponownie"
+        }
       }
     },
     "gitAccounts": {
@@ -10832,6 +10932,12 @@
               "disable": "Wyłączono lekcję planowania",
               "promote": "Awansowano lekcję planowania",
               "retention_set": "Zmieniono okres wycofywania lekcji"
+            },
+            "planner_function_model": {
+              "set": "Zmieniono model Guide, Debug lub Ask"
+            },
+            "run_model_default": {
+              "set": "Zmieniono domyślny model po stronie uruchomień"
             }
           },
           "fleet": {
@@ -11518,17 +11624,17 @@
     "aiPlanning": {
       "breadcrumb": "Platforma · Planowanie z AI",
       "title": "Planowanie z AI",
-      "subtitle": "Którym modelem Motir planuje, dla każdej z trzech grup odbiorców. Zmiana obowiązuje od następnego zadania planowania dla każdej organizacji w tej grupie.",
+      "subtitle": "Którego modelu używają funkcje planowania Motir: planowanie dla każdej z trzech grup odbiorców oraz po jednej wartości domyślnej platformy dla Guide, Debug i Ask. Zmiana obowiązuje od następnego zadania dla każdej organizacji, która nie wybrała własnego.",
       "precedence": "Organizacja, która jest jednocześnie meta i wewnętrzna, podlega wierszowi meta.",
       "tenantSecretLead": "Dzierżawcy nigdy nie widzą tego wyboru.",
       "tenantSecretBody": "Żadna strona dzierżawcy, widok użycia ani plan nie wskazuje modelu, który planował.",
       "card": {
-        "title": "Model planowania według grupy odbiorców",
-        "subtitle": "Każde zadanie planowania ustala model na podstawie organizacji, dla której działa: meta, potem wewnętrzna, potem klient.",
-        "count": "3 grupy odbiorców"
+        "title": "Modele po stronie planowania",
+        "subtitle": "Planowanie ustala model na podstawie grupy odbiorców organizacji: meta, potem wewnętrzna, potem klient. Guide, Debug i Ask mają po jednej wartości domyślnej platformy albo dziedziczą model tej grupy. Organizacja z planem Pro lub wyższym może wybrać własny.",
+        "count": "7 ustawień"
       },
       "col": {
-        "audience": "Grupa odbiorców",
+        "audience": "Dotyczy",
         "model": "Model",
         "lastChanged": "Ostatnia zmiana",
         "action": "Działanie"
@@ -11556,7 +11662,8 @@
         "seeded": "Domyślne ustawienie początkowe · nigdy niezmieniane",
         "by": "Zmienione {when} przez {who}",
         "byUnknown": "Zmienione {when}",
-        "justNowByYou": "Zmienione przed chwilą przez Ciebie"
+        "justNowByYou": "Zmienione przed chwilą przez Ciebie",
+        "neverSet": "Nigdy nie ustawiono"
       },
       "confirm": {
         "title": "Zmienić model planowania dla grupy {audience}?",
@@ -11615,6 +11722,39 @@
         "savedTitle": "Zmieniono model przeglądu",
         "savedBody": "Przeglądy próby działają na {model} od następnego zadania planowania.",
         "unchanged": "Przegląd próby już działa na {model}."
+      },
+      "group": {
+        "audiences": "Planowanie · według odbiorców",
+        "functions": "Guide · Debug · Ask · wartości domyślne platformy",
+        "review": "Przegląd próby · tylko platforma"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Poprowadź mnie krok po kroku",
+          "confirmBody": "{from} → {to}. Obowiązuje od następnego kroku Guide dla każdej organizacji, która nie wybrała własnego. Kroki Guide, które już trwają, kończą się na modelu, na którym się zaczęły.",
+          "savedBody": "Kroki Guide działają teraz na {model} dla każdej organizacji bez własnego wyboru."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Diagnozowanie defektu jako błędu",
+          "confirmBody": "{from} → {to}. Obowiązuje od następnej diagnozy Debug dla każdej organizacji, która nie wybrała własnego. Diagnozy Debug, które już trwają, kończą się na modelu, na którym się zaczęły.",
+          "savedBody": "Diagnozy Debug działają teraz na {model} dla każdej organizacji bez własnego wyboru."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "Rozmowa z Motir AI i Grill me",
+          "confirmBody": "{from} → {to}. Obowiązuje od następnej tury rozmowy Ask dla każdej organizacji, która nie wybrała własnego. Tury rozmowy Ask, które już trwają, kończą się na modelu, na którym się zaczęły.",
+          "savedBody": "Tury rozmowy Ask działają teraz na {model} dla każdej organizacji bez własnego wyboru."
+        },
+        "inherits": "Dziedziczy — model planowania grupy odbiorców",
+        "inheritsDesc": "Podąża za modelem planowania grupy odbiorców organizacji",
+        "pickerAria": "Model dla {name}",
+        "withdrawnBody": "{name} wraca do modelu planowania grupy odbiorców, dopóki nie wybierzesz innego.",
+        "withdrawnBodyReadOnly": "{name} wraca do modelu planowania grupy odbiorców, dopóki superadministrator nie wybierze innego.",
+        "confirmTitle": "Zmienić model platformy dla {name}?",
+        "savedTitle": "Zmieniono model dla {name}",
+        "unchanged": "{name} już działa na {model}."
       }
     },
     "lessons": {
@@ -12864,7 +13004,9 @@
         "inUseParts": {
           "platformDefault": "Jest domyślnym modelem platformy Motir dla poziomów: {levels}. ",
           "projects": "{n, plural, one {Używa go # projekt} few {Używają go # projekty} many {Używa go # projektów} other {Używa go # projektu}}: {list}.",
-          "projectEntry": "{name} ({key}) dla poziomów: {levels}"
+          "projectEntry": "{name} ({key}) dla poziomów: {levels}",
+          "platformReview": "To domyślny model platformy Motir dla agenta przeglądu. ",
+          "platformDesign": "To domyślny model platformy Motir dla uruchomień projektowych. "
         },
         "notListed": "Nie usunięto: {model} nie jest już na liście."
       },
@@ -12878,6 +13020,83 @@
       "unavailable": {
         "title": "Nie udało się wczytać modeli uruchomień hostowanych",
         "body": "motir-ai nie odpowiedział, więc nie wiadomo, czy modele z listy są oferowane, i lista nie jest wyświetlana. Nic się nie zmieniło."
+      },
+      "defaults": {
+        "title": "Wartości domyślne po stronie uruchomień",
+        "subtitle": "Model, na którym startuje hostowany przegląd, uruchomienie projektowe lub uruchomienie agenta, gdy ani osoba, ani projekt, ani organizacja go nie wybrały. Wybierany z listy powyżej.",
+        "count": "6 ustawień",
+        "col": {
+          "function": "Funkcja"
+        },
+        "row": {
+          "review": {
+            "name": "Agent przeglądu",
+            "desc": "Hostowane przeglądy"
+          },
+          "design": {
+            "name": "Uruchomienie projektowe",
+            "desc": "Hostowane uruchomienie na projektowym elemencie roboczym"
+          },
+          "trivial": {
+            "name": "Uruchomienie agenta · Banalna",
+            "desc": "Hostowane uruchomienia budowania na banalnym elemencie roboczym"
+          },
+          "low": {
+            "name": "Uruchomienie agenta · Niska",
+            "desc": "Hostowane uruchomienia budowania na elemencie roboczym o niskiej trudności"
+          },
+          "medium": {
+            "name": "Uruchomienie agenta · Średnia",
+            "desc": "Hostowane uruchomienia budowania na elemencie roboczym o średniej trudności"
+          },
+          "high": {
+            "name": "Uruchomienie agenta · Wysoka",
+            "desc": "Hostowane uruchomienia budowania na elemencie roboczym o wysokiej trudności"
+          }
+        },
+        "inherits": {
+          "review": "Dziedziczy — domyślny model uruchomień",
+          "reviewWith": "Dziedziczy — domyślny model uruchomień ({model})",
+          "design": "Dziedziczy — trudność elementu roboczego",
+          "level": "Dziedziczy — wartość ze środowiska",
+          "levelWith": "Dziedziczy — wartość ze środowiska ({model})"
+        },
+        "fallsBack": {
+          "review": "domyślnego modelu uruchomień",
+          "design": "trudności elementu roboczego",
+          "level": "wartości ze środowiska"
+        },
+        "defaultGroup": "Domyślne",
+        "pickerAria": "Domyślny model dla {name}",
+        "pickerFoot": "Tylko modele z listy powyżej, które motir-ai oferuje dla hostowanych uruchomień.",
+        "changed": {
+          "seededFromEnv": "Przejęte ze środowiska · nigdy niezmieniane",
+          "neverSet": "Nigdy nie ustawiono"
+        },
+        "withdrawn": {
+          "chip": "Już nieoferowany",
+          "body": "{name} wraca do {what}, dopóki nie wybierzesz innego.",
+          "bodyReadOnly": "{name} wraca do {what}, dopóki superadministrator nie wybierze innego."
+        },
+        "refused": "{model} nie jest już oferowany dla hostowanych uruchomień lub nie ma go na liście, więc nie został zapisany. Strona została odświeżona — wybierz inny model.",
+        "confirmTitle": "Zmienić model platformy dla {name}?",
+        "confirmBody": {
+          "review": "{from} → {to}. Obowiązuje od następnego przeglądu dla każdej organizacji, która nie wybrała własnego. Przeglądy, które już trwają, kończą się na modelu, na którym się zaczęły.",
+          "design": "{from} → {to}. Obowiązuje od następnego uruchomienia projektowego dla każdej organizacji, która nie wybrała własnego. Uruchomienia projektowe, które już trwają, kończą się na modelu, na którym się zaczęły.",
+          "level": "{from} → {to}. Obowiązuje od następnego uruchomienia dla każdej organizacji, która nie wybrała własnego. Uruchomienia, które już trwają, kończą się na modelu, na którym się zaczęły."
+        },
+        "savedTitle": "Zmieniono model dla {name}",
+        "savedBody": {
+          "review": "Przeglądy działają teraz na {model} dla każdej organizacji bez własnego wyboru.",
+          "design": "Uruchomienia projektowe działają teraz na {model} dla każdej organizacji bez własnego wyboru.",
+          "level": "Uruchomienia działają teraz na {model} dla każdej organizacji bez własnego wyboru."
+        },
+        "unchanged": "{name} to już {model}.",
+        "unavailable": {
+          "title": "Nie udało się wczytać wartości domyślnych po stronie uruchomień",
+          "body": "Usługa planowania (motir-ai) nie odpowiedziała, więc nie pokazano żadnej wartości domyślnej. Nic się nie zmieniło i żadna wartość nie jest zgadywana.",
+          "retry": "Ponów"
+        }
       }
     },
     "ideas": {
@@ -14359,6 +14578,12 @@
         "override": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>",
         "fromLeaves": "Najwyższa trudność wśród jego liści: <b>{difficulty}</b>",
         "overrideFromLeaves": "Nadpisanie projektu dla poziomu <b>{difficulty}</b>, najwyższej trudności wśród jego liści",
+        "orgLevel": "Domyślne ustawienie organizacji dla poziomu <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Domyślne ustawienie organizacji dla poziomu <b>{difficulty}</b>, najwyższej trudności wśród jego liści",
+        "orgDesign": "<b>Model przebiegu projektowego organizacji</b>: element projektowy",
+        "orgDesignFromLeaves": "<b>Model przebiegu projektowego organizacji</b>: każdy nieukończony liść jest elementem projektowym",
+        "platformDesign": "<b>Model przebiegu projektowego</b>: element projektowy",
+        "platformDesignFromLeaves": "<b>Model przebiegu projektowego</b>: każdy nieukończony liść jest elementem projektowym",
         "noCapacityTag": "Brak przepustowości",
         "noCapacityReason": "Brak przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę.",
         "allHeldBody": "Żaden model nie ma teraz przepustowości dla uruchomień agenta. Spróbuj ponownie za chwilę; nie dotyczy to uruchomień lokalnych."

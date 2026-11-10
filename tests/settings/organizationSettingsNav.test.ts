@@ -98,6 +98,7 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     expect(ids).toEqual([
       'organization',
       'git',
+      'ai-models',
       'members',
       'security',
       'usage',
@@ -147,6 +148,27 @@ describe('the two FILTER AXES — what the actor holds, and what this build has'
     expect(fleet).toMatchObject({
       group: 'billing',
       href: '/settings/organization/fleet',
+      orgAdminOnly: true,
+      cloudOnly: true,
+    });
+  });
+
+  it('`AI models` sits in General under Git, Owner/Admin only and cloud only (MOTIR-10846)', () => {
+    // Off cloud there is no plan tier to qualify on, so the route answers 404.
+    const self = visibleOrganizationSettingsNav(ADMIN, undefined, SELF_HOST).map((e) => e.id);
+    expect(self).not.toContain('ai-models');
+    // A plain member gets no row; the page still serves them the read-only room.
+    for (const actor of [MEMBER, MEMBER_REVEALED]) {
+      const ids = visibleOrganizationSettingsNav(actor, undefined, CLOUD).map((e) => e.id);
+      expect(ids).not.toContain('ai-models');
+    }
+    const general = groupOrganizationSettingsNav(
+      visibleOrganizationSettingsNav(ADMIN, undefined, CLOUD),
+    ).find((g) => g.group === 'general');
+    expect(general?.entries.map((e) => e.id)).toEqual(['organization', 'git', 'ai-models']);
+    expect(ORGANIZATION_SETTINGS_NAV.find((e) => e.id === 'ai-models')).toMatchObject({
+      href: '/settings/organization/ai-models',
+      labelKey: 'aiModels',
       orgAdminOnly: true,
       cloudOnly: true,
     });

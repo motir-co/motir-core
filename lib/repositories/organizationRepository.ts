@@ -37,7 +37,54 @@ function toCapContext(
   };
 }
 
+/** An organisation's run-side model columns (MOTIR-10843) and the meta flag that
+ *  qualifies it whatever its tier. */
+export interface OrgHostedModelOverridesRow {
+  isMeta: boolean;
+  hostedModelTrivial: string | null;
+  hostedModelLow: string | null;
+  hostedModelMedium: string | null;
+  hostedModelHigh: string | null;
+  hostedReviewModel: string | null;
+  hostedDesignModel: string | null;
+}
+
+/** The six writable run-side model columns. */
+export type OrgHostedModelOverrideColumns = Omit<OrgHostedModelOverridesRow, 'isMeta'>;
+
+const ORG_HOSTED_MODEL_SELECT = {
+  isMeta: true,
+  hostedModelTrivial: true,
+  hostedModelLow: true,
+  hostedModelMedium: true,
+  hostedModelHigh: true,
+  hostedReviewModel: true,
+  hostedDesignModel: true,
+} as const;
+
 export const organizationRepository = {
+  /** The org's run-side model columns and `isMeta` (MOTIR-10843), under the
+   *  caller's org context; null when the row is not visible. */
+  async findOrgHostedModelOverridesInTx(
+    id: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrgHostedModelOverridesRow | null> {
+    return tx.organization.findUnique({ where: { id }, select: ORG_HOSTED_MODEL_SELECT });
+  },
+
+  /** Write any subset of the six run-side model columns (null = inherit). */
+  async updateOrgHostedModelOverrides(
+    id: string,
+    columns: Partial<OrgHostedModelOverrideColumns>,
+    tx: Prisma.TransactionClient,
+  ): Promise<OrgHostedModelOverridesRow> {
+    return tx.organization.update({
+      where: { id },
+      data: columns,
+      select: ORG_HOSTED_MODEL_SELECT,
+    });
+  },
+
   /**
    * Find by id inside the caller's transaction so the organization RLS policy
    * (which keys off the per-transaction `app.organization_id` / `app.user_id`

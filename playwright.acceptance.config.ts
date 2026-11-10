@@ -252,6 +252,14 @@ const MOTIR_HOSTED_RUN_JOURNAL_PATH = path.resolve(
 );
 process.env['MOTIR_HOSTED_RUN_FIXTURE_PATH'] ??= MOTIR_HOSTED_RUN_FIXTURE_PATH;
 process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH'] ??= MOTIR_HOSTED_RUN_JOURNAL_PATH;
+// The ORG TIER fixture (Story MOTIR-10838 · MOTIR-10849): ONE file both the
+// planner-model seam (motir-ai's org override `qualifies`) and the hosted-run seam
+// (motir-core's `POST /v1/admin/orgs/tiers`) answer from, in the webServer and in
+// the job worker, so the org AI models room and the run-side resolver agree
+// (`lib/test-org-tier-fixture.ts`). Set on the runner so the spec writes it and
+// `hostedRunSeamEnv` mirrors it into the worker.
+const MOTIR_AI_ORG_TIER_FIXTURE_PATH = path.resolve('/tmp/motir-acceptance-org-tier-fixture.json');
+process.env['MOTIR_AI_ORG_TIER_FIXTURE_PATH'] ??= MOTIR_AI_ORG_TIER_FIXTURE_PATH;
 // The fake orchestrator's cross-process container store (MOTIR-3828's shape,
 // this lane's own copy — never the main/index-writer lane's `out/` path, which
 // belongs to a different `webServer`). A hosted run BOOTS in the webServer
@@ -666,6 +674,7 @@ const APP_SERVER_ENV = {
   MOTIR_RUN_KEY_MINT_SECRET: process.env['MOTIR_RUN_KEY_MINT_SECRET']!,
   MOTIR_HOSTED_RUN_FIXTURE_PATH,
   MOTIR_HOSTED_RUN_JOURNAL_PATH,
+  MOTIR_AI_ORG_TIER_FIXTURE_PATH: process.env['MOTIR_AI_ORG_TIER_FIXTURE_PATH']!,
   MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']!,
   MOTIR_FAKE_PERSISTENT_STATE_PATH: process.env['MOTIR_FAKE_PERSISTENT_STATE_PATH']!,
   // The preview host (MOTIR-5781) — see its block above this config.

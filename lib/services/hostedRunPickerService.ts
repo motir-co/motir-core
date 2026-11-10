@@ -120,6 +120,8 @@ export const hostedRunPickerService = {
       models: offered.models.map((m) => m.id),
       default: offered.default,
       defaultsByDifficulty: offered.defaultsByDifficulty,
+      reviewAgentDefault: offered.reviewAgentDefault,
+      designRunDefault: offered.designRunDefault,
     };
     const [models, resolved] = await Promise.all([
       withCapacity(offered.models),

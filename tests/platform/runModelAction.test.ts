@@ -50,8 +50,27 @@ async function seedStaff(role: 'support' | 'operator' | 'superadmin') {
 let offered: { id: string; provider: string }[] = [];
 let motirAiDown = false;
 
-const fetchStub = vi.fn(async () => {
+/** The run-side review-agent default the stub stores (MOTIR-10844); design stays unset. */
+let reviewDefault: string | null = null;
+
+const fetchStub = vi.fn(async (url: string) => {
   if (motirAiDown) throw new TypeError('fetch failed');
+  if (url.endsWith('/v1/admin/run-model-defaults')) {
+    return new Response(
+      JSON.stringify({
+        settings: (['review', 'design'] as const).map((key) => ({
+          key,
+          model: key === 'review' ? reviewDefault : null,
+          offered: null,
+          effectiveModel: null,
+          updatedAt: '1970-01-01T00:00:00.000Z',
+          updatedByCoreUserId: null,
+        })),
+        models: offered,
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } },
+    );
+  }
   return new Response(
     JSON.stringify({
       models: offered,
@@ -76,6 +95,7 @@ beforeEach(async () => {
   fetchStub.mockClear();
   vi.mocked(revalidatePath).mockClear();
   motirAiDown = false;
+  reviewDefault = null;
   offered = [
     { id: 'claude-opus-5-5', provider: 'anthropic' },
     { id: 'claude-sonnet-5-5', provider: 'anthropic' },
@@ -174,6 +194,19 @@ describe('removeRunModelAction', () => {
       code: 'IN_USE',
       projects: [],
       platformLevels: ['medium', 'high'],
+      platformRoles: [],
+    });
+    expect(await auditRows()).toHaveLength(0);
+  });
+
+  it('IN_USE — names the platform review-agent default (MOTIR-10844); no row', async () => {
+    reviewDefault = 'glm-5.2';
+    expect(await removeRunModelAction('glm-5.2', 'r')).toEqual({
+      ok: false,
+      code: 'IN_USE',
+      projects: [],
+      platformLevels: [],
+      platformRoles: ['review'],
     });
     expect(await auditRows()).toHaveLength(0);
   });

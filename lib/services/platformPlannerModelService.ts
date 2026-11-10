@@ -3,18 +3,27 @@ import 'server-only';
 import {
   getPlannerModelList,
   getPlannerModelSettings,
+  setPlannerFunctionModel,
   setPlannerModel,
   setPlannerReviewModel,
   updatePlannerModelList,
 } from '@/lib/ai/motirAiClient';
-import { PLANNER_AUDIENCES, type PlannerAudience, type PlannerModelListRead } from '@/lib/ai/types';
+import {
+  PLANNER_AUDIENCES,
+  PLANNER_DEFAULT_FUNCTIONS,
+  type PlannerAudience,
+  type PlannerDefaultFunction,
+  type PlannerModelListRead,
+} from '@/lib/ai/types';
 import type {
+  PlatformPlannerFunctionModelWriteDTO,
   PlatformPlannerModelListDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerModelWriteDTO,
   PlatformPlannerReviewModelWriteDTO,
 } from '@/lib/dto/platformPlannerModel';
 import {
+  toPlatformPlannerFunctionModelWriteDTO,
   toPlatformPlannerModelListDTO,
   toPlatformPlannerModelSettingsDTO,
   toPlatformPlannerModelWriteDTO,
@@ -28,6 +37,8 @@ import {
 import { withPlatformRead, type PlatformAuditEntry } from '@/lib/platform/context';
 import {
   PlannerAudienceUnknownError,
+  PlannerFunctionUnknownError,
+  PlannerFunctionModelUnchangedError,
   PlannerModelListModelMissingError,
   PlannerModelUnchangedError,
   PlannerReviewModelUnchangedError,
@@ -68,6 +79,10 @@ function isPlannerAudience(value: string): value is PlannerAudience {
   return (PLANNER_AUDIENCES as readonly string[]).includes(value);
 }
 
+function isPlannerFunction(value: string): value is PlannerDefaultFunction {
+  return (PLANNER_DEFAULT_FUNCTIONS as readonly string[]).includes(value);
+}
+
 export const platformPlannerModelService = {
   /**
    * The AI PLANNING page: three rows in `customer`, `meta`, `internal` order,
@@ -91,6 +106,7 @@ export const platformPlannerModelService = {
         [
           ...read.settings.map((s) => s.updatedByCoreUserId),
           read.review?.updatedByCoreUserId,
+          ...(read.functions ?? []).map((f) => f.updatedByCoreUserId),
         ].filter((id): id is string => !!id),
       ),
     ];
@@ -244,6 +260,79 @@ export const platformPlannerModelService = {
         const { previousModel, model: toModel } = applied;
         console.error(
           `[platform-planner-model] motir-ai applied the review model: "${previousModel}" → ` +
+            `"${toModel}" by ${principal.userId}, but the audit row did not commit`,
+          err,
+        );
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Set Guide's, Debug's or Ask's platform default (MOTIR-10844): a model from the
+   * planning-model list, or `null` to follow the audience's Planning model.
+   * `setReviewModel`'s order, for its reasons — superadmin, the reason, the
+   * current value read through the client so the row says from → to, then the
+   * audited transaction with motir-ai's write inside it, so a refusal rolls the
+   * row back. The concurrent-write warning and the residual case are its too.
+   *
+   * @throws NotPlatformStaffError below `superadmin`.
+   * @throws MissingAuditReasonError for a blank reason.
+   * @throws PlannerFunctionUnknownError for a function that is not one of the three.
+   * @throws PlannerFunctionModelUnchangedError when `model` is already stored.
+   * @throws PlannerModelNotOfferedError / PlannerModelUnreachableError from motir-ai.
+   * @throws MotirAiUnavailableError when motir-ai serves no function rows (an
+   *   older release) — the write has nowhere to land.
+   */
+  async setFunctionModel(
+    principal: PlatformPrincipal,
+    fn: string,
+    model: string | null,
+    reason: string,
+  ): Promise<PlatformPlannerFunctionModelWriteDTO> {
+    await requirePlatformStaff('superadmin');
+    if (!isPlannerFunction(fn)) throw new PlannerFunctionUnknownError(fn);
+    const base = {
+      action: 'ai.planner_function_model.set' as const,
+      targetKind: 'platform' as const,
+      targetId: fn,
+      reason,
+    };
+    assertReasonSatisfied(base);
+
+    const current = await getPlannerModelSettings();
+    const row = current.functions?.find((f) => f.function === fn);
+    if (!row) throw new MotirAiUnavailableError(`motir-ai serves no ${fn} default`);
+    const fromModel = row.model;
+    if (fromModel === model) throw new PlannerFunctionModelUnchangedError(fn, model);
+
+    const entry: PlatformAuditEntry = {
+      ...base,
+      metadata: { function: fn, fromModel, toModel: model },
+    };
+    let applied = null as { previousModel: string | null; model: string | null } | null;
+    try {
+      const result = await withPlatformRead(principal, entry, async () => {
+        const written = await setPlannerFunctionModel({
+          function: fn,
+          model,
+          actorCoreUserId: principal.userId,
+        });
+        applied = written;
+        return written;
+      });
+      if (result.previousModel !== fromModel) {
+        console.warn(
+          `[platform-planner-model] concurrent write on the ${fn} default: this save read ` +
+            `"${fromModel}" but replaced "${result.previousModel}" (now "${result.model}")`,
+        );
+      }
+      return toPlatformPlannerFunctionModelWriteDTO(result, fromModel);
+    } catch (err) {
+      if (applied) {
+        const { previousModel, model: toModel } = applied;
+        console.error(
+          `[platform-planner-model] motir-ai applied the ${fn} default: "${previousModel}" → ` +
             `"${toModel}" by ${principal.userId}, but the audit row did not commit`,
           err,
         );

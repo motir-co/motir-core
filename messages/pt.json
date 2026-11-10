@@ -4119,6 +4119,7 @@
         },
         "organization": "Organização",
         "git": "Git",
+        "aiModels": "Modelos de IA",
         "members": "Membros",
         "security": "Segurança",
         "usage": "Uso e custo",
@@ -4316,6 +4317,105 @@
           "dismissAria": "Dispensar o resultado da interrupção"
         },
         "forbidden": "Somente um proprietário ou administrador pode interromper o trabalho da frota desta organização."
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · Configurações",
+        "title": "Modelos de IA",
+        "lead": "Qual modelo cada função do Motir AI usa em {org}. Uma alteração vale a partir do próximo job ou execução.",
+        "card": {
+          "title": "Modelos por função",
+          "subtitle": "Cada função usa o padrão da plataforma até sua organização escolher outro.",
+          "subtitleMeta": "{org} é a organização meta do Motir, então escolhe os próprios modelos em qualquer plano."
+        },
+        "group": {
+          "planning": {
+            "title": "Lado do planejamento",
+            "list": "Escolhido na lista de modelos de planejamento da plataforma"
+          },
+          "runs": {
+            "title": "Lado da execução",
+            "list": "Escolhido na lista de modelos de execução da plataforma"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "Planejamento",
+            "desc": "Cada sessão de um plano: o percurso e seus reparos"
+          },
+          "guide": {
+            "name": "Guia",
+            "desc": "Guie-me, em um item de trabalho feito por uma pessoa"
+          },
+          "debug": {
+            "name": "Depuração",
+            "desc": "Motir AI diagnosticando um defeito em um bug"
+          },
+          "ask": {
+            "name": "Perguntar",
+            "desc": "A conversa com o Motir AI e o Grill me"
+          },
+          "review": {
+            "name": "Agente de revisão",
+            "desc": "Revisões hospedadas. Se um projeto revisa com um agente continua nas configurações de Aprovações dele."
+          },
+          "design": {
+            "name": "Execução de design",
+            "desc": "Uma execução hospedada em um item de trabalho de design"
+          }
+        },
+        "agentRun": {
+          "name": "Execução de agente",
+          "desc": "Execuções de build hospedadas, pela dificuldade do item de trabalho. A substituição própria de um projeto para uma dificuldade ainda prevalece sobre a da organização."
+        },
+        "modelFor": "Modelo para {function}",
+        "loadingTrigger": "Carregando modelos…",
+        "byDifficulty": "Segue a dificuldade do item de trabalho",
+        "platformDefaultPending": "O padrão da plataforma",
+        "optionDefault": "Padrão da plataforma",
+        "source": {
+          "org": "Escolha da organização",
+          "inherits": "Herda o padrão da plataforma"
+        },
+        "clear": "Limpar",
+        "clearAria": "Limpar a escolha de {function}",
+        "staged": "Ainda não salvo",
+        "withdrawnChip": "Não é mais oferecido",
+        "withdrawn": {
+          "edit": "<id>{model}</id> não é mais oferecido, então {function} volta ao padrão da plataforma, <mono>{fallback}</mono>, até você escolher outro.",
+          "read": "<id>{model}</id> não é mais oferecido, então {function} volta ao padrão da plataforma, <mono>{fallback}</mono>, até um proprietário ou administrador escolher outro.",
+          "editNoFallback": "<id>{model}</id> não é mais oferecido, então {function} volta ao padrão da plataforma até você escolher outro.",
+          "readNoFallback": "<id>{model}</id> não é mais oferecido, então {function} volta ao padrão da plataforma até um proprietário ou administrador escolher outro."
+        },
+        "refused": {
+          "notOffered": "Não salvo: <mono>{model}</mono> deixou de ser oferecido para {function} antes de o salvamento chegar. {function} mantém o modelo atual; escolha outro.",
+          "unreachable": "Não salvo: <mono>{model}</mono> está inacessível no momento, então {function} mantém o modelo atual. Tente novamente ou escolha outro.",
+          "failed": "Não salvo: não foi possível salvar {function}. Ele mantém o modelo atual; tente novamente."
+        },
+        "precedence": {
+          "body": "<b>Qual modelo um job usa</b>, vale a primeira correspondência: a escolha da pessoa em Executar hospedado → a substituição própria do projeto (só execução de agente) → a escolha de {org} → o padrão da plataforma.",
+          "cost": "Cada modelo é cobrado pela própria tarifa, então um modelo mais forte usa mais créditos de {org}."
+        },
+        "footer": {
+          "dirtyHint": "Você tem alterações não salvas.",
+          "cancel": "Cancelar",
+          "save": "Salvar alterações"
+        },
+        "saved": {
+          "title": "Modelos de IA salvos",
+          "description": "{org} os usa a partir do próximo job ou execução."
+        },
+        "locked": {
+          "title": "Escolher modelos faz parte do Pro e superiores",
+          "body": "{org} está no plano {plan}. No Pro e superiores, um proprietário ou administrador escolhe qual modelo cada função do Motir AI usa para toda a organização. Até lá, cada função usa o padrão da plataforma.",
+          "bodyNoPlan": "No Pro e superiores, um proprietário ou administrador escolhe qual modelo cada função do Motir AI usa para toda a organização. Até lá, cada função em {org} usa o padrão da plataforma.",
+          "notApplying": "As escolhas salvas de {org} são mantidas. Voltam a valer quando a organização passar para o Pro ou superior.",
+          "seePlans": "Ver planos"
+        },
+        "readOnly": "Só um proprietário ou administrador de {org} pode alterá-los.",
+        "unavailable": {
+          "body": "Não foi possível carregar os modelos de IA, então nenhum modelo é mostrado e nada pode ser salvo. Nada mudou.",
+          "retry": "Tentar novamente"
+        }
       }
     },
     "gitAccounts": {
@@ -10832,6 +10932,12 @@
               "disable": "Desativou uma lição de planejamento",
               "promote": "Promoveu uma lição de planejamento",
               "retention_set": "Alterou o prazo de aposentadoria das lições"
+            },
+            "planner_function_model": {
+              "set": "Alterou um modelo do Guide, Debug ou Ask"
+            },
+            "run_model_default": {
+              "set": "Alterou um modelo padrão do lado da execução"
             }
           },
           "fleet": {
@@ -11518,17 +11624,17 @@
     "aiPlanning": {
       "breadcrumb": "Plataforma · Planejamento com IA",
       "title": "Planejamento com IA",
-      "subtitle": "Com qual modelo o Motir planeja, para cada um dos três públicos. Uma alteração vale a partir do próximo job de planejamento para todas as organizações desse público.",
+      "subtitle": "Qual modelo as funções de planejamento do Motir usam: o planejamento para cada um dos três públicos e um padrão de plataforma para Guide, Debug e Ask. Uma mudança vale a partir do próximo job para toda organização que não escolheu o seu.",
       "precedence": "Uma organização que é meta e interna ao mesmo tempo segue a linha meta.",
       "tenantSecretLead": "Os tenants nunca veem esta escolha.",
       "tenantSecretBody": "Nenhuma página de tenant, visualização de uso ou plano nomeia o modelo que planejou.",
       "card": {
-        "title": "Modelo de planejamento por público",
-        "subtitle": "Todo job de planejamento resolve o modelo a partir da organização para a qual roda: meta, depois interna, depois cliente.",
-        "count": "3 públicos"
+        "title": "Modelos do lado do planejamento",
+        "subtitle": "O planejamento define o modelo pelo público da organização: meta, depois interna, depois cliente. Guide, Debug e Ask têm cada um um padrão de plataforma, ou herdam o modelo desse público. Uma organização no Pro ou acima pode escolher o seu.",
+        "count": "7 configurações"
       },
       "col": {
-        "audience": "Público",
+        "audience": "Aplica-se a",
         "model": "Modelo",
         "lastChanged": "Última alteração",
         "action": "Ação"
@@ -11556,7 +11662,8 @@
         "seeded": "Padrão inicial · nunca alterado",
         "by": "Alterado {when} por {who}",
         "byUnknown": "Alterado {when}",
-        "justNowByYou": "Alterado agora mesmo por você"
+        "justNowByYou": "Alterado agora mesmo por você",
+        "neverSet": "Nunca definido"
       },
       "confirm": {
         "title": "Alterar o modelo de planejamento de {audience}?",
@@ -11615,6 +11722,39 @@
         "savedTitle": "Modelo de revisão alterado",
         "savedBody": "As revisões da simulação usam {model} a partir do próximo job de planejamento.",
         "unchanged": "A revisão da simulação já usa {model}."
+      },
+      "group": {
+        "audiences": "Planejamento · por público",
+        "functions": "Guide · Debug · Ask · padrões da plataforma",
+        "review": "Revisão da simulação · somente plataforma"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "Me guiar passo a passo",
+          "confirmBody": "{from} → {to}. Vale a partir do próximo passo do Guide para toda organização que não escolheu o seu. Passos do Guide já em andamento terminam no modelo com que começaram.",
+          "savedBody": "Os passos do Guide agora usam {model} para toda organização sem escolha própria."
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "Diagnosticar um defeito como bug",
+          "confirmBody": "{from} → {to}. Vale a partir do próximo diagnóstico do Debug para toda organização que não escolheu o seu. Diagnósticos do Debug já em andamento terminam no modelo com que começaram.",
+          "savedBody": "Os diagnósticos do Debug agora usam {model} para toda organização sem escolha própria."
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "A conversa com o Motir AI e o Grill me",
+          "confirmBody": "{from} → {to}. Vale a partir do próximo turno de conversa do Ask para toda organização que não escolheu o seu. Turnos de conversa do Ask já em andamento terminam no modelo com que começaram.",
+          "savedBody": "Os turnos de conversa do Ask agora usam {model} para toda organização sem escolha própria."
+        },
+        "inherits": "Herda — o modelo de planejamento do público",
+        "inheritsDesc": "Segue o modelo de planejamento do público da organização",
+        "pickerAria": "Modelo para {name}",
+        "withdrawnBody": "{name} volta ao modelo de planejamento do público até você escolher outro.",
+        "withdrawnBodyReadOnly": "{name} volta ao modelo de planejamento do público até um superadministrador escolher outro.",
+        "confirmTitle": "Alterar o modelo de plataforma de {name}?",
+        "savedTitle": "Modelo de {name} alterado",
+        "unchanged": "{name} já usa {model}."
       }
     },
     "lessons": {
@@ -12864,7 +13004,9 @@
         "inUseParts": {
           "platformDefault": "É o padrão da plataforma Motir para {levels}. ",
           "projects": "{n, plural, one {# projeto o usa} other {# projetos o usam}}: {list}.",
-          "projectEntry": "{name} ({key}) para {levels}"
+          "projectEntry": "{name} ({key}) para {levels}",
+          "platformReview": "É o padrão de plataforma do Motir para o agente de revisão. ",
+          "platformDesign": "É o padrão de plataforma do Motir para as execuções de design. "
         },
         "notListed": "Não removido: {model} não está mais na lista."
       },
@@ -12878,6 +13020,83 @@
       "unavailable": {
         "title": "Não foi possível carregar os modelos de execução hospedada",
         "body": "O motir-ai não respondeu, então não se sabe se cada modelo listado é oferecido e nenhuma lista é exibida. Nada foi alterado."
+      },
+      "defaults": {
+        "title": "Padrões do lado da execução",
+        "subtitle": "O modelo com que começa uma revisão hospedada, uma execução de design ou uma execução de agente quando nem a pessoa, nem o projeto, nem a organização escolheram um. Escolhido na lista acima.",
+        "count": "6 configurações",
+        "col": {
+          "function": "Função"
+        },
+        "row": {
+          "review": {
+            "name": "Agente de revisão",
+            "desc": "Revisões hospedadas"
+          },
+          "design": {
+            "name": "Execução de design",
+            "desc": "Uma execução hospedada em um item de trabalho de design"
+          },
+          "trivial": {
+            "name": "Execução de agente · Trivial",
+            "desc": "Execuções de build hospedadas em um item de trabalho trivial"
+          },
+          "low": {
+            "name": "Execução de agente · Baixa",
+            "desc": "Execuções de build hospedadas em um item de trabalho de dificuldade baixa"
+          },
+          "medium": {
+            "name": "Execução de agente · Média",
+            "desc": "Execuções de build hospedadas em um item de trabalho de dificuldade média"
+          },
+          "high": {
+            "name": "Execução de agente · Alta",
+            "desc": "Execuções de build hospedadas em um item de trabalho de dificuldade alta"
+          }
+        },
+        "inherits": {
+          "review": "Herda — o padrão de execução",
+          "reviewWith": "Herda — o padrão de execução ({model})",
+          "design": "Herda — a dificuldade do item de trabalho",
+          "level": "Herda — o valor do ambiente",
+          "levelWith": "Herda — o valor do ambiente ({model})"
+        },
+        "fallsBack": {
+          "review": "o padrão de execução",
+          "design": "a dificuldade do item de trabalho",
+          "level": "o valor do ambiente"
+        },
+        "defaultGroup": "Padrão",
+        "pickerAria": "Modelo padrão de {name}",
+        "pickerFoot": "Somente modelos da lista acima que o motir-ai oferece para execuções hospedadas.",
+        "changed": {
+          "seededFromEnv": "Obtido do ambiente · nunca alterado",
+          "neverSet": "Nunca definido"
+        },
+        "withdrawn": {
+          "chip": "Não é mais oferecido",
+          "body": "{name} volta para {what} até você escolher outro.",
+          "bodyReadOnly": "{name} volta para {what} até um superadministrador escolher outro."
+        },
+        "refused": "{model} não é mais oferecido para execuções hospedadas ou não está na lista, então não foi salvo. A página foi atualizada — escolha outro modelo.",
+        "confirmTitle": "Alterar o modelo de plataforma de {name}?",
+        "confirmBody": {
+          "review": "{from} → {to}. Vale a partir da próxima revisão para toda organização que não escolheu o seu. Revisões já em andamento terminam no modelo com que começaram.",
+          "design": "{from} → {to}. Vale a partir da próxima execução de design para toda organização que não escolheu o seu. Execuções de design já em andamento terminam no modelo com que começaram.",
+          "level": "{from} → {to}. Vale a partir da próxima execução para toda organização que não escolheu o seu. Execuções já em andamento terminam no modelo com que começaram."
+        },
+        "savedTitle": "Modelo de {name} alterado",
+        "savedBody": {
+          "review": "As revisões agora usam {model} para toda organização sem escolha própria.",
+          "design": "As execuções de design agora usam {model} para toda organização sem escolha própria.",
+          "level": "As execuções agora usam {model} para toda organização sem escolha própria."
+        },
+        "unchanged": "{name} já é {model}.",
+        "unavailable": {
+          "title": "Não foi possível carregar os padrões do lado da execução",
+          "body": "O serviço de planejamento (motir-ai) não respondeu, então nenhum padrão é exibido. Nada mudou e nenhum valor é adivinhado.",
+          "retry": "Tentar novamente"
+        }
       }
     },
     "ideas": {
@@ -14359,6 +14578,12 @@
         "override": "Substituição do projeto para <b>{difficulty}</b>",
         "fromLeaves": "Maior dificuldade entre as folhas: <b>{difficulty}</b>",
         "overrideFromLeaves": "Substituição do projeto para <b>{difficulty}</b>, a maior dificuldade entre as folhas",
+        "orgLevel": "Padrão da organização para <b>{difficulty}</b>",
+        "orgLevelFromLeaves": "Padrão da organização para <b>{difficulty}</b>, a maior dificuldade entre as folhas",
+        "orgDesign": "<b>Modelo de execução de design da organização</b>: um item de design",
+        "orgDesignFromLeaves": "<b>Modelo de execução de design da organização</b>: cada folha não concluída é um item de design",
+        "platformDesign": "<b>Modelo de execução de design</b>: um item de design",
+        "platformDesignFromLeaves": "<b>Modelo de execução de design</b>: cada folha não concluída é um item de design",
         "noCapacityTag": "Sem capacidade",
         "noCapacityReason": "Sem capacidade para execuções de agente agora. Tente novamente em breve.",
         "allHeldBody": "Nenhum modelo tem capacidade para execuções de agente agora. Tente novamente em breve; as execuções locais não são afetadas."

@@ -90,6 +90,29 @@ const fetchStub = vi.fn(async (url: string, init?: RequestInit) => {
       },
     });
   }
+  // The run-side defaults a remove checks before it takes a model away (MOTIR-10844):
+  // the levels as the offer serves them, review and design unset.
+  if (url.endsWith('/v1/admin/run-model-defaults')) {
+    const row = (key: string, model: string | null) => ({
+      key,
+      model,
+      offered: model === null ? null : true,
+      effectiveModel: model,
+      updatedAt: '1970-01-01T00:00:00.000Z',
+      updatedByCoreUserId: null,
+    });
+    return json({
+      settings: [
+        row('trivial', 'claude-sonnet-5-5'),
+        row('low', 'claude-sonnet-5-5'),
+        row('medium', 'claude-opus-5-5'),
+        row('high', 'claude-opus-5-5'),
+        row('review', null),
+        row('design', null),
+      ],
+      models: OFFER,
+    });
+  }
   if (url.endsWith('/v1/planner-model-settings')) return json({ settings: [], offered: [] });
   if (url.endsWith('/v1/planner-model-list') && init?.method === 'PUT') {
     return json({ entries: [] });

@@ -32,6 +32,8 @@ function offerWith(levelDefault: string | null, level: keyof HostedModelsByDiffi
     models: [FIRST, DEFAULT, LEVEL, OVERRIDE],
     default: DEFAULT,
     defaultsByDifficulty,
+    reviewAgentDefault: null,
+    designRunDefault: null,
   } satisfies HostedModelOffer;
 }
 
@@ -47,6 +49,8 @@ describe('resolveHostedModel — the precedence matrix', () => {
           if (overrideCase === 'offered') overrides[level] = OVERRIDE;
           if (overrideCase === 'withdrawn') overrides[level] = WITHDRAWN;
           const result = resolveHostedModel({
+            org: null,
+            design: false,
             difficulty: level,
             overrides,
             offered: offerWith(levelDefault, level),
@@ -66,13 +70,27 @@ describe('resolveHostedModel — the precedence matrix', () => {
   it("reads only the card's own level — another level's override is ignored", () => {
     const overrides = { ...none(), high: OVERRIDE };
     expect(
-      resolveHostedModel({ difficulty: 'low', overrides, offered: offerWith(LEVEL, 'low') }),
+      resolveHostedModel({
+        org: null,
+        design: false,
+        difficulty: 'low',
+        overrides,
+        offered: offerWith(LEVEL, 'low'),
+      }),
     ).toEqual({ model: LEVEL, source: 'platform_level' });
   });
 
   it('skips a level default motir-ai names but no longer offers', () => {
     const offered = { ...offerWith('gone', 'medium') };
-    expect(resolveHostedModel({ difficulty: 'medium', overrides: none(), offered })).toEqual({
+    expect(
+      resolveHostedModel({
+        org: null,
+        design: false,
+        difficulty: 'medium',
+        overrides: none(),
+        offered,
+      }),
+    ).toEqual({
       model: DEFAULT,
       source: 'platform_default',
     });
@@ -83,8 +101,18 @@ describe('resolveHostedModel — the precedence matrix', () => {
       models: [FIRST, OVERRIDE],
       default: null,
       defaultsByDifficulty: none(),
+      reviewAgentDefault: null,
+      designRunDefault: null,
     };
-    expect(resolveHostedModel({ difficulty: 'high', overrides: none(), offered })).toEqual({
+    expect(
+      resolveHostedModel({
+        org: null,
+        design: false,
+        difficulty: 'high',
+        overrides: none(),
+        offered,
+      }),
+    ).toEqual({
       model: FIRST,
       source: 'first_offered',
     });
@@ -103,8 +131,12 @@ describe('resolveHostedModel — a card with no difficulty', () => {
       models: [FIRST, DEFAULT, LEVEL, OVERRIDE],
       default: DEFAULT,
       defaultsByDifficulty: { trivial: LEVEL, low: LEVEL, medium: LEVEL, high: LEVEL },
+      reviewAgentDefault: null,
+      designRunDefault: null,
     };
-    expect(resolveHostedModel({ difficulty: null, overrides, offered })).toEqual({
+    expect(
+      resolveHostedModel({ org: null, design: false, difficulty: null, overrides, offered }),
+    ).toEqual({
       model: DEFAULT,
       source: 'platform_default',
     });
@@ -115,8 +147,18 @@ describe('resolveHostedModel — a card with no difficulty', () => {
       models: [FIRST],
       default: null,
       defaultsByDifficulty: none(),
+      reviewAgentDefault: null,
+      designRunDefault: null,
     };
-    expect(resolveHostedModel({ difficulty: null, overrides: none(), offered })).toEqual({
+    expect(
+      resolveHostedModel({
+        org: null,
+        design: false,
+        difficulty: null,
+        overrides: none(),
+        offered,
+      }),
+    ).toEqual({
       model: FIRST,
       source: 'first_offered',
     });
@@ -129,10 +171,14 @@ describe('resolveHostedModel — nothing offered', () => {
       models: [],
       default: DEFAULT,
       defaultsByDifficulty: { trivial: LEVEL, low: LEVEL, medium: LEVEL, high: LEVEL },
+      reviewAgentDefault: null,
+      designRunDefault: null,
     };
     const overrides = { ...none(), low: OVERRIDE };
     for (const difficulty of [...WORK_ITEM_DIFFICULTIES, null]) {
-      expect(resolveHostedModel({ difficulty, overrides, offered })).toBeNull();
+      expect(
+        resolveHostedModel({ org: null, design: false, difficulty, overrides, offered }),
+      ).toBeNull();
     }
   });
 });

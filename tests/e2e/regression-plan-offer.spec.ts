@@ -46,6 +46,7 @@ import { declareSeam, queueAsk, submitsOf } from './_helpers/mid-run-seam';
 import { grantPaidAiPlanIfBilled } from './_helpers/billing';
 import { setReaderLanguage } from './_helpers/reader-language';
 import { withPlanningOverlay } from '@/lib/planning/launcher';
+import { composeStartTurn } from '@/lib/planning/planStartPrompt';
 import type { AskJobOutcome } from '@/lib/test-ai-jobs-mock';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
@@ -334,7 +335,11 @@ test('the plan offer — a question, the offer, Decline, a typed yes, plan this,
     const session = await adminDb.planChangeSession.findFirstOrThrow({
       where: { createdById: userId, targetKeys: { has: seed.notifKey } },
     });
-    expect((await turnsOf(session.id)).find((t) => t.role === 'user')?.body).toBe('plan this');
+    // Send on the item's live start prompt IS Start (MOTIR-10624, design panel 4): the
+    // first turn is the start line, a blank line, then what the person typed.
+    expect((await turnsOf(session.id)).find((t) => t.role === 'user')?.body).toBe(
+      composeStartTurn(`Plan ${seed.notifKey}`, 'plan this'),
+    );
     expect(await plansOf(session.id)).toBe(1);
     await expect
       .poll(

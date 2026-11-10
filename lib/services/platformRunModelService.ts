@@ -1,6 +1,8 @@
 import 'server-only';
 
-import { getAgentModels, type AgentModelsRead } from '@/lib/ai/motirAiClient';
+import { getAgentModels, getRunModelDefaults, type AgentModelsRead } from '@/lib/ai/motirAiClient';
+import { MotirAiError } from '@/lib/ai/errors';
+import type { RunModelDefaultsRead } from '@/lib/ai/types';
 import type { PlatformRunModelListDTO } from '@/lib/dto/platformRunModel';
 import { HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
 import {
@@ -127,6 +129,28 @@ async function onSeededList<T>(
   return attempt();
 }
 
+/**
+ * The run-side defaults' STORED models (MOTIR-10844), or
+ * `HostedModelsUnavailableError` — a remove must know what the review-agent and
+ * design-run defaults hold, set or withdrawn, before it takes a model away.
+ */
+async function readRunDefaults(): Promise<RunModelDefaultsRead> {
+  try {
+    return await getRunModelDefaults();
+  } catch (err) {
+    if (err instanceof MotirAiError) throw new HostedModelsUnavailableError(err.message);
+    /* v8 ignore next -- the client raises only MotirAiError; anything else is a bug, rethrown */
+    throw err;
+  }
+}
+
+/** Which of the review-agent and design-run defaults store `model`. */
+function platformRolesOf(model: string, read: RunModelDefaultsRead): ('review' | 'design')[] {
+  return (['review', 'design'] as const).filter(
+    (key) => read.settings.find((s) => s.key === key)?.model === model,
+  );
+}
+
 /** The estate's override rows and the adders' users — the page's joined reads. */
 async function readPage(
   offer: Extract<AgentModelsRead, { state: 'ok' }>,
@@ -213,8 +237,10 @@ export const platformRunModelService = {
 
   /**
    * Remove a listed model, refused while anything uses it: motir-ai's platform
-   * default for a level, or a live project's override. Both are checked inside
-   * the audited transaction, so the refusal rolls its row back.
+   * default for a level, the platform review-agent or design-run default
+   * (MOTIR-10844, read from the run-model-defaults read, so a stored default is
+   * guarded even while it reads withdrawn), or a live project's override. All are
+   * checked inside the audited transaction, so the refusal rolls its row back.
    *
    * @throws NotPlatformStaffError below `superadmin`.
    * @throws MissingAuditReasonError for a blank reason.
@@ -238,19 +264,20 @@ export const platformRunModelService = {
       metadata: { action: 'remove', model },
     };
     assertReasonSatisfied(entry);
-    const offer = await readOffer();
+    const [offer, runDefaults] = await Promise.all([readOffer(), readRunDefaults()]);
 
     return onSeededList(principal, offer, entry, async (tx) => {
       if (!(await platformRunModelRepository.findByModel(model, tx))) {
         throw new RunModelNotListedError(model);
       }
       const platformLevels = platformDefaultLevelsOf(model, offer.defaultsByDifficulty);
+      const platformRoles = platformRolesOf(model, runDefaults);
       const projects = projectUsesOf(
         model,
         await projectRepository.findLiveWithHostedModelOverrides(tx),
       );
-      if (platformLevels.length > 0 || projects.length > 0) {
-        throw new RunModelInUseError(model, projects, platformLevels);
+      if (platformLevels.length > 0 || platformRoles.length > 0 || projects.length > 0) {
+        throw new RunModelInUseError(model, projects, platformLevels, platformRoles);
       }
       await platformRunModelRepository.deleteByModel(model, tx);
       return readPage(offer, tx, true);

@@ -66,6 +66,7 @@ import {
 } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 import { hostedRunModelService, toOpenCodeModel } from '@/lib/services/hostedRunModelService';
+import { orgHostedModelResolutionService } from '@/lib/services/orgHostedModelResolutionService';
 import { projectHostedAgentSettingsService } from '@/lib/services/projectHostedAgentSettingsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -366,8 +367,8 @@ async function refuseNoCapacity(offered: AgentModel): Promise<void> {
  * agent-run capacity (MOTIR-9628), the organization's credits, every repository of the run writable, the fleet
  * configured. Each is a read. Shared by Run hosted and Continue hosted
  * (MOTIR-6792) so a continue costs and refuses exactly like a run — and by the
- * REVIEW start (MOTIR-6820), which passes no model (it takes the offered list's
- * default) and needs every repository READABLE only (`hosted-agent-run.md` §8.1, §8.3).
+ * REVIEW start (MOTIR-6820), which passes its resolved review model or none (then
+ * it takes the offered list's default) and needs every repository READABLE only (`hosted-agent-run.md` §8.1, §8.3).
  */
 async function preflight(
   input: { model?: string | undefined },
@@ -1052,7 +1053,13 @@ async function startReview(
   /* v8 ignore stop */
   const { item, project } = target;
 
-  const checked = await preflight({}, project.id, [item.id], ctx, 'read');
+  // The review's model (MOTIR-10843): the organisation's review-agent model while
+  // it qualifies, else the platform review-agent model, else the run default. A
+  // chosen id goes through `preflight`'s `assertOffered` and capacity check like a
+  // build run's.
+  const { layer } = await orgHostedModelResolutionService.readOrgLayer(ctx);
+  const reviewModel = await hostedRunModelService.reviewModelFor(layer);
+  const checked = await preflight({ model: reviewModel }, project.id, [item.id], ctx, 'read');
 
   const opened = await dispatchRunService.open(
     {

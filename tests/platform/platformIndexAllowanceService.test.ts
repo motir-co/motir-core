@@ -407,7 +407,10 @@ describe('only platform staff reach it (AC 7)', () => {
     expect(tiersMock).not.toHaveBeenCalled();
   });
 
-  it('the admin index-allowance reads are imported only by the staff-gated service and the admin page', () => {
+  // The org TIER read also feeds the two server-side model-choice qualification
+  // checks (MOTIR-10843 · MOTIR-10850): they read one org's tier key to decide whether
+  // its AI model choices apply, never the index allowance, and expose no estate data.
+  it('the admin index-allowance reads are imported only by the staff-gated service, the admin page and the org tier qualification checks', () => {
     const importers = execSync(
       `git grep -l -E "fetchIndexAllowanceSummary|fetchOrgTiers|platformIndexAllowanceService" -- 'app' 'lib' 'components'`,
       { encoding: 'utf8' },
@@ -419,6 +422,8 @@ describe('only platform staff reach it (AC 7)', () => {
       'app/(admin)/admin/monitoring/_components/IndexAllowanceSection.tsx',
       'app/(admin)/admin/monitoring/page.tsx',
       'lib/ai/motirAiClient.ts',
+      'lib/services/orgHostedModelResolutionService.ts',
+      'lib/services/orgRunModelOverrideService.ts',
       'lib/services/platformIndexAllowanceService.ts',
     ]);
   });

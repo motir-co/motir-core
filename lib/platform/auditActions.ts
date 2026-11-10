@@ -119,6 +119,17 @@ export const PLATFORM_AUDIT_ACTIONS = {
    */
   'ai.planner_review_model.set': { kind: 'write', reason: 'required' },
   /**
+   * The platform default model of a planning-side FUNCTION was changed (Story
+   * MOTIR-10838 · MOTIR-10844): Guide, Debug or Ask — one model offered for
+   * planning, or null to follow the audience's Planning model (the default).
+   *
+   * `required`, at `superadmin`, for `ai.planner_model.set`'s reason: every
+   * organisation without its own choice runs that function on it and is charged
+   * for it. Target is `platform` with the function as `targetId`; `metadata`
+   * carries `{ function, fromModel, toModel }`, each model an id or null.
+   */
+  'ai.planner_function_model.set': { kind: 'write', reason: 'required' },
+  /**
    * A model was ADDED to, or REMOVED from, the platform PLANNING-MODEL LIST
    * (Story MOTIR-7521 · MOTIR-7524) — the set of models an audience may be set
    * to, stored in motir-ai.
@@ -148,6 +159,18 @@ export const PLATFORM_AUDIT_ACTIONS = {
   'ai.run_model_list.seed': { kind: 'write', reason: 'required' },
   'ai.run_model_list.add': { kind: 'write', reason: 'required' },
   'ai.run_model_list.remove': { kind: 'write', reason: 'required' },
+  /**
+   * A RUN-SIDE platform default was changed (Story MOTIR-10838 · MOTIR-10844) —
+   * the model a hosted review, a design run, or an agent run of one difficulty
+   * starts on when neither the person, the project nor the organisation chose
+   * one. Stored in motir-ai (`PUT /v1/admin/run-model-defaults`).
+   *
+   * `required`, at `superadmin`: it changes what every organisation without its
+   * own choice is run WITH and charged for. Target is `platform` with the key
+   * (`trivial` · `low` · `medium` · `high` · `review` · `design`) as `targetId`;
+   * `metadata` carries `{ key, fromModel, toModel }`, from motir-ai's own audit.
+   */
+  'ai.run_model_default.set': { kind: 'write', reason: 'required' },
   /**
    * Credits were GRANTED to an organization (MOTIR-747 · 10.3.2, design Panel
    * 2a/2b) — a positive `grant` row appended to its motir-ai ledger, the

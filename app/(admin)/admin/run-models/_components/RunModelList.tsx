@@ -454,11 +454,18 @@ function addRefusalText(t: Translator, result: Refusal, model: string): string {
 function removeRefusalText(t: Translator, result: Refusal, model: string): string {
   if (result.code === 'IN_USE') {
     const platformDefaultClause =
-      result.platformLevels.length > 0
+      (result.platformLevels.length > 0
         ? t('runModels.remove.inUseParts.platformDefault', {
             levels: levelList(t, result.platformLevels),
           })
-        : '';
+        : '') +
+      // MOTIR-10844: the review-agent and design-run defaults guard it too.
+      (result.platformRoles.includes('review')
+        ? t('runModels.remove.inUseParts.platformReview')
+        : '') +
+      (result.platformRoles.includes('design')
+        ? t('runModels.remove.inUseParts.platformDesign')
+        : '');
     const projectsClause =
       result.projects.length > 0
         ? t('runModels.remove.inUseParts.projects', {
