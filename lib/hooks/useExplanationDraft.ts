@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { drainSseFrames } from '@/lib/ai/sseFrames';
+import { drainSseFrames, unwrapProgressFrame } from '@/lib/ai/sseFrames';
 import { isLocale, type Locale } from '@/lib/i18n/locales';
 
 // The client side of "Draft with AI" (Subtask 8.8.12): submits a
@@ -155,7 +155,11 @@ export function useExplanationDraft(options: UseExplanationDraftOptions): UseExp
           buffer += decoder.decode(value, { stream: true });
           const { frames, rest } = drainSseFrames(buffer);
           buffer = rest;
-          for (const { event, data } of frames) {
+          for (const frame of frames) {
+            const { event } = frame;
+            // `token` and `explanation` are the job's PROGRESS frames, which motir-ai
+            // nests under `data` (MOTIR-10878); `error` passes through unchanged.
+            const data = unwrapProgressFrame(frame.data);
             if (event === 'token') {
               const text = (data as { text?: unknown })?.text;
               if (typeof text === 'string') {

@@ -40,6 +40,7 @@ import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepos
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { jobStreamBody } from './_helpers/job-stream-frames';
 
 // ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
 // workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
@@ -120,7 +121,11 @@ async function stubStream(page: Page, jobId: string): Promise<void> {
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: `event: search\ndata: {}\n\nevent: done\ndata: {}\n\n`,
+      // motir-ai's wire: each progress frame in its `{ jobId, seq, data }` envelope.
+      body: jobStreamBody(jobId, [
+        ['search', {}],
+        ['done', {}],
+      ]),
     });
   });
 }

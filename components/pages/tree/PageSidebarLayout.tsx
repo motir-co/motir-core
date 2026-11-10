@@ -209,9 +209,10 @@ export function PageSidebarLayout({ tree, breadcrumb, children }: PageSidebarLay
         <div className="min-h-0 flex-1 overflow-y-auto">{tree}</div>
       </aside>
       <div className="min-w-0 flex-1">
-        {/* History open (`data-history-open`, MOTIR-7387) widens the column at `xl`,
-            where the panel sits BESIDE the page instead of over it. */}
-        <div className="mx-auto w-full max-w-[760px] xl:has-[[data-history-open]]:max-w-[1180px]">
+        {/* A right-hand panel open — History (MOTIR-7387) or Discussion (MOTIR-10874),
+            `data-side-panel-open` — widens the column at `xl`, where the panel sits
+            BESIDE the page instead of over it. */}
+        <div className="mx-auto w-full max-w-[760px] xl:has-[[data-side-panel-open]]:max-w-[1180px]">
           <div className="flex min-w-0 items-center gap-2">
             <button
               ref={showRef}

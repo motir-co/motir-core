@@ -1,3 +1,5 @@
+import { unwrapProgressFrame } from '@/lib/ai/sseFrames';
+
 export const OUT_OF_CREDITS_CODE = 'MOTIR_AI_OUT_OF_CREDITS';
 
 export class PlanEditsClientError extends Error {
@@ -184,7 +186,9 @@ export async function consumeStream(
           onDone();
           return;
         }
-        onFrame?.(event, data);
+        // motir-ai nests a progress frame's payload under `data` (MOTIR-10864); every
+        // reader of these frames reads the payload's fields at the top level.
+        onFrame?.(event, unwrapProgressFrame(data));
       }
     }
     onDone();

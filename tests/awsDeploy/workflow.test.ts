@@ -159,6 +159,18 @@ describe('the AWS deploy workflow (MOTIR-9928)', () => {
     expect(deploy.run).toContain('--digest "$DIGEST" $NO_ROLL');
   });
 
+  // MOTIR-10883: the deploy writes every image pin in `infra/image-pins/` into its
+  // secret before it rolls, from THIS commit's checkout, so a merged pin pull
+  // request is applied by its own deploy and a revert by the revert's.
+  it('hands the deploy the checked-in image pins, on the gated roll step, from this commit', () => {
+    const deploy = steps[stepIndex((s) => !!s.run?.includes('deploy:aws'))]!;
+    expect(deploy.run).toContain('--pins infra/image-pins');
+    expect(deploy.if).toBe("steps.gate.outputs.deploy == 'true'");
+    const checkout = steps[stepIndex((s) => !!s.uses?.startsWith('actions/checkout@'))]!;
+    expect(checkout.with?.ref).toBeUndefined();
+    expect(code.match(/deploy:aws/g)).toHaveLength(1);
+  });
+
   it('writes the digest and the result line to the job summary', () => {
     expect(code.match(/GITHUB_STEP_SUMMARY/g)?.length).toBeGreaterThanOrEqual(2);
   });

@@ -60,6 +60,7 @@ import {
   workItemIdByKey,
   CONTEXTUAL_JOB_ID,
 } from './_helpers/contextual-plan-seed';
+import { jobStreamBody } from './_helpers/job-stream-frames';
 
 // ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
 // workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
@@ -214,13 +215,15 @@ async function waitForAppendedTurn(
 }
 
 /** The contextual job's SSE, carrying the REAL frame vocabulary the rail narrates
- *  (`search` / `planned` / `done`) — structured progress, not assistant tokens. */
+ *  (`search` / `planned` / `done`) — structured progress, not assistant tokens —
+ *  on motir-ai's wire: each progress frame inside its `{ jobId, seq, data }`
+ *  envelope (MOTIR-10880). */
 function progressSse(proposed: number): string {
-  return (
-    `event: search\ndata: {}\n\n` +
-    `event: planned\ndata: {"proposed":${proposed}}\n\n` +
-    `event: done\ndata: {}\n\n`
-  );
+  return jobStreamBody(CONTEXTUAL_JOB_ID, [
+    ['search', {}],
+    ['planned', { proposed }],
+    ['done', {}],
+  ]);
 }
 
 /** The anchored run's stream relay (`…/ai/plan/[jobId]/stream`). */

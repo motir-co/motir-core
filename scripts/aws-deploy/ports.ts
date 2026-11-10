@@ -26,6 +26,12 @@ import {
   type Task,
   type TaskDefinition,
 } from '@aws-sdk/client-ecs';
+import {
+  GetSecretValueCommand,
+  PutSecretValueCommand,
+  ResourceNotFoundException,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
 import { GetParameterCommand, PutParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 
 /**
@@ -46,11 +52,21 @@ export const GRANTED_ACTIONS = [
   'ecs:DescribeServices',
   'ecs:UpdateService',
   'logs:GetLogEvents',
+  // The image pins only (MOTIR-10883, `imagePins.ts`); motir-infra grants them on
+  // those secrets alone, with the secrets key through Secrets Manager.
+  'secretsmanager:GetSecretValue',
+  'secretsmanager:PutSecretValue',
 ] as const;
 
 export type GrantedAction = (typeof GRANTED_ACTIONS)[number];
 
 export type RegisterTaskDefinitionInput = RegisterTaskDefinitionCommandInput;
+
+/**
+ * A secret's current value, or that the role may not read it. `value` is
+ * undefined for a secret with no current version.
+ */
+export type SecretRead = { state: 'granted'; value: string | undefined } | { state: 'not_granted' };
 
 /** One method per AWS call the script makes, plus the clock it waits on. */
 export interface DeployAws {
@@ -70,6 +86,10 @@ export interface DeployAws {
   updateService(cluster: string, service: string, taskDefinition: string): Promise<void>;
   /** The last `limit` lines of a log stream, oldest first. */
   tailLog(group: string, stream: string, limit: number): Promise<string[]>;
+  /** A secret's current string; `not_granted` when the role is refused it. */
+  getSecretValue(secretId: string): Promise<SecretRead>;
+  /** Make `value` the secret's current version. */
+  putSecretValue(secretId: string, value: string): Promise<void>;
   sleep(ms: number): Promise<void>;
   now(): number;
 }
@@ -88,6 +108,8 @@ export const ACTION_OF: Record<Exclude<keyof DeployAws, 'sleep' | 'now'>, Grante
   describeServices: 'ecs:DescribeServices',
   updateService: 'ecs:UpdateService',
   tailLog: 'logs:GetLogEvents',
+  getSecretValue: 'secretsmanager:GetSecretValue',
+  putSecretValue: 'secretsmanager:PutSecretValue',
 };
 
 /** DescribeServices takes at most this many services per call. */
@@ -99,6 +121,7 @@ export function awsSdkPorts(region: string): DeployAws {
   const ssm = new SSMClient({ region });
   const ecr = new ECRClient({ region });
   const logs = new CloudWatchLogsClient({ region });
+  const secrets = new SecretsManagerClient({ region });
   return {
     async getParameter(name) {
       const out = await ssm.send(new GetParameterCommand({ Name: name }));
@@ -179,6 +202,22 @@ export function awsSdkPorts(region: string): DeployAws {
         }),
       );
       return (out.events ?? []).map((e) => e.message ?? '');
+    },
+    async getSecretValue(secretId) {
+      try {
+        const out = await secrets.send(new GetSecretValueCommand({ SecretId: secretId }));
+        return { state: 'granted', value: out.SecretString };
+      } catch (err) {
+        if (err instanceof ResourceNotFoundException) return { state: 'granted', value: undefined };
+        // A refusal by IAM or by the key arrives as this name, from either service.
+        if (err instanceof Error && err.name === 'AccessDeniedException') {
+          return { state: 'not_granted' };
+        }
+        throw err;
+      }
+    },
+    async putSecretValue(secretId, value) {
+      await secrets.send(new PutSecretValueCommand({ SecretId: secretId, SecretString: value }));
     },
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     now: () => Date.now(),

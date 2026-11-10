@@ -1,5 +1,9 @@
 import type { ContainerDefinition, Service, Task, TaskDefinition } from '@aws-sdk/client-ecs';
-import type { DeployAws, RegisterTaskDefinitionInput } from '@/scripts/aws-deploy/ports';
+import type {
+  DeployAws,
+  RegisterTaskDefinitionInput,
+  SecretRead,
+} from '@/scripts/aws-deploy/ports';
 import { ACTION_OF } from '@/scripts/aws-deploy/ports';
 
 // MOTIR-9927 — a recording DeployAws: every call lands in `calls` (method name
@@ -105,6 +109,12 @@ export class FakeDeployAws implements DeployAws {
   private clock = 0;
   migratePolls = 0;
   failUpdateOf: string | null = null;
+  /** Secrets Manager, by secret id (MOTIR-10883). */
+  readonly secrets = new Map<string, string>();
+  /** The role holds no grant on the secrets, as before motir-infra adds it. */
+  secretsGranted = true;
+  /** A secret whose write is refused. */
+  failPutSecretOf: string | null = null;
 
   constructor() {
     this.params.set(`/${PREFIX}/core/deploy-target`, JSON.stringify(TARGET));
@@ -266,6 +276,21 @@ export class FakeDeployAws implements DeployAws {
   tailLog(group: string, stream: string, limit: number) {
     this.record('tailLog', group, stream, String(limit));
     return Promise.resolve(this.logLines.slice(-limit));
+  }
+
+  getSecretValue(secretId: string): Promise<SecretRead> {
+    this.record('getSecretValue', secretId);
+    if (!this.secretsGranted) return Promise.resolve({ state: 'not_granted' });
+    return Promise.resolve({ state: 'granted', value: this.secrets.get(secretId) });
+  }
+
+  putSecretValue(secretId: string, value: string) {
+    this.record('putSecretValue', secretId, value);
+    if (this.failPutSecretOf === secretId) {
+      return Promise.reject(new Error(`put ${secretId} refused`));
+    }
+    this.secrets.set(secretId, value);
+    return Promise.resolve();
   }
 
   sleep(ms: number) {

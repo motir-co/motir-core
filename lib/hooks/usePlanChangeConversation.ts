@@ -649,6 +649,21 @@ function withoutReading(acts: PlanChangeProgress[]): PlanChangeProgress[] {
 }
 
 /**
+ * An answering session's act record with one more live act (MOTIR-10864).
+ *
+ * The session's own `note` IS what it is doing, in its words, so the first one takes
+ * the place of the opening "Reading your request…" rather than landing under it, and
+ * every later one is appended as it arrives. Any other act is appended as it was.
+ * Pure: `acts` is not changed.
+ */
+export function withAskAct(
+  acts: PlanChangeProgress[],
+  act: PlanChangeProgress,
+): PlanChangeProgress[] {
+  return [...(act.kind === 'note' ? withoutReading(acts) : acts), act];
+}
+
+/**
  * The act record with the `note` acts the settled thread now STORES taken out
  * (MOTIR-10235). An answering session's notes stream live as `note` frames and are
  * also kept against the conversation; once the job settles the rail draws the
@@ -2565,7 +2580,7 @@ export function usePlanChangeConversation({
           (event, data) => {
             if (!mountedRef.current) return;
             const progress = narrateFrame(event, data);
-            if (progress) setState((s) => ({ ...s, progress, acts: [...s.acts, progress] }));
+            if (progress) setState((s) => ({ ...s, progress, acts: withAskAct(s.acts, progress) }));
           },
         );
         if (failed) {

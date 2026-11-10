@@ -169,7 +169,13 @@ async function pressApproveAndMerge() {
     }),
   );
   await waitFor(() => expect(approveAndMergeAction).toHaveBeenCalledTimes(1));
-  await act(async () => {});
+  // ⚠️ WAIT FOR THE PRESS TO SETTLE, NOT FOR ONE FLUSH (MOTIR-10881). The rows read
+  // *Merging* from the moment the press starts until its answer is applied, and that
+  // answer lands on React's own scheduler — a macrotask the flush does not wait for. On a
+  // loaded CI runner it came after, and the row still read *Merging* at the assertion.
+  // Waiting for the pending label to clear is what makes a refusal's negative assertion
+  // mean something, too: before it clears, no answer has been applied at all.
+  await waitFor(() => expect(screen.queryAllByText(pra.outcome.merging)).toHaveLength(0));
 }
 
 beforeEach(() => {
@@ -212,8 +218,8 @@ describe('after Approve and merge in the overlay (MOTIR-6079)', () => {
 
     await pressApproveAndMerge();
 
-    expect(within(rowOf(CORE_PR.title)).getByText(pra.outcome.merged)).toBeTruthy();
-    expect(within(rowOf(GATEWAY_PR.title)).getByText(pra.outcome.queued)).toBeTruthy();
+    expect(await within(rowOf(CORE_PR.title)).findByText(pra.outcome.merged)).toBeTruthy();
+    expect(await within(rowOf(GATEWAY_PR.title)).findByText(pra.outcome.queued)).toBeTruthy();
   });
 
   it('a refused member shows Not merged on its own row — the refusal lands where it happened', async () => {
@@ -235,7 +241,7 @@ describe('after Approve and merge in the overlay (MOTIR-6079)', () => {
 
     await pressApproveAndMerge();
 
-    expect(within(rowOf(GATEWAY_PR.title)).getByText(pra.outcome.refused)).toBeTruthy();
+    expect(await within(rowOf(GATEWAY_PR.title)).findByText(pra.outcome.refused)).toBeTruthy();
   });
 
   it('re-reads the rows through the MERGE gate’s read, so their own state is current — without remounting the frame', async () => {
@@ -273,7 +279,7 @@ describe('after Approve and merge in the overlay (MOTIR-6079)', () => {
     ).toBeTruthy();
     // … and the frame the reader pressed is still the one on screen: the queued member
     // keeps the outcome its press reported, and the band still names the acceptance.
-    expect(within(rowOf(GATEWAY_PR.title)).getByText(pra.outcome.queued)).toBeTruthy();
+    expect(await within(rowOf(GATEWAY_PR.title)).findByText(pra.outcome.queued)).toBeTruthy();
     expect(screen.getAllByText(acc.kindLabel).length).toBeGreaterThan(0);
   });
 

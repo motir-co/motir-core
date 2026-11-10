@@ -132,6 +132,7 @@ export type PersonalDataDelegate =
   | 'folder'
   | 'page'
   | 'pageVersion'
+  | 'pageComment'
   | 'decisionPagePublication'
   | 'pageWorkItemLink'
   | 'monitorConnection'
@@ -573,6 +574,21 @@ export const PERSONAL_DATA_SECTIONS: readonly PersonalDataSection[] = [
     basis: 'Versions of pages the reader saved or restored.',
     redact: ['bodyState'],
     where: (userId) => ({ authorId: userId }),
+  },
+  {
+    // `author_id` attributes an act — writing a comment on a page — and
+    // `resolved_by_id` another — resolving a thread — to a person, the same shape
+    // as `comment.author_id` for a work item's discussion, so both are EXPORTED
+    // (Story MOTIR-10866 · MOTIR-10871). The body ships as its markdown. `anchor`
+    // is the binary pair of Yjs positions an inline thread is pinned at, which
+    // would serialize as a byte-indexed object nobody can read, so it is not
+    // selected; `anchor_quote`, the text it quotes, ships.
+    table: 'page_comment',
+    model: 'pageComment',
+    tier: 'tenant',
+    basis: 'Comments the reader wrote on pages, and page threads the reader resolved.',
+    redact: ['anchor'],
+    where: (userId) => ({ OR: [{ authorId: userId }, { resolvedById: userId }] }),
   },
   {
     // `published_by_id` attributes an act — publishing a page version as a work
