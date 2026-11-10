@@ -15927,9 +15927,6 @@
       "badge": {
         "reviewed": "レビュー済み",
         "reviewedName": "現在のコミットでエージェントがレビュー済み",
-        "container": "{total, plural, other {{done}/# レビュー済み}}",
-        "containerName": "{total, plural, other {# 個中 {done} 個の部分が現在のコミットでエージェントによりレビュー済み}}",
-        "containerAllName": "すべての部分が現在のコミットでエージェントによりレビュー済み",
         "card": {
           "hosted": "Motir のホスト型エージェントがレビュー",
           "own": "{name} のエージェントがレビュー",

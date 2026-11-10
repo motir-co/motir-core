@@ -15927,9 +15927,6 @@
       "badge": {
         "reviewed": "Reviewed",
         "reviewedName": "Reviewed by an agent at the current commits",
-        "container": "{total, plural, one {{done} of # reviewed} other {{done} of # reviewed}}",
-        "containerName": "{total, plural, one {{done} of # part reviewed by an agent at its current commits} other {{done} of # parts reviewed by an agent at their current commits}}",
-        "containerAllName": "Every part reviewed by an agent at its current commits",
         "card": {
           "hosted": "Reviewed by Motir's hosted agent",
           "own": "Reviewed by {name}'s own agent",

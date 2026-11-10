@@ -15930,9 +15930,6 @@
       "badge": {
         "reviewed": "Beoordeeld",
         "reviewedName": "Beoordeeld door een agent bij de huidige commits",
-        "container": "{total, plural, one {{done} van # beoordeeld} other {{done} van # beoordeeld}}",
-        "containerName": "{total, plural, one {{done} van # onderdeel beoordeeld door een agent bij de huidige commits} other {{done} van # onderdelen beoordeeld door een agent bij hun huidige commits}}",
-        "containerAllName": "Elk onderdeel beoordeeld door een agent bij de huidige commits",
         "card": {
           "hosted": "Beoordeeld door de gehoste agent van Motir",
           "own": "Beoordeeld door de eigen agent van {name}",

@@ -22,7 +22,6 @@ import {
   seedReviewCard,
   seedReviewPath,
 } from './_helpers/review-path-seed';
-import { createTranslator } from 'next-intl';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 
@@ -44,7 +43,8 @@ import zh from '@/messages/zh.json';
 // away again. With the gate off, a send-back is dismissed with a reason and the row comes
 // back reading *Review dismissed*. A hosted review is *Agent reviewing*, then *Review could
 // not run*. The author note appears only for a card whose every pull request the routed
-// person opened. A container counts its parts. Approve and merge finishes a card whose record
+// person opened. Each part of a story wears its own badge; the story none. Approve and merge
+// finishes a card whose record
 // names the review it stood on. Then the same surfaces in 中文, and a narrow board.
 //
 // ── THE FAKES — AND ONLY THESE ──────────────────────────────────────────────
@@ -120,9 +120,6 @@ const versionOf = (members: Array<[PrName, string]>) =>
     .map(([pr, sha]) => `${prKey(pr)}@${sha}`)
     .sort()
     .join(',');
-
-/** The catalogue's own formatter — for an ICU message (a plural) the spec cannot `fill`. */
-const enT = createTranslator({ locale: 'en', messages: en });
 
 const MERGE_CONTROL_PATH = process.env['MOTIR_GITHUB_MERGE_CONTROL_PATH']!;
 const MERGE_JOURNAL_PATH = process.env['MOTIR_GITHUB_MERGE_JOURNAL_PATH']!;
@@ -852,32 +849,27 @@ test.describe('the review path', () => {
     });
     await beat();
 
-    // ── 8 · A container counts its parts ────────────────────────────────────
+    // ── 8 · Each part wears its own badge; the story none ───────────────────
     const partOneV = versionOf([['partOne', headShaFor(PRS.partOne.number)]]);
     const partTwoV = versionOf([['partTwo', headShaFor(PRS.partTwo.number)]]);
-    await chapter('A story with one of two parts reviewed: 1 of 2 reviewed', async () => {
-      await awaitGate(partOne, 'pull_request_approval', partOneV);
-      await submitVerdict(api, partOne, { verdict: 'approved', subjectVersion: partOneV });
-      await page.goto(`/items/${story.identifier}`);
-      const badge = main(page).locator('[data-reviewed-badge="container_some"]').first();
-      await expect(badge).toContainText(
-        enT('approvalGate.reviewPath.badge.container', { done: 1, total: 2 }),
-        {
+    await chapter(
+      'Both parts reviewed: each reads Reviewed, the story wears no badge',
+      async () => {
+        await awaitGate(partOne, 'pull_request_approval', partOneV);
+        await submitVerdict(api, partOne, { verdict: 'approved', subjectVersion: partOneV });
+        await awaitGate(partTwo, 'pull_request_approval', partTwoV);
+        await submitVerdict(api, partTwo, { verdict: 'approved', subjectVersion: partTwoV });
+        await page.goto(`/items/${partOne.identifier}`);
+        await expect(main(page).locator('[data-reviewed-badge="reviewed"]').first()).toBeVisible({
           timeout: FIRST_PAINT_MS,
-        },
-      );
-    });
-
-    await chapter('Both parts reviewed: the story reads Reviewed', async () => {
-      await awaitGate(partTwo, 'pull_request_approval', partTwoV);
-      await submitVerdict(api, partTwo, { verdict: 'approved', subjectVersion: partTwoV });
-      await page.reload();
-      await expect(main(page).locator('[data-reviewed-badge="container_all"]').first()).toBeVisible(
-        {
+        });
+        await page.goto(`/items/${story.identifier}`);
+        await expect(main(page).getByRole('heading', { level: 1 })).toBeVisible({
           timeout: FIRST_PAINT_MS,
-        },
-      );
-    });
+        });
+        await expect(main(page).locator('[data-reviewed-badge]')).toHaveCount(0);
+      },
+    );
     await beat();
 
     // ── 9 · Approve and merge to Done ───────────────────────────────────────
@@ -1033,7 +1025,7 @@ test.describe('the review path', () => {
       await expect(main(page)).not.toContainText(rp.marker.couldNotRun);
     });
 
-    await chapter('中文 — the Reviewed badge and its card, the container count', async () => {
+    await chapter('中文 — the Reviewed badge and its card', async () => {
       await page.goto(`/items/${partTwo.identifier}`);
       const badge = main(page).locator('[data-reviewed-badge="reviewed"]').first();
       await expect(badge).toContainText(zrp.badge.reviewed, { timeout: FIRST_PAINT_MS });
@@ -1042,10 +1034,6 @@ test.describe('the review path', () => {
         fill(zrp.badge.card.own, { name: s.owner.name }),
       );
       await page.keyboard.press('Escape');
-      await page.goto(`/items/${story.identifier}`);
-      await expect(main(page).locator('[data-reviewed-badge]').first()).toBeVisible({
-        timeout: FIRST_PAINT_MS,
-      });
       await expect(main(page)).not.toContainText('approvalGate.reviewPath');
     });
 

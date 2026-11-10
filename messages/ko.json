@@ -15924,9 +15924,6 @@
       "badge": {
         "reviewed": "리뷰됨",
         "reviewedName": "현재 커밋에서 에이전트가 리뷰함",
-        "container": "{total, plural, other {{done}/# 리뷰됨}}",
-        "containerName": "{total, plural, other {#개 부분 중 {done}개가 현재 커밋에서 에이전트 리뷰를 받음}}",
-        "containerAllName": "모든 부분이 현재 커밋에서 에이전트 리뷰를 받음",
         "card": {
           "hosted": "Motir 호스팅 에이전트가 리뷰함",
           "own": "{name}의 에이전트가 리뷰함",

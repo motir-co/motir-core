@@ -15930,9 +15930,6 @@
       "badge": {
         "reviewed": "Geprüft",
         "reviewedName": "Von einem Agenten bei den aktuellen Commits geprüft",
-        "container": "{total, plural, one {{done} von # geprüft} other {{done} von # geprüft}}",
-        "containerName": "{total, plural, one {{done} von # Teil von einem Agenten bei seinen aktuellen Commits geprüft} other {{done} von # Teilen von einem Agenten bei ihren aktuellen Commits geprüft}}",
-        "containerAllName": "Jeder Teil von einem Agenten bei seinen aktuellen Commits geprüft",
         "card": {
           "hosted": "Geprüft vom gehosteten Agenten von Motir",
           "own": "Geprüft vom eigenen Agenten von {name}",

@@ -69,7 +69,7 @@ import {
  * THE REVIEW HALF OF THE TO APPROVE READING (Bug MOTIR-10504) — the review rows behind the
  * rows routed to this reader that draw a review — approve-and-merge, and a story run's
  * acceptance (Bug MOTIR-10734): the cards first, from the gate's own routing predicate over
- * the kinds `carriesReviewPath` reads, then one reading over their subtrees.
+ * the kinds `carriesReviewPath` reads, then one reading over those cards.
  *
  * ⚠️ ONE ARM, TWO STATEMENTS IN SEQUENCE, AWAITED HERE. The second needs the first's ids,
  * and both run on the caller's transaction — so the arm is a single promise the fan-out
@@ -83,7 +83,7 @@ async function reviewsOnApprovalRows(
     scope,
     tx,
   );
-  return reviewStateRepository.watermarkReviewsOfSubtrees(cardIds, tx);
+  return reviewStateRepository.watermarkReviewsOfCards(cardIds, tx);
 }
 
 /**

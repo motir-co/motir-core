@@ -3795,3 +3795,16 @@ The Chinese strings fit every slot the English ones fit at the drawn sizes (the 
 - **The pull-request side.** What Motir's GitHub app posts on a pull request is not drawn here.
 - **GitLab**, any new workflow status, and any change to the shipped agent-review panels (§ 30).
 - **Auto-merge after an agent pass.** Merge automatically stays excluded under both sources (§ 32.7).
+
+### 32.13 The container count is retired (amends § 32.3, M6 and M11)
+
+**The container form of the Reviewed badge is gone.** An epic or story with children no longer
+wears an _n of m reviewed_ pill, a _Every part reviewed_ label, or a container glyph in the List /
+Tree status cell. A container shows no review state of its own; each part that has its own pull
+requests still wears its own Reviewed badge and marker, unchanged.
+
+Why: the count was not useful, and reading it meant walking every card under each container on
+the page. On the MOTIR project the first `/items` tree page of 50 roots read 2,751 cards and ran
+the page's workspace transaction past its 5 s limit. Panels M6 and M11 of
+`design/work-items/decision-waiting--review-path.mock.html` and the § 32.11 _container count_ row
+stay as a record of what was drawn; they describe nothing that ships.
