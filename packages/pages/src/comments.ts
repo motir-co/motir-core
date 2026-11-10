@@ -226,8 +226,11 @@ function requireAnchor(anchor: PageCommentAnchorInput | undefined): PageCommentA
   return anchor;
 }
 
-/** A read: the page, archived or not, in the caller's project. */
-async function readablePage(store: PageStore, scope: PageCommentScope): Promise<PageRow> {
+/** A read: the page, archived or not, in the caller's project. It consults no actor. */
+async function readablePage(
+  store: PageStore,
+  scope: Pick<PageCommentScope, 'pageId' | 'projectId'>,
+): Promise<PageRow> {
   const page = await store.findPage(scope.pageId);
   if (!page || page.projectId !== scope.projectId) throw new PageNotFoundError(scope.pageId);
   return page;
@@ -470,4 +473,36 @@ export async function reopenPageCommentThread(
   assertRoot(root);
   if (root.resolvedAt === null) return threadOf(store, root);
   return threadOf(store, await store.setPageCommentResolved(root.id, null, null));
+}
+
+// ── Read one thread ─────────────────────────────────────────────────────────
+
+/** A read of one thread by a comment's id. A read consults no actor. */
+export interface ReadPageCommentThreadInput {
+  readonly pageId: string;
+  /** The project the caller acts in; a page from another reads as missing. */
+  readonly projectId: string;
+  /** The thread's root, or any reply in it. */
+  readonly commentId: string;
+}
+
+/**
+ * One thread by id, wherever it sits in either list — the read a thread link
+ * resolves against. A reply's id answers the thread it sits in. Built through
+ * `threadOf`, the same builder every other thread answer uses, so it cannot
+ * drift from the list's answer for the same thread. Takes no lock and writes
+ * nothing; an archived page still reads, since reading is not a write.
+ * `PageCommentNotFoundError` for an id that names no comment on THIS page.
+ */
+export async function readPageCommentThread(
+  store: PageStore,
+  input: ReadPageCommentThreadInput,
+): Promise<PageCommentThreadDto> {
+  const page = await readablePage(store, input);
+  const named = await store.findPageComment(input.commentId);
+  if (!named || named.pageId !== page.id) throw new PageCommentNotFoundError(input.commentId);
+  if (named.parentCommentId === null) return threadOf(store, named);
+  const root = await store.findPageComment(named.parentCommentId);
+  if (!root || root.pageId !== page.id) throw new PageCommentNotFoundError(input.commentId);
+  return threadOf(store, root);
 }

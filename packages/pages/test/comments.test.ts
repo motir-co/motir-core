@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  PAGE_COMMENT_THREADS_DEFAULT_LIMIT,
   PAGE_COMMENT_THREADS_MAX_LIMIT,
   PageArchivedError,
   PageCommentAnchorInvalidError,
@@ -20,6 +21,7 @@ import {
   encodePageCommentCursor,
   listPageCommentThreads,
   pageCommentThreadsLimit,
+  readPageCommentThread,
   reopenPageCommentThread,
   replyToPageComment,
   resolvePageCommentThread,
@@ -597,5 +599,100 @@ describe('the cursor codec', () => {
     const raw = encodePageCommentCursor(cursor);
     expect(raw).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(decodePageCommentCursor(raw)).toEqual(cursor);
+  });
+});
+
+describe('readPageCommentThread', () => {
+  const read = (commentId: string, id = pageId) =>
+    readPageCommentThread(store, { projectId: 'p1', pageId: id, commentId });
+
+  it('answers a root’s whole thread, deep-equal to what the list answers for it', async () => {
+    const thread = await root('Root');
+    const r1 = await reply(thread.id, 'one');
+    const r2 = await reply(thread.id, 'two', other);
+    const byId = await read(thread.id);
+    expect(byId.replies.map((r) => r.id)).toEqual([r1.id, r2.id]);
+    const listed = await listPageCommentThreads(store, { ...scope(), status: 'open' });
+    expect(byId).toEqual(listed.threads.find((t) => t.id === thread.id));
+  });
+
+  it('answers a root past the first page of its list, with all its replies', async () => {
+    for (let i = 0; i < PAGE_COMMENT_THREADS_DEFAULT_LIMIT; i += 1) await root(`r${i}`);
+    const deep = await root('Past the first page');
+    const r = await reply(deep.id, 'its reply');
+    const first = await listPageCommentThreads(store, { ...scope(), status: 'open' });
+    expect(first.threads.map((t) => t.id)).not.toContain(deep.id);
+    const byId = await read(deep.id);
+    expect(byId).toMatchObject({ id: deep.id, bodyMd: 'Past the first page' });
+    expect(byId.replies.map((x) => x.id)).toEqual([r.id]);
+  });
+
+  it('carries the resolved state, and clears it after a reopen', async () => {
+    const thread = await root();
+    await resolvePageCommentThread(store, clock, { ...scope(other), commentId: thread.id });
+    expect(await read(thread.id)).toMatchObject({
+      resolvedAt: clock.current.toISOString(),
+      resolvedBy: { id: 'u2', name: 'Bo', image: null },
+    });
+    await reopenPageCommentThread(store, { ...scope(), commentId: thread.id });
+    expect(await read(thread.id)).toMatchObject({ resolvedAt: null, resolvedBy: null });
+  });
+
+  it('answers a reply’s id with the whole thread it sits in', async () => {
+    const thread = await root();
+    const r1 = await reply(thread.id, 'one');
+    const r2 = await reply(thread.id, 'two');
+    const byReply = await read(r2.id);
+    expect(byReply.id).toBe(thread.id);
+    expect(byReply.replies.map((r) => r.id)).toEqual([r1.id, r2.id]);
+  });
+
+  it('refuses a missing id and another page’s comment as not found, and another project’s page', async () => {
+    const thread = await root();
+    const otherPage = (
+      await createPage(store, clock, {
+        workspaceId: 'w1',
+        projectId: 'p1',
+        actorId: 'u1',
+        title: 'Other',
+        parent: { kind: 'root' },
+      })
+    ).id;
+    for (const err of [await refused(read('missing')), await refused(read(thread.id, otherPage))]) {
+      expect(err).toBeInstanceOf(PageCommentNotFoundError);
+      expect(err).toMatchObject({ code: 'PAGE_COMMENT_NOT_FOUND', status: 404 });
+    }
+    const elsewhere = await refused(
+      readPageCommentThread(store, { projectId: 'p2', pageId, commentId: thread.id }),
+    );
+    expect(elsewhere).toBeInstanceOf(PageNotFoundError);
+    expect(elsewhere).toMatchObject({ code: 'PAGE_NOT_FOUND', status: 404 });
+  });
+
+  it('refuses a reply whose root is missing as not found', async () => {
+    const thread = await root();
+    const r = await reply(thread.id);
+    // A reply row whose root has gone (the cascade normally takes it too).
+    store.comments.delete(thread.id);
+    expect(await refused(read(r.id))).toBeInstanceOf(PageCommentNotFoundError);
+  });
+
+  it('reads on an archived page', async () => {
+    const thread = await root();
+    await archivePage(store, clock, { projectId: 'p1', pageId, actorId: 'u1' });
+    expect((await read(thread.id)).id).toBe(thread.id);
+  });
+
+  it('writes nothing and locks nothing', async () => {
+    const thread = await root();
+    await reply(thread.id);
+    const before = writes();
+    const locks = store.called('lockPageComment');
+    const rows = JSON.stringify([...store.comments.values()]);
+    await read(thread.id);
+    expect(writes()).toBe(before);
+    expect(store.called('lockPageComment')).toBe(locks);
+    expect(store.called('findPageComment')).toBeGreaterThan(0);
+    expect(JSON.stringify([...store.comments.values()])).toBe(rows);
   });
 });

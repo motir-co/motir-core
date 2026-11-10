@@ -382,6 +382,12 @@ export interface PageStore {
   countPageCommentRoots(pageId: string): Promise<PageCommentCounts>;
   /** Reads one comment `FOR UPDATE`; `null` if absent or out of scope. */
   lockPageComment(commentId: string): Promise<PageCommentRow | null>;
+  /**
+   * Reads one comment WITHOUT a row lock — the read path's by-id read, so a
+   * reader of a discussion never waits behind a writer of it. `null` if absent
+   * or out of scope.
+   */
+  findPageComment(commentId: string): Promise<PageCommentRow | null>;
   /** Creates a comment, root or reply. */
   insertPageComment(row: PageCommentInsert): Promise<PageCommentRow>;
   /** Replaces a comment's body and stamps `editedAt`. */

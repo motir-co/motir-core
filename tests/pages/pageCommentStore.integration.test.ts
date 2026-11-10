@@ -453,4 +453,33 @@ describe('page comments through the adapter', () => {
       locked: null,
     });
   });
+
+  it('findPageComment answers the stored row joined and unlocked, null when absent or out of context', async () => {
+    const t = await makeTenant('l');
+    const other = await makeTenant('m');
+    const clock = steppingClock();
+    const inline = await inTenant(t, t.ownerId, (s) =>
+      createPageComment(s, clock, {
+        ...scope(t, owner(t)),
+        bodyMd: 'Inline',
+        anchor: { bytes: Uint8Array.from([5, 6, 7]), quote: 'the passage' },
+      }),
+    );
+    await inTenant(t, t.memberId, (s) =>
+      resolvePageCommentThread(s, clock, { ...scope(t, member(t)), commentId: inline.id }),
+    );
+    const found = await inTenant(t, t.ownerId, (s) => s.findPageComment(inline.id));
+    expect(found).toMatchObject({
+      id: inline.id,
+      pageId: t.pageId,
+      parentCommentId: null,
+      author: { id: t.ownerId, name: 'Owner l' },
+      resolvedBy: { id: t.memberId, name: 'Member l' },
+      anchorQuote: 'the passage',
+    });
+    expect([...found!.anchor!]).toEqual([5, 6, 7]);
+    expect(await inTenant(t, t.ownerId, (s) => s.findPageComment('missing'))).toBeNull();
+    // Bound to another workspace, the policy does not admit the row.
+    expect(await inTenant(other, other.ownerId, (s) => s.findPageComment(inline.id))).toBeNull();
+  });
 });

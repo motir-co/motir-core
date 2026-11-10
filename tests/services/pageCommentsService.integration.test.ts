@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import {
   PageArchivedError,
   PageCommentForbiddenError,
+  PageCommentNotFoundError,
   PageNotFoundError,
   type PageCommentThreadDto,
 } from '@/lib/pages';
@@ -223,6 +224,104 @@ describe('pageCommentsService — reads', () => {
       }),
     );
     expect(missing).toBeInstanceOf(PageNotFoundError);
+  });
+});
+
+describe('pageCommentsService.readPageThread', () => {
+  it('a viewer reads a thread at 200 with its replies, and it equals the listed thread', async () => {
+    const f = await makeFixture();
+    const viewer = await actorAs(f, 'viewer', 'viewer');
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Root' });
+    const reply = await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: 'A reply',
+    });
+    const read = await pageCommentsService.readPageThread(viewer, {
+      ...on(f),
+      commentId: reply.id,
+    });
+    expect(read.id).toBe(root.id);
+    expect(read.replies.map((r) => r.id)).toEqual([reply.id]);
+    expect(read.workItemRefs).toEqual({});
+    const listed = await pageCommentsService.listPageThreads(viewer, { ...on(f), status: 'open' });
+    const { workItemRefs: _refs, ...thread } = read;
+    expect(thread).toEqual(listed.threads[0]);
+  });
+
+  it('refuses a stranger as browse and a reader without page:view as the page gate', async () => {
+    const f = await makeFixture();
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Root' });
+    const stranger = await makeUser('stranger');
+    const asStranger = await refused(
+      pageCommentsService.readPageThread(
+        { userId: stranger.id, workspaceId: f.workspaceId },
+        { ...on(f), commentId: root.id },
+      ),
+    );
+    expect(asStranger).toBeInstanceOf(ProjectAccessDeniedError);
+    expect(asStranger).toMatchObject({ kind: 'browse' });
+
+    const noPages = await actorAs(f, 'nopages', 'member');
+    // A custom role that browses the project but holds no `page:view`.
+    const role = await adminDb.workspaceRoleDefinition.create({
+      data: {
+        workspaceId: f.workspaceId,
+        name: 'No pages',
+        permissions: ['project:browse', 'work_item:view'],
+      },
+    });
+    await adminDb.workspaceMembership.update({
+      where: { userId_workspaceId: { userId: noPages.userId, workspaceId: f.workspaceId } },
+      data: { roleDefinitionId: role.id },
+    });
+    const asNoPages = await refused(
+      pageCommentsService.readPageThread(noPages, { ...on(f), commentId: root.id }),
+    );
+    const listRefusal = await refused(
+      pageCommentsService.listPageThreads(noPages, { ...on(f), status: 'open' }),
+    );
+    expect(asNoPages).toBeInstanceOf(ProjectAccessDeniedError);
+    expect(asNoPages).toMatchObject({ kind: (listRefusal as ProjectAccessDeniedError).kind });
+  });
+
+  it('answers another project’s page as not found, another page’s comment as comment-not-found, and reads an archived page', async () => {
+    const f = await makeFixture();
+    const root = await pageCommentsService.postPageComment(f.owner, { ...on(f), bodyMd: 'Root' });
+    const other = await projectsService.createProject({
+      workspaceId: f.workspaceId,
+      actorUserId: f.owner.userId,
+      name: 'Other',
+      identifier: 'PCR',
+    });
+    const foreign = await pagesService.createPage(f.owner, { projectId: other.id, title: 'X' });
+    expect(
+      await refused(
+        pageCommentsService.readPageThread(f.owner, {
+          projectId: f.projectId,
+          pageId: foreign.id,
+          commentId: root.id,
+        }),
+      ),
+    ).toBeInstanceOf(PageNotFoundError);
+
+    const sibling = await pagesService.createPage(f.owner, { projectId: f.projectId, title: 'Y' });
+    const wrongPage = await refused(
+      pageCommentsService.readPageThread(f.owner, {
+        projectId: f.projectId,
+        pageId: sibling.id,
+        commentId: root.id,
+      }),
+    );
+    expect(wrongPage).toBeInstanceOf(PageCommentNotFoundError);
+    expect(wrongPage).toMatchObject({ code: 'PAGE_COMMENT_NOT_FOUND' });
+
+    await pagesService.archivePage(f.owner, on(f));
+    const archived = await pageCommentsService.readPageThread(f.owner, {
+      ...on(f),
+      commentId: root.id,
+    });
+    expect(archived.id).toBe(root.id);
   });
 });
 

@@ -252,6 +252,12 @@ export function createPageStore(tx: Prisma.TransactionClient): PageStore {
       return record ? toPageCommentRow(record) : null;
     },
 
+    // The read path's by-id read: no row lock, so a reader never waits behind a writer.
+    async findPageComment(commentId) {
+      const record = await pageCommentRepository.findById(commentId, tx);
+      return record ? toPageCommentRow(record) : null;
+    },
+
     async insertPageComment(row) {
       const record = await pageCommentRepository.insert(
         {
