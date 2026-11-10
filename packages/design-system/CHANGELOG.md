@@ -1,5 +1,17 @@
 # @motir/design-system
 
+## 0.22.2
+
+### Patch Changes
+
+- 15c171e: README: the Usage block adds the `@source '../node_modules/@motir/design-system/dist';` line and says why. Without it Tailwind never generates the utilities used only inside the package's compiled components (MOTIR-10835).
+
+## 0.22.1
+
+### Patch Changes
+
+- 030761d: An unregistered `data-palette` id, or a root with no `data-palette`, now renders the default `motir` palette (`DEFAULT_PALETTE_ID`) instead of the `amethyst` stylesheet base, so the palette axis falls back to its default id like the style and type axes do. Every registered palette renders exactly as before. The `motir` block carries two extra fallback selectors that name every registered id; a new palette must add its id to them (MOTIR-10834).
+
 ## 0.22.0
 
 ### Minor Changes

@@ -4,6 +4,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  DROP_TO_IMAGE_USER_ARGV0,
+  DROP_TO_IMAGE_USER_SH,
   HOME_FILESYSTEM_LABEL,
   INSTANCE_CONFIG_MARKER,
   MACHINE_ID_ENV_KEYS,
@@ -307,4 +309,222 @@ describe('the boot script gives the container the instance id as its machine id'
       expect(lines).toBeNull();
     },
   );
+});
+
+// THE CONTAINER'S USER (MOTIR-10836). Every command Motir sends into an instance
+// is `runuser -u node -- …`, which only root may call; the AWS host agent's
+// `docker exec` runs as the CONTAINER's user, so the container starts as root and
+// its main process drops to the image's user. These run the boot script's OWN
+// container step against a stand-in `docker` that answers the image inspect and
+// records every call — the argv asserted is the argv the VM would run.
+describe('the boot script starts the container as root and drops to the image user', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  const MOUNT = AWS_PERSISTENT_SPEC.mountPath;
+
+  /** Runs the container step of `userData` against an image whose config is `imageConfig`. */
+  function startContainer(userData: string, imageConfig: unknown) {
+    const root = mkdtempSync(join(tmpdir(), 'motir-10836-'));
+    dirs.push(root);
+    const bin = join(root, 'bin');
+    const etc = join(root, 'etc-motir');
+    spawnSync('mkdir', ['-p', bin, etc]);
+    const document = parseInstanceUserData(userData);
+    writeFileSync(join(etc, 'instance.json'), JSON.stringify(document));
+    writeFileSync(join(root, 'image-config.json'), JSON.stringify(imageConfig));
+    // Each call is one JSON line: its argv.
+    writeFileSync(
+      join(bin, 'docker'),
+      [
+        '#!/usr/bin/env python3',
+        'import json, sys',
+        `open(${JSON.stringify(join(root, 'calls'))}, "a").write(json.dumps(sys.argv[1:]) + "\\n")`,
+        'if sys.argv[1:3] == ["image", "inspect"]:',
+        `    sys.stdout.write(open(${JSON.stringify(join(root, 'image-config.json'))}).read())`,
+      ].join('\n'),
+    );
+    chmodSync(join(bin, 'docker'), 0o755);
+    const script = userData.slice(userData.indexOf('#!/bin/bash'), userData.lastIndexOf('\n--'));
+    const step = script.slice(script.indexOf('# The agent, FRESH')).replaceAll('/etc/motir', etc);
+    const run = spawnSync('bash', ['-c', `set -euo pipefail\n${step}`], {
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env['PATH']}` },
+    });
+    const callsFile = join(root, 'calls');
+    const calls: string[][] = existsSync(callsFile)
+      ? readFileSync(callsFile, 'utf8')
+          .split('\n')
+          .filter(Boolean)
+          .map((l) => JSON.parse(l) as string[])
+      : [];
+    return { status: run.status, stderr: run.stderr, calls, etc };
+  }
+
+  const SANDBOX_IMAGE = {
+    User: 'node',
+    Entrypoint: ['motir-sandbox-entrypoint'],
+    Cmd: ['bash', '-l'],
+  };
+
+  it('an image with a user: run as root, the drop script owning the home and becoming the user', () => {
+    const { status, stderr, calls, etc } = startContainer(
+      renderInstanceUserData(config({ terminal: TERMINAL, idleCommand: null })),
+      SANDBOX_IMAGE,
+    );
+    expect(stderr).toBe('');
+    expect(status).toBe(0);
+    const image = AWS_PERSISTENT_SPEC.image;
+    expect(calls.map((c) => c.slice(0, 2))).toEqual([
+      ['rm', '-f'],
+      ['pull', image],
+      ['image', 'inspect'],
+      ['run', '-d'],
+    ]);
+    expect(calls[2]).toEqual(['image', 'inspect', '--format', '{{json .Config}}', image]);
+    expect(calls[3]).toEqual([
+      'run',
+      '-d',
+      '--name',
+      'motir-instance',
+      '--restart',
+      'no',
+      '--env-file',
+      join(etc, 'instance.env'),
+      '-v',
+      `${MOUNT}:${MOUNT}`,
+      '--user',
+      '0',
+      '--entrypoint',
+      'sh',
+      image,
+      '-c',
+      DROP_TO_IMAGE_USER_SH,
+      DROP_TO_IMAGE_USER_ARGV0,
+      'node',
+      MOUNT,
+      'motir-sandbox-entrypoint',
+      ...TERMINAL.command,
+    ]);
+  });
+
+  it('keeps the image’s default command when the document names none', () => {
+    const { status, calls } = startContainer(
+      renderInstanceUserData(config({ terminal: null, idleCommand: null })),
+      { ...SANDBOX_IMAGE, User: '1000:1000' },
+    );
+    expect(status).toBe(0);
+    const run = calls.at(-1)!;
+    expect(run.slice(-5)).toEqual(['1000', MOUNT, 'motir-sandbox-entrypoint', 'bash', '-l']);
+  });
+
+  it('runs an idle command under the image’s entrypoint, and an image with no entrypoint without one', () => {
+    const idle = ['sleep', 'infinity'];
+    const withEntrypoint = startContainer(
+      renderInstanceUserData(config({ terminal: null, idleCommand: idle })),
+      SANDBOX_IMAGE,
+    );
+    expect(withEntrypoint.calls.at(-1)!.slice(-3)).toEqual(['motir-sandbox-entrypoint', ...idle]);
+    const bare = startContainer(
+      renderInstanceUserData(config({ terminal: null, idleCommand: idle })),
+      { User: 'node', Entrypoint: null, Cmd: null },
+    );
+    expect(bare.calls.at(-1)!.slice(-4)).toEqual(['node', MOUNT, ...idle]);
+  });
+
+  it.each([{ User: '' }, { User: 'root' }, { User: '0:0' }, null])(
+    'an image that runs as root (%j) starts exactly as before, with no wrapper',
+    (imageConfig) => {
+      const { status, calls } = startContainer(
+        renderInstanceUserData(config({ terminal: TERMINAL, idleCommand: null })),
+        imageConfig,
+      );
+      expect(status).toBe(0);
+      const run = calls.at(-1)!;
+      expect(run).not.toContain('--user');
+      expect(run).not.toContain('--entrypoint');
+      expect(run.slice(-(TERMINAL.command.length + 1))).toEqual([
+        AWS_PERSISTENT_SPEC.image,
+        ...TERMINAL.command,
+      ]);
+    },
+  );
+
+  it('stops the boot, with no container started, when the image cannot be inspected', () => {
+    const root = mkdtempSync(join(tmpdir(), 'motir-10836-'));
+    dirs.push(root);
+    const userData = renderInstanceUserData(config());
+    const { status, calls } = startContainer(userData, 'not json {');
+    expect(status).not.toBe(0);
+    expect(calls.map((c) => c[0])).not.toContain('run');
+  });
+});
+
+// THE DROP SCRIPT ITSELF, against stand-ins for getent, chown and runuser — what
+// it resolves, what it chowns, and what it execs.
+describe('DROP_TO_IMAGE_USER_SH', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  });
+
+  function drop(user: string, passwd: string) {
+    const root = mkdtempSync(join(tmpdir(), 'motir-10836-drop-'));
+    dirs.push(root);
+    const bin = join(root, 'bin');
+    const log = join(root, 'log');
+    spawnSync('mkdir', ['-p', bin]);
+    const stub = (name: string, body: string) => {
+      writeFileSync(join(bin, name), `#!/bin/sh\n${body}\n`);
+      chmodSync(join(bin, name), 0o755);
+    };
+    writeFileSync(join(root, 'passwd'), passwd);
+    stub(
+      'getent',
+      `awk -F: -v k="$2" '$1 == k || $3 == k' ${JSON.stringify(join(root, 'passwd'))}`,
+    );
+    stub('chown', `echo "chown $*" >> ${JSON.stringify(log)}`);
+    stub('runuser', `echo "runuser $*" >> ${JSON.stringify(log)}`);
+    const run = spawnSync(
+      'sh',
+      [
+        '-c',
+        DROP_TO_IMAGE_USER_SH,
+        DROP_TO_IMAGE_USER_ARGV0,
+        user,
+        '/home/node',
+        'motir-sandbox-entrypoint',
+        'sh',
+        '-c',
+        'exec motir agent-terminal serve',
+      ],
+      { encoding: 'utf8', env: { ...process.env, PATH: `${bin}:${process.env['PATH']}` } },
+    );
+    const lines = existsSync(log) ? readFileSync(log, 'utf8').trim().split('\n') : [];
+    return { status: run.status, stderr: run.stderr, lines };
+  }
+
+  const PASSWD = 'root:x:0:0:root:/root:/bin/bash\nnode:x:1000:1000::/home/node:/bin/bash\n';
+
+  it.each(['node', '1000'])(
+    'resolves %j to the name, owns the home to it, and execs as it',
+    (user) => {
+      const { status, stderr, lines } = drop(user, PASSWD);
+      expect(stderr).toBe('');
+      expect(status).toBe(0);
+      expect(lines).toEqual([
+        'chown node: /home/node',
+        'runuser -u node -- motir-sandbox-entrypoint sh -c exec motir agent-terminal serve',
+      ]);
+    },
+  );
+
+  it('refuses a user the image does not know, rather than run as root', () => {
+    const { status, stderr, lines } = drop('ghost', PASSWD);
+    expect(status).not.toBe(0);
+    expect(stderr).toContain('motir: the image user ghost has no passwd entry');
+    expect(lines).toEqual([]);
+  });
 });
