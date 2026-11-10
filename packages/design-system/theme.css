@@ -5566,13 +5566,18 @@
    `amethyst`. It IS the Tier-3 base, so — exactly like the `warm-editorial`
    base style — it needs NO root override block: data-palette="amethyst" simply
    leaves the base --el-* tokens in force. `motir` now names the monochrome
-   palette (formerly `graphite`), whose block is below; it is the default id,
-   and <html> always carries a data-palette, so the base is a fallback. Each
-   later "Palette: …" subtask ADDS its `[data-palette='<id>']` block here,
-   overriding --el-* (light + dark via [data-palette='<id>'][data-theme='dark']
-   where the palette diverges from the base flip), and authors its
-   docs/palettes/<id>.md — mirroring how the per-style subtasks add a
-   [data-style] block on the other axis.
+   palette (formerly `graphite`), whose block is below; it is the default id.
+   The base is NOT the axis's fallback: an unregistered data-palette, or a root
+   with none, takes the `motir` block too, through the fallback selectors that
+   block carries (MOTIR-10834), so, like the style and type axes, an id this
+   sheet does not know renders the axis's DEFAULT. Each later "Palette: …"
+   subtask ADDS its `[data-palette='<id>']` block here, overriding --el-*
+   (light + dark via [data-palette='<id>'][data-theme='dark'] where the palette
+   diverges from the base flip), adds its id to the three fallback chains on
+   the `motir` block (`:not([data-palette='<id>'])`; omit it and the new
+   palette renders motir, and tests/theme/paletteFallback.test.ts fails), and
+   authors its docs/palettes/<id>.md — mirroring how the per-style subtasks add
+   a [data-style] block on the other axis.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* `amethyst` needs no root block — it is the Tier-3 base above. Each other
@@ -5932,7 +5937,35 @@
    Accessibility: every text-on-surface, white-on-fill, link, and chip-tint
    pairing clears WCAG AA (≥4.5; ≥3.0 for icon/UI hues) in BOTH light and dark —
    verified numerically + by rendered specimen, never eyeballed. See
-   docs/palettes/motir.md for the colour-role reference. */
+   docs/palettes/motir.md for the colour-role reference.
+
+   THE PALETTE AXIS'S FALLBACK (MOTIR-10834). `motir` is DEFAULT_PALETTE_ID, but
+   the Tier-0/Tier-3 base is `amethyst` (BASE_PALETTE_ID), so a selector naming
+   only `motir` left an UNREGISTERED id (a stale stored value, a typo, an id a
+   newer package added that this sheet predates) and a root with no
+   data-palette rendering amethyst, while the style and type axes fall back to
+   their default ids. Two extra selectors give both cases this block:
+     · `[data-palette]:where(:not(<every registered id>))` — any element whose
+       data-palette names no registered palette. The id list sits inside
+       :where() so it adds NO specificity: the selector weighs (0,1,0), exactly
+       what `[data-palette='motir']` weighs, so the fallback wins and loses
+       every cascade tie the motir block does. The ids are chained :not()s,
+       never one comma list, so no comma appears inside the selector.
+     · `:root:where(:not([data-palette]))` — the root carrying no data-palette,
+       also (0,1,0).
+   The list must name EVERY registered id: one it omits would render motir
+   instead of its own block wherever this rule outranks it.
+   tests/theme/paletteFallback.test.ts asserts the list equals PALETTE_IDS in
+   every selector that carries it (one here, two on the dark companion), and
+   that an unregistered id and a missing one resolve every token exactly as
+   `motir` does, in both modes and in a nested scope.
+   `[data-palette='motir']` stays the LAST selector of the list: suites that
+   read a block by its final prelude line find it there. Each selector stays
+   on ONE line (prettier-ignore): the token-layer model in
+   tests/theme/paletteCascade.ts reads a selector without inner whitespace. */
+/* prettier-ignore */
+[data-palette]:where(:not([data-palette='motir']):not([data-palette='amethyst']):not([data-palette='cobalt']):not([data-palette='evergreen']):not([data-palette='spectrum']):not([data-palette='amber']):not([data-palette='sienna']):not([data-palette='garnet']):not([data-palette='citrine']):not([data-palette='candy']):not([data-palette='lagoon']):not([data-palette='olive']):not([data-palette='contrast']):not([data-palette='midnight'])),
+:root:where(:not([data-palette])),
 [data-palette='motir'] {
   /* The logo, kept as Motir has it: the cool-blue primary (its fill is the
      ink CTA, not its identity hue) on a 28% wash of that blue. */
@@ -6076,6 +6109,10 @@
    inverts to near-WHITE ink (Vercel's dark white-button), the accent blue
    brightens so it reads AS text on the dark canvas, and semantic/type hues
    brighten to clear AA on near-black. */
+/* prettier-ignore */
+[data-theme='dark'] [data-palette]:where(:not([data-palette='motir']):not([data-palette='amethyst']):not([data-palette='cobalt']):not([data-palette='evergreen']):not([data-palette='spectrum']):not([data-palette='amber']):not([data-palette='sienna']):not([data-palette='garnet']):not([data-palette='citrine']):not([data-palette='candy']):not([data-palette='lagoon']):not([data-palette='olive']):not([data-palette='contrast']):not([data-palette='midnight'])):not([data-theme]),
+[data-palette]:where(:not([data-palette='motir']):not([data-palette='amethyst']):not([data-palette='cobalt']):not([data-palette='evergreen']):not([data-palette='spectrum']):not([data-palette='amber']):not([data-palette='sienna']):not([data-palette='garnet']):not([data-palette='citrine']):not([data-palette='candy']):not([data-palette='lagoon']):not([data-palette='olive']):not([data-palette='contrast']):not([data-palette='midnight']))[data-theme='dark'],
+:root:where(:not([data-palette]))[data-theme='dark'],
 [data-theme='dark'] [data-palette='motir']:not([data-theme]),
 [data-palette='motir'][data-theme='dark'] {
   --el-logo-mark: var(--color-primary); /* parity with the light block */

@@ -38,9 +38,13 @@
  * "Motir" from v1 (Per Yue, 2026-06-17) until that rename. It is still the
  * Tier-0/Tier-3 BASE in theme.css, so — exactly like the `warm-editorial` base
  * style — the base `--el-*` tokens already are it; its `[data-palette='amethyst']`
- * blocks only re-assert that base inside a scoped subtree. `<html>` always
- * carries a `data-palette`, so the base is a fallback, never what a person sees
- * by default. Each later "Palette: …" subtask ADDS its entry here, ships a
+ * blocks only re-assert that base inside a scoped subtree. The base is NOT the
+ * axis's fallback: an unregistered `data-palette`, or a root with none, takes
+ * the `[data-palette='motir']` block through two fallback selectors it carries
+ * (MOTIR-10834), so — like the style and type axes — an id the stylesheet does
+ * not know renders {@link DEFAULT_PALETTE_ID}. Those selectors name every id in
+ * this registry, so a new entry adds its id to them too (the guard is
+ * tests/theme/paletteFallback.test.ts in motir-core). Each later "Palette: …" subtask ADDS its entry here, ships a
  * `[data-palette='<id>']` block in packages/design-system/theme.css overriding
  * the Tier-0 `--color-*` sources (plus the odd `--el-*`), and authors its
  * `docs/palettes/<id>.md` doc — exactly the shape the per-style subtasks
@@ -223,7 +227,8 @@ export const DEFAULT_PALETTE_ID: PaletteId = 'motir';
  * reference every other palette's override is measured AGAINST. Until
  * MOTIR-6471 it was also {@link DEFAULT_PALETTE_ID}; since the rename the two
  * differ, so a reader asking "which palette is the base?" names this and never
- * the default.
+ * the default. It is also not what an unregistered id renders: the stylesheet
+ * sends those to the default (MOTIR-10834).
  */
 export const BASE_PALETTE_ID: PaletteId = 'amethyst';
 
