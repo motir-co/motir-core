@@ -192,9 +192,70 @@ describe('AgentTerminal — the theme', () => {
     expect(term().options).toMatchObject({
       fontFamily: 'monospace',
       cursorBlink: true,
-      theme: { background: 'Canvas', foreground: 'CanvasText', cursor: 'CanvasText' },
+      theme: {
+        background: 'Canvas',
+        foreground: 'CanvasText',
+        cursor: 'CanvasText',
+        selectionBackground: 'Highlight',
+        selectionInactiveBackground: 'Highlight',
+      },
     });
   });
+
+  // MOTIR-10856: left unset, xterm 6 paints its own white at 30% — invisible on
+  // the light code ground. The selection is the code ground's own selection
+  // tokens, as the browser resolved them on two hidden swatches.
+  it('passes the resolved code-selection tokens to xterm, focused and unfocused', async () => {
+    const real = window.getComputedStyle.bind(window);
+    vi.spyOn(window, 'getComputedStyle').mockImplementation((node: Element) => {
+      const cls = node.getAttribute('class') ?? '';
+      const fill = cls.includes('bg-(--el-code-selection-inactive-bg)')
+        ? 'rgb(214, 210, 238)'
+        : cls.includes('bg-(--el-code-selection-bg)')
+          ? 'rgb(196, 190, 235)'
+          : cls.includes('bg-(--el-code-bg)')
+            ? 'rgb(243, 244, 246)'
+            : '';
+      return {
+        ...real(node),
+        color: 'rgb(55, 53, 47)',
+        fontFamily: 'JetBrains Mono',
+        backgroundColor: fill,
+      } as CSSStyleDeclaration;
+    });
+    const { container } = mount();
+    await load();
+    expect(term().options['theme']).toEqual({
+      background: 'rgb(243, 244, 246)',
+      foreground: 'rgb(55, 53, 47)',
+      cursor: 'rgb(55, 53, 47)',
+      selectionBackground: 'rgb(196, 190, 235)',
+      selectionInactiveBackground: 'rgb(214, 210, 238)',
+    });
+    // The swatches are never seen or read out.
+    const swatches = container.querySelectorAll('span[hidden]');
+    expect([...swatches].map((s) => s.className)).toEqual([
+      'bg-(--el-code-selection-bg)',
+      'bg-(--el-code-selection-inactive-bg)',
+    ]);
+  });
+
+  it.each(['transparent', 'rgba(0, 0, 0, 0)'])(
+    'a selection token that resolves to %s falls back to the system Highlight, never to xterm’s default',
+    async (unresolved) => {
+      vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+        color: 'rgb(1, 2, 3)',
+        fontFamily: 'JetBrains Mono',
+        backgroundColor: unresolved,
+      } as CSSStyleDeclaration);
+      mount();
+      await load();
+      expect(term().options['theme']).toMatchObject({
+        selectionBackground: 'Highlight',
+        selectionInactiveBackground: 'Highlight',
+      });
+    },
+  );
 
   it('watch-only draws no caret — the cursor is painted in the paper — and takes no key', async () => {
     vi.spyOn(window, 'getComputedStyle').mockReturnValue({
@@ -227,13 +288,27 @@ describe('AgentTerminal — the theme', () => {
  * The computed styles the terminal reads, as one mutable record: a "theme switch"
  * is these values changing and then the page telling the terminal about it.
  */
-function computedStyles(initial: { color: string; backgroundColor: string }) {
+function computedStyles(initial: Palette) {
   const styles = { fontFamily: 'JetBrains Mono', ...initial };
-  vi.spyOn(window, 'getComputedStyle').mockImplementation(
-    () => ({ ...styles }) as unknown as CSSStyleDeclaration,
-  );
+  vi.spyOn(window, 'getComputedStyle').mockImplementation((node: Element) => {
+    // The two selection swatches resolve their own tokens (MOTIR-10856).
+    const cls = node.getAttribute('class') ?? '';
+    const backgroundColor = cls.includes('bg-(--el-code-selection-inactive-bg)')
+      ? styles.inactiveSelection
+      : cls.includes('bg-(--el-code-selection-bg)')
+        ? styles.selection
+        : styles.backgroundColor;
+    return { ...styles, backgroundColor } as unknown as CSSStyleDeclaration;
+  });
   return styles;
 }
+
+type Palette = {
+  color: string;
+  backgroundColor: string;
+  selection: string;
+  inactiveSelection: string;
+};
 
 /** A controllable `prefers-color-scheme` query: `flip()` is the OS appearance changing. */
 function colorSchemeQuery() {
@@ -269,8 +344,18 @@ async function settle() {
   });
 }
 
-const LIGHT = { color: 'rgb(20, 20, 20)', backgroundColor: 'rgb(240, 240, 240)' };
-const DARK = { color: 'rgb(230, 230, 230)', backgroundColor: 'rgb(30, 30, 30)' };
+const LIGHT: Palette = {
+  color: 'rgb(20, 20, 20)',
+  backgroundColor: 'rgb(240, 240, 240)',
+  selection: 'rgb(196, 190, 235)',
+  inactiveSelection: 'rgb(214, 210, 238)',
+};
+const DARK: Palette = {
+  color: 'rgb(230, 230, 230)',
+  backgroundColor: 'rgb(30, 30, 30)',
+  selection: 'rgb(60, 52, 112)',
+  inactiveSelection: 'rgb(48, 43, 85)',
+};
 
 describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
   it('an explicit light → dark switch on <html> re-applies the paper and ink to the open terminal', async () => {
@@ -281,6 +366,8 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
       background: LIGHT.backgroundColor,
       foreground: LIGHT.color,
       cursor: LIGHT.color,
+      selectionBackground: LIGHT.selection,
+      selectionInactiveBackground: LIGHT.inactiveSelection,
     });
 
     Object.assign(styles, DARK);
@@ -290,6 +377,8 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
       background: DARK.backgroundColor,
       foreground: DARK.color,
       cursor: DARK.color,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
     });
     // The same terminal, not a reopened one.
     expect(xterm.instances).toHaveLength(1);
@@ -299,12 +388,17 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
     const styles = computedStyles(LIGHT);
     mount();
     await load();
-    Object.assign(styles, { color: 'rgb(1, 50, 90)', backgroundColor: 'rgb(220, 235, 250)' });
+    Object.assign(styles, {
+      color: 'rgb(1, 50, 90)',
+      backgroundColor: 'rgb(220, 235, 250)',
+      selection: 'rgb(150, 180, 230)',
+    });
     document.documentElement.setAttribute('data-palette', 'cobalt');
     await settle();
     expect(term().options['theme']).toMatchObject({
       background: 'rgb(220, 235, 250)',
       foreground: 'rgb(1, 50, 90)',
+      selectionBackground: 'rgb(150, 180, 230)',
     });
   });
 
@@ -328,6 +422,8 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
       background: DARK.backgroundColor,
       foreground: DARK.color,
       cursor: DARK.color,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
     });
   });
 
@@ -344,6 +440,8 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
       background: DARK.backgroundColor,
       foreground: DARK.color,
       cursor: DARK.color,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
     });
     // And back again.
     Object.assign(styles, LIGHT);
@@ -379,6 +477,8 @@ describe('AgentTerminal — following a theme switch (MOTIR-10857)', () => {
       background: DARK.backgroundColor,
       foreground: DARK.color,
       cursor: DARK.backgroundColor,
+      selectionBackground: DARK.selection,
+      selectionInactiveBackground: DARK.inactiveSelection,
     });
   });
 

@@ -23,7 +23,8 @@ import type { TerminalSink } from './useAgentTerminal';
 //   not CSS variables, so they are resolved again whenever the applied theme
 //   changes (MOTIR-10857) — a light/dark or palette switch on <html>, which is
 //   also how the OS appearance arrives while the page follows the system — and
-//   the open terminal follows light and dark like every code block.
+//   the open terminal follows light and dark like every code block. The selection
+//   is the code ground's own (`--el-code-selection-bg` / `-inactive-bg`, MOTIR-10856).
 // - It fills its box, refits to whole cells on every size change, reports the new
 //   size (the hook sends `resize`) and shows `cols × rows` for a moment.
 // - It scrolls inside itself; a reader scrolled up is not yanked down, and
@@ -40,7 +41,27 @@ const THEME_ATTRIBUTES = ['data-theme', 'data-palette'];
 /** The OS appearance; watched as a backstop beside the attribute observer (see `watchTheme`). */
 const COLOR_SCHEME_QUERY = '(prefers-color-scheme: dark)';
 
-type TerminalColours = { background: string; foreground: string; cursor: string };
+type TerminalColours = {
+  background: string;
+  foreground: string;
+  cursor: string;
+  selectionBackground: string;
+  selectionInactiveBackground: string;
+};
+
+/** The two hidden swatches the selection colours are read off. */
+type SelectionSwatches = { selection: Element | null; inactiveSelection: Element | null };
+
+/** A computed fill, or `fallback` when the token resolved to nothing (or to transparent). */
+function resolvedFill(node: Element | null, fallback: string): string {
+  const fill = node ? getComputedStyle(node).backgroundColor : '';
+  return fill && fill !== 'transparent' && fill !== 'rgba(0, 0, 0, 0)' ? fill : fallback;
+}
+
+/** Whether two resolutions paint the same terminal. */
+function sameColours(a: TerminalColours, b: TerminalColours): boolean {
+  return (Object.keys(a) as (keyof TerminalColours)[]).every((k) => a[k] === b[k]);
+}
 
 /**
  * The terminal's colours as the theme currently resolves them: the INK is the
@@ -51,12 +72,28 @@ type TerminalColours = { background: string; foreground: string; cursor: string 
  * ink — the dark-on-black the acceptance recording caught (MOTIR-6943) — so the
  * paper is passed as a colour too. A watch-only terminal draws no caret: its
  * cursor is painted in the paper.
+ *
+ * The SELECTION is `--el-code-selection-bg` (focused) and
+ * `--el-code-selection-inactive-bg` (unfocused), read off two hidden swatches.
+ * Left unset, xterm 6 paints its own white at 30%, which on the light code ground
+ * is all but invisible (MOTIR-10856). An unresolved swatch falls back to the
+ * system Highlight, never to xterm's default. The selected text keeps its ink.
  */
-function resolveColours(el: HTMLElement, watchOnly: boolean): TerminalColours {
+function resolveColours(
+  el: HTMLElement,
+  swatches: SelectionSwatches,
+  watchOnly: boolean,
+): TerminalColours {
   const ink = getComputedStyle(el).color || 'CanvasText';
   const paper =
     (el.parentElement && getComputedStyle(el.parentElement).backgroundColor) || 'Canvas';
-  return { background: paper, foreground: ink, cursor: watchOnly ? paper : ink };
+  return {
+    background: paper,
+    foreground: ink,
+    cursor: watchOnly ? paper : ink,
+    selectionBackground: resolvedFill(swatches.selection, 'Highlight'),
+    selectionInactiveBackground: resolvedFill(swatches.inactiveSelection, 'Highlight'),
+  };
 }
 
 /**
@@ -115,6 +152,8 @@ export function AgentTerminal({
   watchOnly?: boolean;
 }) {
   const host = useRef<HTMLDivElement | null>(null);
+  const selectionSwatch = useRef<HTMLSpanElement | null>(null);
+  const inactiveSelectionSwatch = useRef<HTMLSpanElement | null>(null);
   const term = useRef<Terminal | null>(null);
   const handlers = useRef({ onData, onResize });
   const sizeLabelRef = useRef(sizeLabel);
@@ -175,7 +214,16 @@ export function AgentTerminal({
       ]);
       if (disposed) return;
       const style = getComputedStyle(el);
-      let colours = resolveColours(el, watchOnlyRef.current);
+      const resolve = () =>
+        resolveColours(
+          el,
+          {
+            selection: selectionSwatch.current,
+            inactiveSelection: inactiveSelectionSwatch.current,
+          },
+          watchOnlyRef.current,
+        );
+      let colours = resolve();
       const t = new XTerm({
         // Whatever input state was asked for before xterm loaded holds from the start.
         disableStdin: !inputRef.current,
@@ -225,13 +273,8 @@ export function AgentTerminal({
       // that changed nothing — another attribute's sibling write, the media query
       // flipping while an explicit choice holds — leaves the terminal alone.
       unwatchTheme = watchTheme(() => {
-        const next = resolveColours(el, watchOnlyRef.current);
-        if (
-          next.background === colours.background &&
-          next.foreground === colours.foreground &&
-          next.cursor === colours.cursor
-        )
-          return;
+        const next = resolve();
+        if (sameColours(next, colours)) return;
         colours = next;
         t.options.theme = next;
       });
@@ -260,6 +303,9 @@ export function AgentTerminal({
       aria-label={label}
       className="relative min-h-0 flex-1 bg-(--el-code-bg) font-mono text-(--el-code-text)"
     >
+      {/* The selection colours, resolved by the browser and read with the rest of the theme. */}
+      <span ref={selectionSwatch} hidden className="bg-(--el-code-selection-bg)" />
+      <span ref={inactiveSelectionSwatch} hidden className="bg-(--el-code-selection-inactive-bg)" />
       <div
         ref={host}
         data-testid="agent-terminal"
