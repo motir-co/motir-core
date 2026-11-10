@@ -65,7 +65,6 @@ export const pageCommentRepository = {
     rootIds: readonly string[],
     tx: Prisma.TransactionClient,
   ): Promise<PageCommentRecord[]> {
-    if (rootIds.length === 0) return [];
     return tx.pageComment.findMany({
       where: { parentCommentId: { in: [...rootIds] } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -84,8 +83,9 @@ export const pageCommentRepository = {
         FROM "page_comment"
        WHERE "page_id" = ${pageId} AND "parent_comment_id" IS NULL
     `;
-    const row = rows[0];
-    return { open: Number(row?.open ?? 0), resolved: Number(row?.resolved ?? 0) };
+    // An aggregate with no GROUP BY always answers exactly one row.
+    const [row] = rows;
+    return { open: Number(row!.open), resolved: Number(row!.resolved) };
   },
 
   /** Takes one comment's row lock; whether a visible row was there to lock. */
