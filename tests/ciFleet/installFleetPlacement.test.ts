@@ -11,6 +11,7 @@ import type { AgentInstance, FleetShard } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { wireFleetKindSwitch } from '@/lib/ciFleet/shardTargets';
 import {
+  fleetShardIdForColumn,
   INSTALL_FLEET_SHARD_ID,
   INSTALL_FLEET_TAG,
   installFleetConfig,
@@ -200,6 +201,13 @@ describe('the install fleet module', () => {
     expect(isInstallOrganization(null)).toBe(false);
     vi.stubEnv('MOTIR_CLOUD', '');
     expect(isInstallOrganization({ isMeta: false })).toBe(true);
+  });
+
+  it('records a pool account id in a fleet_shard_id column, and null for itself or no account (MOTIR-10858)', () => {
+    expect(fleetShardIdForColumn('cmshard000')).toBe('cmshard000');
+    expect(fleetShardIdForColumn(INSTALL_FLEET_SHARD_ID)).toBeNull();
+    expect(fleetShardIdForColumn(null)).toBeNull();
+    expect(fleetShardIdForColumn(undefined)).toBeNull();
   });
 });
 

@@ -24,7 +24,7 @@ import {
   type HostedAgentSession,
 } from '@/lib/services/hostedAgentContainerService';
 import { HostedRunBootFailedError } from '@/lib/hostedRuns/errors';
-import { fleetShardIdForColumn, INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
+import { INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
 import { planCapsService } from '@/lib/services/planCapsService';
 import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
@@ -595,14 +595,5 @@ describe('a hosted run on the install fleet hands off with a null account (MOTIR
     expect((error as HostedRunBootFailedError).detail).toBe(
       hostedRunHandoffFailedDetail('refused', false),
     );
-  });
-});
-
-describe('fleetShardIdForColumn — what a fleet_shard_id column records (MOTIR-10858)', () => {
-  it('records a pool account id as itself, and null for the install fleet and no account', () => {
-    expect(fleetShardIdForColumn('cmshard123')).toBe('cmshard123');
-    expect(fleetShardIdForColumn(INSTALL_FLEET_SHARD_ID)).toBeNull();
-    expect(fleetShardIdForColumn(null)).toBeNull();
-    expect(fleetShardIdForColumn(undefined)).toBeNull();
   });
 });
