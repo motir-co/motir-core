@@ -37,6 +37,7 @@ import {
   latestRunCredentialExpiry,
 } from '@/lib/hostedRuns/limits';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
+import { fleetShardIdForColumn } from '@/lib/ciFleet/installFleet';
 import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
@@ -507,6 +508,18 @@ export const HOSTED_RUN_WAITING_REASONS: ReadonlySet<string> = new Set([
   'shard_capacity',
 ]);
 
+/**
+ * The words for a run whose machine BOOTED but could not be handed to its
+ * supervisor (MOTIR-10858): the machine was started and is torn down, never
+ * "nothing was booted". Says so when the teardown itself failed, so a person
+ * knows the reaper still owes it.
+ */
+export function hostedRunHandoffFailedDetail(cause: string, tornDown: boolean): string {
+  return tornDown
+    ? `its machine booted, but its supervision could not be started, so the machine was torn down: ${cause}`
+    : `its machine booted, but its supervision could not be started, and the machine could not be torn down (it is left for the reaper): ${cause}`;
+}
+
 /** The backstop's words for a run that waited its whole life for room. */
 export const HOSTED_RUN_NEVER_ADMITTED_DETAIL = `it waited the whole ${
   HOSTED_RUN_TIMEOUT_MS / 3_600_000
@@ -641,13 +654,16 @@ async function admitHostedRun(
 
   // ── Hand the booted session to the durable supervisor ──────────────────
   // The account the container booted on is on the run BEFORE anything can
-  // supervise, reap or bill it (MOTIR-9423); null for the process-wide fleet.
+  // supervise, reap or bill it (MOTIR-9423); null for the process-wide fleet
+  // AND for the install fleet, whose pseudo-account id has no `fleet_shard` row
+  // (MOTIR-10858). Every later step — supervise, cancel, timeout, settle, the
+  // sweep — routes from the SESSION, whose handle keeps that id.
   // A write that fails tears the container down below, like a failed enqueue.
   try {
     await withWorkspaceServiceContext(data.workspaceId, (tx) =>
       dispatchRunRepository.recordFleetShard(
         data.dispatchRunId,
-        booted.session.handle.shardId ?? null,
+        fleetShardIdForColumn(booted.session.handle.shardId),
         tx,
       ),
     );
@@ -663,15 +679,27 @@ async function admitHostedRun(
     );
   } catch (err) {
     // A container nobody supervises spends until the reaper finds it. Tear it
-    // down now, through the seam's own settle, and fail the run.
-    await hostedAgentContainerService.settle(booted.session, {
+    // down now, through the seam's own settle, and fail the run in words that
+    // say a machine WAS started (MOTIR-10858) — as a boot failure, so the
+    // person is told the machine could not start, never "nothing was booted".
+    console.error('[hostedRunService] a booted hosted run could not be handed to its supervisor', {
+      dispatchRunId: data.dispatchRunId,
+      shardId: booted.session.handle.shardId ?? null,
+      detail: detailOf(err),
+    });
+    const settled = await hostedAgentContainerService.settle(booted.session, {
       done: true,
       reason: 'provision_failed' satisfies TeardownReason,
       startedAt: null,
       exitCode: null,
-      failureDetail: 'its supervision could not be enqueued',
+      failureDetail: 'its supervision could not be started',
     });
-    throw err;
+    const detail = hostedRunHandoffFailedDetail(
+      detailOf(err),
+      settled.outcome !== 'teardown_failed',
+    );
+    await hostedRunService.endHostedRun(data.dispatchRunId, 'failed', detail);
+    return { kind: 'failed', detail };
   }
   return { kind: 'booted' };
 }

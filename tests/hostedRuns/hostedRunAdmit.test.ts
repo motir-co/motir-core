@@ -16,8 +16,15 @@ import { fleetCeilingService } from '@/lib/services/fleetCeilingService';
 import {
   HOSTED_RUN_NEVER_ADMITTED_DETAIL,
   hostedRunAdmitKey,
+  hostedRunHandoffFailedDetail,
   hostedRunService,
 } from '@/lib/services/hostedRunService';
+import {
+  hostedAgentContainerService,
+  type HostedAgentSession,
+} from '@/lib/services/hostedAgentContainerService';
+import { HostedRunBootFailedError } from '@/lib/hostedRuns/errors';
+import { fleetShardIdForColumn, INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
 import { planCapsService } from '@/lib/services/planCapsService';
 import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
@@ -486,5 +493,116 @@ describe('the run records the account its container booted on (MOTIR-9423)', () 
     expect(await runRow(run.dispatchRunId)).toMatchObject({ fleetShardId: a.id });
     expect(superviseSentAtRecord).toEqual([0]);
     expect(await adminDb.jobEvent.count({ where: { name: 'hosted-run/supervise' } })).toBe(1);
+  });
+});
+
+describe('a hosted run on the install fleet hands off with a null account (MOTIR-10858)', () => {
+  const installFake = () => fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+
+  beforeEach(async () => {
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'hosted_agent');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', 'subnet-a');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_INSTANCE_PROFILE_ARN', 'arn:aws:iam::1:instance-profile/vm');
+    // The fake orchestrator is priced in iad only; a real install names its region.
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', 'iad');
+    await adminDb.organization.update({
+      where: { id: fx.workspace.organizationId },
+      data: { isMeta: true },
+    });
+    await seedRepo({ state: 'created', owner: 'motir-projects', name: 'site' });
+  });
+
+  /** The session the start path handed to the supervisor, as the job stored it. */
+  async function supervisedSession(dispatchRunId: string): Promise<HostedAgentSession> {
+    const events = await adminDb.jobEvent.findMany({ where: { name: 'hosted-run/supervise' } });
+    const event = events.find(
+      (e) => (e.data as { dispatchRunId: string }).dispatchRunId === dispatchRunId,
+    );
+    if (!event) throw new Error(`no supervision event for ${dispatchRunId}`);
+    return (event.data as unknown as { session: HostedAgentSession }).session;
+  }
+
+  it('records fleet_shard_id null, enqueues supervision, and keeps the run running', async () => {
+    const run = await start((await newCard('on the install fleet')).identifier);
+
+    expect(installFake().provisioned).toHaveLength(1);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(await runRow(run.dispatchRunId)).toMatchObject({
+      status: 'running',
+      fleetShardId: null,
+    });
+    // The handle keeps the pseudo-account id: every later step routes from it.
+    const session = await supervisedSession(run.dispatchRunId);
+    expect(session.handle.shardId).toBe(INSTALL_FLEET_SHARD_ID);
+    expect(installFake().liveContainerIds()).toHaveLength(1);
+  });
+
+  it('the supervised session reaches the VM through the install fleet: its settle tears it down there', async () => {
+    const run = await start((await newCard('settled on the install fleet')).identifier);
+    const session = await supervisedSession(run.dispatchRunId);
+
+    const settled = await hostedAgentContainerService.settle(session, {
+      done: true,
+      reason: 'job_completed',
+      startedAt: session.handle.createdAt,
+      exitCode: 0,
+      failureDetail: null,
+    });
+
+    expect(settled.outcome).not.toBe('teardown_failed');
+    expect(installFake().liveContainerIds()).toEqual([]);
+    expect(await adminDb.fleetInFlightSlot.count()).toBe(0);
+  });
+
+  it('a hand-off that fails after the boot tears the VM down and says a machine was started', async () => {
+    vi.spyOn(dispatchRunRepository, 'recordFleetShard').mockRejectedValue(
+      new Error('Foreign key constraint violated'),
+    );
+    const card = await newCard('hand-off refused');
+
+    const error = await start(card.identifier).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(HostedRunBootFailedError);
+    const dispatchRunId = (error as HostedRunBootFailedError).dispatchRunId;
+    const detail = hostedRunHandoffFailedDetail('Foreign key constraint violated', true);
+    expect((error as HostedRunBootFailedError).detail).toBe(detail);
+    expect(installFake().provisioned).toHaveLength(1);
+    expect(installFake().liveContainerIds()).toEqual([]);
+    expect(await runRow(dispatchRunId)).toMatchObject({ status: 'failed' });
+    const bodies = (await adminDb.dispatchRunEvent.findMany({ where: { dispatchRunId } })).map(
+      (e) => `${e.body ?? ''} ${JSON.stringify(e.data)}`,
+    );
+    expect(bodies.some((b) => b.includes('its machine booted'))).toBe(true);
+    expect(bodies.some((b) => b.includes('the run could not start'))).toBe(false);
+    expect(await adminDb.jobEvent.count({ where: { name: 'hosted-run/supervise' } })).toBe(0);
+  });
+
+  it('a failed teardown after the hand-off says the machine is left for the reaper', async () => {
+    vi.spyOn(dispatchRunRepository, 'recordFleetShard').mockRejectedValue(new Error('refused'));
+    vi.spyOn(hostedAgentContainerService, 'settle').mockResolvedValue({
+      outcome: 'teardown_failed',
+      detail: 'teardown failed',
+    });
+
+    const error = await start((await newCard('teardown refused')).identifier).catch(
+      (err: unknown) => err,
+    );
+
+    expect(error).toBeInstanceOf(HostedRunBootFailedError);
+    expect((error as HostedRunBootFailedError).detail).toBe(
+      hostedRunHandoffFailedDetail('refused', false),
+    );
+  });
+});
+
+describe('fleetShardIdForColumn — what a fleet_shard_id column records (MOTIR-10858)', () => {
+  it('records a pool account id as itself, and null for the install fleet and no account', () => {
+    expect(fleetShardIdForColumn('cmshard123')).toBe('cmshard123');
+    expect(fleetShardIdForColumn(INSTALL_FLEET_SHARD_ID)).toBeNull();
+    expect(fleetShardIdForColumn(null)).toBeNull();
+    expect(fleetShardIdForColumn(undefined)).toBeNull();
   });
 });

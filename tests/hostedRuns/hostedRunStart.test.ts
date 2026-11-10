@@ -4,6 +4,7 @@ import { fakeOrchestrator } from '@motir/orchestrator';
 import { db } from '@/lib/db';
 import {
   HostedContinueRefusedError,
+  HostedRunBootFailedError,
   HostedModelNotOfferedError,
   HostedModelsUnavailableError,
   HostedRunCardNotReadyError,
@@ -479,7 +480,12 @@ describe('a leaf card — the run it starts', () => {
       return (original as (...args: unknown[]) => Promise<void>)(name, ...rest);
     }) as typeof sendEventModule.sendEvent);
 
-    await expect(start(card.identifier)).rejects.toThrow('queue is down');
+    // A boot failure, in words that say a machine WAS started (MOTIR-10858).
+    const error = await start(card.identifier).catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(HostedRunBootFailedError);
+    expect((error as HostedRunBootFailedError).detail).toBe(
+      'its machine booted, but its supervision could not be started, so the machine was torn down: queue is down',
+    );
 
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
