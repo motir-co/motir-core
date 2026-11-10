@@ -109,6 +109,9 @@ const { platformRunModelService } = await import('@/lib/services/platformRunMode
 const { _resetInstallationTokenCache } = await import('@/lib/github/appAuth');
 
 const AI = 'https://ai.test';
+
+/** Whether a URL is addressed to the motir-ai stub: compared by parsed origin, not by prefix. */
+const isAi = (url: string): boolean => new URL(url).origin === AI;
 const GATEWAY = 'https://gateway.test';
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const PEM = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString();
@@ -187,9 +190,10 @@ function stubHttp(): void {
       const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
       calls.push({ url, method, body });
 
-      if (url.startsWith(AI)) {
+      if (isAi(url)) {
         if (ai.down) throw new TypeError('fetch failed');
-        const path = url.slice(AI.length);
+        const { pathname, search } = new URL(url);
+        const path = pathname + search;
         if (path === '/v1/agent-models') {
           return json(200, {
             models: ai.offered.map((id) => ({ id, provider: provider(id) })),
@@ -358,7 +362,7 @@ function stubHttp(): void {
 }
 
 /** Calls the stub recorded to motir-ai, other than reads. */
-const aiWrites = () => calls.filter((c) => c.url.startsWith(AI) && c.method !== 'GET');
+const aiWrites = () => calls.filter((c) => isAi(c.url) && c.method !== 'GET');
 
 // ── the harness: a project with a repository, and the doors as a browser calls them ──
 
