@@ -40,13 +40,32 @@ See the keystone decision: [`docs/decisions/design-system-package.md`](../../doc
 
 ## Usage
 
-Compose the tokens in your `globals.css` (Tailwind v4 reads `@theme` from the
-imported CSS, so utilities generate with no extra config):
+Compose the tokens in your `globals.css` with three lines:
 
 ```css
 @import 'tailwindcss';
 @import '@motir/design-system/theme.css';
+/* Tailwind skips node_modules: scan the package's compiled components too. */
+@source '../node_modules/@motir/design-system/dist';
 ```
+
+The `@import` of `theme.css` is enough for the **token** utilities, because
+Tailwind v4 reads `@theme` from the imported CSS. It is not enough for the
+utilities the package's **components** use. Tailwind finds class names by
+scanning source files, and its automatic detection leaves out `node_modules`.
+A utility that appears only inside a compiled component under `dist/` (a
+display-font face, a large heading size, a two-column grid at a breakpoint) is
+then never generated. The build passes and nothing warns you; the component
+just renders without that style. The `@source` line tells Tailwind to scan
+`dist/` as well.
+
+The `@source` path is relative to the stylesheet it is written in. The line
+above is for an `app/globals.css` at the project root. For a
+`src/app/globals.css`, use `'../../node_modules/@motir/design-system/dist'`.
+
+Inside the motir-core monorepo, motir-core itself needs no `@source` line: the
+package is a workspace directory inside the project root, and Tailwind already
+scans its `src/` files.
 
 Apply a stored `{styleId, paletteId, typeId}` choice before hydration (FOUC-safe):
 
