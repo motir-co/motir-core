@@ -1,3 +1,5 @@
+import { unwrapProgressFrame } from '@/lib/ai/sseFrames';
+
 export const OUT_OF_CREDITS_CODE = 'MOTIR_AI_OUT_OF_CREDITS';
 
 export class PlanEditsClientError extends Error {
@@ -184,6 +186,8 @@ export async function consumeStream(
           onDone();
           return;
         }
+        // motir-ai nests a progress frame's payload under `data` (MOTIR-10864); every
+        // reader of these frames reads the payload's fields at the top level.
         onFrame?.(event, unwrapProgressFrame(data));
       }
     }
@@ -193,39 +197,6 @@ export async function consumeStream(
     if (onLost) onLost();
     else onError(null);
   }
-}
-
-const PROGRESS_ENVELOPE_KEYS: ReadonlySet<string> = new Set(['jobId', 'seq', 'data']);
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * A progress frame's PAYLOAD, flat, with its `jobId` and `seq` beside it (MOTIR-10864).
- *
- * motir-ai writes every progress frame as an envelope — `{ jobId, seq, data: <payload> }`
- * (`GET /v1/jobs/:id/stream`) — and core's relay passes it on unchanged. Every reader
- * on the browser side reads the payload's fields at the top level (`data.text` on a
- * `note`, `data.target` on a `laying`), so against the real wire each of them read
- * `undefined`: an answering session's notes were emitted, relayed and dropped, and the
- * rail sat on "Reading your request…" for the whole run.
- *
- * So the one consumer flattens it: the payload's fields, then the envelope's `jobId`
- * and `seq` over them, which is what the re-subscribe dedupe reads. A frame that is not
- * exactly that envelope — a `status` / `done` / `error` frame, a test seam's flat
- * frame, a payload that is not an object — is returned as it came.
- */
-export function unwrapProgressFrame(data: unknown): unknown {
-  if (!isPlainObject(data) || typeof data['seq'] !== 'number') return data;
-  const inner = data['data'];
-  if (!isPlainObject(inner)) return data;
-  if (Object.keys(data).some((key) => !PROGRESS_ENVELOPE_KEYS.has(key))) return data;
-  return {
-    ...inner,
-    ...(data['jobId'] !== undefined ? { jobId: data['jobId'] } : {}),
-    seq: data['seq'],
-  };
 }
 
 interface SseFrame {

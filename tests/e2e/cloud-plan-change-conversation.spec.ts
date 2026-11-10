@@ -54,6 +54,7 @@ import {
   PLAN_CHANGE_JOB_ID,
   PLAN_CHANGE_REFINE_JOB_ID,
 } from './_helpers/ai-augment-replan-seed';
+import { jobStreamBody } from './_helpers/job-stream-frames';
 
 // ⚠️ RE-POINTED FOR THE OVERLAY (MOTIR-4732, story MOTIR-4725). The planning
 // workspace was a ROUTE at `/planning`; it is a full-screen OVERLAY on the page
@@ -170,13 +171,15 @@ async function stubPlanChangeSubmit(
 }
 
 /** The augment job's SSE, carrying the REAL frame vocabulary the rail narrates
- *  (`search` / `planned` / `done`) — structured progress, not assistant tokens. */
-function progressSse(proposed: number): string {
-  return (
-    `event: search\ndata: {}\n\n` +
-    `event: planned\ndata: {"proposed":${proposed}}\n\n` +
-    `event: done\ndata: {}\n\n`
-  );
+ *  (`search` / `planned` / `done`) — structured progress, not assistant tokens —
+ *  on motir-ai's wire: each progress frame inside its `{ jobId, seq, data }`
+ *  envelope (MOTIR-10880). */
+function progressSse(jobId: string, proposed: number): string {
+  return jobStreamBody(jobId, [
+    ['search', {}],
+    ['planned', { proposed }],
+    ['done', {}],
+  ]);
 }
 
 async function stubStream(page: Page, jobId: string, body: string): Promise<void> {
@@ -302,8 +305,8 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     { jobId: PLAN_CHANGE_JOB_ID, planId: firstPlanId },
     { jobId: PLAN_CHANGE_REFINE_JOB_ID, planId: refinedPlanId },
   ]);
-  await stubStream(page, PLAN_CHANGE_JOB_ID, progressSse(1));
-  await stubStream(page, PLAN_CHANGE_REFINE_JOB_ID, progressSse(2));
+  await stubStream(page, PLAN_CHANGE_JOB_ID, progressSse(PLAN_CHANGE_JOB_ID, 1));
+  await stubStream(page, PLAN_CHANGE_REFINE_JOB_ID, progressSse(PLAN_CHANGE_REFINE_JOB_ID, 2));
   const releaseFirstResult = await gatePlanRead(page, firstPlanId);
 
   await signIn(page, seed.email, seed.password);
@@ -471,7 +474,9 @@ test('a failed run is recoverable in place — the thread and the retry survive'
     await route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: failing ? `event: error\ndata: {"code":"FAILED"}\n\n` : progressSse(1),
+      body: failing
+        ? `event: error\ndata: {"code":"FAILED"}\n\n`
+        : progressSse(PLAN_CHANGE_JOB_ID, 1),
     });
   });
 
