@@ -3827,3 +3827,17 @@ Removed: `fleetSettings.why.not_inventoried`, `fleetSettings.why.inventory_stale
 Unchanged. The `unverified` row is the job list's `<li>`: `font-mono text-xs`,
 `--el-text-secondary` (AA on the list's surface in both themes). The why line stays
 `--el-text-secondary`.
+
+## AMENDMENT 2026-11-10 — per-function platform defaults (Guide, Debug, Ask; Review agent, Design run, agent run per level)
+
+**Asset:** [`console--function-defaults.mock.html`](./console--function-defaults.mock.html), a
+delta of the AI planning page ([`console--ai-planning.mock.html`](./console--ai-planning.mock.html))
+and of the Hosted-run models page (the Model lists amendment above). Guide, Debug and Ask join the
+AI planning table under group captions, beside the per-audience Planning rows and above the
+unchanged dry-run review row; Review agent, Design run and the four agent-run difficulty defaults
+sit in a new **Run-side defaults** card under the run-model list. The full spec — every element,
+its copy, the confirm-with-reason wording, the withdrawn chip, the read-only and unavailable states
+and why each page holds which rows — is in
+[`../org-admin/design-notes.md`](../org-admin/design-notes.md) § _Settings › Organisation › AI
+models_, sub-section _The console's per-function default rows_, because the organisation room and
+these defaults are one feature.

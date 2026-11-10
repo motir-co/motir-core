@@ -2413,3 +2413,14 @@ reason code does not need a second sentence.
 - The review gate's could-not-run line, To resume and automatic re-run lines: worded from the refusal
   title above by the work that owns those surfaces.
 - The platform-admin capacity screen and any planning surface.
+
+## Run hosted — the source line gains organisation and design-run reasons (delta, 2026-11-10)
+
+**Asset:** [`run-section--org-model-defaults.mock.html`](./run-section--org-model-defaults.mock.html).
+It amends § _Run hosted — the picker says where its model came from_ (panels F1–F6): the door
+row and its line are unchanged in shape, and the line gains three reasons — an organisation
+default for a difficulty level, the organisation design-run model and the platform design-run
+model — each on a leaf and on a parent whose unfinished leaves are all design cards. A project
+override still reads as today. The copy table is in
+[`../org-admin/design-notes.md`](../org-admin/design-notes.md) § _Settings › Organisation › AI
+models_, sub-section _The Run hosted picker — the preselect reason line_.
