@@ -32,6 +32,12 @@ export interface PageDiscussionList extends PageCommentThreadsPage {
   readonly workItemRefs: WorkItemRefMap;
 }
 
+/**
+ * A write's answer: the written row, plus the work items ITS body links, so the
+ * panel draws a newly linked card as a chip without re-reading a list.
+ */
+export type WithWorkItemRefs<T> = T & { readonly workItemRefs: WorkItemRefMap };
+
 export interface PageCommentRefusal {
   readonly ok: false;
   /** The HTTP status, or `0` when the request never reached the server. */
@@ -100,7 +106,7 @@ export function listPageComments(
 export function createPageComment(
   pageId: string,
   bodyMd: string,
-): Promise<PageCommentResult<PageCommentThreadDto>> {
+): Promise<PageCommentResult<WithWorkItemRefs<PageCommentThreadDto>>> {
   return call(commentsPath(pageId), sendJson('POST', { bodyMd }));
 }
 
@@ -109,7 +115,7 @@ export function replyToPageComment(
   pageId: string,
   rootId: string,
   bodyMd: string,
-): Promise<PageCommentResult<PageCommentDto>> {
+): Promise<PageCommentResult<WithWorkItemRefs<PageCommentDto>>> {
   return call(commentsPath(pageId, rootId, 'replies'), sendJson('POST', { bodyMd }));
 }
 
@@ -118,7 +124,7 @@ export function editPageComment(
   pageId: string,
   commentId: string,
   bodyMd: string,
-): Promise<PageCommentResult<PageCommentDto>> {
+): Promise<PageCommentResult<WithWorkItemRefs<PageCommentDto>>> {
   return call(commentsPath(pageId, commentId), sendJson('PATCH', { bodyMd }));
 }
 

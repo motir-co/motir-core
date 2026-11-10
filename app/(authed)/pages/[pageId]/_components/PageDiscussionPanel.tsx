@@ -8,7 +8,6 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { Segmented } from '@/components/ui/Segmented';
 import type { MentionCandidate } from '@/components/ui/MarkdownEditor';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
-import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import type { PageCommentDto, PageCommentThreadDto } from '@/lib/pages';
 import { CommentComposer } from '@/app/(authed)/items/[key]/_components/CommentComposer';
 import {
@@ -283,15 +282,18 @@ export function PageDiscussionPanel({
     setWorkItemRefs((prev) => ({ ...prev, ...res.data.workItemRefs }));
   };
 
-  /**
-   * A write answers its comment without `workItemRefs`, so a body that links a work
-   * item no read has resolved yet is followed by a read of the Open list (the only
-   * list that takes writes), whose answer carries the summary. A body that links
-   * nothing new costs no request.
-   */
-  const followLinks = (bodyMd: string) => {
-    if (parseWorkItemTokenIds(bodyMd).some((id) => !(id in workItemRefs))) fetchList('open');
+  /** Merge the work items a write's own body links (its answer carries them). */
+  const mergeRefs = (refs: WorkItemRefMap | undefined) => {
+    if (refs && Object.keys(refs).length > 0) setWorkItemRefs((prev) => ({ ...prev, ...refs }));
   };
+
+  /**
+   * Resolve and Reopen on ONE thread go out one after another, so the server
+   * applies them in the order they were pressed and the latest answer is the
+   * thread's real state. Two in flight at once could land out of order and leave
+   * the server resolved while the panel shows it open.
+   */
+  const resolutionQueue = useRef(new Map<string, Promise<unknown>>());
 
   // The control's chip follows the open count.
   const openCount = counts?.open ?? null;
@@ -344,21 +346,21 @@ export function PageDiscussionPanel({
   async function submitComment(bodyMd: string): Promise<string | null> {
     const res = await createPageComment(pageId, bodyMd);
     if (!res.ok) return failure(res, 'post');
-    const thread = res.data;
+    const { workItemRefs: refs, ...thread } = res.data;
     setLists((prev) =>
       prev.open.threads.some((item) => item.id === thread.id)
         ? prev
         : { ...prev, open: { ...prev.open, threads: [thread, ...prev.open.threads] } },
     );
     adjustCounts({ open: 1 });
-    followLinks(thread.bodyMd);
+    mergeRefs(refs);
     return null;
   }
 
   async function submitReply(rootId: string, bodyMd: string): Promise<string | null> {
     const res = await replyToPageComment(pageId, rootId, bodyMd);
     if (!res.ok) return failure(res, 'reply');
-    const reply = res.data;
+    const { workItemRefs: refs, ...reply } = res.data;
     setLists((prev) =>
       mapThread(prev, rootId, (thread) =>
         thread.replies.some((item) => item.id === reply.id)
@@ -366,7 +368,7 @@ export function PageDiscussionPanel({
           : { ...thread, replies: [...thread.replies, reply] },
       ),
     );
-    followLinks(reply.bodyMd);
+    mergeRefs(refs);
     return null;
   }
 
@@ -380,7 +382,8 @@ export function PageDiscussionPanel({
     const res = await editPageComment(pageId, commentId, bodyMd);
     if (!res.ok) return failure(res, 'edit');
     if (!isLatest(key, seq)) return null;
-    const edited: PageCommentDto = res.data;
+    const { workItemRefs: refs, ...rest } = res.data;
+    const edited: PageCommentDto = rest;
     setLists((prev) =>
       mapThread(prev, rootId, (thread) =>
         thread.id === edited.id
@@ -391,7 +394,7 @@ export function PageDiscussionPanel({
             },
       ),
     );
-    followLinks(edited.bodyMd);
+    mergeRefs(refs);
     return null;
   }
 
@@ -430,10 +433,17 @@ export function PageDiscussionPanel({
     setThreadError(thread.id, null);
     setLists((prev) => placeThread(prev, optimistic));
     shift(from, to);
-    const res =
+    const send = () =>
       to === 'resolved'
-        ? await resolvePageCommentThread(pageId, thread.id)
-        : await reopenPageCommentThread(pageId, thread.id);
+        ? resolvePageCommentThread(pageId, thread.id)
+        : reopenPageCommentThread(pageId, thread.id);
+    // The helpers never reject, so the queue's tail always settles.
+    const request = (resolutionQueue.current.get(thread.id) ?? Promise.resolve()).then(send);
+    resolutionQueue.current.set(thread.id, request);
+    const res = await request;
+    if (resolutionQueue.current.get(thread.id) === request) {
+      resolutionQueue.current.delete(thread.id);
+    }
     if (!isLatest(key, seq)) return;
     if (res.ok) {
       setLists((prev) => placeThread(prev, res.data));

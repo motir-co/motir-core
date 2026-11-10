@@ -675,11 +675,14 @@ describe('PageDiscussionPanel — resolve and reopen', () => {
     // Moved at once: the next press is Reopen, on the Resolved side.
     await act(async () => fireEvent.click(switchButton('Resolved')));
     fireEvent.click(screen.getByRole('button', { name: 'Reopen' }));
+    // The Reopen waits for the Resolve, so the server sees them in press order.
     await act(async () => reopening.resolve(ok(root)));
-    // The resolve's answer lands LAST and is dropped.
+    expect(client.reopenPageCommentThread).not.toHaveBeenCalled();
+    // The resolve's answer is superseded by the later press and is dropped.
     await act(async () =>
       resolving.resolve(ok({ ...root, resolvedAt: new Date().toISOString(), resolvedBy: ME })),
     );
+    expect(client.reopenPageCommentThread).toHaveBeenCalledTimes(1);
     expect(screen.getByText('No resolved threads')).toBeTruthy();
     await act(async () => fireEvent.click(switchButton('Open')));
     expect(threadOf(BO.name)).toBeTruthy();
@@ -784,50 +787,44 @@ describe('PageDiscussionPanel — work-item links', () => {
     }
   });
 
-  it('reads the Open list again after a write that links a card no read has resolved', async () => {
-    client.listPageComments.mockResolvedValueOnce(list([], { workItemRefs: REFS }));
-    await mountPanel();
-    expect(client.listPageComments).toHaveBeenCalledTimes(1);
-
-    // A body linking only resolved cards, or none, costs no read.
-    fireEvent.click(screen.getByRole('button', { name: 'Add a comment…' }));
-    let box = screen.getByRole('textbox', { name: 'Comment on this page' });
+  it('draws a card a new comment links from the write answer, and keeps a Load more window', async () => {
     const known = thread(ME, [], { bodyMd: 'As [MOTIR-706](motir:wi_live) says.' });
-    fireEvent.change(box, { target: { value: known.bodyMd } });
-    client.createPageComment.mockResolvedValueOnce(ok(known));
-    await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Comment' })));
-    expect(client.listPageComments).toHaveBeenCalledTimes(1);
+    const older = thread(BO, [], { bodyMd: 'Older.' });
+    client.listPageComments.mockResolvedValueOnce(
+      list([known], { nextCursor: 'cur-1', counts: { open: 3, resolved: 0 }, workItemRefs: REFS }),
+    );
+    await mountPanel();
+    client.listPageComments.mockResolvedValueOnce(
+      list([older], { nextCursor: 'cur-2', counts: { open: 3, resolved: 0 } }),
+    );
+    await act(async () =>
+      fireEvent.click(screen.getByRole('button', { name: 'Load more threads' })),
+    );
+    expect(client.listPageComments).toHaveBeenCalledTimes(2);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add a comment…' }));
-    box = screen.getByRole('textbox', { name: 'Comment on this page' });
+    const box = screen.getByRole('textbox', { name: 'Comment on this page' });
     const fresh = thread(ME, [], { bodyMd: 'Blocked by [MOTIR-707](motir:wi_later).' });
     fireEvent.change(box, { target: { value: fresh.bodyMd } });
-    client.createPageComment.mockResolvedValueOnce(ok(fresh));
-    client.listPageComments.mockResolvedValueOnce(
-      list([fresh, known], { workItemRefs: { wi_later: LATER } }),
+    client.createPageComment.mockResolvedValueOnce(
+      ok({ ...fresh, workItemRefs: { wi_later: LATER } }),
     );
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Comment' })));
+
+    // No list is read again: the thread Load more brought in, and its cursor, stay.
     expect(client.listPageComments).toHaveBeenCalledTimes(2);
-    expect(client.listPageComments).toHaveBeenLastCalledWith('page-1', {
-      status: 'open',
-      order: 'desc',
-    });
-    await waitFor(() =>
-      expect(
-        chipFor(screen.getByTestId(`page-comment-${fresh.id}`), 'MOTIR-707').classList.contains(
-          'is-deleted',
-        ),
-      ).toBe(false),
-    );
-    // The earlier read's summary is kept beside the new one.
-    expect(
-      chipFor(screen.getByTestId(`page-comment-${known.id}`), 'MOTIR-706').classList.contains(
-        'is-deleted',
-      ),
-    ).toBe(false);
+    expect(screen.getByTestId(`page-comment-${older.id}`)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Load more threads' })).toBeTruthy();
+    for (const [id, key] of [
+      [fresh.id, 'MOTIR-707'],
+      [known.id, 'MOTIR-706'],
+    ] as const) {
+      const chip = chipFor(screen.getByTestId(`page-comment-${id}`), key);
+      expect(chip.classList.contains('is-deleted')).toBe(false);
+    }
   });
 
-  it('follows a reply and an edit that link a new card the same way', async () => {
+  it('draws the cards a reply and an edit link from their own answers', async () => {
     const root = thread(BO);
     client.listPageComments.mockResolvedValueOnce(list([root]));
     await mountPanel();
@@ -839,13 +836,14 @@ describe('PageDiscussionPanel — work-item links', () => {
       bodyMd: 'Tracked in [MOTIR-706](motir:wi_live).',
     });
     fireEvent.change(box, { target: { value: reply.bodyMd } });
-    client.replyToPageComment.mockResolvedValueOnce(ok(reply));
-    client.listPageComments.mockResolvedValueOnce(
-      list([{ ...root, replies: [reply] }], { workItemRefs: REFS }),
-    );
+    client.replyToPageComment.mockResolvedValueOnce(ok({ ...reply, workItemRefs: REFS }));
     const submit = within(row).getAllByRole('button', { name: 'Reply' });
     await act(async () => fireEvent.click(submit[submit.length - 1]!));
-    expect(client.listPageComments).toHaveBeenCalledTimes(2);
+    expect(
+      chipFor(screen.getByTestId(`page-comment-${reply.id}`), 'MOTIR-706').classList.contains(
+        'is-deleted',
+      ),
+    ).toBe(false);
 
     const mine = screen.getByTestId(`page-comment-${reply.id}`);
     fireEvent.click(within(mine).getByRole('button', { name: 'Edit' }));
@@ -856,12 +854,17 @@ describe('PageDiscussionPanel — work-item links', () => {
       editedAt: reply.createdAt,
     };
     fireEvent.change(edit, { target: { value: edited.bodyMd } });
-    client.editPageComment.mockResolvedValueOnce(ok(edited));
-    client.listPageComments.mockResolvedValueOnce(
-      list([{ ...root, replies: [edited] }], { workItemRefs: { wi_later: LATER } }),
+    client.editPageComment.mockResolvedValueOnce(
+      ok({ ...edited, workItemRefs: { wi_later: LATER } }),
     );
     await act(async () => fireEvent.click(within(mine).getByRole('button', { name: 'Save' })));
-    expect(client.listPageComments).toHaveBeenCalledTimes(3);
+    expect(
+      chipFor(screen.getByTestId(`page-comment-${reply.id}`), 'MOTIR-707').classList.contains(
+        'is-deleted',
+      ),
+    ).toBe(false);
+    // Neither write read a list again.
+    expect(client.listPageComments).toHaveBeenCalledTimes(1);
   });
 });
 

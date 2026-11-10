@@ -61,6 +61,20 @@ export interface PageCommentThreadsResponse extends PageCommentThreadsPage {
   readonly workItemRefs: WorkItemRefMap;
 }
 
+/**
+ * A write's answer: the written row, and the live summaries of the work items ITS
+ * body links (MOTIR-10866 review). The panel merges them, so a card linked in a new
+ * or edited comment draws as a chip at once, with no re-read of a list.
+ */
+export type WithWorkItemRefs<T> = T & { readonly workItemRefs: WorkItemRefMap };
+
+async function withRefs<T extends { readonly bodyMd: string }>(
+  row: T,
+  ctx: ServiceContext,
+): Promise<WithWorkItemRefs<T>> {
+  return { ...row, workItemRefs: await resolveMarkdownBodiesWorkItemRefs([row.bodyMd], ctx) };
+}
+
 interface PageScope {
   projectId: string;
   pageId: string;
@@ -163,37 +177,43 @@ export const pageCommentsService = {
   async postPageComment(
     ctx: ServiceContext,
     input: PostPageCommentInput,
-  ): Promise<PageCommentThreadDto> {
-    return gatedWrite(ctx, input, (store, scope) =>
+  ): Promise<WithWorkItemRefs<PageCommentThreadDto>> {
+    const thread = await gatedWrite(ctx, input, (store, scope) =>
       createPageComment(store, systemClock, {
         ...scope,
         bodyMd: input.bodyMd,
         anchor: input.anchor,
       }),
     );
+    return withRefs(thread, ctx);
   },
 
-  async postPageReply(ctx: ServiceContext, input: PostPageReplyInput): Promise<PageCommentDto> {
-    return gatedWrite(ctx, input, (store, scope) =>
+  async postPageReply(
+    ctx: ServiceContext,
+    input: PostPageReplyInput,
+  ): Promise<WithWorkItemRefs<PageCommentDto>> {
+    const reply = await gatedWrite(ctx, input, (store, scope) =>
       replyToPageComment(store, systemClock, {
         ...scope,
         parentCommentId: input.parentCommentId,
         bodyMd: input.bodyMd,
       }),
     );
+    return withRefs(reply, ctx);
   },
 
   async editPageCommentBody(
     ctx: ServiceContext,
     input: EditPageCommentBodyInput,
-  ): Promise<PageCommentDto> {
-    return gatedWrite(ctx, input, (store, scope) =>
+  ): Promise<WithWorkItemRefs<PageCommentDto>> {
+    const comment = await gatedWrite(ctx, input, (store, scope) =>
       editPageComment(store, systemClock, {
         ...scope,
         commentId: input.commentId,
         bodyMd: input.bodyMd,
       }),
     );
+    return withRefs(comment, ctx);
   },
 
   async removePageComment(

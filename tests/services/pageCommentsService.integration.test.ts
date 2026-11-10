@@ -136,6 +136,39 @@ describe('pageCommentsService — reads', () => {
     });
   });
 
+  it('answers each write with the work items its OWN body links', async () => {
+    const f = await makeFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: f.projectId, kind: 'task', title: 'Rotate the keys' },
+      f.owner,
+    );
+    const other = await workItemsService.createWorkItem(
+      { projectId: f.projectId, kind: 'task', title: 'Ship the notes' },
+      f.owner,
+    );
+    const root = await pageCommentsService.postPageComment(f.owner, {
+      ...on(f),
+      bodyMd: `Blocked by [${item.identifier}](motir:${item.id}).`,
+    });
+    expect(root.workItemRefs[item.id]).toMatchObject({ identifier: item.identifier });
+
+    const reply = await pageCommentsService.postPageReply(f.owner, {
+      ...on(f),
+      parentCommentId: root.id,
+      bodyMd: 'No links here.',
+    });
+    expect(reply.workItemRefs).toEqual({});
+
+    const edited = await pageCommentsService.editPageCommentBody(f.owner, {
+      ...on(f),
+      commentId: reply.id,
+      bodyMd: `Now [${other.identifier}](motir:${other.id}).`,
+    });
+    expect(edited.workItemRefs[other.id]).toMatchObject({ identifier: other.identifier });
+    // Only its own body: the root's link is not in the edit's answer.
+    expect(edited.workItemRefs[item.id]).toBeUndefined();
+  });
+
   it('a viewer reads with no write capabilities; a member may comment; the owner moderates', async () => {
     const f = await makeFixture();
     const viewer = await actorAs(f, 'viewer', 'viewer');
