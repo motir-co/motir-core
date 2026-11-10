@@ -158,6 +158,9 @@ export const GET = withV1Route<{ key: string }>(
       runnerPostsAgentReport: parseAgentReport(ctx.req),
       // MOTIR-10000: the client also posts the agent's `decisions`.
       runnerPostsDecisions: parseAgentReport(ctx.req, 'agentReportDecisions'),
+      // MOTIR-10877: the client also links the agent's `pullRequests` and publishes its
+      // `howToTest`.
+      runnerPostsDelivery: parseAgentReport(ctx.req, 'agentReportDelivery'),
       ...(continueFrom ? { continueFrom } : {}),
     });
 

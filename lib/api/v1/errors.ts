@@ -192,6 +192,13 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   RUN_STOP_REPORT_INVALID: 422,
   // 409 — the leg already carries a discrepancy record (the agent made the call itself).
   DISCREPANCY_ALREADY_RECORDED: 409,
+  // MOTIR-10877 — the run's How to test (`POST …/dispatch-runs/{id}/how-to-test`) answers the
+  // record's own refusals, each one a request the CLI can fix.
+  TEST_INSTRUCTIONS_WORK_ITEM_NOT_FOUND: 404,
+  TEST_INSTRUCTIONS_REPO_NOT_IN_PROJECT: 422,
+  TEST_INSTRUCTIONS_CAP_EXCEEDED: 422,
+  TEST_INSTRUCTIONS_INVALID_FIELD: 422,
+  TEST_INSTRUCTIONS_CONFLICT: 409,
   // ── MOTIR-6821, a hosted REVIEW run's prompt and verdict (`hosted-agent-run.md` §8) ──
   // 403 — not a review run's own credential: a PAT, a device token, a BUILD run's token.
   REVIEW_RUN_TOKEN_REQUIRED: 403,

@@ -507,8 +507,10 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     // `archivePage`, `restorePage`, `linkPageWorkItem` and `unlinkPageWorkItem`
     // (all `page:edit`). 84 with MOTIR-10333's `submitWorkItemReviewVerdict`
     // (`work_item:edit`) — a person's own review agent's verdict. 85 with MOTIR-10334's
-    // `dismissWorkItemReview` (`work_item:edit`) — the routed person's Dismiss.
-    expect(V1_OPERATIONS.length).toBe(85);
+    // `dismissWorkItemReview` (`work_item:edit`) — the routed person's Dismiss. 86 with
+    // MOTIR-10877's `…/dispatch-runs/{id}/how-to-test` (`publishDispatchRunHowToTest`,
+    // `work_item:edit`) — the How to test a tool-less agent wrote, published by its run.
+    expect(V1_OPERATIONS.length).toBe(86);
     for (const operation of V1_OPERATIONS) {
       expect(
         isGrantable(operation.permission),

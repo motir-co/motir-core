@@ -1709,6 +1709,16 @@ looks like a right one, and the record cannot be re-interrogated after the run.
 The directory is created for one dispatch and removed when it ends, so a report
 can only ever describe the run it came from.
 
+**An agent with no Motir tools delivers through the same file** (MOTIR-10877). A
+hosted or agent-instance agent cannot call `link_pull_request` or
+`publish_test_instructions`, so it writes `"pullRequests"` (each pull request URL)
+and `"howToTest"` (`{"bodyMd": "…", "previewPath": "/…"}`) beside `"model"`. When it
+exits, the CLI links each pull request (or, with none in the file, the work
+branch's open pull request from `gh pr view`), then publishes the How to test with
+each repository's pushed head, then moves the card to Implemented, in that order.
+A run that pushed work but could link no pull request leaves the card In Progress,
+names the branch on the run's leg, and exits 1.
+
 ### Headless recipes
 
 An unattended run needs the agent to stop asking for approval. These flags

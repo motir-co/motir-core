@@ -309,6 +309,12 @@ export interface DispatchPromptOptions {
    * {@link import('@/lib/dispatch/promptTemplate').DispatchPromptSource.runnerPostsDecisions}.
    */
   runnerPostsDecisions?: boolean;
+  /**
+   * Whether the runner also links the agent's `pullRequests` and publishes its `howToTest`
+   * (MOTIR-10877) — see
+   * {@link import('@/lib/dispatch/promptTemplate').DispatchPromptSource.runnerPostsDelivery}.
+   */
+  runnerPostsDelivery?: boolean;
 }
 
 /**
@@ -584,6 +590,9 @@ export const dispatchPromptService = {
       ...(opts.runnerPostsDecisions === undefined
         ? {}
         : { runnerPostsDecisions: opts.runnerPostsDecisions }),
+      ...(opts.runnerPostsDelivery === undefined
+        ? {}
+        : { runnerPostsDelivery: opts.runnerPostsDelivery }),
     });
 
     return {

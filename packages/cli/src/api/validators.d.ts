@@ -90,6 +90,7 @@ export declare const operation_moveWorkItemsToBacklog: ValidateFunction;
 export declare const operation_moveWorkItemsToSprint: ValidateFunction;
 export declare const operation_openDispatchRun: ValidateFunction;
 export declare const operation_openPlanSession: ValidateFunction;
+export declare const operation_publishDispatchRunHowToTest: ValidateFunction;
 export declare const operation_recordDispatchRunDiscrepancy: ValidateFunction;
 export declare const operation_recordWorkItemIntegration: ValidateFunction;
 export declare const operation_reportDispatchRunStop: ValidateFunction;

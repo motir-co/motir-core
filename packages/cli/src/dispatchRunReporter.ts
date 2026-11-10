@@ -241,6 +241,16 @@ export interface DispatchRunReporter {
    * throws, a no-op when no run is held. OPTIONAL, as above.
    */
   reportStop?(key: string, stop: AgentStopReport): Promise<void>;
+  /**
+   * Publish the run target `key`'s HOW TO TEST (MOTIR-10877) — the body an agent with no
+   * Motir tools wrote into its self-report, with each repository's pushed head — with the
+   * run's own credential. Resolves `true` when the record is published, `false` when it could
+   * not be (no run, the server refused); never throws. OPTIONAL, as above.
+   */
+  publishHowToTest?(
+    key: string,
+    body: { bodyMd: string; previewPath?: string; repos: { repo: string; commitSha: string }[] },
+  ): Promise<boolean>;
   /** True once a failure has taken reporting down for this session. */
   readonly offline: boolean;
   /** The run this reporter opened, or null when it never opened one. */
@@ -272,6 +282,7 @@ export interface DispatchRunReporterDeps {
         | 'reportDispatchRunUnbuildable'
         | 'recordDispatchRunDiscrepancy'
         | 'reportDispatchRunStop'
+        | 'publishDispatchRunHowToTest'
       >
     >;
   /** Where the single offline warning goes. `console.error` in production. */
@@ -702,6 +713,23 @@ export function createDispatchRunReporter(deps: DispatchRunReporterDeps): Dispat
             (stop.toPlanning ? ' or move it to Planning' : '') +
             ' in Motir. The run continues.',
         );
+      }
+    },
+
+    // The run target's How to test (MOTIR-10877), on the same terms as the two writes above.
+    async publishHowToTest(key, body) {
+      const id = runId;
+      const client = deps.client;
+      if (id === null || closed || client.publishDispatchRunHowToTest === undefined) return false;
+      try {
+        await client.publishDispatchRunHowToTest({ runId: id, key, ...body });
+        return true;
+      } catch (err) {
+        warn(
+          `motir: could not publish How to test on ${key} in Motir` +
+            `${err instanceof Error ? ` (${err.message})` : ''}. The run continues.`,
+        );
+        return false;
       }
     },
 

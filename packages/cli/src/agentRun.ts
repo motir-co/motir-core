@@ -104,6 +104,24 @@ export interface AgentRunResult {
    * make those writes with the run's own credential. Null (or absent) when it wrote none.
    */
   stop?: AgentStopReport | null;
+  /**
+   * The pull requests the agent OPENED, by URL, written into its self-report as
+   * `pullRequests` (MOTIR-10877) — the prompt tells an agent with no Motir tools to, so the
+   * CLI links each one to the card with the run's own credential. Null (or absent) when it
+   * wrote none.
+   */
+  pullRequests?: string[] | null;
+  /**
+   * The run target's HOW TO TEST, written into the self-report as `howToTest` (MOTIR-10877) —
+   * the CLI publishes it with each repository's pushed head. Null (or absent) when it wrote none.
+   */
+  howToTest?: AgentHowToTest | null;
+}
+
+/** The How to test an agent with no Motir tools wrote: the Markdown, and a preview path. */
+export interface AgentHowToTest {
+  bodyMd: string;
+  previewPath: string | null;
 }
 
 /** One point of a build-through: what the plan asked · what was built · why. */
@@ -168,6 +186,18 @@ const MAX_UNBUILDABLE_REASON_LENGTH = 4000;
  */
 const MAX_MODEL_LENGTH = 200;
 
+/**
+ * The server's bounds on a How to test (`TEST_INSTRUCTIONS_*`): the body's UTF-8 bytes, the
+ * preview path's characters, and the repository sections — so a pull-request list longer than
+ * that is cut to it. A body over the cap is DROPPED, never cut: the server refuses a truncated
+ * one for a reason (a How to test cut mid-section reads as complete), so the CLI does not send it.
+ */
+const MAX_HOW_TO_TEST_BODY_BYTES = 32 * 1024;
+const MAX_PREVIEW_PATH_LENGTH = 500;
+const MAX_PULL_REQUESTS = 8;
+/** A GitHub pull-request URL: the only shape the link door resolves. */
+const PULL_REQUEST_URL = /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+\/?$/;
+
 /** What the self-report said. Each field is read on its own: a bad one is null. */
 export interface AgentReport {
   model: string | null;
@@ -175,6 +205,8 @@ export interface AgentReport {
   discrepancy: AgentDiscrepancyPoint[] | null;
   decisions: AgentDecisionPoint[] | null;
   stop: AgentStopReport | null;
+  pullRequests: string[] | null;
+  howToTest: AgentHowToTest | null;
 }
 
 const EMPTY_REPORT: AgentReport = {
@@ -183,6 +215,8 @@ const EMPTY_REPORT: AgentReport = {
   discrepancy: null,
   decisions: null,
   stop: null,
+  pullRequests: null,
+  howToTest: null,
 };
 
 /**
@@ -205,12 +239,14 @@ export function readAgentReport(path: string): AgentReport {
     return EMPTY_REPORT;
   }
   if (typeof parsed !== 'object' || parsed === null) return EMPTY_REPORT;
-  const { model, unbuildable, discrepancy, decisions, stop } = parsed as {
+  const { model, unbuildable, discrepancy, decisions, stop, pullRequests, howToTest } = parsed as {
     model?: unknown;
     unbuildable?: unknown;
     discrepancy?: unknown;
     decisions?: unknown;
     stop?: unknown;
+    pullRequests?: unknown;
+    howToTest?: unknown;
   };
   const unbuildableReason = reasonOf(unbuildable);
   return {
@@ -219,7 +255,40 @@ export function readAgentReport(path: string): AgentReport {
     discrepancy: discrepancyOf(discrepancy),
     decisions: decisionsOf(decisions),
     stop: stopOf(stop, unbuildableReason),
+    pullRequests: pullRequestsOf(pullRequests),
+    howToTest: howToTestOf(howToTest),
   };
+}
+
+/**
+ * The pull-request URLs (MOTIR-10877). Anything that is not a GitHub pull-request URL is
+ * dropped, not the list; duplicates collapse; the server's eight repository sections bound it.
+ */
+function pullRequestsOf(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const urls: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const url = entry.trim().replace(/\/$/, '');
+    if (PULL_REQUEST_URL.test(url) && !urls.includes(url)) urls.push(url);
+  }
+  return urls.length === 0 ? null : urls.slice(0, MAX_PULL_REQUESTS);
+}
+
+/**
+ * The How to test (MOTIR-10877): a non-blank `bodyMd` within the server's byte cap, and a
+ * `previewPath` kept only when it is a path (`/…`) within its cap. An over-cap body is no How
+ * to test at all — see {@link MAX_HOW_TO_TEST_BODY_BYTES}.
+ */
+function howToTestOf(value: unknown): AgentHowToTest | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  if (typeof raw.bodyMd !== 'string') return null;
+  const bodyMd = raw.bodyMd.trim();
+  if (bodyMd === '' || Buffer.byteLength(bodyMd, 'utf8') > MAX_HOW_TO_TEST_BODY_BYTES) return null;
+  const path = typeof raw.previewPath === 'string' ? raw.previewPath.trim() : '';
+  const previewPath = path.startsWith('/') && path.length <= MAX_PREVIEW_PATH_LENGTH ? path : null;
+  return { bodyMd, previewPath };
 }
 
 /** A trimmed, non-empty string cut to `max`, or null. Cut rather than dropped, like a reason. */

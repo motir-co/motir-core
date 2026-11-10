@@ -21,6 +21,8 @@ import {
   findingsPolicyOf,
   renderClaimRefusal,
   renderFindingsPolicy,
+  pushedButUnlinked,
+  renderNoLinkedPullRequest,
   renderNothingPushed,
   renderReplanSubmitted,
   renderRepositoriesBlock,
@@ -812,6 +814,24 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
       kind: 'record',
       cwd: target.cwd,
       record: { ...base, outcome: 'failed', detail: 'bootstrap checkout missing' },
+    };
+  }
+
+  // ⚠️ PUSHED, BUT LINKED TO NOTHING (MOTIR-10877) — `motir run`'s rule, kept here too: a
+  // card nothing would close on merge is not Implemented. The detail names each branch.
+  if (pushedButUnlinked(verdict)) {
+    const unlinked = verdict.delivery?.unlinked ?? [];
+    info(renderNoLinkedPullRequest(entry.key, unlinked));
+    return {
+      kind: 'record',
+      cwd: target.cwd,
+      record: {
+        ...base,
+        outcome: 'failed',
+        detail:
+          'no pull request linked: ' +
+          (unlinked.map((u) => u.branch ?? u.repository ?? '?').join(', ') || 'none found'),
+      },
     };
   }
 

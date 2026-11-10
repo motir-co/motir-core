@@ -255,6 +255,14 @@ const WORK_LOOP_UNMIRRORED: Record<string, string> = {
     'wrote into `$MOTIR_AGENT_REPORT`: one comment and the move to Planning, with the run’s own ' +
     'credential. An agent with the Motir tools makes the same writes through `add_comment` and ' +
     '`transition_status`; no single tool mirrors the pair. `work_item:edit`, the key both assert.',
+  publishDispatchRunHowToTest:
+    'MOTIR-10877 — the run’s HOW TO TEST, posted by the process AROUND the agent: the CLI reads ' +
+    'the body the agent wrote into `$MOTIR_AGENT_REPORT` as `howToTest` and publishes it with ' +
+    'the run’s own credential and the head commits it read itself, because a hosted or ' +
+    'agent-instance agent holds no Motir token and `/api/mcp` refuses a run-bound one. ' +
+    '`publish_test_instructions` is the AGENT’s door to the same record and stays its route ' +
+    'when it has the tools; it addresses the card by key alone, where this door attributes the ' +
+    'version to a named run’s open leg. `work_item:edit`, the key both assert.',
   dismissWorkItemReview:
     'MOTIR-10334 · `approval-gates.md` §12.15 — DISMISS THE REVIEW is the routed PERSON ' +
     'overruling the review agent, with a reason, from the card’s review line. Its caller is ' +
@@ -329,7 +337,8 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
     // 30 since MOTIR-8722: the run's discrepancy record and its STOP report.
     // 31 since MOTIR-10333: the user-token verdict door.
     // 32 since MOTIR-10334: Dismiss the review, the person's overrule of a send-back.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(32);
+    // 33 since MOTIR-10877: the run's How to test, the CLI publishing what a tool-less agent wrote.
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(33);
   });
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {

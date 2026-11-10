@@ -1206,5 +1206,21 @@
  *   `bugs` is the 1.81.0 body, answered as before with `bugs: []`.
  *
  *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.82.0` after `1.81.0` above.
+ *
+ * - `1.83.0` — MOTIR-10877 adds `publishDispatchRunHowToTest`
+ *   (`POST /api/v1/dispatch-runs/{id}/how-to-test`, `work_item:edit`, body
+ *   `{ key, bodyMd, previewPath?, repos? }`, `200` with `RunHowToTestAcknowledgement` —
+ *   `{ testInstructionsId, created }`): the CLI publishes the run target's How to test with
+ *   the run's own credential, from what an agent with no Motir tools wrote into
+ *   `$MOTIR_AGENT_REPORT`, so a hosted run and a run inside an agent instance reach it. A run
+ *   token may call it for its own run (`runTokenRoutes.ts`, `own_run`). `getWorkItemDispatchPrompt`
+ *   gains the optional `agentReportDelivery` query parameter: with it the prompt names the
+ *   `pullRequests` and `howToTest` file route. The record's own refusals
+ *   (`TEST_INSTRUCTIONS_*`) are now mapped codes.
+ *
+ *   Additive: one new operation, one new component, one optional query parameter and codes
+ *   for new conditions (§8's allowed list).
+ *
+ *   ⚠️ RE-READ ON `origin/main` BEFORE MERGE: this claims `1.83.0` after `1.82.0` above.
  */
-export const V1_CONTRACT_VERSION = '1.82.0';
+export const V1_CONTRACT_VERSION = '1.83.0';

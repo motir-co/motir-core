@@ -2120,6 +2120,9 @@ export class MotirClient {
         agentReport: '1',
         // ALWAYS sent (MOTIR-10000): this CLI also posts the agent's `decisions`.
         agentReportDecisions: '1',
+        // ALWAYS sent (MOTIR-10877): this CLI also links the agent's `pullRequests` and
+        // publishes its `howToTest` (`runDelivery.ts`), before the card moves to Implemented.
+        agentReportDelivery: '1',
         ...(opts.continueFrom ? { continueFrom: opts.continueFrom } : {}),
       },
     });
@@ -2619,6 +2622,30 @@ export class MotirClient {
       },
     });
     return { commentId: body.commentId, movedToPlanning: body.movedToPlanning };
+  }
+
+  /**
+   * The run target's HOW TO TEST, published by the run (MOTIR-10877) — the body an agent with
+   * no Motir tools wrote into `$MOTIR_AGENT_REPORT`, with each repository's pushed head. The
+   * same record `publish_test_instructions` writes, attributed to THIS run.
+   */
+  async publishDispatchRunHowToTest(args: {
+    runId: string;
+    key: string;
+    bodyMd: string;
+    previewPath?: string;
+    repos: { repo: string; commitSha: string }[];
+  }): Promise<{ testInstructionsId: string; created: boolean }> {
+    const body = await this.v1.request('publishDispatchRunHowToTest', {
+      path: { id: args.runId },
+      body: {
+        key: args.key,
+        bodyMd: args.bodyMd,
+        ...(args.previewPath ? { previewPath: args.previewPath } : {}),
+        ...(args.repos.length > 0 ? { repos: args.repos } : {}),
+      },
+    });
+    return { testInstructionsId: body.testInstructionsId, created: body.created };
   }
 
   /** CLOSE the run with its stop reason. The status is DERIVED server-side. */
