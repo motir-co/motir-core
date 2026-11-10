@@ -458,6 +458,12 @@ model User {
   // Decision pages this person published (Story MOTIR-5761). Restrict, as
   // `PageVersion.author`: publishing is durable attribution.
   decisionPagePublications         DecisionPagePublication[]           @relation("DecisionPagePublisher")
+  // Page comments this person wrote (Story MOTIR-10866). Restrict, as
+  // `PageVersion.author`: authorship is durable attribution.
+  pageComments                     PageComment[]                       @relation("PageCommentAuthor")
+  // Page threads this person resolved. SET NULL: deleting the user forgets who
+  // resolved a thread, never that it is resolved.
+  resolvedPageComments             PageComment[]                       @relation("PageCommentResolver")
   pageWorkItemLinksCreated         PageWorkItemLink[]                  @relation("PageWorkItemLinkCreator")
   // Monitor connections this person BOUND (Story MOTIR-4926 · MOTIR-4929 ·
   // MOTIR-5576) — whose identity the reconciler files each monitor bug as.
@@ -1875,6 +1881,7 @@ model Workspace {
   folders                     Folder[]
   pages                       Page[]
   pageVersions                PageVersion[]
+  pageComments                PageComment[]
   projectAutoTranslateChanges ProjectAutoTranslateChange[]
   decisionPagePublications    DecisionPagePublication[]
   pageWorkItemLinks           PageWorkItemLink[]
@@ -2391,6 +2398,7 @@ model Project {
   folders                       Folder[]
   pages                         Page[]
   pageVersions                  PageVersion[]
+  pageComments                  PageComment[]
   autoTranslateChanges          ProjectAutoTranslateChange[]
   decisionPagePublications      DecisionPagePublication[]
   pageWorkItemLinks             PageWorkItemLink[]
@@ -14527,6 +14535,9 @@ model Page {
   // The page's meaning vector (Story MOTIR-9490 · MOTIR-9570). Absent = not a
   // semantic candidate yet; the page is still found by full-text. Cascade.
   embedding            PageEmbedding?
+  // The page's discussion (Story MOTIR-10866 · MOTIR-10871). Cascade: a
+  // permanent delete takes every comment, roots and replies, with the page.
+  comments             PageComment[]
 
   @@index([projectId, parentPageId, position, id])
   @@index([projectId, folderId, position, id])
@@ -14619,6 +14630,62 @@ model PageVersion {
   @@unique([pageId, number])
   @@index([workspaceId])
   @@map("page_version")
+}
+
+// PAGE COMMENTS — a page's discussion (Epic MOTIR-5749 · Story MOTIR-10866 ·
+// MOTIR-10871).
+//
+// One row per comment. A ROOT (`parentCommentId` null) starts a thread; a REPLY
+// points at its root, one level deep (the cotenancy trigger refuses a reply to
+// a reply; `@motir/pages` refuses it first). The thread's RESOLVED state lives
+// on the root only (`resolvedAt` decides it; `resolvedById` says who, and is
+// forgotten if that user is deleted). `bodyMd` carries the
+// `[@Name](mention:<userId>)` token as plain text; nothing here parses it.
+//
+// THE INLINE ANCHOR — `anchor` (the pair of Yjs relative positions on the
+// `default` fragment, packed into one byte string by the inline story's codec)
+// and `anchorQuote` (the text quoted when the comment was written),
+// `docs/decisions/pages.md` §8.3. Both NULL on a page-level comment; both set
+// or neither (`page_comment_anchor_pairing`), and only on a root
+// (`page_comment_anchor_only_on_root`).
+//
+// Two PARTIAL indexes are hand-written in the migration and NOT declared here:
+// `page_comment_open_roots_idx` on `(page_id, created_at, id) WHERE
+// parent_comment_id IS NULL AND resolved_at IS NULL` (the Open list's keyset)
+// and `page_comment_resolved_roots_idx` on `(page_id, resolved_at, id) WHERE
+// parent_comment_id IS NULL AND resolved_at IS NOT NULL` (the Resolved list's).
+// Prisma cannot express a `WHERE`; declaring either as a plain `@@index` would
+// make `migrate dev` build a NON-partial index from an empty database. Neither
+// shares a column list with an `@@index` below, so the drift check ignores them.
+model PageComment {
+  id              String    @id @default(cuid())
+  workspaceId     String    @map("workspace_id")
+  projectId       String    @map("project_id")
+  pageId          String    @map("page_id")
+  authorId        String    @map("author_id")
+  parentCommentId String?   @map("parent_comment_id")
+  bodyMd          String    @map("body_md") @db.Text
+  editedAt        DateTime? @map("edited_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  resolvedAt      DateTime? @map("resolved_at") @db.Timestamptz(3)
+  resolvedById    String?   @map("resolved_by_id")
+  anchor          Bytes?
+  anchorQuote     String?   @map("anchor_quote") @db.Text
+
+  workspace  Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project    Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  page       Page          @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  author     User          @relation("PageCommentAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+  resolvedBy User?         @relation("PageCommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  // Deleting a root deletes its replies.
+  parent     PageComment?  @relation("PageCommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies    PageComment[] @relation("PageCommentReplies")
+
+  @@index([pageId])
+  @@index([parentCommentId, createdAt])
+  @@index([workspaceId])
+  @@map("page_comment")
 }
 
 // DECISION PAGE PUBLICATIONS (Story MOTIR-5761 · MOTIR-7428).
