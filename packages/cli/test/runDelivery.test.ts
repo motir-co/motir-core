@@ -262,6 +262,21 @@ describe('declareRunDelivery — what it could not link', () => {
     ]);
   });
 
+  it('work pushed to a DIFFERENTLY named branch is still pushed, and the reason names it', async () => {
+    const other = 'subtask/PROD-7-renamed';
+    const h = harness({
+      lsRemote: { '--heads origin *PROD-7*': `abc\trefs/heads/${other}\n` },
+    });
+    expect((await declareRunDelivery(h.input)).unlinked).toEqual([
+      {
+        repository: 'web',
+        branch: BRANCH,
+        reason: `no open pull request was found for ${BRANCH}; the work is on ${other}`,
+        pushed: true,
+      },
+    ]);
+  });
+
   it('two repositories, one linked: the other is unlinked, pushed or not (MOTIR-10888)', async () => {
     const API_BRANCH_HEAD = `${SHA}\trefs/heads/${BRANCH}`;
     const h = harness({

@@ -657,7 +657,9 @@ describe('an agent with NO Motir tools — the run delivers for it (MOTIR-10877)
             {
               repository: 'motir-core',
               branch: 'subtask/PROD-7-add-the-thing',
-              detail: 'no open pull request was found for subtask/PROD-7-add-the-thing',
+              // This fake's `ls-remote` answers every lookup with `motir/auto-x`.
+              detail:
+                'no open pull request was found for subtask/PROD-7-add-the-thing; the work is on motir/auto-x',
             },
           ],
         },

@@ -245,16 +245,25 @@ export async function declareRunDelivery(input: DeclareRunDeliveryInput): Promis
           data: { url: already.url, repository: already.repo, by: 'agent' },
         });
       } else {
+        // Where the card's work sits on this remote: the named work branch when the remote
+        // answers for it, else every remote branch naming the card — an agent that pushed to a
+        // differently named branch still pushed (MOTIR-10888 review).
+        const pushedOn =
+          branch && remoteHead(branch, cwd, run) !== null
+            ? [branch]
+            : branch
+              ? remoteBranchesNaming(key, cwd, run)
+              : searched;
+        const elsewhere = pushedOn.filter((b) => !searched.includes(b));
         unlinked.push({
           repository: name,
           branch: branch ?? searched[0] ?? null,
           reason:
-            searched.length > 0
+            (searched.length > 0
               ? `no open pull request was found for ${searched.join(', ')}`
-              : 'the run names no work branch to find a pull request on',
-          // The named work branch is pushed when the remote answers for it; with no named
-          // branch, the remote branches that name the card ARE the push.
-          pushed: branch ? remoteHead(branch, cwd, run) !== null : searched.length > 0,
+              : 'the run names no work branch to find a pull request on') +
+            (elsewhere.length > 0 ? `; the work is on ${elsewhere.join(', ')}` : ''),
+          pushed: pushedOn.length > 0,
         });
       }
       continue;
