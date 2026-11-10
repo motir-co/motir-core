@@ -90,6 +90,7 @@ export function toPlanDto(row: Plan, itemCount: number): PlanDto {
     itemCount,
     createdAt: row.createdAt.toISOString(),
     plannedAt: row.plannedAt ? row.plannedAt.toISOString() : null,
+    approvingAt: row.approvingAt ? row.approvingAt.toISOString() : null,
     decidedAt: row.decidedAt ? row.decidedAt.toISOString() : null,
     decidedById: row.decidedById,
     // WHY it ended (MOTIR-3189). Carried on every read that returns a plan, so

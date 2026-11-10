@@ -8,6 +8,7 @@ import {
 } from '@/lib/approvalGates/errors';
 import { APPROVAL_GATE_STATUS } from '@/lib/approvalGates/httpStatus';
 import {
+  PlanApprovingError,
   PlanDecisionStampRequiredError,
   PlanGateAwaitingError,
   PlanNotDecidableYetError,
@@ -29,6 +30,21 @@ import {
  * revision (ADR §11.5c) says who holds it and until when, as data.
  */
 export function gateDecisionRefusalResponse(err: unknown): NextResponse | null {
+  // A PLAN gate whose plan another press is APPROVING right now (Bug MOTIR-9006): the
+  // gate is still awaiting until that approval commits. 409 — the request is well-formed;
+  // a second approve, or a decline, conflicts with the approval in progress. It was a
+  // misleading 503 *approve timed out* when the second press queued on the plan's lock.
+  if (err instanceof PlanApprovingError) {
+    return NextResponse.json(
+      {
+        code: err.code,
+        error: err.message,
+        planId: err.planId,
+        approvingSince: err.approvingSince?.toISOString() ?? null,
+      },
+      { status: 409 },
+    );
+  }
   // A PLAN gate's inherited hold (MOTIR-6035; §11.5c): the gate is still awaiting and
   // says until when. 409 — the request is well-formed, the plan is being rewritten.
   if (err instanceof PlanRevisionInFlightError) {

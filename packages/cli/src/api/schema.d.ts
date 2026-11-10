@@ -2678,7 +2678,7 @@ export interface components {
         PlanOutcome: {
             planId: string;
             /** @enum {string} */
-            status: "generating" | "planned" | "stale" | "approved" | "declined";
+            status: "generating" | "planned" | "approving" | "stale" | "approved" | "declined";
             /** @enum {string} */
             origin: "user" | "cadence";
             jobId: string | null;
@@ -2698,7 +2698,7 @@ export interface components {
         Plan: {
             id: string;
             /** @enum {string} */
-            status: "generating" | "planned" | "stale" | "approved" | "declined";
+            status: "generating" | "planned" | "approving" | "stale" | "approved" | "declined";
             /** @enum {string} */
             origin: "user" | "cadence";
             title: string | null;
@@ -11132,7 +11132,7 @@ export interface operations {
                         plan: {
                             id: string;
                             /** @enum {string} */
-                            status: "generating" | "planned" | "stale" | "approved" | "declined";
+                            status: "generating" | "planned" | "approving" | "stale" | "approved" | "declined";
                             /** @enum {string} */
                             origin: "user" | "cadence";
                             title: string | null;

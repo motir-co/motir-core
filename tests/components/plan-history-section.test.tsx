@@ -56,7 +56,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const PROPOSING: PlanStatusDto[] = ['generating', 'planned', 'stale'];
+// `approving` (Bug MOTIR-9006) has not applied anything until it commits.
+const PROPOSING: PlanStatusDto[] = ['generating', 'planned', 'approving', 'stale'];
 
 describe('the relation sentence — total over status × relation, exact copy', () => {
   const cases: Array<{

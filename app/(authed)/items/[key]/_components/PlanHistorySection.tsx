@@ -61,6 +61,7 @@ export interface PlanHistorySectionProps {
 const STATUS_ICON: Record<PlanStatusDto, LucideIcon> = {
   generating: Loader2,
   planned: Clock,
+  approving: Loader2,
   stale: OctagonAlert,
   approved: CheckCircle2,
   declined: XCircle,
@@ -68,6 +69,7 @@ const STATUS_ICON: Record<PlanStatusDto, LucideIcon> = {
 const STATUS_TINT: Record<PlanStatusDto, string> = {
   generating: 'bg-(--el-tint-sky)',
   planned: 'bg-(--el-tint-lavender)',
+  approving: 'bg-(--el-tint-mint)',
   stale: 'bg-(--el-tint-rose)',
   approved: 'bg-(--el-tint-mint)',
   declined: 'bg-(--el-muted)',
@@ -80,6 +82,8 @@ function StatusPill({ status, label }: { status: PlanStatusDto; label: string })
       return <Pill severity="info">{label}</Pill>;
     case 'planned':
       return <Pill status="planned">{label}</Pill>;
+    case 'approving':
+      return <Pill severity="info">{label}</Pill>;
     case 'stale':
       return <Pill severity="danger">{label}</Pill>;
     case 'declined':
@@ -102,6 +106,9 @@ function tenseOf(status: PlanStatusDto): Tense {
     case 'generating':
     case 'planned':
     case 'stale':
+    // Not applied until the approval commits (Bug MOTIR-9006) — the sentence must not
+    // claim it early.
+    case 'approving':
       return 'proposing';
     case 'approved':
       return 'applied';

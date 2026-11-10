@@ -833,6 +833,13 @@ export interface PlanApprovalSubjectSummaryDTO {
   };
   /** Being rewritten — the row's `Being rewritten` pill (§11.5c), or null. */
   held: PlanGateHeldDTO | null;
+  /**
+   * Being APPROVED right now (Bug MOTIR-9006): somebody pressed Approve and the plan's
+   * proposals are being written into work items. The gate is still `awaiting` until that
+   * commits, so without this the row offered Review on a plan halfway through being
+   * written. The row draws *Approving…* in the Decide cell, with no verb.
+   */
+  approving: boolean;
 }
 
 /**

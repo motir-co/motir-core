@@ -35,6 +35,8 @@ import { useReaderRoutes } from '@/lib/visitor/useReaderRoutes';
 const STATUS_TINT: Record<PlanStatusDto, string> = {
   generating: 'bg-(--el-tint-sky) text-(--el-text-strong)',
   planned: 'bg-(--el-tint-lavender) text-(--el-text-strong)',
+  // Being approved (Bug MOTIR-9006) — the hue it lands on, mint, on its way there.
+  approving: 'bg-(--el-tint-mint) text-(--el-text-strong)',
   // The same rose the LIST row's square takes (`PlanRow`'s `STATUS_TINT`), so
   // the two surfaces agree — Part XI §2.
   stale: 'bg-(--el-tint-rose) text-(--el-text-strong)',

@@ -244,6 +244,7 @@ const FOUR = (p: PlanHoldDTO) => ({
 const MCP_STATE: Record<PlanHeldByPlanDTO['planStatus'], string> = {
   generating: 'is still being written',
   planned: 'is waiting for approval',
+  approving: 'is being approved — its approval releases this card when it finishes',
   stale: 'is stale and needs attention before it can be approved',
 };
 

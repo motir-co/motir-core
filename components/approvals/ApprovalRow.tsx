@@ -1190,6 +1190,9 @@ function PlanApprovalRow({
   const router = useRouter();
   const { row } = record;
 
+  // Being approved (Bug MOTIR-9006): the read says so, or THIS page's press is in flight
+  // and the read has not caught up — the overlay marks the press before it awaits it.
+  const pressPending = useGatePressPending(row.gateId);
   const sentence = planSentenceOf(subject);
   const sentenceText = tPlan.markup(sentence.form, {
     name: sentence.name,
@@ -1398,6 +1401,14 @@ function PlanApprovalRow({
                 {t('live.decidedElsewhere')}
               </Pill>
             )
+          ) : subject.approving || pressPending ? (
+            /* BEING APPROVED (Bug MOTIR-9006): the gate is still `awaiting` until the
+               approval commits, so without this the row offered Review on a plan halfway
+               through being written. The same sky word and slot as *Being rewritten*
+               below, and no verb; the row door still opens, onto the progress. */
+            <Pill severity="info" className={DECIDE_PILL} title={tPlan('approvingTitle')}>
+              {tPlan('approving')}
+            </Pill>
           ) : subject.held ? (
             /* BEING REWRITTEN (§11.5c): the gate is still `awaiting` — ⚠️ NOT § 26's
                `held` section, which is a row that LEFT the set. A word in the sky tint the

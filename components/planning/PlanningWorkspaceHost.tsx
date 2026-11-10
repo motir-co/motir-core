@@ -53,7 +53,7 @@ import {
   pendingProposalCount,
 } from '@/lib/planning/planPending';
 import { planGateView, type PlanDecisionPlace } from '@/lib/planning/planGateView';
-import { isProposedReview } from '@/lib/planning/planReview';
+import { isApprovingReview, isProposedReview } from '@/lib/planning/planReview';
 import { defaultPlanView, type PlanViewDto } from '@/lib/planning/planView';
 import {
   addPlanningTarget,
@@ -1079,7 +1079,11 @@ function PlanWorkspaceHost({
   // live region, so one press is read once (§25.10). Timed out: only the pressed door
   // shows the band, where the stale band would stand (§25.2). The count is the review's
   // own; the sentence says "changes" as soon as anything is not an add (§25.8).
-  const approveRunning = deciding && decisionKind === 'approve';
+  // …and an approve this screen did NOT press (Bug MOTIR-9006): a plan re-opened while
+  // it is `approving` arrives in `deciding` with no press of its own, and draws the same
+  // progress until the hook's watch sees it land.
+  const approvingOnOpen = review !== null && isApprovingReview(review);
+  const approveRunning = deciding && (decisionKind === 'approve' || approvingOnOpen);
   const approveTimedOut = state.errorCode === 'timedOut' && !deciding;
   const progressKind = index.counts.changed + index.counts.removed > 0 ? 'changes' : 'adds';
   const progressCount = state.review?.itemCount ?? 0;

@@ -78,7 +78,7 @@ export const FAILED_WAITING_WHERE = {
 
 /** The plan statuses that are UNDECIDED — a session holding one has work in front of a person
  *  or an engine (MOTIR-7939). One definition for every read that spells the set. */
-export const UNDECIDED_PLAN_STATUSES = ['generating', 'planned', 'stale'] as const;
+export const UNDECIDED_PLAN_STATUSES = ['generating', 'planned', 'approving', 'stale'] as const;
 
 /** The undecided statuses a PERSON is waiting to decide — the plan a failure leaves beside
  *  (situation 2), as opposed to a `generating` plan an engine is still writing. */

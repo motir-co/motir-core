@@ -212,6 +212,12 @@ export const mcpPlanSchema = planSchema.omit({ proposals: true, proposalCount: t
   /** Who decided the plan. MCP has always published it; v1 does not. */
   decidedById: z.string().nullable(),
   /**
+   * WHEN an approve claimed the plan (Bug MOTIR-9006) — set exactly while `status` is
+   * `approving`. MCP's own field, beside `decidedById`: an agent that reads a plan being
+   * approved learns how long it has run; v1 carries the status alone.
+   */
+  approvingAt: z.string().nullable(),
+  /**
    * WHO ASKED for the plan and WHO AUTHORED it (Story MOTIR-2982 · MOTIR-2986)
    * — MCP's own fields,
    * and deliberately NOT added to v1's `planSchema`.
@@ -368,6 +374,7 @@ export function presentMcpPlan(
     projectId: plan.projectId,
     itemCount: plan.itemCount,
     decidedById: plan.decidedById,
+    approvingAt: plan.approvingAt,
     createdById: plan.createdById,
     authorSource: plan.authorSource,
     authorHarness: plan.authorHarness,

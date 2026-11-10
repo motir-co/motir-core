@@ -156,7 +156,14 @@ describe('plansService.countPlansByStatus', () => {
     await planIn(fx, 'generating', 'c');
 
     const counts = await plansService.countPlansByStatus(fx.projectId, fx.ctx);
-    expect(counts).toEqual({ generating: 1, planned: 2, stale: 0, approved: 0, declined: 0 });
+    expect(counts).toEqual({
+      generating: 1,
+      planned: 2,
+      approving: 0,
+      stale: 0,
+      approved: 0,
+      declined: 0,
+    });
     // Every member of the vocabulary has a key, and every value is a number —
     // the property a tab strip rendering `{counts[tab]}` depends on.
     for (const status of PLAN_STATUS_DTO_VALUES) {
@@ -167,7 +174,14 @@ describe('plansService.countPlansByStatus', () => {
   it('counts nothing for a project with no plans, still totally', async () => {
     const fx = await makeWorkItemFixture();
     const counts = await plansService.countPlansByStatus(fx.projectId, fx.ctx);
-    expect(counts).toEqual({ generating: 0, planned: 0, stale: 0, approved: 0, declined: 0 });
+    expect(counts).toEqual({
+      generating: 0,
+      planned: 0,
+      approving: 0,
+      stale: 0,
+      approved: 0,
+      declined: 0,
+    });
   });
 
   it('the repository read is ONE groupBy that returns only the present statuses', async () => {
@@ -204,6 +218,13 @@ describe('the two reads are workspace-scoped', () => {
 
     // And their own project is empty rather than showing ours.
     const theirCounts = await plansService.countPlansByStatus(theirs.projectId, theirs.ctx);
-    expect(theirCounts).toEqual({ generating: 0, planned: 0, stale: 0, approved: 0, declined: 0 });
+    expect(theirCounts).toEqual({
+      generating: 0,
+      planned: 0,
+      approving: 0,
+      stale: 0,
+      approved: 0,
+      declined: 0,
+    });
   });
 });

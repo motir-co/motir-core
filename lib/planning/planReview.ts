@@ -58,7 +58,20 @@ export async function readPendingProposal(
  * the roadmap as though no plan existed.
  */
 export function isProposedReview(review: PlanReviewDto): boolean {
-  return review.status === 'planned' || review.status === 'stale';
+  return review.status === 'planned' || review.status === 'stale' || isApprovingReview(review);
+}
+
+/**
+ * Is this plan BEING APPROVED right now (Bug MOTIR-9006) — somebody pressed Approve and
+ * its proposals are being written into work items?
+ *
+ * ⚠️ IT IS PROPOSED, for {@link isProposedReview}'s question: the reader is still looking
+ * at proposals, and a surface that re-opens one must draw them — not the roadmap — while
+ * the approval runs. What it is NOT is decidable: a surface holding one shows the approve
+ * IN PROGRESS, with every verb disabled, and watches it until it lands.
+ */
+export function isApprovingReview(review: PlanReviewDto): boolean {
+  return review.status === 'approving';
 }
 
 /**
@@ -81,8 +94,11 @@ export function planDecisionErrorCode(err: unknown, fallback = 'APPROVE_ERROR'):
   // A second press of a decided plan answers the same on every surface, whichever
   // refusal carried it: the door's (the plan's gate is decided or withdrawn) or the
   // plan's own status.
+  // `PLAN_APPROVING` (Bug MOTIR-9006) is the same answer arriving early: somebody else's
+  // approve of this plan is still being written.
   if (
     err.code === 'PLAN_NOT_IN_EXPECTED_STATUS' ||
+    err.code === 'PLAN_APPROVING' ||
     err.code === 'APPROVAL_GATE_ALREADY_DECIDED' ||
     err.code === 'APPROVAL_GATE_SUPERSEDED' ||
     err.status === 404
@@ -214,5 +230,17 @@ export interface PlanApproveSummary {
 export function summarizePlanApproval(plan: PlanWithItemsDto): PlanApproveSummary {
   const ids = (op: 'add' | 'modify' | 'remove') =>
     plan.items.filter((item) => item.op === op).map((item) => item.workItemId ?? item.id);
+  return { created: ids('add'), updated: ids('modify'), removed: ids('remove') };
+}
+
+/**
+ * The same outcome read off a DECIDED review (Bug MOTIR-9006) — for an approve this
+ * screen did not press (it was re-opened while the approval ran), so there is no
+ * materialize result to read. A decided review re-keys every committed proposal by the
+ * work item it touched (MOTIR-3160), so each node id IS that work item's id.
+ */
+export function summarizeReviewApproval(review: PlanReviewDto): PlanApproveSummary {
+  const ids = (op: 'add' | 'modify' | 'remove') =>
+    review.items.filter((item) => item.op === op).map((item) => item.nodeId);
   return { created: ids('add'), updated: ids('modify'), removed: ids('remove') };
 }

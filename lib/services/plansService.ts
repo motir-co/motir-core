@@ -180,6 +180,7 @@ import {
   PlanItemTargetMissingError,
   PlanItemUnknownTargetRepoError,
   PlanNotEditableError,
+  PlanApprovingError,
   PlanProposalReferencedError,
   PlanProposalRepoPinMovedError,
   PlanItemUnknownTargetRepoRoleError,
@@ -299,7 +300,12 @@ import { buildScope } from '@/lib/planChange/scope';
 import { PlanSessionNotFoundError } from '@/lib/planChange/errors';
 import type { PlanSessionOriginDto } from '@/lib/dto/planChange';
 import { planGateService } from '@/lib/services/planGateService';
-import { DECIDED_WITHOUT_A_READER } from '@/lib/approvalGates/stamp';
+import {
+  DECIDED_WITHOUT_A_READER,
+  stampMoved,
+  type DecisionStamp,
+} from '@/lib/approvalGates/stamp';
+import { planSubjectVersion } from '@/lib/approvalGates/planApprovalDigest';
 import { withdrawQuestionsOnArchive } from '@/lib/approvalGates/withdrawOnArchive';
 import {
   asPlanStatusRefusal,
@@ -2771,10 +2777,103 @@ function assertPlanHasProposals(planId: string, proposals: readonly unknown[]): 
   if (proposals.length === 0) throw new PlanHasNoProposalsError(planId);
 }
 
-function assertPlanProposalsEditable(plan: Pick<Plan, 'id' | 'status'>): void {
+function assertPlanProposalsEditable(
+  plan: Pick<Plan, 'id' | 'status'> & Partial<Pick<Plan, 'approvingAt'>>,
+): void {
+  // A plan being approved is refused in its own words (Bug MOTIR-9006): the
+  // reader is told to wait for an outcome, not that the plan is decided.
+  if (plan.status === 'approving') throw new PlanApprovingError(plan.id, plan.approvingAt ?? null);
   if (plan.status !== 'generating' && plan.status !== 'planned') {
     throw new PlanNotEditableError(plan.id, plan.status);
   }
+}
+
+/**
+ * REFUSE A PLAN BEING APPROVED BEFORE TAKING ITS LOCK (Bug MOTIR-9006).
+ *
+ * ⚠️ CALLED INSIDE THE TRANSACTION, BEFORE `planRepository.lockById` — the
+ * opposite placement to {@link assertNoRevisionInFlight}, and for a reason. The
+ * approving transaction HOLDS the plan's row lock for as long as materialize
+ * runs, so a writer that locked first queued behind it and was then refused
+ * anyway, or ran out of Prisma's default ~5s budget and answered a bare P2028.
+ * The claim (`claimApprovalWithin`) committed `approving` before that
+ * transaction opened, so a plain read here sees it and refuses at once.
+ *
+ * It is a COURTESY, not the guarantee: a writer that read `planned` a moment
+ * before the claim committed still queues, and its own under-lock status check
+ * refuses it — `assertPlanProposalsEditable` refuses `approving` too.
+ */
+async function refuseWhileApproving(
+  planId: string,
+  workspaceId: string,
+  tx: Prisma.TransactionClient,
+): Promise<void> {
+  const peek = await planRepository.findById(planId, workspaceId, tx);
+  if (peek?.status === 'approving') throw new PlanApprovingError(planId, peek.approvingAt);
+}
+
+/**
+ * CLAIM A PLAN FOR APPROVAL (Bug MOTIR-9006) — `planned` → `approving`, in a short
+ * transaction of its own, so every other reader sees the approval while the long
+ * materialize transaction is still open. Returns the claim's token (its
+ * `approvingAt`), or null when the reader's STAMP no longer matches the proposals:
+ * nothing is claimed, and the decide door then refuses the press stale in its own
+ * words rather than this one flashing `approving` for a press it will refuse.
+ *
+ * Under the plan lock, in approve's own order: a lapsed revision gives the plan
+ * back first, a live one refuses, then the status. A second approve finds
+ * `approving` — before the lock, so it never queues — and is refused
+ * `PLAN_APPROVING`.
+ */
+async function claimApprovalWithin(
+  tx: Prisma.TransactionClient,
+  planId: string,
+  workspaceId: string,
+  stamp: DecisionStamp | symbol | null,
+): Promise<Date | null> {
+  await refuseWhileApproving(planId, workspaceId, tx);
+  const locked = await planRepository.lockById(planId, tx);
+  if (!locked) throw new PlanNotFoundError(planId);
+  await settleLapsedRevisionWithin(planId, workspaceId, tx);
+  const fresh = await planRepository.findById(planId, workspaceId, tx);
+  if (!fresh) throw new PlanNotFoundError(planId);
+  await assertNoRevisionInFlight(planId, tx);
+  if (fresh.status === 'approving') throw new PlanApprovingError(planId, fresh.approvingAt);
+  if (fresh.status !== 'planned') {
+    throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
+  }
+  // The stamp the reader pressed with, against the proposals as they are under the
+  // lock — the same comparison the door makes for a plan gate (§11.3: the live
+  // digest; a card-less gate has no companion and no card body).
+  if (typeof stamp === 'string') {
+    const moved = stampMoved(stamp, {
+      subjectVersion: await planSubjectVersion(planId, tx),
+      companionSubjectVersion: null,
+      descriptionMd: null,
+    });
+    if (moved.length > 0) return null;
+  }
+  const claimedAt = new Date();
+  await planRepository.update(planId, { status: 'approving', approvingAt: claimedAt }, tx);
+  return claimedAt;
+}
+
+/**
+ * GIVE A FAILED APPROVAL'S CLAIM BACK (Bug MOTIR-9006): `approving` → `planned`,
+ * only while the claim is still THIS one (`approvingAt` is its token). Runs after
+ * the materialize transaction rolled back, so the plan is reviewable again exactly
+ * as it was; a claim the stalled-approval sweep already released, or a plan that
+ * did commit, is left alone. Returns whether it released.
+ */
+async function releaseApprovalClaim(
+  plan: { id: string; projectId: string },
+  claimedAt: Date,
+  ctx: ServiceContext,
+): Promise<boolean> {
+  return withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+    async (tx) => (await planRepository.releaseApprovingClaim(plan.id, claimedAt, tx)) === 1,
+  );
 }
 
 /**
@@ -5026,6 +5125,7 @@ async function editAddProposal(
   const { row, items } = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
     async (tx) => {
+      await refuseWhileApproving(planId, ctx.workspaceId, tx);
       const locked = await planRepository.lockById(planId, tx);
       if (!locked) throw new PlanNotFoundError(planId);
       const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -6036,6 +6136,7 @@ export const plansService = {
       result = await withWorkspaceContext(
         { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
         async (tx) => {
+          await refuseWhileApproving(planId, ctx.workspaceId, tx);
           const locked = await planRepository.lockById(planId, tx);
           if (!locked) throw new PlanNotFoundError(planId);
           const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -7212,6 +7313,7 @@ export const plansService = {
         // other status-gated write on this row uses. Read before the lock the
         // gate is a TOCTOU check; read under it, a plan approved between the two
         // reads is refused rather than edited after the fact.
+        await refuseWhileApproving(planId, ctx.workspaceId, tx);
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -7376,6 +7478,7 @@ export const plansService = {
     const { row, items } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
+        await refuseWhileApproving(planId, ctx.workspaceId, tx);
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -7926,6 +8029,7 @@ export const plansService = {
     const { row, items, ended } = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
+        await refuseWhileApproving(planId, ctx.workspaceId, tx);
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -8863,6 +8967,7 @@ export const plansService = {
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
+        await refuseWhileApproving(planId, ctx.workspaceId, tx);
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -9241,7 +9346,11 @@ export const plansService = {
     if (await hasAwaitingPlanGate(planId, ctx)) {
       return decideAskedPlanWithoutAReader(planId, 'approve', ctx, opts);
     }
-    return plansService.approveUnaskedPlan(planId, ctx, opts);
+    // The one-shot guard's documented refusal, on this arm too: a plan another approve
+    // has claimed (Bug MOTIR-9006) answers as its status, `approving`.
+    return plansService.approveUnaskedPlan(planId, ctx, opts).catch(async (err: unknown) => {
+      throw await asPlanStatusRefusal(err, planId, ctx);
+    });
   },
 
   /**
@@ -9261,7 +9370,10 @@ export const plansService = {
     // materializes inside it, and what may only happen AFTER it commits. They are named
     // so the plan gate's handler can run the SAME three around the decide door's own
     // transaction (`approvePlanWithin`) — one home for materialize, never a copy.
-    const prep = await prepareApprove(planId, ctx);
+    // The CLAIM between the first two (Bug MOTIR-9006): `approving` is committed before
+    // the materialize transaction opens, so every reader sees the approval while it runs.
+    // No stamp — this path decides a plan nobody was asked about.
+    const prep = await plansService.claimApprovePlan(await prepareApprove(planId, ctx), ctx, null);
     const done = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: prep.plan.projectId },
       (tx) => approveWithin(tx, planId, ctx, prep, { ...opts, viaGate: false }),
@@ -9288,6 +9400,43 @@ export const plansService = {
   },
 
   /**
+   * Refuse a plan another approve is materializing (Bug MOTIR-9006) — a plain read, no
+   * lock, so the refusal is immediate rather than queued behind the approving
+   * transaction. For a caller about to take the plan's lock for something the
+   * approval forecloses (the decide door's decline).
+   */
+  async refusePlanBeingApproved(planId: string, ctx: ServiceContext): Promise<void> {
+    await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      refuseWhileApproving(planId, ctx.workspaceId, tx),
+    );
+  },
+
+  /**
+   * CLAIM the prepared plan for approval (Bug MOTIR-9006) — `planned` → `approving`,
+   * committed in its own short transaction under the plan lock, BEFORE the long
+   * materialize transaction opens. That is what lets every other reader — the
+   * To-approve row, the session list, a re-opened overlay — see that the plan is being
+   * approved, and every writer refuse it at once (`PLAN_APPROVING`) instead of queueing
+   * on the lock materialize holds.
+   *
+   * `stamp` is what the reader pressed with: a stamp that no longer matches the
+   * proposals claims nothing (`claimedAt: null`) and the door refuses the press stale.
+   * Pass null for a decision nobody rendered. On ANY failure after this the caller hands
+   * the error to {@link approveFailure}, which gives the claim back.
+   */
+  async claimApprovePlan(
+    prep: ApprovePlanPreparation,
+    ctx: ServiceContext,
+    stamp: DecisionStamp | symbol | null,
+  ): Promise<ClaimedApprovePlan> {
+    const claimedAt = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: prep.plan.projectId },
+      (tx) => claimApprovalWithin(tx, prep.plan.id, ctx.workspaceId, stamp),
+    );
+    return { ...prep, claimedAt };
+  },
+
+  /**
    * APPROVE'S BODY INSIDE THE CALLER'S TRANSACTION (MOTIR-6035; ADR §11.5) — the plan
    * lock, the status and revision-lease refusals, materialize, the `approved` write and
    * its trail row, exactly as {@link approvePlan} runs them. The caller commits, then
@@ -9301,7 +9450,7 @@ export const plansService = {
     tx: Prisma.TransactionClient,
     planId: string,
     ctx: ServiceContext,
-    prep: ApprovePlanPreparation,
+    prep: ClaimedApprovePlan,
     opts: { provisionalProjectName?: string | null } = {},
   ): Promise<{ plan: PlanWithItemsDto; afterCommit: () => Promise<void> }> {
     // The handler's seam: THE door's effect, so the asked-question refusal is waived.
@@ -9320,7 +9469,7 @@ export const plansService = {
    */
   async approveFailure(
     err: unknown,
-    prep: ApprovePlanPreparation,
+    prep: ClaimedApprovePlan,
     ctx: ServiceContext,
   ): Promise<unknown> {
     return approveFailure(err, prep, ctx);
@@ -9407,6 +9556,7 @@ export const plansService = {
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
       async (tx) => {
+        await refuseWhileApproving(planId, ctx.workspaceId, tx);
         const locked = await planRepository.lockById(planId, tx);
         if (!locked) throw new PlanNotFoundError(planId);
         const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
@@ -9875,6 +10025,9 @@ async function prepareApprove(planId: string, ctx: ServiceContext) {
   // is unchanged for every built-in role: both keys sit at `admin` and
   // `member` and at neither `viewer` nor the implicit workspace-member grant.
   await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:decide_plan');
+  // A plan another approve is already materializing (Bug MOTIR-9006) is refused
+  // here, before any of the reads below — the claim refuses it again under the lock.
+  if (plan.status === 'approving') throw new PlanApprovingError(plan.id, plan.approvingAt);
 
   // ⚠️ THE LAZY BACKSTOP (MOTIR-3579, AMENDMENT 9 D5). The eager mover is
   // `planDriftService` on `work-item/transitioned`; this is what catches the
@@ -10073,6 +10226,22 @@ async function prepareApprove(planId: string, ctx: ServiceContext) {
 export type ApprovePlanPreparation = Awaited<ReturnType<typeof prepareApprove>>;
 
 /**
+ * A preparation AND the claim taken on it (Bug MOTIR-9006) — what the in-transaction
+ * body runs on. `claimedAt` is the claim's token, or null when the reader's stamp had
+ * moved and nothing was claimed (the door refuses that press stale before the body).
+ */
+export type ClaimedApprovePlan = ApprovePlanPreparation & { claimedAt: Date | null };
+
+/** Refuse the body unless the plan still carries `claimedAt`'s claim — see `approveWithin`. */
+function assertHoldsApprovalClaim(fresh: Plan, claimedAt: Date | null): void {
+  if (fresh.status === 'approving') {
+    if (claimedAt && fresh.approvingAt?.getTime() === claimedAt.getTime()) return;
+    throw new PlanApprovingError(fresh.id, fresh.approvingAt);
+  }
+  throw new PlanNotInExpectedStatusError(fresh.id, fresh.status, 'approving');
+}
+
+/**
  * WHO is running a decision body (MOTIR-6038). `viaGate: true` is the plan gate's
  * handler, inside the decide door's transaction — the ONE writer §11.8 allows while a
  * plan's question is asked. Every other caller is a PLAIN writer and is refused while
@@ -10099,7 +10268,7 @@ async function approveWithin(
   tx: Prisma.TransactionClient,
   planId: string,
   ctx: ServiceContext,
-  prep: ApprovePlanPreparation,
+  prep: ClaimedApprovePlan,
   opts: PlanDecisionBodyOptions & { provisionalProjectName?: string | null },
 ) {
   const { plan, terminalStatusKeys, repoPins, snapshotPins, repoSets, snapshotRepoSets, repoRefs } =
@@ -10121,9 +10290,12 @@ async function approveWithin(
   // plan to `generating`, so the status alone would refuse it as not `planned`
   // and lose the answer the reviewer needs — who is revising it, and until when.
   await assertNoRevisionInFlight(planId, tx);
-  if (fresh.status !== 'planned') {
-    throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
-  }
+  // ⚠️ THE PLAN MUST STILL CARRY THIS APPROVE'S CLAIM (Bug MOTIR-9006). The claim
+  // wrote `approving` in its own transaction so every reader sees the approval; this
+  // is the body that claim was taken for, so it materializes only the plan IT
+  // claimed — `approvingAt` is the token. A claim the stalled-approval sweep
+  // released (back to `planned`), or one a later approver took since, is refused.
+  assertHoldsApprovalClaim(fresh, prep.claimedAt);
   // ⚠️ WHILE A QUESTION IS ASKED, ONLY THE DOOR DECIDES (MOTIR-6038; ADR §11.8's
   // converse) — under the plan lock, which the raise takes too, so no gate can land
   // between this read and the `approved` write.
@@ -10189,7 +10361,7 @@ async function approveWithin(
     (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
   const updated = await planRepository.update(
     planId,
-    { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
+    { status: 'approved', approvingAt: null, decidedAt: new Date(), decidedById: ctx.userId },
     tx,
   );
   // The decision ENDS the conversation that produced it (AMENDMENT 23 §2).
@@ -10368,9 +10540,24 @@ async function afterApproveCommit(
  *  runs, and a transaction timeout reads as its typed refusal. */
 async function approveFailure(
   err: unknown,
-  prep: ApprovePlanPreparation,
+  prep: ClaimedApprovePlan,
   ctx: ServiceContext,
 ): Promise<unknown> {
+  // THE CLAIM GOES BACK FIRST (Bug MOTIR-9006): a rolled-back approve leaves the plan
+  // `planned` and reviewable, exactly as it was — and the lazy `stale` backstop below
+  // only moves a `planned` plan, so it must see the plan given back. Best-effort: a
+  // release that fails here is the stalled-approval sweep's to finish, and it must not
+  // mask the refusal the caller is owed.
+  if (prep.claimedAt) {
+    try {
+      await releaseApprovalClaim(prep.plan, prep.claimedAt, ctx);
+    } catch (releaseErr) {
+      console.warn(
+        `[plans] giving back the approval claim on plan ${prep.plan.id} failed`,
+        releaseErr,
+      );
+    }
+  }
   await markStaleOnImmutableTarget(err, prep.plan, ctx);
   try {
     translateApproveTimeout(err, prep.plan.id, prep.preItems.length);

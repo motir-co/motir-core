@@ -636,6 +636,7 @@ export const planRepository = {
         id: true,
         projectId: true,
         title: true,
+        status: true,
         origin: true,
         authorSource: true,
         authorHarness: true,
@@ -677,6 +678,45 @@ export const planRepository = {
 
   async update(id: string, data: PlanUpdateInput, tx: Prisma.TransactionClient): Promise<Plan> {
     return tx.plan.update({ where: { id }, data });
+  },
+
+  /**
+   * GIVE BACK an approval's claim (Bug MOTIR-9006): `approving` → `planned`, ONLY
+   * while the row still carries THIS claim — `approvingAt` is its token. A plan the
+   * approval did commit (`approved`), or a claim already released and taken again
+   * by a later approver, matches nothing and is left alone. Returns the count (0 or
+   * 1). Guarded in the WHERE rather than by a read-then-write, so a release racing
+   * the commit re-evaluates against the committed row and cannot undo it.
+   */
+  async releaseApprovingClaim(
+    id: string,
+    claimedAt: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const { count } = await tx.plan.updateMany({
+      where: { id, status: 'approving', approvingAt: claimedAt },
+      data: { status: 'planned', approvingAt: null },
+    });
+    return count;
+  },
+
+  /**
+   * `approving` plans whose claim is older than `claimedBefore` — the candidates
+   * for the stalled-approval sweep (Bug MOTIR-9006): an approver that died between
+   * its claim and its commit, or whose release never ran. Cross-workspace — runs
+   * under the system context against the plan's system-read policy. Oldest first.
+   */
+  async listStalledApprovals(
+    claimedBefore: Date,
+    limit: number,
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ id: string; workspaceId: string; approvingAt: Date | null }>> {
+    return tx.plan.findMany({
+      where: { status: 'approving', approvingAt: { lt: claimedBefore } },
+      select: { id: true, workspaceId: true, approvingAt: true },
+      orderBy: [{ approvingAt: 'asc' }, { id: 'asc' }],
+      take: limit,
+    });
   },
 
   /**

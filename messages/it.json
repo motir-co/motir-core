@@ -8471,6 +8471,7 @@
     "status": {
       "generating": "In generazione",
       "planned": "Pianificato",
+      "approving": "Approvazione in corso…",
       "stale": "Non aggiornato",
       "approved": "Approvato",
       "declined": "Rifiutato"
@@ -8518,6 +8519,7 @@
         "none": "Ancora nessun piano",
         "generating": "In scrittura",
         "planned": "In attesa di approvazione",
+        "approving": "Approvazione in corso…",
         "stale": "Non aggiornato",
         "approved": "Approvato",
         "declined": "Rifiutato",
@@ -15436,6 +15438,7 @@
       "planState": {
         "generating": "Motir AI sta ancora scrivendo questo piano.",
         "planned": "Questo piano è in attesa di approvazione.",
+        "approving": "Questo piano è in fase di approvazione.",
         "stale": "Questo piano richiede attenzione prima di poter essere approvato."
       },
       "reviewPlan": "Rivedi il piano",
@@ -15723,6 +15726,8 @@
         },
         "rewriting": "In riscrittura",
         "rewritingTitle": "Motir AI sta scrivendo una nuova versione di questo piano. Potrai approvarla o rifiutarla quando avrà finito.",
+        "approving": "Approvazione in corso…",
+        "approvingTitle": "Questo piano è stato approvato e le sue proposte vengono scritte come elementi di lavoro. Risulterà Approvato al termine.",
         "reviewRow": "Rivedi il piano — {sentence}",
         "declinedNoReason": "Rifiutato senza motivo · su <mono>{version}</mono>"
       },

@@ -157,6 +157,11 @@ export const APPROVE_REFUSALS: Readonly<Record<string, RefusalClassification>> =
     cause: 'tree-caused',
     justification: 'The plan was deleted between the close and the button.',
   },
+  PLAN_APPROVING: {
+    cause: 'tree-caused',
+    justification:
+      'Another approve of this plan has claimed it and is materializing (Bug MOTIR-9006). A property of concurrency, not of the plan.',
+  },
   PLAN_REVISION_IN_FLIGHT: {
     cause: 'tree-caused',
     justification:

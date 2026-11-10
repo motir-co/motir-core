@@ -22,6 +22,8 @@ const COUNTS = {
   generating: 1,
   waiting: 2,
   planned: 3,
+  // Bug MOTIR-9006: a row state, never a segment — All does not add it either.
+  approving: 6,
   stale: 0,
   approved: 9,
   declined: 4,
@@ -68,6 +70,16 @@ describe('the filter’s a11y contract', () => {
       .map((b) => b.textContent ?? '');
     expect(labels.some((l) => l.startsWith('No plan'))).toBe(false);
     expect(within(option('All')).getByText('24')).toBeTruthy();
+  });
+
+  // Bug MOTIR-9006: `approving` lasts the seconds an approve takes — a row state the chip
+  // labels, but no segment to filter by, and its count is not in All.
+  it('draws no "Approving…" segment', () => {
+    renderWithIntl(<PlanStatusTabs value={null} counts={COUNTS} />);
+    const labels = within(group())
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '');
+    expect(labels.some((l) => l.startsWith('Approving'))).toBe(false);
   });
 
   it('presses the state in view', () => {

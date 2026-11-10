@@ -28,6 +28,7 @@ import type { WorkItemSections } from '@/lib/workItems/sections/registry';
 export const PLAN_STATUS_DTO_VALUES = [
   'generating',
   'planned',
+  'approving',
   'stale',
   'approved',
   'declined',
@@ -1081,6 +1082,12 @@ export interface PlanDto {
   itemCount: number;
   createdAt: string;
   plannedAt: string | null;
+  /**
+   * WHEN an approve claimed this plan (Bug MOTIR-9006) — set exactly while
+   * `status` is `approving`, null otherwise. The review surfaces show how long the
+   * approval has been running from it.
+   */
+  approvingAt: string | null;
   decidedAt: string | null;
   decidedById: string | null;
   /**
@@ -2013,6 +2020,9 @@ export const WORK_ITEM_PENDING_PLAN_STATUSES = [
  *  instead of quietly falling out of the item page's predicate. */
 export const WORK_ITEM_PENDING_PLAN_SILENT_STATUSES = [
   'generating',
+  // Being approved (Bug MOTIR-9006): the decision is MADE and only its write is still
+  // running, so there is no pending decision to announce on the card.
+  'approving',
   'approved',
   'declined',
 ] as const satisfies readonly PlanStatusDto[];
@@ -2162,7 +2172,7 @@ export interface PlanHeldByPlanDTO {
   /** The plan holding it. */
   planId: string;
   /** Only an UNDECIDED status holds — the second line's copy key. */
-  planStatus: 'generating' | 'planned' | 'stale';
+  planStatus: 'generating' | 'planned' | 'approving' | 'stale';
   /** The plan's session, or null when it has none. */
   sessionId: string | null;
   /** The plan's first anchor key (its session's `targetKeys[0]`), or null. */

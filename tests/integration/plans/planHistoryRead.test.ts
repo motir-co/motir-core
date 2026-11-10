@@ -96,6 +96,14 @@ async function planWith(
     await adminDb.plan.update({ where: { id: plan.id }, data: { status: 'stale' } });
     return freeTargets(plan.id);
   }
+  // Being approved (Bug MOTIR-9006): the claim an approve commits before it materializes.
+  if (status === 'approving') {
+    await adminDb.plan.update({
+      where: { id: plan.id },
+      data: { status: 'approving', approvingAt: new Date() },
+    });
+    return freeTargets(plan.id);
+  }
   // A DECIDED plan releases its own targets, so these two need nothing.
   if (status === 'approved') await plansService.approvePlan(plan.id, fx.ctx);
   else await plansService.declinePlan(plan.id, fx.ctx);
@@ -239,7 +247,7 @@ describe('plansService.listPlanHistoryForWorkItem', () => {
     expect(page.nextCursor).toBeNull();
   });
 
-  it('lists ALL FIVE statuses — history is not only what landed', async () => {
+  it('lists EVERY status — history is not only what landed', async () => {
     const fx = await makeWorkItemFixture();
     const card = await seed(fx, 'much discussed');
     const ids: string[] = [];

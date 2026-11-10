@@ -58,11 +58,13 @@ export function planningOutcomeOf(plan: {
     case 'planned':
     case 'stale':
       return { chipKey: 'planned', lineKey: 'plannedLine', planStatus: plan.status };
+    case 'approving':
     case 'approved':
-      // Written AND already approved — the reader (or a teammate) decided it between
+      // Written AND already approved — or being approved right now (Bug MOTIR-9006),
+      // which the row's door answers on the planning surface until it commits — the reader (or a teammate) decided it between
       // two polls. It is still the *written* outcome; what changed is only that the
       // review is over, and the row's door is the plan's record.
-      return { chipKey: 'planned', lineKey: 'plannedLine', planStatus: 'approved' };
+      return { chipKey: 'planned', lineKey: 'plannedLine', planStatus: plan.status };
     case 'declined':
       return plan.decisionReason === 'abandoned'
         ? { chipKey: 'abandoned', lineKey: 'abandonedLine', planStatus: 'declined' }

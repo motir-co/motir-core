@@ -22,6 +22,9 @@ function PlanStateChip({ state, label }: { state: PlanSessionStateDto; label: st
       return <Pill tone="awaiting">{label}</Pill>;
     case 'planned':
       return <Pill status="planned">{label}</Pill>;
+    // Being approved (Bug MOTIR-9006): in progress, the sky word `generating` takes.
+    case 'approving':
+      return <Pill severity="info">{label}</Pill>;
     case 'stale':
       return <Pill severity="danger">{label}</Pill>;
     case 'approved':

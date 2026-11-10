@@ -182,6 +182,10 @@ describe('no plan mutation escapes the trail', () => {
     // so the pairing is asserted below, not assumed.
     const PHASE_OF: Record<string, string> = {
       prepareApprovePlan: 'approvePlanWithin',
+      // The CLAIM (Bug MOTIR-9006) — `planned` → `approving` in its own short transaction
+      // before the body opens. A lifecycle status like the `stale` flip: the act it
+      // brackets, the approval, writes the trail row; a failed one gives the claim back.
+      claimApprovePlan: 'approvePlanWithin',
       approveFailure: 'approvePlanWithin',
     };
     const handler = readFileSync(

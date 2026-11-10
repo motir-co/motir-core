@@ -8471,6 +8471,7 @@
     "status": {
       "generating": "Gerando",
       "planned": "Planejado",
+      "approving": "Aprovando…",
       "stale": "Desatualizado",
       "approved": "Aprovado",
       "declined": "Recusado"
@@ -8518,6 +8519,7 @@
         "none": "Ainda sem plano",
         "generating": "Escrevendo",
         "planned": "Aguardando aprovação",
+        "approving": "Aprovando…",
         "stale": "Desatualizado",
         "approved": "Aprovado",
         "declined": "Recusado",
@@ -15436,6 +15438,7 @@
       "planState": {
         "generating": "O Motir AI ainda está escrevendo este plano.",
         "planned": "Este plano está aguardando aprovação.",
+        "approving": "Este plano está sendo aprovado.",
         "stale": "Este plano precisa de atenção antes de poder ser aprovado."
       },
       "reviewPlan": "Revisar plano",
@@ -15723,6 +15726,8 @@
         },
         "rewriting": "Sendo reescrito",
         "rewritingTitle": "O Motir AI está escrevendo uma nova versão deste plano. Você poderá aprová-lo ou recusá-lo quando terminar.",
+        "approving": "Aprovando…",
+        "approvingTitle": "Este plano foi aprovado e suas propostas estão sendo gravadas como itens de trabalho. Ele aparecerá como Aprovado quando terminar.",
         "reviewRow": "Revisar plano — {sentence}",
         "declinedNoReason": "Recusado sem motivo · em <mono>{version}</mono>"
       },

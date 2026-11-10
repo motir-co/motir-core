@@ -113,6 +113,9 @@ describe('the chip map is TOTAL (§19.3)', () => {
   it.each([
     ['generating', 'Writing', true],
     ['planned', 'Waiting for approval', true],
+    // Bug MOTIR-9006 — being approved reads as such, never Waiting for approval, and
+    // its chip still opens the overlay, where the progress is drawn.
+    ['approving', 'Approving…', true],
     ['stale', 'Stale', true],
     ['approved', 'Approved', false],
     ['declined', 'Declined', false],
