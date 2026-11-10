@@ -71,11 +71,12 @@ describe('the rail SWAPS on an organisation-settings route', () => {
     renderRail(ADMIN_ORG);
     // `Git` joined in MOTIR-4680, in the SAME commit as its route — the move
     // every row in these registries makes. `Fleet` joined in MOTIR-10369 the
-    // same way, after Usage & cost.
+    // same way, after Usage & cost, and `AI models` in MOTIR-10846, after Git.
     expect(rowNames()).toEqual([
       'Back to Motir',
       'Organisation',
       'Git',
+      'AI models',
       'Members',
       'Security',
       'Usage & cost',
