@@ -1,5 +1,32 @@
 import { Prisma, type JobRun, type JobRunStatus } from '@/generated/prisma/client';
 
+/**
+ * THE CODE-GRAPH JOBS THAT CLAIM A REPOSITORY — a first index and a refresh.
+ *
+ * Since MOTIR-9454 `claimIndexingRepo` stamps the claiming run's own `job_run` id
+ * into `github_repo.indexing_run_id` for BOTH, so every reader that resolves that
+ * pointer against the ledger must read both. One list, so the running read and
+ * the terminal read cannot drift apart again (bug MOTIR-10821: the terminal read
+ * had been widened to both and the running read had not, so a refresh that failed
+ * was reported while a refresh in flight read `stale`).
+ */
+export const CODE_GRAPH_CLAIMING_FUNCTION_IDS = [
+  'system.code-graph-index',
+  'system.code-graph-refresh',
+] as const;
+
+/**
+ * "The run a repository's claim names is still running" — the ONE predicate
+ * (MOTIR-10821). Every state derivation that turns `indexing_run_id` into
+ * `indexing` reads it through {@link jobRunRepository.listRunningCodeGraphRunIds}
+ * or {@link jobRunRepository.listRunningCodeGraphRunIdsAmong};
+ * `tests/codeGraph/runningClaimPredicate.test.ts` fails on an inline copy.
+ */
+const RUNNING_CODE_GRAPH_RUN = {
+  functionId: { in: [...CODE_GRAPH_CLAIMING_FUNCTION_IDS] },
+  status: 'running',
+} satisfies Prisma.JobRunWhereInput;
+
 // Data access for the job_run ledger (Story 1.6 · Subtask 1.6.2). Single-op
 // methods only; writes require `tx` (the 4-layer contract). jobRunsService
 // owns the transactions and the DTO mapping.
@@ -301,7 +328,7 @@ export const jobRunRepository = {
     const rows = await tx.jobRun.findMany({
       where: {
         workspaceId,
-        functionId: { in: ['system.code-graph-index', 'system.code-graph-refresh'] },
+        functionId: { in: [...CODE_GRAPH_CLAIMING_FUNCTION_IDS] },
         status: { in: ['failed', 'abandoned'] },
       },
       select: { id: true },
@@ -310,18 +337,43 @@ export const jobRunRepository = {
   },
 
   /**
-   * The ids of the workspace's `system.code-graph-index` runs still `running` —
-   * the half of the pointer rule that says `indexing` (MOTIR-8768). A running row
-   * carries no `output.repoRef`, so a repository is indexing only when its
-   * `GithubRepo.indexingRunId` is in this set; a crashed run's pointer names an
-   * `abandoned` row and is simply absent. Ids, so the join stays the caller's.
+   * The ids of the workspace's code-graph runs still `running` — a first INDEX
+   * or a REFRESH, the half of the pointer rule that says `indexing` (MOTIR-8768).
+   * A running row carries no `output.repoRef`, so a repository is indexing only
+   * when its `GithubRepo.indexingRunId` is in this set; a crashed run's pointer
+   * names an `abandoned` row and is simply absent. Ids, so the join stays the
+   * caller's.
+   *
+   * ⚠️ BOTH FUNCTIONS (bug MOTIR-10821), for the reason
+   * {@link listTerminalCodeGraphRunIds} gives: a refresh claims the repository
+   * exactly as a first index does, and a re-index in flight reads `indexing`
+   * (`lib/codeGraph/indexState.ts`), never `stale`.
    */
-  async listRunningCodeGraphIndexRunIds(
+  async listRunningCodeGraphRunIds(
     workspaceId: string,
     tx: Prisma.TransactionClient,
   ): Promise<string[]> {
     const rows = await tx.jobRun.findMany({
-      where: { workspaceId, functionId: 'system.code-graph-index', status: 'running' },
+      where: { workspaceId, ...RUNNING_CODE_GRAPH_RUN },
+      select: { id: true },
+    });
+    return rows.map((row) => row.id);
+  },
+
+  /**
+   * The same question for an ORGANISATION-wide read, which has no single
+   * workspace to scope by: of `runIds` — the claims the caller's repositories
+   * carry — the ones still running. Keyed on the ids, so it is a primary-key
+   * lookup rather than a scan of every workspace's ledger. Run it under
+   * `withSystemContext` (the job_run RLS policy's system-admin branch).
+   */
+  async listRunningCodeGraphRunIdsAmong(
+    runIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (runIds.length === 0) return [];
+    const rows = await tx.jobRun.findMany({
+      where: { id: { in: [...runIds] }, ...RUNNING_CODE_GRAPH_RUN },
       select: { id: true },
     });
     return rows.map((row) => row.id);

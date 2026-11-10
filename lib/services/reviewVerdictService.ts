@@ -150,13 +150,19 @@ function decidedAt(gate: ApprovalGate | null, version: string): boolean {
  * Returns the gates withdrawn.
  */
 async function applySendBack(workItemId: string, tx: Prisma.TransactionClient): Promise<string[]> {
+  // ⚠️ …AND A STORY RUN'S AWAITING ACCEPTANCE QUESTION WITH IT. The video is the evidence
+  // for that merge and its press merges, so a send-back that left it awaiting would keep
+  // the story in To approve over the code just sent back (`pullRequestApprovalHandler`'s
+  // `requestChanges` holds the same rule for a person's refusal).
+  const kinds = ['pull_request_approval', 'acceptance_result'] as const;
   const awaiting = (await approvalGateRepository.findAwaitingByWorkItem(workItemId, tx)).filter(
-    (gate) => gate.kind === 'pull_request_approval',
+    (gate) => (kinds as readonly string[]).includes(gate.kind),
   );
-  if (awaiting.length > 0) {
+  for (const kind of kinds) {
+    if (!awaiting.some((gate) => gate.kind === kind)) continue;
     await approvalGateRepository.supersedeAwaitingByWorkItem(
       workItemId,
-      'pull_request_approval',
+      kind,
       'agent_changes_requested',
       tx,
     );

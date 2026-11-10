@@ -9,6 +9,7 @@ import { DispatchRunAgentBusyError } from '@/lib/dispatchRuns/errors';
 import {
   AgentInstanceNameInvalidError,
   AgentInstanceNameTakenError,
+  AgentInstanceLaneMissingError,
   AgentInstanceNoTerminalServerError,
   AgentInstanceNotFoundError,
   AgentInstanceNotRunningError,
@@ -75,6 +76,9 @@ export function mapAgentInstanceError(err: unknown): NextResponse | null {
     err instanceof AgentInstanceStateConflictError ||
     err instanceof AgentInstanceNotRunningError ||
     err instanceof AgentInstanceNoTerminalServerError ||
+    // A row on a host this deployment no longer runs (MOTIR-10809): the agent's
+    // state, not the deployment's, so a 409 and never the lane-wide 503.
+    err instanceof AgentInstanceLaneMissingError ||
     // The start's own refusals (MOTIR-7026, `agent-instance-run.md` §4) — each a
     // 409 carrying its words, raised before anything was opened or woken.
     err instanceof AgentInstanceWrongProjectError ||

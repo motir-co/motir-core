@@ -20,7 +20,7 @@ export const LIVE_READING_METHODS = [
   'watcherRepository.watermarkByUser',
   'approvalGateRepository.watermarkAwaitingRoutedTo',
   'approvalGateRepository.findAwaitingRoutedReviewCarryingWorkItemIds',
-  'reviewStateRepository.watermarkReviewsOfSubtrees',
+  'reviewStateRepository.watermarkReviewsOfCards',
   'planChangeSessionRepository.watermarkFailedOpenForOwner',
   'planChangeSessionRepository.watermarkEndedWithWaitingPlanForOwner',
   'planChangeSessionRepository.listAwaitingPersonIdsInProjects',

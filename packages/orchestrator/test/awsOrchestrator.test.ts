@@ -1,7 +1,11 @@
+import { execFileSync } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  AWS_INDEX_CONSOLE_GRACE_MS,
   AWS_INDEX_EXIT_MARKER,
   AWS_INDEX_IAM_ROLE,
+  AWS_INDEX_MARKER_HOLD_SECONDS,
+  AWS_INDEX_PULL_ERROR_PREFIX,
   AWS_INDEX_PULL_FAILED_MARKER,
   AWS_DISPATCH_RUN_TAG_KEY,
   AWS_REAP_PAGE_SIZE,
@@ -15,6 +19,7 @@ import {
   buildContainerUserData,
   buildIndexUserData,
   consoleExitCode,
+  consolePullError,
   consoleShowsPullFailure,
   createAwsOrchestrator,
   ecrRegistryOf,
@@ -848,23 +853,19 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     const script = buildIndexUserData({ image, env: {} });
     const lines = script.split('\n');
     const login = lines.findIndex((l) => l.includes('aws ecr get-login-password'));
-    const pull = lines.indexOf('if ! docker pull "$IMAGE"; then');
+    const pull = lines.indexOf('if ! out=$(docker pull "$IMAGE" 2>&1); then');
     expect(login).toBeGreaterThan(-1);
     expect(login).toBeLessThan(pull);
     expect(lines[login]).toBe(
-      "if ! aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin '944842271421.dkr.ecr.us-east-1.amazonaws.com'; then",
+      "if ! out=$({ aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin '944842271421.dkr.ecr.us-east-1.amazonaws.com'; } 2>&1); then",
     );
     // The CLI is installed only when the AMI has none, before the login.
     expect(lines[login - 1]).toBe(
       'if ! command -v aws >/dev/null 2>&1; then dnf install -y -q awscli-2; fi',
     );
-    // A failed login is a failed pull: the same marker, then power off.
-    expect(lines.slice(login + 1, login + 5)).toEqual([
-      `  console '${AWS_INDEX_PULL_FAILED_MARKER}'`,
-      '  shutdown -h now',
-      '  exit 0',
-      'fi',
-    ]);
+    // A failed login is a failed pull: its output, the same marker, the hold,
+    // then power off (MOTIR-10823).
+    expect(lines.slice(login + 1, login + 3)).toEqual(['  pull_failed "$out"', 'fi']);
     // pipefail, so a CLI that fails is the pipe's failure, not docker's.
     expect(script).toContain('\nset -u -o pipefail\n');
     // The login runs on the host, after the env file and the console are set up.
@@ -876,7 +877,7 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
     expect(script).not.toContain('docker login');
     expect(script).not.toContain('awscli');
     expect(script).toContain(
-      `if ! docker pull "$IMAGE"; then\n  console '${AWS_INDEX_PULL_FAILED_MARKER}'\n`,
+      'if ! out=$(docker pull "$IMAGE" 2>&1); then\n  pull_failed "$out"\nfi\n',
     );
   });
 
@@ -920,8 +921,9 @@ describe('an index VM boots the indexer image by digest (MOTIR-9446)', () => {
 
     const running = await orchestrator.describe(handle);
     expect(running.terminal).toBe(false);
-    // A live VM's console is not read: one read per stop, not per poll.
-    expect(ec2.count('getConsoleOutput')).toBe(0);
+    // A running VM's console is read live, for a marker it holds up to show
+    // (MOTIR-10823); with none there it stays running.
+    expect(ec2.count('getConsoleOutput')).toBe(1);
 
     ec2.endJob(handle.id);
     const stopped = await orchestrator.describe(handle);
@@ -1003,17 +1005,70 @@ describe('an index VM reports its exit code through describe (MOTIR-9449)', () =
 
     ec2.setState(handle.id, 'stopping');
     expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
-    expect(ec2.count('getConsoleOutput')).toBe(0);
+    // Read once, live, while running; a stopping VM is not read.
+    expect(ec2.count('getConsoleOutput')).toBe(1);
   });
 
-  it('a VM that stopped with no marker on its console reads as no code', async () => {
-    const { orchestrator, handle } = await bootIndex();
+  it('a VM that stopped with no marker is held non-terminal until the grace window closes, then reads as no code', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID, now: () => new Date(clock) });
+    const handle = await orchestrator.provision(INDEX_SPEC);
     ec2.powerOff(handle.id);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      terminal: false,
+      exitCode: null,
+    });
+    clock += AWS_INDEX_CONSOLE_GRACE_MS - 1;
+    expect((await orchestrator.describe(handle)).terminal).toBe(false);
+    clock += 1;
     expect(await orchestrator.describe(handle)).toMatchObject({
       state: 'stopped',
       terminal: true,
       exitCode: null,
     });
+    expect(ec2.count('terminateInstances')).toBe(0);
+  });
+
+  it('reads the code EC2 posts minutes after the stop, not exit_unobserved (MOTIR-10805)', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID, now: () => new Date(clock) });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.exitIndexContainerUnposted(handle.id, 0);
+
+    // Stopped, but neither the buffered nor the live read holds the marker yet.
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: false, exitCode: null });
+    clock += 5 * 60_000;
+    ec2.postConsole(handle.id);
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'stopped',
+      terminal: true,
+      exitCode: 0,
+    });
+  });
+
+  it('a new adapter keeps the window a stop opened (an adapter per supervision pass)', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const now = () => new Date(clock);
+    const handle = await adapter({ indexerAmiId: INDEXER_AMI_ID, now }).provision(INDEX_SPEC);
+    ec2.powerOff(handle.id);
+    expect((await adapter({ indexerAmiId: INDEXER_AMI_ID, now }).describe(handle)).terminal).toBe(
+      false,
+    );
+    clock += AWS_INDEX_CONSOLE_GRACE_MS;
+    expect((await adapter({ indexerAmiId: INDEXER_AMI_ID, now }).describe(handle)).terminal).toBe(
+      true,
+    );
+  });
+
+  it('times the window from a stop instant EC2 states', async () => {
+    const clock = Date.parse('2026-11-09T11:30:00Z');
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID, now: () => new Date(clock) });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.setState(handle.id, 'stopped', 'User initiated (2026-11-09 11:13:00 GMT)');
+    // Seventeen minutes after the stated stop: past the window at the first read.
+    expect((await orchestrator.describe(handle)).terminal).toBe(true);
   });
 
   it('teardown right after the exit: the describe before it has the code, and the VM ends', async () => {
@@ -1077,5 +1132,163 @@ describe('transitionTimeOf', () => {
     expect(transitionTimeOf('Server.SpotInstanceTermination')).toBeNull();
     expect(transitionTimeOf('User initiated (2026-13-45 99:00:00 GMT)')).toBeNull();
     expect(transitionTimeOf(null)).toBeNull();
+  });
+});
+
+describe('an index VM shows why its pull failed, and holds its marker up for a live read (MOTIR-10823)', () => {
+  const ECR_IMAGE = `944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer@sha256:${'b'.repeat(64)}`;
+
+  /** The script's `console` and `pull_failed` functions, run under bash with the
+   *  console, the hold and the power-off redirected to stdout. */
+  function runPullFailed(failedOutput: string): string[] {
+    const lines = buildIndexUserData({ image: ECR_IMAGE, env: {} }).split('\n');
+    const start = lines.findIndex((l) => l.startsWith('console() {'));
+    const end = lines.indexOf('}', start);
+    const functions = lines.slice(start, end + 1).join('\n');
+    const harness = [
+      functions,
+      'console() { echo "CONSOLE $1"; }',
+      'sleep() { echo "SLEEP $1"; }',
+      'shutdown() { echo "SHUTDOWN"; }',
+      // Its first line copies the output to the boot log (stdout here); the
+      // filter below keeps only what reached the console, the hold and the stop.
+      'pull_failed "$1"',
+    ].join('\n');
+    const out = execFileSync('bash', ['-c', harness, 'harness', failedOutput], {
+      encoding: 'utf8',
+    });
+    return out.split('\n').filter((l) => /^(CONSOLE|SLEEP|SHUTDOWN)/.test(l));
+  }
+
+  it('copies the failed command’s last lines to the console before the marker, then holds and powers off', () => {
+    const failed = [
+      'Pulling from motir/indexer',
+      ...Array.from({ length: 8 }, (_, i) => `progress ${i}`),
+      'Error response from daemon: pull access denied for 944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer',
+      '',
+    ].join('\n');
+
+    expect(runPullFailed(failed)).toEqual([
+      `CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}progress 4`,
+      `CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}progress 5`,
+      `CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}progress 6`,
+      `CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}progress 7`,
+      `CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}Error response from daemon: pull access denied for 944842271421.dkr.ecr.us-east-1.amazonaws.com/motir/indexer`,
+      `CONSOLE ${AWS_INDEX_PULL_FAILED_MARKER}`,
+      `SLEEP ${AWS_INDEX_MARKER_HOLD_SECONDS}`,
+      'SHUTDOWN',
+    ]);
+  });
+
+  it('drops control characters and caps each copied line', () => {
+    const console_ = runPullFailed(`bad\u001b[31m red\u0007\n${'x'.repeat(400)}`);
+    expect(console_[0]).toBe(`CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}bad[31m red`);
+    expect(console_[1]).toBe(`CONSOLE ${AWS_INDEX_PULL_ERROR_PREFIX}${'x'.repeat(300)}`);
+    expect(console_[2]).toBe(`CONSOLE ${AWS_INDEX_PULL_FAILED_MARKER}`);
+  });
+
+  it('a failure with no output still writes the marker', () => {
+    expect(runPullFailed('')).toEqual([
+      `CONSOLE ${AWS_INDEX_PULL_FAILED_MARKER}`,
+      `SLEEP ${AWS_INDEX_MARKER_HOLD_SECONDS}`,
+      'SHUTDOWN',
+    ]);
+  });
+
+  it('keeps the login password on the pipe, and both failure branches go through pull_failed', () => {
+    const script = buildIndexUserData({
+      image: ECR_IMAGE,
+      env: { MOTIR_INDEX_RUN_CREDENTIAL: 'run-cred-secret' },
+    });
+    const lines = script.split('\n');
+    // The captured output is the pipe's stderr and docker login's stdout; the
+    // password is the CLI's stdout, which only the pipe carries.
+    expect(script).toContain(
+      "out=$({ aws ecr get-login-password --region 'us-east-1' | docker login --username AWS --password-stdin",
+    );
+    expect(lines.filter((l) => l === '  pull_failed "$out"')).toHaveLength(2);
+    // The credential is written to the env file only, never echoed.
+    expect(lines.filter((l) => l.includes('run-cred-secret'))).toEqual([
+      'MOTIR_INDEX_RUN_CREDENTIAL=run-cred-secret',
+    ]);
+  });
+
+  it('holds the VM up after the exit marker, before the power-off', () => {
+    const lines = buildIndexUserData({ image: INDEX_IMAGE, env: {} }).split('\n');
+    const marker = lines.findIndex((l) => l.startsWith(`console "${AWS_INDEX_EXIT_MARKER}`));
+    expect(lines.slice(marker + 1, marker + 4)).toEqual([
+      'sync',
+      `sleep ${AWS_INDEX_MARKER_HOLD_SECONDS}`,
+      'shutdown -h now',
+    ]);
+    // Several of supervision's longest polls (15 s) fit inside the hold.
+    expect(AWS_INDEX_MARKER_HOLD_SECONDS).toBeGreaterThanOrEqual(4 * 15);
+  });
+
+  it('a running VM holding its exit marker settles at once with that code', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    expect((await orchestrator.describe(handle)).terminal).toBe(false);
+
+    ec2.exitIndexContainerHeld(handle.id, 0);
+    const status = await orchestrator.describe(handle);
+    expect(status).toMatchObject({ exists: true, state: 'running', terminal: true, exitCode: 0 });
+    expect(status.stoppedAt).toBeInstanceOf(Date);
+    expect(status).not.toHaveProperty('imagePullFailed');
+    // Nothing waited for a stop or a posted console.
+    expect(ec2.count('terminateInstances')).toBe(0);
+  });
+
+  it('a running VM holding a pull failure settles as imagePullFailed and logs the cause', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.failIndexPullHeld(handle.id, ['Error response from daemon: denied', 'second line']);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'running',
+      terminal: true,
+      imagePullFailed: true,
+      exitCode: null,
+    });
+    expect(warn).toHaveBeenCalledWith('[awsOrchestrator] an index VM could not pull its image', {
+      instanceId: handle.id,
+      detail: 'Error response from daemon: denied | second line',
+    });
+  });
+
+  it('a stopped VM whose posted console shows a pull failure logs that it had no error lines', async () => {
+    ec2.markImageUnpullable(INDEX_IMAGE);
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({ imagePullFailed: true });
+    expect(warn).toHaveBeenCalledWith('[awsOrchestrator] an index VM could not pull its image', {
+      instanceId: handle.id,
+      detail: 'no error lines on the console',
+    });
+  });
+
+  it('a live read that fails leaves a running VM running, and warns nothing', async () => {
+    const orchestrator = adapter({ indexerAmiId: INDEXER_AMI_ID });
+    const handle = await orchestrator.provision(INDEX_SPEC);
+    ec2.exitIndexContainerHeld(handle.id, 0);
+    ec2.failNext('getConsoleOutput', 'Throttling', 400);
+
+    expect(await orchestrator.describe(handle)).toMatchObject({
+      state: 'running',
+      terminal: false,
+    });
+    expect(warn).not.toHaveBeenCalled();
+    // The next poll reads it.
+    expect(await orchestrator.describe(handle)).toMatchObject({ terminal: true, exitCode: 0 });
+  });
+
+  it('reads the error lines off a console, without their prefix', () => {
+    expect(
+      consolePullError(
+        `boot\n${AWS_INDEX_PULL_ERROR_PREFIX}one\r\n  ${AWS_INDEX_PULL_ERROR_PREFIX}two  \n${AWS_INDEX_PULL_FAILED_MARKER}\n`,
+      ),
+    ).toEqual(['one', 'two']);
+    expect(consolePullError(null)).toEqual([]);
   });
 });

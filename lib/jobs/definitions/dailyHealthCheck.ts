@@ -2,6 +2,7 @@ import { defineJob } from '../defineJob';
 import type { ScheduleHealthReportDTO } from '@/lib/dto/jobSchedules';
 import type { FleetBootableVerdict } from '@/lib/orchestrator';
 import type { ContainerAiAddressVerdict } from '@/lib/ai/containerAiAddress';
+import type { FleetOriginsVerdict } from '@/lib/ai/fleetOrigins';
 import type { IndexRebuildStreakVerdictDTO } from '@/lib/dto/indexRebuildStreak';
 import type { MonitorConfigVerdict } from '@/lib/monitors';
 import type { CredentialExpiryVerdict } from '@/lib/health/credentialExpiryProbe';
@@ -258,6 +259,13 @@ export interface DailyHealthCheckResult {
    *  that does not reports `not_applicable` beside a `not_applicable`
    *  `indexFleet`. */
   indexContainerAi: ContainerAiAddressVerdict;
+  /** Whether the THREE addresses every fleet machine is handed — core's public
+   *  origin, motir-ai's container-facing origin and the gateway's run-lane
+   *  origin — can work for it (Story MOTIR-9714), one reading per origin.
+   *  Recorded on the healthy tick too, so the ledger answers "were the fleet's
+   *  addresses sane yesterday?". A deployment on the fake orchestrator reports
+   *  `not_applicable`. */
+  fleetOrigins: FleetOriginsVerdict;
   /** Whether any repository has been denied a snapshot N consecutive times
    *  (MOTIR-5027) — recorded on the healthy tick too, so the ledger answers
    *  "was the index still incremental yesterday?". It is the first probe here
@@ -407,8 +415,9 @@ export class HostedAgentImageUnpullableError extends Error {
  * from the fleet's organization.
  *
  * A SEPARATE error from the two image ones, and the message is the reason. Those
- * two send an operator to a REGISTRY; this one sends them to a Fly secret on
- * `motir-core`, and the fix is a different command in a different place. Telling
+ * two send an operator to a REGISTRY; this one sends them to motir-core's own
+ * value and the stack output it must equal (Story MOTIR-9714), and the fix is a
+ * different change in a different place. Telling
  * someone to re-run the image mirror for a name-resolution fault would send them
  * to the wrong system entirely — which is precisely what happened for two weeks
  * while both image probes reported green.
@@ -430,13 +439,40 @@ export class IndexContainerAiAddressError extends Error {
       `An index container cannot reach motir-ai: ${verdict.detail} ` +
         `No code-graph index can be published until this is fixed — the container will still ` +
         `boot, download the repository and build the whole graph, and then throw it away at the ` +
-        `upload grant. Set MOTIR_AI_CONTAINER_URL on motir-core to an address that resolves from ` +
-        `OUTSIDE motir-core's own organization (motir-ai's public ingress; its container-facing ` +
-        `routes are gated on the run-scoped credential either way). It is deliberately not ` +
+        `upload grant. Set MOTIR_AI_CONTAINER_URL on motir-core's web and worker to the ` +
+        `motir-infra services stack output AiContainerOrigin (its container-facing routes are ` +
+        `gated on the run-scoped credential either way). It is deliberately not ` +
         `MOTIR_AI_URL, which is motir-core's own private seam and must stay that way ` +
         `(MOTIR-3277 · MOTIR-4518).`,
     );
     this.name = 'IndexContainerAiAddressError';
+  }
+}
+
+/**
+ * Thrown when any of the three addresses every fleet machine is handed is a
+ * DEFINITE failure (Story MOTIR-9714 · MOTIR-10750): unset, malformed, or a
+ * private or Fly-owned host. The message names, per failing origin, the
+ * variable, what is wrong with it and the motir-infra stack output it must
+ * equal — the one place the right value is published — never a Fly secret.
+ *
+ * Loud on the definite arms only: an `indeterminate` origin is core's probe
+ * failing to get an answer, which the streak below escalates instead.
+ */
+export class FleetOriginsError extends Error {
+  constructor(readonly verdict: Extract<FleetOriginsVerdict, { verdict: 'failed' }>) {
+    const sentences = verdict.failures.map(
+      (f) =>
+        `${f.variable}: ${f.detail} Set it on motir-core's web and worker to the motir-infra ` +
+        `services stack output ${f.output}.`,
+    );
+    super(
+      `${verdict.failures.length} fleet origin(s) cannot work for a fleet machine: ` +
+        `${sentences.join(' ')} The indexer, the agent runner and the agent hoster are ` +
+        `handed these addresses, and a machine handed a wrong one boots, is billed and fails ` +
+        `late (MOTIR-4518 · MOTIR-4916).`,
+    );
+    this.name = 'FleetOriginsError';
   }
 }
 
@@ -755,6 +791,10 @@ export const DAILY_HEALTH_CHECK_PROBES: {
     step: 'index-container-ai-address',
     describeIndeterminate: (v) => ({ phase: 'address', detail: `${v.address}: ${v.detail}` }),
   },
+  fleetOrigins: {
+    step: 'fleet-origins',
+    describeIndeterminate: (v) => ({ phase: 'address', detail: v.detail }),
+  },
   indexRebuildStreak: { step: 'index-rebuild-streak', describeIndeterminate: null },
   monitorConfig: { step: 'monitor-config-preflight', describeIndeterminate: null },
   credentialExpiry: { step: 'credential-expiry', describeIndeterminate: null },
@@ -896,6 +936,9 @@ export const dailyHealthCheck = defineJob(
     const indexContainerAi = await ctx.step.run('index-container-ai-address', () =>
       services.fleetPreflight.checkIndexContainerAiAddress(),
     );
+    const fleetOrigins = await ctx.step.run('fleet-origins', () =>
+      services.fleetPreflight.checkFleetOrigins(),
+    );
     const indexRebuildStreak = await ctx.step.run('index-rebuild-streak', () =>
       services.indexRebuildStreak.check(),
     );
@@ -924,6 +967,7 @@ export const dailyHealthCheck = defineJob(
       indexFleet,
       hostedAgentImage,
       indexContainerAi,
+      fleetOrigins,
       indexRebuildStreak,
       monitorConfig,
       credentialExpiry,
@@ -981,6 +1025,13 @@ export const dailyHealthCheck = defineJob(
     ) {
       throw new IndexContainerAiAddressError(indexContainerAi);
     }
+
+    // The FLEET ORIGINS (Story MOTIR-9714), on the same terms: only `failed` is
+    // loud, and `indeterminate` is core's probe failing to get an answer, which
+    // the streak escalates. After the index container's own address, so a bad
+    // motir-ai address keeps its more specific message; both name the stack
+    // output it must equal.
+    if (fleetOrigins.verdict === 'failed') throw new FleetOriginsError(fleetOrigins);
 
     // The LEDGER probe, reported last and on the same terms as every one above
     // it: only the DEFINITE arm is loud. `not_applicable` is a deployment that

@@ -1436,6 +1436,21 @@ model Organization {
   /// unlike `isMeta`'s data-flip, classifying an org is an operator's act.
   internalBilling Boolean @default(false) @map("internal_billing")
 
+  /// THIS ORGANISATION'S OWN RUN-SIDE MODELS (story MOTIR-10838 · MOTIR-10843),
+  /// beside the project's four `hostedModel*` overrides: the model a hosted build
+  /// run takes per leaf difficulty, a hosted review and a design run. NULL =
+  /// inherit the platform default. Bare gateway ids, nullable strings for the
+  /// project columns' reason (the vocabulary lives in motir-ai). Read only while
+  /// the org QUALIFIES (`orgQualifiesForHostedModelChoice`: meta, or a tier above
+  /// Standard), evaluated at every resolution, so an org that drops below Pro keeps
+  /// its values unread. A withdrawn id is skipped by `resolveHostedModel`.
+  hostedModelTrivial String? @map("hosted_model_trivial")
+  hostedModelLow     String? @map("hosted_model_low")
+  hostedModelMedium  String? @map("hosted_model_medium")
+  hostedModelHigh    String? @map("hosted_model_high")
+  hostedReviewModel  String? @map("hosted_review_model")
+  hostedDesignModel  String? @map("hosted_design_model")
+
   /// THIS ORGANISATION'S CI BURST OVERRIDE (MOTIR-9375 · MOTIR-9377; it was the
   /// org's own fleet pool, MOTIR-6907, until the fleet-capacity decision
   /// MOTIR-9357 retired that pool): how many CI runners the org may have in
@@ -8245,9 +8260,10 @@ model GithubIdentity {
   /// grant is spent, cleared when the rotated pair is stored. A live lease makes
   /// every other caller wait rather than spend the same refresh token.
   refreshLeaseUntil     DateTime? @map("refresh_lease_until")
-  /// When GitHub REFUSED the refresh token (`bad_refresh_token` — expired or
-  /// revoked). The identity is dead until the member reconnects, and no further
-  /// renewal is attempted. Cleared by a reconnect.
+  /// When GitHub REFUSED this sign-in: the refresh token (`bad_refresh_token` —
+  /// expired or revoked), or the access token itself (a 401 from a user-token
+  /// read, Bug MOTIR-10806). The identity is dead until the member reconnects,
+  /// and no further renewal is attempted. Cleared by a reconnect.
   refreshRefusedAt      DateTime? @map("refresh_refused_at")
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
@@ -8601,6 +8617,20 @@ model GithubRepo {
   /// When the refusal above was recorded.
   indexRefusedAt        DateTime? @map("index_refused_at")
 
+  /// THE AUTOMATIC RETRY LEDGER (MOTIR-10819). How many times the catch-up sweep
+  /// re-dispatched this repository's index or refresh after its claimed run ended
+  /// terminal (`failed` / `abandoned`) for a reason other than size, and when it
+  /// last did. Reset by `markIndexSettled` when a run actually indexes.
+  ///
+  /// ⚠️ THE COUNT IS WHAT BOUNDS THE RETRY. A repository that fails
+  /// deterministically would otherwise be re-dispatched on every tick; once the
+  /// count reaches `INDEX_RETRY_MAX_ATTEMPTS` the sweep leaves it alone and
+  /// `refreshFailing` (MOTIR-2105) is the human signal from then on.
+  indexRetryAttempts     Int       @default(0) @map("index_retry_attempts")
+  /// When the sweep last released a dead claim and re-enqueued. Read only while
+  /// `indexingRunId` is null: a re-dispatch no run ever claimed is a lost enqueue.
+  indexRetryDispatchedAt DateTime? @map("index_retry_dispatched_at")
+
   /// THE DRIFT COUNT — how many commits the default branch is ahead of the graph
   /// (MOTIR-4644), and the exact PAIR it was computed for.
   ///
@@ -8705,16 +8735,16 @@ model GithubRepo {
 /// repo AND the work item modelled on both sides (the FK-`@relation` rule). Read
 /// through the GitProvider seam as a NormalizedChangeRequest.
 model GithubPullRequest {
-  id                    String              @id @default(cuid())
+  id                            String              @id @default(cuid())
   /// Provider discriminator — always "github" for these rows.
-  provider              String              @default("github")
+  provider                      String              @default("github")
   /// FK → GithubRepo.id (internal cuid).
-  repoId                String              @map("repo_id")
-  number                Int
+  repoId                        String              @map("repo_id")
+  number                        Int
   /// Normalized change-request state: "open" | "closed" (merged is the boolean).
-  state                 String
-  merged                Boolean             @default(false)
-  headRef               String              @map("head_ref")
+  state                         String
+  merged                        Boolean             @default(false)
+  headRef                       String              @map("head_ref")
   /// The branch the change request targets, as of the last delivery (Story
   /// MOTIR-2725 · MOTIR-2729). The completion decision has always compared this
   /// against the repository's mirrored `defaultBranch` — a merge onto anything
@@ -8732,11 +8762,11 @@ model GithubPullRequest {
   /// rule `merged_at` above states for the same reason. Every live path supplies
   /// it: it is REQUIRED on `NormalizedChangeRequest` for both providers and on
   /// the historical backfill, so only pre-existing rows are ever null.
-  baseRef               String?             @map("base_ref")
+  baseRef                       String?             @map("base_ref")
   /// The PR's title as of the last webhook delivery (MOTIR-1579 — the
   /// Development surface renders it). Nullable: rows ingested before title
   /// capture display their `head_ref` instead.
-  title                 String?
+  title                         String?
   /// Whether the change request is a DRAFT — explicitly not offered for review —
   /// as of the last delivery (MOTIR-5002). `NormalizedChangeRequest.draft` is
   /// where it is read from the payload; this is where it survives the delivery.
@@ -8767,7 +8797,7 @@ model GithubPullRequest {
   /// null on insert. That is what lets the link door create a placeholder row
   /// without claiming to know, and the backfill (merged rows only, where the flag
   /// decides nothing) say the same.
-  draft                 Boolean?
+  draft                         Boolean?
   /// The host's answer to *can this pull request merge into its base right now?* —
   /// GitHub's raw `mergeable_state` (`clean`, `dirty`, `blocked`, `unstable`,
   /// `behind`, `unknown`, …), as of the last time Motir ASKED (MOTIR-5913, for bug
@@ -8784,9 +8814,25 @@ model GithubPullRequest {
   /// ⚠️ NULL IS "NOT KNOWN", NEVER "CONFLICTED" — the MOTIR-5699 rule for `draft`.
   /// GitHub itself answers `mergeable: null` until it has computed, and inventing a
   /// conflict for that would hold healthy work.
-  mergeableState        String?             @map("mergeable_state")
+  mergeableState                String?             @map("mergeable_state")
   /// The head commit `mergeableState` was read at. See above.
-  mergeableStateHeadSha String?             @map("mergeable_state_head_sha")
+  mergeableStateHeadSha         String?             @map("mergeable_state_head_sha")
+  /// The last DECIDED reading taken at an EARLIER head — what `mergeableState` said
+  /// before a reading about a different commit replaced it (Bug MOTIR-10791). Carried
+  /// by the two writers in one statement: when a reading lands at a head other than the
+  /// stored one's, and the stored one was decided (not null, not `unknown`), the stored
+  /// pair moves here; otherwise this pair is left as it is, so a push that never got a
+  /// reading does not erase the one before it.
+  ///
+  /// ⚠️ WHY IT EXISTS. A push replaces the reading (`unknown`, then the host's answer at
+  /// the new head), so a conflict the push answered was gone from the row the moment the
+  /// push landed. The card's stored To fix answer was the only other record of it, and one
+  /// recompute that sees a quick green check at the new head wipes that. This pair is the
+  /// durable fact `mergeabilityAnsweredByHead` reads to raise the conflict again, Fixing,
+  /// while CI runs on the push. Never read as the CURRENT mergeability.
+  previousMergeableState        String?             @map("previous_mergeable_state")
+  /// The head commit `previousMergeableState` was read at.
+  previousMergeableStateHeadSha String?             @map("previous_mergeable_state_head_sha")
   /// The pull request's HEAD COMMIT, as the host last reported it (MOTIR-7005) —
   /// written by every `pull_request` delivery (`synchronize` included) and by every
   /// host read (the reconcile tick, the base-branch re-read, the press-time read).
@@ -8800,7 +8846,25 @@ model GithubPullRequest {
   ///
   /// ⚠️ NULLABLE, NOT BACKFILLED, and read as UNKNOWN — then the readers fall back
   /// to the check rows' head, which is what they did before the column existed.
-  headSha               String?             @map("head_sha")
+  headSha                       String?             @map("head_sha")
+  /// The head commit at which the HOST confirmed CI had DECIDED this pull request's WHOLE
+  /// check set (Bug MOTIR-10797): every check run and workflow run it reports there is
+  /// finished, and no recorded row there is still running. Written by the check-set reconcile
+  /// (`reconcileRecordedCheckSet`), the one place that asks the host which checks a commit has,
+  /// and only while the commit is the pull request's head. Never cleared: a push moves the
+  /// head, and a marker about another commit says nothing about the new one.
+  ///
+  /// ⚠️ WHY IT EXISTS. The recorded rows cannot say whether a head's CI was ever WHOLE: a
+  /// quick green recorded before anything running there is exactly a set of terminal rows.
+  /// So a check that starts at a head CI had already decided (a workflow on `labeled`, a
+  /// third-party suite, a re-run recorded without times) was read as the push's own CI, and
+  /// a card whose fix had gone green was rebuilt as Fixing. A head with this marker answers
+  /// its own verdict, and nothing a push to it answered is rebuilt
+  /// (`hasHeadDecidedBeforeRunningChecks`).
+  ///
+  /// ⚠️ NULLABLE, NOT BACKFILLED: null is "never confirmed", the state the readers fall back
+  /// to the check rows' own times in.
+  ciDecidedSha                  String?             @map("ci_decided_sha")
   /// The pull request's AUTHOR on the host — GitHub's `pull_request.user` (Story MOTIR-10327 ·
   /// MOTIR-10340). The review state read model compares `authorGithubUserId` with the routed
   /// person's `GithubIdentity.githubUserId` to say whether they opened every pull request of
@@ -8813,9 +8877,9 @@ model GithubPullRequest {
   /// before these columns existed does not know its author, and the author fact reads false
   /// for it rather than guessing. Written by every `pull_request` delivery that names one;
   /// the link door and the historical backfill do not assert it.
-  authorGithubUserId    String?             @map("author_github_user_id")
+  authorGithubUserId            String?             @map("author_github_user_id")
   /// The author's login as of the last delivery — a display label, never compared.
-  authorLogin           String?             @map("author_login")
+  authorLogin                   String?             @map("author_login")
   /// Whether this pull request's association with a work item was DECLARED by a
   /// person or an agent (MOTIR-1596, design/github Panel 5) rather than inferred.
   ///
@@ -8843,25 +8907,25 @@ model GithubPullRequest {
   /// 2026-08-28). Phase 2 `@ignore`s the field and RELEASES; phase 3 drops the
   /// column with the `-- @client-stopped-selecting:` marker
   /// `tests/contract-phase-guard.test.ts` requires.
-  linkedManually        Boolean             @default(false) @map("linked_manually")
+  linkedManually                Boolean             @default(false) @map("linked_manually")
   /// WHEN the merge landed, stamped from the delivery's `pull_request.merged_at`
   /// (MOTIR-2922). Null on every row that has not merged — and on merged rows
   /// ingested before this column existed, which is why a consumer must treat
   /// null as "unknown", never as "merged at the epoch". `updatedAt` cannot serve
   /// this purpose: a later `check_suite`-driven upsert moves it, so it answers
   /// "when did we last hear about this PR", not "when did the work land".
-  mergedAt              DateTime?           @map("merged_at")
+  mergedAt                      DateTime?           @map("merged_at")
   /// The repo-relative paths the MERGE touched, captured best-effort after the
   /// status sync commits (MOTIR-2922). Empty when the PR has not merged, when
   /// the capture failed, and on rows that predate the column — all three are the
   /// same "no evidence" state on purpose, because a consumer that could tell
   /// them apart would still have nothing to do with the difference.
-  changedPaths          String[]            @default([]) @map("changed_paths")
+  changedPaths                  String[]            @default([]) @map("changed_paths")
   /// Whether `changedPaths` is a PREFIX of the merge's real file list rather
   /// than the whole of it — set when the list exceeded `MAX_CAPTURED_PR_PATHS`
   /// or the page walk hit its cap. A consumer may read absence of a path as
   /// evidence ONLY while this is false (the no-silent-caps rule).
-  changedPathsTruncated Boolean             @default(false) @map("changed_paths_truncated")
+  changedPathsTruncated         Boolean             @default(false) @map("changed_paths_truncated")
   /// THE MERGE RECORD (MOTIR-5520) — written ONLY when Motir itself merged or
   /// enqueued this pull request, never by the webhook. `null` on both means *not
   /// merged by Motir*, which is every row that predates this column and every merge a
@@ -8872,11 +8936,11 @@ model GithubPullRequest {
   /// the item page paints it as a status (`OptimisticStatusProvider.tsx`); a merge SHA
   /// written there would render as one. An automatic merge has no gate row at all,
   /// so the pull request is the one place both paths can record what happened.
-  mergeAuthority        MergeAuthority?     @map("merge_authority")
+  mergeAuthority                MergeAuthority?     @map("merge_authority")
   /// What the merge PRODUCED — the merge commit SHA, or `queue:<entryId>` when the
   /// pull request was enqueued. The queue entry is what lets a later ejection be
   /// matched to the entry Motir created (MOTIR-5461).
-  mergeOutcomeRef       String?             @map("merge_outcome_ref")
+  mergeOutcomeRef               String?             @map("merge_outcome_ref")
   /// THE DECISION DOCUMENT AT THE HEAD (Story MOTIR-4907 · MOTIR-5674;
   /// `docs/decisions/approval-gates.md` §8's FIFTH AMENDMENT, clause 7). Which
   /// `docs/decisions/*.md` file this pull request adds or modifies, read off the
@@ -8888,22 +8952,22 @@ model GithubPullRequest {
   /// the file's IDENTITY (path + git blob sha), a fact about the host. And it is
   /// NOT `changedPaths`, which stays the MERGE's file list (MOTIR-2922): these are
   /// a HEAD-time fact, and one column meaning two moments would make both wrong.
-  decisionDocOutcome    DecisionDocOutcome? @map("decision_doc_outcome")
+  decisionDocOutcome            DecisionDocOutcome? @map("decision_doc_outcome")
   /// The document's repo-relative path, set only for outcome `one`.
-  decisionDocPath       String?             @map("decision_doc_path")
+  decisionDocPath               String?             @map("decision_doc_path")
   /// The document's git BLOB sha at that head, set only for outcome `one`. The
   /// decision gate's version keys on this, not on the head, so a push that leaves
   /// the document untouched does not re-ask an accepted decision (clause 4).
-  decisionDocBlobSha    String?             @map("decision_doc_blob_sha")
+  decisionDocBlobSha            String?             @map("decision_doc_blob_sha")
   /// The head commit the capture was read at, for every outcome; null when the
   /// host named none.
-  decisionDocHeadSha    String?             @map("decision_doc_head_sha")
+  decisionDocHeadSha            String?             @map("decision_doc_head_sha")
   /// EVERY decision document the head writes — the one path for `one`, each of them
   /// for `several` (MOTIR-5678), so the port can name what a reviewer must reduce to
   /// one. Empty for `none`, `unreadable` and a row never captured.
-  decisionDocPaths      String[]            @default([]) @map("decision_doc_paths")
-  createdAt             DateTime            @default(now()) @map("created_at")
-  updatedAt             DateTime            @updatedAt @map("updated_at")
+  decisionDocPaths              String[]            @default([]) @map("decision_doc_paths")
+  createdAt                     DateTime            @default(now()) @map("created_at")
+  updatedAt                     DateTime            @updatedAt @map("updated_at")
 
   repo               GithubRepo                      @relation(fields: [repoId], references: [id], onDelete: Cascade)
   checkRuns          GithubCheckRun[]
@@ -15123,11 +15187,14 @@ model AgentInstance {
   updateFailedAt      DateTime? @map("update_failed_at")
 
   /// The persistent handle `provisionPersistent` returns (§1, §7). Null until
-  /// the provision call answers; the region is fixed at create.
+  /// the provision call answers. The region is the placement's, written with the
+  /// handle (MOTIR-10801): null while the instance waits for room, because create
+  /// does not know where it will go — the Fly app, an AWS account or the install
+  /// fleet — and must not ask a lane it may not have.
   flyApp    String? @map("fly_app")
   machineId String? @map("machine_id")
   volumeId  String? @map("volume_id")
-  region    String
+  region    String?
 
   /// The fleet account the instance lives in (Story MOTIR-9361 · MOTIR-9468).
   /// NULL = the process-wide Fly app: every instance created before AWS, and every

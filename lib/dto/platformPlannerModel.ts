@@ -3,7 +3,11 @@
 // Which model Motir plans with, one row per AUDIENCE. Staff-facing only: no
 // tenant DTO carries any of this, and the console is the one reader.
 
-import type { PlannerAudience, PlannerModelListReason } from '@/lib/ai/types';
+import type {
+  PlannerAudience,
+  PlannerDefaultFunction,
+  PlannerModelListReason,
+} from '@/lib/ai/types';
 
 /** One audience's row, as the page renders it. */
 export interface PlatformPlannerModelRowDTO {
@@ -45,11 +49,37 @@ export interface PlatformPlannerReviewModelRowDTO {
   seeded: boolean;
 }
 
+/**
+ * A planning-side FUNCTION's platform default (MOTIR-10844) — Guide, Debug or
+ * Ask. `model` null is "inherits the audience's Planning model", the default.
+ */
+export interface PlatformPlannerFunctionRowDTO {
+  function: PlannerDefaultFunction;
+  model: string | null;
+  /** False once a stored model is no longer offered; null while unset. */
+  offered: boolean | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+  /** True while no operator has ever set it. */
+  seeded: boolean;
+}
+
+/** What a function-default save reports back; null is "inherits". */
+export interface PlatformPlannerFunctionModelWriteDTO {
+  function: PlannerDefaultFunction;
+  fromModel: string | null;
+  toModel: string | null;
+  updatedAt: string;
+}
+
 /** The whole page: three rows in `customer`, `meta`, `internal` order. */
 export interface PlatformPlannerModelSettingsDTO {
   rows: PlatformPlannerModelRowDTO[];
   /** The review row, or null when motir-ai did not answer one (an older release). */
   review: PlatformPlannerReviewModelRowDTO | null;
+  /** Guide, Debug and Ask in that order — those motir-ai answered; empty from an
+   *  older release that serves none. */
+  functions: PlatformPlannerFunctionRowDTO[];
   offered: PlatformPlannerOfferedModelDTO[];
   /** True only for a `superadmin`; every other staff role reads. */
   canEdit: boolean;

@@ -239,11 +239,17 @@ describe('the completeness rules the two axes need — and why they differ', () 
         rule.selectors.some((selector) => selectors.includes(selector.trim())),
       );
       expect(block, `the base palette must declare a ${theme} block`).toBeDefined();
-      // What the layer says with NO palette block in play: a context whose
-      // palette matches nothing resolves the Tier-0 + Tier-3 + global-dark
-      // cascade and no `[data-palette]` rule — which is exactly what `<html>`
-      // gets, and therefore what the copy must equal.
-      const layer = declaredIn(rules, { palette: ' none', theme } as ThemeContext);
+      // What the layer says with NO palette block in play: the Tier-0 + Tier-3
+      // + global-dark cascade and no `[data-palette]` rule, which is what the
+      // copy must equal. Every selector naming `data-palette` is dropped rather
+      // than relying on an unregistered id to match nothing: since MOTIR-10834
+      // an unregistered id takes the `motir` block (the axis's default), so it
+      // no longer measures the base.
+      const withoutPaletteRules = rules.map((rule) => ({
+        ...rule,
+        selectors: rule.selectors.filter((selector) => !selector.includes('data-palette')),
+      }));
+      const layer = declaredIn(withoutPaletteRules, { palette: ' none', theme } as ThemeContext);
       for (const [token, value] of Object.entries(block?.declarations ?? {})) {
         compared += 1;
         const declared = layer[token];

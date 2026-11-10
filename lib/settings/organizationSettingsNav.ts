@@ -1,4 +1,13 @@
-import { Building2, Coins, CreditCard, GitBranch, Server, ShieldCheck, Users } from 'lucide-react';
+import {
+  Building2,
+  Coins,
+  CreditCard,
+  GitBranch,
+  Server,
+  ShieldCheck,
+  Sparkles,
+  Users,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 // The ORGANISATION-settings navigation REGISTRY (Story MOTIR-4669 · MOTIR-4710).
@@ -201,6 +210,22 @@ export const ORGANIZATION_SETTINGS_NAV: OrganizationSettingsNavEntry[] = [
     // `general`, beside `Organisation`, for the reason the project rail puts
     // `repositories` there: it is the tenant's own resources, not a permission
     // and not money.
+  },
+  // MOTIR-10846 · Story MOTIR-10838 (design/org-admin, the AI models delta § *The
+  // door*): which model each Motir AI function uses for the organisation. In
+  // General, directly under Git, because it configures the org's own tooling.
+  // Owner/admin only like every org row but Organisation (a plain member who opens
+  // the address is served the read-only room), and cloud only: the choice depends
+  // on the plan tier, which only the cloud build has. Present on every tier, so the
+  // locked room below Pro is where the upgrade path is said.
+  {
+    id: 'ai-models',
+    group: 'general',
+    href: '/settings/organization/ai-models',
+    icon: Sparkles,
+    labelKey: 'aiModels',
+    orgAdminOnly: true,
+    cloudOnly: true,
   },
   {
     id: 'members',

@@ -8,9 +8,9 @@ import type { PullRequestBaseMovedData } from '../types';
 // ⚠️ WHY IT WAITS. GitHub computes `mergeable` LAZILY after the base moves: an immediate
 // read mostly answers `null`. So a member still `null` is asked again after a durable
 // sleep, a bounded number of times; one still `null` after the last wait is left to the
-// 30-minute `system.pull-request-reconcile` tick, which re-reads open delivering pull
-// requests anyway and applies the same withdrawal — that tick is this job's failure path,
-// and no dead-letter queue is added for it.
+// 5-minute `system.pull-request-reconcile` tick (`PULL_REQUEST_RECONCILE_CRON`), which
+// re-reads open delivering pull requests anyway and applies the same withdrawal — that
+// tick is this job's failure path, and no dead-letter queue is added for it.
 //
 // ⚠️ EVERY HOST READ IS INSIDE A `step.run`. The engine resumes a run after `step.sleep` by
 // re-running the handler and serving completed steps from their memo, so a read left

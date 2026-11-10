@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { ApprovalGate } from '@/generated/prisma/client';
 import {
   agentPasses,
-  containerReviewCount,
   deriveReviewState,
   HOSTED_REVIEW_HARNESS,
   reviewCommand,
@@ -326,21 +325,7 @@ describe('deriveReviewState — the author fact', () => {
   });
 });
 
-describe('containerReviewCount and the command', () => {
-  it('reads Reviewed only when every open run target passed', () => {
-    expect(containerReviewCount([{ reviewed: true }, { reviewed: true }])).toEqual({
-      passed: 2,
-      total: 2,
-      allPassed: true,
-    });
-    expect(containerReviewCount([{ reviewed: true }, { reviewed: false }])).toEqual({
-      passed: 1,
-      total: 2,
-      allPassed: false,
-    });
-    expect(containerReviewCount([])).toEqual({ passed: 0, total: 0, allPassed: false });
-  });
-
+describe('the command', () => {
   it('spells the command, and the service re-exports the derivation', () => {
     expect(reviewCommand('ACME-1')).toBe('motir review ACME-1');
     expect(reExported).toBe(deriveReviewState);

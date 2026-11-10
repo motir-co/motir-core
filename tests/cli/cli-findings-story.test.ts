@@ -466,14 +466,24 @@ describe('`motir auto --auto-approve-replan`', () => {
     await card(fx, 'refuses itself forever');
     agent.script([{ refuseCard: { finding: 'Still false.' } }]);
 
+    // ⚠️ THE WAIT IS DRIVEN, NOT SAT THROUGH (MOTIR-10799). There is no motir-ai
+    // here, so the submitted plan stays `generating` forever and the loop spends
+    // its whole patience on the read before it stops: 12 attempts × 5 s, about
+    // 55 s of real time. That used to race the harness's own 60 s kill
+    // (`cliHarness` `run`), and on a slow CI runner the kill won — exit code 1 at
+    // 62 s, which is how this case flaked. The interval is the CLI's own seam
+    // (`MOTIR_APPROVE_WAIT_MS`), so the attempt COUNT stays the shipped default
+    // and only the clock between attempts is taken out of the test.
     const run = await ws.run(
       ['auto', '--agent', agent.command, '--max', '10', '--auto-approve-replan'],
-      { env: agentEnv },
+      { env: { ...agentEnv, MOTIR_APPROVE_WAIT_MS: '1' } },
     );
 
     expect(run.exitCode).toBe(0);
     expect(agent.invocations()).toHaveLength(1);
     expect(await plansIn(fx)).toHaveLength(1);
+    // It stopped at the planner, by name, not at a kill.
+    expect(run.stderr).toContain('still generating');
   });
 
   it('is REFUSED by `motir run`, with the guard’s own message and no approval', async () => {

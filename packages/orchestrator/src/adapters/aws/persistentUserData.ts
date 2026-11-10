@@ -26,9 +26,13 @@ import { USER_DATA_MAX_BYTES } from './userData';
 // requires tokens and a hop limit of 1, so no container reaches it), then
 //
 //   1. formats the home disk ONLY if it holds no filesystem, and mounts it;
-//   2. writes the env (the spec's, the terminal's merged over it) to a mode-600 file;
+//   2. writes the env (the spec's, the terminal's merged over it, and the
+//      instance's own id as its machine id — see {@link MACHINE_ID_ENV_KEYS})
+//      to a mode-600 file;
 //   3. starts the image FRESH — the previous boot's container is removed — with
-//      the home mounted, as the terminal's command or the idle command.
+//      the home mounted, as the terminal's command or the idle command — as ROOT,
+//      dropping to the image's own user for the main process (see
+//      {@link DROP_TO_IMAGE_USER_SH}).
 //
 // That is the port's rule that a wake is a cold boot with the volume intact, and
 // it is what makes a rewritten document take effect at the next start.
@@ -62,6 +66,26 @@ const MIME_BOUNDARY = 'MOTIR-INSTANCE-USER-DATA';
 const HOME_DEVICE_CANDIDATES = ['/dev/sdf', '/dev/xvdf', '/dev/nvme1n1'];
 
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/**
+ * The env keys the boot script sets to the EC2 instance id (MOTIR-10817).
+ *
+ * The terminal server (`motir agent-terminal serve`) refuses to start without a
+ * machine id, and the relay's tokens bind it (`wrong_machine`): the relay mints
+ * them with the instance row's `machine_id`, which on AWS is the instance id
+ * RunInstances returned. On Fly the PLATFORM sets `FLY_MACHINE_ID`; EC2 sets
+ * nothing, so the boot script reads the id from the metadata service on every
+ * boot — a create and a wake alike — and writes it here.
+ *
+ * `MOTIR_MACHINE_ID` is the host-neutral name the server reads first.
+ * `FLY_MACHINE_ID` carries the same value for an image published before the
+ * server read that name: an instance keeps booting the digest it was created
+ * on until its owner updates it, and such an image reads `FLY_MACHINE_ID` only.
+ * Nothing in the agent image reads `FLY_MACHINE_ID` as a sign of running on Fly.
+ * Both are written AFTER the document's env, so a value the document carries
+ * under either key can never stand in for the instance's own id.
+ */
+export const MACHINE_ID_ENV_KEYS = ['MOTIR_MACHINE_ID', 'FLY_MACHINE_ID'] as const;
 
 /**
  * Everything an AWS agent instance boots from — the document the user-data
@@ -149,10 +173,13 @@ function validate(config: AwsInstanceConfig): void {
 
 // The boot steps that read the document. Python 3 is on the hoster AMI (Amazon
 // Linux 2023 ships it), and argv goes to docker as a list — never through a shell.
+// The env file: the document's env, the terminal's over it, and the instance id
+// (`sys.argv[1]`) under every machine-id key over both.
 const WRITE_ENV_PY = [
   'import json, sys',
   `c = json.load(open(${JSON.stringify(PERSISTENT_CONFIG_FILE)}))`,
   'env = {**c["env"], **((c.get("terminal") or {}).get("env") or {})}',
+  `env.update({k: sys.argv[1] for k in ${JSON.stringify(MACHINE_ID_ENV_KEYS)}})`,
   'sys.stdout.write("".join(f"{k}={v}\\n" for k, v in env.items()))',
 ].join('; ');
 
@@ -167,14 +194,60 @@ const WRITE_TLS_PY = [
   '        os.fdopen(fd, "w").write(h[key])',
 ].join('\n');
 
+/**
+ * The container's own first act when the image names a non-root user
+ * (MOTIR-10836): hand the mounted home to that user, then become it and exec the
+ * image's entrypoint with the command. Arguments: the image user, the mount path,
+ * then the main process's argv.
+ *
+ * WHY THE CONTAINER STARTS AS ROOT. Every command Motir sends into an instance is
+ * `runuser -u node -- …` (`lib/agentInstances/`), which only root may call. Fly's
+ * machine exec runs as root; on AWS the exec is the host agent's `docker exec`
+ * with no `-u` (`infra/hoster-host-agent/src/exec.ts`), and `docker exec` runs as
+ * the CONTAINER's user. So the container is started `--user 0`, which makes every
+ * exec root exactly as on Fly, while the main process still runs as the image's
+ * user, as it does on Fly. The host agent is baked into the hoster AMI, so fixing
+ * it here ships with a deploy and reaches an existing instance on its next boot.
+ *
+ * WHY THE CHOWN. A new home disk is formatted by this script, and a fresh ext4
+ * root is `root:root 755`, so the image user could write nothing into its own
+ * home. Only the mount point itself is chowned — never recursively: whatever is
+ * inside is the user's, written by the user.
+ *
+ * The user may be a name or a uid; `getent` resolves either to the name `runuser`
+ * needs, and a user the image does not know is refused rather than run as root.
+ */
+export const DROP_TO_IMAGE_USER_SH = [
+  'set -e',
+  'u="$1"; m="$2"; shift 2',
+  'name=$(getent passwd "$u" | cut -d: -f1)',
+  '[ -n "$name" ] || { echo "motir: the image user $u has no passwd entry" >&2; exit 1; }',
+  'chown "$name:" "$m"',
+  'exec runuser -u "$name" -- "$@"',
+].join('\n');
+
+/** The `$0` the drop script runs under — what `ps` shows for it. */
+export const DROP_TO_IMAGE_USER_ARGV0 = 'motir-boot';
+
+// Starts the container. The image's config (its user, entrypoint and default
+// command) is read from the PULLED image, never assumed: an image that runs as
+// root starts exactly as before, and one with a user starts as root behind the
+// drop script, its own entrypoint and default command kept.
 const RUN_PY = [
   'import json, os, subprocess',
   `c = json.load(open(${JSON.stringify(PERSISTENT_CONFIG_FILE)}))`,
   'cmd = (c.get("terminal") or {}).get("command") or c.get("idleCommand") or []',
   'm = c["mountPath"]',
   'subprocess.run(["docker", "pull", c["image"]], check=True)',
-  `os.execvp("docker", ["docker", "run", "-d", "--name", ${JSON.stringify(PERSISTENT_CONTAINER_NAME)}, "--restart", "no", "--env-file", ${JSON.stringify(PERSISTENT_ENV_FILE)}, "-v", m + ":" + m, c["image"], *cmd])`,
-].join('; ');
+  'inspect = ["docker", "image", "inspect", "--format", "{{json .Config}}", c["image"]]',
+  'image = json.loads(subprocess.run(inspect, check=True, capture_output=True, text=True).stdout) or {}',
+  'user = (image.get("User") or "").split(":")[0]',
+  `run = ["docker", "run", "-d", "--name", ${JSON.stringify(PERSISTENT_CONTAINER_NAME)}, "--restart", "no", "--env-file", ${JSON.stringify(PERSISTENT_ENV_FILE)}, "-v", m + ":" + m]`,
+  'if user in ("", "root", "0"):',
+  '    os.execvp("docker", run + [c["image"], *cmd])',
+  'main = (image.get("Entrypoint") or []) + (cmd or image.get("Cmd") or [])',
+  `os.execvp("docker", run + ["--user", "0", "--entrypoint", "sh", c["image"], "-c", ${JSON.stringify(DROP_TO_IMAGE_USER_SH)}, ${JSON.stringify(DROP_TO_IMAGE_USER_ARGV0)}, user, m, *main])`,
+].join('\n');
 
 /** The per-boot script, carrying `document` (base64 JSON) on its marker line. */
 function bootScript(document: string): string {
@@ -187,6 +260,9 @@ function bootScript(document: string): string {
     '# The CURRENT config: the user-data as it is now, from the metadata service.',
     'imds=http://169.254.169.254/latest',
     `token=$(curl -fsS -X PUT "$imds/api/token" -H 'X-aws-ec2-metadata-token-ttl-seconds: 300')`,
+    "# This instance's own id: the machine id the terminal relay binds its tokens to.",
+    `instance_id=$(curl -fsS -H "X-aws-ec2-metadata-token: $token" "$imds/meta-data/instance-id")`,
+    `[[ "$instance_id" =~ ^i-[0-9a-f]+$ ]] || { echo "motir: no instance id" >&2; exit 1; }`,
     `config=$(curl -fsS -H "X-aws-ec2-metadata-token: $token" "$imds/user-data" | sed -n 's/^${INSTANCE_CONFIG_MARKER}//p' | head -n 1)`,
     '[ -n "$config" ] || { echo "motir: no instance config" >&2; exit 1; }',
     `install -d -m 700 /etc/motir`,
@@ -214,11 +290,13 @@ function bootScript(document: string): string {
     '',
     '# The env file — mode 600, written before any byte of it.',
     `install -m 600 /dev/null ${PERSISTENT_ENV_FILE}`,
-    `python3 -c '${WRITE_ENV_PY}' > ${PERSISTENT_ENV_FILE}`,
+    `python3 -c '${WRITE_ENV_PY}' "$instance_id" > ${PERSISTENT_ENV_FILE}`,
     '',
     '# The agent, FRESH on every boot: the pinned image, the home mounted.',
     `docker rm -f ${PERSISTENT_CONTAINER_NAME} >/dev/null 2>&1 || true`,
-    `python3 -c '${RUN_PY}'`,
+    "python3 - <<'MOTIR_RUN'",
+    RUN_PY,
+    'MOTIR_RUN',
     '',
   ].join('\n');
 }

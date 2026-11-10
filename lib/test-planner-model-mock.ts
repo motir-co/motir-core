@@ -22,8 +22,18 @@
 // `list` reads as motir-ai's migration seed: every offered model, every
 // audience's model and the fallback — so a spec written before the list existed
 // sees the page it always saw.
+//
+// And the PER-FUNCTION models (Story MOTIR-10838 · MOTIR-10849): the platform's
+// Guide, Debug and Ask defaults on the settings GET and their write
+// (`PUT /v1/planner-model-settings/functions`), and ONE organisation's overrides
+// (`GET` / `PUT /v1/orgs/:id/planner-model-overrides`) in motir-ai's documented
+// shapes. An org's `qualifies` comes from the SHARED tier fixture
+// (`lib/test-org-tier-fixture.ts`) the hosted-run seam's tier read also answers
+// from, so the room and the run-side resolver can never disagree; a
+// non-qualifying org's write is refused `permission_denied`, as motir-ai does.
 
 import { readFixtureFileSync, writeFixtureFileSync } from '@/lib/test-fixture-file';
+import { orgTierOf, tierQualifies } from '@/lib/test-org-tier-fixture';
 import type { MockAgent } from 'undici';
 
 type Audience = 'customer' | 'meta' | 'internal';
@@ -50,7 +60,24 @@ export interface PlannerModelFixture {
   list?: PlannerModelListFixtureEntry[];
   /** Why a model that is NOT in `offered` is not plannable; absent reads as `not_servable`. */
   notQualified?: Record<string, PlannerModelListFixtureReason>;
+  /** The platform's Guide / Debug / Ask defaults; an absent one follows the
+   *  audience's Planning model (`model: null` on the wire). */
+  functions?: Partial<Record<PlannerFunctionFixtureKey, PlannerChoiceFixture>>;
+  /** Each organisation's planning-side overrides, keyed by motir-core's org id. */
+  orgOverrides?: Record<string, Partial<Record<OrgFunctionFixtureKey, PlannerChoiceFixture>>>;
 }
+
+/** A stored per-function choice, as the fixture keeps it. */
+export interface PlannerChoiceFixture {
+  model: string;
+  updatedAt?: string;
+  updatedByCoreUserId?: string | null;
+}
+
+const PLATFORM_FUNCTIONS = ['guide', 'debug', 'ask'] as const;
+type PlannerFunctionFixtureKey = (typeof PLATFORM_FUNCTIONS)[number];
+const ORG_FUNCTIONS = ['planning', 'guide', 'debug', 'ask'] as const;
+type OrgFunctionFixtureKey = (typeof ORG_FUNCTIONS)[number];
 
 type PlannerModelListFixtureReason = 'not_servable' | 'not_chat' | 'unrated';
 
@@ -147,10 +174,61 @@ function listToWire(fixture: PlannerModelFixture) {
   };
 }
 
+/** One stored choice on the wire: model, whether still plannable, who and when. */
+function choiceToWire(choice: PlannerChoiceFixture | undefined, offeredIds: Set<string>) {
+  return {
+    model: choice?.model ?? null,
+    offered: choice ? offeredIds.has(choice.model) : null,
+    updatedAt: choice ? (choice.updatedAt ?? SEEDED_AT) : null,
+    updatedByCoreUserId: choice?.updatedByCoreUserId ?? null,
+  };
+}
+
+/** The customer audience's planning model — what an org's functions inherit. */
+function audienceModel(fixture: PlannerModelFixture): string {
+  return fixture.settings.find((s) => s.audience === 'customer')?.model ?? FALLBACK;
+}
+
+/** motir-ai's org override read: the stored rows, whether each applies, and the
+ *  effective model per function with the layer it came from. */
+function orgOverridesToWire(fixture: PlannerModelFixture, orgId: string) {
+  const offered = plannable(fixture);
+  const offeredIds = new Set(offered.map((m) => m.id));
+  const qualifies = tierQualifies(orgTierOf(orgId));
+  const stored = fixture.orgOverrides?.[orgId] ?? {};
+  return {
+    known: true,
+    qualifies,
+    overrides: ORG_FUNCTIONS.map((fn) => {
+      const wire = choiceToWire(stored[fn], offeredIds);
+      return { function: fn, ...wire, applies: qualifies && wire.offered === true };
+    }),
+    effective: ORG_FUNCTIONS.map((fn) => {
+      const own = stored[fn];
+      if (qualifies && own && offeredIds.has(own.model)) {
+        return { function: fn, model: own.model, source: 'org' };
+      }
+      const platform = fn === 'planning' ? undefined : fixture.functions?.[fn];
+      if (platform && offeredIds.has(platform.model)) {
+        return { function: fn, model: platform.model, source: 'function_default' };
+      }
+      const audience = audienceModel(fixture);
+      return offeredIds.has(audience)
+        ? { function: fn, model: audience, source: 'audience' }
+        : { function: fn, model: FALLBACK, source: 'fallback' };
+    }),
+    offered,
+  };
+}
+
 function toWire(fixture: PlannerModelFixture) {
   const offered = plannable(fixture);
   const offeredIds = new Set(offered.map((m) => m.id));
   return {
+    functions: PLATFORM_FUNCTIONS.map((fn) => ({
+      function: fn,
+      ...choiceToWire(fixture.functions?.[fn], offeredIds),
+    })),
     settings: fixture.settings.map((s) => ({
       audience: s.audience,
       model: s.model,
@@ -176,6 +254,39 @@ function problem(status: number, code: string, detail: string): Reply {
 type Reply = { statusCode: number; data: object; responseOptions: typeof json };
 
 const isPath = (p: string) => p.split('?')[0] === '/v1/planner-model-settings';
+const isFunctionsPath = (p: string) => p.split('?')[0] === '/v1/planner-model-settings/functions';
+const ORG_OVERRIDES = /^\/v1\/orgs\/([^/?]+)\/planner-model-overrides$/;
+const orgOf = (p: string) => {
+  const m = ORG_OVERRIDES.exec(p.split('?')[0] ?? '');
+  return m ? decodeURIComponent(m[1]!) : null;
+};
+
+/** Parse a PUT body, or answer the 400 motir-ai would. */
+function bodyOf<T>(raw: unknown): T | Reply {
+  try {
+    return JSON.parse(String(raw ?? '{}')) as T;
+  } catch {
+    return problem(400, 'validation_error', 'body is not JSON');
+  }
+}
+const isReply = (v: unknown): v is Reply =>
+  !!v && typeof v === 'object' && 'statusCode' in v && 'responseOptions' in v;
+
+/** A function-model write's own refusals: not plannable, or its probe failed. */
+function refuseModel(fixture: PlannerModelFixture, model: string | null): Reply | null {
+  if (model === null) return null;
+  if (!plannable(fixture).some((m) => m.id === model)) {
+    return problem(400, 'validation_error', `"${model}" is not offered for planning`);
+  }
+  const reason = fixture.unreachable?.[model];
+  return reason
+    ? problem(
+        422,
+        'model_unreachable',
+        `model "${model}" is not reachable for the planner: ${reason}`,
+      )
+    : null;
+}
 const isListPath = (p: string) => p.split('?')[0] === '/v1/planner-model-list';
 
 export function installPlannerModelBoundaryMock(agent: MockAgent): void {
@@ -298,6 +409,88 @@ export function installPlannerModelBoundaryMock(agent: MockAgent): void {
       fixture.list = list;
       writeFixture(fixture);
       return { statusCode: 200, data: listToWire(fixture), responseOptions: json };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: isFunctionsPath, method: 'PUT' })
+    .reply<object>((req) => {
+      const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
+      const body = bodyOf<{ function?: string; model?: string | null; actorCoreUserId?: string }>(
+        req.body,
+      );
+      if (isReply(body)) return body;
+      const fn = body.function as PlannerFunctionFixtureKey;
+      const model = body.model === undefined ? undefined : body.model;
+      if (!PLATFORM_FUNCTIONS.includes(fn) || model === undefined || !body.actorCoreUserId) {
+        return problem(400, 'validation_error', 'expected { function, model, actorCoreUserId }');
+      }
+      const refused = refuseModel(fixture, model);
+      if (refused) return refused;
+      const previousModel = fixture.functions?.[fn]?.model ?? null;
+      const now = new Date().toISOString();
+      const functions = { ...fixture.functions };
+      if (model === null) delete functions[fn];
+      else functions[fn] = { model, updatedAt: now, updatedByCoreUserId: body.actorCoreUserId };
+      fixture.functions = functions;
+      writeFixture(fixture);
+      return {
+        statusCode: 200,
+        data: { function: fn, previousModel, model, updatedAt: now },
+        responseOptions: json,
+      };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => orgOf(p) !== null, method: 'GET' })
+    .reply<object>((req) => {
+      const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
+      return {
+        statusCode: 200,
+        data: orgOverridesToWire(fixture, orgOf(req.path)!),
+        responseOptions: json,
+      };
+    })
+    .persist();
+
+  pool
+    .intercept({ path: (p) => orgOf(p) !== null, method: 'PUT' })
+    .reply<object>((req) => {
+      const fixture = readFixture();
+      if (fixture.unavailable) return problem(503, 'upstream_unavailable', 'motir-ai is down');
+      const orgId = orgOf(req.path)!;
+      const body = bodyOf<{ function?: string; model?: string | null; actorCoreUserId?: string }>(
+        req.body,
+      );
+      if (isReply(body)) return body;
+      const fn = body.function as OrgFunctionFixtureKey;
+      const model = body.model === undefined ? undefined : body.model;
+      if (!ORG_FUNCTIONS.includes(fn) || model === undefined || !body.actorCoreUserId) {
+        return problem(400, 'validation_error', 'expected { function, model, actorCoreUserId }');
+      }
+      // motir-ai refuses a non-qualifying org's write as `permission_denied`.
+      if (!tierQualifies(orgTierOf(orgId))) {
+        return problem(403, 'permission_denied', 'this organization may not choose its models');
+      }
+      const refused = refuseModel(fixture, model);
+      if (refused) return refused;
+      const overrides = { ...fixture.orgOverrides };
+      const own = { ...overrides[orgId] };
+      const previousModel = own[fn]?.model ?? null;
+      const now = new Date().toISOString();
+      if (model === null) delete own[fn];
+      else own[fn] = { model, updatedAt: now, updatedByCoreUserId: body.actorCoreUserId };
+      overrides[orgId] = own;
+      fixture.orgOverrides = overrides;
+      writeFixture(fixture);
+      return {
+        statusCode: 200,
+        data: { function: fn, previousModel, model, updatedAt: now },
+        responseOptions: json,
+      };
     })
     .persist();
 }

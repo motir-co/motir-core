@@ -4119,6 +4119,7 @@
         },
         "organization": "組織",
         "git": "Git",
+        "aiModels": "AI モデル",
         "members": "メンバー",
         "security": "セキュリティ",
         "usage": "使用量とコスト",
@@ -4316,6 +4317,105 @@
           "dismissAria": "停止結果を閉じる"
         },
         "forbidden": "この組織のフリートの作業を停止できるのは、所有者または管理者のみです。"
+      },
+      "aiModels": {
+        "breadcrumb": "{org} · 設定",
+        "title": "AI モデル",
+        "lead": "{org} 全体で、Motir AI の各機能が使うモデル。変更は次のジョブまたは実行から適用されます。",
+        "card": {
+          "title": "機能別のモデル",
+          "subtitle": "組織が別のモデルを選ぶまで、各機能はプラットフォームのデフォルトを使います。",
+          "subtitleMeta": "{org} は Motir のメタ組織なので、どのプランでも自分でモデルを選べます。"
+        },
+        "group": {
+          "planning": {
+            "title": "計画側",
+            "list": "プラットフォームの計画モデル一覧から選択"
+          },
+          "runs": {
+            "title": "実行側",
+            "list": "プラットフォームの実行モデル一覧から選択"
+          }
+        },
+        "fn": {
+          "planning": {
+            "name": "計画",
+            "desc": "計画の各セッション：ウォークとその修復"
+          },
+          "guide": {
+            "name": "ガイド",
+            "desc": "人が行う作業項目での「ガイドして」"
+          },
+          "debug": {
+            "name": "デバッグ",
+            "desc": "Motir AI が不具合をバグとして診断"
+          },
+          "ask": {
+            "name": "質問",
+            "desc": "Motir AI との会話と Grill me"
+          },
+          "review": {
+            "name": "レビューエージェント",
+            "desc": "ホスト型レビュー。プロジェクトがエージェントでレビューするかどうかは、その承認設定のままです。"
+          },
+          "design": {
+            "name": "デザイン実行",
+            "desc": "デザインの作業項目でのホスト型実行"
+          }
+        },
+        "agentRun": {
+          "name": "エージェント実行",
+          "desc": "作業項目の難易度ごとのホスト型ビルド実行。難易度に対するプロジェクト独自の上書きは、引き続き組織の選択より優先されます。"
+        },
+        "modelFor": "{function} のモデル",
+        "loadingTrigger": "モデルを読み込み中…",
+        "byDifficulty": "作業項目の難易度に従う",
+        "platformDefaultPending": "プラットフォームのデフォルト",
+        "optionDefault": "プラットフォームのデフォルト",
+        "source": {
+          "org": "組織の選択",
+          "inherits": "プラットフォームのデフォルトを継承"
+        },
+        "clear": "クリア",
+        "clearAria": "{function} の選択をクリア",
+        "staged": "まだ保存されていません",
+        "withdrawnChip": "提供終了",
+        "withdrawn": {
+          "edit": "<id>{model}</id> は提供されなくなったため、別のモデルを選ぶまで {function} はプラットフォームのデフォルト <mono>{fallback}</mono> を使います。",
+          "read": "<id>{model}</id> は提供されなくなったため、オーナーまたは管理者が別のモデルを選ぶまで {function} はプラットフォームのデフォルト <mono>{fallback}</mono> を使います。",
+          "editNoFallback": "<id>{model}</id> は提供されなくなったため、別のモデルを選ぶまで {function} はプラットフォームのデフォルトを使います。",
+          "readNoFallback": "<id>{model}</id> は提供されなくなったため、オーナーまたは管理者が別のモデルを選ぶまで {function} はプラットフォームのデフォルトを使います。"
+        },
+        "refused": {
+          "notOffered": "保存されませんでした：保存が届く前に <mono>{model}</mono> は {function} で提供されなくなりました。{function} は現在のモデルのままです。別のモデルを選んでください。",
+          "unreachable": "保存されませんでした：<mono>{model}</mono> に現在接続できないため、{function} は現在のモデルのままです。もう一度試すか、別のモデルを選んでください。",
+          "failed": "保存されませんでした：{function} を保存できませんでした。現在のモデルのままです。もう一度お試しください。"
+        },
+        "precedence": {
+          "body": "<b>ジョブが使うモデル</b>は最初に一致したものが優先されます：「ホストで実行」での本人の選択 → プロジェクト独自の上書き（エージェント実行のみ）→ {org} の選択 → プラットフォームのデフォルト。",
+          "cost": "モデルはそれぞれの料金で請求されるため、強力なモデルほど {org} のクレジットを多く消費します。"
+        },
+        "footer": {
+          "dirtyHint": "未保存の変更があります。",
+          "cancel": "キャンセル",
+          "save": "変更を保存"
+        },
+        "saved": {
+          "title": "AI モデルを保存しました",
+          "description": "{org} は次のジョブまたは実行からこれらを使います。"
+        },
+        "locked": {
+          "title": "モデルの選択は Pro 以上のプランの機能です",
+          "body": "{org} は {plan} プランです。Pro 以上では、オーナーまたは管理者が組織全体で Motir AI の各機能が使うモデルを選べます。それまでは、各機能はプラットフォームのデフォルトを使います。",
+          "bodyNoPlan": "Pro 以上では、オーナーまたは管理者が組織全体で Motir AI の各機能が使うモデルを選べます。それまでは、{org} の各機能はプラットフォームのデフォルトを使います。",
+          "notApplying": "{org} の保存済みの選択は保持されます。Pro 以上に移行すると再び適用されます。",
+          "seePlans": "プランを見る"
+        },
+        "readOnly": "これらを変更できるのは {org} のオーナーまたは管理者だけです。",
+        "unavailable": {
+          "body": "AI モデルを読み込めなかったため、モデルは表示されず、何も保存できません。何も変更されていません。",
+          "retry": "もう一度試す"
+        }
       }
     },
     "gitAccounts": {
@@ -10829,6 +10929,12 @@
               "disable": "計画の教訓をオフにしました",
               "promote": "計画の教訓を昇格",
               "retention_set": "教訓の廃止期間を変更"
+            },
+            "planner_function_model": {
+              "set": "Guide・Debug・Ask のモデルを変更"
+            },
+            "run_model_default": {
+              "set": "実行系の既定モデルを変更"
             }
           },
           "fleet": {
@@ -11515,17 +11621,17 @@
     "aiPlanning": {
       "breadcrumb": "プラットフォーム · AI による計画",
       "title": "AI による計画",
-      "subtitle": "3 つの対象ごとに、Motir が計画に使うモデルです。変更は、その対象のすべての組織で次回の計画ジョブから適用されます。",
+      "subtitle": "Motir の計画系の機能が使うモデルです。3 つの対象それぞれの計画と、Guide・Debug・Ask それぞれに 1 つのプラットフォーム既定値があります。変更は、独自に選んでいないすべての組織で次のジョブから適用されます。",
       "precedence": "メタかつ社内である組織は、メタの行に従います。",
       "tenantSecretLead": "テナントにこの選択が表示されることはありません。",
       "tenantSecretBody": "テナントのページ、使用量の表示、計画のいずれにも、計画に使われたモデル名は表示されません。",
       "card": {
-        "title": "対象別の計画モデル",
-        "subtitle": "各計画ジョブは、実行対象の組織からモデルを決定します: メタ、社内、顧客の順です。",
-        "count": "3 つの対象"
+        "title": "計画系のモデル",
+        "subtitle": "計画は組織の対象からモデルを決めます。メタ、次に内部、次に顧客の順です。Guide・Debug・Ask にはそれぞれ 1 つのプラットフォーム既定値があり、未設定ならその対象のモデルを継承します。Pro 以上の組織は独自に選べます。",
+        "count": "7 件の設定"
       },
       "col": {
-        "audience": "対象",
+        "audience": "適用先",
         "model": "モデル",
         "lastChanged": "最終変更",
         "action": "操作"
@@ -11553,7 +11659,8 @@
         "seeded": "初期設定のデフォルト · 未変更",
         "by": "{when}に {who} が変更",
         "byUnknown": "{when}に変更",
-        "justNowByYou": "たった今あなたが変更"
+        "justNowByYou": "たった今あなたが変更",
+        "neverSet": "未設定"
       },
       "confirm": {
         "title": "{audience} の計画モデルを変更しますか?",
@@ -11612,6 +11719,39 @@
         "savedTitle": "レビューモデルを変更しました",
         "savedBody": "次回の計画ジョブから、ドライランのレビューは {model} で実行されます。",
         "unchanged": "ドライランのレビューはすでに {model} で実行されています。"
+      },
+      "group": {
+        "audiences": "計画 · 対象別",
+        "functions": "Guide · Debug · Ask · プラットフォーム既定値",
+        "review": "ドライランのレビュー · プラットフォームのみ"
+      },
+      "functions": {
+        "guide": {
+          "name": "Guide",
+          "desc": "手順を順に案内",
+          "confirmBody": "{from} → {to}。独自に選んでいないすべての組織で、次の Guide のステップから適用されます。実行中の Guide のステップは開始時のモデルで完了します。",
+          "savedBody": "独自の選択がないすべての組織で、Guide のステップが {model} で実行されるようになりました。"
+        },
+        "debug": {
+          "name": "Debug",
+          "desc": "不具合を診断してバグにする",
+          "confirmBody": "{from} → {to}。独自に選んでいないすべての組織で、次の Debug の診断から適用されます。実行中の Debug の診断は開始時のモデルで完了します。",
+          "savedBody": "独自の選択がないすべての組織で、Debug の診断が {model} で実行されるようになりました。"
+        },
+        "ask": {
+          "name": "Ask",
+          "desc": "Motir AI との会話と Grill me",
+          "confirmBody": "{from} → {to}。独自に選んでいないすべての組織で、次の Ask の会話ターンから適用されます。実行中の Ask の会話ターンは開始時のモデルで完了します。",
+          "savedBody": "独自の選択がないすべての組織で、Ask の会話ターンが {model} で実行されるようになりました。"
+        },
+        "inherits": "継承 — 対象の計画モデル",
+        "inheritsDesc": "組織の対象の計画モデルに従います",
+        "pickerAria": "{name} のモデル",
+        "withdrawnBody": "別のモデルを選ぶまで、{name} は対象の計画モデルにフォールバックします。",
+        "withdrawnBodyReadOnly": "スーパー管理者が別のモデルを選ぶまで、{name} は対象の計画モデルにフォールバックします。",
+        "confirmTitle": "{name} のプラットフォームモデルを変更しますか？",
+        "savedTitle": "{name} のモデルを変更しました",
+        "unchanged": "{name} はすでに {model} で実行されています。"
       }
     },
     "lessons": {
@@ -12861,7 +13001,9 @@
         "inUseParts": {
           "platformDefault": "{levels} の Motir のプラットフォームのデフォルトです。",
           "projects": "{n, plural, other {# 件のプロジェクトが使用しています}}: {list}。",
-          "projectEntry": "{name}({key})の {levels}"
+          "projectEntry": "{name}({key})の {levels}",
+          "platformReview": "これはレビューエージェントの Motir プラットフォーム既定値です。",
+          "platformDesign": "これはデザイン実行の Motir プラットフォーム既定値です。"
         },
         "notListed": "削除されませんでした: {model} はもう掲載されていません。"
       },
@@ -12875,6 +13017,83 @@
       "unavailable": {
         "title": "ホスト型実行のモデルを読み込めませんでした",
         "body": "motir-ai が応答しなかったため、掲載された各モデルが提供されているかどうかは不明で、リストは表示されていません。何も変更されていません。"
+      },
+      "defaults": {
+        "title": "実行系の既定値",
+        "subtitle": "本人、プロジェクト、組織のいずれもモデルを選んでいないときに、ホスト型のレビュー、デザイン実行、エージェント実行が開始時に使うモデルです。上のリストから選びます。",
+        "count": "6 件の設定",
+        "col": {
+          "function": "機能"
+        },
+        "row": {
+          "review": {
+            "name": "レビューエージェント",
+            "desc": "ホスト型レビュー"
+          },
+          "design": {
+            "name": "デザイン実行",
+            "desc": "デザインの作業項目に対するホスト型実行"
+          },
+          "trivial": {
+            "name": "エージェント実行 · ごく簡単",
+            "desc": "ごく簡単な作業項目に対するホスト型ビルド実行"
+          },
+          "low": {
+            "name": "エージェント実行 · 低",
+            "desc": "難易度が低い作業項目に対するホスト型ビルド実行"
+          },
+          "medium": {
+            "name": "エージェント実行 · 中",
+            "desc": "難易度が中程度の作業項目に対するホスト型ビルド実行"
+          },
+          "high": {
+            "name": "エージェント実行 · 高",
+            "desc": "難易度が高い作業項目に対するホスト型ビルド実行"
+          }
+        },
+        "inherits": {
+          "review": "継承 — 実行の既定値",
+          "reviewWith": "継承 — 実行の既定値（{model}）",
+          "design": "継承 — 作業項目の難易度",
+          "level": "継承 — 環境の値",
+          "levelWith": "継承 — 環境の値（{model}）"
+        },
+        "fallsBack": {
+          "review": "実行の既定値",
+          "design": "作業項目の難易度",
+          "level": "環境の値"
+        },
+        "defaultGroup": "デフォルト",
+        "pickerAria": "{name} の既定モデル",
+        "pickerFoot": "上のリストにあり、motir-ai がホスト型実行に提供しているモデルのみです。",
+        "changed": {
+          "seededFromEnv": "環境から設定 · 未変更",
+          "neverSet": "未設定"
+        },
+        "withdrawn": {
+          "chip": "提供終了",
+          "body": "別のモデルを選ぶまで、{name} は{what}にフォールバックします。",
+          "bodyReadOnly": "スーパー管理者が別のモデルを選ぶまで、{name} は{what}にフォールバックします。"
+        },
+        "refused": "{model} はホスト型実行に提供されなくなったか、リストにないため保存されませんでした。ページを更新しました。別のモデルを選んでください。",
+        "confirmTitle": "{name} のプラットフォームモデルを変更しますか？",
+        "confirmBody": {
+          "review": "{from} → {to}。独自に選んでいないすべての組織で、次のレビューから適用されます。実行中のレビューは開始時のモデルで完了します。",
+          "design": "{from} → {to}。独自に選んでいないすべての組織で、次のデザイン実行から適用されます。実行中のデザイン実行は開始時のモデルで完了します。",
+          "level": "{from} → {to}。独自に選んでいないすべての組織で、次の実行から適用されます。実行中の実行は開始時のモデルで完了します。"
+        },
+        "savedTitle": "{name} のモデルを変更しました",
+        "savedBody": {
+          "review": "独自の選択がないすべての組織で、レビューが {model} で実行されるようになりました。",
+          "design": "独自の選択がないすべての組織で、デザイン実行が {model} で実行されるようになりました。",
+          "level": "独自の選択がないすべての組織で、実行が {model} で行われるようになりました。"
+        },
+        "unchanged": "{name} はすでに {model} です。",
+        "unavailable": {
+          "title": "実行系の既定値を読み込めませんでした",
+          "body": "計画サービス（motir-ai）が応答しなかったため、既定値は表示されません。何も変更されておらず、値の推測もしていません。",
+          "retry": "再試行"
+        }
       }
     },
     "ideas": {
@@ -13854,6 +14073,7 @@
       "nameTaken": "このプロジェクトにはすでに {name} という名前のエージェントがあります。",
       "nameInvalid": "小文字の英字、数字、ハイフンを使い、英字か数字で始めてください（最大 40 文字）。",
       "unavailable": "このデプロイではマイエージェントを利用できません。",
+      "laneMissing": "このエージェントは、このデプロイで現在は稼働していないホスト上で作成されたため、再開・休止・更新はできません。削除して、新しいエージェントを作成してください。",
       "conflict": "表示している間にそのエージェントが変更されました。リストは最新の状態になっています。",
       "generic": "問題が発生しました。もう一度お試しください。"
     },
@@ -14121,6 +14341,7 @@
         "cloneNoAccess": "{repository} を読み取れませんでした — アプリにアクセス権がありません",
         "exited": "起動中にマシンが終了しました（終了コード {code}）",
         "deadline": "起動が {minutes} 分以内に完了しませんでした",
+        "agentDeadline": "エージェントが起動後 {minutes} 分以内に応答しませんでした",
         "deleted": "起動中に削除されました"
       },
       "summary": {
@@ -14354,6 +14575,12 @@
         "override": "<b>{difficulty}</b> に対するプロジェクトの上書き設定",
         "fromLeaves": "末端項目の中で最も高い難易度：<b>{difficulty}</b>",
         "overrideFromLeaves": "末端項目の中で最も高い難易度である <b>{difficulty}</b> に対するプロジェクトの上書き設定",
+        "orgLevel": "<b>{difficulty}</b> に対する組織の既定",
+        "orgLevelFromLeaves": "末端項目の中で最も高い難易度である <b>{difficulty}</b> に対する組織の既定",
+        "orgDesign": "<b>組織のデザイン実行モデル</b>：デザイン項目",
+        "orgDesignFromLeaves": "<b>組織のデザイン実行モデル</b>：未完了の末端項目がすべてデザイン項目",
+        "platformDesign": "<b>デザイン実行モデル</b>：デザイン項目",
+        "platformDesignFromLeaves": "<b>デザイン実行モデル</b>：未完了の末端項目がすべてデザイン項目",
         "noCapacityTag": "容量なし",
         "noCapacityReason": "現在エージェント実行の容量がありません。しばらくしてからもう一度お試しください。",
         "allHeldBody": "現在エージェント実行の容量があるモデルはありません。しばらくしてからもう一度お試しください。ローカルでの実行には影響しません。"
@@ -15700,9 +15927,6 @@
       "badge": {
         "reviewed": "レビュー済み",
         "reviewedName": "現在のコミットでエージェントがレビュー済み",
-        "container": "{total, plural, other {{done}/# レビュー済み}}",
-        "containerName": "{total, plural, other {# 個中 {done} 個の部分が現在のコミットでエージェントによりレビュー済み}}",
-        "containerAllName": "すべての部分が現在のコミットでエージェントによりレビュー済み",
         "card": {
           "hosted": "Motir のホスト型エージェントがレビュー",
           "own": "{name} のエージェントがレビュー",

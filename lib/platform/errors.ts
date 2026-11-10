@@ -221,6 +221,62 @@ export class PlannerModelUnchangedError extends Error {
   }
 }
 
+/** A function-default save named a function that is not Guide, Debug or Ask (MOTIR-10844). */
+export class PlannerFunctionUnknownError extends Error {
+  readonly code = 'PLANNER_FUNCTION_UNKNOWN';
+
+  constructor(readonly fn: string) {
+    super(`"${fn}" is not a planning-side function with a platform default`);
+    this.name = 'PlannerFunctionUnknownError';
+  }
+}
+
+/** A run-side default save named a key that is not one of the six (MOTIR-10844). */
+export class RunModelDefaultKeyUnknownError extends Error {
+  readonly code = 'RUN_MODEL_DEFAULT_KEY_UNKNOWN';
+
+  constructor(readonly key: string) {
+    super(`"${key}" is not a run-side default`);
+    this.name = 'RunModelDefaultKeyUnknownError';
+  }
+}
+
+/** A Guide / Debug / Ask default save named the value already stored (MOTIR-10844).
+ *  `model` null is "inherit the audience's Planning model". */
+export class PlannerFunctionModelUnchangedError extends Error {
+  readonly code = 'PLANNER_FUNCTION_MODEL_UNCHANGED';
+
+  constructor(
+    readonly fn: string,
+    readonly model: string | null,
+  ) {
+    super(
+      model === null
+        ? `${fn} already inherits the audience's planning model`
+        : `${fn} already runs on "${model}"`,
+    );
+    this.name = 'PlannerFunctionModelUnchangedError';
+  }
+}
+
+/** A run-side default save named the value already stored (MOTIR-10844), read before
+ *  the write or answered by motir-ai's own no-op (`audit: null`). */
+export class RunModelDefaultUnchangedError extends Error {
+  readonly code = 'RUN_MODEL_DEFAULT_UNCHANGED';
+
+  constructor(
+    readonly key: string,
+    readonly model: string | null,
+  ) {
+    super(
+      model === null
+        ? `The ${key} default already inherits`
+        : `The ${key} default is already "${model}"`,
+    );
+    this.name = 'RunModelDefaultUnchangedError';
+  }
+}
+
 /** A review-model save named the value already stored (MOTIR-10632). `model` null is
  *  "same as the planning model". */
 export class PlannerReviewModelUnchangedError extends Error {
@@ -277,11 +333,16 @@ export class RunModelInUseError extends Error {
     readonly model: string,
     readonly projects: readonly RunModelProjectUse[],
     readonly platformLevels: readonly ('trivial' | 'low' | 'medium' | 'high')[],
+    /** The run-side platform defaults set to it (MOTIR-10844): review agent, design run. */
+    readonly platformRoles: readonly ('review' | 'design')[] = [],
   ) {
     const uses = [
       ...(platformLevels.length > 0
         ? [`the platform default for ${platformLevels.join(', ')}`]
         : []),
+      ...platformRoles.map((r) =>
+        r === 'review' ? 'the platform review-agent default' : 'the platform design-run default',
+      ),
       ...projects.map((p) => `${p.projectKey} for ${p.levels.join(', ')}`),
     ];
     super(`"${model}" is in use: ${uses.join('; ')}`);

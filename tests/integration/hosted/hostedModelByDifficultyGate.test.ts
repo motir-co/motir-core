@@ -269,6 +269,7 @@ describe('a hosted run picks its model from difficulty — settings, picker and 
       override: FABLE,
       overrideOffered: true,
       platformDefault: OPUS,
+      inheritedFrom: 'platform',
       effective: FABLE,
       source: 'override',
     });
@@ -281,6 +282,7 @@ describe('a hosted run picks its model from difficulty — settings, picker and 
       source: 'override',
       difficulty: 'high',
       fromLeaves: false,
+      design: false,
     });
 
     // ── 3. A start WITHOUT `model` runs on the override.
@@ -296,6 +298,7 @@ describe('a hosted run picks its model from difficulty — settings, picker and 
       override: FABLE,
       overrideOffered: false,
       platformDefault: OPUS,
+      inheritedFrom: 'platform',
       effective: OPUS,
       source: 'platform_level',
     });
@@ -312,6 +315,7 @@ describe('a hosted run picks its model from difficulty — settings, picker and 
       source: 'platform_level',
       difficulty: 'high',
       fromLeaves: false,
+      design: false,
     });
     expect(await startWithoutModel(hardLeaf2.identifier)).toBe(OPUS);
     expect(fakeOrchestrator.specs.at(-1)!.env['MOTIR_MODEL']).toBe(`anthropic/${OPUS}`);
@@ -326,6 +330,7 @@ describe('a hosted run picks its model from difficulty — settings, picker and 
       override: null,
       overrideOffered: true,
       platformDefault: OPUS,
+      inheritedFrom: 'platform',
       effective: OPUS,
       source: 'platform_level',
     });
@@ -348,6 +353,7 @@ describe('a hosted run picks its model from difficulty — settings, picker and 
       source: 'platform_level',
       difficulty: 'high',
       fromLeaves: true,
+      design: false,
     });
     expect(await startWithoutModel(story.identifier)).toBe(OPUS);
 

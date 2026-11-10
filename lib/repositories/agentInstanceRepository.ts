@@ -227,10 +227,11 @@ export const agentInstanceRepository = {
     return result.count;
   },
 
-  /** Record the persistent handle once `provisionPersistent` answers. `tx` required. */
+  /** Record the persistent handle, and the region it answered in, once
+   *  `provisionPersistent` answers on the process-wide lane. `tx` required. */
   async setHandle(
     id: string,
-    handle: AgentInstanceHandleColumns,
+    handle: AgentInstanceHandleColumns & { region: string },
     tx: Prisma.TransactionClient,
   ): Promise<number> {
     const result = await tx.agentInstance.updateMany({
@@ -291,6 +292,26 @@ export const agentInstanceRepository = {
   ): Promise<{ applied: boolean }> {
     const result = await tx.agentInstance.updateMany({
       where: { id, fleetShardId, machineId: null, ...LIVE },
+      data: handle,
+    });
+    return { applied: result.count === 1 };
+  },
+
+  /**
+   * Write an INSTALL-FLEET instance's handle (MOTIR-10794): its machine, disk
+   * and region, with no account — and no zone, which the table admits only beside
+   * an account (`agent_instance_zone_needs_account_check`; the zone matters only
+   * at the provision, which has passed) — only while the row is live, on no
+   * account and has no machine yet. `applied: false` means another call placed
+   * it first: what this one provisioned must be destroyed. `tx` required.
+   */
+  async setInstallFleetHandle(
+    id: string,
+    handle: AgentInstanceHandleColumns & { region: string },
+    tx: Prisma.TransactionClient,
+  ): Promise<{ applied: boolean }> {
+    const result = await tx.agentInstance.updateMany({
+      where: { id, fleetShardId: null, machineId: null, ...LIVE },
       data: handle,
     });
     return { applied: result.count === 1 };
@@ -570,6 +591,23 @@ export const agentInstanceRepository = {
   ): Promise<AgentInstance | null> {
     return tx.agentInstance.findFirst({
       where: { fleetShardId, volumeId, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  /**
+   * The NON-DELETED record that names this disk in an app NO fleet account holds
+   * (MOTIR-10828) — the install fleet's disk pass: an install-fleet instance is
+   * keyed by its app (the fleet's tag) with no account row (MOTIR-10794). A
+   * deleted record owns no disk.
+   */
+  async findByVolumeInUnshardedApp(
+    app: string,
+    volumeId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<AgentInstance | null> {
+    return tx.agentInstance.findFirst({
+      where: { flyApp: app, fleetShardId: null, volumeId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
   },

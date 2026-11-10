@@ -163,6 +163,28 @@ describe('githubIdentityService.listOrganizations', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it('keeps a transport failure a GithubUserOrgsError and leaves the identity unmarked', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    orgsResponse = () => {
+      throw new TypeError('fetch failed');
+    };
+    await expect(githubIdentityService.listOrganizations(fx.ownerId)).rejects.toMatchObject({
+      status: null,
+    });
+    expect(await refusedAt(fx.ownerId)).toBeNull();
+  });
+
+  it('turns a 401 into GithubIdentityRefusedError and records it on the identity', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    orgsResponse = () => json(401, { message: 'Bad credentials' });
+    await expect(githubIdentityService.listOrganizations(fx.ownerId)).rejects.toBeInstanceOf(
+      GithubIdentityRefusedError,
+    );
+    expect(await refusedAt(fx.ownerId)).toBeInstanceOf(Date);
+  });
+
   it('decrypts the stored token and lists the organizations for a connected member', async () => {
     const fx = await makeWorkItemFixture();
     await connectIdentity(fx);
@@ -192,6 +214,23 @@ describe('GET /api/github/organizations', () => {
     // that state unreachable, which is the whole degradation the design rests on.
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ code: 'GITHUB_ORGS_UNAVAILABLE' });
+    // An unreachable GitHub is not a dead sign-in: nothing is recorded.
+    expect(await refusedAt(fx.ownerId)).toBeNull();
+  });
+
+  it('answers a 401 on the org list as the reconnect code and records it (Bug MOTIR-10806)', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectIdentity(fx);
+    signIn(fx);
+    orgsResponse = () => json(401, { message: 'Bad credentials' });
+
+    const res = await getOrganizations();
+    // The sign-in is dead, not GitHub unreachable: the same 409 every other
+    // route answers it with, and the mark the account Git pane reads.
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ code: 'github_identity_refused' });
+    expect(await refusedAt(fx.ownerId)).toBeInstanceOf(Date);
+    expect((await githubIdentityService.getIdentityForUser(fx.ownerId))?.needsReauth).toBe(true);
   });
 
   it('answers a dead GitHub sign-in with the reconnect code, not "couldn\'t reach" (Bug MOTIR-10021)', async () => {
@@ -424,6 +463,11 @@ function json(status: number, body: unknown): Response {
 
 function signIn(fx: WorkItemFixture): void {
   workspaceCtx = { userId: fx.ownerId, workspaceId: fx.workspaceId };
+}
+
+async function refusedAt(userId: string): Promise<Date | null> {
+  const row = await adminDb.githubIdentity.findUniqueOrThrow({ where: { userId } });
+  return row.refreshRefusedAt;
 }
 
 async function connectIdentity(fx: WorkItemFixture, avatarUrl?: string): Promise<void> {

@@ -115,7 +115,7 @@ async function resolveCodeState(
         indexedRefs: refs,
         running: run,
         runningRunIds: new Set(
-          await jobRunRepository.listRunningCodeGraphIndexRunIds(ctx.workspaceId, tx),
+          await jobRunRepository.listRunningCodeGraphRunIds(ctx.workspaceId, tx),
         ),
         terminalRunIds: new Set(
           await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),

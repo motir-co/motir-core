@@ -66,11 +66,12 @@ beforeAll(async () => {
            now() - make_interval(secs => g), 'engine', NULL
       FROM generate_series(1, ${NOISE_ROWS}) AS g
   `);
-  // Its code-graph ledger: refreshes (2 failed, 1 abandoned), indexes over three
-  // repositories (one succeeded run indexed nothing), two still running.
+  // Its code-graph ledger: refreshes (2 failed, 1 abandoned, 1 still running),
+  // indexes over three repositories (one succeeded run indexed nothing), two
+  // still running.
   await seedRows(`
     SELECT 'refresh-' || g, '${WORKSPACE}', 'system.code-graph-refresh', 'e', 'refresh-' || g, 1,
-           (CASE WHEN g <= 2 THEN 'failed' WHEN g = 3 THEN 'abandoned' ELSE 'succeeded' END)::"job_run_status",
+           (CASE WHEN g <= 2 THEN 'failed' WHEN g = 3 THEN 'abandoned' WHEN g = 4 THEN 'running' ELSE 'succeeded' END)::"job_run_status",
            now() - make_interval(mins => g), 'engine', NULL
       FROM generate_series(1, 40) AS g
   `);
@@ -164,11 +165,11 @@ describe('the code-graph ledger reads use the ledger index on a >100k-row worksp
     expectLedgerIndexRead(scans);
   });
 
-  it('listRunningCodeGraphIndexRunIds — every running index run', async () => {
+  it('listRunningCodeGraphRunIds — every running run of both functions (bug MOTIR-10821)', async () => {
     const { result, scans } = await measuredInWorkspace((tx) =>
-      jobRunRepository.listRunningCodeGraphIndexRunIds(WORKSPACE, tx),
+      jobRunRepository.listRunningCodeGraphRunIds(WORKSPACE, tx),
     );
-    expect(result.sort()).toEqual(['index-2', 'index-3']);
+    expect(result.sort()).toEqual(['index-2', 'index-3', 'refresh-4']);
     expectLedgerIndexRead(scans);
   });
 

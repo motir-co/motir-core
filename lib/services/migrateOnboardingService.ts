@@ -1223,7 +1223,7 @@ export const migrateOnboardingService = {
           await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
         );
         const runningRunIds = new Set(
-          await jobRunRepository.listRunningCodeGraphIndexRunIds(ctx.workspaceId, tx),
+          await jobRunRepository.listRunningCodeGraphRunIds(ctx.workspaceId, tx),
         );
         const terminalRunIds = new Set(
           await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),
@@ -1495,7 +1495,7 @@ export const migrateOnboardingService = {
           await jobRunRepository.listSucceededCodeGraphIndexRepoRefs(ctx.workspaceId, tx),
         );
         const runningRunIds = new Set(
-          await jobRunRepository.listRunningCodeGraphIndexRunIds(ctx.workspaceId, tx),
+          await jobRunRepository.listRunningCodeGraphRunIds(ctx.workspaceId, tx),
         );
         const terminalRunIds = new Set(
           await jobRunRepository.listTerminalCodeGraphRunIds(ctx.workspaceId, tx),

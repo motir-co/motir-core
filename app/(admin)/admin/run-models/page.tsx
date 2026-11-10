@@ -3,11 +3,16 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Info } from 'lucide-react';
 import { PlannerModelsSkeleton } from '@/components/ai/PlannerModelsSkeleton';
+import { MotirAiError } from '@/lib/ai/errors';
 import type { PlatformRunModelListDTO } from '@/lib/dto/platformRunModel';
+import type { PlatformRunModelDefaultsDTO } from '@/lib/dto/platformRunModelDefaults';
 import { HostedModelsUnavailableError } from '@/lib/hostedRuns/errors';
 import { type PlatformPrincipal } from '@/lib/platform/auth';
 import { requirePlatformStaffPage } from '@/lib/platform/pageGate';
+import { platformRunModelDefaultsService } from '@/lib/services/platformRunModelDefaultsService';
 import { platformRunModelService } from '@/lib/services/platformRunModelService';
+import { RunModelDefaults } from './_components/RunModelDefaults';
+import { RunModelDefaultsUnavailable } from './_components/RunModelDefaultsUnavailable';
 import { RunModelList } from './_components/RunModelList';
 import { RunModelListUnavailable } from './_components/RunModelListUnavailable';
 
@@ -62,6 +67,12 @@ export default async function AdminRunModelsPage() {
       <Suspense fallback={<PlannerModelsSkeleton title={t('card.title')} />}>
         <RunModelsSection principal={principal} />
       </Suspense>
+
+      {/* The run-side defaults (MOTIR-10844), under the list their pickers
+          choose from; their own section, so either can fail alone. */}
+      <Suspense fallback={<PlannerModelsSkeleton title={t('defaults.title')} />}>
+        <RunModelDefaultsSection principal={principal} />
+      </Suspense>
     </div>
   );
 }
@@ -76,4 +87,17 @@ async function RunModelsSection({ principal }: { principal: PlatformPrincipal })
     return <RunModelListUnavailable />;
   }
   return <RunModelList list={list} />;
+}
+
+async function RunModelDefaultsSection({ principal }: { principal: PlatformPrincipal }) {
+  let defaults: PlatformRunModelDefaultsDTO;
+  try {
+    defaults = await platformRunModelDefaultsService.getDefaults(principal);
+  } catch (err) {
+    // Any motir-ai failure is the unavailable card; anything else is a real bug.
+    if (!(err instanceof MotirAiError)) throw err;
+    console.error('[admin] run-side defaults could not be read', err);
+    return <RunModelDefaultsUnavailable />;
+  }
+  return <RunModelDefaults defaults={defaults} />;
 }

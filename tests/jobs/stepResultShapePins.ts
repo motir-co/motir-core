@@ -163,6 +163,17 @@ export interface RetiredStepId {
  * the change carries no `shardId`, which resolves to the process-wide fleet —
  * where that memo's container was booted.
  *
+ * ⚠️ MOTIR-10794 KEPT `index-admit:` AND `index-admit-try:` ON PURPOSE.
+ * `IndexAdmission` gained an OPTIONAL `installFleet: true` (the index was admitted
+ * onto the install fleet, in core's own account), which WIDENS both shapes. Both
+ * steps admit, so a new id would take a second slot on a resumed run. A memo
+ * written before the change carries no `installFleet`, which the boot reads as
+ * "not the install fleet" — the account `shardId` names, or the process-wide
+ * fleet — exactly where that memo's admission placed it, since no admission
+ * before this change could choose the install fleet. The install fleet's
+ * pseudo-account id rides `index-boot:`'s and the hosted boot's existing
+ * optional `shardId: string`, whose shape did not change.
+ *
  * ⚠️ MOTIR-9424 KEPT `hostedAgentBootStepId(…)` ON PURPOSE. The supervising
  * `session.handle` gained an OPTIONAL `shardId` (the agent-runner account the run
  * booted on), which WIDENS the shape. The step provisions, so a new id would
@@ -180,7 +191,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`index-admit:${subject}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:
-      '{ admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight"; requestedAt: string }',
+      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted"; requestedAt: string } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; admittedAt: string; outcome: "already_held"; requestedAt: string } | { admittedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight"; requestedAt: string }',
   },
   // MOTIR-10600 — ONE admission ask, memoized on its own so the wait between two
   // asks can be a defer. Its result is the admission verdict plus the instant it
@@ -188,7 +199,7 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   '`index-admit-try:${subject}:${attempt}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
     shape:
-      '{ admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; askedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted" } | { admission: { admittedAt: string; detail: string; shardId?: null | string | undefined; slotRef: string }; askedAt: string; outcome: "already_held" } | { askedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" }',
+      '{ admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; census: { byWorkload: { agent_instance: number; ci_runner: number; code_graph_index: number; hosted_agent: number }; total: number }; outcome: "admitted" } | { admission: { admittedAt: string; detail: string; installFleet?: true | undefined; shardId?: null | string | undefined; slotRef: string }; askedAt: string; outcome: "already_held" } | { askedAt: string; detail: string; outcome: "deferred"; reason: "ai_plan_required" | "fleet_ceiling" | "gate_unavailable" | "index_cap" | "no_index_account" | "org_index_cap" | "plan_unknown" | "pool_full" | "repo_index_in_flight" }',
   },
   '`index-boot:${subject}`': {
     file: 'lib/services/codeGraphIndexDispatchService.ts',
@@ -277,6 +288,11 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
     shape:
       '{ organizationsAsked: number; outcomes: Array<{ organizationId: string; outcome: "action_failed" | "ask_failed" | "head_unknown" | "index_enqueued" | "pause_cleared" | "pool_still_full" | "refresh_enqueued" | "still_stopped"; repoRef: string }>; scanned: number }',
+  },
+  'retry-failed-indexes': {
+    file: 'lib/jobs/definitions/codeGraphIndexCatchUp.ts',
+    shape:
+      '{ outcomes: Array<{ arm: "dead_run" | "lost_dispatch"; attempt: number; organizationId: string; outcome: "retry_enqueue_failed" | "retry_index_enqueued" | "retry_not_owed" | "retry_raced" | "retry_refresh_enqueued"; repoRef: string }>; scanned: number }',
   },
   'deliver-digest': {
     file: 'lib/jobs/definitions/publicFollowDigestDeliver.ts',
@@ -407,6 +423,13 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     shape:
       '{ address: string; detail: string; verdict: "indeterminate" } | { address: string; detail: string; verdict: "private_address" } | { address: string; status: number; verdict: "reachable" } | { detail: string; verdict: "not_applicable" } | { detail: string; verdict: "unconfigured" }',
   },
+  // The three fleet origins (Story MOTIR-9714 · MOTIR-10750): a verdict the
+  // handler branches on — `failed` throws `FleetOriginsError`.
+  'fleet-origins': {
+    file: 'lib/jobs/definitions/dailyHealthCheck.ts',
+    shape:
+      '{ detail: string; readings: Array<{ address: string; detail: string; path: string; verdict: "indeterminate" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { address: string; detail: string; verdict: "private_address" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { address: string; path: string; status: number; verdict: "reachable" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "not_applicable" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "unconfigured" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" }>; verdict: "indeterminate" } | { detail: string; verdict: "not_applicable" } | { failures: Array<{ address: string; detail: string; verdict: "private_address" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "unconfigured" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" }>; readings: Array<{ address: string; detail: string; path: string; verdict: "indeterminate" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { address: string; detail: string; verdict: "private_address" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { address: string; path: string; status: number; verdict: "reachable" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "not_applicable" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "unconfigured" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" }>; verdict: "failed" } | { readings: Array<{ address: string; detail: string; path: string; verdict: "indeterminate" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { address: string; detail: string; verdict: "private_address" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { address: string; path: string; status: number; verdict: "reachable" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "not_applicable" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" } | { detail: string; verdict: "unconfigured" } & { origin: "aiContainer" | "core" | "gatewayRun"; output: "AiContainerOrigin" | "CoreOrigin" | "GatewayRunOrigin"; variable: "MOTIR_AI_CONTAINER_URL" | "MOTIR_BASE_URL" | "MOTIR_GATEWAY_RUN_URL" }>; verdict: "ok" }',
+  },
   // The indeterminate-streak escalation (MOTIR-10429): a verdict the handler
   // branches on, like every probe of the daily check.
   'indeterminate-streak': {
@@ -445,9 +468,10 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
     shape: 'Array<string>',
   },
-  'reconcile-github-queue': {
+  'reconcile-github-queue-v2': {
     file: 'lib/jobs/definitions/ciRunnerFleet.ts',
-    shape: '{ added: number }',
+    shape:
+      '{ added: number; error?: string | undefined; orgs: Array<{ added: number; awaiting: number; error?: string | undefined; idleRunners: number; org: string; queued: number; skippedRuns?: Array<{ detail: string; repoName: string; repoOwner: string; runId: string; status: null | number }> | undefined }> }',
   },
   'mark-stale-for-terminal-target': {
     file: 'lib/jobs/definitions/planDrift.ts',
@@ -951,6 +975,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
  * table.
  */
 export const RETIRED_STEP_IDS: Record<string, RetiredStepId> = {
+  'reconcile-github-queue': {
+    shape: '{ added: number }',
+    supersededBy: 'reconcile-github-queue-v2',
+    reason:
+      'MOTIR-10790 made the step return the whole reconcile outcome (per org: queued, idle runners, awaiting, added, skipped runs, error) so the provision sweep can record it on `job_run`. A memo under the old id carries only `added`. Re-executing the reconcile on a resumed run is safe: it counts queued jobs against idle runners and pending intents before minting, and the unique index on `(run, attempt, job, reconcile_generation)` makes a second mint collide rather than double-boot.',
+  },
   'runner-image-freshness': {
     shape:
       '{ ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; build: { commit: string; image: string; source: "label" | "sha_tag" }; checkedAt: string; unreleased: Array<{ commit: string; committedAt: string; paths: Array<string>; relation: "ahead" | "diverged"; subject: string }>; verdict: "stale" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; build: { commit: string; image: string; source: "label" | "sha_tag" }; checkedAt: string; verdict: "current" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; checkedAt: string; detail: string; image: string; phase: "build_commit" | "github" | "registry"; verdict: "indeterminate" } | { ami: { amiId: string; reason: string; state: "not_read" } | { state: "unset" }; checkedAt: string; reason: "runner_image_unset"; verdict: "not_applicable" }',

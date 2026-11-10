@@ -3,6 +3,8 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { plansService } from '@/lib/services/plansService';
 import { planReviewService } from '@/lib/services/planReviewService';
+import { readPlanJobCost } from '@/lib/services/planJobCostService';
+import { PLAN_JOB_SESSION_KINDS, type PlanJobCostDto } from '@/lib/dto/planJobCost';
 import type { PlanItemDto, PlanItemOpDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import { isTempRef, tempRefId } from '@/lib/plans/refs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -390,17 +392,44 @@ function renderProposals(
 /** The human-readable block: the plan's own line, then its proposal tree.
  *  `placements` (MOTIR-3191) is what lets a proposal about an EXISTING card be
  *  drawn where that card lives; without it the tree renders flat, as it did. */
+/** A cost figure for the text: `unknown` for `null`, never `0`. */
+const costFigure = (value: number | null, unit = ''): string =>
+  value === null ? 'unknown' : `${value}${unit}`;
+
+/**
+ * `Job cost: total 700 µUSD · 10 credits · ledger complete · conversation 100 · …`
+ * — the plan's job cost (MOTIR-10815), one line. A `null` figure is written
+ * `unknown`, never `0`.
+ */
+export function costLine(cost: PlanJobCostDto): string {
+  const ledger =
+    cost.ledgerComplete === null
+      ? 'ledger unknown'
+      : cost.ledgerComplete
+        ? 'ledger complete'
+        : 'ledger incomplete';
+  const kinds = PLAN_JOB_SESSION_KINDS.map(
+    (kind) => `${kind} ${costFigure(cost.bySessionKind[kind])}`,
+  ).join(' · ');
+  return (
+    `Job cost: total ${costFigure(cost.totalCostMicroUsd, ' µUSD')} · ` +
+    `${costFigure(cost.credits, ' credits')} · ${ledger} · ${kinds}`
+  );
+}
+
 export function summarizePlan(
   plan: PlanWithItemsDto,
   placements?: PlacementByPlanItemId,
   marks?: ProposalMarkRefs,
   sections?: ReadonlyMap<string, ParsedBody>,
+  cost?: PlanJobCostDto,
 ): string {
   const lines = [
     `Plan ${plan.id} — ${plan.status}, ${plan.itemCount} proposal(s).`,
     `Project ${plan.projectId} · origin ${plan.origin}` +
       (plan.sourceJobId ? ` · job ${plan.sourceJobId}` : ''),
   ];
+  if (cost) lines.push(costLine(cost));
   if (plan.title) lines.push(`Title: ${plan.title}`);
   if (plan.summary) lines.push(`Summary: ${plan.summary}`);
 
@@ -536,10 +565,12 @@ export async function runGetPlan(
           }),
       )
     : undefined;
+  // What the plan's job cost (MOTIR-10815): the same read the v1 route makes.
+  const cost = await readPlanJobCost(plan);
   return toolOk(
-    summarizePlan(plan, placements, marks, sections),
+    summarizePlan(plan, placements, marks, sections, cost),
     derived(planPayload, {
-      ...presentMcpPlan(plan, folders),
+      ...presentMcpPlan(plan, folders, cost),
       plannerRecord,
       raisedGaps,
       ...(sections ? { parsedSections: Object.fromEntries(sections) } : {}),

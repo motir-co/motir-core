@@ -128,8 +128,9 @@ export const githubIdentityRepository = {
     });
   },
 
-  /** Mark the refresh token REFUSED by GitHub and release the lease. The
-   *  identity is dead until the member reconnects (`upsertForUser` clears it). */
+  /** Mark the sign-in REFUSED by GitHub — its refresh token, or a 401 on its
+   *  access token (Bug MOTIR-10806) — and release the lease. The identity is dead
+   *  until the member reconnects (`upsertForUser` clears it). */
   async markRefreshRefused(id: string, at: Date, tx: Prisma.TransactionClient): Promise<void> {
     await tx.githubIdentity.update({
       where: { id },

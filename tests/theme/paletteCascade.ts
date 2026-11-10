@@ -46,9 +46,47 @@ const CUSTOM_PROPERTY = /(--[\w-]+)\s*:\s*([^;]+)/g;
 // theme only when this element does not declare one" — the condition the
 // descendant palette arms need (MOTIR-3933). Only the NEGATED-attribute form is
 // recognised; anything richer is still treated as component-scoped.
-const ROOT_SIMPLE = /^(?::root|html|\[[\w-]+(?:=(?:'[^']*'|"[^"]*"))?\]|:not\(\[[\w-]+\]\))+$/;
+//
+// `:where(:not([attr='v']):not([attr])…)` — a zero-specificity group of chained
+// negations — is accepted too, so the palette axis's FALLBACK selectors
+// (`[data-palette]:where(:not(<every registered id>))`, MOTIR-10834) are part of
+// the modelled layer. Only that exact shape is recognised: a `:where()` holding
+// anything but chained attribute negations is still component-scoped.
+const NEGATION = String.raw`:not\(\[[\w-]+(?:=(?:'[^']*'|"[^"]*"))?\]\)`;
+const ROOT_SIMPLE = new RegExp(
+  String.raw`^(?::root|html|\[[\w-]+(?:=(?:'[^']*'|"[^"]*"))?\]|:not\(\[[\w-]+\]\)|:where\((?:${NEGATION})+\))+$`,
+);
 const NOT_ATTR = /:not\(\[([\w-]+)\]\)/g;
 const ATTR_CONDITION = /\[([\w-]+)(?:=['"]([^'"]*)['"])?\]/g;
+const WHERE_GROUP = /:where\(((?::not\(\[[^\]]*\]\))+)\)/g;
+
+/** One negated attribute condition from a `:where()` group: absent, or not that value. */
+interface Exclusion {
+  attribute: string;
+  /** `undefined` for `:not([attr])` — the attribute must be ABSENT. */
+  value: string | undefined;
+}
+
+/**
+ * Split a selector into the part that weighs and the `:where()` negations that
+ * do not. The groups are removed from `core`, so neither the specificity count
+ * nor the positive-condition read sees an attribute that is only negated.
+ */
+function splitWhere(selector: string): { core: string; exclusions: Exclusion[] } {
+  const exclusions: Exclusion[] = [];
+  for (const [, group] of selector.matchAll(WHERE_GROUP)) {
+    for (const [, attribute, value] of (group ?? '').matchAll(ATTR_CONDITION)) {
+      if (attribute !== undefined) exclusions.push({ attribute, value });
+    }
+  }
+  return { core: selector.replace(WHERE_GROUP, ''), exclusions };
+}
+
+/** Does an element whose attribute reads `present` (undefined = absent) pass `exclusion`? */
+function passesExclusion(exclusion: Exclusion, present: string | undefined): boolean {
+  if (exclusion.value === undefined) return present === undefined;
+  return present !== exclusion.value;
+}
 
 function parseDeclarations(body: string): Record<string, string> {
   const out: Record<string, string> = {};
@@ -106,6 +144,8 @@ function parseRules(css: string): Rule[] {
 
 /** CSS specificity of a root-level selector, as the (b, c) pair that can vary here. */
 function specificity(selector: string): [number, number] {
+  // A `:where()` group weighs nothing, whatever it holds.
+  selector = splitWhere(selector).core;
   const attributes = selector.match(/\[[^\]]*\]/g)?.length ?? 0;
   const pseudoClasses = selector.match(/:root/g)?.length ?? 0;
   const types = selector.match(/(^|\])html/g)?.length ?? 0;
@@ -116,14 +156,26 @@ function specificity(selector: string): [number, number] {
 function matchesContext(selector: string, ctx: ThemeContext): boolean {
   const trimmed = selector.trim();
   if (!ROOT_SIMPLE.test(trimmed)) return false; // combinator / class → component-scoped
-  for (const [, attribute, value] of trimmed.matchAll(ATTR_CONDITION)) {
+  const { core, exclusions } = splitWhere(trimmed);
+  // The root's attributes as this context spells them: a palette is always
+  // stamped, and light means `data-theme` is absent.
+  const rootAttribute: Record<string, string | undefined> = {
+    'data-palette': ctx.palette,
+    'data-theme': ctx.theme === 'dark' ? 'dark' : undefined,
+  };
+  for (const exclusion of exclusions) {
+    if (!passesExclusion(exclusion, rootAttribute[exclusion.attribute])) return false;
+  }
+  for (const [, attribute, value] of core.matchAll(ATTR_CONDITION)) {
     switch (attribute) {
       case 'data-theme':
         // light == the attribute is absent, so ONLY a dark context matches.
         if (ctx.theme !== 'dark' || value !== 'dark') return false;
         break;
       case 'data-palette':
-        if (value !== ctx.palette) return false;
+        // `[data-palette]` (no value) only needs the attribute, which a root
+        // context always carries.
+        if (value !== undefined && value !== ctx.palette) return false;
         break;
       case 'data-appearance-scope':
         break; // re-emits the same layer onto a subtree; same declarations
@@ -285,9 +337,12 @@ const ROOT_ONLY = /:root|(?:^|\])html/;
 
 /** Does this single (non-list) selector match an element with `attributes`? */
 function matchesElement(selector: string, attributes: ElementAttributes, isRoot: boolean): boolean {
-  const trimmed = selector.trim();
-  if (!ROOT_SIMPLE.test(trimmed)) return false; // combinator / class → component-scoped
+  if (!ROOT_SIMPLE.test(selector.trim())) return false; // combinator / class → component-scoped
+  const { core: trimmed, exclusions } = splitWhere(selector.trim());
   if (ROOT_ONLY.test(trimmed) && !isRoot) return false;
+  for (const exclusion of exclusions) {
+    if (!passesExclusion(exclusion, attributes[exclusion.attribute])) return false;
+  }
   for (const [, negated] of trimmed.matchAll(NOT_ATTR)) {
     if (negated === undefined) return false;
     if (attributes[negated] !== undefined) return false; // the element DOES declare it

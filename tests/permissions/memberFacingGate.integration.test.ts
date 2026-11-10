@@ -425,13 +425,14 @@ describe('the cross-repo job-scope parameter is ONE string', () => {
     // error and no red test in the repo that made the change.
     expect(JOB_SCOPE_QUERY_PARAM).toBe('coreProjectId');
     const client = readFileSync(join(ROOT, 'lib', 'ai', 'motirAiClient.ts'), 'utf8');
-    // Every job call — the two reads and the cancel (MOTIR-9065) — builds its
-    // params FROM the constant; a re-introduced literal would leave one of these
-    // matches unaccounted for.
+    // Every job call — the two reads, the cancel (MOTIR-9065) and the cost read
+    // (MOTIR-10815) — builds its params FROM the constant; a re-introduced literal
+    // would leave one of these matches unaccounted for.
     const usages = client.match(/\[JOB_SCOPE_QUERY_PARAM\]/g) ?? [];
-    expect(usages.length, 'getJob, streamJob and cancelJob must each use the shared constant').toBe(
-      3,
-    );
+    expect(
+      usages.length,
+      'getJob, streamJob, cancelJob and getJobCost must each use the shared constant',
+    ).toBe(4);
     expect(
       /new URLSearchParams\(\{\s*coreProjectId\s*[,}]/.test(client),
       'a literal `coreProjectId` key in a URLSearchParams call has crept back in',

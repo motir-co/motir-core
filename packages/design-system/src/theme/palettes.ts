@@ -11,15 +11,17 @@
  * style never changes a hue.
  *
  * ── The two-axis runtime contract ───────────────────────────────────────
- *   data-palette="<palette-id>" — THIS axis. Layers per-palette `--el-*`
- *                                 element-token overrides over the Tier-3
- *                                 base in app/globals.css.
+ *   data-palette="<palette-id>" — THIS axis. Layers per-palette colour
+ *                                 overrides over the base in
+ *                                 packages/design-system/theme.css (which
+ *                                 app/globals.css imports).
  *   data-style="<style-id>"     — the INDEPENDENT shape/feel axis.
  *   data-theme="light|dark"     — the light/dark base WITHIN a palette
  *                                 (`--color-*`); orthogonal to the palette.
  *
- * A `[data-palette='…']` block in globals.css MUST override ONLY `--el-*`
- * element colour tokens — NEVER a shape/feel token (radius / spacing / shadow
+ * A `[data-palette='…']` block in packages/design-system/theme.css MUST
+ * override ONLY colour tokens — the Tier-0 `--color-*` sources the `--el-*`
+ * element layer reads, plus the odd `--el-*` — NEVER a shape/feel token (radius / spacing / shadow
  * / sizing / motion / type). That is the style axis's job, and keeping the two
  * disjoint is what makes "style × palette" a true product of two independent
  * choices rather than N×M hand-tuned combinations.
@@ -36,10 +38,15 @@
  * "Motir" from v1 (Per Yue, 2026-06-17) until that rename. It is still the
  * Tier-0/Tier-3 BASE in theme.css, so — exactly like the `warm-editorial` base
  * style — the base `--el-*` tokens already are it; its `[data-palette='amethyst']`
- * blocks only re-assert that base inside a scoped subtree. `<html>` always
- * carries a `data-palette`, so the base is a fallback, never what a person sees
- * by default. Each later "Palette: …" subtask ADDS its entry here, ships a
- * `[data-palette='<id>']` block overriding the `--el-*` layer, and authors its
+ * blocks only re-assert that base inside a scoped subtree. The base is NOT the
+ * axis's fallback: an unregistered `data-palette`, or a root with none, takes
+ * the `[data-palette='motir']` block through two fallback selectors it carries
+ * (MOTIR-10834), so — like the style and type axes — an id the stylesheet does
+ * not know renders {@link DEFAULT_PALETTE_ID}. Those selectors name every id in
+ * this registry, so a new entry adds its id to them too (the guard is
+ * tests/theme/paletteFallback.test.ts in motir-core). Each later "Palette: …" subtask ADDS its entry here, ships a
+ * `[data-palette='<id>']` block in packages/design-system/theme.css overriding
+ * the Tier-0 `--color-*` sources (plus the odd `--el-*`), and authors its
  * `docs/palettes/<id>.md` doc — exactly the shape the per-style subtasks
  * (7.3.33+) follow on the other axis.
  *
@@ -162,6 +169,42 @@ export const PALETTE_REGISTRY = {
       'A candy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Pink primary + Mauve neutrals + a Sky/Jade/Violet/Amber/Crimson candy rainbow; Glossier Pink #F5DADF as the pastel-pink mood reference.',
     designDoc: 'docs/palettes/candy.md',
   },
+  lagoon: {
+    id: 'lagoon',
+    name: 'Lagoon',
+    tagline:
+      'Cool and fresh — a deep lagoon-cyan primary over shallow-water surfaces and slate ink, with a coral highlight.',
+    inspiration:
+      'A lagoon concept grounded entirely in documented Radix Colors scales (every value a Radix step): Cyan primary + Slate cool neutrals, a Tomato coral highlight, and Tomato/Crimson/Jade/Violet/Cyan/Amber tints.',
+    designDoc: 'docs/palettes/lagoon.md',
+  },
+  olive: {
+    id: 'olive',
+    name: 'Olive',
+    tagline:
+      'Muted and earthy — a moss primary over warm olive greys, with a terracotta highlight.',
+    inspiration:
+      'An olive/earthy concept grounded entirely in documented Radix Colors scales (every value a Radix step): Lime moss primary + Olive warm green-grey neutrals, an Orange terracotta highlight, and Orange/Crimson/Lime/Violet/Sky/Amber tints.',
+    designDoc: 'docs/palettes/olive.md',
+  },
+  contrast: {
+    id: 'contrast',
+    name: 'Contrast',
+    tagline:
+      'Clear and strong — paper-white grounds, near-black ink, AAA secondary text and edges you can see.',
+    inspiration:
+      'A high-contrast reading scheme grounded entirely in documented Radix Colors scales (every value a Radix step): one Gray neutral ramp with its text steps held to 7:1, a Plum primary, an Orange highlight, and step-3 tints.',
+    designDoc: 'docs/palettes/contrast.md',
+  },
+  midnight: {
+    id: 'midnight',
+    name: 'Midnight',
+    tagline:
+      'Dark-first and calm — a night-slate ground with a starlight-sky primary and a violet highlight.',
+    inspiration:
+      'A dark-first scheme grounded entirely in documented Radix Colors scales (every value a Radix step): authored in Slate and Sky dark, with each light value derived as the same step of the light scale and every departure recorded.',
+    designDoc: 'docs/palettes/midnight.md',
+  },
 } satisfies Record<string, PaletteDefinition>;
 
 /** The id of every registered palette — `data-palette` value space. */
@@ -184,7 +227,8 @@ export const DEFAULT_PALETTE_ID: PaletteId = 'motir';
  * reference every other palette's override is measured AGAINST. Until
  * MOTIR-6471 it was also {@link DEFAULT_PALETTE_ID}; since the rename the two
  * differ, so a reader asking "which palette is the base?" names this and never
- * the default.
+ * the default. It is also not what an unregistered id renders: the stylesheet
+ * sends those to the default (MOTIR-10834).
  */
 export const BASE_PALETTE_ID: PaletteId = 'amethyst';
 

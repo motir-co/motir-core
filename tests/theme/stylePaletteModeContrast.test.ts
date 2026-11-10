@@ -5,6 +5,17 @@ import { STYLE_IDS } from '@/lib/theme/styles';
 import { BASE_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { loadTokenLayer, resolveTokenInScope, type ScopeChain } from './paletteCascade';
 import { contrast, flattenColorMix } from './colorMetrics';
+import {
+  interpolatePositions,
+  parseLayers,
+  parsePositionList,
+  worstCanvasContrast,
+  type CanvasInput,
+  type InkResult,
+  type Length,
+  type RenderState,
+  type Viewport,
+} from './canvasRaster';
 
 // MOTIR-10674 — the style × palette × mode AA contrast gate.
 //
@@ -77,9 +88,18 @@ import { contrast, flattenColorMix } from './colorMetrics';
 //   - a hero gradient layer confined by `background-size` to a band above the
 //     cap height (Retrofuturism's crown, glass's streak). The label does not
 //     sit on it, which is how those rows were measured when they shipped;
-//   - a canvas pattern is flattened to its WORST case: every translucent stop
-//     is composited over the page ground at its stated peak alpha, which
-//     over-reports;
+//   - a canvas pattern's colour BETWEEN sampled pixels. The canvas is PAINTED
+//     (`canvasRaster.ts`, MOTIR-10736): every layer is stacked top to bottom at
+//     sampled pixels of three viewports, still and across its animation, as a
+//     browser composites it, and each hard ink is measured against the worst
+//     pixel. Reading each layer ALONE over the page, which this file did until
+//     then, UNDER-reports wherever two translucent washes overlap: glass's
+//     bottom-right corner rendered 4.26:1 while every single-layer stop passed.
+//     Checked against Chromium screenshots, the painter finds the same worst
+//     pixel to within two pixels. Its ratios sit about 2% above Chromium's,
+//     which dithers gradients by one level and so puts single pixels below the
+//     undithered colour this file measures. A canvas layer in a form the
+//     painter cannot read fails the resolve case rather than going unmeasured;
 //   - an ink a component sets for itself, from a component this file does not
 //     open;
 //   - a selector that is not exactly the hook (descendant, pseudo-class,
@@ -164,91 +184,13 @@ const ORB_FALLBACK =
  * row id `style/palette/mode · ink on hook`. Asserted by equality.
  */
 // One entry per measured pair, each carrying the ratio it measured and the bug
-// filed when it was recorded: MOTIR-10709 aurora. Retrofuturism (MOTIR-10708),
-// glassmorphism (MOTIR-10707) and cybercore-y2k (MOTIR-10710) clear every row
-// and hold no entry.
-const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {
-  'aurora/amber/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.28',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/amethyst/dark · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.35',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/amethyst/dark · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.26',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.25',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.17',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-text-secondary on canvas (pattern stop 3)': {
-    ratio: '4.32',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/candy/light · --el-text-secondary on canvas (pattern stop 5)': {
-    ratio: '4.23',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/citrine/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.44',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/citrine/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.44',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/cobalt/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.35',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/cobalt/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.38',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/evergreen/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.42',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/evergreen/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.39',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/garnet/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.14',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/garnet/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.40',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/motir/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '3.98',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/motir/light · --el-text-secondary on canvas (pattern stop 1)': {
-    ratio: '4.25',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 1)': {
-    ratio: '4.30',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 3)': {
-    ratio: '4.26',
-    bug: 'MOTIR-10709',
-  },
-  'aurora/sienna/light · --el-accent-on-surface on canvas (pattern stop 5)': {
-    ratio: '4.06',
-    bug: 'MOTIR-10709',
-  },
-};
+// filed when it was recorded. Every style that shipped before MOTIR-10549 now
+// clears every row and holds no entry: retrofuturism (MOTIR-10708),
+// glassmorphism (MOTIR-10707), cybercore-y2k (MOTIR-10710 pill and orb,
+// MOTIR-10746 canvas grid), memphis (MOTIR-10745: painting the canvas whole
+// found its dot-over-hatch pixels under the floor; the pattern now takes
+// 11 / 9 / 5%) and aurora (MOTIR-10709). A new failure joins with its own bug key.
+const KNOWN_SHIPPED_FAILURES: Record<string, { ratio: string; bug: string }> = {};
 
 // ── The material reader ─────────────────────────────────────────────────────
 
@@ -603,6 +545,11 @@ interface Row {
   ratio: number;
   floor: number;
   style: string;
+  palette: string;
+  /** The ink role measured, or `label ink` for the hero pill and orb. */
+  ink: string;
+  /** For a painted canvas: the viewport, frame and pixel of the worst point. */
+  where?: string;
 }
 
 interface Ground {
@@ -637,16 +584,7 @@ function groundsFor(ctx: Context): { grounds: Ground[]; unresolved: string[] } {
       ? colourIn(ctx, own['background-color'], own)
       : colourIn(ctx, `var(${token})`);
     push(hook, `own background-color`, base);
-    if (hook === 'canvas' && own['background-image']) {
-      const under = base && base.a === 1 ? base : pageRgba;
-      // A canvas pattern's layers all lie on the canvas colour, so each is
-      // measured as a bottom layer over it, which is the over-reporting
-      // direction the header names.
-      const layers = fillLayers(resolveIn(ctx, own['background-image'], own), undefined);
-      layers
-        .flatMap((layer) => flattenLayers([layer], under))
-        .forEach((c, i) => push(hook, `pattern stop ${i + 1}`, c, under));
-    }
+    // A canvas `background-image` is measured by painting it (`canvasRows`).
   }
 
   // The selected tint lies on the row's container, the page ground.
@@ -688,6 +626,131 @@ function inksFor(ctx: Context, ground: Ground): string[] {
   return unpainted && MUTED_GROUNDS.has(ground.name) ? [...HARD_INKS, MUTED_INK] : HARD_INKS;
 }
 
+// ── The canvas, painted ─────────────────────────────────────────────────────
+
+/**
+ * The viewports a canvas is painted at, one per aspect ratio, since a wash
+ * placed in percentages lands somewhere else on each: 16:10 desktop (1440×900,
+ * the MOTIR-10707 reproduction; 1280×800 is the same aspect), 16:9 wide, and
+ * the 390×844 phone. Its pixel sizes are real, so a wash sized in px is too.
+ */
+const CANVAS_VIEWPORTS: Viewport[] = [
+  { width: 1440, height: 900 },
+  { width: 1920, height: 1080 },
+  { width: 390, height: 844 },
+];
+/** Frames sampled across one pass of a canvas animation (the drift is `alternate`, so one pass is all of it). */
+const ANIMATION_FRAMES = 8;
+
+/** A `@keyframes <name>` block's `background-position` frames, as `[offset, positions]`. */
+function readKeyframes(name: string): [number, [Length, Length][]][] {
+  const open = new RegExp(`@keyframes\\s+${name}\\s*\\{`).exec(CSS);
+  if (!open) return [];
+  let level = 1;
+  let end = open.index + open[0].length;
+  while (level > 0) {
+    if (CSS[end] === '{') level += 1;
+    else if (CSS[end] === '}') level -= 1;
+    end += 1;
+  }
+  const body = CSS.slice(open.index + open[0].length, end - 1);
+  const frames: [number, [Length, Length][]][] = [];
+  for (const [, selector, block] of body.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const position = /background-position\s*:([^;]*)/.exec(block ?? '');
+    if (!position) continue;
+    for (const offset of topLevelSplit(selector!.trim())) {
+      const at =
+        offset === 'from' ? 0 : offset === 'to' ? 1 : Number(offset.replace('%', '')) / 100;
+      frames.push([at, parsePositionList(position[1]!)]);
+    }
+  }
+  return frames.sort((a, b) => a[0] - b[0]);
+}
+
+/**
+ * Every way the canvas is painted: still (its declared positions, which is also
+ * what a reduced-motion user sees once the drift is switched off), and, when its
+ * `animation` names a keyframes block that moves `background-position`, frames
+ * across the whole of that animation.
+ */
+function renderStates(own: Record<string, string>, still: [Length, Length][]): RenderState[] {
+  const states: RenderState[] = [{ name: 'still', positions: still }];
+  const animation = own['animation'];
+  if (!animation) return states;
+  const name = animation.split(/\s+/).find((word) => readKeyframes(word).length > 0);
+  if (!name) return states;
+  const frames = readKeyframes(name);
+  // A keyframe list that omits `from` / `to` animates from the element's own value.
+  if (frames[0]![0] > 0) frames.unshift([0, still]);
+  if (frames[frames.length - 1]![0] < 1) frames.push([1, still]);
+  for (let i = 0; i <= ANIMATION_FRAMES; i += 1) {
+    const t = i / ANIMATION_FRAMES;
+    const next = frames.findIndex(([at]) => at >= t);
+    const [hi, lo] = [frames[next]!, frames[Math.max(0, next - 1)]!];
+    const w = hi[0] === lo[0] ? 0 : (t - lo[0]) / (hi[0] - lo[0]);
+    states.push({
+      name: `${name} ${Math.round(t * 100)}%`,
+      positions: interpolatePositions(lo[1], hi[1], w),
+    });
+  }
+  return states;
+}
+
+/**
+ * Everything needed to paint a style's canvas pattern in one context: its
+ * ground, its layers, the viewports and frames, and the four hard inks.
+ * `'none'` when the style paints no pattern; a string naming what could not be
+ * read otherwise. `overrides` substitutes custom properties before resolution:
+ * the regression cases below use it to paint values the stylesheet does not ship.
+ */
+function canvasInput(ctx: Context, overrides: Record<string, string> = {}): CanvasInput | string {
+  const own = hookDeclarations(ctx.style, 'canvas');
+  if (!own['background-image']) return 'none';
+  const local = { ...own, ...overrides };
+  const page = colourIn(ctx, 'var(--el-page-bg)', local) ?? KEYWORDS.white!;
+  const base = own['background-color'] ? colourIn(ctx, own['background-color'], local) : page;
+  const ground = base && base.a < 1 ? over(base, page) : (base ?? page);
+  // `currentColor` on the canvas is the canvas's own text colour: `body` sets
+  // `color: var(--el-page-text)` in globals.css.
+  const currentColour = own['color'] ?? 'var(--el-page-text)';
+  try {
+    const layers = parseLayers(
+      {
+        image: resolveIn(
+          ctx,
+          own['background-image'].replace(/currentColor/gi, currentColour),
+          local,
+        ),
+        size: own['background-size'] && resolveIn(ctx, own['background-size'], local),
+        position: own['background-position'] && resolveIn(ctx, own['background-position'], local),
+        repeat: own['background-repeat'],
+      },
+      evaluate,
+    );
+    const inks = HARD_INKS.map((name) => ({ name, colour: colourIn(ctx, `var(${name})`) }));
+    const missing = inks.find((ink) => !ink.colour || ink.colour.a < 1);
+    if (missing) return `${label(ctx)} · ${missing.name} (ink on canvas pattern)`;
+    return {
+      ground,
+      layers,
+      viewports: CANVAS_VIEWPORTS,
+      states: renderStates(
+        own,
+        layers.map((l) => l.position),
+      ),
+      inks: inks.map((ink) => ({ name: ink.name, colour: ink.colour! })),
+    };
+  } catch (error) {
+    return `${label(ctx)} · canvas pattern: ${(error as Error).message}`;
+  }
+}
+
+/** Paint a style's canvas pattern and measure each hard ink against its worst pixel. */
+function canvasRows(ctx: Context, overrides: Record<string, string> = {}): InkResult[] | string {
+  const input = canvasInput(ctx, overrides);
+  return typeof input === 'string' ? input : worstCanvasContrast(input);
+}
+
 function buildMatrix(): { rows: Row[]; unresolved: string[]; expected: number } {
   const rows: Row[] = [];
   const unresolved: string[] = [];
@@ -713,8 +776,29 @@ function buildMatrix(): { rows: Row[]; unresolved: string[]; expected: number } 
           ratio,
           floor,
           style: ctx.style,
+          palette: ctx.palette,
+          ink,
         });
       }
+    }
+    const painted = canvasRows(ctx);
+    if (typeof painted === 'string') {
+      if (painted !== 'none') unresolved.push(painted);
+      continue;
+    }
+    expected += HARD_INKS.length;
+    for (const { ink, ratio, where } of painted) {
+      const id = `${label(ctx)} · ${ink} on canvas (pattern)`;
+      rows.push({
+        id,
+        line: `${id} = ${ratio.toFixed(2)}:1`,
+        ratio,
+        floor: WCAG_TEXT_MIN,
+        style: ctx.style,
+        palette: ctx.palette,
+        ink,
+        where,
+      });
     }
   }
   return { rows, unresolved, expected };
@@ -781,13 +865,191 @@ describe('style × palette × mode AA contrast gate (MOTIR-10674)', () => {
         .filter((r) => r.id in KNOWN_SHIPPED_FAILURES)
         .map((r) => [r.id, { ratio: r.ratio.toFixed(2), bug: KNOWN_SHIPPED_FAILURES[r.id]!.bug }]),
     );
-    const unexplained = failing.filter((r) => !(r.id in KNOWN_SHIPPED_FAILURES)).map((r) => r.line);
+    const unexplained = failing
+      .filter((r) => !(r.id in KNOWN_SHIPPED_FAILURES))
+      .map((r) => (r.where ? `${r.line} (worst at ${r.where})` : r.line));
     expect(unexplained, `pairs under the floor:\n${unexplained.join('\n')}`).toEqual([]);
     // Equality, so a pair that now passes must be deleted from the map.
     expect(known).toEqual(KNOWN_SHIPPED_FAILURES);
   });
 
+  // MOTIR-10736 / MOTIR-10737: the measurements that found the blind spot, as
+  // regression cases. Each paints a value the stylesheet does not ship, through
+  // the same resolver and painter as the matrix, and fails where the browser
+  // fails while every layer measured ALONE clears the floor: the overlap is
+  // what is being measured.
+  const ctxOf = (id: string) => CONTEXTS.find((c) => label(c) === id)!;
+  const inkRatio = (rows: InkResult[] | string, ink: string) => {
+    if (typeof rows === 'string') throw new Error(rows);
+    return rows.find((r) => r.ink === ink)!.ratio;
+  };
+  const eachLayerAlone = (input: CanvasInput | string, ink: string) => {
+    if (typeof input === 'string') throw new Error(input);
+    return input.layers.map((layer) =>
+      inkRatio(worstCanvasContrast({ ...input, layers: [layer] }), ink),
+    );
+  };
+
+  it('paints overlapping canvas washes together: aurora at 15% / 15% fails where its ribbons overlap', () => {
+    // MOTIR-10709's rendered sweep: 3.86:1 in Chromium (sienna light), green
+    // under the per-layer reading this file used to do.
+    const ctx = ctxOf('aurora/sienna/light');
+    const overrides = { '--aurora-wash': '15%', '--aurora-wash-soft': '15%' };
+    const painted = inkRatio(canvasRows(ctx, overrides), '--el-accent-on-surface');
+    expect(painted).toBeLessThan(WCAG_TEXT_MIN);
+    expect(painted).toBeGreaterThan(3.8);
+    for (const alone of eachLayerAlone(canvasInput(ctx, overrides), '--el-accent-on-surface')) {
+      expect(alone).toBeGreaterThanOrEqual(WCAG_TEXT_MIN);
+    }
+  });
+
+  it('paints overlapping canvas washes together: glassmorphism at 16% fails in its bottom-right corner', () => {
+    // MOTIR-10707's rendered sweep: 4.26:1 at (1224,854) in Chromium (motir
+    // light), where the --el-link wash and the second --el-accent wash overlap.
+    const ctx = ctxOf('glassmorphism/motir/light');
+    const overrides = { '--glass-wash': '16%' };
+    const rows = canvasRows(ctx, overrides);
+    const painted = inkRatio(rows, '--el-accent-on-surface');
+    expect(painted).toBeLessThan(WCAG_TEXT_MIN);
+    expect(painted).toBeGreaterThan(4.2);
+    expect(typeof rows !== 'string' && rows[3]!.where).toMatch(
+      /^1440x900 still at \(12\d\d,8\d\d\)$/,
+    );
+    for (const alone of eachLayerAlone(canvasInput(ctx, overrides), '--el-accent-on-surface')) {
+      expect(alone).toBeGreaterThanOrEqual(WCAG_TEXT_MIN);
+    }
+  });
+
+  it('paints a canvas animation across its frames, not only at rest', () => {
+    const own = hookDeclarations('aurora', 'canvas');
+    const states = renderStates(own, []);
+    expect(states[0]!.name).toBe('still');
+    expect(states).toHaveLength(ANIMATION_FRAMES + 2);
+    expect(states.at(-1)!.name).toBe('aurora-drift 100%');
+    // The last frame is the `to` keyframe, verbatim.
+    expect(states.at(-1)!.positions[0]).toEqual([
+      { px: 0, pct: 100 },
+      { px: 0, pct: 40 },
+    ]);
+    expect(renderStates(hookDeclarations('glassmorphism', 'canvas'), [])).toHaveLength(1);
+  });
+
   it('reads --orb-lit-mix from its one declaration and never redeclares it', () => {
     expect([...CSS.matchAll(/--orb-lit-mix\s*:/g)]).toHaveLength(1);
+  });
+});
+
+// ── Palette-scoped floors (MOTIR-10550) ─────────────────────────────────────
+// A palette that PROMISES more than AA is held to its promise here, over the
+// same rows the AA gate measures. `contrast` exists to give AAA body text (7:1,
+// WCAG 1.4.6) and control edges a person can see (3:1, WCAG 1.4.11), and its
+// doc (`docs/palettes/contrast.md`) quotes the lowest rows. Without this block a
+// retune could drop its secondary text to 5:1 with every AA row still green.
+// A future high-contrast palette joins by adding its own entry.
+
+const PALETTE_FLOORS: Record<string, { bodyText: number; edge: number }> = {
+  contrast: { bodyText: 7, edge: WCAG_GRAPHIC_MIN },
+};
+/** The body-text roles an AAA promise covers (accent-on-surface stays at AA). */
+/** A palette with no promise past AA, used as the floor's control. */
+const DEFAULT_FLOORLESS = 'motir';
+const BODY_TEXT_INKS = ['--el-text', '--el-text-strong', '--el-text-secondary'];
+/** The control-edge roles, and the grounds a control sits on. */
+const EDGE_INKS = ['--el-border-strong', '--el-input-border', '--el-button-border'];
+const EDGE_GROUNDS = ['--el-card', '--el-surface', '--el-canvas'];
+
+interface EdgeRow {
+  id: string;
+  ratio: number;
+}
+
+function edgeRows(palette: string): { rows: EdgeRow[]; unresolved: string[] } {
+  const rows: EdgeRow[] = [];
+  const unresolved: string[] = [];
+  for (const ctx of CONTEXTS.filter((c) => c.palette === palette)) {
+    const page = colourIn(ctx, 'var(--el-page-bg)');
+    if (!page) {
+      unresolved.push(`${label(ctx)} · --el-page-bg`);
+      continue;
+    }
+    for (const groundToken of EDGE_GROUNDS) {
+      const ground = colourIn(ctx, `var(${groundToken})`);
+      if (!ground) {
+        unresolved.push(`${label(ctx)} · ${groundToken}`);
+        continue;
+      }
+      const flatGround = ground.a < 1 ? over(ground, page) : ground;
+      for (const edge of EDGE_INKS) {
+        const colour = colourIn(ctx, `var(${edge})`);
+        if (!colour) {
+          unresolved.push(`${label(ctx)} · ${edge}`);
+          continue;
+        }
+        const flatEdge = colour.a < 1 ? over(colour, flatGround) : colour;
+        const ratio = contrast(toHex(flatEdge), toHex(flatGround));
+        rows.push({
+          id: `${label(ctx)} · ${edge} on ${groundToken} = ${ratio.toFixed(2)}:1`,
+          ratio,
+        });
+      }
+    }
+  }
+  return { rows, unresolved };
+}
+
+describe('palette-scoped floors: a high-contrast palette keeps its promise (MOTIR-10550)', () => {
+  const floored = Object.keys(PALETTE_FLOORS);
+
+  it('names only registered palettes, and never floors below AA', () => {
+    expect(floored.length).toBeGreaterThan(0);
+    for (const palette of floored) {
+      expect(PALETTE_IDS as readonly string[]).toContain(palette);
+      expect(PALETTE_FLOORS[palette]!.bodyText).toBeGreaterThanOrEqual(WCAG_TEXT_MIN);
+      expect(PALETTE_FLOORS[palette]!.edge).toBeGreaterThanOrEqual(WCAG_GRAPHIC_MIN);
+    }
+  });
+
+  it('the AAA floor bites: a palette without the promise has body text under 7:1', () => {
+    // Motir's secondary on --el-surface is 6.24:1 light — AA, not AAA. If no row
+    // of an un-floored palette fell under 7, the floor below could not fail.
+    expect(
+      MATRIX.rows.some(
+        (r) => r.palette === DEFAULT_FLOORLESS && r.ink === '--el-text-secondary' && r.ratio < 7,
+      ),
+    ).toBe(true);
+  });
+
+  it.each(floored)(
+    '%s: body text clears its floor on every ground, under every style and mode',
+    (palette) => {
+      const floor = PALETTE_FLOORS[palette]!.bodyText;
+      const rows = MATRIX.rows.filter(
+        (r) => r.palette === palette && BODY_TEXT_INKS.includes(r.ink),
+      );
+      // Every style × both modes × all three roles is present, so none was dropped.
+      for (const style of STYLE_IDS) {
+        for (const theme of THEMES) {
+          for (const ink of BODY_TEXT_INKS) {
+            expect(
+              rows.some((r) => r.id.startsWith(`${style}/${palette}/${theme} · ${ink} on `)),
+              `${style}/${palette}/${theme} · ${ink} has no measured row`,
+            ).toBe(true);
+          }
+        }
+      }
+      const under = rows.filter((r) => r.ratio < floor).map((r) => r.line);
+      expect(under, `body text under ${floor}:1:\n${under.join('\n')}`).toEqual([]);
+    },
+  );
+
+  it.each(floored)('%s: control edges clear their floor on card, surface and canvas', (palette) => {
+    const floor = PALETTE_FLOORS[palette]!.edge;
+    const { rows, unresolved } = edgeRows(palette);
+    expect(unresolved).toEqual([]);
+    expect(rows).toHaveLength(
+      STYLE_IDS.length * THEMES.length * EDGE_GROUNDS.length * EDGE_INKS.length,
+    );
+    const under = rows.filter((r) => r.ratio < floor).map((r) => r.id);
+    expect(under, `edges under ${floor}:1:\n${under.join('\n')}`).toEqual([]);
   });
 });

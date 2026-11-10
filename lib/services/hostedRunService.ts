@@ -37,6 +37,7 @@ import {
   latestRunCredentialExpiry,
 } from '@/lib/hostedRuns/limits';
 import { hostedRunDispatchId } from '@/lib/hostedRuns/ids';
+import { fleetShardIdForColumn } from '@/lib/ciFleet/installFleet';
 import type { MemoizingSteps } from '@/lib/jobs/supervision/inProcessSteps';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import {
@@ -66,6 +67,7 @@ import {
 } from '@/lib/services/hostedAgentContainerService';
 import { hostedRunKeyService } from '@/lib/services/hostedRunKeyService';
 import { hostedRunModelService, toOpenCodeModel } from '@/lib/services/hostedRunModelService';
+import { orgHostedModelResolutionService } from '@/lib/services/orgHostedModelResolutionService';
 import { projectHostedAgentSettingsService } from '@/lib/services/projectHostedAgentSettingsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -366,8 +368,8 @@ async function refuseNoCapacity(offered: AgentModel): Promise<void> {
  * agent-run capacity (MOTIR-9628), the organization's credits, every repository of the run writable, the fleet
  * configured. Each is a read. Shared by Run hosted and Continue hosted
  * (MOTIR-6792) so a continue costs and refuses exactly like a run — and by the
- * REVIEW start (MOTIR-6820), which passes no model (it takes the offered list's
- * default) and needs every repository READABLE only (`hosted-agent-run.md` §8.1, §8.3).
+ * REVIEW start (MOTIR-6820), which passes its resolved review model or none (then
+ * it takes the offered list's default) and needs every repository READABLE only (`hosted-agent-run.md` §8.1, §8.3).
  */
 async function preflight(
   input: { model?: string | undefined },
@@ -506,6 +508,18 @@ export const HOSTED_RUN_WAITING_REASONS: ReadonlySet<string> = new Set([
   'shard_capacity',
 ]);
 
+/**
+ * The words for a run whose machine BOOTED but could not be handed to its
+ * supervisor (MOTIR-10858): the machine was started and is torn down, never
+ * "nothing was booted". Says so when the teardown itself failed, so a person
+ * knows the reaper still owes it.
+ */
+export function hostedRunHandoffFailedDetail(cause: string, tornDown: boolean): string {
+  return tornDown
+    ? `its machine booted, but its supervision could not be started, so the machine was torn down: ${cause}`
+    : `its machine booted, but its supervision could not be started, and the machine could not be torn down (it is left for the reaper): ${cause}`;
+}
+
 /** The backstop's words for a run that waited its whole life for room. */
 export const HOSTED_RUN_NEVER_ADMITTED_DETAIL = `it waited the whole ${
   HOSTED_RUN_TIMEOUT_MS / 3_600_000
@@ -640,13 +654,16 @@ async function admitHostedRun(
 
   // ── Hand the booted session to the durable supervisor ──────────────────
   // The account the container booted on is on the run BEFORE anything can
-  // supervise, reap or bill it (MOTIR-9423); null for the process-wide fleet.
+  // supervise, reap or bill it (MOTIR-9423); null for the process-wide fleet
+  // AND for the install fleet, whose pseudo-account id has no `fleet_shard` row
+  // (MOTIR-10858). Every later step — supervise, cancel, timeout, settle, the
+  // sweep — routes from the SESSION, whose handle keeps that id.
   // A write that fails tears the container down below, like a failed enqueue.
   try {
     await withWorkspaceServiceContext(data.workspaceId, (tx) =>
       dispatchRunRepository.recordFleetShard(
         data.dispatchRunId,
-        booted.session.handle.shardId ?? null,
+        fleetShardIdForColumn(booted.session.handle.shardId),
         tx,
       ),
     );
@@ -662,15 +679,27 @@ async function admitHostedRun(
     );
   } catch (err) {
     // A container nobody supervises spends until the reaper finds it. Tear it
-    // down now, through the seam's own settle, and fail the run.
-    await hostedAgentContainerService.settle(booted.session, {
+    // down now, through the seam's own settle, and fail the run in words that
+    // say a machine WAS started (MOTIR-10858) — as a boot failure, so the
+    // person is told the machine could not start, never "nothing was booted".
+    console.error('[hostedRunService] a booted hosted run could not be handed to its supervisor', {
+      dispatchRunId: data.dispatchRunId,
+      shardId: booted.session.handle.shardId ?? null,
+      detail: detailOf(err),
+    });
+    const settled = await hostedAgentContainerService.settle(booted.session, {
       done: true,
       reason: 'provision_failed' satisfies TeardownReason,
       startedAt: null,
       exitCode: null,
-      failureDetail: 'its supervision could not be enqueued',
+      failureDetail: 'its supervision could not be started',
     });
-    throw err;
+    const detail = hostedRunHandoffFailedDetail(
+      detailOf(err),
+      settled.outcome !== 'teardown_failed',
+    );
+    await hostedRunService.endHostedRun(data.dispatchRunId, 'failed', detail);
+    return { kind: 'failed', detail };
   }
   return { kind: 'booted' };
 }
@@ -1052,7 +1081,13 @@ async function startReview(
   /* v8 ignore stop */
   const { item, project } = target;
 
-  const checked = await preflight({}, project.id, [item.id], ctx, 'read');
+  // The review's model (MOTIR-10843): the organisation's review-agent model while
+  // it qualifies, else the platform review-agent model, else the run default. A
+  // chosen id goes through `preflight`'s `assertOffered` and capacity check like a
+  // build run's.
+  const { layer } = await orgHostedModelResolutionService.readOrgLayer(ctx);
+  const reviewModel = await hostedRunModelService.reviewModelFor(layer);
+  const checked = await preflight({ model: reviewModel }, project.id, [item.id], ctx, 'read');
 
   const opened = await dispatchRunService.open(
     {

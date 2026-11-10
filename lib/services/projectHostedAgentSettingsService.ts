@@ -9,9 +9,12 @@ import { HostedModelNotOfferedError, HostedModelsUnavailableError } from '@/lib/
 import { WORK_ITEM_DIFFICULTIES } from '@/lib/issues/difficulty';
 import {
   highestDifficulty,
+  isDesignRun,
   resolveHostedModel,
   type HostedModelOffer,
+  type OrgHostedModelLayer,
 } from '@/lib/hosted/resolveHostedModel';
+import { orgHostedModelResolutionService } from '@/lib/services/orgHostedModelResolutionService';
 import {
   toHostedModelOverrideColumns,
   toHostedModelOverrides,
@@ -53,6 +56,8 @@ async function readOfferWithModels(): Promise<{
       models: offered.models.map((m) => m.id),
       default: offered.default,
       defaultsByDifficulty: offered.defaultsByDifficulty,
+      reviewAgentDefault: offered.reviewAgentDefault,
+      designRunDefault: offered.designRunDefault,
     },
     models: offered.models.map((m) => ({ id: m.id, provider: m.provider })),
   };
@@ -61,6 +66,11 @@ async function readOfferWithModels(): Promise<{
 /** motir-ai's offer, or the typed error that it could not be read. */
 async function readOffer(): Promise<HostedModelOffer> {
   return (await readOfferWithModels()).offer;
+}
+
+/** The organisation's run-side layer while it qualifies (MOTIR-10843), else null. */
+async function readLayer(ctx: WorkspaceContext): Promise<OrgHostedModelLayer | null> {
+  return (await orgHostedModelResolutionService.readOrgLayer(ctx)).layer;
 }
 
 async function resolveProjectByKeyInTx(
@@ -116,8 +126,8 @@ export const projectHostedAgentSettingsService = {
       if (!overrides) throw new ProjectNotFoundError(projectKey);
       return overrides;
     });
-    const { offer, models } = await readOfferWithModels();
-    return toProjectHostedAgentSettingsDto(row, offer, models);
+    const [{ offer, models }, org] = await Promise.all([readOfferWithModels(), readLayer(ctx)]);
+    return toProjectHostedAgentSettingsDto(row, offer, models, org);
   },
 
   /**
@@ -145,13 +155,15 @@ export const projectHostedAgentSettingsService = {
         tx,
       );
     });
-    return toProjectHostedAgentSettingsDto(row, offer, models);
+    return toProjectHostedAgentSettingsDto(row, offer, models, await readLayer(ctx));
   },
 
   /**
    * The model a hosted run on this card uses: a leaf's difficulty, or a parent's
    * highest difficulty among its unfinished leaf descendants, resolved against
-   * the project's overrides and motir-ai's offer. `null` when nothing is offered.
+   * the project's overrides, the organisation's run-side layer (while it
+   * qualifies) and motir-ai's offer; a design run (every unfinished leaf a design
+   * card) takes the design-run branch first. `null` when nothing is offered.
    * Reads only — the caller has already authorized the card. Pass `offer` when
    * the caller already holds motir-ai's answer, so one request asks it once.
    *
@@ -179,12 +191,16 @@ export const projectHostedAgentSettingsService = {
       read.leaves.map((l) => l.difficulty),
       WORK_ITEM_DIFFICULTIES,
     );
+    const design = isDesignRun(read.leaves);
+    const [offered, org] = await Promise.all([offer ?? readOffer(), readLayer(ctx)]);
     const resolved = resolveHostedModel({
       difficulty,
       overrides: toHostedModelOverrides(read.overrides),
-      offered: offer ?? (await readOffer()),
+      offered,
+      org,
+      design,
     });
     if (!resolved) return null;
-    return { ...resolved, difficulty, fromLeaves: read.fromLeaves };
+    return { ...resolved, difficulty, fromLeaves: read.fromLeaves, design };
   },
 };

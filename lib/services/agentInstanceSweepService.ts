@@ -1,3 +1,4 @@
+import { INSTALL_FLEET_SHARD_ID, INSTALL_FLEET_TAG } from '@/lib/ciFleet/installFleet';
 import type { AgentInstance } from '@/generated/prisma/client';
 import {
   INSTANCE_IDLE_WINDOW_MS,
@@ -14,6 +15,7 @@ import { agentInstanceLapseService } from '@/lib/services/agentInstanceLapseServ
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import {
   agentInstanceClock,
+  agentInstanceLaneMissing,
   agentInstanceLifecycleService as lifecycle,
   readUnlimitedAgentOrg,
 } from '@/lib/services/agentInstanceLifecycleService';
@@ -186,8 +188,12 @@ export const agentInstanceSweepService = {
     const laneConfigured = isPersistentOrchestratorConfigured();
     const accountReachable = new Map<string, boolean>();
     const reachable = async (row: AgentInstance): Promise<boolean> => {
-      if (row.fleetShardId === null) return laneConfigured;
-      let ok = accountReachable.get(row.fleetShardId);
+      // An install-fleet instance (MOTIR-10794) is reached through core's own
+      // account, keyed here by the fleet's pseudo-account id.
+      const installFleet = row.fleetShardId === null && row.flyApp === INSTALL_FLEET_TAG;
+      if (row.fleetShardId === null && !installFleet) return laneConfigured;
+      const key = row.fleetShardId ?? INSTALL_FLEET_SHARD_ID;
+      let ok = accountReachable.get(key);
       if (ok === undefined) {
         try {
           await fleetShardOrchestratorService.persistentOrchestratorFor(row);
@@ -195,11 +201,11 @@ export const agentInstanceSweepService = {
         } catch (err) {
           ok = false;
           console.warn('[agentInstanceSweep] skipped the instances of an unreachable account', {
-            fleetShardId: row.fleetShardId,
+            fleetShardId: key,
             detail: err instanceof Error ? err.message : String(err),
           });
         }
-        accountReachable.set(row.fleetShardId, ok);
+        accountReachable.set(key, ok);
       }
       return ok;
     };
@@ -210,16 +216,22 @@ export const agentInstanceSweepService = {
     };
 
     {
-      // 1 · Anything in motion: finish what an earlier request left pending.
-      const moving = await reachableOnly(
-        await withSystemContext((tx) =>
-          agentInstanceRepository.listLiveInStates(
-            ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
-            SWEEP_BATCH,
-            tx,
-          ),
+      // 1 · Anything in motion: finish what an earlier request left pending. A
+      //     DELETE whose lane is gone is taken too (MOTIR-10809): it needs no
+      //     orchestrator, because `settleDelete` finishes it in Motir alone and
+      //     leaves its Fly machine to the lane's decommissioning (MOTIR-9716).
+      const inMotion = await withSystemContext((tx) =>
+        agentInstanceRepository.listLiveInStates(
+          ['starting', 'waking', 'hibernating', 'deleting', 'updating'],
+          SWEEP_BATCH,
+          tx,
         ),
       );
+      const moving: AgentInstance[] = [];
+      for (const row of inMotion) {
+        const finishedInMotir = row.state === 'deleting' && agentInstanceLaneMissing(row);
+        if (finishedInMotir || (await reachable(row))) moving.push(row);
+      }
       const sweepNow = agentInstanceClock.now().getTime();
       for (const row of moving) {
         // `agent-image-update.md` Q6: an update is the inline settle's while it is
@@ -325,8 +337,12 @@ export const agentInstanceSweepService = {
       //     so one rule, in one place, raises one alert for every machine Fly runs.
       //     The process-wide apps only: a fleet account's inventory is the
       //     reconciler's (MOTIR-9476).
+      // The install fleet's disks are not the process-wide lane's (MOTIR-10794):
+      // the reconciler's install-fleet disk pass judges them (MOTIR-10828).
       const apps = laneConfigured
-        ? await withSystemContext((tx) => agentInstanceRepository.listDistinctApps(tx))
+        ? (await withSystemContext((tx) => agentInstanceRepository.listDistinctApps(tx))).filter(
+            (app) => app !== INSTALL_FLEET_TAG,
+          )
         : [];
       const orchestrator = laneConfigured ? getPersistentOrchestrator() : null;
       for (const app of apps) {

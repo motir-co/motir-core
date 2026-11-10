@@ -678,6 +678,91 @@ describe('resolveGateSet — the ACCEPTANCE question (MOTIR-5789; timing: MOTIR-
     ).toEqual(['acceptance_result']);
   });
 
+  describe('a STORY RUN whose own pull requests have ALL merged (MOTIR-10837)', () => {
+    const merged = (version: string): GateSetMember => ({
+      ...member(version, false),
+      merged: true,
+    });
+    const ALL_MERGED = [merged('moooon/motir-core#10@aaa1'), merged('moooon/motir-ai#4@bbb2')];
+
+    it('asks acceptance ALONE once the subtree is settled — there is no merge question left for it to ride', () => {
+      for (const members of [[merged('moooon/motir-core#10@aaa1')], ALL_MERGED]) {
+        const set = resolveGateSet(
+          input({ currentReceipt: RECEIPT, members, subtreeSettled: true }),
+        );
+        expect(set.awaited).toEqual([
+          { kind: 'acceptance_result', subjectId: 'ae_1', subjectVersion: 'c0ffee1' },
+        ]);
+        expect(set.primary).toBe('acceptance_result');
+      }
+    });
+
+    it('asks nothing while anything under the story is still open, or when the subtree was not loaded', () => {
+      expect(
+        resolveGateSet(
+          input({ currentReceipt: RECEIPT, members: ALL_MERGED, subtreeSettled: false }),
+        ),
+      ).toEqual({ awaited: [], primary: null });
+      expect(
+        resolveGateSet(input({ currentReceipt: RECEIPT, members: ALL_MERGED })).awaited,
+      ).toEqual([]);
+    });
+
+    it('follows the settled rule, not the merge question’s: asked outside `in_review`, and over a stale merge refusal at the merged version', () => {
+      const version = deliverySetVersion(ALL_MERGED.map((m) => m.memberVersion));
+      const set = resolveGateSet(
+        input({
+          currentReceipt: RECEIPT,
+          members: ALL_MERGED,
+          subtreeSettled: true,
+          cardInReview: false,
+          latestMergeGate: decided(WORK_ITEM, version, 'changes_requested'),
+          agentSendBackVersion: version,
+        }),
+      );
+      expect(set.awaited.map((gate) => gate.kind)).toEqual(['acceptance_result']);
+    });
+
+    it('an ANSWERED receipt is not asked again', () => {
+      const set = resolveGateSet(
+        input({
+          currentReceipt: RECEIPT,
+          latestAcceptanceGate: decided('ae_1', 'c0ffee1'),
+          members: ALL_MERGED,
+          subtreeSettled: true,
+        }),
+      );
+      expect(set).toEqual({ awaited: [], primary: null });
+    });
+
+    it('a member CLOSED WITHOUT MERGING still holds the question back, however settled the subtree', () => {
+      const closed: GateSetMember = { ...member('moooon/motir-ai#4@bbb2', false), merged: false };
+      for (const members of [
+        [merged('moooon/motir-core#10@aaa1'), closed],
+        [{ ...closed, merged: undefined }],
+      ]) {
+        const set = resolveGateSet(
+          input({ currentReceipt: RECEIPT, members, subtreeSettled: true }),
+        );
+        expect(set).toEqual({ awaited: [], primary: null });
+      }
+    });
+
+    it('a story run with one member merged and one still OPEN keeps the story-run rule: asked beside the merge question at `in_review`, never outside it', () => {
+      const members = [merged('moooon/motir-core#10@aaa1'), member('moooon/motir-ai#4@bbb2')];
+      expect(
+        resolveGateSet(input({ currentReceipt: RECEIPT, members })).awaited.map(
+          (gate) => gate.kind,
+        ),
+      ).toEqual(['acceptance_result', 'pull_request_approval']);
+      expect(
+        resolveGateSet(
+          input({ currentReceipt: RECEIPT, members, subtreeSettled: true, cardInReview: false }),
+        ).awaited,
+      ).toEqual([]);
+    });
+  });
+
   it('(b) a STORY RUN — receipt + a green set — asks BOTH, and acceptance is the primary', () => {
     const set = resolveGateSet(input({ currentReceipt: RECEIPT, members: GREEN_ONE }));
     expect(set.awaited.map((gate) => gate.kind)).toEqual([
@@ -846,6 +931,68 @@ describe('acceptanceRefusalHoldsMerge + resolveGateSet — MOTIR-6503: a story-r
     );
     expect(acceptanceRefusalHoldsMerge(null, refused('revise'))).toBe(false);
     expect(acceptanceRefusalHoldsMerge(RECEIPT, null)).toBe(false);
+  });
+});
+
+describe('resolveGateSet — a refused MERGE withholds a story run’s acceptance question', () => {
+  const RECEIPT = { id: 'ae_1', commitSha: 'c0ffee1' };
+  const VERSION = 'moooon/motir-core#10@aaa1';
+
+  it('Request changes on the merge gate at the current version asks NOTHING — neither the video nor the merge', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: GREEN_ONE,
+        latestMergeGate: decided(WORK_ITEM, VERSION, 'changes_requested'),
+      }),
+    );
+    expect(set).toEqual({ awaited: [], primary: null });
+  });
+
+  it('a push past the refused version asks both again, acceptance leading', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: GREEN_ONE,
+        latestMergeGate: decided(WORK_ITEM, 'moooon/motir-core#10@old0', 'changes_requested'),
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.kind)).toEqual([
+      'acceptance_result',
+      'pull_request_approval',
+    ]);
+    expect(set.primary).toBe('acceptance_result');
+  });
+
+  it('a standing agent send-back at the version withholds the video too; a Dismiss asks both again', () => {
+    const sentBack = resolveGateSet(
+      input({ currentReceipt: RECEIPT, members: GREEN_ONE, agentSendBackVersion: VERSION }),
+    );
+    expect(sentBack).toEqual({ awaited: [], primary: null });
+
+    const dismissed = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        members: GREEN_ONE,
+        agentSendBackVersion: VERSION,
+        dismissedSendBackVersion: VERSION,
+      }),
+    );
+    expect(dismissed.awaited.map((gate) => gate.kind)).toEqual([
+      'acceptance_result',
+      'pull_request_approval',
+    ]);
+  });
+
+  it('a SUBTASK-RUN story is untouched — its video is not the merge gate', () => {
+    const set = resolveGateSet(
+      input({
+        currentReceipt: RECEIPT,
+        subtreeSettled: true,
+        agentSendBackVersion: VERSION,
+      }),
+    );
+    expect(set.awaited.map((gate) => gate.kind)).toEqual(['acceptance_result']);
   });
 });
 

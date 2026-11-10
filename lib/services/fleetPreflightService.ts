@@ -1,5 +1,7 @@
 import {
+  isHostedAgentConfigured,
   isIndexFleetConfigured,
+  isPersistentOrchestratorConfigured,
   selectedOrchestratorProvider,
   verifyFleetBootable,
   verifyHostedAgentImagePullable,
@@ -10,6 +12,9 @@ import {
   verifyIndexContainerAiAddress,
   type ContainerAiAddressVerdict,
 } from '@/lib/ai/containerAiAddress';
+import { installFleetTakesKind } from '@/lib/ciFleet/installFleet';
+import { fleetKindOnPool } from '@/lib/ciFleet/shardTargets';
+import { verifyFleetOrigins, type FleetOriginsVerdict } from '@/lib/ai/fleetOrigins';
 
 // THE FLEET BOOT PREFLIGHT (Story MOTIR-1916 · MOTIR-2006) — §6.1 of
 // `docs/decisions/fleet-image-pull.md`, given a service seam so a background job
@@ -111,5 +116,53 @@ export const fleetPreflightService = {
     const bootsRealContainers =
       isIndexFleetConfigured() && selectedOrchestratorProvider() !== 'fake';
     return verifyIndexContainerAiAddress({ isConfigured: bootsRealContainers });
+  },
+
+  /**
+   * Can the THREE addresses this deployment hands its fleet machines work for
+   * them? (Story MOTIR-9714 · MOTIR-10750) — core's public origin, motir-ai's
+   * container-facing origin and the gateway's run-lane origin, each checked
+   * against what a machine on a pool account can use.
+   *
+   * A FOURTH method rather than a widened {@link checkIndexContainerAiAddress}:
+   * that one is about the index container alone, applies only where this
+   * deployment indexes, and its verdict and error are pinned by their own tests.
+   * This one covers every fleet kind that is handed a Motir address — the
+   * indexer, the agent runner (hosted runs) and the agent hoster (agent
+   * instances); the CI runner is handed none.
+   *
+   * Never throws, for the reason none of its siblings do.
+   */
+  async checkFleetOrigins(): Promise<FleetOriginsVerdict> {
+    // ⚠️ THE FAKE ADAPTER IS `not_applicable`, the same carve-out the sibling
+    // probes make and for the same reason: the fake boots no machine, so there is
+    // no address a machine could fail to use, and requiring production values
+    // here would put a placeholder in front of every suite that drives this job.
+    // So is a deployment that runs no kind handed a Motir address — a
+    // self-hosted core, a cloud deploy not yet wired, or a CI-only fleet (a CI
+    // runner is handed none; `fleetMachineAddresses.test.ts` shows it). Each
+    // origin is then asked only of a deployment that hands it to a machine, as
+    // that test lists them: core's to a hosted-run container (`MOTIR_API_URL`)
+    // and an agent instance (`apiUrl` at launch), motir-ai's to the index
+    // container, and the gateway's run lane to a hosted-run container.
+    if (selectedOrchestratorProvider() === 'fake') {
+      return verifyFleetOrigins({ isConfigured: false });
+    }
+    const indexes = isIndexFleetConfigured();
+    const hostedRuns = isHostedAgentConfigured();
+    // Agent instances run on the Fly lane, the install fleet (MOTIR-10801) or
+    // their AWS pool: any one of the three means a launch hands core's origin.
+    const agentInstances =
+      isPersistentOrchestratorConfigured() ||
+      installFleetTakesKind('agent_instance') ||
+      (await fleetKindOnPool('agent_instance'));
+    return verifyFleetOrigins({
+      isConfigured: indexes || hostedRuns || agentInstances,
+      applies: {
+        core: hostedRuns || agentInstances,
+        aiContainer: indexes,
+        gatewayRun: hostedRuns,
+      },
+    });
   },
 };

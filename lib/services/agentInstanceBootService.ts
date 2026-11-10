@@ -7,12 +7,18 @@ import type {
   AgentInstanceBootStepState,
   Prisma,
 } from '@/generated/prisma/client';
-import type { PersistentContainerStatus } from '@motir/orchestrator';
+import type {
+  PersistentContainerHandle,
+  PersistentContainerOrchestrator,
+  PersistentContainerStatus,
+} from '@motir/orchestrator';
 import {
   AGENT_BOOT_LEASE_MS,
   AGENT_BOOT_POLL_MS,
   AGENT_WAITING_POLL_MS,
   AGENT_WAITING_REASONS,
+  BOOT_AGENT_DEADLINE_DETAIL,
+  BOOT_AGENT_WAITING_DETAIL,
   INSTANCE_BOOT_DEADLINE_MS,
   parseWaitingReason,
   type AgentWaitingReason,
@@ -248,7 +254,7 @@ async function advanceProvision(
 ): Promise<AgentBootPassVerdict | null> {
   const waiting = parseWaitingReason(step.detail);
   if (waiting) return retryWaiting(pass, step, waiting);
-  if (steps.handleOf(pass.row)) {
+  if (steps.hasMachine(pass.row)) {
     const now = agentInstanceClock.now();
     await pass.record(step, { state: 'done', startedAt: step.startedAt ?? now, endedAt: now });
     return null;
@@ -281,7 +287,7 @@ async function retryWaiting(
   waiting: AgentWaitingReason,
 ): Promise<AgentBootPassVerdict> {
   // A new instance whose machine an earlier pass created but did not record as done.
-  const created = waiting === 'pool' && steps.handleOf(pass.row) !== null;
+  const created = waiting === 'pool' && steps.hasMachine(pass.row);
   if (!created) {
     try {
       const answer =
@@ -315,7 +321,10 @@ function waitingPoll(): AgentBootPassVerdict {
   };
 }
 
-/** `machine_start`: in progress until the machine reports running; failed on an exit or the deadline. */
+/**
+ * `machine_start`: in progress until the machine reports running AND its exec
+ * answers (MOTIR-10808); failed on an exit or the deadline.
+ */
 async function advanceMachineStart(
   pass: Pass,
   step: AgentInstanceBootStep,
@@ -377,11 +386,28 @@ async function advanceMachineStart(
     return DONE;
   }
   const startedAt = machineStartedAt(status, pass.row.stateChangedAt);
+  const unanswered = await awaitExecAnswer(pass, current, orchestrator, handle, status, provision);
+  if (unanswered) return unanswered;
+  // A step that waited for the agent ends when it answered, not when the machine started.
+  const waited = current.detail === BOOT_AGENT_WAITING_DETAIL;
+  const answeredAt = agentInstanceClock.now();
+  if (waited) {
+    // eslint-disable-next-line no-console -- the timing trace the card asks for (AC5: the wait, measured)
+    console.info('[agentInstanceBoot] the agent answered', {
+      instanceId: pass.row.id,
+      attempt: pass.attempt.attempt,
+      machineStartedAt: startedAt?.toISOString() ?? null,
+      answeredAt: answeredAt.toISOString(),
+      waitedMs: startedAt ? answeredAt.getTime() - startedAt.getTime() : null,
+    });
+  }
   await leased(pass.attempt, pass.holder, async (tx) => {
     await writeStep(
       current,
       pass.row.id,
-      { state: 'done', endedAt: startedAt ?? agentInstanceClock.now() },
+      waited
+        ? { state: 'done', endedAt: answeredAt, detail: null }
+        : { state: 'done', endedAt: startedAt ?? answeredAt },
       tx,
     );
     // §5 of the decision: the interval's start is Fly's, where Fly attests it.
@@ -391,6 +417,51 @@ async function advanceMachineStart(
     }
   });
   return null;
+}
+
+/**
+ * THE AGENT ANSWERS (MOTIR-10808). A machine the provider reports `running` is
+ * not yet one that takes commands: an AWS instance's host agent listens only once
+ * the per-boot script has pulled the image and started the container, minutes
+ * after EC2 says `running`, and every exec before that fails `unreachable`. So
+ * the step stays in progress — the read-out's in-progress row, with its clock —
+ * until the orchestrator says its exec answers, marking the step
+ * {@link BOOT_AGENT_WAITING_DETAIL} once while it waits. Null once it answers.
+ * At the boot's own deadline it fails, saying the agent did not answer in time.
+ * Fly answers `ready` at once, so a Fly boot never waits here.
+ */
+async function awaitExecAnswer(
+  pass: Pass,
+  step: AgentInstanceBootStep,
+  orchestrator: PersistentContainerOrchestrator,
+  handle: PersistentContainerHandle,
+  status: PersistentContainerStatus,
+  provision: AgentInstanceBootStep | undefined,
+): Promise<AgentBootPassVerdict | null> {
+  let readiness: Awaited<ReturnType<PersistentContainerOrchestrator['checkExecReady']>>;
+  try {
+    readiness = await orchestrator.checkExecReady(handle);
+  } catch (err) {
+    // The port answers rather than throws; one that threw is asked again next
+    // poll, logged, and bounded by the deadline like a machine still starting.
+    console.warn('[agentInstanceBoot] the exec readiness check threw', {
+      instanceId: pass.row.id,
+      detail: steps.describeError(err),
+    });
+    readiness = 'starting';
+  }
+  if (readiness === 'ready') return null;
+  const now = agentInstanceClock.now().getTime();
+  if (steps.bootDeadlinePassed(pass.row, now, provision?.endedAt ?? null)) {
+    const minutes = Math.round(INSTANCE_BOOT_DEADLINE_MS / 60_000);
+    const reason = `The agent did not answer within ${minutes} minutes of starting. Wake to try again, or delete it.`;
+    await pass.fail(step, BOOT_AGENT_DEADLINE_DETAIL, reason, status);
+    return DONE;
+  }
+  if (step.detail !== BOOT_AGENT_WAITING_DETAIL) {
+    await pass.record(step, { state: 'in_progress', detail: BOOT_AGENT_WAITING_DETAIL });
+  }
+  return { next: 'defer', deferUntil: nextPoll() };
 }
 
 function nextPoll(): Date {

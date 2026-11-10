@@ -7,6 +7,7 @@ import {
   type ReportedCheckRun,
 } from '@/lib/github/checkRuns';
 import { githubCheckRunRepository } from '@/lib/repositories/githubCheckRunRepository';
+import { githubPullRequestRepository } from '@/lib/repositories/githubPullRequestRepository';
 
 // THE RECORDED SET IS NOT THE WHOLE SET (MOTIR-4199).
 //
@@ -235,8 +236,18 @@ export async function readReportedCheckRuns(args: {
  * all. A terminal row is never overwritten by this path in any case — which
  * keeps `createMissing`'s stated safety property intact rather than trading it.
  *
+ * ⚠️ AND IT RECORDS A HEAD WHOSE WHOLE SET CI DECIDED (Bug MOTIR-10797). This is the one
+ * moment Motir knows whether a set of terminal rows is the WHOLE set: when the host reports
+ * every check run and workflow run at the commit finished, and nothing recorded there is
+ * still running once the writes above have landed, CI has decided the commit, and the pull
+ * request's row says so (`githubPullRequestRepository.markCiDecided`, only while the commit
+ * is its head). The rows themselves cannot carry that: a quick green recorded before anything
+ * running is a set of terminal rows too. The To fix rebuild reads the marker, so a check that
+ * starts later at that head answers the head's own verdict rather than an older commit's.
+ *
  * Returns how many rows it created and how many it settled — both zero meaning
- * the recorded set was already whole and current, the answer in the healthy case.
+ * the recorded set was already whole and current, the answer in the healthy case — and
+ * whether it confirmed the commit decided.
  */
 export async function reconcileRecordedCheckSet(args: {
   pullRequestId: string;
@@ -244,7 +255,7 @@ export async function reconcileRecordedCheckSet(args: {
   reported: ReportedCheckRun[];
   recorded: { checkName: string; checkSuiteId: string; conclusion: string }[];
   tx: Prisma.TransactionClient;
-}): Promise<{ created: number; settled: number }> {
+}): Promise<{ created: number; settled: number; decided: boolean }> {
   const recordedByIdentity = new Map(
     args.recorded.map((row) => [identity(row.checkName, row.checkSuiteId), row]),
   );
@@ -296,7 +307,37 @@ export async function reconcileRecordedCheckSet(args: {
     args.tx,
   );
 
-  return { created, settled };
+  // Decided only when the host has nothing running AND the recorded set agrees once the
+  // writes above landed: a commit status (the legacy API, which this read does not cover)
+  // or a row a delivery reopened since the snapshot can still be pending there.
+  let decided = false;
+  if (hostReportsDecided(args.reported)) {
+    const recorded = await githubCheckRunRepository.listByPrAndSha(
+      args.pullRequestId,
+      args.commitSha,
+      args.tx,
+    );
+    if (shaSetClaimsComplete(recorded)) {
+      await githubPullRequestRepository.markCiDecided(args.pullRequestId, args.commitSha, args.tx);
+      decided = true;
+    }
+  }
+
+  return { created, settled, decided };
+}
+
+/**
+ * Whether the host's answer about a commit says CI has DECIDED there (Bug MOTIR-10797): it
+ * reports at least one check, and none of its check runs or workflow runs is still pending.
+ * An empty answer is not a verdict — a commit no CI has reached yet reads the same.
+ *
+ * ⚠️ IT TRUSTS THE ANSWER IT IS GIVEN. When the workflow-run read failed,
+ * `readReportedCheckSet` returns the check runs alone, and a workflow queued without a job
+ * is then invisible; a marker written on that answer drops the Fixing tag for that push, the
+ * conservative side — the behaviour before this marker existed.
+ */
+export function hostReportsDecided(reported: readonly { conclusion: string }[]): boolean {
+  return reported.length > 0 && reported.every((run) => run.conclusion !== 'pending');
 }
 
 /** The ingestion key's own identity, minus the two members that are fixed for

@@ -1272,7 +1272,7 @@ describe('send-back, Dismiss and Motir’s bot on one card', () => {
   });
 });
 
-// ── The review state across a head move, Done, a container and the markers ───
+// ── The review state across a head move, Done and the markers ─────────────────
 
 describe('the review state read model over the assembled path', () => {
   it('Reviewed after a pass, gone after a head move (not reviewed, with the last version), gone on Done', async () => {
@@ -1305,62 +1305,6 @@ describe('the review state read model over the assembled path', () => {
     expect((await stateOf(s, item.id))?.reviewed).not.toBeNull();
     await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'done' } });
     expect((await stateOf(s, item.id))?.reviewed).toBeNull();
-  });
-
-  it('a container reads n of m over its open run targets, and Reviewed only when all passed', async () => {
-    const s = await makeScenario(A);
-    await adminDb.project.update({
-      where: { id: s.project.id },
-      data: { reviewAgentEnabled: false },
-    });
-    const story = await workItemsService.createWorkItem(
-      { projectId: s.project.id, kind: 'story', title: 'The story' },
-      s.ctx,
-    );
-    const children = [];
-    let number = 300;
-    for (const title of ['One', 'Two', 'Three']) {
-      const child = await workItemsService.createWorkItem(
-        { projectId: s.project.id, kind: 'task', title, parentId: story.id },
-        s.ctx,
-      );
-      await workItemsService.updateStatus(child.id, 'in_progress', s.ctx);
-      number += 1;
-      await openPr(A, child.identifier, number, personAuthor(A));
-      await ci(A, 'sha-a', number);
-      children.push({ child, number });
-    }
-    const version = (n: number) => `moooon/acme#${n}@sha-a`;
-    for (const { child, number: n } of children.slice(0, 2)) {
-      await reviewVerdictService.submit(s.project.id, child.identifier, input(version(n)), s.ctx);
-    }
-    const twoOfThree = await stateOf(s, story.id);
-    expect(twoOfThree?.container).toEqual({ passed: 2, total: 3, allPassed: false });
-    expect(twoOfThree?.reviewed).toBeNull();
-
-    const [last] = children.slice(2);
-    await reviewVerdictService.submit(
-      s.project.id,
-      last!.child.identifier,
-      input(version(last!.number)),
-      s.ctx,
-    );
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 3,
-      total: 3,
-      allPassed: true,
-    });
-
-    // A Done run target is no longer open and is not counted.
-    await adminDb.workItem.update({
-      where: { id: children[0]!.child.id },
-      data: { status: 'done' },
-    });
-    expect((await stateOf(s, story.id))?.container).toEqual({
-      passed: 2,
-      total: 2,
-      allPassed: true,
-    });
   });
 
   it('markers from the matching rows: Agent reviewing and Review could not run (hosted), none with the agent off', async () => {

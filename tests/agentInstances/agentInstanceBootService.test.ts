@@ -3,6 +3,8 @@ import type { AgentInstance } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   AGENT_BOOT_LEASE_MS,
+  BOOT_AGENT_DEADLINE_DETAIL,
+  BOOT_AGENT_WAITING_DETAIL,
   INSTANCE_BOOT_DEADLINE_MS,
   INSTANCE_BOOT_EXIT_GRACE_MS,
 } from '@/lib/agentInstances/config';
@@ -274,6 +276,189 @@ describe('a failure fails its own step, and the agent through failInstance', () 
       detail: 'the machine did not start in time',
     });
     await expectAgentFailed(row.id, /did not finish starting within 10 minutes/);
+  });
+});
+
+describe('the agent answering — a running machine is not yet one that takes commands (MOTIR-10808)', () => {
+  it('waits in machine_start while exec does not answer, then clones once it does', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.setExecReadiness('starting');
+    fleet.completeBoot(row.machineId!);
+    const machineStartedAt = clock.now();
+
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    let a = await stepsOf(row.id, attempt);
+    expect(a.steps[1]).toMatchObject({
+      step: 'machine_start',
+      state: 'in_progress',
+      detail: BOOT_AGENT_WAITING_DETAIL,
+      endedAt: null,
+    });
+    expect(a.outcome).toBeNull();
+    expect(cloneExecs()).toEqual([]);
+    expect((await agentRow(row.id)).state).toBe('starting');
+
+    // Minutes later, still not answering: still waiting, and nothing more is written.
+    const seq = await maxSeq(row.id);
+    clock.advance(3 * 60_000);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    expect(await maxSeq(row.id)).toBe(seq);
+    expect(cloneExecs()).toEqual([]);
+
+    clock.advance(10_000);
+    fleet.setExecReadiness('ready');
+    const answeredAt = clock.now();
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    a = await stepsOf(row.id, attempt);
+    expect(shape(a.steps)).toEqual([
+      ['provision', null, 'done'],
+      ['machine_start', null, 'done'],
+      ['clone', 'acme/web', 'done'],
+      ['clone', 'acme/api', 'done'],
+      ['terminal_check', null, 'skipped'],
+      ['ready', null, 'done'],
+    ]);
+    // The step ends when the agent answered; the interval still starts with the machine.
+    expect(a.steps[1]).toMatchObject({ endedAt: answeredAt, detail: null });
+    expect(a.outcome).toBe('running');
+    expect(cloneExecs().map((e) => e.command.at(-1))).toEqual(['acme/web', 'acme/api']);
+    expect((await intervals()).find((i) => i.endedAt === null)!.startedAt).toEqual(
+      machineStartedAt,
+    );
+    expect((await agentRow(row.id)).state).toBe('running');
+  });
+
+  it('fails only at the boot’s deadline, saying the agent did not answer in time', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.setExecReadiness('starting');
+    fleet.completeBoot(row.machineId!);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    clock.advance(INSTANCE_BOOT_DEADLINE_MS - 1_000);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    clock.advance(1_000);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    const a = await stepsOf(row.id, attempt);
+    expect(a.steps[1]).toMatchObject({
+      step: 'machine_start',
+      state: 'failed',
+      detail: BOOT_AGENT_DEADLINE_DETAIL,
+    });
+    expect(a.steps.slice(2).every((s) => s.state === 'waiting')).toBe(true);
+    expect(a.outcome).toBe('failed');
+    expect(cloneExecs()).toEqual([]);
+    const agent = await agentRow(row.id);
+    expect(agent.state).toBe('failed');
+    expect(agent.failureReason).toMatch(/agent did not answer within 10 minutes of starting/);
+  });
+
+  it('a machine that attests no start time still ends its wait when the agent answers', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.setExecReadiness('starting');
+    fleet.completeBoot(row.machineId!);
+    const describe = fleet.describePersistent.bind(fleet);
+    const unattested = vi
+      .spyOn(fleet, 'describePersistent')
+      .mockImplementation(async (h) => ({ ...(await describe(h)), startedAt: null, events: [] }));
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    clock.advance(20_000);
+    fleet.setExecReadiness('ready');
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect(info).toHaveBeenCalledWith(
+      '[agentInstanceBoot] the agent answered',
+      expect.objectContaining({ machineStartedAt: null, waitedMs: null }),
+    );
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      state: 'done',
+      endedAt: clock.now(),
+      detail: null,
+    });
+    unattested.mockRestore();
+  });
+
+  it('a machine that attests no start time and answers at once ends its step on this pass', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.completeBoot(row.machineId!);
+    const describe = fleet.describePersistent.bind(fleet);
+    const unattested = vi
+      .spyOn(fleet, 'describePersistent')
+      .mockImplementation(async (h) => ({ ...(await describe(h)), startedAt: null, events: [] }));
+    clock.advance(5_000);
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      state: 'done',
+      endedAt: clock.now(),
+    });
+    unattested.mockRestore();
+  });
+
+  it('a readiness check that throws is asked again, as a machine still starting', async () => {
+    const row = await startingAgent();
+    const attempt = await open(row);
+    fleet.completeBoot(row.machineId!);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const check = vi
+      .spyOn(fleet, 'checkExecReady')
+      .mockRejectedValueOnce(new Error('the port broke its word'));
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      state: 'in_progress',
+      detail: BOOT_AGENT_WAITING_DETAIL,
+    });
+    expect(warn).toHaveBeenCalledWith(
+      '[agentInstanceBoot] the exec readiness check threw',
+      expect.objectContaining({ detail: 'the port broke its word' }),
+    );
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    expect((await agentRow(row.id)).state).toBe('running');
+    check.mockRestore();
+  });
+
+  it('a wake waits for the agent the same way before its first exec', async () => {
+    fleet.setBootBehaviour('start');
+    bootDriver.inline = true;
+    const dto = await lifecycle.create(
+      fx.projectIdentifier,
+      { name: 'yue-claude', profileId: 'claude' },
+      fx.ctx,
+    );
+    await lifecycle.hibernate(fx.projectIdentifier, dto.id, fx.ctx);
+    fleet.setBootBehaviour('never_start');
+    bootDriver.inline = false;
+    clock.advance(60_000);
+    expect((await lifecycle.wake(fx.projectIdentifier, dto.id, fx.ctx)).state).toBe('waking');
+    const row = await agentRow(dto.id);
+    const attempt = 2;
+    fleet.setExecReadiness('starting');
+    fleet.completeBoot(row.machineId!);
+    const execsBefore = fleet.execs.length;
+    expect(await boot.advance(row.id, attempt, 'run-1')).toMatchObject({ next: 'defer' });
+    expect((await stepsOf(row.id, attempt)).steps[1]).toMatchObject({
+      step: 'machine_start',
+      state: 'in_progress',
+      detail: BOOT_AGENT_WAITING_DETAIL,
+    });
+    // No probe and no command reached the machine while its agent was not answering.
+    expect(fleet.execs).toHaveLength(execsBefore);
+    expect((await agentRow(row.id)).state).toBe('waking');
+
+    fleet.setExecReadiness('ready');
+    expect(await boot.advance(row.id, attempt, 'run-1')).toEqual({ next: 'done' });
+    const a = await stepsOf(row.id, attempt);
+    expect(shape(a.steps)).toEqual([
+      ['provision', null, 'done'],
+      ['machine_start', null, 'done'],
+      ['clone', 'acme/web', 'skipped'],
+      ['clone', 'acme/api', 'skipped'],
+      ['terminal_check', null, 'skipped'],
+      ['ready', null, 'done'],
+    ]);
+    expect(fleet.execReadyChecks).toContain(row.machineId);
+    expect((await agentRow(row.id)).state).toBe('running');
   });
 });
 

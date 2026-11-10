@@ -40,6 +40,7 @@ import {
 } from '@motir/orchestrator';
 import type { FleetShard } from '@/generated/prisma/client';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
 import { AGENT_RUNNER_PROVIDER_ENV_VAR } from '@/lib/ciFleet/fleetKindSwitches';
 import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
 import { HOSTED_AGENT_SHARD_CAPACITY_DETAIL } from '@/lib/services/fleetShardAdmissionService';
@@ -971,5 +972,68 @@ describe('a hosted run is supervised on its account (MOTIR-9424)', () => {
     expect(outcome.costUsd).not.toBe('0');
     expect(forShard).toHaveBeenCalledWith(a.id);
     expect(charge).toHaveBeenCalledWith(withRun.dispatchRunId, expect.anything());
+  });
+});
+
+describe('the install fleet runs the meta org’s agent runs (MOTIR-10794)', () => {
+  const installFake = () => fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+
+  beforeEach(async () => {
+    vi.stubEnv('MOTIR_CLOUD', 'true');
+    vi.stubEnv('GITHUB_FALLBACK_ORG', 'motir-projects');
+    vi.stubEnv(AGENT_RUNNER_PROVIDER_ENV_VAR, 'aws');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'hosted_agent');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', 'subnet-a');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_INSTANCE_PROFILE_ARN', 'arn:aws:iam::1:instance-profile/vm');
+    // The fake orchestrator is priced in iad only; a real install names its region.
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', 'iad');
+    await adminDb.organization.update({
+      where: { id: tenant.organizationId },
+      data: { isMeta: true },
+    });
+  });
+
+  it('boots on the install fleet, never a pool account, and settles there', async () => {
+    const pool = await agentAccount(5);
+    const request = requestFor();
+    const booted = await hostedAgentContainerService.boot(request);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+
+    expect(installFake().specs).toHaveLength(1);
+    expect(installFake().specs[0]).toMatchObject({
+      image: 'motir/hosted-agent@sha256:fake',
+      region: 'iad',
+    });
+    expect(accountFake(pool).provisioned).toEqual([]);
+    expect(fakeOrchestrator.provisioned).toEqual([]);
+    expect(booted.session.handle.shardId).toBe(INSTALL_FLEET_SHARD_ID);
+    // The slot names no account.
+    expect((await slotOf(request))?.fleetShardId).toBeNull();
+
+    const settled = await hostedAgentContainerService.settle(booted.session, {
+      done: true,
+      reason: 'job_completed',
+      startedAt: booted.session.handle.createdAt,
+      exitCode: 0,
+      failureDetail: null,
+    });
+    expect(settled.outcome).not.toBe('teardown_failed');
+    expect(installFake().liveContainerIds()).toEqual([]);
+  });
+
+  it('a capacity refusal there waits, giving the slot back — there is no other account to move to', async () => {
+    installFake().failNextProvisionForCapacity('out_of_stock');
+    const request = requestFor();
+    const booted = await hostedAgentContainerService.boot(request, { now: () => NOW });
+    expect(booted).toEqual({
+      phase: 'terminal',
+      outcome: {
+        outcome: 'admission_deferred',
+        reason: 'shard_capacity',
+        detail: HOSTED_AGENT_SHARD_CAPACITY_DETAIL,
+      },
+    });
+    expect(await slotOf(request)).toBeNull();
   });
 });

@@ -2739,6 +2739,18 @@ export interface components {
                 folderPath: string[] | null;
                 blockedByRefs: string[];
             }[];
+            cost?: {
+                ledgerComplete: boolean | null;
+                totalCostMicroUsd: number | null;
+                credits: number | null;
+                bySessionKind: {
+                    conversation: number | null;
+                    lay: number | null;
+                    author: number | null;
+                    entry_author: number | null;
+                    tool: number | null;
+                };
+            };
         };
         PlanSession: {
             id: string;
@@ -11161,6 +11173,18 @@ export interface operations {
                                 folderPath: string[] | null;
                                 blockedByRefs: string[];
                             }[];
+                            cost?: {
+                                ledgerComplete: boolean | null;
+                                totalCostMicroUsd: number | null;
+                                credits: number | null;
+                                bySessionKind: {
+                                    conversation: number | null;
+                                    lay: number | null;
+                                    author: number | null;
+                                    entry_author: number | null;
+                                    tool: number | null;
+                                };
+                            };
                         } | null;
                     };
                 };

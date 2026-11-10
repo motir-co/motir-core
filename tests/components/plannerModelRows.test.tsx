@@ -23,6 +23,7 @@ const setPlannerReviewModelAction = vi.hoisted(() =>
   vi.fn<(...args: unknown[]) => Promise<unknown>>(async () => ({ ok: true })),
 );
 vi.mock('@/app/(admin)/admin/ai-planning/actions', () => ({
+  setPlannerFunctionModelAction: vi.fn(),
   setPlannerModelAction,
   setPlannerReviewModelAction,
 }));
@@ -71,6 +72,7 @@ function settings(
     ],
     canEdit: true,
     review: null,
+    functions: [],
     ...over,
   };
 }

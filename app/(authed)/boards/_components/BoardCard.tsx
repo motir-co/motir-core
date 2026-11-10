@@ -104,9 +104,9 @@ function slotOf(
   return 'priority';
 }
 
-/** Does the card wear a Reviewed badge (or a container's count)? */
+/** Does the card wear a Reviewed badge? */
 function wearsReviewedBadge(card: BoardCardDto): boolean {
-  return Boolean(card.review && (card.review.container || card.review.reviewed));
+  return Boolean(card.review?.reviewed);
 }
 
 /**

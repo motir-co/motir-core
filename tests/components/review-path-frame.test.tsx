@@ -468,7 +468,6 @@ function stateOf(over: Partial<ReviewStateDTO>): ReviewStateDTO {
     recordRef: null,
     sentBack: false,
     sentBackRecord: null,
-    container: null,
     reviewToRun: null,
     authorOfEveryPr: false,
     routedTo: null,
@@ -496,7 +495,7 @@ describe('the read-model slices', () => {
     });
   });
 
-  it('toApprovalRowReviewDto: null with no line; the badge only when reviewed or a container, never a marker', () => {
+  it('toApprovalRowReviewDto: null with no line; the badge only when reviewed, never a marker', () => {
     expect(toApprovalRowReviewDto(stateOf({}))).toBeNull();
     const line = lineOf({ value: 'not_reviewed' });
     expect(
@@ -563,7 +562,6 @@ describe('ApprovalRow — an approve-and-merge row wears its review', () => {
                   at: '2026-11-05T11:00:00Z',
                   commits: [],
                 },
-                container: null,
                 recordRef: { kind: 'record', id: 'r1' },
               },
             },

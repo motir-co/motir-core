@@ -11,6 +11,7 @@ import {
 import {
   createPostgresRateLimitStore,
   DEFAULT_RATE_LIMIT_STORE_TIMEOUT_MS,
+  RateLimitStoreTimeoutError,
 } from '@/lib/rateLimit/postgresStore';
 import {
   RATE_LIMIT_STORE_ENV,
@@ -24,12 +25,8 @@ import { rateLimitService } from '@/lib/services/rateLimitService';
 import { createV1Caller, withTokenFor } from '../../fixtures/apiV1Fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../../helpers/db';
-import {
-  ALIGNED_WINDOW_MS,
-  currentWindowStart,
-  sleep,
-  waitForWindowBoundary,
-} from '../../helpers/rateLimitWindow';
+import { freezeWindowClock } from '../../helpers/frozenWindowClock';
+import { ALIGNED_WINDOW_MS, currentWindowStart } from '../../helpers/rateLimitWindow';
 import {
   pinSharedRateLimitStoreDeadline,
   testDeadlineRateLimitStore,
@@ -87,6 +84,28 @@ import {
 // comes from `testDeadlineRateLimitStore()`, and a third one added later owes
 // the same — the fail-open cases further down, whose tiny deadline IS their
 // subject, are the only stores here built with an explicit `timeoutMs`.
+//
+// ── EVERY COUNTED CASE RUNS ON A FROZEN CLOCK (MOTIR-10807) ─────────────────
+// The limiter buckets on an epoch grid read from `Date.now()`, so a case whose
+// assertion depends on an ACCUMULATED count owns that count only while no grid
+// boundary falls between its calls. These cases used to buy that with
+// `waitForWindowBoundary` — a margin against the wall clock, which a loaded CI
+// shard spent on motir-core#4081: `does NOT pool two tokens…` served its third
+// request as the first of a fresh cell. Each counted case now calls
+// `freezeWindowClock()` (Date only; timers stay real) right before its first
+// counted call, and the one case that needs the next window moves the clock
+// there itself. The fail-open cases keep the real clock: they count nothing,
+// and one of them measures elapsed time.
+//
+// ── THE DEFAULT-DEADLINE CASES ASSERT THE ROW, NOT THE RESPONSE (MOTIR-10807)
+// The two resolution cases that count through the DEFAULT store inherit its
+// 250 ms deadline, and on that same shard it expired: the wrapper failed open,
+// answered `x-ratelimit-remaining: 10` (the whole budget — only the fail-open
+// arm says that) and moved on while its `INSERT` was still running. Whether a
+// counter write answers inside 250 ms is a property of the runner, not of store
+// resolution, so those cases keep every real increment the default store
+// starts, settle them, and assert on the shared ROW — which the write reaches
+// whichever side of the deadline it finishes on.
 
 const ME = 'http://localhost:3000/api/v1/me';
 
@@ -138,6 +157,9 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  // FIRST: everything below, and the suite-wide in-flight probe after it, may
+  // read `Date`.
+  vi.useRealTimers();
   vi.restoreAllMocks();
   __useDefaultRateLimitStoreForTest();
   __resetSharedRateLimitStoreForTest();
@@ -148,6 +170,31 @@ afterAll(async () => {
   await db.$disconnect();
   await adminDb.$disconnect();
 });
+
+/**
+ * Keep every REAL counter increment the shared store starts, so a case can wait
+ * for the writes themselves rather than for the store's verdict on them.
+ *
+ * ⚠️ Observes, never replaces: each call runs the real service, so the store
+ * under test is still the unmodified default. What it adds is the one thing the
+ * fail-open arm takes away — a write that lost the deadline keeps running after
+ * the wrapper has moved on, and `settle()` is how the case waits for it before
+ * reading the row (and before the in-flight probe finds it, MOTIR-6278).
+ */
+function keepCounterWrites(): { settle: () => Promise<void> } {
+  const realIncrement = rateLimitService.increment.bind(rateLimitService);
+  const writes: Promise<number>[] = [];
+  vi.spyOn(rateLimitService, 'increment').mockImplementation((...args) => {
+    const write = realIncrement(...args);
+    writes.push(write);
+    return write;
+  });
+  return {
+    settle: async () => {
+      await Promise.allSettled(writes);
+    },
+  };
+}
 
 describe('the wrapper counts through the SHARED store by default', () => {
   it('writes the token’s count to the shared counter TABLE — no wiring step required', async () => {
@@ -161,14 +208,21 @@ describe('the wrapper counts through the SHARED store by default', () => {
     // it in place would make this assertion true of the override rather than of
     // the default and prove nothing about production.
     __resetSharedRateLimitStoreForTest();
+    // ⚠️ AND SO THE DEADLINE IS THE PRODUCTION 250 ms, which a loaded shard
+    // misses (MOTIR-10807): the wrapper then fails open and answers the whole
+    // budget as remaining, while the write is still on its way to the table. The
+    // claim here is WHERE the count goes, so the case waits for the write and
+    // reads the row; the header's value is the runner's speed, and
+    // `rate-limit.test.ts` owns what the header says.
+    const writes = keepCounterWrites();
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
     const windowStart = currentWindowStart(ALIGNED_WINDOW_MS);
 
     const res = await GET(req(caller.headers));
+    await writes.settle();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('x-ratelimit-remaining')).toBe('9');
     // The row is the point: nothing in production calls `setRateLimitStore`, so
     // if the default were still the in-process Map this read would be null.
     expect(
@@ -185,17 +239,30 @@ describe('the wrapper counts through the SHARED store by default', () => {
     // two surfaces would trivially resolve the same object, and the identity
     // this case asserts is one about the DEFAULTS.
     __resetSharedRateLimitStoreForTest();
+    // Same 250 ms exposure as the case above (MOTIR-10807), on BOTH writes: the
+    // wrapper's and the direct one below. So the case waits for the writes and
+    // reads the row they share, instead of trusting a return value the deadline
+    // may have replaced with a timeout.
+    const writes = keepCounterWrites();
     const shared = sharedRateLimitStore();
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
     const windowStart = currentWindowStart(rateLimitBudget().windowMs);
 
     await GET(req(caller.headers));
     // The app-level side, writing the SAME key through its own entry point,
-    // continues v1's count rather than starting a second one.
-    const next = await shared.increment(keyFor(caller), windowStart, rateLimitBudget().windowMs);
+    // continues v1's count rather than starting a second one. A timeout is the
+    // deadline's verdict, not the write's: the write it abandoned still lands.
+    await shared
+      .increment(keyFor(caller), windowStart, rateLimitBudget().windowMs)
+      .catch((err: unknown) => {
+        if (!(err instanceof RateLimitStoreTimeoutError)) throw err;
+      });
+    await writes.settle();
 
-    expect(next).toBe(2);
+    expect(
+      await rateLimitCounterRepository.findCountUnsafe(keyFor(caller), BigInt(windowStart)),
+    ).toBe(2);
   });
 });
 
@@ -207,7 +274,7 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
     const LIMIT = 3;
     budget(LIMIT, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
     // The second machine gets the test-time deadline too — the header's pin
     // covers only the store `beforeEach` installs (MOTIR-6520).
     const other = testDeadlineRateLimitStore();
@@ -230,7 +297,7 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
   it('the two clients count into ONE row, not one row each', async () => {
     budget(10, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
     // The second machine gets the test-time deadline too — the header's pin
     // covers only the store `beforeEach` installs (MOTIR-6520).
     const other = testDeadlineRateLimitStore();
@@ -259,7 +326,7 @@ describe('TWO STORE CLIENTS enforce ONE window — the defect this card closes',
     budget(2, ALIGNED_WINDOW_MS);
     const first = await createV1Caller();
     const second = await withTokenFor(first.user, first.workspace, { label: 'second' });
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
 
     expect((await GET(req(first.headers))).status).toBe(200);
     expect((await GET(req(first.headers))).status).toBe(200);
@@ -370,7 +437,7 @@ describe('the shared counter stays ATOMIC and time-bounded under the wrapper', (
     budget(N - 1, ALIGNED_WINDOW_MS);
     setRateLimitStore(instrumented.store);
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
 
     const responses = await Promise.all(Array.from({ length: N }, () => GET(req(caller.headers))));
     const statuses = responses.map((r) => r.status);
@@ -487,16 +554,19 @@ describe('the shared counter stays ATOMIC and time-bounded under the wrapper', (
     const ROLLOVER_WINDOW_MS = 2_000;
     budget(1, ROLLOVER_WINDOW_MS);
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ROLLOVER_WINDOW_MS);
+    freezeWindowClock();
 
     expect((await GET(req(caller.headers))).status).toBe(200);
     const refused = await GET(req(caller.headers));
     expect(refused.status).toBe(429);
 
-    // Wait past the reset the response itself advertised — a real rollover, not
-    // a mocked clock.
+    // Move the clock past the reset the response itself advertised. The
+    // rollover is still the limiter's own: it reads `Date.now()`, computes the
+    // next `windowStart` and writes a new row. What the move removes is the
+    // chance that the two requests above straddled a boundary on their own
+    // (MOTIR-10807) — a real sleep only decided where the SECOND cell began.
     const resetAtMs = Number(refused.headers.get('x-ratelimit-reset')) * 1000;
-    await sleep(Math.max(0, resetAtMs - Date.now()) + 100);
+    vi.setSystemTime(resetAtMs + 100);
 
     expect((await GET(req(caller.headers))).status).toBe(200);
     // Two rows for one token: the old window's and the new one's. The sweep
@@ -574,7 +644,7 @@ describe('the single-instance escape hatch', () => {
     __resetSharedRateLimitStoreForTest();
     budget(2, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    freezeWindowClock();
 
     expect((await GET(req(caller.headers))).status).toBe(200);
     expect((await GET(req(caller.headers))).status).toBe(200);

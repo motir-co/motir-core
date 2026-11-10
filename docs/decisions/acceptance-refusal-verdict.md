@@ -101,6 +101,19 @@ same write:
 The code's own approve-to-merge refusal (`pull_request_approval` _Request changes_) is
 unchanged.
 
+> **AMENDMENT (2026-11-08) — the mirror: a refused MERGE withdraws a story run's video.**
+> On a story run the acceptance video is the merge gate's evidence and its press merges, so
+> the two are one question about one set of commits. Requesting changes on the code — a
+> person's _Request changes_ on the `pull_request_approval` gate through any door, a GitHub
+> review synced into it, or the review agent's send-back (`approval-gates.md` §12.14) — now
+> supersedes the story's `awaiting` `acceptance_result` gate in the same transaction: cause
+> `pulled_back` for a person's or GitHub's refusal, `agent_changes_requested` for the
+> agent's. The receipt is not stamped; nobody answered it. `resolveGateSet` does not ask the
+> video again while the merge is refused at the set's CURRENT version (a `changes_requested`
+> merge gate there, or a standing, undismissed agent send-back). A push moves the version and
+> the next green asks both again, acceptance leading; a newer recording from `motir fix`
+> rides that same ask. A SUBTASK-run story is untouched: its video is not the merge gate.
+
 ### 4. Re-run is a FIX, served by `motir fix <story>`
 
 A Re-run means the reviewer is complaining about implementation details: a wrong colour, an

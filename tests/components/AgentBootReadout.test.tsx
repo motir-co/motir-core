@@ -195,6 +195,31 @@ describe('the read-out once failed', () => {
     expect(rows()[1]!.textContent).toContain('The boot didn’t finish within 10 minutes');
   });
 
+  it('a machine whose agent never answered says so, in minutes, not as a machine that did not start (MOTIR-10808)', () => {
+    readout(
+      boot({
+        outcome: 'failed',
+        endedAt: at(600),
+        steps: [
+          step(0, { state: 'done', startedAt: at(0), endedAt: at(2) }),
+          step(1, {
+            step: 'machine_start',
+            state: 'failed',
+            startedAt: at(2),
+            endedAt: at(600),
+            detail: 'the agent did not answer in time',
+          }),
+        ],
+      }),
+      'failed',
+    );
+    expect(rows()[1]!.getAttribute('data-state')).toBe('failed');
+    expect(rows()[1]!.textContent).toContain(
+      'The agent didn’t answer within 10 minutes of starting',
+    );
+    expect(rows()[1]!.textContent).not.toContain('the agent did not answer in time');
+  });
+
   it('a deletion mid-boot is the reader’s own act: struck through, no danger, the panel’s last word', () => {
     readout(
       boot({
@@ -216,6 +241,31 @@ describe('the read-out once failed', () => {
     expect(screen.getByRole('heading', { name: 'Deleted — this panel closes' })).toBeTruthy();
     expect(rows()[1]!.getAttribute('data-state')).toBe('deleted');
     expect(screen.queryByRole('button', { name: 'Wake' })).toBeNull();
+  });
+});
+
+describe('while the agent has not answered yet (MOTIR-10808)', () => {
+  it('the started machine stays in progress with its clock — a wait, never a failure', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(T0 + 95_000);
+    readout(
+      boot({
+        steps: [
+          step(0, { state: 'done', startedAt: at(0), endedAt: at(2) }),
+          step(1, {
+            step: 'machine_start',
+            state: 'in_progress',
+            startedAt: at(2),
+            detail: 'waiting for the agent to answer',
+          }),
+        ],
+      }),
+    );
+    expect(rows()[1]!.getAttribute('data-state')).toBe('in_progress');
+    expect(rows()[1]!.textContent).toContain('1:33');
+    expect(document.querySelector('[data-state="failed"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Wake' })).toBeNull();
+    vi.useRealTimers();
   });
 });
 

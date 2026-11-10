@@ -43,6 +43,7 @@ import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 import { Prisma, type FleetShard } from '@/generated/prisma/client';
 import { fakeOrchestratorForShard, resetShardFakes } from '@/lib/orchestrator';
+import { INSTALL_FLEET_SHARD_ID } from '@/lib/ciFleet/installFleet';
 import { SHARD_PAUSE_SECONDS } from '@/lib/ciFleet/shardTargets';
 import { fleetShardOrchestratorService } from '@/lib/services/fleetShardOrchestratorService';
 import { buildFleetCostReadout, type FleetCostReadout } from '../../scripts/fleetCostReadoutQuery';
@@ -2554,5 +2555,68 @@ describe('a queued admission waits as a run_at, not inside its worker slot (MOTI
 
     expect(outcome).toMatchObject({ outcome: 'settled', verdict: { indexed: true } });
     expect(slept[0]).toBe(5_000);
+  });
+});
+
+// ── The install fleet (MOTIR-10794) ───────────────────────────────────────
+
+describe('an index admitted onto the install fleet boots, polls and settles there', () => {
+  const installFake = () => fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+  const onInstall = (): IndexAdmission => ({
+    ...admissionFor(INPUT),
+    shardId: null,
+    installFleet: true,
+  });
+
+  beforeEach(() => {
+    resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+    vi.stubEnv('MOTIR_INSTALL_FLEET_KINDS', 'code_graph_index');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', 'subnet-a,subnet-b');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID', 'sg-install');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_INSTANCE_PROFILE_ARN', 'arn:aws:iam::1:instance-profile/vm');
+    vi.stubEnv('MOTIR_INSTALL_FLEET_REGION', 'us-east-1');
+  });
+
+  afterEach(() => {
+    resetShardFakes();
+    fleetShardOrchestratorService.resetCache();
+  });
+
+  it('boots in the install fleet’s region, and the session names the install fleet', async () => {
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, onInstall(), FAST);
+    if (booted.phase !== 'supervising') throw new Error('expected a supervising boot');
+    expect(installFake().specs).toHaveLength(1);
+    expect(installFake().specs[0]!.region).toBe('us-east-1');
+    expect(fakeOrchestrator.provisioned).toHaveLength(0);
+    expect(booted.session.shardId).toBe(INSTALL_FLEET_SHARD_ID);
+
+    const fake = installFake();
+    fake.completeJob(fake.liveContainerIds()[0]!, { exitCode: 0 });
+    const polled = await codeGraphIndexDispatchService.pollIndexContainer(
+      booted.session,
+      INITIAL_INDEX_POLL_STATE,
+      FAST,
+    );
+    if (!polled.done) throw new Error('expected a done verdict');
+    expect(
+      await codeGraphIndexDispatchService.settleIndexContainer(booted.session, polled),
+    ).toMatchObject({ outcome: 'settled' });
+    expect(installFake().teardowns).toHaveLength(1);
+    expect(fakeOrchestrator.teardowns).toHaveLength(0);
+  });
+
+  it('an install fleet with no network fails the boot and gives the slot back', async () => {
+    vi.stubEnv('MOTIR_INSTALL_FLEET_SUBNET_IDS', '');
+    const booted = await codeGraphIndexDispatchService.bootIndexContainer(INPUT, onInstall(), FAST);
+    expect(booted).toMatchObject({
+      phase: 'terminal',
+      outcome: { outcome: 'provision_failed' },
+    });
+    if (booted.phase === 'terminal' && 'detail' in booted.outcome) {
+      expect(booted.outcome.detail).toContain('MOTIR_INSTALL_FLEET_SUBNET_IDS');
+    }
+    expect(installFake().provisioned).toHaveLength(0);
+    expect(released).toContain(onInstall().slotRef);
   });
 });

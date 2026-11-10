@@ -1,6 +1,7 @@
 import {
   AWS_INDEX_IMAGE_COMMENT,
   AWS_INDEX_EXIT_MARKER,
+  AWS_INDEX_PULL_ERROR_PREFIX,
   AWS_INDEX_PULL_FAILED_MARKER,
   Ec2ApiError,
   type Ec2Api,
@@ -126,6 +127,10 @@ export class AwsEc2Fake implements Ec2Api {
   private readonly byToken = new Map<string, string>();
   /** The next launch stays `pending`. */
   leaveNextPending = false;
+  /** The next launch's lag, consumed by the launch ({@link lagNextLaunch}). */
+  private nextLaunchLag: { notFound: number; unmapped: number } | null = null;
+  /** The by-id describes each lagging instance still has to wait out. */
+  private readonly lags = new Map<string, { notFound: number; unmapped: number }>();
   /** The next RunInstances creates its instance and THEN fails — an ambiguous
    *  timeout. */
   private failNextAfterCreate: string | null = null;
@@ -141,6 +146,17 @@ export class AwsEc2Fake implements Ec2Api {
   private readonly unpullableImages = new Set<string>();
   /** Each instance's serial console, as GetConsoleOutput reads it. */
   readonly consoles = new Map<string, string>();
+
+  /**
+   * EC2'S EVENTUAL CONSISTENCY for an instance it has just made (MOTIR-10826):
+   * the next launch's instance answers its first `notFound` by-id describes with
+   * `InvalidInstanceID.NotFound`, then lists without its block-device mapping
+   * for `unmapped` more, and only then as it is. On 2026-11-09 real EC2 answered
+   * NotFound to every describe CloudTrail showed sent the second after a launch.
+   */
+  lagNextLaunch(lag: { notFound?: number; unmapped?: number }): void {
+    this.nextLaunchLag = { notFound: lag.notFound ?? 0, unmapped: lag.unmapped ?? 0 };
+  }
 
   /** The next call of `method` throws an `Ec2ApiError` with `code`. */
   failNext(method: keyof Ec2Api, code = 'InternalError', httpStatus = 500): void {
@@ -168,6 +184,8 @@ export class AwsEc2Fake implements Ec2Api {
     this.failures.clear();
     this.unpullableImages.clear();
     this.leaveNextPending = false;
+    this.nextLaunchLag = null;
+    this.lags.clear();
     this.holdNextTerminate = false;
     this.holdNextStop = false;
     this.now = () => new Date();
@@ -281,6 +299,44 @@ export class AwsEc2Fake implements Ec2Api {
     const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
     this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
     this.powerOff(instanceId);
+  }
+
+  /** An index VM's container returns `code` and the script writes the exit
+   *  marker, then HOLDS the VM up before its power-off (MOTIR-10823): the VM is
+   *  still `running`, so only a live read sees the marker. */
+  exitIndexContainerHeld(instanceId: string, code: number): void {
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    this.consoles.set(instanceId, `${before}${AWS_INDEX_EXIT_MARKER}${code}\n`);
+  }
+
+  /** An index VM's login or pull fails: the script copies the failed command's
+   *  lines and the pull-failure marker to the console, then HOLDS the VM up
+   *  (MOTIR-10823) — still `running`. */
+  failIndexPullHeld(instanceId: string, errorLines: readonly string[]): void {
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    const errors = errorLines.map((line) => `${AWS_INDEX_PULL_ERROR_PREFIX}${line}\n`).join('');
+    this.consoles.set(instanceId, `${before}${errors}${AWS_INDEX_PULL_FAILED_MARKER}\n`);
+  }
+
+  /** Console text EC2 has not posted yet — what a buffered read cannot see until
+   *  {@link postConsole} (MOTIR-10805). */
+  readonly unpostedConsoles = new Map<string, string>();
+
+  /** As {@link exitIndexContainer}, but the marker reaches the buffered console
+   *  only when {@link postConsole} is called — EC2 posts a stopped instance's
+   *  output minutes after the stop, and a live read of it answers empty. */
+  exitIndexContainerUnposted(instanceId: string, code: number): void {
+    this.unpostedConsoles.set(instanceId, `${AWS_INDEX_EXIT_MARKER}${code}\n`);
+    this.powerOff(instanceId);
+  }
+
+  /** EC2 posts the buffered console output written before the stop. */
+  postConsole(instanceId: string): void {
+    const pending = this.unpostedConsoles.get(instanceId);
+    if (pending === undefined) return;
+    this.unpostedConsoles.delete(instanceId);
+    const before = this.consoles.get(instanceId) ?? '[  12.3] cloud-init\n';
+    this.consoles.set(instanceId, `${before}${pending}`);
   }
 
   /** The VM powers itself off: `stopped` or `terminated`, as its launch asked. */
@@ -593,7 +649,10 @@ export class AwsEc2Fake implements Ec2Api {
   async runInstances(input: Ec2RunInstanceInput) {
     this.record('runInstances', input);
     const existing = this.byToken.get(input.clientToken);
-    if (existing) return this.view(existing);
+    if (existing) {
+      const { volumes: _volumes, ...again } = this.view(existing);
+      return again;
+    }
     if (!this.subnets.has(input.subnetId)) {
       throw new Ec2ApiError('InvalidSubnetID.NotFound', 400, false);
     }
@@ -639,6 +698,8 @@ export class AwsEc2Fake implements Ec2Api {
       request: input,
     });
     this.leaveNextPending = false;
+    if (this.nextLaunchLag) this.lags.set(instanceId, this.nextLaunchLag);
+    this.nextLaunchLag = null;
     this.userData.set(instanceId, Buffer.from(input.userData, 'base64').toString('utf8'));
     this.byToken.set(input.clientToken, instanceId);
     const image = this.indexImageOf(instanceId);
@@ -652,8 +713,11 @@ export class AwsEc2Fake implements Ec2Api {
       this.failNextAfterCreate = null;
       throw new Ec2ApiError(code, 500, true);
     }
-    // EC2's own answer to a launch: `pending`, whatever it is a moment later.
-    return { ...this.view(instanceId), state: 'pending' };
+    // EC2's own answer to a launch: `pending`, whatever it is a moment later,
+    // and no block-device mapping — CloudTrail shows `blockDeviceMapping: {}`
+    // on every real launch (MOTIR-10826), so the disk's id is a describe's.
+    const { volumes: _volumes, ...answered } = this.view(instanceId);
+    return { ...answered, state: 'pending' };
   }
 
   async describeInstances(input: Ec2DescribeInstancesInput) {
@@ -665,8 +729,21 @@ export class AwsEc2Fake implements Ec2Api {
           throw new Ec2ApiError('InvalidInstanceID.Malformed', 400, false);
         if (!this.instances.has(id))
           throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+        const lag = this.lags.get(id);
+        if (lag && lag.notFound > 0) {
+          lag.notFound -= 1;
+          throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+        }
       }
     }
+    const unmapped = new Set(
+      (input.instanceIds ?? []).filter((id) => {
+        const lag = this.lags.get(id);
+        if (!lag || lag.unmapped === 0) return false;
+        lag.unmapped -= 1;
+        return true;
+      }),
+    );
     const matching = [...this.instances.values()]
       .filter((i) => !input.instanceIds || input.instanceIds.includes(i.instanceId))
       .filter((i) =>
@@ -675,7 +752,12 @@ export class AwsEc2Fake implements Ec2Api {
           'instance-id': [i.instanceId],
         }),
       )
-      .map((i) => this.view(i.instanceId));
+      .map((i) => {
+        const view = this.view(i.instanceId);
+        if (!unmapped.has(i.instanceId)) return view;
+        const { volumes: _volumes, ...listed } = view;
+        return listed;
+      });
     const start = input.nextToken ? Number(input.nextToken) : 0;
     const size = input.maxResults ?? matching.length;
     const end = start + size;
@@ -834,10 +916,17 @@ export class AwsEc2Fake implements Ec2Api {
     this.volumes.delete(volumeId);
   }
 
-  async getConsoleOutput(instanceId: string) {
+  async getConsoleOutput(instanceId: string, options?: { readonly latest?: boolean }) {
     this.record('getConsoleOutput', instanceId);
     if (!this.instances.has(instanceId)) {
       throw new Ec2ApiError('InvalidInstanceID.NotFound', 400, false);
+    }
+    // A live read reaches only a RUNNING instance's serial port; a stopped one
+    // answers empty, as EC2 does (MOTIR-10805).
+    if (options?.latest) {
+      return this.instance(instanceId).state === 'running'
+        ? (this.consoles.get(instanceId) ?? null)
+        : null;
     }
     return this.consoles.get(instanceId) ?? null;
   }

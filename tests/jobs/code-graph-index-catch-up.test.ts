@@ -504,7 +504,7 @@ describe('no manual intervention re-arms indexing (AC 5)', () => {
 });
 
 describe('the job', () => {
-  it('is registered every 5 minutes and drives the service through one memoized step', async () => {
+  it('is registered every 5 minutes and drives the paused pass and the retry pass through one memoized step each', async () => {
     expect(CODE_GRAPH_INDEX_CATCH_UP_CRON).toBe('*/5 * * * *');
     expect(jobSchedules()).toContainEqual({
       functionId: 'system.code-graph-index-catch-up',
@@ -513,15 +513,19 @@ describe('the job', () => {
     const sweep = vi
       .spyOn(jobServices.codeGraphIndexCatchUp, 'catchUp')
       .mockResolvedValue({ scanned: 0, organizationsAsked: 0, outcomes: [] });
+    const retry = vi
+      .spyOn(jobServices.codeGraphIndexCatchUp, 'retryFailed')
+      .mockResolvedValue({ scanned: 0, outcomes: [] });
     const { ctx } = await new JobTestEngine({ function: codeGraphIndexCatchUp }).execute({
       events: [{ name: 'system.code-graph-index-catch-up', data: {} }],
     } as never);
     expect(sweep).toHaveBeenCalledTimes(1);
+    expect(retry).toHaveBeenCalledTimes(1);
     expect(
       (ctx as { step: { run: { mock: { calls: unknown[][] } } } }).step.run.mock.calls.map(
         (c) => c[0],
       ),
-    ).toContain('catch-up-paused-indexes-v2');
+    ).toEqual(expect.arrayContaining(['catch-up-paused-indexes-v2', 'retry-failed-indexes']));
   });
 });
 

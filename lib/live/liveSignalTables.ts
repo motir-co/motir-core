@@ -29,13 +29,13 @@ export const LIVE_SIGNAL_TABLES = {
   // The review rows behind a To approve row's review line and badge (Bug MOTIR-10504;
   // `20261106100000_live_signal_review_triggers`).
   review_verdict_record:
-    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfSubtrees)',
+    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfCards)',
   review_dismissal:
-    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfSubtrees)',
+    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfCards)',
   work_item_delivery:
-    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfSubtrees)',
+    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfCards)',
   github_pull_request_review:
-    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfSubtrees)',
+    'the review of the To approve rows (reviewStateRepository.watermarkReviewsOfCards)',
 } as const satisfies Record<string, string>;
 
 export type LiveSignalTable = keyof typeof LIVE_SIGNAL_TABLES;

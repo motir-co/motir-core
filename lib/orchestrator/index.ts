@@ -42,7 +42,15 @@ import {
   type PersistentContainerOrchestrator,
   type PersistentTerminalEndpoint,
   type RegistryCredentialResolver,
+  AWS_SHARD_TAG_KEY,
 } from '@motir/orchestrator';
+import {
+  INSTALL_FLEET_SHARD_ID,
+  INSTALL_FLEET_TAG,
+  installFleetConfig,
+  isInstallFleetEnabled,
+  type InstallFleetConfig,
+} from '@/lib/ciFleet/installFleet';
 import type { FleetShardDTO } from '@/lib/dto/fleetShard';
 import {
   appendShardFakeCall,
@@ -583,16 +591,23 @@ function awsHosterConfig(shard: FleetShardDTO) {
     HOSTER_CLIENT_CERT_ENV_VAR,
     HOSTER_CLIENT_KEY_ENV_VAR,
   ]);
-  const env = Object.fromEntries(Object.entries(values).map(([k, v]) => [k, pem(v)]));
+  return { ec2, region, shardTag: shard.name, ...hosterConfigFrom(values) };
+}
+
+/** Each value read as a PEM. */
+function pemValues(values: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(values).map(([k, v]) => [k, pem(v)]));
+}
+
+/** The hoster AMI and the host agent's TLS, from the five hoster variables. */
+function hosterConfigFrom(values: Record<string, string>) {
+  const env = pemValues(values);
   const clientTls = {
     caPem: env[HOSTER_CA_CERT_ENV_VAR]!,
     certPem: env[HOSTER_CLIENT_CERT_ENV_VAR]!,
     keyPem: env[HOSTER_CLIENT_KEY_ENV_VAR]!,
   };
   return {
-    ec2,
-    region,
-    shardTag: shard.name,
     amiId: env[AWS_HOSTER_AMI_ENV_VAR]!,
     hostAgent: {
       client: createHostAgentClient(clientTls),
@@ -661,6 +676,160 @@ export function persistentOrchestratorForShard(
       return adapter.persistent(shard);
     }
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// THE INSTALL FLEET (Story MOTIR-10792 · MOTIR-10794)
+// ═══════════════════════════════════════════════════════════════════════════
+// The install's own org's VMs, in core's OWN account: the EC2 client is on the
+// SDK's default chain — the task role core already runs as — and nothing is
+// assumed, so no management credential and no pool role is read. The network,
+// the VM profile and the region are motir-infra's values
+// (`lib/ciFleet/installFleet.ts`); the AMIs and the hoster TLS are the same
+// per-kind pins every pool account boots. Every VM is tagged
+// `motir-shard=motir-install`, which scopes its reap and its inventory.
+
+/** The account record the lane's fake EC2 is keyed by — never a row. */
+function installFleetPseudoShard(region: string): FleetShardDTO {
+  return {
+    id: INSTALL_FLEET_SHARD_ID,
+    name: INSTALL_FLEET_TAG,
+    fleetKind: 'code_graph_index',
+    provider: 'aws',
+    role: 'primary',
+    state: 'active',
+    github: { org: '', installationId: '', appRole: 'provisioning' },
+    fly: null,
+    aws: { accountId: '', region },
+    credentialRef: '',
+    limits: {
+      vcpuQuota: null,
+      machineLimit: null,
+      githubRegistrationsPer5Min: null,
+      githubApiPerHour: null,
+    },
+    limitsSource: {},
+    limitsVerifiedAt: null,
+    ownerOrganizationId: null,
+    quotaRequestedAt: null,
+    grantedAt: null,
+    liveAt: null,
+    accountState: null,
+    createdAt: '',
+    updatedAt: '',
+  };
+}
+
+/** The install fleet's EC2 client — core's own identity, or the lane's fake. */
+function installFleetEc2(): { ec2: Ec2Api; config: InstallFleetConfig } {
+  const config = installFleetConfig();
+  const override = awsEc2Override();
+  if (override) {
+    return { ec2: override(installFleetPseudoShard(config.region), { Ec2ApiError }), config };
+  }
+  return { ec2: createEc2Api({ region: config.region, defaultCredentials: true }), config };
+}
+
+/** Required variables, every missing one named at once; the fake EC2 needs none. */
+function requiredInstallValues(names: readonly string[]): Record<string, string> {
+  const values: Record<string, string> = {};
+  const missing: string[] = [];
+  for (const name of names) {
+    const value = process.env[name]?.trim();
+    if (value) values[name] = value;
+    else if (awsEc2Override()) values[name] = FAKE_AWS_AMI_ID;
+    else missing.push(name);
+  }
+  if (missing.length > 0) throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  return values;
+}
+
+/** Is the process-wide fake selected with no fake EC2 behind it? */
+function installFleetOnPlainFake(): boolean {
+  return selectedOrchestratorProvider() === 'fake' && awsEc2Override() === null;
+}
+
+/** The install fleet's orchestrator (an index or an agent run). */
+export function installFleetOrchestrator(): ContainerOrchestrator {
+  if (installFleetOnPlainFake()) return fakeOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+  const { ec2, config } = installFleetEc2();
+  const values = requiredInstallValues([AWS_RUNNER_AMI_ENV_VAR]);
+  return createAwsOrchestrator({
+    ec2,
+    region: config.region,
+    shardTag: INSTALL_FLEET_TAG,
+    amiId: values[AWS_RUNNER_AMI_ENV_VAR]!,
+    indexerAmiId: process.env[AWS_INDEXER_AMI_ENV_VAR]?.trim() || undefined,
+    network: { subnetIds: config.subnetIds, securityGroupId: config.securityGroupId },
+    // The VM profile grants only the indexer's ECR pull: an index VM takes it,
+    // an agent run boots with none, as on a pool account (MOTIR-10793).
+    indexInstanceProfileArn: config.instanceProfileArn,
+  });
+}
+
+/** The install fleet's PERSISTENT orchestrator — the meta org's agent hosts. */
+export function installFleetPersistentOrchestrator(): PersistentContainerOrchestrator {
+  if (selectedOrchestratorProvider() === 'fake') {
+    return fakePersistentOrchestratorForShard(INSTALL_FLEET_SHARD_ID);
+  }
+  const { ec2, config } = installFleetEc2();
+  const hoster = hosterConfigFrom(
+    requiredInstallValues([
+      AWS_HOSTER_AMI_ENV_VAR,
+      HOSTER_CA_CERT_ENV_VAR,
+      HOSTER_CA_KEY_ENV_VAR,
+      HOSTER_CLIENT_CERT_ENV_VAR,
+      HOSTER_CLIENT_KEY_ENV_VAR,
+    ]),
+  );
+  return createAwsPersistentOrchestrator({
+    ec2,
+    region: config.region,
+    shardTag: INSTALL_FLEET_TAG,
+    ...hoster,
+    network: { subnetIds: config.subnetIds, securityGroupId: config.securityGroupId },
+  });
+}
+
+/** Where the relay dials an install-fleet agent's terminal. */
+export async function installFleetTerminalEndpoint(
+  handle: PersistentContainerHandle,
+): Promise<PersistentTerminalEndpoint> {
+  if (selectedOrchestratorProvider() === 'fake') return persistentTerminalEndpoint(handle);
+  const { ec2 } = installFleetEc2();
+  const env = pemValues(
+    requiredInstallValues([
+      HOSTER_CA_CERT_ENV_VAR,
+      HOSTER_CLIENT_CERT_ENV_VAR,
+      HOSTER_CLIENT_KEY_ENV_VAR,
+    ]),
+  );
+  return awsTerminalEndpoint(
+    ec2,
+    {
+      caPem: env[HOSTER_CA_CERT_ENV_VAR]!,
+      certPem: env[HOSTER_CLIENT_CERT_ENV_VAR]!,
+      keyPem: env[HOSTER_CLIENT_KEY_ENV_VAR]!,
+    },
+    handle,
+  );
+}
+
+/**
+ * The install fleet's machine listing for the reconciler — ONLY instances and
+ * disks tagged `motir-shard=motir-install`: core's own account holds other
+ * machines that are not the fleet's to judge. Null when no kind is listed, or on
+ * the plain fake.
+ */
+export function installFleetInventory(): FleetInventory | null {
+  if (!isInstallFleetEnabled() || installFleetOnPlainFake()) return null;
+  const { ec2, config } = installFleetEc2();
+  return createAwsFleetInventory({
+    ec2,
+    region: config.region,
+    accountName: INSTALL_FLEET_TAG,
+    filters: [{ name: `tag:${AWS_SHARD_TAG_KEY}`, values: [INSTALL_FLEET_TAG] }],
+  });
 }
 
 /**
@@ -871,6 +1040,16 @@ const FAKE_HOSTED_AGENT_IMAGE = 'motir/hosted-agent@sha256:fake';
 /** The variable's value, trimmed, or `''` when it is unset. */
 function rawHostedAgentImage(): string {
   return process.env[HOSTED_AGENT_IMAGE_ENV_VAR]?.trim() ?? '';
+}
+
+/**
+ * Does this deployment run hosted agents — is the hosted-agent image set? The
+ * same test the hosted-agent image preflight makes, exported so the fleet
+ * origins preflight (MOTIR-9714) asks the gateway's run-lane origin of exactly
+ * the deployments that hand it to a machine.
+ */
+export function isHostedAgentConfigured(): boolean {
+  return rawHostedAgentImage() !== '';
 }
 
 /**

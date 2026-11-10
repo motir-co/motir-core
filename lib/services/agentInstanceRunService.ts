@@ -64,7 +64,6 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { AGENT_RUN_END_DETAIL } from '@/lib/agentInstances/runEnd';
 import { toAgentForCardDto } from '@/lib/mappers/agentInstanceRunMappers';
 import { toDispatchRunAgentInstanceDto } from '@/lib/mappers/dispatchRunMappers';
-import { isPersistentOrchestratorConfigured } from '@/lib/orchestrator';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { agentInstanceRepository } from '@/lib/repositories/agentInstanceRepository';
 import { dispatchRunEventRepository } from '@/lib/repositories/dispatchRunEventRepository';
@@ -76,6 +75,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import {
   agentInstanceClock,
+  agentInstanceLaneMissing,
   agentInstanceLifecycleService,
   agentInstanceReach,
   type InstanceReach,
@@ -499,9 +499,9 @@ export const agentInstanceRunService = {
 
     // ── 5, 6 · The profile, the image, the sign-in ───────────────────────────
     // The process-wide lane's check applies to an agent on it; one placed on an
-    // account is reached through that account (MOTIR-9473).
-    const laneMissing = agent.fleetShardId === null && !isPersistentOrchestratorConfigured();
-    if (laneMissing || !isAgentTerminalConfigured()) {
+    // account (MOTIR-9473) or on the install fleet (MOTIR-10803) is reached
+    // through that account, whatever the Fly token.
+    if (agentInstanceLaneMissing(agent) || !isAgentTerminalConfigured()) {
       throw new AgentInstancesUnavailableError('an agent cannot be reached to start a run');
     }
     // A RUNNING agent is asked now (§4: the start's own live probe), and its answer

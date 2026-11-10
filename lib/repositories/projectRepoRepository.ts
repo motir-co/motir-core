@@ -110,6 +110,8 @@ interface JoinedRow {
   repoIndexRefusedSizeBytes: bigint | null;
   repoIndexRefusedCapBytes: bigint | null;
   repoIndexRefusedAt: Date | null;
+  repoIndexRetryAttempts: number;
+  repoIndexRetryDispatchedAt: Date | null;
   repoCommitsBehind: number | null;
   repoCommitsBehindBaseSha: string | null;
   repoCommitsBehindHeadSha: string | null;
@@ -196,6 +198,8 @@ function toNested(r: JoinedRow): ProjectRepoWithRealized {
             indexRefusedSizeBytes: r.repoIndexRefusedSizeBytes,
             indexRefusedCapBytes: r.repoIndexRefusedCapBytes,
             indexRefusedAt: r.repoIndexRefusedAt,
+            indexRetryAttempts: r.repoIndexRetryAttempts,
+            indexRetryDispatchedAt: r.repoIndexRetryDispatchedAt,
             commitsBehind: r.repoCommitsBehind,
             commitsBehindBaseSha: r.repoCommitsBehindBaseSha,
             commitsBehindHeadSha: r.repoCommitsBehindHeadSha,
@@ -400,6 +404,8 @@ export const projectRepoRepository = {
         gr."index_refused_size_bytes" AS "repoIndexRefusedSizeBytes",
         gr."index_refused_cap_bytes" AS "repoIndexRefusedCapBytes",
         gr."index_refused_at"        AS "repoIndexRefusedAt",
+        gr."index_retry_attempts"    AS "repoIndexRetryAttempts",
+        gr."index_retry_dispatched_at" AS "repoIndexRetryDispatchedAt",
         gr."commits_behind"          AS "repoCommitsBehind",
         gr."commits_behind_base_sha" AS "repoCommitsBehindBaseSha",
         gr."commits_behind_head_sha" AS "repoCommitsBehindHeadSha"

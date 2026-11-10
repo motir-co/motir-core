@@ -1,6 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
 import {
-  containerReviewCount,
   deriveReviewState,
   reviewAnswerAt,
   skippedByName,
@@ -35,7 +34,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 // THE REVIEW STATE READ MODEL (Story MOTIR-10327 · MOTIR-10340; `approval-gates.md` §12;
 // `design/github/design-notes.md` § 32). ONE place answers, per card at its CURRENT
 // delivery-set version, what every surface says about its agent review — the marker, the
-// Reviewed state, the review line, a container's n of m, a review to run, and whether the
+// Reviewed state, the review line, a review to run, and whether the
 // routed person opened every pull request — so the board, the list, the header, To approve
 // and the gate frame cannot disagree about the same card at the same commits.
 //
@@ -59,12 +58,6 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 function routedIdOf(card: ReviewStateCardRow): string {
   /* v8 ignore next -- `reporterId` is NOT NULL on `work_item`. */
   return routingTargetId(card) ?? card.reporterId;
-}
-
-/** A card of a subtree walk, as the run-target rule reads it. */
-interface TreeNode {
-  id: string;
-  parentId: string | null;
 }
 
 function groupBy<T>(rows: readonly T[], key: (row: T) => string | null): Map<string, T[]> {
@@ -113,38 +106,6 @@ function setOf(
 }
 
 /**
- * The open RUN TARGETS of a tree: each card holding a delivery set of its own that its
- * nearest delivering ancestor (within the tree) does not already cover. A child built onto
- * its parent's pull requests is reviewed as that parent, so it is not counted twice; a
- * card with pull requests of its own is. A Done, Cancelled or archived card is not open.
- */
-function openRunTargets(
-  rootId: string,
-  nodes: readonly TreeNode[],
-  prIdsByCard: Map<string, Set<string>>,
-  isOpen: (id: string) => boolean,
-): string[] {
-  const parentOf = new Map(nodes.map((n) => [n.id, n.parentId] as const));
-  const targets: string[] = [];
-  for (const node of nodes) {
-    const own = prIdsByCard.get(node.id);
-    if (!own || own.size === 0) continue;
-    let covered = false;
-    let cursor: string | null = node.id === rootId ? null : (parentOf.get(node.id) ?? null);
-    while (cursor !== null) {
-      const above = prIdsByCard.get(cursor);
-      if (above && above.size > 0) {
-        covered = [...own].some((id) => above.has(id));
-        break;
-      }
-      cursor = cursor === rootId ? null : (parentOf.get(cursor) ?? null);
-    }
-    if (!covered && isOpen(node.id)) targets.push(node.id);
-  }
-  return targets;
-}
-
-/**
  * The review state of `workItemIds` in `projectId`, inside the caller's workspace-bound
  * transaction. A card that is not in the project, or not visible, is absent from the map.
  */
@@ -159,8 +120,11 @@ export async function readReviewStates(
   if (!project || project.workspaceId !== ctx.workspaceId) return out;
   if ((await projectAccessService.filterBrowsable([project], ctx, tx)).length === 0) return out;
 
-  const tree = await reviewStateRepository.listSubtrees([...new Set(workItemIds)], projectId, tx);
-  const allIds = [...new Set(tree.map((row) => row.id))];
+  // ⚠️ THE ASKED CARDS ONLY — never their subtrees. A container used to carry an *n of m
+  // reviewed* count over its tree, which made a page of 50 tree roots read every card under
+  // its epics (2,751 on the MOTIR project) and ran `/items` past the 5 s transaction limit.
+  // The count was dropped: a container wears no review state of its own.
+  const allIds = [...new Set(workItemIds)];
   const [cards, statuses, deliveries, agentGates, latestDecided, records, dismissals] =
     await Promise.all([
       reviewStateRepository.listCards(allIds, tx),
@@ -172,7 +136,6 @@ export async function readReviewStates(
       reviewStateRepository.listDismissals(allIds, tx),
     ]);
 
-  const cardById = new Map(cards.map((card) => [card.id, card] as const));
   const finishedStatuses = new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
   const isFinished = (card: ReviewStateCardRow) => finishedStatuses.has(card.status);
 
@@ -205,13 +168,8 @@ export async function readReviewStates(
   const recordsByCard = groupBy(records, (r) => r.workItemId);
   const dismissalsByCard = groupBy(dismissals, (d) => d.workItemId);
 
-  const derived = new Map<string, ReviewState>();
-  const stateOf = (id: string): ReviewState | null => {
-    const cached = derived.get(id);
-    if (cached) return cached;
-    const card = cardById.get(id);
-    /* v8 ignore next -- every id here came from the same transaction's tree walk. */
-    if (!card) return null;
+  const stateOf = (card: ReviewStateCardRow): ReviewState => {
+    const id = card.id;
     const set = setOf(deliveriesByCard.get(id) ?? [], reviewsByPr);
     const routedId = routedIdOf(card);
     const routed = personById.get(routedId);
@@ -238,37 +196,14 @@ export async function readReviewStates(
       routedGithubUserId: routed?.githubUserId ?? null,
       viewerUserId: ctx.userId,
     };
-    const state = deriveReviewState(facts);
-    derived.set(id, state);
-    return state;
+    return deriveReviewState(facts);
   };
 
-  const treeByRoot = groupBy(tree, (row) => row.rootId);
-  const prIdsByCard = new Map(
-    [...deliveriesByCard].map(([id, rows]) => [
-      id,
-      new Set(rows.map((d) => d.githubPullRequestId)),
-    ]),
-  );
-  const isOpen = (id: string) => {
+  // In the asked order; a card of another project, or none, is absent from the map.
+  const cardById = new Map(cards.map((card) => [card.id, card] as const));
+  for (const id of allIds) {
     const card = cardById.get(id);
-    return card !== undefined && card.archivedAt === null && !isFinished(card);
-  };
-
-  for (const id of new Set(workItemIds)) {
-    const card = cardById.get(id);
-    const state = card ? stateOf(id) : null;
-    if (!card || !state || card.projectId !== projectId) continue;
-    const nodes = treeByRoot.get(id) ?? [];
-    const container =
-      nodes.length > 1
-        ? containerReviewCount(
-            openRunTargets(id, nodes, prIdsByCard, isOpen).map((target) => ({
-              reviewed: Boolean(stateOf(target)?.reviewed),
-            })),
-          )
-        : null;
-    out.set(id, toReviewStateDto(card, state, container));
+    if (card?.projectId === projectId) out.set(id, toReviewStateDto(card, stateOf(card)));
   }
   return out;
 }

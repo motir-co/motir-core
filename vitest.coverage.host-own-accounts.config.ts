@@ -34,6 +34,9 @@ export default defineConfig({
       'tests/ciFleet/hostLeaveOwnAccounts.test.ts',
       // The story's integration gate (MOTIR-9591).
       'tests/ciFleet/hostOwnAccountsIntegration.test.ts',
+      // The install fleet (MOTIR-10794): the placement `chooseInTx` asks first,
+      // and its module.
+      'tests/ciFleet/installFleetPlacement.test.ts',
       // The tenant's door onto the capacity-request record and its DTO
       // (MOTIR-9662, `requestForOrganization` / `listForOrganization` /
       // `toOrgFleetCapacityRequestDTO`), which Story MOTIR-9368 added to two
@@ -51,6 +54,9 @@ export default defineConfig({
         'lib/ciFleet/hostAccounts.ts',
         'lib/ciFleet/hostAccountState.ts',
         'lib/ciFleet/hostMergedAccountSplit.ts',
+        // The install fleet's module (MOTIR-10794), whose placement this lane's
+        // admission service asks first.
+        'lib/ciFleet/installFleet.ts',
         'lib/mappers/fleetCapacityRequestMappers.ts',
         'lib/repositories/fleetCapacityRequestRepository.ts',
         'lib/repositories/hostAccountAttemptRepository.ts',
@@ -87,6 +93,12 @@ export default defineConfig({
           lines: 100,
         },
         'lib/ciFleet/hostMergedAccountSplit.ts': {
+          statements: 100,
+          branches: 100,
+          functions: 100,
+          lines: 100,
+        },
+        'lib/ciFleet/installFleet.ts': {
           statements: 100,
           branches: 100,
           functions: 100,

@@ -5,7 +5,7 @@ import {
 } from '@/lib/repositories/githubIdentityRepository';
 import { toGithubIdentityDTO } from '@/lib/mappers/githubMappers';
 import { encryptToken, decryptToken } from '@/lib/github/tokenCrypto';
-import { userOrgsClient, type GithubUserOrg } from '@/lib/github/userOrgs';
+import { userOrgsClient, GithubUserOrgsError, type GithubUserOrg } from '@/lib/github/userOrgs';
 import {
   GithubIdentityRefreshUnavailableError,
   GithubIdentityRefusedError,
@@ -185,7 +185,9 @@ export const githubIdentityService = {
    *   the next call tries again.
    * - A row with NO refresh token — linked before this change, or from an App
    *   that does not expire tokens — is returned as stored, never renewed; a dead
-   *   one meets MOTIR-8984's reconnect prompt on its first 401.
+   *   one meets MOTIR-8984's reconnect prompt on its first 401, which
+   *   {@link githubIdentityService.recordRejectedToken} records on the row (Bug
+   *   MOTIR-10806), so every later call refuses at once like a refused renewal.
    */
   async getLiveToken(userId: string): Promise<{ accessToken: string } | null> {
     for (;;) {
@@ -216,7 +218,61 @@ export const githubIdentityService = {
   async listOrganizations(userId: string): Promise<GithubUserOrg[]> {
     const live = await this.getLiveToken(userId);
     if (!live) return [];
-    return userOrgsClient.listForToken(live.accessToken);
+    try {
+      return await userOrgsClient.listForToken(live.accessToken);
+    } catch (err) {
+      // A 401 is a DEAD sign-in, not an unreachable GitHub (Bug MOTIR-10806): it
+      // is recorded and answered as the reconnect state. Every other failure is
+      // still the picker's "couldn't reach your organizations".
+      if (err instanceof GithubUserOrgsError && err.status === 401) {
+        await this.recordRejectedToken(userId, live.accessToken);
+        throw new GithubIdentityRefusedError();
+      }
+      throw err;
+    }
+  },
+
+  /**
+   * Record that GitHub REJECTED a user token Motir handed it — HTTP 401 `Bad
+   * credentials` from a user-token read (Bug MOTIR-10806). The caller then throws
+   * {@link GithubIdentityRefusedError}.
+   *
+   * ⚠️ "GITHUB REJECTED THIS SIGN-IN" IS ONE RECORDED STATE. A sign-in dies three
+   * ways: GitHub refuses the renewal, the access token expires on a row that has
+   * no refresh token (every row linked before MOTIR-10021), or the member revokes
+   * the App on GitHub. Only the first used to be written, so the account Git pane
+   * read the other two as Connected while every action asked the member to
+   * reconnect. All three now land on `refresh_refused_at`, which is what the
+   * pane's Needs re-auth reads (`toGithubIdentityDTO`), what `getLiveToken`
+   * answers with an immediate refusal, and what a reconnect clears.
+   *
+   * ⚠️ ONLY THE TOKEN THAT WAS REJECTED IS MARKED. The row is locked and its stored
+   * token compared with the one GitHub refused: a member who reconnected, or a
+   * renewal that rotated the pair, while the rejected call was in flight holds a
+   * NEW credential, and marking it would send a working sign-in to reconnect.
+   * The same holds while a renewal LEASE is live: GitHub may already have
+   * rotated the pair (which is what invalidated this token), and the renewal
+   * is about to store the new one, so its outcome decides — a refused renewal
+   * marks the row itself.
+   */
+  async recordRejectedToken(userId: string, accessToken: string): Promise<void> {
+    const marked = await withUserContext(userId, async (tx) => {
+      await githubIdentityRepository.lockByUserId(userId, tx);
+      const row = await githubIdentityRepository.findByUserId(userId, tx);
+      if (!row || row.refreshRefusedAt) return null;
+      if (row.refreshLeaseUntil && row.refreshLeaseUntil.getTime() > Date.now()) return null;
+      if (decryptToken(row.accessTokenEncrypted) !== accessToken) return null;
+      await githubIdentityRepository.markRefreshRefused(row.id, new Date(), tx);
+      return row.id;
+    });
+    if (marked) {
+      console.warn(
+        '[githubIdentityService] GitHub rejected the user token; the member must reconnect',
+        {
+          identityId: marked,
+        },
+      );
+    }
   },
 
   /**
@@ -322,7 +378,8 @@ async function decideRenewal(userId: string): Promise<RenewalDecision> {
     if (row.refreshRefusedAt) return { kind: 'refused' };
 
     // No refresh token: a row linked before MOTIR-10021, or a non-expiring
-    // token. Returned as stored — a dead one meets MOTIR-8984's 401 → reconnect.
+    // token. Returned as stored — GitHub is the authority on whether it is still
+    // live, and its first 401 marks the row (`recordRejectedToken`, MOTIR-10806).
     const now = Date.now();
     const fresh = { kind: 'fresh', accessToken: decryptToken(row.accessTokenEncrypted) } as const;
     if (!row.refreshTokenEncrypted || !row.tokenExpiresAt) return fresh;

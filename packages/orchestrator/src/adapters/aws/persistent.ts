@@ -14,6 +14,7 @@ import type {
   PersistentContainerSpec,
   PersistentContainerState,
   PersistentContainerStatus,
+  PersistentExecReadiness,
   PersistentExecResult,
   PersistentLivenessResult,
   PersistentMachineEvent,
@@ -37,8 +38,18 @@ import {
   type Ec2Tag,
   type Ec2Volume,
 } from './ec2Client';
-import { AWS_DEFAULT_INSTANCE_TYPE, AwsInstanceSizeError, transitionTimeOf } from './index';
-import { HOST_AGENT_PORT, type HostAgentClient, type HostAgentTls } from './hostAgentClient';
+import {
+  AWS_DEFAULT_INSTANCE_TYPE,
+  AwsInstanceSizeError,
+  transitionTimeOf,
+  type AwsExplicitNetwork,
+} from './index';
+import {
+  HOST_AGENT_PORT,
+  HostAgentUnreachableError,
+  type HostAgentClient,
+  type HostAgentTls,
+} from './hostAgentClient';
 import {
   hostCertificateNeedsRenewal,
   mintHostServerCertificate,
@@ -120,6 +131,16 @@ export const AWS_LIST_PAGE_SIZE = 200;
 /** The default bound on one exec, as on Fly. */
 export const AWS_EXEC_DEFAULT_TIMEOUT_SECONDS = 120;
 
+/**
+ * THE READINESS EXEC (MOTIR-10808): the no-op `checkExecReady` sends to the host
+ * agent. The contract defines no health path (`aws-hoster-host-agent.md` §1), so
+ * the probe is the exec door itself, with a command that does nothing. Its bound
+ * is short: a host agent that is up answers `true` at once, and one that is not
+ * fails at the transport — the client's deadline is this plus its margin.
+ */
+export const AWS_EXEC_READY_COMMAND: readonly string[] = ['true'];
+export const AWS_EXEC_READY_TIMEOUT_SECONDS = 5;
+
 /** The description on the host agent's one inbound rule. */
 export const AWS_HOST_AGENT_INGRESS_DESCRIPTION =
   'motir host agent - mutual TLS, Motir hoster CA client certificates only';
@@ -132,6 +153,26 @@ export const AWS_VOLUME_DELETE_ATTEMPTS = 10;
 
 /** The pause between those reads and tries. */
 export const AWS_PERSISTENT_POLL_MS = 2_000;
+
+/**
+ * THE HOME DISK OF A JUST-LAUNCHED INSTANCE (MOTIR-10826): the pauses between
+ * the provision's DescribeInstances reads, one entry per re-read, so at most
+ * `length + 1` reads over about 39 seconds.
+ *
+ * RunInstances never answers the block-device mapping (CloudTrail shows
+ * `blockDeviceMapping: {}` on every launch), so the describe is the only place
+ * the home disk's id comes from. And a describe sent the moment after the launch
+ * can answer `InvalidInstanceID.NotFound`, or list the instance before its
+ * volumes are attached: EC2 is eventually consistent for a resource it has just
+ * created, and asks callers to retry with a growing backoff
+ * (https://docs.aws.amazon.com/ec2/latest/devguide/eventual-consistency.html):
+ * exponential, from a second, capped at 8 s. AWS allows "up to a few minutes";
+ * the ceiling is lower because the create provisions inside the person's web
+ * request, and a propagation that slow is one a retry of the create meets.
+ */
+export const AWS_HOME_VOLUME_READ_DELAYS_MS: readonly number[] = [
+  1_000, 2_000, 4_000, 8_000, 8_000, 8_000, 8_000,
+];
 
 /** The volume capacity codes — the EC2 error-codes reference
  *  (https://docs.aws.amazon.com/AWSEC2/latest/APIReference/errors-overview.html).
@@ -150,6 +191,42 @@ export class AwsPersistentSpecError extends Error {
   constructor(readonly reason: 'missing_zone') {
     super('An AWS agent instance needs the availability zone its disk will live in.');
     this.name = 'AwsPersistentSpecError';
+  }
+}
+
+/** What the provision last read of an instance whose home disk it never saw. */
+export type AwsHomeVolumeLastRead = 'not_found' | 'no_mapping' | 'terminated';
+
+/**
+ * THE HOME DISK NEVER APPEARED (MOTIR-10826). EC2 launched the instance, but no
+ * describe within {@link AWS_HOME_VOLUME_READ_DELAYS_MS} listed a volume on
+ * {@link AWS_HOME_DEVICE_NAME}, or the instance ended while it was waited for.
+ * The instance has been terminated; its disk (`DeleteOnTermination: false`) is
+ * left where it is.
+ *
+ * A subclass, as `OrchestratorCapacityError` is, so every `catch
+ * (OrchestratorApiError)` keeps catching it, and its message REPLACED: EC2
+ * answered every read, so "could not be reached" would describe a transport
+ * failure that never happened.
+ */
+export class AwsHomeVolumeMissingError extends OrchestratorApiError {
+  constructor(
+    readonly instanceId: string,
+    readonly reads: number,
+    readonly lastRead: AwsHomeVolumeLastRead,
+  ) {
+    super('aws', null, 'MissingField.HomeVolume');
+    this.name = 'AwsHomeVolumeMissingError';
+    const seen =
+      lastRead === 'not_found'
+        ? 'EC2 did not know the instance yet'
+        : lastRead === 'no_mapping'
+          ? `the instance listed no volume on ${AWS_HOME_DEVICE_NAME}`
+          : 'the instance had ended';
+    this.message =
+      `The aws machine ${instanceId} was launched, but its home disk never appeared ` +
+      `(${reads} ${reads === 1 ? 'read' : 'reads'}; last: ${seen}). ` +
+      `The machine was terminated; its disk was left in the account.`;
   }
 }
 
@@ -183,6 +260,10 @@ export interface AwsPersistentOrchestratorConfig {
   readonly now?: () => Date;
   /** The pause between polls — the test seam. */
   readonly sleep?: (ms: number) => Promise<void>;
+  /** Subnets and group NAMED by configuration — the install fleet's
+   *  (MOTIR-10794). The zone's subnet is the one of them EC2 places in that zone,
+   *  and the group's inbound rule is its infrastructure's, never written here. */
+  readonly network?: AwsExplicitNetwork;
 }
 
 function defaultInstanceType(size: ContainerSize): string | null {
@@ -328,6 +409,7 @@ export function createAwsPersistentOrchestrator(
 
   /** The account's subnet in `zone` and its security group, found by tag. */
   async function networkIn(zone: string): Promise<{ subnetId: string; securityGroupId: string }> {
+    if (config.network) return namedNetworkIn(config.network, zone);
     const byTag = { name: `tag:${AWS_SHARD_TAG_KEY}`, values: [shardTag] };
     let subnets, groups;
     try {
@@ -348,10 +430,76 @@ export function createAwsPersistentOrchestrator(
     return { subnetId: subnets[0]!.subnetId, securityGroupId: groups[0]!.groupId };
   }
 
+  /** The named subnet in `zone`, read by id (MOTIR-10794). */
+  async function namedNetworkIn(
+    named: AwsExplicitNetwork,
+    zone: string,
+  ): Promise<{ subnetId: string; securityGroupId: string }> {
+    let subnets;
+    try {
+      subnets = await ec2.describeSubnets([
+        { name: 'subnet-id', values: [...named.subnetIds] },
+        { name: 'availability-zone', values: [zone] },
+      ]);
+    } catch (err) {
+      throw awsApiError(err);
+    }
+    if (subnets.length === 0) {
+      throw new OrchestratorNotConfiguredError(
+        `none of the configured subnets is in ${zone} (${region})`,
+      );
+    }
+    return { subnetId: subnets[0]!.subnetId, securityGroupId: named.securityGroupId };
+  }
+
   const readInstance = (id: string) => readAwsInstance(ec2, id);
 
   function homeVolumeOf(instance: Ec2Instance | null): string | null {
     return instance?.volumes?.find((v) => v.deviceName === AWS_HOME_DEVICE_NAME)?.volumeId ?? null;
+  }
+
+  /**
+   * THE HOME DISK OF THE INSTANCE JUST LAUNCHED (MOTIR-10826), re-read on
+   * {@link AWS_HOME_VOLUME_READ_DELAYS_MS}. For THIS id, and only here,
+   * `InvalidInstanceID.NotFound` means "not visible yet", never "gone": EC2 made
+   * it a moment ago. A throttle, a 5xx or a transport failure is retried within
+   * the same ceiling, because a machine already exists and giving it back is
+   * the costlier answer. An instance that ends while it is waited for, a
+   * non-retryable refusal, or the ceiling, stops the wait; the caller gives the
+   * machine back.
+   */
+  async function awaitHomeVolume(
+    id: string,
+  ): Promise<
+    | { readonly kind: 'listed'; readonly volumeId: string; readonly reads: number }
+    | { readonly kind: 'missing'; readonly reads: number; readonly lastRead: AwsHomeVolumeLastRead }
+    | { readonly kind: 'refused'; readonly reads: number; readonly error: unknown }
+  > {
+    let lastRead: AwsHomeVolumeLastRead = 'not_found';
+    for (let reads = 1; ; reads += 1) {
+      let instance: Ec2Instance | null = null;
+      try {
+        instance = (await ec2.describeInstances({ instanceIds: [id] })).instances[0] ?? null;
+      } catch (err) {
+        const notYet =
+          codeOf(err) === 'InvalidInstanceID.NotFound' ||
+          (err instanceof Ec2ApiError && err.retryable);
+        if (!notYet) return { kind: 'refused', reads, error: err };
+      }
+      if (instance) {
+        const volumeId = homeVolumeOf(instance);
+        if (volumeId) return { kind: 'listed', volumeId, reads };
+        if (instance.state === 'shutting-down' || instance.state === 'terminated') {
+          return { kind: 'missing', reads, lastRead: 'terminated' };
+        }
+        lastRead = 'no_mapping';
+      } else {
+        lastRead = 'not_found';
+      }
+      const delay = AWS_HOME_VOLUME_READ_DELAYS_MS[reads - 1];
+      if (delay === undefined) return { kind: 'missing', reads, lastRead };
+      await sleep(delay);
+    }
   }
 
   /** Terminate; an id EC2 no longer knows is already gone. */
@@ -408,7 +556,7 @@ export function createAwsPersistentOrchestrator(
     userData: string,
   ): Promise<Ec2Instance> {
     const { subnetId, securityGroupId } = await networkIn(zone);
-    await ensureHostAgentIngress(securityGroupId);
+    if (!config.network) await ensureHostAgentIngress(securityGroupId);
     const token = clientToken();
     for (let attempt = 1; ; attempt += 1) {
       try {
@@ -574,15 +722,30 @@ export function createAwsPersistentOrchestrator(
       );
 
       const launched = await launch(spec, zone, instanceType, userData);
-      // RunInstances answers the mapping it made; when it did not, describe it.
-      const volumeId =
-        homeVolumeOf(launched) ?? homeVolumeOf(await readInstance(launched.instanceId));
-      if (!volumeId) {
+      // RunInstances does not answer the mapping (MOTIR-10826), so the disk's id
+      // comes from describing the instance until EC2 lists it.
+      const found = await awaitHomeVolume(launched.instanceId);
+      if (found.kind !== 'listed') {
         // Not a handle Motir could ever destroy the disk of: give the machine
-        // back now, and leave the disk to the reconciler's tag listing.
+        // back now, and leave the disk in the account. A hoster account's disk
+        // pass deletes it; the install fleet's disks have none yet (MOTIR-10828).
         await terminate(launched.instanceId);
-        throw new OrchestratorApiError('aws', null, 'MissingField.HomeVolume');
+        if (found.kind === 'refused') throw awsApiError(found.error);
+        console.warn('[awsPersistent] a launched machine never listed its home disk', {
+          instanceId: launched.instanceId,
+          describes: found.reads,
+          lastRead: found.lastRead,
+        });
+        throw new AwsHomeVolumeMissingError(launched.instanceId, found.reads, found.lastRead);
       }
+      // How long EC2 took to list the disk — the evidence MOTIR-10826 asks for.
+      // eslint-disable-next-line no-console -- the timing trace the card asks for (AC5: describes to see the disk)
+      console.info('[awsPersistent] home disk listed', {
+        instanceId: launched.instanceId,
+        volumeId: found.volumeId,
+        describes: found.reads,
+      });
+      const volumeId = found.volumeId;
       return {
         provider: 'aws',
         app: shardTag,
@@ -786,12 +949,42 @@ export function createAwsPersistentOrchestrator(
       options: { timeoutSeconds?: number; stdin?: string } = {},
     ): Promise<PersistentExecResult> {
       const address = await publicAddressOf(ec2, handle.machineId);
-      if (!address) throw new OrchestratorApiError('aws', 503, 'unreachable');
+      if (!address) throw new HostAgentUnreachableError();
       return config.hostAgent.client.exec(address, {
         command,
         ...(options.stdin !== undefined ? { stdin: options.stdin } : {}),
         timeoutSeconds: options.timeoutSeconds ?? AWS_EXEC_DEFAULT_TIMEOUT_SECONDS,
       });
+    },
+
+    /** A running instance's host agent starts only after the per-boot script has
+     *  pulled the image and started the container (the hoster AMI orders its
+     *  service after cloud-final), minutes after EC2 reports `running`. So the
+     *  instance is `starting` until a no-op exec gets ANY answer from it; only
+     *  a transport failure — {@link HostAgentUnreachableError} — or an error
+     *  reading its address means not yet. A host agent that answered with a
+     *  refusal or a timeout is up: the boot's first real exec meets that. */
+    async checkExecReady(handle: PersistentContainerHandle): Promise<PersistentExecReadiness> {
+      let address: string | null;
+      try {
+        address = await publicAddressOf(ec2, handle.machineId);
+      } catch {
+        // EC2 could not be asked for the address: not known to answer yet.
+        return 'starting';
+      }
+      if (!address) return 'starting';
+      try {
+        await config.hostAgent.client.exec(address, {
+          command: AWS_EXEC_READY_COMMAND,
+          timeoutSeconds: AWS_EXEC_READY_TIMEOUT_SECONDS,
+        });
+      } catch (err) {
+        if (err instanceof HostAgentUnreachableError) return 'starting';
+        // `exec_timeout` or `host_agent_refused`: the agent answered. Anything
+        // else is not a host agent's answer, and is not hidden as one.
+        if (!(err instanceof OrchestratorApiError)) throw err;
+      }
+      return 'ready';
     },
 
     terminalEndpoint(handle: PersistentContainerHandle): Promise<PersistentTerminalEndpoint> {

@@ -279,6 +279,11 @@ export function describePersistentContract(
       },
     );
 
+    it('9b · checkExecReady answers ready on a running machine whose exec answers (MOTIR-10808)', async () => {
+      const handle = await provisioned();
+      expect(await orchestrator.checkExecReady(handle)).toBe('ready');
+    });
+
     it('10 · destroyPersistent takes the machine, THEN the volume', async () => {
       const handle = await provisioned();
       await orchestrator.destroyPersistent(handle);

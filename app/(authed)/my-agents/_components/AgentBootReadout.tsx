@@ -16,7 +16,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { INSTANCE_BOOT_DEADLINE_MS } from '@/lib/agentInstances/config';
+import { BOOT_AGENT_DEADLINE_DETAIL, INSTANCE_BOOT_DEADLINE_MS } from '@/lib/agentInstances/config';
 import type { AgentInstanceBootDto, AgentInstanceBootStepDto } from '@/lib/dto/agentInstances';
 
 // THE BOOT READ-OUT (Story MOTIR-7393 · MOTIR-7400), built to the approved delta
@@ -113,6 +113,9 @@ function failedDetail(step: AgentInstanceBootStepDto, t: Translate): string | nu
   if (exit) return t('detail.exited', { code: exit[1]! });
   if (detail === 'the machine did not start in time')
     return t('detail.deadline', { minutes: INSTANCE_BOOT_DEADLINE_MS / 60_000 });
+  // The machine ran, but its agent never took a command (MOTIR-10808).
+  if (detail === BOOT_AGENT_DEADLINE_DETAIL)
+    return t('detail.agentDeadline', { minutes: INSTANCE_BOOT_DEADLINE_MS / 60_000 });
   if (
     step.step === 'clone' &&
     /not installed|no installation|has no access|not found/i.test(detail) &&

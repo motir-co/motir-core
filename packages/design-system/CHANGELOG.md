@@ -1,5 +1,32 @@
 # @motir/design-system
 
+## 0.22.2
+
+### Patch Changes
+
+- 15c171e: README: the Usage block adds the `@source '../node_modules/@motir/design-system/dist';` line and says why. Without it Tailwind never generates the utilities used only inside the package's compiled components (MOTIR-10835).
+
+## 0.22.1
+
+### Patch Changes
+
+- 030761d: An unregistered `data-palette` id, or a root with no `data-palette`, now renders the default `motir` palette (`DEFAULT_PALETTE_ID`) instead of the `amethyst` stylesheet base, so the palette axis falls back to its default id like the style and type axes do. Every registered palette renders exactly as before. The `motir` block carries two extra fallback selectors that name every registered id; a new palette must add its id to them (MOTIR-10834).
+
+## 0.22.0
+
+### Minor Changes
+
+- d246115: Add the Contrast palette (`data-palette="contrast"`): one Radix Gray ramp with body text at 7:1 (AAA) under every style in light and dark, control edges at 3:1, a Plum primary and step-3 tints.
+- d246115: Add the Lagoon palette (`data-palette="lagoon"`): a deep lagoon-cyan primary over shallow-water cyan surfaces and Slate ink, with a coral highlight, every value a Radix Colors step and every text role AA in light and dark under every style.
+- d246115: Add the Midnight palette (`data-palette="midnight"`): dark-first — authored in Radix Slate and Sky dark with each light value derived as the same step of the light scale — a starlight-sky primary over a night-slate ground, AA in light and dark under every style.
+- d246115: Add the Olive palette (`data-palette="olive"`): a moss primary over warm olive greys with a terracotta highlight, every value a Radix Colors step and every text role AA in light and dark under every style.
+
+## 0.21.4
+
+### Patch Changes
+
+- fe354d8: Memphis: lower the canvas pattern to 11% accent dots, 9% highlight dots and a 5% link hatch, so text on a dot that lands on a hatch line clears AA in every palette (MOTIR-10745).
+
 ## 0.21.3
 
 ### Patch Changes
@@ -8,6 +35,17 @@
 - 6f1a304: Glassmorphism: the canvas wash drops from 42% to 12% and the AI hero pill fill rises from 86% to 94% accent, so text on the canvas and the pill label clear WCAG AA (4.5:1) in every palette and mode (MOTIR-10707).
 
 ## 0.21.2
+
+### Minor Changes
+
+- 42424ef: Add the Dense / Pro style (`data-style="dense-pro"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the High-Contrast / Accessible style (`data-style="high-contrast-accessible"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Tonal / Elevated style (`data-style="tonal-elevated"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Claymorphism style (`data-style="claymorphism"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Bento style (`data-style="bento"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Editorial Print / Newspaper style (`data-style="editorial-print"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Art Deco style (`data-style="art-deco"`) to the style registry and `theme.css` (MOTIR-10549).
+- 42424ef: Add the Memphis style (`data-style="memphis"`) to the style registry and `theme.css` (MOTIR-10549).
 
 ### Patch Changes
 
@@ -24,6 +62,11 @@
 ### Minor Changes
 
 - 4114081: `theme.css` adds `--spacing-shadow-elevated-drop` (MOTIR-10631): how far the solid edge of `--shadow-elevated` falls below the box that casts it. It is `0px` in every style whose elevated shadow is blurred, and `6px` in Neo-Brutalism, whose elevated shadow is a hard 6px offset block. A control hung over other content lifts itself by it, so its shadow clears what it floats above as its box does. No existing token changes.
+- 69dec83: Add the `marker` type pairing (`data-type="marker"`), a marker / script face, Hand-Drawn's default (MOTIR-10548).
+- 69dec83: Add the `rounded` type pairing (`data-type="rounded"`), a rounded sans (MOTIR-10548).
+- 69dec83: Add the `slab` type pairing (`data-type="slab"`), a slab serif (MOTIR-10548).
+- 69dec83: Add the `humanist` type pairing (`data-type="humanist"`), a humanist sans (MOTIR-10548).
+- c04656c: Export `DatePicker` from the package root, with an injected locale and date formatter (MOTIR-10551).
 
 ## 0.20.0
 

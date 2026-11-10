@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { Editor } from '@tiptap/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { clearToastTimersAfterEach } from '../helpers/toastTimers';
 import { ToastProvider } from '@/components/ui/Toast';
 import { PageView, type PageViewPage } from '@/app/(authed)/pages/[pageId]/_components/PageView';
 import type { PageVersionListItemDto } from '@/lib/dto/pages';
@@ -124,6 +125,8 @@ async function confirmRestore() {
   });
 }
 
+clearToastTimersAfterEach();
+
 beforeEach(() => {
   for (const key of Object.keys(answers)) delete answers[key];
   fetchMock.mockClear();
@@ -133,6 +136,7 @@ afterEach(() => {
   cleanup();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe('who sees Restore', () => {

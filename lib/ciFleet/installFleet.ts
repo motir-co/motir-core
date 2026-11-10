@@ -1,0 +1,134 @@
+import { OrchestratorNotConfiguredError, type FleetWorkloadKind } from '@motir/orchestrator';
+import { isCloud } from '@/lib/billing/availability';
+
+// THE INSTALL FLEET (Story MOTIR-10792 · MOTIR-10794) — the VMs the install's
+// OWN organisation runs on, in core's own AWS account, with no pool account, no
+// `fleet_shard` row and no shared or org cap. The install's own organisation is
+// the meta org on Motir cloud and, with cloud off, the install's one org (any
+// org). Three kinds may run there — the index, the agent host and the agent run
+// — and only those `MOTIR_INSTALL_FLEET_KINDS` lists; a CI runner never does.
+//
+// motir-infra (MOTIR-10793) defines the subnets, the security group and the VM
+// instance profile and passes them to core's tasks under the names below. Core
+// launches with its own task-role credentials: nothing is assumed.
+//
+// ⚠️ NO ROW, SO A PSEUDO-ACCOUNT ID. Every boot path resolves "where does this
+// container live" through one account id (`fleetShardOrchestratorService.forShard`),
+// and a session memo carries it across steps. The install fleet's is
+// {@link INSTALL_FLEET_SHARD_ID}: it lives in memory and in memos only, and is
+// never written to a `fleet_shard_id` column — every row of an install-fleet
+// container carries null there, as the card requires.
+
+export const INSTALL_FLEET_KINDS_ENV = 'MOTIR_INSTALL_FLEET_KINDS';
+export const INSTALL_FLEET_SUBNET_IDS_ENV = 'MOTIR_INSTALL_FLEET_SUBNET_IDS';
+export const INSTALL_FLEET_SECURITY_GROUP_ID_ENV = 'MOTIR_INSTALL_FLEET_SECURITY_GROUP_ID';
+export const INSTALL_FLEET_INSTANCE_PROFILE_ARN_ENV = 'MOTIR_INSTALL_FLEET_INSTANCE_PROFILE_ARN';
+export const INSTALL_FLEET_REGION_ENV = 'MOTIR_INSTALL_FLEET_REGION';
+
+/** The install fleet's pseudo-account id — never a `fleet_shard` row's (a cuid). */
+export const INSTALL_FLEET_SHARD_ID = 'install-fleet';
+
+/** The `motir-shard` tag every install-fleet VM AND its volumes carry, and the
+ *  `app` of its agent instances' handles: what the reconciler and the routing
+ *  find it by. motir-infra's grants (MOTIR-10793) are conditioned on exactly
+ *  this value — a launch without it is refused. */
+export const INSTALL_FLEET_TAG = 'motir-install-fleet';
+
+/** The kinds the install fleet can run at all. */
+const ELIGIBLE: ReadonlySet<FleetWorkloadKind> = new Set<FleetWorkloadKind>([
+  'code_graph_index',
+  'agent_instance',
+  'hosted_agent',
+]);
+
+/** Is this the install fleet's pseudo-account id? */
+export function isInstallFleetShardId(id: string | null | undefined): boolean {
+  return id === INSTALL_FLEET_SHARD_ID;
+}
+
+/**
+ * What a `fleet_shard_id` column records for the account a container booted on:
+ * the account's id, or null for the install fleet and the process-wide fleet —
+ * the never-written contract above (MOTIR-10858). The pseudo-account id has no
+ * `fleet_shard` row, so writing it would break the column's foreign key.
+ */
+export function fleetShardIdForColumn(id: string | null | undefined): string | null {
+  if (id === null || id === undefined || isInstallFleetShardId(id)) return null;
+  return id;
+}
+
+/**
+ * Was this container placed on the install fleet? Its row records no account
+ * (`fleet_shard_id` is null) and its handle's app is the install fleet's tag
+ * (MOTIR-10794). A null account with any other app is the process-wide lane.
+ */
+export function isOnInstallFleet(placement: {
+  fleetShardId: string | null;
+  flyApp?: string | null;
+}): boolean {
+  return placement.fleetShardId === null && placement.flyApp === INSTALL_FLEET_TAG;
+}
+
+/** The kinds `MOTIR_INSTALL_FLEET_KINDS` lists that the install fleet can run.
+ *  Unset or empty: none, and every placement is as before. Read per call. */
+export function installFleetKinds(): ReadonlySet<FleetWorkloadKind> {
+  const raw = process.env[INSTALL_FLEET_KINDS_ENV] ?? '';
+  const kinds = raw
+    .split(',')
+    .map((kind) => kind.trim())
+    .filter((kind): kind is FleetWorkloadKind => ELIGIBLE.has(kind as FleetWorkloadKind));
+  return new Set(kinds);
+}
+
+/** Does the install fleet take this kind on this deployment? */
+export function installFleetTakesKind(kind: FleetWorkloadKind): boolean {
+  return installFleetKinds().has(kind);
+}
+
+/** Is this org the install's own — the meta org on cloud, any org with cloud off? */
+export function isInstallOrganization(org: { isMeta: boolean } | null): boolean {
+  if (!isCloud()) return true;
+  return org?.isMeta === true;
+}
+
+/** Is any install-fleet kind configured? The reconciler walks the fleet only then. */
+export function isInstallFleetEnabled(): boolean {
+  return installFleetKinds().size > 0;
+}
+
+/** Where the install fleet's VMs go. */
+export interface InstallFleetConfig {
+  readonly region: string;
+  readonly subnetIds: readonly string[];
+  readonly securityGroupId: string;
+  readonly instanceProfileArn: string;
+}
+
+/**
+ * The install fleet's network, profile and region — or the typed not-configured
+ * error naming EVERY missing variable at once, as `indexFleetConfig` does: a
+ * listed kind with no network is a misconfiguration to say loudly at the boot,
+ * never a quiet fall back to a pool the admission did not count it against.
+ */
+export function installFleetConfig(): InstallFleetConfig {
+  const read = (name: string) => process.env[name]?.trim() ?? '';
+  const subnetIds = read(INSTALL_FLEET_SUBNET_IDS_ENV)
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  const values = {
+    region: read(INSTALL_FLEET_REGION_ENV),
+    securityGroupId: read(INSTALL_FLEET_SECURITY_GROUP_ID_ENV),
+    instanceProfileArn: read(INSTALL_FLEET_INSTANCE_PROFILE_ARN_ENV),
+  };
+  const missing = [
+    ...(subnetIds.length === 0 ? [INSTALL_FLEET_SUBNET_IDS_ENV] : []),
+    ...(values.securityGroupId ? [] : [INSTALL_FLEET_SECURITY_GROUP_ID_ENV]),
+    ...(values.instanceProfileArn ? [] : [INSTALL_FLEET_INSTANCE_PROFILE_ARN_ENV]),
+    ...(values.region ? [] : [INSTALL_FLEET_REGION_ENV]),
+  ];
+  if (missing.length > 0) {
+    throw new OrchestratorNotConfiguredError(`set ${missing.join(', ')}`);
+  }
+  return { ...values, subnetIds };
+}

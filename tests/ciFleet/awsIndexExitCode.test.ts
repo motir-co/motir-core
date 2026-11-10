@@ -17,6 +17,8 @@ interface Ec2Fake extends Ec2Api {
   exitIndexContainer(instanceId: string, code: number): void;
   powerOff(instanceId: string): void;
   markImageUnpullable(image: string): void;
+  exitIndexContainerUnposted(instanceId: string, code: number): void;
+  postConsole(instanceId: string): void;
 }
 
 type Source = typeof import('@motir/orchestrator');
@@ -53,13 +55,14 @@ beforeEach(() => {
   ec2.seedShardNetwork(SHARD_TAG);
 });
 
-function orchestrator() {
+function orchestrator(now?: () => Date) {
   return source.createAwsOrchestrator({
     ec2,
     region: 'us-east-1',
     shardTag: SHARD_TAG,
     amiId: 'ami-0runner000000000',
     indexerAmiId: 'ami-0dockerhost00000',
+    ...(now ? { now } : {}),
   });
 }
 
@@ -81,10 +84,35 @@ describe('an AWS index VM’s exit code classifies as on Fly (MOTIR-9449)', () =
     expect(classifyIndexExit(status.exitCode)).toMatchObject({ exitClass, indexed });
   });
 
-  it('a VM that stopped with no recorded code classifies as exit_unobserved', async () => {
-    const status = await finished((id) => ec2.powerOff(id));
+  it('a VM that stopped with no recorded code classifies as exit_unobserved once the console grace window closes', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const aws = orchestrator(() => new Date(clock));
+    const handle = await aws.provision(INDEX_SPEC);
+    ec2.powerOff(handle.id);
+
+    // EC2 may not have posted the console yet: not terminal, so supervision polls again.
+    expect((await aws.describe(handle)).terminal).toBe(false);
+    clock += source.AWS_INDEX_CONSOLE_GRACE_MS;
+    const status = await aws.describe(handle);
     expect(status.terminal).toBe(true);
     expect(classifyIndexExit(status.exitCode).exitClass).toBe('exit_unobserved');
+  });
+
+  it('a code EC2 posts minutes after the stop classifies as indexed (MOTIR-10805)', async () => {
+    let clock = Date.parse('2026-11-09T11:13:00Z');
+    const aws = orchestrator(() => new Date(clock));
+    const handle = await aws.provision(INDEX_SPEC);
+    ec2.exitIndexContainerUnposted(handle.id, 0);
+
+    expect((await aws.describe(handle)).terminal).toBe(false);
+    clock += 5 * 60_000;
+    ec2.postConsole(handle.id);
+    const status = await aws.describe(handle);
+    expect(status.terminal).toBe(true);
+    expect(classifyIndexExit(status.exitCode)).toMatchObject({
+      exitClass: 'indexed',
+      indexed: true,
+    });
   });
 
   it('a running VM carries no code', async () => {

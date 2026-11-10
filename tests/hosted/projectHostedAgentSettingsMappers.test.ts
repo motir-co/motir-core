@@ -20,7 +20,13 @@ describe('toProjectHostedAgentSettingsDto', () => {
   it('labels the bare offer with an empty provider when no provider list is passed', () => {
     const dto = toProjectHostedAgentSettingsDto(
       { ...NO_OVERRIDES, hostedModelHigh: 'm-2' },
-      { models: ['m-1', 'm-2'], default: 'm-1', defaultsByDifficulty: NO_LEVELS },
+      {
+        models: ['m-1', 'm-2'],
+        default: 'm-1',
+        defaultsByDifficulty: NO_LEVELS,
+        reviewAgentDefault: null,
+        designRunDefault: null,
+      },
     );
     expect(dto.offered).toEqual([
       { id: 'm-1', provider: '' },
@@ -38,7 +44,13 @@ describe('toProjectHostedAgentSettingsDto', () => {
   it('answers null effective models and sources when nothing is offered', () => {
     const dto = toProjectHostedAgentSettingsDto(
       { ...NO_OVERRIDES, hostedModelLow: 'm-gone' },
-      { models: [], default: null, defaultsByDifficulty: NO_LEVELS },
+      {
+        models: [],
+        default: null,
+        defaultsByDifficulty: NO_LEVELS,
+        reviewAgentDefault: null,
+        designRunDefault: null,
+      },
     );
     expect(dto.offeredModels).toEqual([]);
     expect(dto.noDifficulty).toEqual({ effective: null, source: null });

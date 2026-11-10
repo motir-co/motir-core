@@ -170,6 +170,11 @@ export function hostedRunSeamEnv(): Record<string, string> {
     ...(process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH']
       ? { MOTIR_HOSTED_RUN_JOURNAL_PATH: process.env['MOTIR_HOSTED_RUN_JOURNAL_PATH'] }
       : {}),
+    // The org tier fixture (MOTIR-10849): a hosted review resolves its org's model
+    // HERE, so its tier read answers from the same file the webServer's does.
+    ...(process.env['MOTIR_AI_ORG_TIER_FIXTURE_PATH']
+      ? { MOTIR_AI_ORG_TIER_FIXTURE_PATH: process.env['MOTIR_AI_ORG_TIER_FIXTURE_PATH'] }
+      : {}),
     ...(process.env['MOTIR_FAKE_CONTAINER_STATE_PATH']
       ? { MOTIR_FAKE_CONTAINER_STATE_PATH: process.env['MOTIR_FAKE_CONTAINER_STATE_PATH'] }
       : {}),

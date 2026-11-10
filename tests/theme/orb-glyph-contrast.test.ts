@@ -274,11 +274,11 @@ describe('the floating orb’s glyph (MOTIR-3207)', () => {
     expect(mockGradient()).toContain(`var(${MIX_TOKEN})`);
   });
 
-  it('resolves every stop in all twenty palette × theme contexts', () => {
+  it('resolves every stop in every palette × theme context', () => {
     // Guards the guard: an expression this evaluator silently skipped would
     // make every assertion below vacuous.
     expect(CONTEXTS).toHaveLength(PALETTE_IDS.length * 2);
-    expect(MEASURED.size).toBe(20);
+    expect(MEASURED.size).toBe(CONTEXTS.length);
     for (const [key, { stops }] of MEASURED) {
       expect(stops, key).toHaveLength(3);
     }

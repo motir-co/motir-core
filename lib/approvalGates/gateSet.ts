@@ -127,6 +127,10 @@ export interface GateSetInput {
    * asked while anything under the story, the recording subtask included, is still
    * open. Optional; absent reads as NOT settled, so a caller that did not load it
    * never raises the question early.
+   *
+   * ⚠️ ALSO READ on a STORY RUN whose every member has MERGED (Bug MOTIR-10837): with
+   * nothing left to land there is no merge question for the video to ride, so the story
+   * is asked as a finished story is — once its subtree is settled.
    */
   subtreeSettled?: boolean;
   /** The card's most recent approve-to-merge gate, whatever its state, or null. */
@@ -539,7 +543,9 @@ export function decisionApprovalStandsForMerge(
  *     requests"*. On a STORY run (the story delivers pull requests) that is exactly when
  *     every member could be merged now; on a SUBTASK run (it delivers none) it is when
  *     every descendant is in the done category. Never while a story's set is red, and
- *     never while the recording subtask is unmerged.
+ *     never while the recording subtask is unmerged. A story run whose every member has
+ *     already MERGED is asked as a subtask run is, once the subtree is settled
+ *     (MOTIR-10837) — its merge question has nothing left to land.
  *  3. **The MERGE question** is owed in a `manual` project when the card delivers at
  *     least one pull request, EVERY member could be merged now or has already merged
  *     (a merged member is settled — MOTIR-5901), at least one is still open to merge,
@@ -684,9 +690,37 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   const storyRun = input.members.length > 0;
   // A story run's video rides the merge question, so it takes that question's status
   // condition too (MOTIR-6971): asked only while the story is `in_review`.
-  const acceptanceTimely = storyRun
-    ? everyMemberMergeable && input.cardInReview
-    : input.subtreeSettled === true;
+  //
+  // ⚠️ AND A STORY RUN'S VIDEO IS NOT ASKED WHILE THE MERGE IS REFUSED AT THIS VERSION —
+  // a person's Request changes on the merge gate, or a standing agent send-back. The video
+  // rides the merge question, so refusing the commits withdrew it too
+  // (`pullRequestApprovalHandler.requestChanges`, `reviewVerdictService`'s send-back), and
+  // without this clause the next reconcile would ask it again, alone, over the code just
+  // sent back. A push moves the version and asks both again.
+  const sentBack =
+    version !== null &&
+    (input.agentSendBackVersion ?? null) === version &&
+    (input.dismissedSendBackVersion ?? null) !== version;
+  const mergeRefusedAtVersion =
+    version !== null &&
+    input.latestMergeGate?.state === 'changes_requested' &&
+    input.latestMergeGate.subjectId === input.workItemId &&
+    input.latestMergeGate.subjectVersion === version;
+  // ⚠️ A STORY RUN WHOSE OWN PULL REQUESTS HAVE ALL MERGED HAS NO MERGE QUESTION LEFT FOR
+  // THE VIDEO TO RIDE (Bug MOTIR-10837). `everyMemberMergeable` needs a member still open,
+  // which is right for the merge question and can never hold once every member has merged —
+  // so a receipt published after the last merge was asked of nobody. With nothing left to
+  // land the story is a FINISHED story, and its video follows the settled rule a subtask
+  // run's does: asked once nothing under the story is open. This is the shape
+  // `acceptanceResultHandler` already reads (`hasOpenOwnDelivery` false ⇒ the approval is
+  // terminal once the subtree is settled), so the question and its press agree. A member
+  // CLOSED WITHOUT MERGING is not merged, so it keeps the story-run branch, where it is not
+  // mergeable either, and still holds the question back.
+  const everyMemberMerged = storyRun && input.members.every((member) => member.merged === true);
+  const acceptanceTimely =
+    storyRun && !everyMemberMerged
+      ? everyMemberMergeable && input.cardInReview && !mergeRefusedAtVersion && !sentBack
+      : input.subtreeSettled === true;
   if (
     receipt !== null &&
     acceptanceTimely &&
@@ -750,11 +784,8 @@ export function resolveGateSet(input: GateSetInput): GateSet {
   // the merge question stays withdrawn (`agent_changes_requested`) until a push moves the
   // version, and a review switched on since is not asked of commits already reviewed.
   // A person's DISMISSAL at the version (MOTIR-10334; §12.15) ends it: the merge question is
-  // asked again, at the same version, through this one rule.
-  const sentBack =
-    version !== null &&
-    (input.agentSendBackVersion ?? null) === version &&
-    (input.dismissedSendBackVersion ?? null) !== version;
+  // asked again, at the same version, through this one rule. (`sentBack` is computed above,
+  // where the acceptance question reads it too.)
   if (mergeAskable && !sentBack && review === 'owed') {
     awaited.push({
       kind: 'agent_review',

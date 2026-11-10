@@ -1,27 +1,30 @@
 'use client';
 
-import { useId, useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
 import { useFormatter, useTranslations } from 'next-intl';
 import { Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
-import { Input } from '@/components/ui/Input';
-import { Modal } from '@/components/ui/Modal';
+import type { ComboboxOption } from '@/components/ui/Combobox';
 import { Pill } from '@/components/ui/Pill';
-import { useToast } from '@/components/ui/Toast';
+import {
+  formatWhen,
+  GroupCaptionRow,
+  ModelRow,
+  ModelText,
+  Th,
+  toOptions,
+} from '@/components/ai/PlatformModelRow';
 import { PLANNER_MODEL_FALLBACK } from '@/lib/ai/types';
 import type {
+  PlatformPlannerFunctionRowDTO,
   PlatformPlannerModelRowDTO,
   PlatformPlannerModelSettingsDTO,
   PlatformPlannerOfferedModelDTO,
   PlatformPlannerReviewModelRowDTO,
 } from '@/lib/dto/platformPlannerModel';
 import {
+  setPlannerFunctionModelAction,
   setPlannerModelAction,
   setPlannerReviewModelAction,
-  type PlannerModelActionResult,
 } from '../actions';
 
 /**
@@ -51,6 +54,7 @@ export interface PlannerModelRowsProps {
 export function PlannerModelRows({ settings }: PlannerModelRowsProps) {
   const t = useTranslations('platformAdmin.aiPlanning');
   const options = toOptions(settings.offered);
+  const cols = settings.canEdit ? 4 : 3;
 
   return (
     <>
@@ -89,6 +93,7 @@ export function PlannerModelRows({ settings }: PlannerModelRowsProps) {
               </tr>
             </thead>
             <tbody>
+              <GroupCaptionRow label={t('group.audiences')} colSpan={cols} />
               {settings.rows.map((row) => (
                 <PlannerModelRow
                   key={row.audience}
@@ -98,6 +103,21 @@ export function PlannerModelRows({ settings }: PlannerModelRowsProps) {
                   canEdit={settings.canEdit}
                 />
               ))}
+              {settings.functions.length > 0 ? (
+                <GroupCaptionRow label={t('group.functions')} colSpan={cols} />
+              ) : null}
+              {settings.functions.map((row) => (
+                <PlannerFunctionModelRow
+                  key={row.function}
+                  row={row}
+                  offered={settings.offered}
+                  options={options}
+                  canEdit={settings.canEdit}
+                />
+              ))}
+              {settings.review ? (
+                <GroupCaptionRow label={t('group.review')} colSpan={cols} />
+              ) : null}
               {settings.review ? (
                 <PlannerReviewModelRow
                   review={settings.review}
@@ -121,18 +141,6 @@ export function PlannerModelRows({ settings }: PlannerModelRowsProps) {
     </>
   );
 }
-
-/** Offered models, grouped by provider and ordered by id within a group. */
-function toOptions(offered: PlatformPlannerOfferedModelDTO[]): ComboboxOption<string>[] {
-  return [...offered]
-    .sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id))
-    .map((m) => ({ value: m.id, label: m.id, secondary: m.provider, group: m.provider }));
-}
-
-type RowError =
-  | { kind: 'refused'; model: string }
-  | { kind: 'unreachable'; model: string; reason: string }
-  | { kind: 'other'; message: string };
 
 interface PlannerModelRowProps {
   row: PlatformPlannerModelRowDTO;
@@ -170,6 +178,85 @@ function PlannerModelRow({ row, offered, options, canEdit }: PlannerModelRowProp
     />
   );
 }
+
+/**
+ * A planning-side FUNCTION's platform default (MOTIR-10844) — Guide, Debug or
+ * Ask, drawn in the audience rows' grammar. Its picker leads with "Inherits — the
+ * audience's planning model" (stored as null, the default) above the same
+ * planning-list models; an unset row's last-changed line reads "Never set".
+ */
+function PlannerFunctionModelRow({
+  row,
+  offered,
+  options,
+  canEdit,
+}: {
+  row: PlatformPlannerFunctionRowDTO;
+  offered: PlatformPlannerOfferedModelDTO[];
+  options: ComboboxOption<string>[];
+  canEdit: boolean;
+}) {
+  const t = useTranslations('platformAdmin.aiPlanning');
+  const name = t(`functions.${row.function}.name`);
+  const inherits = t('functions.inherits');
+  const fnOptions: ComboboxOption<string>[] = [
+    {
+      value: INHERITS,
+      label: inherits,
+      description: t('functions.inheritsDesc'),
+      group: t('review.defaultGroup'),
+    },
+    ...options,
+  ];
+  const labelOf = (value: string) => (value === INHERITS ? inherits : value);
+  const provider = row.model ? (offered.find((m) => m.id === row.model)?.provider ?? null) : null;
+  return (
+    <ModelRow
+      testId={`function-default-row-${row.function}`}
+      name={name}
+      desc={t(`functions.${row.function}.desc`)}
+      stored={row.model ?? INHERITS}
+      labelOf={labelOf}
+      readOnly={
+        row.model ? (
+          <ModelText model={row.model} provider={provider} />
+        ) : (
+          <span className="text-xs text-(--el-text)">{inherits}</span>
+        )
+      }
+      pickerAria={t('functions.pickerAria', { name })}
+      options={fnOptions}
+      canEdit={canEdit}
+      chips={
+        row.offered === false ? (
+          <div className="flex flex-col items-start gap-1" data-testid="ai-planning-withdrawn">
+            <Pill severity="warning">{t('withdrawn.chip')}</Pill>
+            <p role="note" className="font-sans text-xs text-(--el-text-secondary)">
+              {t(canEdit ? 'functions.withdrawnBody' : 'functions.withdrawnBodyReadOnly', {
+                name,
+              })}
+            </p>
+          </div>
+        ) : null
+      }
+      changed={row}
+      neverChanged={t('changed.neverSet')}
+      confirmTitle={t('functions.confirmTitle', { name })}
+      confirmBody={(from, to) => t(`functions.${row.function}.confirmBody`, { from, to })}
+      saved={(label) => ({
+        title: t('functions.savedTitle', { name }),
+        description: t(`functions.${row.function}.savedBody`, { model: label }),
+      })}
+      unchanged={(label) => t('functions.unchanged', { name, model: label })}
+      save={(value, reason) =>
+        setPlannerFunctionModelAction(row.function, value === INHERITS ? null : value, reason)
+      }
+    />
+  );
+}
+
+/** The picker value that stands for a function default stored as null. */
+const INHERITS = '__inherits__';
 
 /**
  * The dry-run REVIEW model's row (MOTIR-10632) — one platform-wide value beside
@@ -247,213 +334,6 @@ function PlannerReviewModelRow({
 /** The picker value that stands for a review model stored as null. */
 const SAME_AS_PLANNING = '__same_as_planning__';
 
-function ModelText({ model, provider }: { model: string; provider: string | null }) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="font-mono text-xs text-(--el-text)">{model}</span>
-      {provider ? <span className="text-xs text-(--el-text-identifier)">{provider}</span> : null}
-    </div>
-  );
-}
-
-interface ModelRowProps {
-  testId: string;
-  name: string;
-  desc: string;
-  /** The stored value, as a picker option value. */
-  stored: string;
-  /** A picker value as the confirm, toast and errors name it. */
-  labelOf: (value: string) => string;
-  /** What a reader without the picker sees in the Model cell. */
-  readOnly: React.ReactNode;
-  pickerAria: string;
-  options: ComboboxOption<string>[];
-  canEdit: boolean;
-  chips: React.ReactNode;
-  changed: { seeded: boolean; updatedAt: string | null; updatedBy: string | null };
-  confirmTitle: string;
-  confirmBody: (from: string, to: string) => string;
-  saved: (label: string) => { title: string; description: string };
-  unchanged: (label: string) => string;
-  save: (value: string, reason: string) => Promise<PlannerModelActionResult>;
-}
-
-/**
- * One row of the table — the picker, chips, last-changed line, Save and the
- * confirm-with-reason — shared by the audience rows and the review row.
- */
-function ModelRow(props: ModelRowProps) {
-  const { stored, labelOf, canEdit } = props;
-  const t = useTranslations('platformAdmin.aiPlanning');
-  const format = useFormatter();
-  const router = useRouter();
-  const { toast } = useToast();
-  const reasonFieldId = useId();
-  const [draft, setDraft] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState<RowError | null>(null);
-  // The value this tab last saved on this row. "Changed just now by you" holds
-  // only while the server still reports that same value.
-  const [savedHere, setSavedHere] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  const selected = draft ?? stored;
-  const dirty = selected !== stored;
-
-  function closeConfirm() {
-    setConfirming(false);
-    setReason('');
-  }
-
-  function report(result: PlannerModelActionResult, value: string) {
-    closeConfirm();
-    const model = labelOf(value);
-    if (result.ok) {
-      setDraft(null);
-      setError(null);
-      setSavedHere(value);
-      toast({ variant: 'success', ...props.saved(model) });
-      return;
-    }
-    switch (result.code) {
-      case 'NOT_OFFERED':
-        // Panel 6: keep the stored value and re-read the offered list.
-        setDraft(null);
-        setError({ kind: 'refused', model });
-        router.refresh();
-        return;
-      case 'UNREACHABLE':
-        // Panel 8 (left): nothing was written; the row keeps its stored model.
-        setDraft(null);
-        setError({ kind: 'unreachable', model, reason: result.reason });
-        return;
-      case 'UNCHANGED':
-        setDraft(null);
-        setError({ kind: 'other', message: props.unchanged(model) });
-        return;
-      case 'NOT_PERMITTED':
-        setError({ kind: 'other', message: t('error.notPermitted') });
-        return;
-      case 'REASON_REQUIRED':
-        setError({ kind: 'other', message: t('error.reasonRequired') });
-        return;
-      case 'UNAVAILABLE':
-      case 'FAILED':
-        setError({ kind: 'other', message: t('error.failed') });
-        return;
-    }
-  }
-
-  function submit() {
-    const trimmed = reason.trim();
-    if (!trimmed || !dirty) return;
-    const value = selected;
-    startTransition(async () => {
-      report(await props.save(value, trimmed), value);
-    });
-  }
-
-  const { changed } = props;
-  const changedLine =
-    savedHere === stored
-      ? t('changed.justNowByYou')
-      : changed.seeded || !changed.updatedAt
-        ? t('changed.seeded')
-        : changed.updatedBy
-          ? t('changed.by', { when: formatWhen(format, changed.updatedAt), who: changed.updatedBy })
-          : t('changed.byUnknown', { when: formatWhen(format, changed.updatedAt) });
-
-  return (
-    <tr data-testid={props.testId} className="border-b border-(--el-border-soft) last:border-b-0">
-      <Td>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-(--el-text)">{props.name}</span>
-          <span className="text-xs text-(--el-text-secondary)">{props.desc}</span>
-        </div>
-      </Td>
-      <Td className="w-[22rem]">
-        <div className="flex flex-col gap-1.5">
-          {canEdit ? (
-            <Combobox
-              label={props.pickerAria}
-              options={props.options}
-              // A withdrawn stored model is not among the options; the trigger
-              // still names it, because that is what is stored (Panel 7).
-              value={selected}
-              placeholder={labelOf(stored)}
-              onChange={(value) => {
-                setError(null);
-                setDraft(value === stored ? null : value);
-              }}
-              footer={
-                <p className="font-sans text-xs text-(--el-text-secondary)">{t('pickerFoot')}</p>
-              }
-            />
-          ) : (
-            props.readOnly
-          )}
-          {props.chips}
-          {error ? (
-            <p role="alert" className="font-sans text-xs text-(--el-danger-on-surface)">
-              {errorText(t, error)}
-            </p>
-          ) : null}
-        </div>
-      </Td>
-      <Td className="text-xs text-(--el-text-secondary)">{changedLine}</Td>
-      {canEdit ? (
-        <Td>
-          <Button
-            size="sm"
-            variant={dirty ? 'primary' : 'secondary'}
-            disabled={!dirty || isPending}
-            onClick={() => setConfirming(true)}
-          >
-            {t('save')}
-          </Button>
-          <Modal
-            open={confirming}
-            onOpenChange={(next) => (next ? undefined : closeConfirm())}
-            role="alertdialog"
-            title={props.confirmTitle}
-            description={props.confirmBody(labelOf(stored), labelOf(selected))}
-            size="md"
-          >
-            <Modal.Body className="gap-4">
-              <Input
-                id={reasonFieldId}
-                label={t('confirm.reasonLabel')}
-                placeholder={t('confirm.reasonPlaceholder')}
-                helperText={t('confirm.reasonHint')}
-                value={reason}
-                onChange={(event) => setReason(event.target.value)}
-                autoFocus
-                maxLength={280}
-              />
-            </Modal.Body>
-            <Modal.Footer>
-              <Button variant="ghost" onClick={closeConfirm} disabled={isPending}>
-                {t('confirm.cancel')}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={submit}
-                loading={isPending}
-                // A courtesy: the audit vocabulary's reason policy is the rule,
-                // asserted in the service.
-                disabled={reason.trim().length === 0}
-              >
-                {t('confirm.confirm')}
-              </Button>
-            </Modal.Footer>
-          </Modal>
-        </Td>
-      ) : null}
-    </tr>
-  );
-}
-
 /** Panel 7 (withdrawn, warning) and Panel 8 right (failing, danger). */
 function RowChips({ row, canEdit }: { row: PlatformPlannerModelRowDTO; canEdit: boolean }) {
   const t = useTranslations('platformAdmin.aiPlanning');
@@ -483,42 +363,4 @@ function RowChips({ row, canEdit }: { row: PlatformPlannerModelRowDTO; canEdit: 
       ) : null}
     </>
   );
-}
-
-type Translator = ReturnType<typeof useTranslations<'platformAdmin.aiPlanning'>>;
-
-function errorText(t: Translator, error: RowError): string {
-  if (error.kind === 'refused') return t('refused', { model: error.model });
-  if (error.kind === 'unreachable') {
-    return t('unreachable.save', { model: error.model, reason: localizeReason(t, error.reason) });
-  }
-  return error.message;
-}
-
-/**
- * motir-ai's probe reasons are English sentences built in one place
- * (`plannerModelProbe`); the three it can produce are localized, and anything
- * else is shown as it came rather than dropped.
- */
-function localizeReason(t: Translator, reason: string): string {
-  if (reason.startsWith('the provider key was refused')) return t('unreachable.reason.keyRefused');
-  if (reason.startsWith('no enabled channel serves')) return t('unreachable.reason.noChannel');
-  if (reason.startsWith('the gateway did not answer')) return t('unreachable.reason.timeout');
-  return reason;
-}
-
-function formatWhen(format: ReturnType<typeof useFormatter>, iso: string): string {
-  return format.dateTime(new Date(iso), { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="py-2 pr-4 font-sans text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <td className={`py-3 pr-4 align-top ${className}`}>{children}</td>;
 }

@@ -15,8 +15,12 @@ export interface HostedAgentLevelSettingDto {
   /** Whether that override is on motir-ai's offered list right now. `true` when
    *  there is no override, so the flag reads "nothing to warn about". */
   overrideOffered: boolean;
-  /** motir-ai's platform default for this level — null when it is not offered. */
+  /** What the level INHERITS without a project override (MOTIR-10843): the
+   *  organisation's own choice while it qualifies and it is offered, else motir-ai's
+   *  platform default — null when neither is offered. */
   platformDefault: string | null;
+  /** Where `platformDefault` comes from. */
+  inheritedFrom: 'organization' | 'platform';
   /** The model a hosted run on a leaf of this level uses, or null when nothing is offered. */
   effective: string | null;
   /** Why `effective` won; null when nothing is offered. */
@@ -54,6 +58,9 @@ export interface ResolvedWorkItemHostedModelDto {
   difficulty: WorkItemDifficultyDto | null;
   /** Whether the card is a parent, so `difficulty` is the highest of its leaves. */
   fromLeaves: boolean;
+  /** Whether the card is a design run — a design leaf, or a parent whose every
+   *  unfinished leaf is a design card (MOTIR-10843). */
+  design: boolean;
 }
 
 /**

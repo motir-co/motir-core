@@ -564,6 +564,14 @@ rather than introducing a second one.
 > projects that use each model, so it crosses every tenant's `project` row and is audited as
 > `estate.read`.
 
+> **⚠️ AMENDED 2026-11-10 (Story MOTIR-10838 · MOTIR-10844).** Two more platform model settings,
+> both stored in motir-ai and both at `superadmin` with `support` and up reading: the Guide, Debug
+> and Ask platform defaults on `/admin/ai-planning` (`ai.planner_function_model.set`, the function
+> as `targetId`, `{ function, fromModel, toModel }`), and the six run-side defaults on
+> `/admin/run-models` (`ai.run_model_default.set`, the key as `targetId`, `{ key, fromModel,
+toModel }`). Both are `reason: 'required'` with `targetKind: 'platform'`; motir-ai's write runs
+> inside the audited transaction, so a refused or no-op save leaves no row.
+
 > **⚠️ AMENDED 2026-10-02 (Story MOTIR-1408 · MOTIR-1411).** The planning-lessons page adds four
 > writes from outside Epic 10: `ai.lesson.edit`, `ai.lesson.enable`, `ai.lesson.disable` and
 > `ai.lesson.promote`, all `reason: 'required'`. Edit and enable/disable take `operator`, because

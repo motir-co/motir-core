@@ -66,7 +66,7 @@ async function readerState(workspaceId: string) {
     select: { indexingRunId: true },
   });
   const { running, terminal } = await withSystemContext(async (tx) => ({
-    running: new Set(await jobRunRepository.listRunningCodeGraphIndexRunIds(workspaceId, tx)),
+    running: new Set(await jobRunRepository.listRunningCodeGraphRunIds(workspaceId, tx)),
     terminal: new Set(await jobRunRepository.listTerminalCodeGraphRunIds(workspaceId, tx)),
   }));
   const indexingRunId = repo.indexingRunId;

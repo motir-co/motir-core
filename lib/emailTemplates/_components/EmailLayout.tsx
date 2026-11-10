@@ -1,6 +1,6 @@
 import { Body, Container, Head, Hr, Html, Img, Preview, Text } from '@react-email/components';
 import type { ReactNode } from 'react';
-import { EMAIL_MARK_PATH, EMAIL_MARK_PX } from '@/components/brand/waveBand';
+import { EMAIL_MARK_PATH, EMAIL_MARK_PX } from '@motir/brand';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { defaultLocale, type Locale } from '@/lib/i18n/locales';
 import { BCP47 } from '@/lib/utils/datetime';

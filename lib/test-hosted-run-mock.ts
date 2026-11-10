@@ -33,9 +33,14 @@
 //     proof each stub answered, and what it was asked — the gateway mint's
 //     `models`, the gateway revoke's `runRef`, the machine debit's figures.
 
-import { appendFixtureFileSync, readFixtureFileSync } from '@/lib/test-fixture-file';
+import {
+  appendFixtureFileSync,
+  readFixtureFileSync,
+  writeFixtureFileSync,
+} from '@/lib/test-fixture-file';
 import type { MockAgent } from 'undici';
 import { recordAgentDebit } from '@/lib/test-billing-mock';
+import { orgTierOf } from '@/lib/test-org-tier-fixture';
 
 const GITHUB_ORIGIN = 'https://api.github.com';
 
@@ -58,6 +63,10 @@ export interface HostedRunModelsFixture {
    *  beside the Claude ones). An id not named here is `anthropic`, so a fixture
    *  that predates the field answers exactly as it did. */
   providers?: Record<string, string>;
+  /** The platform review-agent and design-run models (story MOTIR-10838 ·
+   *  MOTIR-10843). Omitted → the field is absent, as an older motir-ai serves it. */
+  reviewAgentDefault?: string | null;
+  designRunDefault?: string | null;
 }
 
 export interface HostedRunUsageFixture {
@@ -82,7 +91,50 @@ export interface HostedRunFixture {
    *  always-present default (never the legitimate-but-untestable 404 "no usage
    *  yet" — the happy path always has a cost block to read). */
   usage?: HostedRunUsageFixture;
+  /** motir-ai is down for the MODEL reads and writes (story MOTIR-10838 ·
+   *  MOTIR-10849): the offer, the run-model defaults and the org tier read answer
+   *  503, so every surface that reads them shows its unavailable face. The credit,
+   *  usage and machine-time calls are untouched. */
+  unavailable?: boolean;
+  /** Who last wrote each run-side default through `PUT /v1/admin/run-model-defaults`,
+   *  and when — written by that PUT. The VALUES live in `models` (the four levels in
+   *  `defaultsByDifficulty`, `reviewAgentDefault`, `designRunDefault`), so the offer
+   *  a run resolves from and the console row can never disagree. */
+  runModelDefaultsChanged?: Partial<
+    Record<RunModelDefaultFixtureKey, { updatedAt: string; updatedByCoreUserId: string | null }>
+  >;
 }
+
+/** The six run-side default keys, in motir-ai's order. */
+const RUN_MODEL_DEFAULT_KEYS = ['trivial', 'low', 'medium', 'high', 'review', 'design'] as const;
+type RunModelDefaultFixtureKey = (typeof RUN_MODEL_DEFAULT_KEYS)[number];
+type Level = 'trivial' | 'low' | 'medium' | 'high';
+
+/** A run-side default's stored value, read from the offer it lives in. */
+function runDefaultOf(
+  models: HostedRunModelsFixture | undefined,
+  key: RunModelDefaultFixtureKey,
+): string | null {
+  if (key === 'review') return models?.reviewAgentDefault ?? null;
+  if (key === 'design') return models?.designRunDefault ?? null;
+  return models?.defaultsByDifficulty?.[key] ?? null;
+}
+
+const UNSET_AT = '1970-01-01T00:00:00.000Z';
+
+/** The `unavailable` switch's answer: motir-ai's 503 problem, status included, so
+ *  the client reads it as an outage rather than a refusal. */
+const UNAVAILABLE = (): MockReply => ({
+  statusCode: 503,
+  data: {
+    type: 'about:blank',
+    code: 'upstream_unavailable',
+    title: 'upstream_unavailable',
+    status: 503,
+    detail: 'motir-ai is down',
+  },
+  responseOptions: { headers: { 'content-type': 'application/problem+json' } },
+});
 
 const DEFAULT_USAGE: Required<HostedRunUsageFixture> = {
   inputTokens: 18_400,
@@ -98,6 +150,11 @@ const DEFAULT_USAGE: Required<HostedRunUsageFixture> = {
 function fixturePath(): string | null {
   const raw = process.env['MOTIR_HOSTED_RUN_FIXTURE_PATH'];
   return raw !== undefined && raw !== '' ? raw : null;
+}
+
+function writeFixture(fixture: HostedRunFixture): void {
+  const path = fixturePath();
+  if (path) writeFixtureFileSync(path, JSON.stringify(fixture));
 }
 
 function readFixture(): HostedRunFixture {
@@ -209,7 +266,9 @@ export function installHostedRunMock(agent: MockAgent): void {
     pool
       .intercept({ path: '/v1/agent-models', method: 'GET' })
       .reply((): MockReply => {
-        const fx = readFixture().models;
+        const fixture = readFixture();
+        if (fixture.unavailable) return UNAVAILABLE();
+        const fx = fixture.models;
         const status = fx?.status ?? 200;
         if (status !== 200) return reply(status, { code: 'internal_error' });
         const ids = fx?.ids ?? [DEFAULT_MODEL_ID];
@@ -220,6 +279,126 @@ export function installHostedRunMock(agent: MockAgent): void {
           ...(fx?.defaultsByDifficulty !== undefined
             ? { defaultsByDifficulty: fx.defaultsByDifficulty }
             : {}),
+          ...(fx?.reviewAgentDefault !== undefined
+            ? { reviewAgentDefault: fx.reviewAgentDefault }
+            : {}),
+          ...(fx?.designRunDefault !== undefined ? { designRunDefault: fx.designRunDefault } : {}),
+        });
+      })
+      .persist();
+    // The console's run-side defaults read (MOTIR-10844) and write (MOTIR-10849),
+    // from the same fixture: the four levels ARE the offer's per-difficulty
+    // defaults, review and design ARE `reviewAgentDefault` / `designRunDefault`, so
+    // a console save is what the next run resolves from. The run-model list's
+    // remove reads it, so a spec that removes run models stays green.
+    const runDefaultsRow = (fixture: HostedRunFixture, key: RunModelDefaultFixtureKey) => {
+      const ids = fixture.models?.ids ?? [DEFAULT_MODEL_ID];
+      const model = runDefaultOf(fixture.models, key);
+      const changed = fixture.runModelDefaultsChanged?.[key];
+      return {
+        key,
+        model,
+        offered: model === null ? null : ids.includes(model),
+        effectiveModel: model !== null && ids.includes(model) ? model : null,
+        updatedAt: changed?.updatedAt ?? UNSET_AT,
+        updatedByCoreUserId: changed?.updatedByCoreUserId ?? null,
+      };
+    };
+    pool
+      .intercept({ path: '/v1/admin/run-model-defaults', method: 'GET' })
+      .reply((): MockReply => {
+        const fixture = readFixture();
+        if (fixture.unavailable) return UNAVAILABLE();
+        const fx = fixture.models;
+        const status = fx?.status ?? 200;
+        if (status !== 200) return reply(status, { code: 'internal_error' });
+        const ids = fx?.ids ?? [DEFAULT_MODEL_ID];
+        return reply(200, {
+          settings: RUN_MODEL_DEFAULT_KEYS.map((key) => runDefaultsRow(fixture, key)),
+          models: ids.map((id) => ({ id, provider: fx?.providers?.[id] ?? 'anthropic' })),
+        });
+      })
+      .persist();
+    pool
+      .intercept({ path: '/v1/admin/run-model-defaults', method: 'PUT' })
+      .reply((req: MockRequest): MockReply => {
+        const fixture = readFixture();
+        if (fixture.unavailable) return UNAVAILABLE();
+        const body = parseBody(req.body) ?? {};
+        const key = body['key'] as RunModelDefaultFixtureKey;
+        const model = body['model'];
+        const actor = typeof body['actorCoreUserId'] === 'string' ? body['actorCoreUserId'] : null;
+        const problem = (detail: string) =>
+          reply(400, {
+            type: 'about:blank',
+            code: 'validation_error',
+            title: 'validation_error',
+            status: 400,
+            detail,
+          });
+        if (!RUN_MODEL_DEFAULT_KEYS.includes(key) || !actor) {
+          return problem('expected { key, model, actorCoreUserId }');
+        }
+        if (model !== null && typeof model !== 'string')
+          return problem('model must be a string or null');
+        const ids = fixture.models?.ids ?? [DEFAULT_MODEL_ID];
+        const allowed = Array.isArray(body['allowedModels'])
+          ? (body['allowedModels'] as string[])
+          : null;
+        if (model !== null && (!ids.includes(model) || (allowed && !allowed.includes(model)))) {
+          return problem(`model "${model}" is not offered for hosted runs`);
+        }
+        const before = runDefaultOf(fixture.models, key);
+        if (before === model) {
+          return reply(200, { setting: runDefaultsRow(fixture, key), audit: null });
+        }
+        const models: HostedRunModelsFixture = { ...(fixture.models ?? {}) };
+        if (key === 'review') models.reviewAgentDefault = model;
+        else if (key === 'design') models.designRunDefault = model;
+        else
+          models.defaultsByDifficulty = { ...models.defaultsByDifficulty, [key as Level]: model };
+        const at = new Date().toISOString();
+        const next: HostedRunFixture = {
+          ...fixture,
+          models,
+          runModelDefaultsChanged: {
+            ...fixture.runModelDefaultsChanged,
+            [key]: { updatedAt: at, updatedByCoreUserId: actor },
+          },
+        };
+        writeFixture(next);
+        return reply(200, {
+          setting: runDefaultsRow(next, key),
+          audit: {
+            action: 'ai.run_model_default.set',
+            actorCoreUserId: actor,
+            at,
+            key,
+            before: { model: before },
+            after: { model },
+          },
+        });
+      })
+      .persist();
+    // motir-core's org TIER read (`POST /v1/admin/orgs/tiers`), from the tier fixture the
+    // planner-model seam's org override read also answers from — so the room and
+    // the run-side resolver cannot disagree (`lib/test-org-tier-fixture.ts`). No
+    // earlier seam claims this path.
+    pool
+      .intercept({ path: '/v1/admin/orgs/tiers', method: 'POST' })
+      .reply((req: MockRequest): MockReply => {
+        if (readFixture().unavailable) return UNAVAILABLE();
+        const body = parseBody(req.body) ?? {};
+        const ids = Array.isArray(body['coreOrganizationIds'])
+          ? (body['coreOrganizationIds'] as unknown[]).filter(
+              (v): v is string => typeof v === 'string',
+            )
+          : [];
+        return reply(200, {
+          orgs: ids.map((coreOrganizationId) => ({
+            coreOrganizationId,
+            tierKey: orgTierOf(coreOrganizationId),
+          })),
         });
       })
       .persist();

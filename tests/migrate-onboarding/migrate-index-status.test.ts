@@ -242,6 +242,51 @@ describe('migrateOnboardingService.getIndexStatus', () => {
     expect(status.allIndexed).toBe(false);
   });
 
+  it('⚠️ a repo whose claim names a RUNNING REFRESH reads `indexing` (bug MOTIR-10821)', async () => {
+    // A refresh claims the repository with its own job_run id (MOTIR-9454); the
+    // running read must count it as it counts a first index. Settled refreshes
+    // read exactly what they read before: failed/abandoned `failed`, succeeded
+    // (with no first-index ledger row) `queued`.
+    const fx = await makeWorkItemFixture();
+    const run = await migrateOnboardingService.startMigration(fx.projectId, fx.ctx);
+    const inst = await seedInstallation(fx);
+    const refreshIn = async (status: 'running' | 'succeeded' | 'failed' | 'abandoned') =>
+      (
+        await adminDb.jobRun.create({
+          data: {
+            workspaceId: fx.workspaceId,
+            functionId: 'system.code-graph-refresh',
+            eventName: 'system.code-graph-refresh',
+            eventId: `evt-${randomToken()}`,
+            lane: 'engine',
+            attempt: 0,
+            status,
+            ...(status === 'running' ? {} : { finishedAt: new Date() }),
+            output: {},
+          },
+        })
+      ).id;
+    const running = await seedRepo(inst, 'acme', 'running', {
+      indexingRunId: await refreshIn('running'),
+    });
+    const succeeded = await seedRepo(inst, 'acme', 'succeeded', {
+      indexingRunId: await refreshIn('succeeded'),
+    });
+    const failed = await seedRepo(inst, 'acme', 'failed', {
+      indexingRunId: await refreshIn('failed'),
+    });
+    const abandoned = await seedRepo(inst, 'acme', 'abandoned', {
+      indexingRunId: await refreshIn('abandoned'),
+    });
+
+    const status = await migrateOnboardingService.getIndexStatus(run.id, fx.ctx);
+    const byRef = new Map(status.repos.map((r) => [r.repoRef, r.status]));
+    expect(byRef.get(running)).toBe('indexing');
+    expect(byRef.get(succeeded)).toBe('queued');
+    expect(byRef.get(failed)).toBe('failed');
+    expect(byRef.get(abandoned)).toBe('failed');
+  });
+
   it('throws NotFound for a bogus run id', async () => {
     const fx = await makeWorkItemFixture();
     await expect(migrateOnboardingService.getIndexStatus('nope', fx.ctx)).rejects.toBeInstanceOf(

@@ -185,6 +185,40 @@ export class PlannerModelUnreachableError extends MotirAiError {
   }
 }
 
+// A run-side platform default write named a model motir-ai would not store
+// (`PUT /v1/admin/run-model-defaults` → `validation_error`; MOTIR-10840): not in
+// the run-model list motir-core sent, or no longer offered for agent runs.
+export class RunModelDefaultNotOfferedError extends MotirAiError {
+  readonly code = 'RUN_MODEL_DEFAULT_NOT_OFFERED' as const;
+  constructor(
+    readonly model: string,
+    detail?: string,
+  ) {
+    super(`"${model}" is not offered for hosted runs${detail ? `: ${detail}` : ''}`);
+    this.name = 'RunModelDefaultNotOfferedError';
+  }
+}
+
+// An ORG model-choice write motir-ai refused because the org does not qualify
+// (`PUT /v1/orgs/:id/planner-model-overrides` → `permission_denied`; MOTIR-10845):
+// below Pro and not the meta org, or an org motir-ai has never seen. The client
+// maps it BEFORE `errorFromProblem`, which reads `permission_denied` as a rejected
+// service credential — a Standard org's refused save is not a deploy fault.
+export class OrgModelChoiceNotQualifiedError extends MotirAiError {
+  readonly code = 'ORG_MODEL_CHOICE_NOT_QUALIFIED' as const;
+  constructor(readonly coreOrganizationId: string) {
+    super(`organization ${coreOrganizationId} does not qualify for its own model choices`);
+    this.name = 'OrgModelChoiceNotQualifiedError';
+  }
+}
+
+// motir-ai cannot answer (transport, timeout, 5xx) or is not configured in this
+// deployment — the two conditions an org surface shows as "models unreadable"
+// rather than an error page (MOTIR-10845).
+export function isMotirAiUnreadable(err: unknown): boolean {
+  return err instanceof MotirAiUnavailableError || err instanceof MotirAiConfigError;
+}
+
 // A PLANNING-MODEL LIST add named a model motir-ai would not plan with right now
 // (`PUT /v1/planner-model-list` → `validation_error`, "cannot be allowed for
 // planning: …"; motir-ai MOTIR-7520 · core MOTIR-7524). `reason` is the

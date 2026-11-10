@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AWS_HOME_DEVICE_NAME,
+  AWS_HOME_VOLUME_READ_DELAYS_MS,
   AWS_IMAGE_TAG_KEY,
   AWS_PERSISTENT_LAUNCH_ATTEMPTS,
   AWS_TERMINATE_WAIT_ATTEMPTS,
   AWS_VOLUME_DELETE_ATTEMPTS,
+  AwsHomeVolumeMissingError,
   AwsInstanceSizeError,
   AwsPersistentSpecError,
   Ec2ApiError,
@@ -122,25 +124,18 @@ describe('provisionPersistent — one RunInstances makes the machine and its dis
     });
   });
 
-  it('reads the home disk from DescribeInstances when the launch answer names none', async () => {
+  it('reads the home disk from DescribeInstances — the launch answer names none', async () => {
     const run = ec2.runInstances.bind(ec2);
+    let answered: Ec2Instance | null = null;
     vi.spyOn(ec2, 'runInstances').mockImplementation(async (input) => {
-      const { volumes: _v, ...instance } = await run(input);
-      return instance as Ec2Instance;
+      answered = await run(input);
+      return answered;
     });
     const handle = await adapter().provisionPersistent(spec());
+    // EC2's own launch answer carries no mapping (MOTIR-10826), as the fake's does.
+    expect(answered).not.toHaveProperty('volumes');
     expect(ec2.volumes.has(handle.volumeId)).toBe(true);
-  });
-
-  it('gives the machine back when no home disk can be read at all', async () => {
-    const run = ec2.runInstances.bind(ec2);
-    vi.spyOn(ec2, 'runInstances').mockImplementation(async (input) => {
-      const { volumes: _v, ...instance } = await run(input);
-      return instance as Ec2Instance;
-    });
-    vi.spyOn(ec2, 'describeInstances').mockResolvedValue({ instances: [], nextToken: null });
-    await expect(adapter().provisionPersistent(spec())).rejects.toThrow(/MissingField.HomeVolume/);
-    expect(ec2.liveInstanceIds()).toEqual([]);
+    expect(ec2.count('describeInstances')).toBe(1);
   });
 
   it('refuses a spec with no zone, an unmapped size, another region or bad user-data before any call', async () => {
@@ -429,6 +424,7 @@ describe('destroy — the machine, THEN the disk', () => {
 
   it('never touches the disk of a machine that will not terminate — it throws', async () => {
     const { orchestrator, handle } = await provisioned();
+    ec2.calls.length = 0;
     ec2.holdNextTerminate = true;
     await expect(orchestrator.destroyPersistent(handle)).rejects.toThrow(/InstanceNotTerminated/);
     expect(ec2.count('describeInstances')).toBe(AWS_TERMINATE_WAIT_ATTEMPTS);
@@ -522,6 +518,138 @@ describe('the account as the app', () => {
     await vi.runAllTimersAsync();
     await done;
     vi.useRealTimers();
+    expect(ec2.liveVolumeIds()).toEqual([]);
+  });
+});
+
+describe('provisionPersistent — a machine EC2 has only just made is not gone (MOTIR-10826)', () => {
+  function sleeps() {
+    const waited: number[] = [];
+    return { waited, sleep: async (ms: number) => void waited.push(ms) };
+  }
+
+  it('waits out NotFound and an unmapped listing, then returns the disk EC2 lists', async () => {
+    const info = vi.spyOn(console, 'info').mockImplementation(() => {});
+    ec2.lagNextLaunch({ notFound: 2, unmapped: 1 });
+    const { waited, sleep } = sleeps();
+    const handle = await adapter({ sleep }).provisionPersistent(spec());
+    expect(ec2.volumes.get(handle.volumeId)?.attachedInstanceId).toBe(handle.machineId);
+    expect(ec2.liveInstanceIds()).toEqual([handle.machineId]);
+    expect(ec2.count('terminateInstances')).toBe(0);
+    expect(ec2.count('describeInstances')).toBe(4);
+    expect(waited).toEqual(AWS_HOME_VOLUME_READ_DELAYS_MS.slice(0, 3));
+    // The production evidence: which machine, and how many describes it took.
+    expect(info).toHaveBeenCalledWith('[awsPersistent] home disk listed', {
+      instanceId: handle.machineId,
+      volumeId: handle.volumeId,
+      describes: 4,
+    });
+  });
+
+  it('retries a throttled or failed describe inside the same ceiling', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    const describe = ec2.describeInstances.bind(ec2);
+    vi.spyOn(ec2, 'describeInstances')
+      .mockRejectedValueOnce(new Ec2ApiError('RequestLimitExceeded', 503, true))
+      .mockRejectedValueOnce(new Ec2ApiError('InternalError', 500, true))
+      .mockImplementation(describe);
+    const handle = await adapter().provisionPersistent(spec());
+    expect(ec2.liveInstanceIds()).toEqual([handle.machineId]);
+    expect(ec2.volumes.has(handle.volumeId)).toBe(true);
+  });
+
+  it('gives the machine back past the ceiling, naming the missing home disk', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ec2.lagNextLaunch({ notFound: 1_000 });
+    const { waited, sleep } = sleeps();
+    const failure = await adapter({ sleep })
+      .provisionPersistent(spec())
+      .catch((err: unknown) => err);
+    const reads = AWS_HOME_VOLUME_READ_DELAYS_MS.length + 1;
+    expect(failure).toBeInstanceOf(AwsHomeVolumeMissingError);
+    expect(failure).toBeInstanceOf(OrchestratorApiError);
+    expect(failure).toMatchObject({ provider: 'aws', status: null, reads, lastRead: 'not_found' });
+    const message = (failure as Error).message;
+    expect(message).toMatch(/home disk never appeared/);
+    expect(message).toContain(`${reads} reads; last: EC2 did not know the instance yet`);
+    expect(message).not.toMatch(/could not be reached/);
+    expect(waited).toEqual([...AWS_HOME_VOLUME_READ_DELAYS_MS]);
+    // The machine is terminated as before; its disk stays in the account.
+    const [instanceId] = [...ec2.instances.keys()];
+    expect((failure as AwsHomeVolumeMissingError).instanceId).toBe(instanceId);
+    expect(ec2.liveInstanceIds()).toEqual([]);
+    expect(ec2.liveVolumeIds()).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(
+      '[awsPersistent] a launched machine never listed its home disk',
+      { instanceId, describes: reads, lastRead: 'not_found' },
+    );
+  });
+
+  it('says so when EC2 knew the machine but never listed its disk', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    ec2.lagNextLaunch({ unmapped: 1_000 });
+    await expect(adapter().provisionPersistent(spec())).rejects.toMatchObject({
+      lastRead: 'no_mapping',
+      message: expect.stringContaining(`the instance listed no volume on ${AWS_HOME_DEVICE_NAME}`),
+    });
+    expect(ec2.liveInstanceIds()).toEqual([]);
+  });
+
+  it('stops waiting the moment the machine ends', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const describe = ec2.describeInstances.bind(ec2);
+    vi.spyOn(ec2, 'describeInstances').mockImplementationOnce(async (input) => {
+      const { instances } = await describe(input);
+      const { volumes: _v, ...instance } = instances[0] as Ec2Instance;
+      return { instances: [{ ...instance, state: 'shutting-down' }], nextToken: null };
+    });
+    const { waited, sleep } = sleeps();
+    const failure = await adapter({ sleep })
+      .provisionPersistent(spec())
+      .catch((err: unknown) => err);
+    expect(failure).toMatchObject({ reads: 1, lastRead: 'terminated' });
+    expect((failure as Error).message).toMatch(/1 read; last: the instance had ended/);
+    expect(waited).toEqual([]);
+    expect(ec2.liveInstanceIds()).toEqual([]);
+  });
+
+  it('reads an empty answer for the new id as not visible yet', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    const describe = ec2.describeInstances.bind(ec2);
+    vi.spyOn(ec2, 'describeInstances')
+      .mockResolvedValueOnce({ instances: [], nextToken: null })
+      .mockImplementation(describe);
+    const handle = await adapter().provisionPersistent(spec());
+    expect(ec2.liveInstanceIds()).toEqual([handle.machineId]);
+  });
+
+  it('gives the machine back on a describe EC2 refuses outright, with EC2’s code', async () => {
+    ec2.failNext('describeInstances', 'UnauthorizedOperation', 403);
+    await expect(adapter().provisionPersistent(spec())).rejects.toMatchObject({
+      provider: 'aws',
+      status: 403,
+    });
+    expect(ec2.liveInstanceIds()).toEqual([]);
+  });
+
+  it('still fails a capacity refusal at once, with no describe', async () => {
+    ec2.failNextRunInstances({ code: 'InsufficientInstanceCapacity' });
+    await expect(adapter().provisionPersistent(spec())).rejects.toBeInstanceOf(
+      OrchestratorCapacityError,
+    );
+    expect(ec2.count('describeInstances')).toBe(0);
+  });
+
+  it('keeps NotFound meaning gone for a machine it already knows', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => {});
+    const orchestrator = adapter();
+    const handle = await orchestrator.provisionPersistent(spec());
+    ec2.failNext('describeInstances', 'InvalidInstanceID.NotFound', 400);
+    expect((await orchestrator.describePersistent(handle)).state).toBe('gone');
+    ec2.failNext('stopInstances', 'InvalidInstanceID.NotFound', 400);
+    await expect(orchestrator.stop(handle)).resolves.toBeUndefined();
+    ec2.failNext('describeInstances', 'InvalidInstanceID.NotFound', 400);
+    await expect(orchestrator.destroyPersistent(handle)).resolves.toBeUndefined();
     expect(ec2.liveVolumeIds()).toEqual([]);
   });
 });

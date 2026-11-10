@@ -68,7 +68,6 @@ const REVIEWED: CardReviewDTO = {
     at: '2026-11-05T09:00:00.000Z',
     commits: [{ repo: 'acme/web', number: 88, headSha: '3f2a9c1aaaa' }],
   },
-  container: null,
   recordRef: { kind: 'record', id: 'r1' },
 };
 const WAITING_YOURS: CardReviewDTO = {
@@ -80,7 +79,6 @@ const WAITING_YOURS: CardReviewDTO = {
     command: 'motir review PROD-2',
   },
   reviewed: null,
-  container: null,
   recordRef: null,
 };
 
@@ -209,24 +207,6 @@ describe('the board card — the review marker in the exclusive slot', () => {
     // Not interactive: no hover card on a card that is one button.
     fireEvent.mouseEnter(badge);
     expect(screen.queryByTestId('reviewed-card')).toBeNull();
-  });
-
-  it('a container draws its count and joins the description too', () => {
-    renderCard(
-      card({
-        id: 'c6',
-        key: 6,
-        kind: 'story',
-        review: {
-          ...REVIEWED,
-          reviewed: null,
-          container: { passed: 1, total: 4, allPassed: false },
-        },
-      }),
-    );
-    const badge = document.querySelector('[data-reviewed-badge]') as HTMLElement;
-    expect(badge.textContent).toBe('1 of 4 reviewed');
-    expect(describedBy()).toContain(badge.id);
   });
 
   it('a marker without a Reviewed state adds no badge id to the description', () => {
