@@ -139,7 +139,14 @@ export type ReleaseState =
   | 'destroyed';
 
 /** What a forwarder must send to reach the upstream (MOTIR-5769 §4): the derived
- *  `X-Motir-Origin-Secret`, a SigV4 signature, or nothing yet. */
+ *  `X-Motir-Origin-Secret`, a SigV4 signature, or nothing yet.
+ *
+ *  `aws_sigv4` stays a member (the decision MOTIR-10128). The AWS adapter no
+ *  longer produces it for a release it deployed — a function is reached through
+ *  its front door with the origin secret (MOTIR-10129) — but it is still what
+ *  the serverless target's adapter describes (`adapters/serverless`), what an
+ *  AWS function stack applied before the front door describes until its next
+ *  deploy, and what the fake port answers for the serverless target. */
 export type OriginCredentialKind = 'origin_secret' | 'aws_sigv4' | 'none';
 
 export interface ReleaseDescription {

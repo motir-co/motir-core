@@ -53,8 +53,11 @@ and no profile.
   secret from it, so a container release deployed now rejects the forwarder once a
   person sets the real key. Set the key before the check, or deploy the fixture
   again after the key changes.
-- **The worker task role may call a function URL.** `page` on the `function`
-  shape signs its request (SigV4, service `lambda`) with the task's own
+- **The worker task role may call a function URL** — needed now only for a
+  function stack applied before its front door (MOTIR-10129). A function release
+  deployed since is reached through its FRONT DOOR with the origin secret, as a
+  container is, and `page` signs nothing for it. For an older stack, `page`
+  signs its request (SigV4, service `lambda`) with the task's own
   credentials, and a function URL in another account admits a caller only when the
   URL's resource policy names it AND the caller's own policy allows it. Since
   October 2025 a new function URL needs BOTH `lambda:InvokeFunctionUrl` and
@@ -201,6 +204,7 @@ CloudShell open; the next steps run in the services account's again.
 
 ```sh
 check deploy --shape function
+check probe --shape function
 check page --shape function
 check release2 --shape function
 check rollback --shape function
@@ -209,18 +213,25 @@ check rollback --shape function
 | step       | prints                                                                       | needs                                                                                |
 | ---------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
 | `deploy`   | release 1, its state, its HTTPS address and origin credential                | the database, the management role                                                    |
+| `probe`    | the health path with the origin secret, without it and with a wrong value    | the management role, outbound HTTPS                                                  |
 | `page`     | `/health` and `/row` status, `release: 1`, the row                           | the management role; the function URL grant (function) or outbound HTTPS (container) |
 | `release2` | release 2, then its `page`: `release: 2`                                     | as `deploy`, then as `page`                                                          |
 | `rollback` | the serving release, then its `page`: `release: 1` again — no build, no push | the management role, then as `page`                                                  |
 
-`page` signs a function release's request with the task's own credentials, and
-sends a container release the origin secret derived from
-`MOTIR_HOSTING_ORIGIN_SECRET_KEY`. It retries a 5xx or an unreachable release up
-to six times, five seconds apart: a function's first invocation and a
+`page` sends either shape the origin secret derived from
+`MOTIR_HOSTING_ORIGIN_SECRET_KEY`: a function release at its front door's URL
+(MOTIR-10129), a container release at the load balancer. Only a function stack
+applied before the front door is still described with SigV4, and `page` signs
+that one with the task's own credentials. It retries a 5xx or an unreachable
+release up to six times, five seconds apart: a function's first invocation and a
 scale-from-zero database both answer 5xx while they wake. `status` and `probe`
-work as on Fly; `probe` proves a container release's load-balancer rule (2xx
-with the origin secret, 403 without) and stops on a function release, whose
-credential is SigV4, not the secret.
+work as on Fly. `probe` proves what admits the forwarder — a function's front
+door, a container's load-balancer rule — with three reads of the health path:
+2xx with the origin secret, 403 without it and 403 with a wrong value. A
+function's 403s come from the front door, which never invokes the app for them
+(the app's own log group, `/aws/lambda/mh-<id>`, shows no invocation for
+them; the front door's, `/aws/lambda/mh-<id>-front-door`, shows all three).
+`page` after it shows the request the front door admitted reaching the app.
 
 ### 6. `destroy` — in the task
 
@@ -239,8 +250,10 @@ the task, so any running worker task can take any step.
 In the **tenant account**, region `us-east-1`, while a release is up:
 
 - **Function shape:** Lambda shows the function `mh-<id>` with its function URL
-  (auth type `AWS_IAM`), and two published versions after `release2`. Nothing
-  named `mh-<id>` exists in Motir's own accounts.
+  (auth type `AWS_IAM`), and two published versions after `release2`, and its
+  front door `mh-<id>-front-door` with a function URL of auth type `NONE` — the
+  address `deploy` prints. Nothing named `mh-<id>` exists in Motir's own
+  accounts.
 - **Container shape:** ECS shows the Fargate service `mh-<id>` in the account's
   cluster; EC2 › Target groups shows its target group, and the account's load
   balancer has a host rule for the app that checks `X-Motir-Origin-Secret`.

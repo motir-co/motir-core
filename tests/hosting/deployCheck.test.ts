@@ -13,6 +13,7 @@ import {
   DEPLOY_CHECK_IMAGE,
   DEPLOY_CHECK_STEPS,
   DEPLOY_CHECK_USAGE,
+  DEPLOY_CHECK_WRONG_SECRET,
   deployCheckApp,
   DeployCheckNameRefusedError,
   DeployCheckUsageError,
@@ -246,9 +247,14 @@ describe('probe (MOTIR-9947)', () => {
       originCredential: 'origin_secret',
       withSecret: '200 OK',
       withoutSecret: '403 Forbidden',
+      withWrongSecret: '403 Forbidden',
     });
     // The secret went on the wire once, under the header, and nowhere else.
-    expect(h.requests.map((r) => r.headers)).toEqual([{ 'X-Motir-Origin-Secret': SECRET }, {}]);
+    expect(h.requests.map((r) => r.headers)).toEqual([
+      { 'X-Motir-Origin-Secret': SECRET },
+      {},
+      { 'X-Motir-Origin-Secret': DEPLOY_CHECK_WRONG_SECRET },
+    ]);
     expect(JSON.stringify(h.out)).not.toContain(SECRET);
     expect(JSON.stringify(h.out)).not.toContain(KEY);
   });
@@ -273,15 +279,56 @@ describe('probe (MOTIR-9947)', () => {
     });
   });
 
-  // An AWS function release is reached with SigV4, not the origin secret
-  // (MOTIR-10011): the probe sends no secret and stops with its refusal.
-  it('fails, sending no secret, when the release has no origin-secret guard', async () => {
+  it('fails when the release admits a wrong secret', async () => {
+    const h = harness({
+      fetch: async (_url, init) =>
+        new Response(null, { status: init.headers['X-Motir-Origin-Secret'] ? 200 : 403 }),
+    });
+    await h.run('deploy');
+    expect(await h.run('probe')).toBe(1);
+    expect(h.block('probe')).toMatchObject({ withoutSecret: '403', withWrongSecret: '200' });
+    expect(h.block('refused')).toMatchObject({
+      message: expect.stringMatching(/with a wrong secret it answered 200/),
+    });
+  });
+
+  // An AWS function release is reached through its front door with the origin
+  // secret (MOTIR-10129), so the probe proves it as it proves a container.
+  it('proves an AWS function release’s front door with the origin secret', async () => {
     const h = harness({ target: 'aws' });
     const aws = ['--target', 'aws', '--repository', 'probe1', '--shape', 'function'];
     expect(await h.run('deploy', ...aws)).toBe(0);
-    expect(await h.run('probe', ...aws)).toBe(1);
+    expect(await h.run('probe', ...aws)).toBe(0);
+    expect(h.block('probe')).toEqual({
+      app: 'mh-probe1',
+      url: 'https://mh-probe1.lambda-url.fake.invalid/health',
+      originCredential: 'origin_secret',
+      withSecret: '200 OK',
+      withoutSecret: '403 Forbidden',
+      withWrongSecret: '403 Forbidden',
+    });
+    expect(h.requests.map((r) => r.headers)).toEqual([
+      { 'X-Motir-Origin-Secret': deriveOriginSecret(KEY, 'mh-probe1') },
+      {},
+      { 'X-Motir-Origin-Secret': DEPLOY_CHECK_WRONG_SECRET },
+    ]);
+  });
+
+  // A release a forwarder must sign for (the serverless target, or an AWS
+  // function stack from before the front door) has no origin-secret guard to
+  // probe: the probe stops with its refusal.
+  it('fails, sending no secret, when the release has no origin-secret guard', async () => {
+    // The fake serverless port behind the Fly steps: its release is described
+    // `aws_sigv4`, as an IAM-authorised function URL is.
+    const h = harness({ target: 'serverless' });
+    expect(await h.run('deploy')).toBe(0);
+    expect(await h.run('probe')).toBe(1);
     expect(h.block('probe')).toMatchObject({ originCredential: 'aws_sigv4' });
-    expect(h.requests.map((r) => r.headers)).toEqual([{}, {}]);
+    expect(h.requests.map((r) => r.headers)).toEqual([
+      {},
+      {},
+      { 'X-Motir-Origin-Secret': DEPLOY_CHECK_WRONG_SECRET },
+    ]);
     expect(h.block('refused')).toMatchObject({
       message: expect.stringMatching(/origin credential is aws_sigv4/),
     });
@@ -298,10 +345,12 @@ describe('probe (MOTIR-9947)', () => {
       originCredential: 'origin_secret',
       withSecret: '200 OK',
       withoutSecret: '403 Forbidden',
+      withWrongSecret: '403 Forbidden',
     });
     expect(h.requests.map((r) => r.headers)).toEqual([
       { 'X-Motir-Origin-Secret': deriveOriginSecret(KEY, 'mh-probe2') },
       {},
+      { 'X-Motir-Origin-Secret': DEPLOY_CHECK_WRONG_SECRET },
     ]);
   });
 

@@ -155,6 +155,14 @@
         {
           "name": "InvokePrincipalArn",
           "required": true
+        },
+        {
+          "name": "OriginSecret",
+          "required": true
+        },
+        {
+          "name": "FrontDoorRevision",
+          "required": false
         }
       ],
       "outputs": [
@@ -162,7 +170,8 @@
         "FunctionArn",
         "EnvironmentSecretArn",
         "FunctionUrl",
-        "LiveVersion"
+        "LiveVersion",
+        "FrontDoorUrl"
       ]
     },
     "container-release.yaml": {

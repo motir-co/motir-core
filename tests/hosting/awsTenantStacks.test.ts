@@ -375,7 +375,7 @@ describe('function-release.yaml', () => {
   const t = T['function-release.yaml'];
 
   it('declares a 1,769 MB x86_64 image function in the VPC', () => {
-    expect(one(t, 'AWS::Lambda::Function').Properties).toMatchObject({
+    expect(t.Resources['Function']!.Properties).toMatchObject({
       FunctionName: { Ref: 'AppRef' },
       PackageType: 'Image',
       MemorySize: 1769,
@@ -385,11 +385,11 @@ describe('function-release.yaml', () => {
   });
 
   it('retains each replaced version behind the alias live, and fronts it with an IAM function URL', () => {
-    const version = one(t, 'AWS::Lambda::Version');
+    const version = t.Resources['Version']!;
     expect(version).toMatchObject({ UpdateReplacePolicy: 'Retain', DeletionPolicy: 'Retain' });
-    const alias = one(t, 'AWS::Lambda::Alias').Properties!;
+    const alias = t.Resources['LiveAlias']!.Properties!;
     expect(alias['Name']).toBe('live');
-    expect(one(t, 'AWS::Lambda::Url').Properties).toMatchObject({
+    expect(t.Resources['FunctionUrl']!.Properties).toMatchObject({
       AuthType: 'AWS_IAM',
       Qualifier: 'live',
     });
@@ -415,12 +415,90 @@ describe('function-release.yaml', () => {
         Principal: { Ref: 'InvokePrincipalArn' },
       },
     });
-    expect(resourcesOf(t, 'AWS::Lambda::Permission')).toHaveLength(2);
+    // The forwarder's two, and the front door's public two.
+    expect(resourcesOf(t, 'AWS::Lambda::Permission')).toHaveLength(4);
     expect(t.Outputs!['FunctionUrl']).toBeDefined();
   });
 
+  it('fronts live with a public front door that only the origin secret passes (MOTIR-10129)', () => {
+    const published = (name: string) => {
+      const resource = t.Resources[name];
+      expect(resource, name).toBeDefined();
+      expect(resource!['Condition'], name).toBe('Published');
+      return resource!.Properties!;
+    };
+    expect(t.Parameters!['OriginSecret']).toMatchObject({ Type: 'String', NoEcho: true });
+    expect(t.Parameters!['OriginSecret']).not.toHaveProperty('Default');
+    const fn = published('FrontDoorFunction');
+    expect(fn).toMatchObject({
+      FunctionName: { 'Fn::Sub': '${AppRef}-front-door' },
+      Runtime: 'nodejs22.x',
+      Handler: 'index.handler',
+      Environment: {
+        Variables: {
+          MOTIR_FRONT_DOOR_SECRET: { Ref: 'OriginSecret' },
+          MOTIR_FRONT_DOOR_TARGET: { Ref: 'LiveAlias' },
+        },
+      },
+    });
+    // It answers after the app would: the app's own timeout decides first.
+    expect(fn['Timeout'] as number).toBeGreaterThan(
+      t.Resources['Function']!.Properties!['Timeout'] as number,
+    );
+    // It calls only the Lambda API, so it sits outside the VPC.
+    expect(fn).not.toHaveProperty('VpcConfig');
+    expect(String((fn['Code'] as Obj)['ZipFile'])).toContain("'x-motir-origin-secret'");
+    // Its role may invoke `live` and nothing else of the account's.
+    const role = published('FrontDoorRole');
+    const statements = ((role['Policies'] as Obj[])[0]!['PolicyDocument'] as Obj)[
+      'Statement'
+    ] as Obj[];
+    expect(statements).toContainEqual({
+      Effect: 'Allow',
+      Action: 'lambda:InvokeFunction',
+      Resource: { Ref: 'LiveAlias' },
+    });
+    expect(statements.map((st) => st['Action'])).toEqual([
+      ['logs:CreateLogStream', 'logs:PutLogEvents'],
+      'lambda:InvokeFunction',
+    ]);
+    expect(published('FrontDoorVersion')['Description']).toEqual({
+      'Fn::Sub': 'front door ${FrontDoorRevision}',
+    });
+    expect(published('FrontDoorAlias')).toMatchObject({
+      Name: 'live',
+      FunctionVersion: { 'Fn::GetAtt': ['FrontDoorVersion', 'Version'] },
+      ProvisionedConcurrencyConfig: {
+        'Fn::If': ['AlwaysOn', { ProvisionedConcurrentExecutions: 1 }, { Ref: 'AWS::NoValue' }],
+      },
+    });
+    expect(published('FrontDoorUrl')).toEqual({
+      TargetFunctionArn: { Ref: 'FrontDoorFunction' },
+      Qualifier: 'live',
+      AuthType: 'NONE',
+      InvokeMode: 'BUFFERED',
+    });
+    // A public URL created since October 2025 needs both actions granted to `*`.
+    expect(published('FrontDoorPublicUrl')).toEqual({
+      Action: 'lambda:InvokeFunctionUrl',
+      FunctionName: { Ref: 'FrontDoorAlias' },
+      FunctionUrlAuthType: 'NONE',
+      Principal: '*',
+    });
+    expect(published('FrontDoorPublicInvoke')).toEqual({
+      Action: 'lambda:InvokeFunction',
+      FunctionName: { Ref: 'FrontDoorAlias' },
+      InvokedViaFunctionUrl: true,
+      Principal: '*',
+    });
+    expect(t.Outputs!['FrontDoorUrl']).toEqual({
+      Condition: 'Published',
+      Value: { 'Fn::GetAtt': ['FrontDoorUrl', 'FunctionUrl'] },
+    });
+  });
+
   it('sets provisioned concurrency 1 on live only when the idle policy is always_on', () => {
-    const alias = one(t, 'AWS::Lambda::Alias').Properties!;
+    const alias = t.Resources['LiveAlias']!.Properties!;
     expect(alias['ProvisionedConcurrencyConfig']).toEqual({
       'Fn::If': ['AlwaysOn', { ProvisionedConcurrentExecutions: 1 }, { Ref: 'AWS::NoValue' }],
     });
