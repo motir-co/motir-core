@@ -530,6 +530,15 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
     file: 'lib/jobs/definitions/notificationFanIn.ts',
     shape: '{ writtenUserIds: Array<string> }',
   },
+  // The page-comment consumers of `page/comment.created` (Story MOTIR-10868).
+  'page-comment-notification-fan-in': {
+    file: 'lib/jobs/definitions/pageCommentNotificationFanIn.ts',
+    shape: '{ writtenUserIds: Array<string> }',
+  },
+  'page-comment-email': {
+    file: 'lib/jobs/definitions/pageCommentEmail.ts',
+    shape: '{ notifiedUserIds: Array<string> }',
+  },
   'probe-boot': {
     file: 'lib/test-deferring-job.ts',
     shape: '{ bootedAt: string }',
@@ -819,10 +828,12 @@ export const LIVE_STEP_SHAPES: Record<string, StepShapePin> = {
   // `template` is surfaced on `job_run.output` only and no code branches on it.
   // MOTIR-10565 WIDENED `skipped` by one member (`recipient_suppressed`) and kept
   // the id: every stored memo carries the older member or none, both still valid.
+  // MOTIR-10925 WIDENED `template` by one member (`page-comment-notification`) and
+  // kept the id for the same reason: every stored memo names an older member.
   send: {
     file: 'lib/jobs/definitions/emailSend.ts',
     shape:
-      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | "recipient_suppressed" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
+      '{ providerMessageId: null | string; skipped?: "notification_budget_exhausted" | "recipient_suppressed" | undefined; template: "agents-deletion-scheduled" | "automation-rule-failed" | "data-export-ready" | "email-change" | "filter-subscription" | "follow-confirm" | "follow-digest" | "mention-notification" | "organization-deletion-cancelled" | "organization-deletion-reminder" | "organization-deletion-scheduled" | "organization-erased" | "ownership-transferred" | "page-comment-notification" | "password-reset" | "two-factor-otp" | "watcher-comment-notification" | "watcher-transition-notification" | "workspace-invite"; to: string }',
   },
   'settle-runner': {
     file: 'lib/services/ciRunnerBootService.ts',

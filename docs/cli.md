@@ -1465,11 +1465,11 @@ does not ride the run's opening it is simply gone.
 
 ### Where to watch it
 
-| surface       | what it shows                                                                                |
-| ------------- | -------------------------------------------------------------------------------------------- |
-| `/runs/<id>`  | the run: its set, each card's live state, the skips with their reasons, the stop reason.     |
-| the work item | a run section on the card — live, saying which of N it is in this run — and its run history. |
-| `/ready`      | a strip on the row a run is working, linking through to the run.                             |
+| surface          | what it shows                                                                                |
+| ---------------- | -------------------------------------------------------------------------------------------- |
+| `/runs?run=<id>` | the run: its set, each card's live state, the skips with their reasons, the stop reason.     |
+| the work item    | a run section on the card — live, saying which of N it is in this run — and its run history. |
+| `/ready`         | a strip on the row a run is working, linking through to the run.                             |
 
 A card's run history answers _"every run that carried a leg for this card"_, not
 _"every run that named it"_ — so the sprint run that swept a card up is findable

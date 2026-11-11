@@ -1,10 +1,12 @@
 # Palette — Citrine (`data-palette="citrine"`)
 
 > Miro's **Sunglow yellow** — the whole Mirotone palette. Registered in
-> [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its override lives in
-> the **AXIS 1 (COLOUR)** section of
-> [`app/globals.css`](../../app/globals.css) as the `[data-palette='citrine']`
-> block (light) + a `[data-palette='citrine'][data-theme='dark']` companion.
+> [`packages/design-system/src/theme/palettes.ts`](../../packages/design-system/src/theme/palettes.ts);
+> its override lives in the **AXIS 1 (COLOUR)** section of
+> [`packages/design-system/theme.css`](../../packages/design-system/theme.css) (which
+> `app/globals.css` imports) as the `[data-palette='citrine']` light block plus a dark
+> companion selected by both `[data-theme='dark'] [data-palette='citrine']:not([data-theme])`
+> and `[data-palette='citrine'][data-theme='dark']`.
 
 **Tagline:** Bright and collaborative — Miro's Sunglow yellow over the whiteboard
 greys, with the Miro action-blue accent.

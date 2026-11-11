@@ -228,7 +228,31 @@ describe('editPageComment', () => {
       commentId: thread.id,
       bodyMd: 'Final',
     });
-    expect(edited).toMatchObject({ bodyMd: 'Final', editedAt: clock.current.toISOString() });
+    expect(edited.comment).toMatchObject({
+      bodyMd: 'Final',
+      editedAt: clock.current.toISOString(),
+    });
+  });
+
+  it('answers the body the edit replaced, and the unchanged body on an identical edit', async () => {
+    const thread = await root('Draft');
+    const edited = await editPageComment(store, clock, {
+      ...scope(),
+      commentId: thread.id,
+      bodyMd: 'Final',
+    });
+    expect(edited.previousBodyMd).toBe('Draft');
+
+    const before = writes();
+    const same = await editPageComment(store, clock, {
+      ...scope(),
+      commentId: thread.id,
+      bodyMd: 'Final',
+    });
+    expect(same.previousBodyMd).toBe('Final');
+    expect(same.comment.bodyMd).toBe('Final');
+    expect(same.comment.editedAt).toBe(edited.comment.editedAt);
+    expect(writes()).toBe(before);
   });
 
   it('refuses a non-author without moderation, and lets a moderator edit', async () => {
@@ -246,7 +270,7 @@ describe('editPageComment', () => {
       commentId: thread.id,
       bodyMd: 'Tidied',
     });
-    expect(edited.bodyMd).toBe('Tidied');
+    expect(edited.comment.bodyMd).toBe('Tidied');
   });
 
   it('writes nothing for the identical body and leaves editedAt alone', async () => {
@@ -258,7 +282,7 @@ describe('editPageComment', () => {
       commentId: thread.id,
       bodyMd: 'Same',
     });
-    expect(result.editedAt).toBeNull();
+    expect(result.comment.editedAt).toBeNull();
     expect(writes()).toBe(before);
   });
 });

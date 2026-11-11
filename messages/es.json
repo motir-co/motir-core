@@ -950,6 +950,18 @@
       "fallback": "O copia este enlace en tu navegador:",
       "reason": "Recibes este correo porque sigues {identifier}."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} te ha mencionado en {page}",
+      "previewMention": "{author} te ha mencionado en {page}",
+      "subjectReply": "{author} ha respondido en un hilo de {page}",
+      "previewReply": "{author} ha respondido en un hilo de {page}",
+      "greeting": "Hola, {name}:",
+      "ledeMention": "{author} te ha mencionado en un comentario de {page}.",
+      "ledeReply": "{author} ha respondido en un hilo de {page}.",
+      "view": "Abrir el debate",
+      "fallback": "O copia este enlace en tu navegador:",
+      "reasonReply": "Recibes este correo porque respondiste en este hilo."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} ha movido {identifier} a {status}",
       "preview": "{actor} ha movido {identifier} a {status}",
@@ -3071,8 +3083,8 @@
             "desc": "Alguien te @menciona en un comentario o una descripción."
           },
           "commented": {
-            "label": "Comentarios en un elemento en el que participas",
-            "desc": "Un comentario nuevo en un elemento que creaste, que tienes asignado o en el que comentaste."
+            "label": "Comentarios en tus elementos o en tus debates de página",
+            "desc": "Un comentario nuevo en un elemento que creaste, que tienes asignado o en el que comentaste — o una respuesta en un debate de página que iniciaste o en el que participaste."
           },
           "assigned": {
             "label": "Asignaciones a ti",
@@ -3102,7 +3114,7 @@
         "soon": "Próximamente",
         "cellAria": "{channel} para {event}",
         "cellAriaSoon": "{channel} para {event} (próximamente)",
-        "defaultsNote": "Los eventos directos (menciones, comentarios en tus elementos y asignaciones) están activados por defecto en ambos canales. Una fila sin tocar usa ese valor predeterminado (no está desactivada hasta que la desactives).",
+        "defaultsNote": "Los eventos directos (menciones, comentarios en tus elementos, respuestas en tus debates de página y asignaciones) están activados por defecto en ambos canales. Una fila sin tocar usa ese valor predeterminado (no está desactivada hasta que la desactives).",
         "status": {
           "saving": "Guardando…",
           "saved": "Guardado",
@@ -6078,7 +6090,9 @@
       "accessRefused": "El código de <s>{project}</s> está listo, pero aún no puedes abrirlo: prueba a enviar la invitación de nuevo",
       "reviewToRun": "Una revisión de <s>{key}</s> espera a tu agente",
       "reviewSentBack": "Un agente pidió cambios en <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> hibernó tu agente <s>{agent}</s>"
+      "agentHibernatedByAdmin": "<s>{actor}</s> hibernó tu agente <s>{agent}</s>",
+      "pageMentioned": "<s>{actor}</s> te ha mencionado en <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> ha respondido en un hilo de <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Un administrador de la organización lo detuvo a las {time}. Sus archivos se conservan; despiértalo desde Agentes."

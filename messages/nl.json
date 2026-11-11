@@ -950,6 +950,18 @@
       "fallback": "Of kopieer deze link naar je browser:",
       "reason": "Je ontvangt dit omdat je {identifier} volgt."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} heeft je genoemd op {page}",
+      "previewMention": "{author} heeft je genoemd op {page}",
+      "subjectReply": "{author} heeft gereageerd in een thread op {page}",
+      "previewReply": "{author} heeft gereageerd in een thread op {page}",
+      "greeting": "Hoi {name},",
+      "ledeMention": "{author} heeft je genoemd in een opmerking op {page}.",
+      "ledeReply": "{author} heeft gereageerd in een thread op {page}.",
+      "view": "Discussie openen",
+      "fallback": "Of kopieer deze link naar je browser:",
+      "reasonReply": "Je ontvangt dit omdat je in deze thread hebt gereageerd."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} heeft {identifier} verplaatst naar {status}",
       "preview": "{actor} heeft {identifier} verplaatst naar {status}",
@@ -3071,8 +3083,8 @@
             "desc": "Iemand noemt je met @ in een opmerking of beschrijving."
           },
           "commented": {
-            "label": "Opmerking bij een item waar je bij betrokken bent",
-            "desc": "Een nieuwe opmerking bij een item dat je hebt gemaakt, dat aan je is toegewezen of waarop je hebt gereageerd."
+            "label": "Opmerkingen bij je items of in je paginadiscussies",
+            "desc": "Een nieuwe opmerking bij een item dat je hebt gemaakt, dat aan je is toegewezen of waarop je hebt gereageerd — of een antwoord in een paginadiscussie die je bent begonnen of waaraan je hebt deelgenomen."
           },
           "assigned": {
             "label": "Aan jou toegewezen",
@@ -3102,7 +3114,7 @@
         "soon": "Binnenkort",
         "cellAria": "{channel} voor {event}",
         "cellAriaSoon": "{channel} voor {event} (binnenkort beschikbaar)",
-        "defaultsNote": "Directe gebeurtenissen — vermeldingen, opmerkingen bij je items en toewijzingen — staan standaard aan voor beide kanalen. Een rij die je niet hebt aangeraakt, gebruikt die standaard (hij staat pas uit als je hem uitzet).",
+        "defaultsNote": "Directe gebeurtenissen — vermeldingen, opmerkingen bij je items, antwoorden in je paginadiscussies en toewijzingen — staan standaard aan voor beide kanalen. Een rij die je niet hebt aangeraakt, gebruikt die standaard (hij staat pas uit als je hem uitzet).",
         "status": {
           "saving": "Opslaan…",
           "saved": "Opgeslagen",
@@ -6078,7 +6090,9 @@
       "accessRefused": "De code van <s>{project}</s> is klaar, maar je kunt die nog niet openen — probeer de uitnodiging opnieuw te sturen",
       "reviewToRun": "Een review van <s>{key}</s> wacht op je agent",
       "reviewSentBack": "Een agent vroeg om wijzigingen aan <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet"
+      "agentHibernatedByAdmin": "<s>{actor}</s> heeft je agent <s>{agent}</s> in slaapstand gezet",
+      "pageMentioned": "<s>{actor}</s> heeft je vermeld op <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> heeft gereageerd in een thread op <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Een beheerder van de organisatie heeft hem om {time} gestopt. Zijn bestanden blijven bewaard; wek hem via Agents."

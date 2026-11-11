@@ -950,6 +950,18 @@
       "fallback": "Ou copiez ce lien dans votre navigateur :",
       "reason": "Vous recevez cet e-mail parce que vous observez {identifier}."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} vous a mentionné dans {page}",
+      "previewMention": "{author} vous a mentionné dans {page}",
+      "subjectReply": "{author} a répondu à un fil dans {page}",
+      "previewReply": "{author} a répondu à un fil dans {page}",
+      "greeting": "Bonjour {name},",
+      "ledeMention": "{author} vous a mentionné dans un commentaire sur {page}.",
+      "ledeReply": "{author} a répondu à un fil dans {page}.",
+      "view": "Ouvrir la discussion",
+      "fallback": "Ou copiez ce lien dans votre navigateur :",
+      "reasonReply": "Vous recevez cet e-mail parce que vous avez répondu dans ce fil."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} a passé {identifier} à {status}",
       "preview": "{actor} a passé {identifier} à {status}",
@@ -3071,8 +3083,8 @@
             "desc": "Quelqu’un vous @-mentionne dans un commentaire ou une description."
           },
           "commented": {
-            "label": "Commentaire sur un élément qui vous concerne",
-            "desc": "Un nouveau commentaire sur un élément que vous avez créé, qui vous est assigné ou que vous avez commenté."
+            "label": "Commentaires sur vos éléments ou dans vos discussions de page",
+            "desc": "Un nouveau commentaire sur un élément que vous avez créé, qui vous est assigné ou que vous avez commenté — ou une réponse dans une discussion de page que vous avez lancée ou à laquelle vous avez participé."
           },
           "assigned": {
             "label": "Assigné à vous",
@@ -3102,7 +3114,7 @@
         "soon": "Bientôt",
         "cellAria": "{channel} pour {event}",
         "cellAriaSoon": "{channel} pour {event} (bientôt disponible)",
-        "defaultsNote": "Les événements directs (mentions, commentaires sur vos éléments et assignations) sont activés par défaut sur les deux canaux. Une ligne non modifiée utilise cette valeur par défaut (elle n’est désactivée que si vous la désactivez).",
+        "defaultsNote": "Les événements directs (mentions, commentaires sur vos éléments, réponses dans vos discussions de page et assignations) sont activés par défaut sur les deux canaux. Une ligne non modifiée utilise cette valeur par défaut (elle n’est désactivée que si vous la désactivez).",
         "status": {
           "saving": "Enregistrement…",
           "saved": "Enregistré",
@@ -6078,7 +6090,9 @@
       "accessRefused": "Le code de <s>{project}</s> est prêt, mais vous ne pouvez pas encore l’ouvrir — essayez de renvoyer l’invitation",
       "reviewToRun": "Une revue de <s>{key}</s> attend votre agent",
       "reviewSentBack": "Un agent a réclamé des modifications sur <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> a mis votre agent <s>{agent}</s> en veille"
+      "agentHibernatedByAdmin": "<s>{actor}</s> a mis votre agent <s>{agent}</s> en veille",
+      "pageMentioned": "<s>{actor}</s> vous a mentionné dans <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> a répondu à un fil dans <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Un administrateur de l’organisation l’a arrêté à {time}. Ses fichiers sont conservés ; réveillez-le depuis Agents."

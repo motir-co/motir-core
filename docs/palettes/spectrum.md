@@ -1,10 +1,12 @@
 # Palette — Spectrum (`data-palette="spectrum"`)
 
 > A vibrant, playful, energetic **multi-accent** re-skin. Registered in
-> [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its override lives in
-> the **AXIS 1 (COLOUR)** section of
-> [`app/globals.css`](../../app/globals.css) as the `[data-palette='spectrum']`
-> block (light) + a `[data-palette='spectrum'][data-theme='dark']` companion.
+> [`packages/design-system/src/theme/palettes.ts`](../../packages/design-system/src/theme/palettes.ts);
+> its override lives in the **AXIS 1 (COLOUR)** section of
+> [`packages/design-system/theme.css`](../../packages/design-system/theme.css) (which
+> `app/globals.css` imports) as the `[data-palette='spectrum']` light block plus a dark
+> companion selected by both `[data-theme='dark'] [data-palette='spectrum']:not([data-theme])`
+> and `[data-palette='spectrum'][data-theme='dark']`.
 
 ![Spectrum palette specimen — light and dark](./spectrum.png)
 

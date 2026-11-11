@@ -950,6 +950,18 @@
       "fallback": "또는 이 링크를 브라우저에 복사하세요:",
       "reason": "{identifier}을(를) 관찰하고 있어 이 이메일을 받았습니다."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} 님이 {page}에서 회원님을 멘션했습니다",
+      "previewMention": "{author} 님이 {page}에서 회원님을 멘션했습니다",
+      "subjectReply": "{author} 님이 {page}의 스레드에 답글을 남겼습니다",
+      "previewReply": "{author} 님이 {page}의 스레드에 답글을 남겼습니다",
+      "greeting": "{name} 님, 안녕하세요.",
+      "ledeMention": "{author} 님이 {page}의 댓글에서 회원님을 멘션했습니다.",
+      "ledeReply": "{author} 님이 {page}의 스레드에 답글을 남겼습니다.",
+      "view": "토론 열기",
+      "fallback": "또는 이 링크를 브라우저에 복사하세요:",
+      "reasonReply": "이 스레드에 답글을 남겨 이 이메일을 받았습니다."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} 님이 {identifier}을(를) {status}(으)로 이동했습니다",
       "preview": "{actor} 님이 {identifier}을(를) {status}(으)로 이동했습니다",
@@ -3071,8 +3083,8 @@
             "desc": "누군가 댓글이나 설명에서 회원님을 @멘션합니다."
           },
           "commented": {
-            "label": "관련된 항목에 댓글이 달림",
-            "desc": "회원님이 보고했거나, 배정받았거나, 댓글을 단 항목에 새 댓글이 달립니다."
+            "label": "내 항목 또는 페이지 토론의 댓글",
+            "desc": "회원님이 보고했거나, 배정받았거나, 댓글을 단 항목에 새 댓글이 달리거나, 회원님이 시작했거나 참여한 페이지 토론에 답글이 달립니다."
           },
           "assigned": {
             "label": "나에게 배정됨",
@@ -3102,7 +3114,7 @@
         "soon": "곧 제공",
         "cellAria": "{event}의 {channel}",
         "cellAriaSoon": "{event}의 {channel}(곧 제공)",
-        "defaultsNote": "직접 이벤트(멘션, 내 항목의 댓글, 배정)는 기본적으로 두 채널 모두 켜져 있습니다. 변경하지 않은 행은 기본값을 사용합니다(직접 끄기 전까지는 꺼지지 않습니다).",
+        "defaultsNote": "직접 이벤트(멘션, 내 항목의 댓글, 내 페이지 토론의 답글, 배정)는 기본적으로 두 채널 모두 켜져 있습니다. 변경하지 않은 행은 기본값을 사용합니다(직접 끄기 전까지는 꺼지지 않습니다).",
         "status": {
           "saving": "저장 중…",
           "saved": "저장됨",
@@ -6078,7 +6090,9 @@
       "accessRefused": "<s>{project}</s>의 코드가 준비되었지만 아직 열 수 없습니다 — 초대를 다시 보내 보세요",
       "reviewToRun": "<s>{key}</s>의 리뷰가 내 에이전트를 기다리고 있어요",
       "reviewSentBack": "에이전트가 <s>{key}</s>에 변경을 요청했습니다",
-      "agentHibernatedByAdmin": "<s>{actor}</s> 님이 내 에이전트 <s>{agent}</s>을(를) 최대 절전 모드로 전환했습니다"
+      "agentHibernatedByAdmin": "<s>{actor}</s> 님이 내 에이전트 <s>{agent}</s>을(를) 최대 절전 모드로 전환했습니다",
+      "pageMentioned": "<s>{actor}</s>님이 <s>{page}</s>에서 나를 멘션했습니다",
+      "pageReplied": "<s>{actor}</s>님이 <s>{page}</s>의 스레드에 답글을 남겼습니다"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "조직 관리자가 {time}에 중지했습니다. 파일은 보존되며, 에이전트에서 깨울 수 있습니다."

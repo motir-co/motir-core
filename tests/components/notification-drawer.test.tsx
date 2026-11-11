@@ -41,7 +41,10 @@ function pageDTO(over: Partial<NotificationsPageDTO> = {}): NotificationsPageDTO
   };
 }
 
-function renderDrawer(page: NotificationsPageDTO = pageDTO()) {
+function renderDrawer(
+  page: NotificationsPageDTO = pageDTO(),
+  intl: { locale?: string; messages?: Record<string, unknown> } = {},
+) {
   const fetchMock = vi.fn(
     async (_input: RequestInfo | URL) =>
       ({ ok: true, json: async () => page }) as unknown as Response,
@@ -52,6 +55,7 @@ function renderDrawer(page: NotificationsPageDTO = pageDTO()) {
     <ToastProvider>
       <NotificationDrawer unreadCount={5} onCountChange={onCountChange} onNavigate={() => {}} />
     </ToastProvider>,
+    intl,
   );
   return { ...utils, fetchMock, onCountChange };
 }
@@ -277,5 +281,190 @@ describe('NotificationDrawer — the review-sent-back row', () => {
     expect(row.textContent).toContain(expected);
     expect(row.textContent).not.toContain(en.notifications.actorFallback);
     expect(row.getAttribute('href')).toBe('/items/ACME-412?activity=all#agent-verdict-rec-1');
+  });
+});
+
+// ── THE PAGE ROWS (MOTIR-10926 · Story MOTIR-10868) ──────────────────────────
+//
+// design/notifications/design-notes.md, "Page comment rows and the page-comment
+// email": the shipped row with three substitutions — the sentence (chosen from the
+// data KIND, before the issue-key question), an excerpt on both arms, and the page
+// address with the thread root — and the badge of the row's own TYPE.
+
+describe('NotificationDrawer — the page rows', () => {
+  type PageKind = 'page_mentioned' | 'page_replied';
+  const ben = { id: 'u-ben', name: 'Ben Okafor', image: null };
+  const pageRow = (
+    kind: PageKind,
+    over: {
+      readAt?: string | null;
+      actor?: typeof ben | null;
+      pageTitle?: string;
+      excerpt?: string | null;
+      pageId?: string;
+      threadRootId?: string;
+    } = {},
+  ) => ({
+    id: `n-${kind}`,
+    type: kind === 'page_mentioned' ? 'mentioned' : 'commented',
+    category: 'direct' as const,
+    readAt: over.readAt ?? null,
+    createdAt: new Date().toISOString(),
+    actor: over.actor === undefined ? ben : over.actor,
+    workItemId: null,
+    data: {
+      kind,
+      pageId: over.pageId ?? 'page-1',
+      pageTitle: over.pageTitle ?? 'Release checklist',
+      projectKey: 'PROD',
+      threadRootId: over.threadRootId ?? 'root-1',
+      excerpt: over.excerpt === undefined ? 'Can you check this?' : over.excerpt,
+    },
+  });
+
+  /** The catalogue sentence, tags stripped and filled the way the row fills it. */
+  const sentence = (template: string, fill: Record<string, string>) =>
+    Object.entries(fill).reduce(
+      (out, [k, v]) => out.replace(`{${k}}`, v),
+      template.replace(/<\/?s>/g, ''),
+    );
+
+  const renderRows = (rows: unknown[], intl = {}) =>
+    renderDrawer(pageDTO({ notifications: rows as never, totalCount: rows.length }), intl);
+
+  const SENTENCES: Record<PageKind, string> = {
+    page_mentioned: en.notifications.summary.pageMentioned,
+    page_replied: en.notifications.summary.pageReplied,
+  };
+
+  for (const kind of ['page_mentioned', 'page_replied'] as const) {
+    it(`${kind}: the kind's sentence, never the keyless catch-all, and no issue key`, async () => {
+      renderRows([pageRow(kind)]);
+      const row = await screen.findByRole('link', { name: /Release checklist/ });
+      expect(row.textContent).toContain(
+        sentence(SENTENCES[kind], { actor: 'Ben Okafor', page: 'Release checklist' }),
+      );
+      // The difference IS the measurement: a keyless row would have taken this one.
+      expect(row.textContent).not.toContain(
+        sentence(en.notifications.summary.genericNoKey, { actor: 'Ben Okafor' }),
+      );
+      expect(row.textContent).not.toContain('PROD');
+      expect(row.querySelectorAll('strong')).toHaveLength(2);
+    });
+
+    it(`${kind}: links to the page at its thread, URL-encoded, never to an item`, async () => {
+      renderRows([pageRow(kind, { pageId: 'pg/1 a', threadRootId: 'r?1&x' })]);
+      const row = await screen.findByRole('link', { name: /Release checklist/ });
+      expect(row.getAttribute('href')).toBe('/pages/pg%2F1%20a?thread=r%3F1%26x');
+      expect(row.getAttribute('href')).not.toContain('/items/');
+    });
+
+    it(`${kind}: the excerpt is the second line, and a null one draws no line at all`, async () => {
+      renderRows([pageRow(kind)]);
+      let row = await screen.findByRole('link', { name: /Release checklist/ });
+      const line = within(row).getByText('Can you check this?');
+      expect(line.className).toContain('text-(--el-text-secondary)');
+      cleanup();
+
+      renderRows([pageRow(kind, { excerpt: null })]);
+      row = await screen.findByRole('link', { name: /Release checklist/ });
+      // Only the summary line remains in the body column: no empty line, no dash.
+      expect(row.querySelectorAll('span.truncate.text-xs')).toHaveLength(0);
+      expect(row.textContent).not.toMatch(/—|–/);
+    });
+  }
+
+  it('an untitled page reads the pages word in the reader’s language, at render', async () => {
+    const row = pageRow('page_mentioned', { pageTitle: '' });
+    renderRows([row]);
+    let link = await screen.findByRole('link', { name: new RegExp(en.pages.untitled) });
+    expect(link.textContent).toContain(
+      sentence(SENTENCES.page_mentioned, { actor: 'Ben Okafor', page: en.pages.untitled }),
+    );
+    expect(row.data.pageTitle).toBe('');
+    cleanup();
+
+    const { getMessagesFor } = await import('@/lib/i18n/messages');
+    const de = getMessagesFor('de') as unknown as { pages: { untitled: string } };
+    expect(de.pages.untitled).not.toBe(en.pages.untitled);
+    renderRows([row], { locale: 'de', messages: de as unknown as Record<string, unknown> });
+    link = await screen.findByRole('link', { name: new RegExp(de.pages.untitled) });
+    expect(link.textContent).toContain(de.pages.untitled);
+  });
+
+  it('a deleted author reads as the shipped actor fallback, still a sentence', async () => {
+    renderRows([pageRow('page_replied', { actor: null })]);
+    const row = await screen.findByRole('link', { name: /Release checklist/ });
+    expect(row.textContent).toContain(
+      sentence(SENTENCES.page_replied, {
+        actor: en.notifications.actorFallback,
+        page: 'Release checklist',
+      }),
+    );
+  });
+
+  it('keeps the type’s glyph on the initial avatar, and the strong slots truncate', async () => {
+    renderRows([pageRow('page_mentioned'), pageRow('page_replied')]);
+    const [mention, reply] = await screen.findAllByRole('link', { name: /Release checklist/ });
+    for (const [row, hue, glyph] of [
+      [mention!, '--el-notif-mentioned', 'lucide-at-sign'],
+      [reply!, '--el-notif-commented', 'lucide-message-square'],
+    ] as const) {
+      // The initial avatar is drawn (not actorless), with the badge on it.
+      expect(row.textContent).toContain('B');
+      const badge = row.querySelector(`[class*="${hue}"]`);
+      expect(badge).not.toBeNull();
+      expect(badge!.querySelector('svg')!.getAttribute('class')).toContain(glyph);
+      for (const strong of row.querySelectorAll('strong')) {
+        expect(strong.className).toContain('truncate');
+      }
+    }
+  });
+
+  it('keeps the shipped read treatment: dot and full ink unread, neither read', async () => {
+    renderRows([
+      pageRow('page_mentioned'),
+      { ...pageRow('page_replied', { readAt: new Date().toISOString() }), id: 'n-read' },
+    ]);
+    const [unread, read] = await screen.findAllByRole('link', { name: /Release checklist/ });
+    expect(unread!.querySelector('[class*="bg-(--el-accent)"]')).not.toBeNull();
+    expect(unread!.querySelector('strong')!.className).toContain('--el-text-strong');
+    expect(read!.querySelector('[class*="bg-(--el-accent)"]')).toBeNull();
+    expect(read!.querySelector('strong')!.className).not.toContain('--el-text-strong');
+    for (const row of [unread!, read!]) {
+      expect(within(row).getByText('Can you check this?').className).toContain(
+        'text-(--el-text-secondary)',
+      );
+    }
+  });
+
+  it('leaves a work-item mention row exactly as shipped beside a page row', async () => {
+    renderRows([
+      pageRow('page_mentioned'),
+      {
+        id: 'n-item',
+        type: 'mentioned',
+        category: 'direct' as const,
+        readAt: null,
+        createdAt: new Date().toISOString(),
+        actor: ben,
+        workItemId: 'wi-1',
+        data: {
+          kind: 'mentioned' as const,
+          source: 'comment',
+          issueKey: 'PROD-7',
+          title: 'Fix it',
+          excerpt: 'On the item',
+        },
+      },
+    ]);
+    const item = await screen.findByRole('link', { name: /PROD-7/ });
+    expect(item.getAttribute('href')).toBe('/items/PROD-7');
+    expect(item.textContent).toContain(
+      sentence(en.notifications.summary.mentioned, { actor: 'Ben Okafor', key: 'PROD-7' }),
+    );
+    expect(item.textContent).toContain('On the item');
+    // Strong slots on a work-item row are not bounded — a key is short.
+    expect(item.querySelector('strong')!.className).not.toContain('truncate');
   });
 });

@@ -950,6 +950,18 @@
       "fallback": "Możesz też skopiować ten link do przeglądarki:",
       "reason": "Otrzymujesz tę wiadomość, ponieważ obserwujesz {identifier}."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} wspomina o Tobie na stronie {page}",
+      "previewMention": "{author} wspomina o Tobie na stronie {page}",
+      "subjectReply": "{author} odpowiada w wątku na stronie {page}",
+      "previewReply": "{author} odpowiada w wątku na stronie {page}",
+      "greeting": "Cześć {name},",
+      "ledeMention": "{author} wspomina o Tobie w komentarzu na stronie {page}.",
+      "ledeReply": "{author} odpowiada w wątku na stronie {page}.",
+      "view": "Otwórz dyskusję",
+      "fallback": "Możesz też skopiować ten link do przeglądarki:",
+      "reasonReply": "Otrzymujesz tę wiadomość, ponieważ odpowiedziałeś w tym wątku."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} przeniósł/przeniosła {identifier} do statusu {status}",
       "preview": "{actor} przeniósł/przeniosła {identifier} do statusu {status}",
@@ -3071,8 +3083,8 @@
             "desc": "Ktoś wspomina o Tobie (@) w komentarzu lub opisie."
           },
           "commented": {
-            "label": "Komentarz do elementu, w który jesteś zaangażowany",
-            "desc": "Nowy komentarz do elementu, który zgłosiłeś, który jest Ci przypisany lub który skomentowałeś."
+            "label": "Komentarze do Twoich elementów lub w Twoich dyskusjach na stronach",
+            "desc": "Nowy komentarz do elementu, który zgłosiłeś, który jest Ci przypisany lub który skomentowałeś — albo odpowiedź w dyskusji na stronie, którą rozpocząłeś lub w której brałeś udział."
           },
           "assigned": {
             "label": "Przypisano do Ciebie",
@@ -3102,7 +3114,7 @@
         "soon": "Wkrótce",
         "cellAria": "{channel} dla zdarzenia {event}",
         "cellAriaSoon": "{channel} dla zdarzenia {event} (wkrótce)",
-        "defaultsNote": "Zdarzenia bezpośrednie — wzmianki, komentarze do Twoich elementów i przypisania — są domyślnie włączone w obu kanałach. Nieruszony wiersz używa wartości domyślnej (nie jest wyłączony, dopóki go nie wyłączysz).",
+        "defaultsNote": "Zdarzenia bezpośrednie — wzmianki, komentarze do Twoich elementów, odpowiedzi w Twoich dyskusjach na stronach i przypisania — są domyślnie włączone w obu kanałach. Nieruszony wiersz używa wartości domyślnej (nie jest wyłączony, dopóki go nie wyłączysz).",
         "status": {
           "saving": "Zapisywanie…",
           "saved": "Zapisano",
@@ -6078,7 +6090,9 @@
       "accessRefused": "Kod projektu <s>{project}</s> jest gotowy, ale nie możesz go jeszcze otworzyć — spróbuj wysłać zaproszenie ponownie",
       "reviewToRun": "Recenzja <s>{key}</s> czeka na twojego agenta",
       "reviewSentBack": "Agent poprosił o zmiany w <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>"
+      "agentHibernatedByAdmin": "<s>{actor}</s> uśpił Twojego agenta <s>{agent}</s>",
+      "pageMentioned": "<s>{actor}</s> wspomina o Tobie na stronie <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> odpowiada w wątku na stronie <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Administrator organizacji zatrzymał go o {time}. Jego pliki zostały zachowane; wybudź go w sekcji Agenci."

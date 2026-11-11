@@ -23,6 +23,7 @@ import { usersService } from '@/lib/services/usersService';
 import { emailService } from '@/lib/services/emailService';
 import { mentionNotificationsService } from '@/lib/services/mentionNotificationsService';
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
+import { pageCommentEmailService } from '@/lib/services/pageCommentEmailService';
 import { notificationFanInService } from '@/lib/services/notificationFanInService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { publicAddressCertificatesService } from '@/lib/services/publicAddressCertificatesService';
@@ -117,6 +118,7 @@ export const jobServices = {
   email: emailService,
   mentionNotifications: mentionNotificationsService,
   watcherNotifications: watcherNotificationsService,
+  pageCommentEmail: pageCommentEmailService,
   notificationFanIn: notificationFanInService,
   attachments: attachmentsService,
   publicAddressCertificates: publicAddressCertificatesService,

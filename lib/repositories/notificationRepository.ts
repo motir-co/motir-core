@@ -69,6 +69,27 @@ export const notificationRepository = {
   },
 
   /**
+   * Which of `recipientUserIds` already hold a row under `dedupeKey` — the read a
+   * fan-in makes BEFORE its insert, so the ids it reports as written are the ones
+   * it actually wrote (MOTIR-10924). `createMany` answers a count and no ids, so
+   * `skipDuplicates` alone cannot say who was new; it stays the guard against a
+   * concurrent duplicate. Served by the `(dedupe_key, recipient_user_id)` unique.
+   * Required `tx`: the caller reads and writes on one workspace binding.
+   */
+  async findRecipientIdsByDedupeKey(
+    dedupeKey: string,
+    recipientUserIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<string[]> {
+    if (recipientUserIds.length === 0) return [];
+    const rows = await tx.notification.findMany({
+      where: { dedupeKey, recipientUserId: { in: [...recipientUserIds] } },
+      select: { recipientUserId: true },
+    });
+    return rows.map((r) => r.recipientUserId);
+  },
+
+  /**
    * One notification by id, or null. Read-only path → `db` singleton (the
    * service reads it to gate ownership before a mark-read write). Takes `tx`
    * when read inside a transaction.

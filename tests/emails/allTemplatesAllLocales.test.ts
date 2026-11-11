@@ -134,7 +134,7 @@ function render(template: EmailTemplate, locale: Locale): Promise<RenderedEmail>
 
 describe('the matrix', () => {
   it('covers every template in the union', () => {
-    expect(TEMPLATES).toHaveLength(18);
+    expect(TEMPLATES).toHaveLength(19);
     expect([...ENGLISH_ONLY].every((t) => TEMPLATES.includes(t))).toBe(true);
   });
 });

@@ -950,6 +950,18 @@
       "fallback": "または、次のリンクをブラウザにコピーしてください:",
       "reason": "{identifier} をウォッチしているため、このメールが送信されています。"
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} さんが {page} であなたをメンションしました",
+      "previewMention": "{author} さんが {page} であなたをメンションしました",
+      "subjectReply": "{author} さんが {page} のスレッドに返信しました",
+      "previewReply": "{author} さんが {page} のスレッドに返信しました",
+      "greeting": "{name} さん",
+      "ledeMention": "{author} さんが {page} のコメントであなたをメンションしました。",
+      "ledeReply": "{author} さんが {page} のスレッドに返信しました。",
+      "view": "ディスカッションを開く",
+      "fallback": "または、次のリンクをブラウザにコピーしてください:",
+      "reasonReply": "このスレッドに返信したため、このメールが送信されています。"
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} さんが {identifier} を {status} に移動しました",
       "preview": "{actor} さんが {identifier} を {status} に移動しました",
@@ -3071,8 +3083,8 @@
             "desc": "コメントや説明で誰かがあなたを @メンションしたとき。"
           },
           "commented": {
-            "label": "関わっている項目へのコメント",
-            "desc": "報告した項目、割り当てられた項目、コメントした項目に新しいコメントがあったとき。"
+            "label": "あなたの項目やページのディスカッションへのコメント",
+            "desc": "報告した項目、割り当てられた項目、コメントした項目に新しいコメントがあったとき、または開始・参加したページのディスカッションに返信があったとき。"
           },
           "assigned": {
             "label": "あなたへの割り当て",
@@ -3102,7 +3114,7 @@
         "soon": "近日提供",
         "cellAria": "{event}の{channel}",
         "cellAriaSoon": "{event}の{channel}（近日提供）",
-        "defaultsNote": "直接的なイベント（メンション、あなたの項目へのコメント、割り当て）は、デフォルトで両方のチャネルがオンです。変更していない行はそのデフォルトを使用します（オフにするまではオフになりません）。",
+        "defaultsNote": "直接的なイベント（メンション、あなたの項目へのコメント、ページのディスカッションへの返信、割り当て）は、デフォルトで両方のチャネルがオンです。変更していない行はそのデフォルトを使用します（オフにするまではオフになりません）。",
         "status": {
           "saving": "保存しています…",
           "saved": "保存しました",
@@ -6078,7 +6090,9 @@
       "accessRefused": "<s>{project}</s> のコードの準備ができましたが、まだ開くことができません。招待をもう一度送信してみてください",
       "reviewToRun": "<s>{key}</s> のレビューがあなたのエージェントを待っています",
       "reviewSentBack": "エージェントが <s>{key}</s> に変更を求めました",
-      "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました"
+      "agentHibernatedByAdmin": "<s>{actor}</s> があなたのエージェント <s>{agent}</s> を休止しました",
+      "pageMentioned": "<s>{actor}</s> さんが <s>{page}</s> であなたをメンションしました",
+      "pageReplied": "<s>{actor}</s> さんが <s>{page}</s> のスレッドに返信しました"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "組織の管理者が {time} に停止しました。ファイルは保持されています。エージェントから再開できます。"

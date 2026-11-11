@@ -950,6 +950,18 @@
       "fallback": "Oder kopieren Sie diesen Link in Ihren Browser:",
       "reason": "Sie erhalten diese E-Mail, weil Sie {identifier} beobachten."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} hat Sie in {page} erwähnt",
+      "previewMention": "{author} hat Sie in {page} erwähnt",
+      "subjectReply": "{author} hat auf {page} in einem Thread geantwortet",
+      "previewReply": "{author} hat auf {page} in einem Thread geantwortet",
+      "greeting": "Hallo {name},",
+      "ledeMention": "{author} hat Sie in einem Kommentar zu {page} erwähnt.",
+      "ledeReply": "{author} hat auf {page} in einem Thread geantwortet.",
+      "view": "Diskussion öffnen",
+      "fallback": "Oder kopieren Sie diesen Link in Ihren Browser:",
+      "reasonReply": "Sie erhalten diese E-Mail, weil Sie in diesem Thread geantwortet haben."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} hat {identifier} auf {status} gesetzt",
       "preview": "{actor} hat {identifier} auf {status} gesetzt",
@@ -3071,8 +3083,8 @@
             "desc": "Jemand erwähnt Sie mit @ in einem Kommentar oder einer Beschreibung."
           },
           "commented": {
-            "label": "Kommentar zu einem Element, an dem Sie beteiligt sind",
-            "desc": "Ein neuer Kommentar zu einem Element, das Sie erstellt haben, für das Sie verantwortlich sind oder das Sie kommentiert haben."
+            "label": "Kommentare zu Ihren Elementen oder in Ihren Seitendiskussionen",
+            "desc": "Ein neuer Kommentar zu einem Element, das Sie erstellt haben, für das Sie verantwortlich sind oder das Sie kommentiert haben – oder eine Antwort in einer Seitendiskussion, die Sie begonnen oder an der Sie teilgenommen haben."
           },
           "assigned": {
             "label": "Ihnen zugewiesen",
@@ -3102,7 +3114,7 @@
         "soon": "Demnächst",
         "cellAria": "{channel} für {event}",
         "cellAriaSoon": "{channel} für {event} (demnächst verfügbar)",
-        "defaultsNote": "Direkte Ereignisse – Erwähnungen, Kommentare zu Ihren Elementen und Zuweisungen – sind standardmäßig für beide Kanäle aktiviert. Eine unveränderte Zeile verwendet diesen Standard (sie ist erst deaktiviert, wenn Sie sie deaktivieren).",
+        "defaultsNote": "Direkte Ereignisse – Erwähnungen, Kommentare zu Ihren Elementen, Antworten in Ihren Seitendiskussionen und Zuweisungen – sind standardmäßig für beide Kanäle aktiviert. Eine unveränderte Zeile verwendet diesen Standard (sie ist erst deaktiviert, wenn Sie sie deaktivieren).",
         "status": {
           "saving": "Wird gespeichert…",
           "saved": "Gespeichert",
@@ -6078,7 +6090,9 @@
       "accessRefused": "Der Code von <s>{project}</s> ist bereit, aber Sie können ihn noch nicht öffnen – versuchen Sie, die Einladung erneut zu senden",
       "reviewToRun": "Ein Review von <s>{key}</s> wartet auf deinen Agenten",
       "reviewSentBack": "Ein Agent hat Änderungen an <s>{key}</s> angefordert",
-      "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt"
+      "agentHibernatedByAdmin": "<s>{actor}</s> hat Ihren Agenten <s>{agent}</s> in den Ruhezustand versetzt",
+      "pageMentioned": "<s>{actor}</s> hat Sie in <s>{page}</s> erwähnt",
+      "pageReplied": "<s>{actor}</s> hat auf <s>{page}</s> in einem Thread geantwortet"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Ein Admin der Organisation hat ihn um {time} gestoppt. Seine Dateien bleiben erhalten; wecken Sie ihn unter Agenten auf."

@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · Notification preferences — page replies in the Commented row (MOTIR-10868 ·
+      MOTIR-10931)
+    </title>
+    <!--
+      DELTA MOCK amending preferences.mock.html (design-notes.md § Notification
+      preferences, Panel 0). It draws ONLY the panel that changes: the
+      Notifications card's Commented row, reworded because a reply in a page
+      discussion now notifies through that row's switches (Story MOTIR-10868),
+      and the defaults note, whose list of direct events gains page replies.
+
+      The words are messages/en.json verbatim
+      (settings.account.notifications.events.commented.label / .desc and
+      .defaultsNote), apart from the emphasis on "on" the original mock draws.
+      The Mentioned row is drawn unchanged above it for context, and the other
+      rows of the shipped matrix are left out: none of them changes.
+
+      The style block is copied unchanged from preferences.mock.html, so the
+      tokens, the Card and the Switch are the ones that mock draws. Toggle dark
+      for token parity. See design-notes.md § "Page replies in the Commented row".
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-modal: 12px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-control: 6px;
+        --radius-btn: 8px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-input-x: 16px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 6px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-md: 16px;
+        --height-input: 44px;
+        --height-btn-md: 40px;
+        --height-btn-sm: 32px;
+        --height-control: 32px;
+        --focus-ring-color: var(--color-primary);
+        --focus-ring-width: 2px;
+        --focus-ring-offset: 2px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+        --el-sidebar-item-bg-hover: #eeede9;
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-primary-pressed: #5645d4;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #3bb3ae;
+        --color-accent-green: #2fc94f;
+        --color-info: #4aa3ff;
+        --color-destructive: #f0656c;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.05);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 12px 40px rgba(15, 15, 15, 0.15);
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome ──────────────────────────────────────────────────────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 120px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 880px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .stack {
+        max-width: 1180px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 44px;
+      }
+      .panel {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        padding-left: 2px;
+      }
+      .panel-note {
+        font-size: 12px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+        max-width: 940px;
+        padding-left: 2px;
+      }
+      .panel-note code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .mini-label {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-secondary);
+        margin-bottom: 10px;
+      }
+      .row-of {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 32px;
+        align-items: flex-start;
+      }
+
+      /* ── Settings-page placement chrome ───────────────────────────────────── */
+      .settings-page {
+        max-width: 680px;
+      }
+      .breadcrumb {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-bottom: 6px;
+      }
+      .page-title {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        margin: 0 0 18px;
+        color: var(--el-text);
+      }
+      /* a quieter "prior card" to show the section sits beside LanguageCard */
+      .prior-card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+        margin-bottom: 16px;
+        opacity: 0.55;
+      }
+      .prior-card h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 12px;
+        color: var(--el-text);
+      }
+      .fake-input {
+        height: var(--height-input);
+        max-width: 256px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        display: flex;
+        align-items: center;
+        padding: 0 var(--spacing-input-x);
+        font-size: 14px;
+        color: var(--el-text-secondary);
+      }
+
+      /* ── THE CARD — ContentSectionCard grammar ────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-card-padding);
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .card-head h2 {
+        font-family: var(--font-sans);
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0;
+        color: var(--el-text);
+      }
+      .card-help {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        margin: 4px 0 0;
+        max-width: 460px;
+      }
+      .save-status {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 500;
+        white-space: nowrap;
+        padding-top: 2px;
+      }
+      .save-status svg {
+        width: 14px;
+        height: 14px;
+      }
+      .save-status.saved {
+        color: var(--el-success);
+      }
+      .save-status.saving {
+        color: var(--el-text-muted);
+      }
+      .save-status.err {
+        color: var(--el-danger);
+      }
+      .spinner {
+        width: 13px;
+        height: 13px;
+        border-radius: 9999px;
+        border: 2px solid var(--el-border-strong);
+        border-top-color: var(--el-accent);
+        animation: spin 0.7s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .retry-link {
+        background: transparent;
+        border: 0;
+        padding: 0;
+        color: var(--el-link);
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
+      /* ── THE MATRIX ───────────────────────────────────────────────────────── */
+      .matrix {
+        margin-top: 20px;
+      }
+      .matrix-grid {
+        display: grid;
+        grid-template-columns: 1fr 84px 84px;
+        align-items: center;
+      }
+      .mh {
+        text-align: center;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--el-border);
+      }
+      .mh.left {
+        text-align: left;
+      }
+      .mrow {
+        display: contents;
+      }
+      .mrow > div {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .mrow.last > div {
+        border-bottom: 0;
+      }
+      .evt {
+        padding-right: 16px;
+      }
+      .evt-label {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .evt-label.is-disabled {
+        color: var(--el-text-secondary);
+      }
+      .evt-desc {
+        font-size: 12px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .seam-tag {
+        display: inline-block;
+        margin-left: 8px;
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-lavender);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        vertical-align: middle;
+      }
+      .cell {
+        display: flex;
+        justify-content: center;
+      }
+      .defaults-note {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        margin-top: 16px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .defaults-note .dot {
+        margin-top: 6px;
+        width: 5px;
+        height: 5px;
+        border-radius: 9999px;
+        background: var(--el-text-faint);
+        flex: none;
+      }
+
+      /* ── THE SWITCH — role=switch (h-5 w-9, --el-accent on) ───────────────── */
+      .switch {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        width: 36px;
+        height: 20px;
+        border-radius: 9999px;
+        border: 1px solid;
+        background: var(--el-muted);
+        border-color: var(--el-border-strong);
+        cursor: pointer;
+        padding: 0;
+        transition:
+          background-color 0.15s,
+          border-color 0.15s;
+      }
+      .switch:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .switch.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+      }
+      .switch.disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .switch .knob {
+        position: absolute;
+        width: 14px;
+        height: 14px;
+        border-radius: 9999px;
+        background: var(--el-surface);
+        box-shadow: var(--shadow-subtle);
+        transition: transform 0.15s;
+        left: 2px;
+        transform: translateX(0);
+      }
+      .switch.on .knob {
+        transform: translateX(16px);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Notification preferences — page replies in the Commented row</h1>
+        <p>
+          Story MOTIR-10868 · MOTIR-10931. Amends Panel 0 of
+          <code>preferences.mock.html</code>: a reply in a page discussion you started or took part
+          in now notifies through the <strong>Commented</strong> row, so its label, its description
+          and the defaults note say so. Nothing else on the matrix changes.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <div class="stack">
+      <!-- PANEL 0 (amended) — the Commented row and the defaults note -->
+      <section class="panel">
+        <div class="panel-label">
+          0 · Amended — the Commented row and the defaults note on /settings/account/notifications
+        </div>
+        <div class="settings-page">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h2>Notifications</h2>
+                <p class="card-help">
+                  Choose how you're notified for each kind of update. These apply to you across
+                  every workspace.
+                </p>
+              </div>
+            </div>
+            <div class="matrix">
+              <div class="matrix-grid">
+                <div class="mh left">Event</div>
+                <div class="mh">Email</div>
+                <div class="mh">In-app</div>
+
+                <div class="mrow">
+                  <div class="evt">
+                    <div class="evt-label">Mentioned</div>
+                    <div class="evt-desc">Someone @-mentions you in a comment or description.</div>
+                  </div>
+                  <div class="cell">
+                    <button
+                      class="switch on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="Email for Mentioned"
+                    >
+                      <span class="knob"></span>
+                    </button>
+                  </div>
+                  <div class="cell">
+                    <button
+                      class="switch on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="In-app for Mentioned"
+                    >
+                      <span class="knob"></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mrow last">
+                  <div class="evt">
+                    <div class="evt-label">Comments on your items or in your page discussions</div>
+                    <div class="evt-desc">
+                      A new comment on an item you reported, are assigned, or commented on — or a
+                      reply in a page discussion you started or took part in.
+                    </div>
+                  </div>
+                  <div class="cell">
+                    <button
+                      class="switch on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="Email for Comments on your items or in your page discussions"
+                    >
+                      <span class="knob"></span>
+                    </button>
+                  </div>
+                  <div class="cell">
+                    <button
+                      class="switch on"
+                      role="switch"
+                      aria-checked="true"
+                      aria-label="In-app for Comments on your items or in your page discussions"
+                    >
+                      <span class="knob"></span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="defaults-note">
+                <span class="dot" aria-hidden="true"></span>
+                <span
+                  >Direct events — mentions, comments on your items, replies in your page
+                  discussions, and assignments — default <strong>on</strong> for both channels. An
+                  untouched row uses that default (it is not off until you turn it off).</span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          The label and description are the catalogue's, so the row now names both subjects it
+          gates: comments on work items, and replies in a page discussion the reader started or took
+          part in. Each switch's name is <code>{channel} for {event}</code> over that label, so both
+          switches are renamed with it, as drawn. No default changes: the row was already on for
+          both channels, and the defaults note only lists the new direct event.
+        </p>
+      </section>
+    </div>
+  </body>
+</html>

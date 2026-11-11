@@ -440,18 +440,32 @@ export interface EditPageCommentInput extends PageCommentScope {
   readonly bodyMd: string;
 }
 
+/**
+ * An edit's answer: the comment as it now stands, and the body it carried before
+ * the edit (MOTIR-10923) — the identical body on a no-op edit. The service diffs
+ * the two bodies' mentions so an edit notifies only the people it added; the body
+ * comes from here because this procedure already holds the comment's lock, and a
+ * caller taking that lock itself would take it before the page's.
+ */
+export interface EditPageCommentResult {
+  readonly comment: PageCommentDto;
+  readonly previousBodyMd: string;
+}
+
 /** Edit a comment's body. The identical body writes nothing and leaves `editedAt` alone. */
 export async function editPageComment(
   store: PageStore,
   clock: Clock,
   input: EditPageCommentInput,
-): Promise<PageCommentDto> {
+): Promise<EditPageCommentResult> {
   const bodyMd = requireBody(input.bodyMd);
   const page = await writablePage(store, input);
   const comment = await lockedComment(store, page, input.commentId);
   assertMayChange(comment, input.actor, 'edit');
-  if (comment.bodyMd === bodyMd) return toPageCommentDto(comment);
-  return toPageCommentDto(await store.updatePageCommentBody(comment.id, bodyMd, clock.now()));
+  const previousBodyMd = comment.bodyMd;
+  if (previousBodyMd === bodyMd) return { comment: toPageCommentDto(comment), previousBodyMd };
+  const updated = await store.updatePageCommentBody(comment.id, bodyMd, clock.now());
+  return { comment: toPageCommentDto(updated), previousBodyMd };
 }
 
 export interface DeletePageCommentInput extends PageCommentScope {
