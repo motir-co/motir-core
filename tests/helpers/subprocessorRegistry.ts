@@ -74,10 +74,43 @@ export interface VendorSignature {
  */
 export const VENDOR_SIGNATURES: readonly VendorSignature[] = [
   { vendor: 'Fly.io', hosts: ['fly.io', 'api.machines.dev'] },
-  { vendor: 'Tigris', packages: ['@aws-sdk/client-s3', '@aws-sdk/s3-request-presigner'] },
-  { vendor: 'Resend', hosts: ['api.resend.com'] },
-  // MOTIR-10565: production email moves to Amazon SES (Story MOTIR-10562).
-  { vendor: 'Amazon SES', packages: ['@aws-sdk/client-sesv2'] },
+  // MOTIR-10939: ONE vendor for every AWS service this repository installs a
+  // client for, named for the company. Production runs on AWS (Epic MOTIR-9699),
+  // so these nine packages reach S3, SES, ECR, ECS, CloudWatch Logs, SSM,
+  // Secrets Manager and Service Quotas in Motir's own account. The label is the
+  // company's and not a service's because the page's row covers application
+  // hosting, managed PostgreSQL and object storage as well as email, and
+  // `motir-marketing`'s seam matches this string against that row's first
+  // bolded span.
+  //
+  // ⚠️ WHERE TWO OF THEM CAME FROM. `@aws-sdk/client-s3` and
+  // `@aws-sdk/s3-request-presigner` were Tigris's evidence while the object
+  // store was Tigris (S3-compatible, reached with the AWS SDK). Production's
+  // store is now Amazon S3, so the same packages reach AWS and Tigris receives
+  // nothing: Tigris's signature is DELETED, not recorded in LEAVING_BEFORE_LAUNCH,
+  // because that map retires an entry only once its packages are uninstalled —
+  // and these stay installed, so such an entry would never retire. Deleting the
+  // S3 dependency still turns this guard red, now against the right vendor.
+  // `@aws-sdk/client-sesv2` was Amazon SES's own signature (MOTIR-10565); it
+  // folds into this one.
+  {
+    vendor: 'Amazon Web Services',
+    packages: [
+      '@aws-sdk/client-cloudwatch-logs',
+      '@aws-sdk/client-ecr',
+      '@aws-sdk/client-ecs',
+      '@aws-sdk/client-s3',
+      '@aws-sdk/client-secrets-manager',
+      '@aws-sdk/client-service-quotas',
+      '@aws-sdk/client-sesv2',
+      '@aws-sdk/client-ssm',
+      '@aws-sdk/s3-request-presigner',
+    ],
+  },
+  // Resend's signature was here (`api.resend.com`). Production sends through
+  // Amazon SES (MOTIR-9703; motir-infra `PRODUCTION_EMAIL_PROVIDER = 'ses'`), so
+  // the hosted service reaches Resend at no point: the host is excused in
+  // NOT_A_VENDOR_HOST instead, as the arm the hosted service does not select.
   // ⚠️ THE HOST WAS ADDED BY MOTIR-5260, AND IT MOVED OUT OF `NOT_A_VENDOR_HOST`
   // TO GET HERE. `sentry.io` sat in the exclusion list with the reason
   // "operator link to Sentry's issue list; never requested by the server", which
@@ -170,6 +203,12 @@ export const NOT_A_VENDOR_HOST: Readonly<Record<string, string>> = {
   // covered by their own entries. (`app.inngest.com` sat here until MOTIR-3418
   // deleted the last link to it.)
   'console.neon.tech': "operator link to Neon's console; never requested by the server",
+
+  // The vendor LEFT, the arm stayed (MOTIR-10939). `lib/email.ts` keeps a Resend
+  // arm for any deployment that selects it, so the endpoint is still in the tree;
+  // the hosted service selects SES, so no data of ours reaches it.
+  'api.resend.com':
+    "the endpoint of `lib/email.ts`'s Resend arm, reachable only where EMAIL_PROVIDER=resend, which the hosted service does not set — production's provider is SES (motir-infra `PRODUCTION_EMAIL_PROVIDER = 'ses'`, decided by MOTIR-9703)",
   // `sentry.io` WAS here, on exactly that reasoning. MOTIR-5260 falsified it —
   // see the note on Sentry's `VendorSignature` above.
 
@@ -224,7 +263,14 @@ export interface DepartingVendor {
 export const LEAVING_BEFORE_LAUNCH: Readonly<Record<string, DepartingVendor>> = {};
 
 export const INVISIBLE_TO_THIS_GUARD: Readonly<Record<string, string>> = {
-  Neon: 'reached over the Postgres wire protocol via DATABASE_URL, not an HTTPS host or an SDK',
+  // MOTIR-10939: no longer production's database (that is Amazon RDS, under
+  // Amazon Web Services above). Neon now serves only the applications Motir
+  // hosts, through the database adapter in `packages/orchestrator`, which sits
+  // outside the SCAN_ROOTS this guard walks.
+  Neon:
+    'serves only the applications Motir hosts: their databases are provisioned by the hosting ' +
+    'database adapter in packages/orchestrator, outside the lib/ and app/ this guard reads. ' +
+    "Production's own database is Amazon RDS, not Neon",
   OpenAI: 'reached THROUGH the gateway; motir-core never names it',
   Brave: 'reached THROUGH the gateway; motir-core never names it',
   DeepSeek:
