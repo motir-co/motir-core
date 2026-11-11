@@ -10746,6 +10746,7 @@
       "navIdeas": "아이디어",
       "navRunModels": "호스팅 실행 모델",
       "navFleetSettings": "플릿 설정",
+      "navServices": "서비스",
       "navCapacity": "공급자 용량",
       "navJobs": "작업",
       "navStarters": "스타터"
@@ -13538,6 +13539,103 @@
           "body": "새 에이전트가 생성되는 위치를 읽을 수 없어 상태를 표시하지 않고 스위치도 제공하지 않습니다. 읽기 오류입니다 — 아무것도 변경되지 않았으며 어떤 값도 추측하지 않습니다.",
           "retry": "다시 시도"
         }
+      }
+    },
+    "services": {
+      "breadcrumb": "운영 · 서비스",
+      "title": "서비스",
+      "subtitle": "Motir가 자체 AWS 계정({account})에서 직접 실행하는 것: 클러스터 {cluster}의 모든 ECS 서비스, 그 태스크와 크기를 계정의 Fargate vCPU 할당량과 비교해 보여줍니다. 페이지를 열 때마다 AWS에서 읽습니다. 읽기 전용입니다.",
+      "accountUnknown": "—",
+      "readAt": "AWS에서 읽음 {age} · {time} UTC",
+      "readFailedAt": "{time} UTC에 AWS 읽기 실패",
+      "card": {
+        "title": "ECS 서비스 · 클러스터 {cluster}",
+        "subtitle": "Fargate의 클러스터 {cluster}에 있는 모든 서비스, 실행 중인 태스크와 그 크기, 그리고 Fargate vCPU 할당량 대비 합계"
+      },
+      "pill": {
+        "count": "{count, plural, other {서비스 #개}}",
+        "rolling": "{count}개 롤아웃 중",
+        "rolloutFailed": "{count, plural, other {롤아웃 #개 실패}}",
+        "short": "{count, plural, other {태스크가 부족한 서비스 #개}}"
+      },
+      "verdict": {
+        "under": "Fargate 할당량의 {percent}%",
+        "over70": "Fargate 할당량의 70% 초과",
+        "atQuota": "Fargate 할당량 도달",
+        "notRead": "Fargate 할당량을 읽지 않음",
+        "notReadLabel": "AWS에서 Fargate 할당량을 읽지 않음",
+        "clusterNotRead": "클러스터를 읽지 않음"
+      },
+      "col": {
+        "service": "서비스",
+        "tasks": "태스크",
+        "vcpuPerTask": "태스크당 vCPU",
+        "memoryPerTask": "태스크당 메모리",
+        "vcpu": "vCPU",
+        "deployment": "배포"
+      },
+      "caption": "클러스터 {cluster}의 ECS 서비스와 Fargate 온디맨드 vCPU 할당량 대비 합계",
+      "taskDefinition": "태스크 정의 {family}:{revision}",
+      "tasks": {
+        "running": "{n}개 실행 중",
+        "partial": "{desired}개 중 {running}개 실행 중",
+        "rolling": "목표 {desired} · 이전 {old} + 신규 {new}",
+        "notStarted": "{n}개 시작 안 됨",
+        "scaledToZero": "0으로 축소됨"
+      },
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
+      },
+      "deploy": {
+        "steady": "안정",
+        "onRevision": "리비전 {revision}",
+        "notRolling": "롤아웃 없음",
+        "rolling": "롤아웃 · 진행 중",
+        "rollingDetail": "리비전 {from} → {to} · 신규 {desired}개 중 {new}개 시작",
+        "failed": "롤아웃 실패",
+        "failedDetail": "리비전 {to} 중지 · 여전히 {from}",
+        "started": "시작 {age}"
+      },
+      "total": {
+        "label": "합계",
+        "services": "{count, plural, other {서비스 #개}}",
+        "desired": "목표 {n}",
+        "inUse": "사용 중",
+        "share": "Fargate 할당량의 {percent}%",
+        "toGo": "70%까지 {n} vCPU 남음",
+        "over70": "70% 초과",
+        "leftBeforeQuota": "할당량까지 {n} vCPU 남음",
+        "atQuota": "할당량 도달",
+        "noneLeft": "남은 vCPU 없음 · 새 태스크가 시작되지 않음",
+        "overBy": "{n} vCPU 초과 · 새 태스크가 시작되지 않음",
+        "shareNotKnown": "Fargate 할당량 대비 · 할당량을 읽기 전에는 알 수 없음"
+      },
+      "quota": {
+        "label": "Fargate 할당량",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "읽음 {age}",
+        "notRead": "읽지 않음",
+        "notReadLabel": "AWS에서 할당량을 읽지 않음",
+        "lastRead": "마지막 읽기 {age}",
+        "neverRead": "읽은 적 없음",
+        "body": "이 계정과 리전의 Fargate 한도입니다. 플릿의 EC2 머신은 별도의 EC2 할당량에 포함되며 플릿 상태에서 볼 수 있습니다.",
+        "bodyNotRead": "Service Quotas가 응답하지 않아 할당량 대비 비율은 표시하지 않습니다. 사용 중인 vCPU는 클러스터에서 측정되므로 숫자로 계속 표시됩니다."
+      },
+      "notAvailable": "사용할 수 없음",
+      "error": {
+        "title": "ECS가 응답하지 않았습니다",
+        "body": "지금은 클러스터 {cluster}를 읽을 수 없어 서비스와 합계를 표시하지 않으며, 이전 수치로 대신하지도 않습니다. {last} 다시 시도하려면 새로고침하세요.",
+        "lastRead": "마지막으로 {age}, {time} UTC에 읽었습니다.",
+        "neverRead": "이전 읽기 기록이 없습니다."
+      },
+      "loading": "AWS에서 클러스터와 Fargate 할당량을 읽는 중…",
+      "readOnly": "읽기 전용입니다. 서비스를 확장, 재시작 또는 배포하려면 해당 배포 워크플로나 AWS 콘솔을 사용하세요. 행은 클러스터에서 가져오므로 새 서비스는 다음에 페이지를 열 때 나타납니다.",
+      "phone": {
+        "listLabel": "클러스터 {cluster}의 ECS 서비스",
+        "perTask": "태스크당"
       }
     },
     "capacity": {

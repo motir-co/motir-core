@@ -183,6 +183,8 @@ describe('the reason rule', () => {
     'console.open': 'never',
     'estate.read': 'never',
     'health.read': 'never',
+    // The Services page's AWS read (MOTIR-10890).
+    'services.read': 'never',
     'user.read': 'never',
     'user.password_reset_sent': 'required',
     'user.suspend': 'required',
@@ -329,6 +331,8 @@ describe('the reason rule', () => {
       'audit.verify',
       // The platform admin's list of capacity requests (MOTIR-9583).
       'fleet.capacity_request.list',
+      // The Services page's AWS read (MOTIR-10890).
+      'services.read',
       // The source row a starter promotion reads (MOTIR-710).
       'seed_registry.promote_source_read',
       // The starter library and the promote form's picker (MOTIR-712).
