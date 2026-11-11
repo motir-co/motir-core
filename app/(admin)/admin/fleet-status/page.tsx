@@ -9,12 +9,15 @@ import {
   fleetStatusImagesService,
   type FleetPublishRecords,
 } from '@/lib/services/fleetStatusImagesService';
+import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
 import { HostedImageCard, RunnerImageCard, SandboxImageCard } from './_components/ImageCards';
+import { InstallFleetCard, ShardPoolsCard } from './_components/PoolCards';
 
 /**
  * The console's FLEET STATUS page — design `platform-admin/design-notes.md`
  * § AMENDMENT 2026-11-10 (Fleet status, MOTIR-10885), card MOTIR-10886. This
- * card builds the frame and the Images section; MOTIR-10887 adds Pools.
+ * card builds the frame and the Images section; MOTIR-10887 adds Pools, two
+ * cards each read and settled on its own.
  *
  * ⚠️ `superadmin` ONLY, AND EVERYONE ELSE GETS THE 404 — Fleet settings' gate.
  * The service asserts it again on every read and on the action.
@@ -69,6 +72,22 @@ export default async function AdminFleetStatusPage() {
           </Suspense>
         ))}
       </section>
+      <section aria-labelledby="pools-heading" className="flex flex-col gap-4 pt-2">
+        <div className="flex flex-col gap-1">
+          <h2 id="pools-heading" className="font-serif text-xl text-(--el-text)">
+            {t('pools.title')}
+          </h2>
+          <p className="max-w-prose font-sans text-sm text-(--el-text-secondary)">
+            {t('pools.subtitle')}
+          </p>
+        </div>
+        <Suspense fallback={<CardSkeleton label={t('pools.loading.install')} />}>
+          <InstallFleetPool principal={principal} />
+        </Suspense>
+        <Suspense fallback={<CardSkeleton label={t('pools.loading.shard')} />}>
+          <ShardPools principal={principal} />
+        </Suspense>
+      </section>
     </div>
   );
 }
@@ -117,6 +136,26 @@ async function ImageRow({
     <SandboxImageCard
       row={await fleetStatusImagesService.readSandbox(record)}
       actorEmail={principal.email}
+    />
+  );
+}
+
+async function InstallFleetPool({ principal }: { principal: PlatformPrincipal }) {
+  const now = new Date();
+  return (
+    <InstallFleetCard
+      block={await fleetStatusPoolsService.readInstallFleet(principal, { now })}
+      now={now}
+    />
+  );
+}
+
+async function ShardPools({ principal }: { principal: PlatformPrincipal }) {
+  const now = new Date();
+  return (
+    <ShardPoolsCard
+      block={await fleetStatusPoolsService.readAddShard(principal, { now })}
+      now={now}
     />
   );
 }

@@ -14206,6 +14206,93 @@
         "unset": "Dit image is op deze deployment niet geconfigureerd.",
         "failed": "GitHub heeft de workflow niet gestart:",
         "notPermitted": "Alleen een superadmin kan vanaf deze pagina publiceren."
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "Hoe groot elke vlootpool is en hoeveel machines er nu in draaien: eerst de installatievloot in Motirs eigen AWS-account, dan de add-shard-accounts waarop de jobs van tenants draaien.",
+        "notApplicable": "Niet van toepassing",
+        "loading": {
+          "install": "Motirs eigen account laden",
+          "shard": "De add-shard-pools laden"
+        }
+      },
+      "install": {
+        "title": "Motirs eigen account · installatievloot",
+        "subtitle": "De machines waarop Motirs eigen organisatie haar index-, agenthost- en agentrun-jobs draait. De drie pools delen het ene EC2-vCPU-quotum van het account; geen ervan heeft een eigen grootte.",
+        "nearQuota": "Dicht bij het vCPU-quotum",
+        "quota": {
+          "label": "EC2-vCPU-quotum · gedeeld door de drie pools",
+          "read": "Draaiende On-Demand Standard-instances · gelezen {age}",
+          "notRead": "AWS antwoordde niet · {when}"
+        },
+        "used": "In gebruik door de drie pools",
+        "percent": "Van het quotum in gebruik",
+        "nearBody": "Op {percent}% van het quotum, voorbij de 70%-buffergrens. Er blijven {left} vCPU over voor alle drie de pools.",
+        "table": {
+          "col": {
+            "pool": "Pool",
+            "onFleet": "Op de installatievloot",
+            "running": "Draaiend",
+            "vcpu": "vCPU",
+            "share": "Aandeel in het quotum"
+          }
+        },
+        "yes": "Ja",
+        "notOnFleet": "Niet op de installatievloot",
+        "noneRunning": "Geen draaiend",
+        "machines": "{count, plural, one {# machine} other {# machines}}",
+        "awake": "{count} actief",
+        "hibernated": "{count} in slaapstand, niet geteld",
+        "readOnly": "Alleen-lezen. Welke pools hier draaien bepaalt MOTIR_INSTALL_FLEET_KINDS; een CI-runner nooit.",
+        "error": {
+          "title": "Motirs eigen account kon niet worden gelezen",
+          "body": "AWS antwoordde niet, dus hier is niets geladen: geen enkel getal is nul en er wordt geen provider beweerd. De add-shard-pools en de images zijn niet getroffen. Herlaad om het opnieuw te proberen."
+        }
+      },
+      "shard": {
+        "title": "Add-shard-accounts · jobs van tenants",
+        "subtitle": "Eén pool per vlootsoort. De grootte van een pool is de som van de toelatingsplafonds van zijn gedeelde accounts, de machines die de toelating tegelijk binnenlaat. Dezelfde pools die Monitoring → Pools leest, plus wat er nu in draait.",
+        "nearCount": "{count, plural, one {# pool dicht bij zijn grootte} other {# pools dicht bij hun grootte}}",
+        "col": {
+          "pool": "Pool",
+          "size": "Grootte",
+          "accounts": "Accounts",
+          "running": "Draaiend",
+          "percent": "Van zijn grootte in gebruik"
+        },
+        "machines": "{count, plural, one {# machine} other {# machines}}",
+        "shared": "{count} gedeeld",
+        "spare": "reserve <mono>{name}</mono>, niet geteld",
+        "noSpare": "nog geen Motir-reserveaccount",
+        "near": "Dicht bij de grootte",
+        "atSize": "Op grootte · nieuwe jobs wachten",
+        "noAccount": "Nog geen account",
+        "noAccountBody": "Nog geen add-shard-run voor deze soort. Het eerste account wordt toegevoegd met <cmd>{command}</cmd>.",
+        "notReadCount": "{count, plural, one {het quotum van # account is niet gelezen} other {het quotum van # accounts is niet gelezen}}",
+        "fly": "Overgezet naar Fly, dus geen AWS-pool",
+        "accounts": {
+          "title": "{kind} · accounts",
+          "col": {
+            "size": "Grootte",
+            "running": "Draaiend",
+            "paused": "Gepauzeerd tot"
+          }
+        },
+        "role": {
+          "spare": "Reserve"
+        },
+        "fromGranted": "uit {vcpu} toegekende vCPU",
+        "fromMachineLimit": "uit de machinelimiet",
+        "setByAdmin": "ingesteld door een platformbeheerder",
+        "spareNotCounted": "de reserve, niet geteld",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "Niet gepauzeerd",
+        "paused": {
+          "capacityRefused": "Gepauzeerd · capaciteit geweigerd",
+          "unreachable": "Gepauzeerd · onbereikbaar"
+        },
+        "pausedUntil": "tot {time}, over {left}",
+        "readOnly": "Alleen-lezen. Wil je meer quota bij AWS aanvragen, voer dan <cmd>{command}</cmd> uit in een terminal; de plafondoverschrijving van een account blijft op zijn vaste plek."
       }
     }
   },

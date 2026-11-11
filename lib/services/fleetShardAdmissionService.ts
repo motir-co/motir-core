@@ -174,6 +174,25 @@ export const fleetShardAdmissionService = {
   },
 
   /**
+   * How many machines of this kind one account holds now — the per-account
+   * in-flight count {@link chooseInTx} chooses by, exposed for the Fleet status
+   * page (MOTIR-10887) so the two can never count differently. A kind with no
+   * per-account count throws, as the choice does.
+   */
+  async countInFlightOnShardInTx(
+    kind: FleetWorkloadKind,
+    shardId: string,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const countInFlight = IN_FLIGHT_ON_SHARD[kind];
+    if (!countInFlight) {
+      throw new Error(`fleet kind ${kind} has no per-account in-flight count yet`);
+    }
+    return countInFlight(shardId, now, tx);
+  },
+
+  /**
    * The accounts a job may use: its org's own LIVE account of the kind alone,
    * when it has one (MOTIR-9586) — else the active shared accounts of the kind —
    * and, for a job of one of Motir's own exempt orgs (meta or internal, the

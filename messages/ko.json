@@ -14200,6 +14200,93 @@
         "unset": "이 이미지는 이 배포에서 구성되지 않았습니다.",
         "failed": "GitHub가 워크플로를 시작하지 않았습니다:",
         "notPermitted": "이 페이지에서는 슈퍼 관리자만 게시할 수 있습니다."
+      },
+      "pools": {
+        "title": "풀",
+        "subtitle": "각 플릿 풀의 크기와 지금 그 안에서 실행 중인 머신 수입니다. 먼저 Motir 자체 AWS 계정의 설치 플릿, 그다음 테넌트의 작업이 실행되는 add-shard 계정입니다.",
+        "notApplicable": "해당 없음",
+        "loading": {
+          "install": "Motir 자체 계정을 불러오는 중",
+          "shard": "add-shard 풀을 불러오는 중"
+        }
+      },
+      "install": {
+        "title": "Motir 자체 계정 · 설치 플릿",
+        "subtitle": "Motir 자체 조직이 인덱스, 에이전트 호스트, 에이전트 실행 작업을 돌리는 머신입니다. 세 풀은 계정의 EC2 vCPU 할당량 하나를 공유하며, 어느 풀도 자체 크기가 없습니다.",
+        "nearQuota": "vCPU 할당량에 근접",
+        "quota": {
+          "label": "EC2 vCPU 할당량 · 세 풀이 공유",
+          "read": "실행 중인 온디맨드 표준 인스턴스 · {age} 읽음",
+          "notRead": "AWS가 응답하지 않았습니다 · {when}"
+        },
+        "used": "세 풀이 사용 중",
+        "percent": "할당량 사용률",
+        "nearBody": "할당량의 {percent}%로, 70% 여유 기준을 넘었습니다. 세 풀 전체에 {left} vCPU가 남아 있습니다.",
+        "table": {
+          "col": {
+            "pool": "풀",
+            "onFleet": "설치 플릿 사용",
+            "running": "실행 중",
+            "vcpu": "vCPU",
+            "share": "할당량 점유율"
+          }
+        },
+        "yes": "예",
+        "notOnFleet": "설치 플릿 미사용",
+        "noneRunning": "실행 중 없음",
+        "machines": "{count, plural, other {머신 #대}}",
+        "awake": "활성 {count}",
+        "hibernated": "최대 절전 {count}, 집계 제외",
+        "readOnly": "읽기 전용입니다. 여기서 실행되는 풀은 MOTIR_INSTALL_FLEET_KINDS가 정하며, CI 러너는 실행되지 않습니다.",
+        "error": {
+          "title": "Motir 자체 계정을 읽을 수 없습니다",
+          "body": "AWS가 응답하지 않아 여기에 아무것도 불러오지 않았습니다. 어떤 수치도 0이 아니며 공급자도 표시하지 않습니다. add-shard 풀과 이미지는 영향을 받지 않습니다. 다시 시도하려면 새로 고치십시오."
+        }
+      },
+      "shard": {
+        "title": "add-shard 계정 · 테넌트의 작업",
+        "subtitle": "플릿 종류마다 풀 하나입니다. 풀의 크기는 공유 계정들의 수용 상한, 즉 수용 단계가 한 번에 들여보내는 머신 수의 합입니다. 모니터링 → 풀이 읽는 것과 같은 풀에 지금 실행 중인 것을 더했습니다.",
+        "nearCount": "{count, plural, other {크기에 근접한 풀 #개}}",
+        "col": {
+          "pool": "풀",
+          "size": "크기",
+          "accounts": "계정",
+          "running": "실행 중",
+          "percent": "크기 사용률"
+        },
+        "machines": "{count, plural, other {머신 #대}}",
+        "shared": "공유 {count}",
+        "spare": "예비 <mono>{name}</mono>, 집계 제외",
+        "noSpare": "아직 Motir 예비 계정 없음",
+        "near": "크기에 근접",
+        "atSize": "크기 도달 · 새 작업 대기",
+        "noAccount": "아직 계정 없음",
+        "noAccountBody": "이 종류에 대한 add-shard 실행이 아직 없습니다. 첫 계정은 <cmd>{command}</cmd> 명령으로 추가합니다.",
+        "notReadCount": "{count, plural, other {계정 #개의 할당량을 읽지 못함}}",
+        "fly": "Fly로 전환되어 AWS 풀이 없습니다",
+        "accounts": {
+          "title": "{kind} · 계정",
+          "col": {
+            "size": "크기",
+            "running": "실행 중",
+            "paused": "일시 중지 종료"
+          }
+        },
+        "role": {
+          "spare": "예비"
+        },
+        "fromGranted": "부여된 {vcpu} vCPU 기준",
+        "fromMachineLimit": "머신 한도 기준",
+        "setByAdmin": "플랫폼 관리자가 설정",
+        "spareNotCounted": "예비 계정, 집계 제외",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "일시 중지 안 됨",
+        "paused": {
+          "capacityRefused": "일시 중지 · 용량 거부됨",
+          "unreachable": "일시 중지 · 연결 불가"
+        },
+        "pausedUntil": "{time}까지, {left} 후",
+        "readOnly": "읽기 전용입니다. AWS에 할당량 추가를 요청하려면 터미널에서 <cmd>{command}</cmd> 명령을 실행하십시오. 계정의 상한 재정의는 기존 위치 그대로입니다."
       }
     }
   },

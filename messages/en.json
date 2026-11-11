@@ -14203,6 +14203,93 @@
         "unset": "This image is not configured on this deployment.",
         "failed": "GitHub didn't start the workflow:",
         "notPermitted": "Only a superadmin can publish from this page."
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "How big each fleet pool is and how many machines run in it now: first the install fleet in Motir’s own AWS account, then the add-shard accounts tenants’ jobs run on.",
+        "notApplicable": "Not applicable",
+        "loading": {
+          "install": "Loading Motir’s own account",
+          "shard": "Loading the add-shard pools"
+        }
+      },
+      "install": {
+        "title": "Motir’s own account · install fleet",
+        "subtitle": "The machines Motir’s own organisation runs its index, agent host and agent run jobs on. The three pools share the account’s one EC2 vCPU quota; none has a size of its own.",
+        "nearQuota": "Near the vCPU quota",
+        "quota": {
+          "label": "EC2 vCPU quota · shared by the three pools",
+          "read": "Running On-Demand Standard instances · read {age}",
+          "notRead": "AWS didn’t answer · {when}"
+        },
+        "used": "In use by the three pools",
+        "percent": "Of the quota in use",
+        "nearBody": "At {percent}% of the quota, past the 70% headroom mark. {left} vCPU are left for all three pools.",
+        "table": {
+          "col": {
+            "pool": "Pool",
+            "onFleet": "On the install fleet",
+            "running": "Running",
+            "vcpu": "vCPU",
+            "share": "Share of the quota"
+          }
+        },
+        "yes": "Yes",
+        "notOnFleet": "Not on the install fleet",
+        "noneRunning": "None running",
+        "machines": "{count, plural, one {# machine} other {# machines}}",
+        "awake": "{count} awake",
+        "hibernated": "{count} hibernated, not counted",
+        "readOnly": "Read-only. Which pools run here is MOTIR_INSTALL_FLEET_KINDS; a CI runner never does.",
+        "error": {
+          "title": "Couldn’t read Motir’s own account",
+          "body": "AWS didn’t answer, so nothing here is loaded: no figure is zero and no provider is claimed. The add-shard pools and the images are unaffected. Reload to try again."
+        }
+      },
+      "shard": {
+        "title": "Add-shard accounts · tenants’ jobs",
+        "subtitle": "One pool per fleet kind. A pool’s size is the sum of its shared accounts’ admission ceilings, the machines admission lets in at once. The same pools Monitoring → Pools reads, plus what runs in them now.",
+        "nearCount": "{count, plural, one {# pool near its size} other {# pools near their size}}",
+        "col": {
+          "pool": "Pool",
+          "size": "Size",
+          "accounts": "Accounts",
+          "running": "Running",
+          "percent": "Of its size in use"
+        },
+        "machines": "{count, plural, one {# machine} other {# machines}}",
+        "shared": "{count} shared",
+        "spare": "spare <mono>{name}</mono>, not counted",
+        "noSpare": "no Motir spare yet",
+        "near": "Near size",
+        "atSize": "At size · new jobs wait",
+        "noAccount": "No account yet",
+        "noAccountBody": "No add-shard run for this kind yet. Its first account is added with <cmd>{command}</cmd>.",
+        "notReadCount": "{count, plural, one {# account’s quota is not read} other {# accounts’ quota is not read}}",
+        "fly": "Switched to Fly, so it has no AWS pool",
+        "accounts": {
+          "title": "{kind} · accounts",
+          "col": {
+            "size": "Size",
+            "running": "Running",
+            "paused": "Paused until"
+          }
+        },
+        "role": {
+          "spare": "Spare"
+        },
+        "fromGranted": "from {vcpu} vCPU granted",
+        "fromMachineLimit": "from its machine limit",
+        "setByAdmin": "set by a platform admin",
+        "spareNotCounted": "the spare, not counted",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "Not paused",
+        "paused": {
+          "capacityRefused": "Paused · capacity refused",
+          "unreachable": "Paused · unreachable"
+        },
+        "pausedUntil": "until {time}, in {left}",
+        "readOnly": "Read-only. To ask AWS for more quota, run <cmd>{command}</cmd> at a terminal; an account’s ceiling override stays on its existing door."
       }
     }
   },

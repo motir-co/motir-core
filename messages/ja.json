@@ -14203,6 +14203,93 @@
         "unset": "このイメージはこのデプロイでは設定されていません。",
         "failed": "GitHub はワークフローを開始しませんでした:",
         "notPermitted": "このページから公開できるのはスーパー管理者だけです。"
+      },
+      "pools": {
+        "title": "プール",
+        "subtitle": "各フリートプールの大きさと、いま稼働しているマシン数。まず Motir 自身の AWS アカウントのインストールフリート、次にテナントのジョブが動く add-shard アカウントです。",
+        "notApplicable": "該当なし",
+        "loading": {
+          "install": "Motir 自身のアカウントを読み込み中",
+          "shard": "add-shard プールを読み込み中"
+        }
+      },
+      "install": {
+        "title": "Motir 自身のアカウント · インストールフリート",
+        "subtitle": "Motir 自身の組織がインデックス、エージェントホスト、エージェント実行のジョブを動かすマシンです。3 つのプールはアカウントの EC2 vCPU クォータ 1 つを共有し、どれにも独自のサイズはありません。",
+        "nearQuota": "vCPU クォータに接近",
+        "quota": {
+          "label": "EC2 vCPU クォータ · 3 つのプールで共有",
+          "read": "実行中のオンデマンド標準インスタンス · {age}に読み取り",
+          "notRead": "AWS が応答しませんでした · {when}"
+        },
+        "used": "3 つのプールで使用中",
+        "percent": "クォータの使用率",
+        "nearBody": "クォータの {percent}% で、70% の余裕ラインを超えています。3 つのプール全体で残りは {left} vCPU です。",
+        "table": {
+          "col": {
+            "pool": "プール",
+            "onFleet": "インストールフリート上",
+            "running": "稼働中",
+            "vcpu": "vCPU",
+            "share": "クォータに占める割合"
+          }
+        },
+        "yes": "はい",
+        "notOnFleet": "インストールフリート外",
+        "noneRunning": "稼働なし",
+        "machines": "{count, plural, other {# 台}}",
+        "awake": "稼働中 {count}",
+        "hibernated": "休止中 {count}(数えません)",
+        "readOnly": "読み取り専用です。ここで動くプールは MOTIR_INSTALL_FLEET_KINDS で決まります。CI ランナーは動きません。",
+        "error": {
+          "title": "Motir 自身のアカウントを読み取れませんでした",
+          "body": "AWS が応答しなかったため、ここには何も読み込まれていません。どの数値も 0 ではなく、プロバイダーも示していません。add-shard プールとイメージには影響しません。再読み込みしてもう一度お試しください。"
+        }
+      },
+      "shard": {
+        "title": "add-shard アカウント · テナントのジョブ",
+        "subtitle": "フリートの種類ごとに 1 つのプール。プールのサイズは、共有アカウントの受け入れ上限、つまり受け入れが同時に通すマシン数の合計です。モニタリング → プールが読むものと同じプールに、いま稼働中のものを加えています。",
+        "nearCount": "{count, plural, other {サイズに近いプール # 個}}",
+        "col": {
+          "pool": "プール",
+          "size": "サイズ",
+          "accounts": "アカウント",
+          "running": "稼働中",
+          "percent": "サイズの使用率"
+        },
+        "machines": "{count, plural, other {# 台}}",
+        "shared": "共有 {count}",
+        "spare": "予備 <mono>{name}</mono>(数えません)",
+        "noSpare": "Motir の予備アカウントはまだありません",
+        "near": "サイズに接近",
+        "atSize": "サイズ到達 · 新しいジョブは待機",
+        "noAccount": "アカウントはまだありません",
+        "noAccountBody": "この種類の add-shard 実行はまだありません。最初のアカウントは <cmd>{command}</cmd> で追加します。",
+        "notReadCount": "{count, plural, other {# 件のアカウントのクォータが未読み取り}}",
+        "fly": "Fly に切り替え済みのため、AWS プールはありません",
+        "accounts": {
+          "title": "{kind} · アカウント",
+          "col": {
+            "size": "サイズ",
+            "running": "稼働中",
+            "paused": "一時停止の期限"
+          }
+        },
+        "role": {
+          "spare": "予備"
+        },
+        "fromGranted": "付与された {vcpu} vCPU から",
+        "fromMachineLimit": "マシン上限から",
+        "setByAdmin": "プラットフォーム管理者が設定",
+        "spareNotCounted": "予備のため数えません",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "一時停止なし",
+        "paused": {
+          "capacityRefused": "一時停止 · 容量を拒否",
+          "unreachable": "一時停止 · 到達不能"
+        },
+        "pausedUntil": "{time} まで(残り {left})",
+        "readOnly": "読み取り専用です。AWS にクォータの追加を申請するには、ターミナルで <cmd>{command}</cmd> を実行してください。アカウントの上限の上書きは従来の場所のままです。"
       }
     }
   },
