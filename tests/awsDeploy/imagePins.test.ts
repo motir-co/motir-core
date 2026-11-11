@@ -35,6 +35,16 @@ const V026 = `ghcr.io/motir-co/motir-ci-runner@sha256:bf38f5940e5a327ad171cabb6f
 /** Build sha-ca74591b, the interim re-pin of 2026-11-10 (MOTIR-10882). */
 const HOSTED_AGENT_CA74591B =
   'ghcr.io/motir-co/motir-hosted-agent@sha256:035f996160f027655ac677135faa512277559608819a4cb8a89337ba435be4f7';
+/**
+ * The deploy tests read this fixture, not the checked-in directory: both pins
+ * move by a release lane's pull request (the hosted-agent one on every publish
+ * from `main`), so a test holding the checked-in digests would fail the very
+ * pull request that bumps them.
+ */
+const PINS_FIXTURE: Record<string, string> = {
+  'motir-hosted-agent-image': `${HOSTED_AGENT_CA74591B}\n`,
+  'motir-runner-image': `${V026}\n`,
+};
 const SECRET = pinSecretId(PREFIX, 'motir-runner-image');
 const log = () => {};
 
@@ -67,12 +77,18 @@ async function deploy(aws: FakeDeployAws, dir: string, extra: string[] = []) {
 }
 
 describe('the checked-in pin', () => {
-  it('pins production to runner-v0.2.6 and the hosted-agent build that carries MOTIR-10705', () => {
+  // The digests themselves are not held here: the release lanes move them by
+  // pull request (README.md), and the pull request's own image check proves the
+  // one it names. This holds what every bump must keep: one pull-by-digest
+  // reference per pin, each naming its own image.
+  it('pins each secret to its own image, by digest', () => {
     const pins = readImagePins(IMAGE_PINS_DIR);
-    expect(pins).toEqual([
-      { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B },
-      { name: 'motir-runner-image', value: V026 },
-    ]);
+    expect(pins.map((p) => p.name)).toEqual(['motir-hosted-agent-image', 'motir-runner-image']);
+    const [hostedAgent, runner] = pins;
+    expect(hostedAgent!.value).toMatch(
+      /^ghcr\.io\/motir-co\/motir-hosted-agent@sha256:[a-f0-9]{64}$/,
+    );
+    expect(runner!.value).toMatch(/^ghcr\.io\/motir-co\/motir-ci-runner@sha256:[a-f0-9]{64}$/);
   });
 
   it('holds exactly the pinned secrets, and only notes besides them', () => {
@@ -196,7 +212,7 @@ describe('applyPins and restorePins', () => {
 describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
   it('writes the secret after the migrate task and before the first service changes', async () => {
     const aws = coreFleet();
-    const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
+    const { code, result } = await deploy(aws, pinsDir(PINS_FIXTURE));
     expect(code).toBe(0);
     expect(aws.secrets.get(SECRET)).toBe(V026);
     expect(result?.['pins']).toEqual([
@@ -212,7 +228,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
   it('puts the previous value back when the roll fails, beside the services', async () => {
     const aws = coreFleet();
     aws.rollouts.set('worker', (_, rolledTo) => ({ primary: rolledTo, state: 'FAILED' }));
-    const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
+    const { code, result } = await deploy(aws, pinsDir(PINS_FIXTURE));
     expect(code).toBe(1);
     expect(aws.secrets.get(SECRET)).toBe(V024);
     // The hosted-agent secret held nothing before, so there is nothing to put back.
@@ -231,7 +247,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
   it('stops before any service changes when the secret write is refused', async () => {
     const aws = coreFleet();
     aws.failPutSecretOf = SECRET;
-    const { code, err } = await deploy(aws, IMAGE_PINS_DIR);
+    const { code, err } = await deploy(aws, pinsDir(PINS_FIXTURE));
     expect(code).toBe(1);
     expect(err.join('\n')).toContain(`put ${SECRET} refused`);
     expect(aws.methods()).not.toContain('updateService');
@@ -241,7 +257,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
   it('rolls as before when the role is not granted the secret yet, and says so on the result', async () => {
     const aws = coreFleet();
     aws.secretsGranted = false;
-    const { code, result } = await deploy(aws, IMAGE_PINS_DIR);
+    const { code, result } = await deploy(aws, pinsDir(PINS_FIXTURE));
     expect(code).toBe(0);
     expect(result?.['pins']).toEqual([
       { name: 'motir-hosted-agent-image', value: HOSTED_AGENT_CA74591B, state: 'not_granted' },
@@ -253,7 +269,7 @@ describe('the deploy writes the pin, then rolls (MOTIR-10883)', () => {
   it('writes no pin on a --no-roll deploy, which has no service to start', async () => {
     const aws = new FakeDeployAws();
     aws.migrate = migrateExits(0);
-    const { code } = await deploy(aws, IMAGE_PINS_DIR, ['--no-roll']);
+    const { code } = await deploy(aws, pinsDir(PINS_FIXTURE), ['--no-roll']);
     expect(code).toBe(0);
     expect(aws.methods()).not.toContain('getSecretValue');
   });
