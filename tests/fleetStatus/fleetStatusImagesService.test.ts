@@ -765,7 +765,7 @@ describe('the publish records', () => {
 });
 
 describe('Publish latest', () => {
-  it('dispatches the row’s target and records the press in the same transaction', async () => {
+  it('dispatches the row’s target, then records the press with the run it started', async () => {
     const outcome = await service.publish(currentPrincipal, 'hosted');
     expect(outcome).toEqual({
       outcome: 'dispatched',
@@ -867,6 +867,41 @@ describe('Publish latest', () => {
     expect(await adminDb.platformAuditLog.count({ where: { action: 'fleet.image.publish' } })).toBe(
       0,
     );
+  });
+
+  // Review finding on #4140: the dispatch is a remote call of up to tens of
+  // seconds, and `withPlatformWrite` closes its transaction after Prisma's 5 s
+  // default. A dispatch that outlasts it must still leave its row.
+  it('a dispatch slower than the write transaction’s timeout still records the press', async () => {
+    const answer = workflowRun({ id: 88, runNumber: 13, status: 'queued', conclusion: null });
+    gh.dispatch.mockImplementationOnce(
+      () => new Promise((resolve) => setTimeout(() => resolve(answer), 5_500)),
+    );
+    expect(await service.publish(currentPrincipal, 'hosted')).toMatchObject({
+      outcome: 'dispatched',
+    });
+    expect(await adminDb.platformAuditLog.count({ where: { action: 'fleet.image.publish' } })).toBe(
+      1,
+    );
+  }, 20_000);
+
+  it('a press GitHub started is answered as dispatched even when its row cannot be written', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const recordPress = vi
+      .spyOn(service, 'recordPress')
+      .mockRejectedValueOnce(new Error('the database went away'));
+    expect(await service.publish(currentPrincipal, 'hosted')).toMatchObject({
+      outcome: 'dispatched',
+      runNumber: 13,
+    });
+    expect(error).toHaveBeenCalledWith('[admin] fleet image publish dispatched but not recorded', {
+      image: 'hosted',
+      runId: 88,
+      error: 'Error',
+    });
+    expect(JSON.stringify(error.mock.calls)).not.toContain('went away');
+    recordPress.mockRestore();
+    error.mockRestore();
   });
 
   it('an error that is not GitHub’s is not swallowed', async () => {

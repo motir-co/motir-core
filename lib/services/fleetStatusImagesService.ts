@@ -603,9 +603,14 @@ export const fleetStatusImagesService = {
   /**
    * PUBLISH LATEST for one image. The row is read again here, never trusted
    * from the page: refused when it is not behind, when a run of its workflow is
-   * already going, or when it cannot be read. The dispatch and its
-   * `fleet.image.publish` row are one transaction, so a refused dispatch is
-   * recorded nowhere and a recorded press always names its run.
+   * already going, or when it cannot be read. The dispatch runs OUTSIDE any
+   * transaction: it is a remote call of up to tens of seconds (the POST, then
+   * finding the run it started), and `withPlatformWrite` holds the audit chain
+   * lock under Prisma's 5 s interactive-transaction timeout, so dispatching
+   * inside it would stall every other staff write and, past the timeout, start
+   * the workflow with no row to show for it. Only once GitHub has answered
+   * with the run is the press recorded, naming that run. A refused dispatch is
+   * recorded nowhere.
    *
    * @throws NotPlatformStaffError below `superadmin`.
    */
@@ -636,40 +641,61 @@ export const fleetStatusImagesService = {
         detail: `this deployment has no GitHub App installation on ${MOTIR_CORE.owner} to start the workflow with`,
       };
     }
+    let run: PublishWorkflowRun;
     try {
-      const run = await withPlatformWrite(principal, async (_tx, record) => {
-        const started = await publishWorkflowsClient.dispatch(
-          MOTIR_CORE,
-          target.workflow,
-          target.ref,
-          target.inputs,
-          token,
-        );
-        await record({
-          action: 'fleet.image.publish',
-          targetKind: 'platform',
-          targetId: targetIdFor(image),
-          targetLabel: image,
-          reason: PUBLISH_REASON,
-          metadata: {
-            image,
-            workflow: target.workflow,
-            ref: target.ref,
-            from: target.from,
-            to: target.to,
-            target: target.target,
-            runId: started.id,
-            runUrl: started.htmlUrl,
-            runNumber: started.runNumber,
-          },
-        });
-        return started;
-      });
-      return { outcome: 'dispatched', runUrl: run.htmlUrl, runNumber: run.runNumber };
+      run = await publishWorkflowsClient.dispatch(
+        MOTIR_CORE,
+        target.workflow,
+        target.ref,
+        target.inputs,
+        token,
+      );
     } catch (err) {
       if (err instanceof PublishWorkflowError) return { outcome: 'failed', detail: err.message };
       throw err;
     }
+    // The workflow is running whatever happens next, so the press is answered
+    // as dispatched even if its row cannot be written; that failure is logged
+    // with the run it leaves unaudited, never swallowed.
+    try {
+      await this.recordPress(principal, image, target, run);
+    } catch (err) {
+      console.error('[admin] fleet image publish dispatched but not recorded', {
+        image,
+        runId: run.id,
+        error: err instanceof Error ? err.name : 'unknown',
+      });
+    }
+    return { outcome: 'dispatched', runUrl: run.htmlUrl, runNumber: run.runNumber };
+  },
+
+  /** The `fleet.image.publish` row for a press GitHub has started a run for. */
+  async recordPress(
+    principal: PlatformPrincipal,
+    image: FleetImageKey,
+    target: FleetPublishTargetDTO,
+    run: PublishWorkflowRun,
+  ): Promise<void> {
+    await withPlatformWrite(principal, async (_tx, record) => {
+      await record({
+        action: 'fleet.image.publish',
+        targetKind: 'platform',
+        targetId: targetIdFor(image),
+        targetLabel: image,
+        reason: PUBLISH_REASON,
+        metadata: {
+          image,
+          workflow: target.workflow,
+          ref: target.ref,
+          from: target.from,
+          to: target.to,
+          target: target.target,
+          runId: run.id,
+          runUrl: run.htmlUrl,
+          runNumber: run.runNumber,
+        },
+      });
+    });
   },
 
   /**
