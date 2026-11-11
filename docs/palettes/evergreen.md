@@ -1,10 +1,12 @@
 # Palette — Evergreen (`data-palette="evergreen"`)
 
 > A fresh, technical **emerald** colour scheme. Registered in
-> [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its overrides live in
-> the `[data-palette='evergreen']` (light) and
-> `[data-palette='evergreen'][data-theme='dark']` (dark) blocks of
-> [`app/globals.css`](../../app/globals.css).
+> [`packages/design-system/src/theme/palettes.ts`](../../packages/design-system/src/theme/palettes.ts);
+> its overrides live in the **AXIS 1 (COLOUR)** section of
+> [`packages/design-system/theme.css`](../../packages/design-system/theme.css) (which
+> `app/globals.css` imports) as the `[data-palette='evergreen']` light block plus a dark
+> companion selected by both `[data-theme='dark'] [data-palette='evergreen']:not([data-theme])`
+> and `[data-palette='evergreen'][data-theme='dark']`.
 
 ![Evergreen palette specimen — light and dark](./evergreen.png)
 
