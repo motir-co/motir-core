@@ -1657,6 +1657,16 @@ export async function ensureRepoPullRequest(
     // exactly as the open above holds no "have I opened it?" state — which is
     // what keeps a resumed or re-invoked run safe.
     if (result.url) await linkSessionPrToContainer(link, session.branch, result.url);
+    // ⚠️ AND, IN A SCOPED RUN, EVERY CARD THAT HAS LANDED HERE (MOTIR-10985). Its
+    // agent links its own card only if the pull request already existed, which
+    // is never true of the run's first card in a repository, so the run links the
+    // cards it carried. An upsert per `(work item, pull request)`, so repeating
+    // it on every landed card is a no-op for the cards already linked.
+    if (result.url && link.container) {
+      for (const key of session.keys) {
+        await linkSessionPrTo(link.client, key, session.branch, result.url);
+      }
+    }
   } catch (err) {
     info(
       `Could not open ${session.branch}'s pull request yet: ` +
@@ -1705,13 +1715,18 @@ async function linkSessionPrToContainer(
   // carrying two parents must not invent a story to name.
   const key = deliveredContainerKey(link.carried.filter(landedWork), link.container);
   if (key === null) return;
+  await linkSessionPrTo(link.client, key, branch, url);
+}
+
+/** Declare that a session pull request delivers `key` — reported and swallowed. */
+async function linkSessionPrTo(
+  client: MotirClient,
+  key: string,
+  branch: string,
+  url: string,
+): Promise<void> {
   try {
-    await link.client.linkPullRequest({
-      key,
-      url,
-      headRef: branch,
-      baseRef: SESSION_PR_BASE,
-    });
+    await client.linkPullRequest({ key, url, headRef: branch, baseRef: SESSION_PR_BASE });
   } catch (err) {
     info(
       `Could not link ${url} to ${key}: ` + `${err instanceof Error ? err.message : String(err)}`,

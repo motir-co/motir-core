@@ -558,14 +558,15 @@ describe('a scoped run’s container decides the title and the link (MOTIR-10985
     const create = log.find((line) => line.startsWith('gh pr create'))!;
     expect(create).toContain('--draft');
     expect(create).toContain(`--title PROD-1 ${STORY.title}`);
-    expect(fake.links).toEqual([
-      {
-        key: 'PROD-1',
+    // The container, then each card that landed in this repository.
+    expect(fake.links).toEqual(
+      ['PROD-1', 'PROD-2'].map((key) => ({
+        key,
         url: 'https://github.test/pull/9001',
         headRef: 'motir/auto-x',
         baseRef: 'main',
-      },
-    ]);
+      })),
+    );
   });
 
   it('closeOutContainer links and flips the container on a ONE-card run', async () => {

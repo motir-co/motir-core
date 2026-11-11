@@ -3729,6 +3729,9 @@ describe('a SCOPED run’s card never opens or edits the session pull request (M
       `3. find the session pull request for this repository (\`gh pr list --head ${SESSION}\`). Do NOT open or edit it`,
     );
     expect(text).toContain('If it does not exist yet, skip step 4');
+    // …and the FINISHED header does not claim a pull request is open.
+    expect(text).toContain('FINISHED — the work is done, committed, integrated and PUSHED:');
+    expect(text).not.toContain('PUSHED, and its pull request is open:');
     // The link and the stop are kept.
     expect(text).toContain(`8. LINK it: call the link_pull_request tool with key ${src().key}`);
     expect(text).toContain('9. STOP.');
@@ -3783,6 +3786,7 @@ describe('a SCOPED run’s card never opens or edits the session pull request (M
       expect(prompt).toContain('If it does not exist yet, you are the');
       expect(flat(prompt)).toContain('or open it from that branch if you are the first item');
       expect(prompt).not.toContain('do NOT create or edit the session pull');
+      expect(prompt).toContain('PUSHED, and its pull request is open:');
     }
     const multi = assembleDispatchPrompt(
       source({ sessionBranch: SESSION, runTargetKey: null, targetRepos: TWO_REPOS }),
@@ -3800,5 +3804,6 @@ describe('a SCOPED run’s card never opens or edits the session pull request (M
     );
     expect(workflowMode).toBe('per_item_pr');
     expect(prompt).toContain('This item has no session lineage, so it ships as ONE pull request');
+    expect(prompt).toContain('PUSHED, and its pull request is open:');
   });
 });

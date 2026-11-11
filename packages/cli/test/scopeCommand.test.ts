@@ -814,7 +814,8 @@ describe('motir run <container> — the close-out RE-READS the child set (MOTIR-
     expect(creates[0]![creates[0]!.indexOf('--title') + 1]).toBe('PROD-1 The story');
     const links = callsTo('link_pull_request').map((c) => (c.args as { key: string }).key);
     expect(links.length).toBeGreaterThan(0);
-    expect(new Set(links)).toEqual(new Set(['PROD-1']));
+    // The story, and the one landed card its agent could not link (no PR existed yet).
+    expect(new Set(links)).toEqual(new Set(['PROD-1', 'PROD-2']));
   });
 
   it('the CONTROL still holds: every child implemented opens ONE pull request and MARKS IT READY', async () => {

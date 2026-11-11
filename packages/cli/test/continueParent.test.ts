@@ -367,7 +367,8 @@ describe('motir continue <PARENT>', () => {
       .filter((c) => c.tool === 'link_pr')
       .map((c) => (c.args as { key: string }).key);
     expect(linked.length).toBeGreaterThan(0);
-    expect(new Set(linked)).toEqual(new Set(['PROD-1']));
+    expect(linked).toContain('PROD-1');
+    expect(linked).toContain('PROD-3');
   });
 });
 

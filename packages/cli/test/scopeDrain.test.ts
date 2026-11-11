@@ -837,7 +837,8 @@ describe('a story scope opens the story’s DRAFT at its first landed card (MOTI
     expect(argv).toContain('--draft');
     expect(argv).toContain(`--title ${STORY.key} ${STORY.title}`);
     expect(argv).not.toContain('--title PROD-2');
-    expect(fake.links).toEqual([`PROD-1@${PR}`]);
+    // The story, and the landed card — whose agent found no PR to link to yet.
+    expect(fake.links).toEqual([`PROD-1@${PR}`, `PROD-2@${PR}`]);
   });
 
   it('later cards find the SAME pull request, and the close-out readies it once every child landed', async () => {
@@ -850,8 +851,10 @@ describe('a story scope opens the story’s DRAFT at its first landed card (MOTI
     );
 
     expect(created(log)).toHaveLength(1);
-    // Re-declared on every landed card — an idempotent upsert — and only ever the story.
-    expect(new Set(fake.links)).toEqual(new Set([`PROD-1@${PR}`]));
+    // Re-declared on every landed card — an idempotent upsert — the story and its cards.
+    expect(new Set(fake.links)).toEqual(
+      new Set(['PROD-1', 'PROD-2', 'PROD-3', 'PROD-4'].map((k) => `${k}@${PR}`)),
+    );
     expect(summary.container).toEqual(STORY);
 
     closeOutRepos(summary, run);
@@ -894,7 +897,8 @@ describe('a story scope opens the story’s DRAFT at its first landed card (MOTI
       },
     );
     expect(summary.records.map((r) => r.outcome)).toEqual(['integrated', 'failed']);
-    expect(fake.links).toEqual([`PROD-1@${PR}`]);
+    // The failed card did not land, so it is not linked.
+    expect(fake.links).toEqual([`PROD-1@${PR}`, `PROD-2@${PR}`]);
 
     // The close-out's re-read names the child that did not land.
     closeOutRepos(summary, run, { containerKey: 'PROD-1', openChildren: ['PROD-3'] });

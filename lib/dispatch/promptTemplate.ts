@@ -2506,7 +2506,11 @@ function outcomeProtocol(src: DispatchPromptSource, sessionBranch: string | null
     '',
     ...modelSelfReport(),
     '',
-    'FINISHED — the work is done, committed, PUSHED, and its pull request is open:',
+    // MOTIR-10985 — a scoped card opens no pull request, and on the run's first
+    // card the run has not opened its draft yet, so "is open" would be untrue.
+    sessionBranch && target
+      ? 'FINISHED — the work is done, committed, integrated and PUSHED:'
+      : 'FINISHED — the work is done, committed, PUSHED, and its pull request is open:',
     '',
     '  IN THIS ORDER, and the order is the point:',
     '',
