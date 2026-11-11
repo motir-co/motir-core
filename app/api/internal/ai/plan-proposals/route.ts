@@ -8,6 +8,7 @@ import {
   InvalidProposalError,
   NoPlanForJobError,
   PlanItemUnknownTargetRepoRoleError,
+  PlanItemUnresolvableTargetRepoRoleError,
   PlanNotEditableError,
   PlanNotFoundError,
   PlanNotGeneratingError,
@@ -286,6 +287,20 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof PlanItemUnknownTargetRepoRoleError) {
       return NextResponse.json(
         { code: err.code, proposal: err.proposalLabel, role: err.role, error: err.message },
+        { status: 422 },
+      );
+    }
+    // A vocabulary role the project's set resolves to no single row (MOTIR-11039).
+    // Refused before the append's transaction opens, so the batch stored nothing.
+    if (err instanceof PlanItemUnresolvableTargetRepoRoleError) {
+      return NextResponse.json(
+        {
+          code: err.code,
+          proposal: err.proposalLabel,
+          role: err.role,
+          reason: err.reason,
+          error: err.message,
+        },
         { status: 422 },
       );
     }

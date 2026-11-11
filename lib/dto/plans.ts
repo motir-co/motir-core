@@ -332,6 +332,13 @@ export interface PlanItemProposedFields {
    * still pins by role before any row exists — but the work item has nowhere to
    * hold one, which is why the review diff for this key has no old side to read
    * (`planReviewService.buildChanges`, MOTIR-3868).
+   *
+   * ⚠️ Validated against the role VOCABULARY and, since MOTIR-11039, against the
+   * project's repository SET too: at the append, a correction and approve, a role
+   * that no single row carries — none does, or several do — is refused
+   * `PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE` rather than landing the card with no
+   * repository. A project whose set is EMPTY is exempt: there the role is what
+   * drives the set approve proposes.
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
   /**
@@ -593,6 +600,9 @@ export interface PlanItemPatch {
    * the shipped `targetRepo` patch: absent (`undefined`) leaves the pin untouched;
    * an explicit `null` UNPINS. Validated against the role vocabulary the same way
    * the `add` path's is, so the two paths cannot disagree about what a role means.
+   * And, like it, against the project's repository SET (MOTIR-11039): a role no
+   * single row carries is `PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE`, unless the set
+   * is empty.
    */
   targetRepoRole?: ProjectRepoRoleDto | null;
   /**

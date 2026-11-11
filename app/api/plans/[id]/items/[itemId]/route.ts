@@ -10,6 +10,7 @@ import {
   PlanNotInExpectedStatusError,
   PlanRefGraphError,
   UnresolvedPlanRefError,
+  PlanItemUnresolvableTargetRepoRoleError,
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { UpdateProposalInput } from '@/lib/dto/plans';
@@ -140,6 +141,14 @@ export async function PATCH(
     }
     if (err instanceof InvalidProposalError || err instanceof UnresolvedPlanRefError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
+    }
+    // A correction re-pinning to a role the project's repository set resolves to no
+    // single row (MOTIR-11039) — `correctProposal` raises it before its transaction.
+    if (err instanceof PlanItemUnresolvableTargetRepoRoleError) {
+      return NextResponse.json(
+        { code: err.code, role: err.role, reason: err.reason, error: err.message },
+        { status: 422 },
+      );
     }
     // A `supersedesRefs` the ref passes refuse (MOTIR-6631) — dangling, a
     // duplicate, a folder, a cycle — with the same code and `reason` the agent

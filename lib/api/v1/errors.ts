@@ -558,6 +558,8 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   INVALID_PROPOSAL: 422,
   PLAN_ITEM_UNKNOWN_TARGET_REPO: 422,
   PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE: 422,
+  // MOTIR-11039 — a vocabulary role the project's set resolves to no single row.
+  PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE: 422,
   UNRESOLVED_PLAN_REF: 422,
   PLAN_ITEM_TARGET_MISSING: 422,
   // 422, and it means exactly ONE thing here: the target is a LEAF, which

@@ -5013,7 +5013,11 @@ Errors: `PLAN_NOT_FOUND` / `PLAN_ITEM_NOT_FOUND`; `PLAN_NOT_EDITABLE` on an
 `approved` or `declined` plan; `UNRESOLVED_PLAN_REF` for a ref naming no proposal;
 `INVALID_PROPOSAL` for a `patch` on an `add`, a body field on a `modify`, or a
 correction that changes nothing; `PLAN_ITEM_UNKNOWN_TARGET_REPO_ROLE` for a
-`targetRepoRole` outside the vocabulary.
+`targetRepoRole` outside the vocabulary; `PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE`
+for a role no single repository of the project's set carries (none does, or
+several do — the message says which and names them; pin the row with
+`targetRepositoryRef` instead). A project that records no repositories is exempt.
+`add_plan_items` and approve refuse the same role the same way.
 
 ##### `withdraw_plan_proposal` — take ONE proposal off a plan
 

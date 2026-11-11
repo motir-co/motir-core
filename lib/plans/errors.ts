@@ -281,6 +281,59 @@ export class PlanItemUnknownTargetRepoRoleError extends Error {
 }
 
 /**
+ * A proposal pins a `targetRepoRole` that is in the vocabulary but resolves to NO
+ * SINGLE row of the project's repository set (Story MOTIR-10162 · MOTIR-11039):
+ * either no row carries the role (`no-match`), or more than one does
+ * (`ambiguous`). A role resolves only through a role carried by exactly one row
+ * (`proposalRepoRef` → `byRole`), so such a pin would materialize a card with NO
+ * repository, silently. This refuses it instead.
+ *
+ * Two neighbours it is deliberately NOT:
+ *
+ *   * {@link PlanItemUnknownTargetRepoRoleError} — the role is not a word of the
+ *     vocabulary at all, a fact about the PRODUCER;
+ *   * {@link PlanItemUnknownTargetRepoError} — a repository NAME the project's set
+ *     does not hold.
+ *
+ * This one is a fact about the project's SET and a valid word together, and it is
+ * fixed differently: add the row, or pin the row itself (`targetRepositoryRef`),
+ * which is the pin that lifts the repeated-role ceiling.
+ *
+ * Raised at the append (`planItemId` null), at a correction and at approve —
+ * before any transaction opens — and exempt on a project whose set is EMPTY,
+ * where a role pin is what drives the set proposed at approval. → 422.
+ */
+export class PlanItemUnresolvableTargetRepoRoleError extends Error {
+  readonly code = 'PLAN_ITEM_UNRESOLVABLE_TARGET_REPO_ROLE' as const;
+  constructor(
+    /** The PlanItem's id, or `null` when it is not persisted yet (the append). */
+    readonly planItemId: string | null,
+    /** The offending proposal, as the author can recognise it. */
+    readonly proposalLabel: string,
+    /** The pinned role. */
+    readonly role: string,
+    /** Which of the two failures it is. */
+    readonly reason: 'no-match' | 'ambiguous',
+    /** How many rows of the set carry the role (0, or 2+). */
+    readonly rowCount: number,
+    /** The names of the rows carrying an ambiguous role (empty on `no-match`). */
+    readonly rowNames: readonly string[],
+  ) {
+    super(
+      reason === 'no-match'
+        ? `Proposal ${proposalLabel} pins the repository role \`${role}\`, but no repository in this ` +
+            `project's set carries that role, so the card would land with no repository. Pin a ` +
+            `repository the project has — by name (\`targetRepo\`) or by row (\`targetRepositoryRef\`) — ` +
+            `or leave the card unpinned.`
+        : `Proposal ${proposalLabel} pins the repository role \`${role}\`, but more than one repository ` +
+            `in this project's set carries it (${rowCount}: ${rowNames.join(', ')}), so the role ` +
+            `resolves to none of them. Pin the row itself with \`targetRepositoryRef\`.`,
+    );
+    this.name = 'PlanItemUnresolvableTargetRepoRoleError';
+  }
+}
+
+/**
  * A proposal's `targetRepo` MOVED between approve's pre-transaction resolution
  * and the transaction that materializes it (Bug MOTIR-3604,
  * `agent-authored-plans.md` AMENDMENT 9 D4).
