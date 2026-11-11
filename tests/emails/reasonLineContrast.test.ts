@@ -40,7 +40,7 @@ function decodeEntities(text: string): string {
 /** The inline `color` of every paragraph whose text opens the reason line. */
 function reasonLineColours(html: string): string[] {
   const colours: string[] = [];
-  for (const [, style, inner] of html.matchAll(
+  for (const [, style = '', inner = ''] of html.matchAll(
     /<p\b[^>]*\bstyle="([^"]*)"[^>]*>([\s\S]*?)<\/p>/g,
   )) {
     const text = decodeEntities(inner.replace(/<[^>]+>/g, '')).trim();
@@ -53,12 +53,14 @@ function reasonLineColours(html: string): string[] {
 
 function relativeLuminance(hex: string): number {
   const channels = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-  const [r, g, b] = channels.map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  const [r = 0, g = 0, b = 0] = channels.map((c) =>
+    c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4,
+  );
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
 function contrastRatio(a: string, b: string): number {
-  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  const [hi = 0, lo = 0] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
   return (hi + 0.05) / (lo + 0.05);
 }
 
