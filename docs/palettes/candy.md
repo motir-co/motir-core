@@ -1,10 +1,12 @@
 # Palette — Candy (`data-palette="candy"`)
 
 > A sweet, playful **light-pink** candy re-skin. Registered in
-> [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its override lives in
-> the **AXIS 1 (COLOUR)** section of
-> [`app/globals.css`](../../app/globals.css) as the `[data-palette='candy']`
-> block (light) + a `[data-palette='candy'][data-theme='dark']` companion.
+> [`packages/design-system/src/theme/palettes.ts`](../../packages/design-system/src/theme/palettes.ts);
+> its override lives in the **AXIS 1 (COLOUR)** section of
+> [`packages/design-system/theme.css`](../../packages/design-system/theme.css) (which
+> `app/globals.css` imports) as the `[data-palette='candy']` light block plus a dark
+> companion selected by both `[data-theme='dark'] [data-palette='candy']:not([data-theme])`
+> and `[data-palette='candy'][data-theme='dark']`.
 
 **Tagline:** Sweet and playful — a light bubblegum-pink primary over candy-paper
 pinks, with a full pastel-candy rainbow.

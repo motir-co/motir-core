@@ -1,10 +1,12 @@
 # Palette — Cobalt (`data-palette="cobalt"`)
 
 > A cool, calm, trustworthy **institutional-blue** re-skin. Registered in
-> [`lib/theme/palettes.ts`](../../lib/theme/palettes.ts); its override lives in
-> the **AXIS 1 (COLOUR)** section of
-> [`app/globals.css`](../../app/globals.css) as the `[data-palette='cobalt']`
-> block (light) + a `[data-palette='cobalt'][data-theme='dark']` companion.
+> [`packages/design-system/src/theme/palettes.ts`](../../packages/design-system/src/theme/palettes.ts);
+> its override lives in the **AXIS 1 (COLOUR)** section of
+> [`packages/design-system/theme.css`](../../packages/design-system/theme.css) (which
+> `app/globals.css` imports) as the `[data-palette='cobalt']` light block plus a dark
+> companion selected by both `[data-theme='dark'] [data-palette='cobalt']:not([data-theme])`
+> and `[data-palette='cobalt'][data-theme='dark']`.
 
 **Tagline:** Cool and institutional — slate-cool surfaces, a confident cobalt
 primary, cooled tints.
