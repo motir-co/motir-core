@@ -1,4 +1,8 @@
-import { OrchestratorNotConfiguredError, type FleetWorkloadKind } from '@motir/orchestrator';
+import {
+  AWS_DEFAULT_INSTANCE_TYPE,
+  OrchestratorNotConfiguredError,
+  type FleetWorkloadKind,
+} from '@motir/orchestrator';
 import { isCloud } from '@/lib/billing/availability';
 
 // THE INSTALL FLEET (Story MOTIR-10792 · MOTIR-10794) — the VMs the install's
@@ -40,6 +44,38 @@ const ELIGIBLE: ReadonlySet<FleetWorkloadKind> = new Set<FleetWorkloadKind>([
   'agent_instance',
   'hosted_agent',
 ]);
+
+/** The kinds the install fleet can run at all, in the Fleet status page's order
+ *  (Monitoring's, without the CI runner): agent runner, indexer, agent hoster. */
+export const INSTALL_FLEET_ELIGIBLE_KINDS: readonly FleetWorkloadKind[] = [
+  'hosted_agent',
+  'code_graph_index',
+  'agent_instance',
+];
+
+/**
+ * vCPU per EC2 instance type the install fleet boots (MOTIR-10887). A type not
+ * listed has no known size, and the Fleet status page shows its vCPU as Not
+ * available rather than guessing one.
+ */
+export const EC2_INSTANCE_TYPE_VCPU: Readonly<Record<string, number>> = {
+  'm6i.large': 2,
+};
+
+/**
+ * The instance type an install-fleet VM of this kind boots. Every kind boots the
+ * AWS adapters' default: `installFleetOrchestrator` names no type for an index or
+ * an agent run, and the persistent adapter maps the agent host's one size
+ * (`FLEET_CONTAINER_SIZE`) to the same type.
+ */
+export function installFleetInstanceType(_kind: FleetWorkloadKind): string {
+  return AWS_DEFAULT_INSTANCE_TYPE;
+}
+
+/** vCPU of one install-fleet VM of this kind, or null when its type's size is unknown. */
+export function installFleetMachineVcpu(kind: FleetWorkloadKind): number | null {
+  return EC2_INSTANCE_TYPE_VCPU[installFleetInstanceType(kind)] ?? null;
+}
 
 /** Is this the install fleet's pseudo-account id? */
 export function isInstallFleetShardId(id: string | null | undefined): boolean {

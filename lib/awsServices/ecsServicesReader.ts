@@ -6,7 +6,8 @@ import {
 } from '@aws-sdk/client-ecs';
 import { GetServiceQuotaCommand, ServiceQuotasClient } from '@aws-sdk/client-service-quotas';
 
-// THE SERVICES PAGE'S AWS READ (MOTIR-10890) — the ONLY file in motir-core that
+// THE SERVICES PAGE'S AWS READ (MOTIR-10890) — with `ec2VcpuQuotaReader.ts` (the
+// Fleet status page's EC2 quota, MOTIR-10887), the ONLY code in motir-core that
 // talks to ECS and Service Quotas about core's OWN account, the way
 // `lib/ses/sesClient.ts` is the only one that talks to SES
 // (`tests/ciFleet/awsSdkBoundary.test.ts` registers the directory). It answers in

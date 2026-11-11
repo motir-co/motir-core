@@ -328,6 +328,20 @@ export const agentInstanceRepository = {
   },
 
   /**
+   * How many live instances in an app NO fleet account holds are in one state
+   * (MOTIR-10887) — the Fleet status page's hibernated count on the install
+   * fleet, whose instances are keyed by its app (the fleet's tag) with no account
+   * row (MOTIR-10794). `tx` required.
+   */
+  async countLiveInUnshardedAppByState(
+    app: string,
+    state: AgentInstanceState,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    return tx.agentInstance.count({ where: { flyApp: app, fleetShardId: null, state, ...LIVE } });
+  },
+
+  /**
    * Every record in one fleet account, live AND deleted — the reconciler and the
    * headroom reading count an account's instances. An instance with no account
    * (the process-wide Fly app) is in no account's list. `tx` required.

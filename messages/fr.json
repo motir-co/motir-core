@@ -14192,6 +14192,92 @@
         "unset": "Cette image n’est pas configurée sur ce déploiement.",
         "failed": "GitHub n’a pas démarré le workflow :",
         "notPermitted": "Seul un superadmin peut publier depuis cette page."
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "La taille de chaque pool de la flotte et le nombre de machines qui y tournent maintenant : d’abord la flotte d’installation dans le compte AWS propre à Motir, puis les comptes add-shard sur lesquels tournent les jobs des clients.",
+        "notApplicable": "Sans objet",
+        "loading": {
+          "install": "Chargement du compte propre à Motir",
+          "shard": "Chargement des pools add-shard"
+        }
+      },
+      "install": {
+        "title": "Compte propre à Motir · flotte d’installation",
+        "subtitle": "Les machines sur lesquelles l’organisation propre à Motir exécute ses jobs d’index, d’hébergement d’agents et d’exécution d’agents. Les trois pools partagent l’unique quota de vCPU EC2 du compte ; aucun n’a de taille propre.",
+        "nearQuota": "Proche du quota de vCPU",
+        "quota": {
+          "label": "Quota de vCPU EC2 · partagé par les trois pools",
+          "read": "Instances On-Demand Standard en cours · lu {age}",
+          "notRead": "AWS n’a pas répondu · {when}"
+        },
+        "used": "Utilisé par les trois pools",
+        "percent": "Part du quota utilisée",
+        "nearBody": "À {percent} % du quota, au-delà du seuil de marge de 70 %. Il reste {left} vCPU pour les trois pools.",
+        "table": {
+          "col": {
+            "pool": "Pool",
+            "onFleet": "Sur la flotte d’installation",
+            "running": "En cours",
+            "vcpu": "vCPU",
+            "share": "Part du quota"
+          }
+        },
+        "yes": "Oui",
+        "notOnFleet": "Pas sur la flotte d’installation",
+        "noneRunning": "Aucune en cours",
+        "machines": "{count, plural, one {# machine} other {# machines}}",
+        "awake": "{count} actives",
+        "hibernated": "{count} en veille, non comptées",
+        "readOnly": "Lecture seule. Les pools qui tournent ici sont fixés par MOTIR_INSTALL_FLEET_KINDS ; un runner CI jamais.",
+        "error": {
+          "title": "Impossible de lire le compte propre à Motir",
+          "body": "AWS n’a pas répondu, donc rien n’est chargé ici : aucun chiffre n’est zéro et aucun fournisseur n’est affirmé. Les pools add-shard et les images ne sont pas affectés. Rechargez pour réessayer."
+        }
+      },
+      "shard": {
+        "title": "Comptes add-shard · jobs des clients",
+        "subtitle": "Un pool par type de flotte. La taille d’un pool est la somme des plafonds d’admission de ses comptes partagés, les machines que l’admission laisse entrer à la fois. Les mêmes pools que lit Supervision → Pools, plus ce qui y tourne maintenant.",
+        "nearCount": "{count, plural, one {# pool proche de sa taille} other {# pools proches de leur taille}}",
+        "col": {
+          "pool": "Pool",
+          "size": "Taille",
+          "accounts": "Comptes",
+          "running": "En cours",
+          "percent": "Part de sa taille utilisée"
+        },
+        "machines": "{count, plural, one {# machine} other {# machines}}",
+        "shared": "{count} partagés",
+        "spare": "réserve <mono>{name}</mono>, non comptée",
+        "noSpare": "pas encore de compte de réserve Motir",
+        "near": "Proche de la taille",
+        "atSize": "Taille atteinte · les nouveaux jobs attendent",
+        "noAccount": "Aucun compte pour l’instant",
+        "noAccountBody": "Aucune exécution add-shard pour ce type pour l’instant. Son premier compte s’ajoute avec <cmd>{command}</cmd>.",
+        "notReadCount": "{count, plural, one {le quota de # compte n’est pas lu} other {le quota de # comptes n’est pas lu}}",
+        "fly": "Passé sur Fly, donc sans pool AWS",
+        "accounts": {
+          "title": "{kind} · comptes",
+          "col": {
+            "size": "Taille",
+            "running": "En cours",
+            "paused": "En pause jusqu’à"
+          }
+        },
+        "role": {
+          "spare": "Réserve"
+        },
+        "fromGranted": "à partir de {vcpu} vCPU accordés",
+        "setByAdmin": "fixé par un administrateur de la plateforme",
+        "spareNotCounted": "la réserve, non comptée",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "Pas en pause",
+        "paused": {
+          "capacityRefused": "En pause · capacité refusée",
+          "unreachable": "En pause · injoignable"
+        },
+        "pausedUntil": "jusqu’à {time}, dans {left}",
+        "readOnly": "Lecture seule. Pour demander plus de quota à AWS, exécutez <cmd>{command}</cmd> dans un terminal ; le remplacement du plafond d’un compte reste à son emplacement habituel."
       }
     }
   },

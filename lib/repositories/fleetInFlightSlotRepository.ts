@@ -247,6 +247,32 @@ export const fleetInFlightSlotRepository = {
   },
 
   /**
+   * How many LIVE slots of one workload are held on NO account by these
+   * organisations (MOTIR-10887) — the Fleet status page's running count on the
+   * install fleet: an install-fleet container's slot records no account
+   * (MOTIR-10858) and belongs to the install's own org (MOTIR-10794), the same
+   * pair admission excludes from the shared caps. `organizationIds` null means any
+   * organisation (cloud off: every org is the install's own). Rides
+   * `[fleet_shard_id, workload]`.
+   */
+  async countLiveUnplacedForWorkload(
+    workload: string,
+    organizationIds: readonly string[] | null,
+    now: Date,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (organizationIds !== null && organizationIds.length === 0) return 0;
+    return tx.fleetInFlightSlot.count({
+      where: {
+        workload,
+        fleetShardId: null,
+        expiresAt: { gt: now },
+        ...(organizationIds === null ? {} : { organizationId: { in: [...organizationIds] } }),
+      },
+    });
+  },
+
+  /**
    * How many LIVE slots of one workload one ACCOUNT of the fleet pool is holding
    * (MOTIR-9421) — the per-account in-flight count admission chooses an account
    * by. The same locking contract as {@link countLiveForWorkload}: read under the

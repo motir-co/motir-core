@@ -294,6 +294,11 @@ export default defineConfig({
         'lib/fleetStatus/imageVerdict.ts',
         'lib/github/publishWorkflows.ts',
         'lib/services/fleetStatusImagesService.ts',
+        // MOTIR-10887 — the Fleet status page's Pools section. Pinned at 90 in `thresholds`.
+        'app/**/admin/fleet-status/_components/PoolCards.tsx',
+        'app/**/admin/fleet-status/_components/PoolDisclosure.tsx',
+        'lib/awsServices/ec2VcpuQuotaReader.ts',
+        'lib/services/fleetStatusPoolsService.ts',
         'lib/ideas/consoleActor.ts',
         'lib/services/ideasAdminService.ts',
         'lib/services/ideasPublicService.ts',
@@ -6707,6 +6712,30 @@ export default defineConfig({
           lines: 90,
         },
         'lib/services/fleetStatusImagesService.ts': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-status/_components/PoolCards.tsx': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/admin/fleet-status/_components/PoolDisclosure.tsx': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/awsServices/ec2VcpuQuotaReader.ts': {
+          statements: 90,
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/fleetStatusPoolsService.ts': {
           statements: 90,
           branches: 90,
           functions: 90,

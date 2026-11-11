@@ -64,7 +64,9 @@ const EMAIL_TRANSPORT = {
  * in core's OWN account — the web task's role, not a pool account the
  * orchestrator's adapters assume into. It reaches both through
  * `lib/awsServices/ecsServicesReader.ts` and nothing else, the `lib/ses` shape:
- * the service judging what it read sees plain objects and is tested offline.
+ * the service judging what it read sees plain objects and is tested offline. The
+ * Fleet status page's EC2 vCPU quota read (MOTIR-10887) is the same kind of read
+ * and lives beside it, in `lib/awsServices/ec2VcpuQuotaReader.ts`.
  */
 const SERVICES_READ = {
   dir: join('lib', 'awsServices'),

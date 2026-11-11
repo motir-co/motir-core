@@ -14192,6 +14192,92 @@
         "unset": "Ten obraz nie jest skonfigurowany w tym wdrożeniu.",
         "failed": "GitHub nie uruchomił workflow:",
         "notPermitted": "Tylko superadmin może publikować z tej strony."
+      },
+      "pools": {
+        "title": "Pule",
+        "subtitle": "Jak duża jest każda pula floty i ile maszyn działa w niej teraz: najpierw flota instalacyjna na własnym koncie AWS Motir, potem konta add-shard, na których działają zadania najemców.",
+        "notApplicable": "Nie dotyczy",
+        "loading": {
+          "install": "Wczytywanie własnego konta Motir",
+          "shard": "Wczytywanie pul add-shard"
+        }
+      },
+      "install": {
+        "title": "Własne konto Motir · flota instalacyjna",
+        "subtitle": "Maszyny, na których własna organizacja Motir uruchamia zadania indeksu, hosta agentów i uruchomień agentów. Trzy pule dzielą jeden limit vCPU EC2 konta; żadna nie ma własnego rozmiaru.",
+        "nearQuota": "Blisko limitu vCPU",
+        "quota": {
+          "label": "Limit vCPU EC2 · wspólny dla trzech pul",
+          "read": "Działające instancje On-Demand Standard · odczytano {age}",
+          "notRead": "AWS nie odpowiedział · {when}"
+        },
+        "used": "Używane przez trzy pule",
+        "percent": "Wykorzystanie limitu",
+        "nearBody": "{percent}% limitu, powyżej progu zapasu 70%. Dla wszystkich trzech pul zostało {left} vCPU.",
+        "table": {
+          "col": {
+            "pool": "Pula",
+            "onFleet": "We flocie instalacyjnej",
+            "running": "Działające",
+            "vcpu": "vCPU",
+            "share": "Udział w limicie"
+          }
+        },
+        "yes": "Tak",
+        "notOnFleet": "Poza flotą instalacyjną",
+        "noneRunning": "Brak działających",
+        "machines": "{count, plural, one {# maszyna} few {# maszyny} many {# maszyn} other {# maszyny}}",
+        "awake": "Aktywne: {count}",
+        "hibernated": "Uśpione: {count}, nie liczone",
+        "readOnly": "Tylko do odczytu. O tym, które pule tu działają, decyduje MOTIR_INSTALL_FLEET_KINDS; runner CI nigdy.",
+        "error": {
+          "title": "Nie udało się odczytać własnego konta Motir",
+          "body": "AWS nie odpowiedział, więc nic tu nie jest wczytane: żadna liczba nie jest zerem i żaden dostawca nie jest wskazany. Pule add-shard i obrazy nie są objęte problemem. Odśwież stronę, aby spróbować ponownie."
+        }
+      },
+      "shard": {
+        "title": "Konta add-shard · zadania najemców",
+        "subtitle": "Jedna pula na rodzaj floty. Rozmiar puli to suma limitów dopuszczenia jej kont współdzielonych, czyli maszyn, które dopuszczenie wpuszcza naraz. Te same pule, które czyta Monitorowanie → Pule, plus to, co teraz w nich działa.",
+        "nearCount": "{count, plural, one {# pula blisko swojego rozmiaru} few {# pule blisko swojego rozmiaru} many {# pul blisko swojego rozmiaru} other {# puli blisko swojego rozmiaru}}",
+        "col": {
+          "pool": "Pula",
+          "size": "Rozmiar",
+          "accounts": "Konta",
+          "running": "Działające",
+          "percent": "Wykorzystanie rozmiaru"
+        },
+        "machines": "{count, plural, one {# maszyna} few {# maszyny} many {# maszyn} other {# maszyny}}",
+        "shared": "Współdzielone: {count}",
+        "spare": "zapasowe <mono>{name}</mono>, nie liczone",
+        "noSpare": "jeszcze brak konta zapasowego Motir",
+        "near": "Blisko rozmiaru",
+        "atSize": "Rozmiar osiągnięty · nowe zadania czekają",
+        "noAccount": "Jeszcze brak konta",
+        "noAccountBody": "Dla tego rodzaju nie było jeszcze uruchomienia add-shard. Jego pierwsze konto dodaje się poleceniem <cmd>{command}</cmd>.",
+        "notReadCount": "{count, plural, one {limit # konta nie jest odczytany} few {limity # kont nie są odczytane} many {limity # kont nie są odczytane} other {limity # konta nie są odczytane}}",
+        "fly": "Przełączono na Fly, więc nie ma puli AWS",
+        "accounts": {
+          "title": "{kind} · konta",
+          "col": {
+            "size": "Rozmiar",
+            "running": "Działające",
+            "paused": "Wstrzymane do"
+          }
+        },
+        "role": {
+          "spare": "Zapasowe"
+        },
+        "fromGranted": "z {vcpu} przyznanych vCPU",
+        "setByAdmin": "ustawione przez administratora platformy",
+        "spareNotCounted": "konto zapasowe, nie liczone",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "Nie wstrzymane",
+        "paused": {
+          "capacityRefused": "Wstrzymane · odmowa pojemności",
+          "unreachable": "Wstrzymane · nieosiągalne"
+        },
+        "pausedUntil": "do {time}, za {left}",
+        "readOnly": "Tylko do odczytu. Aby poprosić AWS o większy limit, uruchom <cmd>{command}</cmd> w terminalu; nadpisanie limitu konta pozostaje w swoim dotychczasowym miejscu."
       }
     }
   },

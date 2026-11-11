@@ -5,6 +5,7 @@ import en from '@/messages/en.json';
 import type { FleetImagePublishDTO } from '@/lib/dto/fleetStatusImages';
 import type { RunnerAmiFreshnessDTO } from '@/lib/dto/runnerImageFreshness';
 import { fleetStatusImagesService } from '@/lib/services/fleetStatusImagesService';
+import { fleetStatusPoolsService } from '@/lib/services/fleetStatusPoolsService';
 import {
   hostedRow,
   publishIdle,
@@ -78,6 +79,12 @@ beforeEach(async () => {
   currentSession = null;
   await truncateAuthTables();
   vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  // The Pools section's reads (MOTIR-10887) have their own suite
+  // (`tests/fleetStatus/fleetStatusPoolsService.test.ts`); here they are stubbed.
+  vi.spyOn(fleetStatusPoolsService, 'readInstallFleet').mockResolvedValue({
+    status: 'unavailable',
+  });
+  vi.spyOn(fleetStatusPoolsService, 'readAddShard').mockResolvedValue({ status: 'unavailable' });
 });
 
 afterEach(() => {
@@ -98,6 +105,8 @@ describe('the fleet status page', () => {
       const read = vi.spyOn(fleetStatusImagesService, 'publishRecords');
       await expect(Page()).rejects.toBeInstanceOf(NotFoundSentinel);
       expect(read).not.toHaveBeenCalled();
+      expect(fleetStatusPoolsService.readInstallFleet).not.toHaveBeenCalled();
+      expect(fleetStatusPoolsService.readAddShard).not.toHaveBeenCalled();
     },
   );
 
@@ -122,6 +131,19 @@ describe('the fleet status page', () => {
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(readHosted).toHaveBeenCalledWith(publishRecord());
     expect(records).toHaveBeenCalled();
+    // The Pools section: its heading, and its two cards, each streamed behind
+    // its own boundary (so their place in the HTML is the order they resolved).
+    expect(html.indexOf('id="pools-heading"')).toBeGreaterThan(html.indexOf('id="images-heading"'));
+    for (const pool of ['install-fleet', 'add-shard'])
+      expect(html).toContain(`data-pool="${pool}"`);
+    expect(fleetStatusPoolsService.readInstallFleet).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'superadmin' }),
+      { now: expect.any(Date) },
+    );
+    expect(fleetStatusPoolsService.readAddShard).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'superadmin' }),
+      { now: expect.any(Date) },
+    );
   });
 
   it('one image that cannot be read leaves the other two cards whole', async () => {

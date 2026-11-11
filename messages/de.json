@@ -14192,6 +14192,92 @@
         "unset": "Dieses Image ist auf diesem Deployment nicht konfiguriert.",
         "failed": "GitHub hat den Workflow nicht gestartet:",
         "notPermitted": "Nur ein Superadmin kann von dieser Seite veröffentlichen."
+      },
+      "pools": {
+        "title": "Pools",
+        "subtitle": "Wie groß jeder Flotten-Pool ist und wie viele Maschinen jetzt darin laufen: zuerst die Installationsflotte im eigenen AWS-Konto von Motir, dann die Add-Shard-Konten, auf denen die Jobs der Mandanten laufen.",
+        "notApplicable": "Nicht zutreffend",
+        "loading": {
+          "install": "Motirs eigenes Konto wird geladen",
+          "shard": "Die Add-Shard-Pools werden geladen"
+        }
+      },
+      "install": {
+        "title": "Motirs eigenes Konto · Installationsflotte",
+        "subtitle": "Die Maschinen, auf denen Motirs eigene Organisation ihre Index-, Agent-Host- und Agent-Lauf-Jobs ausführt. Die drei Pools teilen sich das eine EC2-vCPU-Kontingent des Kontos; keiner hat eine eigene Größe.",
+        "nearQuota": "Nahe am vCPU-Kontingent",
+        "quota": {
+          "label": "EC2-vCPU-Kontingent · von den drei Pools geteilt",
+          "read": "On-Demand-Standard-Instanzen in Betrieb · gelesen {age}",
+          "notRead": "AWS hat nicht geantwortet · {when}"
+        },
+        "used": "Von den drei Pools genutzt",
+        "percent": "Genutzter Anteil des Kontingents",
+        "nearBody": "Bei {percent} % des Kontingents, über der 70-%-Reservemarke. Für alle drei Pools bleiben {left} vCPU.",
+        "table": {
+          "col": {
+            "pool": "Pool",
+            "onFleet": "In der Installationsflotte",
+            "running": "Laufend",
+            "vcpu": "vCPU",
+            "share": "Anteil am Kontingent"
+          }
+        },
+        "yes": "Ja",
+        "notOnFleet": "Nicht in der Installationsflotte",
+        "noneRunning": "Keine laufend",
+        "machines": "{count, plural, one {# Maschine} other {# Maschinen}}",
+        "awake": "{count} aktiv",
+        "hibernated": "{count} im Ruhezustand, nicht gezählt",
+        "readOnly": "Nur lesen. Welche Pools hier laufen, legt MOTIR_INSTALL_FLEET_KINDS fest; ein CI-Runner nie.",
+        "error": {
+          "title": "Motirs eigenes Konto konnte nicht gelesen werden",
+          "body": "AWS hat nicht geantwortet, daher ist hier nichts geladen: Keine Zahl ist null, und kein Anbieter wird behauptet. Die Add-Shard-Pools und die Images sind nicht betroffen. Laden Sie die Seite neu, um es erneut zu versuchen."
+        }
+      },
+      "shard": {
+        "title": "Add-Shard-Konten · Jobs der Mandanten",
+        "subtitle": "Ein Pool pro Flottenart. Die Größe eines Pools ist die Summe der Zulassungsobergrenzen seiner geteilten Konten, also der Maschinen, die die Zulassung gleichzeitig hereinlässt. Dieselben Pools, die Monitoring → Pools liest, plus was jetzt darin läuft.",
+        "nearCount": "{count, plural, one {# Pool nahe an seiner Größe} other {# Pools nahe an ihrer Größe}}",
+        "col": {
+          "pool": "Pool",
+          "size": "Größe",
+          "accounts": "Konten",
+          "running": "Laufend",
+          "percent": "Genutzter Anteil der Größe"
+        },
+        "machines": "{count, plural, one {# Maschine} other {# Maschinen}}",
+        "shared": "{count} geteilt",
+        "spare": "Reserve <mono>{name}</mono>, nicht gezählt",
+        "noSpare": "noch kein Motir-Reservekonto",
+        "near": "Nahe an der Größe",
+        "atSize": "Größe erreicht · neue Jobs warten",
+        "noAccount": "Noch kein Konto",
+        "noAccountBody": "Für diese Art gab es noch keinen Add-Shard-Lauf. Ihr erstes Konto wird mit <cmd>{command}</cmd> hinzugefügt.",
+        "notReadCount": "{count, plural, one {Das Kontingent von # Konto ist nicht gelesen} other {Das Kontingent von # Konten ist nicht gelesen}}",
+        "fly": "Auf Fly umgestellt, daher kein AWS-Pool",
+        "accounts": {
+          "title": "{kind} · Konten",
+          "col": {
+            "size": "Größe",
+            "running": "Laufend",
+            "paused": "Pausiert bis"
+          }
+        },
+        "role": {
+          "spare": "Reserve"
+        },
+        "fromGranted": "aus {vcpu} gewährten vCPU",
+        "setByAdmin": "von einem Plattform-Admin festgelegt",
+        "spareNotCounted": "die Reserve, nicht gezählt",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "Nicht pausiert",
+        "paused": {
+          "capacityRefused": "Pausiert · Kapazität verweigert",
+          "unreachable": "Pausiert · nicht erreichbar"
+        },
+        "pausedUntil": "bis {time}, in {left}",
+        "readOnly": "Nur lesen. Um bei AWS mehr Kontingent zu beantragen, führen Sie <cmd>{command}</cmd> in einem Terminal aus; die Obergrenzen-Überschreibung eines Kontos bleibt an ihrer bisherigen Stelle."
       }
     }
   },

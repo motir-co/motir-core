@@ -14183,6 +14183,92 @@
         "unset": "此部署未配置该镜像。",
         "failed": "GitHub 没有启动工作流:",
         "notPermitted": "只有超级管理员可以从本页面发布。"
+      },
+      "pools": {
+        "title": "资源池",
+        "subtitle": "每个集群池有多大，以及现在有多少台机器在其中运行：先是 Motir 自己 AWS 账户中的安装集群，然后是运行租户作业的 add-shard 账户。",
+        "notApplicable": "不适用",
+        "loading": {
+          "install": "正在加载 Motir 自己的账户",
+          "shard": "正在加载 add-shard 池"
+        }
+      },
+      "install": {
+        "title": "Motir 自己的账户 · 安装集群",
+        "subtitle": "Motir 自己的组织运行其索引、智能体托管和智能体运行作业的机器。三个池共享账户唯一的 EC2 vCPU 配额，没有一个池有自己的大小。",
+        "nearQuota": "接近 vCPU 配额",
+        "quota": {
+          "label": "EC2 vCPU 配额 · 由三个池共享",
+          "read": "正在运行的按需标准实例 · {age}读取",
+          "notRead": "AWS 没有响应 · {when}"
+        },
+        "used": "三个池正在使用",
+        "percent": "配额使用率",
+        "nearBody": "已达配额的 {percent}%，超过 70% 余量线。三个池共剩 {left} vCPU。",
+        "table": {
+          "col": {
+            "pool": "池",
+            "onFleet": "在安装集群上",
+            "running": "运行中",
+            "vcpu": "vCPU",
+            "share": "占配额比例"
+          }
+        },
+        "yes": "是",
+        "notOnFleet": "不在安装集群上",
+        "noneRunning": "无运行",
+        "machines": "{count, plural, other {# 台机器}}",
+        "awake": "{count} 个活跃",
+        "hibernated": "{count} 个休眠，不计入",
+        "readOnly": "只读。哪些池在这里运行由 MOTIR_INSTALL_FLEET_KINDS 决定；CI 运行器从不在这里运行。",
+        "error": {
+          "title": "无法读取 Motir 自己的账户",
+          "body": "AWS 没有响应，因此这里没有加载任何内容：没有数字为零，也没有声明任何提供商。add-shard 池和镜像不受影响。请刷新重试。"
+        }
+      },
+      "shard": {
+        "title": "add-shard 账户 · 租户的作业",
+        "subtitle": "每种集群类型一个池。池的大小是其共享账户准入上限之和，即准入一次放行的机器数。与“监控 → 资源池”读取的池相同，另加现在在其中运行的内容。",
+        "nearCount": "{count, plural, other {# 个池接近其大小}}",
+        "col": {
+          "pool": "池",
+          "size": "大小",
+          "accounts": "账户",
+          "running": "运行中",
+          "percent": "大小使用率"
+        },
+        "machines": "{count, plural, other {# 台机器}}",
+        "shared": "{count} 个共享",
+        "spare": "备用 <mono>{name}</mono>，不计入",
+        "noSpare": "尚无 Motir 备用账户",
+        "near": "接近大小",
+        "atSize": "已达大小 · 新作业等待",
+        "noAccount": "尚无账户",
+        "noAccountBody": "这种类型尚无 add-shard 运行。其第一个账户通过 <cmd>{command}</cmd> 添加。",
+        "notReadCount": "{count, plural, other {# 个账户的配额未读取}}",
+        "fly": "已切换到 Fly，因此没有 AWS 池",
+        "accounts": {
+          "title": "{kind} · 账户",
+          "col": {
+            "size": "大小",
+            "running": "运行中",
+            "paused": "暂停至"
+          }
+        },
+        "role": {
+          "spare": "备用"
+        },
+        "fromGranted": "来自已授予的 {vcpu} vCPU",
+        "setByAdmin": "由平台管理员设置",
+        "spareNotCounted": "备用账户，不计入",
+        "runningCell": "{count} · {vcpu} vCPU",
+        "notPaused": "未暂停",
+        "paused": {
+          "capacityRefused": "已暂停 · 容量被拒绝",
+          "unreachable": "已暂停 · 无法访问"
+        },
+        "pausedUntil": "至 {time}，{left}后",
+        "readOnly": "只读。如需向 AWS 申请更多配额，请在终端运行 <cmd>{command}</cmd>；账户上限的覆盖仍在原来的位置设置。"
       }
     }
   },
