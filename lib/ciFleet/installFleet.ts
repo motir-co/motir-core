@@ -72,9 +72,14 @@ export function installFleetInstanceType(_kind: FleetWorkloadKind): string {
   return AWS_DEFAULT_INSTANCE_TYPE;
 }
 
+/** vCPU of one VM of an EC2 instance type, or null when the type's size is not known here. */
+export function ec2InstanceTypeVcpu(type: string): number | null {
+  return EC2_INSTANCE_TYPE_VCPU[type] ?? null;
+}
+
 /** vCPU of one install-fleet VM of this kind, or null when its type's size is unknown. */
 export function installFleetMachineVcpu(kind: FleetWorkloadKind): number | null {
-  return EC2_INSTANCE_TYPE_VCPU[installFleetInstanceType(kind)] ?? null;
+  return ec2InstanceTypeVcpu(installFleetInstanceType(kind));
 }
 
 /** Is this the install fleet's pseudo-account id? */

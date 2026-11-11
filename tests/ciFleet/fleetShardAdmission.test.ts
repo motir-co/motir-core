@@ -510,6 +510,23 @@ describe('the agent runner on its pool (MOTIR-9421)', () => {
     expect(await choose(fx)).toEqual({ shardId: b.id });
   });
 
+  it('exposes one account’s in-flight count per kind for the Fleet status page (MOTIR-10887)', async () => {
+    const fx = await seedTenant();
+    const a = await account(4, { fleetKind: 'hosted_agent' });
+    await hostedSlot(fx, a, 'fs1');
+    await hostedSlot(fx, a, 'fs2');
+    await occupy(fx, a, 1);
+    const count = (kind: string) =>
+      withSystemContext((tx) =>
+        fleetShardAdmissionService.countInFlightOnShardInTx(kind as never, a.id, NOW, tx),
+      );
+    expect(await count('hosted_agent')).toBe(2);
+    expect(await count('ci_runner')).toBe(1);
+    await expect(count('no_such_kind')).rejects.toThrow(
+      'fleet kind no_such_kind has no per-account in-flight count yet',
+    );
+  });
+
   it('a full hosted pool defers with the hosted-agent words, not CI’s', async () => {
     const fx = await seedTenant();
     const a = await account(1, { fleetKind: 'hosted_agent' });
