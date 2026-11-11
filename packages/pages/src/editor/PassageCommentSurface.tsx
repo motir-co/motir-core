@@ -69,8 +69,18 @@ export function PassageCommentAction({
   );
 }
 
-/** Focusable things inside the composer, the editor first. */
-const EDITABLE = '[contenteditable="true"], textarea, input:not([type="hidden"])';
+/**
+ * Where typing goes inside the composer, in order of preference. Each kind is
+ * looked for on its own, not as one selector list: a list answers the first
+ * match in DOM order, and the shipped editor draws its toolbar's upload input
+ * BEFORE its writing surface. A file, hidden or button input is never a
+ * place to type.
+ */
+const EDITABLE = [
+  '[contenteditable="true"]',
+  'textarea',
+  'input:not([type="hidden"]):not([type="file"]):not([type="button"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"])',
+] as const;
 
 /** The Inline composer's frame around the host's composer. */
 export function PassageCommentComposer({
@@ -96,7 +106,13 @@ export function PassageCommentComposer({
   useEffect(() => {
     // The frame is drawn unconditionally, so its ref is set before any effect runs.
     const root = frameRef.current!;
-    const editable = () => root.querySelector<HTMLElement>(EDITABLE);
+    const editable = () => {
+      for (const selector of EDITABLE) {
+        const found = root.querySelector<HTMLElement>(selector);
+        if (found) return found;
+      }
+      return null;
+    };
     const present = editable();
     if (present) {
       present.focus();

@@ -503,6 +503,25 @@ describe('the Inline composer', () => {
     expect(h.composer()).toBeNull();
   });
 
+  it('focuses the writing surface, not an upload input drawn before it', async () => {
+    const h = mount({
+      passageComment: {
+        renderComposer: () => (
+          <div>
+            <input type="file" aria-label="Upload" />
+            <div contentEditable suppressContentEditableWarning aria-label="Write" />
+          </div>
+        ),
+      },
+    });
+    await frames();
+    select(h.surface, 'closing line');
+    await frames();
+    fireEvent.click(h.action()!);
+    await frames();
+    expect(document.activeElement?.getAttribute('aria-label')).toBe('Write');
+  });
+
   it('moves focus into an editor that mounts late, however late', async () => {
     const h = mount({ passageComment: { renderComposer: () => <LateEditor /> } });
     await frames();
