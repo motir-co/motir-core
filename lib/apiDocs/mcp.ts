@@ -761,6 +761,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
       'Read one page as markdown — its title, where it is filed, its revision and newest version — to read it or to write it back; or read one version by number.',
     descriptionFingerprint: '1ddf57794b56',
   },
+  get_page_comments: {
+    summary:
+      'Read a page’s discussion — its open and resolved threads in one call, each list on its own cursor, with every root’s comment id, quote and whether its passage is still in the page.',
+    descriptionFingerprint: '22e6b4a3cbb5',
+  },
   create_page: {
     summary:
       'Create a page with a markdown body — at the root, in a folder or as a sub-page — and get its id and revision.',

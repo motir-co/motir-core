@@ -158,6 +158,7 @@ import { CREATE_FOLDER_TOOL_NAME, registerCreateFolder } from './tools/createFol
 import { UPDATE_FOLDER_TOOL_NAME, registerUpdateFolder } from './tools/updateFolder';
 import { DELETE_FOLDER_TOOL_NAME, registerDeleteFolder } from './tools/deleteFolder';
 import { GET_PAGE_TOOL_NAME, registerGetPage } from './tools/getPage';
+import { GET_PAGE_COMMENTS_TOOL_NAME, registerGetPageComments } from './tools/getPageComments';
 import { CREATE_PAGE_TOOL_NAME, registerCreatePage } from './tools/createPage';
 import { UPDATE_PAGE_TOOL_NAME, registerUpdatePage } from './tools/updatePage';
 import { RENAME_PAGE_TOOL_NAME, registerRenamePage } from './tools/renamePage';
@@ -325,6 +326,7 @@ export const MCP_TOOL_NAMES = [
   UPDATE_FOLDER_TOOL_NAME,
   DELETE_FOLDER_TOOL_NAME,
   GET_PAGE_TOOL_NAME,
+  GET_PAGE_COMMENTS_TOOL_NAME,
   CREATE_PAGE_TOOL_NAME,
   UPDATE_PAGE_TOOL_NAME,
   RENAME_PAGE_TOOL_NAME,
@@ -629,6 +631,8 @@ export function registerMcpTools(
   // Page tools (MOTIR-5760) — an agent reads and writes a page as markdown by id
   // (`docs/decisions/pages.md` §8.2), over the same page service the editor uses.
   registerGetPage(target, resolveContext);
+  // A page's discussion (MOTIR-10978) — both thread lists, over `pageCommentsService`.
+  registerGetPageComments(target, resolveContext);
   registerCreatePage(target, resolveContext);
   registerUpdatePage(target, resolveContext);
   registerRenamePage(target, resolveContext);
