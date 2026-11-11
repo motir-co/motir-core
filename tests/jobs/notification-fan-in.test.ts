@@ -8,6 +8,7 @@ import {
   notificationFanInOnTransitioned,
 } from '@/lib/jobs/definitions/notificationFanIn';
 import { jobDefinitions } from '@/lib/jobs/registry';
+import { pageCommentNotificationFanIn } from '@/lib/jobs/definitions/pageCommentNotificationFanIn';
 import {
   notificationFanInService,
   NOTIFICATION_FAN_IN_REGISTRY,
@@ -501,6 +502,16 @@ describe('notificationFanIn jobs — in-process runs', () => {
     expect(jobDefinitions).toContain(notificationFanInOnCommentCreated);
     expect(jobDefinitions).toContain(notificationFanInOnWorkItemMentioned);
     expect(jobDefinitions).toContain(notificationFanInOnTransitioned);
+  });
+
+  it('registers the page-comment consumer on page/comment.created (MOTIR-10924)', () => {
+    expect(jobDefinitions).toContain(pageCommentNotificationFanIn);
+    expect(pageCommentNotificationFanIn).toMatchObject({
+      id: 'notification-fan-in/page-comment.created',
+      trigger: 'page/comment.created',
+      retryPolicy: 'transient',
+      idempotency: undefined,
+    });
   });
 
   it('drives the comment-created event end-to-end: rows written, job_run recorded', async () => {

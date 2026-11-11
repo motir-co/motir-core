@@ -22,6 +22,13 @@ import {
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
+const sentry = vi.hoisted(() => ({ captureException: vi.fn(), setContext: vi.fn() }));
+vi.mock('@sentry/nextjs', () => ({
+  captureException: sentry.captureException,
+  withScope: (fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: sentry.setContext }),
+}));
+
 const setEnabled = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/fleetOrgCiSettingService', () => ({
   fleetOrgCiSettingService: { setEnabled },
@@ -211,9 +218,15 @@ describe('setFleetOrgCiAction', () => {
     expect(setEnabled).not.toHaveBeenCalled();
   });
 
-  it('FAILED — an unexpected error logs a constant message and context, never its text', async () => {
+  it('FAILED — an unexpected error is logged and reported with the pair and direction, never its secret (MOTIR-10972)', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    setEnabled.mockRejectedValueOnce(new Error(`boom with ${SECRET}`));
+    sentry.captureException.mockClear();
+    sentry.setContext.mockClear();
+    const expired = Object.assign(
+      new Error(`A query cannot be executed on an expired transaction near ${SECRET}`),
+      { code: 'P2028' },
+    );
+    setEnabled.mockRejectedValueOnce(expired);
     const result = await setFleetOrgCiAction(PROJECT, ORG, true, 'x');
     expect(result).toEqual({ ok: false, code: 'FAILED' });
     expect(JSON.stringify(result)).not.toContain(SECRET);
@@ -221,8 +234,37 @@ describe('setFleetOrgCiAction', () => {
       projectId: PROJECT,
       org: ORG,
       enabled: true,
+      to: 'fleet',
+      error: {
+        name: 'Error',
+        code: 'P2028',
+        message: 'A query cannot be executed on an expired transaction near [redacted]',
+      },
     });
     expect(JSON.stringify(log.mock.calls)).not.toContain(SECRET);
+    expect(sentry.captureException).toHaveBeenCalledTimes(1);
+    expect(sentry.setContext).toHaveBeenCalledWith('server_action', {
+      action: 'setFleetOrgCiAction',
+      projectId: PROJECT,
+      org: ORG,
+      enabled: true,
+      to: 'fleet',
+    });
+    log.mockRestore();
+  });
+
+  it('FAILED — turning OFF reports the github_hosted direction', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    sentry.setContext.mockClear();
+    setEnabled.mockRejectedValueOnce(new Error('boom'));
+    expect(await setFleetOrgCiAction(PROJECT, ORG, false, 'x')).toEqual({
+      ok: false,
+      code: 'FAILED',
+    });
+    expect(sentry.setContext).toHaveBeenCalledWith(
+      'server_action',
+      expect.objectContaining({ enabled: false, to: 'github_hosted' }),
+    );
     log.mockRestore();
   });
 });

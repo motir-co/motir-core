@@ -950,6 +950,18 @@
       "fallback": "Ou copie este link no seu navegador:",
       "reason": "Você está recebendo isto porque observa {identifier}."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} mencionou você em {page}",
+      "previewMention": "{author} mencionou você em {page}",
+      "subjectReply": "{author} respondeu a um tópico em {page}",
+      "previewReply": "{author} respondeu a um tópico em {page}",
+      "greeting": "Olá, {name},",
+      "ledeMention": "{author} mencionou você em um comentário em {page}.",
+      "ledeReply": "{author} respondeu a um tópico em {page}.",
+      "view": "Abrir a discussão",
+      "fallback": "Ou copie este link no seu navegador:",
+      "reasonReply": "Você está recebendo isto porque respondeu neste tópico."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} moveu {identifier} para {status}",
       "preview": "{actor} moveu {identifier} para {status}",
@@ -3071,8 +3083,8 @@
             "desc": "Alguém menciona você com @ em um comentário ou descrição."
           },
           "commented": {
-            "label": "Comentário em um item em que você está envolvido",
-            "desc": "Um novo comentário em um item que você criou, do qual é responsável ou no qual comentou."
+            "label": "Comentários nos seus itens ou nas suas discussões de página",
+            "desc": "Um novo comentário em um item que você criou, do qual é responsável ou no qual comentou — ou uma resposta em uma discussão de página que você iniciou ou da qual participou."
           },
           "assigned": {
             "label": "Atribuído a você",
@@ -3102,7 +3114,7 @@
         "soon": "Em breve",
         "cellAria": "{channel} para {event}",
         "cellAriaSoon": "{channel} para {event} (em breve)",
-        "defaultsNote": "Eventos diretos — menções, comentários nos seus itens e atribuições — vêm ativados por padrão nos dois canais. Uma linha não alterada usa esse padrão (ela só fica desativada quando você a desativa).",
+        "defaultsNote": "Eventos diretos — menções, comentários nos seus itens, respostas nas suas discussões de página e atribuições — vêm ativados por padrão nos dois canais. Uma linha não alterada usa esse padrão (ela só fica desativada quando você a desativa).",
         "status": {
           "saving": "Salvando…",
           "saved": "Salvo",
@@ -6078,7 +6090,9 @@
       "accessRefused": "O código de <s>{project}</s> está pronto, mas você ainda não pode abri-lo — tente enviar o convite novamente",
       "reviewToRun": "Uma revisão de <s>{key}</s> está à espera do seu agente",
       "reviewSentBack": "Um agente pediu alterações em <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> hibernou seu agente <s>{agent}</s>"
+      "agentHibernatedByAdmin": "<s>{actor}</s> hibernou seu agente <s>{agent}</s>",
+      "pageMentioned": "<s>{actor}</s> mencionou você em <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> respondeu a um tópico em <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Um administrador da organização o parou às {time}. Os arquivos dele foram mantidos; desperte-o em Agentes."

@@ -326,7 +326,7 @@ describe('pull requests name the dispatcher, the card and the run (AC4)', () => 
     const line = hostedAttributionLine()!;
     expect(line).toContain('Dispatched by Yue Zhu');
     expect(line).toContain(`(${serverUrl}/items/PROD-7)`);
-    expect(line).toContain(`(${serverUrl}/runs/${RUN})`);
+    expect(line).toContain(`(${serverUrl}/runs?run=${RUN})`);
     const once = withHostedAttribution('Body.');
     expect(withHostedAttribution(once)).toBe(once);
 

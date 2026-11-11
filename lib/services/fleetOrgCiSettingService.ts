@@ -70,8 +70,18 @@ import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces
  * inside the audited transaction so a refusal rolls the row back. The audit row
  * is appended AFTER the write (`withPlatformWrite`, which takes the chain lock
  * first), because its metadata carries what the write did (`variableOutcome`).
- * Holding the chain lock across one GitHub round trip is the accepted cost for a
- * rarely used switch; it also serialises two flips of one pair.
+ * Holding the chain lock across the flip's GitHub round trips is the accepted
+ * cost for a rarely used switch; it also serialises two flips of one pair.
+ *
+ * ⚠️ THE TRANSACTION IS GIVEN A DEADLINE SIZED TO ITS GITHUB WRITES
+ * (MOTIR-10972). Prisma's interactive default is 5 s, and one flip makes up to
+ * three variable requests plus one PATCH per default-setup move: a pair with
+ * three repositories to move outlived it, the expired transaction fell through
+ * to a bare `FAILED`, and the flip could not be made from the console at all.
+ * {@link flipTransactionTimeoutMs} grows with the moves the flip plans. A GitHub
+ * call that outlasts even that deadline is still safe: Postgres rolls the
+ * transaction back (releasing the chain lock), the callback's next statement
+ * fails, and the compensation below puts back everything that had moved.
  *
  * GitHub applied the write and core's commit then failed: nothing makes the two
  * atomic, so the service COMPENSATES by restoring the variable it read before the
@@ -268,6 +278,26 @@ interface DefaultSetupMove {
 
 const FLEET_RUNNER: DefaultSetupRunner = { type: 'labeled', label: MOTIR_RUNNER_LABEL };
 const HOSTED_RUNNER: DefaultSetupRunner = { type: 'standard' };
+
+/** The flip transaction's fixed work: the chain lock, the row lock and re-read,
+ *  the upsert and the hash-chained audit append — plus room to wait on another
+ *  platform transaction's chain lock. */
+export const FLIP_TRANSACTION_BASE_MS = 10_000;
+/** One GitHub request's share of the deadline. GitHub answers a variable or
+ *  default-setup write well inside a second; this leaves room for a slow one. */
+export const FLIP_GITHUB_REQUEST_BUDGET_MS = 5_000;
+/** `ensureOrgVariable` reads, then creates or patches, and a lost create race
+ *  patches again: three requests at most. `deleteOrgVariable` is one. */
+const VARIABLE_WRITE_REQUESTS = 3;
+
+/** The flip transaction's deadline: its fixed work plus every GitHub request it
+ *  makes while it holds the locks — the variable write and one PATCH per move. */
+export function flipTransactionTimeoutMs(moveCount: number): number {
+  return (
+    FLIP_TRANSACTION_BASE_MS +
+    FLIP_GITHUB_REQUEST_BUDGET_MS * (VARIABLE_WRITE_REQUESTS + Math.max(0, moveCount))
+  );
+}
 
 const direction = (enabled: boolean): 'fleet' | 'github_hosted' =>
   enabled ? 'fleet' : 'github_hosted';
@@ -491,7 +521,8 @@ export const fleetOrgCiSettingService = {
    *   6. The variable and each private repository's CodeQL default setup as
    *      they are, kept for compensation.
    *   7. The audited transaction: lock, re-read, the variable write, the
-   *      default-setup moves, upsert, audit row.
+   *      default-setup moves, upsert, audit row — under a deadline sized to the
+   *      GitHub writes it makes ({@link flipTransactionTimeoutMs}).
    *   8. A failure after GitHub wrote ⇒ restore the variable and every default
    *      setup read in step 6.
    *
@@ -565,50 +596,58 @@ export const fleetOrgCiSettingService = {
     const operation = enabled ? 'set' : 'delete';
     let applied = false;
     try {
-      await withPlatformWrite(principal, async (tx, record) => {
-        const locked = await platformFleetOrgCiRepository.lockForUpdate(target.projectId, org, tx);
-        if ((locked?.enabled ?? false) === enabled) throw new UnchangedUnderLock();
-
-        let variableOutcome: string;
-        try {
-          variableOutcome = enabled
-            ? await actionsVariableClient.ensureOrgVariable(
-                MOTIR_RUNNER_VARIABLE,
-                MOTIR_RUNNER_LABEL,
-                ghTarget,
-              )
-            : await actionsVariableClient.deleteOrgVariable(MOTIR_RUNNER_VARIABLE, ghTarget);
-        } catch (err) {
-          if (!isGithubFailure(err)) throw err;
-          throw new FleetOrgCiGithubWriteError(org, statusOf(err), operation);
-        }
-        applied = true;
-        await applyDefaultSetupMoves(target, moves, moved, enabled);
-
-        await platformFleetOrgCiRepository.upsert(
-          {
-            projectId: target.projectId,
+      await withPlatformWrite(
+        principal,
+        async (tx, record) => {
+          const locked = await platformFleetOrgCiRepository.lockForUpdate(
+            target.projectId,
             org,
-            enabled,
-            lastReason: trimmed,
-            updatedByUserId: principal.userId,
-          },
-          tx,
-        );
-        const entry: PlatformAuditEntry = {
-          ...base,
-          metadata: {
-            projectId: target.projectId,
-            projectKey: target.projectKey,
-            org,
-            from: !enabled,
-            to: enabled,
-            variableOutcome,
-            codeScanningMoved: moved.map((m) => m.repo.name),
-          },
-        };
-        await record(entry);
-      });
+            tx,
+          );
+          if ((locked?.enabled ?? false) === enabled) throw new UnchangedUnderLock();
+
+          let variableOutcome: string;
+          try {
+            variableOutcome = enabled
+              ? await actionsVariableClient.ensureOrgVariable(
+                  MOTIR_RUNNER_VARIABLE,
+                  MOTIR_RUNNER_LABEL,
+                  ghTarget,
+                )
+              : await actionsVariableClient.deleteOrgVariable(MOTIR_RUNNER_VARIABLE, ghTarget);
+          } catch (err) {
+            if (!isGithubFailure(err)) throw err;
+            throw new FleetOrgCiGithubWriteError(org, statusOf(err), operation);
+          }
+          applied = true;
+          await applyDefaultSetupMoves(target, moves, moved, enabled);
+
+          await platformFleetOrgCiRepository.upsert(
+            {
+              projectId: target.projectId,
+              org,
+              enabled,
+              lastReason: trimmed,
+              updatedByUserId: principal.userId,
+            },
+            tx,
+          );
+          const entry: PlatformAuditEntry = {
+            ...base,
+            metadata: {
+              projectId: target.projectId,
+              projectKey: target.projectKey,
+              org,
+              from: !enabled,
+              to: enabled,
+              variableOutcome,
+              codeScanningMoved: moved.map((m) => m.repo.name),
+            },
+          };
+          await record(entry);
+        },
+        { timeoutMs: flipTransactionTimeoutMs(moves.length) },
+      );
     } catch (err) {
       if (err instanceof UnchangedUnderLock) {
         return { outcome: 'unchanged', state: await storedState(target) };

@@ -14,6 +14,13 @@ import { MissingAuditReasonError, NotPlatformStaffError } from '@/lib/platform/e
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
+const sentry = vi.hoisted(() => ({ captureException: vi.fn(), setContext: vi.fn() }));
+vi.mock('@sentry/nextjs', () => ({
+  captureException: sentry.captureException,
+  withScope: (fn: (scope: unknown) => void) =>
+    fn({ setLevel: vi.fn(), setTag: vi.fn(), setContext: sentry.setContext }),
+}));
+
 const setOnPool = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/services/agentHostingSettingService', () => ({
   agentHostingSettingService: { setOnPool },
@@ -97,13 +104,23 @@ describe('setAgentHostingAction', () => {
     },
   );
 
-  it('FAILED — an unexpected error logs a constant message, never its text', async () => {
+  it('FAILED — an unexpected error is logged and reported with its direction, never its secret (MOTIR-10972)', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-    setOnPool.mockRejectedValueOnce(new Error('boom secret'));
+    sentry.captureException.mockClear();
+    const token = 'ghs_abcdefghijklmnopqrstuvwxyz0123';
+    setOnPool.mockRejectedValueOnce(new Error(`boom ${token}`));
     const result = await setAgentHostingAction(true, 'x');
     expect(result).toEqual({ ok: false, code: 'FAILED' });
-    expect(log).toHaveBeenCalledWith('[admin] agent hosting action failed', { onPool: true });
-    expect(JSON.stringify(log.mock.calls)).not.toContain('secret');
+    expect(log).toHaveBeenCalledWith('[admin] agent hosting action failed', {
+      onPool: true,
+      error: { name: 'Error', code: null, message: 'boom [redacted]' },
+    });
+    expect(JSON.stringify(log.mock.calls)).not.toContain(token);
+    expect(sentry.captureException).toHaveBeenCalledTimes(1);
+    expect(sentry.setContext).toHaveBeenCalledWith('server_action', {
+      action: 'setAgentHostingAction',
+      onPool: true,
+    });
     expect(revalidatePath).not.toHaveBeenCalled();
     log.mockRestore();
   });

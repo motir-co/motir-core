@@ -55,8 +55,13 @@ vi.mock('@/lib/platform/auth', async (importOriginal) => {
   };
 });
 
-const { fleetOrgCiSettingService: service, plannedDefaultSetupMoves } =
-  await import('@/lib/services/fleetOrgCiSettingService');
+const {
+  fleetOrgCiSettingService: service,
+  plannedDefaultSetupMoves,
+  flipTransactionTimeoutMs,
+  FLIP_TRANSACTION_BASE_MS,
+  FLIP_GITHUB_REQUEST_BUDGET_MS,
+} = await import('@/lib/services/fleetOrgCiSettingService');
 const { codeScanningDefaultSetupClient } = await import('@/lib/github/codeScanningDefaultSetup');
 const { fleetReadinessService } = await import('@/lib/services/fleetReadinessService');
 const { findProvisioningInstallationId, RepoProvisioningApiError } =
@@ -975,6 +980,92 @@ describe('CodeQL default setup travels with the flip (MOTIR-10289)', () => {
     spy.mockReset();
     spy.mockResolvedValueOnce(true).mockRejectedValueOnce(new TypeError('not GitHub'));
     await expect(service.getState(superadmin, pair())).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+/** Every GitHub WRITE (the variable's and each default setup's) answers after
+ *  `ms`; reads and the installation token stay instant, as they run before the
+ *  flip's transaction opens. */
+function slowGithubWrites(ms: number): void {
+  const real = globalThis.fetch;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: { method?: string }) => {
+      const method = init?.method ?? 'GET';
+      if (method !== 'GET' && !String(url).includes('/access_tokens')) {
+        await new Promise((resolve) => setTimeout(resolve, ms));
+      }
+      return real(url, init as RequestInit);
+    }),
+  );
+}
+
+describe('a flip whose GitHub writes are slow (MOTIR-10972)', () => {
+  beforeEach(async () => {
+    // With the fixture's `api`, three private repositories to move; `site` is public.
+    await connectRepo(ORG, 'gateway');
+    await connectRepo(ORG, 'meta');
+  });
+
+  // Four writes of 2 s each (the variable's create, three default-setup PATCHes)
+  // inside the transaction: 8 s, past Prisma's 5 s interactive default. Before
+  // the fix this flip died with an expired transaction that the action answered
+  // as a bare FAILED, with everything compensated and nothing stored.
+  it('ON moving three default setups at 2 s per GitHub call completes, stores ON and writes one row', async () => {
+    world.setups = { api: { ...STANDARD }, gateway: { ...STANDARD }, meta: { ...STANDARD } };
+    slowGithubWrites(2_000);
+
+    const result = await service.setEnabled(superadmin, pair(), true, 'onto the fleet');
+
+    expect(result.outcome).toBe('changed');
+    expect((await storedRow())?.enabled).toBe(true);
+    const rows = await auditRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.metadata).toMatchObject({
+      variableOutcome: 'created',
+      codeScanningMoved: ['api', 'gateway', 'meta'],
+    });
+    expect(world.variable).toEqual({
+      value: MOTIR_RUNNER_LABEL,
+      visibility: ORG_VARIABLE_VISIBILITY,
+    });
+    for (const name of ['api', 'gateway', 'meta']) {
+      expect(world.setups[name]).toMatchObject({
+        runner_type: 'labeled',
+        runner_label: MOTIR_RUNNER_LABEL,
+      });
+    }
+  }, 30_000);
+
+  it('OFF moving three default setups back at 2 s per GitHub call completes the same way', async () => {
+    await adminDb.platformFleetOrgCi.create({
+      data: { projectId: fx.projectId, org: ORG, enabled: true, lastReason: 'seeded' },
+    });
+    world.variable = { value: MOTIR_RUNNER_LABEL, visibility: ORG_VARIABLE_VISIBILITY };
+    world.setups = { api: { ...LABELED }, gateway: { ...LABELED }, meta: { ...LABELED } };
+    slowGithubWrites(2_000);
+
+    const result = await service.setEnabled(superadmin, pair(), false, 'back to hosted');
+
+    expect(result.outcome).toBe('changed');
+    expect((await storedRow())?.enabled).toBe(false);
+    expect(await auditRows()).toHaveLength(1);
+    expect(world.variable).toBeNull();
+    for (const name of ['api', 'gateway', 'meta']) expect(world.setups[name]).toEqual(STANDARD);
+  }, 30_000);
+});
+
+describe('flipTransactionTimeoutMs', () => {
+  it('covers the variable write and one request per move, on top of the fixed work', () => {
+    expect(flipTransactionTimeoutMs(0)).toBe(
+      FLIP_TRANSACTION_BASE_MS + 3 * FLIP_GITHUB_REQUEST_BUDGET_MS,
+    );
+    expect(flipTransactionTimeoutMs(3) - flipTransactionTimeoutMs(0)).toBe(
+      3 * FLIP_GITHUB_REQUEST_BUDGET_MS,
+    );
+    // Never below Prisma's own default, and never shrunk by a nonsense count.
+    expect(flipTransactionTimeoutMs(0)).toBeGreaterThan(5_000);
+    expect(flipTransactionTimeoutMs(-2)).toBe(flipTransactionTimeoutMs(0));
   });
 });
 

@@ -17,11 +17,12 @@ from `app/globals.css`; colour flows only through Tier-3 `--el-*`, shape only
 through the element-semantic radius / spacing / sizing / shadow tokens. Toggle
 dark in any mockup for theme parity.
 
-| Surface                                     | Asset                            | Notes                                                                                                                                                                      |
-| ------------------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Header notification bell + unread badge** | `bell.mock.html` + `.png`        | The shell-header bell + the unread/_seen_ count pill. Gates 5.7.5. `design/shell/desktop.pen` draws the TopNav but no bell. See below.                                     |
-| **Notification drawer / feed**              | `drawer.mock.html` + `.png`      | The header-anchored popover the bell opens: Direct/Watching split, per-row read state, mark-all, cursor-paged feed. Gates 5.7.5. See below.                                |
-| **Notification preferences (settings)**     | `preferences.mock.html` + `.png` | The per-user × event-type × channel matrix on `/settings/account` — the channel gate both the in-app job (5.7.3) and the email job (5.1.6) honour. Gates 5.7.6. See below. |
+| Surface                                     | Asset                                 | Notes                                                                                                                                                                      |
+| ------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Header notification bell + unread badge** | `bell.mock.html` + `.png`             | The shell-header bell + the unread/_seen_ count pill. Gates 5.7.5. `design/shell/desktop.pen` draws the TopNav but no bell. See below.                                     |
+| **Notification drawer / feed**              | `drawer.mock.html` + `.png`           | The header-anchored popover the bell opens: Direct/Watching split, per-row read state, mark-all, cursor-paged feed. Gates 5.7.5. See below.                                |
+| **Notification preferences (settings)**     | `preferences.mock.html` + `.png`      | The per-user × event-type × channel matrix on `/settings/account` — the channel gate both the in-app job (5.7.3) and the email job (5.1.6) honour. Gates 5.7.6. See below. |
+| **Preferences — page replies (delta)**      | `preferences--page-replies.mock.html` | Amends Panel 0 of the preferences mock: the Commented row and the defaults note name page replies (MOTIR-10868). See § Page replies in the Commented row.                  |
 
 **Mirror-product anchor (decision-ladder rung 1, verified at plan time in the
 5.7 story module — Atlassian + Linear sources, not memory):** the Jira Cloud
@@ -407,3 +408,50 @@ it.
 - **New token need for 5.7.5/5.7.6:** none. Every colour resolves to an existing
   `--el-*` and every shaped surface to an existing element-semantic shape token;
   no Tier-0 `--color-*` and no raw `rounded-*` / fixed control padding are used.
+
+## Page replies in the Commented row (Story MOTIR-10868 · MOTIR-10931)
+
+**Amends** § Notification preferences above, and Panel 0 of
+`preferences.mock.html`. The change is drawn in
+**`preferences--page-replies.mock.html`**, which holds only the panel that
+changes. The older mock and its `preferences.png` are left as the record of
+Story 5.7. Per `docs/decisions/design-result.md` AMENDMENT 4, no new export is
+made.
+
+**Why it changes.** Story MOTIR-10868 sends a reply in a page discussion through
+the existing `commented` preference: the row's two switches now also gate the
+`page_replied` notification. So the row has to name both subjects it gates, and
+the defaults note has to list the new direct event. No default changes: the row
+was already on for both channels.
+
+**The three strings,** each read from `messages/en.json` and drawn verbatim:
+
+- **Label** (`settings.account.notifications.events.commented.label`) —
+  "Comments on your items or in your page discussions". It replaces "Commented
+  on an item you're involved in" in the event-row bullet above.
+- **Description** (`…events.commented.desc`) — "A new comment on an item you
+  reported, are assigned, or commented on — or a reply in a page discussion you
+  started or took part in."
+- **Defaults note** (`settings.account.notifications.defaultsNote`) — "Direct
+  events — mentions, comments on your items, replies in your page discussions,
+  and assignments — default on for both channels. An untouched row uses that
+  default (it is not off until you turn it off)." The mock keeps its own
+  emphasis on **on**. The § Defaults paragraph above reads the same with this
+  fourth item added, and the rest of its reasoning still holds: the resolver
+  supplies an untouched row's default.
+
+**The switches.** Each switch's accessible name is `cellAria`
+(`{channel} for {event}`) over the row's label, so the shipped switches read
+"Email for Comments on your items or in your page discussions" and "In-app for
+…". The delta mock draws those names. The older mock's shorthand ("Email for
+Commented") was never the shipped name.
+
+**Unchanged,** and so not drawn: every other event row, the Watching seam, the
+column headers, the switch states, the inline save status (Panel 1) and the
+switch closeups (Panel 2). Tokens and primitives are the ones the original mock
+draws. The style block is copied unchanged, and colour and shape flow through
+the same `--el-*` and element-semantic shape tokens.
+
+**Judged and left:** the plan-seed records in `scripts/plan-seed/data/epics.ts`
+and `story-5.7.ts` still print the old label. They are the seeded text of Story
+5.7 and are never rendered, so rewriting them would falsify that record.

@@ -950,6 +950,18 @@
       "fallback": "Oppure copia questo link nel browser:",
       "reason": "Ricevi questa email perché osservi {identifier}."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} ti ha menzionato in {page}",
+      "previewMention": "{author} ti ha menzionato in {page}",
+      "subjectReply": "{author} ha risposto a un thread in {page}",
+      "previewReply": "{author} ha risposto a un thread in {page}",
+      "greeting": "Ciao {name},",
+      "ledeMention": "{author} ti ha menzionato in un commento su {page}.",
+      "ledeReply": "{author} ha risposto a un thread in {page}.",
+      "view": "Apri la discussione",
+      "fallback": "Oppure copia questo link nel browser:",
+      "reasonReply": "Ricevi questa email perché hai risposto in questo thread."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} ha spostato {identifier} in {status}",
       "preview": "{actor} ha spostato {identifier} in {status}",
@@ -3071,8 +3083,8 @@
             "desc": "Qualcuno ti menziona con @ in un commento o in una descrizione."
           },
           "commented": {
-            "label": "Commenti su un elemento in cui sei coinvolto",
-            "desc": "Un nuovo commento su un elemento che hai creato, che ti è assegnato o che hai commentato."
+            "label": "Commenti sui tuoi elementi o nelle tue discussioni di pagina",
+            "desc": "Un nuovo commento su un elemento che hai creato, che ti è assegnato o che hai commentato — oppure una risposta in una discussione di pagina che hai avviato o a cui hai partecipato."
           },
           "assigned": {
             "label": "Assegnato a te",
@@ -3102,7 +3114,7 @@
         "soon": "Presto",
         "cellAria": "{channel} per {event}",
         "cellAriaSoon": "{channel} per {event} (in arrivo)",
-        "defaultsNote": "Gli eventi diretti (menzioni, commenti sui tuoi elementi e assegnazioni) sono attivi per impostazione predefinita su entrambi i canali. Una riga non modificata usa l’impostazione predefinita (non è disattivata finché non la disattivi tu).",
+        "defaultsNote": "Gli eventi diretti (menzioni, commenti sui tuoi elementi, risposte nelle tue discussioni di pagina e assegnazioni) sono attivi per impostazione predefinita su entrambi i canali. Una riga non modificata usa l’impostazione predefinita (non è disattivata finché non la disattivi tu).",
         "status": {
           "saving": "Salvataggio…",
           "saved": "Salvato",
@@ -6078,7 +6090,9 @@
       "accessRefused": "Il codice di <s>{project}</s> è pronto, ma non puoi ancora aprirlo: prova a inviare di nuovo l’invito",
       "reviewToRun": "Una revisione di <s>{key}</s> aspetta il tuo agente",
       "reviewSentBack": "Un agente ha chiesto modifiche a <s>{key}</s>",
-      "agentHibernatedByAdmin": "<s>{actor}</s> ha ibernato il tuo agente <s>{agent}</s>"
+      "agentHibernatedByAdmin": "<s>{actor}</s> ha ibernato il tuo agente <s>{agent}</s>",
+      "pageMentioned": "<s>{actor}</s> ti ha menzionato in <s>{page}</s>",
+      "pageReplied": "<s>{actor}</s> ha risposto a un thread in <s>{page}</s>"
     },
     "excerpt": {
       "agentHibernatedByAdmin": "Un amministratore dell’organizzazione lo ha arrestato alle {time}. I suoi file vengono conservati; risveglialo da Agenti."

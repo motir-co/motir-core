@@ -221,7 +221,7 @@ const RUNS_TOPIC: HelpTopic = {
       '',
       'WHERE TO WATCH IT',
       '',
-      '  /runs/<id>            the run: its set, each card’s state, the skips',
+      '  /runs?run=<id>        the run: its set, each card’s state, the skips',
       '                        and their reasons, and the stop reason.',
       '  the work item         a run section on the card, live, saying which of',
       '                        N it is in this run, plus that card’s run history.',

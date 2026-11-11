@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { reportActionFault } from '@/lib/actions/actionFault';
 import { requirePlatformStaff } from '@/lib/platform/auth';
 import {
   FleetOrgCiCodeScanningError,
@@ -123,7 +124,14 @@ export async function setFleetOrgCiAction(
     if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
     if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
     if (err instanceof FleetOrgCiTargetUnknownError) return { ok: false, code: 'TARGET_UNKNOWN' };
-    console.error('[admin] fleet org CI action failed', { projectId, org, enabled });
+    // Anything else is a fault: the person reads FAILED, and the cause is logged
+    // and reported (MOTIR-10972 — a bare FAILED once hid an expired transaction).
+    reportActionFault(err, '[admin] fleet org CI action failed', 'setFleetOrgCiAction', {
+      projectId,
+      org,
+      enabled,
+      to: enabled ? 'fleet' : 'github_hosted',
+    });
     return { ok: false, code: 'FAILED' };
   }
 }
@@ -157,7 +165,9 @@ export async function setAgentHostingAction(
   } catch (err) {
     if (err instanceof MissingAuditReasonError) return { ok: false, code: 'REASON_REQUIRED' };
     if (err instanceof NotPlatformStaffError) return { ok: false, code: 'NOT_PERMITTED' };
-    console.error('[admin] agent hosting action failed', { onPool });
+    reportActionFault(err, '[admin] agent hosting action failed', 'setAgentHostingAction', {
+      onPool,
+    });
     return { ok: false, code: 'FAILED' };
   }
 }

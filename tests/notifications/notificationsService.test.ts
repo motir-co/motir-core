@@ -325,6 +325,7 @@ describe('toNotificationDto (mapper)', () => {
     type: 'mentioned',
     category: 'direct',
     workItemId: 'wi-1',
+    pageId: null,
     actorId: 'actor-1',
     data: {
       kind: 'mentioned',
