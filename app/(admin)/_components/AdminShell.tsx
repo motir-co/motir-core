@@ -10,6 +10,7 @@ import {
   Boxes,
   Building2,
   Coins,
+  Container,
   Gauge,
   Layers,
   Lightbulb,
@@ -65,6 +66,8 @@ export interface AdminShellLabels {
   /** Operations → Fleet settings (MOTIR-8715), superadmin only. */
   navFleetSettings: string;
   navFleetStatus: string;
+  /** Operations → Services (MOTIR-10890), superadmin only. */
+  navServices: string;
   /** Operations → Provider capacity (MOTIR-9614), visible to every staff role. */
   navCapacity: string;
   /** Operations → AI planning (MOTIR-7231), visible to every staff role. */
@@ -198,6 +201,16 @@ export function AdminShell({ operator, labels, children }: AdminShellProps) {
                 label: labels.navFleetStatus,
                 href: '/admin/fleet-status',
                 active: pathname === '/admin/fleet-status',
+              },
+              // What Motir itself runs on ECS against the Fargate quota
+              // (MOTIR-10890, design MOTIR-10889): after Fleet status,
+              // superadmin only like it — for the other roles the row is absent
+              // and the route 404s.
+              {
+                icon: <Container />,
+                label: labels.navServices,
+                href: '/admin/services',
+                active: pathname === '/admin/services',
               },
             ]
           : []),

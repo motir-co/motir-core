@@ -59,7 +59,19 @@ const EMAIL_TRANSPORT = {
   modules: new Set(['@aws-sdk/client-sesv2']),
 };
 
-const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING, EMAIL_TRANSPORT];
+/**
+ * The console's Services page (MOTIR-10890) reads ECS and the Fargate vCPU quota
+ * in core's OWN account — the web task's role, not a pool account the
+ * orchestrator's adapters assume into. It reaches both through
+ * `lib/awsServices/ecsServicesReader.ts` and nothing else, the `lib/ses` shape:
+ * the service judging what it read sees plain objects and is tested offline.
+ */
+const SERVICES_READ = {
+  dir: join('lib', 'awsServices'),
+  modules: new Set(['@aws-sdk/client-ecs', '@aws-sdk/client-service-quotas']),
+};
+
+const EXCEPTIONS = [BLOB_STORE, SERVERLESS_HOSTING, EMAIL_TRANSPORT, SERVICES_READ];
 
 const SDK_IMPORT =
   /(?:from\s+|import\s*\(\s*|require\s*\(\s*|^\s*import\s+)['"](@aws-sdk\/[^'"]+)['"]/gm;

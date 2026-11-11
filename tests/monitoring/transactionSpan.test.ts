@@ -50,6 +50,10 @@ function listening() {
 
 describe('the phase arithmetic', () => {
   it('puts the time before bodyStarted in WAIT and the time after it, to the settle, in HOLD', async () => {
+    // The three phases sleep 40, 200 and 400 ms, so each bound sits a whole
+    // neighbouring phase away from its edge: a loaded CI runner can stretch a
+    // 40 ms sleep past 60 ms, but WAIT reaching 200 means it swallowed HOLD, and
+    // HOLD reaching 400 means it swallowed the after-commit work.
     const seen = listening();
     await retryOnceBeforeBody(
       (bodyStarted, settled) =>
@@ -57,13 +61,13 @@ describe('the phase arithmetic', () => {
           (async () => {
             await sleep(40);
             return bodyStarted(async () => {
-              await sleep(60);
+              await sleep(200);
               return 'ok';
             });
           })(),
         ).then(async (value) => {
           // after-commit work: outside the hold.
-          await sleep(80);
+          await sleep(400);
           return value;
         }),
       'workspace',
@@ -74,9 +78,9 @@ describe('the phase arithmetic', () => {
     expect(m!.attempt).toBe(1);
     expect(m!.outcome).toBe('committed');
     expect(m!.waitMs).toBeGreaterThanOrEqual(35);
-    expect(m!.waitMs).toBeLessThan(60);
-    expect(m!.holdMs).toBeGreaterThanOrEqual(55);
-    expect(m!.holdMs).toBeLessThan(80);
+    expect(m!.waitMs).toBeLessThan(200);
+    expect(m!.holdMs).toBeGreaterThanOrEqual(195);
+    expect(m!.holdMs).toBeLessThan(400);
   });
 
   it('a bare bodyStarted() still ends the wait, and an unwrapped attempt holds to its own end', async () => {

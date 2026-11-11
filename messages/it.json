@@ -10752,6 +10752,7 @@
       "navIdeas": "Idee",
       "navRunModels": "Modelli delle esecuzioni ospitate",
       "navFleetSettings": "Impostazioni della flotta",
+      "navServices": "Servizi",
       "navCapacity": "Capacità dei fornitori",
       "navJobs": "Job",
       "navStarters": "Starter",
@@ -13553,174 +13554,101 @@
         }
       }
     },
-    "fleetStatus": {
-      "breadcrumb": "Operazioni · Stato della flotta",
-      "title": "Stato della flotta",
-      "subtitle": "Se la produzione esegue la più recente di ogni immagine che Motir avvia, e quanto è pieno ogni pool della flotta. Letto al caricamento della pagina. Pubblica l’ultima è l’unica azione qui, e ogni clic viene scritto nel registro di audit.",
-      "images": {
-        "title": "Immagini",
-        "subtitle": "Le tre immagini che la produzione avvia. Ognuna è confrontata con la più recente pubblicata; quando la produzione è indietro, Pubblica l’ultima la porta avanti tramite il workflow di pubblicazione di quell’immagine."
+    "services": {
+      "breadcrumb": "Operazioni · Servizi",
+      "title": "Servizi",
+      "subtitle": "Ciò che Motir esegue nel proprio account AWS ({account}): ogni servizio ECS nel cluster {cluster}, i suoi task e la loro dimensione, rispetto alla quota vCPU Fargate dell’account. Letto da AWS a ogni caricamento della pagina. Sola lettura.",
+      "accountUnknown": "—",
+      "readAt": "Letto da AWS {age} · {time} UTC",
+      "readFailedAt": "Lettura AWS non riuscita alle {time} UTC",
+      "card": {
+        "title": "Servizi ECS · cluster {cluster}",
+        "subtitle": "Ogni servizio nel cluster {cluster} su Fargate, i suoi task in esecuzione e la loro dimensione, e il totale rispetto alla quota vCPU Fargate"
       },
-      "image": {
-        "hosted": {
-          "title": "Immagine dell’agente ospitato",
-          "subtitle": "Ciò che avvia ogni esecuzione ospitata. Fissata da MOTIR_HOSTED_AGENT_IMAGE; la più recente è l’ultima build di main di ghcr.io/motir-co/motir-hosted-agent."
-        },
-        "runner": {
-          "title": "Immagine del runner CI",
-          "subtitle": "Ciò in cui gira ogni job CI della flotta. Fissata da MOTIR_RUNNER_IMAGE; la più recente è l’ultima release runner-v*."
-        },
-        "sandbox": {
-          "title": "Immagini delle istanze agente",
-          "subtitle": "La sandbox in cui girano gli agenti, un tag per profilo su ghcr.io/motir-co/motir-sandbox. Completa quando ogni profilo ha il suo tag all’ultima release cli-v*."
-        }
-      },
-      "imageName": {
-        "hosted": "immagine dell’agente ospitato",
-        "runner": "immagine del runner CI",
-        "sandbox": "immagini delle istanze agente"
-      },
-      "source": {
-        "ghcr": "GHCR",
-        "github": "GitHub",
-        "aws": "AWS"
+      "pill": {
+        "count": "{count, plural, one {# servizio} other {# servizi}}",
+        "rolling": "{count} in rilascio",
+        "rolloutFailed": "{count, plural, one {# rilascio non riuscito} other {# rilasci non riusciti}}",
+        "short": "{count, plural, one {# servizio con task mancanti} other {# servizi con task mancanti}}"
       },
       "verdict": {
-        "upToDate": "Aggiornata",
-        "daysBehind": "{count, plural, one {# giorno indietro} other {# giorni indietro}}",
-        "releasesBehind": "{count, plural, one {# release indietro} other {# release indietro}}",
-        "releaseNeeded": "Serve una release",
-        "tagsMissing": "Mancano {missing} tag su {total}",
-        "publishing": "Pubblicazione in corso",
-        "publishFailed": "Pubblicazione non riuscita",
-        "notRead": "Non letto"
+        "under": "{percent}% della quota Fargate",
+        "over70": "Oltre il 70% della quota Fargate",
+        "atQuota": "Alla quota Fargate",
+        "notRead": "Quota Fargate non letta",
+        "notReadLabel": "Quota Fargate non letta da AWS",
+        "clusterNotRead": "Cluster non letto"
       },
-      "compare": {
-        "pinned": "Fissata in produzione",
-        "newestBuild": "Ultima build di main",
-        "newestRelease": "Ultima release",
-        "builtFrom": "Compilata da <commit>{commit}</commit>",
-        "noCommit": "Nessun commit di build registrato",
-        "same": "Uguale a quella fissata",
-        "unknownRelease": "Nessun tag di release indica questi byte"
+      "col": {
+        "service": "Servizio",
+        "tasks": "Task",
+        "vcpuPerTask": "vCPU per task",
+        "memoryPerTask": "Memoria per task",
+        "vcpu": "vCPU",
+        "deployment": "Rilascio"
       },
-      "gap": {
-        "hosted": "{count, plural, one {# commit} other {# commit}} su packages/cli tra la build fissata e la più recente.",
-        "runner": "({tags}) · {days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} su infra/ci-runner.",
-        "runnerNoTags": "{days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} su infra/ci-runner.",
-        "link": "Vedi i commit"
+      "caption": "Servizi ECS nel cluster {cluster}, con il totale rispetto alla quota vCPU On-Demand di Fargate",
+      "taskDefinition": "definizione di task {family}:{revision}",
+      "tasks": {
+        "running": "{n} in esecuzione",
+        "partial": "{running} di {desired} in esecuzione",
+        "rolling": "desiderati {desired} · {old} vecchi + {new} nuovi",
+        "notStarted": "{n} non avviati",
+        "scaledToZero": "Ridimensionato a 0"
       },
-      "unreleased": {
-        "title": "Uniti dopo {release}, in nessuna release",
-        "count": "{count, plural, one {# modifica} other {# modifiche}} su infra/ci-runner"
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
       },
-      "releaseNeeded": "<strong>Serve una release.</strong> Queste modifiche raggiungono la flotta solo in una nuova release del runner, e questa pagina non ne crea. Esegui il push del tag <mono>{tag}</mono>; la pipeline di release la pubblica e la riga offre Pubblica l’ultima.",
-      "ami": {
-        "title": "AMI del runner · sola lettura",
-        "current": "Aggiornata",
-        "stale": "Obsoleta",
+      "deploy": {
+        "steady": "Stabile",
+        "onRevision": "sulla revisione {revision}",
+        "notRolling": "Nessun rilascio",
+        "rolling": "Rilascio · in corso",
+        "rollingDetail": "revisione {from} → {to} · {new} di {desired} nuovi attivi",
+        "failed": "Rilascio non riuscito",
+        "failedDetail": "revisione {to} fermata · ancora sulla {from}",
+        "started": "avviato {age}"
+      },
+      "total": {
+        "label": "Totale",
+        "services": "{count, plural, one {# servizio} other {# servizi}}",
+        "desired": "desiderati {n}",
+        "inUse": "in uso",
+        "share": "{percent}% della quota Fargate",
+        "toGo": "mancano {n} vCPU al 70%",
+        "over70": "Oltre il 70%",
+        "leftBeforeQuota": "restano {n} vCPU prima della quota",
+        "atQuota": "Alla quota",
+        "noneLeft": "nessuna vCPU libera · un nuovo task non partirà",
+        "overBy": "{n} vCPU oltre · un nuovo task non partirà",
+        "shareNotKnown": "della quota Fargate · non noto finché la quota non è letta"
+      },
+      "quota": {
+        "label": "Quota Fargate",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "letta {age}",
         "notRead": "Non letta",
-        "pinned": "AMI fissata",
-        "name": "Nome",
-        "builtFrom": "Compilata da",
-        "contains": "Contiene ogni modifica unita su infra/ci-runner-aws",
-        "after": "{count, plural, one {# modifica unita su infra/ci-runner-aws è arrivata dopo} other {# modifiche unite su infra/ci-runner-aws sono arrivate dopo}}",
-        "note": "L’AMI è pubblicata dalla propria pipeline ci-runner-ami-v* e fissata in motir-infra, quindi qui non ha un pulsante. Letta tramite il ruolo runner della flotta di {account}.",
-        "notReadBody": "{ami} è fissata, ma la sua build non è stata letta, quindi il suo commit di build non è noto. Non è mostrata come aggiornata.",
-        "unset": "Nessuna AMI del runner è fissata su questo deployment (MOTIR_AWS_RUNNER_AMI_ID non è impostata)."
+        "notReadLabel": "Quota non letta da AWS",
+        "lastRead": "ultima lettura {age}",
+        "neverRead": "mai letta",
+        "body": "Il limite Fargate per questo account e questa regione. Le macchine EC2 della flotta rientrano in una quota EC2 separata, in Stato della flotta.",
+        "bodyNotRead": "Service Quotas non ha risposto, quindi la quota usata non è mostrata. Le vCPU in uso sono misurate sul cluster e restano un numero."
       },
-      "sandbox": {
-        "newest": "Ultima release <mono>{release}</mono> · {date} · compilata da <mono>{commit}</mono>",
-        "tagsAt": "Tag a {release}",
-        "allPublished": "Tutti i {total} pubblicati",
-        "somePublished": "{published} su {total} pubblicati · {missing} mancanti",
-        "published": "Pubblicato",
-        "missing": "Mancante",
-        "incomplete": "<strong>Release incompleta.</strong> {profiles} non hanno il tag {version}, quindi gli agenti di quei profili ricevono ancora {previous}.",
-        "incompleteNoPrevious": "<strong>Release incompleta.</strong> {profiles} non hanno il tag {version}.",
-        "allCurrent": "Ogni agente attivo esegue {version}.",
-        "older": "<strong>{count, plural, one {# agente attivo esegue} other {# agenti attivi eseguono}} una versione precedente.</strong> I proprietari vedono «Aggiornamento disponibile» sull’agente; qui non viene riavviato nulla."
+      "notAvailable": "Non disponibile",
+      "error": {
+        "title": "ECS non ha risposto",
+        "body": "Non è stato possibile leggere il cluster {cluster} in questo momento, quindi non sono mostrati né servizi né totale, e nessun valore precedente li sostituisce. {last} Ricarica per riprovare.",
+        "lastRead": "Letto l’ultima volta {age}, alle {time} UTC.",
+        "neverRead": "Nessuna lettura precedente registrata."
       },
-      "publish": {
-        "button": "Pubblica l’ultima",
-        "republish": "Ripubblica",
-        "note": {
-          "hosted": "Fissa l’ultima build di main tramite il workflow di fissaggio dell’agente ospitato. Web e worker passano a usarla.",
-          "runner": "Fissa {release} tramite il workflow di fissaggio del runner. Web e worker passano a usarla.",
-          "sandbox": "Ripubblica {release}. Vengono inviati solo i {count} tag mancanti; in produzione non cambia nulla.",
-          "hostedCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima build di main.",
-          "runnerCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima release del runner.",
-          "runnerReleaseNeeded": "Niente di più recente da pubblicare: la produzione fissa l’ultima release. Le modifiche unite sopra richiedono prima una release.",
-          "sandboxCurrent": "Niente di più recente da pubblicare. Ogni profilo ha il suo tag all’ultima release.",
-          "sandboxOld": "{release} è stata creata prima che una nuova esecuzione potesse inviare solo i tag mancanti, quindi rieseguirla invierebbe di nuovo ogni tag. Crea invece una nuova release cli-v*.",
-          "running": "Un’esecuzione del workflow di pubblicazione di questa immagine è già in corso. Pubblica l’ultima è disattivato finché non termina.",
-          "done": "Niente di più recente da pubblicare."
-        }
-      },
-      "confirm": {
-        "hostedTitle": "Pubblicare l’ultima immagine dell’agente ospitato?",
-        "runnerTitle": "Pubblicare {release}?",
-        "sandboxTitle": "Ripubblicare {release}?",
-        "from": "Da",
-        "to": "A",
-        "cancel": "Annulla",
-        "audited": "Registrato nel registro di audit a tuo nome, {email}.",
-        "sandboxFrom": "{published} tag su {total} a {version}",
-        "hostedBody": "Avvia il workflow di fissaggio dell’agente ospitato. Sposta MOTIR_HOSTED_AGENT_IMAGE all’ultima build e fa il deploy: <strong>web e worker si aggiornano</strong> sul nuovo fissaggio, e le esecuzioni ospitate avviate dopo l’aggiornamento avviano la nuova immagine.",
-        "runnerBody": "Avvia il workflow di fissaggio del runner. Sposta MOTIR_RUNNER_IMAGE a {release} e fa il deploy: <strong>web e worker si aggiornano</strong> sul nuovo fissaggio. L’AMI del runner non cambia.",
-        "sandboxBody": "Riesegue la release della sandbox per {release} e invia solo i tag mancanti: {missing}. {published} sono già pubblicati e non vengono inviati di nuovo. <strong>In produzione non cambia nulla.</strong>",
-        "sandboxBodyNonePublished": "Riesegue la release della sandbox per {release} e invia solo i tag mancanti: {missing}. <strong>In produzione non cambia nulla.</strong>"
-      },
-      "progress": {
-        "title": "Pubblicazione in corso.",
-        "body": "Il workflow di pubblicazione è in esecuzione; questa riga si aggiorna quando termina.",
-        "started": "· avviato {age} da {email}",
-        "startedNoActor": "· avviato {age}",
-        "button": "Pubblicazione…"
-      },
-      "done": {
-        "title": "Pubblicato.",
-        "pin": "La produzione ora fissa {to} ({digest}).",
-        "sandbox": "Ogni profilo ora ha il suo tag a {version}."
-      },
-      "failed": {
-        "title": "Pubblicazione non riuscita {age}.",
-        "body": "L’esecuzione del workflow è terminata con questo errore, e la produzione fissa ancora ciò che fissava prima:",
-        "noDetail": "GitHub non ha registrato alcun messaggio di errore per questa esecuzione; apri l’esecuzione per il suo log.",
-        "retry": "Riprova"
-      },
-      "workflow": {
-        "hosted": "Fissaggio dell’agente ospitato",
-        "runner": "Fissaggio del runner",
-        "sandbox": "Release della sandbox {tag}",
-        "run": "{workflow} · esecuzione n. {number}",
-        "runNoNumber": "{workflow} · esecuzione"
-      },
-      "audit": {
-        "last": "Ultima pubblicazione da questa pagina di {email} il {when}.",
-        "never": "Mai pubblicato da questa pagina.",
-        "started": "Pubblicazione avviata da {email} il {when}.",
-        "link": "Registro di audit"
-      },
-      "imageError": {
-        "title": "Impossibile leggere: {image}",
-        "body": "{source} non ha risposto, quindi qui non è caricato nulla, e niente di tutto ciò significa aggiornato. Pubblica l’ultima resta disattivato finché non viene letto. Le altre immagini e i pool non sono interessati. Ricarica per riprovare."
-      },
-      "unset": {
-        "title": "Non configurato qui",
-        "body": "{variable} non è impostata su questo deployment, quindi non c’è alcun fissaggio da confrontare."
-      },
-      "loading": "Caricamento: {image}",
-      "publishError": {
-        "title": "Pubblica l’ultima non è partito.",
-        "running": "Un’esecuzione del workflow di pubblicazione di questa immagine è già in corso; non è stato avviato nulla di nuovo.",
-        "up_to_date": "La produzione esegue già l’ultima immagine; non è stato avviato nulla.",
-        "release_needed": "La produzione fissa già l’ultima release; le modifiche unite richiedono prima una release.",
-        "not_republishable": "Questa release non può essere rieseguita solo per i tag mancanti; non è stato avviato nulla.",
-        "not_read": "Al momento l’immagine non è stata letta, quindi non è stato avviato nulla.",
-        "unset": "Questa immagine non è configurata su questo deployment.",
-        "failed": "GitHub non ha avviato il workflow:",
-        "notPermitted": "Solo un superadmin può pubblicare da questa pagina."
+      "loading": "Lettura del cluster e della quota Fargate da AWS…",
+      "readOnly": "Sola lettura. Per scalare, riavviare o rilasciare un servizio, usa il suo workflow di deploy o la console AWS. Le righe sono lette dal cluster, quindi un nuovo servizio compare al caricamento successivo.",
+      "phone": {
+        "listLabel": "Servizi ECS nel cluster {cluster}",
+        "perTask": "Per task"
       }
     },
     "capacity": {
@@ -14094,6 +14022,176 @@
           "genericTitle": "Motir non è riuscito a promuovere questo repository.",
           "genericBody": "Non è stato copiato nulla. Riprova."
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "Operazioni · Stato della flotta",
+      "title": "Stato della flotta",
+      "subtitle": "Se la produzione esegue la più recente di ogni immagine che Motir avvia, e quanto è pieno ogni pool della flotta. Letto al caricamento della pagina. Pubblica l’ultima è l’unica azione qui, e ogni clic viene scritto nel registro di audit.",
+      "images": {
+        "title": "Immagini",
+        "subtitle": "Le tre immagini che la produzione avvia. Ognuna è confrontata con la più recente pubblicata; quando la produzione è indietro, Pubblica l’ultima la porta avanti tramite il workflow di pubblicazione di quell’immagine."
+      },
+      "image": {
+        "hosted": {
+          "title": "Immagine dell’agente ospitato",
+          "subtitle": "Ciò che avvia ogni esecuzione ospitata. Fissata da MOTIR_HOSTED_AGENT_IMAGE; la più recente è l’ultima build di main di ghcr.io/motir-co/motir-hosted-agent."
+        },
+        "runner": {
+          "title": "Immagine del runner CI",
+          "subtitle": "Ciò in cui gira ogni job CI della flotta. Fissata da MOTIR_RUNNER_IMAGE; la più recente è l’ultima release runner-v*."
+        },
+        "sandbox": {
+          "title": "Immagini delle istanze agente",
+          "subtitle": "La sandbox in cui girano gli agenti, un tag per profilo su ghcr.io/motir-co/motir-sandbox. Completa quando ogni profilo ha il suo tag all’ultima release cli-v*."
+        }
+      },
+      "imageName": {
+        "hosted": "immagine dell’agente ospitato",
+        "runner": "immagine del runner CI",
+        "sandbox": "immagini delle istanze agente"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "Aggiornata",
+        "daysBehind": "{count, plural, one {# giorno indietro} other {# giorni indietro}}",
+        "releasesBehind": "{count, plural, one {# release indietro} other {# release indietro}}",
+        "releaseNeeded": "Serve una release",
+        "tagsMissing": "Mancano {missing} tag su {total}",
+        "publishing": "Pubblicazione in corso",
+        "publishFailed": "Pubblicazione non riuscita",
+        "notRead": "Non letto"
+      },
+      "compare": {
+        "pinned": "Fissata in produzione",
+        "newestBuild": "Ultima build di main",
+        "newestRelease": "Ultima release",
+        "builtFrom": "Compilata da <commit>{commit}</commit>",
+        "noCommit": "Nessun commit di build registrato",
+        "same": "Uguale a quella fissata",
+        "unknownRelease": "Nessun tag di release indica questi byte"
+      },
+      "gap": {
+        "hosted": "{count, plural, one {# commit} other {# commit}} su packages/cli tra la build fissata e la più recente.",
+        "runner": "({tags}) · {days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} su infra/ci-runner.",
+        "runnerNoTags": "{days, plural, one {# giorno} other {# giorni}} · {commits, plural, one {# commit} other {# commit}} su infra/ci-runner.",
+        "link": "Vedi i commit"
+      },
+      "unreleased": {
+        "title": "Uniti dopo {release}, in nessuna release",
+        "count": "{count, plural, one {# modifica} other {# modifiche}} su infra/ci-runner"
+      },
+      "releaseNeeded": "<strong>Serve una release.</strong> Queste modifiche raggiungono la flotta solo in una nuova release del runner, e questa pagina non ne crea. Esegui il push del tag <mono>{tag}</mono>; la pipeline di release la pubblica e la riga offre Pubblica l’ultima.",
+      "ami": {
+        "title": "AMI del runner · sola lettura",
+        "current": "Aggiornata",
+        "stale": "Obsoleta",
+        "notRead": "Non letta",
+        "pinned": "AMI fissata",
+        "name": "Nome",
+        "builtFrom": "Compilata da",
+        "contains": "Contiene ogni modifica unita su infra/ci-runner-aws",
+        "after": "{count, plural, one {# modifica unita su infra/ci-runner-aws è arrivata dopo} other {# modifiche unite su infra/ci-runner-aws sono arrivate dopo}}",
+        "note": "L’AMI è pubblicata dalla propria pipeline ci-runner-ami-v* e fissata in motir-infra, quindi qui non ha un pulsante. Letta tramite il ruolo runner della flotta di {account}.",
+        "notReadBody": "{ami} è fissata, ma la sua build non è stata letta, quindi il suo commit di build non è noto. Non è mostrata come aggiornata.",
+        "unset": "Nessuna AMI del runner è fissata su questo deployment (MOTIR_AWS_RUNNER_AMI_ID non è impostata)."
+      },
+      "sandbox": {
+        "newest": "Ultima release <mono>{release}</mono> · {date} · compilata da <mono>{commit}</mono>",
+        "tagsAt": "Tag a {release}",
+        "allPublished": "Tutti i {total} pubblicati",
+        "somePublished": "{published} su {total} pubblicati · {missing} mancanti",
+        "published": "Pubblicato",
+        "missing": "Mancante",
+        "incomplete": "<strong>Release incompleta.</strong> {profiles} non hanno il tag {version}, quindi gli agenti di quei profili ricevono ancora {previous}.",
+        "incompleteNoPrevious": "<strong>Release incompleta.</strong> {profiles} non hanno il tag {version}.",
+        "allCurrent": "Ogni agente attivo esegue {version}.",
+        "older": "<strong>{count, plural, one {# agente attivo esegue} other {# agenti attivi eseguono}} una versione precedente.</strong> I proprietari vedono «Aggiornamento disponibile» sull’agente; qui non viene riavviato nulla."
+      },
+      "publish": {
+        "button": "Pubblica l’ultima",
+        "republish": "Ripubblica",
+        "note": {
+          "hosted": "Fissa l’ultima build di main tramite il workflow di fissaggio dell’agente ospitato. Web e worker passano a usarla.",
+          "runner": "Fissa {release} tramite il workflow di fissaggio del runner. Web e worker passano a usarla.",
+          "sandbox": "Ripubblica {release}. Vengono inviati solo i {count} tag mancanti; in produzione non cambia nulla.",
+          "hostedCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima build di main.",
+          "runnerCurrent": "Niente di più recente da pubblicare. La produzione fissa l’ultima release del runner.",
+          "runnerReleaseNeeded": "Niente di più recente da pubblicare: la produzione fissa l’ultima release. Le modifiche unite sopra richiedono prima una release.",
+          "sandboxCurrent": "Niente di più recente da pubblicare. Ogni profilo ha il suo tag all’ultima release.",
+          "sandboxOld": "{release} è stata creata prima che una nuova esecuzione potesse inviare solo i tag mancanti, quindi rieseguirla invierebbe di nuovo ogni tag. Crea invece una nuova release cli-v*.",
+          "running": "Un’esecuzione del workflow di pubblicazione di questa immagine è già in corso. Pubblica l’ultima è disattivato finché non termina.",
+          "done": "Niente di più recente da pubblicare."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "Pubblicare l’ultima immagine dell’agente ospitato?",
+        "runnerTitle": "Pubblicare {release}?",
+        "sandboxTitle": "Ripubblicare {release}?",
+        "from": "Da",
+        "to": "A",
+        "cancel": "Annulla",
+        "audited": "Registrato nel registro di audit a tuo nome, {email}.",
+        "sandboxFrom": "{published} tag su {total} a {version}",
+        "hostedBody": "Avvia il workflow di fissaggio dell’agente ospitato. Sposta MOTIR_HOSTED_AGENT_IMAGE all’ultima build e fa il deploy: <strong>web e worker si aggiornano</strong> sul nuovo fissaggio, e le esecuzioni ospitate avviate dopo l’aggiornamento avviano la nuova immagine.",
+        "runnerBody": "Avvia il workflow di fissaggio del runner. Sposta MOTIR_RUNNER_IMAGE a {release} e fa il deploy: <strong>web e worker si aggiornano</strong> sul nuovo fissaggio. L’AMI del runner non cambia.",
+        "sandboxBody": "Riesegue la release della sandbox per {release} e invia solo i tag mancanti: {missing}. {published} sono già pubblicati e non vengono inviati di nuovo. <strong>In produzione non cambia nulla.</strong>",
+        "sandboxBodyNonePublished": "Riesegue la release della sandbox per {release} e invia solo i tag mancanti: {missing}. <strong>In produzione non cambia nulla.</strong>"
+      },
+      "progress": {
+        "title": "Pubblicazione in corso.",
+        "body": "Il workflow di pubblicazione è in esecuzione; questa riga si aggiorna quando termina.",
+        "started": "· avviato {age} da {email}",
+        "startedNoActor": "· avviato {age}",
+        "button": "Pubblicazione…"
+      },
+      "done": {
+        "title": "Pubblicato.",
+        "pin": "La produzione ora fissa {to} ({digest}).",
+        "sandbox": "Ogni profilo ora ha il suo tag a {version}."
+      },
+      "failed": {
+        "title": "Pubblicazione non riuscita {age}.",
+        "body": "L’esecuzione del workflow è terminata con questo errore, e la produzione fissa ancora ciò che fissava prima:",
+        "noDetail": "GitHub non ha registrato alcun messaggio di errore per questa esecuzione; apri l’esecuzione per il suo log.",
+        "retry": "Riprova"
+      },
+      "workflow": {
+        "hosted": "Fissaggio dell’agente ospitato",
+        "runner": "Fissaggio del runner",
+        "sandbox": "Release della sandbox {tag}",
+        "run": "{workflow} · esecuzione n. {number}",
+        "runNoNumber": "{workflow} · esecuzione"
+      },
+      "audit": {
+        "last": "Ultima pubblicazione da questa pagina di {email} il {when}.",
+        "never": "Mai pubblicato da questa pagina.",
+        "started": "Pubblicazione avviata da {email} il {when}.",
+        "link": "Registro di audit"
+      },
+      "imageError": {
+        "title": "Impossibile leggere: {image}",
+        "body": "{source} non ha risposto, quindi qui non è caricato nulla, e niente di tutto ciò significa aggiornato. Pubblica l’ultima resta disattivato finché non viene letto. Le altre immagini e i pool non sono interessati. Ricarica per riprovare."
+      },
+      "unset": {
+        "title": "Non configurato qui",
+        "body": "{variable} non è impostata su questo deployment, quindi non c’è alcun fissaggio da confrontare."
+      },
+      "loading": "Caricamento: {image}",
+      "publishError": {
+        "title": "Pubblica l’ultima non è partito.",
+        "running": "Un’esecuzione del workflow di pubblicazione di questa immagine è già in corso; non è stato avviato nulla di nuovo.",
+        "up_to_date": "La produzione esegue già l’ultima immagine; non è stato avviato nulla.",
+        "release_needed": "La produzione fissa già l’ultima release; le modifiche unite richiedono prima una release.",
+        "not_republishable": "Questa release non può essere rieseguita solo per i tag mancanti; non è stato avviato nulla.",
+        "not_read": "Al momento l’immagine non è stata letta, quindi non è stato avviato nulla.",
+        "unset": "Questa immagine non è configurata su questo deployment.",
+        "failed": "GitHub non ha avviato il workflow:",
+        "notPermitted": "Solo un superadmin può pubblicare da questa pagina."
       }
     }
   },

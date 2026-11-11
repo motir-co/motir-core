@@ -422,6 +422,15 @@ export const PLATFORM_AUDIT_ACTIONS = {
    * desiredVcpu, quotaRequestId? }`, never a credential.
    */
   'fleet.capacity_request.list': { kind: 'read', reason: 'never' },
+  /**
+   * The SERVICES page was read (MOTIR-10890): the ECS services core runs in its
+   * own account and the Fargate vCPU quota, read from AWS on one page load.
+   * Its own member rather than `estate.read`, for the reason `health.read` is:
+   * it reads no tenant row. `targetKind: 'platform'`, `targetId` the cluster,
+   * `metadata` `{ cluster, clusterRead, quotaRead }` — whether each AWS read
+   * answered, never a figure.
+   */
+  'services.read': { kind: 'read', reason: 'never' },
   'fleet.capacity_request.link': { kind: 'write', reason: 'required' },
   'fleet.capacity_request.close': { kind: 'write', reason: 'required' },
   /**

@@ -10752,6 +10752,7 @@
       "navIdeas": "Ideeën",
       "navRunModels": "Modellen voor gehoste runs",
       "navFleetSettings": "Vlootinstellingen",
+      "navServices": "Services",
       "navCapacity": "Providercapaciteit",
       "navJobs": "Taken",
       "navStarters": "Starters",
@@ -13553,174 +13554,101 @@
         }
       }
     },
-    "fleetStatus": {
-      "breadcrumb": "Operaties · Vlootstatus",
-      "title": "Vlootstatus",
-      "subtitle": "Of productie de nieuwste versie draait van elk image dat Motir start, en hoe vol elke vlootpool is. Gelezen bij het laden van de pagina. Nieuwste publiceren is de enige actie hier, en elke klik wordt in het auditlogboek geschreven.",
-      "images": {
-        "title": "Images",
-        "subtitle": "De drie images die productie start. Elk wordt vergeleken met het nieuwste gepubliceerde; loopt productie achter, dan brengt Nieuwste publiceren het bij via de eigen publicatieworkflow van dat image."
+    "services": {
+      "breadcrumb": "Beheer · Services",
+      "title": "Services",
+      "subtitle": "Wat Motir zelf in zijn AWS-account ({account}) draait: elke ECS-service in cluster {cluster}, de taken en hun grootte, afgezet tegen het Fargate-vCPU-quotum van het account. Bij elke keer laden van de pagina uit AWS gelezen. Alleen-lezen.",
+      "accountUnknown": "—",
+      "readAt": "Gelezen uit AWS {age} · {time} UTC",
+      "readFailedAt": "Lezen uit AWS mislukt om {time} UTC",
+      "card": {
+        "title": "ECS-services · cluster {cluster}",
+        "subtitle": "Elke service in cluster {cluster} op Fargate, de actieve taken en hun grootte, en het totaal afgezet tegen het Fargate-vCPU-quotum"
       },
-      "image": {
-        "hosted": {
-          "title": "Hosted-agent-image",
-          "subtitle": "Wat elke gehoste run start. Vastgezet door MOTIR_HOSTED_AGENT_IMAGE; het nieuwste is de laatste main-build van ghcr.io/motir-co/motir-hosted-agent."
-        },
-        "runner": {
-          "title": "CI-runner-image",
-          "subtitle": "Waarin elke CI-job van de vloot draait. Vastgezet door MOTIR_RUNNER_IMAGE; het nieuwste is de laatste runner-v*-release."
-        },
-        "sandbox": {
-          "title": "Agent-instantie-images",
-          "subtitle": "De sandbox waarin agents draaien, één tag per profiel op ghcr.io/motir-co/motir-sandbox. Compleet wanneer elk profiel zijn tag heeft bij de nieuwste cli-v*-release."
-        }
-      },
-      "imageName": {
-        "hosted": "hosted-agent-image",
-        "runner": "CI-runner-image",
-        "sandbox": "agent-instantie-images"
-      },
-      "source": {
-        "ghcr": "GHCR",
-        "github": "GitHub",
-        "aws": "AWS"
+      "pill": {
+        "count": "{count, plural, one {# service} other {# services}}",
+        "rolling": "{count} in uitrol",
+        "rolloutFailed": "{count, plural, one {# uitrol mislukt} other {# uitrollen mislukt}}",
+        "short": "{count, plural, one {# service komt taken tekort} other {# services komen taken tekort}}"
       },
       "verdict": {
-        "upToDate": "Actueel",
-        "daysBehind": "{count, plural, one {# dag achter} other {# dagen achter}}",
-        "releasesBehind": "{count, plural, one {# release achter} other {# releases achter}}",
-        "releaseNeeded": "Release nodig",
-        "tagsMissing": "{missing} van {total} tags ontbreken",
-        "publishing": "Wordt gepubliceerd",
-        "publishFailed": "Publicatie mislukt",
-        "notRead": "Niet gelezen"
+        "under": "{percent}% van het Fargate-quotum",
+        "over70": "Boven 70% van het Fargate-quotum",
+        "atQuota": "Op het Fargate-quotum",
+        "notRead": "Fargate-quotum niet gelezen",
+        "notReadLabel": "Fargate-quotum niet gelezen van AWS",
+        "clusterNotRead": "Cluster niet gelezen"
       },
-      "compare": {
-        "pinned": "Vastgezet in productie",
-        "newestBuild": "Nieuwste main-build",
-        "newestRelease": "Nieuwste release",
-        "builtFrom": "Gebouwd uit <commit>{commit}</commit>",
-        "noCommit": "Geen build-commit vastgelegd",
-        "same": "Gelijk aan vastgezet",
-        "unknownRelease": "Geen release-tag wijst naar deze bytes"
+      "col": {
+        "service": "Service",
+        "tasks": "Taken",
+        "vcpuPerTask": "vCPU per taak",
+        "memoryPerTask": "Geheugen per taak",
+        "vcpu": "vCPU",
+        "deployment": "Uitrol"
       },
-      "gap": {
-        "hosted": "{count, plural, one {# commit} other {# commits}} aan packages/cli tussen de vastgezette en de nieuwste build.",
-        "runner": "({tags}) · {days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan infra/ci-runner.",
-        "runnerNoTags": "{days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan infra/ci-runner.",
-        "link": "Bekijk de commits"
+      "caption": "ECS-services in cluster {cluster}, met het totaal afgezet tegen het Fargate On-Demand-vCPU-quotum",
+      "taskDefinition": "taakdefinitie {family}:{revision}",
+      "tasks": {
+        "running": "{n} actief",
+        "partial": "{running} van {desired} actief",
+        "rolling": "gewenst {desired} · {old} oud + {new} nieuw",
+        "notStarted": "{n} niet gestart",
+        "scaledToZero": "Geschaald naar 0"
       },
-      "unreleased": {
-        "title": "Gemerged sinds {release}, in geen release",
-        "count": "{count, plural, one {# wijziging} other {# wijzigingen}} aan infra/ci-runner"
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
       },
-      "releaseNeeded": "<strong>Er is een release nodig.</strong> Deze wijzigingen bereiken de vloot alleen in een nieuwe runner-release, en deze pagina maakt er geen. Push de tag <mono>{tag}</mono>; de release-pipeline publiceert hem dan en de rij biedt Nieuwste publiceren aan.",
-      "ami": {
-        "title": "Runner-AMI · alleen lezen",
-        "current": "Actueel",
-        "stale": "Verouderd",
+      "deploy": {
+        "steady": "Stabiel",
+        "onRevision": "op revisie {revision}",
+        "notRolling": "Geen uitrol",
+        "rolling": "Uitrol · bezig",
+        "rollingDetail": "revisie {from} → {to} · {new} van {desired} nieuw actief",
+        "failed": "Uitrol mislukt",
+        "failedDetail": "revisie {to} gestopt · nog op {from}",
+        "started": "gestart {age}"
+      },
+      "total": {
+        "label": "Totaal",
+        "services": "{count, plural, one {# service} other {# services}}",
+        "desired": "gewenst {n}",
+        "inUse": "in gebruik",
+        "share": "{percent}% van het Fargate-quotum",
+        "toGo": "nog {n} vCPU tot 70%",
+        "over70": "Boven 70%",
+        "leftBeforeQuota": "nog {n} vCPU tot het quotum",
+        "atQuota": "Op het quotum",
+        "noneLeft": "geen vCPU over · een nieuwe taak start niet",
+        "overBy": "{n} vCPU erboven · een nieuwe taak start niet",
+        "shareNotKnown": "van het Fargate-quotum · onbekend zolang het quotum niet is gelezen"
+      },
+      "quota": {
+        "label": "Fargate-quotum",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "gelezen {age}",
         "notRead": "Niet gelezen",
-        "pinned": "Vastgezette AMI",
-        "name": "Naam",
-        "builtFrom": "Gebouwd uit",
-        "contains": "Bevat elke gemergde wijziging aan infra/ci-runner-aws",
-        "after": "{count, plural, one {# gemergde wijziging aan infra/ci-runner-aws kwam erna} other {# gemergde wijzigingen aan infra/ci-runner-aws kwamen erna}}",
-        "note": "De AMI wordt uitgebracht door zijn eigen ci-runner-ami-v*-pipeline en vastgezet in motir-infra, dus hij heeft hier geen knop. Gelezen via de vloot-runnerrol van {account}.",
-        "notReadBody": "{ami} is vastgezet, maar zijn build kon niet worden gelezen, dus zijn build-commit is onbekend. Hij wordt niet als actueel getoond.",
-        "unset": "Op deze deployment is geen runner-AMI vastgezet (MOTIR_AWS_RUNNER_AMI_ID is niet ingesteld)."
+        "notReadLabel": "Quota niet gelezen van AWS",
+        "lastRead": "laatst gelezen {age}",
+        "neverRead": "nooit gelezen",
+        "body": "De Fargate-limiet voor dit account en deze regio. De EC2-machines van de vloot tellen mee voor een apart EC2-quotum, op Vlootstatus.",
+        "bodyNotRead": "Service Quotas antwoordde niet, dus het aandeel van het quotum wordt niet getoond. De vCPU in gebruik wordt gemeten op het cluster en blijft een getal."
       },
-      "sandbox": {
-        "newest": "Nieuwste release <mono>{release}</mono> · {date} · gebouwd uit <mono>{commit}</mono>",
-        "tagsAt": "Tags bij {release}",
-        "allPublished": "Alle {total} gepubliceerd",
-        "somePublished": "{published} van {total} gepubliceerd · {missing} ontbreken",
-        "published": "Gepubliceerd",
-        "missing": "Ontbreekt",
-        "incomplete": "<strong>Release onvolledig.</strong> {profiles} hebben geen {version}-tag, dus agents van die profielen krijgen nog {previous}.",
-        "incompleteNoPrevious": "<strong>Release onvolledig.</strong> {profiles} hebben geen {version}-tag.",
-        "allCurrent": "Elke actieve agent draait {version}.",
-        "older": "<strong>{count, plural, one {# actieve agent draait} other {# actieve agents draaien}} een oudere versie.</strong> Hun eigenaren zien ‘Update beschikbaar’ bij de agent; hier wordt niets herstart."
+      "notAvailable": "Niet beschikbaar",
+      "error": {
+        "title": "ECS antwoordde niet",
+        "body": "Cluster {cluster} kon nu niet worden gelezen, dus er wordt geen service en geen totaal getoond, en geen eerder getal komt in de plaats. {last} Laad opnieuw om het nog eens te proberen.",
+        "lastRead": "Het werd voor het laatst gelezen {age}, om {time} UTC.",
+        "neverRead": "Er is geen eerdere lezing vastgelegd."
       },
-      "publish": {
-        "button": "Nieuwste publiceren",
-        "republish": "Opnieuw publiceren",
-        "note": {
-          "hosted": "Zet de nieuwste main-build vast via de pinworkflow van de hosted agent. Web en worker rollen erop over.",
-          "runner": "Zet {release} vast via de pinworkflow van de runner. Web en worker rollen erop over.",
-          "sandbox": "Publiceert {release} opnieuw. Alleen de {count} ontbrekende tags worden gepusht; in productie rolt niets over.",
-          "hostedCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste main-build vast.",
-          "runnerCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste runner-release vast.",
-          "runnerReleaseNeeded": "Niets nieuwers om te publiceren: productie zet de nieuwste release vast. De gemergde wijzigingen hierboven hebben eerst een release nodig.",
-          "sandboxCurrent": "Niets nieuwers om te publiceren. Elk profiel heeft zijn tag bij de nieuwste release.",
-          "sandboxOld": "{release} is gemaakt voordat een nieuwe run alleen de ontbrekende tags kon pushen, dus opnieuw uitvoeren zou elke tag opnieuw pushen. Maak in plaats daarvan een nieuwe cli-v*-release.",
-          "running": "Er loopt al een run van de publicatieworkflow van dit image. Nieuwste publiceren staat uit tot die klaar is.",
-          "done": "Niets nieuwers om te publiceren."
-        }
-      },
-      "confirm": {
-        "hostedTitle": "Het nieuwste hosted-agent-image publiceren?",
-        "runnerTitle": "{release} publiceren?",
-        "sandboxTitle": "{release} opnieuw publiceren?",
-        "from": "Van",
-        "to": "Naar",
-        "cancel": "Annuleren",
-        "audited": "Vastgelegd in het auditlogboek als jij, {email}.",
-        "sandboxFrom": "{published} van {total} tags bij {version}",
-        "hostedBody": "Dit start de pinworkflow van de hosted agent. Die zet MOTIR_HOSTED_AGENT_IMAGE op de nieuwste build en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin, en gehoste runs die na het overrollen starten, booten het nieuwe image.",
-        "runnerBody": "Dit start de pinworkflow van de runner. Die zet MOTIR_RUNNER_IMAGE op {release} en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin. De runner-AMI verandert niet.",
-        "sandboxBody": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. {published} zijn al gepubliceerd en worden niet opnieuw gepusht. <strong>In productie rolt niets over.</strong>",
-        "sandboxBodyNonePublished": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. <strong>In productie rolt niets over.</strong>"
-      },
-      "progress": {
-        "title": "Wordt gepubliceerd.",
-        "body": "De publicatieworkflow draait; deze rij wordt bijgewerkt als hij klaar is.",
-        "started": "· gestart {age} door {email}",
-        "startedNoActor": "· gestart {age}",
-        "button": "Wordt gepubliceerd…"
-      },
-      "done": {
-        "title": "Gepubliceerd.",
-        "pin": "Productie zet nu {to} vast ({digest}).",
-        "sandbox": "Elk profiel heeft nu zijn tag bij {version}."
-      },
-      "failed": {
-        "title": "Publicatie mislukt {age}.",
-        "body": "De workflowrun eindigde met deze fout, en productie zet nog vast wat het eerder vastzette:",
-        "noDetail": "GitHub heeft geen foutbericht voor deze run vastgelegd; open de run voor het logboek.",
-        "retry": "Opnieuw proberen"
-      },
-      "workflow": {
-        "hosted": "Hosted-agent-pin",
-        "runner": "Runner-pin",
-        "sandbox": "Sandbox-release {tag}",
-        "run": "{workflow} · run #{number}",
-        "runNoNumber": "{workflow} · run"
-      },
-      "audit": {
-        "last": "Laatst gepubliceerd vanaf deze pagina door {email} op {when}.",
-        "never": "Nog nooit vanaf deze pagina gepubliceerd.",
-        "started": "Publicatie gestart door {email} op {when}.",
-        "link": "Auditlogboek"
-      },
-      "imageError": {
-        "title": "Kon niet lezen: {image}",
-        "body": "{source} antwoordde niet, dus hier is niets geladen, en niets ervan betekent actueel. Nieuwste publiceren blijft uit tot er gelezen is. De andere images en de pools blijven onaangetast. Herlaad om het opnieuw te proberen."
-      },
-      "unset": {
-        "title": "Hier niet geconfigureerd",
-        "body": "{variable} is op deze deployment niet ingesteld, dus er is geen pin om te vergelijken."
-      },
-      "loading": "Laden: {image}",
-      "publishError": {
-        "title": "Nieuwste publiceren is niet gestart.",
-        "running": "Er loopt al een run van de publicatieworkflow van dit image; er is niets nieuws gestart.",
-        "up_to_date": "Productie draait al het nieuwste image; er is niets gestart.",
-        "release_needed": "Productie zet al de nieuwste release vast; de gemergde wijzigingen hebben eerst een release nodig.",
-        "not_republishable": "Deze release kan niet opnieuw worden uitgevoerd voor alleen de ontbrekende tags; er is niets gestart.",
-        "not_read": "Het image kon zojuist niet worden gelezen, dus er is niets gestart.",
-        "unset": "Dit image is op deze deployment niet geconfigureerd.",
-        "failed": "GitHub heeft de workflow niet gestart:",
-        "notPermitted": "Alleen een superadmin kan vanaf deze pagina publiceren."
+      "loading": "Het cluster en het Fargate-quotum worden uit AWS gelezen…",
+      "readOnly": "Alleen-lezen. Gebruik de deploy-workflow van een service of de AWS-console om hem te schalen, te herstarten of uit te rollen. De rijen komen uit het cluster, dus een nieuwe service verschijnt bij de volgende keer laden.",
+      "phone": {
+        "listLabel": "ECS-services in cluster {cluster}",
+        "perTask": "Per taak"
       }
     },
     "capacity": {
@@ -14094,6 +14022,176 @@
           "genericTitle": "Motir kon deze repository niet promoveren.",
           "genericBody": "Er is niets gekopieerd. Probeer het opnieuw."
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "Operaties · Vlootstatus",
+      "title": "Vlootstatus",
+      "subtitle": "Of productie de nieuwste versie draait van elk image dat Motir start, en hoe vol elke vlootpool is. Gelezen bij het laden van de pagina. Nieuwste publiceren is de enige actie hier, en elke klik wordt in het auditlogboek geschreven.",
+      "images": {
+        "title": "Images",
+        "subtitle": "De drie images die productie start. Elk wordt vergeleken met het nieuwste gepubliceerde; loopt productie achter, dan brengt Nieuwste publiceren het bij via de eigen publicatieworkflow van dat image."
+      },
+      "image": {
+        "hosted": {
+          "title": "Hosted-agent-image",
+          "subtitle": "Wat elke gehoste run start. Vastgezet door MOTIR_HOSTED_AGENT_IMAGE; het nieuwste is de laatste main-build van ghcr.io/motir-co/motir-hosted-agent."
+        },
+        "runner": {
+          "title": "CI-runner-image",
+          "subtitle": "Waarin elke CI-job van de vloot draait. Vastgezet door MOTIR_RUNNER_IMAGE; het nieuwste is de laatste runner-v*-release."
+        },
+        "sandbox": {
+          "title": "Agent-instantie-images",
+          "subtitle": "De sandbox waarin agents draaien, één tag per profiel op ghcr.io/motir-co/motir-sandbox. Compleet wanneer elk profiel zijn tag heeft bij de nieuwste cli-v*-release."
+        }
+      },
+      "imageName": {
+        "hosted": "hosted-agent-image",
+        "runner": "CI-runner-image",
+        "sandbox": "agent-instantie-images"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "Actueel",
+        "daysBehind": "{count, plural, one {# dag achter} other {# dagen achter}}",
+        "releasesBehind": "{count, plural, one {# release achter} other {# releases achter}}",
+        "releaseNeeded": "Release nodig",
+        "tagsMissing": "{missing} van {total} tags ontbreken",
+        "publishing": "Wordt gepubliceerd",
+        "publishFailed": "Publicatie mislukt",
+        "notRead": "Niet gelezen"
+      },
+      "compare": {
+        "pinned": "Vastgezet in productie",
+        "newestBuild": "Nieuwste main-build",
+        "newestRelease": "Nieuwste release",
+        "builtFrom": "Gebouwd uit <commit>{commit}</commit>",
+        "noCommit": "Geen build-commit vastgelegd",
+        "same": "Gelijk aan vastgezet",
+        "unknownRelease": "Geen release-tag wijst naar deze bytes"
+      },
+      "gap": {
+        "hosted": "{count, plural, one {# commit} other {# commits}} aan packages/cli tussen de vastgezette en de nieuwste build.",
+        "runner": "({tags}) · {days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan infra/ci-runner.",
+        "runnerNoTags": "{days, plural, one {# dag} other {# dagen}} · {commits, plural, one {# commit} other {# commits}} aan infra/ci-runner.",
+        "link": "Bekijk de commits"
+      },
+      "unreleased": {
+        "title": "Gemerged sinds {release}, in geen release",
+        "count": "{count, plural, one {# wijziging} other {# wijzigingen}} aan infra/ci-runner"
+      },
+      "releaseNeeded": "<strong>Er is een release nodig.</strong> Deze wijzigingen bereiken de vloot alleen in een nieuwe runner-release, en deze pagina maakt er geen. Push de tag <mono>{tag}</mono>; de release-pipeline publiceert hem dan en de rij biedt Nieuwste publiceren aan.",
+      "ami": {
+        "title": "Runner-AMI · alleen lezen",
+        "current": "Actueel",
+        "stale": "Verouderd",
+        "notRead": "Niet gelezen",
+        "pinned": "Vastgezette AMI",
+        "name": "Naam",
+        "builtFrom": "Gebouwd uit",
+        "contains": "Bevat elke gemergde wijziging aan infra/ci-runner-aws",
+        "after": "{count, plural, one {# gemergde wijziging aan infra/ci-runner-aws kwam erna} other {# gemergde wijzigingen aan infra/ci-runner-aws kwamen erna}}",
+        "note": "De AMI wordt uitgebracht door zijn eigen ci-runner-ami-v*-pipeline en vastgezet in motir-infra, dus hij heeft hier geen knop. Gelezen via de vloot-runnerrol van {account}.",
+        "notReadBody": "{ami} is vastgezet, maar zijn build kon niet worden gelezen, dus zijn build-commit is onbekend. Hij wordt niet als actueel getoond.",
+        "unset": "Op deze deployment is geen runner-AMI vastgezet (MOTIR_AWS_RUNNER_AMI_ID is niet ingesteld)."
+      },
+      "sandbox": {
+        "newest": "Nieuwste release <mono>{release}</mono> · {date} · gebouwd uit <mono>{commit}</mono>",
+        "tagsAt": "Tags bij {release}",
+        "allPublished": "Alle {total} gepubliceerd",
+        "somePublished": "{published} van {total} gepubliceerd · {missing} ontbreken",
+        "published": "Gepubliceerd",
+        "missing": "Ontbreekt",
+        "incomplete": "<strong>Release onvolledig.</strong> {profiles} hebben geen {version}-tag, dus agents van die profielen krijgen nog {previous}.",
+        "incompleteNoPrevious": "<strong>Release onvolledig.</strong> {profiles} hebben geen {version}-tag.",
+        "allCurrent": "Elke actieve agent draait {version}.",
+        "older": "<strong>{count, plural, one {# actieve agent draait} other {# actieve agents draaien}} een oudere versie.</strong> Hun eigenaren zien ‘Update beschikbaar’ bij de agent; hier wordt niets herstart."
+      },
+      "publish": {
+        "button": "Nieuwste publiceren",
+        "republish": "Opnieuw publiceren",
+        "note": {
+          "hosted": "Zet de nieuwste main-build vast via de pinworkflow van de hosted agent. Web en worker rollen erop over.",
+          "runner": "Zet {release} vast via de pinworkflow van de runner. Web en worker rollen erop over.",
+          "sandbox": "Publiceert {release} opnieuw. Alleen de {count} ontbrekende tags worden gepusht; in productie rolt niets over.",
+          "hostedCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste main-build vast.",
+          "runnerCurrent": "Niets nieuwers om te publiceren. Productie zet de nieuwste runner-release vast.",
+          "runnerReleaseNeeded": "Niets nieuwers om te publiceren: productie zet de nieuwste release vast. De gemergde wijzigingen hierboven hebben eerst een release nodig.",
+          "sandboxCurrent": "Niets nieuwers om te publiceren. Elk profiel heeft zijn tag bij de nieuwste release.",
+          "sandboxOld": "{release} is gemaakt voordat een nieuwe run alleen de ontbrekende tags kon pushen, dus opnieuw uitvoeren zou elke tag opnieuw pushen. Maak in plaats daarvan een nieuwe cli-v*-release.",
+          "running": "Er loopt al een run van de publicatieworkflow van dit image. Nieuwste publiceren staat uit tot die klaar is.",
+          "done": "Niets nieuwers om te publiceren."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "Het nieuwste hosted-agent-image publiceren?",
+        "runnerTitle": "{release} publiceren?",
+        "sandboxTitle": "{release} opnieuw publiceren?",
+        "from": "Van",
+        "to": "Naar",
+        "cancel": "Annuleren",
+        "audited": "Vastgelegd in het auditlogboek als jij, {email}.",
+        "sandboxFrom": "{published} van {total} tags bij {version}",
+        "hostedBody": "Dit start de pinworkflow van de hosted agent. Die zet MOTIR_HOSTED_AGENT_IMAGE op de nieuwste build en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin, en gehoste runs die na het overrollen starten, booten het nieuwe image.",
+        "runnerBody": "Dit start de pinworkflow van de runner. Die zet MOTIR_RUNNER_IMAGE op {release} en deployt: <strong>web en worker rollen</strong> over op de nieuwe pin. De runner-AMI verandert niet.",
+        "sandboxBody": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. {published} zijn al gepubliceerd en worden niet opnieuw gepusht. <strong>In productie rolt niets over.</strong>",
+        "sandboxBodyNonePublished": "Dit voert de sandbox-release voor {release} opnieuw uit en pusht alleen de ontbrekende tags: {missing}. <strong>In productie rolt niets over.</strong>"
+      },
+      "progress": {
+        "title": "Wordt gepubliceerd.",
+        "body": "De publicatieworkflow draait; deze rij wordt bijgewerkt als hij klaar is.",
+        "started": "· gestart {age} door {email}",
+        "startedNoActor": "· gestart {age}",
+        "button": "Wordt gepubliceerd…"
+      },
+      "done": {
+        "title": "Gepubliceerd.",
+        "pin": "Productie zet nu {to} vast ({digest}).",
+        "sandbox": "Elk profiel heeft nu zijn tag bij {version}."
+      },
+      "failed": {
+        "title": "Publicatie mislukt {age}.",
+        "body": "De workflowrun eindigde met deze fout, en productie zet nog vast wat het eerder vastzette:",
+        "noDetail": "GitHub heeft geen foutbericht voor deze run vastgelegd; open de run voor het logboek.",
+        "retry": "Opnieuw proberen"
+      },
+      "workflow": {
+        "hosted": "Hosted-agent-pin",
+        "runner": "Runner-pin",
+        "sandbox": "Sandbox-release {tag}",
+        "run": "{workflow} · run #{number}",
+        "runNoNumber": "{workflow} · run"
+      },
+      "audit": {
+        "last": "Laatst gepubliceerd vanaf deze pagina door {email} op {when}.",
+        "never": "Nog nooit vanaf deze pagina gepubliceerd.",
+        "started": "Publicatie gestart door {email} op {when}.",
+        "link": "Auditlogboek"
+      },
+      "imageError": {
+        "title": "Kon niet lezen: {image}",
+        "body": "{source} antwoordde niet, dus hier is niets geladen, en niets ervan betekent actueel. Nieuwste publiceren blijft uit tot er gelezen is. De andere images en de pools blijven onaangetast. Herlaad om het opnieuw te proberen."
+      },
+      "unset": {
+        "title": "Hier niet geconfigureerd",
+        "body": "{variable} is op deze deployment niet ingesteld, dus er is geen pin om te vergelijken."
+      },
+      "loading": "Laden: {image}",
+      "publishError": {
+        "title": "Nieuwste publiceren is niet gestart.",
+        "running": "Er loopt al een run van de publicatieworkflow van dit image; er is niets nieuws gestart.",
+        "up_to_date": "Productie draait al het nieuwste image; er is niets gestart.",
+        "release_needed": "Productie zet al de nieuwste release vast; de gemergde wijzigingen hebben eerst een release nodig.",
+        "not_republishable": "Deze release kan niet opnieuw worden uitgevoerd voor alleen de ontbrekende tags; er is niets gestart.",
+        "not_read": "Het image kon zojuist niet worden gelezen, dus er is niets gestart.",
+        "unset": "Dit image is op deze deployment niet geconfigureerd.",
+        "failed": "GitHub heeft de workflow niet gestart:",
+        "notPermitted": "Alleen een superadmin kan vanaf deze pagina publiceren."
       }
     }
   },

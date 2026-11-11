@@ -29,6 +29,7 @@ const LABELS = {
   navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
   navFleetStatus: en.platformAdmin.shell.navFleetStatus,
+  navServices: en.platformAdmin.shell.navServices,
   navCapacity: en.platformAdmin.shell.navCapacity,
   navAiPlanning: 'AI planning',
   navPlanningLessons: 'Planning lessons',
@@ -72,6 +73,8 @@ describe('the Fleet settings row', () => {
     expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navJobs);
     expect(names[names.indexOf(LABELS.navJobs) + 1]).toBe(LABELS.navFleetSettings);
     expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navFleetStatus);
+    // Services (MOTIR-10890) follows it, then Provider capacity.
+    expect(names[names.indexOf(LABELS.navFleetStatus) + 1]).toBe(LABELS.navServices);
   });
 
   it.each(['support', 'operator'] as const)('is absent for %s', (role) => {
@@ -99,7 +102,7 @@ describe('the Fleet status row', () => {
     expect(LABELS.navFleetStatus).toBe('Fleet status');
   });
 
-  it('is on the rail for a superadmin, between Fleet settings and Provider capacity', () => {
+  it('is on the rail for a superadmin, between Fleet settings and Services', () => {
     const rail = renderShell('superadmin', '/admin');
     const row = within(rail).getByRole('link', { name: LABELS.navFleetStatus });
     expect(row.getAttribute('href')).toBe('/admin/fleet-status');
@@ -108,7 +111,7 @@ describe('the Fleet status row', () => {
       .getAllByRole('link')
       .map((link) => link.textContent?.trim());
     expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navFleetStatus);
-    expect(names[names.indexOf(LABELS.navFleetStatus) + 1]).toBe(LABELS.navCapacity);
+    expect(names[names.indexOf(LABELS.navFleetStatus) + 1]).toBe(LABELS.navServices);
   });
 
   it.each(['support', 'operator'] as const)('is absent for %s', (role) => {

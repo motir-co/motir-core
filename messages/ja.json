@@ -10749,6 +10749,7 @@
       "navIdeas": "アイデア",
       "navRunModels": "ホスト型実行のモデル",
       "navFleetSettings": "フリート設定",
+      "navServices": "サービス",
       "navCapacity": "プロバイダーの容量",
       "navJobs": "ジョブ",
       "navStarters": "スターター",
@@ -13550,174 +13551,101 @@
         }
       }
     },
-    "fleetStatus": {
-      "breadcrumb": "運用 · フリート状況",
-      "title": "フリート状況",
-      "subtitle": "Motir が起動する各イメージについて本番環境が最新版を実行しているか、そして各フリートプールの埋まり具合。ページを読み込んだときに読み取ります。ここでの操作は「最新を公開」だけで、押すたびに監査ログに記録されます。",
-      "images": {
-        "title": "イメージ",
-        "subtitle": "本番環境が起動する 3 つのイメージ。それぞれを公開済みの最新版と比較し、本番環境が遅れている場合は「最新を公開」がそのイメージ自身の公開ワークフローで更新します。"
+    "services": {
+      "breadcrumb": "運用 · サービス",
+      "title": "サービス",
+      "subtitle": "Motir 自身が自社の AWS アカウント（{account}）で実行しているもの：クラスター {cluster} のすべての ECS サービス、そのタスクとサイズを、アカウントの Fargate vCPU クォータと比べて表示します。ページを読み込むたびに AWS から読み込みます。読み取り専用です。",
+      "accountUnknown": "—",
+      "readAt": "AWS から読み込み {age} · {time} UTC",
+      "readFailedAt": "AWS の読み込みに失敗しました（{time} UTC）",
+      "card": {
+        "title": "ECS サービス · クラスター {cluster}",
+        "subtitle": "Fargate 上のクラスター {cluster} のすべてのサービス、実行中のタスクとそのサイズ、および Fargate vCPU クォータに対する合計"
       },
-      "image": {
-        "hosted": {
-          "title": "ホスト型エージェントイメージ",
-          "subtitle": "すべてのホスト型実行が起動するもの。MOTIR_HOSTED_AGENT_IMAGE で固定。最新は ghcr.io/motir-co/motir-hosted-agent の最新の main ビルドです。"
-        },
-        "runner": {
-          "title": "CI ランナーイメージ",
-          "subtitle": "フリートのすべての CI ジョブが動く環境。MOTIR_RUNNER_IMAGE で固定。最新は最新の runner-v* リリースです。"
-        },
-        "sandbox": {
-          "title": "エージェントインスタンスイメージ",
-          "subtitle": "エージェントが動くサンドボックス。ghcr.io/motir-co/motir-sandbox にプロファイルごとに 1 つのタグ。最新の cli-v* リリースですべてのプロファイルにタグがあれば完了です。"
-        }
-      },
-      "imageName": {
-        "hosted": "ホスト型エージェントイメージ",
-        "runner": "CI ランナーイメージ",
-        "sandbox": "エージェントインスタンスイメージ"
-      },
-      "source": {
-        "ghcr": "GHCR",
-        "github": "GitHub",
-        "aws": "AWS"
+      "pill": {
+        "count": "{count, plural, other {# 件のサービス}}",
+        "rolling": "{count} 件ロールアウト中",
+        "rolloutFailed": "{count, plural, other {# 件のロールアウトが失敗}}",
+        "short": "{count, plural, other {# 件のサービスでタスクが不足}}"
       },
       "verdict": {
-        "upToDate": "最新",
-        "daysBehind": "{count, plural, other {# 日遅れ}}",
-        "releasesBehind": "{count, plural, other {# リリース遅れ}}",
-        "releaseNeeded": "リリースが必要",
-        "tagsMissing": "{total} 個中 {missing} 個のタグが欠落",
-        "publishing": "公開中",
-        "publishFailed": "公開に失敗",
-        "notRead": "未読み取り"
+        "under": "Fargate クォータの {percent}%",
+        "over70": "Fargate クォータの 70% 超",
+        "atQuota": "Fargate クォータに到達",
+        "notRead": "Fargate クォータ未読み込み",
+        "notReadLabel": "Fargate クォータは AWS から読み込まれていません",
+        "clusterNotRead": "クラスター未読み込み"
       },
-      "compare": {
-        "pinned": "本番で固定中",
-        "newestBuild": "最新の main ビルド",
-        "newestRelease": "最新リリース",
-        "builtFrom": "<commit>{commit}</commit> からビルド",
-        "noCommit": "ビルドコミットの記録なし",
-        "same": "固定中と同じ",
-        "unknownRelease": "これらのバイトを指すリリースタグはありません"
+      "col": {
+        "service": "サービス",
+        "tasks": "タスク",
+        "vcpuPerTask": "タスクあたりの vCPU",
+        "memoryPerTask": "タスクあたりのメモリ",
+        "vcpu": "vCPU",
+        "deployment": "デプロイ"
       },
-      "gap": {
-        "hosted": "固定中のビルドと最新ビルドの間に packages/cli へのコミットが {count, plural, other {# 件}}。",
-        "runner": "({tags}) · {days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
-        "runnerNoTags": "{days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
-        "link": "コミットを見る"
+      "caption": "クラスター {cluster} の ECS サービスと、Fargate オンデマンド vCPU クォータに対する合計",
+      "taskDefinition": "タスク定義 {family}:{revision}",
+      "tasks": {
+        "running": "{n} 件実行中",
+        "partial": "{desired} 件中 {running} 件実行中",
+        "rolling": "必要数 {desired} · 旧 {old} + 新 {new}",
+        "notStarted": "{n} 件未起動",
+        "scaledToZero": "0 にスケール済み"
       },
-      "unreleased": {
-        "title": "{release} 以降にマージ、どのリリースにも未収録",
-        "count": "infra/ci-runner への変更 {count, plural, other {# 件}}"
+      "vcpu": "{n} vCPU",
+      "vcpuTimes": "{running} × {perTask}",
+      "memory": {
+        "mb": "{n} MB",
+        "gb": "{n} GB"
       },
-      "releaseNeeded": "<strong>リリースが必要です。</strong>これらの変更は新しいランナーリリースでしかフリートに届かず、このページはリリースを作成しません。タグ <mono>{tag}</mono> をプッシュしてください。リリースレーンが公開し、この行に「最新を公開」が表示されます。",
-      "ami": {
-        "title": "ランナー AMI · 読み取り専用",
-        "current": "最新",
-        "stale": "古い",
-        "notRead": "未読み取り",
-        "pinned": "固定中の AMI",
-        "name": "名前",
-        "builtFrom": "ビルド元",
-        "contains": "infra/ci-runner-aws へのマージ済み変更をすべて含む",
-        "after": "{count, plural, other {infra/ci-runner-aws へのマージ済み変更 # 件がその後に入りました}}",
-        "note": "AMI は専用の ci-runner-ami-v* レーンで公開され motir-infra で固定されるため、ここにはボタンがありません。{account} のフリートランナーロール経由で読み取りました。",
-        "notReadBody": "{ami} は固定されていますが、ビルドを読み取れなかったため、ビルドコミットは不明です。最新としては表示しません。",
-        "unset": "このデプロイではランナー AMI が固定されていません(MOTIR_AWS_RUNNER_AMI_ID が未設定)。"
+      "deploy": {
+        "steady": "安定",
+        "onRevision": "リビジョン {revision}",
+        "notRolling": "ロールアウトなし",
+        "rolling": "ロールアウト · 進行中",
+        "rollingDetail": "リビジョン {from} → {to} · 新規 {desired} 件中 {new} 件起動",
+        "failed": "ロールアウト失敗",
+        "failedDetail": "リビジョン {to} は停止 · {from} のまま",
+        "started": "開始 {age}"
       },
-      "sandbox": {
-        "newest": "最新リリース <mono>{release}</mono> · {date} · <mono>{commit}</mono> からビルド",
-        "tagsAt": "{release} のタグ",
-        "allPublished": "{total} 個すべて公開済み",
-        "somePublished": "{total} 個中 {published} 個公開済み · {missing} 個欠落",
-        "published": "公開済み",
-        "missing": "欠落",
-        "incomplete": "<strong>リリースが不完全です。</strong>{profiles} には {version} のタグがないため、それらのプロファイルのエージェントは引き続き {previous} を受け取ります。",
-        "incompleteNoPrevious": "<strong>リリースが不完全です。</strong>{profiles} には {version} のタグがありません。",
-        "allCurrent": "稼働中のすべてのエージェントが {version} を実行しています。",
-        "older": "<strong>稼働中のエージェント {count, plural, other {# 個}}が古いバージョンを実行しています。</strong>所有者にはエージェントに「更新があります」と表示されます。ここからは何も再起動しません。"
+      "total": {
+        "label": "合計",
+        "services": "{count, plural, other {# 件のサービス}}",
+        "desired": "必要数 {n}",
+        "inUse": "使用中",
+        "share": "Fargate クォータの {percent}%",
+        "toGo": "70% まであと {n} vCPU",
+        "over70": "70% 超",
+        "leftBeforeQuota": "クォータまであと {n} vCPU",
+        "atQuota": "クォータに到達",
+        "noneLeft": "空き vCPU なし · 新しいタスクは起動しません",
+        "overBy": "{n} vCPU 超過 · 新しいタスクは起動しません",
+        "shareNotKnown": "Fargate クォータに対する割合 · クォータを読み込むまで不明"
       },
-      "publish": {
-        "button": "最新を公開",
-        "republish": "再公開",
-        "note": {
-          "hosted": "ホスト型エージェントの固定ワークフローで最新の main ビルドを固定します。Web とワーカーがそれに切り替わります。",
-          "runner": "ランナーの固定ワークフローで {release} を固定します。Web とワーカーがそれに切り替わります。",
-          "sandbox": "{release} を再公開します。欠落している {count} 個のタグだけをプッシュし、本番環境では何も切り替わりません。",
-          "hostedCurrent": "公開する新しいものはありません。本番環境は最新の main ビルドを固定しています。",
-          "runnerCurrent": "公開する新しいものはありません。本番環境は最新のランナーリリースを固定しています。",
-          "runnerReleaseNeeded": "公開する新しいものはありません。本番環境は最新リリースを固定しています。上のマージ済み変更には先にリリースが必要です。",
-          "sandboxCurrent": "公開する新しいものはありません。すべてのプロファイルに最新リリースのタグがあります。",
-          "sandboxOld": "{release} は欠落タグだけを再プッシュできるようになる前に作成されたため、再実行するとすべてのタグを再プッシュしてしまいます。代わりに新しい cli-v* リリースを作成してください。",
-          "running": "このイメージの公開ワークフローがすでに実行中です。終了するまで「最新を公開」は無効です。",
-          "done": "公開する新しいものはありません。"
-        }
+      "quota": {
+        "label": "Fargate クォータ",
+        "code": "Fargate On-Demand vCPU · L-3032A538",
+        "readAgo": "読み込み {age}",
+        "notRead": "未読み込み",
+        "notReadLabel": "クォータは AWS から読み込まれていません",
+        "lastRead": "最終読み込み {age}",
+        "neverRead": "一度も読み込まれていません",
+        "body": "このアカウントとリージョンの Fargate の上限です。フリートの EC2 マシンは別の EC2 クォータに数えられ、フリートの状態に表示されます。",
+        "bodyNotRead": "Service Quotas が応答しなかったため、クォータに対する割合は表示されません。使用中の vCPU はクラスターから測定され、数値のまま表示されます。"
       },
-      "confirm": {
-        "hostedTitle": "最新のホスト型エージェントイメージを公開しますか?",
-        "runnerTitle": "{release} を公開しますか?",
-        "sandboxTitle": "{release} を再公開しますか?",
-        "from": "変更前",
-        "to": "変更後",
-        "cancel": "キャンセル",
-        "audited": "あなた({email})として監査ログに記録されます。",
-        "sandboxFrom": "{version} のタグ {total} 個中 {published} 個",
-        "hostedBody": "ホスト型エージェントの固定ワークフローを開始します。MOTIR_HOSTED_AGENT_IMAGE を最新ビルドに移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わり</strong>、切り替え後に開始したホスト型実行は新しいイメージで起動します。",
-        "runnerBody": "ランナーの固定ワークフローを開始します。MOTIR_RUNNER_IMAGE を {release} に移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わります</strong>。ランナー AMI は変更しません。",
-        "sandboxBody": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。{published} はすでに公開済みのため再プッシュしません。<strong>本番環境では何も切り替わりません。</strong>",
-        "sandboxBodyNonePublished": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。<strong>本番環境では何も切り替わりません。</strong>"
+      "notAvailable": "利用不可",
+      "error": {
+        "title": "ECS が応答しませんでした",
+        "body": "クラスター {cluster} を今は読み込めなかったため、サービスも合計も表示せず、以前の数値で代用もしません。{last} 再読み込みしてもう一度お試しください。",
+        "lastRead": "最終読み込みは {age}、{time} UTC です。",
+        "neverRead": "以前の読み込みの記録はありません。"
       },
-      "progress": {
-        "title": "公開中です。",
-        "body": "公開ワークフローが実行中です。終了するとこの行が更新されます。",
-        "started": "· {age}に {email} が開始",
-        "startedNoActor": "· {age}に開始",
-        "button": "公開中…"
-      },
-      "done": {
-        "title": "公開しました。",
-        "pin": "本番環境は現在 {to} ({digest}) を固定しています。",
-        "sandbox": "すべてのプロファイルに {version} のタグが揃いました。"
-      },
-      "failed": {
-        "title": "公開に失敗しました({age})。",
-        "body": "ワークフロー実行は次のエラーで終了し、本番環境は以前の固定のままです:",
-        "noDetail": "GitHub はこの実行のエラーメッセージを記録していません。ログは実行を開いて確認してください。",
-        "retry": "再試行"
-      },
-      "workflow": {
-        "hosted": "ホスト型エージェントの固定",
-        "runner": "ランナーの固定",
-        "sandbox": "サンドボックスリリース {tag}",
-        "run": "{workflow} · 実行 #{number}",
-        "runNoNumber": "{workflow} · 実行"
-      },
-      "audit": {
-        "last": "最後にこのページから公開したのは {email}({when})です。",
-        "never": "このページから公開されたことはありません。",
-        "started": "{email} が {when} に公開を開始しました。",
-        "link": "監査ログ"
-      },
-      "imageError": {
-        "title": "{image}を読み取れませんでした",
-        "body": "{source} が応答しなかったため、ここには何も読み込まれておらず、最新を意味するものもありません。読み取れるまで「最新を公開」は無効です。ほかのイメージとプールには影響しません。再読み込みして再試行してください。"
-      },
-      "unset": {
-        "title": "ここでは未設定",
-        "body": "このデプロイでは {variable} が設定されていないため、比較する固定がありません。"
-      },
-      "loading": "{image}を読み込み中",
-      "publishError": {
-        "title": "「最新を公開」は開始されませんでした。",
-        "running": "このイメージの公開ワークフローがすでに実行中のため、新たに開始したものはありません。",
-        "up_to_date": "本番環境はすでに最新のイメージを実行しているため、何も開始していません。",
-        "release_needed": "本番環境はすでに最新リリースを固定しています。マージ済みの変更には先にリリースが必要です。",
-        "not_republishable": "このリリースは欠落タグだけのために再実行できないため、何も開始していません。",
-        "not_read": "現在イメージを読み取れなかったため、何も開始していません。",
-        "unset": "このイメージはこのデプロイでは設定されていません。",
-        "failed": "GitHub はワークフローを開始しませんでした:",
-        "notPermitted": "このページから公開できるのはスーパー管理者だけです。"
+      "loading": "AWS からクラスターと Fargate クォータを読み込んでいます…",
+      "readOnly": "読み取り専用です。サービスのスケール、再起動、デプロイには、そのデプロイワークフローか AWS コンソールを使用してください。行はクラスターから取得するため、新しいサービスは次の読み込みで表示されます。",
+      "phone": {
+        "listLabel": "クラスター {cluster} の ECS サービス",
+        "perTask": "タスクあたり"
       }
     },
     "capacity": {
@@ -14091,6 +14019,176 @@
           "genericTitle": "Motir はこのリポジトリを昇格できませんでした。",
           "genericBody": "何もコピーされていません。もう一度お試しください。"
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "運用 · フリート状況",
+      "title": "フリート状況",
+      "subtitle": "Motir が起動する各イメージについて本番環境が最新版を実行しているか、そして各フリートプールの埋まり具合。ページを読み込んだときに読み取ります。ここでの操作は「最新を公開」だけで、押すたびに監査ログに記録されます。",
+      "images": {
+        "title": "イメージ",
+        "subtitle": "本番環境が起動する 3 つのイメージ。それぞれを公開済みの最新版と比較し、本番環境が遅れている場合は「最新を公開」がそのイメージ自身の公開ワークフローで更新します。"
+      },
+      "image": {
+        "hosted": {
+          "title": "ホスト型エージェントイメージ",
+          "subtitle": "すべてのホスト型実行が起動するもの。MOTIR_HOSTED_AGENT_IMAGE で固定。最新は ghcr.io/motir-co/motir-hosted-agent の最新の main ビルドです。"
+        },
+        "runner": {
+          "title": "CI ランナーイメージ",
+          "subtitle": "フリートのすべての CI ジョブが動く環境。MOTIR_RUNNER_IMAGE で固定。最新は最新の runner-v* リリースです。"
+        },
+        "sandbox": {
+          "title": "エージェントインスタンスイメージ",
+          "subtitle": "エージェントが動くサンドボックス。ghcr.io/motir-co/motir-sandbox にプロファイルごとに 1 つのタグ。最新の cli-v* リリースですべてのプロファイルにタグがあれば完了です。"
+        }
+      },
+      "imageName": {
+        "hosted": "ホスト型エージェントイメージ",
+        "runner": "CI ランナーイメージ",
+        "sandbox": "エージェントインスタンスイメージ"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "最新",
+        "daysBehind": "{count, plural, other {# 日遅れ}}",
+        "releasesBehind": "{count, plural, other {# リリース遅れ}}",
+        "releaseNeeded": "リリースが必要",
+        "tagsMissing": "{total} 個中 {missing} 個のタグが欠落",
+        "publishing": "公開中",
+        "publishFailed": "公開に失敗",
+        "notRead": "未読み取り"
+      },
+      "compare": {
+        "pinned": "本番で固定中",
+        "newestBuild": "最新の main ビルド",
+        "newestRelease": "最新リリース",
+        "builtFrom": "<commit>{commit}</commit> からビルド",
+        "noCommit": "ビルドコミットの記録なし",
+        "same": "固定中と同じ",
+        "unknownRelease": "これらのバイトを指すリリースタグはありません"
+      },
+      "gap": {
+        "hosted": "固定中のビルドと最新ビルドの間に packages/cli へのコミットが {count, plural, other {# 件}}。",
+        "runner": "({tags}) · {days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
+        "runnerNoTags": "{days, plural, other {# 日}} · infra/ci-runner へのコミット {commits, plural, other {# 件}}。",
+        "link": "コミットを見る"
+      },
+      "unreleased": {
+        "title": "{release} 以降にマージ、どのリリースにも未収録",
+        "count": "infra/ci-runner への変更 {count, plural, other {# 件}}"
+      },
+      "releaseNeeded": "<strong>リリースが必要です。</strong>これらの変更は新しいランナーリリースでしかフリートに届かず、このページはリリースを作成しません。タグ <mono>{tag}</mono> をプッシュしてください。リリースレーンが公開し、この行に「最新を公開」が表示されます。",
+      "ami": {
+        "title": "ランナー AMI · 読み取り専用",
+        "current": "最新",
+        "stale": "古い",
+        "notRead": "未読み取り",
+        "pinned": "固定中の AMI",
+        "name": "名前",
+        "builtFrom": "ビルド元",
+        "contains": "infra/ci-runner-aws へのマージ済み変更をすべて含む",
+        "after": "{count, plural, other {infra/ci-runner-aws へのマージ済み変更 # 件がその後に入りました}}",
+        "note": "AMI は専用の ci-runner-ami-v* レーンで公開され motir-infra で固定されるため、ここにはボタンがありません。{account} のフリートランナーロール経由で読み取りました。",
+        "notReadBody": "{ami} は固定されていますが、ビルドを読み取れなかったため、ビルドコミットは不明です。最新としては表示しません。",
+        "unset": "このデプロイではランナー AMI が固定されていません(MOTIR_AWS_RUNNER_AMI_ID が未設定)。"
+      },
+      "sandbox": {
+        "newest": "最新リリース <mono>{release}</mono> · {date} · <mono>{commit}</mono> からビルド",
+        "tagsAt": "{release} のタグ",
+        "allPublished": "{total} 個すべて公開済み",
+        "somePublished": "{total} 個中 {published} 個公開済み · {missing} 個欠落",
+        "published": "公開済み",
+        "missing": "欠落",
+        "incomplete": "<strong>リリースが不完全です。</strong>{profiles} には {version} のタグがないため、それらのプロファイルのエージェントは引き続き {previous} を受け取ります。",
+        "incompleteNoPrevious": "<strong>リリースが不完全です。</strong>{profiles} には {version} のタグがありません。",
+        "allCurrent": "稼働中のすべてのエージェントが {version} を実行しています。",
+        "older": "<strong>稼働中のエージェント {count, plural, other {# 個}}が古いバージョンを実行しています。</strong>所有者にはエージェントに「更新があります」と表示されます。ここからは何も再起動しません。"
+      },
+      "publish": {
+        "button": "最新を公開",
+        "republish": "再公開",
+        "note": {
+          "hosted": "ホスト型エージェントの固定ワークフローで最新の main ビルドを固定します。Web とワーカーがそれに切り替わります。",
+          "runner": "ランナーの固定ワークフローで {release} を固定します。Web とワーカーがそれに切り替わります。",
+          "sandbox": "{release} を再公開します。欠落している {count} 個のタグだけをプッシュし、本番環境では何も切り替わりません。",
+          "hostedCurrent": "公開する新しいものはありません。本番環境は最新の main ビルドを固定しています。",
+          "runnerCurrent": "公開する新しいものはありません。本番環境は最新のランナーリリースを固定しています。",
+          "runnerReleaseNeeded": "公開する新しいものはありません。本番環境は最新リリースを固定しています。上のマージ済み変更には先にリリースが必要です。",
+          "sandboxCurrent": "公開する新しいものはありません。すべてのプロファイルに最新リリースのタグがあります。",
+          "sandboxOld": "{release} は欠落タグだけを再プッシュできるようになる前に作成されたため、再実行するとすべてのタグを再プッシュしてしまいます。代わりに新しい cli-v* リリースを作成してください。",
+          "running": "このイメージの公開ワークフローがすでに実行中です。終了するまで「最新を公開」は無効です。",
+          "done": "公開する新しいものはありません。"
+        }
+      },
+      "confirm": {
+        "hostedTitle": "最新のホスト型エージェントイメージを公開しますか?",
+        "runnerTitle": "{release} を公開しますか?",
+        "sandboxTitle": "{release} を再公開しますか?",
+        "from": "変更前",
+        "to": "変更後",
+        "cancel": "キャンセル",
+        "audited": "あなた({email})として監査ログに記録されます。",
+        "sandboxFrom": "{version} のタグ {total} 個中 {published} 個",
+        "hostedBody": "ホスト型エージェントの固定ワークフローを開始します。MOTIR_HOSTED_AGENT_IMAGE を最新ビルドに移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わり</strong>、切り替え後に開始したホスト型実行は新しいイメージで起動します。",
+        "runnerBody": "ランナーの固定ワークフローを開始します。MOTIR_RUNNER_IMAGE を {release} に移してデプロイします。<strong>Web とワーカーが新しい固定に切り替わります</strong>。ランナー AMI は変更しません。",
+        "sandboxBody": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。{published} はすでに公開済みのため再プッシュしません。<strong>本番環境では何も切り替わりません。</strong>",
+        "sandboxBodyNonePublished": "{release} のサンドボックスリリースを再実行し、欠落しているタグ {missing} だけをプッシュします。<strong>本番環境では何も切り替わりません。</strong>"
+      },
+      "progress": {
+        "title": "公開中です。",
+        "body": "公開ワークフローが実行中です。終了するとこの行が更新されます。",
+        "started": "· {age}に {email} が開始",
+        "startedNoActor": "· {age}に開始",
+        "button": "公開中…"
+      },
+      "done": {
+        "title": "公開しました。",
+        "pin": "本番環境は現在 {to} ({digest}) を固定しています。",
+        "sandbox": "すべてのプロファイルに {version} のタグが揃いました。"
+      },
+      "failed": {
+        "title": "公開に失敗しました({age})。",
+        "body": "ワークフロー実行は次のエラーで終了し、本番環境は以前の固定のままです:",
+        "noDetail": "GitHub はこの実行のエラーメッセージを記録していません。ログは実行を開いて確認してください。",
+        "retry": "再試行"
+      },
+      "workflow": {
+        "hosted": "ホスト型エージェントの固定",
+        "runner": "ランナーの固定",
+        "sandbox": "サンドボックスリリース {tag}",
+        "run": "{workflow} · 実行 #{number}",
+        "runNoNumber": "{workflow} · 実行"
+      },
+      "audit": {
+        "last": "最後にこのページから公開したのは {email}({when})です。",
+        "never": "このページから公開されたことはありません。",
+        "started": "{email} が {when} に公開を開始しました。",
+        "link": "監査ログ"
+      },
+      "imageError": {
+        "title": "{image}を読み取れませんでした",
+        "body": "{source} が応答しなかったため、ここには何も読み込まれておらず、最新を意味するものもありません。読み取れるまで「最新を公開」は無効です。ほかのイメージとプールには影響しません。再読み込みして再試行してください。"
+      },
+      "unset": {
+        "title": "ここでは未設定",
+        "body": "このデプロイでは {variable} が設定されていないため、比較する固定がありません。"
+      },
+      "loading": "{image}を読み込み中",
+      "publishError": {
+        "title": "「最新を公開」は開始されませんでした。",
+        "running": "このイメージの公開ワークフローがすでに実行中のため、新たに開始したものはありません。",
+        "up_to_date": "本番環境はすでに最新のイメージを実行しているため、何も開始していません。",
+        "release_needed": "本番環境はすでに最新リリースを固定しています。マージ済みの変更には先にリリースが必要です。",
+        "not_republishable": "このリリースは欠落タグだけのために再実行できないため、何も開始していません。",
+        "not_read": "現在イメージを読み取れなかったため、何も開始していません。",
+        "unset": "このイメージはこのデプロイでは設定されていません。",
+        "failed": "GitHub はワークフローを開始しませんでした:",
+        "notPermitted": "このページから公開できるのはスーパー管理者だけです。"
       }
     }
   },

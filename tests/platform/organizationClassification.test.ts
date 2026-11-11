@@ -148,6 +148,9 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
     // (`20261028200000_seed_registry`). `project_repository` and `github_repo`
     // carry MOTIR-710's SELECT-only arms, for the one cross-tenant read a starter
     // promotion makes (`20261028220000_seed_registry_promotion`).
+    // `platform_aws_read` is MOTIR-10890's record of WHEN each AWS figure on the
+    // Services page was last read (`20261110230000_platform_aws_read`):
+    // platform-only, written and read solely from this tier.
     expect(rows.map((r) => r.tablename)).toEqual([
       'capacity_alert_setting',
       'capacity_raised_alert',
@@ -165,6 +168,7 @@ describe('the `organization` platform-staff policy arms (MOTIR-4565)', () => {
       'organization',
       'organization_membership',
       'platform_audit_log',
+      'platform_aws_read',
       'platform_fleet_kind_switch',
       'platform_fleet_org_ci',
       'platform_run_model',

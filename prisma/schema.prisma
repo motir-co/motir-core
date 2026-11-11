@@ -589,6 +589,21 @@ model PlatformFleetKindSwitch {
   @@map("platform_fleet_kind_switch")
 }
 
+/// The last SUCCESSFUL read of one AWS figure the console shows live (MOTIR-10890):
+/// the Services page's cluster (`ecs:<cluster>`) and the Fargate vCPU quota
+/// (`servicequotas:fargate/L-3032A538`). One row per subject, upserted when a
+/// read succeeds, so a later read that fails can say when the figure was last
+/// read — and never stand in for it: no figure is stored, only the time and the
+/// account it was read in. Platform staff only, read and write
+/// (`app.platform_staff`), inside the page read's audited transaction.
+model PlatformAwsRead {
+  subject   String   @id
+  accountId String?  @map("account_id")
+  readAt    DateTime @map("read_at")
+
+  @@map("platform_aws_read")
+}
+
 model PlatformRunModel {
   id        String   @id @default(cuid())
   model     String   @unique
