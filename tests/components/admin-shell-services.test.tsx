@@ -28,6 +28,7 @@ const LABELS = {
   navMonitoring: 'Monitoring',
   navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
+  navFleetStatus: en.platformAdmin.shell.navFleetStatus,
   navServices: en.platformAdmin.shell.navServices,
   navCapacity: en.platformAdmin.shell.navCapacity,
   navAiPlanning: 'AI planning',
@@ -61,7 +62,7 @@ describe('the Services row', () => {
     expect(LABELS.navServices).toBe('Services');
   });
 
-  it('is on the rail for a superadmin, between Fleet settings and Provider capacity', () => {
+  it('is on the rail for a superadmin, between Fleet status and Provider capacity', () => {
     const rail = renderShell('superadmin', '/admin');
     const row = within(rail).getByRole('link', { name: LABELS.navServices });
     expect(row.getAttribute('href')).toBe('/admin/services');
@@ -69,7 +70,7 @@ describe('the Services row', () => {
     const names = within(rail)
       .getAllByRole('link')
       .map((link) => link.textContent?.trim());
-    expect(names[names.indexOf(LABELS.navServices) - 1]).toBe(LABELS.navFleetSettings);
+    expect(names[names.indexOf(LABELS.navServices) - 1]).toBe(LABELS.navFleetStatus);
     expect(names[names.indexOf(LABELS.navServices) + 1]).toBe(LABELS.navCapacity);
   });
 

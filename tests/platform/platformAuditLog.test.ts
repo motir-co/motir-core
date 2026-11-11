@@ -257,6 +257,10 @@ describe('the reason rule', () => {
     // The agent hoster's Fly↔AWS switch (MOTIR-9503): a flip says why.
     'fleet.agent_hosting.enable': 'required',
     'fleet.agent_hosting.disable': 'required',
+    // Publish latest on /admin/fleet-status (MOTIR-10886): the confirm has no
+    // reason field, so the service writes one; the page's read of those rows.
+    'fleet.image.publish': 'inherited',
+    'fleet.status.read': 'never',
     // `fleet-admin add-shard` / `refresh-limits` (Story MOTIR-8953 · MOTIR-8967):
     // a fleet account added or its quota re-read — writes, reason by the service.
     'fleet.shard.add': 'required',
@@ -338,6 +342,8 @@ describe('the reason rule', () => {
       // The starter library and the promote form's picker (MOTIR-712).
       'seed_registry.library_read',
       'seed_registry.promote_sources_read',
+      // The console's Fleet status page (MOTIR-10886).
+      'fleet.status.read',
     ];
     for (const action of Object.keys(PLATFORM_AUDIT_ACTIONS)) {
       const key = action as keyof typeof PLATFORM_AUDIT_ACTIONS;

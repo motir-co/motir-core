@@ -21,7 +21,10 @@ interface Step {
   env?: Record<string, string>;
 }
 const workflow = parse(source) as {
-  on: { push: { tags: string[] } };
+  on: {
+    push: { tags: string[] };
+    workflow_dispatch: { inputs: Record<string, { type: string; default?: unknown }> };
+  };
   jobs: Record<
     string,
     {
@@ -42,12 +45,32 @@ describe('the runner image release opens its own pin pull request (MOTIR-10883)'
   it('runs after the publish, on a tag push only — a dry run publishes nothing to pin', () => {
     expect(workflow.on.push.tags).toEqual(['runner-v*']);
     expect(pin.needs).toEqual(['version', 'release']);
-    expect(pin.if).toBe("${{ github.event_name == 'push' }}");
+    expect(pin.if).toContain('!cancelled()');
+    expect(pin.if).toContain("github.event_name == 'push' && needs.release.result == 'success'");
+  });
+
+  it('a Publish latest dispatch (MOTIR-10886) pins an already-published digest, building nothing', () => {
+    const inputs = workflow.on.workflow_dispatch.inputs;
+    expect(inputs['pin_digest']).toMatchObject({ type: 'string', default: '' });
+    expect(inputs['pin_version']).toMatchObject({ type: 'string', default: '' });
+    expect(workflow.jobs['version']!.if).toBe('${{ !inputs.pin_digest }}');
+    expect(pin.if).toContain("github.event_name == 'workflow_dispatch' && inputs.pin_digest != ''");
+    const write = step('write');
+    expect(write.env?.['VERSION']).toBe(
+      '${{ inputs.pin_version || needs.version.outputs.version }}',
+    );
+    expect(write.run).toContain('^[0-9]+\\.[0-9]+\\.[0-9]+$');
+    const queue = pin.steps.find((s) => s.run?.includes('gh pr merge'))!;
+    expect(queue.if).toBe(
+      "${{ github.event_name == 'workflow_dispatch' && steps.write.outputs.changed == 'true' }}",
+    );
+    expect(queue.run).toContain('--head chore/runner-image-pin');
+    expect(queue.run).toContain('--auto');
   });
 
   it('takes the digest the reusable lane published and pulled back, never a tag', () => {
     const write = step('write');
-    expect(write.env?.['DIGEST']).toBe('${{ needs.release.outputs.digest }}');
+    expect(write.env?.['DIGEST']).toBe('${{ inputs.pin_digest || needs.release.outputs.digest }}');
     expect(write.env?.['IMAGE']).toBe('ghcr.io/motir-co/motir-ci-runner');
     expect(write.env?.['PIN']).toBe(PIN_FILE);
     expect(write.run).toContain('^sha256:[a-f0-9]{64}$');

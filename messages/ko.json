@@ -10749,7 +10749,8 @@
       "navServices": "서비스",
       "navCapacity": "공급자 용량",
       "navJobs": "작업",
-      "navStarters": "스타터"
+      "navStarters": "스타터",
+      "navFleetStatus": "플릿 상태"
     },
     "nav": {
       "overview": "개요",
@@ -10962,6 +10963,12 @@
               "list": "플릿 용량 요청 목록 조회",
               "link": "용량 요청을 할당량 증가에 연결",
               "close": "플릿 용량 요청 종료"
+            },
+            "image": {
+              "publish": "플릿 이미지를 게시함"
+            },
+            "status": {
+              "read": "플릿 상태를 읽음"
             }
           },
           "idea": {
@@ -14009,6 +14016,176 @@
           "genericTitle": "Motir가 이 저장소를 승격하지 못했습니다.",
           "genericBody": "아무것도 복사되지 않았습니다. 다시 시도하십시오."
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "운영 · 플릿 상태",
+      "title": "플릿 상태",
+      "subtitle": "Motir가 부팅하는 각 이미지에 대해 프로덕션이 최신 버전을 실행하는지, 그리고 각 플릿 풀이 얼마나 찼는지 보여 줍니다. 페이지를 불러올 때 읽습니다. 여기서 할 수 있는 작업은 최신 게시뿐이며, 누를 때마다 감사 로그에 기록됩니다.",
+      "images": {
+        "title": "이미지",
+        "subtitle": "프로덕션이 부팅하는 세 이미지입니다. 각각을 게시된 최신 이미지와 비교하며, 프로덕션이 뒤처지면 최신 게시가 그 이미지 자체의 게시 워크플로로 옮깁니다."
+      },
+      "image": {
+        "hosted": {
+          "title": "호스팅 에이전트 이미지",
+          "subtitle": "모든 호스팅 실행이 부팅하는 이미지입니다. MOTIR_HOSTED_AGENT_IMAGE로 고정되며, 최신은 ghcr.io/motir-co/motir-hosted-agent의 최신 main 빌드입니다."
+        },
+        "runner": {
+          "title": "CI 러너 이미지",
+          "subtitle": "플릿의 모든 CI 작업이 실행되는 환경입니다. MOTIR_RUNNER_IMAGE로 고정되며, 최신은 최신 runner-v* 릴리스입니다."
+        },
+        "sandbox": {
+          "title": "에이전트 인스턴스 이미지",
+          "subtitle": "에이전트가 실행되는 샌드박스로, ghcr.io/motir-co/motir-sandbox에 프로필마다 태그가 하나씩 있습니다. 모든 프로필이 최신 cli-v* 릴리스의 태그를 가지면 완료입니다."
+        }
+      },
+      "imageName": {
+        "hosted": "호스팅 에이전트 이미지",
+        "runner": "CI 러너 이미지",
+        "sandbox": "에이전트 인스턴스 이미지"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "최신",
+        "daysBehind": "{count, plural, other {#일 뒤처짐}}",
+        "releasesBehind": "{count, plural, other {릴리스 #개 뒤처짐}}",
+        "releaseNeeded": "릴리스 필요",
+        "tagsMissing": "태그 {total}개 중 {missing}개 누락",
+        "publishing": "게시 중",
+        "publishFailed": "게시 실패",
+        "notRead": "읽지 못함"
+      },
+      "compare": {
+        "pinned": "프로덕션에 고정됨",
+        "newestBuild": "최신 main 빌드",
+        "newestRelease": "최신 릴리스",
+        "builtFrom": "<commit>{commit}</commit>에서 빌드",
+        "noCommit": "빌드 커밋 기록 없음",
+        "same": "고정된 것과 같음",
+        "unknownRelease": "이 바이트를 가리키는 릴리스 태그가 없음"
+      },
+      "gap": {
+        "hosted": "고정된 빌드와 최신 빌드 사이 packages/cli 커밋 {count, plural, other {#개}}.",
+        "runner": "({tags}) · {days, plural, other {#일}} · infra/ci-runner 커밋 {commits, plural, other {#개}}.",
+        "runnerNoTags": "{days, plural, other {#일}} · infra/ci-runner 커밋 {commits, plural, other {#개}}.",
+        "link": "커밋 보기"
+      },
+      "unreleased": {
+        "title": "{release} 이후 병합됨, 어떤 릴리스에도 없음",
+        "count": "infra/ci-runner 변경 {count, plural, other {#개}}"
+      },
+      "releaseNeeded": "<strong>릴리스가 필요합니다.</strong> 이 변경은 새 러너 릴리스로만 플릿에 반영되며, 이 페이지는 릴리스를 만들지 않습니다. 태그 <mono>{tag}</mono>를 푸시하세요. 그러면 릴리스 레인이 게시하고 이 행에 최신 게시가 나타납니다.",
+      "ami": {
+        "title": "러너 AMI · 읽기 전용",
+        "current": "최신",
+        "stale": "오래됨",
+        "notRead": "읽지 못함",
+        "pinned": "고정된 AMI",
+        "name": "이름",
+        "builtFrom": "빌드 원본",
+        "contains": "infra/ci-runner-aws에 병합된 모든 변경 포함",
+        "after": "{count, plural, other {infra/ci-runner-aws에 병합된 변경 #개가 그 뒤에 들어옴}}",
+        "note": "AMI는 자체 ci-runner-ami-v* 레인으로 출시되고 motir-infra에서 고정되므로 여기에는 버튼이 없습니다. {account}의 플릿 러너 역할로 읽었습니다.",
+        "notReadBody": "{ami}이(가) 고정되어 있지만 빌드를 읽지 못해 빌드 커밋을 알 수 없습니다. 최신으로 표시하지 않습니다.",
+        "unset": "이 배포에는 고정된 러너 AMI가 없습니다(MOTIR_AWS_RUNNER_AMI_ID가 설정되지 않음)."
+      },
+      "sandbox": {
+        "newest": "최신 릴리스 <mono>{release}</mono> · {date} · <mono>{commit}</mono>에서 빌드",
+        "tagsAt": "{release}의 태그",
+        "allPublished": "{total}개 모두 게시됨",
+        "somePublished": "{total}개 중 {published}개 게시됨 · {missing}개 누락",
+        "published": "게시됨",
+        "missing": "누락",
+        "incomplete": "<strong>릴리스가 불완전합니다.</strong> {profiles}에 {version} 태그가 없어 해당 프로필의 에이전트는 여전히 {previous}을(를) 받습니다.",
+        "incompleteNoPrevious": "<strong>릴리스가 불완전합니다.</strong> {profiles}에 {version} 태그가 없습니다.",
+        "allCurrent": "실행 중인 모든 에이전트가 {version}을(를) 실행합니다.",
+        "older": "<strong>실행 중인 에이전트 {count, plural, other {#개}}가 이전 버전을 실행합니다.</strong> 소유자에게는 에이전트에 업데이트 가능이 표시되며, 여기서는 아무것도 다시 시작하지 않습니다."
+      },
+      "publish": {
+        "button": "최신 게시",
+        "republish": "다시 게시",
+        "note": {
+          "hosted": "호스팅 에이전트 고정 워크플로로 최신 main 빌드를 고정합니다. 웹과 워커가 그것으로 전환됩니다.",
+          "runner": "러너 고정 워크플로로 {release}을(를) 고정합니다. 웹과 워커가 그것으로 전환됩니다.",
+          "sandbox": "{release}을(를) 다시 게시합니다. 누락된 태그 {count}개만 푸시하며, 프로덕션에서는 아무것도 전환되지 않습니다.",
+          "hostedCurrent": "게시할 새 항목이 없습니다. 프로덕션은 최신 main 빌드를 고정하고 있습니다.",
+          "runnerCurrent": "게시할 새 항목이 없습니다. 프로덕션은 최신 러너 릴리스를 고정하고 있습니다.",
+          "runnerReleaseNeeded": "게시할 새 항목이 없습니다. 프로덕션은 최신 릴리스를 고정하고 있습니다. 위의 병합된 변경에는 먼저 릴리스가 필요합니다.",
+          "sandboxCurrent": "게시할 새 항목이 없습니다. 모든 프로필에 최신 릴리스 태그가 있습니다.",
+          "sandboxOld": "{release}은(는) 재실행이 누락된 태그만 푸시할 수 있게 되기 전에 만들어져, 재실행하면 모든 태그를 다시 푸시합니다. 대신 새 cli-v* 릴리스를 만드세요.",
+          "running": "이 이미지의 게시 워크플로 실행이 이미 진행 중입니다. 끝날 때까지 최신 게시가 꺼져 있습니다.",
+          "done": "게시할 새 항목이 없습니다."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "최신 호스팅 에이전트 이미지를 게시할까요?",
+        "runnerTitle": "{release}을(를) 게시할까요?",
+        "sandboxTitle": "{release}을(를) 다시 게시할까요?",
+        "from": "이전",
+        "to": "이후",
+        "cancel": "취소",
+        "audited": "감사 로그에 본인({email})으로 기록됩니다.",
+        "sandboxFrom": "{version}의 태그 {total}개 중 {published}개",
+        "hostedBody": "호스팅 에이전트 고정 워크플로를 시작합니다. MOTIR_HOSTED_AGENT_IMAGE를 최신 빌드로 옮기고 배포합니다. <strong>웹과 워커가 새 고정으로 전환</strong>되며, 전환 후 시작된 호스팅 실행은 새 이미지로 부팅합니다.",
+        "runnerBody": "러너 고정 워크플로를 시작합니다. MOTIR_RUNNER_IMAGE를 {release}(으)로 옮기고 배포합니다. <strong>웹과 워커가 새 고정으로 전환</strong>됩니다. 러너 AMI는 바뀌지 않습니다.",
+        "sandboxBody": "{release}의 샌드박스 릴리스를 다시 실행해 누락된 태그 {missing}만 푸시합니다. {published}은(는) 이미 게시되어 다시 푸시하지 않습니다. <strong>프로덕션에서는 아무것도 전환되지 않습니다.</strong>",
+        "sandboxBodyNonePublished": "{release}의 샌드박스 릴리스를 다시 실행해 누락된 태그 {missing}만 푸시합니다. <strong>프로덕션에서는 아무것도 전환되지 않습니다.</strong>"
+      },
+      "progress": {
+        "title": "게시 중입니다.",
+        "body": "게시 워크플로가 실행 중이며, 끝나면 이 행이 업데이트됩니다.",
+        "started": "· {age} {email}이(가) 시작",
+        "startedNoActor": "· {age} 시작",
+        "button": "게시 중…"
+      },
+      "done": {
+        "title": "게시했습니다.",
+        "pin": "프로덕션은 이제 {to}({digest})을(를) 고정합니다.",
+        "sandbox": "이제 모든 프로필에 {version} 태그가 있습니다."
+      },
+      "failed": {
+        "title": "게시 실패 {age}.",
+        "body": "워크플로 실행이 이 오류로 끝났으며, 프로덕션은 이전에 고정한 것을 그대로 고정합니다:",
+        "noDetail": "GitHub가 이 실행의 오류 메시지를 기록하지 않았습니다. 로그는 실행을 열어 확인하세요.",
+        "retry": "다시 시도"
+      },
+      "workflow": {
+        "hosted": "호스팅 에이전트 고정",
+        "runner": "러너 고정",
+        "sandbox": "샌드박스 릴리스 {tag}",
+        "run": "{workflow} · 실행 #{number}",
+        "runNoNumber": "{workflow} · 실행"
+      },
+      "audit": {
+        "last": "이 페이지에서 마지막으로 {email}이(가) {when}에 게시했습니다.",
+        "never": "이 페이지에서 게시한 적이 없습니다.",
+        "started": "{email}이(가) {when}에 게시를 시작했습니다.",
+        "link": "감사 로그"
+      },
+      "imageError": {
+        "title": "{image}을(를) 읽지 못했습니다",
+        "body": "{source}이(가) 응답하지 않아 여기에는 아무것도 불러오지 않았으며, 어느 것도 최신을 뜻하지 않습니다. 읽을 때까지 최신 게시는 꺼져 있습니다. 다른 이미지와 풀은 영향을 받지 않습니다. 다시 불러와 다시 시도하세요."
+      },
+      "unset": {
+        "title": "여기서 구성되지 않음",
+        "body": "이 배포에는 {variable}이(가) 설정되지 않아 비교할 고정이 없습니다."
+      },
+      "loading": "{image} 불러오는 중",
+      "publishError": {
+        "title": "최신 게시가 시작되지 않았습니다.",
+        "running": "이 이미지의 게시 워크플로 실행이 이미 진행 중이어서 새로 시작한 것이 없습니다.",
+        "up_to_date": "프로덕션이 이미 최신 이미지를 실행 중이어서 아무것도 시작하지 않았습니다.",
+        "release_needed": "프로덕션이 이미 최신 릴리스를 고정하고 있습니다. 병합된 변경에는 먼저 릴리스가 필요합니다.",
+        "not_republishable": "이 릴리스는 누락된 태그만 다시 실행할 수 없어 아무것도 시작하지 않았습니다.",
+        "not_read": "지금은 이미지를 읽지 못해 아무것도 시작하지 않았습니다.",
+        "unset": "이 이미지는 이 배포에서 구성되지 않았습니다.",
+        "failed": "GitHub가 워크플로를 시작하지 않았습니다:",
+        "notPermitted": "이 페이지에서는 슈퍼 관리자만 게시할 수 있습니다."
       }
     }
   },

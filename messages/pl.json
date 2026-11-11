@@ -10755,7 +10755,8 @@
       "navServices": "Usługi",
       "navCapacity": "Pojemność dostawców",
       "navJobs": "Zadania",
-      "navStarters": "Szablony"
+      "navStarters": "Szablony",
+      "navFleetStatus": "Stan floty"
     },
     "nav": {
       "overview": "Przegląd",
@@ -10968,6 +10969,12 @@
               "list": "Wyświetlono prośby o pojemność floty",
               "link": "Powiązano prośbę o pojemność z podniesieniem limitu",
               "close": "Zamknięto prośbę o pojemność floty"
+            },
+            "image": {
+              "publish": "Opublikowano obraz floty"
+            },
+            "status": {
+              "read": "Odczytano stan floty"
             }
           },
           "idea": {
@@ -14015,6 +14022,176 @@
           "genericTitle": "Motir nie mógł awansować tego repozytorium.",
           "genericBody": "Nic nie zostało skopiowane. Spróbuj ponownie."
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "Operacje · Stan floty",
+      "title": "Stan floty",
+      "subtitle": "Czy produkcja uruchamia najnowszą wersję każdego obrazu, który startuje Motir, i jak zapełniona jest każda pula floty. Odczytywane przy ładowaniu strony. Opublikuj najnowszy to jedyna akcja tutaj, a każde kliknięcie trafia do dziennika audytu.",
+      "images": {
+        "title": "Obrazy",
+        "subtitle": "Trzy obrazy, które uruchamia produkcja. Każdy jest porównywany z najnowszym opublikowanym; gdy produkcja jest w tyle, Opublikuj najnowszy przesuwa ją przez własny workflow publikacji tego obrazu."
+      },
+      "image": {
+        "hosted": {
+          "title": "Obraz hostowanego agenta",
+          "subtitle": "To, co uruchamia każde hostowane uruchomienie. Przypięty przez MOTIR_HOSTED_AGENT_IMAGE; najnowszy to ostatni build main z ghcr.io/motir-co/motir-hosted-agent."
+        },
+        "runner": {
+          "title": "Obraz runnera CI",
+          "subtitle": "W czym działa każde zadanie CI floty. Przypięty przez MOTIR_RUNNER_IMAGE; najnowszy to ostatnie wydanie runner-v*."
+        },
+        "sandbox": {
+          "title": "Obrazy instancji agentów",
+          "subtitle": "Piaskownica, w której działają agenty, jeden tag na profil w ghcr.io/motir-co/motir-sandbox. Kompletne, gdy każdy profil ma swój tag w najnowszym wydaniu cli-v*."
+        }
+      },
+      "imageName": {
+        "hosted": "obraz hostowanego agenta",
+        "runner": "obraz runnera CI",
+        "sandbox": "obrazy instancji agentów"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "Aktualny",
+        "daysBehind": "{count, plural, one {# dzień w tyle} few {# dni w tyle} many {# dni w tyle} other {# dnia w tyle}}",
+        "releasesBehind": "{count, plural, one {# wydanie w tyle} few {# wydania w tyle} many {# wydań w tyle} other {# wydania w tyle}}",
+        "releaseNeeded": "Potrzebne wydanie",
+        "tagsMissing": "Brakuje {missing} z {total} tagów",
+        "publishing": "Publikowanie",
+        "publishFailed": "Publikacja nie powiodła się",
+        "notRead": "Nie odczytano"
+      },
+      "compare": {
+        "pinned": "Przypięty w produkcji",
+        "newestBuild": "Najnowszy build main",
+        "newestRelease": "Najnowsze wydanie",
+        "builtFrom": "Zbudowany z <commit>{commit}</commit>",
+        "noCommit": "Nie zapisano commita builda",
+        "same": "Taki sam jak przypięty",
+        "unknownRelease": "Żaden tag wydania nie wskazuje tych bajtów"
+      },
+      "gap": {
+        "hosted": "{count, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w packages/cli między przypiętym a najnowszym buildem.",
+        "runner": "({tags}) · {days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w infra/ci-runner.",
+        "runnerNoTags": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} · {commits, plural, one {# commit} few {# commity} many {# commitów} other {# commita}} w infra/ci-runner.",
+        "link": "Zobacz commity"
+      },
+      "unreleased": {
+        "title": "Scalone od {release}, w żadnym wydaniu",
+        "count": "{count, plural, one {# zmiana} few {# zmiany} many {# zmian} other {# zmiany}} w infra/ci-runner"
+      },
+      "releaseNeeded": "<strong>Potrzebne jest wydanie.</strong> Te zmiany trafiają do floty tylko w nowym wydaniu runnera, a ta strona go nie tworzy. Wypchnij tag <mono>{tag}</mono>; potok wydań go opublikuje, a wiersz zaproponuje Opublikuj najnowszy.",
+      "ami": {
+        "title": "AMI runnera · tylko odczyt",
+        "current": "Aktualne",
+        "stale": "Nieaktualne",
+        "notRead": "Nie odczytano",
+        "pinned": "Przypięte AMI",
+        "name": "Nazwa",
+        "builtFrom": "Zbudowane z",
+        "contains": "Zawiera każdą scaloną zmianę w infra/ci-runner-aws",
+        "after": "{count, plural, one {# scalona zmiana w infra/ci-runner-aws pojawiła się później} few {# scalone zmiany w infra/ci-runner-aws pojawiły się później} many {# scalonych zmian w infra/ci-runner-aws pojawiło się później} other {# scalonej zmiany w infra/ci-runner-aws pojawiło się później}}",
+        "note": "AMI jest wydawane przez własny potok ci-runner-ami-v* i przypinane w motir-infra, więc nie ma tu przycisku. Odczytane przez rolę runnera floty konta {account}.",
+        "notReadBody": "{ami} jest przypięte, ale nie udało się odczytać jego builda, więc commit builda jest nieznany. Nie jest pokazywane jako aktualne.",
+        "unset": "W tym wdrożeniu nie przypięto żadnego AMI runnera (MOTIR_AWS_RUNNER_AMI_ID nie jest ustawione)."
+      },
+      "sandbox": {
+        "newest": "Najnowsze wydanie <mono>{release}</mono> · {date} · zbudowane z <mono>{commit}</mono>",
+        "tagsAt": "Tagi w {release}",
+        "allPublished": "Opublikowano wszystkie {total}",
+        "somePublished": "Opublikowano {published} z {total} · brakuje {missing}",
+        "published": "Opublikowany",
+        "missing": "Brak",
+        "incomplete": "<strong>Wydanie niekompletne.</strong> {profiles} nie mają tagu {version}, więc agenty tych profili nadal dostają {previous}.",
+        "incompleteNoPrevious": "<strong>Wydanie niekompletne.</strong> {profiles} nie mają tagu {version}.",
+        "allCurrent": "Każdy aktywny agent działa na {version}.",
+        "older": "<strong>{count, plural, one {# aktywny agent działa} few {# aktywne agenty działają} many {# aktywnych agentów działa} other {# aktywnego agenta działa}} na starszej wersji.</strong> Ich właściciele widzą „Dostępna aktualizacja” przy agencie; nic tutaj ich nie restartuje."
+      },
+      "publish": {
+        "button": "Opublikuj najnowszy",
+        "republish": "Opublikuj ponownie",
+        "note": {
+          "hosted": "Przypina najnowszy build main przez workflow przypinania hostowanego agenta. Web i worker przechodzą na niego.",
+          "runner": "Przypina {release} przez workflow przypinania runnera. Web i worker przechodzą na nie.",
+          "sandbox": "Publikuje ponownie {release}. Wypychane są tylko brakujące tagi ({count}); w produkcji nic się nie zmienia.",
+          "hostedCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowszy build main.",
+          "runnerCurrent": "Nie ma nic nowszego do opublikowania. Produkcja przypina najnowsze wydanie runnera.",
+          "runnerReleaseNeeded": "Nie ma nic nowszego do opublikowania: produkcja przypina najnowsze wydanie. Scalone zmiany powyżej najpierw potrzebują wydania.",
+          "sandboxCurrent": "Nie ma nic nowszego do opublikowania. Każdy profil ma swój tag w najnowszym wydaniu.",
+          "sandboxOld": "{release} utworzono, zanim ponowne uruchomienie mogło wypchnąć tylko brakujące tagi, więc ponowne uruchomienie wypchnęłoby każdy tag od nowa. Zamiast tego utwórz nowe wydanie cli-v*.",
+          "running": "Uruchomienie workflow publikacji tego obrazu już trwa. Opublikuj najnowszy jest wyłączone do jego zakończenia.",
+          "done": "Nie ma nic nowszego do opublikowania."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "Opublikować najnowszy obraz hostowanego agenta?",
+        "runnerTitle": "Opublikować {release}?",
+        "sandboxTitle": "Opublikować ponownie {release}?",
+        "from": "Z",
+        "to": "Na",
+        "cancel": "Anuluj",
+        "audited": "Zapisane w dzienniku audytu jako ty, {email}.",
+        "sandboxFrom": "{published} z {total} tagów w {version}",
+        "hostedBody": "To uruchamia workflow przypinania hostowanego agenta. Przestawia MOTIR_HOSTED_AGENT_IMAGE na najnowszy build i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie, a hostowane uruchomienia rozpoczęte po przejściu startują nowy obraz.",
+        "runnerBody": "To uruchamia workflow przypinania runnera. Przestawia MOTIR_RUNNER_IMAGE na {release} i wdraża: <strong>web i worker przechodzą</strong> na nowe przypięcie. AMI runnera się nie zmienia.",
+        "sandboxBody": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. {published} są już opublikowane i nie są wypychane ponownie. <strong>W produkcji nic się nie zmienia.</strong>",
+        "sandboxBodyNonePublished": "To ponownie uruchamia wydanie piaskownicy dla {release} i wypycha tylko brakujące tagi: {missing}. <strong>W produkcji nic się nie zmienia.</strong>"
+      },
+      "progress": {
+        "title": "Publikowanie.",
+        "body": "Workflow publikacji działa; ten wiersz zaktualizuje się, gdy się zakończy.",
+        "started": "· uruchomione {age} przez {email}",
+        "startedNoActor": "· uruchomione {age}",
+        "button": "Publikowanie…"
+      },
+      "done": {
+        "title": "Opublikowano.",
+        "pin": "Produkcja przypina teraz {to} ({digest}).",
+        "sandbox": "Każdy profil ma teraz swój tag w {version}."
+      },
+      "failed": {
+        "title": "Publikacja nie powiodła się {age}.",
+        "body": "Uruchomienie workflow zakończyło się tym błędem, a produkcja nadal przypina to, co przypinała wcześniej:",
+        "noDetail": "GitHub nie zapisał komunikatu o błędzie dla tego uruchomienia; otwórz uruchomienie, aby zobaczyć log.",
+        "retry": "Ponów"
+      },
+      "workflow": {
+        "hosted": "Przypięcie hostowanego agenta",
+        "runner": "Przypięcie runnera",
+        "sandbox": "Wydanie piaskownicy {tag}",
+        "run": "{workflow} · uruchomienie #{number}",
+        "runNoNumber": "{workflow} · uruchomienie"
+      },
+      "audit": {
+        "last": "Ostatnio opublikowane z tej strony przez {email} {when}.",
+        "never": "Nigdy nie publikowano z tej strony.",
+        "started": "Publikację uruchomił(a) {email} {when}.",
+        "link": "Dziennik audytu"
+      },
+      "imageError": {
+        "title": "Nie udało się odczytać: {image}",
+        "body": "{source} nie odpowiedział, więc nic tu nie jest załadowane i nic z tego nie oznacza aktualności. Opublikuj najnowszy pozostaje wyłączone do odczytu. Pozostałe obrazy i pule nie są objęte. Odśwież, aby spróbować ponownie."
+      },
+      "unset": {
+        "title": "Nieskonfigurowane tutaj",
+        "body": "{variable} nie jest ustawione w tym wdrożeniu, więc nie ma przypięcia do porównania."
+      },
+      "loading": "Ładowanie: {image}",
+      "publishError": {
+        "title": "Opublikuj najnowszy nie wystartowało.",
+        "running": "Uruchomienie workflow publikacji tego obrazu już trwa; nie uruchomiono niczego nowego.",
+        "up_to_date": "Produkcja już działa na najnowszym obrazie; nic nie uruchomiono.",
+        "release_needed": "Produkcja już przypina najnowsze wydanie; scalone zmiany najpierw potrzebują wydania.",
+        "not_republishable": "Tego wydania nie można uruchomić ponownie tylko dla brakujących tagów; nic nie uruchomiono.",
+        "not_read": "Nie udało się teraz odczytać obrazu, więc nic nie uruchomiono.",
+        "unset": "Ten obraz nie jest skonfigurowany w tym wdrożeniu.",
+        "failed": "GitHub nie uruchomił workflow:",
+        "notPermitted": "Tylko superadmin może publikować z tej strony."
       }
     }
   },

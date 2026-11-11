@@ -10752,7 +10752,8 @@
       "navServices": "Services",
       "navCapacity": "Provider capacity",
       "navJobs": "Jobs",
-      "navStarters": "Starters"
+      "navStarters": "Starters",
+      "navFleetStatus": "Fleet status"
     },
     "nav": {
       "overview": "Overview",
@@ -10965,6 +10966,12 @@
               "list": "Listed fleet capacity requests",
               "link": "Linked a capacity request to a quota raise",
               "close": "Closed a fleet capacity request"
+            },
+            "image": {
+              "publish": "Published a fleet image"
+            },
+            "status": {
+              "read": "Read the fleet status"
             }
           },
           "idea": {
@@ -14012,6 +14019,176 @@
           "genericTitle": "Motir couldn't promote this repository.",
           "genericBody": "Nothing was copied. Try again."
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "Operations · Fleet status",
+      "title": "Fleet status",
+      "subtitle": "Whether production runs the newest of each image Motir boots, and how full each fleet pool is. Read when the page loads. Publish latest is the one action here, and every press is written to the audit log.",
+      "images": {
+        "title": "Images",
+        "subtitle": "The three images production boots. Each is compared with the newest one published; when production is behind, Publish latest moves it through that image's own publish workflow."
+      },
+      "image": {
+        "hosted": {
+          "title": "Hosted-agent image",
+          "subtitle": "What every hosted run boots. Pinned by MOTIR_HOSTED_AGENT_IMAGE; newest is the latest main build of ghcr.io/motir-co/motir-hosted-agent."
+        },
+        "runner": {
+          "title": "CI runner image",
+          "subtitle": "What every fleet CI job runs in. Pinned by MOTIR_RUNNER_IMAGE; newest is the latest runner-v* release."
+        },
+        "sandbox": {
+          "title": "Agent-instance images",
+          "subtitle": "The sandbox agents run in, one tag per profile at ghcr.io/motir-co/motir-sandbox. Complete when every profile has its tag at the newest cli-v* release."
+        }
+      },
+      "imageName": {
+        "hosted": "hosted-agent image",
+        "runner": "CI runner image",
+        "sandbox": "agent-instance images"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "Up to date",
+        "daysBehind": "{count, plural, one {# day behind} other {# days behind}}",
+        "releasesBehind": "{count, plural, one {# release behind} other {# releases behind}}",
+        "releaseNeeded": "Release needed",
+        "tagsMissing": "{missing} of {total} tags missing",
+        "publishing": "Publishing",
+        "publishFailed": "Publish failed",
+        "notRead": "Not read"
+      },
+      "compare": {
+        "pinned": "Pinned in production",
+        "newestBuild": "Newest main build",
+        "newestRelease": "Newest release",
+        "builtFrom": "Built from <commit>{commit}</commit>",
+        "noCommit": "No build commit recorded",
+        "same": "Same as pinned",
+        "unknownRelease": "No release tag names these bytes"
+      },
+      "gap": {
+        "hosted": "{count, plural, one {# commit} other {# commits}} to packages/cli between the pinned build and the newest one.",
+        "runner": "({tags}) · {days, plural, one {# day} other {# days}} · {commits, plural, one {# commit} other {# commits}} to infra/ci-runner.",
+        "runnerNoTags": "{days, plural, one {# day} other {# days}} · {commits, plural, one {# commit} other {# commits}} to infra/ci-runner.",
+        "link": "See the commits"
+      },
+      "unreleased": {
+        "title": "Merged since {release}, in no release",
+        "count": "{count, plural, one {# change} other {# changes}} to infra/ci-runner"
+      },
+      "releaseNeeded": "<strong>A release is needed.</strong> These changes reach the fleet only in a new runner release, and this page does not cut one. Push the tag <mono>{tag}</mono>; the release lane then publishes it and the row offers Publish latest.",
+      "ami": {
+        "title": "Runner AMI · read only",
+        "current": "Current",
+        "stale": "Stale",
+        "notRead": "Not read",
+        "pinned": "Pinned AMI",
+        "name": "Name",
+        "builtFrom": "Built from",
+        "contains": "Contains every merged change to infra/ci-runner-aws",
+        "after": "{count, plural, one {# merged change to infra/ci-runner-aws came after it} other {# merged changes to infra/ci-runner-aws came after it}}",
+        "note": "The AMI is released by its own ci-runner-ami-v* lane and pinned in motir-infra, so it has no button here. Read through the fleet runner role of {account}.",
+        "notReadBody": "{ami} is pinned, but its build could not be read, so its build commit is not known. It is not shown as current.",
+        "unset": "No runner AMI is pinned on this deployment (MOTIR_AWS_RUNNER_AMI_ID is unset)."
+      },
+      "sandbox": {
+        "newest": "Newest release <mono>{release}</mono> · {date} · built from <mono>{commit}</mono>",
+        "tagsAt": "Tags at {release}",
+        "allPublished": "All {total} published",
+        "somePublished": "{published} of {total} published · {missing} missing",
+        "published": "Published",
+        "missing": "Missing",
+        "incomplete": "<strong>Release incomplete.</strong> {profiles} have no {version} tag, so agents of those profiles still get {previous}.",
+        "incompleteNoPrevious": "<strong>Release incomplete.</strong> {profiles} have no {version} tag.",
+        "allCurrent": "Every live agent runs {version}.",
+        "older": "<strong>{count, plural, one {# live agent runs} other {# live agents run}} an older version.</strong> Their owners see Update available on the agent; nothing here restarts them."
+      },
+      "publish": {
+        "button": "Publish latest",
+        "republish": "Re-publish",
+        "note": {
+          "hosted": "Pins the newest main build through the hosted-agent pin workflow. Web and worker roll onto it.",
+          "runner": "Pins {release} through the runner pin workflow. Web and worker roll onto it.",
+          "sandbox": "Re-publishes {release}. Only the {count} missing tags are pushed; nothing in production rolls.",
+          "hostedCurrent": "Nothing newer to publish. Production pins the newest main build.",
+          "runnerCurrent": "Nothing newer to publish. Production pins the newest runner release.",
+          "runnerReleaseNeeded": "Nothing newer to publish: production pins the newest release. The merged changes above need a release first.",
+          "sandboxCurrent": "Nothing newer to publish. Every profile has its tag at the newest release.",
+          "sandboxOld": "{release} was cut before a re-run could push only the missing tags, so re-running it would push every tag again. Cut a new cli-v* release instead.",
+          "running": "A run of this image's publish workflow is already in progress. Publish latest is off until it ends.",
+          "done": "Nothing newer to publish."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "Publish the newest hosted-agent image?",
+        "runnerTitle": "Publish {release}?",
+        "sandboxTitle": "Re-publish {release}?",
+        "from": "From",
+        "to": "To",
+        "cancel": "Cancel",
+        "audited": "Recorded in the audit log as you, {email}.",
+        "sandboxFrom": "{published} of {total} tags at {version}",
+        "hostedBody": "This starts the hosted-agent pin workflow. It moves MOTIR_HOSTED_AGENT_IMAGE to the newest build and deploys: <strong>web and worker roll</strong> onto the new pin, and hosted runs started after the roll boot the new image.",
+        "runnerBody": "This starts the runner pin workflow. It moves MOTIR_RUNNER_IMAGE to {release} and deploys: <strong>web and worker roll</strong> onto the new pin. The runner AMI is not changed.",
+        "sandboxBody": "This re-runs the sandbox release for {release} and pushes only the missing tags: {missing}. {published} are already published and are not pushed again. <strong>Nothing in production rolls.</strong>",
+        "sandboxBodyNonePublished": "This re-runs the sandbox release for {release} and pushes only the missing tags: {missing}. <strong>Nothing in production rolls.</strong>"
+      },
+      "progress": {
+        "title": "Publishing.",
+        "body": "The publish workflow is running; this row updates when it ends.",
+        "started": "· started {age} by {email}",
+        "startedNoActor": "· started {age}",
+        "button": "Publishing…"
+      },
+      "done": {
+        "title": "Published.",
+        "pin": "Production now pins {to} ({digest}).",
+        "sandbox": "Every profile now has its tag at {version}."
+      },
+      "failed": {
+        "title": "Publish failed {age}.",
+        "body": "The workflow run ended with this error, and production still pins what it pinned before:",
+        "noDetail": "GitHub recorded no error message for this run; open the run for its log.",
+        "retry": "Retry"
+      },
+      "workflow": {
+        "hosted": "Hosted-agent pin",
+        "runner": "Runner pin",
+        "sandbox": "Sandbox release {tag}",
+        "run": "{workflow} · run #{number}",
+        "runNoNumber": "{workflow} · run"
+      },
+      "audit": {
+        "last": "Last published from this page by {email} on {when}.",
+        "never": "Never published from this page.",
+        "started": "Publish started by {email} on {when}.",
+        "link": "Audit log"
+      },
+      "imageError": {
+        "title": "Couldn't read the {image}",
+        "body": "{source} didn't answer, so nothing here is loaded, and none of it means up to date. Publish latest stays off until it reads. The other images and the pools are unaffected. Reload to try again."
+      },
+      "unset": {
+        "title": "Not configured here",
+        "body": "{variable} is not set on this deployment, so there is no pin to compare."
+      },
+      "loading": "Loading the {image}",
+      "publishError": {
+        "title": "Publish latest didn't start.",
+        "running": "A run of this image's publish workflow is already going; nothing new was started.",
+        "up_to_date": "Production already runs the newest image; nothing was started.",
+        "release_needed": "Production already pins the newest release; the merged changes need a release first.",
+        "not_republishable": "This release cannot be re-run for only its missing tags; nothing was started.",
+        "not_read": "The image could not be read just now, so nothing was started.",
+        "unset": "This image is not configured on this deployment.",
+        "failed": "GitHub didn't start the workflow:",
+        "notPermitted": "Only a superadmin can publish from this page."
       }
     }
   },

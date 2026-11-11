@@ -472,6 +472,23 @@ export const agentInstanceRepository = {
     return rows[0]?.n ?? 0;
   },
 
+  /**
+   * How many LIVE instances run each recorded image version, fleet-wide
+   * (MOTIR-10886's Fleet status, the sandbox card's live-agents line). Only the
+   * counts, never whose: one row per version, `imageVersion` null for the
+   * instances whose version was never named. Read under the system arm.
+   */
+  async countLiveByImageVersion(
+    tx: Prisma.TransactionClient,
+  ): Promise<Array<{ imageVersion: string | null; count: number }>> {
+    const rows = await tx.agentInstance.groupBy({
+      by: ['imageVersion'],
+      where: { ...LIVE },
+      _count: { _all: true },
+    });
+    return rows.map((row) => ({ imageVersion: row.imageVersion, count: row._count._all }));
+  },
+
   /** Live instances a user holds in ANY project — §6's per-user cap. */
   async countLiveForOwnerEverywhere(
     ownerId: string,

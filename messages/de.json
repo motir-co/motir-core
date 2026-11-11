@@ -10755,7 +10755,8 @@
       "navServices": "Dienste",
       "navCapacity": "Anbieterkapazität",
       "navJobs": "Aufträge",
-      "navStarters": "Starter"
+      "navStarters": "Starter",
+      "navFleetStatus": "Flottenstatus"
     },
     "nav": {
       "overview": "Übersicht",
@@ -10968,6 +10969,12 @@
               "list": "Kapazitätsanfragen der Flotte aufgelistet",
               "link": "Kapazitätsanfrage mit einer Kontingenterhöhung verknüpft",
               "close": "Kapazitätsanfrage der Flotte geschlossen"
+            },
+            "image": {
+              "publish": "Ein Flotten-Image veröffentlicht"
+            },
+            "status": {
+              "read": "Den Flottenstatus gelesen"
             }
           },
           "idea": {
@@ -14015,6 +14022,176 @@
           "genericTitle": "Motir konnte dieses Repository nicht übernehmen.",
           "genericBody": "Es wurde nichts kopiert. Versuchen Sie es erneut."
         }
+      }
+    },
+    "fleetStatus": {
+      "breadcrumb": "Betrieb · Flottenstatus",
+      "title": "Flottenstatus",
+      "subtitle": "Ob die Produktion das neueste jedes Images ausführt, das Motir startet, und wie voll jeder Flotten-Pool ist. Beim Laden der Seite gelesen. Neuestes veröffentlichen ist die einzige Aktion hier, und jeder Klick wird ins Audit-Log geschrieben.",
+      "images": {
+        "title": "Images",
+        "subtitle": "Die drei Images, die die Produktion startet. Jedes wird mit dem neuesten veröffentlichten verglichen; liegt die Produktion zurück, bringt Neuestes veröffentlichen sie über den eigenen Veröffentlichungs-Workflow dieses Images nach vorn."
+      },
+      "image": {
+        "hosted": {
+          "title": "Hosted-Agent-Image",
+          "subtitle": "Was jeder gehostete Lauf startet. Gepinnt durch MOTIR_HOSTED_AGENT_IMAGE; das neueste ist der letzte main-Build von ghcr.io/motir-co/motir-hosted-agent."
+        },
+        "runner": {
+          "title": "CI-Runner-Image",
+          "subtitle": "Worin jeder CI-Job der Flotte läuft. Gepinnt durch MOTIR_RUNNER_IMAGE; das neueste ist das letzte runner-v*-Release."
+        },
+        "sandbox": {
+          "title": "Agent-Instanz-Images",
+          "subtitle": "Die Sandbox, in der Agenten laufen, ein Tag pro Profil unter ghcr.io/motir-co/motir-sandbox. Vollständig, wenn jedes Profil sein Tag beim neuesten cli-v*-Release hat."
+        }
+      },
+      "imageName": {
+        "hosted": "Hosted-Agent-Image",
+        "runner": "CI-Runner-Image",
+        "sandbox": "Agent-Instanz-Images"
+      },
+      "source": {
+        "ghcr": "GHCR",
+        "github": "GitHub",
+        "aws": "AWS"
+      },
+      "verdict": {
+        "upToDate": "Aktuell",
+        "daysBehind": "{count, plural, one {# Tag zurück} other {# Tage zurück}}",
+        "releasesBehind": "{count, plural, one {# Release zurück} other {# Releases zurück}}",
+        "releaseNeeded": "Release nötig",
+        "tagsMissing": "{missing} von {total} Tags fehlen",
+        "publishing": "Wird veröffentlicht",
+        "publishFailed": "Veröffentlichung fehlgeschlagen",
+        "notRead": "Nicht gelesen"
+      },
+      "compare": {
+        "pinned": "In Produktion gepinnt",
+        "newestBuild": "Neuester main-Build",
+        "newestRelease": "Neuestes Release",
+        "builtFrom": "Gebaut aus <commit>{commit}</commit>",
+        "noCommit": "Kein Build-Commit erfasst",
+        "same": "Wie gepinnt",
+        "unknownRelease": "Kein Release-Tag nennt diese Bytes"
+      },
+      "gap": {
+        "hosted": "{count, plural, one {# Commit} other {# Commits}} an packages/cli zwischen dem gepinnten und dem neuesten Build.",
+        "runner": "({tags}) · {days, plural, one {# Tag} other {# Tage}} · {commits, plural, one {# Commit} other {# Commits}} an infra/ci-runner.",
+        "runnerNoTags": "{days, plural, one {# Tag} other {# Tage}} · {commits, plural, one {# Commit} other {# Commits}} an infra/ci-runner.",
+        "link": "Commits ansehen"
+      },
+      "unreleased": {
+        "title": "Seit {release} gemergt, in keinem Release",
+        "count": "{count, plural, one {# Änderung} other {# Änderungen}} an infra/ci-runner"
+      },
+      "releaseNeeded": "<strong>Ein Release ist nötig.</strong> Diese Änderungen erreichen die Flotte nur in einem neuen Runner-Release, und diese Seite erstellt keins. Pushe das Tag <mono>{tag}</mono>; die Release-Pipeline veröffentlicht es dann, und die Zeile bietet Neuestes veröffentlichen an.",
+      "ami": {
+        "title": "Runner-AMI · nur lesend",
+        "current": "Aktuell",
+        "stale": "Veraltet",
+        "notRead": "Nicht gelesen",
+        "pinned": "Gepinntes AMI",
+        "name": "Name",
+        "builtFrom": "Gebaut aus",
+        "contains": "Enthält jede gemergte Änderung an infra/ci-runner-aws",
+        "after": "{count, plural, one {# gemergte Änderung an infra/ci-runner-aws kam danach} other {# gemergte Änderungen an infra/ci-runner-aws kamen danach}}",
+        "note": "Das AMI wird von seiner eigenen ci-runner-ami-v*-Pipeline veröffentlicht und in motir-infra gepinnt, daher hat es hier keine Schaltfläche. Gelesen über die Flotten-Runner-Rolle von {account}.",
+        "notReadBody": "{ami} ist gepinnt, aber sein Build konnte nicht gelesen werden, daher ist sein Build-Commit unbekannt. Es wird nicht als aktuell angezeigt.",
+        "unset": "Auf diesem Deployment ist kein Runner-AMI gepinnt (MOTIR_AWS_RUNNER_AMI_ID ist nicht gesetzt)."
+      },
+      "sandbox": {
+        "newest": "Neuestes Release <mono>{release}</mono> · {date} · gebaut aus <mono>{commit}</mono>",
+        "tagsAt": "Tags bei {release}",
+        "allPublished": "Alle {total} veröffentlicht",
+        "somePublished": "{published} von {total} veröffentlicht · {missing} fehlen",
+        "published": "Veröffentlicht",
+        "missing": "Fehlt",
+        "incomplete": "<strong>Release unvollständig.</strong> {profiles} haben kein {version}-Tag, daher erhalten Agenten dieser Profile weiterhin {previous}.",
+        "incompleteNoPrevious": "<strong>Release unvollständig.</strong> {profiles} haben kein {version}-Tag.",
+        "allCurrent": "Jeder laufende Agent nutzt {version}.",
+        "older": "<strong>{count, plural, one {# laufender Agent nutzt} other {# laufende Agenten nutzen}} eine ältere Version.</strong> Ihre Besitzer sehen am Agenten „Update verfügbar“; hier wird nichts neu gestartet."
+      },
+      "publish": {
+        "button": "Neuestes veröffentlichen",
+        "republish": "Erneut veröffentlichen",
+        "note": {
+          "hosted": "Pinnt den neuesten main-Build über den Hosted-Agent-Pin-Workflow. Web und Worker rollen darauf um.",
+          "runner": "Pinnt {release} über den Runner-Pin-Workflow. Web und Worker rollen darauf um.",
+          "sandbox": "Veröffentlicht {release} erneut. Nur die {count} fehlenden Tags werden gepusht; in der Produktion rollt nichts um.",
+          "hostedCurrent": "Nichts Neueres zu veröffentlichen. Die Produktion pinnt den neuesten main-Build.",
+          "runnerCurrent": "Nichts Neueres zu veröffentlichen. Die Produktion pinnt das neueste Runner-Release.",
+          "runnerReleaseNeeded": "Nichts Neueres zu veröffentlichen: Die Produktion pinnt das neueste Release. Die gemergten Änderungen oben brauchen zuerst ein Release.",
+          "sandboxCurrent": "Nichts Neueres zu veröffentlichen. Jedes Profil hat sein Tag beim neuesten Release.",
+          "sandboxOld": "{release} wurde erstellt, bevor ein erneuter Lauf nur die fehlenden Tags pushen konnte, daher würde ein erneuter Lauf jedes Tag erneut pushen. Erstelle stattdessen ein neues cli-v*-Release.",
+          "running": "Ein Lauf des Veröffentlichungs-Workflows dieses Images ist bereits im Gang. Neuestes veröffentlichen ist aus, bis er endet.",
+          "done": "Nichts Neueres zu veröffentlichen."
+        }
+      },
+      "confirm": {
+        "hostedTitle": "Das neueste Hosted-Agent-Image veröffentlichen?",
+        "runnerTitle": "{release} veröffentlichen?",
+        "sandboxTitle": "{release} erneut veröffentlichen?",
+        "from": "Von",
+        "to": "Nach",
+        "cancel": "Abbrechen",
+        "audited": "Im Audit-Log als du erfasst, {email}.",
+        "sandboxFrom": "{published} von {total} Tags bei {version}",
+        "hostedBody": "Dies startet den Hosted-Agent-Pin-Workflow. Er setzt MOTIR_HOSTED_AGENT_IMAGE auf den neuesten Build und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um, und gehostete Läufe, die nach dem Umrollen starten, booten das neue Image.",
+        "runnerBody": "Dies startet den Runner-Pin-Workflow. Er setzt MOTIR_RUNNER_IMAGE auf {release} und deployt: <strong>Web und Worker rollen</strong> auf den neuen Pin um. Das Runner-AMI wird nicht geändert.",
+        "sandboxBody": "Dies führt das Sandbox-Release für {release} erneut aus und pusht nur die fehlenden Tags: {missing}. {published} sind bereits veröffentlicht und werden nicht erneut gepusht. <strong>In der Produktion rollt nichts um.</strong>",
+        "sandboxBodyNonePublished": "Dies führt das Sandbox-Release für {release} erneut aus und pusht nur die fehlenden Tags: {missing}. <strong>In der Produktion rollt nichts um.</strong>"
+      },
+      "progress": {
+        "title": "Wird veröffentlicht.",
+        "body": "Der Veröffentlichungs-Workflow läuft; diese Zeile aktualisiert sich, wenn er endet.",
+        "started": "· gestartet {age} von {email}",
+        "startedNoActor": "· gestartet {age}",
+        "button": "Wird veröffentlicht…"
+      },
+      "done": {
+        "title": "Veröffentlicht.",
+        "pin": "Die Produktion pinnt jetzt {to} ({digest}).",
+        "sandbox": "Jedes Profil hat jetzt sein Tag bei {version}."
+      },
+      "failed": {
+        "title": "Veröffentlichung fehlgeschlagen {age}.",
+        "body": "Der Workflow-Lauf endete mit diesem Fehler, und die Produktion pinnt weiterhin, was sie vorher gepinnt hat:",
+        "noDetail": "GitHub hat für diesen Lauf keine Fehlermeldung erfasst; öffne den Lauf für sein Log.",
+        "retry": "Erneut versuchen"
+      },
+      "workflow": {
+        "hosted": "Hosted-Agent-Pin",
+        "runner": "Runner-Pin",
+        "sandbox": "Sandbox-Release {tag}",
+        "run": "{workflow} · Lauf #{number}",
+        "runNoNumber": "{workflow} · Lauf"
+      },
+      "audit": {
+        "last": "Zuletzt von dieser Seite veröffentlicht von {email} am {when}.",
+        "never": "Noch nie von dieser Seite veröffentlicht.",
+        "started": "Veröffentlichung gestartet von {email} am {when}.",
+        "link": "Audit-Log"
+      },
+      "imageError": {
+        "title": "{image} konnte nicht gelesen werden",
+        "body": "{source} hat nicht geantwortet, daher ist hier nichts geladen, und nichts davon bedeutet aktuell. Neuestes veröffentlichen bleibt aus, bis gelesen wurde. Die anderen Images und die Pools sind nicht betroffen. Lade neu, um es erneut zu versuchen."
+      },
+      "unset": {
+        "title": "Hier nicht konfiguriert",
+        "body": "{variable} ist auf diesem Deployment nicht gesetzt, daher gibt es keinen Pin zum Vergleichen."
+      },
+      "loading": "{image} wird geladen",
+      "publishError": {
+        "title": "Neuestes veröffentlichen wurde nicht gestartet.",
+        "running": "Ein Lauf des Veröffentlichungs-Workflows dieses Images läuft bereits; nichts Neues wurde gestartet.",
+        "up_to_date": "Die Produktion nutzt bereits das neueste Image; nichts wurde gestartet.",
+        "release_needed": "Die Produktion pinnt bereits das neueste Release; die gemergten Änderungen brauchen zuerst ein Release.",
+        "not_republishable": "Dieses Release kann nicht nur für seine fehlenden Tags erneut ausgeführt werden; nichts wurde gestartet.",
+        "not_read": "Das Image konnte gerade nicht gelesen werden, daher wurde nichts gestartet.",
+        "unset": "Dieses Image ist auf diesem Deployment nicht konfiguriert.",
+        "failed": "GitHub hat den Workflow nicht gestartet:",
+        "notPermitted": "Nur ein Superadmin kann von dieser Seite veröffentlichen."
       }
     }
   },

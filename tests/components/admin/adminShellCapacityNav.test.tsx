@@ -29,6 +29,7 @@ const LABELS = {
   navMonitoring: en.platformAdmin.nav.monitoring,
   navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: shell.navFleetSettings,
+  navFleetStatus: shell.navFleetStatus,
   navServices: shell.navServices,
   navCapacity: shell.navCapacity,
   navAiPlanning: shell.navAiPlanning,
@@ -66,7 +67,8 @@ describe('the Provider capacity row', () => {
   it.each([
     ['support', LABELS.navJobs],
     ['operator', LABELS.navJobs],
-    // Services (MOTIR-10890) sits between Fleet settings and Provider capacity.
+    // Fleet status (MOTIR-10886), then Services (MOTIR-10890), sit between
+    // Fleet settings and Provider capacity.
     ['superadmin', LABELS.navServices],
   ] as const)('is on the rail for %s, directly after %s', (role, before) => {
     const nav = rail(role, '/admin');

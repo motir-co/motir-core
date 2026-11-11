@@ -28,6 +28,7 @@ const LABELS = {
   navMonitoring: 'Monitoring',
   navJobs: en.platformAdmin.shell.navJobs,
   navFleetSettings: en.platformAdmin.shell.navFleetSettings,
+  navFleetStatus: en.platformAdmin.shell.navFleetStatus,
   navServices: en.platformAdmin.shell.navServices,
   navCapacity: en.platformAdmin.shell.navCapacity,
   navAiPlanning: 'AI planning',
@@ -71,8 +72,9 @@ describe('the Fleet settings row', () => {
       .map((link) => link.textContent?.trim());
     expect(names[names.indexOf(LABELS.navMonitoring) + 1]).toBe(LABELS.navJobs);
     expect(names[names.indexOf(LABELS.navJobs) + 1]).toBe(LABELS.navFleetSettings);
+    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navFleetStatus);
     // Services (MOTIR-10890) follows it, then Provider capacity.
-    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navServices);
+    expect(names[names.indexOf(LABELS.navFleetStatus) + 1]).toBe(LABELS.navServices);
   });
 
   it.each(['support', 'operator'] as const)('is absent for %s', (role) => {
@@ -89,6 +91,43 @@ describe('the Fleet settings row', () => {
     ).toBe('page');
     expect(
       within(rail).getByRole('link', { name: LABELS.navMonitoring }).getAttribute('aria-current'),
+    ).toBeNull();
+  });
+});
+
+// The Fleet status row (MOTIR-10886, design MOTIR-10885 Panel 1): directly
+// after Fleet settings, superadmin only, lit on its page.
+describe('the Fleet status row', () => {
+  it('is labelled from the catalogue', () => {
+    expect(LABELS.navFleetStatus).toBe('Fleet status');
+  });
+
+  it('is on the rail for a superadmin, between Fleet settings and Services', () => {
+    const rail = renderShell('superadmin', '/admin');
+    const row = within(rail).getByRole('link', { name: LABELS.navFleetStatus });
+    expect(row.getAttribute('href')).toBe('/admin/fleet-status');
+    expect(row.getAttribute('aria-current')).toBeNull();
+    const names = within(rail)
+      .getAllByRole('link')
+      .map((link) => link.textContent?.trim());
+    expect(names[names.indexOf(LABELS.navFleetSettings) + 1]).toBe(LABELS.navFleetStatus);
+    expect(names[names.indexOf(LABELS.navFleetStatus) + 1]).toBe(LABELS.navServices);
+  });
+
+  it.each(['support', 'operator'] as const)('is absent for %s', (role) => {
+    const rail = renderShell(role, '/admin');
+    expect(within(rail).queryByRole('link', { name: LABELS.navFleetStatus })).toBeNull();
+  });
+
+  it('is lit on its page, and Fleet settings is not', () => {
+    const rail = renderShell('superadmin', '/admin/fleet-status');
+    expect(
+      within(rail).getByRole('link', { name: LABELS.navFleetStatus }).getAttribute('aria-current'),
+    ).toBe('page');
+    expect(
+      within(rail)
+        .getByRole('link', { name: LABELS.navFleetSettings })
+        .getAttribute('aria-current'),
     ).toBeNull();
   });
 });
