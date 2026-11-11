@@ -379,6 +379,17 @@ describe('help topics', () => {
     expect(body).toContain('UPWARD');
   });
 
+  it('`runs` sends people to the run modal at /runs?run=<id>, never a /runs/<id> page', () => {
+    // There is no `app/(authed)/runs/[id]` route: the run opens as a modal over
+    // the Runs list, addressed by the `run` query parameter (`runUrlOf`,
+    // lib/mappers/orgFleetMappers.ts). `/runs/<id>` is a 404 (MOTIR-10975).
+    const body = findHelpTopic('runs')?.body() ?? '';
+    const watch = body.slice(body.indexOf('WHERE TO WATCH IT'), body.indexOf('WHAT LEAVES'));
+
+    expect(watch).toMatch(/^ {2}\/runs\?run=<id> +the run: its set/m);
+    expect(body).not.toMatch(/\/runs\/</);
+  });
+
   it('`motir help <topic>` prints the topic body, not the pseudo-command’s usage', async () => {
     const program = buildProgram();
     const stdout = vi.spyOn(process.stdout, 'write').mockReturnValue(true);
