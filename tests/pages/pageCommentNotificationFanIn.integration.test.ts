@@ -7,6 +7,9 @@ import type { PageCommentCreatedData } from '@/lib/jobs/types';
 import { NOTIFICATION_PREFERENCE_EVENT_TYPES } from '@/lib/notifications/preferences';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
+import { pageCommentRepository } from '@/lib/repositories/pageCommentRepository';
+import { pageRepository } from '@/lib/repositories/pageRepository';
+import { projectRepository } from '@/lib/repositories/projectRepository';
 import {
   PAGE_COMMENT_DEDUPE_PREFIX,
   notificationFanInService,
@@ -275,6 +278,48 @@ describe('fanInPageComment — exclusions and gates', () => {
     expect(await adminDb.notification.count()).toBe(0);
   });
 
+  it('a page or project that no longer resolves writes nothing', async () => {
+    const t = await makeTenant();
+    const { event } = await startThread(t, t.a, `cc ${token(t.b)}`);
+    vi.spyOn(pageRepository, 'findById').mockResolvedValueOnce(null);
+    expect(await notificationFanInService.fanInPageComment(event)).toEqual({ writtenUserIds: [] });
+    vi.spyOn(projectRepository, 'findById').mockResolvedValueOnce(null);
+    expect(await notificationFanInService.fanInPageComment(event)).toEqual({ writtenUserIds: [] });
+    expect(await adminDb.notification.count()).toBe(0);
+  });
+
+  it('a reply whose thread root no longer resolves still reaches the earlier repliers', async () => {
+    const t = await makeTenant();
+    const { root } = await startThread(t, t.a, 'Root');
+    await reply(t, t.b, root.id, 'First');
+    const { event } = await reply(t, t.c, root.id, 'Second');
+    const real = pageCommentRepository.findById.bind(pageCommentRepository);
+    vi.spyOn(pageCommentRepository, 'findById').mockImplementation(async (id, tx) =>
+      id === root.id ? null : real(id, tx),
+    );
+    expect((await notificationFanInService.fanInPageComment(event)).writtenUserIds).toEqual([
+      t.b.userId,
+    ]);
+  });
+
+  it('a fan-out whose every candidate is dropped writes nothing', async () => {
+    const t = await makeTenant();
+    const { event } = await startThread(t, t.a, `cc ${token(t.b)}`);
+    expect(
+      await notificationFanInService.fanInPageComment({
+        ...event,
+        mentionedUserIds: [t.outsider.userId],
+      }),
+    ).toEqual({ writtenUserIds: [] });
+    await notificationPreferencesService.setPreference(t.b.userId, {
+      eventType: 'mentioned',
+      channel: 'in_app',
+      enabled: false,
+    });
+    expect(await notificationFanInService.fanInPageComment(event)).toEqual({ writtenUserIds: [] });
+    expect(await adminDb.notification.count()).toBe(0);
+  });
+
   it('a vanished project ends the walk with no row', async () => {
     const t = await makeTenant();
     const { event } = await startThread(t, t.a, `cc ${token(t.b)}`);
@@ -335,6 +380,16 @@ describe('fanInPageComment — idempotency, batching and the page', () => {
     await notificationFanInService.fanInPageComment(event);
     expect(await notificationFanInService.fanInPageComment(event)).toEqual({ writtenUserIds: [] });
     expect(await rowsFor(root.id)).toHaveLength(1);
+  });
+
+  it('the existence read answers nothing for no recipients, without a query', async () => {
+    const reads = vi.spyOn(adminDb.notification, 'findMany');
+    expect(
+      await adminDb.$transaction((tx) =>
+        notificationRepository.findRecipientIdsByDedupeKey('page-comment:x', [], tx),
+      ),
+    ).toEqual([]);
+    expect(reads).not.toHaveBeenCalled();
   });
 
   it('writes one createMany per page of recipients', async () => {

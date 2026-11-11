@@ -20,7 +20,7 @@ export const pageCommentNotificationFanIn = defineJob(
   },
   async (ctx, services) => {
     const payload = ctx.event.data as PageCommentCreatedData;
-    return ctx.step.run('notification-fan-in', () =>
+    return ctx.step.run('page-comment-notification-fan-in', () =>
       services.notificationFanIn.fanInPageComment(payload),
     );
   },

@@ -36,6 +36,10 @@ const QUOTED_PROPS: { [K in EmailTemplate]?: Partial<TemplateData<K>> } = {
     excerpt: QUOTED.excerpt,
     workItemTitle: QUOTED.workItemTitle,
   },
+  'page-comment-notification': {
+    excerpt: QUOTED.excerpt,
+    pageTitle: QUOTED.workItemTitle,
+  },
   'watcher-transition-notification': {
     workItemTitle: QUOTED.workItemTitle,
     statusName: QUOTED.statusName,

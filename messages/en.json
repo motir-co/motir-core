@@ -950,6 +950,18 @@
       "fallback": "Or copy this link into your browser:",
       "reason": "You're receiving this because you watch {identifier}."
     },
+    "pageCommentNotification": {
+      "subjectMention": "{author} mentioned you on {page}",
+      "previewMention": "{author} mentioned you on {page}",
+      "subjectReply": "{author} replied to a thread on {page}",
+      "previewReply": "{author} replied to a thread on {page}",
+      "greeting": "Hi {name},",
+      "ledeMention": "{author} mentioned you in a comment on {page}.",
+      "ledeReply": "{author} replied to a thread on {page}.",
+      "view": "Open the discussion",
+      "fallback": "Or copy this link into your browser:",
+      "reasonReply": "You're receiving this because you replied in this thread."
+    },
     "watcherTransitionNotification": {
       "subject": "{actor} moved {identifier} to {status}",
       "preview": "{actor} moved {identifier} to {status}",
