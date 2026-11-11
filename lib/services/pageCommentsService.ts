@@ -21,7 +21,10 @@ import {
   type PageCommentThreadsPage,
   type PageStore,
 } from '@/lib/pages';
+import { sendEvent } from '@/lib/jobs/sendEvent';
+import { parseMentionIds } from '@/lib/mentions/parse';
 import { PermissionDeniedError } from '@/lib/projects/errors';
+import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import { resolveMarkdownBodiesWorkItemRefs } from '@/lib/workItems/resolveWorkItemRefs';
@@ -44,6 +47,14 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 //      viewer is refused 403 on an archived page too;
 //   3. the package: a page outside the project (404), an archived page (409),
 //      author-or-`comment:moderate` on edit and delete (403), and the rest.
+//
+// ⚠️ THREE WRITES NOTIFY (Story MOTIR-10868 · MOTIR-10923): starting a thread,
+// replying, and an edit that adds a mention each emit ONE `page/comment.created`
+// AFTER their transaction commits — never inside it, so a rolled-back write has
+// notified nobody. The mention ids are the body's tokens kept to the people who
+// can enter the project, read as REFERENCE data before the transaction (the
+// member read binds its own context) and only when the body names someone.
+// Delete, resolve and reopen emit nothing, as their work-item twins do.
 
 export interface PageCommentCapabilities {
   /** May post, reply, resolve and reopen — `comment:add`, and the page is live. */
@@ -124,6 +135,52 @@ async function writeActor(
   const caps = await projectAccessService.getCommentCapabilities(projectId, ctx, tx);
   if (!caps.canComment) throw new PermissionDeniedError(projectId, 'comment:add');
   return { userId: ctx.userId, canModerate: caps.canModerate };
+}
+
+/**
+ * The people a page comment may mention: those who can ENTER the project (the
+ * work-item comments' rule, `assignableMembersService`), scoped by its access
+ * mode. A reference read, run before the write's transaction and outside it —
+ * the member read binds its own workspace context.
+ */
+async function resolvePageMentionableIds(
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<Set<string>> {
+  const { accessMode } = await projectAccessService.getCommentCapabilities(projectId, ctx);
+  const members = await assignableMembersService.list({ projectId, accessMode, ctx });
+  return new Set(members.map((m) => m.userId));
+}
+
+/** The body's mention ids, and who among them may be mentioned — no read without a token. */
+async function mentionCandidates(
+  bodyMd: string,
+  projectId: string,
+  ctx: ServiceContext,
+): Promise<{ tokenIds: string[]; mentionable: Set<string> }> {
+  const tokenIds = parseMentionIds(bodyMd);
+  const mentionable =
+    tokenIds.length > 0 ? await resolvePageMentionableIds(projectId, ctx) : new Set<string>();
+  return { tokenIds, mentionable };
+}
+
+/** Emit the page-comment event, post-commit. */
+function emitPageCommentCreated(
+  ctx: ServiceContext,
+  input: { projectId: string; pageId: string; commentId: string; threadRootCommentId: string },
+  mentionedUserIds: string[],
+  isReply: boolean,
+): Promise<void> {
+  return sendEvent('page/comment.created', {
+    workspaceId: ctx.workspaceId,
+    projectId: input.projectId,
+    pageId: input.pageId,
+    commentId: input.commentId,
+    threadRootCommentId: input.threadRootCommentId,
+    authorId: ctx.userId,
+    mentionedUserIds,
+    isReply,
+  });
 }
 
 /** One gated write: the transaction, the gate, then the procedure. */
@@ -222,41 +279,97 @@ export const pageCommentsService = {
     ctx: ServiceContext,
     input: PostPageCommentInput,
   ): Promise<WithWorkItemRefs<PageCommentThreadDto>> {
-    const thread = await gatedWrite(ctx, input, (store, scope) =>
-      createPageComment(store, systemClock, {
-        ...scope,
-        bodyMd: input.bodyMd,
-        anchor: input.anchor,
+    const { tokenIds, mentionable } = await mentionCandidates(input.bodyMd, input.projectId, ctx);
+    const { row: thread, mentionedUserIds } = await gatedWrite(
+      ctx,
+      input,
+      async (store, scope) => ({
+        row: await createPageComment(store, systemClock, {
+          ...scope,
+          bodyMd: input.bodyMd,
+          anchor: input.anchor,
+        }),
+        mentionedUserIds: tokenIds.filter((id) => mentionable.has(id)),
       }),
+    );
+    // Post-commit, never inside the tx — a rollback must not have notified.
+    await emitPageCommentCreated(
+      ctx,
+      {
+        projectId: input.projectId,
+        pageId: thread.pageId,
+        commentId: thread.id,
+        threadRootCommentId: thread.id,
+      },
+      mentionedUserIds,
+      false,
     );
     return withRefs(thread, ctx);
   },
 
+  /** Reply to a thread. It always emits, mention or not: a reply reaches the thread's people. */
   async postPageReply(
     ctx: ServiceContext,
     input: PostPageReplyInput,
   ): Promise<WithWorkItemRefs<PageCommentDto>> {
-    const reply = await gatedWrite(ctx, input, (store, scope) =>
-      replyToPageComment(store, systemClock, {
+    const { tokenIds, mentionable } = await mentionCandidates(input.bodyMd, input.projectId, ctx);
+    const { row: reply, mentionedUserIds } = await gatedWrite(ctx, input, async (store, scope) => ({
+      row: await replyToPageComment(store, systemClock, {
         ...scope,
         parentCommentId: input.parentCommentId,
         bodyMd: input.bodyMd,
       }),
+      mentionedUserIds: tokenIds.filter((id) => mentionable.has(id)),
+    }));
+    // Post-commit, never inside the tx — a rollback must not have notified.
+    await emitPageCommentCreated(
+      ctx,
+      {
+        projectId: input.projectId,
+        pageId: reply.pageId,
+        commentId: reply.id,
+        // The package refuses a reply to a reply, so the parent IS the root.
+        threadRootCommentId: reply.parentCommentId ?? input.parentCommentId,
+      },
+      mentionedUserIds,
+      true,
     );
     return withRefs(reply, ctx);
   },
 
+  /**
+   * Edit a comment's body. It emits only when the edit ADDED someone, and then
+   * names only them: the new body's mentionable ids minus every id the previous
+   * body parsed to — both sides parsed, so a token in code counts on neither.
+   */
   async editPageCommentBody(
     ctx: ServiceContext,
     input: EditPageCommentBodyInput,
   ): Promise<WithWorkItemRefs<PageCommentDto>> {
-    const comment = await gatedWrite(ctx, input, (store, scope) =>
+    const { tokenIds, mentionable } = await mentionCandidates(input.bodyMd, input.projectId, ctx);
+    const { comment, previousBodyMd } = await gatedWrite(ctx, input, (store, scope) =>
       editPageComment(store, systemClock, {
         ...scope,
         commentId: input.commentId,
         bodyMd: input.bodyMd,
       }),
     );
+    const before = new Set(parseMentionIds(previousBodyMd));
+    const added = tokenIds.filter((id) => mentionable.has(id) && !before.has(id));
+    if (added.length > 0) {
+      // Post-commit, never inside the tx — a rollback must not have notified.
+      await emitPageCommentCreated(
+        ctx,
+        {
+          projectId: input.projectId,
+          pageId: comment.pageId,
+          commentId: comment.id,
+          threadRootCommentId: comment.parentCommentId ?? comment.id,
+        },
+        added,
+        comment.parentCommentId !== null,
+      );
+    }
     return withRefs(comment, ctx);
   },
 

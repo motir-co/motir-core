@@ -99,6 +99,41 @@ export interface WorkItemCommentCreatedData {
 }
 
 /**
+ * The `page/comment.created` event payload (Story MOTIR-10868 · MOTIR-10923) — a
+ * page comment that should reach someone. Emitted by `pageCommentsService` AFTER
+ * its write commits (never inside the transaction: a rollback must not have
+ * notified anyone), on three writes only:
+ *
+ *   - starting a thread and replying to one — ALWAYS, even with an empty
+ *     `mentionedUserIds`, because a reply that mentions nobody still reaches the
+ *     people already in the thread;
+ *   - an edit — ONLY when it added at least one mention, and then carrying ONLY
+ *     the added ids.
+ *
+ * Resolving, reopening and deleting emit nothing, and neither does a refused write.
+ *
+ * ⚠️ IDS ONLY. No page title, no excerpt, no recipient list: each consumer (the
+ * in-app fan-in, the page-comment email) resolves those at SEND time, so a page
+ * renamed after the comment notifies under its new name and each channel
+ * re-checks access its own way. An edit's re-fire names the same `commentId` as
+ * the write that created the comment, so a consumer keyed on comment × recipient
+ * makes it harmless for everyone it re-computes.
+ */
+export interface PageCommentCreatedData {
+  workspaceId: string;
+  projectId: string;
+  pageId: string;
+  commentId: string;
+  /** The thread's root: the comment's own id on a thread being started. */
+  threadRootCommentId: string;
+  /** The acting user — the commenter, or the editor on a moderator's edit. */
+  authorId: string;
+  /** Validated mentionable ids; on an edit, ONLY the ids the edit added. */
+  mentionedUserIds: string[];
+  isReply: boolean;
+}
+
+/**
  * The `work-item/mentioned` event payload (Story 5.1 · Subtask 5.1.6) — the
  * DESCRIPTION-mention sibling of `work-item/comment.created`. Emitted AFTER a
  * work-item create / description-changing update commits, carrying ONLY the
@@ -775,6 +810,7 @@ export interface JobEventDataMap {
   'agent-instance-run/supervise': AgentInstanceRunSuperviseData;
   'email.send': EmailSendData;
   'work-item/comment.created': WorkItemCommentCreatedData;
+  'page/comment.created': PageCommentCreatedData;
   'work-item/mentioned': WorkItemMentionedData;
   'work-item/transitioned': WorkItemTransitionedData;
   'work-item/created': WorkItemCreatedData;
