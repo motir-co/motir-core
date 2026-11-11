@@ -26,6 +26,10 @@
 #   secrets.MOTIR_AWS_AMI_BUILD_ROLE_ARN  the IAM role the build assumes
 #   vars.MOTIR_AWS_ORG_ARN                the Organization the AMI is shared with
 #   vars.MOTIR_AWS_AMI_BUILD_SUBNET_ID    optional; else the default VPC
+#   vars.MOTIR_AWS_AMI_BUILD_SECURITY_GROUP_ID
+#                                         optional; else Packer makes a temporary
+#                                         group. Set both for the services-account
+#                                         build role, which may create neither.
 
 name: Release CI runner AMI
 
@@ -108,4 +112,5 @@ jobs:
         env:
           AWS_ORG_ARN: ${{ vars.MOTIR_AWS_ORG_ARN }}
           AMI_BUILD_SUBNET_ID: ${{ vars.MOTIR_AWS_AMI_BUILD_SUBNET_ID }}
+          AMI_BUILD_SECURITY_GROUP_ID: ${{ vars.MOTIR_AWS_AMI_BUILD_SECURITY_GROUP_ID }}
         run: infra/ci-runner-aws/build-ami.sh build
